@@ -700,6 +700,17 @@ test("only runs after the owner's last answer count, so Let it run is asked agai
   assert.equal(pass(later).report.familiesChurning, 1, "three idle runs since the answer ask again");
 });
 
+// The two asks used to share familyDecision: a duplicate answer after Let it
+// run erased it (and the churn ask came back over answered runs), and a churn
+// answer silenced a duplicate question nobody had asked yet.
+test("a churn answer and a duplicate answer are kept apart", () => {
+  const letRun = { at: NOW - 3 * HOUR, choice: "let-run" };
+  const both = chain().map((task) => ({ ...task, churnDecision: letRun, familyDecision: { at: NOW - HOUR, choice: "keep-all", keepId: null } }));
+  assert.equal(pass(both).report.familiesChurning, 0, "Keep them all does not bring back the answered churn ask");
+  const legacy = chain().map((task) => ({ ...task, familyDecision: { ...letRun, keepId: null } }));
+  assert.equal(pass(legacy).report.familiesChurning, 0, "a churn answer saved before the split still covers its runs");
+});
+
 test("the owner's hold stops the waiting card until Try again; the loop-guard switches never release it", async () => {
   const [ask] = pass(chain()).familyAsks;
   const h = gatewayHost({ tasks: chain() });
@@ -709,7 +720,7 @@ test("the owner's hold stops the waiting card until Try again; the loop-guard sw
   assert.equal(typed.error, "Choose Hold it for my review or Let it run: a typed answer cannot decide whether this work waits.");
   assert.equal((await h.env.assistantAnswer({ id: question.id, optionId: "hold" })).ok, true);
   const rows = Object.fromEntries(h.board().tasks.map((task) => [task.id, task]));
-  for (const id of ["task_c1", "task_c2", "task_c3", "task_c4"]) assert.equal(rows[id].familyDecision.choice, "hold", `${id} is stamped`);
+  for (const id of ["task_c1", "task_c2", "task_c3", "task_c4"]) assert.equal(rows[id].churnDecision.choice, "hold", `${id} is stamped`);
   assert.deepEqual([rows.task_c4.loopGuard.kind, rows.task_c4.loopGuard.by], ["family", "owner"]);
   assert.match(rows.task_c4.loopGuard.reason, /^you held it for review: 3 of this work's last 4 runs changed nothing/);
   assert.equal(rows.task_c4.logs.at(-1).text, "You decided: hold this work for your review — 3 of this work's last 4 runs changed nothing but the TESTRUNS notebook");
@@ -735,12 +746,12 @@ test("Let it run stamps only, and the ask is not repeated for the runs it covere
   const question = h.env.assistantQuestion(ask);
   assert.equal((await h.env.assistantAnswer({ id: question.id, optionId: "let-run" })).ok, true);
   const rows = h.board().tasks;
-  assert.ok(rows.every((task) => task.familyDecision?.choice === "let-run" && task.loopGuard === undefined));
+  assert.ok(rows.every((task) => task.churnDecision?.choice === "let-run" && task.loopGuard === undefined));
   assert.equal(backlog.workState(rows.find((task) => task.id === "task_c4"), Date.now(), { tasks: rows }).stage, "ready");
   // The runs the answer covered are not counted again.
   // (The fixture runs are dated ahead of the real clock the answer stamps;
   // move them, and the revisions the gateway recorded, before the answer.)
-  const covered = rows.map(({ contextHistory: _history, ...task }) => (task.verification ? { ...task, verification: { ...task.verification, at: task.familyDecision.at - MIN } } : task));
+  const covered = rows.map(({ contextHistory: _history, ...task }) => (task.verification ? { ...task, verification: { ...task.verification, at: task.churnDecision.at - MIN } } : task));
   assert.equal(pass(covered).report.familiesChurning, 0);
 });
 

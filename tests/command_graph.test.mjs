@@ -96,6 +96,95 @@ test("the complete Command module can enter and draw while preserving the defaul
   assert.equal(window.MefiIdle.ambientZenStatus().enabled, false, "reloading preserves a disabled Zen preference");
 });
 
+test("behind Home the tree draws as slow scenery, and holds still with motion off", () => {
+  const drawn = [];
+  let still = false;
+  const state = { active: false, homeBackdrop: true, motionHot: true, frameCost: 1 };
+  const document = { hidden: false, body: { dataset: {} } };
+  const env = vm.createContext({ state, document, pickerHeld: () => false, noMotion: () => still, drawFrame: (time) => drawn.push(time), requestAnimationFrame: () => 1, console });
+  vm.runInContext(section("// Animation state belongs", "function drawFrame("), env);
+  for (let time = 100; time <= 500; time += 16.7) env.frame(time);
+  assert.equal(drawn.length, 5, "about 12 fps at rest or mid-glide: " + drawn.join(", "));
+  drawn.length = 0;
+  document.body.dataset.sheet = "tasks";
+  for (let time = 600; time <= 900; time += 16.7) env.frame(time);
+  assert.equal(drawn.length, 0, "a sheet over Home pauses the scenery");
+  delete document.body.dataset.sheet;
+  still = true;
+  for (let time = 1000; time <= 2900; time += 16.7) env.frame(time);
+  assert.equal(drawn.length, 2, "motion off: one frame a second picks up graph changes");
+  state.homeBackdrop = false;
+  drawn.length = 0;
+  env.frame(5000);
+  assert.equal(drawn.length, 0, "with neither Command nor Home asking, the loop stops");
+});
+
+test("Home's backdrop hands the canvas to Command and takes it back while Home still shows", async () => {
+  const callbacks = [], errors = [], intervals = new Set();
+  const bodyClasses = new Set();
+  const classList = { add: (name) => bodyClasses.add(name), remove: (name) => bodyClasses.delete(name), toggle: (name, on) => (on ?? !bodyClasses.has(name)) ? bodyClasses.add(name) : bodyClasses.delete(name), contains: (name) => bodyClasses.has(name) };
+  const inert = { add() {}, remove() {}, toggle() {}, contains: () => false };
+  const document = { readyState: "loading", hidden: false, addEventListener() {}, activeElement: null, querySelector: () => null, body: { dataset: {}, classList } };
+  const window = { addEventListener() {}, dispatchEvent() {}, innerWidth: 1200, innerHeight: 800 };
+  const hook = `window.__graphTest = { state, el, prepare() {
+    closeAmbience = closeViewMenu = hideTip = clearSearch = resize = renderLegend = syncViewControls = setCamMode = loadPngs = updateTelemetry = renderFeed = renderHint = bumpHud = selectNode = applyEnterParams = releaseReactiveInput = () => {};
+    refreshTasks = () => Promise.resolve();
+    refreshGraph = () => { window.__graphReads = (window.__graphReads ?? 0) + 1; };
+    drawFrame = () => {};
+    bell = ensureReactiveInput = () => {};
+  }};`;
+  const env = vm.createContext({ window, document, Promise, Date, Math, Map, Set, WeakMap, localStorage: { getItem: () => null, setItem() {} }, CustomEvent: class { constructor(type, details) { this.type = type; this.detail = details.detail; } }, requestAnimationFrame: (callback) => { callbacks.push(callback); return callbacks.length; }, cancelAnimationFrame() {}, setInterval: () => { const id = intervals.size + 1; intervals.add(id); return id; }, clearInterval: (id) => intervals.delete(id), clearTimeout() {}, console: { error: (...args) => errors.push(args) } });
+  vm.runInContext(source.replace("  window.MefiIdle = {", `${hook}\n  window.MefiIdle = {`), env);
+  const { state, el, prepare } = window.__graphTest;
+  prepare(); state.zen = false;
+  const attrs = new Map();
+  el.canvas = { hidden: true, inert: false, focus() {}, setAttribute: (name, value) => attrs.set(name, value), removeAttribute: (name) => attrs.delete(name) };
+  el.far = { hidden: true, classList: inert };
+  el.hud = { hidden: true, classList: inert, contains: () => false };
+  const idle = window.MefiIdle;
+  const backdrop = () => ({ ...idle.homeBackdropStatus() }); // copied out of the vm realm for deepEqual
+
+  assert.equal(idle.setHomeBackdrop(true), true);
+  assert.deepEqual(backdrop(), { drawing: true, wanted: true, commandActive: false });
+  assert.equal(idle.isActive(), false, "the backdrop is not Command: nav, keys and bells still read closed");
+  assert.equal(el.canvas.hidden, false);
+  assert.equal(el.canvas.inert, true, "no focus stop and no pointer behind Home's controls");
+  assert.equal(attrs.get("aria-hidden"), "true");
+  assert.ok(bodyClasses.has("home-backdrop"), "the CSS drops the canvases under the workspace layer");
+  assert.ok(el.hud.hidden, "no HUD behind Home");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.ok(window.__graphReads >= 1, "the graph is built for the backdrop");
+
+  idle.enter();
+  await state.readyPromise;
+  assert.equal(idle.isActive(), true);
+  assert.equal(backdrop().drawing, false, "Command takes the canvas over");
+  assert.equal(el.canvas.inert, false);
+  assert.equal(attrs.has("aria-hidden"), false);
+  assert.ok(!bodyClasses.has("home-backdrop"));
+  assert.ok(bodyClasses.has("command-active"));
+
+  idle.exit();
+  assert.equal(idle.isActive(), false);
+  assert.deepEqual(backdrop(), { drawing: true, wanted: true, commandActive: false }, "Home is still underneath, so the tree stays as its backdrop");
+  assert.equal(el.canvas.hidden, false);
+
+  idle.setHomeBackdrop(false);
+  assert.deepEqual(backdrop(), { drawing: false, wanted: false, commandActive: false });
+  assert.equal(el.canvas.hidden, true, "leaving Home hides the canvases again");
+  assert.equal(el.far.hidden, true);
+  assert.ok(!bodyClasses.has("home-backdrop"));
+  assert.equal(intervals.size, 0, "no refresh timer outlives the backdrop");
+
+  idle.enter();
+  await state.readyPromise;
+  idle.setHomeBackdrop(true);
+  assert.deepEqual(backdrop(), { drawing: false, wanted: true, commandActive: true }, "asked for while Command holds the canvas, it waits");
+  idle.exit();
+  assert.equal(backdrop().drawing, true, "and starts as Command lets go");
+  assert.equal(errors.length, 0, JSON.stringify(errors));
+});
+
 test("Music preview refreshes real graph snapshots while other sheets remain idle", () => {
   let reads = 0, popups = 0;
   const state = { active: true, settingsPreview: { x: 600, y: 0, w: 600, h: 800 }, assistant: {}, ambient: true, popupAt: 0 };
@@ -1311,6 +1400,144 @@ test("a complete overview orbit keeps fixed nodes clear of panel clipping", () =
     state.camera.x = -10000;
     assert.ok(run("free").some(({ p }) => p.x < area.x || p.x > area.x + area.w), "manual pan remains under user control");
   }
+});
+
+// The overview's camera as the frame loop drives it: the pan lands on its
+// target (the tree's centre) and the tree turns about it.
+function overviewTurn(env, state, nodes, area, turns, check) {
+  const run = () => {
+    state.camera.x = state.camera.tx ?? state.camera.x; state.camera.y = state.camera.ty ?? state.camera.y; state.camera.z = state.camera.tz ?? state.camera.z;
+    const points = nodes.map((node) => ({ node, p: env.project(node) }));
+    env.layoutProjectedGraph(points, area, "orbit", 1000, true);
+    return points;
+  };
+  run();
+  // The spin's slow nod repeats every 2π / 0.37 radians of turn, so a long
+  // run meets every pairing of heading and tilt.
+  for (let step = 0; step <= turns * 96; step += 1) {
+    state.angle = 0.5 + step * Math.PI / 48;
+    check(run(), step);
+  }
+}
+
+function overviewFixture(layout, { width = 1440, height = 900, count = 30 } = {}) {
+  const { env, state } = graphContext({ width, height });
+  Object.assign(state, { fit: 1, view: "3d", nodeLayout: layout, tasks: [] });
+  vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+  const nodes = Array.from({ length: count }, (_, i) => ({ id: i ? `task:${i}` : "root", kind: i ? "task" : "root", x: 0, y: 0, z: 0 }));
+  state.edges = nodes.slice(1).map((_, i) => ({ a: Math.floor(i / 4), b: i + 1 }));
+  return { env, state, nodes, area: env.usableArea() };
+}
+
+test("the overview turns the tree about its own centre, at one steady frame, with every node in view", () => {
+  for (const layout of ["constellation", "tree", "radial", "helix", "layers"]) for (const [width, height] of [[1440, 900], [1920, 1170]]) {
+    const { env, state, nodes, area } = overviewFixture(layout, { width, height });
+    let frame = null;
+    overviewTurn(env, state, nodes, area, 3, (points, step) => {
+      const centre = state.orbitFrame;
+      assert.deepEqual([state.camera.tx, state.camera.ty, state.camera.tz], [-centre.x, -centre.y, -centre.z], `${layout}: the overview camera aims at the tree's own centre`);
+      const pivot = env.project(centre);
+      assert.ok(Math.hypot(pivot.x - (area.x + area.w / 2), pivot.y - (area.y + area.h / 2)) < 1e-6, `${layout}: the tree turns about the middle of the frame`);
+      frame ??= state.overviewScale;
+      assert.ok(Math.abs(state.overviewScale - frame) < 1e-9, `${layout} at ${width}px keeps one frame through the turn (step ${step}: ${state.overviewScale} vs ${frame})`);
+      for (const { node, p } of points) assert.ok(p.x - 25 >= area.x - 1e-6 && p.x + 25 <= area.x + area.w + 1e-6 && p.y - 25 >= area.y - 1e-6 && p.y + 25 <= area.y + area.h + 1e-6, `${layout} keeps ${node.id} in view at step ${step}`);
+    });
+    // Sized for the turn, not shrunk to a sliver: the old origin-centred
+    // turn backed some of these layouts off to a seventh of the frame.
+    assert.ok(frame >= 0.5, `${layout} at ${width}px keeps a readable frame: ${frame}`);
+  }
+});
+
+test("the tree's centre is the smallest circle around it from above, halfway up its height", () => {
+  const { env } = overviewFixture("constellation");
+  const circle = env.enclosingCircle([{ x: -3, z: 0 }, { x: 3, z: 0 }, { x: 0, z: 1 }]);
+  assert.deepEqual([circle.x, circle.z, circle.r], [0, 0, 3], "an obtuse triangle is spanned by its long side");
+  const square = env.enclosingCircle([{ x: 1, z: 1 }, { x: 5, z: 1 }, { x: 5, z: 5 }, { x: 1, z: 5 }, { x: 3, z: 3 }]);
+  assert.ok(Math.abs(square.x - 3) < 1e-9 && Math.abs(square.z - 3) < 1e-9 && Math.abs(square.r - Math.hypot(2, 2)) < 1e-9);
+  const line = env.enclosingCircle([{ x: 0, z: 0 }, { x: 1, z: 1 }, { x: 4, z: 4 }, { x: 2, z: 2 }]);
+  assert.ok(Math.abs(line.x - 2) < 1e-9 && Math.abs(line.r - Math.hypot(2, 2)) < 1e-9, "collinear points use their widest pair");
+  let seed = 7;
+  const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let trial = 0; trial < 40; trial += 1) {
+    const points = Array.from({ length: 3 + trial * 3 }, () => ({ x: random() * 800 - 300, z: random() * 500 - 100 }));
+    const best = env.enclosingCircle(points);
+    assert.ok(points.every((point) => Math.hypot(point.x - best.x, point.z - best.z) <= best.r + 1e-6), "the circle holds every point");
+    // Minimal: no circle through any pair or triple that holds them all is smaller.
+    const holds = (c) => points.every((point) => Math.hypot(point.x - c.x, point.z - c.z) <= c.r + 1e-6);
+    for (let a = 0; a < points.length; a += 1) for (let b = a + 1; b < points.length; b += 1) {
+      const pair = { x: (points[a].x + points[b].x) / 2, z: (points[a].z + points[b].z) / 2, r: Math.hypot(points[a].x - points[b].x, points[a].z - points[b].z) / 2 };
+      if (holds(pair)) assert.ok(best.r <= pair.r + 1e-6);
+    }
+  }
+  const nodes = [{ x: -100, y: -40, z: 0 }, { x: 100, y: 10, z: 0 }, { x: 0, y: 80, z: 60 }].map((point, i) => ({ node: { id: `n${i}`, _layoutAnchor: point } }));
+  nodes.push({ node: { id: "leaving", dying: true, _layoutAnchor: { x: 5000, y: 5000, z: 5000 } } });
+  const centre = env.orbitCentre(nodes);
+  assert.deepEqual([centre.x, centre.y, centre.z], [0, 20, 0], "dying work does not move the centre; the height is the middle of the range");
+  assert.equal(env.orbitCentre(nodes), centre, "an unchanged tree reuses its centre");
+});
+
+test("music moves the overview only inside the frame it keeps in reserve", () => {
+  for (const layout of ["constellation", "tree", "helix", "layers"]) {
+    const { env, state, nodes, area } = overviewFixture(layout);
+    const halfW = area.w / 2 - 28, halfH = area.h / 2 - 28;
+    const swell = 0.07, sway = 0.035, nod = 0.06;
+    let quiet = null;
+    overviewTurn(env, state, nodes, area, 1, () => { quiet ??= state.overviewScale; });
+    // Every extreme at once: full room, the sway at a corner of its figure
+    // of eight, the snare's full nod, and the swell both at rest and on the kick.
+    for (const [px, py] of [[1, 0.5], [-1, -0.5], [1, -0.5], [-1, 0.5]]) for (const beat of [0, 1]) {
+      state.groove = { room: 1, swell: beat, sway: 1, nod, tiltRoom: nod, px: px * sway * halfW, py: py * sway * halfH, frame: 1 - (swell * (1 - beat) + sway) };
+      state.angle = 0.5;
+      let frame = null;
+      overviewTurn(env, state, nodes, area, 1, (points, step) => {
+        frame ??= state.overviewScale;
+        assert.ok(Math.abs(state.overviewScale - frame) < 1e-9, `${layout}: the music's frame holds steady through the turn at step ${step}`);
+        for (const { node, p } of points) assert.ok(p.x - 25 >= area.x - 1e-6 && p.x + 25 <= area.x + area.w + 1e-6 && p.y - 25 >= area.y - 1e-6 && p.y + 25 <= area.y + area.h + 1e-6, `${layout}: ${node.id} stays in view while the tree dances (step ${step})`);
+      });
+      assert.ok(frame < quiet, `${layout}: the frame keeps room for the music`);
+      assert.ok(frame > quiet * 0.85, `${layout}: the room is a margin, not a collapse`);
+    }
+  }
+});
+
+test("Tree motion turns, steps, sways and swells with the music, and settles without it", () => {
+  const state = { audioResponse: 0.35 };
+  let now = 10000;
+  const env = vm.createContext({ state, Math, Number, Date: class extends Date { static now() { return now; } }, GROOVE_SPIN: 1.8, GROOVE_KICK: 0.0045, GROOVE_SWELL: 0.07, GROOVE_SWAY: 0.035, GROOVE_NOD: 0.06 });
+  vm.runInContext(section("function stepGroove(", "function computeBranch("), env);
+  const area = { x: 0, y: 0, w: 1056, h: 656 };
+  const music = (onset, loud = 0.8) => ({ energy: loud, kick: loud, bassline: loud, mid: loud, snare: loud, bandState: { bass: { lastOnset: onset } } });
+  const frame = (sample, live = true, still = false) => { now += 33; return env.stepGroove(sample, 0.033, live, still, area); };
+  // Linking mid-track only sets the kick clock.
+  assert.equal(frame(music(500)).kick, 0, "the first reading does not jolt the tree");
+  for (let i = 0; i < 180; i += 1) frame(music(500));
+  const groove = state.groove;
+  assert.ok(Math.abs(groove.room - 0.7) < 0.01, `room eases to the Response share (35% of a full 50%): ${groove.room}`);
+  const step = frame(music(900));
+  assert.ok(step.kick > 0.002, "a new kick steps the spin on");
+  assert.ok(step.spin > 1.9, "the spin quickens with the music's energy");
+  assert.equal(frame(music(900)).kick, 0, "one kick, one step");
+  assert.ok(groove.frame < 1 && Math.abs(groove.frame - (1 - groove.room * (0.07 * (1 - groove.swell) + 0.035))) < 1e-12, "the frame reserve covers the swell and the sway");
+  assert.ok(Math.abs(groove.px) <= 0.035 * groove.room * (area.w / 2 - 28) + 1e-9 && Math.abs(groove.py) <= 0.5 * 0.035 * groove.room * (area.h / 2 - 28) + 1e-9, "the sway stays inside the reserve");
+  assert.ok(groove.nod > 0 && groove.nod <= 0.06 && groove.tiltRoom === 0.06, "the snare nods within the tilt the frame allows");
+  const swayBefore = groove.phase;
+  for (let kick = 0; kick < 4; kick += 1) for (let i = 0; i < 15; i += 1) frame(music(1200 + kick * 500));
+  assert.ok(groove.phase > swayBefore + Math.PI * 1.9, `four kicks walk the tree once round its figure of eight: ${groove.phase - swayBefore}`);
+  // The spin pauses, or the music stops: every voice settles back out.
+  for (let i = 0; i < 200; i += 1) frame(music(1200 + 3 * 500), false);
+  assert.ok(groove.room < 0.01 && groove.swell < 0.01 && groove.sway < 0.01 && groove.nod < 0.001, "without the spin the tree settles into its steady frame");
+  assert.equal(frame(music(99999), false).kick, 0, "a paused spin takes no kicks");
+  for (let i = 0; i < 90; i += 1) frame(music(99999));
+  for (let i = 0; i < 80; i += 1) frame({ energy: 0, bandState: { bass: { lastOnset: 99999 } } });
+  assert.ok(groove.room > 0.6, "a pause between tracks keeps the room");
+  for (let i = 0; i < 220; i += 1) frame({ energy: 0, bandState: { bass: { lastOnset: 99999 } } });
+  assert.ok(groove.room < 0.01, "after three quiet seconds the frame is given back");
+  for (let i = 0; i < 90; i += 1) frame(music(99999));
+  const reduced = frame(music(123456), true, true);
+  assert.deepEqual([reduced.kick, reduced.spin, groove.room, groove.px, groove.py, groove.nod, groove.frame], [0, 1, 0, 0, 0, 0, 1], "reduced motion stills every voice at once");
+  state.audioResponse = 0;
+  for (let i = 0; i < 200; i += 1) frame(music(200000 + i * 500));
+  assert.ok(groove.room < 0.01, "a zero Response keeps the tree still");
 });
 
 test("circular 3D views retain meaningful volume and separate work rims through modest camera turns", () => {

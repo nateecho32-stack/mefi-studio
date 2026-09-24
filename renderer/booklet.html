@@ -53,6 +53,22 @@
   --tint-gold-2: rgba(113, 203, 183, 0.09);
   --tint-gold-3: rgba(113, 203, 183, 0.14);
 
+  /* ---- frost: glass over the live tree (Home, the menu, the project panel) ----
+     Mixed from the theme's own tokens, so every theme keeps its hue; the Blur
+     behind panels switch (html[data-no-blur], under "Home over the live tree")
+     makes them dense. */
+  --frost: blur(18px) saturate(1.6);
+  --frost-veil: color-mix(in srgb, var(--bg) 18%, transparent);          /* over the tree itself */
+  --frost-glass: color-mix(in srgb, var(--panel-solid) 40%, transparent); /* a top-level panel */
+  --frost-glass-strong: color-mix(in srgb, var(--panel-solid) 60%, transparent);
+  --frost-tint: color-mix(in srgb, color-mix(in srgb, var(--gold) 7%, var(--panel-solid)) 36%, transparent); /* a card inside one */
+  --frost-tint-strong: color-mix(in srgb, color-mix(in srgb, var(--gold) 8%, var(--panel-solid)) 52%, transparent);
+  --frost-tint-hover: color-mix(in srgb, color-mix(in srgb, var(--gold) 14%, var(--panel-solid)) 54%, transparent);
+  --frost-well: color-mix(in srgb, var(--bg-deep) 55%, transparent);     /* fields and counters */
+  --frost-edge: color-mix(in srgb, var(--hairline-strong) 62%, transparent);
+  --frost-edge-soft: color-mix(in srgb, var(--hairline-strong) 34%, transparent);
+  --frost-lift: 0 18px 44px -24px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
   /* ---- spacing ---- */
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px; --s6: 24px; --s7: 32px;
   --gutter: 26px;
@@ -182,10 +198,15 @@ a.link .glyph { opacity: 0.75; }
 .panel,
 .card {
   background: var(--glass);
-  backdrop-filter: var(--blur);
   border: 1px solid var(--hairline);
   box-shadow: var(--shadow-2), var(--inset-hi);
 }
+/* The catalog's cards sit straight on the body's flat-dark gradients, where a
+   blur changes nothing visible, yet each card became its own blurred render
+   surface that scrolling the grid re-blurred frame by frame. Panels keep it:
+   the blur also makes a panel the containing block and stacking context of
+   what it holds, and the Model Lab's position: fixed hover tip sits in one. */
+.panel { backdrop-filter: var(--blur); }
 
 .overlay .sheet,
 .explorer-sheet,
@@ -1934,7 +1955,9 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 }
 .palette-sheet input:focus { box-shadow: none; border-color: var(--hairline); }
 .palette-search-row { display: flex; align-items: center; border-bottom: 1px solid var(--hairline); padding-right: var(--s3); gap: var(--s2); }
-.palette-search-row input { flex: 1; min-width: 0; border-bottom: 0; }
+/* The field starts in the sheet's rounded corner, so its keyboard ring follows
+   that corner instead of drawing a square one across it. */
+.palette-search-row input { flex: 1; min-width: 0; border-bottom: 0; border-radius: var(--r-lg) var(--r-xs) var(--r-xs) var(--r-xs); }
 .palette-search-row button { flex-shrink: 0; }
 .palette-result-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 #palette-list .description { color: var(--dim); font-size: var(--fs-xs); line-height: 1.45; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1952,6 +1975,12 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
   cursor: pointer;
 }
 #palette-list li .kind { color: var(--gold); font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.08em; min-width: 64px; }
+/* A section's name heads its group once instead of on every row. The rest keep
+   it (it is part of each option's spoken name) but only show it, faintly, on the
+   row you are on, so a long group scrolled past its first row still says where
+   you are. Opacity, not visibility, so screen readers hear it unchanged. */
+#palette-list li:not(.palette-group-start) .kind { opacity: 0; }
+#palette-list li:not(.palette-group-start):is(.active, :hover) .kind { opacity: .5; }
 #palette-list li .label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #palette-list li .count { position: static; }
 #palette-list li .hint { color: var(--dim); font-size: var(--fs-xs); margin-left: auto; display: inline-flex; align-items: center; gap: var(--s1); }
@@ -1998,7 +2027,9 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 #help-grid { display: block; columns: 2 20rem; column-gap: var(--s7); }
 .help-section {
   break-inside: avoid;
-  display: grid; grid-template-columns: 112px minmax(0, 1fr);
+  /* Wide enough for the longest keycap (Right-drag), and no wider: the old
+     112px left a gutter between each key and what it does. */
+  display: grid; grid-template-columns: 88px minmax(0, 1fr);
   gap: 7px var(--s4); align-items: baseline;
   margin: 0 0 var(--s5);
 }
@@ -2713,7 +2744,8 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 #workspace-sidebar-panel {
   position: absolute; inset: 0 auto 0 0; width: var(--sidebar-width); height: 100%;
   padding: 14px 16px 16px; border-left: 0; border-right: 1px solid var(--hairline-strong);
-  background: radial-gradient(120% 34% at 0 0, rgba(var(--ws-accent-rgb), 0.12), transparent 60%), var(--panel-solid);
+  background: radial-gradient(120% 34% at 0 0, rgba(var(--ws-accent-rgb), 0.12), transparent 60%), var(--frost-glass-strong);
+  backdrop-filter: var(--frost);
   color: var(--ivory); overflow-y: auto;
   overscroll-behavior: contain; scrollbar-gutter: stable; pointer-events: none;
   transform: translateX(-100%); visibility: hidden;
@@ -2755,7 +2787,9 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 #workspace-sidebar .ws-home .label { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #workspace-sidebar .ws-home kbd { margin-left: 0; }
 #workspace-sidebar .ws-home:hover { background: rgba(var(--ws-accent-rgb), 0.08); border-color: rgba(var(--ws-accent-rgb), 0.22); color: var(--ivory); }
-#workspace-sidebar [data-nav][aria-current="page"] { background: rgba(var(--ws-accent-rgb), 0.14); border-color: rgba(var(--ws-accent-rgb), 0.35); color: var(--ivory); box-shadow: inset 3px 0 0 var(--ws-accent); }
+/* The brand links home too, but it is the panel's heading, not a row: on Home
+   it must not wear the current-page pill (a filled box with an accent bar). */
+#workspace-sidebar [data-nav][aria-current="page"]:not(.ws-brand) { background: rgba(var(--ws-accent-rgb), 0.14); border-color: rgba(var(--ws-accent-rgb), 0.35); color: var(--ivory); box-shadow: inset 3px 0 0 var(--ws-accent); }
 /* projects */
 #workspace-sidebar .ws-section-label { display: flex; align-items: center; justify-content: space-between; padding: 14px 8px 6px; color: var(--dim); font-size: 10px; letter-spacing: 1.6px; }
 #workspace-sidebar .ws-section-label button { font-size: 20px; min-height: 24px; min-width: 24px; padding: 0 4px; border: 1px solid transparent; border-radius: 7px; color: var(--ws-accent); }
@@ -2801,6 +2835,70 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
   #workspace-sidebar-panel { transition: none; }
 }
 @media (max-width: 650px) { .ws-section-label { display: flex; padding: 2px 6px 6px; } }
+/* ---- Home over the live tree ------------------------------------------------
+   idle.js draws the node tree behind Home as scenery (startHomeBackdrop, which
+   sets body.home-backdrop) and the workspace layer itself is clear, so Home is
+   glass over the tree. The top-level panels (the glance tiles, the
+   conversation, Your work, the connection pill, the setup card, the project
+   panel and the menu) frost what is behind them. What sits inside a panel
+   (the composer, messages, cards, the backlog) is a lighter tint over that
+   frost with no filter of its own: a nested backdrop-filter would only see its
+   own panel. Blur behind panels off (html[data-no-blur]) makes every surface
+   dense and unfiltered. The ids outrank the theme rules in music.css on
+   purpose: this is Home's one skin, in every theme. */
+body.home-backdrop :is(#idle-layer, #idle-layer-far) { z-index: calc(var(--z-workspace) - 1); pointer-events: none; }
+html[data-no-blur] {
+  --frost: none;
+  --frost-glass: color-mix(in srgb, var(--panel-solid) 94%, transparent);
+  --frost-glass-strong: var(--panel-solid);
+  --frost-tint: color-mix(in srgb, var(--gold) 6%, var(--panel-solid));
+  --frost-tint-strong: color-mix(in srgb, var(--gold) 8%, var(--panel-solid));
+  --frost-tint-hover: color-mix(in srgb, var(--gold) 13%, var(--panel-solid));
+  --frost-well: var(--bg-deep);
+}
+#workspace-layer { background: transparent; }
+/* The veil keeps the tree a backdrop: a little deeper behind the headline,
+   lighter lower down where the panels already frost it. */
+#workspace-layer .ws-main { background: radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent), var(--frost-veil) 260px); }
+:root[data-studio-theme-tier="premium"] #workspace-layer .ws-main { background: radial-gradient(ellipse at 12% 100%, rgba(var(--accent-2-rgb), .07), transparent 46%), radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent), var(--frost-veil) 260px); }
+#workspace-layer :is(.ws-topbar, .ws-heading) { text-shadow: 0 1px 14px rgba(0, 0, 0, 0.6); }
+#workspace-layer .ws-topbar { border-color: var(--frost-edge-soft); }
+
+/* top-level panels: the frost itself */
+#workspace-layer :is(.ws-dash-tile, .ws-conversation, .ws-work, .ws-connection, .walkthrough-invitation:not(.community-invitation)) {
+  background: var(--frost-glass); border: 1px solid var(--frost-edge); box-shadow: var(--frost-lift);
+  backdrop-filter: var(--frost);
+}
+#workspace-layer .ws-dash-tile:is(:hover, :focus-visible) { background: var(--frost-tint-hover); border-color: var(--hairline-strong); }
+#workspace-layer .ws-dash-service:hover { background: var(--frost-glass); border-color: var(--frost-edge); }
+#workspace-layer .ws-dash-tile[data-tone="warn"] { border-color: rgba(230, 168, 90, 0.55); }
+#workspace-layer .ws-dash-tile[data-tone="held"] { border-color: rgba(200, 120, 120, 0.5); }
+#workspace-layer .ws-connection { color: var(--ivory); }
+/* The conversation and Your work become the two panes they already were,
+   each with its own frosted pane instead of a rule between them. */
+#workspace-layer .ws-conversation { border-radius: var(--r-lg); padding: 2px 16px 12px; }
+#workspace-layer .ws-work { border-radius: var(--r-lg); padding: 4px 14px 12px; }
+#workspace-layer :is(.ws-companion-bar, .ws-work-tabs) { border-color: var(--frost-edge-soft); }
+#workspace-layer .ws-conversation > .ws-activity { border-color: var(--frost-edge-soft); }
+
+/* inside a panel: tints over its frost */
+#workspace-layer :is(.ws-composer, .ws-backlog) { background: var(--frost-tint-strong); border-color: var(--frost-edge); }
+#workspace-layer .ws-composer:focus-within { border-color: var(--ws-accent); }
+#workspace-layer .ws-message.user { background: var(--frost-tint); border-color: var(--frost-edge-soft); }
+#workspace-layer :is(.ws-work-card, .ws-idea-card) { background: var(--frost-tint); border-top-color: var(--frost-edge-soft); border-right-color: var(--frost-edge-soft); border-bottom-color: var(--frost-edge-soft); }
+#workspace-layer .ws-work-card:is([data-stage="running"], [data-status="active"], [data-status="running"]) { background: color-mix(in srgb, color-mix(in srgb, var(--gold) 16%, var(--panel-solid)) 56%, transparent); }
+#workspace-layer .ws-work-card:hover { background: var(--frost-tint-hover); }
+#workspace-layer :is(.ws-work-search, .ws-modes, .ws-work-tabs button span) { background: var(--frost-well); }
+#workspace-layer .ws-work-search { border-color: var(--frost-edge); }
+#workspace-layer .ghost { border-color: var(--frost-edge); }
+#workspace-layer .ghost:hover { background: var(--tint-gold-2); border-color: var(--hairline-strong); }
+
+/* the project panel's rows, over its own frost */
+#workspace-sidebar .ws-project.selected { background: var(--frost-tint-strong); }
+#workspace-sidebar .ws-project-icon { background: var(--frost-well); }
+
+/* Stacked (a narrow window), Your work is a full pane under the conversation. */
+@media (max-width: 960px) { #workspace-layer .ws-work { padding: 12px 14px; } }
 #tasks-overlay .explorer-grid { grid-template-columns: minmax(270px,31%) minmax(0,1fr); }
 /* The overview follows saved plan and conversation relationships. Nested rows
    retain the original task controls without competing with the goal cards. */
@@ -2882,6 +2980,10 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 @media (max-width: 740px) { #tasks-overlay .explorer-grid { grid-template-columns: 1fr; overflow-y: auto; }#tasks-overlay .explorer-col { overflow: visible; } }
 
                                                                                         
+/* --cmd-surface is --panel-solid, an opaque hex in every theme (music.js
+   themeTokens), so a HUD panel filled with it, or a transparent control
+   sitting on one, sets backdrop-filter: none: behind an opaque fill the
+   glass recipe's blur only re-ran under the panel on every Command frame. */
 #idle-hud { --command-panel-top: 158px; --command-panel-bottom: 100px; --command-feed-width: 328px; --cmd-surface: var(--panel-solid); --cmd-raised: color-mix(in srgb, var(--ivory) 5%, var(--panel-solid)); --cmd-hover: color-mix(in srgb, var(--ivory) 8%, var(--panel-solid)); --cmd-edge: color-mix(in srgb, var(--ivory) 15%, var(--panel-solid)); --cmd-shadow: 0 10px 28px #0002, inset 0 1px color-mix(in srgb, var(--ivory) 5%, transparent); scrollbar-color: var(--cmd-edge) transparent; }
 #idle-hud .cmd-top { top: 20px; left: 24px; right: 24px; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 24px; align-items: start; }
 #idle-hud .cmd-brand { gap: 14px; min-width: 0; align-items: flex-start; }
@@ -2899,7 +3001,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 #idle-hud .cmd-tele .pill.bad { color: var(--bad); }
 #idle-hud .cmd-tele .pill:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 #idle-hud .cmd-center { grid-column: 1 / -1; grid-row: 2; justify-self: start; display: flex; flex-wrap: nowrap; gap: 0; width: min(720px, calc(100% - 48px)); max-width: 100%; margin: 0 0 0 48px; padding: 4px; border: 1px solid var(--cmd-edge); border-radius: 14px; background: var(--cmd-surface); box-shadow: var(--cmd-shadow); }
-#idle-hud .cmd-composer, #idle-hud .cmd-search { min-width: 0; background: transparent; border: 1px solid transparent; border-radius: 9px; box-shadow: none; min-height: 34px; }
+#idle-hud .cmd-composer, #idle-hud .cmd-search { min-width: 0; background: transparent; border: 1px solid transparent; border-radius: 9px; box-shadow: none; min-height: 34px; backdrop-filter: none; }
 #idle-hud .cmd-composer:focus-within, #idle-hud .cmd-search:focus-within { border-color: var(--gold); box-shadow: none; background: var(--cmd-raised); }
 #idle-hud .cmd-composer .glyph, #idle-hud .cmd-search .glyph { color: var(--muted); }
 #idle-hud .cmd-composer .primary.mini { border-radius: 7px; padding-inline: 14px; min-height: 28px; background: var(--gold); color: var(--ink); border-color: transparent; box-shadow: inset 0 1px #ffffff20; }
@@ -2907,7 +3009,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 #idle-hud .cmd-search { width: 46%; flex: 1 1 46%; margin-left: 6px; padding-left: 12px; border-left-color: var(--cmd-edge); border-radius: 0 9px 9px 0; }
 #idle-hud .cmd-composer input { width: 100%; min-width: 0; font-size: 13px; }
 #idle-hud .cmd-search input { width: 100%; min-width: 0; font-size: 13px; }
-#idle-hud .cmd-tools { grid-column: 2; grid-row: 1; justify-self: end; padding: 5px; gap: 2px; border-radius: 14px; border-color: var(--cmd-edge); background: var(--cmd-surface); box-shadow: var(--cmd-shadow); }
+#idle-hud .cmd-tools { grid-column: 2; grid-row: 1; justify-self: end; padding: 5px; gap: 2px; border-radius: 14px; border-color: var(--cmd-edge); background: var(--cmd-surface); box-shadow: var(--cmd-shadow); backdrop-filter: none; }
 #idle-hud .cmd-tools button { min-height: 34px; padding: 5px 9px; border-radius: 6px; }
 #idle-hud .cmd-tools .glyph, #idle-hud #idle-labels .label, #idle-hud #idle-view .label { color: inherit; }
 #idle-hud .cmd-tools .ghost:hover { background: var(--cmd-hover); border-color: transparent; }
@@ -2990,7 +3092,7 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .feed-queue .qt { flex: 1; color: var(--ivory); white-space: normal; font-size: 12px; line-height: 1.5; text-align: left; padding: 7px 6px; border: 0; border-radius: 6px; background: transparent; box-shadow: none; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 #idle-hud .feed-queue button.qt:hover { color: var(--ivory); background: var(--cmd-raised); transform: none; box-shadow: none; }
 #idle-hud .feed-queue .src-tag { font-size: 9px; }
-#idle-hud .feed-drop { padding: 0; border: 0; background: transparent; }
+#idle-hud .feed-drop { padding: 0; border: 0; background: transparent; backdrop-filter: none; }
 #idle-hud .feed-drop[hidden] { display: none; }
 #idle-hud .feed-section { flex: none; border-top: 1px solid var(--hairline); padding-top: 10px; }
 #idle-hud .feed-section summary { display: list-item; cursor: pointer; color: var(--muted); font-size: 12px; padding: 2px 0 6px; }
@@ -3032,7 +3134,7 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .cmd-chat.collapsed { bottom: auto; width: max-content; max-width: 300px; min-height: 48px; padding: 9px 12px; border-radius: 14px; }
 #idle-hud .cmd-chat.collapsed .chat-log-head { padding: 0; margin: 0; border: 0; }
 #idle-hud .cmd-chat.collapsed .feed-state { margin-left: 6px; font-size: 10px; max-width: 12em; }
-#idle-hud .cmd-card { top: calc(var(--command-panel-top) + 66px); right: 24px; width: 300px; max-height: calc(100vh - var(--command-panel-top) - 170px); background: var(--cmd-surface); border-color: var(--hairline-strong); border-radius: 12px; box-shadow: 0 12px 32px #0005; }
+#idle-hud .cmd-card { top: calc(var(--command-panel-top) + 66px); right: 24px; width: 300px; max-height: calc(100vh - var(--command-panel-top) - 170px); background: var(--cmd-surface); border-color: var(--hairline-strong); border-radius: 12px; box-shadow: 0 12px 32px #0005; backdrop-filter: none; }
 #idle-hud.chat-log-open .cmd-card { right: 340px; }
 /* the bottom bar sits left, right after the Legend / Usage corner, instead of centred:
    the corner column is --command-corner-width wide, the bar starts one gap past it,
@@ -3040,7 +3142,7 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud { --command-corner-width: 172px; --command-corner-gap: 14px; --command-dock-max: calc(100vw - 24px - var(--command-corner-width) - var(--command-corner-gap) - 24px); }
 #idle-hud .cmd-bottom { left: calc(24px + var(--command-corner-width) + var(--command-corner-gap)); right: auto; bottom: 22px; padding: 0; align-items: flex-start; gap: 9px; max-width: var(--command-dock-max); }
 #idle-hud .cmd-hint { font-size: 10px; color: var(--muted); opacity: .7; letter-spacing: .02em; text-align: left; padding-left: 10px; }
-#idle-hud .cmd-dock { display: flex; flex-wrap: nowrap; align-items: center; gap: 3px; padding: 6px 8px; border-radius: 16px; max-width: var(--command-dock-max); min-height: 48px; background: var(--cmd-surface); border-color: var(--cmd-edge); box-shadow: var(--cmd-shadow); }
+#idle-hud .cmd-dock { display: flex; flex-wrap: nowrap; align-items: center; gap: 3px; padding: 6px 8px; border-radius: 16px; max-width: var(--command-dock-max); min-height: 48px; background: var(--cmd-surface); border-color: var(--cmd-edge); box-shadow: var(--cmd-shadow); backdrop-filter: none; }
 #idle-hud .dock-item { min-width: 0; min-height: 35px; padding: 6px 11px; gap: 7px; border-radius: 9px; font-size: 12px; color: var(--muted); }
 #idle-hud .dock-item .glyph { color: inherit; }
 #idle-hud .dock-item .label { display: inline; }
@@ -3072,7 +3174,7 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .usage-brief:empty { display: none; }
 #idle-hud .usage-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--warn); box-shadow: 0 0 6px var(--warn); }
 #idle-hud .usage-dot[hidden] { display: none; }
-#idle-hud .legend-list { background: var(--cmd-surface); border-color: var(--cmd-edge); }
+#idle-hud .legend-list { background: var(--cmd-surface); border-color: var(--cmd-edge); backdrop-filter: none; }
 /* an open corner list reaches over the hint line; the hint steps out of the way until it closes */
 #idle-hud .cmd-legend:has(.legend-list:not([hidden]), .usage-pop:not([hidden])) ~ .cmd-bottom .cmd-hint { opacity: 0; }
 @media (max-width: 1440px) {
@@ -3577,7 +3679,11 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
 .walkthrough-coach-hint { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
 .walkthrough-coach-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .walkthrough-coach-actions .primary { font-size: 11px; }
-.walkthrough-focus { outline: 2px solid var(--gold-bright) !important; outline-offset: 3px; border-radius: 7px; animation: walkthrough-pulse 1.6s ease-in-out infinite; }
+/* The pulse runs for the first few beats of a step, then the outline holds:
+   an endless outline-color loop restyled the target on every frame for as
+   long as the coach stayed on it (and the !important outline wins the
+   cascade over the animated colour anyway). */
+.walkthrough-focus { outline: 2px solid var(--gold-bright) !important; outline-offset: 3px; border-radius: 7px; animation: walkthrough-pulse 1.6s ease-in-out 4; }
 body.command-active .walkthrough-coach { right: 392px; }
 @media (max-width: 1150px) { body.command-active .walkthrough-coach { right: 18px; } }
 @media (max-width: 650px) { .walkthrough-coach { left: 12px; right: 12px; bottom: 12px; width: auto; } }
@@ -4294,8 +4400,8 @@ html[data-shell="rail"][data-rail-pinned] { --shell-rail-w: var(--shell-rail-ope
   position: fixed; top: 0; bottom: 0; left: 0; z-index: var(--z-shell);
   width: var(--shell-rail-w); box-sizing: border-box;
   display: flex; flex-direction: column; gap: 4px; padding: 10px 8px;
-  background: var(--glass-hard); border-right: 1px solid var(--hairline);
-  backdrop-filter: var(--blur);
+  background: var(--frost-glass-strong); border-right: 1px solid var(--hairline);
+  backdrop-filter: var(--frost);
   /* Only the section list scrolls (below); the brand, the foot and the pin
      stay on screen however tall the open rail grows. */
   overflow: hidden;
@@ -4342,14 +4448,17 @@ html[data-shell="rail"][data-rail-pinned] { --shell-rail-w: var(--shell-rail-ope
 #app-rail .app-rail-brand,
 #app-rail .app-rail-foot,
 #app-rail .app-rail-pin { flex: none; }
+/* At rest the tile spends the rail's whole inner width on its word, so the
+   longest section name ("Settings") fits instead of ending in an ellipsis. */
 #app-rail .app-rail-head {
   flex-direction: column; justify-content: center; gap: 3px;
-  min-height: 52px; padding: 6px 2px; font-size: 10.5px; text-align: center;
+  min-height: 52px; padding: 6px 0; font-size: 10.5px; letter-spacing: -0.01em; text-align: center;
 }
 #app-rail .app-rail-head .app-rail-text { flex: none; max-width: 100%; }
 #app-rail .app-rail-head .count { position: absolute; top: 3px; right: 5px; min-width: 15px; height: 15px; padding: 0 4px; font-size: 9.5px; }
-#app-rail .app-rail-children { display: none; flex-direction: column; gap: 1px; padding: 2px 0 8px 14px; }
-#app-rail .app-rail-item { min-height: 32px; padding: 0 10px; font-size: var(--fs-xs); }
+#app-rail .app-rail-children { display: none; flex-direction: column; gap: 1px; padding: 0 0 6px; }
+/* Items line their glyphs up with the heads' and Home's, one column of icons. */
+#app-rail .app-rail-item { min-height: 30px; padding: 0 15px; font-size: var(--fs-sm); }
 #app-rail .app-rail-item .key { margin-left: auto; opacity: .62; font-size: 10px; }
 #app-rail .app-rail-item .count { margin-left: 4px; }
 
@@ -4357,8 +4466,25 @@ html[data-shell="rail"][data-rail-pinned] { --shell-rail-w: var(--shell-rail-ope
 #app-rail:has(:focus-visible) .app-rail-head,
 html[data-rail-pinned] #app-rail .app-rail-head {
   flex-direction: row; justify-content: flex-start; gap: 10px;
-  min-height: 40px; padding: 0 15px; font-size: var(--fs-sm); text-align: left;
+  min-height: 40px; padding: 0 15px; font-size: var(--fs-sm); letter-spacing: normal; text-align: left;
 }
+/* Open, a head with a list under it is that list's heading: a short, quiet
+   capitals row, so the eye reads sections and destinations as two levels and
+   the whole menu fits a 900px window. It still goes to its main destination.
+   Home lists nothing beneath it and keeps the full row. */
+#app-rail:hover .app-rail-section:has(> .app-rail-children) > .app-rail-head,
+#app-rail:has(:focus-visible) .app-rail-section:has(> .app-rail-children) > .app-rail-head,
+html[data-rail-pinned] #app-rail .app-rail-section:has(> .app-rail-children) > .app-rail-head {
+  min-height: 28px; margin-top: 4px; color: var(--rail-head-ink, var(--dim));
+  font: 600 var(--fs-2xs)/1.2 var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase;
+}
+/* The heading's quiet ink still brightens on hover and lights for the section
+   you are in: those rules set the ink rather than fight its specificity. */
+#app-rail .app-rail-head:hover { --rail-head-ink: var(--ivory); }
+#app-rail .app-rail-section.current > .app-rail-head { --rail-head-ink: var(--gold-bright); }
+#app-rail:hover .app-rail-section:has(> .app-rail-children) > .app-rail-head .glyph,
+#app-rail:has(:focus-visible) .app-rail-section:has(> .app-rail-children) > .app-rail-head .glyph,
+html[data-rail-pinned] #app-rail .app-rail-section:has(> .app-rail-children) > .app-rail-head .glyph { width: 14px; height: 14px; margin-inline: 1px; }
 #app-rail:hover .app-rail-head .count,
 #app-rail:has(:focus-visible) .app-rail-head .count,
 html[data-rail-pinned] #app-rail .app-rail-head .count { position: static; margin-left: auto; }
@@ -4370,28 +4496,60 @@ html[data-rail-pinned] #app-rail .app-rail-children { display: flex; }
 #app-rail .app-rail-section.current > .app-rail-head { color: var(--gold-bright); }
 #app-rail .app-rail-section.current > .app-rail-head .glyph { color: var(--gold); }
 #app-rail [aria-current="page"] { color: var(--gold-bright); background: var(--tint-gold-3); border-color: var(--hairline-strong); }
+#app-rail .app-rail-item[aria-current="page"] .glyph { color: var(--gold); }
+
+/* A list taller than the window says so: its scrolled-off edges fade out. The
+   fade depths follow the scroll position (a scroll-driven animation), so a
+   list that fits, or sits at an end, shows a hard edge there. */
+@property --rail-fade-top { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --rail-fade-bottom { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@keyframes rail-scroll-fade {
+  0% { --rail-fade-top: 0px; --rail-fade-bottom: 28px; }
+  6%, 94% { --rail-fade-top: 28px; --rail-fade-bottom: 28px; }
+  100% { --rail-fade-top: 28px; --rail-fade-bottom: 0px; }
+}
+#app-rail .app-rail-sections {
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--rail-fade-top), #000 calc(100% - var(--rail-fade-bottom)), transparent);
+  animation: rail-scroll-fade linear both;
+  animation-timeline: scroll(self);
+}
 
 /* At rest the one-line buttons (brand, foot, pin) are icon only: their words,
    keycaps and counts wait for the rail to open instead of peeking out clipped. */
 html:not([data-rail-pinned]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-brand, .app-rail-foot-item, .app-rail-pin) :is(.label, .key, .app-rail-text, .count) { display: none; }
 #app-rail .app-rail-foot { display: flex; flex-direction: column; gap: 1px; padding-top: 8px; border-top: 1px solid var(--hairline); }
-#app-rail .app-rail-foot .app-rail-item { min-height: 36px; padding: 0 15px; }
+#app-rail .app-rail-foot .app-rail-item { min-height: 34px; padding: 0 15px; }
 #app-rail .app-rail-pin { min-height: 34px; margin-top: 2px; }
 #app-rail .app-rail-pin[aria-pressed="true"] { color: var(--gold-bright); }
 /* Short windows: the open rail lists every destination, so its rows tighten
-   (about 110px back at 720px tall); at rest the section tiles shrink too. */
+   and the foot folds into one row of icons (each keeps its name as a tooltip
+   and accessible name), which gives back about 150px at 720px tall. At rest
+   the section tiles shrink too. */
 @media (max-height: 820px) {
   #app-rail .app-rail-brand { min-height: 40px; margin-bottom: 4px; }
   #app-rail:hover .app-rail-head,
   #app-rail:has(:focus-visible) .app-rail-head,
   html[data-rail-pinned] #app-rail .app-rail-head { min-height: 34px; }
+  #app-rail:hover .app-rail-section:has(> .app-rail-children) > .app-rail-head,
+  #app-rail:has(:focus-visible) .app-rail-section:has(> .app-rail-children) > .app-rail-head,
+  html[data-rail-pinned] #app-rail .app-rail-section:has(> .app-rail-children) > .app-rail-head { min-height: 24px; margin-top: 0; }
   #app-rail .app-rail-item { min-height: 28px; }
   #app-rail .app-rail-foot .app-rail-item { min-height: 32px; }
   #app-rail .app-rail-pin { min-height: 30px; }
+  #app-rail:hover .app-rail-foot,
+  #app-rail:has(:focus-visible) .app-rail-foot,
+  html[data-rail-pinned] #app-rail .app-rail-foot { flex-flow: row wrap; gap: 2px; }
+  #app-rail:hover .app-rail-foot :is(.app-rail-item, .update-pill),
+  #app-rail:has(:focus-visible) .app-rail-foot :is(.app-rail-item, .update-pill),
+  html[data-rail-pinned] #app-rail .app-rail-foot :is(.app-rail-item, .update-pill) { flex: 1 1 0; justify-content: center; width: auto; min-width: 36px; padding: 0; }
+  #app-rail:hover .app-rail-foot :is(.app-rail-item, .update-pill) :is(.label, .key, .count),
+  #app-rail:has(:focus-visible) .app-rail-foot :is(.app-rail-item, .update-pill) :is(.label, .key, .count),
+  html[data-rail-pinned] #app-rail .app-rail-foot :is(.app-rail-item, .update-pill) :is(.label, .key, .count) { display: none; }
 }
 @media (max-height: 640px) {
   #app-rail .app-rail-head { min-height: 44px; }
-  #app-rail .app-rail-head .app-rail-text { font-size: 9.5px; }
+  /* The smaller word is for the resting tile; open, heads keep their size. */
+  html:not([data-rail-pinned]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head .app-rail-text { font-size: 9.5px; }
 }
 
 /* Every full-window layer makes room for the rail. The Command canvas stays
@@ -4417,7 +4575,13 @@ html[data-shell="rail"] #workspace-sidebar-panel { left: var(--shell-rail-w); }
 html[data-shell="rail"] .overlay .sheet { width: min(620px, calc(92vw - var(--shell-rail-w))); }
 html[data-shell="rail"] .palette-sheet { width: min(640px, calc(92vw - var(--shell-rail-w))); }
 /* toasts clear the rail (Settings' sticky list sits with the Settings rules) */
-html[data-shell="rail"] #toast-host { left: calc(var(--shell-rail-w) + 22px); }
+html[data-shell="rail"] #toast-host {
+  left: calc(var(--shell-rail-w) + 22px);
+  transition: bottom var(--dur-2) var(--ease), left var(--motion-menu) var(--ease);
+}
+/* The rail opens over the page, and toasts paint above it: while it is open
+   they step aside to its edge instead of covering its foot. */
+html[data-shell="rail"]:has(#app-rail:hover, #app-rail :focus-visible) #toast-host { left: calc(var(--shell-rail-open) + 22px); }
 html[data-shell="rail"] .explorer-sheet { width: min(1460px, calc(97vw - var(--shell-rail-w))); }
 html[data-shell="rail"] .overlay .walkthrough-sheet { width: min(740px, calc(94vw - var(--shell-rail-w))); }
 
@@ -4437,9 +4601,13 @@ html[data-shell="rail"] #idle-hud .cmd-brand .monogram { display: none; }
 
 /* Zen fades the rail with the rest of the HUD. */
 body.command-zen #app-rail { opacity: 0; pointer-events: none; }   /* fades both ways: opacity is in the base transition */
+/* Over Command the rail sits on canvases that redraw every frame, so its 94%
+   glass would re-blur that strip each frame for the 6% that shows through.
+   The fill it composites to over the empty sky stands in, blur-free. */
+body.command-active #app-rail { background: color-mix(in srgb, var(--panel-solid) 94%, var(--cmd-bg)); backdrop-filter: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  #app-rail { transition: none; }
+  #app-rail, html[data-shell="rail"] #toast-host { transition: none; }
 }
 @media print {
   #app-rail { display: none; }
@@ -4820,8 +4988,13 @@ body.music-preview-active #idle-hud { display: none !important; }
 .planning-flow-status { display: flex; align-items: flex-start; gap: 10px; margin-top: 16px; padding: 13px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; border-top: 1px solid var(--hairline); }
 .planning-flow-status[data-active="true"] { color: var(--gold-bright); }
 .planning-flow-dot { flex: none; height: 7px; width: 7px; border-radius: 50%; margin-top: 6px; background: var(--hairline-strong); }
-.planning-flow-status[data-active="true"] .planning-flow-dot { background: var(--gold-bright); animation: planning-think 1.8s ease-in-out infinite; }
-@keyframes planning-think { 50% { box-shadow: 0 0 0 5px var(--tint-gold-2); opacity: .6; } }
+/* The thinking dot breathes on opacity alone; its halo is a fixed ring on a
+   pseudo-element that fades in with it (the dot's .6 dims it too, as it did
+   the animated box-shadow), so the compositor runs the loop, not paint. */
+.planning-flow-status[data-active="true"] .planning-flow-dot { position: relative; background: var(--gold-bright); animation: planning-think 1.8s ease-in-out infinite; }
+.planning-flow-status[data-active="true"] .planning-flow-dot::after { content: ""; position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 5px var(--tint-gold-2); opacity: 0; pointer-events: none; animation: planning-think-halo 1.8s ease-in-out infinite; }
+@keyframes planning-think { 50% { opacity: .6; } }
+@keyframes planning-think-halo { 50% { opacity: 1; } }
 .planning-question-map, .planning-execution { border-top: 1px solid var(--hairline); padding-top: 17px; margin-top: 19px; }
 .planning-map-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 13px; }
 .planning-map-head h4 { margin: 0; font-size: 13px; font-weight: 600; }
@@ -4917,8 +5090,8 @@ body.music-preview-active #idle-hud { display: none !important; }
   .planning-map-columns { gap: 13px; }
 }
 @media (max-width: 420px) { .planning-flow-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); } .planning-flow-rail li:nth-child(4)::after { display: block; } .planning-flow-rail li:nth-child(3n)::after { display: none; } }
-@media (prefers-reduced-motion: reduce) { .planning-flow-dot { animation: none !important; } }
-.no-motion .planning-flow-dot, .ws-still .planning-flow-dot { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .planning-flow-dot, .planning-flow-dot::after { animation: none !important; } }
+.no-motion .planning-flow-dot, .ws-still .planning-flow-dot, .no-motion .planning-flow-dot::after, .ws-still .planning-flow-dot::after { animation: none !important; }
 @media print { .planning-overlay { position: static; padding: 0; background: none; } .planning-sheet { height: auto; overflow: visible; } .planning-sidebar, .planning-actions { display: none; } .planning-body { display: block; } .planning-detail { overflow: visible; } }
 
 /* Already in this project: maps, tickets and tooling found in the folder. */
@@ -5054,7 +5227,13 @@ body.music-preview-active #idle-hud { display: none !important; }
    stage is scaled by a CSS transform that vector-effect does not undo */
 .brains-wire { --accent: var(--hairline-strong); fill: none; stroke: var(--accent); stroke-opacity: .6; stroke-width: calc(2px / var(--zoom, 1)); transition: stroke-opacity var(--dur-2) var(--ease); }
 .brains-wire[data-hover="true"] { stroke-opacity: 1; stroke-width: calc(3.5px / var(--zoom, 1)); }
-.brains-wire[data-lit="true"] { stroke-opacity: 1; stroke-width: calc(2.5px / var(--zoom, 1)); stroke-dasharray: calc(10px / var(--zoom, 1)) calc(7px / var(--zoom, 1)); animation: brains-flow 900ms linear infinite; }
+/* A lit wire flows for four beats after the selection (every render redraws
+   the wires, so each new selection flows again), then rests dashed and bright
+   beside the dimmed rest. A dash offset repaints the SVG on the main thread
+   every frame, so it no longer runs for as long as a node stays selected;
+   pointing at a lit wire keeps it flowing. */
+.brains-wire[data-lit="true"] { stroke-opacity: 1; stroke-width: calc(2.5px / var(--zoom, 1)); stroke-dasharray: calc(10px / var(--zoom, 1)) calc(7px / var(--zoom, 1)); animation: brains-flow 900ms linear 4; }
+.brains-wire[data-lit="true"][data-hover="true"] { animation-iteration-count: infinite; }
 .brains-wire[data-dim="true"] { stroke-opacity: .14; }
 .brains-wire[data-feedback="true"] { stroke-dasharray: calc(6px / var(--zoom, 1)) calc(5px / var(--zoom, 1)); }
 .brains-wire[data-problem="error"] { stroke: var(--bad); stroke-opacity: .95; }
@@ -5112,7 +5291,15 @@ body.music-preview-active #idle-hud { display: none !important; }
 .brains-port[data-armed="true"] { color: var(--gold-bright); background: var(--tint-gold-3); }
 .brains-port[data-armed="true"] i { border-color: var(--gold-bright); box-shadow: 0 0 0 4px var(--tint-gold-3); }
 .brains-port[data-target="yes"] { color: var(--ivory); }
-.brains-port[data-target="yes"] i { border-color: var(--gold-bright); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold-bright) 25%, transparent); animation: brains-pulse 1.1s ease-in-out infinite; }
+/* The drop-target pulse cross-fades two fixed rings (the 3px one at rest, the
+   wider fainter one at the peak) on pseudo-elements the compositor animates,
+   instead of repainting an animated box-shadow every frame. Without motion
+   the resting ring stays, as the static shadow did. */
+.brains-port[data-target="yes"] i { position: relative; border-color: var(--gold-bright); }
+.brains-port[data-target="yes"] i::before,
+.brains-port[data-target="yes"] i::after { content: ""; position: absolute; inset: -1.5px; border-radius: 50%; pointer-events: none; }
+.brains-port[data-target="yes"] i::before { box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold-bright) 25%, transparent); animation: brains-pulse-rest 1.1s ease-in-out infinite; }
+.brains-port[data-target="yes"] i::after { opacity: 0; box-shadow: 0 0 0 5px color-mix(in srgb, var(--gold-bright) 12%, transparent); animation: brains-pulse 1.1s ease-in-out infinite; }
 .brains-port[data-target="no"] { opacity: .3; }
 .brains-node-note { grid-column: 1 / -1; height: 36px; margin: 0; padding: 4px 10px 0 12px; font-size: 11px; line-height: 1.4; color: var(--muted); font-style: italic; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .brains-node-foot { flex: none; height: 26px; margin: 0; padding: 0 10px 0 12px; display: block; line-height: 25px; font-size: 9.5px; color: var(--dim); border-top: 1px solid var(--hairline); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -5319,12 +5506,13 @@ textarea.brains-dialog-input { min-height: 104px; resize: vertical; }
 .brains-banner { animation-name: brains-banner-in; }
 @keyframes brains-banner-in { from { opacity: 0; transform: translate(-50%, -6px); } }
 @keyframes brains-node-in { from { opacity: 0; } }
-@keyframes brains-pulse { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--gold-bright) 12%, transparent); } }
+@keyframes brains-pulse { 50% { opacity: 1; } }
+@keyframes brains-pulse-rest { 50% { opacity: 0; } }
 @keyframes brains-spin { to { transform: rotate(360deg); } }
 
 @media (prefers-reduced-motion: reduce) {
   .brains-wire[data-lit="true"] { animation: none; stroke-dasharray: none; }
-  .brains-port[data-target="yes"] i, .brains-node, .brains-menu, .brains-banner, .brains-search-panel, .brains-dialog-panel, .brains-shortcuts-panel { animation: none; }
+  .brains-port[data-target="yes"] i::before, .brains-port[data-target="yes"] i::after, .brains-node, .brains-menu, .brains-banner, .brains-search-panel, .brains-dialog-panel, .brains-shortcuts-panel { animation: none; }
   .brains-stage.animating, .brains-body { transition: none; }
 }
 @container brains-sheet (max-width: 1400px) {
@@ -6082,10 +6270,10 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
           </div>
           <div class="settings-you-switches">
             <label class="switch" id="settings-companion-motion" title="Your companion floats and blinks beside the conversation. Calm and Off keep it still."><input id="workspace-motion" type="checkbox" checked><span class="track"></span><span>Let your companion move</span></label>
-            <label class="switch" title="Blur what sits behind every sheet and menu. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
+            <label class="switch" title="Blur what sits behind every sheet, menu and Home panel. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
             <label class="switch" title="On: every launch lands on Your workspace. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span>Open Workspace on launch</span></label>
           </div>
-          <p class="muted">Blur behind panels applies to every sheet and menu. With Open Workspace on launch off, Studio opens straight into Command view after the project chooser. All of this stays on this computer.</p>
+          <p class="muted">Blur behind panels applies to every sheet, menu and Home panel. With Open Workspace on launch off, Studio opens straight into Command view after the project chooser. All of this stays on this computer.</p>
         </details>
         <details class="settings-optional settings-card" id="settings-community"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-community"/></svg></span><span class="settings-summary-text"><b>Community</b><span>The Void Engine Discord: builders, model setups and the members' Void collection</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
           <section class="community-showcase" id="community-showcase" aria-labelledby="community-showcase-title"><div class="community-showcase-copy"><span class="community-showcase-kicker">Void collection</span><strong id="community-showcase-title">Four themes, three node styles</strong><span class="community-showcase-state" id="community-showcase-state" data-unlocked="false">For members of the Void Engine Discord</span><button type="button" class="primary mini community-choose" id="community-choose" title="Open Style &amp; sound at the Void collection" hidden>Choose a Void theme</button></div><div class="community-showcase-items" id="community-showcase-items" aria-hidden="true"></div></section>
@@ -17621,6 +17809,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
 // After five quiet minutes it opens itself in ambient mode; D (or the dock, the
 // rail button, the palette) opens it as the menu. Keys, layers and every
 // destination belong to nav.js — this file owns the canvas and its HUD.
+// Behind Home it draws the same tree as scenery for the workspace's frosted
+// panels (startHomeBackdrop): no HUD, no input, no text, a slow cadence.
 (function () {
   "use strict";
 
@@ -17754,6 +17944,15 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   const ORBIT_ENERGY = 0.0022; // audio-energy term
   const ORBIT_EASE = 0.06; // velocity lerp per frame → ~1.2 s to settle
   const SETTLE_MS = 2500; // a wheel zoom holds the orbit still for a beat
+  // Tree motion (Audio link): how far the music may move the overview at full
+  // response (stepGroove). The frame keeps SWELL + SWAY of itself in reserve
+  // while music plays, and always allows for the nod, so none of it can push
+  // work out of view.
+  const GROOVE_SPIN = 1.8; // the spin quickens by up to this share with the music's energy
+  const GROOVE_KICK = 0.0045; // radians/frame a kick drum adds to the spin; it glides off at ORBIT_EASE
+  const GROOVE_SWELL = 0.07; // share of the frame the bass breathes the tree out by
+  const GROOVE_SWAY = 0.035; // share of the half-frame the figure-of-eight sway travels
+  const GROOVE_NOD = 0.06; // radians the snare tips the tree toward the camera
   // Starfield: three depth bands wheeling at a fraction of the orbit rate, so
   // the far sky drifts slowly against the constellation. Positions are hashed
   // from seed+index — stable across frames and resizes, no stored array.
@@ -17856,7 +18055,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     bands: { bass: 0, mid: 0, treble: 0 },
     music: null,
     audioResponse: initialAudioPreferences.response,
-    audioEffects: { waves: initialAudioPreferences.waves, nodes: initialAudioPreferences.nodes, percussion: initialAudioPreferences.percussion, background: initialAudioPreferences.background, splitBands: initialAudioPreferences.splitBands },
+    audioEffects: { waves: initialAudioPreferences.waves, nodes: initialAudioPreferences.nodes, percussion: initialAudioPreferences.percussion, background: initialAudioPreferences.background, splitBands: initialAudioPreferences.splitBands, motion: initialAudioPreferences.motion },
     spectrumBuffer: null,
     waveformBuffer: null,
     inputSource: null,
@@ -17886,7 +18085,12 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     analyser: null,
     inputStream: null,
     inputPending: null, // source kind of the in-flight capture request
-    timers: { idle: null, refresh: null },
+    timers: { idle: null, refresh: null, backdrop: null },
+    // Home's backdrop (startHomeBackdrop): the tree drawn as scenery behind
+    // the workspace. `homeBackdrop` is true while it draws; `homeBackdropWanted`
+    // remembers that Home asked for it while Command held the canvas.
+    homeBackdrop: false,
+    homeBackdropWanted: false,
     lastFrame: 0,
     lastInput: Date.now(),
     checkpoints: {},
@@ -18306,7 +18510,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const phase = !state.reactive ? "off" : state.inputError ? "error" : pending ? "pending" : listening ? paused ? "paused" : "listening" : "ready";
     const text = phase === "off" ? "Audio link off" : phase === "error" ? "Audio unavailable" : phase === "pending" ? "Connecting audio…" : phase === "paused" ? "Track paused" : phase === "listening" ? (state.music?.energy > 0.035 ? `${source === "local" ? "Track" : source === "mic" ? "Mic" : "Desktop"} linked` : "Listening · quiet") : state.audioSource === "local" ? "Add a track to link" : "Connect audio";
     const description = state.inputError || (listening ? paused ? "Studio track is paused. Play it to animate the nodes." : `Following ${sourceName.toLowerCase()}. Bass, mids and treble animate the nodes and connections.` : pending ? `Connecting to ${sourceName.toLowerCase()}…` : state.audioSource === "local" ? "Add a local track, then play it to animate the nodes." : state.audioSource === "auto" ? "Follows loaded Studio tracks directly. Connect to desktop audio when no track is loaded." : `Connect to ${sourceName.toLowerCase()} to animate the nodes.`);
-    return { reactive: state.reactive, selection: state.audioSource, source, listening, pending, error: state.inputError, phase, text, label: text, description, response: state.audioResponse ?? 0.35, effects: { waves: state.audioEffects?.waves !== false, nodes: state.audioEffects?.nodes !== false, percussion: state.audioEffects?.percussion === true, background: state.audioEffects?.background === true, splitBands: state.audioEffects?.splitBands !== false }, bands: { ...state.bands }, energy: state.music?.energy ?? 0, beat: state.music?.beat ?? 0, kick: state.music?.kick ?? 0, snare: state.music?.snare ?? 0, hat: state.music?.hat ?? 0, bassline: state.music?.bassline ?? 0 };
+    return { reactive: state.reactive, selection: state.audioSource, source, listening, pending, error: state.inputError, phase, text, label: text, description, response: state.audioResponse ?? 0.35, effects: { waves: state.audioEffects?.waves !== false, nodes: state.audioEffects?.nodes !== false, percussion: state.audioEffects?.percussion === true, background: state.audioEffects?.background === true, splitBands: state.audioEffects?.splitBands !== false, motion: state.audioEffects?.motion !== false }, bands: { ...state.bands }, energy: state.music?.energy ?? 0, beat: state.music?.beat ?? 0, kick: state.music?.kick ?? 0, snare: state.music?.snare ?? 0, hat: state.music?.hat ?? 0, bassline: state.music?.bassline ?? 0 };
   }
 
   function bell({ low = false, long = false, quick = false, level = 1 }) {
@@ -20868,16 +21072,40 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return left * (1 - ease);
   }
 
+  // The music's sway (stepGroove) moves the projection centre itself, so the
+  // tree steps about on screen while every anchor, pick and unprojection
+  // stays exact.
   function centerX() {
-    if (state.center) return state.center.x;
+    const sway = state.groove?.px ?? 0;
+    if (state.center) return state.center.x + sway;
     const area = usableArea();
-    return area.x + area.w / 2;
+    return area.x + area.w / 2 + sway;
   }
 
   function centerY() {
-    if (state.center) return state.center.y;
+    const sway = state.groove?.py ?? 0;
+    if (state.center) return state.center.y + sway;
     const area = usableArea();
-    return area.y + area.h / 2;
+    return area.y + area.h / 2 + sway;
+  }
+
+  // The camera backs off as the graph is scaled up, so a screen-filling fit
+  // (or a deep zoom) keeps the same gentle perspective instead of ballooning
+  // the near nodes. It also stays 3.5 half-diagonals of the graph frame out
+  // (times the zoom), about four radii of a tree seeded to fill it, so the
+  // far end of a wide tree turning to the front grows by a third at most
+  // instead of swelling off the frame. The frame is known before the layout
+  // seeds, so the perspective a layout was spaced under is the one it keeps.
+  function cameraDistance(scale) {
+    const frame = state.graphFrame;
+    const reach = frame ? Math.hypot(frame.w, frame.h) / 2 * (state.zoom || 1) * 3.5 : 0;
+    return Math.max(900 * Math.max(1, scale / 1.6), reach);
+  }
+
+  // The tilt the tree turns under: the slow nod the spin carries, the
+  // owner's right-drag pitch, and the snare's nod while music plays.
+  function cameraTilt() {
+    return Math.sin(state.angle * 0.37) * 0.35 + state.pitch + (state.groove?.nod ?? 0);
   }
 
   function project(node) {
@@ -20894,20 +21122,19 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     }
     const cos = Math.cos(state.angle);
     const sin = Math.sin(state.angle);
-    const tilt = Math.sin(state.angle * 0.37) * 0.35 + state.pitch;
+    const tilt = cameraTilt();
     const x0 = (node.x + state.camera.x) * scale;
     const z0 = (node.z + state.camera.z) * scale;
     const y0 = (node.y + state.camera.y) * scale;
     const rx = x0 * cos - z0 * sin;
     const rz = x0 * sin + z0 * cos;
     const ry = y0 * Math.cos(tilt) - rz * Math.sin(tilt) * 0.4;
-    // The camera backs off as the graph is scaled up, so a screen-filling fit (or
-    // a deep zoom) keeps the same gentle perspective instead of ballooning the
-    // near nodes. `depth` is reported on the 900 baseline the fades are tuned to.
-    const distance = 900 * Math.max(1, scale / 1.6);
-    const raw = rz + distance;
-    const k = distance / Math.max(distance * 0.2, raw);
-    return { x: centerX() + rx * k * framing, y: centerY() + ry * k * framing, k, depth: (raw * 900) / distance };
+    const distance = cameraDistance(scale);
+    const k = distance / Math.max(distance * 0.2, rz + distance);
+    // `depth` orders the paint. It is reported on the 900 baseline the camera
+    // stood at before it backed off to the frame, so a volume measures the
+    // same however far the camera now stands.
+    return { x: centerX() + rx * k * framing, y: centerY() + ry * k * framing, k, depth: 900 + rz / Math.max(1, scale / 1.6) };
   }
 
   function unprojectForLayout(point, source) {
@@ -20915,11 +21142,10 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const framing = state.overviewScale ?? 1;
     if (state.view === "2d") return { x: (point.x - centerX()) / (scale * framing) - state.camera.x, y: source.y, z: (point.y - centerY()) / (scale * framing) - state.camera.z };
     const base = project(source);
-    const distance = 900 * Math.max(1, scale / 1.6);
-    const rz = base.depth * distance / 900 - distance;
+    const rz = (base.depth - 900) * Math.max(1, scale / 1.6);
     const rx = (point.x - centerX()) / (base.k * framing), ry = (point.y - centerY()) / (base.k * framing);
     const cos = Math.cos(state.angle), sin = Math.sin(state.angle);
-    const tilt = Math.sin(state.angle * 0.37) * 0.35 + state.pitch;
+    const tilt = cameraTilt();
     return { x: (rx * cos + rz * sin) / scale - state.camera.x, y: (ry + rz * Math.sin(tilt) * 0.4) / Math.cos(tilt) / scale - state.camera.y, z: (-rx * sin + rz * cos) / scale - state.camera.z };
   }
 
@@ -20942,6 +21168,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     }
     if (state.ambientZen) {
       state.graphFrame = { x: 28, y: 28, w: Math.max(1, el.width - 56), h: Math.max(1, el.height - 56) };
+      return { ...state.graphFrame };
+    }
+    // Behind Home there is no HUD to keep clear: the tree spreads edge to edge.
+    if (state.homeBackdrop && !state.active) {
+      state.graphFrame = { x: 0, y: 0, w: Math.max(1, el.width), h: Math.max(1, el.height) };
       return { ...state.graphFrame };
     }
     const now = Date.now();
@@ -22063,6 +22294,100 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return projected;
   }
 
+  // The smallest circle around points on the floor plane (x, z), the plane
+  // the spin turns in: Welzl's incremental construction, visiting the points
+  // in a fixed scrambled order so a long sorted branch cannot hit its slow case.
+  function enclosingCircle(points) {
+    const count = points.length;
+    if (!count) return { x: 0, z: 0, r: 0 };
+    const order = count % 7919 ? points.map((_, index) => points[(index * 7919 + 13) % count]) : points;
+    const inside = (circle, point) => Math.hypot(point.x - circle.x, point.z - circle.z) <= circle.r * (1 + 1e-9) + 1e-6;
+    const pair = (a, b) => ({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2, r: Math.hypot(a.x - b.x, a.z - b.z) / 2 });
+    const triple = (a, b, c) => {
+      const bx = b.x - a.x, bz = b.z - a.z, cx = c.x - a.x, cz = c.z - a.z;
+      const d = 2 * (bx * cz - bz * cx);
+      // In a line, the widest pair already spans all three.
+      if (Math.abs(d) < 1e-9) return [pair(a, b), pair(a, c), pair(b, c)].sort((p, q) => q.r - p.r)[0];
+      const b2 = bx * bx + bz * bz, c2 = cx * cx + cz * cz;
+      const ux = (cz * b2 - bz * c2) / d, uz = (bx * c2 - cx * b2) / d;
+      return { x: a.x + ux, z: a.z + uz, r: Math.hypot(ux, uz) };
+    };
+    let circle = { x: order[0].x, z: order[0].z, r: 0 };
+    for (let i = 1; i < count; i += 1) {
+      if (inside(circle, order[i])) continue;
+      circle = { x: order[i].x, z: order[i].z, r: 0 };
+      for (let j = 0; j < i; j += 1) {
+        if (inside(circle, order[j])) continue;
+        circle = pair(order[i], order[j]);
+        for (let k = 0; k < j; k += 1) if (!inside(circle, order[k])) circle = triple(order[i], order[j], order[k]);
+      }
+    }
+    return circle;
+  }
+
+  // The point the overview turns the tree about: the middle of the smallest
+  // circle around its anchors seen from above, halfway up its height. The
+  // world origin sits wherever the layout's seeds and depths left it, so
+  // turning about it swung the tree off to one side; this point is the
+  // tree's own, so the spin keeps the whole structure centred. Workers ride
+  // their hosts and dying nodes are already leaving, so neither moves it.
+  // Cached on the live anchors, which only change when work comes or goes.
+  function orbitCentre(anchors) {
+    const points = [];
+    let key = 0;
+    for (const { node } of anchors) {
+      const point = node._layoutAnchor;
+      if (node.dying || node._absorbed || !point) continue;
+      points.push(point);
+      for (const value of [point.x, point.y, point.z]) key = (key * 31 + Math.round(value * 8)) | 0;
+    }
+    const cached = state.orbitFrame;
+    if (cached && cached.key === key && cached.count === points.length) return cached;
+    const circle = enclosingCircle(points);
+    let low = Infinity, high = -Infinity;
+    for (const point of points) { low = Math.min(low, point.y); high = Math.max(high, point.y); }
+    state.orbitFrame = { key, count: points.length, x: circle.x, y: points.length ? (low + high) / 2 : 0, z: circle.z };
+    return state.orbitFrame;
+  }
+
+  // The overview's scale for a whole turn: the largest (at most 1) at which
+  // every anchor stays inside half-extents halfW × halfH of the frame at every
+  // angle of the spin, under every tilt its slow nod, the owner's pitch and
+  // the music's nod can give it. Each anchor only needs its reach off the
+  // spin axis (r) and its height (y) about the centre, so the frame is sized
+  // once for the turn instead of breathing in and out as a long tree swings
+  // end-on. Across a turn an anchor's screen x peaks at r / √(1 − ρ²), where
+  // ρ = r / camera distance; its screen y peaks with it nearest (or
+  // farthest) and at the tilt that lifts it most.
+  function orbitEnvelope(points, centre, halfW, halfH) {
+    const scale = Math.max(0.01, state.fit * state.zoom);
+    const distance = cameraDistance(scale);
+    const nod = state.groove?.tiltRoom ?? 0;
+    const low = state.pitch - 0.35 - nod, high = state.pitch + 0.35 + nod;
+    let fit = 1;
+    for (const point of points) {
+      const r = Math.hypot(point.x - centre.x, point.z - centre.z) * scale;
+      const y = (point.y - centre.y) * scale;
+      const ratio = r / distance;
+      // Past 0.8 the projection clamps its magnification at 5.
+      const clamped = ratio >= 0.8;
+      const wide = clamped ? r * 5 : r / Math.sqrt(1 - ratio * ratio);
+      let tall = 0;
+      for (const side of [-1, 1]) {
+        // ry = y·cos t − rz·sin t·0.4 with rz = side·r: a·cos t + b·sin t.
+        const a = y, b = -0.4 * r * side;
+        const lift = (t) => Math.abs(a * Math.cos(t) + b * Math.sin(t));
+        let peak = Math.max(lift(low), lift(high));
+        const phase = Math.atan2(b, a);
+        if (Math.ceil((low - phase) / Math.PI) * Math.PI + phase <= high) peak = Math.hypot(a, b);
+        tall = Math.max(tall, clamped ? peak * 5 : peak / (1 + side * ratio));
+      }
+      if (wide > 0) fit = Math.min(fit, halfW / wide);
+      if (tall > 0) fit = Math.min(fit, halfH / tall);
+    }
+    return fit;
+  }
+
   function layoutProjectedGraph(projected, area, mode, animationTime = Date.now(), still = false) {
     const profiler = globalThis.window?.MefiProfiler;
     const span = profiler?.begin("command.layout");
@@ -22080,7 +22405,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const frame = state.graphFrame ?? area;
     const key = `${layoutName}|${state.view}|${frame.x},${frame.y},${frame.w},${frame.h}`;
     if (state.screenLayout?.key !== key) {
-      state.screenLayout = { key, nodes: new Map(), slots: new Map() };
+      state.screenLayout = { key, nodes: new Map(), slots: new Map(), fresh: true };
       state.overviewScale = 1;
     }
     const layout = state.screenLayout.nodes;
@@ -22149,18 +22474,45 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       layout.set(node.id, { world: anchor }); node._layoutAnchor = { ...anchor };
       Object.assign(p, project(anchor));
     }
-    // Fixed world anchors can project beyond their initial frame as a 3D
-    // orbit turns. Back the overview off as a whole, preserving perspective
-    // and anchors, so panel clipping never removes work from the overview.
-    // Free/Follow retain their intentional pan and zoom into part of the tree.
+    // The tree's own centre (3D only: the flat map does not turn), kept
+    // current in every mode for frameTree. The overview camera flies to it,
+    // which makes the spin turn the tree in place; a fresh layout lands there
+    // at once, and Fit and a mode switch morph over the move.
+    const fresh = state.screenLayout.fresh;
+    state.screenLayout.fresh = false;
+    if (state.view !== "2d") {
+      const centre = orbitCentre(anchors);
+      if (mode === "orbit") {
+        state.camera.tx = -centre.x; state.camera.ty = -centre.y; state.camera.tz = -centre.z;
+        if (fresh) {
+          state.camera.x = state.camera.tx; state.camera.y = state.camera.ty; state.camera.z = state.camera.tz;
+          if (state.camVel) { state.camVel.x = 0; state.camVel.y = 0; state.camVel.z = 0; }
+          for (const { node, p } of anchors) Object.assign(p, project(node._layoutAnchor));
+        }
+      }
+    }
+    // Fixed world anchors turn with the camera, so the overview sizes the
+    // frame for the whole turn about that centre (orbitEnvelope), less the
+    // room the music's swell and sway keep (stepGroove). A camera still
+    // gliding to a new centre is checked frame by frame on top, with the
+    // sway's offset taken out of the frame, so panel clipping never removes
+    // work from the overview. Free/Follow retain their intentional pan and
+    // zoom into part of the tree.
     if (mode === "orbit") {
-      const cx = area.x + area.w / 2, cy = area.y + area.h / 2;
+      const groove = state.groove;
+      const swayX = groove?.px ?? 0, swayY = groove?.py ?? 0;
+      const cx = area.x + area.w / 2 + swayX, cy = area.y + area.h / 2 + swayY;
       const halfW = Math.max(1, area.w / 2 - 28), halfH = Math.max(1, area.h / 2 - 28);
       const previousScale = state.overviewScale ?? 1;
       let scale = 1;
+      if (state.view !== "2d") {
+        const live = anchors.filter(({ node }) => !node.dying && !node._absorbed && node._layoutAnchor).map(({ node }) => node._layoutAnchor);
+        scale = orbitEnvelope(live, state.orbitFrame, halfW, halfH) * (groove?.frame ?? 1);
+      }
+      const roomX = Math.max(1, halfW - Math.abs(swayX)), roomY = Math.max(1, halfH - Math.abs(swayY));
       for (const { node, p } of anchors) {
         if (node.dying || node._absorbed) continue;
-        scale = Math.min(scale, halfW / Math.max(1, Math.abs(p.x - cx) / previousScale), halfH / Math.max(1, Math.abs(p.y - cy) / previousScale));
+        scale = Math.min(scale, roomX / Math.max(1, Math.abs(p.x - cx) / previousScale), roomY / Math.max(1, Math.abs(p.y - cy) / previousScale));
       }
       state.overviewScale = scale;
       if (scale !== previousScale) for (const { node, p } of anchors) Object.assign(p, project(node._layoutAnchor));
@@ -23762,6 +24114,59 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return ORBIT_BASE + (state.reactive ? 0 : energy) * ORBIT_ENERGY;
   }
 
+  // Tree motion (Audio link): how the music moves the overview while the
+  // spin runs. Every voice is eased, so nothing snaps:
+  //  - spin: the turn quickens with the music's energy;
+  //  - kick: each kick drum steps the turn on, and it glides off again;
+  //  - swell: the bass breathes the tree out into the room the frame keeps;
+  //  - sway: the tree steps round a small figure of eight, a quarter of it
+  //    per kick, as wide as the mids are loud;
+  //  - nod: the snare tips it toward the camera.
+  // `room` eases in while music is heard (to the Response share, full from
+  // 50%) and out again after three quiet seconds or when the spin stops, and
+  // every voice is a share of it, so the layout's frame reserve
+  // (groove.frame) always covers the swell and the sway. Returns the spin's
+  // multiplier and this frame's kick, in radians per 30 fps frame.
+  function stepGroove(music, dt, live, still, area) {
+    const groove = (state.groove ??= { room: 0, swell: 0, sway: 0, phase: 0, step: 0, nod: 0, px: 0, py: 0, kickAt: null, heardAt: -Infinity });
+    groove.tiltRoom = GROOVE_NOD;
+    const clamp = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+    const ease = (from, to, attack, release = attack) => (dt > 0 ? from + (to - from) * (1 - Math.exp(-dt / (to > from ? attack : release))) : from);
+    const now = Date.now();
+    const energy = clamp(music?.energy);
+    if (live && energy > 0.04) groove.heardAt = now;
+    const hearing = live && !still && now - groove.heardAt < 3000;
+    let kick = 0;
+    // A kick is the bass band's onset clock moving on. The first reading only
+    // sets the clock, so linking mid-track does not jolt the tree.
+    const onset = music?.bandState?.bass?.lastOnset;
+    if (Number.isFinite(onset) && onset !== groove.kickAt) {
+      if (hearing && groove.kickAt != null) {
+        kick = GROOVE_KICK * Math.max(0.5, clamp(music.kick)) * groove.room;
+        groove.step += Math.PI / 2;
+      }
+      groove.kickAt = onset;
+    }
+    if (still) Object.assign(groove, { room: 0, swell: 0, sway: 0, nod: 0 });
+    else {
+      groove.room = ease(groove.room, hearing ? Math.min(1, Math.max(0, state.audioResponse ?? 0.35) / 0.5) : 0, 0.9, 1.2);
+      groove.swell = ease(groove.swell, hearing ? clamp(clamp(music?.kick) * 0.8 + clamp(music?.bassline) * 0.35) : 0, 0.05, 0.28);
+      groove.sway = ease(groove.sway, hearing ? clamp(clamp(music?.mid) * 0.7 + energy * 0.3) : 0, 0.4, 0.9);
+      groove.nod = ease(groove.nod, hearing ? GROOVE_NOD * clamp(music?.snare) * groove.room : 0, 0.06, 0.35);
+      // Between kicks the figure of eight drifts on with the energy.
+      if (hearing) groove.step += dt * (0.15 + energy * 0.45);
+      groove.phase = ease(groove.phase, groove.step, 0.22);
+      if (groove.step > Math.PI * 8) { groove.step -= Math.PI * 4; groove.phase -= Math.PI * 4; }
+    }
+    const room = groove.room;
+    groove.frame = 1 - room * (GROOVE_SWELL * (1 - groove.swell) + GROOVE_SWAY);
+    const reach = GROOVE_SWAY * room * groove.sway;
+    groove.px = reach ? Math.sin(groove.phase) * reach * Math.max(0, area.w / 2 - 28) : 0;
+    groove.py = reach ? Math.sin(groove.phase * 2) * 0.5 * reach * Math.max(0, area.h / 2 - 28) : 0;
+    groove.moving = room > 0.002;
+    return { spin: 1 + GROOVE_SPIN * energy * room, kick };
+  }
+
   function computeBranch() {
     const node = state.selected?.node;
     if (!node) {
@@ -23840,10 +24245,19 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   const AMBIENT_FRAME_MS = 30;
   const HOT_FRAME_MS = 12;
   const HOT_FRAME_BUDGET_MS = 9;
+  // Behind Home the tree is scenery under frosted glass: about 12 fps keeps a
+  // slow orbit smooth through the blur for well under half Command's cost, and
+  // with motion off one frame a second is enough to pick up graph changes.
+  const BACKDROP_FRAME_MS = 80;
+  const BACKDROP_STILL_FRAME_MS = 1000;
   let lastFrameAt = 0;
   let frameRequest = 0;
+  function frameGap(hot) {
+    if (state.active) return hot ? HOT_FRAME_MS : AMBIENT_FRAME_MS;
+    return typeof noMotion === "function" && noMotion() ? BACKDROP_STILL_FRAME_MS : BACKDROP_FRAME_MS;
+  }
   function frame(time) {
-    if (!state.active) return;
+    if (!state.active && !state.homeBackdrop) return;
     if (document.body.dataset.sheet && !(state.settingsPreview && document.body.dataset.sheet === "music") || pickerHeld(time)) {
       frameRequest = requestAnimationFrame(frame);
       return;
@@ -23853,7 +24267,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     // tick that missed a 33 ms gate cost a whole extra tick — a 50 ms hitch
     // that read as judder in every camera glide.
     const hot = state.motionHot && Number.isFinite(state.frameCost) && state.frameCost < HOT_FRAME_BUDGET_MS;
-    if (!document.hidden && time - lastFrameAt >= (hot ? HOT_FRAME_MS : AMBIENT_FRAME_MS)) {
+    if (!document.hidden && time - lastFrameAt >= frameGap(hot)) {
       lastFrameAt = time;
       const profiler = globalThis.window?.MefiProfiler;
       const span = profiler?.begin("command.frame");
@@ -23885,7 +24299,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const saved = value && typeof value === "object" && !Array.isArray(value) ? value : {};
     const legacy = legacyResponse == null || legacyResponse === "" ? NaN : Number(legacyResponse);
     const response = typeof saved.response === "number" && Number.isFinite(saved.response) ? saved.response : Number.isFinite(legacy) ? Math.max(0, Math.min(2, legacy)) * 0.35 : 0.35;
-    return { response: Math.max(0, Math.min(2, response)), waves: typeof saved.waves === "boolean" ? saved.waves : true, nodes: typeof saved.nodes === "boolean" ? saved.nodes : true, percussion: saved.percussion === true, background: saved.background === true, splitBands: typeof saved.splitBands === "boolean" ? saved.splitBands : true };
+    return { response: Math.max(0, Math.min(2, response)), waves: typeof saved.waves === "boolean" ? saved.waves : true, nodes: typeof saved.nodes === "boolean" ? saved.nodes : true, percussion: saved.percussion === true, background: saved.background === true, splitBands: typeof saved.splitBands === "boolean" ? saved.splitBands : true, motion: typeof saved.motion === "boolean" ? saved.motion : true };
   }
 
   function readAudioPreferences() {
@@ -23901,7 +24315,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   function setAudioEffects(changes = {}) {
     const effects = normalizeAudioPreferences(state.audioEffects);
     delete effects.response;
-    for (const key of ["waves", "nodes", "percussion", "background", "splitBands"]) if (typeof changes?.[key] === "boolean") effects[key] = changes[key];
+    for (const key of ["waves", "nodes", "percussion", "background", "splitBands", "motion"]) if (typeof changes?.[key] === "boolean") effects[key] = changes[key];
     state.audioEffects = effects;
     if (!effects.waves) state.audioWaves = [];
     persistAudioPreferences();
@@ -24955,19 +25369,21 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   }
 
   // The whole tree back in view: the camera glides out to the fitted frame
-  // at the same rate a click closed in (pan targets to the origin, zoom
-  // target 1, fit recomputed for the current window). Reduced motion lands
-  // at once, the way the frame loop snaps every glide.
+  // at the same rate a click closed in (pan targets to the tree's centre in
+  // 3D, the origin on the flat map; zoom target 1, fit recomputed for the
+  // current window). Reduced motion lands at once, the way the frame loop
+  // snaps every glide.
   function frameTree() {
-    state.camera.tx = 0;
-    state.camera.ty = 0;
-    state.camera.tz = 0;
+    const centre = state.view !== "2d" ? state.orbitFrame : null;
+    state.camera.tx = centre ? -centre.x : 0;
+    state.camera.ty = centre ? -centre.y : 0;
+    state.camera.tz = centre ? -centre.z : 0;
     autoFit();
     glideZoom(1);
     if (noMotion()) {
-      state.camera.x = 0;
-      state.camera.y = 0;
-      state.camera.z = 0;
+      state.camera.x = state.camera.tx;
+      state.camera.y = state.camera.ty;
+      state.camera.z = state.camera.tz;
     }
   }
 
@@ -25030,7 +25446,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const centerFlight = stepCenter(graphArea, still, cameraEase);
     updateFollowCamera(Date.now());
     const target = orbitTarget(energy);
-    state.orbitVel += (target - state.orbitVel) * perSec(ORBIT_EASE, dt);
+    // Tree motion: in the overview, with the spin running and music linked,
+    // the music quickens the turn and each kick steps it on (see stepGroove).
+    const grooveLive = audioLinked && state.audioEffects?.motion !== false && state.audioResponse > 0 && target > 0 && state.camMode === "orbit" && state.view !== "2d" && !state.focus && !state.ambientZen;
+    const groove = stepGroove(state.music, dt, grooveLive, still, graphArea);
+    state.orbitVel += (target * groove.spin - state.orbitVel) * perSec(ORBIT_EASE, dt) + groove.kick;
     if (still) state.orbitVel = 0;
     // orbitVel is radians per 30 fps frame, as tuned
     state.angle += state.orbitVel * dt * 30;
@@ -25067,8 +25487,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     // "in flight" is a pan still worth more than a few pixels, or a zoom glide.
     const flightPx = Math.hypot(state.camera.tx - state.camera.x, state.camera.ty - state.camera.y, state.camera.tz - state.camera.z) * state.fit * state.zoom * (state.overviewScale ?? 1);
     state.cameraMoving = !still && (flightPx > 8 || centerFlight > 8 || (state.zoomTarget != null && Math.abs(state.zoomTarget - state.zoom) > 0.03));
-    // What earns the display's full rate: a glide, a zoom, or a hand on the tree.
-    state.motionHot = !still && (state.cameraMoving || flightPx > 0.5 || centerFlight > 0.5 || state.zoomTarget != null || Number.isFinite(state.fitTarget) || Boolean(state.morph || state.lifeHot || state.panning || state.rotating));
+    // What earns the display's full rate: a glide, a zoom, a hand on the
+    // tree, or the music moving it.
+    state.motionHot = !still && (state.cameraMoving || flightPx > 0.5 || centerFlight > 0.5 || state.zoomTarget != null || Number.isFinite(state.fitTarget) || groove.moving || Boolean(state.morph || state.lifeHot || state.panning || state.rotating));
 
     const { ctx } = el;
     // Two layers: the sky, and while a node is focused or a card hovered
@@ -25300,9 +25721,14 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     }
     } finally { profiler?.end(nodesSpan); }
 
+    // Behind Home the tree is scenery seen through frosted glass: orbs, links
+    // and sky only. Its words would blur into smudges, so the text layers
+    // (checkpoint badges, callouts, speech and labels) wait for Command.
+    const scenery = state.homeBackdrop && !state.active;
     // Checkpoint notes stay discoverable without competing with current work.
-    const badgeExclusions = [...hudRects()];
+    const badgeExclusions = scenery ? [] : [...hudRects()];
     for (const { node, p } of projected) {
+      if (scenery) break;
       if (node.kind !== "session" || !node._pr) continue;
       const notes = state.checkpoints?.[node.id];
       if (!notes?.length) continue;
@@ -25321,9 +25747,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     // bubbles and the compact labels stepping around them
     stepDeferred(Date.now());
     stepSpeech(Date.now());
-    drawCallouts(projected, { near: ctx, far, focusIds, dt });
-    drawSpeech(projected);
-    drawLabels(projected);
+    if (!scenery) {
+      drawCallouts(projected, { near: ctx, far, focusIds, dt });
+      drawSpeech(projected);
+      drawLabels(projected);
+    }
     ctx.restore();
     if (far !== ctx) far.restore();
     syncFarLayer(liveFocusIds);
@@ -27697,12 +28125,79 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return { selected: state.selected?.id ?? null, zoom: state.zoom };
   }
 
+  // Home's backdrop: the same tree drawn behind the workspace, as scenery for
+  // its frosted panels. It is not Command. state.active stays false, so nav,
+  // keys, bells, audio capture, the HUD and the mefi:command event all still
+  // read "closed". The canvases sit under the workspace layer
+  // (body.home-backdrop in styles.css), take no input, draw without text at
+  // BACKDROP_FRAME_MS, and pick up graph changes on a slow tick. enter() takes
+  // the canvas over, and exit() hands it back while Home still wants it.
+  const BACKDROP_REFRESH_MS = 6000;
+  function setBackdropSurfaces(on) {
+    // No focus stop, no pointer and nothing for a screen reader: Home's own
+    // controls are the page.
+    el.canvas.inert = on;
+    if (on) el.canvas.setAttribute?.("aria-hidden", "true");
+    else el.canvas.removeAttribute?.("aria-hidden");
+    document.body.classList.toggle("home-backdrop", on);
+  }
+  function backdropTick() {
+    if (!state.homeBackdrop || state.active) return;
+    if (document.hidden || document.body.dataset.sheet || pickerHeld()) return;
+    refreshGraph();
+  }
+  function startHomeBackdrop() {
+    state.homeBackdropWanted = true;
+    if (!el.canvas || state.active || state.homeBackdrop) return;
+    state.homeBackdrop = true;
+    setBackdropSurfaces(true);
+    el.canvas.hidden = false;
+    if (el.far) el.far.hidden = false;
+    resize();
+    // The tree Command last drew is still in state.nodes, so a return from
+    // Command shows it at once; a cold start fills in once the reads land.
+    Promise.all([refreshTasks(true), window.MefiTree?.ready?.()])
+      .catch(() => {})
+      .then(() => { if (state.homeBackdrop) refreshGraph(); })
+      .catch(() => {});
+    clearInterval(state.timers.backdrop);
+    state.timers.backdrop = setInterval(backdropTick, BACKDROP_REFRESH_MS);
+    cancelAnimationFrame(frameRequest);
+    frameRequest = requestAnimationFrame(frame);
+  }
+  // Stops the backdrop's drawing and hands the surfaces back; the canvases
+  // stay as they are, for enter() to take over or stopHomeBackdrop() to hide.
+  function releaseHomeBackdrop() {
+    if (!state.homeBackdrop) return false;
+    state.homeBackdrop = false;
+    clearInterval(state.timers.backdrop);
+    state.timers.backdrop = null;
+    cancelAnimationFrame(frameRequest);
+    frameRequest = 0;
+    setBackdropSurfaces(false);
+    return true;
+  }
+  function stopHomeBackdrop() {
+    state.homeBackdropWanted = false;
+    if (!releaseHomeBackdrop() || state.active) return;
+    el.canvas.hidden = true;
+    if (el.far) el.far.hidden = true;
+  }
+  function setHomeBackdrop(on) {
+    if (on) startHomeBackdrop();
+    else stopHomeBackdrop();
+    return state.homeBackdrop;
+  }
+
   function enter(force = false, params = {}) {
     if (!el.canvas || !el.hud) return;
     if (state.active) {
       applyEnterParams(params);
       return;
     }
+    // Command opens over Home (the quiet clock, or a jump that keeps Home
+    // underneath): it takes the canvas over from the backdrop where it stands.
+    releaseHomeBackdrop();
     state.active = true;
     state.lastInput = Date.now();
     state.frameError = false;
@@ -27869,6 +28364,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     }
     document.body.classList.remove("command-active");
     window.dispatchEvent(new CustomEvent("mefi:command", { detail: { active: false } }));
+    // Home is still underneath (the quiet clock opened Command over it, or
+    // Home asked for the tree while Command held it): it stays as scenery.
+    if (state.homeBackdropWanted) startHomeBackdrop();
   }
 
   function tick() {
@@ -28379,9 +28877,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     window.mefiStudio?.onTasks?.(async (tasks) => {
       if (Array.isArray(tasks)) takeTasks(tasks);
       else await refreshTasks();
-      if (state.active) refreshGraph();
+      if (state.active || state.homeBackdrop) refreshGraph();
     });
-    window.addEventListener("resize", () => state.active && resize());
+    window.addEventListener("resize", () => (state.active || state.homeBackdrop) && resize());
 
     // Mouse interacts with the constellation instead of dismissing it.
     // A right-drag orbits the camera; the menu key/gesture must not interrupt it.
@@ -28730,6 +29228,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     graphViewport: () => ({ ...usableArea() }),
     geometryStatus: () => ({ view: state.view, angle: state.angle, pitch: state.pitch, links: state.edges.map(({ a, b }) => ({ from: state.nodes[a]?.id ?? null, to: state.nodes[b]?.id ?? null })), nodes: state.nodes.map((node) => ({ id: node.id, anchor: node._layoutAnchor ? { ...node._layoutAnchor } : null, world: { x: node.x, y: node.y, z: node.z }, projected: project(node._layoutAnchor ?? node) })) }),
     setSettingsPreview,
+    // Home's backdrop: workspace.js turns it on when Home shows and off when it leaves.
+    setHomeBackdrop,
+    homeBackdropStatus: () => ({ drawing: state.homeBackdrop, wanted: state.homeBackdropWanted, commandActive: state.active }),
     ambientZenStatus: () => ({ enabled: state.ambientZenEnabled, active: state.ambientZen, delayMs: AMBIENT_ZEN_MS, idleMs: Math.max(0, Date.now() - state.lastInput), eligible: canAmbientZen(), feedCollapsed: state.feedCollapsed }),
     settingsPreviewStatus: () => ({ active: Boolean(state.settingsPreview), viewport: state.settingsPreview ? { ...state.settingsPreview } : null, camera: { ...state.camera }, zoom: state.zoom, fit: state.fit, previousWasActive: state.previewRestore?.wasActive ?? null }),
     followStatus: () => ({ mode: state.camMode, taskId: state.follow?.taskId ?? null, nodeId: state.follow?.key ?? null, title: state.follow?.title ?? null, stage: state.follow?.stage ?? null, reason: state.follow?.reason ?? null, since: state.follow?.since ?? null, zoom: state.zoom, targetZoom: state.followZoomTarget }),
@@ -28861,7 +29362,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     els.status.style.color = isError ? "var(--bad)" : "";
   }
 
-  async function load() {
+  async function load(options = {}) {
     if (!window.mefiStudio?.eyesState) {
       status("Desktop mode only — run npm start inside mefi-studio.", true);
       treeNote("Desktop mode only — run npm start inside mefi-studio.");
@@ -28911,16 +29412,24 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         treeNote(`session store unavailable: ${stateResult?.error ?? "unknown error"}`);
       }
       if (!state.audit) runAudit();
-      window.mefiStudio?.machineStatus?.().then((result) => {
-        // A failed scan must read as degraded, never as a free machine.
-        if (result?.ok) renderMachine(result.status);
-        else if (els.machineLines) {
-          els.machineLines.textContent = `machine scan unavailable: ${result?.error ?? "unknown error"}`;
-          els.machineLines.style.color = "var(--bad)";
-        }
-      }).catch((error) => {
-        if (els.machineLines) els.machineLines.textContent = `machine scan failed: ${String(error?.message ?? error)}`;
-      });
+      // Once per open (or an explicit refresh), never per poll tick: the
+      // machineStatus IPC is a full host process scan plus two file writes
+      // and a broadcast, and its 2 s cache never survives a 5 s poll. The
+      // onMachineStatus push (init) carries every watcher pass after that
+      // into the same renderMachine, as nav.js's badge already relies on.
+      if (!state.machineRead || options.machine) {
+        state.machineRead = true;
+        window.mefiStudio?.machineStatus?.().then((result) => {
+          // A failed scan must read as degraded, never as a free machine.
+          if (result?.ok) renderMachine(result.status);
+          else if (els.machineLines) {
+            els.machineLines.textContent = `machine scan unavailable: ${result?.error ?? "unknown error"}`;
+            els.machineLines.style.color = "var(--bad)";
+          }
+        }).catch((error) => {
+          if (els.machineLines) els.machineLines.textContent = `machine scan failed: ${String(error?.message ?? error)}`;
+        });
+      }
       // Read once per open, and read-only: machineSet({}) as a read rewrote
       // settings.json and auth.json on every 5 s tick.
       if (!state.machinePrefsRead) {
@@ -30112,6 +30621,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const params = optionsOf(options);
     els.overlay.hidden = false;
     state.machinePrefsRead = false;
+    state.machineRead = false;
     if (typeof params.sessionId === "string" && params.sessionId) {
       state.selected = params.sessionId;
       // The shared "current session" signal: the rail highlights it, A-Eyes
@@ -30232,8 +30742,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     els.pause?.addEventListener("click", () => control(state.assistant?.status === "paused" ? "start-work" : "pause"));
     els.stopAll?.addEventListener("click", () => control("stop-all"));
     els.restart?.addEventListener("click", () => restartStudio());
+    // No MefiTree.applyAssistant here: nav.js's listener (registered first, as
+    // nav.js loads first) and tree3d.js's own already apply every push, and a
+    // third state-only apply only rewrote the rail's stats line again. This
+    // sheet renders from its own state.assistant.
     window.mefiStudio?.onAssistant?.((payload) => {
-      window.MefiTree?.applyAssistant?.(payload);
       if (payload?.state) state.assistant = payload.state;
       if (els.overlay?.hidden) return;
       renderAssistantService();
@@ -30377,7 +30890,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return { sessionId: state.selected ?? null, folded: Boolean(state.foldedOpen) };
   }
 
-  window.MefiExplorer = { init, open, close, refresh: load, runAssistant, saveState };
+  // refresh() is the explicit re-read, so it also rescans the machine.
+  window.MefiExplorer = { init, open, close, refresh: () => load({ machine: true }), runAssistant, saveState };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
 })();
@@ -30939,6 +31453,24 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   // shows, and the tick bails while hidden or while the sheet is closed, so a
   // hidden app issues no store reads.
   const TASKS_POLL_MS = 15000;
+  // eyes:tasks arrives up to once a second per running job (every executor
+  // checkpoint). While the sheet is open a push after a quiet 250 ms paints
+  // at once and pushes inside that window share one trailing paint; a paint
+  // leaves the list or the detail alone when nothing it shows has changed;
+  // and the scheduler snapshot (backlogStatus: the host takes the board lock
+  // and re-reads the board) is read at most once per 3.5 s, with one
+  // trailing read so the last push is never left unread.
+  const PUSH_QUIET_MS = 250;
+  const BACKLOG_MIN_MS = 3500;
+  let pushPaintTimer = 0;
+  let pushPaintedAt = 0;
+  let backlogReadAt = 0;
+  let backlogTimer = 0;
+  // What a push paint last drew. renderList()/renderDetail() clear them, so
+  // anything drawn outside the push path is never mistaken for it.
+  const UNPAINTED = Object.freeze({ view: "", rows: null });
+  let paintedList = UNPAINTED;
+  let paintedDetail = UNPAINTED;
   const state = { tasks: [], plans: [], plansError: null, selected: null, filter: "all", readiness: "all", projectId: null, query: "", doneCollapsed: false, renaming: false, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, useReference: true }, references: null };
   // Two-step delete: the id of the task whose Delete button is armed right now.
   let deleteArmed = null;
@@ -31098,6 +31630,85 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return seconds ? `Automatic retry in ${seconds < 60 ? `${seconds}s` : `${Math.ceil(seconds / 60)}m`} (${new Date(time).toLocaleTimeString()}).` : "Retry is due; waiting for the next scheduling pass.";
   }
 
+  // ---- push paint signatures ----
+  // One string per task row, without runProgress: the executor rewrites it on
+  // every checkpoint and only the selected task's live attempt (the detail
+  // pane) shows it. Every other field stays in, so a row reads as changed
+  // whenever anything the list, the overview or the detail could show has
+  // changed; the clock-driven labels ride along exactly as the rows print
+  // them. Rows are compared one by one, never nested into one string: a
+  // multi-MB board would be re-escaped on every paint.
+  function rowSignature(task, now) {
+    // A shallow copy with runProgress undefined, which JSON.stringify skips; a
+    // replacer function would run once per nested value of every row.
+    const row = JSON.stringify(task?.runProgress === undefined ? task : { ...task, runProgress: undefined });
+    const done = isDone(task);
+    const scheduled = scheduledTask(task);
+    const labels = [done ? relTime(doneStamp(task)) : "", done && now - doneStamp(task) < DONE_PULSE_MS, done && now - doneStamp(task) < 7 * 86400000, scheduled?.stage === "cooling" ? retryDescription(scheduled.retryAt) : ""];
+    // JSON never holds a raw newline, so one separates the two parts safely.
+    return `${row}\n${JSON.stringify(labels)}`;
+  }
+  const sameRows = (rows, painted) => Array.isArray(painted) && rows.length === painted.length && rows.every((row, index) => row === painted[index]);
+  // What else the list reads: the view, the plans and the scheduler's stages.
+  const listView = () => JSON.stringify([state.filter, state.readiness, state.query, state.selected, state.doneCollapsed, [...overviewExpanded], Boolean(window.MefiTaskGroups?.overviewGroups), state.plans, state.plansError, state.backlog?.taskStates ?? null]);
+  // What else the detail reads: the scheduler's stages and project, what the
+  // selected task's live attempt shows of runProgress, and minute-grained ages.
+  const detailView = () => {
+    const progress = selectedTask()?.runProgress;
+    const live = progress ? [progress.runId, Number.isFinite(progress.progress) ? Math.round(progress.progress * 100) : null, progress.outputTail, progress.sessionId] : null;
+    return JSON.stringify([state.selected, live, state.backlog?.projectId ?? null, state.backlog?.taskStates ?? null, Math.floor(Date.now() / 60000)]);
+  };
+  function paintIfChanged() {
+    const now = Date.now();
+    const rows = state.tasks.map((task) => rowSignature(task, now));
+    if (listView() !== paintedList.view || !sameRows(rows, paintedList.rows)) {
+      renderList();
+      // Read after the render: renderList may unfold the done mark for the selection.
+      paintedList = { view: listView(), rows };
+    }
+    const detail = detailView();
+    if (detail !== paintedDetail.view || !sameRows(rows, paintedDetail.rows)) {
+      renderDetail();
+      paintedDetail = { view: detail, rows };
+    }
+  }
+  function schedulePushPaint() {
+    if (pushPaintTimer) return;
+    const wait = pushPaintedAt + PUSH_QUIET_MS - Date.now();
+    const paint = () => {
+      pushPaintTimer = 0;
+      pushPaintedAt = Date.now();
+      if (!els.overlay.hidden) paintIfChanged();
+    };
+    if (wait <= 0) paint();
+    else pushPaintTimer = setTimeout(paint, wait);
+  }
+  // A re-render that only shows data the detail fetched for itself (its
+  // context and attempt reads) changes nothing the signature covers, so it
+  // keeps the push paint's signature instead of forcing the next push to
+  // redraw (and refetch) an unchanged task. With a push paint still pending
+  // the signature is dropped, since the rows may already be newer.
+  function refreshDetail() {
+    const kept = paintedDetail;
+    renderDetail();
+    if (!pushPaintTimer) paintedDetail = kept;
+  }
+  function readBacklogSoon() {
+    const wait = backlogReadAt + BACKLOG_MIN_MS - Date.now();
+    if (wait > 0) {
+      if (!backlogTimer) backlogTimer = setTimeout(() => { backlogTimer = 0; if (!els.overlay.hidden) readBacklogSoon(); }, wait);
+      return;
+    }
+    backlogReadAt = Date.now();
+    const read = ++backlogRead;
+    Promise.resolve(window.mefiStudio?.backlogStatus?.()).then((result) => {
+      if (read !== backlogRead || !result?.ok) return;
+      state.backlog = result;
+      keepSelectedVisible();
+      if (!els.overlay.hidden) paintIfChanged();
+    }).catch(() => {});
+  }
+
   function renderFilters() {
     if (!els.filters) return;
     const counts = summary();
@@ -31242,6 +31853,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   }
 
   function renderList() {
+    paintedList = UNPAINTED;
     els.list.textContent = "";
     renderFilters();
     els.overlay?.classList.toggle("task-overview-mode", state.filter !== "done");
@@ -31459,12 +32071,15 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       if (epoch !== projectEpoch || read !== plansRead) return;
       state.plansError = true;
     }
-    if (!els.overlay.hidden) renderList();
+    if (!els.overlay.hidden) paintIfChanged();
   }
 
   async function load(options = {}) {
     const revision = taskRevision;
     const epoch = projectEpoch;
+    // The poll and open() read the scheduler snapshot too; a push right
+    // after one waits out the same 3.5 s instead of reading it again.
+    backlogReadAt = Date.now();
     const [tasks, prefs, backlog] = await Promise.all([window.mefiStudio?.tasksList?.(), window.mefiStudio?.prefsGet?.(), Promise.resolve(window.mefiStudio?.backlogStatus?.()).catch(() => null)]);
     if (epoch !== projectEpoch) return;
     if (tasks?.ok === false || !Array.isArray(tasks?.tasks)) throw new Error(tasks?.error || "Task store unavailable");
@@ -31489,8 +32104,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     keepSelectedVisible();
     syncBadge();
     renderFilters();
-    renderList();
-    renderDetail();
+    // The 15 s poll lands here too: an unchanged board keeps its rows, the
+    // detail's focus and drafts, and skips the detail's context rereads.
+    paintIfChanged();
     applyPrefs();
     await loadPlans();
   }
@@ -31804,7 +32420,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       record.hasMore = history?.hasMore === true;
       record.text = handoff?.ok ? handoff.text || "" : "";
       record.error = history?.error || handoff?.error || (results.some((result) => result.status === "rejected") ? "The saved context could not be loaded." : "");
-      if (!els.overlay.hidden && taskKey(selectedTask()) === key) renderDetail();
+      if (!els.overlay.hidden && taskKey(selectedTask()) === key) refreshDetail();
     });
     return record;
   }
@@ -31947,7 +32563,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
           const result = await api.tasksHistory({ taskId: task.id, projectId: task.projectId || state.backlog?.projectId, before: context.nextBefore });
           if (!result?.ok) throw new Error(result?.error || "Earlier briefs could not be loaded.");
           context.entries.push(...(result.entries || [])); context.hasMore = result.hasMore === true; context.nextBefore = result.nextBefore;
-          if (taskKey(selectedTask()) === key) renderDetail();
+          if (taskKey(selectedTask()) === key) refreshDetail();
         } catch (error) { more.textContent = error.message; more.disabled = false; }
       });
       history.append(more);
@@ -31979,7 +32595,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       .finally(() => {
         if (attemptReads.get(key) !== record || epoch !== projectEpoch) return;
         record.loading = false;
-        if (!els.overlay.hidden && taskKey(selectedTask()) === key) renderDetail();
+        if (!els.overlay.hidden && taskKey(selectedTask()) === key) refreshDetail();
       });
     return record;
   }
@@ -32063,6 +32679,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   }
 
   function renderDetail() {
+    paintedDetail = UNPAINTED;
     const task = selectedTask();
     if (els.overviewBack) els.overviewBack.hidden = !task;
     els.detail.textContent = "";
@@ -32584,15 +33201,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
           state.filter = taskStage(task);
           setPref("taskFilter", state.filter);
         }
-        renderList();
-        renderDetail();
-        const read = ++backlogRead;
-        Promise.resolve(window.mefiStudio?.backlogStatus?.()).then((result) => {
-          if (read !== backlogRead || !result?.ok) return;
-          state.backlog = result;
-          keepSelectedVisible();
-          if (!els.overlay.hidden) { renderList(); renderDetail(); }
-        }).catch(() => {});
+        schedulePushPaint();
+        readBacklogSoon();
       }
     });
     window.mefiStudio?.onProjects?.((result) => {
@@ -38825,6 +39435,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   const companion = () => storage.get("companion", "Mefi").trim() || "Mefi";
   const project = () => state.projects.find((item) => item.id === state.activeId);
   const text = (tag, className, value) => { const node = document.createElement(tag); node.className = className; node.textContent = String(value ?? ""); return node; };
+  // Writes that skip themselves when nothing changes (see renderWork).
+  const setAttr = (node, name, value) => { if (node.getAttribute(name) !== value) node.setAttribute(name, value); };
+  const setHidden = (node, hidden) => { if (node.hidden !== hidden) node.hidden = hidden; };
   const done = (task) => ["done", "archived", "completed"].includes(task.status);
   const describe = (task) => window.MefiTasks?.describe?.(task) ?? { stage: done(task) ? "done" : task.status === "awaiting_verification" ? "review" : "open", label: task.status === "active" ? "Working" : done(task) ? "Completed" : task.status === "awaiting_verification" ? "Needs review" : "Queued", summary: task.result?.summary || task.logs?.at(-1)?.text || "" };
   const when = (at) => { const value = new Date(at); return Number.isFinite(value.getTime()) ? value.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : ""; };
@@ -39018,10 +39631,15 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const matchingTasks = tasks.filter(matches), matchingIdeas = ideas.filter(matches);
     const counts = { all: matchingTasks.length + matchingIdeas.length, open: 0, review: 0, done: 0, ideas: matchingIdeas.length };
     for (const task of matchingTasks) counts[taskView(task).filter] += 1;
+    // Every eyes:tasks and assistant:status push lands here, so each write
+    // below only happens when its value moved: an identical write still
+    // replaces the text node or re-runs attribute invalidation.
     for (const button of $("layer").querySelectorAll("[data-work-filter]")) {
-      button.setAttribute("aria-pressed", String(button.dataset.workFilter === state.filter));
-      button.querySelector("span").textContent = counts[button.dataset.workFilter] || 0;
-      button.setAttribute("aria-label", `${workLabels[button.dataset.workFilter]}: ${counts[button.dataset.workFilter] || 0}${state.query ? " matches" : " items"}`);
+      const count = String(counts[button.dataset.workFilter] || 0);
+      setAttr(button, "aria-pressed", String(button.dataset.workFilter === state.filter));
+      const badge = button.querySelector("span");
+      if (badge.textContent !== count) badge.textContent = count;
+      setAttr(button, "aria-label", `${workLabels[button.dataset.workFilter]}: ${count}${state.query ? " matches" : " items"}`);
     }
     const ranks = new Map((state.backlog?.next || []).map((item, index) => [item.id, index]));
     const taskRows = matchingTasks.filter((task) => state.filter === "all" || taskView(task).filter === state.filter)
@@ -39031,17 +39649,22 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       .map((item) => ({ item, isIdea: true }));
     const visible = state.filter === "all" ? [...taskRows, ...ideaRows] : state.filter === "ideas" ? ideaRows : taskRows;
     const page = visible.slice(0, state.limit);
-    const signature = JSON.stringify([page, counts, state.filter, state.query, state.limit, state.backlog?.taskStates, state.backlog?.next, state.status.running, companion()]);
-    $("work-search").placeholder = state.filter === "all" ? "Search all tasks and ideas…" : `Search ${workLabels[state.filter].toLowerCase()}…`;
-    $("work-search").setAttribute("aria-label", `Search ${workLabels[state.filter].toLowerCase()}`);
-    $("clear-search").hidden = !state.query;
+    // A card never shows runProgress (its bar reads state.status.running), and
+    // the executor rewrites it on every checkpoint push, so it stays out.
+    const signature = JSON.stringify([page.map(({ item, isIdea }) => [isIdea, item.runProgress === undefined ? item : { ...item, runProgress: undefined }]), counts, state.filter, state.query, state.limit, state.backlog?.taskStates, state.backlog?.next, state.status.running, companion()]);
+    const searchLabel = workLabels[state.filter].toLowerCase();
+    const placeholder = state.filter === "all" ? "Search all tasks and ideas…" : `Search ${searchLabel}…`;
+    if ($("work-search").placeholder !== placeholder) $("work-search").placeholder = placeholder;
+    setAttr($("work-search"), "aria-label", `Search ${searchLabel}`);
+    setHidden($("clear-search"), !state.query);
     const summary = `${workLabels[state.filter]} · ${visible.length > page.length ? `${page.length} of ` : ""}${visible.length} ${state.query ? visible.length === 1 ? "match" : "matches" : visible.length === 1 ? "item" : "items"}`;
     if ($("work-summary").textContent !== summary) $("work-summary").textContent = summary;
     // The tabs already carry the counts; the line earns its row only while it
     // says more (a search is narrowing the list, or it is paged).
-    $("work-summary").hidden = !state.query && visible.length <= page.length;
-    $("show-more").hidden = visible.length <= state.limit;
-    $("show-more").textContent = `Show ${Math.min(20, Math.max(0, visible.length - state.limit))} more · ${Math.max(0, visible.length - state.limit)} remaining`;
+    setHidden($("work-summary"), !state.query && visible.length <= page.length);
+    setHidden($("show-more"), visible.length <= state.limit);
+    const more = `Show ${Math.min(20, Math.max(0, visible.length - state.limit))} more · ${Math.max(0, visible.length - state.limit)} remaining`;
+    if ($("show-more").textContent !== more) $("show-more").textContent = more;
     if (signature === workSignature) return;
     workSignature = signature;
     const top = $("work-list").scrollTop;
@@ -39213,16 +39836,26 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     } catch (error) { feedback(error.message, true); }
     finally { state.busyAction = null; renderBacklog(); controls(); }
   }
-  function scheduleBacklogRead() {
+  // Every assistant:status, eyes:tasks and eyes:ideas push asks for a fresh
+  // snapshot, and the host takes the board lock and re-reads the board for
+  // each one, so pushes read it at most once per 3.5 s (one trailing read
+  // catches the last push). A user action passes force and reads after the
+  // usual 300 ms settle.
+  const BACKLOG_MIN_MS = 3500;
+  let backlogReadAt = 0;
+  function scheduleBacklogRead(force = false) {
     revisions.backlog += 1;
+    if (force && backlogTimer) { clearTimeout(backlogTimer); backlogTimer = null; }
     if (backlogTimer || !active() || document.hidden) return;
-    backlogTimer = setTimeout(() => { backlogTimer = null; if (active() && !document.hidden) void readBacklog(); }, 300);
+    const wait = force ? 300 : Math.max(300, backlogReadAt + BACKLOG_MIN_MS - Date.now());
+    backlogTimer = setTimeout(() => { backlogTimer = null; if (active() && !document.hidden) void readBacklog(); }, wait);
   }
   // A push already carried its own slice; only the backlog snapshot is derived.
   // The 15 s backstop / visibility refresh still re-reads every panel.
   let backlogFlight = null;
   function readBacklog() {
     if (!api()?.backlogStatus || !state.activeId || backlogFlight) return backlogFlight;
+    backlogReadAt = Date.now();
     const epoch = state.epoch, revision = revisions.backlog;
     backlogFlight = readWithDeadline(() => api().backlogStatus()).then((result) => {
       if (epoch !== state.epoch || revision !== revisions.backlog || !result?.ok || (result.projectId && result.projectId !== state.activeId)) return;
@@ -39472,6 +40105,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const sequence = ++readSequence;
     const before = { ...revisions };
     const belongs = (value) => !value?.projectId || value.projectId === state.activeId;
+    // This reads the backlog too, so the push reads count their interval from here.
+    backlogReadAt = Date.now();
     const run = Promise.allSettled(["tasksList", "assistantState", "assistantStatus", "jevStatus", "ideasList", "backlogStatus"].map((method) => readWithDeadline(() => api()[method]?.()))).then((results) => {
       if (epoch !== state.epoch || sequence !== readSequence) return;
       if (before.tasks === revisions.tasks && results[0].status === "fulfilled" && results[0].value?.tasks && belongs(results[0].value)) state.tasks = results[0].value.tasks;
@@ -39525,9 +40160,18 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     init();
     return retry ? loadInitialWorkspace() : startupPromise ?? Promise.resolve(!api());
   }
+  // The live node tree drawn behind Home's frosted panels (idle.js owns it).
+  // It waits for the startup layer to lift, so Home's first paint never shares
+  // the thread with it, and starts only if Home is still showing by then.
+  function showBackdrop() {
+    const start = () => { if (active()) window.MefiIdle?.setHomeBackdrop?.(true); };
+    if (window.MefiBoot?.isActive?.()) Promise.resolve(window.MefiBoot.ready?.()).then(start, start);
+    else start();
+  }
   function enter() {
     init(); window.MefiIdle?.exit?.(); $("layer").hidden = false;
     document.body.classList.add("workspace-active");
+    showBackdrop();
     renderMachineTile(); renderUsageTile();
     // Usage has no push; one read on entry (cached 5 min by the tracker).
     if (api()) window.MefiUsageTracker?.refresh?.()?.catch?.(() => {});
@@ -39536,7 +40180,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     // the loading layer joins that work instead of issuing a second batch.
     return startupPending || window.MefiBoot?.isActive?.() ? ready() : refresh(true);
   }
-  function exit() { if (!$("layer")) return; $("layer").hidden = true; document.body.classList.remove("workspace-active"); saveDraft(); }
+  function exit() { if (!$("layer")) return; $("layer").hidden = true; document.body.classList.remove("workspace-active"); window.MefiIdle?.setHomeBackdrop?.(false); saveDraft(); }
   function init() {
     if (initialized || !$("layer")) return; initialized = true;
     $("form").addEventListener("submit", submit);
@@ -39610,7 +40254,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
           const result = guard(await api().assistantControl("start"));
           if (result.state) state.assistant = result.state;
           state.status = { ...state.status, ...(result.autopilot || {}), held: false };
-          renderCompanion(); renderBacklog(); scheduleBacklogRead();
+          renderCompanion(); renderBacklog(); scheduleBacklogRead(true);
           feedback(result.running ? "Agents started. New work can begin." : "Agents are on. The assistant was paused last time; press Resume to let new work start.");
           return;
         }
@@ -39628,7 +40272,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
           state.status = { ...state.status, execute: false };
           feedback("New work paused. Running jobs finish normally.");
         }
-        renderCompanion(); renderBacklog(); scheduleBacklogRead();
+        renderCompanion(); renderBacklog(); scheduleBacklogRead(true);
       }
       catch (error) { feedback(error.message, true); } finally { controls(); }
     });
@@ -39745,6 +40389,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     waves: { title: "Connection waves", detail: "Let sound gently bend the connections.", enabled: true },
     splitBands: { title: "Separate frequency lines", detail: "Bass, mids and treble drive different connections.", enabled: true },
     nodes: { title: "Node glow", detail: "Light the nodes with the music.", enabled: true },
+    motion: { title: "Tree motion", detail: "Let the beat turn, sway and swell the spinning tree. It stays in frame.", enabled: true },
     percussion: { title: "Drum accents", detail: "Add sharper ripples on drum hits.", enabled: false },
     background: { title: "Background glow", detail: "Let the space behind the tree pulse.", enabled: false },
   };
@@ -40756,7 +41401,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const audioLink = element("section", "music-audio-link", null, main);
     audioLink.setAttribute("aria-labelledby", "music-audio-heading");
     const audioHeading = element("h3", null, "Audio link", audioLink); audioHeading.id = "music-audio-heading";
-    element("p", "music-fineprint", "Gentle waves and node glow follow quiet or loud music. Add drum accents or background glow when you want more movement.", audioLink);
+    element("p", "music-fineprint", "Gentle waves, node glow and tree motion follow quiet or loud music. Add drum accents or background glow when you want more movement.", audioLink);
     const audioControls = element("div", "music-audio-controls", null, audioLink);
     const sourceLabel = element("label", null, "Listen to", audioControls);
     els.audioSource = element("select", null, null, sourceLabel); els.audioSource.id = "music-audio-source";
@@ -43607,7 +44252,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     }
     if (name === "eyes") window.MefiEyes?.init();
     if (name === "studio") {
+      // The first show checks Server Styler inside initStudio; later shows
+      // check once here, since the poll skipped while another tab was up.
+      const firstShow = !state.studioInitialized;
       initStudio();
+      if (!firstShow) void refreshStyler?.();
       paintSettingsRows();
       syncSettingsNav();
       syncBlurBox();
@@ -43932,6 +44581,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   const studioLogLines = [];
   let studioLogFrame = 0;
   let studioLogStale = false;
+  // initStudio's Server Styler status check, once the desktop bridge has one.
+  let refreshStyler = null;
   function paintStudioLog() {
     studioLogFrame = 0;
     const log = document.getElementById("studio-log");
@@ -44000,9 +44651,18 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       }
     }
     void refreshStylerStatus();
-    if (typeof setInterval === "function") setInterval(() => {
-      if (!document.getElementById("tab-studio").hidden) void refreshStylerStatus();
-    }, 5000);
+    // Each check costs the host a file read and a localhost fetch, so it runs
+    // only while Settings is what you are looking at: never while the window
+    // hides (boot.js's shared guard clears the timer), nor while Command, the
+    // workspace or a sheet covers the tab. showTab("studio") checks at once.
+    refreshStyler = refreshStylerStatus;
+    const stylerTick = () => {
+      const body = document.body;
+      if (document.getElementById("tab-studio").hidden || body?.classList?.contains?.("command-active") || body?.classList?.contains?.("workspace-active") || body?.dataset?.sheet) return;
+      void refreshStylerStatus();
+    };
+    if (window.MefiBoot?.pollStart) window.MefiBoot.pollStart("booklet.styler", stylerTick, 5000);
+    else if (typeof setInterval === "function") setInterval(stylerTick, 5000);
     stylerActions.addEventListener("click", async (event) => {
       const button = event.target.closest("button[data-styler-action]");
       if (!button || button.disabled) return;

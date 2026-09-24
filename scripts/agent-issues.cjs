@@ -26,7 +26,7 @@ const TITLE_MAX = 140;
 const DETAIL_MAX = 600;
 const EVIDENCE_LINES = 4;
 
-const ANSI = /\u001b\[[0-9;]*m/g;
+const ANSI = /\u001b\[[0-?]*[ -\/]*[@-~]/g; // every CSI sequence, not only colour: cursor codes hide a mark too
 const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g;
 
 function clean(value, limit) {

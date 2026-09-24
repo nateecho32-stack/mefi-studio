@@ -19,6 +19,24 @@
   // shows, and the tick bails while hidden or while the sheet is closed, so a
   // hidden app issues no store reads.
   const TASKS_POLL_MS = 15000;
+  // eyes:tasks arrives up to once a second per running job (every executor
+  // checkpoint). While the sheet is open a push after a quiet 250 ms paints
+  // at once and pushes inside that window share one trailing paint; a paint
+  // leaves the list or the detail alone when nothing it shows has changed;
+  // and the scheduler snapshot (backlogStatus: the host takes the board lock
+  // and re-reads the board) is read at most once per 3.5 s, with one
+  // trailing read so the last push is never left unread.
+  const PUSH_QUIET_MS = 250;
+  const BACKLOG_MIN_MS = 3500;
+  let pushPaintTimer = 0;
+  let pushPaintedAt = 0;
+  let backlogReadAt = 0;
+  let backlogTimer = 0;
+  // What a push paint last drew. renderList()/renderDetail() clear them, so
+  // anything drawn outside the push path is never mistaken for it.
+  const UNPAINTED = Object.freeze({ view: "", rows: null });
+  let paintedList = UNPAINTED;
+  let paintedDetail = UNPAINTED;
   const state = { tasks: [], plans: [], plansError: null, selected: null, filter: "all", readiness: "all", projectId: null, query: "", doneCollapsed: false, renaming: false, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, useReference: true }, references: null };
   // Two-step delete: the id of the task whose Delete button is armed right now.
   let deleteArmed = null;
@@ -178,6 +196,85 @@
     return seconds ? `Automatic retry in ${seconds < 60 ? `${seconds}s` : `${Math.ceil(seconds / 60)}m`} (${new Date(time).toLocaleTimeString()}).` : "Retry is due; waiting for the next scheduling pass.";
   }
 
+  // ---- push paint signatures ----
+  // One string per task row, without runProgress: the executor rewrites it on
+  // every checkpoint and only the selected task's live attempt (the detail
+  // pane) shows it. Every other field stays in, so a row reads as changed
+  // whenever anything the list, the overview or the detail could show has
+  // changed; the clock-driven labels ride along exactly as the rows print
+  // them. Rows are compared one by one, never nested into one string: a
+  // multi-MB board would be re-escaped on every paint.
+  function rowSignature(task, now) {
+    // A shallow copy with runProgress undefined, which JSON.stringify skips; a
+    // replacer function would run once per nested value of every row.
+    const row = JSON.stringify(task?.runProgress === undefined ? task : { ...task, runProgress: undefined });
+    const done = isDone(task);
+    const scheduled = scheduledTask(task);
+    const labels = [done ? relTime(doneStamp(task)) : "", done && now - doneStamp(task) < DONE_PULSE_MS, done && now - doneStamp(task) < 7 * 86400000, scheduled?.stage === "cooling" ? retryDescription(scheduled.retryAt) : ""];
+    // JSON never holds a raw newline, so one separates the two parts safely.
+    return `${row}\n${JSON.stringify(labels)}`;
+  }
+  const sameRows = (rows, painted) => Array.isArray(painted) && rows.length === painted.length && rows.every((row, index) => row === painted[index]);
+  // What else the list reads: the view, the plans and the scheduler's stages.
+  const listView = () => JSON.stringify([state.filter, state.readiness, state.query, state.selected, state.doneCollapsed, [...overviewExpanded], Boolean(window.MefiTaskGroups?.overviewGroups), state.plans, state.plansError, state.backlog?.taskStates ?? null]);
+  // What else the detail reads: the scheduler's stages and project, what the
+  // selected task's live attempt shows of runProgress, and minute-grained ages.
+  const detailView = () => {
+    const progress = selectedTask()?.runProgress;
+    const live = progress ? [progress.runId, Number.isFinite(progress.progress) ? Math.round(progress.progress * 100) : null, progress.outputTail, progress.sessionId] : null;
+    return JSON.stringify([state.selected, live, state.backlog?.projectId ?? null, state.backlog?.taskStates ?? null, Math.floor(Date.now() / 60000)]);
+  };
+  function paintIfChanged() {
+    const now = Date.now();
+    const rows = state.tasks.map((task) => rowSignature(task, now));
+    if (listView() !== paintedList.view || !sameRows(rows, paintedList.rows)) {
+      renderList();
+      // Read after the render: renderList may unfold the done mark for the selection.
+      paintedList = { view: listView(), rows };
+    }
+    const detail = detailView();
+    if (detail !== paintedDetail.view || !sameRows(rows, paintedDetail.rows)) {
+      renderDetail();
+      paintedDetail = { view: detail, rows };
+    }
+  }
+  function schedulePushPaint() {
+    if (pushPaintTimer) return;
+    const wait = pushPaintedAt + PUSH_QUIET_MS - Date.now();
+    const paint = () => {
+      pushPaintTimer = 0;
+      pushPaintedAt = Date.now();
+      if (!els.overlay.hidden) paintIfChanged();
+    };
+    if (wait <= 0) paint();
+    else pushPaintTimer = setTimeout(paint, wait);
+  }
+  // A re-render that only shows data the detail fetched for itself (its
+  // context and attempt reads) changes nothing the signature covers, so it
+  // keeps the push paint's signature instead of forcing the next push to
+  // redraw (and refetch) an unchanged task. With a push paint still pending
+  // the signature is dropped, since the rows may already be newer.
+  function refreshDetail() {
+    const kept = paintedDetail;
+    renderDetail();
+    if (!pushPaintTimer) paintedDetail = kept;
+  }
+  function readBacklogSoon() {
+    const wait = backlogReadAt + BACKLOG_MIN_MS - Date.now();
+    if (wait > 0) {
+      if (!backlogTimer) backlogTimer = setTimeout(() => { backlogTimer = 0; if (!els.overlay.hidden) readBacklogSoon(); }, wait);
+      return;
+    }
+    backlogReadAt = Date.now();
+    const read = ++backlogRead;
+    Promise.resolve(window.mefiStudio?.backlogStatus?.()).then((result) => {
+      if (read !== backlogRead || !result?.ok) return;
+      state.backlog = result;
+      keepSelectedVisible();
+      if (!els.overlay.hidden) paintIfChanged();
+    }).catch(() => {});
+  }
+
   function renderFilters() {
     if (!els.filters) return;
     const counts = summary();
@@ -322,6 +419,7 @@
   }
 
   function renderList() {
+    paintedList = UNPAINTED;
     els.list.textContent = "";
     renderFilters();
     els.overlay?.classList.toggle("task-overview-mode", state.filter !== "done");
@@ -539,12 +637,15 @@
       if (epoch !== projectEpoch || read !== plansRead) return;
       state.plansError = true;
     }
-    if (!els.overlay.hidden) renderList();
+    if (!els.overlay.hidden) paintIfChanged();
   }
 
   async function load(options = {}) {
     const revision = taskRevision;
     const epoch = projectEpoch;
+    // The poll and open() read the scheduler snapshot too; a push right
+    // after one waits out the same 3.5 s instead of reading it again.
+    backlogReadAt = Date.now();
     const [tasks, prefs, backlog] = await Promise.all([window.mefiStudio?.tasksList?.(), window.mefiStudio?.prefsGet?.(), Promise.resolve(window.mefiStudio?.backlogStatus?.()).catch(() => null)]);
     if (epoch !== projectEpoch) return;
     if (tasks?.ok === false || !Array.isArray(tasks?.tasks)) throw new Error(tasks?.error || "Task store unavailable");
@@ -569,8 +670,9 @@
     keepSelectedVisible();
     syncBadge();
     renderFilters();
-    renderList();
-    renderDetail();
+    // The 15 s poll lands here too: an unchanged board keeps its rows, the
+    // detail's focus and drafts, and skips the detail's context rereads.
+    paintIfChanged();
     applyPrefs();
     await loadPlans();
   }
@@ -884,7 +986,7 @@
       record.hasMore = history?.hasMore === true;
       record.text = handoff?.ok ? handoff.text || "" : "";
       record.error = history?.error || handoff?.error || (results.some((result) => result.status === "rejected") ? "The saved context could not be loaded." : "");
-      if (!els.overlay.hidden && taskKey(selectedTask()) === key) renderDetail();
+      if (!els.overlay.hidden && taskKey(selectedTask()) === key) refreshDetail();
     });
     return record;
   }
@@ -1027,7 +1129,7 @@
           const result = await api.tasksHistory({ taskId: task.id, projectId: task.projectId || state.backlog?.projectId, before: context.nextBefore });
           if (!result?.ok) throw new Error(result?.error || "Earlier briefs could not be loaded.");
           context.entries.push(...(result.entries || [])); context.hasMore = result.hasMore === true; context.nextBefore = result.nextBefore;
-          if (taskKey(selectedTask()) === key) renderDetail();
+          if (taskKey(selectedTask()) === key) refreshDetail();
         } catch (error) { more.textContent = error.message; more.disabled = false; }
       });
       history.append(more);
@@ -1059,7 +1161,7 @@
       .finally(() => {
         if (attemptReads.get(key) !== record || epoch !== projectEpoch) return;
         record.loading = false;
-        if (!els.overlay.hidden && taskKey(selectedTask()) === key) renderDetail();
+        if (!els.overlay.hidden && taskKey(selectedTask()) === key) refreshDetail();
       });
     return record;
   }
@@ -1143,6 +1245,7 @@
   }
 
   function renderDetail() {
+    paintedDetail = UNPAINTED;
     const task = selectedTask();
     if (els.overviewBack) els.overviewBack.hidden = !task;
     els.detail.textContent = "";
@@ -1664,15 +1767,8 @@
           state.filter = taskStage(task);
           setPref("taskFilter", state.filter);
         }
-        renderList();
-        renderDetail();
-        const read = ++backlogRead;
-        Promise.resolve(window.mefiStudio?.backlogStatus?.()).then((result) => {
-          if (read !== backlogRead || !result?.ok) return;
-          state.backlog = result;
-          keepSelectedVisible();
-          if (!els.overlay.hidden) { renderList(); renderDetail(); }
-        }).catch(() => {});
+        schedulePushPaint();
+        readBacklogSoon();
       }
     });
     window.mefiStudio?.onProjects?.((result) => {

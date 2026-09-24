@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mefi's Studio AI+ promo</title>
+<!-- A 50-second promotional film, drawn as one deterministic page. Nothing
+     animates on its own: render.mjs calls window.seek(t) for every frame and
+     screenshots the result, so the same t always gives the same picture.
+     Open it in a browser with ?play to watch it in real time. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=block" rel="stylesheet">
+<style>
+  :root {
+    --bg: #050d13;
+    --panel: #0d1b24;
+    --panel-2: #101f29;
+    --line: rgba(70, 112, 110, 0.55);
+    --teal: #71cbb7;
+    --teal-bright: #a7f3da;
+    --teal-dim: rgba(113, 203, 183, 0.32);
+    --ivory: #eef6f0;
+    --muted: #abc4c9;
+    --dim: #7c8a8c;
+    --live: #57ff9a;
+    --warn: #ffd479;
+    --good: #afdfc2;
+    --gold: #c9a45c;
+    --serif: "Newsreader", Georgia, serif;
+    --sans: "Inter", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); }
+  body { font-family: var(--sans); color: var(--ivory); -webkit-font-smoothing: antialiased; }
+  #stage { position: absolute; inset: 0; overflow: hidden; background: radial-gradient(1200px 800px at 70% 20%, #0b2029 0%, var(--bg) 60%); }
+  #bg { position: absolute; inset: 0; }
+  .scene { position: absolute; inset: 0; opacity: 0; will-change: opacity, transform; }
+  .vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.55) 100%); }
+  #black { position: absolute; inset: 0; background: #000; opacity: 0; }
+
+  .eyebrow { font-family: var(--sans); font-weight: 500; font-size: 20px; letter-spacing: 0.32em; text-transform: uppercase; color: var(--teal); }
+  h1, h2, h3 { font-family: var(--serif); font-weight: 400; color: var(--ivory); letter-spacing: -0.01em; }
+  h2 { font-size: 66px; line-height: 1.04; }
+  h2 em, h1 em, .line em { font-style: italic; color: var(--teal-bright); }
+  p.body { font-size: 25px; line-height: 1.5; color: var(--muted); }
+
+  .window { position: absolute; border-radius: 18px; overflow: hidden; background: var(--panel-2);
+    border: 1px solid rgba(167, 243, 218, 0.22);
+    box-shadow: 0 50px 120px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(0, 0, 0, 0.4), 0 0 80px rgba(113, 203, 183, 0.08); }
+  .window .shot { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  .window .shot img { display: block; }
+
+  .hl { position: absolute; border: 2px solid var(--teal-bright); border-radius: 16px;
+    box-shadow: 0 0 0 6px rgba(113, 203, 183, 0.18), 0 0 40px rgba(113, 203, 183, 0.45), inset 0 0 30px rgba(113, 203, 183, 0.12); }
+  .hl .tag { position: absolute; left: 14px; top: -46px; white-space: nowrap; font-size: 20px; font-weight: 600; color: #04130e;
+    background: var(--teal-bright); padding: 7px 16px; border-radius: 999px; }
+
+  .pill { display: inline-flex; align-items: center; gap: 10px; font-size: 21px; color: var(--ivory);
+    padding: 10px 20px; border-radius: 999px; border: 1px solid var(--line); background: rgba(16, 31, 41, 0.8); }
+  .pill .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 12px var(--teal); }
+
+  /* 1 · intro */
+  #logo-wrap { position: absolute; left: 50%; top: 250px; width: 240px; height: 240px; margin-left: -120px; }
+  #logo-wrap img { width: 240px; height: 240px; border-radius: 52px; box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7), 0 0 90px rgba(201, 164, 92, 0.22); }
+  #logo-ring { position: absolute; left: -40px; top: -40px; width: 320px; height: 320px; }
+  #s1 h1 { position: absolute; left: 0; right: 0; top: 560px; text-align: center; font-size: 132px; line-height: 1; }
+  #s1 .rule { position: absolute; left: 50%; top: 735px; height: 1px; width: 520px; margin-left: -260px; background: linear-gradient(90deg, transparent, var(--teal), transparent); transform-origin: 50% 50%; }
+  #s1 .eyebrow { position: absolute; left: 0; right: 0; top: 770px; text-align: center; font-size: 24px; }
+
+  /* 2 · four verbs */
+  #s2 .lines { position: absolute; left: 330px; top: 175px; }
+  #s2 .line { display: flex; align-items: baseline; gap: 40px; font-family: var(--serif); font-size: 124px; line-height: 1.52; color: var(--ivory); }
+  #s2 .line .n { font-family: var(--mono); font-size: 24px; color: var(--teal); letter-spacing: 0.1em; width: 40px; }
+
+  /* 3 · workspace */
+  #s3 .cap { position: absolute; left: 110px; top: 210px; width: 470px; }
+  #s3 .cap h2 { margin: 26px 0 30px; }
+  .steps { margin-top: 46px; display: grid; gap: 22px; }
+  .step { display: flex; gap: 18px; align-items: flex-start; font-size: 23px; line-height: 1.4; color: var(--muted); }
+  .step b { color: var(--ivory); font-weight: 600; display: block; }
+  .step .k { flex: none; width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--teal); color: var(--teal-bright);
+    font-family: var(--mono); font-size: 18px; display: grid; place-items: center; }
+
+  /* 4 · command view */
+  #s4 .cap { position: absolute; left: 1470px; top: 190px; width: 390px; }
+  #s4 .cap h2 { font-size: 60px; margin: 26px 0 28px; }
+  #s4 .cap p.body { font-size: 23px; }
+  .chips-label { margin-top: 40px; font-size: 17px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--dim); }
+  .chips { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip { font-family: var(--mono); font-size: 18px; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line); background: rgba(16, 31, 41, 0.9); color: var(--ivory); }
+  .ping { position: absolute; width: 20px; height: 20px; margin: -10px 0 0 -10px; border-radius: 50%; border: 2px solid var(--gold); }
+
+  /* 5 · board */
+  #s5 .head { position: absolute; left: 155px; top: 120px; width: 1610px; display: flex; justify-content: space-between; align-items: flex-end; }
+  #s5 .head h2 { font-size: 84px; margin-top: 20px; }
+  #s5 .head p.body { width: 560px; text-align: right; font-size: 23px; }
+  .col { position: absolute; top: 370px; width: 380px; height: 640px; border-radius: 20px; border: 1px solid rgba(70, 112, 110, 0.4); background: rgba(13, 27, 36, 0.72); }
+  .col-h { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; font-size: 22px; font-weight: 600; color: var(--ivory); border-bottom: 1px solid rgba(70, 112, 110, 0.3); }
+  .col-h .count { font-family: var(--mono); font-size: 18px; color: var(--muted); min-width: 34px; height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line); display: grid; place-items: center; }
+  .col-h .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 12px; }
+  .card { position: absolute; width: 340px; border-radius: 16px; background: #13252f; border: 1px solid rgba(113, 203, 183, 0.25); padding: 18px 20px; }
+  .card.dim { opacity: 0.55; }
+  .card h4 { font-size: 22px; font-weight: 600; line-height: 1.3; color: var(--ivory); margin: 10px 0 8px; }
+  .card .meta { font-size: 17px; color: var(--muted); }
+  .state { display: inline-block; font-size: 14px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; padding: 4px 10px; border-radius: 6px; }
+  #hero { z-index: 5; border-color: rgba(167, 243, 218, 0.55); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55); }
+  #hero .bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); margin: 14px 0 10px; overflow: hidden; }
+  #hero .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--teal), var(--live)); border-radius: 3px; }
+  #hero ul { list-style: none; margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(70, 112, 110, 0.35); display: grid; gap: 11px; }
+  #hero li { display: flex; gap: 12px; align-items: flex-start; font-size: 16.5px; line-height: 1.35; color: var(--muted); }
+  #hero li .box { flex: none; width: 22px; height: 22px; border-radius: 6px; border: 1.5px solid var(--dim); display: grid; place-items: center; margin-top: 1px; }
+  #hero li .box svg { width: 14px; height: 14px; }
+  #hero .checks-h { font-size: 13px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim); margin-top: 16px; }
+  #burst { position: absolute; z-index: 4; border-radius: 22px; border: 2px solid var(--good); }
+
+  /* 6 · brain maps + radio */
+  .duo { position: absolute; top: 180px; width: 820px; }
+  .duo .eyebrow { font-size: 18px; }
+  .duo h3 { font-size: 50px; margin: 12px 0 30px; }
+  .duo .window { position: relative; width: 820px; height: 562px; }
+  .crop { position: absolute; inset: 0; background-repeat: no-repeat; }
+  #ticker { position: absolute; left: 0; top: 955px; white-space: nowrap; font-family: var(--serif); font-size: 34px; color: var(--muted); }
+  #ticker span { margin: 0 26px; }
+  #ticker span.sep { color: var(--teal); margin: 0; }
+
+  /* 7 · privacy */
+  #s7 .shade { position: absolute; inset: -60px; background: url(../../docs/images/settings.png) center / cover no-repeat; filter: blur(10px) saturate(0.8); opacity: 0.22; }
+  #s7 .center { position: absolute; left: 0; right: 0; top: 190px; text-align: center; }
+  #s7 h2 { font-size: 92px; margin-top: 24px; }
+  .tiles { position: absolute; left: 155px; top: 500px; display: flex; gap: 30px; }
+  .tile { width: 380px; height: 250px; border-radius: 22px; padding: 34px 32px; background: rgba(13, 27, 36, 0.88); border: 1px solid rgba(113, 203, 183, 0.28); }
+  .tile svg { width: 50px; height: 50px; stroke: var(--teal-bright); fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .tile h4 { font-family: var(--serif); font-weight: 400; font-size: 36px; margin: 22px 0 10px; }
+  .tile p { font-size: 20px; color: var(--muted); line-height: 1.4; }
+  #s7 .providers { position: absolute; left: 0; right: 0; top: 850px; text-align: center; font-size: 24px; color: var(--muted); }
+  #s7 .providers b { color: var(--ivory); font-weight: 500; }
+  #s7 .providers i { font-style: normal; color: var(--teal); margin: 0 12px; }
+
+  /* 8 · outro */
+  #s8 #logo2 { position: absolute; left: 50%; top: 170px; width: 190px; height: 190px; margin-left: -95px; border-radius: 42px; box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7), 0 0 110px rgba(201, 164, 92, 0.25); }
+  #s8 h1 { position: absolute; left: 0; right: 0; top: 410px; text-align: center; font-size: 118px; line-height: 1; }
+  #s8 .tagline { position: absolute; left: 0; right: 0; top: 560px; text-align: center; font-family: var(--serif); font-style: italic; font-size: 44px; color: var(--muted); }
+  #s8 .pills { position: absolute; left: 0; right: 0; top: 680px; display: flex; justify-content: center; gap: 16px; }
+  #s8 .url { position: absolute; left: 0; right: 0; top: 820px; text-align: center; font-family: var(--mono); font-size: 30px; color: var(--teal-bright); letter-spacing: 0.02em; }
+  #s8 .url small { display: block; margin-top: 16px; font-family: var(--sans); font-size: 18px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--dim); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg" width="1920" height="1080"></canvas>
+
+  <!-- 1 · intro -->
+  <section class="scene" id="s1">
+    <div id="logo-wrap" data-at="0.3" data-dur="1.4" data-s="0.82" data-blur="14" data-y="0">
+      <svg id="logo-ring" viewBox="0 0 320 320">
+        <circle cx="160" cy="160" r="150" fill="none" stroke="#c9a45c" stroke-width="1.5" stroke-opacity="0.8" stroke-dasharray="943" stroke-dashoffset="943" transform="rotate(-90 160 160)"></circle>
+        <circle cx="160" cy="160" r="156" fill="none" stroke="#71cbb7" stroke-width="1" stroke-opacity="0.35" stroke-dasharray="981" stroke-dashoffset="981" transform="rotate(90 160 160)"></circle>
+      </svg>
+      <img src="../../assets/icon-256.png" alt="">
+    </div>
+    <h1 data-at="1.35" data-dur="1.2" data-y="34" data-blur="10">Mefi's Studio <em>AI+</em></h1>
+    <div class="rule" id="s1rule"></div>
+    <div class="eyebrow" data-at="2.3" data-dur="1" data-y="16">A local-first workspace for building with AI agents</div>
+  </section>
+
+  <!-- 2 · four verbs -->
+  <section class="scene" id="s2">
+    <div class="lines">
+      <div class="line" data-at="5.35" data-x="-60" data-y="0" data-blur="8"><span class="n">01</span><span>Talk it <em>through.</em></span></div>
+      <div class="line" data-at="6.25" data-x="-60" data-y="0" data-blur="8"><span class="n">02</span><span>Hand it <em>over.</em></span></div>
+      <div class="line" data-at="7.15" data-x="-60" data-y="0" data-blur="8"><span class="n">03</span><span>Watch it <em>build.</em></span></div>
+      <div class="line" data-at="8.05" data-x="-60" data-y="0" data-blur="8"><span class="n">04</span><span>Know it's <em>done.</em></span></div>
+    </div>
+  </section>
+
+  <!-- 3 · workspace -->
+  <section class="scene" id="s3">
+    <div class="cap">
+      <div class="eyebrow" data-at="10.35">Your workspace</div>
+      <h2 data-at="10.55">Talk it through, <em>then hand it over.</em></h2>
+      <p class="body" data-at="10.85">Shape an idea with your AI companion. When it's ready, it becomes a task with its acceptance checks written out.</p>
+      <div class="steps">
+        <div class="step" data-at="12.5" data-x="-24" data-y="0"><span class="k">1</span><span><b>Talk together</b>Think out loud, plan, ask.</span></div>
+        <div class="step" data-at="14.5" data-x="-24" data-y="0"><span class="k">2</span><span><b>Give a task</b>It lands in your queue, ready to build.</span></div>
+      </div>
+    </div>
+    <div class="window" id="w3" style="left:640px; top:150px; width:1296px; height:810px;">
+      <div class="shot" id="w3shot" style="transform-origin: 62% 70%;">
+        <img src="../../docs/images/workspace.png" width="1296" height="810" alt="">
+        <div class="hl" id="hl1" style="left:88px; top:617px; width:760px; height:160px;"><span class="tag">Talk together · Give a task</span></div>
+        <div class="hl" id="hl2" style="left:883px; top:421px; width:370px; height:185px;"><span class="tag">Your work</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 · command view -->
+  <section class="scene" id="s4">
+    <div class="window" id="w4" style="left:60px; top:130px; width:1368px; height:855px;">
+      <div class="shot" id="w4shot" style="transform-origin: 44% 58%;">
+        <img src="../../docs/images/command.png" width="1368" height="855" alt="">
+        <div class="ping" style="left:498px; top:201px;"></div>
+        <div class="ping" style="left:651px; top:215px;"></div>
+        <div class="ping" style="left:690px; top:224px;"></div>
+        <div class="ping" style="left:731px; top:649px;"></div>
+        <div class="ping" style="left:662px; top:252px; border-color:#a7f3da;"></div>
+      </div>
+    </div>
+    <div class="cap">
+      <div class="eyebrow" data-at="17.85">Command view</div>
+      <h2 data-at="18.05">Watch the agents <em>build it.</em></h2>
+      <p class="body" data-at="18.35">Every session, task and agent is a live node. Builders fly to their task and say what they're doing.</p>
+      <div class="chips-label" data-at="20.2">Builds with the CLI you use</div>
+      <div class="chips">
+        <span class="chip" data-at="20.45" data-y="12">OpenCode</span>
+        <span class="chip" data-at="20.6" data-y="12">Claude Code</span>
+        <span class="chip" data-at="20.75" data-y="12">Codex</span>
+        <span class="chip" data-at="20.9" data-y="12">Grok</span>
+        <span class="chip" data-at="21.05" data-y="12">Antigravity</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 · verified -->
+  <section class="scene" id="s5">
+    <div class="head">
+      <div>
+        <div class="eyebrow" data-at="25.3">From idea to done</div>
+        <h2 data-at="25.5">&ldquo;Done&rdquo; means <em>verified.</em></h2>
+      </div>
+      <p class="body" data-at="25.8">A finished attempt waits in Review with its evidence until the checks pass or you confirm it.</p>
+    </div>
+    <div class="col" data-at="25.9" data-y="30" style="left:155px;"><div class="col-h"><span><i class="sw" style="background:#abc4c9"></i>Ready</span><span class="count" id="c0">2</span></div></div>
+    <div class="col" data-at="26.0" data-y="30" style="left:565px;"><div class="col-h"><span><i class="sw" style="background:#57ff9a"></i>Working</span><span class="count" id="c1">1</span></div></div>
+    <div class="col" data-at="26.1" data-y="30" style="left:975px;"><div class="col-h"><span><i class="sw" style="background:#ffd479"></i>Review</span><span class="count" id="c2">0</span></div></div>
+    <div class="col" data-at="26.2" data-y="30" style="left:1385px;"><div class="col-h"><span><i class="sw" style="background:#afdfc2"></i>Done</span><span class="count" id="c3">1</span></div></div>
+    <div class="card dim" data-at="26.3" data-y="20" style="left:175px; top:855px;"><span class="state" style="color:#abc4c9; background:rgba(171,196,201,.12)">Ready</span><h4>Keyboard shortcut for new note</h4><div class="meta">Up next</div></div>
+    <div class="card dim" data-at="26.4" data-y="20" style="left:585px; top:855px;"><span class="state" style="color:#57ff9a; background:rgba(87,255,154,.12)">Working</span><h4>Search notes by tag</h4><div class="meta">builder · step 1 of 3</div></div>
+    <div class="card dim" data-at="26.5" data-y="20" style="left:1405px; top:855px;"><span class="state" style="color:#afdfc2; background:rgba(175,223,194,.12)">Done</span><h4>Export notes as Markdown</h4><div class="meta">Verified · 2 of 2 checks</div></div>
+    <div id="burst"></div>
+    <div class="card" id="hero">
+      <span class="state" id="heroState">Ready</span>
+      <h4>Add an empty state to the notes list</h4>
+      <div class="bar"><i id="heroBar"></i></div>
+      <div class="meta" id="heroMeta">Up next · ready for a builder</div>
+      <div class="checks-h">Acceptance checks</div>
+      <ul>
+        <li><span class="box"></span><span>Shows &ldquo;No notes yet&rdquo; on an empty list</span></li>
+        <li><span class="box"></span><span>Create note button opens the editor</span></li>
+        <li><span class="box"></span><span>notes-list tests pass</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 6 · brain maps + radio -->
+  <section class="scene" id="s6">
+    <div class="duo" style="left:100px;" data-at="32.75" data-x="-50" data-y="0">
+      <div class="eyebrow">Brain maps</div>
+      <h3>Rewire the pipeline <em>as a node map.</em></h3>
+      <div class="window"><div class="crop" id="crop1" style="background-image:url(../../docs/images/release-0.3.0/brain-maps.png);"></div></div>
+    </div>
+    <div class="duo" style="left:1000px;" data-at="33.05" data-x="50" data-y="0">
+      <div class="eyebrow">Style &amp; sound</div>
+      <h3>Ad-free radio, <em>built in.</em></h3>
+      <div class="window"><div class="crop" id="crop2" style="background-image:url(../../docs/images/release-0.3.0/ad-free-radio.png);"></div></div>
+    </div>
+    <div id="ticker" data-at="33.4" data-y="0"></div>
+  </section>
+
+  <!-- 7 · privacy -->
+  <section class="scene" id="s7">
+    <div class="shade"></div>
+    <div class="center">
+      <div class="eyebrow" data-at="37.8">Local-first</div>
+      <h2 data-at="37.95">Everything stays <em>on your machine.</em></h2>
+    </div>
+    <div class="tiles">
+      <div class="tile" data-at="38.5" data-y="40">
+        <svg viewBox="0 0 48 48"><rect x="10" y="21" width="28" height="20" rx="4"/><path d="M16 21v-6a8 8 0 0 1 16 0v6"/><circle cx="24" cy="31" r="2.5"/></svg>
+        <h4>Keys in the keystore</h4><p>Encrypted by the OS, saved once, never shown again.</p>
+      </div>
+      <div class="tile" data-at="38.7" data-y="40">
+        <svg viewBox="0 0 48 48"><path d="M6 24s7-12 18-12 18 12 18 12-7 12-18 12S6 24 6 24z"/><circle cx="24" cy="24" r="5"/><path d="M8 40L40 8"/></svg>
+        <h4>No telemetry</h4><p>Nothing about your work phones home.</p>
+      </div>
+      <div class="tile" data-at="38.9" data-y="40">
+        <svg viewBox="0 0 48 48"><path d="M6 14a4 4 0 0 1 4-4h9l4 5h15a4 4 0 0 1 4 4v17a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4z"/><path d="M17 27l5 5 9-10"/></svg>
+        <h4>No hosted account</h4><p>Tasks and chats live with your project folder.</p>
+      </div>
+      <div class="tile" data-at="39.1" data-y="40">
+        <svg viewBox="0 0 48 48"><path d="M17 14L7 24l10 10"/><path d="M31 14l10 10-10 10"/><path d="M27 9l-6 30"/></svg>
+        <h4>MIT licensed</h4><p>Read it, fork it, change it. No lock-in.</p>
+      </div>
+    </div>
+    <div class="providers" data-at="39.7" data-y="16"><b>Any model you like</b><i>·</i>z.ai<i>·</i>OpenCode Go &amp; Zen<i>·</i>LM Studio<i>·</i>CLI logins<i>·</i>any OpenAI-compatible endpoint</div>
+  </section>
+
+  <!-- 8 · outro -->
+  <section class="scene" id="s8">
+    <img id="logo2" src="../../assets/icon-256.png" alt="" data-at="42.8" data-dur="1.2" data-s="0.85" data-blur="12" data-y="0">
+    <h1 data-at="43.3" data-dur="1.1" data-y="30" data-blur="8">Mefi's Studio <em>AI+</em></h1>
+    <div class="tagline" data-at="43.9" data-y="20">Talk it through. Watch it build. Know it's done.</div>
+    <div class="pills">
+      <span class="pill" data-at="44.5" data-y="16"><span class="dot"></span>Version 0.3.3</span>
+      <span class="pill" data-at="44.65" data-y="16"><span class="dot"></span>Windows 10 &amp; 11</span>
+      <span class="pill" data-at="44.8" data-y="16"><span class="dot"></span>Free &amp; open source</span>
+    </div>
+    <div class="url" data-at="45.3" data-y="16">github.com/nateecho32-stack/mefi-studio<small>Download the portable build</small></div>
+  </section>
+
+  <div class="vignette"></div>
+  <div id="black"></div>
+</div>
+
+<script>
+"use strict";
+const DURATION = 50;
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, p) => a + (b - a) * p;
+const prog = (t, at, dur) => clamp((t - at) / dur);
+const easeOut = (p) => 1 - Math.pow(1 - clamp(p), 3);
+const easeInOut = (p) => { p = clamp(p); return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; };
+
+// Scene windows [start, end]. Cuts land on bar lines of the 96 BPM score.
+const SCENES = [
+  ["s1", 0, 5], ["s2", 5, 10], ["s3", 10, 17.5], ["s4", 17.5, 25],
+  ["s5", 25, 32.5], ["s6", 32.5, 37.5], ["s7", 37.5, 42.5], ["s8", 42.5, 50],
+];
+const FADE = 0.55;
+
+function sceneAlpha(t, a, b) {
+  if (t < a - 0.01 || t > b + 0.01) return 0;
+  const fin = a === 0 ? 1 : easeInOut((t - a + FADE * 0.5) / FADE);
+  const fout = b === DURATION ? 1 : 1 - easeInOut((t - b + FADE) / FADE);
+  return clamp(Math.min(fin, fout));
+}
+
+// Every [data-at] element rises in at its time. data-x/-y give the travel,
+// data-s a starting scale, data-blur a starting blur, data-dur the length.
+function entrances(t) {
+  for (const el of $$("[data-at]")) {
+    const d = el.dataset;
+    const p = easeOut(prog(t, +d.at, d.dur ? +d.dur : 0.8));
+    const x = (d.x ? +d.x : 0) * (1 - p);
+    const y = (d.y !== undefined ? +d.y : 26) * (1 - p);
+    const s = lerp(d.s ? +d.s : 1, 1, p);
+    el.style.opacity = p;
+    el.style.transform = `translate(${x}px, ${y}px) scale(${s})`;
+    if (d.blur) el.style.filter = p < 1 ? `blur(${(1 - p) * +d.blur}px)` : "none";
+  }
+}
+
+// ---- background constellation ------------------------------------------------
+function mulberry32(a) { return () => { a |= 0; a = a + 0x6d2b79f5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const rnd = mulberry32(20260924);
+const NODES = Array.from({ length: 120 }, () => ({
+  x: rnd() * 2200 - 140, y: rnd() * 1300 - 110, r: 1.2 + rnd() * 2.8,
+  ph: rnd() * Math.PI * 2, sp: 0.15 + rnd() * 0.35, glow: rnd() < 0.14,
+}));
+const EDGES = [];
+NODES.forEach((n, i) => {
+  const near = NODES.map((m, j) => [j, (m.x - n.x) ** 2 + (m.y - n.y) ** 2]).filter(([j]) => j !== i).sort((a, b) => a[1] - b[1]).slice(0, 2);
+  for (const [j] of near) if (!EDGES.some(([a, b]) => (a === j && b === i))) EDGES.push([i, j]);
+});
+const TRAVELERS = Array.from({ length: 9 }, (_, k) => ({ e: Math.floor(rnd() * EDGES.length), sp: 0.25 + rnd() * 0.3, off: rnd(), k }));
+const cv = $("#bg"), cx = cv.getContext("2d");
+
+function bgLevel(t) {
+  const keys = [[0, 1], [4.6, 1], [5.4, 0.85], [9.6, 0.85], [10.4, 0.45], [25, 0.45], [25.6, 0.6], [32.3, 0.6], [33, 0.45], [37.3, 0.45], [38, 0.7], [42.3, 0.7], [43, 1], [50, 1]];
+  for (let i = 1; i < keys.length; i++) if (t <= keys[i][0]) return lerp(keys[i - 1][1], keys[i][1], easeInOut((t - keys[i - 1][0]) / (keys[i][0] - keys[i - 1][0])));
+  return 1;
+}
+
+function drawBg(t) {
+  const lvl = bgLevel(t);
+  cx.clearRect(0, 0, 1920, 1080);
+  // Opening fly-in and closing pull-back around the centre.
+  const zoom = lerp(2.4, 1, easeOut(t / 4)) * lerp(1, 1.12, easeInOut((t - 42.5) / 7.5));
+  const cxp = 960, cyp = 540;
+  const pos = NODES.map((n) => {
+    const x = n.x + Math.sin(t * n.sp + n.ph) * 22 + t * 6;
+    const y = n.y + Math.cos(t * n.sp * 0.8 + n.ph) * 16;
+    return [cxp + (x - cxp) * zoom, cyp + (y - cyp) * zoom];
+  });
+  // Silk waves, like the Command view's backdrop.
+  cx.lineWidth = 1.2;
+  for (let w = 0; w < 16; w++) {
+    cx.strokeStyle = `rgba(113, 203, 183, ${0.05 * lvl})`;
+    cx.beginPath();
+    for (let x = -20; x <= 1940; x += 24) {
+      const y = 760 + w * 9 + Math.sin(x * 0.0035 + t * 0.45 + w * 0.12) * 70 + Math.sin(x * 0.0012 - t * 0.25 + w * 0.05) * 90;
+      x === -20 ? cx.moveTo(x, y) : cx.lineTo(x, y);
+    }
+    cx.stroke();
+  }
+  cx.lineWidth = 1;
+  for (const [a, b] of EDGES) {
+    cx.strokeStyle = `rgba(113, 203, 183, ${0.16 * lvl})`;
+    cx.beginPath(); cx.moveTo(pos[a][0], pos[a][1]); cx.lineTo(pos[b][0], pos[b][1]); cx.stroke();
+  }
+  NODES.forEach((n, i) => {
+    const [x, y] = pos[i];
+    if (x < -40 || x > 1960 || y < -40 || y > 1120) return;
+    const r = n.r * Math.sqrt(zoom);
+    if (n.glow) {
+      const pulse = 0.6 + 0.4 * Math.sin(t * 2 + n.ph);
+      const g = cx.createRadialGradient(x, y, 0, x, y, r * 7);
+      g.addColorStop(0, `rgba(167, 243, 218, ${0.5 * pulse * lvl})`);
+      g.addColorStop(1, "rgba(167, 243, 218, 0)");
+      cx.fillStyle = g; cx.beginPath(); cx.arc(x, y, r * 7, 0, Math.PI * 2); cx.fill();
+    }
+    cx.fillStyle = n.glow ? `rgba(200, 255, 235, ${0.9 * lvl})` : `rgba(140, 190, 185, ${0.55 * lvl})`;
+    cx.beginPath(); cx.arc(x, y, r, 0, Math.PI * 2); cx.fill();
+  });
+  // Agents travelling along wires.
+  for (const tr of TRAVELERS) {
+    const [a, b] = EDGES[(tr.e + Math.floor(t * tr.sp + tr.off)) % EDGES.length];
+    const f = (t * tr.sp + tr.off) % 1;
+    const x = lerp(pos[a][0], pos[b][0], f), y = lerp(pos[a][1], pos[b][1], f);
+    const g = cx.createRadialGradient(x, y, 0, x, y, 16);
+    g.addColorStop(0, `rgba(230, 196, 120, ${0.85 * lvl})`);
+    g.addColorStop(1, "rgba(230, 196, 120, 0)");
+    cx.fillStyle = g; cx.beginPath(); cx.arc(x, y, 16, 0, Math.PI * 2); cx.fill();
+  }
+}
+
+// ---- per-scene motion --------------------------------------------------------
+const CHECK = '<svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="#04130e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const STATES = {
+  Ready: ["#abc4c9", "rgba(171,196,201,.14)"], Working: ["#57ff9a", "rgba(87,255,154,.14)"],
+  Review: ["#ffd479", "rgba(255,212,121,.14)"], Done: ["#afdfc2", "rgba(175,223,194,.16)"],
+};
+const COL_X = [175, 585, 995, 1405];
+const MOVES = [[26.9, 27.45], [28.75, 29.3], [30.95, 31.5]];
+const CHECK_AT = [29.6, 30.0, 30.4];
+
+function scene1(t) {
+  const [r1, r2] = $$("#logo-ring circle");
+  r1.setAttribute("stroke-dashoffset", 943 * (1 - easeInOut(prog(t, 0.6, 1.8))));
+  r2.setAttribute("stroke-dashoffset", 981 * (1 - easeInOut(prog(t, 0.9, 1.8))));
+  $("#logo-ring").style.transform = `rotate(${t * 8}deg)`;
+  const p = easeOut(prog(t, 2.0, 1.2));
+  $("#s1rule").style.transform = `scaleX(${p})`;
+  $("#s1rule").style.opacity = p;
+  $("#s1").style.transform = `scale(${lerp(1, 1.04, easeInOut(prog(t, 3.8, 1.2)))})`;
+}
+
+function scene3(t) {
+  const p = easeOut(prog(t, 10.2, 1.5));
+  const w = $("#w3");
+  w.style.opacity = p;
+  w.style.transform = `perspective(2200px) translateX(${(1 - p) * 260}px) rotateY(${(1 - p) * -16}deg)`;
+  $("#w3shot").style.transform = `scale(${lerp(1, 1.06, easeInOut(prog(t, 11.5, 6)))})`;
+  const hl = (el, a, b) => {
+    const v = Math.min(easeOut(prog(t, a, 0.5)), 1 - easeInOut(prog(t, b - 0.4, 0.4)));
+    el.style.opacity = v;
+    el.style.transform = `scale(${lerp(1.06, 1, easeOut(prog(t, a, 0.6)))})`;
+  };
+  hl($("#hl1"), 12.5, 14.4);
+  hl($("#hl2"), 14.5, 17.4);
+}
+
+function scene4(t) {
+  const p = easeOut(prog(t, 17.6, 1.4));
+  const w = $("#w4");
+  w.style.opacity = p;
+  w.style.transform = `perspective(2200px) translateX(${(1 - p) * -220}px) rotateY(${(1 - p) * 14}deg)`;
+  $("#w4shot").style.transform = `scale(${lerp(1, 1.12, easeInOut(prog(t, 18.6, 6.4)))})`;
+  $$("#w4 .ping").forEach((el, i) => {
+    const f = ((t - 18.8 + i * 0.37) % 1.6) / 1.6;
+    const on = t > 18.8 ? 1 : 0;
+    el.style.opacity = on * (1 - f) * 0.9;
+    el.style.transform = `scale(${1 + f * 3.2})`;
+  });
+}
+
+function scene5(t) {
+  // Which column the hero card sits in, and where it is between columns.
+  let x = COL_X[0], lift = 0;
+  MOVES.forEach(([a, b], i) => {
+    const m = easeInOut(prog(t, a, b - a));
+    if (t >= a) x = lerp(COL_X[i], COL_X[i + 1], m);
+    if (t >= a && t <= b) lift = Math.sin(m * Math.PI);
+  });
+  // The label and counts change halfway across, as the card crosses over.
+  const col = MOVES.filter(([a, b]) => t >= (a + b) / 2).length;
+  const name = ["Ready", "Working", "Review", "Done"][col];
+  const hero = $("#hero");
+  const pin = easeOut(prog(t, 26.25, 0.8));
+  hero.style.left = `${x}px`;
+  hero.style.top = "460px";
+  hero.style.opacity = pin;
+  hero.style.transform = `translateY(${(1 - pin) * 24 - lift * 18}px) scale(${1 + lift * 0.035}) rotate(${lift * -1.2}deg)`;
+  const st = $("#heroState");
+  st.textContent = name;
+  st.style.color = STATES[name][0];
+  st.style.background = STATES[name][1];
+  const work = prog(t, 27.5, 1.2);
+  $("#heroBar").style.width = `${(col === 0 ? 0 : col === 1 ? work : 1) * 100}%`;
+  const done = CHECK_AT.filter((c) => t >= c).length;
+  const meta = [
+    "Up next · ready for a builder",
+    `builder · step ${Math.min(3, 1 + Math.floor(work * 3))} of 3`,
+    `Checking evidence · ${done} of 3 passed`,
+    "Verified · 3 of 3 checks passed",
+  ][col];
+  $("#heroMeta").textContent = meta;
+  $$("#hero li").forEach((li, i) => {
+    const on = easeOut(prog(t, CHECK_AT[i], 0.3));
+    const box = li.querySelector(".box");
+    box.style.background = on > 0 ? `rgba(175, 223, 194, ${on})` : "transparent";
+    box.style.borderColor = on > 0 ? "#afdfc2" : "";
+    box.innerHTML = on > 0 ? CHECK : "";
+    box.style.transform = `scale(${1 + Math.sin(on * Math.PI) * 0.3})`;
+    li.style.color = on > 0.5 ? "#eef6f0" : "";
+  });
+  hero.style.boxShadow = col === 3
+    ? `0 24px 60px rgba(0,0,0,.55), 0 0 ${40 + 30 * Math.sin(t * 3)}px rgba(175,223,194,.35)`
+    : "";
+  hero.style.borderColor = col === 3 ? "rgba(175,223,194,.8)" : "";
+  const burst = $("#burst"), bp = prog(t, 31.5, 0.9);
+  const hb = hero.offsetHeight;
+  burst.style.left = `${COL_X[3] - 6}px`; burst.style.top = "454px";
+  burst.style.width = "352px"; burst.style.height = `${hb + 12}px`;
+  burst.style.opacity = bp > 0 && bp < 1 ? (1 - bp) : 0;
+  burst.style.transform = `scale(${1 + easeOut(bp) * 0.18})`;
+  const counts = [[2, 1, 0, 1], [1, 2, 0, 1], [1, 1, 1, 1], [1, 1, 0, 2]][col];
+  counts.forEach((c, i) => { $(`#c${i}`).textContent = c; });
+}
+
+function scene6(t) {
+  const crop = (el, sx, sy, sw, zoom) => {
+    const s = (820 / sw) * zoom;
+    el.style.backgroundSize = `${1440 * s}px ${810 * s}px`;
+    el.style.backgroundPosition = `${-sx * s}px ${-sy * s}px`;
+  };
+  const z = easeInOut(prog(t, 32.6, 5));
+  crop($("#crop1"), lerp(655, 700, z), lerp(147, 175, z), 785, lerp(1, 1.08, z));
+  crop($("#crop2"), lerp(652, 660, z), lerp(147, 150, z), 788, lerp(1, 1.06, z));
+  $("#ticker").style.left = `${140 - (t - 32.5) * 150}px`;
+}
+
+function scene8(t) {
+  $("#black").style.opacity = easeInOut(prog(t, 48.9, 1.1));
+}
+
+window.seek = function seek(t) {
+  drawBg(t);
+  for (const [id, a, b] of SCENES) {
+    const el = $(`#${id}`);
+    const v = sceneAlpha(t, a, b);
+    el.style.opacity = v;
+    el.style.visibility = v > 0 ? "visible" : "hidden";
+  }
+  entrances(t);
+  scene1(t); scene3(t); scene4(t); scene5(t); scene6(t); scene8(t);
+};
+
+const FEATURES = ["Task board", "Plans", "Ideas inbox", "Model catalog", "Model Lab", "Analyzer", "Session explorer", "Overhead", "Performance profiler", "Search anything", "Start here walkthrough", "Auto setup"];
+$("#ticker").innerHTML = [...FEATURES, ...FEATURES].map((f) => `<span>${f}</span>`).join('<span class="sep">◆</span>');
+
+window.ready = Promise.all([
+  // Load every face now, not when a later scene first uses it.
+  document.fonts.ready.then(() => Promise.all([...document.fonts].map((f) => f.load().catch(() => null)))),
+  ...$$("img").map((i) => i.complete ? null : new Promise((r) => { i.onload = i.onerror = r; })),
+  ...["../../docs/images/release-0.3.0/brain-maps.png", "../../docs/images/release-0.3.0/ad-free-radio.png", "../../docs/images/settings.png"]
+    .map((src) => new Promise((r) => { const i = new Image(); i.onload = i.onerror = r; i.src = src; })),
+]);
+
+// ?play watches it in real time; ?t=12.5 holds one frame.
+const q = new URLSearchParams(location.search);
+window.ready.then(() => {
+  if (q.has("t")) { seek(+q.get("t")); return; }
+  if (!q.has("play")) { seek(0); return; }
+  const t0 = performance.now();
+  const tick = () => { const t = (performance.now() - t0) / 1000; seek(Math.min(t, DURATION)); if (t < DURATION) requestAnimationFrame(tick); };
+  tick();
+});
+</script>
+</body>
+</html>

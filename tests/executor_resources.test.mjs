@@ -119,6 +119,44 @@ test("a throw after the durable claim releases it instead of stranding the slot"
   assertUnclaimed(h, "unreadable-brief");
 });
 
+test("a request typed into the inbox with no title starts under a title taken from its prompt", async () => {
+  // Exactly what the Explorer's request box files: { prompt, source: "manual" }.
+  const h = executorHost({ parallel: 2, requests: [{ prompt: "Make the header sticky\nIt scrolls away on long pages.", at: 5, source: "manual" }] });
+  await h.env.executeNextRequest();
+  assert.equal(h.starts.length, 1, "the manual request starts instead of throwing after its claim");
+  assert.equal(h.autopilot.jobs[0].title, "Make the header sticky");
+  assert.equal(h.board().requests[0].status, "running");
+  assert.equal(h.board().requests[0].title, undefined, "the inbox row itself is not rewritten");
+});
+
+test("a claim the ghost sweep released during a slow worktree checkout never launches", async () => {
+  const h = executorHost({ parallel: 2, tasks: [task("slow-checkout")] });
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const discarded = [];
+  let prepared = 0;
+  h.env.executorWorktrees = {
+    enabled: () => true,
+    prepare: async ({ root, runId }) => { prepared += 1; await gate; return { root, path: `${root}/.mefi/worktrees/${runId}`, branch: `mefi/${runId}`, runId }; },
+    discard: async (worktree) => { discarded.push(worktree); return { discarded: true }; },
+    settle: async () => ({ merged: true }),
+  };
+  const fill = h.env.spawnNextJob();
+  for (let turn = 0; turn < 200 && !prepared; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(prepared, 1, "dispatch reached the checkout");
+  const entry = h.autopilot.jobs[0];
+  // The checkout outlasts the supervisor's two-minute sweep, which reaps the claim.
+  h.advance(130000);
+  h.env.assistantSuperviseJobs(h.now());
+  for (let turn = 0; turn < 50; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(entry.finished, true);
+  assertUnclaimed(h, "slow-checkout");
+  release();
+  assert.equal(await fill, "lost");
+  assert.equal(h.starts.length, 0, "a released claim must not become an untracked worker");
+  assert.equal(discarded.length, 1, "its checkout goes back");
+});
+
 test("the post-claim admission counts existing workers without counting its own pending start twice", async () => {
   const h = executorHost({ adaptiveParallel: true, tasks: [task("last-available")], workerCapacity: async ({ running }) => running < 1 ? healthy() : pressure("memory") });
   h.wake(); await h.pump();

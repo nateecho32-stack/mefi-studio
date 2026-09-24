@@ -7,7 +7,89 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Home is glass over the live node tree.** The workspace used to sit on a
+  flat, opaque background. Now the Command constellation draws behind it,
+  and the glance tiles, the conversation, Your work, the menu and the
+  project panel are frosted glass that shows the tree through, blurred.
+  Behind Home the tree is scenery: no labels or input, about 12 frames a
+  second (one a second with Motion off), paused under a sheet. It costs
+  about a third of Command's frame time. Every theme tints the glass with
+  its own colours, and **Blur behind panels** off makes the panels solid.
+- **Tree motion.** With the Audio link on and the Overview spinning in 3D,
+  the music moves the tree: the spin quickens with the music's energy, each
+  kick drum steps it on, the bass swells it, the mids sway it round a small
+  figure of eight and the snare nods it toward you. It all happens inside
+  room the frame keeps for it, so no node leaves the view, and it settles
+  back when the music stops, the spin pauses or a node is focused. Response
+  sets how much (full from 50%); **Tree motion** under Style & sound ›
+  Reactions turns it off.
+
 ### Fixed
+- **Claude Code and Antigravity builders are no longer killed for working
+  quietly.** Their print mode says nothing until the answer, so every run
+  longer than the start budget was killed as a wedged start. The 25-minute
+  budget still bounds them.
+- **Long runs no longer park the executor.** A run killed at its 25-minute
+  budget counted as a failure to start, so three long tasks paused every
+  worker for ten minutes. Only a run that never said anything counts now, and
+  a breaker pause is no longer saved as "executor off" (which kept it off
+  after a restart).
+- **Stop all stops everything** even when settings cannot be saved, and a
+  wedged CLI's opencode fallback no longer starts after it.
+- **Restart Studio restarts once the build it waited for finishes.** It used
+  to hold all new work and never restart.
+- **Switching projects cannot start a worker in the project you left**, and a
+  refused switch no longer stops the assistant's tick.
+- **Verification checks no longer see Studio's API keys.** They now get the
+  same stripped environment as every other child process.
+- A hung verification check is killed with its whole process tree and no
+  longer holds a verification slot until restart. A card whose evidence cannot
+  be read (a very long check history, a session gone from the store) is parked
+  for review after two hours, instead of waiting forever.
+- The LÖVE harness result counts, so a failing suite blocks verification. An
+  `npm run check` moved to Studio's checkout (the project has no package.json)
+  no longer verifies or reopens the project's cards. Reported test paths keep
+  their case on Linux.
+- An inbox request typed without a title starts instead of stranding its
+  claim. A request with a long or non-Latin title no longer runs beside the
+  card it became, or becomes a new card on every pass.
+- A resumed run no longer replays the previous run's done line and hand-offs
+  when its CLI echoes the prompt. Escape codes alone are not a worker
+  speaking, and cursor codes no longer hide the done line.
+- The opencode fallback is judged on its own start and verdict.
+- The thread says "Stopped (progress saved)" or "Waiting to retry (not
+  charged)" instead of "Failed" when nothing was charged. A failure question
+  names this run's error, and a stale run asks nothing about a card another
+  run owns.
+- A run that started ends the card's streak of failed starts, and Try again
+  resets it. A reopened done card gets its own receipt. "Let it run" and "Keep
+  them all" no longer erase each other.
+- **The menu shows every destination again.** Opened, it needed about 990px,
+  so a 900px window hid Style & sound and Profiler behind the foot and a
+  720px window hid all of Settings, with no sign the list scrolled. Opened,
+  Work, Live, Models and Settings are now short capitals headings over their
+  destinations, lined up in one column of icons, and the whole menu fits
+  900px. Below 820px tall the foot folds into one row of icons. When the
+  list still has to scroll, its hidden edge fades out. At rest, "Settings" is
+  no longer cut to "Setti…".
+- **Toasts no longer cover the opened menu.** A tip in the bottom-left corner
+  sat over Shortcuts, Community and Keep menu open; it now steps aside while
+  the menu is open.
+- **Search Studio names each section once.** Every row repeated its section
+  ("WORK", "WORK", "WORK"…); the name now heads its group, and shows faintly
+  on the row you are on. The search field's focus ring follows the sheet's
+  rounded corner instead of cutting across it.
+- The project panel's "Mefi's Studio" heading no longer wears the current-page
+  highlight on Home, and the Shortcuts sheet's key column is narrowed to its
+  longest key.
+- **The spinning tree stays in frame, turning in place.** The Overview
+  turned the tree about the world's origin rather than its own centre, so a
+  lopsided tree swung up to a few hundred pixels to one side, and the frame
+  shrank and grew with every turn (down to a seventh of its size for
+  Branches and Terraces on a wide window). It now turns about the tree's
+  centre, sizes the frame once for the whole turn, and keeps the camera far
+  enough back that the near end of a wide tree no longer balloons.
 - **A machine that settles just under busy no longer holds new workers
   forever.** After a lag spike, new worker starts waited for two readings at
   40 ms or less, and a laptop that settled at 41–99 ms never got there. Once

@@ -166,7 +166,10 @@ contextBridge.exposeInMainWorld("mefiStudio", {
   onBriefing: (callback) => ipcRenderer.on("eyes:briefing", (_event, data) => callback(data)),
   onEyesActivity: (callback) => ipcRenderer.on("eyes:activity", (_event, data) => callback(data)),
   onEyesError: (callback) => ipcRenderer.on("eyes:error", (_event, message) => callback(message)),
-  onStudioLog: (callback) => ipcRenderer.on("studio:log", (_event, line) => callback(line)),
+  // The host batches log lines (logLine in main.cjs); listeners still get one line per call.
+  onStudioLog: (callback) => ipcRenderer.on("studio:log", (_event, lines) => {
+    for (const line of Array.isArray(lines) ? lines : [lines]) callback(line);
+  }),
   onUpdateEvent: (callback) => ipcRenderer.on("update:event", (_event, payload) => callback(payload)),
   onReleaseEvent: (callback) => ipcRenderer.on("release:event", (_event, payload) => callback(payload)),
   onAssistant: (callback) => ipcRenderer.on("eyes:assistant", (_event, payload) => callback(payload)),

@@ -10,7 +10,7 @@ walk through the agent loop read [agent-loop.md](agent-loop.md).
 | Term | Meaning |
 | --- | --- |
 | **Menu** (the rail) | The navigation down the left edge: **Home**, **Work**, **Live**, **Models** and **Settings**, with **Search**, **Start here**, **Shortcuts** and **Community** at its foot. The code calls it the rail (`#app-rail`, `renderRail` in `renderer/nav.js`). **M+** at its top opens the project panel. |
-| **Workspace** | The home screen (`H`): project header, the "Studio at a glance" strip, the conversation with your companion, and **Your work**. |
+| **Workspace** | The home screen (`H`): project header, the "Studio at a glance" strip, the conversation with your companion, and **Your work**, as frosted glass over the live node tree. |
 | **Command view** | The 3D node tree (`D`): sessions, tasks and agents as orbs, with a panel on the right for Work, Agents, Assistant, Done and Ask. |
 | **Booklet** | Historically the single-file model catalog; today `renderer/booklet.html` is the whole app bundled into one file by `npm run build-booklet`. The **Model catalog** tab (`1`) is the part that kept the name. |
 | **Model Lab** | Tab `2`: measured latency, throughput, cost and the usage tracker per project. |
@@ -62,8 +62,13 @@ walk through the agent loop read [agent-loop.md](agent-loop.md).
   here**, **Shortcuts** (`?`), **Community** and the update badge. At rest it
   is five icons with their names; hover it or Tab into it and it opens over the
   page to list every destination with its key, without moving anything
-  underneath. The section you are in lights up and the destination you are on
-  is marked.
+  underneath. Opened, each section's name becomes a small capitals heading
+  over its destinations (it still goes to the section's main page), and the
+  whole menu fits a 900px window. Below 820px tall the foot folds into one
+  row of icons, each named by its tooltip, and a list that still has to
+  scroll fades out at its hidden edge. The section you are in lights up and
+  the destination you are on is marked. Toasts step aside while the menu is
+  open.
 - **Keep menu open** pins it and the page makes room. In a window narrower
   than 1100px a pinned menu behaves as if unpinned and opens over the page;
   the pin comes back when the window widens. The window never shrinks below
@@ -90,6 +95,17 @@ walk through the agent loop read [agent-loop.md](agent-loop.md).
 
 ### Workspace and work
 
+- **Home sits over the live tree.** The node tree from Command view draws
+  behind the workspace, and every panel on Home (the glance tiles, the
+  conversation, **Your work**, the connection pill and the setup card) is
+  frosted glass that shows it through, blurred; the menu and the project
+  panel frost whatever they open over. The tree is scenery only: orbs, links
+  and sky with no labels, no pointer or keyboard input, about 12 frames a
+  second (one a second with Motion off), paused while a sheet covers Home.
+  Opening Command takes the canvas over, and closing it hands the tree back
+  while Home is still underneath. **Blur behind panels** off makes the panels
+  solid. The glass is mixed from the theme's own colours, so every theme
+  keeps its hue.
 - **Projects** keeps each folder's tasks, conversations, drafts, references and
   work logs together. **M+** at the top of the menu opens the project panel
   beside it: the project list and **+** to add a folder. Running work must
@@ -192,7 +208,10 @@ revision history stay in the project's ignored local `planning.json`.
   folds Map 2D / 3D (`V`), Labels (`L`) and Zoom into one menu. **Sound** holds
   **Music** and **Ambience**. **Spin** is the only control that turns the tree
   (`Space` pauses it); **Overview** keeps the whole tree framed. The two used
-  to share the name Orbit.
+  to share the name Orbit. In 3D the Overview turns the tree about its own
+  centre (the middle of the smallest circle around it seen from above,
+  halfway up its height) and sizes the frame once for the whole turn, so the
+  tree spins in place at a steady size with every node in view.
 - The **Ambience** popover reads **Look** (Backdrop, Speech bubbles, Card
   style), **Sound** (what the nodes listen to, the Zen bells' profile and
   switch) and **Calm** (Zen mode), then links on to **Style & sound** for the
@@ -260,7 +279,10 @@ revision history stay in the project's ignored local `planning.json`.
   effects. **Sound** follows: the player (local files, ad-free radio or a
   Spotify link), the **Audio link**, which wires bass, mids and treble to the
   live tree (including desktop audio and microphone sources) only when you
-  enable it, and **Find your next sound**. A **Look · Sound** strip in its
+  enable it (its **Tree motion** reaction lets the music quicken the
+  Overview's spin, step it on each kick, sway it round a small figure of
+  eight and swell it on the bass, inside room the frame keeps for it), and
+  **Find your next sound**. A **Look · Sound** strip in its
   header jumps between the two. A locked Void item explains itself in the
   sheet instead of leaving it.
 

@@ -177,7 +177,7 @@ function retryTask(task, now = Date.now()) {
   const next = { ...task, status: "open", updatedAt: now, pin: true, pinAt: now };
   // duplicateOf goes too: Run anyway on a card waiting for its duplicate. Its
   // familyDecision stays, so the keeper does not ask about the family again.
-  for (const name of ["runFailures", "providerFailures", "nextRunAt", "lastRunError", "verifyAttempts", "verification", "verificationReceiptId", "doneAt", "runId", "lease", "buildApproval", "loopGuard", "duplicateOf"]) delete next[name];
+  for (const name of ["runFailures", "startFailures", "providerFailures", "nextRunAt", "lastRunError", "verifyAttempts", "verification", "verificationReceiptId", "doneAt", "runId", "lease", "buildApproval", "loopGuard", "duplicateOf"]) delete next[name];
   // The owner's acknowledgement for the loop guard: the ledger restarts from
   // now, so outcomes logged before this retry are never counted again.
   next.loopLedger = { v: 1, at: now, n: 0, reasons: {} };

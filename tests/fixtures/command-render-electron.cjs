@@ -467,7 +467,7 @@ app.whenReady().then(async () => {
   // capture device is requested. Each section isolates a musical response.
   const audioDefaults = await run("return window.MefiIdle.audioStatus();");
   assert.equal(audioDefaults.response, 0.35, "fresh installs start with gentle audio response");
-  assert.deepEqual(audioDefaults.effects, { waves: true, nodes: true, percussion: false, background: false, splitBands: true });
+  assert.deepEqual(audioDefaults.effects, { waves: true, nodes: true, percussion: false, background: false, splitBands: true, motion: true });
   await run(`
     window.MefiIdle.setView('2d');
     window.MefiIdle.setOrbit(false);
@@ -690,7 +690,7 @@ app.whenReady().then(async () => {
   report.audio = {defaults:audioDefaults,quiet:audioQuiet,lowLevel,loud,playing:audioPlaying,nextWave:audioNextWave,bassline,snare,hat,silence:audioSilence,paused:audioPaused,waveChecks,stableGeometry:true};
   await run(`
     window.MefiIdle.setAudioResponse(.35);
-    window.MefiIdle.setAudioEffects({waves:true,nodes:true,percussion:false,background:false,splitBands:true});
+    window.MefiIdle.setAudioEffects({waves:true,nodes:true,percussion:false,background:false,splitBands:true,motion:true});
     window.MefiMusic.open();
     window.__audioCaptureCalls=[];
     window.__audioCaptureMethods={};

@@ -390,6 +390,7 @@ async function resourcePass({ kill = true, reason = "poll", withProcesses = true
       const action = { at: Date.now(), reason, pid: verdict.pid, status: verdict.status, label: verdict.name, commandLine: verdict.commandLine };
       actions.push(action);
       machineEvents.unshift(action);
+      if (machineEvents.length > 60) machineEvents.length = 60;
       logLine(`[machine] killed pid ${verdict.pid} (${verdict.status})`);
       await queueRequests([
         {
@@ -428,8 +429,22 @@ async function resourcePass({ kill = true, reason = "poll", withProcesses = true
     );
     status.history = machineStatusHistory;
   }
-  await eyes.writeJson(MACHINE_STATUS_PATH, status);
-  await eyes.writeJson(RESOURCE_LOG_PATH, { updatedAt: status.updatedAt, events: machineEvents.slice(0, 60) });
+  // Both files are diagnostics nothing in the app reads back, and every tick
+  // rewrote them: 6-12 atomic writes a minute into the synced data folder.
+  // The status file is written when what it says changes (leases, verdicts,
+  // kills, the capacity decision) and at least once a minute to refresh its
+  // readings and history; the resource log when a kill added to it.
+  const now = Date.now();
+  const written = resourcePass.written ?? (resourcePass.written = { key: null, at: 0, newest: undefined });
+  const key = JSON.stringify([status.leases, verdicts.map((verdict) => [verdict.pid, verdict.status, verdict.killable === true]), actions.length, capacity?.canStart, capacity?.reason ?? null, status.wait]);
+  if (key !== written.key || now - written.at >= 60000) {
+    await eyes.writeJson(MACHINE_STATUS_PATH, status);
+    Object.assign(written, { key, at: now });
+  }
+  if (written.newest !== (machineEvents[0] ?? null)) {
+    await eyes.writeJson(RESOURCE_LOG_PATH, { updatedAt: status.updatedAt, events: machineEvents.slice(0, 60) });
+    written.newest = machineEvents[0] ?? null;
+  }
   send("machine:status", status);
   return status;
 }
@@ -749,6 +764,7 @@ async function awaitPause(kind) {
 // A pending restart drains the current workers without changing the user's
 // saved run/pause preference. Their existing timeout/recovery rules still apply.
 let updateDrainRequested = false;
+let manualRestartRetry = null; // a deferred manual restart waiting for the builds to end
 let executorClosing = false;
 function executorUpdateHold() {
   if (executorClosing) return "Studio is saving work before closing";
@@ -777,6 +793,23 @@ async function applyRestart(files, { counted = true } = {}) {
   const running = autopilot.jobs.filter((job) => !job.finished || job.settlementPending);
   if (running.length) {
     updateDrainRequested = true;
+    // An updater restart is finished by the updater's own phase events. A
+    // manual one has none: the drain held every later dispatch and no restart
+    // ever followed. It retries itself once the builds end, and gives the
+    // queue back if they never do (the hard kill bounds every run).
+    if (!counted && !manualRestartRetry && typeof waitForExecutorIdle === "function") {
+      const budget = (typeof EXECUTOR_KILL_MS === "number" ? EXECUTOR_KILL_MS : 25 * 60 * 1000) + 5 * 60 * 1000;
+      manualRestartRetry = waitForExecutorIdle(budget)
+        .then((idle) => {
+          manualRestartRetry = null;
+          if (idle) return applyRestart(files, { counted: false });
+          if (updateDrainRequested) {
+            updateDrainRequested = false;
+            if (typeof assistantAskForWork === "function") assistantAskForWork("restart abandoned: builds still running");
+          }
+        })
+        .catch((error) => { manualRestartRetry = null; if (typeof logLine === "function") logLine(`[update] manual restart retry failed: ${error?.message ?? error}`); });
+    }
     return { deferred: true, reason: `${running.length} build job(s) finishing before update; new dispatches wait` };
   }
   await updateSettings((settings) => {
@@ -4331,7 +4364,7 @@ function findBasenameUnderRoot(root, base, { maxEntries = 20000, maxDepth = 6 } 
 // was handed names both marks, so any CLI that echoes its prompt filed one on
 // every run.
 function parseExecutorHandoff(line) {
-  const text = String(line ?? "").replace(/\u001b\[[0-9;]*m/g, "").trim();
+  const text = String(line ?? "").replace(/\u001b\[[0-?]*[ -\/]*[@-~]/g, "").trim();
   if (text.startsWith(EXECUTOR_NEXT_MARK)) {
     const body = text.slice(EXECUTOR_NEXT_MARK.length).trim();
     const [title, ...rest] = body.split("::");
@@ -4580,15 +4613,20 @@ function assistantWrite() {
 }
 
 // The journal: every job start and finish lands on disk at once, so a crash
-// leaves the truth in the file for the next boot.
-function assistantJournal(entry) {
+// leaves the truth in the file for the next boot. A hop only moves a running
+// job's target and progress, several times a second while AI roles work, so
+// it rides the throttled save (at most one whole-state write per 2 s); the
+// quit path still saves the latest progress synchronously.
+function assistantJournal(entry, { lazy = false } = {}) {
   if (!assistantState) return;
   try {
     if (assistantModule?.applyWork) assistantState = assistantModule.applyWork(assistantState, entry, Date.now());
   } catch (error) {
     logLine(`[assistant] journal update failed: ${error.message}`);
   }
-  if (!CLI_MODE) assistantWrite().catch(() => {});
+  if (CLI_MODE) return;
+  if (lazy) saveAssistant().catch(() => {});
+  else assistantWrite().catch(() => {});
 }
 
 function assistantJobId() {
@@ -4652,7 +4690,7 @@ async function assistantHop(entry, target, { progress = null, label = null } = {
   entry.progress = progress;
   if (entry.work) {
     Object.assign(entry.work, { target, targets: entry.targets, progress });
-    assistantJournal(entry.work);
+    assistantJournal(entry.work, { lazy: true });
   }
   assistantRowTargets(entry.role, { target, targets: entry.targets, progress });
   if (progress !== 1 && Date.now() - (entry.lastHopAt || 0) < ASSISTANT_HOP_MS) return;
@@ -5771,6 +5809,14 @@ async function assistantForemanJob(now, entry) {
   // executeNextRequest, so a foreman that skipped the call also skipped every
   // recovery — a parked executor stayed parked until an unrelated code path
   // happened to run it. The gate below reports the post-call state instead.
+  // A project switch abandons a running pass (drainProjectGate clears it from
+  // the pool) and moves on, while this body still runs inside the old
+  // project's scope: a dispatch from here claimed the old project's card and
+  // started a worker in the folder the owner had just left.
+  const leftProject = typeof projects !== "undefined" && typeof projects?.active === "function" && typeof projects?.current === "function" && projects.current()?.id !== projects.active()?.id;
+  if (entry?.abandoned === true || leftProject) {
+    return { ok: true, text: "project changed · nothing dispatched", intel: { handedOut: 0, building: autopilot.jobs.length, slotsFree: null }, messages: [] };
+  }
   const before = autopilot.jobs.map((job) => job.id);
   await executeNextRequest();
   const started = autopilot.jobs.filter((job) => !before.includes(job.id));
@@ -6946,7 +6992,9 @@ function assistantSuperviseJobs(now) {
   // A run past its budget needs another termination attempt, not an early
   // claim release: a failed taskkill can leave the writer alive. The child
   // controller keeps ownership until exit or confirmed process-tree removal.
-  const wedged = jobs.filter((job) => now - job.startedAt > ASSISTANT_JOB_WEDGED_MS);
+  // Measured from the current child's start: attach() gives an opencode
+  // fallback a fresh kill budget, which the claim's startedAt cut short.
+  const wedged = jobs.filter((job) => now - (Number(job.attachedAt) || job.startedAt) > ASSISTANT_JOB_WEDGED_MS);
   const ghosts = jobs.filter((job) => !job.pid && now - job.startedAt > 120000);
   const reaped = [];
   for (const job of [...wedged, ...ghosts]) {
@@ -7044,7 +7092,14 @@ function assistantSchedule(ms = assistantState?.intervalMs ?? 30000) {
 // at once; the pool does the work. Anything but the timer queues every
 // cadence role.
 async function assistantTick(reason = "timer") {
-  if (projectSwitching) return { skipped: "switching project", queued: [] };
+  if (projectSwitching) {
+    // The timer is a one-shot chain. Only a switch that completes re-arms it,
+    // so a timer tick skipped here during a switch that was then refused
+    // (the gate still busy) stopped every cadence role for good. A skipped
+    // timer tick re-arms itself; assistantSchedule replaces any earlier timer.
+    if (reason === "timer") assistantSchedule();
+    return { skipped: "switching project", queued: [] };
+  }
   if (assistantTickInFlight) {
     if (reason === "timer") return assistantTickInFlight;
     // Keep an explicit run-once request that arrives during a timer pass.
@@ -7442,7 +7497,14 @@ function refreshTray() {
     const paused = assistantState.status === "paused";
     const held = autopilot.held === true;
     const summary = assistantModule?.summarizeForTree?.(assistantState, Date.now());
-    tray.setToolTip(`Mefi's Studio AI+ · ${held ? "agents waiting for you" : (summary?.sublabel ?? (paused ? "assistant paused" : "assistant running"))}`);
+    // Every assistant push lands here (up to four a second); the OS call only
+    // when the words change.
+    const tip = `Mefi's Studio AI+ · ${held ? "agents waiting for you" : (summary?.sublabel ?? (paused ? "assistant paused" : "assistant running"))}`;
+    if (refreshTray.tip !== tip || refreshTray.tray !== tray) {
+      tray.setToolTip(tip);
+      refreshTray.tip = tip;
+      refreshTray.tray = tray;
+    }
     // The menu is rebuilt only when its one variable entry would change.
     const menuState = `${held ? "held" : "released"}:${paused ? "paused" : "running"}`;
     if (trayPaused === menuState) return;
@@ -8628,7 +8690,9 @@ async function assistantChurnAction(choice, memberIds, action = {}) {
     const at = Date.now();
     let held = 0;
     for (const task of members) {
-      task.familyDecision = { at, choice, keepId: null };
+      // Its own field: familyDecision is the duplicate answer, and each used
+      // to erase the other (assistant.mjs auditPass reads both).
+      task.churnDecision = { at, choice };
       const waiting = !task.runId && !task.lease && !task.absorbedInto && (!task.status || ["open", "pending", "queued"].includes(task.status));
       if (!holdIds.has(task.id) || !waiting) continue;
       task.loopGuard = { v: 1, at, kind: "family", count: 0, reason: `you held it for review: ${reason}`, remedy: "Read the last attempts, then edit, split or close the brief, or choose Try again to run it as it is.", by: "owner" };
@@ -8871,7 +8935,10 @@ function assistantBuildFailureQuestion(job, failures, evidence = {}) {
   return assistantRaiseIssue(agentIssues.runFailureIssue({
     task: { id: job.ref.id, title: job.title },
     failures,
-    error: evidence.error ?? job.ref.lastRunError ?? null,
+    // This run's own error (a budget kill, a broken pipe) or its own last
+    // words; job.ref.lastRunError is the previous run's, and titled every
+    // later failure with an error that was no longer happening.
+    error: evidence.error ?? evidence.runError ?? null,
     outputTail: evidence.outputTail ?? [],
     runId: evidence.runId ?? null,
     sessionId: evidence.sessionId ?? null,
@@ -9272,7 +9339,7 @@ function queuedWorkCount(requests, tasks) {
   const board = Array.isArray(tasks) ? tasks : [];
   const represented = new Set(board.filter((task) => task && task.status !== "archived").map((task) => workTitleKey(task.title)).filter(Boolean));
   const waiting = (Array.isArray(requests) ? requests : []).filter((item) => {
-    if (!item || !["ready", "cooling"].includes(backlog.workState(item, Date.now(), { tasks: board }).stage)) return false;
+    if (!item || item.promotedTo || !["ready", "cooling"].includes(backlog.workState(item, Date.now(), { tasks: board }).stage)) return false;
     const key = workTitleKey(item.title || item.prompt);
     if (key && represented.has(key)) return false;
     if (key) represented.add(key);
@@ -9282,7 +9349,23 @@ function queuedWorkCount(requests, tasks) {
   return waiting + open;
 }
 
+// Command, the Workspace and the Tasks sheet ask for the queue status on
+// their own timers and pushes. Asks that overlap for one project share one
+// read of the three board files (a read that waits its turn behind board
+// writes), so a burst of pushes costs one multi-megabyte read, not one each.
 async function backlogStatus() {
+  const projectId = projects.current().id;
+  const pending = backlogStatusReads.get(projectId);
+  if (pending) return pending;
+  const read = readBacklogStatus().finally(() => {
+    if (backlogStatusReads.get(projectId) === read) backlogStatusReads.delete(projectId);
+  });
+  backlogStatusReads.set(projectId, read);
+  return read;
+}
+const backlogStatusReads = new Map();
+
+async function readBacklogStatus() {
   await ensureAssistant();
   const assistant = await getAssistant();
   const board = await withBoardLock(async () => {
@@ -9775,7 +9858,7 @@ async function promoteRequestsToTasks() {
     // Moving work onto the board cannot clear a hold or claim. Pins and age
     // use the dispatch ordering so a capped pass admits the chosen task first.
     const candidates = requests
-      .filter((request) => request?.title && !request.runId && !request.runProgress?.pending && !request.absorbedInto && (!request.status || ["open", "pending", "queued"].includes(request.status)))
+      .filter((request) => request?.title && !request.promotedTo && !request.runId && !request.runProgress?.pending && !request.absorbedInto && (!request.status || ["open", "pending", "queued"].includes(request.status)))
       .sort(compareWork);
     const created = [];
     for (const request of candidates) {
@@ -9808,6 +9891,9 @@ async function promoteRequestsToTasks() {
       if (board.tasks.some((task) => task && task.title === title && task.status === "active" && task.runId)) continue;
       const key = workTitleKey(title);
       if (key && board.tasks.some((task) => task && task.status !== "archived" && workTitleKey(task.title) === key)) continue;
+      // A title with no ASCII letters or digits has no compact key; the same
+      // exact title and brief is still the same work.
+      if (!key && board.tasks.some((task) => task && task.status !== "archived" && task.title === title && (task.prompt ?? "") === (request.prompt ?? ""))) continue;
       if (key && created.some((candidate) => workTitleKey(String(candidate.title).slice(0, 90)) === key && candidate.prompt === request.prompt)) continue;
       const theme = workPlanTheme(title);
       if (theme && board.tasks.some((task) => task && task.status !== "archived" && workPlanTheme(task.title) === theme)) continue;
@@ -9858,6 +9944,11 @@ async function promoteRequestsToTasks() {
         ...(Array.isArray(request.problemFiles) && request.problemFiles.length ? { problemFiles: request.problemFiles.slice(0, 8) } : {}),
       };
     });
+    // The inbox row stays until the compactor absorbs it, and both used to find
+    // each other only by title key: a title cut to 90 characters, or one with
+    // no compact key at all, left the request running beside its own task and
+    // promoted again on every pass. The link is now the task's id.
+    created.forEach((request, index) => { request.promotedTo = rows[index].id; });
     for (const parent of rows.filter((row) => row.delegation)) {
       const childIds = new Set(parent.delegation.childTaskIds ?? []);
       for (const child of board.tasks) if (childIds.has(child?.id) && child.delegatedFrom?.scope === parent.delegation.scope) {
@@ -9924,7 +10015,7 @@ async function assistantCreateTask({ title, prompt = "", source = "chat", focuse
     if (conversation) {
       const existing = chatWork.findExistingChatWork({ ...board, jobs: autopilot.jobs }, { ...task, ...conversation });
       if (existing) return { created: null, existing };
-    } else if (board.tasks.some((task) => task && task.status !== "done" && task.status !== "archived" && workTitleKey(task.title) === key)) return { created: null };
+    } else if (board.tasks.some((task) => task && task.status !== "done" && task.status !== "archived" && (key ? workTitleKey(task.title) === key : task.title === cleanTitle))) return { created: null };
     board.tasks = [task, ...board.tasks];
     return { tasks: board.tasks, created: task };
   });
@@ -10297,8 +10388,10 @@ async function mutateBoard(mutator) {
       const { contextHistory, ...body } = task;
       return { ...structuredClone(body), ...(contextHistory ? { contextHistory } : {}) };
     };
-    const applyMutation = (board) => {
-      const previous = new Map(board.tasks.filter(Boolean).map((task) => [task.id, cloneTask(task)]));
+    // `pristine` is the file path's untouched read: its rows are already a
+    // snapshot the mutator never sees, so they stand in for a third clone.
+    const applyMutation = (board, pristine = null) => {
+      const previous = new Map((pristine ?? board.tasks).filter(Boolean).map((task) => [task.id, pristine ? task : cloneTask(task)]));
       const returned = mutator(board, eyes);
       if (isThenable(returned)) throw new TypeError("mutateBoard: mutator must be synchronous — await inputs before the gateway, not inside it");
       const patch = returned ?? {};
@@ -10350,7 +10443,7 @@ async function mutateBoard(mutator) {
       ideas: Array.isArray(ideas) ? ideas : [],
     };
     const board = { requests: structuredClone(original.requests), tasks: original.tasks.map(cloneTask), ideas: structuredClone(original.ideas) };
-    const returned = applyMutation(board);
+    const returned = applyMutation(board, original.tasks);
     if (isThenable(returned)) {
       throw new TypeError("mutateBoard: mutator must be synchronous — await inputs before the gateway, not inside it");
     }
@@ -10503,20 +10596,23 @@ async function prepareClusterJob(job, entry, tasks) {
           agent.step = agent.role === "planner" ? canDelegate ? "Dividing this task into scoped subtasks" : "Planning this task" : "Reviewing risks and acceptance checks";
           publish();
           const result = await httpAssistantCall(route, prompt.system, prompt.user, canDelegate && agent.role === "planner" ? 3200 : 1800, { role: "routine", taskType: `cluster-${agent.role}`, source: entry.mode });
-          return current() ? result : { ok: true, text: "Advisory cancelled; result discarded" };
+          // Not a pool failure, but not advice either: the report below
+          // treats it as failed so it is neither briefed nor cached.
+          return current() ? result : { ok: true, discarded: true, text: "Advisory cancelled; result discarded" };
         }, { ai: true, priority: ASSISTANT_PRIORITY.demand, key: agent.id, text: agent.step, targets: entry.taskId ? [taskTarget(entry.taskId)] : [ASSISTANT_NODE] });
       } catch (error) { result = { ok: false, error: String(error.message ?? error) }; }
       if (!accepting) return { role: agent.role, ok: false, error: "Advisory wait ended" };
-      const ok = result?.ok === true && Boolean(String(result.text ?? "").trim());
+      const ok = result?.ok === true && result.discarded !== true && Boolean(String(result.text ?? "").trim());
       agent.status = ok ? "done" : "failed";
-      agent.step = ok ? "Findings handed to builder" : String(result?.error || "No findings returned").slice(0, 160);
+      agent.step = ok ? "Findings handed to builder" : String((result?.discarded ? "Mode changed or work paused" : result?.error) || "No findings returned").slice(0, 160);
       publish();
       agent.report = { role: agent.role, ok, text: ok ? String(result.text).slice(0, 12000) : "", error: ok ? null : agent.step };
       return agent.report;
     }));
     // Only advice worth reusing: two failed answers (a provider outage, a
     // refused key) would otherwise stop re-claims from asking again for 30 min.
-    if (agents.every((agent) => agent.report) && reports.some((report) => report.ok)) {
+    // Nor advice for a claim already released (breaker, update drain, sweep).
+    if (current() && agents.every((agent) => agent.report) && reports.some((report) => report.ok)) {
       for (const [key, value] of clusterAdvice) if (Date.now() - value.at >= CLUSTER_ADVICE_TTL_MS) clusterAdvice.delete(key);
       clusterAdvice.set(adviceKey, { signature: adviceSignature, at: Date.now(), reports });
     }
@@ -10549,8 +10645,11 @@ async function spawnNextJob() {
       && (autopilot.adaptiveParallel === true || others.length < Math.max(1, autopilot.parallel || 1));
   };
   // The pause can land mid-fill (an infra breaker tripped on a sibling job),
-  // so re-check instead of trusting the dispatcher's one-time gate.
+  // so re-check instead of trusting the dispatcher's one-time gate. A caller
+  // still scoped to a project the owner has left (an abandoned roster pass)
+  // dispatches nothing there.
   if (projectSwitching) return "empty";
+  if (typeof projects.active === "function" && runProject?.id !== projects.active()?.id) return "empty";
   // No folder is open: nothing may build in the app's own seed store.
   if (!projects.open()) return "noproject";
   if (!autopilot.execute || assistantState?.status === "paused" || executorUpdateHold()) return "empty";
@@ -10713,6 +10812,8 @@ async function spawnNextJob() {
     // pass. A temporary direct-request completion is removed from the inbox
     // and would leave its parent unable to distinguish finished from lost.
     if (item.handoffId && item.fromRun) return false;
+    // Already a card on the board (promoteRequestsToTasks); the card runs.
+    if (item.promotedTo) return false;
     if ((item.runFailures ?? 0) >= 5) return false;
     if (backlog.workState(item, Date.now(), { tasks, autoBuild: autopilot.autoBuild }).stage !== "ready") return false;
     if (item.nextRunAt && item.nextRunAt > Date.now()) return false;
@@ -10758,7 +10859,11 @@ async function spawnNextJob() {
     const candidate = ranked[rank];
     const next = {
       kind: candidate.kind,
-      title: candidate.ref.title,
+      // The Explorer's request box files a prompt with no title, and promotion
+      // skips title-less requests, so they reach dispatch as they are. Every
+      // later step names the job by its title (the policy record sliced it
+      // after the claim landed, which threw and stranded the claim).
+      title: candidate.ref.title || String(candidate.ref.prompt ?? "").trim().split(/\r?\n/)[0].slice(0, 90) || "Untitled request",
       prompt: candidate.ref.prompt ?? "",
       source: candidate.kind === "request" ? candidate.ref.source ?? "manual" : candidate.ref.source ?? "task",
       ref: candidate.ref,
@@ -10998,8 +11103,9 @@ async function spawnNextJob() {
     // SQLite serializes the writes but cannot make a separately performed
     // check atomic. The lease ({ pid, at }) rides the claim so housekeeping
     // can tell our own dead runs from another process's live ones.
+    const projectLeft = () => typeof projects.active === "function" && runProject?.id !== projects.active()?.id;
     await mutateBoard((board) => {
-      if (!autopilot.execute || assistantState?.status === "paused" || executorUpdateHold() || !manualCapacityAvailable(entry)) return null;
+      if (!autopilot.execute || assistantState?.status === "paused" || executorUpdateHold() || !manualCapacityAvailable(entry) || projectLeft()) return null;
       // The operator can edit an open card while the route/policy reads await.
       // Its new scope needs a new collaboration decision and file reservation;
       // never run an updated brief under the old selection's file locks.
@@ -11104,7 +11210,8 @@ async function spawnNextJob() {
         && !backlog.dependencyState(current, currentTasks).stage);
     });
   } catch {}
-  if (!launchAllowed || !autopilot.execute || assistantState?.status === "paused" || executorUpdateHold() || !manualCapacityAvailable(entry) || !backlog.buildAllowed(job.ref, autopilot)) {
+  if (!launchAllowed || !autopilot.execute || assistantState?.status === "paused" || executorUpdateHold() || !manualCapacityAvailable(entry) || !backlog.buildAllowed(job.ref, autopilot)
+    || (typeof projects.active === "function" && runProject?.id !== projects.active()?.id)) {
     await cancelClaim("claim or scope changed before launch");
     return "lost";
   }
@@ -11124,7 +11231,10 @@ async function spawnNextJob() {
       // The checkout added an await between the gates and the spawn, so the
       // gates are rechecked: a pause that landed mid-checkout cancels the
       // claim instead of spawning onto a cancelled run.
-      if (!autopilot.execute || assistantState?.status === "paused" || executorUpdateHold() || projectSwitching || !manualCapacityAvailable(entry)) {
+      // A checkout can outlast the supervisor's two-minute ghost sweep, which
+      // releases the claim (entry.finished) while this await is pending; the
+      // task is then open again and a spawn here would be an untracked twin.
+      if (entry.finished || !autopilot.execute || assistantState?.status === "paused" || executorUpdateHold() || projectSwitching || !manualCapacityAvailable(entry)) {
         await worktreeManager.discard(runWorktree).catch(() => {});
         await cancelClaim("paused during worktree checkout");
         return "lost";
@@ -11159,7 +11269,7 @@ async function spawnNextJob() {
     decisionId: entryPolicyDecisionId,
     parentAttemptId: job.ref?.fromRun ? String(job.ref.fromRun).slice(0, 80) : null,
     parentTitle: job.ref?.parent ? String(job.ref.parent).slice(0, 90) : null,
-    intentKey: workTitleKey(job.title) || job.title.slice(0, 120),
+    intentKey: workTitleKey(job.title) || String(job.title ?? "").slice(0, 120),
     actionId: selectedRank >= 0 && selectedRank < entryPolicyActions.length ? entryPolicyActions[selectedRank].id : null,
     workItem: {
       kind: job.kind,
@@ -11448,37 +11558,48 @@ async function spawnNextJob() {
     // another silent retry. A run the owner or the host stopped (Stop all,
     // switching projects) raises nothing of its own: it resumes from its
     // checkpoint and can ask again. One run's issues are raised in turn, so
-    // the one-open-card rule sees the card the one before it opened. Guarded
-    // for the vm test slices that do not carry the issue host.
-    if (!userStop && job.kind === "task" && job.ref?.id && typeof assistantRaiseIssue === "function") {
-      const owed = agentIssues.ownerResultIssue(entry.resultNote?.parts);
-      const raising = [...(Array.isArray(entry.issues) ? entry.issues : []), ...(owed ? [owed] : [])];
-      raising.reduce((chain, raised) => chain.then(() => assistantRaiseIssue({ ...raised, taskId: job.ref.id, taskTitle: job.title, runId: entry.id,
-        sessionId: sessionId ?? null, attempts: Math.floor(Number(job.ref.runFailures) || 0),
-        // The chain it sits in, so its card offers Split only where Split can land.
-        splitFrom: job.ref.splitFrom ?? null, splitDepth: job.ref.splitDepth ?? null })).catch(() => {}), Promise.resolve());
-    }
-    if (!ok && !userStop && job.kind === "task" && job.ref?.id && typeof assistantBuildFailureQuestion === "function") {
-      try {
-        assistantBuildFailureQuestion(job, Math.max(1, Math.floor(Number(job.ref.runFailures) || 0) + 1), {
-          error: entry.startKilled ? errorMessage : null,
-          outputTail: entry.outputTail ?? [],
-          runId: entry.id,
-          sessionId: sessionId ?? null,
-          // Settle's own verdict: an outage it requeues uncharged is asked
-          // about by no one; one charged past its grace goes to triage.
-          providerDown,
-        })?.catch?.(() => {});
-      } catch {}
-    }
+    // the one-open-card rule sees the card the one before it opened. Raised
+    // only once settle() has committed under the ownership fence: a stale run
+    // whose card a newer run now owns used to ask about that live card, and an
+    // automatic answer landed in the decisions its current worker reads.
+    // Guarded for the vm test slices that do not carry the issue host.
+    const raiseRunIssues = () => {
+      if (!userStop && job.kind === "task" && job.ref?.id && typeof assistantRaiseIssue === "function") {
+        try {
+          const owed = agentIssues.ownerResultIssue(entry.resultNote?.parts);
+          const raising = [...(Array.isArray(entry.issues) ? entry.issues : []), ...(owed ? [owed] : [])];
+          raising.reduce((chain, raised) => chain.then(() => assistantRaiseIssue({ ...raised, taskId: job.ref.id, taskTitle: job.title, runId: entry.id,
+            sessionId: sessionId ?? null, attempts: Math.floor(Number(job.ref.runFailures) || 0),
+            // The chain it sits in, so its card offers Split only where Split can land.
+            splitFrom: job.ref.splitFrom ?? null, splitDepth: job.ref.splitDepth ?? null })).catch(() => {}), Promise.resolve());
+        } catch (error) { logLine(`[autopilot] run issues not raised: ${String(error?.message ?? error).slice(0, 160)}`); }
+      }
+      if (!ok && !userStop && job.kind === "task" && job.ref?.id && typeof assistantBuildFailureQuestion === "function") {
+        try {
+          assistantBuildFailureQuestion(job, Math.max(1, Math.floor(Number(job.ref.runFailures) || 0) + 1), {
+            error: entry.startKilled ? errorMessage : null,
+            runError: errorMessage ?? null,
+            outputTail: entry.outputTail ?? [],
+            runId: entry.id,
+            sessionId: sessionId ?? null,
+            // Settle's own verdict: an outage it requeues uncharged is asked
+            // about by no one; one charged past its grace goes to triage.
+            providerDown,
+          })?.catch?.(() => {});
+        } catch {}
+      }
+    };
     // Policy Lab PR1 — the outcome half of the attempt. A finish report is
     // not a verification result: `outcome` records what the run CLAIMED; a
     // positive learning label can only come later, from a runner-produced
     // receipt (autopilotHousekeeping). Unknown costs stay null, never zero.
     const attemptDurationMs = Date.now() - entry.startedAt;
-    policyRecord("attempt-finish", {
+    // Nothing between entry.finished and settle() may throw: a throw here left
+    // the entry in autopilot.jobs as finished, which every reaper skips, so the
+    // card stayed active and the slot spent until restart.
+    try { policyRecord("attempt-finish", {
       attemptId: entry.id,
-      intentKey: workTitleKey(job.title) || job.title.slice(0, 120),
+      intentKey: workTitleKey(job.title) || String(job.title ?? "").slice(0, 120),
       outcome: ok ? "reported-done" : "failed",
       exitCode: code ?? null,
       sawDone: entry.sawDone === true,
@@ -11494,7 +11615,11 @@ async function spawnNextJob() {
           }
         : null,
       cost: { durationMs: attemptDurationMs, modelCalls: null, tokens: null, providerCost: null, testExecutions: null },
-    });
+    }); } catch (error) { logLine(`[autopilot] attempt record failed: ${String(error?.message ?? error).slice(0, 160)}`); }
+    let capturedHandoffs = [];
+    try {
+      capturedHandoffs = taskHandoffs.captureTaskHandoffs(entry, job, { now: Date.now(), maxDepth: EXECUTOR_MAX_DEPTH, limit: EXECUTOR_MAX_HANDOFFS });
+    } catch (error) { logLine(`[autopilot] hand-offs not captured: ${String(error?.message ?? error).slice(0, 160)}`); }
     const attempt = {
       runId: entry.id,
       startedAt: entry.startedAt,
@@ -11507,7 +11632,7 @@ async function spawnNextJob() {
       tail: lastWords,
       ...(errorMessage ? { error: String(errorMessage).slice(0, 500) } : {}),
       ...(entry.resultNote ? { result: entry.resultNote } : {}),
-      handoffs: taskHandoffs.captureTaskHandoffs(entry, job, { now: Date.now(), maxDepth: EXECUTOR_MAX_DEPTH, limit: EXECUTOR_MAX_HANDOFFS }),
+      handoffs: capturedHandoffs,
       // Markers only: the raw advisories reached the worker through its brief,
       // and a full copy here was re-snapshotted into every later revision.
       ...(entry.clusterReports ? {
@@ -11558,8 +11683,10 @@ async function spawnNextJob() {
             const next = { ...item, status: "verifying", lastAttempt: attempt };
             // A new attempt starts a new evidence streak, as a task's does.
             delete next.verification;
-            // The provider answered this run: an outage streak is over.
+            // The provider answered this run: an outage streak is over, and
+            // so is a run of start kills.
             delete next.providerFailures;
+            delete next.startFailures;
             // Direct requests owe the same follow-ups as task-backed runs.
             // Keep them on the parent before attempting the separate queue write.
             if (entry.handoffs.length) next.remaining = entry.handoffs.slice(0, EXECUTOR_MAX_HANDOFFS).map((handoff) => handoff.title);
@@ -11633,6 +11760,7 @@ async function spawnNextJob() {
               next.nextRunAt = Date.now() + Math.min(30 * 60000, 60000 * 2 ** (next.startFailures - 1));
               return next;
             }
+            if (!entry.startKilled && (entry.spoke || entry.sessionId)) delete next.startFailures;
             if (providerDown) {
               next.providerFailures = (Number(item.providerFailures) || 0) + 1;
               next.lastRunError = String(lastWords || errorMessage || `exit ${code ?? "?"}`).slice(0, 160);
@@ -11766,6 +11894,9 @@ async function spawnNextJob() {
         delete task.lease;
         delete task.doneAt;
         task.providerFailures = (Number(task.providerFailures) || 0) + 1;
+        // The runner did start (it spoke or bound a session): the run of
+        // consecutive start kills is over, as the ok branch already says.
+        if (!entry.startKilled && (entry.spoke || entry.sessionId)) delete task.startFailures;
         const cooldown = providerCooldown(task.providerFailures);
         task.nextRunAt = Date.now() + cooldown;
         task.lastRunError = String(lastWords || errorMessage || `exit ${code ?? "?"}`).slice(0, 160);
@@ -11782,6 +11913,7 @@ async function spawnNextJob() {
         // next one is charged too; any other failure ends it.
         if (providerSaid) task.providerFailures = (Number(task.providerFailures) || 0) + 1;
         else delete task.providerFailures;
+        if (!entry.startKilled && (entry.spoke || entry.sessionId)) delete task.startFailures;
         task.runFailures = (task.runFailures ?? 0) + 1;
         // First miss retries in a minute with the error in the prompt so
         // the next agent works on resolving it; later misses back off.
@@ -11832,13 +11964,19 @@ async function spawnNextJob() {
     // Outcome messages, follow-up work and node context require a successful
     // ownership-fenced commit. A stale worker may log its exit, but cannot
     // announce success or create a new branch of work for another attempt.
+    // Nor raise questions about a card it no longer owns (raiseRunIssues).
+    raiseRunIssues();
+    // Settled back to the queue with no attempt charged: a start kill inside
+    // its grace, or a provider outage. Neither is the work failing, and the
+    // chat thread, the node log and the feed used to say "failed" for both.
+    const requeued = !ok && !userStop && (providerDown || (entry.startKilled === true && (Number(job.ref?.startFailures) || 0) < EXECUTOR_START_FAILURE_GRACE));
     let heard = null;
     if (!userStop) {
       try { heard = assistantHearBuilder(entry, job, ok, errorMessage, code ?? null); }
       catch (error) { logLine(`[assistant] builder report failed: ${error.message}`); }
     }
     if (job.kind === "task") {
-      const outcome = userStop ? "stopped on request — progress saved" : ok ? "finished, verifying" : "failed";
+      const outcome = userStop ? "stopped on request — progress saved" : ok ? "finished, verifying" : requeued ? "requeued, no attempt charged" : "failed";
       try { assistantNodeContext(taskTarget(job.ref.id), "run", `autopilot "${assistantClip(job.title, 60)}" — ${outcome} (exit ${code ?? "?"})`, "executor"); }
       catch (error) { logLine(`[autopilot] task context update failed: ${error.message}`); }
     }
@@ -11909,7 +12047,11 @@ async function spawnNextJob() {
     // died inside 15s *without saying anything*, means opencode itself cannot
     // start. A run that talked is not an infra failure however it exited —
     // that false positive is what used to park the executor on a healthy CLI.
-    const infraFail = !userStop && (errorMessage != null || (!ok && !entry.spoke && Date.now() - entry.startedAt < 15000));
+    // A stop reason is an errorMessage too ("killed after budget", a supervisor
+    // kill, a broken prompt pipe), so an error only counts when the run never
+    // spoke: three long tasks hitting the 25-minute budget used to park the
+    // whole executor. Start kills and spawn errors are silent by definition.
+    const infraFail = !userStop && !entry.spoke && (errorMessage != null || (!ok && Date.now() - (Number(entry.attachedAt) || entry.startedAt) < 15000));
     if (ok) {
       autopilot.infraFailures = 0;
       autopilot.lastError = null;
@@ -11927,7 +12069,7 @@ async function spawnNextJob() {
       // so the feed and the chat reply can name the issue, not just "exit 1".
       const tail = lastWords;
       autopilot.lastError = errorMessage ?? (tail ? `${tail.slice(0, 160)}` : `no ${EXECUTOR_DONE_MARK} (exit ${code})`);
-      pushAutopilotHistory("failed", `failed: ${job.title} (code ${code ?? "?"})${tail ? ` — ${tail.slice(0, 100)}` : ""}`);
+      pushAutopilotHistory(requeued ? "requeued" : "failed", `${requeued ? "requeued" : "failed"}: ${job.title} (code ${code ?? "?"})${tail ? ` — ${tail.slice(0, 100)}` : ""}`);
       if (infraFail) {
         autopilot.infraFailures += 1;
         if (autopilot.infraFailures >= 3 && autopilot.execute) {
@@ -11946,7 +12088,7 @@ async function spawnNextJob() {
     // "Finished" stays honest: the run reported success, verification still
     // has to confirm it before the card reads done.
     if (job.source === "chat") {
-      assistantAppendReply(`${ok ? "Finished (verifying)" : "Failed"}: ${assistantClip(job.title, 80)}.`, "local", "request");
+      assistantAppendReply(`${ok ? "Finished (verifying)" : userStop ? "Stopped (progress saved)" : requeued ? "Waiting to retry (not charged)" : "Failed"}: ${assistantClip(job.title, 80)}.`, "local", "request");
       saveAssistant({ force: true }).catch(() => {});
     }
     emitAutopilot();
@@ -11994,13 +12136,19 @@ async function spawnNextJob() {
       // Terminal-free text for everything a person reads: a bare colour reset
       // is not a line, in the studio log or in the kept tails below.
       const plain = line.replace(/\u001b\[[0-?]*[ -\/]*[@-~]/g, "").trim();
-      if (plain) logLine(`[${runLabel}] ${plain}`);
+      // Escape codes alone (a hidden cursor, a cleared line) are not a line:
+      // counted as speech they disarmed the wedged-start watchdog, recorded
+      // a 0 ms start and blocked the silent-exit fallback.
+      if (!plain) return;
+      logLine(`[${runLabel}] ${plain}`);
       // A runner's first line is how long it took to start — the evidence
       // the start watchdog sets its budget from (see startBudgetMs). A start
       // also ends any run of consecutive start kills.
       if (!entry.spoke) {
         const samples = (autopilot.startSamples ??= []);
-        samples.push(Date.now() - attemptStartedAt);
+        // A print-mode CLI's first line is its whole run, not its start: as a
+        // sample it stretched every later start budget towards ten minutes.
+        if (!entry.bufferedOutput) samples.push(Date.now() - attemptStartedAt);
         if (samples.length > 8) samples.splice(0, samples.length - 8);
         autopilot.startKills = 0;
         // Three healthy starts in a row step a narrowed manual pool back up by
@@ -12063,11 +12211,23 @@ async function spawnNextJob() {
       // are worth the prompt one.
       queueExecutorCheckpoint(entry, entry.sawDone !== sawDoneBefore || entry.resultNote !== resultBefore ? {} : { delay: 30000 });
     };
+    // Only the new chunk is split, and a line that never ends (a spinner
+    // redrawn with bare carriage returns, a runaway dump) is kept to its
+    // first 64 KiB: re-splitting a growing buffer on every chunk was
+    // quadratic, and the whole line went to the log and the renderer.
     stream.on("data", (chunk) => {
-      buffer += chunk;
-      const lines = buffer.split(/\r?\n/);
-      buffer = lines.pop();
-      for (const line of lines) if (line.trim()) take(line);
+      const pieces = chunk.split(/\r?\n/);
+      if (pieces.length === 1) {
+        if (buffer.length < 65536) buffer = (buffer + chunk).slice(0, 65536);
+        return;
+      }
+      const first = (buffer + pieces[0]).slice(0, 65536).replace(/\r$/, "");
+      if (first.trim()) take(first);
+      for (let index = 1; index < pieces.length - 1; index += 1) {
+        const line = pieces[index].length > 65536 ? pieces[index].slice(0, 65536) : pieces[index];
+        if (line.trim()) take(line);
+      }
+      buffer = pieces[pieces.length - 1].slice(0, 65536);
     });
     stream.on("end", () => {
       if (buffer.trim()) take(buffer);
@@ -12293,12 +12453,20 @@ async function spawnNextJob() {
     const startBudgetMs = Math.round(Math.min(10 * 60000, Math.max(crowded, escalated, learned)));
     const startBudgetText = `${Math.round(startBudgetMs / 6000) / 10}m`;
     attemptStartedAt = Date.now();
-    startWatchdog = setTimeout(() => {
-      if (entry.finished || entry.child !== nextChild) return;
-      const wedged = assistantModule?.isWedgedStart
-        ? assistantModule.isWedgedStart({ spoke: entry.spoke, sessionId: entry.sessionId, ageMs: Date.now() - attemptStartedAt, budgetMs: startBudgetMs })
-        : !entry.spoke && !entry.sessionId;
-      if (!wedged) return;
+    entry.attachedAt = attemptStartedAt;
+    // Print-mode CLIs answer once, at the end: `claude -p --output-format
+    // text` and `agy -p` say nothing while they work and register no OpenCode
+    // session, so silence is their healthy shape and every run longer than
+    // the start budget was killed as wedged. The hard kill budget bounds them.
+    entry.bufferedOutput = label === "claude" || label === "antigravity";
+    // The timer firing is itself proof the budget passed: Node may deliver it
+    // a millisecond early by the wall clock, and an early read returned here
+    // without ever re-arming, leaving a wedged run until the hard kill.
+    const wedged = () => (assistantModule?.isWedgedStart
+      ? assistantModule.isWedgedStart({ spoke: entry.spoke, sessionId: entry.sessionId, ageMs: Math.max(Date.now() - attemptStartedAt, startBudgetMs), budgetMs: startBudgetMs })
+      : !entry.spoke && !entry.sessionId);
+    const killWedged = () => {
+      if (entry.finished || entry.child !== nextChild || !wedged()) return;
       entry.startKilled = true;
       autopilot.startKills = (autopilot.startKills ?? 0) + 1;
       logLine(`[autopilot] ${runLabel} run wedged (no session, no output in ${startBudgetText}) — killing: ${job.title}`);
@@ -12327,8 +12495,15 @@ async function spawnNextJob() {
         }
       }
       stop(`no session and no output for ${startBudgetText} after spawn — killed as a wedged start`, allowFallback);
+    };
+    startWatchdog = entry.bufferedOutput ? null : setTimeout(() => {
+      if (entry.finished || entry.child !== nextChild || !wedged()) return;
+      // The session poll (watchRunSession) gives up after a minute; a store
+      // that registered this run later still proves it started. Look once.
+      if (typeof attributeRunSession !== "function" || entry.sessionId) { killWedged(); return; }
+      attributeRunSession(eyes, entry).catch(() => false).then(killWedged);
     }, startBudgetMs);
-    startWatchdog.unref?.();
+    startWatchdog?.unref?.();
     child.on("close", (code) => {
       ended(code, inputError);
     });
@@ -12342,6 +12517,11 @@ async function spawnNextJob() {
   };
   const fallbackToOpencode = (reason) => {
     if (entry.finished || entry.fallbackTried || !fallbackRoute) return false;
+    // Stop all, a pause or a project switch can land while a wedged CLI is
+    // still being killed; its stop() is ignored then, so this is the last
+    // chance not to launch a fresh paid worker nobody wants. The run settles
+    // as the stop it was.
+    if (entry.stopUser || autopilot.execute === false || (typeof assistantState !== "undefined" && assistantState?.status === "paused") || (typeof projectSwitching !== "undefined" && projectSwitching)) return false;
     entry.fallbackTried = true;
     logLine(`[autopilot] ${runLabel} failed (${reason}) — retrying "${assistantClip(job.title, 60)}" on opencode`);
     pushAutopilotHistory("fallback", `${runLabel} ${reason} — retried on opencode: ${assistantClip(job.title, 40)}`);
@@ -12353,6 +12533,16 @@ async function spawnNextJob() {
       title: String(job.title ?? "").slice(0, 160),
       reason: String(reason).slice(0, 120),
     }).catch(() => {});
+    // The replacement is judged on its own start and its own verdict. A CLI
+    // that died after one stderr notice left `spoke` set, which disarmed the
+    // replacement's wedged-start watchdog; a CLI the watchdog killed left
+    // `startKilled` set, so a replacement that ran and then failed was
+    // requeued as "never started" with no attempt charged.
+    entry.spoke = false;
+    entry.spokeOut = false;
+    entry.startKilled = false;
+    entry.sawDone = false;
+    if (entry.resultNote) entry.resultNote = null;
     try {
       attach(spawnAttempt(fallbackRoute, null), "opencode", fallbackRoute, false);
       watchRunSession(eyes, startedAt, entry);
@@ -12425,7 +12615,10 @@ const VERIFICATION_COMMAND_BUDGET_MS = 15 * 60 * 1000;
 // worker pool so a verification burst cannot crowd out the machine.
 const VERIFICATION_PARALLEL = 2;
 const runCheckCommand = (command, cwd) => new Promise((resolve) => {
-  const child = spawn(String(command), { cwd, shell: true, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+  // Three arguments: platform.cjs strips Studio's credentials into the options
+  // it passes on, and the two-argument form put the options in the args slot,
+  // where Node read them as options and dropped the stripped environment.
+  const child = spawn(String(command), [], { cwd, shell: true, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
   let tail = "";
   const note = (chunk) => {
     tail += String(chunk);
@@ -12433,14 +12626,26 @@ const runCheckCommand = (command, cwd) => new Promise((resolve) => {
   };
   child.stdout?.on("data", note);
   child.stderr?.on("data", note);
-  const killTimer = setTimeout(() => { try { child.kill(); } catch {} }, VERIFICATION_COMMAND_BUDGET_MS);
-  child.on("error", (error) => { clearTimeout(killTimer); resolve({ command: String(command), ok: false, timedOut: false, exitCode: null, tail: String(error?.message ?? error).slice(-200) }); });
+  let timedOut = false;
+  let closeGrace = null;
+  const done = (result) => { clearTimeout(killTimer); if (closeGrace) clearTimeout(closeGrace); resolve(result); };
+  // Out of budget: the whole tree goes, not just the shell (child.kill() on
+  // Windows ended cmd.exe and left npm and node running). "close" waits for
+  // every holder of the pipes, so a survivor could keep this job — and its
+  // drain slot — forever; the grace settles it as timed out regardless.
+  const killTimer = setTimeout(() => {
+    timedOut = true;
+    try { spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" })?.on?.("error", () => {}); } catch {}
+    try { child.kill(); } catch {}
+    closeGrace = setTimeout(() => done({ command: String(command), ok: false, timedOut: true, exitCode: null, tail: `timed out after ${Math.round(VERIFICATION_COMMAND_BUDGET_MS / 60000)}m` }), 15000);
+    closeGrace.unref?.();
+  }, VERIFICATION_COMMAND_BUDGET_MS);
+  child.on("error", (error) => done({ command: String(command), ok: false, timedOut: false, exitCode: null, tail: String(error?.message ?? error).slice(-200) }));
   child.on("close", (code, signal) => {
-    clearTimeout(killTimer);
-    const timedOut = signal === "SIGTERM";
-    const exitCode = Number.isSafeInteger(code) ? code : null;
+    const late = timedOut || signal === "SIGTERM";
+    const exitCode = late ? null : Number.isSafeInteger(code) ? code : null;
     const last = tail.trim().split(/\r?\n/).filter(Boolean).slice(-2).join(" | ");
-    resolve({ command: String(command), ok: exitCode === 0, timedOut, exitCode, tail: timedOut ? `timed out after ${Math.round(VERIFICATION_COMMAND_BUDGET_MS / 60000)}m` : last.slice(-200) });
+    done({ command: String(command), ok: exitCode === 0, timedOut: late, exitCode, tail: late ? `timed out after ${Math.round(VERIFICATION_COMMAND_BUDGET_MS / 60000)}m` : last.slice(-200) });
   });
 });
 // A burst of done reports schedules the same base check (`npm run check` in
@@ -12492,7 +12697,9 @@ async function runVerificationJob(planned) {
   const notBefore = Number(planned.createdAt) || 0;
   for (const command of planned.commands) {
     const result = await runSharedCheck(command, cwd, notBefore);
-    results.push(result);
+    // An npm command moved to the Studio checkout checked Studio's tree, not
+    // the card's project: it is kept on the stamp but is nobody's evidence.
+    results.push(cwd !== requested && /^\s*npm\b/.test(String(command)) ? { ...result, relocated: true } : result);
     if (!result.ok) break; // a failed check ends the run; the tail says why
   }
   const failed = results.filter((row) => !row.ok);
@@ -12657,6 +12864,11 @@ const VERIFY_DWELL_MS = 30 * 1000; // allow the finished session's evidence to f
 // without this, "waiting for evidence" meant one full tick per attempt.
 const VERIFY_EVIDENCE_RETRY_MS = 15 * 1000;
 const VERIFY_EVIDENCE_RETRY_MAX = 8;
+// Some gaps never close: a check history longer than the read's cap, or a
+// session row gone from the store (which reads exactly like an outage). Past
+// this long waiting the card is parked for the owner instead of sitting in
+// review for good; a rerun could not make that evidence readable either.
+const VERIFY_EVIDENCE_WAIT_MAX_MS = 2 * 60 * 60 * 1000;
 let verificationEvidenceRetries = 0;
 const LEASE_REFRESH_MS = 10 * 60 * 1000; // how often a live owner re-stamps its claims
 // Board-wide stale-scope heal. The settlement heal only touches the card a run
@@ -12860,7 +13072,7 @@ async function autopilotHousekeeping() {
       }
       if (!evidence.checks.has(key) && typeof eyes.listSessionChecks === "function") {
         try {
-          evidence.checks.set(key, { read: await eyes.listSessionChecks({ sessionId: attempt.sessionId, ...window, limit: 200 }) });
+          evidence.checks.set(key, { read: await eyes.listSessionChecks({ sessionId: attempt.sessionId, ...window, limit: 1000 }) });
         } catch (error) {
           evidence.checks.set(key, { error: String(error?.message ?? error) });
         }
@@ -12924,14 +13136,30 @@ async function autopilotHousekeeping() {
     // The studio log hears about a waiting card once per streak — when its
     // pending stamp is written — not again on every short retry pass.
     let evidenceGap = "";
+    // True while the row should keep waiting; false once it has waited past
+    // VERIFY_EVIDENCE_WAIT_MAX_MS, when the caller settles it as unverified.
+    // The pending stamp keeps the moment the wait began.
     const waitForEvidence = (row) => {
       const reason = "Waiting for the attempt's recorded execution evidence";
+      if (row.verification?.state === "pending" && row.verification.reason === reason) {
+        if (now - (Number(row.verification.at) || now) >= VERIFY_EVIDENCE_WAIT_MAX_MS) return false;
+        followUp.evidenceWaiting = true;
+        return true;
+      }
       followUp.evidenceWaiting = true;
-      if (row.verification?.state === "pending" && row.verification.reason === reason) return;
       row.verification = { state: "pending", at: now, reason };
       changedByVerify = true;
       verifyNotes.push(`verification waiting for "${assistantClip(row.title, 60)}" — ${evidenceGap}`);
+      return true;
     };
+    // The verdict for evidence that never became readable: parked for the
+    // owner, like a run whose route leaves no session, with no paid rerun.
+    const evidenceNeverRead = (row) => ({
+      state: "failed",
+      reason: `the attempt's recorded evidence could not be read for ${Math.round(VERIFY_EVIDENCE_WAIT_MAX_MS / 3600000)} hours (${evidenceGap || "unavailable"}); check the work and confirm it yourself, or retry it`,
+      attemptNo: (Number(row.verifyAttempts) || 0) + 1,
+      evidence: null,
+    });
     // Builders other than OpenCode (claude, grok, codex, antigravity) leave no
     // session the evidence readers can see, so waiting or retrying cannot
     // produce proof: the verifier hands those straight to the owner.
@@ -12986,7 +13214,8 @@ async function autopilotHousekeeping() {
       if (!run || !Array.isArray(run.results) || !run.results.length) return [];
       const startedAt = Number(run.at);
       if (!Number.isFinite(startedAt) || startedAt <= 0) return [];
-      return run.results.map((row) => {
+      // A relocated command (runVerificationJob) proved Studio's own tree.
+      return run.results.filter((row) => row?.relocated !== true).map((row) => {
         const timedOut = row?.timedOut === true;
         // Rows stamped before exitCode was recorded carry only `ok`.
         const exitCode = Number.isSafeInteger(row?.exitCode) ? row.exitCode : row?.ok === true ? 0 : null;
@@ -13028,19 +13257,40 @@ async function autopilotHousekeeping() {
         // this attempt's run counts, only a result that landed after the
         // verdict it contradicts, and never against the user's manual Done.
         const doneRun = task?.status === "done" && task.verification?.state !== "manual" ? overseerRunFor(task, task.lastAttempt) : null;
-        if (doneRun?.state === "failed" && Array.isArray(doneRun.results) && doneRun.results.length && Number(doneRun.at) > Number(task.verification?.at || task.doneAt || 0)) {
+        // Only a counted failure reopens: a relocated check's red is Studio's.
+        const doneChecks = doneRun?.state === "failed" ? verificationRunChecks(doneRun) : [];
+        if (doneChecks.some((check) => check.passed !== true) && Number(doneRun.at) > Number(task.verification?.at || task.doneAt || 0)) {
           const attempt = task.lastAttempt ?? {};
           const verdict = verify({
             verdictOk: true,
             changedFiles: 0,
             hasSession: Boolean(attempt.sessionId),
             observedChecks: [],
-            overseerChecks: verificationRunChecks(doneRun),
+            overseerChecks: doneChecks,
             resolvedHandoffs: task.handoffState?.resolvedTitles ?? [],
             remaining: Array.isArray(task.remaining) ? task.remaining : [],
             resultNote: attempt.result ?? null,
             priorAttempts: Number(task.verifyAttempts) || 0,
           });
+          // The reopen is a verdict too. Without its own receipt the attempt's
+          // earlier "verified" receipt stayed the last word the lab reads.
+          const reopenReceipt = receiptsModule?.buildReceipt
+            ? receiptsModule.buildReceipt({
+                attemptId: attempt.runId,
+                workItem: { kind: "task", id: task.id ?? null, title: task.title, prompt: task.prompt ?? "" },
+                contract: "implementation",
+                attempt,
+                verdict,
+                changedFiles: 0,
+                remaining: Array.isArray(task.remaining) ? task.remaining : [],
+                evaluator: evaluatorIdentity,
+                now,
+              })
+            : null;
+          if (reopenReceipt) {
+            task.verificationReceiptId = reopenReceipt.id;
+            policyReceipts.push(reopenReceipt);
+          }
           task.verifyAttempts = verdict.attemptNo;
           task.status = "open";
           delete task.doneAt;
@@ -13084,12 +13334,13 @@ async function autopilotHousekeeping() {
           const all = Array.isArray(rows) ? rows.flatMap((row) => (row?.files?.length ? row.files : [row?.file])).filter(Boolean).map(String) : [];
           return all.length > 0 && all.every(ledgerFile);
         };
-        const files = attemptChanges(attempt);
-        if (files === null) { waitForEvidence(task); continue; }
-        const observedChecks = attemptChecks(attempt);
-        if (observedChecks === null) { waitForEvidence(task); continue; }
+        let files = attemptChanges(attempt);
+        const observedChecks = files === null ? null : attemptChecks(attempt);
+        const unread = files === null || observedChecks === null;
+        if (unread && waitForEvidence(task)) continue;
+        if (unread) files = Array.isArray(files) ? files : [];
         const overseerChecks = verificationRunChecks(overseerRunFor(task, attempt));
-        const verdict = verify({
+        const verdict = unread ? evidenceNeverRead(task) : verify({
           verdictOk: attempt.sawDone === true || attempt.code === 0,
           changedFiles: Array.isArray(files) ? files.length : 0,
           ledgerChanges: ledgerChanges(files),
@@ -13178,11 +13429,12 @@ async function autopilotHousekeeping() {
         const attempt = request.lastAttempt ?? {};
         if (dwelling(attempt)) continue;
         if (overseerRunPending(request)) continue;
-        const files = attemptChanges(attempt);
-        if (files === null) { waitForEvidence(request); continue; }
-        const observedChecks = attemptChecks(attempt);
-        if (observedChecks === null) { waitForEvidence(request); continue; }
-        const verdict = verify({
+        let files = attemptChanges(attempt);
+        const observedChecks = files === null ? null : attemptChecks(attempt);
+        const unread = files === null || observedChecks === null;
+        if (unread && waitForEvidence(request)) continue;
+        if (unread) files = Array.isArray(files) ? files : [];
+        const verdict = unread ? evidenceNeverRead(request) : verify({
           verdictOk: attempt.sawDone === true || attempt.code === 0,
           changedFiles: Array.isArray(files) ? files.length : 0,
           hasSession: Boolean(attempt.sessionId),
@@ -13422,7 +13674,11 @@ async function setAutopilot(prefs = {}) {
       autoBuild = buildRevision !== null && buildRevision === setAutopilot.buildRevision ? prefs.autoBuild : autopilot.autoBuild !== false;
       settings.ui = {
         ...(settings.ui ?? {}),
-        autopilot: { enabled: autopilot.enabled, execute: autopilot.execute, autoBuild, minutes: autopilot.minutes, parallel: autopilot.parallelNarrowedFrom ?? autopilot.parallel, adaptiveParallel: autopilot.adaptiveParallel === true, mode: autopilot.mode === "cluster" ? "cluster" : "swarm" },
+        // A breaker park (parkedUntil, set in finish) is not the operator
+        // turning the executor off; saved as off it never came back, since a
+        // boot with execute false clears the park that would have re-armed it.
+        // An explicit stop zeroes parkedUntil above, so it is saved as off.
+        autopilot: { enabled: autopilot.enabled, execute: autopilot.execute || Number(autopilot.parkedUntil) > 0, autoBuild, minutes: autopilot.minutes, parallel: autopilot.parallelNarrowedFrom ?? autopilot.parallel, adaptiveParallel: autopilot.adaptiveParallel === true, mode: autopilot.mode === "cluster" ? "cluster" : "swarm" },
       };
     });
     if (buildRevision !== null && buildRevision === setAutopilot.buildRevision) autopilot.autoBuild = autoBuild;
@@ -13491,8 +13747,14 @@ async function stopAllAgents({ reason = "stopped by user", pauseAssistant = true
     // 1. No new dispatch while the brake is on. Persisting execute=false keeps
     //    the stop durable across a restart; the project-switch path leaves the
     //    operator's execute preference alone and only stops what is running.
-    if (pauseExecutor) await setAutopilot({ execute: false });
-    else {
+    //    setAutopilot turns execute off before its first await; the save is
+    //    awaited last, so a settings file that cannot be written (locked by
+    //    a sync client, a full disk) no longer aborts the brake before a
+    //    single worker is stopped.
+    const executorSaved = pauseExecutor
+      ? setAutopilot({ execute: false }).catch((error) => logLine(`[autopilot] stop applied, but not saved: ${error?.message ?? error}`))
+      : null;
+    if (!pauseExecutor) {
       autopilot.waiting = null;
       autopilot.clusterCancel?.("Agents stopped");
     }
@@ -13524,6 +13786,7 @@ async function stopAllAgents({ reason = "stopped by user", pauseAssistant = true
       else if (!CLI_MODE) await saveAssistant({ force: true }).catch(() => {});
     }
     const idle = await waitForExecutorIdle(waitMs);
+    await executorSaved;
     emitAutopilot();
     return { ok: true, reason, stopped: stopped.length, idle, state: assistantState, autopilot: autopilotStatus() };
   })().finally(() => { stopAllPromise = null; });
@@ -13695,7 +13958,40 @@ function updateSettings(mutate) {
 
 function send(channel, payload) {
   if (projects.current().id !== projects.active().id && (channel.startsWith("eyes:") || channel === "assistant:status")) return;
+  if (BOARD_PUSH_CHANNELS.has(channel)) {
+    pushBoardList(channel, payload);
+    return;
+  }
   if (window && !window.isDestroyed()) window.webContents.send(channel, payload);
+}
+
+// Board pushes carry whole lists (eyes:tasks is every card on the board), and
+// a busy executor mutates the board several times a second: each push was
+// copied into every renderer listener and rebuilt the Command graph, the
+// Tasks sheet and the Workspace. The first push of a quiet window still goes
+// at once; later pushes inside BOARD_PUSH_MS share one trailing push of the
+// newest list. A list queued in one project is dropped if the owner switches
+// to another before it goes out; the switch sends its own lists.
+const BOARD_PUSH_MS = 250;
+const BOARD_PUSH_CHANNELS = new Set(["eyes:tasks", "eyes:requests", "eyes:ideas"]);
+const boardPushes = new Map(); // channel -> { timer, pending: { payload, projectId } | null }
+
+function pushBoardList(channel, payload) {
+  const projectId = projects.active().id;
+  const slot = boardPushes.get(channel);
+  if (slot) {
+    slot.pending = { payload, projectId };
+    return;
+  }
+  if (window && !window.isDestroyed()) window.webContents.send(channel, payload);
+  const next = { timer: null, pending: null };
+  next.timer = setTimeout(() => {
+    boardPushes.delete(channel);
+    const pending = next.pending;
+    if (pending && pending.projectId === projects.active().id) pushBoardList(channel, pending.payload);
+  }, BOARD_PUSH_MS);
+  next.timer.unref?.();
+  boardPushes.set(channel, next);
 }
 
 // registerIpc installs the real auto setup (it needs the CLI probes that live
@@ -13726,8 +14022,42 @@ async function firstLaunchAutoSetup() {
   return { ...result, record };
 }
 
+// Worker output reaches the log a dozen lines a second per builder, and in
+// bursts of thousands. One IPC message per line made every line its own
+// renderer task, so lines are held for one STUDIO_LOG_FLUSH_MS beat and sent
+// as an array (preload.cjs unpacks it: renderer listeners still see one line
+// per call). A burst keeps its newest STUDIO_LOG_BATCH_MAX lines, which is
+// all the renderer's log keeps anyway, and each line is clipped for reading;
+// a run's own tails and sentinels are parsed before this, from the full line.
+const STUDIO_LOG_FLUSH_MS = 100;
+const STUDIO_LOG_BATCH_MAX = 400;
+const STUDIO_LOG_LINE_MAX = 4000;
+let studioLogPending = [];
+let studioLogDropped = 0;
+let studioLogTimer = null;
+
+function flushStudioLog() {
+  studioLogTimer = null;
+  if (!studioLogPending.length) return;
+  const lines = studioLogPending;
+  if (studioLogDropped) lines.unshift(`[studio] ${studioLogDropped} earlier log line${studioLogDropped === 1 ? "" : "s"} skipped in a burst`);
+  studioLogPending = [];
+  studioLogDropped = 0;
+  send("studio:log", lines);
+}
+
 function logLine(line) {
-  send("studio:log", String(line).replace(/\r?\n$/, ""));
+  let text = String(line).replace(/\r?\n$/, "");
+  if (text.length > STUDIO_LOG_LINE_MAX) text = `${text.slice(0, STUDIO_LOG_LINE_MAX)}… (${text.length - STUDIO_LOG_LINE_MAX} more characters)`;
+  studioLogPending.push(text);
+  if (studioLogPending.length > STUDIO_LOG_BATCH_MAX) {
+    studioLogDropped += studioLogPending.length - STUDIO_LOG_BATCH_MAX;
+    studioLogPending.splice(0, studioLogPending.length - STUDIO_LOG_BATCH_MAX);
+  }
+  if (!studioLogTimer) {
+    studioLogTimer = setTimeout(flushStudioLog, STUDIO_LOG_FLUSH_MS);
+    studioLogTimer.unref?.();
+  }
 }
 
 function streamChild(child, label) {
@@ -13736,11 +14066,18 @@ function streamChild(child, label) {
   const wire = (stream) => {
     stream.setEncoding("utf8");
     let buffer = "";
+    // Split only the new chunk and keep an unending line to 64 KiB, as the
+    // executor's wire does.
     stream.on("data", (chunk) => {
-      buffer += chunk;
-      const lines = buffer.split(/\r?\n/);
-      buffer = lines.pop();
-      for (const line of lines) if (line.trim()) logLine(line);
+      const pieces = chunk.split(/\r?\n/);
+      if (pieces.length === 1) {
+        if (buffer.length < 65536) buffer = (buffer + chunk).slice(0, 65536);
+        return;
+      }
+      const first = (buffer + pieces[0]).replace(/\r$/, "");
+      if (first.trim()) logLine(first);
+      for (let index = 1; index < pieces.length - 1; index += 1) if (pieces[index].trim()) logLine(pieces[index]);
+      buffer = pieces[pieces.length - 1].slice(0, 65536);
     });
     stream.on("end", () => {
       if (buffer.trim()) logLine(buffer);
@@ -15211,6 +15548,21 @@ function registerIpc() {
   });
 
   // ---- A-Eyes -------------------------------------------------------------
+  // The evidence walk behind eyes:state (tools/logs, two levels, one stat per
+  // PNG) is shared by overlapping reads and kept for 30 s per folder: several
+  // surfaces read the state together, and screenshots arrive far less often.
+  const pngReads = new Map(); // root -> { at, pngs, pending }
+  const recentPngs = (eyes, root) => {
+    const entry = pngReads.get(root) ?? { at: 0, pngs: null, pending: null };
+    pngReads.set(root, entry);
+    if (entry.pngs && Date.now() - entry.at < 30000) return Promise.resolve(entry.pngs);
+    entry.pending ??= Promise.resolve(eyes.listPngs({ roots: [root] })).then((pngs) => {
+      entry.pngs = pngs;
+      entry.at = Date.now();
+      return pngs;
+    }).finally(() => { entry.pending = null; });
+    return entry.pending;
+  };
   ipcMain.handle("eyes:state", async (_event, { sessionId = null } = {}) => {
     try {
       const eyes = await getEyes();
@@ -15218,7 +15570,7 @@ function registerIpc() {
         eyes.listSessions(),
         eyes.listChanges({ sessionId, limit: 300 }),
         eyes.listTodos(),
-        eyes.listPngs({ roots: [path.join(projectRoot(), "tools", "logs")] }),
+        recentPngs(eyes, path.join(projectRoot(), "tools", "logs")),
       ]);
       // An empty listing from a store file that has no session schema is
       // explained on the empty card rather than shown as "no recent sessions".
