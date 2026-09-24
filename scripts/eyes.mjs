@@ -926,9 +926,29 @@ export function ownerIsInactive(collision) {
   return Boolean(row && typeof row === "object" && row.active === false);
 }
 
-function editWindowsByFile({ dbPath = DEFAULT_DB, since, root = null } = {}) {
-  if (!storePresent(dbPath)) return new Map();
-  const db = openDb(dbPath);
+// collisions (a one-hour window) and filePresence (ten minutes) are read
+// together on every store pass, and each scanned the recent parts with a
+// json_extract over their data. The last scan's rows are kept with the
+// store's data_version, which changes whenever another connection commits:
+// while it holds, a scan whose window lies inside the kept one filters those
+// rows (same rows, same order) instead of reading the part table again.
+const EDIT_ROWS_MEMO_MS = 30 * 1000;
+let editRowsMemo = null;
+function storeDataVersion(db) {
+  try {
+    const version = db.prepare("pragma data_version").get()?.data_version;
+    return Number.isFinite(version) ? version : null;
+  } catch {
+    return null;
+  }
+}
+
+function recentEditRows(db, dbPath, since) {
+  const version = storeDataVersion(db);
+  const memo = editRowsMemo;
+  if (memo && version !== null && memo.db === db && memo.dbPath === dbPath && memo.version === version && memo.since <= since && Date.now() - memo.at < EDIT_ROWS_MEMO_MS) {
+    return memo.since === since ? memo.rows : memo.rows.filter((row) => row.time_created > since);
+  }
   const rows = scanRecentParts(db, (lower) => db
     .prepare(
       `select session_id, json_extract(data,'$.state.input.filePath') file, time_created
@@ -939,6 +959,14 @@ function editWindowsByFile({ dbPath = DEFAULT_DB, since, root = null } = {}) {
        order by time_created desc`
     )
     .all(lower, since), (_found, lower) => windowCovers(db, lower, since));
+  editRowsMemo = version === null ? null : { db, dbPath, version, since, rows, at: Date.now() };
+  return rows;
+}
+
+function editWindowsByFile({ dbPath = DEFAULT_DB, since, root = null } = {}) {
+  if (!storePresent(dbPath)) return new Map();
+  const db = openDb(dbPath);
+  const rows = recentEditRows(db, dbPath, since);
   const byFile = new Map();
   for (const row of rows) {
     if (!row.file || !withinRoot(row.file, root)) continue;
@@ -2639,6 +2667,7 @@ export function usageLedger({ dbPath = DEFAULT_DB, root = null, since = null, no
 // close it so a temp fixture database is deletable; the next read reopens.
 export function closeReadDb() {
   schemaChecks.clear();
+  editRowsMemo = null;
   if (cached) {
     try { cached.db.close(); } catch {}
     cached = null;
