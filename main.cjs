@@ -27,7 +27,7 @@ const { spawn } = optionalHelper(
   () => require("./scripts/platform.cjs"),
   { spawn: require("node:child_process").spawn },
 );
-const { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } = require("node:fs");
+const { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } = require("node:fs");
 const { appendFile, copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } = require("node:fs/promises");
 const os = require("node:os");
 const crypto = require("node:crypto");
@@ -2555,7 +2555,27 @@ function normalizeLmStudioEndpoint(value) {
 
 // An OpenAI-compatible server needs a model id per request. When no override
 // is saved, ask the endpoint which model it serves instead of guessing one.
+// Every assistant call on such a route resolved it again, a GET /models of up
+// to 5 s each, so an answer is remembered per endpoint (a model for a minute,
+// a miss for 15 s so a server started meanwhile is soon noticed) and callers
+// that ask while a probe is out share it.
+const COMPAT_MODEL_TTL_MS = 60 * 1000;
+const COMPAT_MODEL_MISS_TTL_MS = 15 * 1000;
+const compatModelProbes = new Map();
 async function compatEndpointModel(endpoint) {
+  const known = compatModelProbes.get(endpoint);
+  if (known?.pending) return known.pending;
+  if (known && Date.now() - known.at < (known.model ? COMPAT_MODEL_TTL_MS : COMPAT_MODEL_MISS_TTL_MS)) return known.model;
+  const entry = { pending: probeCompatEndpointModel(endpoint), model: null, at: 0 };
+  compatModelProbes.delete(endpoint);
+  compatModelProbes.set(endpoint, entry);
+  if (compatModelProbes.size > 16) compatModelProbes.delete(compatModelProbes.keys().next().value);
+  const model = await entry.pending;
+  Object.assign(entry, { pending: null, model, at: Date.now() });
+  return model;
+}
+
+async function probeCompatEndpointModel(endpoint) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5000);
   try {
@@ -2624,8 +2644,14 @@ async function resolveAiCandidate(provider, role, settings, { allowCli, zaiKey, 
 
 async function resolveAutoRoute(role, settings, { allowCli, zaiKey, goKey, zenKey }) {
   const order = normalizeAutoProviders(settings.aiAutoProviders);
+  const armed = autoFallbackEnabled(settings);
   const candidates = [];
   for (const id of order) {
+    // Past the first usable entry only the armed retry list reads the order,
+    // and a CLI route never joins it: those entries are not resolved at all
+    // (no CLI lookup, no endpoint probe), which leaves the route unchanged.
+    if (candidates.length && !armed) break;
+    if (candidates.length && ["grok", "claude", "codex", "antigravity"].includes(id)) continue;
     const candidate = await resolveAiCandidate(id, role, settings, { allowCli, zaiKey, goKey, zenKey });
     if (candidate) candidates.push(candidate);
   }
@@ -2635,7 +2661,7 @@ async function resolveAutoRoute(role, settings, { allowCli, zaiKey, goKey, zenKe
   const [primary, ...rest] = candidates;
   // A CLI route is never a silent retry target: it can prompt or hang, so the
   // fallback list keeps the HTTP entries only.
-  const fallbacks = autoFallbackEnabled(settings) ? rest.filter((candidate) => !candidate.cli) : [];
+  const fallbacks = armed ? rest.filter((candidate) => !candidate.cli) : [];
   return { ok: true, ...primary, fallback: fallbacks[0] ?? null, fallbacks };
 }
 
@@ -4075,6 +4101,21 @@ function normalizeBriefing(result) {
   return result;
 }
 
+// The machine tail of an AI pass's facts reuses a status read in the last
+// MACHINE_FACTS_FRESH_MS (the machine role's two-minute pass, or a UI read)
+// instead of running a resource pass of its own; only when neither is that
+// fresh does the pass scan.
+const MACHINE_FACTS_FRESH_MS = 150 * 1000;
+function freshMachineStatus(now = Date.now()) {
+  let best = null, bestAt = 0;
+  for (const status of [assistantCache?.machine, machineReadCache?.status]) {
+    if (!status || typeof status !== "object" || !status.leases || !Array.isArray(status.leases.holders) || !Array.isArray(status.running)) continue;
+    const at = Date.parse(status.updatedAt);
+    if (Number.isFinite(at) && at > bestAt) { best = status; bestAt = at; }
+  }
+  return best && now - bestAt <= MACHINE_FACTS_FRESH_MS && bestAt <= now + 1000 ? best : null;
+}
+
 async function runAssistant(mode = "brief", sessionId = null, payload = null) {
   const settings = await readSettings();
   // Grok, Claude Code and LM Studio need no stored key: the first two ride
@@ -4139,7 +4180,7 @@ async function runAssistant(mode = "brief", sessionId = null, payload = null) {
             ? ASSISTANT_AUDIT_SYSTEM
             : ASSISTANT_SYSTEM;
   try {
-    const machineStatus = await resourcePass({ kill: false, reason: "facts", withProcesses: false });
+    const machineStatus = freshMachineStatus() ?? (await resourcePass({ kill: false, reason: "facts", withProcesses: false }));
     const leases = machineStatus.leases ?? {};
     facts = {
       ...facts,
@@ -4163,7 +4204,9 @@ async function runAssistant(mode = "brief", sessionId = null, payload = null) {
     const seat = ASSISTANT_RUN_ROLES[mode] ?? (mode === "brief" ? "briefer" : null);
     facts = { ...facts, chatter: assistantModule.mailLines(assistantState, Date.now(), { limit: 8 }), ...(seat ? { inbox: assistantModule.mailLines(assistantState, Date.now(), { limit: 6, role: seat }) } : {}) };
   }
-  const user = JSON.stringify(facts).slice(0, 14000);
+  // Valid JSON within the budget: the largest lists and texts give way first,
+  // so the machine, work, chatter and inbox tails are no longer cut off.
+  const user = (await getAssistant()).boundedFactsJson(facts, 14000);
   // The improver rewrites the assistant's own playbook — the one pass that
   // earns the always-reasoning glm-5.3 route; everything else rides flash.
   const call = await assistantFetch(system, user, 6000, { role: mode === "improve" ? "heavy" : "routine", taskType: mode });
@@ -4311,31 +4354,40 @@ const EXECUTOR_CALLABLE = new Set(["auditor", "reference", "ideas", "improver", 
 // trees dwarf the source tree and cannot own a moved project file.
 const SCOPE_WALK_SKIP = new Set(["node_modules", ".git", "dist", "out", "build", "data", "__pycache__", "venv"]);
 
-// Bounded breadth-first search for one basename under a project root — the
-// locator behind stale file-scope healing (resolveStaleFileScope). Shallowest
-// match wins, the walk caps entries and depth, and every filesystem error
-// reads as "not here". Returns an absolute path or null.
-function findBasenameUnderRoot(root, base, { maxEntries = 20000, maxDepth = 6 } = {}) {
-  const name = String(base ?? "").trim();
+// Bounded breadth-first search for basenames under a project root — the
+// locator behind stale file-scope healing (resolveStaleFileScope). One walk
+// answers every name asked for, and each answer is the one a walk for that
+// name alone gives: the same visit order and entry count, so the shallowest
+// match wins (ties by directory order) within the first maxEntries entries,
+// and the walk ends once every name is found. Every filesystem error reads as
+// "not here". Async, so a 20k-entry walk no longer blocks the main thread.
+// Returns a Map from each found (trimmed) name to its absolute path.
+async function findBasenamesUnderRoot(root, bases, { maxEntries = 20000, maxDepth = 6 } = {}) {
+  const found = new Map();
+  const wanted = new Set([...(bases ?? [])].map((base) => String(base ?? "").trim()).filter(Boolean));
   const start = String(root ?? "").trim();
-  if (!name || !start) return null;
-  let stat;
-  try { stat = statSync(start, { throwIfNoEntry: false }); } catch { return null; }
-  if (!stat?.isDirectory()) return null;
+  if (!wanted.size || !start) return found;
+  let info;
+  try { info = await stat(start); } catch { return found; }
+  if (!info?.isDirectory()) return found;
   const queue = [[start, 0]];
+  let head = 0;
   let seen = 0;
-  let best = null;
-  while (queue.length && seen < maxEntries && !best) {
-    const [dir, depth] = queue.shift();
+  while (head < queue.length && seen < maxEntries && found.size < wanted.size) {
+    const [dir, depth] = queue[head];
+    head += 1;
     let list;
-    try { list = readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    try { list = await readdir(dir, { withFileTypes: true }); } catch { continue; }
     for (const item of list) {
       if (++seen > maxEntries) break;
-      if (item.isFile() && item.name === name) { best = path.join(dir, item.name); break; }
+      if (item.isFile() && wanted.has(item.name) && !found.has(item.name)) {
+        found.set(item.name, path.join(dir, item.name));
+        if (found.size === wanted.size) break;
+      }
       if (item.isDirectory() && depth < maxDepth && !item.name.startsWith(".") && !SCOPE_WALK_SKIP.has(item.name.toLowerCase())) queue.push([path.join(dir, item.name), depth + 1]);
     }
   }
-  return best;
+  return found;
 }
 
 // Pull the handoffs out of one line of a run's output.
@@ -5855,13 +5907,16 @@ async function assistantForemanJob(now, entry) {
 async function assistantThinkerJob(now, entry) {
   if (!assistantState.prefs?.proactive) return { ok: true, text: "proactive off · not thinking" };
   let organized = false;
+  let store = null;
   try {
-    const store = await assistantReadStore();
+    store = await assistantReadStore();
     if (store) organized = await assistantOrganize(now, store);
   } catch (error) {
     logError(`thinker tree pass failed: ${error.message}`);
   }
-  const facts = await assistantMessageFacts(now, "");
+  // The store read above serves the facts too, and the facts pass is the lite
+  // one: thinkPlan reads only the log, the executor and the ranked picks.
+  const facts = await assistantMessageFacts(now, "", { store, lite: true });
   const lastThought =
     [...(assistantState.messages ?? [])].reverse().find((message) => message?.role === "thinking")?.text ?? assistantState.thinking?.text ?? "";
   let plan = { thinking: "looking at the log", act: null };
@@ -6558,7 +6613,7 @@ async function assistantOverseerJob(now, entry) {
   let via = "local";
   // Smoke runs get the local pass only — never an AI call.
   if (!SMOKE && assistantAiUsable()) {
-    const call = await assistantFetch(ASSISTANT_OVERSEER_SYSTEM, JSON.stringify(overseerFacts(now, board)).slice(0, 14000), 6000, { role: "heavy", taskType: "overseer" });
+    const call = await assistantFetch(ASSISTANT_OVERSEER_SYSTEM, assistant.boundedFactsJson(overseerFacts(now, board), 14000), 6000, { role: "heavy", taskType: "overseer" });
     if (call.ok) {
       assistantAiOk();
       assistantSetProblems(["ai-offline"], []);
@@ -7496,12 +7551,22 @@ function refreshTray() {
 // ---- the thread -------------------------------------------------------------
 // Facts for a reply: every source guarded, null when it is not available,
 // shaped by the module's own builder.
-async function assistantMessageFacts(now, query = "") {
-  const raw = { sessions: null, todos: null, collisions: null, presence: null, uncommitted: null, tasks: null, ideas: null, planning: null, machine: null, audit: null, briefing: null, update: null, mail: assistantState?.mail ?? null, now };
+//
+// options.store hands in a store the caller has just read, so it is not read
+// twice. options.lite is the thinker's once-a-minute pass: thinkPlan reads only
+// the log, the executor and the ranked picks (suggestWork: sessions, todos,
+// collisions, uncommitted, tasks, ideas, requests, audit), so the planning
+// summary, the project work scan (which can spawn gh), the briefing, the
+// machine status, the backlog readiness summary and the memory, chatter,
+// update and project blocks are left out of that pass.
+async function assistantMessageFacts(now, query = "", options = null) {
+  const lite = options?.lite === true;
+  const givenStore = options?.store ?? null;
+  const raw = { sessions: null, todos: null, collisions: null, presence: null, uncommitted: null, tasks: null, ideas: null, planning: null, machine: null, audit: null, briefing: null, update: null, mail: lite ? null : assistantState?.mail ?? null, now };
   // The folder the user opened is a fact in its own right: its identity and
   // the Analyzer's local scan of it, so a reply about "this project" or about
   // the plans in it answers for the folder the thread actually belongs to.
-  try {
+  if (!lite) try {
     const project = projects.current();
     raw.project = { id: project.id, name: project.name, path: project.path };
     const scanned = analyzerProjectReports.get(project.id);
@@ -7510,15 +7575,15 @@ async function assistantMessageFacts(now, query = "") {
   // Independent sources run together. A slow audit or unavailable OpenCode
   // store must neither serialize all the other reads nor discard their facts.
   await Promise.allSettled([
-    (async () => { raw.planning = await planningService().summary({ projectId: projects.current().id, query }); })(),
+    lite ? null : (async () => { raw.planning = await planningService().summary({ projectId: projects.current().id, query }); })(),
     // The repo's own issue tracker and tooling: "open issues" and "which
     // skills do we have" answer from this, not from the board alone.
-    (async () => {
+    lite ? null : (async () => {
       const work = await projectWork.scanProjectWork(projects.current().path);
       if (work?.ok) raw.projectWork = { text: projectWork.describeProjectWork(work), counts: work.counts, tracker: work.tracker?.kind ?? null, tooling: work.tooling?.counts ?? null };
     })(),
     (async () => {
-      const store = await assistantReadStore();
+      const store = givenStore ?? (await assistantReadStore());
       Object.assign(raw, { sessions: store.sessions, todos: store.todos, collisions: store.collisions, presence: store.presence, uncommitted: store.uncommitted });
     })(),
     (async () => {
@@ -7527,12 +7592,12 @@ async function assistantMessageFacts(now, query = "") {
         eyes.readJson(TASKS_PATH, []).then((rows) => { raw.tasks = rows; }),
         eyes.readJson(IDEAS_PATH, []).then((rows) => { raw.ideas = rows.slice(0, 40); }),
         eyes.readJson(REQUESTS_PATH, []).then((rows) => { raw.requests = rows; }),
-        eyes.readJson(BRIEFING_PATH, null).then((briefing) => {
+        lite ? null : eyes.readJson(BRIEFING_PATH, null).then((briefing) => {
           if (briefing?.summary) raw.briefing = { summary: briefing.summary, generatedAt: briefing.generatedAt, alerts: (briefing.alerts ?? []).slice(0, 6) };
         }),
       ]);
     })(),
-    (async () => {
+    lite ? null : (async () => {
       const status = assistantCache.machine ?? (await resourcePass({ kill: false, reason: "assistant", withProcesses: false }));
       raw.machine = {
         wait: Boolean(status.wait),
@@ -7546,7 +7611,7 @@ async function assistantMessageFacts(now, query = "") {
       raw.audit = { errors: audit.errors, warnings: audit.warnings, findings: audit.findings.slice(0, 12) };
     })(),
   ]);
-  try {
+  if (!lite) try {
     const status = updater?.status();
     if (status) raw.update = { phase: status.phase, reason: status.reason ?? null };
   } catch {}
@@ -7556,7 +7621,7 @@ async function assistantMessageFacts(now, query = "") {
   raw.log = (assistantState.log ?? []).filter((entry) => entry && entry.kind !== "tick").slice(-20);
   // The focused node's folder rides the facts, so a reply can quote what has
   // been saved on that node instead of answering from the thread alone.
-  raw.nodeFolders = assistantState.nodeFolders ?? null;
+  raw.nodeFolders = lite ? null : assistantState.nodeFolders ?? null;
   // What the executor is actually building: the roster answers "what are the
   // agents doing", and without this a reply could only ever see itself. The
   // feed's own log rides along — running jobs with their age, why dispatch is
@@ -7577,7 +7642,7 @@ async function assistantMessageFacts(now, query = "") {
   } catch {}
   try {
     const assistant = await getAssistant();
-    if (Array.isArray(raw.tasks) && Array.isArray(raw.requests)) {
+    if (!lite && Array.isArray(raw.tasks) && Array.isArray(raw.requests)) {
       const readiness = backlog.summarizeBacklog({ tasks: raw.tasks, requests: raw.requests, jobs: (autopilot.jobs ?? []).filter((job) => !job.finished), now, compare: compareWork,
         autoBuild: autopilot.autoBuild,
         paused: assistantState.status === "paused" || !autopilot.execute, waiting: autopilot.waiting, lastError: autopilot.lastError, parkedUntil: autopilot.parkedUntil });
@@ -7585,7 +7650,7 @@ async function assistantMessageFacts(now, query = "") {
       raw.backlog = { counts: { ...readiness.counts, readyTasks, readyRequests: readiness.counts.ready - readyTasks }, paused: readiness.paused,
         waiting: readiness.waiting, next: readiness.next.slice(0, 3), totalTasks: raw.tasks.length, totalRequests: raw.requests.length };
     }
-    const facts = assistant.buildFacts({ ...raw, query, lessons: assistantState?.overseer?.lessons });
+    const facts = assistant.buildFacts({ ...raw, query, lessons: lite ? null : assistantState?.overseer?.lessons });
     // Ranked next-work picks ride the facts so a reply — local or AI — can
     // offer real work instead of summarising the board flatly.
     facts.suggestions = assistant.suggestWork({ ...facts, now });
@@ -9811,6 +9876,13 @@ function requestsFromExpand(briefing, existing = [], source = "grow") {
 // the compactor's own output instead of being overwritten by it (or vice
 // versa).
 async function promoteRequestsToTasks() {
+  // Most foreman wakes find nothing to promote, and the gateway's own early
+  // exit only runs after its locked read, clone and change detection. A plain
+  // read of the inbox through the same reader skips that transaction when no
+  // request could be promoted; the gateway below still decides, so a request
+  // filed in between is promoted on the next pass, as one filed just after a
+  // pass always was.
+  if (!(await promotableRequestsWaiting())) return 0;
   const patch = await mutateBoard((board, eyes) => {
     const requests = board.requests;
     if (!requests.length) return { added: 0 };
@@ -9818,7 +9890,7 @@ async function promoteRequestsToTasks() {
     // Moving work onto the board cannot clear a hold or claim. Pins and age
     // use the dispatch ordering so a capped pass admits the chosen task first.
     const candidates = requests
-      .filter((request) => request?.title && !request.runId && !request.runProgress?.pending && !request.absorbedInto && (!request.status || ["open", "pending", "queued"].includes(request.status)))
+      .filter(promotableRequest)
       .sort(compareWork);
     const created = [];
     for (const request of candidates) {
@@ -9912,6 +9984,26 @@ async function promoteRequestsToTasks() {
     return { tasks: board.tasks, added };
   });
   return patch.added ?? 0;
+}
+
+// A request the promotion pass may move onto the board: titled, unclaimed,
+// not mid-run, not absorbed, and still open.
+function promotableRequest(request) {
+  return Boolean(request?.title && !request.runId && !request.runProgress?.pending && !request.absorbedInto && (!request.status || ["open", "pending", "queued"].includes(request.status)));
+}
+
+// The pre-check behind promoteRequestsToTasks: true unless a plain read of the
+// inbox shows no promotable request. A read that fails, or a reader that is
+// not there, answers true and leaves the decision to the gateway.
+async function promotableRequestsWaiting() {
+  try {
+    const eyes = await getEyes();
+    if (typeof eyes?.readJson !== "function") return true;
+    const requests = await eyes.readJson(REQUESTS_PATH, []);
+    return !Array.isArray(requests) || requests.some(promotableRequest);
+  } catch {
+    return true;
+  }
 }
 
 // Chat work lands straight on the task board. "Add …" in the thread, the
@@ -11314,9 +11406,9 @@ async function spawnNextJob() {
   // fresh parked entry exists, a dispatch-time porcelain probe re-derives the
   // same caution straight from git, so the advice survives restarts (and
   // persists for as long as the files are genuinely staged) without a
-  // file-backed store. The production probe is synchronous (spawnSync in
-  // scripts/eyes.mjs), so the typeof keeps the common path await-free; async
-  // git observation (the vm test hosts) rides the same await.
+  // file-backed store. The production probe answers a promise (an async git
+  // child on the eyes worker); the typeof lets a synchronous probe skip the
+  // await.
   if (!collabBit) {
     try {
       const probed = typeof eyes.gitPorcelain === "function" && typeof eyes.parsePorcelain === "function" ? eyes.gitPorcelain({ root: runRoot }) : "";
@@ -11369,8 +11461,19 @@ async function spawnNextJob() {
     // The durable brief carries prior findings and successful prerequisite
     // outputs into the next worker instead of restarting from a short title.
     if (job.kind === "task" || job.ref?.delegation) {
-      const recovery = job.kind === "task" ? `Full saved task context: read ${JSON.stringify(projectDataPath(TASKS_PATH))}, find task id ${JSON.stringify(job.ref.id)}. Read that record and its members whenever the brief is excerpted or grouped; contextHistory contains earlier requirements and attempts. Do not rewrite Studio's task store from the worker.\n\n` : "";
-      job.prompt = recovery + taskContext.buildTaskHandoff(job.ref, { tasks, maxChars: Math.max(1000, promptBudget - recovery.length) });
+      // A task's saved record goes to the worker as its own small run file
+      // (writeTaskRunContext); the handoff header points at it. Only when that
+      // write fails is the builder sent to the whole board file, as before.
+      let contextPath = null;
+      if (job.kind === "task") {
+        try {
+          contextPath = await writeTaskRunContext(entry.id, job.ref, tasks);
+        } catch (error) {
+          logLine(`[autopilot] could not write the run context for "${assistantClip(job.title, 60)}": ${String(error?.message ?? error).slice(0, 160)}`);
+        }
+      }
+      const recovery = job.kind === "task" && !contextPath ? `Full saved task context: read ${JSON.stringify(projectDataPath(TASKS_PATH))}, find task id ${JSON.stringify(job.ref.id)}. Read that record and its members whenever the brief is excerpted or grouped; contextHistory contains earlier requirements and attempts. Do not rewrite Studio's task store from the worker.\n\n` : "";
+      job.prompt = recovery + taskContext.buildTaskHandoff(job.ref, { tasks, maxChars: Math.max(1000, promptBudget - recovery.length), contextPath: contextPath ? JSON.stringify(contextPath) : null });
     }
     const body = String(job.prompt ?? "").slice(0, promptBudget);
     const head = `${titleBit}${resumeFlat}${body}${failFlat}${memoryFlat}${pathsFlat}${collabFlat}${clusterFlat}${instructions}`;
@@ -11573,10 +11676,9 @@ async function spawnNextJob() {
     let scopeHeal = null;
     if (job.kind === "task") {
       try {
-        scopeHeal = taskContext.resolveStaleFileScope(job.ref, {
-          exists: (candidate) => { try { return statSync(candidate, { throwIfNoEntry: false })?.isFile() === true; } catch { return false; } },
-          locate: (base, ref) => findBasenameUnderRoot(ref?.projectPath || projectRoot(), base),
-        });
+        // The same locator as the board-wide heal: an async walk, and a
+        // basename it recently missed is not walked for again.
+        scopeHeal = taskContext.resolveStaleFileScope(job.ref, await staleScopeLocator([job.ref]));
       } catch {}
     }
     // Settlement rides ONE transactional mutation for the board stores: the
@@ -12445,6 +12547,58 @@ async function spawnNextJob() {
   return "spawned";
 }
 
+// A task run's saved context, as a small read-only file. The worker prompt
+// used to send the builder to the whole board file (megabytes: every task's
+// contextHistory) to find its one record. It now points at data/task-runs/
+// <run id>.json in the project's data folder (git-ignored with the rest of
+// data/): the task row as saved, with its contextHistory and grouped members,
+// plus its dependencies and its delegation or split parent without their
+// histories. Only the newest TASK_RUN_CONTEXT_KEEP files are kept, and none
+// younger than TASK_RUN_CONTEXT_MIN_AGE_MS is removed, so a live run's file
+// stays in place.
+const TASK_RUN_CONTEXT_KEEP = 48;
+const TASK_RUN_CONTEXT_MIN_AGE_MS = 2 * 60 * 60 * 1000;
+function taskRunContext(runId, task, tasks, now = Date.now()) {
+  const byId = new Map((Array.isArray(tasks) ? tasks : []).filter((row) => row && typeof row === "object" && row.id).map((row) => [row.id, row]));
+  const related = (id) => {
+    const row = byId.get(id);
+    if (!row) return { id, status: "missing" };
+    const { contextHistory: _history, ...rest } = row;
+    return rest;
+  };
+  const parentId = task?.parentTaskId || task?.delegatedFrom?.parentTaskId || null;
+  return {
+    note: "Read-only copy of this run's saved task context, written by Studio at dispatch. Studio's task store stays the authority; do not edit it from the worker.",
+    runId,
+    writtenAt: new Date(now).toISOString(),
+    task,
+    dependencies: backlog.dependencyIds(task).map(related),
+    ...(parentId ? { parent: related(parentId) } : {}),
+    ...(task?.splitFrom ? { splitFrom: related(task.splitFrom) } : {}),
+  };
+}
+
+async function writeTaskRunContext(runId, task, tasks) {
+  const dir = path.join(path.dirname(projectDataPath(TASKS_PATH)), "task-runs");
+  const file = path.join(dir, `${runId}.json`);
+  await mkdir(dir, { recursive: true });
+  await writeFile(file, JSON.stringify(taskRunContext(runId, task, tasks)), "utf8");
+  pruneTaskRunContexts(dir).catch(() => {});
+  return file;
+}
+
+// Run ids carry their start time (run_<ms>_<seq>), so age is read from the
+// name; a file that does not follow the pattern is never touched.
+async function pruneTaskRunContexts(dir, now = Date.now()) {
+  const runs = (await readdir(dir))
+    .map((name) => ({ name, at: Number(/^run_(\d+)_\d+\.json$/.exec(name)?.[1]) }))
+    .filter((row) => Number.isFinite(row.at) && row.at > 0)
+    .sort((a, b) => b.at - a.at || b.name.localeCompare(a.name));
+  const stale = runs.slice(TASK_RUN_CONTEXT_KEEP).filter((row) => now - row.at >= TASK_RUN_CONTEXT_MIN_AGE_MS);
+  await Promise.all(stale.map((row) => rm(path.join(dir, row.name), { force: true }).catch(() => {})));
+  return stale.length;
+}
+
 // npm scripts exist only where a package.json defines them. Kept above the
 // verification queue so the drain contract test injects its own probe.
 const hasPackageJson = (dir) => Boolean(dir) && existsSync(path.join(dir, "package.json"));
@@ -12726,27 +12880,58 @@ const LEASE_REFRESH_MS = 10 * 60 * 1000; // how often a live owner re-stamps its
 // stale path is still the saved one, so a concurrent edit is never clobbered.
 // Studio heals its own saved scope — a worker run may not rewrite it.
 // A basename the walk could not find (a deleted file, one the task has yet
-// to create) is not walked for again for 30 minutes: the walk is synchronous
-// on the main thread and costs tens of ms in a game-sized tree.
+// to create) is not walked for again for 30 minutes, here or at settlement:
+// the walk covers up to 20k entries of a game-sized tree.
 const SCOPE_HEAL_INTERVAL_MS = 5 * 60 * 1000;
 let scopeHealAt = null;
 const scopeMisses = new Map(); // `${root}\n${base}` → retry-after ms, oldest first
-async function healBoardFileScopes(reason = "housekeeping") {
-  const eyes = await getEyes();
-  const saved = await eyes.readJson(TASKS_PATH, []);
+// The exists/locate pair resolveStaleFileScope takes, for these tasks. The
+// resolver is synchronous, so every basename it could ask for (a saved path
+// that is not a file, whose miss is not remembered) is found first: one async
+// walk per project root for all of them (findBasenamesUnderRoot). locate then
+// answers from those results and keeps scopeMisses exactly as a walk per call
+// did; a name no walk covered (the file vanished meanwhile) reads as not found.
+async function staleScopeLocator(tasks, now = Date.now()) {
   const exists = (candidate) => { try { return statSync(candidate, { throwIfNoEntry: false })?.isFile() === true; } catch { return false; } };
+  const rootOf = (ref) => ref?.projectPath || projectRoot();
+  const missKey = (root, base) => `${root}\n${base}`;
+  const wanted = new Map();
+  for (const task of Array.isArray(tasks) ? tasks : []) {
+    if (!task?.id) continue;
+    const saved = [...(Array.isArray(task?.files) ? task.files : []), task?.file].filter((entry) => typeof entry === "string" && entry);
+    if (!saved.length) continue;
+    const root = rootOf(task);
+    for (const entry of new Set(saved)) {
+      if (exists(entry)) continue;
+      const base = entry.split(/[\\/]/).pop();
+      if ((scopeMisses.get(missKey(root, base)) ?? 0) > now) continue;
+      if (!wanted.has(root)) wanted.set(root, new Set());
+      wanted.get(root).add(base);
+    }
+  }
+  const walked = new Map();
+  for (const [root, bases] of wanted) {
+    const found = await findBasenamesUnderRoot(root, bases);
+    for (const base of bases) walked.set(missKey(root, base), found.get(String(base ?? "").trim()) ?? null);
+  }
   const locate = (base, ref) => {
-    const root = ref?.projectPath || projectRoot();
-    const key = `${root}\n${base}`;
-    if ((scopeMisses.get(key) ?? 0) > Date.now()) return null;
-    const found = findBasenameUnderRoot(root, base);
+    const key = missKey(rootOf(ref), base);
+    if ((scopeMisses.get(key) ?? 0) > now || !walked.has(key)) return null;
+    const found = walked.get(key);
     scopeMisses.delete(key);
     if (!found) {
-      scopeMisses.set(key, Date.now() + 30 * 60 * 1000);
+      scopeMisses.set(key, now + 30 * 60 * 1000);
       if (scopeMisses.size > 200) scopeMisses.delete(scopeMisses.keys().next().value);
     }
     return found;
   };
+  return { exists, locate };
+}
+
+async function healBoardFileScopes(reason = "housekeeping") {
+  const eyes = await getEyes();
+  const saved = await eyes.readJson(TASKS_PATH, []);
+  const { exists, locate } = await staleScopeLocator(saved);
   const heals = new Map();
   for (const task of Array.isArray(saved) ? saved : []) {
     if (!task?.id || (!Array.isArray(task.files) || !task.files.length) && !task.file) continue;

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { executorHost } from "./fixtures/host_executor.mjs";
 import { captureTaskHandoffs } from "../scripts/task-handoffs.cjs";
+import path from "node:path";
 
 const task = (id, extra = {}) => ({ id, title: `Implement fixture ${id}`, prompt: `Implement ${id} and retain its full acceptance brief.`, status: "open", createdAt: 1, files: [`src/${id}.js`], ...extra });
 
@@ -25,6 +26,46 @@ test("real host loop dispatches, records streamed completion, verifies and start
   await h.finish("second"); h.advance(31000); await h.pump();
   assert.ok(h.board().tasks.every((row) => row.status === "done"));
   assert.equal(h.autopilot.jobs.length, 0); assert.equal(h.registry.size, 0);
+});
+
+test("a task run gets its own small context file instead of the whole board, and old run files are pruned", async () => {
+  const history = { version: 1, entries: [{ id: "revision_1_x", revision: 1, at: 1, kind: "saved", note: "", hash: "x", snapshot: { id: "second", prompt: "The original, longer brief." } }] };
+  const h = executorHost({ tasks: [
+    task("first", { status: "done", doneAt: 5, lastAttempt: { result: { parts: { done: "first output" } } }, contextHistory: { version: 1, entries: [] } }),
+    task("second", { dependsOn: ["first"], createdAt: 2, contextHistory: history, members: [{ id: "member", title: "Grouped obligation", prompt: "Member brief" }] }),
+    task("bystander", { status: "done", createdAt: 3, prompt: "x".repeat(5000) }),
+  ] });
+  h.wake(); await h.pump();
+  assert.deepEqual(h.starts.map((start) => start.taskId), ["second"]);
+  const files = h.runFiles();
+  assert.equal(files.size, 1);
+  const [[file, text]] = files;
+  const runId = h.starts[0].runId;
+  assert.equal(path.basename(file), `${runId}.json`);
+  assert.equal(path.basename(path.dirname(file)), "task-runs");
+  const prompt = h.starts[0].child.prompt;
+  assert.ok(prompt.includes(`Full saved task context: read ${JSON.stringify(file)} and select task ID second`));
+  assert.doesNotMatch(prompt, /find task id/, "the builder is not sent to the whole board file");
+  const saved = JSON.parse(text);
+  assert.equal(saved.runId, runId);
+  assert.equal(saved.task.id, "second");
+  assert.deepEqual(saved.task.contextHistory, history);
+  assert.equal(saved.task.members[0].prompt, "Member brief");
+  assert.deepEqual(saved.dependencies.map((row) => [row.id, row.status, row.contextHistory]), [["first", "done", undefined]]);
+  assert.ok(!text.includes("x".repeat(5000)), "unrelated cards stay out of the run file");
+
+  // Pruning keeps the newest files by the start time in the run id, never a young one, never a foreign name.
+  const dir = path.dirname(file);
+  const at = h.now();
+  for (let index = 0; index < 60; index += 1) await h.env.writeFile(path.join(dir, `run_${at - 1 - index * 1000}_${index}.json`), "{}");
+  await h.env.writeFile(path.join(dir, "notes.json"), "{}");
+  assert.equal(await h.env.pruneTaskRunContexts(dir, at + 60 * 60000), 0, "nothing under two hours old is removed");
+  const removed = await h.env.pruneTaskRunContexts(dir, at + 3 * 3600000);
+  const left = [...h.runFiles().keys()].map((name) => path.basename(name));
+  assert.equal(removed, 13);
+  assert.equal(left.length, 49);
+  assert.ok(left.includes(`${runId}.json`) && left.includes("notes.json"));
+  assert.ok(left.includes(`run_${at - 1}_0.json`) && !left.includes(`run_${at - 1 - 59000}_59.json`));
 });
 
 test("dispatch enforces shared-index commit hygiene and surfaces leftover staged files after a run", async () => {

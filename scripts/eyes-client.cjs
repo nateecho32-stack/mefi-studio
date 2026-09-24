@@ -31,8 +31,9 @@ const { Worker } = require("node:worker_threads");
 // (scripts/projects.cjs) or directly. Pure helpers (requestsFromCollisions,
 // uncommittedOnly, parsePorcelain...) and the fs-backed readers (readJson,
 // listPngs, tailLog...) stay in-process; they never touch the database.
-// gitPorcelain and commitEvidence are here because they are synchronous git
-// spawns with an 8 s timeout: the worker absorbs that wait too.
+// gitPorcelain and commitEvidence are here because they spawn git with an 8 s
+// timeout: the wait happens off the main thread, and as async children they
+// no longer hold the worker's queued store reads behind them either.
 const EYES_WORKER_METHODS = Object.freeze([
   "listSessions",
   "listSessionIds",

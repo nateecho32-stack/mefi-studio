@@ -2204,23 +2204,42 @@ function sessionTodoText(session, todosById) {
   return [...nested, ...extra].filter(Boolean).join(" ");
 }
 
-function overlappingSessions(job, sessions, todos = []) {
-  const needles = collabNeedles(job);
-  if (!needles.length) return [];
+// Each top-level session with the text a feature-overlap check searches. The
+// spawn loop checks every ranked candidate against the same store snapshot,
+// and each check rebuilt the todo index and lowercased every session again,
+// so the rows are kept per snapshot: keyed on the sessions array, valid for
+// the same todos array (or any empty one) and unchanged lengths.
+const sessionHaystacks = new WeakMap();
+function sessionHaystackRows(sessions, todos) {
+  const cacheable = Array.isArray(sessions);
+  const todoRows = asArray(todos);
+  const known = cacheable ? sessionHaystacks.get(sessions) : null;
+  if (known && known.sessionCount === sessions.length && (known.todos === todos || (!known.todoCount && !todoRows.length)) && known.todoCount === todoRows.length) return known.rows;
   const todosById = new Map();
-  for (const todo of asArray(todos).filter(isObject)) {
+  for (const todo of todoRows.filter(isObject)) {
     const id = str(todo.sessionId);
     if (!id) continue;
     const list = todosById.get(id) ?? [];
     list.push(todo);
     todosById.set(id, list);
   }
-  const hits = [];
-  const seen = new Set();
+  const rows = [];
   for (const session of asArray(sessions).filter(isObject)) {
     const id = str(session.id || session.sessionId);
-    if (!id || session.parentId || seen.has(id)) continue;
-    const hay = compactKey(`${str(session.title)} ${sessionTodoText(session, todosById)}`);
+    if (!id || session.parentId) continue;
+    rows.push({ id, session, hay: compactKey(`${str(session.title)} ${sessionTodoText(session, todosById)}`) });
+  }
+  if (cacheable) sessionHaystacks.set(sessions, { todos, sessionCount: sessions.length, todoCount: todoRows.length, rows });
+  return rows;
+}
+
+function overlappingSessions(job, sessions, todos = []) {
+  const needles = collabNeedles(job);
+  if (!needles.length) return [];
+  const hits = [];
+  const seen = new Set();
+  for (const { id, session, hay } of sessionHaystackRows(sessions, todos)) {
+    if (seen.has(id)) continue;
     if (!needles.some((word) => hay.includes(word))) continue;
     seen.add(id);
     hits.push({
@@ -4426,7 +4445,10 @@ export function tidy({ tasks, ideas, requests, checkpoints, nodeFolders = null, 
     checkpoints: isObject(checkpoints) ? tidyCheckpoints(checkpoints, sessions, now, report) : {},
     nodeFolders: isObject(nodeFolders) ? tidyNodeFolders(nodeFolders, { sessions, tasks, now, staleHours: rules.tidyDoneAfterHours }, report) : {},
   };
-  const differs = (before, after) => before != null && JSON.stringify(before) !== JSON.stringify(after);
+  // The tidy helpers hand back the very collection they were given when they
+  // change nothing, so identity settles most calls without stringifying the
+  // board (multi-MB with contextHistory) twice.
+  const differs = (before, after) => before != null && before !== after && JSON.stringify(before) !== JSON.stringify(after);
   const changed = differs(tasks, out.tasks) || differs(ideas, out.ideas) || differs(requests, out.requests) || differs(checkpoints, out.checkpoints) || differs(nodeFolders, out.nodeFolders);
   const parts = [];
   if (report.tasksArchived) parts.push(`archived ${plural(report.tasksArchived, "done task")}`);
@@ -6508,6 +6530,71 @@ export function buildFacts({ sessions = null, todos = null, collisions = null, p
       ? activityLogRows(log, 12).map((entry) => ({ kind: str(entry.kind), text: clip(str(entry.text), 90), at: num(entry.at, 0) }))
       : null,
   };
+}
+
+// Facts for an AI pass as JSON that always parses and fits `limit` characters.
+// A plain slice of the serialized facts cut mid-value: the model got invalid
+// JSON, and the keys serialized last (machine, work, resumed, chatter, inbox)
+// were the first to go. Here the largest array or string anywhere in the tree
+// gives way first, by at most half of itself per step (an array loses its
+// tail, a string is clipped), until the whole fits, so small keys come through
+// whole. `truncatedKeys` names the top-level keys that were cut. The caller's
+// facts are never modified.
+const FACTS_CLIP_MIN = 24;
+export function boundedFactsJson(facts, limit = 14000) {
+  const text = JSON.stringify(facts);
+  if (text === undefined) return "null";
+  if (text.length <= limit) return text;
+  // A private copy in a box, so the root is clipped like any other value.
+  const box = { root: JSON.parse(text) };
+  const cut = new Set();
+  const render = () => JSON.stringify(cut.size && isObject(box.root) ? { ...box.root, truncatedKeys: [...cut] } : box.root);
+  const sizeOf = (node) => JSON.stringify(node).length;
+  let out = render();
+  for (let pass = 0; out.length > limit && pass < 1000; pass += 1) {
+    // Serialized sizes, bottom up, and the largest shrinkable value: an array
+    // of two or more rows, or a string with room to clip.
+    let best = null;
+    const consider = (candidate) => { if (!best || candidate.size > best.size) best = candidate; };
+    const walk = (node, holder, key, top) => {
+      if (typeof node === "string") {
+        const size = sizeOf(node);
+        if (node.length > FACTS_CLIP_MIN + 8) consider({ size, holder, key, top });
+        return size;
+      }
+      if (!node || typeof node !== "object") return sizeOf(node);
+      let size = 2;
+      if (Array.isArray(node)) {
+        node.forEach((child, index) => { size += (index ? 1 : 0) + walk(child, node, index, top ?? String(index)); });
+        if (node.length > 1) consider({ size, rows: node, top });
+      } else {
+        Object.entries(node).forEach(([name, child], index) => { size += (index ? 1 : 0) + sizeOf(name) + 1 + walk(child, node, name, top ?? name); });
+      }
+      return size;
+    };
+    walk(box.root, box, "root", null);
+    if (!best) break;
+    const reduce = Math.max(1, Math.min(out.length - limit, Math.ceil(best.size / 2)));
+    if (best.rows) {
+      let removed = 0;
+      while (best.rows.length > 1 && removed < reduce) removed += sizeOf(best.rows.pop()) + 1;
+    } else {
+      const current = best.holder[best.key];
+      best.holder[best.key] = `${current.slice(0, Math.max(FACTS_CLIP_MIN, current.length - reduce - 1))}…`;
+    }
+    cut.add(best.top ?? "(root)");
+    out = render();
+  }
+  // Nothing left to shrink (many small keys): the largest top-level keys go.
+  if (out.length > limit && isObject(box.root)) {
+    for (const [name] of Object.entries(box.root).map(([key, child]) => [key, sizeOf(child)]).sort((a, b) => b[1] - a[1])) {
+      delete box.root[name];
+      cut.add(name);
+      out = render();
+      if (out.length <= limit) break;
+    }
+  }
+  return out.length <= limit ? out : "null";
 }
 
 // One fixture in, everything out: what the Python contract pins.

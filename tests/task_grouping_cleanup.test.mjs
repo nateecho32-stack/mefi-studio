@@ -224,3 +224,16 @@ test("grouping and dissolution preserve idea ownership recorded only on the idea
   assert.equal(dissolved.ideas[0].status, "planned");
   assert.deepEqual(dissolved.tasks.find((row) => row.id === "one").ideas, ["linked"]);
 });
+
+test("tidy settles an untouched board by identity without serializing it", () => {
+  let serialized = 0;
+  const tasks = [task("a", "Open obligation"), task("b", "Recent done", { status: "done", updatedAt: now - 1000 })];
+  Object.defineProperty(tasks, "toJSON", { value() { serialized += 1; return [...this]; } });
+  const quiet = tidy({ tasks, ideas: [], requests: [], checkpoints: {}, now });
+  assert.equal(quiet.tasks, tasks);
+  assert.equal(quiet.changed, false);
+  assert.equal(serialized, 0);
+  const stale = tidy({ tasks: [task("c", "Old done", { status: "done", updatedAt: now - 30 * 24 * 3600 * 1000 })], now });
+  assert.equal(stale.changed, true);
+  assert.equal(stale.tasks[0].status, "archived");
+});

@@ -570,7 +570,7 @@ class MefiStudioEyesTests(unittest.TestCase):
         # heals its own store, a worker run may not rewrite saved scope.
         self.assertIn("resolveStaleFileScope", self.main, "settlement consults the scope resolver")
         self.assertIn("file scope healed", self.main, "the heal is visible on the card's work log")
-        self.assertIn("function findBasenameUnderRoot(root, base", self.main, "the locator is a bounded basename search under the project root")
+        self.assertIn("async function findBasenamesUnderRoot(root, bases", self.main, "the locator is a bounded basename search under the project root")
         self.assertIn('const SCOPE_WALK_SKIP = new Set(["node_modules", ".git", "dist"', self.main, "the walk never descends into dependency and build trees")
         self.assertIn("maxEntries = 20000, maxDepth = 6", self.main, "the walk is bounded so it can never hold the board lock long")
 

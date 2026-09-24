@@ -22,8 +22,8 @@ const code = [
   section("function normalizeCompatEndpoint(", "const modelPerformanceStores"),
 ].join("\n");
 
-function routeHost({ settings = {}, keys = {} } = {}) {
-  const logs = [], fetches = [];
+function routeHost({ settings = {}, keys = {}, serve = null, now = null } = {}) {
+  const logs = [], fetches = [], cliChecks = [];
   let saved = { aiProvider: "auto", ...settings };
   const store = { zaiApiKeyEncrypted: "zai-fixture-key", apiKeyEncrypted: "go-fixture-key", customApiKeyEncrypted: "custom-fixture-key", ...keys };
   const context = vm.createContext({
@@ -37,14 +37,15 @@ function routeHost({ settings = {}, keys = {} } = {}) {
     readSettings: async () => structuredClone(saved),
     decryptKey: (_settings, field) => store[field] ?? null,
     logLine: (message) => logs.push(message),
-    grokCliAvailable: async () => false, claudeCliAvailable: async () => false,
+    grokCliAvailable: async () => { cliChecks.push("grok"); return false; }, claudeCliAvailable: async () => { cliChecks.push("claude"); return false; },
     codexCliAvailable: async () => false, antigravityCliAvailable: async () => false,
     AbortController, setTimeout, clearTimeout,
-    fetch: async (url) => { fetches.push(String(url)); return { ok: false, json: async () => ({}) }; },
+    fetch: async (url) => { fetches.push(String(url)); await Promise.resolve(); return serve ? { ok: true, json: async () => ({ data: [{ id: serve }] }) } : { ok: false, json: async () => ({}) }; },
+    ...(now ? { Date: { now: () => now.at } } : {}),
   });
   vm.runInContext(code, context);
   return {
-    logs, fetches,
+    logs, fetches, cliChecks,
     resolve: (role = "routine", options) => context.resolveAiRoute(role, options),
     routes: (options) => context.armedFallbackRoutes(saved, { zaiKey: store.zaiApiKeyEncrypted ?? null, goKey: store.apiKeyEncrypted ?? null, ...options }),
   };
@@ -180,4 +181,46 @@ test("a custom endpoint that reports no model degrades to the keyed route once a
   assert.equal(result.provider, "zai");
   assert.match(host.logs.join("\n"), /custom endpoint cannot answer \(the custom endpoint reported no model.*answering via z\.ai GLM/);
   assert.equal(host.fetches.length, 1, "only the primary's own probe ran");
+});
+
+test("an unarmed auto route stops at its first usable provider; an armed one skips CLI entries past it", async () => {
+  const order = ["zai", "grok", "lmstudio", "custom", "opencode"];
+  const settings = { aiAutoProviders: order, customEndpoint: "https://api.example.com/v1/chat/completions" };
+  const off = routeHost({ settings });
+  const plain = await off.resolve();
+  assert.equal(plain.provider, "zai");
+  assert.deepEqual([...plain.fallbacks], []);
+  assert.deepEqual(off.fetches, [], "no endpoint probe for entries the route never uses");
+  assert.deepEqual(off.cliChecks, [], "no CLI lookup either");
+  const on = routeHost({ settings: { ...settings, aiAutoFallback: true }, serve: "served-model" });
+  const armed = await on.resolve();
+  assert.equal(armed.provider, "zai");
+  assert.deepEqual([...armed.fallbacks.map((row) => [row.provider, row.model])], [["lmstudio", "served-model"], ["custom", "served-model"], ["opencode", "deepseek-v4.1-flash"]]);
+  assert.deepEqual(on.cliChecks, [], "a CLI entry past the primary could never be a fallback");
+  const cliFirst = routeHost({ settings: { aiAutoProviders: ["grok", "zai"] } });
+  assert.equal((await cliFirst.resolve()).provider, "zai");
+  assert.deepEqual(cliFirst.cliChecks, ["grok"], "a CLI entry ahead of the primary is still looked up");
+});
+
+test("endpoint model probes are shared while in flight and remembered per endpoint", async () => {
+  const clock = { at: 1_000_000 };
+  const host = routeHost({ settings: { aiProvider: "lmstudio" }, serve: "local-model", now: clock });
+  const [a, b] = await Promise.all([host.resolve(), host.resolve()]);
+  assert.equal(a.model, "local-model");
+  assert.equal(b.model, "local-model");
+  assert.equal(host.fetches.length, 1, "concurrent callers share one probe");
+  clock.at += 59_000;
+  assert.equal((await host.resolve()).model, "local-model");
+  assert.equal(host.fetches.length, 1, "a found model is remembered for a minute");
+  clock.at += 2_000;
+  await host.resolve();
+  assert.equal(host.fetches.length, 2, "then the endpoint is asked again");
+  const idle = routeHost({ settings: { aiProvider: "lmstudio" }, now: clock });
+  assert.equal((await idle.resolve()).ok, false);
+  clock.at += 10_000;
+  assert.equal((await idle.resolve()).ok, false);
+  assert.equal(idle.fetches.length, 1, "a miss is remembered briefly");
+  clock.at += 6_000;
+  await idle.resolve();
+  assert.equal(idle.fetches.length, 2, "and a server started meanwhile is noticed within 15 s");
 });
