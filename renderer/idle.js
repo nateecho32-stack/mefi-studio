@@ -140,6 +140,15 @@
   const ORBIT_ENERGY = 0.0022; // audio-energy term
   const ORBIT_EASE = 0.06; // velocity lerp per frame → ~1.2 s to settle
   const SETTLE_MS = 2500; // a wheel zoom holds the orbit still for a beat
+  // Tree motion (Audio link): how far the music may move the overview at full
+  // response (stepGroove). The frame keeps SWELL + SWAY of itself in reserve
+  // while music plays, and always allows for the nod, so none of it can push
+  // work out of view.
+  const GROOVE_SPIN = 1.8; // the spin quickens by up to this share with the music's energy
+  const GROOVE_KICK = 0.0045; // radians/frame a kick drum adds to the spin; it glides off at ORBIT_EASE
+  const GROOVE_SWELL = 0.07; // share of the frame the bass breathes the tree out by
+  const GROOVE_SWAY = 0.035; // share of the half-frame the figure-of-eight sway travels
+  const GROOVE_NOD = 0.06; // radians the snare tips the tree toward the camera
   // Starfield: three depth bands wheeling at a fraction of the orbit rate, so
   // the far sky drifts slowly against the constellation. Positions are hashed
   // from seed+index — stable across frames and resizes, no stored array.
@@ -242,7 +251,7 @@
     bands: { bass: 0, mid: 0, treble: 0 },
     music: null,
     audioResponse: initialAudioPreferences.response,
-    audioEffects: { waves: initialAudioPreferences.waves, nodes: initialAudioPreferences.nodes, percussion: initialAudioPreferences.percussion, background: initialAudioPreferences.background, splitBands: initialAudioPreferences.splitBands },
+    audioEffects: { waves: initialAudioPreferences.waves, nodes: initialAudioPreferences.nodes, percussion: initialAudioPreferences.percussion, background: initialAudioPreferences.background, splitBands: initialAudioPreferences.splitBands, motion: initialAudioPreferences.motion },
     spectrumBuffer: null,
     waveformBuffer: null,
     inputSource: null,
@@ -692,7 +701,7 @@
     const phase = !state.reactive ? "off" : state.inputError ? "error" : pending ? "pending" : listening ? paused ? "paused" : "listening" : "ready";
     const text = phase === "off" ? "Audio link off" : phase === "error" ? "Audio unavailable" : phase === "pending" ? "Connecting audio…" : phase === "paused" ? "Track paused" : phase === "listening" ? (state.music?.energy > 0.035 ? `${source === "local" ? "Track" : source === "mic" ? "Mic" : "Desktop"} linked` : "Listening · quiet") : state.audioSource === "local" ? "Add a track to link" : "Connect audio";
     const description = state.inputError || (listening ? paused ? "Studio track is paused. Play it to animate the nodes." : `Following ${sourceName.toLowerCase()}. Bass, mids and treble animate the nodes and connections.` : pending ? `Connecting to ${sourceName.toLowerCase()}…` : state.audioSource === "local" ? "Add a local track, then play it to animate the nodes." : state.audioSource === "auto" ? "Follows loaded Studio tracks directly. Connect to desktop audio when no track is loaded." : `Connect to ${sourceName.toLowerCase()} to animate the nodes.`);
-    return { reactive: state.reactive, selection: state.audioSource, source, listening, pending, error: state.inputError, phase, text, label: text, description, response: state.audioResponse ?? 0.35, effects: { waves: state.audioEffects?.waves !== false, nodes: state.audioEffects?.nodes !== false, percussion: state.audioEffects?.percussion === true, background: state.audioEffects?.background === true, splitBands: state.audioEffects?.splitBands !== false }, bands: { ...state.bands }, energy: state.music?.energy ?? 0, beat: state.music?.beat ?? 0, kick: state.music?.kick ?? 0, snare: state.music?.snare ?? 0, hat: state.music?.hat ?? 0, bassline: state.music?.bassline ?? 0 };
+    return { reactive: state.reactive, selection: state.audioSource, source, listening, pending, error: state.inputError, phase, text, label: text, description, response: state.audioResponse ?? 0.35, effects: { waves: state.audioEffects?.waves !== false, nodes: state.audioEffects?.nodes !== false, percussion: state.audioEffects?.percussion === true, background: state.audioEffects?.background === true, splitBands: state.audioEffects?.splitBands !== false, motion: state.audioEffects?.motion !== false }, bands: { ...state.bands }, energy: state.music?.energy ?? 0, beat: state.music?.beat ?? 0, kick: state.music?.kick ?? 0, snare: state.music?.snare ?? 0, hat: state.music?.hat ?? 0, bassline: state.music?.bassline ?? 0 };
   }
 
   function bell({ low = false, long = false, quick = false, level = 1 }) {
@@ -3254,16 +3263,40 @@
     return left * (1 - ease);
   }
 
+  // The music's sway (stepGroove) moves the projection centre itself, so the
+  // tree steps about on screen while every anchor, pick and unprojection
+  // stays exact.
   function centerX() {
-    if (state.center) return state.center.x;
+    const sway = state.groove?.px ?? 0;
+    if (state.center) return state.center.x + sway;
     const area = usableArea();
-    return area.x + area.w / 2;
+    return area.x + area.w / 2 + sway;
   }
 
   function centerY() {
-    if (state.center) return state.center.y;
+    const sway = state.groove?.py ?? 0;
+    if (state.center) return state.center.y + sway;
     const area = usableArea();
-    return area.y + area.h / 2;
+    return area.y + area.h / 2 + sway;
+  }
+
+  // The camera backs off as the graph is scaled up, so a screen-filling fit
+  // (or a deep zoom) keeps the same gentle perspective instead of ballooning
+  // the near nodes. It also stays 3.5 half-diagonals of the graph frame out
+  // (times the zoom), about four radii of a tree seeded to fill it, so the
+  // far end of a wide tree turning to the front grows by a third at most
+  // instead of swelling off the frame. The frame is known before the layout
+  // seeds, so the perspective a layout was spaced under is the one it keeps.
+  function cameraDistance(scale) {
+    const frame = state.graphFrame;
+    const reach = frame ? Math.hypot(frame.w, frame.h) / 2 * (state.zoom || 1) * 3.5 : 0;
+    return Math.max(900 * Math.max(1, scale / 1.6), reach);
+  }
+
+  // The tilt the tree turns under: the slow nod the spin carries, the
+  // owner's right-drag pitch, and the snare's nod while music plays.
+  function cameraTilt() {
+    return Math.sin(state.angle * 0.37) * 0.35 + state.pitch + (state.groove?.nod ?? 0);
   }
 
   function project(node) {
@@ -3280,20 +3313,19 @@
     }
     const cos = Math.cos(state.angle);
     const sin = Math.sin(state.angle);
-    const tilt = Math.sin(state.angle * 0.37) * 0.35 + state.pitch;
+    const tilt = cameraTilt();
     const x0 = (node.x + state.camera.x) * scale;
     const z0 = (node.z + state.camera.z) * scale;
     const y0 = (node.y + state.camera.y) * scale;
     const rx = x0 * cos - z0 * sin;
     const rz = x0 * sin + z0 * cos;
     const ry = y0 * Math.cos(tilt) - rz * Math.sin(tilt) * 0.4;
-    // The camera backs off as the graph is scaled up, so a screen-filling fit (or
-    // a deep zoom) keeps the same gentle perspective instead of ballooning the
-    // near nodes. `depth` is reported on the 900 baseline the fades are tuned to.
-    const distance = 900 * Math.max(1, scale / 1.6);
-    const raw = rz + distance;
-    const k = distance / Math.max(distance * 0.2, raw);
-    return { x: centerX() + rx * k * framing, y: centerY() + ry * k * framing, k, depth: (raw * 900) / distance };
+    const distance = cameraDistance(scale);
+    const k = distance / Math.max(distance * 0.2, rz + distance);
+    // `depth` orders the paint. It is reported on the 900 baseline the camera
+    // stood at before it backed off to the frame, so a volume measures the
+    // same however far the camera now stands.
+    return { x: centerX() + rx * k * framing, y: centerY() + ry * k * framing, k, depth: 900 + rz / Math.max(1, scale / 1.6) };
   }
 
   function unprojectForLayout(point, source) {
@@ -3301,11 +3333,10 @@
     const framing = state.overviewScale ?? 1;
     if (state.view === "2d") return { x: (point.x - centerX()) / (scale * framing) - state.camera.x, y: source.y, z: (point.y - centerY()) / (scale * framing) - state.camera.z };
     const base = project(source);
-    const distance = 900 * Math.max(1, scale / 1.6);
-    const rz = base.depth * distance / 900 - distance;
+    const rz = (base.depth - 900) * Math.max(1, scale / 1.6);
     const rx = (point.x - centerX()) / (base.k * framing), ry = (point.y - centerY()) / (base.k * framing);
     const cos = Math.cos(state.angle), sin = Math.sin(state.angle);
-    const tilt = Math.sin(state.angle * 0.37) * 0.35 + state.pitch;
+    const tilt = cameraTilt();
     return { x: (rx * cos + rz * sin) / scale - state.camera.x, y: (ry + rz * Math.sin(tilt) * 0.4) / Math.cos(tilt) / scale - state.camera.y, z: (-rx * sin + rz * cos) / scale - state.camera.z };
   }
 
@@ -4449,6 +4480,100 @@
     return projected;
   }
 
+  // The smallest circle around points on the floor plane (x, z), the plane
+  // the spin turns in: Welzl's incremental construction, visiting the points
+  // in a fixed scrambled order so a long sorted branch cannot hit its slow case.
+  function enclosingCircle(points) {
+    const count = points.length;
+    if (!count) return { x: 0, z: 0, r: 0 };
+    const order = count % 7919 ? points.map((_, index) => points[(index * 7919 + 13) % count]) : points;
+    const inside = (circle, point) => Math.hypot(point.x - circle.x, point.z - circle.z) <= circle.r * (1 + 1e-9) + 1e-6;
+    const pair = (a, b) => ({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2, r: Math.hypot(a.x - b.x, a.z - b.z) / 2 });
+    const triple = (a, b, c) => {
+      const bx = b.x - a.x, bz = b.z - a.z, cx = c.x - a.x, cz = c.z - a.z;
+      const d = 2 * (bx * cz - bz * cx);
+      // In a line, the widest pair already spans all three.
+      if (Math.abs(d) < 1e-9) return [pair(a, b), pair(a, c), pair(b, c)].sort((p, q) => q.r - p.r)[0];
+      const b2 = bx * bx + bz * bz, c2 = cx * cx + cz * cz;
+      const ux = (cz * b2 - bz * c2) / d, uz = (bx * c2 - cx * b2) / d;
+      return { x: a.x + ux, z: a.z + uz, r: Math.hypot(ux, uz) };
+    };
+    let circle = { x: order[0].x, z: order[0].z, r: 0 };
+    for (let i = 1; i < count; i += 1) {
+      if (inside(circle, order[i])) continue;
+      circle = { x: order[i].x, z: order[i].z, r: 0 };
+      for (let j = 0; j < i; j += 1) {
+        if (inside(circle, order[j])) continue;
+        circle = pair(order[i], order[j]);
+        for (let k = 0; k < j; k += 1) if (!inside(circle, order[k])) circle = triple(order[i], order[j], order[k]);
+      }
+    }
+    return circle;
+  }
+
+  // The point the overview turns the tree about: the middle of the smallest
+  // circle around its anchors seen from above, halfway up its height. The
+  // world origin sits wherever the layout's seeds and depths left it, so
+  // turning about it swung the tree off to one side; this point is the
+  // tree's own, so the spin keeps the whole structure centred. Workers ride
+  // their hosts and dying nodes are already leaving, so neither moves it.
+  // Cached on the live anchors, which only change when work comes or goes.
+  function orbitCentre(anchors) {
+    const points = [];
+    let key = 0;
+    for (const { node } of anchors) {
+      const point = node._layoutAnchor;
+      if (node.dying || node._absorbed || !point) continue;
+      points.push(point);
+      for (const value of [point.x, point.y, point.z]) key = (key * 31 + Math.round(value * 8)) | 0;
+    }
+    const cached = state.orbitFrame;
+    if (cached && cached.key === key && cached.count === points.length) return cached;
+    const circle = enclosingCircle(points);
+    let low = Infinity, high = -Infinity;
+    for (const point of points) { low = Math.min(low, point.y); high = Math.max(high, point.y); }
+    state.orbitFrame = { key, count: points.length, x: circle.x, y: points.length ? (low + high) / 2 : 0, z: circle.z };
+    return state.orbitFrame;
+  }
+
+  // The overview's scale for a whole turn: the largest (at most 1) at which
+  // every anchor stays inside half-extents halfW × halfH of the frame at every
+  // angle of the spin, under every tilt its slow nod, the owner's pitch and
+  // the music's nod can give it. Each anchor only needs its reach off the
+  // spin axis (r) and its height (y) about the centre, so the frame is sized
+  // once for the turn instead of breathing in and out as a long tree swings
+  // end-on. Across a turn an anchor's screen x peaks at r / √(1 − ρ²), where
+  // ρ = r / camera distance; its screen y peaks with it nearest (or
+  // farthest) and at the tilt that lifts it most.
+  function orbitEnvelope(points, centre, halfW, halfH) {
+    const scale = Math.max(0.01, state.fit * state.zoom);
+    const distance = cameraDistance(scale);
+    const nod = state.groove?.tiltRoom ?? 0;
+    const low = state.pitch - 0.35 - nod, high = state.pitch + 0.35 + nod;
+    let fit = 1;
+    for (const point of points) {
+      const r = Math.hypot(point.x - centre.x, point.z - centre.z) * scale;
+      const y = (point.y - centre.y) * scale;
+      const ratio = r / distance;
+      // Past 0.8 the projection clamps its magnification at 5.
+      const clamped = ratio >= 0.8;
+      const wide = clamped ? r * 5 : r / Math.sqrt(1 - ratio * ratio);
+      let tall = 0;
+      for (const side of [-1, 1]) {
+        // ry = y·cos t − rz·sin t·0.4 with rz = side·r: a·cos t + b·sin t.
+        const a = y, b = -0.4 * r * side;
+        const lift = (t) => Math.abs(a * Math.cos(t) + b * Math.sin(t));
+        let peak = Math.max(lift(low), lift(high));
+        const phase = Math.atan2(b, a);
+        if (Math.ceil((low - phase) / Math.PI) * Math.PI + phase <= high) peak = Math.hypot(a, b);
+        tall = Math.max(tall, clamped ? peak * 5 : peak / (1 + side * ratio));
+      }
+      if (wide > 0) fit = Math.min(fit, halfW / wide);
+      if (tall > 0) fit = Math.min(fit, halfH / tall);
+    }
+    return fit;
+  }
+
   function layoutProjectedGraph(projected, area, mode, animationTime = Date.now(), still = false) {
     const profiler = globalThis.window?.MefiProfiler;
     const span = profiler?.begin("command.layout");
@@ -4466,7 +4591,7 @@
     const frame = state.graphFrame ?? area;
     const key = `${layoutName}|${state.view}|${frame.x},${frame.y},${frame.w},${frame.h}`;
     if (state.screenLayout?.key !== key) {
-      state.screenLayout = { key, nodes: new Map(), slots: new Map() };
+      state.screenLayout = { key, nodes: new Map(), slots: new Map(), fresh: true };
       state.overviewScale = 1;
     }
     const layout = state.screenLayout.nodes;
@@ -4535,18 +4660,45 @@
       layout.set(node.id, { world: anchor }); node._layoutAnchor = { ...anchor };
       Object.assign(p, project(anchor));
     }
-    // Fixed world anchors can project beyond their initial frame as a 3D
-    // orbit turns. Back the overview off as a whole, preserving perspective
-    // and anchors, so panel clipping never removes work from the overview.
-    // Free/Follow retain their intentional pan and zoom into part of the tree.
+    // The tree's own centre (3D only: the flat map does not turn), kept
+    // current in every mode for frameTree. The overview camera flies to it,
+    // which makes the spin turn the tree in place; a fresh layout lands there
+    // at once, and Fit and a mode switch morph over the move.
+    const fresh = state.screenLayout.fresh;
+    state.screenLayout.fresh = false;
+    if (state.view !== "2d") {
+      const centre = orbitCentre(anchors);
+      if (mode === "orbit") {
+        state.camera.tx = -centre.x; state.camera.ty = -centre.y; state.camera.tz = -centre.z;
+        if (fresh) {
+          state.camera.x = state.camera.tx; state.camera.y = state.camera.ty; state.camera.z = state.camera.tz;
+          if (state.camVel) { state.camVel.x = 0; state.camVel.y = 0; state.camVel.z = 0; }
+          for (const { node, p } of anchors) Object.assign(p, project(node._layoutAnchor));
+        }
+      }
+    }
+    // Fixed world anchors turn with the camera, so the overview sizes the
+    // frame for the whole turn about that centre (orbitEnvelope), less the
+    // room the music's swell and sway keep (stepGroove). A camera still
+    // gliding to a new centre is checked frame by frame on top, with the
+    // sway's offset taken out of the frame, so panel clipping never removes
+    // work from the overview. Free/Follow retain their intentional pan and
+    // zoom into part of the tree.
     if (mode === "orbit") {
-      const cx = area.x + area.w / 2, cy = area.y + area.h / 2;
+      const groove = state.groove;
+      const swayX = groove?.px ?? 0, swayY = groove?.py ?? 0;
+      const cx = area.x + area.w / 2 + swayX, cy = area.y + area.h / 2 + swayY;
       const halfW = Math.max(1, area.w / 2 - 28), halfH = Math.max(1, area.h / 2 - 28);
       const previousScale = state.overviewScale ?? 1;
       let scale = 1;
+      if (state.view !== "2d") {
+        const live = anchors.filter(({ node }) => !node.dying && !node._absorbed && node._layoutAnchor).map(({ node }) => node._layoutAnchor);
+        scale = orbitEnvelope(live, state.orbitFrame, halfW, halfH) * (groove?.frame ?? 1);
+      }
+      const roomX = Math.max(1, halfW - Math.abs(swayX)), roomY = Math.max(1, halfH - Math.abs(swayY));
       for (const { node, p } of anchors) {
         if (node.dying || node._absorbed) continue;
-        scale = Math.min(scale, halfW / Math.max(1, Math.abs(p.x - cx) / previousScale), halfH / Math.max(1, Math.abs(p.y - cy) / previousScale));
+        scale = Math.min(scale, roomX / Math.max(1, Math.abs(p.x - cx) / previousScale), roomY / Math.max(1, Math.abs(p.y - cy) / previousScale));
       }
       state.overviewScale = scale;
       if (scale !== previousScale) for (const { node, p } of anchors) Object.assign(p, project(node._layoutAnchor));
@@ -6148,6 +6300,59 @@
     return ORBIT_BASE + (state.reactive ? 0 : energy) * ORBIT_ENERGY;
   }
 
+  // Tree motion (Audio link): how the music moves the overview while the
+  // spin runs. Every voice is eased, so nothing snaps:
+  //  - spin: the turn quickens with the music's energy;
+  //  - kick: each kick drum steps the turn on, and it glides off again;
+  //  - swell: the bass breathes the tree out into the room the frame keeps;
+  //  - sway: the tree steps round a small figure of eight, a quarter of it
+  //    per kick, as wide as the mids are loud;
+  //  - nod: the snare tips it toward the camera.
+  // `room` eases in while music is heard (to the Response share, full from
+  // 50%) and out again after three quiet seconds or when the spin stops, and
+  // every voice is a share of it, so the layout's frame reserve
+  // (groove.frame) always covers the swell and the sway. Returns the spin's
+  // multiplier and this frame's kick, in radians per 30 fps frame.
+  function stepGroove(music, dt, live, still, area) {
+    const groove = (state.groove ??= { room: 0, swell: 0, sway: 0, phase: 0, step: 0, nod: 0, px: 0, py: 0, kickAt: null, heardAt: -Infinity });
+    groove.tiltRoom = GROOVE_NOD;
+    const clamp = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+    const ease = (from, to, attack, release = attack) => (dt > 0 ? from + (to - from) * (1 - Math.exp(-dt / (to > from ? attack : release))) : from);
+    const now = Date.now();
+    const energy = clamp(music?.energy);
+    if (live && energy > 0.04) groove.heardAt = now;
+    const hearing = live && !still && now - groove.heardAt < 3000;
+    let kick = 0;
+    // A kick is the bass band's onset clock moving on. The first reading only
+    // sets the clock, so linking mid-track does not jolt the tree.
+    const onset = music?.bandState?.bass?.lastOnset;
+    if (Number.isFinite(onset) && onset !== groove.kickAt) {
+      if (hearing && groove.kickAt != null) {
+        kick = GROOVE_KICK * Math.max(0.5, clamp(music.kick)) * groove.room;
+        groove.step += Math.PI / 2;
+      }
+      groove.kickAt = onset;
+    }
+    if (still) Object.assign(groove, { room: 0, swell: 0, sway: 0, nod: 0 });
+    else {
+      groove.room = ease(groove.room, hearing ? Math.min(1, Math.max(0, state.audioResponse ?? 0.35) / 0.5) : 0, 0.9, 1.2);
+      groove.swell = ease(groove.swell, hearing ? clamp(clamp(music?.kick) * 0.8 + clamp(music?.bassline) * 0.35) : 0, 0.05, 0.28);
+      groove.sway = ease(groove.sway, hearing ? clamp(clamp(music?.mid) * 0.7 + energy * 0.3) : 0, 0.4, 0.9);
+      groove.nod = ease(groove.nod, hearing ? GROOVE_NOD * clamp(music?.snare) * groove.room : 0, 0.06, 0.35);
+      // Between kicks the figure of eight drifts on with the energy.
+      if (hearing) groove.step += dt * (0.15 + energy * 0.45);
+      groove.phase = ease(groove.phase, groove.step, 0.22);
+      if (groove.step > Math.PI * 8) { groove.step -= Math.PI * 4; groove.phase -= Math.PI * 4; }
+    }
+    const room = groove.room;
+    groove.frame = 1 - room * (GROOVE_SWELL * (1 - groove.swell) + GROOVE_SWAY);
+    const reach = GROOVE_SWAY * room * groove.sway;
+    groove.px = reach ? Math.sin(groove.phase) * reach * Math.max(0, area.w / 2 - 28) : 0;
+    groove.py = reach ? Math.sin(groove.phase * 2) * 0.5 * reach * Math.max(0, area.h / 2 - 28) : 0;
+    groove.moving = room > 0.002;
+    return { spin: 1 + GROOVE_SPIN * energy * room, kick };
+  }
+
   function computeBranch() {
     const node = state.selected?.node;
     if (!node) {
@@ -6271,7 +6476,7 @@
     const saved = value && typeof value === "object" && !Array.isArray(value) ? value : {};
     const legacy = legacyResponse == null || legacyResponse === "" ? NaN : Number(legacyResponse);
     const response = typeof saved.response === "number" && Number.isFinite(saved.response) ? saved.response : Number.isFinite(legacy) ? Math.max(0, Math.min(2, legacy)) * 0.35 : 0.35;
-    return { response: Math.max(0, Math.min(2, response)), waves: typeof saved.waves === "boolean" ? saved.waves : true, nodes: typeof saved.nodes === "boolean" ? saved.nodes : true, percussion: saved.percussion === true, background: saved.background === true, splitBands: typeof saved.splitBands === "boolean" ? saved.splitBands : true };
+    return { response: Math.max(0, Math.min(2, response)), waves: typeof saved.waves === "boolean" ? saved.waves : true, nodes: typeof saved.nodes === "boolean" ? saved.nodes : true, percussion: saved.percussion === true, background: saved.background === true, splitBands: typeof saved.splitBands === "boolean" ? saved.splitBands : true, motion: typeof saved.motion === "boolean" ? saved.motion : true };
   }
 
   function readAudioPreferences() {
@@ -6287,7 +6492,7 @@
   function setAudioEffects(changes = {}) {
     const effects = normalizeAudioPreferences(state.audioEffects);
     delete effects.response;
-    for (const key of ["waves", "nodes", "percussion", "background", "splitBands"]) if (typeof changes?.[key] === "boolean") effects[key] = changes[key];
+    for (const key of ["waves", "nodes", "percussion", "background", "splitBands", "motion"]) if (typeof changes?.[key] === "boolean") effects[key] = changes[key];
     state.audioEffects = effects;
     if (!effects.waves) state.audioWaves = [];
     persistAudioPreferences();
@@ -7341,19 +7546,21 @@
   }
 
   // The whole tree back in view: the camera glides out to the fitted frame
-  // at the same rate a click closed in (pan targets to the origin, zoom
-  // target 1, fit recomputed for the current window). Reduced motion lands
-  // at once, the way the frame loop snaps every glide.
+  // at the same rate a click closed in (pan targets to the tree's centre in
+  // 3D, the origin on the flat map; zoom target 1, fit recomputed for the
+  // current window). Reduced motion lands at once, the way the frame loop
+  // snaps every glide.
   function frameTree() {
-    state.camera.tx = 0;
-    state.camera.ty = 0;
-    state.camera.tz = 0;
+    const centre = state.view !== "2d" ? state.orbitFrame : null;
+    state.camera.tx = centre ? -centre.x : 0;
+    state.camera.ty = centre ? -centre.y : 0;
+    state.camera.tz = centre ? -centre.z : 0;
     autoFit();
     glideZoom(1);
     if (noMotion()) {
-      state.camera.x = 0;
-      state.camera.y = 0;
-      state.camera.z = 0;
+      state.camera.x = state.camera.tx;
+      state.camera.y = state.camera.ty;
+      state.camera.z = state.camera.tz;
     }
   }
 
@@ -7416,7 +7623,11 @@
     const centerFlight = stepCenter(graphArea, still, cameraEase);
     updateFollowCamera(Date.now());
     const target = orbitTarget(energy);
-    state.orbitVel += (target - state.orbitVel) * perSec(ORBIT_EASE, dt);
+    // Tree motion: in the overview, with the spin running and music linked,
+    // the music quickens the turn and each kick steps it on (see stepGroove).
+    const grooveLive = audioLinked && state.audioEffects?.motion !== false && state.audioResponse > 0 && target > 0 && state.camMode === "orbit" && state.view !== "2d" && !state.focus && !state.ambientZen;
+    const groove = stepGroove(state.music, dt, grooveLive, still, graphArea);
+    state.orbitVel += (target * groove.spin - state.orbitVel) * perSec(ORBIT_EASE, dt) + groove.kick;
     if (still) state.orbitVel = 0;
     // orbitVel is radians per 30 fps frame, as tuned
     state.angle += state.orbitVel * dt * 30;
@@ -7453,8 +7664,9 @@
     // "in flight" is a pan still worth more than a few pixels, or a zoom glide.
     const flightPx = Math.hypot(state.camera.tx - state.camera.x, state.camera.ty - state.camera.y, state.camera.tz - state.camera.z) * state.fit * state.zoom * (state.overviewScale ?? 1);
     state.cameraMoving = !still && (flightPx > 8 || centerFlight > 8 || (state.zoomTarget != null && Math.abs(state.zoomTarget - state.zoom) > 0.03));
-    // What earns the display's full rate: a glide, a zoom, or a hand on the tree.
-    state.motionHot = !still && (state.cameraMoving || flightPx > 0.5 || centerFlight > 0.5 || state.zoomTarget != null || Number.isFinite(state.fitTarget) || Boolean(state.morph || state.lifeHot || state.panning || state.rotating));
+    // What earns the display's full rate: a glide, a zoom, a hand on the
+    // tree, or the music moving it.
+    state.motionHot = !still && (state.cameraMoving || flightPx > 0.5 || centerFlight > 0.5 || state.zoomTarget != null || Number.isFinite(state.fitTarget) || groove.moving || Boolean(state.morph || state.lifeHot || state.panning || state.rotating));
 
     const { ctx } = el;
     // Two layers: the sky, and while a node is focused or a card hovered

@@ -192,7 +192,10 @@ revision history stay in the project's ignored local `planning.json`.
   folds Map 2D / 3D (`V`), Labels (`L`) and Zoom into one menu. **Sound** holds
   **Music** and **Ambience**. **Spin** is the only control that turns the tree
   (`Space` pauses it); **Overview** keeps the whole tree framed. The two used
-  to share the name Orbit.
+  to share the name Orbit. In 3D the Overview turns the tree about its own
+  centre (the middle of the smallest circle around it seen from above,
+  halfway up its height) and sizes the frame once for the whole turn, so the
+  tree spins in place at a steady size with every node in view.
 - The **Ambience** popover reads **Look** (Backdrop, Speech bubbles, Card
   style), **Sound** (what the nodes listen to, the Zen bells' profile and
   switch) and **Calm** (Zen mode), then links on to **Style & sound** for the
@@ -260,7 +263,10 @@ revision history stay in the project's ignored local `planning.json`.
   effects. **Sound** follows: the player (local files, ad-free radio or a
   Spotify link), the **Audio link**, which wires bass, mids and treble to the
   live tree (including desktop audio and microphone sources) only when you
-  enable it, and **Find your next sound**. A **Look · Sound** strip in its
+  enable it (its **Tree motion** reaction lets the music quicken the
+  Overview's spin, step it on each kick, sway it round a small figure of
+  eight and swell it on the bass, inside room the frame keeps for it), and
+  **Find your next sound**. A **Look · Sound** strip in its
   header jumps between the two. A locked Void item explains itself in the
   sheet instead of leaving it.
 

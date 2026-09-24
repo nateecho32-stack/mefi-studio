@@ -495,8 +495,8 @@ test("focus closes in by kind, turns the tree slowly, and lets go of the orbit i
 
 test("letting go of a node brings the whole tree back into view", () => {
   // Empty canvas, Esc and the card's close button all release the node:
-  // the selection and focus clear, the pan glides back to the origin and the
-  // zoom glides to the fitted frame. With nothing held, a stray click on the
+  // the selection and focus clear, the pan glides back to the tree's centre
+  // and the zoom glides to the fitted frame. With nothing held, a stray click on the
   // canvas leaves the camera where the user put it.
   const task = { id: "task:t", kind: "task", x: 200, y: 30, z: -40 };
   const { env, state, calls } = calloutFixture({ nodes: [task] });
@@ -511,10 +511,21 @@ test("letting go of a node brings the whole tree back into view", () => {
   assert.equal(env.releaseNode(), true);
   assert.equal(state.selected, null);
   assert.equal(state.focus, null);
-  assert.deepEqual([state.camera.tx, state.camera.ty, state.camera.tz], [0, 0, 0], "the pan glides back to the origin");
+  assert.deepEqual([state.camera.tx, state.camera.ty, state.camera.tz], [0, 0, 0], "with no centre measured yet, the pan glides back to the origin");
   assert.equal(state.zoomTarget, 1, "the zoom glides back to the fitted frame");
   assert.ok(calls.some(([kind]) => kind === "autoFit"), "the fit is recomputed for the current window");
   assert.equal(state.orbit, "paused", "the borrowed orbit still goes back");
+  // Once the overview has measured the tree's centre, letting go frames the
+  // tree about that centre, the point the spin turns it around.
+  state.orbitFrame = { x: 12, y: -4, z: 30 };
+  env.enterFocus(task);
+  assert.equal(env.releaseNode(), true);
+  assert.deepEqual([state.camera.tx, state.camera.ty, state.camera.tz], [-12, 4, -30], "the pan glides back to the tree's own centre");
+  state.view = "2d";
+  env.enterFocus(task);
+  assert.equal(env.releaseNode(), true);
+  assert.deepEqual([state.camera.tx, state.camera.ty, state.camera.tz], [0, 0, 0], "the flat map, which never turns, frames about the origin");
+  state.view = "3d";
   const idleSrc = idle;
   for (const marker of ["else releaseNode();", "close.addEventListener(\"click\", () => releaseNode());", "if (state.focus || state.selected) {\n      releaseNode();"]) {
     assert.ok(idleSrc.replace(/\r\n/g, "\n").includes(marker), `idle.js carries ${marker}`);
