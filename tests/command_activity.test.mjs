@@ -544,6 +544,45 @@ test("feed pushes paint at once after a quiet window and share one trailing pain
   assert.equal(renders, 3, "leaving Command drops the trailing paint");
 });
 
+// The board, todo and checkpoint pushes each rebuilt the graph at once, up to
+// once a second per running job; they share the feed's window.
+test("graph pushes refresh at once after a quiet window and share one trailing refresh in a burst", () => {
+  const text = source.replace(/\r\n/g, "\n");
+  const from = text.indexOf("  const transcriptRow = ");
+  const to = text.indexOf("  function feedLine(item) {", from);
+  let clock = 50_000, refreshes = 0, renders = 0;
+  const timers = [];
+  const state = { feed: [], active: true, feedDirty: false };
+  const env = vm.createContext({
+    state, Math, Date: { now: () => clock },
+    renderFeed() { renders += 1; },
+    refreshGraph() { refreshes += 1; },
+    setTimeout: (fn, ms) => { timers.push({ fn, at: clock + ms }); return timers.length; },
+  });
+  vm.runInContext(text.slice(from, to), env);
+  // A const binding lives in the context's lexical scope, not on the object.
+  const refreshGraphSoon = vm.runInContext("refreshGraphSoon", env);
+  refreshGraphSoon();
+  assert.equal(refreshes, 1, "a lone push rebuilds immediately");
+  for (let push = 0; push < 8; push += 1) { clock += 20; refreshGraphSoon(); }
+  assert.equal(refreshes, 1);
+  assert.equal(timers.length, 1, "the burst shares one trailing rebuild");
+  assert.equal(timers[0].at, 50_000 + 250);
+  env.pushFeed({ kind: "log", text: "[assistant] a feed line" });
+  assert.equal(renders, 1, "the feed keeps its own window");
+  clock = timers[0].at; timers.shift().fn();
+  assert.equal(refreshes, 2, "the trailing rebuild shows the burst's last push");
+  clock += 300; refreshGraphSoon();
+  assert.equal(refreshes, 3);
+  clock += 10; refreshGraphSoon();
+  state.active = false;
+  clock = timers[0].at; timers.shift().fn();
+  assert.equal(refreshes, 3, "leaving Command drops the trailing rebuild");
+  for (const marker of ["if (data.todos) refreshGraphSoon();", "if (state.active) refreshGraphSoon();\n    });\n    window.addEventListener(\"resize\"", "state.checkpoints = data ?? {};\n      if (state.active) refreshGraphSoon();"]) {
+    assert.ok(text.includes(marker), `idle.js carries ${marker}`);
+  }
+});
+
 // The chat log repaints on every feed push; the thread under it only rebuilds
 // (and measures its scroll, a forced layout) when what it shows changed.
 test("the chat thread rebuilds only when a bubble, its age label or the pending reply changed", () => {
