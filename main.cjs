@@ -5835,13 +5835,16 @@ async function assistantForemanJob(now, entry) {
 async function assistantThinkerJob(now, entry) {
   if (!assistantState.prefs?.proactive) return { ok: true, text: "proactive off · not thinking" };
   let organized = false;
+  let store = null;
   try {
-    const store = await assistantReadStore();
+    store = await assistantReadStore();
     if (store) organized = await assistantOrganize(now, store);
   } catch (error) {
     logError(`thinker tree pass failed: ${error.message}`);
   }
-  const facts = await assistantMessageFacts(now, "");
+  // The store read above serves the facts too, and the facts pass is the lite
+  // one: thinkPlan reads only the log, the executor and the ranked picks.
+  const facts = await assistantMessageFacts(now, "", { store, lite: true });
   const lastThought =
     [...(assistantState.messages ?? [])].reverse().find((message) => message?.role === "thinking")?.text ?? assistantState.thinking?.text ?? "";
   let plan = { thinking: "looking at the log", act: null };
@@ -7469,12 +7472,22 @@ function refreshTray() {
 // ---- the thread -------------------------------------------------------------
 // Facts for a reply: every source guarded, null when it is not available,
 // shaped by the module's own builder.
-async function assistantMessageFacts(now, query = "") {
-  const raw = { sessions: null, todos: null, collisions: null, presence: null, uncommitted: null, tasks: null, ideas: null, planning: null, machine: null, audit: null, briefing: null, update: null, mail: assistantState?.mail ?? null, now };
+//
+// options.store hands in a store the caller has just read, so it is not read
+// twice. options.lite is the thinker's once-a-minute pass: thinkPlan reads only
+// the log, the executor and the ranked picks (suggestWork: sessions, todos,
+// collisions, uncommitted, tasks, ideas, requests, audit), so the planning
+// summary, the project work scan (which can spawn gh), the briefing, the
+// machine status, the backlog readiness summary and the memory, chatter,
+// update and project blocks are left out of that pass.
+async function assistantMessageFacts(now, query = "", options = null) {
+  const lite = options?.lite === true;
+  const givenStore = options?.store ?? null;
+  const raw = { sessions: null, todos: null, collisions: null, presence: null, uncommitted: null, tasks: null, ideas: null, planning: null, machine: null, audit: null, briefing: null, update: null, mail: lite ? null : assistantState?.mail ?? null, now };
   // The folder the user opened is a fact in its own right: its identity and
   // the Analyzer's local scan of it, so a reply about "this project" or about
   // the plans in it answers for the folder the thread actually belongs to.
-  try {
+  if (!lite) try {
     const project = projects.current();
     raw.project = { id: project.id, name: project.name, path: project.path };
     const scanned = analyzerProjectReports.get(project.id);
@@ -7483,15 +7496,15 @@ async function assistantMessageFacts(now, query = "") {
   // Independent sources run together. A slow audit or unavailable OpenCode
   // store must neither serialize all the other reads nor discard their facts.
   await Promise.allSettled([
-    (async () => { raw.planning = await planningService().summary({ projectId: projects.current().id, query }); })(),
+    lite ? null : (async () => { raw.planning = await planningService().summary({ projectId: projects.current().id, query }); })(),
     // The repo's own issue tracker and tooling: "open issues" and "which
     // skills do we have" answer from this, not from the board alone.
-    (async () => {
+    lite ? null : (async () => {
       const work = await projectWork.scanProjectWork(projects.current().path);
       if (work?.ok) raw.projectWork = { text: projectWork.describeProjectWork(work), counts: work.counts, tracker: work.tracker?.kind ?? null, tooling: work.tooling?.counts ?? null };
     })(),
     (async () => {
-      const store = await assistantReadStore();
+      const store = givenStore ?? (await assistantReadStore());
       Object.assign(raw, { sessions: store.sessions, todos: store.todos, collisions: store.collisions, presence: store.presence, uncommitted: store.uncommitted });
     })(),
     (async () => {
@@ -7500,12 +7513,12 @@ async function assistantMessageFacts(now, query = "") {
         eyes.readJson(TASKS_PATH, []).then((rows) => { raw.tasks = rows; }),
         eyes.readJson(IDEAS_PATH, []).then((rows) => { raw.ideas = rows.slice(0, 40); }),
         eyes.readJson(REQUESTS_PATH, []).then((rows) => { raw.requests = rows; }),
-        eyes.readJson(BRIEFING_PATH, null).then((briefing) => {
+        lite ? null : eyes.readJson(BRIEFING_PATH, null).then((briefing) => {
           if (briefing?.summary) raw.briefing = { summary: briefing.summary, generatedAt: briefing.generatedAt, alerts: (briefing.alerts ?? []).slice(0, 6) };
         }),
       ]);
     })(),
-    (async () => {
+    lite ? null : (async () => {
       const status = assistantCache.machine ?? (await resourcePass({ kill: false, reason: "assistant", withProcesses: false }));
       raw.machine = {
         wait: Boolean(status.wait),
@@ -7519,7 +7532,7 @@ async function assistantMessageFacts(now, query = "") {
       raw.audit = { errors: audit.errors, warnings: audit.warnings, findings: audit.findings.slice(0, 12) };
     })(),
   ]);
-  try {
+  if (!lite) try {
     const status = updater?.status();
     if (status) raw.update = { phase: status.phase, reason: status.reason ?? null };
   } catch {}
@@ -7529,7 +7542,7 @@ async function assistantMessageFacts(now, query = "") {
   raw.log = (assistantState.log ?? []).filter((entry) => entry && entry.kind !== "tick").slice(-20);
   // The focused node's folder rides the facts, so a reply can quote what has
   // been saved on that node instead of answering from the thread alone.
-  raw.nodeFolders = assistantState.nodeFolders ?? null;
+  raw.nodeFolders = lite ? null : assistantState.nodeFolders ?? null;
   // What the executor is actually building: the roster answers "what are the
   // agents doing", and without this a reply could only ever see itself. The
   // feed's own log rides along — running jobs with their age, why dispatch is
@@ -7550,7 +7563,7 @@ async function assistantMessageFacts(now, query = "") {
   } catch {}
   try {
     const assistant = await getAssistant();
-    if (Array.isArray(raw.tasks) && Array.isArray(raw.requests)) {
+    if (!lite && Array.isArray(raw.tasks) && Array.isArray(raw.requests)) {
       const readiness = backlog.summarizeBacklog({ tasks: raw.tasks, requests: raw.requests, jobs: (autopilot.jobs ?? []).filter((job) => !job.finished), now, compare: compareWork,
         autoBuild: autopilot.autoBuild,
         paused: assistantState.status === "paused" || !autopilot.execute, waiting: autopilot.waiting, lastError: autopilot.lastError, parkedUntil: autopilot.parkedUntil });
@@ -7558,7 +7571,7 @@ async function assistantMessageFacts(now, query = "") {
       raw.backlog = { counts: { ...readiness.counts, readyTasks, readyRequests: readiness.counts.ready - readyTasks }, paused: readiness.paused,
         waiting: readiness.waiting, next: readiness.next.slice(0, 3), totalTasks: raw.tasks.length, totalRequests: raw.requests.length };
     }
-    const facts = assistant.buildFacts({ ...raw, query, lessons: assistantState?.overseer?.lessons });
+    const facts = assistant.buildFacts({ ...raw, query, lessons: lite ? null : assistantState?.overseer?.lessons });
     // Ranked next-work picks ride the facts so a reply — local or AI — can
     // offer real work instead of summarising the board flatly.
     facts.suggestions = assistant.suggestWork({ ...facts, now });

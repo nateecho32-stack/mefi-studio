@@ -161,6 +161,36 @@ test("chat starts independent facts together and preserves facts when one source
   assert.equal(facts.audit.errors, 0);
 });
 
+test("the thinker's lite facts reuse its store read and skip what thinkPlan never reads", async () => {
+  const reads = [];
+  const refuse = (name) => () => { throw new Error(`${name} must not run in the lite pass`); };
+  const { buildFacts, suggestWork, thinkPlan } = await import("../scripts/assistant.mjs");
+  const now = Date.now();
+  const store = { sessions: [{ id: "s1", title: "Quiet session", timeUpdated: now - 90 * 60000 }], todos: [{ sessionId: "s1", content: "finish", status: "in_progress" }], collisions: [], presence: [], uncommitted: [] };
+  const board = { tasks: [{ id: "t1", title: "Open task", status: "open", createdAt: 1 }], ideas: [], requests: [{ title: "Inbox item", prompt: "do it", status: "open" }] };
+  const env = host(section("async function assistantMessageFacts(", "function assistantMessageId()"), {
+    assistantReadStore: refuse("assistantReadStore"),
+    getEyes: async () => ({ readJson: async (name) => { reads.push(name); if (!(name in board)) throw new Error(`${name} must not be read`); return board[name]; } }),
+    resourcePass: refuse("resourcePass"), planningService: refuse("planningService"),
+    projectWork: { scanProjectWork: refuse("scanProjectWork") }, backlog: { summarizeBacklog: refuse("summarizeBacklog") },
+    getAuditor: async () => ({ audit: async () => ({ errors: 1, warnings: 0, findings: [] }) }),
+    TASKS_PATH: "tasks", IDEAS_PATH: "ideas", REQUESTS_PATH: "requests", BRIEFING_PATH: "briefing",
+    assistantCache: {}, autopilot: { execute: true, jobs: [] }, updater: { status: refuse("updater") },
+    assistantState: { log: [{ kind: "think", text: "looked", at: now }], mail: [{ from: "x", text: "y" }], nodeFolders: { a: {} }, overseer: { lessons: ["l"] } },
+    getAssistant: async () => ({ buildFacts, suggestWork }),
+  });
+  const facts = await env.assistantMessageFacts(now, "", { store, lite: true });
+  assert.deepEqual(reads.sort(), ["ideas", "requests", "tasks"]);
+  assert.equal(facts.backlog, null);
+  assert.equal(facts.machine, null);
+  assert.equal(facts.chatter, null);
+  const kinds = facts.suggestions.map((pick) => pick.kind);
+  assert.deepEqual(kinds, ["audit", "session", "request", "task"], "every pick source thinkPlan ranks still rides the lite facts");
+  const plan = thinkPlan({ log: facts.log, suggestions: facts.suggestions, executor: facts.executor });
+  assert.equal(plan.act.kind, "dispatch");
+  assert.match(plan.thinking, /log: looked/);
+});
+
 function tickHost() {
   const key = deferred();
   const queued = [];
