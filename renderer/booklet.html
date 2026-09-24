@@ -16516,7 +16516,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       const css = (triple) => `#${triple.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
       const deep = mix(rgb, [7, 8, 16], 0.86);
       derived = { hex, rgb, hot: css(mix(rgb, [255, 255, 255], 0.6)), ink: css(mix(rgb, [255, 255, 255], 0.86)), deep: css(deep), shade: css(mix(deep, rgb, 0.4)),
-        accent: undefined, glow: [null, null], disc: [null, null], fade: [null, null], core: null, halo: null, well: [null, null] };
+        accent: undefined, glow: [null, null], disc: [null, null], fade: [null, null], core: null, halo: null, well: [null, null], free: {} };
       derivedColors.set(color, derived);
     }
     return derived;
@@ -16572,8 +16572,48 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return derived.well[index];
   }
 
+  // The free styles' gradients (the orbs' halo and body, the extra glow, the
+  // crystal's gem and the glass wash), cached per colour in unit space like
+  // the Void collection's: a node's path is traced in screen space and filled
+  // under translate(p) and scale(radius), which maps the unit paint onto it,
+  // so a frame builds no gradient per node.
+  function freePaint(color, kind, variant = 0) {
+    const paints = derivedColor(color).free;
+    const key = variant ? `${kind}${variant}` : kind;
+    let paint = paints[key];
+    if (paint) return paint;
+    if (kind === "glow") {
+      paint = ctx.createRadialGradient(0, 0, 0, 0, 0, 2.8);
+      paint.addColorStop(0, color + "77"); paint.addColorStop(0.45, color + "33"); paint.addColorStop(1, color + "00");
+    } else if (kind === "halo") {
+      // variant 2: working, 1: selected, 0: at rest
+      paint = ctx.createRadialGradient(0, 0, 0.4, 0, 0, variant ? 2.4 : 1.8);
+      paint.addColorStop(0, color + (variant === 2 ? "44" : "20")); paint.addColorStop(1, color + "00");
+    } else if (kind === "body") {
+      paint = ctx.createRadialGradient(-0.25, -0.3, 0, 0, 0, 1);
+      paint.addColorStop(0, color + "dd"); paint.addColorStop(0.5, color + "88"); paint.addColorStop(1, color + "22");
+    } else if (kind === "gem") {
+      paint = ctx.createLinearGradient(-1, -1, 1, 1);
+      paint.addColorStop(0, color + "cc"); paint.addColorStop(0.45, color + "44"); paint.addColorStop(1, "#0c131f");
+    } else {
+      paint = ctx.createLinearGradient(-1, -1, 1, 1);
+      paint.addColorStop(0, color + "66"); paint.addColorStop(1, color + "08");
+    }
+    paints[key] = paint;
+    return paint;
+  }
+  // Fills the current (screen-space) path with a unit-space paint.
+  function fillUnit(paint, x, y, radius) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(radius, radius);
+    ctx.fillStyle = paint; ctx.fill();
+    ctx.restore();
+  }
+
+  // The theme's canvas palette as of this frame: draw() reads it once and every
+  // node's colour comes from that copy instead of asking music.js per node.
+  let framePalette = null;
   function colorOf(node) {
-    const palette = window.MefiMusic?.themePalette?.()?.canvas;
+    const palette = framePalette;
     if (node.kind === "assistant") return palette?.bright ?? COLORS.assistant;
     if (node.kind === "agent") {
       // status first: amber on error, green when the last job is done, dim
@@ -16673,10 +16713,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     }
   }
 
-  function drawStars() {
+  function drawStars(palette) {
     // The rail's sky follows the colour theme: a faint accent wash rises from
     // the foot of the strip and the stars take the theme's text tone.
-    const palette = window.MefiMusic?.themePalette?.()?.canvas;
     if (palette?.accent) {
       const accent = hexRgb(palette.accent);
       const wash = ctx.createRadialGradient(width * 0.5, height * 1.05, 0, width * 0.5, height * 1.05, height * 0.8);
@@ -16698,7 +16737,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   function draw(time) {
     if (!width || !height) resize();
     ctx.clearRect(0, 0, width, height);
-    drawStars();
+    // Theme and graph preferences change between frames, never inside one.
+    framePalette = window.MefiMusic?.themePalette?.()?.canvas ?? null;
+    const appearance = window.MefiMusic?.graphPreferences?.() ?? {};
+    const nodeStyle = appearance.nodeStyle ?? "orbs";
+    drawStars(framePalette);
 
     const projected = new Map();
     for (const node of nodes) projected.set(node, project(node));
@@ -16821,12 +16864,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       if (node.stale) fresh = Math.min(fresh, 0.45);
       const focused = assistant.state?.focus;
       const selected = isHover || node.kind === "session" && node.id === activeSessionId || focused && node.kind === focused.kind && node.id === focused.id;
-      const appearance = window.MefiMusic?.graphPreferences?.() ?? {};
-      const nodeStyle = appearance.nodeStyle ?? "orbs";
       if (appearance.extraGlow === true) {
-        const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius * 2.8);
-        glow.addColorStop(0, color + "77"); glow.addColorStop(0.45, color + "33"); glow.addColorStop(1, color + "00");
-        ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(p.x, p.y, radius * 2.8, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(p.x, p.y, radius * 2.8, 0, Math.PI * 2); fillUnit(freePaint(color, "glow"), p.x, p.y, radius);
       }
       if (nodeStyle === "minimal") {
         ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, radius * (working ? 0.65 : 0.48)), 0, Math.PI * 2);
@@ -16839,12 +16878,16 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         ctx.beginPath(); ctx.arc(p.x, p.y, radius * 0.6, 0, Math.PI * 2); ctx.globalAlpha = 0.3 * visibility; ctx.lineWidth = 0.8; ctx.stroke(); ctx.globalAlpha = visibility;
         ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1.5, radius * 0.16), 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill(); ctx.restore();
       } else if (nodeStyle === "crystal") {
-        ctx.save(); const points = Array.from({ length: 6 }, (_, index) => ({ x: p.x + Math.cos(index * Math.PI / 3 - Math.PI / 2) * radius, y: p.y + Math.sin(index * Math.PI / 3 - Math.PI / 2) * radius }));
-        ctx.beginPath(); points.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y)); ctx.closePath();
-        const gem = ctx.createLinearGradient(p.x - radius, p.y - radius, p.x + radius, p.y + radius);
-        gem.addColorStop(0, color + "cc"); gem.addColorStop(0.45, color + "44"); gem.addColorStop(1, "#0c131f");
-        ctx.fillStyle = gem; ctx.fill(); ctx.strokeStyle = color; ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke();
-        ctx.globalAlpha = 0.35 * visibility; ctx.beginPath(); points.filter((_, index) => index % 2 === 0).forEach((point) => { ctx.moveTo(p.x, p.y); ctx.lineTo(point.x, point.y); }); ctx.lineWidth = 0.7; ctx.stroke(); ctx.restore();
+        ctx.save(); ctx.beginPath();
+        for (let index = 0; index < 6; index += 1) {
+          const x = p.x + Math.cos(index * Math.PI / 3 - Math.PI / 2) * radius, y = p.y + Math.sin(index * Math.PI / 3 - Math.PI / 2) * radius;
+          if (index) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        }
+        ctx.closePath();
+        fillUnit(freePaint(color, "gem"), p.x, p.y, radius); ctx.strokeStyle = color; ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke();
+        ctx.globalAlpha = 0.35 * visibility; ctx.beginPath();
+        for (let index = 0; index < 6; index += 2) { ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + Math.cos(index * Math.PI / 3 - Math.PI / 2) * radius, p.y + Math.sin(index * Math.PI / 3 - Math.PI / 2) * radius); }
+        ctx.lineWidth = 0.7; ctx.stroke(); ctx.restore();
       } else if (nodeStyle === "singularity") {
         // A near-black core behind a thin photon ring, inside an accretion disc
         // whose brightness turns with the angle, over a faint outer glow.
@@ -16917,22 +16960,22 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         ctx.globalAlpha = visibility;
       } else if (nodeStyle === "glass") {
         ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, Math.PI * 2); ctx.fillStyle = "#172331"; ctx.fill();
-        const glass = ctx.createLinearGradient(p.x - radius, p.y - radius, p.x + radius, p.y + radius);
-        glass.addColorStop(0, color + "66"); glass.addColorStop(1, color + "08"); ctx.fillStyle = glass; ctx.fill();
+        fillUnit(freePaint(color, "glass"), p.x, p.y, radius);
         ctx.strokeStyle = color; ctx.globalAlpha = (selected ? 0.95 : working ? 0.72 : 0.42) * visibility; ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke(); ctx.globalAlpha = visibility;
         ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, radius - 2), Math.PI * 1.13, Math.PI * 1.6);
         ctx.strokeStyle = "rgba(231,243,255,0.55)"; ctx.lineWidth = 1; ctx.stroke();
       } else {
         // Restrained luminous orbs retain the constellation's visual identity.
+        // Halo and body are unit-space paints filled under one transform; the
+        // circles are traced in that space and the rim strokes in screen space.
         const spread = working || selected ? 2.4 : 1.8;
-        const halo = ctx.createRadialGradient(p.x, p.y, radius * 0.4, p.x, p.y, radius * spread);
-        halo.addColorStop(0, color + (working ? "44" : "20")); halo.addColorStop(1, color + "00");
-        ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(p.x, p.y, radius * spread, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+        ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius);
+        ctx.fillStyle = freePaint(color, "halo", working ? 2 : selected ? 1 : 0); ctx.beginPath(); ctx.arc(0, 0, spread, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2);
         ctx.fillStyle = "#151a22"; ctx.fill();
-        const body = ctx.createRadialGradient(p.x - radius * 0.25, p.y - radius * 0.3, 0, p.x, p.y, radius);
-        body.addColorStop(0, color + "dd"); body.addColorStop(0.5, color + "88"); body.addColorStop(1, color + "22");
-        ctx.globalAlpha = Math.max(0.5, fresh) * visibility; ctx.fillStyle = body; ctx.fill(); ctx.globalAlpha = visibility;
+        ctx.globalAlpha = Math.max(0.5, fresh) * visibility; ctx.fillStyle = freePaint(color, "body"); ctx.fill();
+        ctx.restore();
+        ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
         ctx.strokeStyle = color; ctx.globalAlpha = (selected ? 0.95 : working ? 0.8 : 0.35) * visibility;
         ctx.lineWidth = selected ? 1.6 : 1; ctx.stroke(); ctx.globalAlpha = visibility;
       }
@@ -17049,7 +17092,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     ctx.globalAlpha = 1;
 
     if (hover) {
-      tip.hidden = false;
+      let text;
       if (hover.kind === "assistant") {
         const summary = assistantSummary(assistant.state);
         const log = Array.isArray(assistant.state?.log) ? assistant.state.log : [];
@@ -17057,16 +17100,16 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         // What is in flight beats what last happened.
         const work = Array.isArray(assistant.state?.work) ? assistant.state.work : [];
         const line = work.length ? `working on: ${String(work[0]?.text ?? work[0]?.kind ?? "").slice(0, 100)}` : last ? String(last.text).slice(0, 100) : "";
-        tip.textContent =
+        text =
           `${summary.label} · ${summary.sublabel}${line ? ` · ${line}` : ""}` +
           "\nclick: focus the assistant · double-click: open in the Explorer";
       } else if (hover.kind === "folded") {
-        tip.textContent = `${plural(hover.count, "finished session")} · click to list them in the Explorer`;
+        text = `${plural(hover.count, "finished session")} · click to list them in the Explorer`;
       } else if (hover.kind === "agent") {
         const detail = hover.status === "error" && hover.error ? hover.error : hover.text;
         const progress = typeof hover.progress === "number" ? ` · ${Math.round(hover.progress * 100)}%` : "";
         const where = hover.targetLabel && (hover.phase === "flying" || hover.phase === "hovering") ? `\n→ ${String(hover.targetLabel).slice(0, 60)}` : "";
-        tip.textContent = `${hover.role} · ${hover.status}${detail ? ` · ${String(detail).slice(0, 100)}` : ""}${progress}${where}\nclick: focus the assistant`;
+        text = `${hover.role} · ${hover.status}${detail ? ` · ${String(detail).slice(0, 100)}` : ""}${progress}${where}\nclick: focus the assistant`;
       } else {
         const ageMinutes = hover.updated ? Math.round((Date.now() - hover.updated) / 60000) : null;
         const ageLabel = ageMinutes == null ? "" : ageMinutes < 1 ? " · active now" : ` · updated ${ageMinutes}m ago`;
@@ -17076,23 +17119,37 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         const focused = assistant.state?.focus;
         const isFocused = focused && hover.kind === focused.kind && hover.id === focused.id;
         const reach = `\nclick: filter the feed · ${isFocused ? "unfocus the assistant" : "point the assistant at it"} · double-click: open in the Explorer`;
-        tip.textContent =
+        text =
           (hover.kind === "todo"
             ? `${hover.status}: ${hover.label}`
             : `${hover.label} · ${hover.agent ?? ""} ${hover.model ?? ""}${ageLabel}${staleLabel}${noteLabel}`) + reach;
       }
-      tip.style.left = Math.min(width - 250, hover._px + 14) + "px";
-      tip.style.top = Math.max(10, hover._py - 10) + "px";
-    } else {
+      placeTip(text, Math.min(width - 250, hover._px + 14) + "px", Math.max(10, hover._py - 10) + "px");
+    } else if (!tip.hidden) {
       tip.hidden = true;
     }
+  }
+
+  // What the tooltip shows: a frame writes its text and position only when
+  // they change, since every write dirties the rail's layout.
+  let tipText = null, tipLeft = null, tipTop = null;
+  function placeTip(text, left, top) {
+    if (tip.hidden) tip.hidden = false;
+    if (text !== tipText) { tip.textContent = text; tipText = text; }
+    if (left !== tipLeft) { tip.style.left = left; tipLeft = left; }
+    if (top !== tipTop) { tip.style.top = top; tipTop = top; }
   }
 
   let lastDraw = -Infinity;
   let animationFrame = null;
 
+  // Home and Command cover the rail, and so does every sheet but Style &
+  // sound: the others lay a blurred scrim over the whole window, while that
+  // one has none and sits beside the rail.
   function railVisible() {
+    const sheet = document.body.dataset?.sheet;
     return !document.hidden && width > 0 && height > 0 &&
+      !(sheet && sheet !== "music") &&
       !document.body.classList.contains("workspace-active") &&
       !document.body.classList.contains("command-active");
   }
@@ -17411,6 +17468,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
 
   function loadResult(result) {
     if (!result?.ok) {
+      lastRead = null;
       storeNote = null;
       buildGraph([], [], {
         status: "unavailable",
@@ -17422,7 +17480,40 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     // An empty read may carry why: a store file whose session schema is
     // missing. The empty card shows the note instead of "no recent sessions".
     storeNote = typeof result.note === "string" && result.note ? result.note : null;
+    const sessions = Array.isArray(result.sessions) ? result.sessions : [];
+    lastRead = { sessions, ids: new Set(sessions.map((session) => session.id)), at: performance.now() };
     buildGraph(result.sessions, result.todos);
+  }
+
+  // Tool activity arrives every couple of seconds while agents work, and each
+  // push already carries the store's todo list. A full eyes:state read (the
+  // sessions, 300 diffs and a walk of the screenshot folder) is only needed
+  // for a session this rail has not read yet, or once FULL_READ_MS has passed;
+  // otherwise the graph is rebuilt from the pushed todos and the sessions of
+  // the last read, each touched session carrying its newest activity time.
+  const FULL_READ_MS = 15000;
+  let lastRead = null;
+  function takeActivity(data) {
+    const items = Array.isArray(data?.activity) ? data.activity : [];
+    if (!Array.isArray(data?.todos) || !lastRead || performance.now() - lastRead.at >= FULL_READ_MS ||
+      items.some((item) => item?.sessionId != null && !lastRead.ids.has(item.sessionId))) {
+      load().catch(() => {});
+      return;
+    }
+    const touched = new Map();
+    for (const item of items) {
+      const at = Number(item?.time);
+      if (item?.sessionId != null && Number.isFinite(at)) touched.set(item.sessionId, Math.max(touched.get(item.sessionId) ?? -Infinity, at));
+    }
+    if (touched.size) {
+      // Copies, not edits: the read's rows may be shared with other surfaces.
+      const sessions = lastRead.sessions.map((session) => {
+        const at = touched.get(session.id);
+        return at > (Number(session.timeUpdated) || 0) ? { ...session, timeUpdated: at } : session;
+      });
+      lastRead = { ...lastRead, sessions };
+    }
+    buildGraph(lastRead.sessions, data.todos);
   }
 
   // The rail's pinned state is a preference: it must survive a reload, and the
@@ -17478,10 +17569,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       setKbdFocus(null);
       activeSessionId = null;
       sessionSlots = new Map();
+      lastRead = null;
       load().catch(() => {});
     });
     if (typeof MutationObserver !== "undefined") {
-      new MutationObserver(syncAnimation).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+      new MutationObserver(syncAnimation).observe(document.body, { attributes: true, attributeFilter: ["class", "data-sheet"] });
     }
     // The rail animates its width; the canvas bitmap must follow or the tree
     // renders stretched while expanding.
@@ -17529,8 +17621,10 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       checkpoints = data ?? {};
     });
     window.mefiStudio?.onEyesActivity?.((data) => {
+      // Rebuild before the pulses: a pulse holds node objects, and a rebuild
+      // replaces every one of them.
+      if (data.todos) takeActivity(data);
       for (const item of data.activity ?? []) spawnPulse(item.sessionId);
-      if (data.todos) load().catch(() => {});
     });
     window.mefiStudio?.onAssistant?.((payload) => applyAssistant(payload));
     try {
@@ -18515,6 +18609,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   }
 
   function refreshGraph() {
+    state.calmFrames = 0; // a rebuild can change anything on screen
     const profiler = globalThis.window?.MefiProfiler;
     const span = profiler?.begin("command.graph");
     try { return refreshGraphImpl(); }
@@ -20589,6 +20684,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   }
 
   function onAssistantEvent(payload) {
+    state.calmFrames = 0;
     const applied = window.MefiTree?.applyAssistant?.(payload) ?? Promise.resolve();
     refreshAssistantCache();
     updateAssistantPill();
@@ -21284,6 +21380,39 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return paints;
   }
 
+  // The extra glow, the crystal's gem and the glass wash as unit-space paints,
+  // cached per context like orbPaints. The node's path stays in screen space;
+  // fillUnit fills it under translate(p) and scale(radius), which maps the
+  // unit paint onto it.
+  function surfacePaint(ctx, kind, tint, lit) {
+    const contexts = state.surfacePaintCache ??= new WeakMap();
+    let cache = contexts.get(ctx);
+    if (!cache) { cache = new Map(); contexts.set(ctx, cache); }
+    const key = `${kind}|${tint.join(",")}|${Boolean(lit)}`;
+    let paint = cache.get(key);
+    if (paint) return paint;
+    if (kind === "glow") {
+      paint = ctx.createRadialGradient(0, 0, 0.25, 0, 0, lit ? 2.25 : 1.8);
+      paint.addColorStop(0, rgba(tint, lit ? 0.32 : 0.16));
+      paint.addColorStop(0.45, rgba(tint, lit ? 0.14 : 0.05));
+      paint.addColorStop(1, rgba(tint, 0));
+    } else if (kind === "gem") {
+      paint = ctx.createLinearGradient(-1, -1, 1, 1);
+      paint.addColorStop(0, rgba(tint, 0.8)); paint.addColorStop(0.45, rgba(tint, 0.28)); paint.addColorStop(1, "rgba(12,19,31,0.96)");
+    } else {
+      paint = ctx.createLinearGradient(-1, -1, 1, 1);
+      paint.addColorStop(0, rgba(tint, lit ? 0.42 : 0.22)); paint.addColorStop(0.55, "rgba(31,43,59,0.15)"); paint.addColorStop(1, rgba(tint, 0.06));
+    }
+    if (cache.size >= 128) cache.delete(cache.keys().next().value);
+    cache.set(key, paint);
+    return paint;
+  }
+  function fillUnit(ctx, paint, p, radius) {
+    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius);
+    ctx.fillStyle = paint; ctx.fill();
+    ctx.restore();
+  }
+
   // ---------- the Void collection's node styles ----------
   // The orbs' frame budget applies: every gradient (the conic accretion disc
   // included) is a unit-space paint cached per context, tint and theme hue;
@@ -21480,11 +21609,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     node._extraGlow = state.extraGlow === true;
     if (node._extraGlow) {
       const spread = radius * (active || selected ? 2.25 : 1.8);
-      const glow = ctx.createRadialGradient(p.x, p.y, radius * 0.25, p.x, p.y, spread);
-      glow.addColorStop(0, rgba(tint, active || selected ? 0.32 : 0.16));
-      glow.addColorStop(0.45, rgba(tint, active || selected ? 0.14 : 0.05));
-      glow.addColorStop(1, rgba(tint, 0));
-      ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(p.x, p.y, spread, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(p.x, p.y, spread, 0, Math.PI * 2);
+      fillUnit(ctx, surfacePaint(ctx, "glow", tint, active || selected), p, radius);
     }
     const style = state.nodeStyle ?? "orbs";
     if (style === "halo") {
@@ -21497,12 +21623,15 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       ctx.restore(); return;
     }
     if (style === "crystal") {
-      const points = Array.from({ length: 6 }, (_, index) => ({ x: p.x + Math.cos(index * Math.PI / 3 - Math.PI / 2) * radius, y: p.y + Math.sin(index * Math.PI / 3 - Math.PI / 2) * radius }));
-      ctx.beginPath(); points.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y)); ctx.closePath();
-      const gem = ctx.createLinearGradient(p.x - radius, p.y - radius, p.x + radius, p.y + radius);
-      gem.addColorStop(0, rgba(tint, 0.8)); gem.addColorStop(0.45, rgba(tint, 0.28)); gem.addColorStop(1, "rgba(12,19,31,0.96)");
-      ctx.fillStyle = gem; ctx.fill(); ctx.strokeStyle = rgba(tint, active || selected ? 0.95 : 0.6); ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke();
-      ctx.beginPath(); for (const point of points.filter((_, index) => index % 2 === 0)) { ctx.moveTo(p.x, p.y); ctx.lineTo(point.x, point.y); }
+      ctx.beginPath();
+      for (let index = 0; index < 6; index += 1) {
+        const x = p.x + Math.cos(index * Math.PI / 3 - Math.PI / 2) * radius, y = p.y + Math.sin(index * Math.PI / 3 - Math.PI / 2) * radius;
+        if (index) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+      }
+      ctx.closePath();
+      fillUnit(ctx, surfacePaint(ctx, "gem", tint, false), p, radius); ctx.strokeStyle = rgba(tint, active || selected ? 0.95 : 0.6); ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke();
+      ctx.beginPath();
+      for (let index = 0; index < 6; index += 2) { ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + Math.cos(index * Math.PI / 3 - Math.PI / 2) * radius, p.y + Math.sin(index * Math.PI / 3 - Math.PI / 2) * radius); }
       ctx.strokeStyle = rgba(tint, 0.35); ctx.lineWidth = 0.7; ctx.stroke();
       ctx.restore(); return;
     }
@@ -21531,9 +21660,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     if (style === "glass") {
       traceNodeSurface(ctx, "circle", p.x, p.y, radius);
       ctx.fillStyle = "#172331"; ctx.fill();
-      const glass = ctx.createLinearGradient(p.x - radius, p.y - radius, p.x + radius, p.y + radius);
-      glass.addColorStop(0, rgba(tint, active || selected ? 0.42 : 0.22)); glass.addColorStop(0.55, "rgba(31,43,59,0.15)"); glass.addColorStop(1, rgba(tint, 0.06));
-      ctx.fillStyle = glass; ctx.fill(); ctx.strokeStyle = rgba(tint, selected ? 0.95 : active ? 0.72 : 0.42); ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke();
+      fillUnit(ctx, surfacePaint(ctx, "glass", tint, active || selected), p, radius); ctx.strokeStyle = rgba(tint, selected ? 0.95 : active ? 0.72 : 0.42); ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke();
       ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, radius - 3), Math.PI * 1.13, Math.PI * 1.6);
       ctx.strokeStyle = "rgba(231,243,255,0.55)"; ctx.lineWidth = 1; ctx.stroke();
       ctx.restore(); return;
@@ -22454,6 +22581,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   // `kind` shapes the marker: say · send (→) · receive (←) · think · done · error.
   function say(node, text, { kind = "say", ttl = SPEECH_TTL, tint = null, delay = 0 } = {}) {
     if (!state.bubbles || !node || !text) return null;
+    state.calmFrames = 0;
     const id = typeof node === "string" ? node : node.id;
     if (!id) return null;
     if (delay > 0) {
@@ -22788,24 +22916,30 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   // log), and a worker's stdout arrives here a line at a time, a dozen a
   // second with several running. A push after a quiet FEED_PUSH_MS paints at
   // once; pushes inside that window share one trailing paint, so a burst
-  // costs at most four rail rebuilds a second instead of one per line.
+  // costs at most four rail rebuilds a second instead of one per line. The
+  // graph pushes (the board, the store's todos, checkpoints; up to once a
+  // second per running job) share their refreshGraph the same way.
   const FEED_PUSH_MS = 250;
-  let feedPaintTimer = 0;
-  let feedPaintedAt = 0;
-  function paintFeedSoon() {
-    if (feedPaintTimer) return;
-    const wait = feedPaintedAt + FEED_PUSH_MS - Date.now();
-    if (wait <= 0) {
-      feedPaintedAt = Date.now();
-      renderFeed();
-      return;
-    }
-    feedPaintTimer = setTimeout(() => {
-      feedPaintTimer = 0;
-      feedPaintedAt = Date.now();
-      if (state.active) renderFeed();
-    }, wait);
+  function coalescedPush(run) {
+    let timer = 0;
+    let ranAt = 0;
+    return () => {
+      if (timer) return;
+      const wait = ranAt + FEED_PUSH_MS - Date.now();
+      if (wait <= 0) {
+        ranAt = Date.now();
+        run();
+        return;
+      }
+      timer = setTimeout(() => {
+        timer = 0;
+        ranAt = Date.now();
+        if (state.active) run();
+      }, wait);
+    };
   }
+  const paintFeedSoon = coalescedPush(() => renderFeed());
+  const refreshGraphSoon = coalescedPush(() => refreshGraph());
 
   function feedLine(item) {
     if (item.kind === "tool") return `${item.tool ?? "tool"} ${item.file ?? ""}`.trim();
@@ -23628,6 +23762,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
 
   function onActivity(data) {
     if (!state.active) return;
+    state.calmFrames = 0;
     const now = Date.now();
     for (const item of data.activity ?? []) {
       pushFeed({ id: item.id, at: item.time, kind: "tool", tool: item.tool, file: basename(item.file), sessionId: item.sessionId });
@@ -23646,20 +23781,24 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         bell({ long: item.tool === "patch", level: 0.9 });
       } else {
         // external work (reads, greps, fetches) vaporizes into blue-white dust
-        spawnParticles(session, item.tool === "websearch" || item.tool === "webfetch" ? 18 : 10);
+        spawnParticles(session, item.tool === "websearch" || item.tool === "webfetch" ? 8 : 5);
         bell({ quick: true, level: 0.6 });
       }
     }
-    if (data.todos) refreshGraph();
+    if (data.todos) refreshGraphSoon();
     else if (state.camMode === "follow") updateFollowCamera(now, true);
   }
 
+  // A tool call throws a handful of specks, and the pool keeps the newest
+  // PARTICLE_MAX: each speck is a fill per frame, and a busy run of reads
+  // used to keep hundreds of them in the air.
+  const PARTICLE_MAX = 200;
   function spawnParticles(node, count, { gold = false, tint = null } = {}) {
     const projected = project(node);
     for (let index = 0; index < count; index += 1) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 0.4 + Math.random() * 1.6;
-      state.particles.push({
+      const particle = {
         x: projected.x,
         y: projected.y,
         vx: Math.cos(angle) * speed * (gold ? 8 : 14),
@@ -23671,9 +23810,14 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         gold,
         // "r,g,b" when the specks should carry an agent's role colour
         tint: tint ? tint.join(",") : null,
-      });
+      };
+      // The colour and the opacity at full life are fixed at birth, so a
+      // frame only sets the alpha instead of building a colour string.
+      particle.fill = particle.tint ? `rgb(${particle.tint})` : gold ? "rgb(241,220,174)" : particle.blue ? "rgb(157,183,255)" : "rgb(255,255,255)";
+      particle.peak = particle.tint || gold ? 0.9 : particle.blue ? 0.85 : 0.8;
+      state.particles.push(particle);
     }
-    if (state.particles.length > 600) state.particles.splice(0, state.particles.length - 600);
+    if (state.particles.length > PARTICLE_MAX) state.particles.splice(0, state.particles.length - PARTICLE_MAX);
   }
 
   // The tree owns the agents' flights; this surface advances them while its
@@ -23871,12 +24015,16 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   }
 
   // Animation state belongs to the scheduler, independent of graph styling.
-  // Command draws at 30 fps at rest and at the display's rate (capped near
-  // 60-75 fps) while the camera, a zoom or a drag is moving, as long as the
-  // measured frame cost leaves room for it.
+  // Command draws at 30 fps, and at the display's rate (capped near 60-75
+  // fps) while the camera, a zoom or a drag is moving, as long as the
+  // measured frame cost leaves room for it. Once REST_AFTER_FRAMES frames in a
+  // row have shown nothing moving but a slow sky (sceneAtRest), it draws about
+  // ten times a second; any input or data push ends the rest (wakeFrames).
   const AMBIENT_FRAME_MS = 30;
   const HOT_FRAME_MS = 12;
   const HOT_FRAME_BUDGET_MS = 9;
+  const REST_FRAME_MS = 96; // just under six ticks at 60 Hz
+  const REST_AFTER_FRAMES = 30;
   let lastFrameAt = 0;
   let frameRequest = 0;
   function frame(time) {
@@ -23890,7 +24038,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     // tick that missed a 33 ms gate cost a whole extra tick — a 50 ms hitch
     // that read as judder in every camera glide.
     const hot = state.motionHot && Number.isFinite(state.frameCost) && state.frameCost < HOT_FRAME_BUDGET_MS;
-    if (!document.hidden && time - lastFrameAt >= (hot ? HOT_FRAME_MS : AMBIENT_FRAME_MS)) {
+    const resting = !hot && state.calmFrames >= REST_AFTER_FRAMES;
+    if (!document.hidden && time - lastFrameAt >= (hot ? HOT_FRAME_MS : resting ? REST_FRAME_MS : AMBIENT_FRAME_MS)) {
       lastFrameAt = time;
       const profiler = globalThis.window?.MefiProfiler;
       const span = profiler?.begin("command.frame");
@@ -24214,12 +24363,23 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const diagonal = Math.hypot(width, height);
     const clock = still ? 0 : time;
     const breathe = still ? 0.5 : (Math.sin(time / 14000) + 1) / 2;
-    const skyTint = backdrop.map((channel, index) => Math.round(channel * 0.95 + accent[index] * 0.05));
-    const sky = ctx.createLinearGradient(0, 0, 0, height);
-    sky.addColorStop(0, rgb(skyTint));
-    sky.addColorStop(0.55, rgb(backdrop));
-    sky.addColorStop(1, rgb(backdrop.map((channel) => Math.round(channel * 0.97))));
-    ctx.fillStyle = sky;
+    // The sky and the vignette only change with the window and the palette:
+    // their gradients are built once per size and colours, per canvas.
+    const skyKey = `${width}x${height}|${backdrop}|${accent}`;
+    let skyPaints = state.skyPaints;
+    if (skyPaints?.key !== skyKey || skyPaints.ctx !== ctx) {
+      const skyTint = backdrop.map((channel, index) => Math.round(channel * 0.95 + accent[index] * 0.05));
+      const sky = ctx.createLinearGradient(0, 0, 0, height);
+      sky.addColorStop(0, rgb(skyTint));
+      sky.addColorStop(0.55, rgb(backdrop));
+      sky.addColorStop(1, rgb(backdrop.map((channel) => Math.round(channel * 0.97))));
+      const outer = diagonal / 2;
+      const vignette = ctx.createRadialGradient(width / 2, height / 2, outer * 0.45, width / 2, height / 2, outer);
+      vignette.addColorStop(0, rgba(backdrop, 0));
+      vignette.addColorStop(1, rgba(backdrop, 0.55));
+      skyPaints = state.skyPaints = { key: skyKey, ctx, sky, vignette };
+    }
+    ctx.fillStyle = skyPaints.sky;
     ctx.fillRect(0, 0, width, height);
     const nebula = (x, y, r, triple, alpha) => {
       if (alpha <= 0.002) return;
@@ -24443,11 +24603,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     ctx.fillStyle = coreGlow;
     ctx.fillRect(core.x - coreR, core.y - coreR, coreR * 2, coreR * 2);
     // vignette: the constellation sits in the middle of the frame, the edges fall away
-    const outer = diagonal / 2;
-    const vignette = ctx.createRadialGradient(width / 2, height / 2, outer * 0.45, width / 2, height / 2, outer);
-    vignette.addColorStop(0, rgba(backdrop, 0));
-    vignette.addColorStop(1, rgba(backdrop, 0.55));
-    ctx.fillStyle = vignette;
+    ctx.fillStyle = skyPaints.vignette;
     ctx.fillRect(0, 0, width, height);
   }
 
@@ -25026,6 +25182,64 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return state.cardStyle;
   }
 
+  // Skies that drift slowly enough to draw ten times a second unchanged to the
+  // eye: a few tenths of a pixel of drift and about a hundredth of a star's
+  // alpha per rest frame. Dust's motes, embers, fireflies and the deep-space
+  // meteor move further than that and keep the ambient pace.
+  const REST_SCENES = new Set(["minimal", "grid", "nebula", "aurora", "bokeh"]);
+  // Whether this frame showed nothing moving but such a sky and the hub's slow
+  // breathing: no glide, zoom, drag, orbit or refit, no pulse, speck, trail,
+  // speech or done-hold, no agent or running work, no node growing, leaving
+  // or easing its lift, no sound driving the picture. Whatever might animate
+  // counts as motion.
+  function sceneAtRest(projected, runningIds, still, audioLinked) {
+    if (state.motionHot || state.cameraMoving || state.panning || state.rotating || state.morph || state.lifeHot || state.farHold) return false;
+    if (state.zoomTarget != null || Number.isFinite(state.fitTarget)) return false;
+    if (state.pulses.length || state.particles.length || state.agentTrails?.size || state.speech?.size || state.deferred?.length || state.doneHold?.size) return false;
+    if (runningIds?.size) return false;
+    if (!still) {
+      if (Math.abs(state.orbitVel ?? 0) > 1e-5) return false;
+      if (audioLinked || state.reactive && (state.inputStream || state.localAudio)) return false;
+      if (state.camMode === "follow" && state.followZoomTarget != null && Math.abs(state.followZoomTarget - state.zoom) > 0.003) return false;
+      if (!REST_SCENES.has(activeBackdrop())) return false;
+    }
+    const now = Date.now();
+    for (const fx of state.fx?.values() ?? []) {
+      if (fx.absorbAt != null || fx.resumeAt != null || fx.builder) return false;
+      if (Number.isFinite(fx.bornAt) && now - fx.bornAt < NODE_GROW_MS) return false;
+    }
+    // A card keeps its lift only while above 0; one drawn this frame at
+    // anything short of 1 is still easing.
+    const cardLift = state.cardLift;
+    for (const { node } of projected) {
+      if (node.kind === "agent" || node.dying || node.doneHold || node.state === "active") return false;
+      if (node._workLabel === "Running" || node._workLabel === "Next") return false;
+      if (node._lift != null && node._lift !== 0 && node._lift !== 1) return false;
+      if (node._callout && cardLift?.has(node.id) && cardLift.get(node.id) !== 1) return false;
+    }
+    return true;
+  }
+  // Ends a rest: the next frame comes at the ambient pace (or sooner).
+  function wakeFrames() {
+    state.calmFrames = 0;
+  }
+
+  // A pulse's head glow (see drawFrame) and its comet tail's two stops,
+  // built once per pulse colour instead of parsed every frame.
+  const PULSE_GLOW_PX = 0.8;
+  const PULSE_GLOW_ALPHA = 0.3;
+  const pulseTails = new Map();
+  function pulseTail(color) {
+    let tail = pulseTails.get(color);
+    if (!tail) {
+      const [red, green, blue] = hexToRgb(color);
+      tail = { from: `rgba(${red},${green},${blue},0)`, to: `rgba(${red},${green},${blue},0.55)` };
+      if (pulseTails.size >= 64) pulseTails.clear();
+      pulseTails.set(color, tail);
+    }
+    return tail;
+  }
+
   function drawFrame(time) {
     // One clock per frame: how long since the last draw, clamped to 50 ms, as
     // a hidden tab, an open sheet or a held picker pauses the loop and
@@ -25232,10 +25446,10 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         const tailT = Math.max(0, t - 0.18);
         const tx = from.x + (to.x - from.x) * tailT;
         const ty = from.y + (to.y - from.y) * tailT;
-        const [pr, pg, pb] = hexToRgb(pulse.color ?? "#a9ffcd");
+        const tail = pulseTail(pulse.color ?? "#a9ffcd");
         const trail = ctx.createLinearGradient(tx, ty, x, y);
-        trail.addColorStop(0, `rgba(${pr},${pg},${pb},0)`);
-        trail.addColorStop(1, `rgba(${pr},${pg},${pb},0.55)`);
+        trail.addColorStop(0, tail.from);
+        trail.addColorStop(1, tail.to);
         ctx.strokeStyle = trail;
         ctx.lineWidth = pulse.small ? 0.8 : 1.2;
         ctx.lineCap = "round";
@@ -25244,15 +25458,22 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         ctx.lineTo(x, y);
         ctx.stroke();
       }
-      ctx.beginPath();
-      ctx.arc(x, y, pulse.small ? 1.5 : 2.2 + musicBands.bass * 0.5, 0, Math.PI * 2);
-      ctx.fillStyle = pulse.color ?? "#a9ffcd";
+      const dot = pulse.small ? 1.5 : 2.2 + musicBands.bass * 0.5;
       if (!still) {
-        ctx.shadowColor = pulse.glow ?? "#57ff9a";
-        ctx.shadowBlur = 3;
+        // The glow: a wider disc at a third of the alpha under the head. A
+        // canvas shadow (shadowBlur) cost a separate blur pass per pulse.
+        const alpha = ctx.globalAlpha;
+        ctx.globalAlpha = alpha * PULSE_GLOW_ALPHA;
+        ctx.fillStyle = pulse.glow ?? "#57ff9a";
+        ctx.beginPath();
+        ctx.arc(x, y, dot + PULSE_GLOW_PX, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = alpha;
       }
+      ctx.beginPath();
+      ctx.arc(x, y, dot, 0, Math.PI * 2);
+      ctx.fillStyle = pulse.color ?? "#a9ffcd";
       ctx.fill();
-      ctx.shadowBlur = 0;
     }
     ctx.lineCap = "butt";
     if (still) state.pulses = [];
@@ -25262,22 +25483,25 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     // Particles were tuned at 0.016 of their velocity per 30 fps frame.
     const frames30 = still ? 0 : dt * 30;
     const step = 0.016 * frames30;
+    // One fill per speck and no canvas shadow: shadowBlur (2) ran a separate
+    // blur pass for every speck. The light that glow added is kept by drawing
+    // the speck a hair wider and, where its core is faint, a little brighter
+    // (fitted against Skia's own shadowBlur output).
+    const particleAlpha = ctx.globalAlpha;
     for (const particle of state.particles) {
       particle.x += particle.vx * step;
       particle.y += particle.vy * step;
       particle.vy += 6 * step;
       particle.life -= particle.decay * frames30;
       const life = Math.max(0, particle.life);
+      const alpha = life * (particle.peak ?? 0.8);
+      ctx.globalAlpha = particleAlpha * (still ? alpha : Math.min(1, alpha + 0.9 * alpha * (1 - alpha)));
+      ctx.fillStyle = particle.fill ?? "rgb(255,255,255)";
       ctx.beginPath();
-      ctx.arc(particle.x, particle.y, Math.max(0, particle.size * life), 0, Math.PI * 2);
-      ctx.fillStyle = particle.tint ? `rgba(${particle.tint},${life * 0.9})` : particle.gold ? `rgba(241,220,174,${life * 0.9})` : particle.blue ? `rgba(157,183,255,${life * 0.85})` : `rgba(255,255,255,${life * 0.8})`;
-      if (!still) {
-        ctx.shadowColor = particle.tint ? `rgb(${particle.tint})` : particle.gold ? "#e6c98d" : particle.blue ? "#9db7ff" : "#ffffff";
-        ctx.shadowBlur = 2;
-      }
+      ctx.arc(particle.x, particle.y, Math.max(0, particle.size * life) + (still ? 0 : 0.1), 0, Math.PI * 2);
       ctx.fill();
-      ctx.shadowBlur = 0;
     }
+    ctx.globalAlpha = particleAlpha;
     if (still) state.particles = [];
 
     // wakes: what a flying agent leaves behind, under the orbs
@@ -25364,6 +25588,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     ctx.restore();
     if (far !== ctx) far.restore();
     syncFarLayer(liveFocusIds);
+    state.calmFrames = sceneAtRest(projected, runningIds, still, audioLinked) ? (state.calmFrames ?? 0) + 1 : 0;
   }
 
   // ---------- labels ----------
@@ -25486,6 +25711,10 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return area.w < 800 || area.h < 480 ? 6 : 8;
   }
 
+  // Equal-priority labels keep their locale order. String#localeCompare with
+  // no locale compares exactly like a default Intl.Collator, but builds one
+  // per call, and this sort runs every frame.
+  const labelIdCollator = typeof Intl !== "undefined" && Intl.Collator ? new Intl.Collator() : { compare: (a, b) => a.localeCompare(b) };
   function labelCandidates(projected) {
     const mode = state.labels;
     const selectedId = state.selected?.id ?? null;
@@ -25545,7 +25774,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       list.push({ node, p: item.p, priority });
     }
     // Stable ties keep Orbit from constantly swapping the labels being read.
-    list.sort((a, b) => a.priority - b.priority || String(a.node.id).localeCompare(String(b.node.id)));
+    list.sort((a, b) => a.priority - b.priority || labelIdCollator.compare(String(a.node.id), String(b.node.id)));
     if (mode === "auto") {
       let quietSessions = 0;
       const budget = labelBudget();
@@ -27741,6 +27970,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       return;
     }
     state.active = true;
+    state.calmFrames = 0;
     state.lastInput = Date.now();
     state.frameError = false;
     state.ambient = !force;
@@ -27914,7 +28144,12 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     if (pickerHeld()) return; // an opening picker gets the main thread; the next tick catches up
     if (document.hidden) return; // hidden app: make no fetch; the visibilitychange listener snaps the view back on show
     refreshCommandBacklog();
+    // This periodic catch-up alone does not end a rest (refreshGraph wakes for
+    // pushes and input): anything it brings that moves shows in the next frame's
+    // sceneAtRest, at most one rest frame later.
+    const calmFrames = state.calmFrames;
     refreshGraph();
+    state.calmFrames = calmFrames;
     checkCollisions();
     updateTelemetry();
     if (autopilotJobs(state.assistant).length || chatMode()) state.feedDirty = true; // "running: … · Ns" and the chat status line age between status pushes
@@ -27957,16 +28192,23 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const bitmapW = Math.round(width * dpr);
     const bitmapH = Math.round(height * dpr);
     const fit = (canvas, ctx) => {
-      if (canvas.width !== bitmapW || canvas.height !== bitmapH) {
+      const cleared = canvas.width !== bitmapW || canvas.height !== bitmapH;
+      if (cleared) {
         canvas.width = bitmapW;
         canvas.height = bitmapH;
       }
       canvas.style.width = width + "px";
       canvas.style.height = height + "px";
       ctx.setTransform(bitmapW / width, 0, 0, bitmapH / height, 0, 0);
+      return cleared;
     };
     fit(el.canvas, el.ctx);
-    if (el.far && el.farCtx) fit(el.far, el.farCtx);
+    // A fresh opaque bitmap is black: until the next frame paints the sky it
+    // shows the theme's background, as the element's CSS background did.
+    if (el.far && el.farCtx && fit(el.far, el.farCtx)) {
+      el.farCtx.fillStyle = state.canvasPalette?.background ?? "#050507";
+      el.farCtx.fillRect(0, 0, width, height);
+    }
     el.width = width;
     el.height = height;
     state.labelWidths.clear();
@@ -28049,7 +28291,10 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       el.canvas = document.getElementById("idle-layer");
     // The far layer: the sky, and whatever a focused branch pushes behind it.
     el.far = document.getElementById("idle-layer-far");
-    el.farCtx = el.far?.getContext?.("2d") ?? null;
+    // Opaque: drawBackdrop paints the whole sky first every frame, and nothing
+    // reads the layer's transparency, so the compositor need not blend it
+    // with what lies under it.
+    el.farCtx = el.far?.getContext?.("2d", { alpha: false }) ?? null;
       el.hud = document.getElementById("idle-hud");
       if (!el.canvas) return;
       el.ctx = el.canvas.getContext("2d");
@@ -28414,9 +28659,10 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     // The broadcast carries the list that was just written. Using it skips a
     // second read that could land inside the next save and come back empty.
     window.mefiStudio?.onTasks?.(async (tasks) => {
+      state.calmFrames = 0;
       if (Array.isArray(tasks)) takeTasks(tasks);
       else await refreshTasks();
-      if (state.active) refreshGraph();
+      if (state.active) refreshGraphSoon();
     });
     window.addEventListener("resize", () => state.active && resize());
 
@@ -28596,6 +28842,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       if (state.active) renderFeed();
     });
     window.mefiStudio?.onRequests?.((requests) => {
+      state.calmFrames = 0; // a pinned request marks its node Next
       state.requests = Array.isArray(requests) ? requests : [];
       state.feedDirty = true;
       if (state.active) renderFeed();
@@ -28604,6 +28851,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     // {ok, status} — accept either shape here. The roster counts the graph
     // rebuild put in this slot survive the push (adoptAssistantStatus).
     window.mefiStudio?.onAssistantStatus?.((status) => {
+      state.calmFrames = 0;
       adoptAssistantStatus(status?.status ?? status ?? null);
       renderNewWorkControl();
       // Autopilot history (started/done/failed/paused) becomes gold "a-eyes"
@@ -28665,8 +28913,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       if (state.active) renderFeed();
     });
     window.mefiStudio?.onCheckpoints?.((data) => {
+      state.calmFrames = 0;
       state.checkpoints = data ?? {};
-      if (state.active) refreshGraph();
+      if (state.active) refreshGraphSoon();
     });
     window.mefiStudio?.onAssistant?.(onAssistantEvent);
     // The rail's click on its assistant node lands here while Command is up.
@@ -28746,6 +28995,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     )
   );
 
+  // Input anywhere in the window, and the page's own change events, end a rest
+  // before their handlers run (capture), so the answer is never a rest frame late.
+  for (const type of ["pointerdown", "pointermove", "pointerup", "wheel", "keydown", "keyup", "focusin", "resize"]) window.addEventListener(type, wakeFrames, { capture: true, passive: true });
+  for (const type of ["mefi-music-change", "mefi-theme-change", "mefi-tree-preferences", "mefi:nav", "mefi:tree-select", "mefi:assistant-focus", "mefi:project-changed"]) window.addEventListener(type, wakeFrames, true);
+  document.addEventListener?.("visibilitychange", wakeFrames);
   window.addEventListener("mefi-music-change", syncMusicNode);
   window.addEventListener("mefi-theme-change", syncGraphTheme);
   window.addEventListener("mefi-tree-preferences", (event) => applyTreePreferences(event.detail ?? {}));
@@ -33240,6 +33494,16 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   const el = {};
   let initialized = false;
   let raf = null;
+  // About 30 fps, as the tree rail draws: the gate sits under the two-tick
+  // spacing at 60 Hz, and a 120 or 144 Hz display no longer paints the sheet
+  // at its full rate. The slow turn is paced by time, as it was at 60 Hz.
+  const FRAME_MS = 30;
+  const TURN_PER_MS = 0.0009 * 60 / 1000;
+  let lastDraw = -Infinity;
+  // The focused box's glow: faint strokes, widest first, under its rim. A
+  // canvas shadow (shadowBlur 18) blurred the stroke in a separate pass.
+  const FOCUS_GLOW_WIDTHS = [36, 28.5, 21, 13.5, 6];
+  const FOCUS_GLOW_ALPHA = 0.025;
 
   // Task/snapshot refresh cadence while the sheet is open. Polls pause while
   // document.hidden and back off while a poll reads the same data, so an idle
@@ -33274,6 +33538,20 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
 
   const keywords = (text) => new Set((String(text).toLowerCase().match(/[a-z][a-z0-9_-]{3,}/g) ?? []).slice(0, 10));
 
+  // Each task's session, matched once per task and node list (load() brings
+  // fresh ones): draw() used to rescan every session's label for every task
+  // on every frame.
+  let anchors = new WeakMap();
+  let anchorNodes = null;
+  function anchorOf(task) {
+    if (anchorNodes !== state.nodes) {
+      anchors = new WeakMap();
+      anchorNodes = state.nodes;
+    }
+    if (!anchors.has(task)) anchors.set(task, anchorFor(task));
+    return anchors.get(task);
+  }
+
   function anchorFor(task) {
     const keys = keywords(`${task.title} ${task.prompt ?? ""}`);
     let best = null;
@@ -33307,6 +33585,12 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
 
   function draw(time) {
     if (el.canvas.hidden) return;
+    if (time - lastDraw < FRAME_MS) {
+      raf = requestAnimationFrame(draw);
+      return;
+    }
+    const elapsed = Number.isFinite(lastDraw) ? Math.min(100, time - lastDraw) : 0;
+    lastDraw = time;
     const ctx = el.ctx;
     ctx.clearRect(0, 0, el.width, el.height);
     ctx.fillStyle = "#030304";
@@ -33318,7 +33602,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       state.cycleIndex = (state.cycleIndex + 1) % active.length;
     }
     const focusTask = state.overview ? active[state.cycleIndex % Math.max(1, active.length)] : null;
-    const focusAnchor = focusTask ? anchorFor(focusTask) : null;
+    const focusAnchor = focusTask ? anchorOf(focusTask) : null;
     const offset = focusAnchor ? { x: focusAnchor.x * 0.6, y: 0, z: focusAnchor.z * 0.6 } : { x: 0, y: 0, z: 0 };
 
     const projected = state.nodes.map((node) => ({ node, p: project(node, offset) }));
@@ -33377,7 +33661,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
 
     boxes.clear();
     active.forEach((task, index) => {
-      const anchor = anchorFor(task);
+      const anchor = anchorOf(task);
       const fallbackAngle = (index / Math.max(1, active.length)) * Math.PI * 2;
       const position = anchor
         ? project(anchor, offset)
@@ -33415,13 +33699,19 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       const top = slot.top;
       ctx.globalAlpha = focused || !focusTask ? 1 : 0.62;
       ctx.strokeStyle = task.color ?? "#e6c98d";
-      ctx.lineWidth = focused ? 2.4 : 1.4;
-      ctx.shadowColor = focused ? task.color : "transparent";
-      ctx.shadowBlur = focused ? 18 : 0;
       ctx.beginPath();
       ctx.roundRect(left, top, BOX_WIDTH, BOX_HEIGHT, 10);
+      if (focused) {
+        const alpha = ctx.globalAlpha;
+        ctx.globalAlpha = alpha * FOCUS_GLOW_ALPHA;
+        for (const glow of FOCUS_GLOW_WIDTHS) {
+          ctx.lineWidth = glow;
+          ctx.stroke();
+        }
+        ctx.globalAlpha = alpha;
+      }
+      ctx.lineWidth = focused ? 2.4 : 1.4;
       ctx.stroke();
-      ctx.shadowBlur = 0;
       ctx.fillStyle = "rgba(8,8,11,0.82)";
       ctx.fill();
       ctx.stroke();
@@ -33443,7 +33733,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       boxes.set(task.id, { x: left, y: top, w: BOX_WIDTH, h: BOX_HEIGHT });
     });
 
-    if (!window.MefiNav?.noMotion?.()) state.angle += 0.0009;
+    if (!window.MefiNav?.noMotion?.()) state.angle += TURN_PER_MS * elapsed;
     raf = requestAnimationFrame(draw);
   }
 
@@ -33498,6 +33788,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     if (el.overlay.hidden) return;
     resize();
     cancelAnimationFrame(raf);
+    lastDraw = -Infinity;
     raf = requestAnimationFrame(draw);
     pollDelay = POLL_INTERVAL_MS;
     schedulePoll();
@@ -40161,6 +40452,22 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     applyTheme("custom", save);
     return true;
   }
+  // The palette on screen, read every frame by the tree rail and the Command
+  // view. resolvePalette runs dozens of contrast searches (about 70 µs), so
+  // the answer is kept until the theme or a custom colour changes, and every
+  // reader shares one frozen copy.
+  let paletteKey = null, paletteMemo = null;
+  function themePalette() {
+    const theme = effective.theme;
+    const custom = prefs.customColors;
+    const key = theme === "custom" ? `custom|${custom.accent}|${custom.background}|${custom.surface}|${custom.text}` : theme;
+    if (key !== paletteKey || !paletteMemo) {
+      const palette = resolvePalette(theme, custom);
+      paletteMemo = Object.freeze({ theme, ...palette, canvas: Object.freeze(palette.canvas) });
+      paletteKey = key;
+    }
+    return paletteMemo;
+  }
   // Read per node per frame by the tree rail: plain fields, no storage reads.
   function graphPreferences() { return { nodeStyle: effective.nodeStyle, nodeLayout: prefs.nodeLayout, orbitTrails: prefs.orbitTrails, extraGlow: prefs.extraGlow }; }
   function syncTreePreferences(save) {
@@ -41130,7 +41437,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   }
   window.MefiMusic = { init, open, close, status, graphPreferences, applyNodeStyle, applyNodeLayout, applyNodeEffects, getAudioElement: () => { init(); return activeDeck(); }, tune, stopRadio,
     stations: () => STATIONS.map((item) => ({ id: item.id, name: item.name, detail: item.detail, origin: item.origin, mirrors: item.mirrors.length })), setRecommender: (fn) => { recommender = typeof fn === "function" ? fn : null; render(); }, addFiles, loadSpotify, setSource, applyTheme, applyCustomColors,
-    customColors: () => ({ ...prefs.customColors }), themePalette: () => ({ theme: effective.theme, ...resolvePalette(effective.theme, prefs.customColors) }),
+    customColors: () => ({ ...prefs.customColors }), themePalette,
     // isNodeStyle is for the tree painters; the catalog feeds Settings › Community.
     isNodeStyle,
     premiumCatalog: () => ({
