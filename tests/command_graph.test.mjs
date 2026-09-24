@@ -96,6 +96,95 @@ test("the complete Command module can enter and draw while preserving the defaul
   assert.equal(window.MefiIdle.ambientZenStatus().enabled, false, "reloading preserves a disabled Zen preference");
 });
 
+test("behind Home the tree draws as slow scenery, and holds still with motion off", () => {
+  const drawn = [];
+  let still = false;
+  const state = { active: false, homeBackdrop: true, motionHot: true, frameCost: 1 };
+  const document = { hidden: false, body: { dataset: {} } };
+  const env = vm.createContext({ state, document, pickerHeld: () => false, noMotion: () => still, drawFrame: (time) => drawn.push(time), requestAnimationFrame: () => 1, console });
+  vm.runInContext(section("// Animation state belongs", "function drawFrame("), env);
+  for (let time = 100; time <= 500; time += 16.7) env.frame(time);
+  assert.equal(drawn.length, 5, "about 12 fps at rest or mid-glide: " + drawn.join(", "));
+  drawn.length = 0;
+  document.body.dataset.sheet = "tasks";
+  for (let time = 600; time <= 900; time += 16.7) env.frame(time);
+  assert.equal(drawn.length, 0, "a sheet over Home pauses the scenery");
+  delete document.body.dataset.sheet;
+  still = true;
+  for (let time = 1000; time <= 2900; time += 16.7) env.frame(time);
+  assert.equal(drawn.length, 2, "motion off: one frame a second picks up graph changes");
+  state.homeBackdrop = false;
+  drawn.length = 0;
+  env.frame(5000);
+  assert.equal(drawn.length, 0, "with neither Command nor Home asking, the loop stops");
+});
+
+test("Home's backdrop hands the canvas to Command and takes it back while Home still shows", async () => {
+  const callbacks = [], errors = [], intervals = new Set();
+  const bodyClasses = new Set();
+  const classList = { add: (name) => bodyClasses.add(name), remove: (name) => bodyClasses.delete(name), toggle: (name, on) => (on ?? !bodyClasses.has(name)) ? bodyClasses.add(name) : bodyClasses.delete(name), contains: (name) => bodyClasses.has(name) };
+  const inert = { add() {}, remove() {}, toggle() {}, contains: () => false };
+  const document = { readyState: "loading", hidden: false, addEventListener() {}, activeElement: null, querySelector: () => null, body: { dataset: {}, classList } };
+  const window = { addEventListener() {}, dispatchEvent() {}, innerWidth: 1200, innerHeight: 800 };
+  const hook = `window.__graphTest = { state, el, prepare() {
+    closeAmbience = closeViewMenu = hideTip = clearSearch = resize = renderLegend = syncViewControls = setCamMode = loadPngs = updateTelemetry = renderFeed = renderHint = bumpHud = selectNode = applyEnterParams = releaseReactiveInput = () => {};
+    refreshTasks = () => Promise.resolve();
+    refreshGraph = () => { window.__graphReads = (window.__graphReads ?? 0) + 1; };
+    drawFrame = () => {};
+    bell = ensureReactiveInput = () => {};
+  }};`;
+  const env = vm.createContext({ window, document, Promise, Date, Math, Map, Set, WeakMap, localStorage: { getItem: () => null, setItem() {} }, CustomEvent: class { constructor(type, details) { this.type = type; this.detail = details.detail; } }, requestAnimationFrame: (callback) => { callbacks.push(callback); return callbacks.length; }, cancelAnimationFrame() {}, setInterval: () => { const id = intervals.size + 1; intervals.add(id); return id; }, clearInterval: (id) => intervals.delete(id), clearTimeout() {}, console: { error: (...args) => errors.push(args) } });
+  vm.runInContext(source.replace("  window.MefiIdle = {", `${hook}\n  window.MefiIdle = {`), env);
+  const { state, el, prepare } = window.__graphTest;
+  prepare(); state.zen = false;
+  const attrs = new Map();
+  el.canvas = { hidden: true, inert: false, focus() {}, setAttribute: (name, value) => attrs.set(name, value), removeAttribute: (name) => attrs.delete(name) };
+  el.far = { hidden: true, classList: inert };
+  el.hud = { hidden: true, classList: inert, contains: () => false };
+  const idle = window.MefiIdle;
+  const backdrop = () => ({ ...idle.homeBackdropStatus() }); // copied out of the vm realm for deepEqual
+
+  assert.equal(idle.setHomeBackdrop(true), true);
+  assert.deepEqual(backdrop(), { drawing: true, wanted: true, commandActive: false });
+  assert.equal(idle.isActive(), false, "the backdrop is not Command: nav, keys and bells still read closed");
+  assert.equal(el.canvas.hidden, false);
+  assert.equal(el.canvas.inert, true, "no focus stop and no pointer behind Home's controls");
+  assert.equal(attrs.get("aria-hidden"), "true");
+  assert.ok(bodyClasses.has("home-backdrop"), "the CSS drops the canvases under the workspace layer");
+  assert.ok(el.hud.hidden, "no HUD behind Home");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.ok(window.__graphReads >= 1, "the graph is built for the backdrop");
+
+  idle.enter();
+  await state.readyPromise;
+  assert.equal(idle.isActive(), true);
+  assert.equal(backdrop().drawing, false, "Command takes the canvas over");
+  assert.equal(el.canvas.inert, false);
+  assert.equal(attrs.has("aria-hidden"), false);
+  assert.ok(!bodyClasses.has("home-backdrop"));
+  assert.ok(bodyClasses.has("command-active"));
+
+  idle.exit();
+  assert.equal(idle.isActive(), false);
+  assert.deepEqual(backdrop(), { drawing: true, wanted: true, commandActive: false }, "Home is still underneath, so the tree stays as its backdrop");
+  assert.equal(el.canvas.hidden, false);
+
+  idle.setHomeBackdrop(false);
+  assert.deepEqual(backdrop(), { drawing: false, wanted: false, commandActive: false });
+  assert.equal(el.canvas.hidden, true, "leaving Home hides the canvases again");
+  assert.equal(el.far.hidden, true);
+  assert.ok(!bodyClasses.has("home-backdrop"));
+  assert.equal(intervals.size, 0, "no refresh timer outlives the backdrop");
+
+  idle.enter();
+  await state.readyPromise;
+  idle.setHomeBackdrop(true);
+  assert.deepEqual(backdrop(), { drawing: false, wanted: true, commandActive: true }, "asked for while Command holds the canvas, it waits");
+  idle.exit();
+  assert.equal(backdrop().drawing, true, "and starts as Command lets go");
+  assert.equal(errors.length, 0, JSON.stringify(errors));
+});
+
 test("Music preview refreshes real graph snapshots while other sheets remain idle", () => {
   let reads = 0, popups = 0;
   const state = { active: true, settingsPreview: { x: 600, y: 0, w: 600, h: 800 }, assistant: {}, ambient: true, popupAt: 0 };

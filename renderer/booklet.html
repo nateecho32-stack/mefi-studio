@@ -53,6 +53,22 @@
   --tint-gold-2: rgba(113, 203, 183, 0.09);
   --tint-gold-3: rgba(113, 203, 183, 0.14);
 
+  /* ---- frost: glass over the live tree (Home, the menu, the project panel) ----
+     Mixed from the theme's own tokens, so every theme keeps its hue; the Blur
+     behind panels switch (html[data-no-blur], under "Home over the live tree")
+     makes them dense. */
+  --frost: blur(18px) saturate(1.6);
+  --frost-veil: color-mix(in srgb, var(--bg) 18%, transparent);          /* over the tree itself */
+  --frost-glass: color-mix(in srgb, var(--panel-solid) 40%, transparent); /* a top-level panel */
+  --frost-glass-strong: color-mix(in srgb, var(--panel-solid) 60%, transparent);
+  --frost-tint: color-mix(in srgb, color-mix(in srgb, var(--gold) 7%, var(--panel-solid)) 36%, transparent); /* a card inside one */
+  --frost-tint-strong: color-mix(in srgb, color-mix(in srgb, var(--gold) 8%, var(--panel-solid)) 52%, transparent);
+  --frost-tint-hover: color-mix(in srgb, color-mix(in srgb, var(--gold) 14%, var(--panel-solid)) 54%, transparent);
+  --frost-well: color-mix(in srgb, var(--bg-deep) 55%, transparent);     /* fields and counters */
+  --frost-edge: color-mix(in srgb, var(--hairline-strong) 62%, transparent);
+  --frost-edge-soft: color-mix(in srgb, var(--hairline-strong) 34%, transparent);
+  --frost-lift: 0 18px 44px -24px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
   /* ---- spacing ---- */
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px; --s6: 24px; --s7: 32px;
   --gutter: 26px;
@@ -2718,7 +2734,8 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 #workspace-sidebar-panel {
   position: absolute; inset: 0 auto 0 0; width: var(--sidebar-width); height: 100%;
   padding: 14px 16px 16px; border-left: 0; border-right: 1px solid var(--hairline-strong);
-  background: radial-gradient(120% 34% at 0 0, rgba(var(--ws-accent-rgb), 0.12), transparent 60%), var(--panel-solid);
+  background: radial-gradient(120% 34% at 0 0, rgba(var(--ws-accent-rgb), 0.12), transparent 60%), var(--frost-glass-strong);
+  backdrop-filter: var(--frost);
   color: var(--ivory); overflow-y: auto;
   overscroll-behavior: contain; scrollbar-gutter: stable; pointer-events: none;
   transform: translateX(-100%); visibility: hidden;
@@ -2806,6 +2823,70 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
   #workspace-sidebar-panel { transition: none; }
 }
 @media (max-width: 650px) { .ws-section-label { display: flex; padding: 2px 6px 6px; } }
+/* ---- Home over the live tree ------------------------------------------------
+   idle.js draws the node tree behind Home as scenery (startHomeBackdrop, which
+   sets body.home-backdrop) and the workspace layer itself is clear, so Home is
+   glass over the tree. The top-level panels (the glance tiles, the
+   conversation, Your work, the connection pill, the setup card, the project
+   panel and the menu) frost what is behind them. What sits inside a panel
+   (the composer, messages, cards, the backlog) is a lighter tint over that
+   frost with no filter of its own: a nested backdrop-filter would only see its
+   own panel. Blur behind panels off (html[data-no-blur]) makes every surface
+   dense and unfiltered. The ids outrank the theme rules in music.css on
+   purpose: this is Home's one skin, in every theme. */
+body.home-backdrop :is(#idle-layer, #idle-layer-far) { z-index: calc(var(--z-workspace) - 1); pointer-events: none; }
+html[data-no-blur] {
+  --frost: none;
+  --frost-glass: color-mix(in srgb, var(--panel-solid) 94%, transparent);
+  --frost-glass-strong: var(--panel-solid);
+  --frost-tint: color-mix(in srgb, var(--gold) 6%, var(--panel-solid));
+  --frost-tint-strong: color-mix(in srgb, var(--gold) 8%, var(--panel-solid));
+  --frost-tint-hover: color-mix(in srgb, var(--gold) 13%, var(--panel-solid));
+  --frost-well: var(--bg-deep);
+}
+#workspace-layer { background: transparent; }
+/* The veil keeps the tree a backdrop: a little deeper behind the headline,
+   lighter lower down where the panels already frost it. */
+#workspace-layer .ws-main { background: radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent), var(--frost-veil) 260px); }
+:root[data-studio-theme-tier="premium"] #workspace-layer .ws-main { background: radial-gradient(ellipse at 12% 100%, rgba(var(--accent-2-rgb), .07), transparent 46%), radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent), var(--frost-veil) 260px); }
+#workspace-layer :is(.ws-topbar, .ws-heading) { text-shadow: 0 1px 14px rgba(0, 0, 0, 0.6); }
+#workspace-layer .ws-topbar { border-color: var(--frost-edge-soft); }
+
+/* top-level panels: the frost itself */
+#workspace-layer :is(.ws-dash-tile, .ws-conversation, .ws-work, .ws-connection, .walkthrough-invitation:not(.community-invitation)) {
+  background: var(--frost-glass); border: 1px solid var(--frost-edge); box-shadow: var(--frost-lift);
+  backdrop-filter: var(--frost);
+}
+#workspace-layer .ws-dash-tile:is(:hover, :focus-visible) { background: var(--frost-tint-hover); border-color: var(--hairline-strong); }
+#workspace-layer .ws-dash-service:hover { background: var(--frost-glass); border-color: var(--frost-edge); }
+#workspace-layer .ws-dash-tile[data-tone="warn"] { border-color: rgba(230, 168, 90, 0.55); }
+#workspace-layer .ws-dash-tile[data-tone="held"] { border-color: rgba(200, 120, 120, 0.5); }
+#workspace-layer .ws-connection { color: var(--ivory); }
+/* The conversation and Your work become the two panes they already were,
+   each with its own frosted pane instead of a rule between them. */
+#workspace-layer .ws-conversation { border-radius: var(--r-lg); padding: 2px 16px 12px; }
+#workspace-layer .ws-work { border-radius: var(--r-lg); padding: 4px 14px 12px; }
+#workspace-layer :is(.ws-companion-bar, .ws-work-tabs) { border-color: var(--frost-edge-soft); }
+#workspace-layer .ws-conversation > .ws-activity { border-color: var(--frost-edge-soft); }
+
+/* inside a panel: tints over its frost */
+#workspace-layer :is(.ws-composer, .ws-backlog) { background: var(--frost-tint-strong); border-color: var(--frost-edge); }
+#workspace-layer .ws-composer:focus-within { border-color: var(--ws-accent); }
+#workspace-layer .ws-message.user { background: var(--frost-tint); border-color: var(--frost-edge-soft); }
+#workspace-layer :is(.ws-work-card, .ws-idea-card) { background: var(--frost-tint); border-top-color: var(--frost-edge-soft); border-right-color: var(--frost-edge-soft); border-bottom-color: var(--frost-edge-soft); }
+#workspace-layer .ws-work-card:is([data-stage="running"], [data-status="active"], [data-status="running"]) { background: color-mix(in srgb, color-mix(in srgb, var(--gold) 16%, var(--panel-solid)) 56%, transparent); }
+#workspace-layer .ws-work-card:hover { background: var(--frost-tint-hover); }
+#workspace-layer :is(.ws-work-search, .ws-modes, .ws-work-tabs button span) { background: var(--frost-well); }
+#workspace-layer .ws-work-search { border-color: var(--frost-edge); }
+#workspace-layer .ghost { border-color: var(--frost-edge); }
+#workspace-layer .ghost:hover { background: var(--tint-gold-2); border-color: var(--hairline-strong); }
+
+/* the project panel's rows, over its own frost */
+#workspace-sidebar .ws-project.selected { background: var(--frost-tint-strong); }
+#workspace-sidebar .ws-project-icon { background: var(--frost-well); }
+
+/* Stacked (a narrow window), Your work is a full pane under the conversation. */
+@media (max-width: 960px) { #workspace-layer .ws-work { padding: 12px 14px; } }
 #tasks-overlay .explorer-grid { grid-template-columns: minmax(270px,31%) minmax(0,1fr); }
 /* The overview follows saved plan and conversation relationships. Nested rows
    retain the original task controls without competing with the goal cards. */
@@ -4307,8 +4388,8 @@ html[data-shell="rail"][data-rail-pinned] { --shell-rail-w: var(--shell-rail-ope
   position: fixed; top: 0; bottom: 0; left: 0; z-index: var(--z-shell);
   width: var(--shell-rail-w); box-sizing: border-box;
   display: flex; flex-direction: column; gap: 4px; padding: 10px 8px;
-  background: var(--glass-hard); border-right: 1px solid var(--hairline);
-  backdrop-filter: var(--blur);
+  background: var(--frost-glass-strong); border-right: 1px solid var(--hairline);
+  backdrop-filter: var(--frost);
   /* Only the section list scrolls (below); the brand, the foot and the pin
      stay on screen however tall the open rail grows. */
   overflow: hidden;
@@ -6119,10 +6200,10 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
           </div>
           <div class="settings-you-switches">
             <label class="switch" id="settings-companion-motion" title="Your companion floats and blinks beside the conversation. Calm and Off keep it still."><input id="workspace-motion" type="checkbox" checked><span class="track"></span><span>Let your companion move</span></label>
-            <label class="switch" title="Blur what sits behind every sheet and menu. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
+            <label class="switch" title="Blur what sits behind every sheet, menu and Home panel. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
             <label class="switch" title="On: every launch lands on Your workspace. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span>Open Workspace on launch</span></label>
           </div>
-          <p class="muted">Blur behind panels applies to every sheet and menu. With Open Workspace on launch off, Studio opens straight into Command view after the project chooser. All of this stays on this computer.</p>
+          <p class="muted">Blur behind panels applies to every sheet, menu and Home panel. With Open Workspace on launch off, Studio opens straight into Command view after the project chooser. All of this stays on this computer.</p>
         </details>
         <details class="settings-optional settings-card" id="settings-community"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-community"/></svg></span><span class="settings-summary-text"><b>Community</b><span>The Void Engine Discord: builders, model setups and the members' Void collection</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
           <section class="community-showcase" id="community-showcase" aria-labelledby="community-showcase-title"><div class="community-showcase-copy"><span class="community-showcase-kicker">Void collection</span><strong id="community-showcase-title">Four themes, three node styles</strong><span class="community-showcase-state" id="community-showcase-state" data-unlocked="false">For members of the Void Engine Discord</span><button type="button" class="primary mini community-choose" id="community-choose" title="Open Style &amp; sound at the Void collection" hidden>Choose a Void theme</button></div><div class="community-showcase-items" id="community-showcase-items" aria-hidden="true"></div></section>
@@ -17658,6 +17739,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
 // After five quiet minutes it opens itself in ambient mode; D (or the dock, the
 // rail button, the palette) opens it as the menu. Keys, layers and every
 // destination belong to nav.js — this file owns the canvas and its HUD.
+// Behind Home it draws the same tree as scenery for the workspace's frosted
+// panels (startHomeBackdrop): no HUD, no input, no text, a slow cadence.
 (function () {
   "use strict";
 
@@ -17923,7 +18006,12 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     analyser: null,
     inputStream: null,
     inputPending: null, // source kind of the in-flight capture request
-    timers: { idle: null, refresh: null },
+    timers: { idle: null, refresh: null, backdrop: null },
+    // Home's backdrop (startHomeBackdrop): the tree drawn as scenery behind
+    // the workspace. `homeBackdrop` is true while it draws; `homeBackdropWanted`
+    // remembers that Home asked for it while Command held the canvas.
+    homeBackdrop: false,
+    homeBackdropWanted: false,
     lastFrame: 0,
     lastInput: Date.now(),
     checkpoints: {},
@@ -20981,6 +21069,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       state.graphFrame = { x: 28, y: 28, w: Math.max(1, el.width - 56), h: Math.max(1, el.height - 56) };
       return { ...state.graphFrame };
     }
+    // Behind Home there is no HUD to keep clear: the tree spreads edge to edge.
+    if (state.homeBackdrop && !state.active) {
+      state.graphFrame = { x: 0, y: 0, w: Math.max(1, el.width), h: Math.max(1, el.height) };
+      return { ...state.graphFrame };
+    }
     const now = Date.now();
     if (state.graphArea && now - state.graphAreaAt < 250) return state.graphArea;
     const visibleBox = (node) => {
@@ -23877,10 +23970,19 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   const AMBIENT_FRAME_MS = 30;
   const HOT_FRAME_MS = 12;
   const HOT_FRAME_BUDGET_MS = 9;
+  // Behind Home the tree is scenery under frosted glass: about 12 fps keeps a
+  // slow orbit smooth through the blur for well under half Command's cost, and
+  // with motion off one frame a second is enough to pick up graph changes.
+  const BACKDROP_FRAME_MS = 80;
+  const BACKDROP_STILL_FRAME_MS = 1000;
   let lastFrameAt = 0;
   let frameRequest = 0;
+  function frameGap(hot) {
+    if (state.active) return hot ? HOT_FRAME_MS : AMBIENT_FRAME_MS;
+    return typeof noMotion === "function" && noMotion() ? BACKDROP_STILL_FRAME_MS : BACKDROP_FRAME_MS;
+  }
   function frame(time) {
-    if (!state.active) return;
+    if (!state.active && !state.homeBackdrop) return;
     if (document.body.dataset.sheet && !(state.settingsPreview && document.body.dataset.sheet === "music") || pickerHeld(time)) {
       frameRequest = requestAnimationFrame(frame);
       return;
@@ -23890,7 +23992,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     // tick that missed a 33 ms gate cost a whole extra tick — a 50 ms hitch
     // that read as judder in every camera glide.
     const hot = state.motionHot && Number.isFinite(state.frameCost) && state.frameCost < HOT_FRAME_BUDGET_MS;
-    if (!document.hidden && time - lastFrameAt >= (hot ? HOT_FRAME_MS : AMBIENT_FRAME_MS)) {
+    if (!document.hidden && time - lastFrameAt >= frameGap(hot)) {
       lastFrameAt = time;
       const profiler = globalThis.window?.MefiProfiler;
       const span = profiler?.begin("command.frame");
@@ -25337,9 +25439,14 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     }
     } finally { profiler?.end(nodesSpan); }
 
+    // Behind Home the tree is scenery seen through frosted glass: orbs, links
+    // and sky only. Its words would blur into smudges, so the text layers
+    // (checkpoint badges, callouts, speech and labels) wait for Command.
+    const scenery = state.homeBackdrop && !state.active;
     // Checkpoint notes stay discoverable without competing with current work.
-    const badgeExclusions = [...hudRects()];
+    const badgeExclusions = scenery ? [] : [...hudRects()];
     for (const { node, p } of projected) {
+      if (scenery) break;
       if (node.kind !== "session" || !node._pr) continue;
       const notes = state.checkpoints?.[node.id];
       if (!notes?.length) continue;
@@ -25358,9 +25465,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     // bubbles and the compact labels stepping around them
     stepDeferred(Date.now());
     stepSpeech(Date.now());
-    drawCallouts(projected, { near: ctx, far, focusIds, dt });
-    drawSpeech(projected);
-    drawLabels(projected);
+    if (!scenery) {
+      drawCallouts(projected, { near: ctx, far, focusIds, dt });
+      drawSpeech(projected);
+      drawLabels(projected);
+    }
     ctx.restore();
     if (far !== ctx) far.restore();
     syncFarLayer(liveFocusIds);
@@ -27734,12 +27843,79 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return { selected: state.selected?.id ?? null, zoom: state.zoom };
   }
 
+  // Home's backdrop: the same tree drawn behind the workspace, as scenery for
+  // its frosted panels. It is not Command. state.active stays false, so nav,
+  // keys, bells, audio capture, the HUD and the mefi:command event all still
+  // read "closed". The canvases sit under the workspace layer
+  // (body.home-backdrop in styles.css), take no input, draw without text at
+  // BACKDROP_FRAME_MS, and pick up graph changes on a slow tick. enter() takes
+  // the canvas over, and exit() hands it back while Home still wants it.
+  const BACKDROP_REFRESH_MS = 6000;
+  function setBackdropSurfaces(on) {
+    // No focus stop, no pointer and nothing for a screen reader: Home's own
+    // controls are the page.
+    el.canvas.inert = on;
+    if (on) el.canvas.setAttribute?.("aria-hidden", "true");
+    else el.canvas.removeAttribute?.("aria-hidden");
+    document.body.classList.toggle("home-backdrop", on);
+  }
+  function backdropTick() {
+    if (!state.homeBackdrop || state.active) return;
+    if (document.hidden || document.body.dataset.sheet || pickerHeld()) return;
+    refreshGraph();
+  }
+  function startHomeBackdrop() {
+    state.homeBackdropWanted = true;
+    if (!el.canvas || state.active || state.homeBackdrop) return;
+    state.homeBackdrop = true;
+    setBackdropSurfaces(true);
+    el.canvas.hidden = false;
+    if (el.far) el.far.hidden = false;
+    resize();
+    // The tree Command last drew is still in state.nodes, so a return from
+    // Command shows it at once; a cold start fills in once the reads land.
+    Promise.all([refreshTasks(true), window.MefiTree?.ready?.()])
+      .catch(() => {})
+      .then(() => { if (state.homeBackdrop) refreshGraph(); })
+      .catch(() => {});
+    clearInterval(state.timers.backdrop);
+    state.timers.backdrop = setInterval(backdropTick, BACKDROP_REFRESH_MS);
+    cancelAnimationFrame(frameRequest);
+    frameRequest = requestAnimationFrame(frame);
+  }
+  // Stops the backdrop's drawing and hands the surfaces back; the canvases
+  // stay as they are, for enter() to take over or stopHomeBackdrop() to hide.
+  function releaseHomeBackdrop() {
+    if (!state.homeBackdrop) return false;
+    state.homeBackdrop = false;
+    clearInterval(state.timers.backdrop);
+    state.timers.backdrop = null;
+    cancelAnimationFrame(frameRequest);
+    frameRequest = 0;
+    setBackdropSurfaces(false);
+    return true;
+  }
+  function stopHomeBackdrop() {
+    state.homeBackdropWanted = false;
+    if (!releaseHomeBackdrop() || state.active) return;
+    el.canvas.hidden = true;
+    if (el.far) el.far.hidden = true;
+  }
+  function setHomeBackdrop(on) {
+    if (on) startHomeBackdrop();
+    else stopHomeBackdrop();
+    return state.homeBackdrop;
+  }
+
   function enter(force = false, params = {}) {
     if (!el.canvas || !el.hud) return;
     if (state.active) {
       applyEnterParams(params);
       return;
     }
+    // Command opens over Home (the quiet clock, or a jump that keeps Home
+    // underneath): it takes the canvas over from the backdrop where it stands.
+    releaseHomeBackdrop();
     state.active = true;
     state.lastInput = Date.now();
     state.frameError = false;
@@ -27906,6 +28082,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     }
     document.body.classList.remove("command-active");
     window.dispatchEvent(new CustomEvent("mefi:command", { detail: { active: false } }));
+    // Home is still underneath (the quiet clock opened Command over it, or
+    // Home asked for the tree while Command held it): it stays as scenery.
+    if (state.homeBackdropWanted) startHomeBackdrop();
   }
 
   function tick() {
@@ -28416,9 +28595,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     window.mefiStudio?.onTasks?.(async (tasks) => {
       if (Array.isArray(tasks)) takeTasks(tasks);
       else await refreshTasks();
-      if (state.active) refreshGraph();
+      if (state.active || state.homeBackdrop) refreshGraph();
     });
-    window.addEventListener("resize", () => state.active && resize());
+    window.addEventListener("resize", () => (state.active || state.homeBackdrop) && resize());
 
     // Mouse interacts with the constellation instead of dismissing it.
     // A right-drag orbits the camera; the menu key/gesture must not interrupt it.
@@ -28767,6 +28946,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     graphViewport: () => ({ ...usableArea() }),
     geometryStatus: () => ({ view: state.view, angle: state.angle, pitch: state.pitch, links: state.edges.map(({ a, b }) => ({ from: state.nodes[a]?.id ?? null, to: state.nodes[b]?.id ?? null })), nodes: state.nodes.map((node) => ({ id: node.id, anchor: node._layoutAnchor ? { ...node._layoutAnchor } : null, world: { x: node.x, y: node.y, z: node.z }, projected: project(node._layoutAnchor ?? node) })) }),
     setSettingsPreview,
+    // Home's backdrop: workspace.js turns it on when Home shows and off when it leaves.
+    setHomeBackdrop,
+    homeBackdropStatus: () => ({ drawing: state.homeBackdrop, wanted: state.homeBackdropWanted, commandActive: state.active }),
     ambientZenStatus: () => ({ enabled: state.ambientZenEnabled, active: state.ambientZen, delayMs: AMBIENT_ZEN_MS, idleMs: Math.max(0, Date.now() - state.lastInput), eligible: canAmbientZen(), feedCollapsed: state.feedCollapsed }),
     settingsPreviewStatus: () => ({ active: Boolean(state.settingsPreview), viewport: state.settingsPreview ? { ...state.settingsPreview } : null, camera: { ...state.camera }, zoom: state.zoom, fit: state.fit, previousWasActive: state.previewRestore?.wasActive ?? null }),
     followStatus: () => ({ mode: state.camMode, taskId: state.follow?.taskId ?? null, nodeId: state.follow?.key ?? null, title: state.follow?.title ?? null, stage: state.follow?.stage ?? null, reason: state.follow?.reason ?? null, since: state.follow?.since ?? null, zoom: state.zoom, targetZoom: state.followZoomTarget }),
@@ -39696,9 +39878,18 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     init();
     return retry ? loadInitialWorkspace() : startupPromise ?? Promise.resolve(!api());
   }
+  // The live node tree drawn behind Home's frosted panels (idle.js owns it).
+  // It waits for the startup layer to lift, so Home's first paint never shares
+  // the thread with it, and starts only if Home is still showing by then.
+  function showBackdrop() {
+    const start = () => { if (active()) window.MefiIdle?.setHomeBackdrop?.(true); };
+    if (window.MefiBoot?.isActive?.()) Promise.resolve(window.MefiBoot.ready?.()).then(start, start);
+    else start();
+  }
   function enter() {
     init(); window.MefiIdle?.exit?.(); $("layer").hidden = false;
     document.body.classList.add("workspace-active");
+    showBackdrop();
     renderMachineTile(); renderUsageTile();
     // Usage has no push; one read on entry (cached 5 min by the tracker).
     if (api()) window.MefiUsageTracker?.refresh?.()?.catch?.(() => {});
@@ -39707,7 +39898,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     // the loading layer joins that work instead of issuing a second batch.
     return startupPending || window.MefiBoot?.isActive?.() ? ready() : refresh(true);
   }
-  function exit() { if (!$("layer")) return; $("layer").hidden = true; document.body.classList.remove("workspace-active"); saveDraft(); }
+  function exit() { if (!$("layer")) return; $("layer").hidden = true; document.body.classList.remove("workspace-active"); window.MefiIdle?.setHomeBackdrop?.(false); saveDraft(); }
   function init() {
     if (initialized || !$("layer")) return; initialized = true;
     $("form").addEventListener("submit", submit);

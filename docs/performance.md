@@ -1,5 +1,29 @@
 # Agent loop and startup measurements
 
+## Home's tree backdrop, September 24, 2026
+
+Home now draws the Command tree behind its frosted panels
+(`startHomeBackdrop` in renderer/idle.js). Behind Home the tree skips its
+text layers (checkpoint badges, callouts, speech and labels, which the frost
+would only smear), draws every 80 ms rather than every 30, once a second
+with Motion off, and not at all while a sheet covers Home or the window is
+hidden. The graph refreshes every 6 s instead of Command's 4 s tick. Opening
+Command takes the same canvases over, so nothing is drawn twice.
+
+Measured with the renderer's own profiler (`command.frame` spans over 5 s)
+in headless Chromium with software rendering, at 1600×1000, on a synthetic
+tree of 90 nodes (7 sessions, 16 tasks, their todos) behind a fake bridge.
+This is not the packaged app:
+
+| Surface | Frames drawn per second | Mean frame JS | JS per second |
+|---|---:|---:|---:|
+| Home backdrop | 10.2 | 2.84 ms | 29 ms |
+| Command | 29.2 | 3.44 ms | 101 ms |
+
+Blurring the panels over a moving canvas is GPU compositor work that these
+numbers do not include; with **Blur behind panels** off the panels are
+solid and unfiltered. None of these numbers are pass/fail thresholds.
+
 ## Worker output stops repainting the rail per line, September 22, 2026
 
 Measured on the running packaged app itself (Command home, five `opencode`

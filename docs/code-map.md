@@ -146,7 +146,7 @@ imports.
 
 | File | Lines | Purpose |
 | --- | ---: | --- |
-| `idle.js` | 10,560 | The Command view: the 3D node constellation that is also the menu. Its costs are in [performance.md](performance.md). |
+| `idle.js` | 10,560 | The Command view: the 3D node constellation that is also the menu, and the same tree drawn as scenery behind Home's frosted panels. Its costs are in [performance.md](performance.md). |
 | `brains.js` | 3,777 | The brain-map editor over the data `scripts/brains.cjs` validates. |
 | `nav.js` | 2,133 | The navigation registry: one list of destinations behind the rail, the palette, the help sheet and the shortcuts. |
 | `tree3d.js` | 2,151 | The 3D task-tree rail. |
