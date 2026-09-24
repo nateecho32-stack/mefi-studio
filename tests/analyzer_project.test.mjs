@@ -250,3 +250,86 @@ test("an archived Studio plan is set aside and is not compared with the code", a
   const studio = result.plans.filter((plan) => plan.sourceType === "studio").map((plan) => plan.title);
   assert.deepEqual(studio, ["Live plan"]);
 });
+
+// The pre-cache scan, kept verbatim as the reference: every line lowercased
+// once per keyword. The live scan lowercases each file once and uses indexOf.
+async function referenceIdeaScan(root, keywords) {
+  const { readdir, stat } = await import("node:fs/promises");
+  const SCAN_DIRS = ["renderer", "scripts", "tests", "game", "render", "ui", "worldgen", "save", "tools", "dev", "docs", ".codex_smoke"];
+  const SKIP = /node_modules|[\\/]build[\\/]|[\\/]\.git[\\/]|[\\/]assets[\\/]|[\\/]logs[\\/]/;
+  const hits = [];
+  const keywordHits = Object.fromEntries(keywords.map((keyword) => [keyword, 0]));
+  let scanned = 0;
+  async function walk(dir, depth) {
+    if (depth > 5 || scanned > 600 || hits.length > 80) return;
+    let entries = [];
+    try { entries = await readdir(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      if (hits.length > 80 || scanned > 600) return;
+      const full = path.join(dir, entry.name);
+      if (SKIP.test(full) || entry.name.startsWith(".")) continue;
+      if (entry.isDirectory()) { await walk(full, depth + 1); continue; }
+      if (!/\.(lua|py|js|mjs|cjs|md|json|css|ps1)$/.test(entry.name)) continue;
+      const relative = path.relative(root, full).replace(/\\/g, "/");
+      for (const keyword of keywords) {
+        if (relative.toLowerCase().includes(keyword)) {
+          hits.push({ keyword, file: relative, line: 0, snippet: "(file name match)" });
+          keywordHits[keyword] += 1;
+        }
+      }
+      try {
+        const info = await stat(full);
+        if (info.size > 260000) continue;
+        const text = await readFile(full, "utf8");
+        scanned += 1;
+        const lines = text.split("\n");
+        for (const keyword of keywords) {
+          if (hits.length > 80) break;
+          for (let index = 0; index < lines.length; index += 1) {
+            if (lines[index].toLowerCase().includes(keyword)) {
+              hits.push({ keyword, file: relative, line: index + 1, snippet: lines[index].trim().slice(0, 110) });
+              keywordHits[keyword] += 1;
+              break;
+            }
+          }
+        }
+      } catch {}
+    }
+  }
+  for (const dir of SCAN_DIRS) await walk(path.join(root, dir), 0);
+  return { hits, keywordHits, scanned };
+}
+
+test("idea scan lowercases each file once and reports exactly the per-line scan's hits", async (t) => {
+  const idea = "Orbit comet nebula quasar pulsar meteor galaxy stellar zenith aurora eclipse photon plasma vortex";
+  const entries = {
+    "scripts/unicode.js": "const x = 'İİİ';  // dotted capital I lowercases to two code units\nfunction ORBIT() {}\n// ΟΔΟΣ\r\nlet Comet = 1;\r\n",
+    "scripts/late.js": `${"filler line\n".repeat(400)}the NEBULA sits late\nquasar\n`,
+    "game/notes.md": "# Pulsar\n\nMeteor showers and a Galaxy far away.\nStellar ZENITH aurora.\n",
+    "tests/orbit-comet.test.mjs": "eclipse photon plasma vortex\n",
+    "scripts/big.json": JSON.stringify({ skip: "x".repeat(270000) }),
+  };
+  for (let index = 0; index < 12; index += 1) {
+    entries[`tools/many${index}.js`] = "orbit comet nebula quasar pulsar meteor galaxy stellar zenith aurora eclipse photon plasma vortex\n";
+  }
+  const root = await fixture(t, entries);
+  const expected = await referenceIdeaScan(root, idea.toLowerCase().match(/[a-z][a-z0-9_-]{3,}/g));
+  for (let pass = 0; pass < 2; pass += 1) {
+    const result = await verifyIdea(idea, { root });
+    assert.deepEqual(result.keywordHits, expected.keywordHits);
+    assert.equal(result.scanned, expected.scanned);
+    assert.deepEqual(result.hits, expected.hits.slice(0, 40));
+    assert.deepEqual(result.files, [...new Set(expected.hits.map((hit) => hit.file))].slice(0, 20));
+  }
+  assert.ok(expected.hits.length > 80, "the fixture reaches the hit cap");
+  assert.ok(expected.hits.some((hit) => hit.file === "scripts/late.js" && hit.line === 401));
+  assert.ok(expected.hits.some((hit) => hit.file === "scripts/unicode.js" && hit.line === 4));
+
+  // A rewritten file is read again, not served from the text cache.
+  const lone = await fixture(t, { "scripts/a.js": "nothing here\n" });
+  assert.equal((await verifyIdea("zircon", { root: lone })).verdict, "new");
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  await writeFile(path.join(lone, "scripts/a.js"), "nothing here\nconst ZIRCON = 1;\n");
+  const after = await verifyIdea("zircon", { root: lone });
+  assert.deepEqual(after.hits, [{ keyword: "zircon", file: "scripts/a.js", line: 2, snippet: "const ZIRCON = 1;" }]);
+});

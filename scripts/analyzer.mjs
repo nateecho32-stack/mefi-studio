@@ -180,6 +180,37 @@ function keywordsOf(text) {
   return [...new Set(words)].slice(0, 14);
 }
 
+// Idea checks run on every claim, so file text is kept between scans while its
+// size and modification time hold. Bounded by total characters, oldest out.
+const SCAN_TEXT_LIMIT = 16 * 1024 * 1024;
+const scanTextCache = new Map();
+let scanTextChars = 0;
+
+async function scanText(full, info) {
+  const cached = scanTextCache.get(full);
+  if (cached && cached.mtimeMs === info.mtimeMs && cached.size === info.size) {
+    scanTextCache.delete(full);
+    scanTextCache.set(full, cached);
+    return cached;
+  }
+  const text = await readFile(full, "utf8");
+  const entry = { mtimeMs: info.mtimeMs, size: info.size, text, lower: text.toLowerCase() };
+  if (cached) {
+    scanTextCache.delete(full);
+    scanTextChars -= cached.text.length + cached.lower.length;
+  }
+  const chars = text.length + entry.lower.length;
+  if (chars > SCAN_TEXT_LIMIT / 8) return entry;
+  scanTextCache.set(full, entry);
+  scanTextChars += chars;
+  for (const [key, old] of scanTextCache) {
+    if (scanTextChars <= SCAN_TEXT_LIMIT) break;
+    scanTextCache.delete(key);
+    scanTextChars -= old.text.length + old.lower.length;
+  }
+  return entry;
+}
+
 async function scanTree(root, keywords) {
   const hits = [];
   const keywordHits = Object.fromEntries(keywords.map((keyword) => [keyword, 0]));
@@ -211,18 +242,21 @@ async function scanTree(root, keywords) {
       try {
         const info = await stat(full);
         if (info.size > 260000) continue;
-        const text = await readFile(full, "utf8");
+        const { text, lower } = await scanText(full, info);
         scanned += 1;
-        const lines = text.split("\n");
+        let lines = null;
         for (const keyword of keywords) {
           if (hits.length > 80) break;
-          for (let index = 0; index < lines.length; index += 1) {
-            if (lines[index].toLowerCase().includes(keyword)) {
-              hits.push({ keyword, file: relative, line: index + 1, snippet: lines[index].trim().slice(0, 110) });
-              keywordHits[keyword] += 1;
-              break;
-            }
-          }
+          // Lowercasing the whole file once reads the same as lowercasing each
+          // line: "\n" is neither cased nor case-ignorable, so no mapping
+          // (final sigma included) looks across it, and keywords never hold one.
+          const at = lower.indexOf(keyword);
+          if (at < 0) continue;
+          let index = 0;
+          for (let cut = lower.indexOf("\n"); cut !== -1 && cut < at; cut = lower.indexOf("\n", cut + 1)) index += 1;
+          lines ??= text.split("\n");
+          hits.push({ keyword, file: relative, line: index + 1, snippet: lines[index].trim().slice(0, 110) });
+          keywordHits[keyword] += 1;
         }
       } catch {}
     }
