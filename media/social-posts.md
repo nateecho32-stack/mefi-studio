@@ -1,13 +1,17 @@
 # Since 0.3.0: social posts
 
-Attach `01-chaos-to-clarity.mp4` as the main announcement video.
-The square feature tour is 02-connected-studio.mp4; the portrait cut is 03-node-ballet.mp4. All three are silent and 30 seconds.
+Attach `mefi-thought-form.mp4` as the main announcement video.
+This is the current single design: a silent, 30-second, 1920 × 1080 film.
+Dimensional ASCII agents exchange signals over a charcoal-to-teal atmosphere.
+Their animated thoughts include rowing a boat, hammering a problem and a happy
+robot jumping. It is a conceptual workflow illustration, not a UI recording.
+Earlier circle films are superseded.
 
 ## Discord
 
-**Mefi's Studio AI+ has grown a brain.**
+**A thought is just the start. Meet Mefi's Studio AI+.**
 
-From circles bumping into chaos to a tree of connected work. Here’s a 30-second development preview, built around what’s changed since 0.3.0:
+Agents with a direction. Ideas turning into connected work. Here’s a 30-second look at the development work since 0.3.0:
 
 - **Agent Brain:** see the pipeline, its steps and the agents working on them.
 - **Project map:** explore your systems, their parts and the files inside.
@@ -20,7 +24,8 @@ From circles bumping into chaos to a tree of connected work. Here’s a 30-secon
 
 Free, open source and local-first. Bring your own provider or local model.
 
-**Download / source:** https://github.com/nateecho32-stack/mefi-studio
+**Watch / download:** https://nateecho32-stack.github.io/mefi-studio/
+**Source:** https://github.com/nateecho32-stack/mefi-studio
 **Community:** https://discord.gg/xgfKc5pVxG
 
 This is a development preview. The download page lists the latest published build.
@@ -29,7 +34,7 @@ What would you build with it?
 
 ## X
 
-From chaos to connected work.
+A thought is just the start.
 
 Mefi's Studio AI+ development preview: agent pipelines, project maps, Playbook recipes, OpenRouter and floating media.
 
@@ -40,7 +45,7 @@ https://github.com/nateecho32-stack/mefi-studio
 
 ## Release coverage
 
-The videos group the major changes to remain readable in 30 seconds. Link
+The film groups the major changes to remain readable in 30 seconds. Link
 `CHANGELOG.md` for the full history, including fixes to task admission,
 delegation, verification, routing, interrupted work, project switching, usage
 readings, Brain map drafts, navigation, community perks and Server Styler

@@ -25,6 +25,6 @@ Desk tools, nested delegation and head drafts are optional and start off. Shared
 
 ## Watch and share
 
-[Main showcase](../../media/01-chaos-to-clarity.mp4) · [Square cut](../../media/02-connected-studio.mp4) · [Vertical cut](../../media/03-node-ballet.mp4)
+[Thought / Form — 30-second showcase](../../media/mefi-thought-form.mp4)
 
 [Read every change](https://github.com/nateecho32-stack/mefi-studio/blob/main/CHANGELOG.md).
