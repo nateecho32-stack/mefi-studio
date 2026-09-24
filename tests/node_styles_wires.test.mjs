@@ -222,6 +222,21 @@ test("every wire stops at its ends' surfaces (inside each look's narrowest edge)
   const start = plain(ctx.calls.log.find(([name]) => name === "moveTo").slice(1)), end = plain(ctx.calls.log.find(([name]) => name === "bezierCurveTo").slice(5));
   assert.ok(onCurve(start) < 0.05 && onCurve(end) < 0.05, "both ends on the caller's curve");
   assert.ok(Math.hypot(start[0] - A.x, start[1] - A.y) > 7 && Math.hypot(end[0] - B.x, end[1] - B.y) > 9, "and cut at the surfaces");
+  // However wide or flat the S-curve (a wide terrace shelf, a tilted 3D
+  // camera), each end is cut where the curve crosses that node's surface:
+  // the S-curve leaves a node upright and slow and then swings wide, so an
+  // estimate from its speed at the end cut far too much (a stub mid-link).
+  for (const style of ["orbs", "sigil", "prism"]) {
+    for (const [far, rA, rB] of [[{ x: 120, y: 80 }, 10, 10], [{ x: 240, y: 40 }, 10, 10], [{ x: 200, y: 8 }, 10, 10], [{ x: 200, y: 0.5 }, 10, 10], [{ x: 30, y: 6 }, 15, 4]]) {
+      const near = { x: 0, y: 0 }, mid = far.y / 2;
+      const flat = recordingContext();
+      styles.wire(flat, style, near, far, wire({ kind: "session", dash: [], curved: true, cp: { x1: near.x, y1: mid, x2: far.x, y2: mid }, rA, rB }));
+      const first = plain(flat.calls.log.find(([name]) => name === "moveTo").slice(1)), last = plain(flat.calls.log.find(([name]) => name === "bezierCurveTo").slice(5));
+      const gapA = Math.hypot(first[0] - near.x, first[1] - near.y), gapB = Math.hypot(last[0] - far.x, last[1] - far.y);
+      assert.ok(Math.abs(gapA - rA * inset[style]) < 0.75, `${style} ${far.x}x${far.y}: leaves a at its surface (${gapA.toFixed(2)} px, want ${(rA * inset[style]).toFixed(2)})`);
+      assert.ok(Math.abs(gapB - rB * inset[style]) < 0.75, `${style} ${far.x}x${far.y}: meets b at its surface (${gapB.toFixed(2)} px, want ${(rB * inset[style]).toFixed(2)})`);
+    }
+  }
   // A pulse still rides to the target's centre.
   const surge = recordingContext();
   styles.surge(surge, "glass", A, B, 1, pulse(), look());

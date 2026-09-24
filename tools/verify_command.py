@@ -773,6 +773,7 @@ VERIFY_METHOD = r'''
     assert.equal(narrow.style,'true');assert.equal(narrow.layout,'true');
     assert(narrow.scroll<=narrow.width+1,'node preferences do not create page overflow');
     for (const control of narrow.controls) assert(control.rect.width>20 && control.rect.x>=narrow.sheet.x && control.rect.right<=narrow.sheet.right+1,`${control.id} fits the narrow music sheet`);
+    await sleep(2500);
     report.nodePreferences.narrow={...narrow,preview:await preview('900px preview')};
     await this.capture('18-node-preferences-narrow');
     this.setContentSize(650,760);await sleep(250);

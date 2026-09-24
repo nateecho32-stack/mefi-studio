@@ -20610,12 +20610,35 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   const WIRE_INSET = Object.freeze(Object.assign(Object.create(null), {
     orbs: 0.96, glass: 0.96, minimal: 0.38, halo: 0.96, crystal: 0.85, singularity: 0, prism: 0.56, sigil: 0.84,
   }));
-  const TRIM_A = { x: 0, y: 0 }, TRIM_B = { x: 0, y: 0 }, TRIM_CP = { x1: 0, y1: 0, x2: 0, y2: 0 };
-  // The tree's S-curve (a cubic through the caller's controls) between t0
-  // and t1, by its blossoms, into TRIM_A, TRIM_CP and TRIM_B.
-  function trimCurve(a, b, cp, t0, t1) {
+  const TRIM_A = { x: 0, y: 0 }, TRIM_B = { x: 0, y: 0 }, TRIM_CP = { x1: 0, y1: 0, x2: 0, y2: 0 }, CROSS_AT = { x: 0, y: 0 };
+  // Where the curve in PATH crosses the circle of radius r round (cx, cy),
+  // between the parameter `inside` (the curve's end at that centre) and
+  // `outside` (out of the circle): eight halvings, then the chord between
+  // the last two. The curve's
+  // speed at its end says nothing about where it leaves a circle (the tree's
+  // S-curve leaves its node upright and slow, then swings wide), so the
+  // crossing is found, not estimated.
+  function curveCross(cx, cy, r, inside, outside) {
+    let lo = inside, hi = outside;
+    pathBlossom(PATH, hi, hi, hi, CROSS_AT);
+    let far = Math.hypot(CROSS_AT.x - cx, CROSS_AT.y - cy), near = 0;
+    if (!(far > r)) return outside;
+    for (let step = 0; step < 8; step += 1) {
+      const mid = (lo + hi) / 2;
+      pathBlossom(PATH, mid, mid, mid, CROSS_AT);
+      const d = Math.hypot(CROSS_AT.x - cx, CROSS_AT.y - cy);
+      if (d < r) { lo = mid; near = d; } else { hi = mid; far = d; }
+    }
+    return lo + (hi - lo) * (far > near ? (r - near) / (far - near) : 1);
+  }
+  // The tree's S-curve (a cubic through the caller's controls) cut where it
+  // leaves a's circle of radius rA and meets b's of radius rB, by its
+  // blossoms, into TRIM_A, TRIM_CP and TRIM_B.
+  function trimCurve(a, b, cp, rA, rB) {
     PATH.cubic = true; PATH.straight = false;
     PATH.x0 = a.x; PATH.y0 = a.y; PATH.x1 = cp.x1; PATH.y1 = cp.y1; PATH.x2 = cp.x2; PATH.y2 = cp.y2; PATH.x3 = b.x; PATH.y3 = b.y;
+    const t0 = rA > 0 ? curveCross(a.x, a.y, rA, 0, 1) : 0;
+    const t1 = rB > 0 ? curveCross(b.x, b.y, rB, 1, t0) : 1;
     pathBlossom(PATH, t0, t0, t0, TRIM_A);
     pathBlossom(PATH, t0, t0, t1, PATH_C1); TRIM_CP.x1 = PATH_C1.x; TRIM_CP.y1 = PATH_C1.y;
     pathBlossom(PATH, t0, t1, t1, PATH_C2); TRIM_CP.x2 = PATH_C2.x; TRIM_CP.y2 = PATH_C2.y;
@@ -20634,11 +20657,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     if (!(len > rA + rB + 1)) return true;
     const cp = given.curved === true && given.cp ? given.cp : null;
     if (cp && !Object.isFrozen(given)) {
-      // On the S-curve, the curve's own piece between the two surfaces (its
-      // speed at either end is three times the leg to the nearer control).
-      const speedA = 3 * Math.hypot(cp.x1 - a.x, cp.y1 - a.y), speedB = 3 * Math.hypot(b.x - cp.x2, b.y - cp.y2);
-      const t0 = Math.min(0.45, rA / (speedA > 1 ? speedA : len)), t1 = Math.max(0.55, 1 - rB / (speedB > 1 ? speedB : len));
-      trimCurve(a, b, cp, t0, t1);
+      // On the S-curve, the curve's own piece between the two surfaces.
+      trimCurve(a, b, cp, rA, rB);
       given.cp = TRIM_CP;
       try { return hook(ctx, TRIM_A, TRIM_B, given, style) !== false; } finally { given.cp = cp; }
     }
