@@ -8,7 +8,7 @@ const flush = async () => { for (let i = 0; i < 20; i += 1) await Promise.resolv
 
 async function environment({ classes = [], sessions, todos = [], profiler } = {}) {
   const bodyClasses = new Set(classes), frames = new Map(), documentEvents = new Map(), windowEvents = new Map(), bridgeEvents = {};
-  let nextFrame = 0, now = 0, paints = 0, bitmapWrites = 0, bodyObserver, resizeObserver, paintError;
+  let nextFrame = 0, now = 0, paints = 0, bitmapWrites = 0, stateReads = 0, bodyObserver, resizeObserver, paintError;
   const element = () => ({
     style: {}, clientWidth: 420, clientHeight: 600, append() {}, addEventListener() {},
     setAttribute() {}, removeAttribute() {}, querySelector: () => null,
@@ -25,7 +25,7 @@ async function environment({ classes = [], sessions, todos = [], profiler } = {}
   for (const dimension of ["width", "height"]) Object.defineProperty(canvas, dimension, { set() { bitmapWrites += 1; } });
   const elements = { "tree-canvas": canvas, "tree-rail": rail, "tree-stats": element() };
   const document = {
-    hidden: false, body: { classList: { contains: (name) => bodyClasses.has(name) } },
+    hidden: false, body: { dataset: {}, classList: { contains: (name) => bodyClasses.has(name) } },
     getElementById: (id) => elements[id] ?? null, createElement: element,
     addEventListener: (name, callback) => documentEvents.set(name, callback),
   };
@@ -34,7 +34,7 @@ async function environment({ classes = [], sessions, todos = [], profiler } = {}
     devicePixelRatio: 1, matchMedia: () => ({ matches: false }),
     addEventListener: (name, callback) => windowEvents.set(name, callback),
     mefiStudio: {
-      eyesState: async () => ({ ok: true, sessions: sessions ?? [{ id: "s1", title: "Current session", timeUpdated: Date.now() }], todos }),
+      eyesState: async () => { stateReads += 1; return { ok: true, sessions: sessions ?? [{ id: "s1", title: "Current session", timeUpdated: Date.now() }], todos }; },
       assistantState: async () => ({ ok: true, state: { status: "idle", agents: [] } }),
       eyesCheckpointsRead: async () => ({ checkpoints: {} }),
       onEyesActivity: (callback) => { bridgeEvents.activity = callback; },
@@ -49,11 +49,11 @@ async function environment({ classes = [], sessions, todos = [], profiler } = {}
     MutationObserver: class { constructor(callback) { bodyObserver = callback; } observe() {} },
     ResizeObserver: class { constructor(callback) { resizeObserver = callback; } observe() {} },
   });
-  vm.runInContext(source.replace("  window.MefiTree = {", "  window.__pulseCount = () => pulses.length;\n  window.MefiTree = {"), context);
+  vm.runInContext(source.replace("  window.MefiTree = {", "  window.__pulseCount = () => pulses.length;\n  window.__pulsesLive = () => pulses.every((pulse) => nodes.includes(pulse.from) && nodes.includes(pulse.to));\n  window.MefiTree = {"), context);
   await window.MefiTree.init();
   return {
     tree: window.MefiTree, window, rail, frames,
-    paints: () => paints, bitmapWrites: () => bitmapWrites, pulseCount: window.__pulseCount,
+    paints: () => paints, bitmapWrites: () => bitmapWrites, stateReads: () => stateReads, pulseCount: window.__pulseCount, pulsesLive: window.__pulsesLive,
     resize: () => resizeObserver(),
     failPaint(error) { paintError = error; },
     advance(time) { now = time; return window.MefiTree.advanceAgents(time); },
@@ -61,6 +61,7 @@ async function environment({ classes = [], sessions, todos = [], profiler } = {}
     async activity(data) { bridgeEvents.activity(data); await flush(); },
     hide(hidden) { document.hidden = hidden; documentEvents.get("visibilitychange")(); },
     cover(name, enabled) { if (enabled) bodyClasses.add(name); else bodyClasses.delete(name); bodyObserver(); },
+    sheet(id) { if (id) document.body.dataset.sheet = id; else delete document.body.dataset.sheet; bodyObserver(); },
     frame(time) { now = time; const pending = [...frames.values()]; frames.clear(); for (const callback of pending) callback(time); },
   };
 }
@@ -268,4 +269,52 @@ test("unresolved targets lift off smoothly and repeated status updates preserve 
   assert.equal(settled.phase, "running");
   assert.ok(settled.y < -116, "repeated reports do not restart the lift timer before it reaches working height");
   assert.equal(slot.retiring, false);
+});
+
+test("a scrimmed sheet suspends the rail; Style & sound, which has none, leaves it drawing", async () => {
+  const env = await environment();
+  assert.equal(env.frames.size, 1);
+  env.sheet("tasks");
+  assert.equal(env.frames.size, 0, "the Tasks sheet's scrim covers the rail");
+  env.frame(1);
+  assert.equal(env.paints(), 0);
+  await env.activity({ activity: [{ sessionId: "s1" }] });
+  assert.equal(env.pulseCount(), 0, "no pulses pile up under a sheet");
+  env.sheet(null);
+  assert.equal(env.frames.size, 1, "closing the sheet resumes at once");
+  env.frame(40);
+  assert.equal(env.paints(), 1);
+  env.sheet("music");
+  assert.equal(env.frames.size, 1, "Style & sound sits beside the rail without a scrim");
+  env.frame(80);
+  assert.equal(env.paints(), 2);
+});
+
+test("activity pushes rebuild from their own todos and read the store only for a new session or after 15 s", async () => {
+  const at = Date.now();
+  const sessions = [{ id: "s1", title: "First", timeUpdated: at - 600000 }, { id: "s2", title: "Second", timeUpdated: at - 900000 }];
+  const todo = (sessionId, position, content, status = "pending") => ({ sessionId, position, content, status });
+  const env = await environment({ sessions, todos: [todo("s1", 0, "Old step")] });
+  assert.equal(env.stateReads(), 1);
+  const labels = () => Array.from(env.tree.snapshot().nodes.filter((node) => node.kind === "todo"), (node) => `${node.sessionId}:${node.label}:${node.status}`);
+  assert.deepEqual(labels(), ["s1:Old step:pending"]);
+  await env.activity({ activity: [{ sessionId: "s2", time: at - 1000 }], todos: [todo("s1", 0, "Old step", "completed"), todo("s2", 0, "New step", "in_progress")] });
+  assert.equal(env.stateReads(), 1, "a push for a known session needs no store read");
+  assert.deepEqual(labels(), ["s2:New step:in_progress", "s1:Old step:completed"], "the pushed todos rebuild the graph at once, the touched session now newest");
+  assert.equal(env.tree.snapshot().nodes.find((node) => node.id === "s2").updated, at - 1000, "the touched session carries its newest activity");
+  assert.equal(env.tree.snapshot().nodes.find((node) => node.id === "s1").updated, at - 600000);
+  assert.equal(sessions[1].timeUpdated, at - 900000, "the read's own rows are never edited");
+  assert.ok(env.pulseCount() > 0 && env.pulsesLive(), "the push's pulses ride the rebuilt nodes");
+  await env.activity({ activity: [{ sessionId: "s9" }], todos: [] });
+  assert.equal(env.stateReads(), 2, "a session the rail has not read yet takes a full read");
+  await env.activity({ activity: [{ sessionId: "s1" }], todos: true });
+  assert.equal(env.stateReads(), 3, "a push without a todo list falls back to the full read");
+  env.advance(1000);
+  await env.activity({ activity: [{ sessionId: "s1" }], todos: [] });
+  assert.equal(env.stateReads(), 3);
+  env.advance(1000 + 15000);
+  await env.activity({ activity: [{ sessionId: "s1" }], todos: [] });
+  assert.equal(env.stateReads(), 4, "sessions are re-read at least every 15 s while activity flows");
+  await env.activity({ activity: [{ sessionId: "s1" }] });
+  assert.equal(env.stateReads(), 4, "tool activity alone only pulses");
 });
