@@ -468,17 +468,42 @@ export async function processSnapshot({ powershell = "powershell", ps = "ps", ta
 
 export const CLASSIFY_DEFAULTS = { idleSeconds: 240, maxAgeMinutes: 20, maxMemMB: 1500 };
 
-// Pure classification for one scan. `previousCpu` maps pid -> cpuMs from the
-// prior scan; a test process whose CPU has not moved for idleSeconds is hung.
-export function classify({ processes = [], previousCpu = new Map(), now = Date.now(), limits = {}, parentAlive = isPidAlive } = {}) {
+// When each process's CPU last moved, across scans: pid -> { cpuMs, since,
+// startedAt }. A test process is hung once its CPU has not moved for
+// idleSeconds of real time. Comparing only with the previous scan counted one
+// unchanged sample as the whole window, so at the 5 s scan cadence a test
+// that sat idle between two scans (waiting on a file, a frame, a child) was
+// killed as hung. The Machine scans are the only caller in the app, so the
+// ledger lives with the module; a reload starts it again, which can only delay
+// a verdict, never bring one forward.
+const cpuProgress = new Map();
+
+// Classification for one scan. `previousCpu` maps pid -> cpuMs from the prior
+// scan; a test process whose CPU has not moved (against it and against the
+// progress ledger) for idleSeconds is hung. `progress` is the ledger: the
+// module's own by default, a caller's Map in tests, or null for the one-sample
+// reading (an unchanged sample counts as the whole window), which the
+// --classify-fixture contract pins.
+export function classify({ processes = [], previousCpu = new Map(), now = Date.now(), limits = {}, parentAlive = isPidAlive, progress = cpuProgress } = {}) {
   const options = { ...CLASSIFY_DEFAULTS, ...limits };
   const verdicts = [];
+  const present = new Set();
   for (const row of processes) {
     const test = isTestProcess(row);
     const ageMinutes = Number.isFinite(row.startedAt) ? (now - row.startedAt) / 60000 : 0;
     // Map keys survive JSON as strings; accept both key shapes.
     const previous = previousCpu instanceof Map ? previousCpu.get(row.pid) ?? previousCpu.get(String(row.pid)) : previousCpu?.[row.pid];
-    const noProgressSeconds = previous == null ? 0 : previous === row.cpuMs ? options.idleSeconds : 0;
+    let noProgressSeconds = previous == null || previous !== row.cpuMs ? 0 : options.idleSeconds;
+    if (progress instanceof Map) {
+      const key = String(row.pid);
+      present.add(key);
+      let entry = progress.get(key);
+      if (!entry || entry.cpuMs !== row.cpuMs || entry.startedAt !== row.startedAt) {
+        entry = { cpuMs: row.cpuMs, since: now, startedAt: row.startedAt };
+        progress.set(key, entry);
+      }
+      if (noProgressSeconds) noProgressSeconds = Math.max(0, (now - entry.since) / 1000);
+    }
     let status = test ? "healthy" : "other";
     if (!parentAlive(row.parentPid)) status = "orphan";
     else if (test && noProgressSeconds >= options.idleSeconds) status = "hang";
@@ -497,6 +522,8 @@ export function classify({ processes = [], previousCpu = new Map(), now = Date.n
       commandLine: String(row.commandLine ?? "").slice(0, 300),
     });
   }
+  // A process that left the scan leaves the ledger.
+  if (progress instanceof Map) for (const key of [...progress.keys()]) if (!present.has(key)) progress.delete(key);
   return { verdicts, killable: verdicts.filter((verdict) => verdict.killable) };
 }
 
@@ -540,7 +567,13 @@ async function cli() {
     const fixture = JSON.parse(await readFile(args[fixtureIndex + 1], "utf8"));
     const previousCpu = new Map(Object.entries(fixture.previousCpu ?? {}));
     const parentAlive = (pid) => Boolean(fixture.aliveParents?.[pid]);
-    console.log(JSON.stringify(classify({ processes: fixture.processes ?? [], previousCpu, now: fixture.now ?? Date.now(), limits: fixture.limits ?? {}, parentAlive }), null, 2));
+    // A fixture reads one sample (an unchanged CPU is the whole idle window)
+    // unless it says when each process's CPU last moved: lastProgressAt.
+    const moved = fixture.lastProgressAt && typeof fixture.lastProgressAt === "object" ? fixture.lastProgressAt : null;
+    const progress = moved
+      ? new Map((fixture.processes ?? []).filter((row) => Number.isFinite(Number(moved[row.pid]))).map((row) => [String(row.pid), { cpuMs: row.cpuMs, since: Number(moved[row.pid]), startedAt: row.startedAt }]))
+      : null;
+    console.log(JSON.stringify(classify({ processes: fixture.processes ?? [], previousCpu, now: fixture.now ?? Date.now(), limits: fixture.limits ?? {}, parentAlive, progress }), null, 2));
     return;
   }
   const leaseIndex = args.indexOf("--leases-fixture");
