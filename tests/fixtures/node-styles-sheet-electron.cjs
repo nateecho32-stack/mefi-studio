@@ -100,15 +100,15 @@ function pageSetup() {
   // (idle.js syncGraphTheme builds them from the palette, as context() does).
   const ROWS = [
     { id: "idle", label: "idle task", kind: "task", tint: "task" },
-    { id: "working", label: "working (Running)", kind: "task", tint: "warm", active: true, orbit: 1.1, progress: 0.62 },
-    { id: "glow", label: "working + Extra glow", kind: "task", tint: "warm", active: true, orbit: 1.1, progress: 0.62, extraGlow: true },
+    { id: "working", label: "working (Running)", kind: "task", tint: "warm", active: true, orbit: 1.8, progress: 0.62 },
+    { id: "glow", label: "working + Extra glow", kind: "task", tint: "warm", active: true, orbit: 1.8, progress: 0.62, extraGlow: true },
     { id: "hover", label: "hover (lift .5)", kind: "task", tint: "task", hover: true },
     { id: "selected", label: "selected (search match)", kind: "task", tint: "task", selected: true },
     { id: "chosen", label: "chosen (clicked)", kind: "task", tint: "task", selected: true, chosen: true },
     { id: "verifying", label: "verifying", kind: "task", tint: "verify" },
     { id: "done", label: "done", kind: "session", tint: "done" },
     { id: "blocked", label: "blocked (amber)", kind: "task", tint: "amber" },
-    { id: "stale", label: "stale", kind: "session", tint: "stale" },
+    { id: "stale", label: "stale", kind: "session", tint: "stale", stale: true },
     { id: "todo", label: "todo", kind: "todo", tint: "pending" },
     { id: "agent-running", label: "agent running (watcher)", kind: "agent", role: "watcher", status: "running", active: true },
     { id: "agent-queued", label: "agent queued (auditor)", kind: "agent", role: "auditor", status: "queued" },
@@ -182,7 +182,7 @@ function pageSetup() {
     return {
       style, active: row.active === true, selected: row.selected === true || row.chosen === true, lift: row.chosen === true ? 1 : 0,
       progress: Number.isFinite(row.progress) ? row.progress : null, orbit: Number.isFinite(row.orbit) ? row.orbit : 0,
-      status: row.kind === "agent" ? row.status ?? null : null, time: 0, frame: 0,
+      status: row.kind === "agent" ? row.status ?? null : null, stale: row.stale === true, time: 0, frame: 0,
     };
   }
   function recordAt(row, style, t, still, id = row.id) {
@@ -211,22 +211,24 @@ function pageSetup() {
   }
 
   // One node surface as drawFrame paints it: nodeVisualProfile's alpha (.65
-  // at rest, 1 lifted, working or the hub), the detail tier under its cap
-  // (1 on the far layer; a lit node one above), and the paint options.
+  // at rest on a dark page, .85 on a light one and .92 for the Void styles
+  // there; 1 lifted, working or the hub), the detail tier under its cap (1
+  // on the far layer; a lit node one above), and the paint options.
   function paintNode(ctx, c, style, p, r, row, record, time, still, fade = 1) {
     const tint = c.tintOf(row);
     const selected = row.selected === true || row.hover === true || row.chosen === true;
     const active = row.active === true;
     const always = active || row.kind === "assistant";
     const lift = always ? 1 : Number.isFinite(record.lift) ? record.lift : 0;
-    const surfaceAlpha = Math.max(0.35, 0.65 + 0.35 * lift);
+    const quiet = c.light ? (styles.PREMIUM.includes(style) ? 0.92 : 0.85) : 0.65;
+    const surfaceAlpha = Math.max(0.35, quiet + (1 - quiet) * lift);
     const lit = active || selected;
     const cap = row.far ? 1 : 3;
     const detail = styles.tier(r, lit ? cap + 1 : cap);
     record.tint = tint;
     const monogram = row.kind === "assistant" || row.kind === "music";
     styles.paint(ctx, style, p, r, tint, {
-      kind: row.kind, selected, chosen: row.chosen === true, active, alpha: fade * surfaceAlpha,
+      kind: row.kind, selected, chosen: row.chosen === true, active, stale: row.stale === true, alpha: fade * surfaceAlpha,
       glyph: monogram || row.kind === "agent" && r >= 4.5, monogram, motion: record, time, still, detail,
       extraGlow: row.extraGlow === true, theme: c.theme,
     });
@@ -687,17 +689,24 @@ function pageSetup() {
     const perFrame = [];
     const leaks = {};
     const STATE = ["globalAlpha", "globalCompositeOperation", "lineWidth", "lineCap", "lineJoin", "lineDashOffset", "fillStyle", "strokeStyle", "font", "textAlign", "textBaseline", "shadowBlur", "shadowColor", "filter"];
-    const snapshot = () => { const m = ctx.getTransform(); return [m.a, m.b, m.c, m.d, m.e, m.f, ctx.getLineDash().join(","), ...STATE.map((key) => String(ctx[key]))].join("|"); };
+    // A wire hands back what the next wire or node reads without setting it
+    // (the alpha, cap, dash, offset, transform and the rest), not its pen's
+    // colour, width or join: the edge pass sets those per edge, and a save and
+    // a restore per edge cost more than the line.
+    const PEN = new Set(["lineWidth", "lineJoin", "fillStyle", "strokeStyle"]);
+    const WIRE_STATE = STATE.filter((key) => !PEN.has(key));
+    const snapshot = (keys = STATE) => { const m = ctx.getTransform(); return [m.a, m.b, m.c, m.d, m.e, m.f, ctx.getLineDash().join(","), ...keys.map((key) => String(ctx[key]))].join("|"); };
     let frameCounts = null;
     const categoryOf = (name) => name === "paint" ? "paint" : name === "wire" ? "wires" : name === "surge" || name === "land" ? "pulses" : "overlays";
     const call = (name, run) => {
-      const before = snapshot(), gradientsBefore = built(), blurBefore = counts.shadowBlur, filterBefore = counts.filter;
+      const keys = name === "wire" ? WIRE_STATE : STATE;
+      const before = snapshot(keys), gradientsBefore = built(), blurBefore = counts.shadowBlur, filterBefore = counts.filter;
       const value = run();
       const bucket = frameCounts[categoryOf(name)];
       bucket.gradients += built() - gradientsBefore;
       bucket.shadowBlur += counts.shadowBlur - blurBefore;
       bucket.filter += counts.filter - filterBefore;
-      if (snapshot() !== before) leaks[name] = (leaks[name] ?? 0) + 1;
+      if (snapshot(keys) !== before) leaks[name] = (leaks[name] ?? 0) + 1;
       return value;
     };
     const FRAMES = 14, WARM = 2;

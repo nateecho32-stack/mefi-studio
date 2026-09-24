@@ -1,5 +1,68 @@
 # Agent loop and startup measurements
 
+## Node styles remastered: frame cost against the merge base, September 23, 2026
+
+Every node now animates from its own motion record and paints through the
+shared painters (renderer/node-styles.js), and each style draws its own
+wires, pulses and landings. Measured with tools/profile_studio.mjs
+(Electron offscreen, software rendering, 1280x900, 2 s warm-up, 6 s
+capture) against the merge base, in seven interleaved pairs (control and
+new alternating N C C N ...), so a burst of load on the shared host hits
+both sides. Medians per side; the paired delta is the median of run i
+against run i.
+
+The first integration missed the plan's gate (frame mean at most 1.5 ms
+over the control, p95 at most 3 ms) on two styles: Sigil at +3.5 ms mean
+and +5.3 ms p95, Prism at +2.7 / +4.2 (command-150-3d, seven pairs). The
+fix round:
+
+- A resting Sigil todo (T0; not lit, working or kicked: most of a board)
+  is its seal and ONE stroke (rim, turning rune tick and centre dot) traced
+  in pixels, instead of a save, a transform and four draws. A resting Prism
+  kite is traced in pixels too, and the light band steps its lit plane up
+  the tone ramp instead of adding a third fill.
+- Resting Sigil session and todo wires are one plain line (their rune dash
+  shows on inspected, active and working wires, and on the task and folded
+  links). Prism's glint runs only on a wire that carries work, a lit one, or
+  one between T2+ gems, and a solid Prism wire never touches the dash.
+- Every wire hook (the free styles' shared one, Singularity, Prism, Sigil)
+  sets the canvas's alpha, cap, dash and offset back by hand instead of a
+  save and a restore per edge, and sets no dash at all for a solid line; the
+  Command view's edge pass clears the dash once a frame for them.
+
+| command-150-3d, 7 pairs | `command.frame` mean, control → new (paired Δ) | p95 (paired Δ) | `command.nodes` self |
+|---|---:|---:|---:|
+| Classic orbs | 6.15 → 6.66 ms (+0.64) | 9.6 → 11.7 ms (+1.6) | 2.29 → 2.56 ms (×1.12) |
+| Soft glass | 6.18 → 6.94 (+0.67) | 10.0 → 11.3 (+1.6) | 1.24 → 2.83 (×2.28) |
+| Minimal | 5.32 → 6.15 (+1.19) | 9.0 → 9.6 (+1.0) | 0.43 → 1.98 (×4.65) |
+| Halo | 5.88 → 6.96 (+0.92) | 9.5 → 10.7 (+1.4) | 0.89 → 2.64 (×2.97) |
+| Crystal | 6.82 → 7.07 (+0.52) | 10.2 → 10.8 (+0.7) | 1.86 → 2.94 (×1.59) |
+| Singularity | 6.54 → 7.48 (+0.82) | 10.6 → 11.6 (+0.2) | 2.72 → 3.22 (×1.18) |
+| Prism | 6.62 → 7.51 (+1.20) | 10.7 → 12.1 (+1.4) | 2.84 → 3.32 (×1.17) |
+| Sigil | 6.27 → 6.82 (+0.56) | 9.9 → 10.9 (+1.0) | 2.48 → 2.67 (×1.08) |
+
+The 30-node scene (command-30-3d) stays inside the 60 Hz glide's budget in
+every style: frame means 3.85 to 4.75 ms (at most 6) and p95 7.0 to 8.2 ms
+(at most 10). No steady frame builds a gradient; Sigil's three per run are
+its lazily built glow, well and spark the first time a node shows them.
+
+What still misses a plan gate, and why:
+
+- `command.nodes` self for the free styles (Soft glass ×2.3, Halo ×3.0,
+  Minimal ×4.7 against at most 1.3 and 1.0). The control's Halo and Soft
+  glass paid their cost in the raster (`shadowBlur`, gradients built per
+  frame) outside that span, and its Minimal was one fill a node; every node
+  now also steps its motion record and paints through the shared dispatcher,
+  about 10 us a node for 150 nodes. The frame means above, which include the
+  raster, stay inside the gate.
+- Long tasks (50 ms and over). The per-run counts are small and bursty on
+  this shared host (0 to 32 a run, the bursts landing on both sides), so the
+  1.25x ratio does not resolve: per-run medians went from 0 to 2 on the
+  control to 1 to 6 on the new build (Prism 29 → 21 and Sigil 41 → 22 in
+  total; Crystal 3 → 50, most of it two runs during a host burst).
+
+None of these numbers are pass/fail thresholds beyond the plan's own gates.
+
 ## Worker output stops repainting the rail per line, September 22, 2026
 
 Measured on the running packaged app itself (Command home, five `opencode`

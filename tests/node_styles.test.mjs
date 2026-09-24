@@ -33,7 +33,7 @@ test("node-styles.js loads into a bare vm and exports one frozen contract", () =
   const styles = loadNodeStyles();
   assert.ok(styles, "window.MefiNodeStyles is set");
   assert.ok(Object.isFrozen(styles));
-  assert.deepEqual(Object.keys(styles), ["version", "STYLES", "PREMIUM", "shapes", "seed", "hash", "approach", "motionRecord", "stepMotion", "shownTint", "theme", "inkOf", "tier", "paint", "glyph", "ring", "hubDress", "orbit", "arrival", "select", "wire", "surge", "land", "reach", "cacheStats"]);
+  assert.deepEqual(Object.keys(styles), ["version", "STYLES", "PREMIUM", "shapes", "seed", "hash", "approach", "motionRecord", "stepMotion", "shownTint", "theme", "inkOf", "tier", "paint", "glyph", "ring", "hubDress", "orbit", "arrival", "select", "wire", "surge", "land", "reach", "cacheStats", "outline"]);
   assert.equal(styles.version, 1);
   assert.deepEqual(plain(styles.STYLES), STYLES);
   assert.deepEqual(plain(styles.PREMIUM), ["singularity", "prism", "sigil"]);
@@ -159,10 +159,10 @@ test("motion records live by id, integrate their clock and orbit, and ease every
   assert.ok(record.work > 0.9 && record.work < 1, "work falls on its 0.6 s time constant");
   assert.ok(Math.abs(record.work - Math.exp(-0.05 / 0.6)) < 1e-12);
   assert.ok(record.tempo > 1 && record.tempo < 2.5);
-  // The work orbit is an integrated phase too: a Running turn is 1.1 s.
+  // The work orbit is an integrated phase too: a Running turn is 1.8 s.
   const orbit = record.orbit;
-  styles.stepMotion(record, flags({ orbit: 1.1 }), 0.05, false);
-  assert.ok(Math.abs(record.orbit - orbit - 0.05 * Math.PI * 2 / 1.1) < 1e-12);
+  styles.stepMotion(record, flags({ orbit: 1.8 }), 0.05, false);
+  assert.ok(Math.abs(record.orbit - orbit - 0.05 * Math.PI * 2 / 1.8) < 1e-12);
   // Selection rises on its own clock; progress eases toward the reported fraction.
   styles.stepMotion(record, flags({ selected: true, progress: 0.5 }), 0.05, false);
   assert.ok(Math.abs(record.sel - (1 - Math.exp(-0.05 / 0.07))) < 1e-12);
@@ -199,6 +199,94 @@ test("motion records live by id, integrate their clock and orbit, and ease every
   assert.equal(sigil.tempo, 4);
   styles.stepMotion(sigil, flags({ style: "nebula", active: true, speedup: 7 }), 0, false);
   assert.equal(sigil.tempo, 7);
+  // A stale node's clock runs at .4 of its tempo: it reads as stalled, and
+  // still moves (reduced motion still holds it).
+  const stale = styles.motionRecord(table, "session:stale");
+  styles.stepMotion(stale, flags({ style: "orbs", stale: true }), 0.05, false);
+  assert.ok(Math.abs(stale.clock - 0.02) < 1e-12 && Math.abs(stale.tempo - 0.4) < 1e-12, "a stale clock runs at .4");
+  styles.stepMotion(stale, flags({ style: "orbs", stale: true }), 0.05, true);
+  assert.ok(Math.abs(stale.clock - 0.02) < 1e-12, "and holds under reduced motion");
+});
+
+test("on a light page every look's done, blocked and stale nodes keep a mark 3:1 or more off the page, at the quiet alpha", () => {
+  const styles = loadNodeStyles();
+  const light = styles.theme({ background: "#F3F0E8", text: "#1D2330" });
+  const page = [243, 240, 232];
+  const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+  // The strongest mark a node paints (its rim, ring, dot or a gradient's
+  // stop, a black horizon's say), blended onto the page at the alpha it
+  // lands with. Walks the log: the pen in force at every fill and stroke.
+  const strongest = (style, tint, radius) => {
+    const ctx = recordingContext({ center: { x: 50, y: 50 } });
+    const quiet = styles.PREMIUM.includes(style) ? 0.92 : 0.85;
+    styles.paint(ctx, style, { x: 50, y: 50 }, radius, tint, { kind: "session", alpha: quiet, detail: styles.tier(radius), theme: light });
+    let best = 1, fill = "", stroke = "", alpha = 1;
+    for (const [name, value] of ctx.calls.log) {
+      if (name === "set:fillStyle") fill = String(value);
+      else if (name === "set:strokeStyle") stroke = String(value);
+      else if (name === "set:globalAlpha") alpha = value;
+      else if (name === "fill" || name === "stroke") {
+        for (const [, r, g, b, a] of (name === "fill" ? fill : stroke).matchAll(/rgba\(([\d.]+),([\d.]+),([\d.]+),([\d.]+)\)/g)) {
+          const k = Number(a) * alpha;
+          best = Math.max(best, ratio([r, g, b].map((channel, index) => page[index] + (Number(channel) - page[index]) * k), page));
+        }
+      }
+    }
+    return best;
+  };
+  for (const style of STYLES) {
+    for (const [state, tint] of [["done", [104, 236, 164]], ["blocked", [255, 212, 121]], ["stale", [150, 146, 138]]]) {
+      for (const radius of [8, 15]) {
+        const best = strongest(style, tint, radius);
+        assert.ok(best >= 3, `${style} ${state} at r ${radius}: its strongest mark reads ${best.toFixed(2)}:1 on the page`);
+      }
+    }
+  }
+});
+
+test("a stale node reads as stalled in every look: its rim cut in short dashes from T1 up (its clock slowed by stepMotion)", () => {
+  const styles = loadNodeStyles();
+  const dashes = (style, stale, detail) => {
+    const ctx = recordingContext();
+    styles.paint(ctx, style, { x: 50, y: 50 }, 12, [150, 146, 138], { kind: "session", stale, detail });
+    return ctx.calls.log.filter(([name, ...dash]) => name === "setLineDash" && dash.length === 2 && Math.abs(dash[0] / dash[1] - 0.75) < 1e-4).length;
+  };
+  for (const style of STYLES) {
+    assert.equal(dashes(style, false, 3), 0, `${style}: a fresh node's rim is whole`);
+    assert.equal(dashes(style, true, 3), 1, `${style}: a stale one's is dashed`);
+    assert.equal(dashes(style, true, 0), 0, `${style}: not below T1 (a todo-sized node keeps its rim whole)`);
+  }
+});
+
+test("outline() traces each look's silhouette for the rims a caller draws round a node", () => {
+  const styles = loadNodeStyles();
+  const vertices = {};
+  for (const style of [...STYLES, "nebula"]) {
+    const ctx = recordingContext({ center: { x: 50, y: 50 } });
+    ctx.beginPath();
+    const count = styles.outline(ctx, style, 50, 50, 12);
+    vertices[style] = [count, ctx.calls.moveTo + ctx.calls.lineTo, ctx.calls.arc, ctx.calls.closePath];
+    assert.ok(ctx.calls.pathReach <= 12 * 1.1 + 1e-9, `${style}: stays on its radius (${ctx.calls.pathReach})`);
+    assert.equal(ctx.calls.stroke + ctx.calls.fill, 0, `${style}: only traces (the caller strokes)`);
+  }
+  assert.deepEqual(vertices.sigil, [6, 6, 0, 1], "Sigil: its seal's hexagon");
+  assert.deepEqual(vertices.crystal, [8, 8, 0, 1], "Crystal: its octagon");
+  assert.deepEqual(vertices.prism, [4, 4, 0, 1], "Prism: its kite");
+  for (const style of ["orbs", "glass", "minimal", "halo", "singularity", "nebula"]) assert.deepEqual(vertices[style], [0, 1, 1, 0], `${style}: a circle`);
+  // Sigil's seal is pointy-top at .98 r; Crystal's octagon turns with the gem.
+  const seal = recordingContext();
+  seal.beginPath(); styles.outline(seal, "sigil", 0, 0, 10);
+  const first = seal.calls.log.find(([name]) => name === "moveTo");
+  assert.deepEqual(plain(first.slice(1)).map((value) => Math.round(value * 100) / 100), [0, -9.8]);
+  const turned = (clock) => {
+    const ctx = recordingContext();
+    const m = { ...styles.motionRecord(new Map(), "crystal:a"), clock, still: false };
+    ctx.beginPath(); styles.outline(ctx, "crystal", 0, 0, 10, m);
+    return plain(ctx.calls.log.find(([name]) => name === "moveTo"));
+  };
+  assert.notDeepEqual(turned(0), turned(5), "the octagon turns with the gem's clock");
 });
 
 test("a tint change cross-fades in twelve cached steps and snaps for reduced motion", () => {
@@ -235,7 +323,7 @@ test("theme() turns a palette into frozen triples, once per palette", () => {
   assert.deepEqual(plain(defaults), {
     key: "5,5,7|236,229,216|-|104,236,164|255,212,121",
     bg: [5, 5, 7], light: false, hi: [255, 255, 255], text: [236, 229, 216], track: [51, 50, 49], orbit: [125, 178, 255], accent2: null,
-    done: [104, 236, 164], amber: [255, 212, 121], doneWell: [25, 51, 38], doneInk: [180, 246, 210], amberWell: [55, 46, 30],
+    done: [104, 236, 164], amber: [255, 212, 121], doneWell: [25, 51, 38], doneInk: [180, 246, 210], amberWell: [55, 46, 30], amberInk: [255, 212, 121],
   });
   const dark = theme({ background: "#050507", text: "#ece5d8", accent2: "#36d1ff" });
   assert.equal(theme({ background: "#050507", text: "#ece5d8", accent2: "#36d1ff" }), dark, "an equal palette answers the same theme");
@@ -246,6 +334,11 @@ test("theme() turns a palette into frozen triples, once per palette", () => {
   const light = theme({ background: "#f4f1ea", text: "#1a1a1a" });
   assert.equal(light.light, true);
   assert.deepEqual(plain(light.hi), [12, 14, 20], "light themes mix toward near-black");
+  // A light page's badges are filled wells in the state's deepened hue, the
+  // mark cut out in the page's own colour.
+  assert.deepEqual(plain({ amberWell: light.amberWell, doneWell: light.doneWell, amberInk: light.amberInk, doneInk: light.doneInk }), {
+    amberWell: [134, 113, 71], doneWell: [53, 114, 85], amberInk: [244, 241, 234], doneInk: [244, 241, 234],
+  });
   assert.deepEqual(plain(light.orbit), [52, 96, 178]);
   assert.deepEqual(plain(theme({ background: "#fff" }).bg), [255, 255, 255], "#rgb backgrounds parse");
   assert.equal(theme({ background: "not a colour" }).bg.join(","), "5,5,7");
@@ -262,7 +355,7 @@ test("inkOf derives a tint's tones under the theme and caches them per triple", 
   const light = theme({ background: "#f4f1ea" });
   const lit = inkOf(tint, light);
   assert.notEqual(lit, inks, "another theme rebuilds them");
-  assert.deepEqual(plain(lit.core), [240, 231, 214]);
+  assert.deepEqual(plain(lit.core), [232, 211, 172], "a light theme sinks the core only halfway: the body keeps its state's hue");
   assert.equal(inkOf(tint, light), lit);
 });
 

@@ -317,6 +317,7 @@
     nodeMotion: new Map(),
     nodeTheme: null, // MefiNodeStyles.theme(palette), rebuilt by syncGraphTheme
     styleBurstUntil: 0, // a style switch or a new selection draws at the hot cadence until then
+    orbitHotAt: -Infinity, // the frame time a Running work orbit was last drawn (it earns the hot cadence)
     orbitVel: 0,
     settleUntil: 0,
     labels: LABEL_MODES.includes(storedLabels) ? storedLabels : "auto",
@@ -3572,9 +3573,14 @@
     const always = working || node.kind === "assistant";
     // Hover and selection ease an orb forward and back (drawFrame steps
     // node._lift); working orbs and the hub stay forward. Without a stepped
-    // value the profile answers at once, as it always did.
+    // value the profile answers at once, as it always did. A quiet node sits
+    // back at .65 on a dark page; a light page keeps it at .85 (its state's
+    // rim must still read on the pale ground), and .92 for the Void
+    // collection there (Singularity's horizon stays black, not grey).
     const lift = always ? 1 : Number.isFinite(node._lift) ? node._lift : focused ? 1 : 0;
-    return { prominent: always || focused, maxRadius: 11 + 4 * lift, alpha: 0.65 + 0.35 * lift, shape: "circle" };
+    const style = state.nodeStyle;
+    const quiet = state.nodeTheme?.light === true ? (style === "singularity" || style === "prism" || style === "sigil" ? 0.92 : 0.85) : 0.65;
+    return { prominent: always || focused, maxRadius: 11 + 4 * lift, alpha: quiet + (1 - quiet) * lift, shape: "circle" };
   }
 
   function setSettingsPreview(rect) {
@@ -3631,7 +3637,7 @@
   // (window.MefiNodeStyles, bundled first and shared with the tree rail), in
   // the chosen style; a bare harness without it gets one plain disc. One
   // options scratch is reused for every node.
-  const SURFACE = { kind: "task", selected: false, chosen: false, active: false, alpha: 1, glyph: false, monogram: false, motion: null, time: 0, still: false, detail: 3, extraGlow: false, theme: null };
+  const SURFACE = { kind: "task", selected: false, chosen: false, active: false, stale: false, alpha: 1, glyph: false, monogram: false, motion: null, time: 0, still: false, detail: 3, extraGlow: false, theme: null };
   // The agent ring's, the hub dress's and the work orbit's options: one
   // scratch each, filled per node (a style's hook reads them at once and
   // never keeps them). `detail` is the tier drawFrame capped for the node's
@@ -3667,6 +3673,7 @@
       options.glyph = monogram || node.kind === "agent" && radius >= 4.5; options.monogram = monogram;
       options.motion = motion; options.time = time; options.still = Boolean(still); options.detail = detail;
       options.extraGlow = node._extraGlow; options.theme = state.nodeTheme ?? null;
+      options.stale = node.stale === true || node.state === "stale";
       styles.paint(ctx, state.nodeStyle ?? "orbs", p, radius, tint, options);
       return;
     }
@@ -3816,7 +3823,9 @@
     if (grow <= 0.02) return;
     const theme = state.nodeTheme ?? null;
     const done = theme?.done ?? NODE_RGB.done;
-    const mark = theme?.light ? theme.doneInk : done;
+    // (a light page's badge is a filled green well with its "!" cut out in
+    // the page's colour: its edge and echoes take the well's deep green)
+    const mark = theme?.light ? theme.doneWell : done;
     const offset = node._m?.seed ?? 0;
     const beatAt = still ? 0 : (time / 1600 + offset) % 1;
     const beat = !still && beatAt < 0.4 ? Math.sin(Math.PI * beatAt / 0.4) : 0;
@@ -3828,8 +3837,13 @@
     // The echoes wait for the pop: from each beat's peak (.2) over 60% of it.
     const echo = !still && grow === 1 && beatAt >= 0.2 && beatAt < 0.8 ? (beatAt - 0.2) / 0.6 : -1;
     if (echo >= 0) {
-      // The node pulses green on the same beat: a ring off its rim.
-      ctx.beginPath(); ctx.arc(p.x, p.y, radius + 2 + 4 * echo, 0, Math.PI * 2);
+      // The node pulses green on the same beat: a ring off its rim, in the
+      // style's own silhouette (a hexagon round Sigil's seal, an octagon
+      // round Crystal, a kite round Prism).
+      const styles = globalThis.window?.MefiNodeStyles;
+      ctx.beginPath();
+      if (styles) styles.outline(ctx, state.nodeStyle ?? "orbs", p.x, p.y, radius + 2 + 4 * echo, node._m ?? null);
+      else ctx.arc(p.x, p.y, radius + 2 + 4 * echo, 0, Math.PI * 2);
       ctx.strokeStyle = rgba(mark, Math.round(0.4 * (1 - echo) * 32) / 32); ctx.lineWidth = 1.2; ctx.stroke();
     }
     ctx.translate(bx, by);
@@ -3916,10 +3930,13 @@
     }
     if (!state.orbitTrails || !shown) return;
     const running = shown === "Running";
-    // The node's motion record integrates the orbit (a Running turn 1.1 s, a
+    // The node's motion record integrates the orbit (a Running turn 1.8 s, a
     // Next one 2.4 s), so a node that starts or stops working never jumps;
-    // without one the same speeds from the clock.
-    const phase = still ? Math.PI / 3 : Number.isFinite(m?.orbit) ? m.orbit : time / (running ? 1100 : 2400) * Math.PI * 2;
+    // without one the same speeds from the clock. A Running orbit on screen
+    // earns the display's full rate (motionHot, when frames are cheap), so
+    // it glides at about 1.4 px a frame instead of stepping.
+    const phase = still ? Math.PI / 3 : Number.isFinite(m?.orbit) ? m.orbit : time / (running ? 1800 : 2400) * Math.PI * 2;
+    if (running && !still) state.orbitHotAt = time;
     const ring = radius + 9;
     if (fade < 1) { ctx.save(); ctx.globalAlpha *= fade; }
     // A style may draw the orbit in its own language (the free styles share
@@ -6447,6 +6464,9 @@
     // both pens go back to the canvas default for the nodes after them.
     ctx.lineCap = "round";
     if (far !== ctx) far.lineCap = "round";
+    // (a style's plain wire relies on it: it touches the dash only to draw one)
+    ctx.setLineDash?.(NO_DASH); ctx.lineDashOffset = 0;
+    if (far !== ctx) { far.setLineDash?.(NO_DASH); far.lineDashOffset = 0; }
     // A style may draw its own wires (renderer/node-styles.js); one without
     // them, or a bare harness, keeps the lines below. One scratch per frame.
     const nodeStyles = globalThis.window?.MefiNodeStyles ?? null;
@@ -7472,8 +7492,9 @@
     const flightPx = Math.hypot(state.camera.tx - state.camera.x, state.camera.ty - state.camera.y, state.camera.tz - state.camera.z) * state.fit * state.zoom * (state.overviewScale ?? 1);
     state.cameraMoving = !still && (flightPx > 8 || centerFlight > 8 || (state.zoomTarget != null && Math.abs(state.zoomTarget - state.zoom) > 0.03));
     // What earns the display's full rate: a glide, a zoom, or a hand on the tree.
-    // A style's short effects (a switch, a selection settling) earn it too.
-    state.motionHot = !still && (state.cameraMoving || flightPx > 0.5 || centerFlight > 0.5 || state.zoomTarget != null || Number.isFinite(state.fitTarget) || Boolean(state.morph || state.lifeHot || state.panning || state.rotating) || state.styleBurstUntil > time);
+    // A style's short effects (a switch, a selection settling) earn it too,
+    // and so does a Running work orbit drawn in the last 100 ms.
+    state.motionHot = !still && (state.cameraMoving || flightPx > 0.5 || centerFlight > 0.5 || state.zoomTarget != null || Number.isFinite(state.fitTarget) || Boolean(state.morph || state.lifeHot || state.panning || state.rotating) || state.styleBurstUntil > time || state.orbitHotAt > time - 100);
 
     const { ctx } = el;
     // Two layers: the sky, and while a node is focused or a card hovered
@@ -7607,6 +7628,10 @@
     for (const pulse of state.pulses) {
       // An arrived pulse's head is done: the landing pass below has it now.
       if (!still && now - pulse.start >= pulse.duration) continue;
+      // A style's pulse runs only to a node still in the graph: one whose
+      // target left it (folded, absorbed, filtered) would fly to where that
+      // node last stood and land there as a stray mark. It is dropped.
+      if (pulseLook && !screenPoints.has(pulse.to?.id)) { pulse._landed = true; continue; }
       // A pulse launched from a HUD row (an absorbed record) starts at that
       // screen point rather than at a node.
       const from = screenPoints.get(pulse.from.id) ?? project(pulse.from);
@@ -7659,7 +7684,8 @@
       for (const pulse of state.pulses) {
         const since = now - pulse.start - pulse.duration;
         if (!still && since < 0) continue;
-        landPulse(ctx, nodeStyles, pulse, screenPoints.get(pulse.to.id) ?? project(pulse.to), since, pulseLook, time, still);
+        if (!screenPoints.has(pulse.to?.id)) { pulse._landed = true; continue; }
+        landPulse(ctx, nodeStyles, pulse, screenPoints.get(pulse.to.id), since, pulseLook, time, still);
       }
     }
     ctx.lineCap = "butt";
@@ -7705,7 +7731,7 @@
     if (costCap < 3 && !(cost >= 12) && frameNo - (state.detailCapAt ?? -Infinity) >= 30) costCap += 1;
     if (costCap !== capWas) state.detailCapAt = frameNo;
     state.detailCap = costCap;
-    const stepFlags = { style: state.nodeStyle, active: false, selected: false, progress: null, orbit: 0, status: null, time, frame: frameNo };
+    const stepFlags = { style: state.nodeStyle, active: false, selected: false, progress: null, orbit: 0, status: null, stale: false, time, frame: frameNo };
     // The surface's flags and the arrival/selection options: one scratch each
     // for the frame, filled per node (drawNodeSurface reads its flags at once;
     // a style's hook never keeps its options).
@@ -7743,8 +7769,9 @@
         // A work orbit fading out after its label dropped keeps turning at
         // its speed (drawWorkOrbit keeps the label it shows on the record).
         const orbiting = node._workLabel === "Running" || node._workLabel === "Next" ? node._workLabel : motion.orbitLabel;
-        stepFlags.orbit = orbiting === "Running" ? 1.1 : orbiting === "Next" ? 2.4 : 0;
+        stepFlags.orbit = orbiting === "Running" ? 1.8 : orbiting === "Next" ? 2.4 : 0;
         stepFlags.status = node.kind === "agent" ? node.status ?? null : null;
+        stepFlags.stale = node.stale === true || node.state === "stale";
         nodeStyles.stepMotion(motion, stepFlags, dt, still);
         tint = nodeStyles.shownTint(motion, tint, time, still);
       }
@@ -7811,17 +7838,11 @@
         const clash = state.nodeTheme?.light === true ? nodeStyles?.inkOf(NODE_RGB.collision, state.nodeTheme).hot ?? null : null;
         ctx.save();
         ctx.globalAlpha *= dim;
-        if (state.nodeStyle === "sigil" && nodeStyles) {
-          // Sigil's seal is a pointy-top hexagon (.98 r): the rim follows it,
-          // a hexagon ~2.2 px off its edges, rather than a round mark round it.
-          const rim = 0.98 * radius + 2.6 + beat;
+        // The rim follows the style's silhouette (Sigil's seal, Crystal's
+        // octagon, Prism's kite), a couple of pixels off it.
+        if (nodeStyles) {
           ctx.beginPath();
-          for (let k = 0; k < 6; k += 1) {
-            const angle = (k / 3 - 0.5) * Math.PI;
-            if (k) ctx.lineTo(p.x + rim * Math.cos(angle), p.y + rim * Math.sin(angle));
-            else ctx.moveTo(p.x + rim * Math.cos(angle), p.y + rim * Math.sin(angle));
-          }
-          ctx.closePath();
+          nodeStyles.outline(ctx, state.nodeStyle ?? "orbs", p.x, p.y, radius + 2.6 + beat, motion);
         } else traceNodeSurface(ctx, visual.shape, p.x, p.y, radius + 2 + beat);
         ctx.strokeStyle = clash ? rgba(clash, Math.round((0.5 + 0.25 * beat) * 32) / 32) : still ? rgba(NODE_RGB.collision, 0.55) : rgba(NODE_RGB.collision, Math.round((0.4 + 0.3 * beat) * 32) / 32);
         ctx.lineWidth = 1 + 0.4 * beat;

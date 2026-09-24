@@ -125,9 +125,12 @@
   }
 
   // One step of a record. flags: { style, active, selected, lift?, progress,
-  // orbit (seconds per turn, 0 for none), status, time (ms), frame, speedup? }.
-  // `clock` is integrated (seconds × tempo), so going from idle to working
-  // speeds a style up without a phase jump; reduced motion holds it.
+  // orbit (seconds per turn, 0 for none), status, time (ms), frame, speedup?,
+  // stale? }. `clock` is integrated (seconds × tempo), so going from idle to
+  // working speeds a style up without a phase jump; a stale node's clock
+  // runs at STALE_TEMPO (it reads as stalled, and still moves); reduced
+  // motion holds it.
+  const STALE_TEMPO = 0.4;
   function stepMotion(record, flags, dt, still) {
     const active = flags.active === true, selected = flags.selected === true;
     const step = dt > 0 ? dt : 0;
@@ -140,7 +143,7 @@
     record.kick = still ? 0 : Math.max(0, record.kick - step / 0.45);
     record.age = active ? (still ? 1e9 : record.age + step) : 0;
     const speedup = Number.isFinite(flags.speedup) ? flags.speedup : LOOKS[flags.style]?.speedup ?? 2.6;
-    record.tempo = 1 + (speedup - 1) * record.work;
+    record.tempo = (1 + (speedup - 1) * record.work) * (flags.stale === true ? STALE_TEMPO : 1);
     if (!still && step > 0) {
       record.clock += step * record.tempo;
       if (flags.orbit > 0) record.orbit += step * TAU / flags.orbit;
@@ -258,6 +261,10 @@
     return null;
   }
   const frozenMix = (from, toward, amount) => Object.freeze(mix(from, toward, amount));
+  // The status badges' wells and marks. On a dark theme a dark well in the
+  // state's hue carries a bright mark; on a light one the well is the state's
+  // hue deepened (a filled amber or green badge, the most urgent marks on the
+  // board) and its "!" or tick is cut out in the page's own colour.
   function buildTheme(bg, text, accent2, done, amber) {
     const light = bg[0] * 0.2126 + bg[1] * 0.7152 + bg[2] * 0.0722 > 145;
     const hi = Object.freeze(light ? [12, 14, 20] : [255, 255, 255]);
@@ -268,9 +275,10 @@
       orbit: accent2 ?? Object.freeze(light ? [52, 96, 178] : [125, 178, 255]),
       accent2,
       done, amber,
-      doneWell: frozenMix(done, bg, 0.8),
-      doneInk: frozenMix(done, hi, 0.5),
-      amberWell: frozenMix(amber, bg, 0.8),
+      doneWell: light ? frozenMix(done, hi, 0.55) : frozenMix(done, bg, 0.8),
+      doneInk: light ? bg : frozenMix(done, hi, 0.5),
+      amberWell: light ? frozenMix(amber, hi, 0.5) : frozenMix(amber, bg, 0.8),
+      amberInk: light ? bg : amber,
     });
   }
   const INK_DEFAULTS = buildTheme(Object.freeze([5, 5, 7]), Object.freeze([236, 229, 216]), null, Object.freeze([104, 236, 164]), Object.freeze([255, 212, 121]));
@@ -290,8 +298,9 @@
   }
 
   // A tint's derived tones under a theme, cached per triple and rebuilt when
-  // the theme changes: core/deep sink toward the background, spec/hot/frost/
-  // ink rise toward the highlight. Read-only.
+  // the theme changes: core/deep sink toward the background (only halfway on
+  // a light theme, so a body keeps its state's hue off a pale page instead of
+  // going pastel), spec/hot/frost/ink rise toward the highlight. Read-only.
   const inks = new WeakMap();
   function inkOf(tint, currentTheme = INK_DEFAULTS) {
     const active = currentTheme ?? INK_DEFAULTS;
@@ -299,7 +308,7 @@
     if (record && record.key === active.key) return record;
     record = {
       key: active.key,
-      core: mix(tint, active.bg, 0.84), deep: mix(tint, active.bg, 0.86),
+      core: mix(tint, active.bg, active.light ? 0.5 : 0.84), deep: mix(tint, active.bg, active.light ? 0.55 : 0.86),
       spec: mix(tint, active.hi, 0.78), hot: mix(tint, active.hi, 0.6),
       frost: mix(tint, active.hi, 0.82), ink: mix(tint, active.hi, 0.9),
     };
@@ -365,6 +374,10 @@
   // Entry: { speedup, paint(ctx, p, radius, tint, o, m), glyph, ring, hubDress,
   // orbit, arrival, select, wire, surge, land, reach }.
   const LOOKS = Object.create(null);
+  // A style whose silhouette is not a circle registers it here from its own
+  // section: (ctx, x, y, r, m) adds one closed subpath at radius r and
+  // answers its vertex count (see outline() in overlays).
+  const OUTLINES = Object.create(null);
   const lookOf = (style) => LOOKS[style] ?? null;
   const EMPTY = Object.freeze({});
   // A known style's hook `name`: its own, else the owning section's shared
@@ -503,14 +516,26 @@
   // page, so each look's edge (a rim, a ring) takes a tone deepened toward
   // the theme's dark highlight; dark themes keep the tint. Built on a cache
   // miss only (mix makes a new triple).
-  const freeEdge = (tint, currentTheme) => currentTheme.light ? mix(tint, currentTheme.hi, 0.6) : tint;
+  const freeEdge = (tint, currentTheme) => currentTheme.light ? mix(tint, currentTheme.hi, 0.72) : tint;
   // The rims breathe with the node, 4.2 s a breath (1.6 s working), at every
   // size and tier: ±25% of their alpha (the orb and glass rims their width
-  // too), the motion a todo-sized node keeps.
-  const freeBreath = (m) => 0.6 + 0.4 * swell(m, 4.2);
+  // too), the motion a todo-sized node keeps. On a light page a rim is the
+  // state's mark against the page, so it breathes shallower (never under
+  // 85%) and is at least FREE_LIGHT_RIM px wide from T1's size up.
+  const freeBreath = (m, light = false) => light ? 0.85 + 0.15 * swell(m, 4.2) : 0.6 + 0.4 * swell(m, 4.2);
+  const FREE_LIGHT_RIM = 1.4;
+  const freeRim = (width, radius, light) => light && radius >= 6 && width < FREE_LIGHT_RIM ? FREE_LIGHT_RIM : width;
+  // A stale node's rim (from T1 up) is cut in short dashes: it reads as
+  // stalled while it still breathes (its clock runs slower, see stepMotion).
+  const FREE_STALE_DASH = Object.freeze([1.5, 2]), FREE_NO_DASH = Object.freeze([]);
   // A dark ink that keeps a trace of the hue, for a glyph on a bright body.
   const FREE_DARK = Object.freeze([11, 14, 20]);
   const freeLuma = (triple) => triple[0] * 0.2126 + triple[1] * 0.7152 + triple[2] * 0.0722;
+  // WCAG relative luminance and the contrast ratio of two triples (run once
+  // per theme and tint, on a cache miss).
+  const freeLinear = (channel) => { const c = channel / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const freeLuminance = (triple) => 0.2126 * freeLinear(triple[0]) + 0.7152 * freeLinear(triple[1]) + 0.0722 * freeLinear(triple[2]);
+  const freeContrast = (a, b) => { const la = freeLuminance(a), lb = freeLuminance(b); return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05); };
   // Each free look's glyph ink for a tint under a theme (the hub's monogram
   // and an agent's role glyph), cached per theme and triple: an orb writes
   // on its body's centre (the tint at about .76 over the theme-derived core),
@@ -540,10 +565,17 @@
         minimal: rgba(freeEdge(tint, active), 1),
         halo: rgba(tones.hot, 1),
         crystal: rgba(tones.ink, 1),
-        dot: active.light ? mix(tint, active.hi, 0.55) : tint,
-        dotRest: null,
+        // (on a light page the dot is the tint half way to the ink, and
+        // opaque at rest: paler or fainter, a done or amber dot melts into the
+        // page at a quiet node's alpha; its hue still holds at this depth)
+        dot: active.light ? mix(tint, active.hi, 0.5) : tint,
+        dotRest: null, minimalText: null,
       };
-      inks.dotRest = rgba(inks.dot, qa(active.light ? 0.8 : 0.6));
+      inks.dotRest = rgba(inks.dot, active.light ? 1 : 0.6);
+      // Minimal's hub and music dots carry their monogram: the dark or the
+      // light ink, whichever stands further off the dot (over the page).
+      const shown = mix(active.bg, inks.dot, active.light ? 1 : 0.6);
+      inks.minimalText = rgba(freeContrast(dark, shown) >= freeContrast(light, shown) ? dark : light, 1);
       byTint.set(tint, inks);
     }
     freeInkTheme = active; freeInkTint = tint; freeInkLast = inks;
@@ -617,10 +649,15 @@
     ctx.fillStyle = paints.body; ctx.fill();
     if (sway) { ctx.beginPath(); ctx.rotate(-sway); }
     freeLeave(ctx, p, radius);
-    // The rim breathes with the halo (the same 4.2 s breath) in alpha and width.
+    // The rim breathes with the halo (the same 4.2 s breath) in alpha and
+    // width (on a light page shallower, and at least 1.4 px from 6 px up).
     ctx.arc(p.x, p.y, radius, 0, TAU);
-    ctx.strokeStyle = rgba(paints.edge, qa((paints.light ? 0.85 + 0.1 * lit + 0.05 * sel : 0.5 + 0.32 * lit + 0.18 * sel) * (0.55 + 0.45 * breath)));
-    ctx.lineWidth = ((paints.light ? 1 : 0.8) + 0.5 * lit + 0.5 * sel) * (0.8 + 0.4 * breath); ctx.stroke();
+    ctx.strokeStyle = rgba(paints.edge, qa((paints.light ? 0.85 + 0.1 * lit + 0.05 * sel : 0.5 + 0.32 * lit + 0.18 * sel) * (paints.light ? 0.85 + 0.15 * breath : 0.55 + 0.45 * breath)));
+    ctx.lineWidth = freeRim(((paints.light ? 1.2 : 0.8) + 0.5 * lit + 0.5 * sel) * (0.8 + 0.4 * breath), radius, paints.light);
+    const stale = n.stale && n.detail >= 1;
+    if (stale) ctx.setLineDash?.(FREE_STALE_DASH);
+    ctx.stroke();
+    if (stale) ctx.setLineDash?.(FREE_NO_DASH);
     // The glint (T1 up, faded in over the tier's first 1.2 px): a streak of
     // rim light riding round the inside of the rim, clear of the body's
     // middle.
@@ -641,8 +678,8 @@
 
   // Soft glass: a pane sunk toward the background under a cached tint wash
   // that swells with the node's breath, a crisp rim breathing in alpha and
-  // width (pulsing while it works), a frost ring, one light catch that sways
-  // upper left and a caustic lower right. A soft frost sheen (a cached,
+  // width (pulsing while it works), a frost ring, one light catch orbiting
+  // the pane with a caustic across from it. A soft frost sheen (a cached,
   // feathered band) sweeps across the pane from the light over most of each
   // pass, 2.6 times as often while it works; no clip, the band fills the
   // pane's own circle. On a light page the pane keeps most of the hue and
@@ -656,17 +693,19 @@
     if (cached) return cached;
     const light = currentTheme.light;
     const wash = ctx.createLinearGradient(-0.9, -0.9, 0.9, 0.9);
-    wash.addColorStop(0, rgba(tint, 0.46)); wash.addColorStop(0.5, rgba(tint, 0.12)); wash.addColorStop(1, rgba(tint, 0.05));
+    wash.addColorStop(0, rgba(tint, light ? 0.6 : 0.56)); wash.addColorStop(0.5, rgba(tint, 0.12)); wash.addColorStop(1, rgba(tint, 0.05));
     const frost = mix(tint, WHITE, 0.82);
     // The sheen across the sweep's axis (.34 either side of its middle):
     // feathered edges, a brighter core.
     const sheen = ctx.createLinearGradient(-0.34 * GLASS_SWEEP_X, -0.34 * GLASS_SWEEP_Y, 0.34 * GLASS_SWEEP_X, 0.34 * GLASS_SWEEP_Y);
-    sheen.addColorStop(0, rgba(frost, 0)); sheen.addColorStop(0.34, rgba(frost, light ? 0.28 : 0.16)); sheen.addColorStop(0.5, rgba(frost, light ? 0.7 : 0.42));
-    sheen.addColorStop(0.66, rgba(frost, light ? 0.28 : 0.16)); sheen.addColorStop(1, rgba(frost, 0));
+    sheen.addColorStop(0, rgba(frost, 0)); sheen.addColorStop(0.34, rgba(frost, light ? 0.28 : 0.26)); sheen.addColorStop(0.5, rgba(frost, light ? 0.7 : 0.6));
+    sheen.addColorStop(0.66, rgba(frost, light ? 0.28 : 0.26)); sheen.addColorStop(1, rgba(frost, 0));
     return cachePut(ctx, key, {
       wash, sheen, frost, edge: freeEdge(tint, currentTheme), light,
-      pane: rgba(mix(tint, currentTheme.bg, light ? 0.32 : 0.78), 0.92),
-      catch: rgba(frost, light ? 0.9 : 0.62), caustic: light ? rgba(WHITE, 0.85) : rgba(mix(tint, WHITE, 0.35), 0.5),
+      // (on a dark page the pane keeps a third of its hue: sunk any deeper,
+      // a warm tint reads as a muddy olive disc)
+      pane: rgba(mix(tint, currentTheme.bg, light ? 0.32 : 0.66), 0.92),
+      catch: rgba(frost, light ? 0.9 : 0.75), caustic: light ? rgba(WHITE, 0.85) : rgba(mix(tint, WHITE, 0.35), 0.5),
     });
   }
   function paintGlass(ctx, p, radius, tint, n, m) {
@@ -677,23 +716,27 @@
     ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, TAU);
     ctx.fillStyle = paints.pane; ctx.fill();
     // The wash (its cached gradient in the pane's unit space) swells deeply
-    // with the node's breath.
+    // with the node's breath, and its bright side follows the light as it
+    // orbits the pane (the light catch below rides the rim beside it).
+    const sway = turn(m, 6.8);
     freeEnter(ctx, p, radius);
     ctx.arc(0, 0, 1, 0, TAU);
     ctx.globalAlpha = base * (0.62 + 0.38 * lit) * (0.5 + 0.5 * breath);
+    if (sway) ctx.rotate(sway);
     ctx.fillStyle = paints.wash; ctx.fill();
-    // The sheen (T1 up): the first 80% of each 6.8 s pass (2.6 s working)
-    // sweeps it from the upper left to the lower right, at full strength
-    // through the middle of the sweep and easing in and out at the pane's
-    // edges; reduced motion parks it by the light. The cached band moves
-    // along the sweep; the pane's circle moves back under it.
+    if (sway) ctx.rotate(-sway);
+    // The sheen (T1 up): each 6.8 s pass (2.6 s working) sweeps it from the
+    // upper left to the lower right, at full strength through the middle of
+    // the sweep and easing in and out at the pane's edges; it never rests
+    // (it leaves the far edge as the next pass enters at the light).
+    // Reduced motion parks it by the light. The cached band moves along the
+    // sweep; the pane's circle moves back under it.
     const shown = n.detail >= 1 ? tierIn(radius, 1) : 0;
     if (shown > 0) {
       let at = -0.5, envelope = 0.8;
       if (!m.still) {
-        const u = cycle(m, 6.8) / 0.8;
-        envelope = u < 1 ? smooth01(u / 0.15) * smooth01((1 - u) / 0.15) : 0;
-        at = -1 + 2 * u;
+        at = -1.2 + 2.4 * cycle(m, 6.8);
+        envelope = smooth01((1.2 - Math.abs(at)) / 0.6);
       }
       const gain = shown * envelope * (0.65 + 0.35 * lit);
       if (gain > 0.004) {
@@ -708,16 +751,24 @@
     freeLeave(ctx, p, radius);
     ctx.globalAlpha = base;
     // The rim breathes in alpha and width, and pulses on top of that while
-    // the node works; a light page gets a firmer rim.
+    // the node works; a light page gets a firmer rim (never under 85%, and
+    // at least 1.4 px from 6 px up).
     ctx.arc(p.x, p.y, radius, 0, TAU);
-    const pulse = work > 0 ? 1 - 0.2 * work * (1 - swell(m, 2.2)) : 1;
+    const pulse = work > 0 ? 1 - 0.35 * work * (1 - swell(m, 2.2)) : 1;
     const rim = paints.light ? 0.85 + 0.1 * lit + 0.05 * sel : 0.5 + 0.28 * lit + 0.22 * sel;
-    ctx.strokeStyle = rgba(paints.edge, qa(rim * (0.55 + 0.45 * breath) * pulse)); ctx.lineWidth = (1 + 0.7 * sel) * (0.8 + 0.4 * breath); ctx.stroke();
-    // The light catch, swaying upper left, at every size (on a small pane
-    // it keeps a little over half the radius, clear of the centre).
-    const sway = 0.3 * (2 * swell(m, 7.2) - 1), from = Math.PI * 1.1 + sway;
-    ctx.lineCap = "round"; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(radius * 0.55, radius - Math.max(2, radius * 0.22)), from, from + Math.PI * 0.47);
+    ctx.strokeStyle = rgba(paints.edge, qa(rim * (paints.light ? 0.85 + 0.15 * breath : 0.55 + 0.45 * breath) * pulse));
+    ctx.lineWidth = freeRim((1 + 0.7 * sel) * (0.8 + 0.4 * breath), radius, paints.light);
+    const stale = n.stale && n.detail >= 1;
+    if (stale) ctx.setLineDash?.(FREE_STALE_DASH);
+    ctx.stroke();
+    if (stale) ctx.setLineDash?.(FREE_NO_DASH);
+    // The light catch, at every size (on a small pane it keeps a little over
+    // half the radius, clear of the centre), orbiting the pane: one turn in
+    // 6.8 s (2.6 s working), from the light at the upper left; the caustic
+    // keeps across from it. Reduced motion parks it at the light.
+    const from = Math.PI * 1.1 + sway;
+    ctx.lineCap = "round"; ctx.lineWidth = paints.light ? 1 : 1.3;
+    ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(radius * 0.55, radius - Math.max(2, radius * 0.22)), from, from + Math.PI * 0.6);
     ctx.strokeStyle = paints.catch; ctx.stroke();
     // T2 up: a frost ring inside the rim and a caustic lower right, drawn
     // last so their gains need no undoing (paint() restores the canvas).
@@ -740,8 +791,9 @@
   // going out from it (born soft, never glued to the dot); a selection ring
   // in the theme's text colour. On a light page the dot and the sonar take
   // a tone deepened toward the theme's dark highlight, at a firmer alpha.
-  // An agent keeps a backing disc for its role glyph, the hub a larger dot
-  // and no monogram.
+  // An agent keeps a backing disc for its role glyph; the hub and the music
+  // node a larger dot wearing their monogram in whichever ink stands off it.
+  // A stale node (from T1 up) wears a dashed ring round its dot.
   function paintMinimal(ctx, p, radius, tint, n, m) {
     const { lit, sel, work } = freeLevels(n, m);
     const base = n.alpha;
@@ -756,7 +808,7 @@
     } else {
       dot = Math.max(2.5, radius * (n.monogram ? 0.62 : 0.46 + 0.14 * work + 0.05 * sel)) * (1 + (0.14 + 0.06 * work) * breath);
       ctx.arc(p.x, p.y, dot, 0, TAU);
-      ctx.fillStyle = lit > 0 ? rgba(tone, qa(n.theme.light ? 0.8 + 0.2 * lit : 0.6 + 0.35 * lit)) : inks.dotRest; ctx.fill();
+      ctx.fillStyle = lit > 0 && !n.theme.light ? rgba(tone, qa(0.6 + 0.35 * lit)) : inks.dotRest; ctx.fill();
     }
     if (work > 0.01 && radius >= 4) {
       const u = m.still ? 0.45 : cycle(m, 4.2);
@@ -766,12 +818,20 @@
       ctx.strokeStyle = rgba(tone, 1); ctx.lineWidth = 1; ctx.stroke();
       ctx.globalAlpha = base;
     }
+    if (n.stale && n.detail >= 1) {
+      ctx.beginPath(); ctx.arc(p.x, p.y, dot + 1.5, 0, TAU);
+      ctx.setLineDash?.(FREE_STALE_DASH);
+      ctx.strokeStyle = rgba(tone, 0.75); ctx.lineWidth = 1; ctx.stroke();
+      ctx.setLineDash?.(FREE_NO_DASH);
+    }
     if (sel > 0.01) {
       ctx.globalAlpha = base * sel;
       ctx.beginPath(); ctx.arc(p.x, p.y, dot + 2.5, 0, TAU);
       ctx.strokeStyle = rgba(n.theme.text, 0.9); ctx.lineWidth = 1.5; ctx.stroke();
       ctx.globalAlpha = base;
     }
+    // (a dot too small to hold the 10 px glyph goes without it)
+    if (n.monogram && dot >= 4.5) freeMonogram(ctx, p, n, inks.minimalText);
   }
   LOOKS.minimal = { speedup: 2.6, paint: paintMinimal, glyph: { scale: 0.62, ringGap: 2, ink: (tint, currentTheme) => freeInks(tint, currentTheme).minimal }, ring: null, hubDress: null, orbit: null, arrival: null, select: null, wire: null, surge: null, land: null, reach: 1 };
 
@@ -798,7 +858,7 @@
     glow.addColorStop(0, rgba(tint, 0)); glow.addColorStop(0.3, rgba(tint, 0.16)); glow.addColorStop(0.45, rgba(tint, 0.42));
     glow.addColorStop(0.62, rgba(tint, 0.12)); glow.addColorStop(1, rgba(tint, 0));
     const tones = inkOf(tint, currentTheme);
-    const comet = currentTheme.light ? mix(tint, currentTheme.hi, 0.8) : mix(tint, WHITE, 0.85);
+    const comet = currentTheme.light ? mix(tint, currentTheme.hi, 0.92) : mix(tint, WHITE, 0.85);
     return cachePut(ctx, key, {
       glow, edge: freeEdge(tint, currentTheme), light: currentTheme.light, band: rgba(tint, 0.14),
       core: rgba(tones.core, 0.86), comet: rgba(comet, 0.9),
@@ -832,10 +892,19 @@
       }
       ctx.globalAlpha = base;
     }
-    const ringWidth = 1.4 + 0.6 * lit + 0.4 * sel;
+    // The ring breathes in width (±14%) and between 80% and full alpha (on a
+    // light page 93%, and it never drops under .85 there), and a hover lifts
+    // it: +.25 alpha and +.5 px on top of what the lit level adds.
+    const breath = swell(m, 4.2);
+    const ringWidth = (1.4 + 0.6 * lit + 0.9 * sel) * (0.86 + 0.28 * breath);
     ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, TAU);
     ctx.fillStyle = paints.core; ctx.fill();
-    ctx.strokeStyle = rgba(paints.edge, qa((paints.light ? 0.82 + 0.16 * lit : 0.68 + 0.27 * lit) * freeBreath(m))); ctx.lineWidth = ringWidth; ctx.stroke();
+    const ring = paints.light ? (0.92 + 0.08 * lit + 0.25 * sel) * (0.93 + 0.07 * breath) : (0.68 + 0.27 * lit + 0.25 * sel) * (0.8 + 0.2 * breath);
+    ctx.strokeStyle = rgba(paints.edge, qa(ring > 1 ? 1 : ring)); ctx.lineWidth = ringWidth;
+    const stale = n.stale && n.detail >= 1;
+    if (stale) ctx.setLineDash?.(FREE_STALE_DASH);
+    ctx.stroke();
+    if (stale) ctx.setLineDash?.(FREE_NO_DASH);
     // The comet (T1 up, while it works): a bright head and a fading tail.
     if (shown > 0 && work > 0.02 && radius >= 5) {
       const head = turn(m, 4.4, -Math.PI / 2);
@@ -889,9 +958,10 @@
   // light flashes, handing over to its neighbour as the gem turns (no tone
   // ever pops). A tilt breathes, a sparkle twinkles where the light
   // strikes, and a lit gem glows inside an octagon. Detail by tier: below
-  // T1 a plain gem; T1 adds the shadow facets and the table; T2 the flash
-  // and the sparkle; T3 the cut's lines on a lit gem or one of 12 px and up
-  // (each fading in over its tier's first 1.2 px).
+  // T1 the gem and its shadow facets (a touch larger, with mitred corners,
+  // so a todo keeps its flats); T1 adds the table; T2 the flash and the
+  // sparkle; T3 the cut's lines on a lit gem or one of 12 px and up (each
+  // fading in over its tier's first 1.2 px).
   const crystalKeys = new WeakMap();
   const CRYSTAL_LIGHT = -Math.PI * 0.75;
   const CRYSTAL_OCT = new Float64Array(16);
@@ -900,6 +970,7 @@
     CRYSTAL_OCT[2 * k + 1] = Math.sin(Math.PI / 8 + k * Math.PI / 4);
   }
   const CRYSTAL_GEM = new Float64Array(16); // this frame's turned, tilted cut
+  const CRYSTAL_DASH = [0, 0]; // a stale rim's dash in the gem's unit space (setLineDash copies it)
   const CRYSTAL_DARK = Object.freeze([8, 10, 18]);
   function crystalPaints(ctx, tint, currentTheme) {
     const key = freeKey(crystalKeys, "crystal", tint, currentTheme);
@@ -920,6 +991,8 @@
       light, glow, firm: currentTheme.light,
       shade: rgba(mix(tint, CRYSTAL_DARK, depth), currentTheme.light ? 0.36 : 0.46), flash: rgba(mix(tint, WHITE, 0.78), 0.92),
       table: rgba(mix(tint, WHITE, 0.3), 0.62), well: rgba(tones.deep, 0.92), hot: tones.hot,
+      // the girdle: the risen tint, or on a light page the deepened edge tone
+      rim: currentTheme.light ? freeEdge(tint, currentTheme) : tones.hot,
       spark: rgba(mix(tint, WHITE, 0.88), 0.95),
     });
   }
@@ -941,7 +1014,11 @@
     const paints = crystalPaints(ctx, tint, n.theme);
     const { lit, sel } = freeLevels(n, m);
     const base = n.alpha;
-    const spin = turn(m, 40), cos = Math.cos(spin), sin = Math.sin(spin);
+    // Below T1 (a todo) the cut is drawn a little larger, with mitred
+    // corners and its shadow facets, so it keeps its flats and never reads
+    // as a plain disc.
+    const small = n.detail < 1, size = small ? 1.06 : 1;
+    const spin = turn(m, 40), cos = size * Math.cos(spin), sin = size * Math.sin(spin);
     const tilt = 1 - 0.07 * swell(m, 5.6);
     for (let k = 0; k < 8; k += 1) {
       const x = CRYSTAL_OCT[2 * k], y = CRYSTAL_OCT[2 * k + 1];
@@ -949,6 +1026,7 @@
       CRYSTAL_GEM[2 * k + 1] = tilt * (x * sin + y * cos);
     }
     const shown = n.detail >= 1 ? tierIn(radius, 1) : 0;
+    const facets = small ? 1 : shown;
     const flashes = n.detail >= 2 ? tierIn(radius, 2) : 0;
     // The whole gem in its unit space, one transform and no save of its own
     // (paint() restores the canvas); strokes divide their pixel widths by
@@ -964,15 +1042,30 @@
     // inner half, so the girdle takes the light with them.
     ctx.beginPath(); crystalOutline(ctx, 1);
     ctx.fillStyle = paints.light; ctx.fill();
-    ctx.lineJoin = "round";
-    ctx.strokeStyle = rgba(paints.hot, qa((paints.firm ? 0.7 + 0.2 * lit + 0.1 * sel : 0.45 + 0.4 * lit + 0.15 * sel) * freeBreath(m))); ctx.lineWidth = (0.9 + 0.5 * lit + 0.6 * sel) / radius; ctx.stroke();
-    if (shown > 0) {
-      // Alternate facets in shadow (T1 up), then the flash (T2 up): the
+    ctx.lineJoin = small ? "miter" : "round";
+    // (a light page's rim is the gem's mark on the page: firmer, never
+    // under 1.4 px from 6 px up)
+    ctx.strokeStyle = rgba(paints.rim, qa((paints.firm ? 0.9 + 0.1 * lit : 0.45 + 0.4 * lit + 0.15 * sel) * freeBreath(m, paints.firm)));
+    ctx.lineWidth = freeRim(0.9 + 0.5 * lit + 0.6 * sel, radius, paints.firm) / radius;
+    const stale = n.stale && n.detail >= 1;
+    if (stale) { CRYSTAL_DASH[0] = FREE_STALE_DASH[0] / radius; CRYSTAL_DASH[1] = FREE_STALE_DASH[1] / radius; ctx.setLineDash?.(CRYSTAL_DASH); }
+    ctx.stroke();
+    if (stale) ctx.setLineDash?.(FREE_NO_DASH);
+    if (facets > 0) {
+      // Alternate facets in shadow (T0 up), then the flash (T2 up): the
       // facet facing the light and its neighbour share it by how far each
       // has turned.
-      ctx.globalAlpha = base * shown;
+      ctx.globalAlpha = base * facets;
       ctx.beginPath(); for (let k = 1; k < 8; k += 2) crystalFacet(ctx, k);
       ctx.fillStyle = paints.shade; ctx.fill();
+      // (a todo's gem is too small for the flash: the other four facets
+      // catch the light instead, so light and shadow alternate round it and
+      // turn with it; that reads as a cut gem, not a disc)
+      if (small) {
+        ctx.globalAlpha = base * 0.5;
+        ctx.beginPath(); for (let k = 0; k < 8; k += 2) crystalFacet(ctx, k);
+        ctx.fillStyle = paints.flash; ctx.fill();
+      }
       if (flashes > 0) {
         const at = (CRYSTAL_LIGHT - spin) / (Math.PI / 4) - 1, first = Math.floor(at), share = at - first;
         ctx.fillStyle = paints.flash;
@@ -1028,6 +1121,9 @@
     }
     if (n.monogram) { freeLeave(ctx, p, radius); freeMonogram(ctx, p, n, freeInks(tint, n.theme).crystal); }
   }
+  // The gem's outline for the caller's rims: the octagon, turned with the gem
+  // (its breathing tilt, under 7%, left out).
+  OUTLINES.crystal = (ctx, x, y, r, m) => { polyPath(ctx, x, y, r, 8, Math.PI / 8 + (m ? turn(m, 40) : 0)); return 8; };
   LOOKS.crystal = { speedup: 2.6, paint: paintCrystal, glyph: { scale: 0.56, ringGap: 3.5, ink: (tint, currentTheme) => freeInks(tint, currentTheme).crystal }, ring: null, hubDress: null, orbit: null, arrival: null, select: null, wire: null, surge: null, land: null, reach: 1 };
 
 // ===== style: singularity =====
@@ -1053,6 +1149,7 @@
   const HOLE_QUEUE_DASH = Object.freeze([2, 3]);
   const HOLE_QUEUE_DASH_SMALL = Object.freeze([3, 2.5]);
   const HOLE_CREW_DASH = Object.freeze([2, 5]);
+  const HOLE_STALE = [0, 0]; // a stale photon ring's dash, refilled in the hole's unit space
   // The streak conic's bright bands, as [centre, width, alpha] triples around
   // the turn: irregular on purpose, so the turning disc never looks spoked.
   // Nothing narrower than .07 of a turn: at the working spin (a turn a
@@ -1115,14 +1212,19 @@
   // The tones of one tint under one theme, cached per triple. The horizon is
   // black on every theme; `hot` whitens the tint (less on a light theme, so
   // the disc keeps its colour against a pale page); `lens` draws the lensing
-  // and selection rings (the tint itself on a light theme, where a whitened
+  // and selection rings (the disc's tone on a light theme, where a whitened
   // ring would vanish); accent is the theme's second hue or a whitened tint.
+  // `disc` is the tone the disc, the photon ring and a todo's ring are lit
+  // in: the tint on a dark page; on a pale one the tint deepened a third of
+  // the way to the ink, so a quiet hole is a black core in a coloured ring
+  // there and not a grey planet in a pastel one.
   const holeToneMemo = new WeakMap();
   function holeTones(tint, currentTheme) {
     let tones = holeToneMemo.get(tint);
     if (tones && tones.themeKey === currentTheme.key) return tones;
     const light = currentTheme.light === true;
-    const hot = mix(tint, WHITE, light ? 0.42 : 0.6), ink = mix(tint, WHITE, 0.86);
+    const disc = light ? mix(tint, currentTheme.hi, 0.35) : tint;
+    const hot = mix(disc, WHITE, light ? 0.42 : 0.6), ink = mix(tint, WHITE, 0.86);
     // On a pale page brightness reads as depth: the approaching side and the
     // streaks go deeper and more saturated instead of whiter. The receding
     // side keeps the tint with only a trace of the second hue, so a state's
@@ -1131,12 +1233,15 @@
     tones = {
       themeKey: currentTheme.key, light,
       key: `singularity|${tint.join(",")}|${currentTheme.key}`,
-      hot, ink, lens: light ? tint : hot,
+      disc, hot, ink, lens: light ? disc : hot,
       beam: light ? mix(tint, HOLE_BLACK, 0.22) : hot,
       glint: light ? mix(tint, HOLE_BLACK, 0.45) : ink,
       rim: light ? mix(tint, HOLE_BLACK, 0.3) : ink,
+      // A resting todo's hot spot: the disc's tone lifted a little, so it
+      // turns without whitening every todo alike.
+      ember: light ? mix(disc, HOLE_BLACK, 0.25) : mix(tint, WHITE, 0.3),
       deep: mix(tint, currentTheme.bg, 0.86), shade: mix(tint, HOLE_BLACK, 0.7),
-      accent, recede: mix(tint, accent, 0.3),
+      accent, recede: mix(disc, accent, 0.3),
     };
     holeToneMemo.set(tint, tones);
     return tones;
@@ -1148,7 +1253,7 @@
     const tones = holeTones(tint, currentTheme);
     const cached = cacheGet(ctx, tones.key);
     if (cached) return cached;
-    const { hot, ink, lens, beam, glint, rim, deep, shade, recede } = tones;
+    const { disc, hot, ink, lens, beam, glint, rim, deep, shade, recede } = tones;
     const conic = typeof ctx.createConicGradient === "function";
     // The aura: light bent round the shadow, brightest hugging it, with a
     // soft lensing ring near 1.26 radii. Hollow under the horizon (clear up to
@@ -1167,23 +1272,26 @@
     // receding side dim, with a thin trace of the second hue. It never turns.
     const doppler = conic ? ctx.createConicGradient(Math.PI, 0, 0) : ctx.createRadialGradient(-0.6, 0, 0, -0.2, 0, 1.3);
     doppler.addColorStop(0, rgba(beam, 1));
-    doppler.addColorStop(0.1, rgba(tint, 1));
-    doppler.addColorStop(0.3, rgba(tint, 0.58));
-    doppler.addColorStop(0.42, rgba(tint, 0.45));
+    doppler.addColorStop(0.1, rgba(disc, 1));
+    doppler.addColorStop(0.3, rgba(disc, 0.58));
+    doppler.addColorStop(0.42, rgba(disc, 0.45));
     doppler.addColorStop(0.5, rgba(recede, 0.36));
-    doppler.addColorStop(0.58, rgba(tint, 0.45));
-    doppler.addColorStop(0.7, rgba(tint, 0.58));
-    doppler.addColorStop(0.9, rgba(tint, 1));
+    doppler.addColorStop(0.58, rgba(disc, 0.45));
+    doppler.addColorStop(0.7, rgba(disc, 0.58));
+    doppler.addColorStop(0.9, rgba(disc, 1));
     doppler.addColorStop(1, rgba(beam, 1));
     // The same light for a node under 6 px, across the disc from left to
     // right: at that size a conic reads no differently and costs a canvas
-    // several times more to record and to paint.
+    // several times more to record and to paint. The beam is only its very
+    // edge; the rest holds the state's own colour, so a done, a grey and an
+    // amber todo never read as the same small white ellipse.
     const flat = ctx.createLinearGradient(-1.08, 0, 1.08, 0);
     flat.addColorStop(0, rgba(beam, 1));
-    flat.addColorStop(0.2, rgba(tint, 1));
-    flat.addColorStop(0.5, rgba(tint, 0.6));
-    flat.addColorStop(0.8, rgba(tint, 0.45));
-    flat.addColorStop(1, rgba(recede, 0.36));
+    flat.addColorStop(0.08, rgba(disc, 1));
+    flat.addColorStop(0.2, rgba(disc, 1));
+    flat.addColorStop(0.5, rgba(disc, 0.85));
+    flat.addColorStop(0.8, rgba(disc, 0.7));
+    flat.addColorStop(1, rgba(recede, 0.55));
     // The plasma streaks that turn (a banded sweep without conic support).
     const streaks = conic ? ctx.createConicGradient(0, 0, 0) : ctx.createLinearGradient(-1.1, 0, 1.1, 0);
     streaks.addColorStop(0, rgba(glint, 0));
@@ -1209,9 +1317,9 @@
     core.addColorStop(1, rgba(shade, 0.6));
     // The photon ring, brightest on top: the far side of the disc, lensed.
     const photon = ctx.createLinearGradient(0, -0.58, 0, 0.58);
-    photon.addColorStop(0, rgba(ink, 1));
+    photon.addColorStop(0, rgba(tones.light ? rim : ink, 1));
     photon.addColorStop(0.5, rgba(hot, 0.95));
-    photon.addColorStop(1, rgba(tint, 0.7));
+    photon.addColorStop(1, rgba(disc, 0.7));
     // Both jets in one symmetric paint (they leave from the horizon's edge,
     // hottest just past it).
     const jet = ctx.createLinearGradient(0, -1.6, 0, 1.6);
@@ -1225,7 +1333,9 @@
       tones, aura, doppler, flat, streaks, edge, core, photon, jet,
       // Infalling matter: a whitened glint on a dark page, a deep beam on a pale one.
       spark: rgba(tones.light ? beam : glint, 0.8), knot: rgba(rim, 0.95), spot: rgba(rim, 1), black: rgba(HOLE_BLACK, 1),
-      ring: tones.light ? rgba(tint, 1) : photon, glow: rgba(tint, 1), hot: rgba(hot, 1), lens: rgba(lens, 1),
+      ring: tones.light ? rgba(disc, 1) : photon, glow: rgba(tint, 1), hot: rgba(hot, 1), lens: rgba(lens, 1),
+      // a todo's photon ring and its resting hot spot
+      ember: rgba(tones.ember, 1),
     });
   }
 
@@ -1340,14 +1450,16 @@
   // closing chord; the part behind the horizon is never traced, so the near
   // half crosses the shadow and the far half passes behind it. Its Doppler
   // light runs left to right (a conic reads no differently at this size and
-  // costs a software canvas several times more). A hot spot rides the disc,
-  // hidden while it is behind the horizon; it shares the ring's stroke style
-  // and width. The aura only while lit or kicked (it fades in above T0 as a
+  // costs a software canvas several times more). The photon ring is the
+  // state's own colour (the disc's tone, a little lifted: the ember), so the
+  // todos of a board tell their states apart. A hot spot rides the disc,
+  // hidden while it is behind the horizon, in the ring's pen at rest (it
+  // still turns) and white-hot while the node is lit. The aura only while lit or kicked (it fades in above T0 as a
   // node grows past 6 px, so nothing pops at the cut), cut at 1.36 where its
   // last stops are too faint to show. The frame is sized by the aura exactly
   // as above T0: `grow` (1/aura) maps the body's radii into it and `unit` is
   // one pixel there.
-  function holeTiny(ctx, paints, base, glow, disc, spin, unit, horizon, grow) {
+  function holeTiny(ctx, paints, base, glow, disc, spin, unit, horizon, grow, lit) {
     if (glow > 0.01) {
       ctx.globalAlpha = base * glow;
       ctx.beginPath(); ctx.arc(0, 0, 1.36, 0, TAU); ctx.fillStyle = paints.aura; ctx.fill();
@@ -1355,7 +1467,7 @@
     const shadow = horizon * grow;
     ctx.globalAlpha = base;
     ctx.beginPath(); ctx.arc(0, 0, shadow, 0, TAU); ctx.fillStyle = paints.black; ctx.fill();
-    ctx.strokeStyle = paints.spot; ctx.lineWidth = 0.9 * unit; ctx.stroke();
+    ctx.strokeStyle = paints.ember; ctx.lineWidth = 1.1 * unit; ctx.stroke();
     const outer = 1.08 * grow, inner = 0.62 * grow, reach = 0.86 * grow;
     ctx.globalAlpha = base * disc;
     ctx.beginPath();
@@ -1369,6 +1481,7 @@
     const tx = reach * (cos * HOLE_SPOT_COS - sin * HOLE_SPOT_SIN), ty = reach * HOLE_SQ * (sin * HOLE_SPOT_COS + cos * HOLE_SPOT_SIN);
     const hidden = shadow * shadow;
     if (sin < 0 && (hx * hx + hy * hy < hidden || tx * tx + ty * ty < hidden)) return;
+    if (lit > 0.3) ctx.strokeStyle = paints.spot;
     ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx, hy); ctx.stroke();
   }
 
@@ -1405,7 +1518,7 @@
       const size = radius * swell;
       ctx.transform(size * cos, size * sin, -size * sin, size * cos, p.x, p.y);
       // A glyph (or a small hub's monogram) reads through a faint disc.
-      holeTiny(ctx, paints, base, glow, disc * (o.glyph || horizon > 0.52 ? 0.4 : 1), spin, 1 / size, horizon, 1 / swell);
+      holeTiny(ctx, paints, base, glow, disc * (o.glyph || horizon > 0.52 ? 0.4 : 1), spin, 1 / size, horizon, 1 / swell, lit);
       if (monogram) { ctx.restore(); voidMonogram(ctx, p, o, paints.tones.ink); }
       return;
     }
@@ -1465,7 +1578,12 @@
     ctx.beginPath(); ctx.arc(0, 0, horizon, 0, TAU); ctx.fillStyle = horizon > 0.52 ? paints.black : paints.core; ctx.fill();
     ctx.beginPath(); ctx.arc(0, 0, horizon + 0.03, 0, TAU);
     ctx.lineWidth = Math.max(0.75 / radius, 0.07 + 0.04 * sel + 0.05 * kick);
-    ctx.strokeStyle = paints.photon; ctx.stroke();
+    ctx.strokeStyle = paints.photon;
+    // (a stale hole's photon ring is broken into short dashes: it reads as
+    // stalled, its clock slowed, the disc still turning)
+    if (o.stale) { HOLE_STALE[0] = 1.5 / radius; HOLE_STALE[1] = 2 / radius; ctx.setLineDash?.(HOLE_STALE); }
+    ctx.stroke();
+    if (o.stale) ctx.setLineDash?.(HOLE_NO_DASH);
     // 5. The near half crossing in front of the horizon (faint on a node that
     // wears a glyph, so the glyph reads), then the sparks in front.
     holeNear(ctx, paints, base * nearGain, disc, streak, edge, spin);
@@ -1788,10 +1906,13 @@
   // wires stay one line each. The tree's S-curves keep their shape; a far
   // (blurred) pen gets the line alone; the rail bends every edge (at the cost
   // of the line) and carries motes only on the active session's edges
-  // (o.active there; the rail's edges offer no flow). One save/restore per
-  // edge hands the canvas back as it was: measured in Electron's software
-  // canvas it costs less than reading the stroke style back, and it replaces
-  // resetting the dash, its offset and the cap by hand.
+  // (o.active there; the rail's edges offer no flow). Every alpha is a gain
+  // on the canvas's own (a dimmed pen dims the wire and its motes), and the
+  // canvas comes back with its alpha, dash, offset and cap: set back by hand,
+  // cheaper than a save and a restore on every edge. On a pale page the wire
+  // and its motes keep the tint's hue, deepened as far as it needs to read
+  // (the shared wire tones: the line, and the deeper motes), and a tether is
+  // never under 1.2 px.
   function wireSingularity(ctx, a, b, o) {
     const tint = o.tint;
     if (!tint) return false;
@@ -1801,16 +1922,17 @@
     const cp = !rail && o.curved && o.cp ? o.cp : null;
     const alpha = Number.isFinite(o.alpha) ? o.alpha : 1;
     const time = Number.isFinite(o.time) ? o.time : 0;
-    ctx.save();
-    ctx.globalAlpha = alpha; ctx.strokeStyle = rgba(tint, 1); ctx.lineWidth = Number.isFinite(o.width) ? o.width : 1;
+    const base = holeBase(ctx), currentTheme = holeTheme(o);
+    const tones = currentTheme.light === true ? wireLightTone(tint, currentTheme) : null;
+    const width = Number.isFinite(o.width) ? o.width : 1;
+    ctx.globalAlpha = base * alpha; ctx.strokeStyle = rgba(tones ? tones.line : tint, 1);
+    ctx.lineWidth = tones && o.kind === "tether" && width < 1.2 ? 1.2 : width;
     const dash = o.dash && o.dash.length ? o.dash : null;
     if (dash) {
       ctx.setLineDash?.(dash);
-      if (o.march && !still) {
-        let period = 0;
-        for (let index = 0; index < dash.length; index += 1) period += dash[index];
-        if (period > 0) ctx.lineDashOffset = -((time / 55) % period);
-      }
+      let period = 0;
+      if (o.march && !still) for (let index = 0; index < dash.length; index += 1) period += dash[index];
+      ctx.lineDashOffset = period > 0 ? -((time / 55) % period) : 0;
     }
     ctx.beginPath();
     if (o.double && !rail) {
@@ -1818,6 +1940,7 @@
       holeWirePath(ctx, a, b, cp, 1.6, nx, ny); holeWirePath(ctx, a, b, cp, -1.6, nx, ny);
     } else holeWirePath(ctx, a, b, cp, 0, 0, 0);
     ctx.stroke();
+    if (dash) { ctx.setLineDash?.(HOLE_NO_DASH); ctx.lineDashOffset = 0; }
     const active = o.active === true;
     const flowing = rail ? active : typeof o.flow === "boolean" ? o.flow : active;
     const lively = flowing || active || o.inspected === true || o.kind === "hub" || o.kind === "session" || (Number.isFinite(o.detail) ? o.detail : 3) >= 2;
@@ -1835,12 +1958,13 @@
       }
       // Half as bright again as the line they ride, so a dimmed or fading
       // wire dims its motes with it.
-      if (dash) ctx.setLineDash?.(HOLE_NO_DASH);
+      const cap = ctx.lineCap;
       ctx.lineCap = "round";
-      ctx.globalAlpha = Math.min(0.9, alpha * 1.5); ctx.strokeStyle = holeMote(tint); ctx.lineWidth = flowing ? 1.8 : 1.4;
+      ctx.globalAlpha = base * Math.min(0.9, alpha * 1.5); ctx.strokeStyle = tones ? rgba(tones.deep, 1) : holeMote(tint); ctx.lineWidth = flowing ? 1.8 : 1.4;
       ctx.stroke();
+      ctx.lineCap = cap;
     }
-    ctx.restore();
+    ctx.globalAlpha = base;
     return true;
   }
 
@@ -1858,16 +1982,27 @@
     holeColours.set(key, triple);
     return triple;
   }
-  // A pulse colour's spark, per canvas: its inks, and a unit radial glow
-  // built the first time a pulse there needs one (the rail's never do).
+  // A pulse colour's spark, per canvas and theme: its inks, and a unit radial
+  // glow built the first time a pulse there needs one (the rail's never do).
+  // On a pale page the spark keeps its hue (the shared wire tones: the tail
+  // and line in the colour deepened as far as it needs, the head deeper
+  // still, 3:1 or more on the page) and carries no glow: a pale haze of it
+  // would vanish into the page.
   const holeSparkKeys = new WeakMap();
-  function holeSparkPaints(ctx, rgb) {
-    let key = holeSparkKeys.get(rgb);
-    if (!key) { key = `singularity|spark|${rgb.join(",")}`; holeSparkKeys.set(rgb, key); }
-    const cached = cacheGet(ctx, key);
+  function holeSparkPaints(ctx, rgb, currentTheme) {
+    let memo = holeSparkKeys.get(rgb);
+    if (!memo || memo.theme !== currentTheme.key) {
+      memo = { theme: currentTheme.key, key: `singularity|spark|${rgb.join(",")}|${currentTheme.light ? currentTheme.key : "dark"}` };
+      holeSparkKeys.set(rgb, memo);
+    }
+    const cached = cacheGet(ctx, memo.key);
     if (cached) return cached;
+    if (currentTheme.light === true) {
+      const tones = wireLightTone(rgb, currentTheme);
+      return cachePut(ctx, memo.key, { rgb, hot: tones.deep, glow: null, light: true, head: rgba(tones.deep, 1), tail: rgba(tones.line, 1), line: rgba(tones.line, 1) });
+    }
     const hot = mix(rgb, WHITE, 0.55);
-    return cachePut(ctx, key, { rgb, hot, glow: null, head: rgba(hot, 1), tail: rgba(rgb, 1), line: rgba(rgb, 1) });
+    return cachePut(ctx, memo.key, { rgb, hot, glow: null, light: false, head: rgba(hot, 1), tail: rgba(rgb, 1), line: rgba(rgb, 1) });
   }
   function holeSparkGlow(ctx, paints) {
     if (paints.glow) return paints.glow;
@@ -1942,26 +2077,28 @@
   // tail, captured by its target at the end (a wave pulse also warms its
   // whole path). A pulse on a tree S-curve (o.cp) rides the curve as drawn
   // instead of the bend. On the rail (at most 11 px nodes) it rides the bent
-  // edge all the way, smaller and without the glow.
+  // edge all the way, smaller and without the glow. Every alpha is a gain on
+  // the canvas's own.
   function surgeSingularity(ctx, from, to, t, pulse, o) {
     const bend = holeBend(from.x, from.y, to.x, to.y);
     if (!(bend.len > 2)) return true;
     const rail = o.rail === true;
     const cp = !rail && o.cp ? o.cp : null;
     const rgb = holeColour(pulse?.color);
-    const paints = holeSparkPaints(ctx, rgb);
+    const paints = holeSparkPaints(ctx, rgb, holeTheme(o));
     const small = pulse?.small === true, wave = o.kind === "wave" || pulse?.wave === true;
     ctx.save();
+    const base = holeBase(ctx);
     ctx.lineCap = "round";
     if (holeStill(o)) {
-      ctx.globalAlpha = 0.5; ctx.strokeStyle = paints.line; ctx.lineWidth = (small ? 1.3 : 2) * (rail ? 0.6 : 1);
+      ctx.globalAlpha = base * 0.5; ctx.strokeStyle = paints.line; ctx.lineWidth = (small ? 1.3 : 2) * (rail ? 0.6 : 1);
       ctx.beginPath(); holeWirePath(ctx, from, to, cp, 0, 0, 0); ctx.stroke();
       ctx.restore();
       return true;
     }
     const head = clamp01(t);
     if (wave) {
-      ctx.globalAlpha = 0.3 * Math.sin(Math.PI * head); ctx.strokeStyle = paints.line; ctx.lineWidth = (small ? 1.2 : 1.7) * (rail ? 0.6 : 1);
+      ctx.globalAlpha = base * 0.3 * Math.sin(Math.PI * head); ctx.strokeStyle = paints.line; ctx.lineWidth = (small ? 1.2 : 1.7) * (rail ? 0.6 : 1);
       ctx.beginPath(); holeWirePath(ctx, from, to, cp, 0, 0, 0); ctx.stroke();
     }
     if (rail) { HOLE_SPIRAL.sh = 1; HOLE_SPIRAL.th = 1; HOLE_SPIRAL.cp = null; } else holeCapture(from, to, bend, o.rTo > 0 ? o.rTo : 8, pulse, cp);
@@ -1977,21 +2114,22 @@
     ctx.strokeStyle = paints.tail;
     for (let index = 1; index <= 3; index += 1) {
       point = holeSurgePoint(from, to, Math.max(0, head - index * step));
-      ctx.globalAlpha = 0.62 - 0.17 * index; ctx.lineWidth = size * (2.6 - 0.55 * index);
+      ctx.globalAlpha = base * (0.62 - 0.17 * index); ctx.lineWidth = size * (2.6 - 0.55 * index);
       ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(point.x, point.y); ctx.stroke();
       px = point.x; py = point.y;
     }
-    // The head: a cached glow (not on the rail) and a white-hot core.
-    if (!rail) {
+    // The head: a cached glow (not on the rail, nor on a pale page) and a
+    // white-hot core (on a pale page, the colour's deep tone).
+    if (!rail && !paints.light) {
       const glow = size * 5.5;
       ctx.save(); ctx.translate(hx, hy); ctx.scale(glow, glow);
-      ctx.globalAlpha = 1; ctx.fillStyle = holeSparkGlow(ctx, paints); ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
+      ctx.globalAlpha = base; ctx.fillStyle = holeSparkGlow(ctx, paints); ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
       ctx.restore();
     }
-    ctx.globalAlpha = 1; ctx.fillStyle = paints.head;
-    ctx.beginPath(); ctx.arc(hx, hy, size * 1.7, 0, TAU); ctx.fill();
+    ctx.globalAlpha = base; ctx.fillStyle = paints.head;
+    ctx.beginPath(); ctx.arc(hx, hy, size * (paints.light ? 1.9 : 1.7), 0, TAU); ctx.fill();
     if (pulse?.packet) {
-      ctx.globalAlpha = 0.8; ctx.strokeStyle = paints.head; ctx.lineWidth = 1;
+      ctx.globalAlpha = base * (paints.light ? 0.9 : 0.8); ctx.strokeStyle = paints.head; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.arc(hx, hy, size * 3.6, 0, TAU); ctx.stroke();
     }
     ctx.restore();
@@ -2010,16 +2148,19 @@
     const gain = 0.85 * Math.sin(Math.PI * k);
     if (gain <= 0.004) return true;
     const rest = 1 - k;
+    // (a pale page: the ring and the swirl in the colour's deepened tones)
+    const currentTheme = holeTheme(o), tones = currentTheme.light === true ? wireLightTone(tint, currentTheme) : null;
     ctx.save();
-    ctx.globalAlpha = gain; ctx.strokeStyle = rgba(tint, 1); ctx.lineWidth = 0.8 + 1.2 * rest;
+    const base = holeBase(ctx);
+    ctx.globalAlpha = base * gain; ctx.strokeStyle = rgba(tones ? tones.line : tint, 1); ctx.lineWidth = 0.8 + 1.2 * rest;
     ctx.beginPath(); ctx.arc(p.x, p.y, r * (0.55 + 1.35 * rest * rest), 0, TAU); ctx.stroke();
     const pulse = o.pulse;
     if (o.rail !== true && pulse && Number.isFinite(pulse._holeAngle)) {
       const dir = pulse._holeDir === -1 ? -1 : 1;
       const at = pulse._holeAngle + dir * 6.6 * k * Math.sqrt(k);
       const span = 0.35 + 0.95 * rest;
-      ctx.globalAlpha = 0.95 * Math.min(1, 6 * k) * rest;
-      ctx.lineCap = "round"; ctx.strokeStyle = holeMote(tint); ctx.lineWidth = 0.9 + 0.9 * rest;
+      ctx.globalAlpha = base * 0.95 * Math.min(1, 6 * k) * rest;
+      ctx.lineCap = "round"; ctx.strokeStyle = tones ? rgba(tones.deep, 1) : holeMote(tint); ctx.lineWidth = 0.9 + 0.9 * rest;
       ctx.beginPath(); ctx.arc(p.x, p.y, r * (1.05 + 0.45 * rest), dir > 0 ? at - span : at, dir > 0 ? at : at + span); ctx.stroke();
     }
     ctx.restore();
@@ -2090,6 +2231,8 @@
   // Every facet tone stands at least this far off the background (luminance).
   const PRISM_APART = 22;
   const PRISM_SOLID = Object.freeze([]), PRISM_QUEUE_DASH = Object.freeze([2, 3]), PRISM_CREW_DASH = Object.freeze([2, 5]);
+  // A stale gem's rim dash (1.5 px on, 2 off), refilled in the gem's unit space.
+  const PRISM_STALE = [0, 0];
   // The shards' orbit: an ellipse 1.34 × .42 tilted −.35.
   const PRISM_ORBIT_X = 1.34, PRISM_ORBIT_Y = 0.42, PRISM_ORBIT_TILT = -0.35;
   const PRISM_ORBIT_COS = Math.cos(PRISM_ORBIT_TILT), PRISM_ORBIT_SIN = Math.sin(PRISM_ORBIT_TILT);
@@ -2317,10 +2460,18 @@
   }
 
   // A small gem (T0): a kite whose lit plane turns (its ridge swings with
-  // the spin), lit whole as the light band crosses it, a rim and the arrival
-  // flash. 9 lineTo, 4 fills, 1 stroke.
+  // the spin) and steps up the tone ramp as the light band crosses it (the
+  // kite catches it whole: too small to show the band travel), a rim and the
+  // arrival flash. 9 lineTo, 2 fills and 1 stroke at rest.
   function prismKite(ctx) {
     ctx.moveTo(0, PRISM_TOP); ctx.lineTo(PRISM_GIRDLE, PRISM_GIRDLE_Y); ctx.lineTo(0, PRISM_BOTTOM); ctx.lineTo(-PRISM_GIRDLE, PRISM_GIRDLE_Y); ctx.closePath();
+  }
+  // The band's pass as a step up the ramp from the lit plane's own tone.
+  const PRISM_KITE_BUMP = 8;
+  function prismKiteLit(tones, band, still) {
+    const bump = still ? 0.35 : Math.max(0, 1 - Math.abs(band - PRISM_KITE_BAND) / 0.6);
+    const step = (tones.light ? PRISM_KITE_LIT_LIGHT : PRISM_KITE_LIT) + Math.round(bump * PRISM_KITE_BUMP);
+    return tones.ramp[step >= PRISM_RAMP ? PRISM_RAMP - 1 : step];
   }
   function prismSmall(ctx, tones, n, base, theta, band, still, work, sel, kick, pixel) {
     ctx.globalAlpha = base;
@@ -2329,15 +2480,24 @@
     const ridge = 0.55 * Math.sin(theta);
     ctx.beginPath();
     ctx.moveTo(0, PRISM_TOP); ctx.lineTo(-PRISM_GIRDLE, PRISM_GIRDLE_Y); ctx.lineTo(0, PRISM_BOTTOM); ctx.lineTo(ridge, PRISM_GIRDLE_Y); ctx.closePath();
-    ctx.globalAlpha = base * (n.glyph ? 0.4 : 1); ctx.fillStyle = tones.kiteLit; ctx.fill();
+    ctx.globalAlpha = base * (n.glyph ? 0.4 : 1); ctx.fillStyle = prismKiteLit(tones, band, still); ctx.fill();
     ctx.beginPath(); prismKite(ctx);
-    // The light band's pass, in the big gem's rhythm: too small to show the
-    // band travel, the kite catches it whole as it crosses.
-    const bump = still ? 0.35 : Math.max(0, 1 - Math.abs(band - PRISM_KITE_BAND) / 0.6);
-    if (bump > 0.01) { ctx.globalAlpha = base * 0.4 * bump; ctx.fillStyle = tones.spec; ctx.fill(); }
     ctx.globalAlpha = base * (n.chosen ? 1 : Math.min(1, 0.8 + 0.2 * work + 0.1 * sel));
     ctx.strokeStyle = n.chosen ? tones.chosen : tones.rim; ctx.lineWidth = (n.chosen ? 1.3 : 0.8 + 0.3 * work + 0.5 * sel) * pixel; ctx.stroke();
     if (kick > 0.01) { ctx.globalAlpha = base * 0.6 * kick; ctx.fillStyle = tones.spec; ctx.fill(); }
+  }
+  // The same kite for a resting todo (not lit, kicked, chosen or wearing a
+  // glyph: most of a board), traced in pixels: no save, no transform.
+  function prismTiny(ctx, tones, x, y, r, base, theta, band, still, work, sel) {
+    const top = y + PRISM_TOP * r, bottom = y + PRISM_BOTTOM * r, girdle = y + PRISM_GIRDLE_Y * r, side = PRISM_GIRDLE * r;
+    ctx.globalAlpha = base;
+    ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x + side, girdle); ctx.lineTo(x, bottom); ctx.lineTo(x - side, girdle); ctx.closePath();
+    ctx.fillStyle = tones.kiteBase; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x - side, girdle); ctx.lineTo(x, bottom); ctx.lineTo(x + 0.55 * Math.sin(theta) * r, girdle); ctx.closePath();
+    ctx.fillStyle = prismKiteLit(tones, band, still); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x + side, girdle); ctx.lineTo(x, bottom); ctx.lineTo(x - side, girdle); ctx.closePath();
+    ctx.globalAlpha = base * Math.min(1, 0.8 + 0.2 * work + 0.1 * sel);
+    ctx.strokeStyle = tones.rim; ctx.lineWidth = 0.8 + 0.3 * work + 0.5 * sel; ctx.stroke();
   }
 
   // The working shards: `count` crystals round a tilted ellipse, the ones
@@ -2430,6 +2590,10 @@
     // Where the light band is on its sweep (it crosses the gem in the
     // middle third of it).
     const band = still ? PRISM_STILL_BAND : -1.7 + 3.4 * cycle(m, PRISM_SWEEP);
+    if (detail === 0 && lit <= 0.01 && kick <= 0.01 && !n.glyph && !n.monogram && !n.chosen) {
+      prismTiny(ctx, tones, p.x, p.y, radius, base, theta, band, still, work, sel);
+      return;
+    }
     ctx.save();
     ctx.translate(p.x, p.y); ctx.scale(radius, radius);
     // The glow, only while it works or is chosen, eased with the node.
@@ -2506,7 +2670,10 @@
     if (kick > 0.01) { ctx.globalAlpha = base * 0.6 * kick; ctx.fillStyle = tones.spec; ctx.fill(); }
     ctx.globalAlpha = base * (n.chosen ? 1 : Math.min(1, 0.72 + 0.23 * work + 0.05 * sel));
     ctx.strokeStyle = n.chosen ? tones.chosen : tones.rim;
-    ctx.lineWidth = (n.chosen ? 1.6 : 0.85 + 0.35 * work + 0.6 * sel) * pixel; ctx.stroke();
+    ctx.lineWidth = (n.chosen ? 1.6 : 0.85 + 0.35 * work + 0.6 * sel) * pixel;
+    if (n.stale) { PRISM_STALE[0] = 1.5 * pixel; PRISM_STALE[1] = 2 * pixel; ctx.setLineDash(PRISM_STALE); }
+    ctx.stroke();
+    if (n.stale) ctx.setLineDash(PRISM_SOLID);
     // A glyph (an agent's role, the hub's monogram) sits on a dark table.
     if (n.glyph) {
       ctx.beginPath();
@@ -2574,25 +2741,28 @@
         amber: rgba(light ? mix(currentTheme.amber, currentTheme.hi, 0.35) : currentTheme.amber, 1),
         done: rgba(light ? mix(currentTheme.done, currentTheme.hi, 0.35) : currentTheme.done, 1),
         amberWell: rgba(currentTheme.amberWell, 1), doneWell: rgba(currentTheme.doneWell, 1),
+        // the "!" and the tick: the state's colour on a dark well, the page's
+        // own colour cut out of a filled one on a light theme
+        mark: light ? rgba(currentTheme.bg, 1) : null,
       };
       prismStateCache.set(currentTheme, inks);
     }
     return inks;
   }
   // A status badge cut as a small gem: a diamond well in the state's colour
-  // with a "!" or a tick, top right of the node.
-  function prismBadge(ctx, x, y, pop, well, edge, mark) {
+  // with a "!" or a tick (in `ink`, else the edge's colour), top right of the node.
+  function prismBadge(ctx, x, y, pop, well, edge, mark, ink = null) {
     ctx.save();
     ctx.translate(x, y); ctx.scale(pop, pop);
     ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(5.4, 0); ctx.lineTo(0, 6); ctx.lineTo(-5.4, 0); ctx.closePath();
     ctx.fillStyle = well; ctx.fill();
     ctx.strokeStyle = edge; ctx.lineWidth = 1; ctx.stroke();
     if (mark === "!") {
-      ctx.fillStyle = edge; ctx.font = '700 8px system-ui, "Segoe UI", sans-serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillStyle = ink ?? edge; ctx.font = '700 8px system-ui, "Segoe UI", sans-serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText("!", 0, 0.5);
     } else {
       ctx.beginPath(); ctx.moveTo(-2.4, 0); ctx.lineTo(-0.7, 1.8); ctx.lineTo(2.4, -1.8);
-      ctx.lineWidth = 1.4; ctx.stroke();
+      ctx.strokeStyle = ink ?? edge; ctx.lineWidth = 1.4; ctx.stroke();
     }
     ctx.restore();
   }
@@ -2631,7 +2801,7 @@
         ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, TAU); ctx.stroke();
       }
       ctx.globalAlpha = base;
-      prismBadge(ctx, p.x + radius + 3, p.y - radius - 3, prismPop(m, o.time, still), error ? inks.amberWell : inks.doneWell, error ? inks.amber : inks.done, error ? "!" : "tick");
+      prismBadge(ctx, p.x + radius + 3, p.y - radius - 3, prismPop(m, o.time, still), error ? inks.amberWell : inks.doneWell, error ? inks.amber : inks.done, error ? "!" : "tick", inks.mark);
     }
     ctx.restore();
     return true;
@@ -2772,7 +2942,11 @@
   // large or lit target the beam splits into three strands (rose, the tint,
   // blue) that fan into the node. The far (blurred) pen gets the line alone.
   // On the rail, only the active session's edges carry the glint; the rest
-  // keep the rail's plain line.
+  // keep the rail's plain line. The glint runs only where it is seen: a wire
+  // that carries work, a lit one, or one between larger gems (both ends T2
+  // and up); the many small resting wires stay one stroke each. The canvas
+  // comes back with its alpha, cap, dash and offset, set back by hand (a
+  // solid wire never touches the dash).
   function prismWireLine(ctx, a, b, o, width) {
     ctx.beginPath();
     if (o.double === true) {
@@ -2827,23 +3001,28 @@
     // The overlays' boost is taken on the stroke's alpha before its lifetime,
     // so an edge fading out fades its glint and strands with it.
     const lifetime = Number.isFinite(o.lifetime) ? clamp01(o.lifetime) : 1, core = lifetime > 0 ? alpha / lifetime : alpha;
-    ctx.save();
-    const base = ctx.globalAlpha;
+    const base = ctx.globalAlpha, cap = ctx.lineCap;
+    const dash = o.dash && o.dash.length ? o.dash : null;
     ctx.strokeStyle = tones.tint;
     if (lit && !far && !rail) {
-      ctx.globalAlpha = base * alpha * 0.16; ctx.lineCap = "round"; ctx.setLineDash(PRISM_SOLID);
+      ctx.globalAlpha = base * alpha * 0.16; if (cap !== "round") ctx.lineCap = "round";
       prismWireLine(ctx, a, b, o, width + 2.6);
     }
-    ctx.globalAlpha = base * alpha; ctx.lineCap = "butt";
-    ctx.setLineDash(o.dash ?? PRISM_SOLID);
-    ctx.lineDashOffset = o.march === true && !still ? (o.kind === "tether" ? -((time / 40) % 10) : -((time / 60) % 6)) : 0;
+    ctx.globalAlpha = base * alpha;
+    if (dash) {
+      // (butt caps keep the dashes crisp)
+      ctx.lineCap = "butt"; ctx.setLineDash(dash);
+      ctx.lineDashOffset = o.march === true && !still ? (o.kind === "tether" ? -((time / 40) % 10) : -((time / 60) % 6)) : 0;
+    }
     prismWireLine(ctx, a, b, o, width);
-    if (far) { ctx.restore(); return true; }
-    ctx.setLineDash(PRISM_SOLID); ctx.lineDashOffset = 0; ctx.lineCap = "round";
+    if (dash) { ctx.setLineDash(PRISM_SOLID); ctx.lineDashOffset = 0; }
+    const detail = Number.isFinite(o.detail) ? o.detail : 3;
+    if (far) { ctx.globalAlpha = base; ctx.lineCap = cap; return true; }
+    ctx.lineCap = "round";
     // The glint: a short bright dash running a → b, fading in and out at the
     // ends (a still pose keeps it halfway on a wire that carries work).
     const u = still ? 0.5 : ((time / (flowing ? 1100 : 3200) + seed) % 1 + 1) % 1;
-    if (!still || flowing) {
+    if ((!still || flowing) && (flowing || lit || detail >= 2)) {
       const span = Math.min(0.2, Math.max(0.05, 18 / length)), head = u * (1 + span), tail = head - span;
       const from = tail < 0 ? 0 : tail, to = head > 1 ? 1 : head, ends = 4 * u * (1 - u);
       if (to > from && ends > 0.02) {
@@ -2860,7 +3039,7 @@
     // only into a full-detail (T3) target. On the tree's S-curve the split
     // starts ON the drawn curve (its end tangent turns only in the last
     // pixels) and the strands aim from there into the node.
-    const rB = Number.isFinite(o.rB) ? o.rB : 0, detail = Number.isFinite(o.detail) ? o.detail : 3;
+    const rB = Number.isFinite(o.rB) ? o.rB : 0;
     if (!rail && rB > 0 && detail >= (lit ? 1 : 3) && length > 3 * rB + 20) {
       const back = 2.4 * rB / length;
       const split = 1 - (cp ? Math.min(0.45, back) : back);
@@ -2876,7 +3055,7 @@
         ctx.strokeStyle = tones.strands[index]; ctx.stroke();
       }
     }
-    ctx.restore();
+    ctx.globalAlpha = base; ctx.lineCap = cap;
     return true;
   }
   // Pulse colours: parsed once per colour, one stable triple each. Keyed on
@@ -2994,13 +3173,22 @@
     return true;
   }
   // How far the look reaches: the shards while it works, the dispersed ring
-  // while selected. The ring keeps 2.4 px or more off a small gem, so in
-  // radii it reaches further the smaller the node: 1.6 covers every node
-  // from 6 px up (a radius-free reach cannot follow a T0 todo's, up to 2.2).
+  // while selected, growing with the eased selection (so a hover glides the
+  // labels out instead of hopping them). The ring keeps 2.4 px or more off a
+  // small gem, so in radii it reaches further the smaller the node: 1.6
+  // covers every node from 6 px up (a radius-free reach cannot follow a T0
+  // todo's, up to 2.2; the caller's floor does).
   function prismReach(m) {
     const work = prismLevel(m?.work, 0), sel = prismLevel(m?.sel, 0);
-    return Math.max(1.1 + 0.45 * work, sel > 0.01 ? 1.6 : 1.1);
+    return Math.max(1.1 + 0.45 * work, 1.1 + 0.5 * sel);
   }
+  // The gem's still-pose hull for the caller's rims: the kite (top apex,
+  // girdle ends, bottom apex).
+  OUTLINES.prism = (ctx, x, y, r) => {
+    ctx.moveTo(x, y + PRISM_TOP * r); ctx.lineTo(x + PRISM_GIRDLE * r, y + PRISM_GIRDLE_Y * r);
+    ctx.lineTo(x, y + PRISM_BOTTOM * r); ctx.lineTo(x - PRISM_GIRDLE * r, y + PRISM_GIRDLE_Y * r); ctx.closePath();
+    return 4;
+  };
   LOOKS.prism = { speedup: 2.5, paint: paintPrism, glyph: { scale: 0.56, ringGap: 3.5, ink: lightInk }, ring: prismRing, hubDress: prismHub, orbit: prismOrbit, arrival: prismArrival, select: prismSelect, wire: prismWire, surge: prismSurge, land: prismLand, reach: prismReach };
 
 // ===== style: sigil =====
@@ -3194,10 +3382,10 @@
 
   // A tint's tones under a theme, and its three radials, per canvas. The body
   // sinks toward the theme's background (a dark seal on a dark theme; on a
-  // light one only halfway, so the seal carries its state's hue, an apricot
-  // seal for amber, off the page) and the ink rises toward its highlight; on
-  // a light theme the rim darkens (3:1 on the page for amber) and the glows
-  // use the hue itself, so every state tint stays legible. The theme's second
+  // light one less than a third of the way, so the seal carries its state's
+  // hue off the page) and the ink rises toward its highlight; on a light
+  // theme the rim darkens well past 3:1 on the page and the glows use the
+  // hue itself, so every state tint stays legible. The theme's second
   // hue is only ever a highlight (the tail rune, the lit cell, the crown, the
   // wire packets); without one, or when it is the tint's own hue (a working
   // node on a theme whose bright is its second hue), it is the tint risen
@@ -3207,8 +3395,8 @@
   const sigilKeys = new WeakMap();
   function sigilTones(tint, palette) {
     const light = palette.light === true, hi = palette.hi ?? WHITE, bg = palette.bg ?? theme(null).bg;
-    const edge = light ? mix(tint, hi, 0.4) : tint;
-    const deep = mix(tint, bg, light ? 0.5 : 0.84);
+    const edge = light ? mix(tint, hi, 0.62) : tint;
+    const deep = mix(tint, bg, light ? 0.3 : 0.84);
     const hot = mix(tint, hi, 0.55);
     const ink = mix(tint, hi, light ? 0.9 : 0.88);
     const rune = mix(tint, hi, light ? 0.55 : 0.42);
@@ -3219,7 +3407,9 @@
     return {
       tint, edge, deep, hot, ink, rune, accent, halo, light, own,
       tintS: rgba(tint, 1), edgeS: rgba(edge, 1), deepS: rgba(deep, 1), hotS: rgba(hot, 1), inkS: rgba(ink, 1),
-      runeS: rgba(rune, 1), accentS: rgba(accent, 1), flashS: rgba(halo, 1),
+      runeS: rgba(rune, 1), accentS: rgba(accent, 1), flashS: rgba(halo, 1), bgS: rgba(bg, 1),
+      // the seal's rim at rest, px (a light page's is firmer)
+      rimWidth: light ? 1.3 : 1.1,
       glow: null, well: null, spark: null,
     };
   }
@@ -3360,8 +3550,10 @@
         ctx.globalAlpha = base * gain * trail * (tones.own ? 0.35 : 0.5); ctx.fillStyle = tones.own ? tones.edgeS : tones.accentS; ctx.fill();
         ctx.globalAlpha = base * gain * 0.9; ctx.strokeStyle = tones.edgeS; ctx.lineWidth = px; ctx.stroke();
       } else {
-        ctx.globalAlpha = base * gain * flare * 0.72; ctx.fillStyle = tones.accentS; ctx.fill();
-        ctx.globalAlpha = base * gain * (0.55 + 0.45 * flare); ctx.strokeStyle = tones.hotS; ctx.lineWidth = 1.2 * px; ctx.stroke();
+        // (a filled hex under a hairline: a heavy outline on a 3 px cell
+        // reads as a ringed dot)
+        ctx.globalAlpha = base * gain * (0.4 + 0.55 * flare); ctx.fillStyle = tones.accentS; ctx.fill();
+        ctx.globalAlpha = base * gain * (0.45 + 0.45 * flare); ctx.strokeStyle = tones.hotS; ctx.lineWidth = px; ctx.stroke();
       }
     }
     const extent = SIGIL_CELLS[lit], ink = lighting ? engrave * flare * Math.min(1, extent) : 0;
@@ -3377,6 +3569,21 @@
     }
   }
 
+  // A resting todo (T0; not lit, working or kicked, no glyph: most of a
+  // board): the seal, then its rim, the rune tick turning with the ring and
+  // the centre dot as ONE stroke in the edge tone, traced in pixels (no save,
+  // no transform): a fill and a stroke. The dot is a tiny diamond stroked
+  // solid.
+  const SIGIL_STALE = [0, 0];
+  function sigilTiny(ctx, tones, x, y, r, base, ring) {
+    ctx.beginPath(); sigilHex(ctx, x, y, SIGIL_SEAL * r);
+    ctx.globalAlpha = base; ctx.fillStyle = tones.deepS; ctx.fill();
+    const angle = ring - Math.PI / 2, cos = Math.cos(angle), sin = Math.sin(angle), dot = 0.12 * r;
+    ctx.moveTo(x + cos * 0.42 * r, y + sin * 0.42 * r); ctx.lineTo(x + cos * 0.82 * r, y + sin * 0.82 * r);
+    ctx.moveTo(x, y - dot); ctx.lineTo(x + dot, y); ctx.lineTo(x, y + dot); ctx.lineTo(x - dot, y); ctx.closePath();
+    ctx.lineJoin = "miter";
+    ctx.globalAlpha = base * (tones.light ? 0.95 : 0.85); ctx.strokeStyle = tones.edgeS; ctx.lineWidth = tones.rimWidth; ctx.stroke();
+  }
   function paintSigil(ctx, p, radius, tint, n, m) {
     const palette = n.theme;
     const tones = sigilPaints(ctx, tint, palette);
@@ -3389,6 +3596,10 @@
     const work = clamp01(sigilNum(m.work, n.active ? 1 : 0));
     const sel = clamp01(sigilNum(m.sel, n.selected ? 1 : 0));
     const kick = still ? 0 : clamp01(sigilNum(m.kick, 0));
+    if (detail === 0 && work <= 0.02 && lit <= 0.02 && kick <= 0.01 && !n.glyph && !n.monogram) {
+      sigilTiny(ctx, tones, p.x, p.y, r, base, still ? 0 : TAU * sigilFrac(clock / 9 + seed));
+      return;
+    }
     const age = sigilNum(m.age, 1e9);
     // The ring's turn, and the scan: one step (a rune written, a cell lit)
     // every .7 clock seconds, so 1.4 s a circuit at work. `phase` runs
@@ -3443,7 +3654,13 @@
     }
     if (kick > 0.01) { ctx.globalAlpha = base * 0.5 * kick; ctx.fillStyle = tones.flashS; ctx.fill(); }
     ctx.globalAlpha = base * (tones.light ? 0.95 + 0.05 * lit : 0.85 + 0.15 * lit); ctx.strokeStyle = tones.edgeS;
-    ctx.lineWidth = (1.1 + 0.45 * lit + 0.35 * sel + 0.4 * kick) * px; ctx.stroke();
+    ctx.lineWidth = (tones.rimWidth + 0.45 * lit + 0.35 * sel + 0.4 * kick) * px;
+    // (a stale seal's rim is cut in short dashes from T1 up: it reads as
+    // stalled, its clock slowed, still turning)
+    const stale = n.stale && detail >= 1;
+    if (stale) { SIGIL_STALE[0] = 1.5 * px; SIGIL_STALE[1] = 2 * px; ctx.setLineDash(SIGIL_STALE); }
+    ctx.stroke();
+    if (stale) ctx.setLineDash(SIGIL_NO_DASH);
     // T3: a faint inner border while the seal rests (the cells take over at work).
     const border = detail >= 3 ? 0.32 * (1 - work) * tierIn(r, 3) : 0;
     if (border > 0.01) {
@@ -3492,12 +3709,14 @@
         if (cool < 0.99) { ctx.globalAlpha = base * tail * (1 - cool); ctx.strokeStyle = tones.inkS; ctx.lineWidth = 1.6 * px; ctx.stroke(); }
       }
       const lead = workHead > restHead ? near : slot;
-      const spark = detail >= 3 && !n.glyph ? tierIn(r, 3) * Math.max(restHead, workHead) * 0.8 : 0;
+      // (the spark marks the head at rest; at work the lit cell carries the scan)
+      const spark = detail >= 3 && !n.glyph ? tierIn(r, 3) * restHead * (1 - work) * 0.8 : 0;
       if (spark > 0.01) {
+        // (a hex of light, in the seal's own language)
         tones.spark ??= sigilSparkPaint(ctx, tones);
         ctx.save(); ctx.translate(SIGIL_NORMAL[2 * lead] * 0.7, SIGIL_NORMAL[2 * lead + 1] * 0.7); ctx.scale(0.24, 0.24);
         ctx.globalAlpha = base * spark; ctx.fillStyle = tones.spark;
-        ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
+        ctx.beginPath(); sigilHex(ctx, 0, 0, 1); ctx.fill();
         ctx.restore();
       }
       ctx.strokeStyle = tones.inkS; ctx.lineWidth = 1.6 * px;
@@ -3535,24 +3754,25 @@
       const light = palette.light === true, hi = palette.hi ?? WHITE, bg = palette.bg ?? theme(null).bg;
       const amber = palette.amber ?? theme(null).amber, done = palette.done ?? theme(null).done;
       states = light
-        ? { amber: mix(amber, hi, 0.42), amberWell: mix(amber, bg, 0.62), done: mix(done, hi, 0.42), doneWell: mix(done, bg, 0.62) }
-        : { amber, amberWell: palette.amberWell ?? mix(amber, bg, 0.8), done, doneWell: palette.doneWell ?? mix(done, bg, 0.8) };
+        ? { amber: mix(amber, hi, 0.42), amberWell: mix(amber, hi, 0.5), done: mix(done, hi, 0.42), doneWell: mix(done, hi, 0.55), mark: bg }
+        : { amber, amberWell: palette.amberWell ?? mix(amber, bg, 0.8), done, doneWell: palette.doneWell ?? mix(done, bg, 0.8), mark: null };
       sigilStateCache.set(palette, states);
     }
     return states;
   }
-  function sigilBadge(ctx, x, y, pop, well, colour, bang, base) {
+  function sigilBadge(ctx, x, y, pop, well, colour, bang, base, mark = null) {
     ctx.save(); ctx.translate(x, y); ctx.scale(pop, pop);
     ctx.beginPath(); sigilHex(ctx, 0, 0, 5.4);
     ctx.globalAlpha = base; ctx.fillStyle = rgba(well, 1); ctx.fill();
     ctx.globalAlpha = base * 0.9; ctx.strokeStyle = rgba(colour, 1); ctx.lineWidth = 1; ctx.stroke();
     ctx.globalAlpha = base;
+    const ink = rgba(mark ?? colour, 1);
     if (bang) {
       ctx.font = SIGIL_FONT; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillStyle = rgba(colour, 1); ctx.fillText("!", 0, 0.5);
+      ctx.fillStyle = ink; ctx.fillText("!", 0, 0.5);
     } else {
       ctx.beginPath(); ctx.moveTo(-2.6, 0); ctx.lineTo(-0.8, 1.9); ctx.lineTo(2.6, -2);
-      ctx.lineWidth = 1.4; ctx.stroke();
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.4; ctx.stroke();
     }
     ctx.restore();
   }
@@ -3591,8 +3811,8 @@
         const pulse = still ? 1 : 0.5 + 0.5 * Math.sin(TAU * sigilFrac(time / 1200 + seed));
         ctx.beginPath(); sigilHex(ctx, p.x, p.y, ring);
         ctx.globalAlpha = base * (0.55 + 0.35 * pulse); ctx.strokeStyle = rgba(states.amber, 1); ctx.lineWidth = 1.4; ctx.stroke();
-        if (pop > 0.02) sigilBadge(ctx, bx, by, pop, states.amberWell, states.amber, true, base);
-      } else if (pop > 0.02) sigilBadge(ctx, bx, by, pop, states.doneWell, states.done, false, base);
+        if (pop > 0.02) sigilBadge(ctx, bx, by, pop, states.amberWell, states.amber, true, base, states.mark);
+      } else if (pop > 0.02) sigilBadge(ctx, bx, by, pop, states.doneWell, states.done, false, base, states.mark);
     }
     ctx.restore();
     return true;
@@ -3676,12 +3896,14 @@
     ctx.globalAlpha = alpha * 0.7 * fade * fade; ctx.fillStyle = tones.flashS; ctx.fill();
     ctx.beginPath(); sigilHex(ctx, 0, 0, SIGIL_SEAL * (1 + 0.4 * easeOut(u)));
     ctx.globalAlpha = alpha * 0.8 * fade; ctx.strokeStyle = tones.edgeS; ctx.lineWidth = 1.4 / radius; ctx.stroke();
-    // Big enough to read as hexes (6 px corner to corner at r 12), and edged.
-    const out = 1 + 0.85 * easeOut(u), size = 0.27 * (1 - 0.3 * u), cos = Math.cos(u * Math.PI), sin = Math.sin(u * Math.PI);
+    // Big enough to read as hexes at 1x (7.7 px corner to corner at r 12):
+    // bright hex outlines over a faint wash of the second hue, so they read
+    // as hexes and never as dim round dots.
+    const out = 1 + 0.85 * easeOut(u), size = 0.32 * (1 - 0.3 * u), cos = Math.cos(u * Math.PI), sin = Math.sin(u * Math.PI);
     ctx.beginPath();
     for (let k = 0; k < 6; k += 1) sigilHexTurned(ctx, SIGIL_HEX[2 * k] * out, SIGIL_HEX[2 * k + 1] * out, size, cos, sin);
-    ctx.globalAlpha = alpha * 0.9 * fade; ctx.fillStyle = tones.accentS; ctx.fill();
-    ctx.globalAlpha = alpha * 0.6 * fade; ctx.strokeStyle = tones.hotS; ctx.lineWidth = 1 / radius; ctx.stroke();
+    ctx.globalAlpha = alpha * 0.35 * fade; ctx.fillStyle = tones.accentS; ctx.fill();
+    ctx.globalAlpha = alpha * 0.95 * fade; ctx.strokeStyle = tones.hotS; ctx.lineWidth = 1.3 / radius; ctx.stroke();
     ctx.restore();
     return true;
   }
@@ -3767,13 +3989,18 @@
     return true;
   }
 
-  // Wires: cut in the rune rhythm, drifting slowly at rest and marching while
-  // the work runs, where a faint groove lies under the runes; a wire that
-  // carries work (o.flow; a caller without it, an active wire) has two hex
-  // packets in the second hue riding along, turning (a still pose parks one
-  // halfway). The far (blurred) pen keeps the runes alone. On the rail only
-  // an active session's wires carry the runes; every other rail wire keeps
-  // its plain line.
+  // Wires: cut in the rune rhythm wherever there is something to read (a
+  // wire that carries work, an active or inspected one, and the task and
+  // folded links, which are dashed in every style), drifting slowly and
+  // marching while the work runs, where a faint groove lies under the runes;
+  // the many resting session and todo wires are one plain line each (their
+  // runes show as soon as the branch is inspected). A wire that carries work
+  // (o.flow; a caller without it, an active wire) has two hex packets in the
+  // second hue riding along, turning, edged in the page's colour (a still
+  // pose parks one halfway). The far (blurred) pen keeps the line alone. On
+  // the rail only an active session's wires carry the runes; every other
+  // rail wire keeps its plain line. The canvas comes back with its alpha,
+  // cap, dash and offset, set back by hand (a plain wire touches none).
   function sigilWirePath(ctx, a, b, cp) {
     ctx.moveTo(a.x, a.y);
     if (cp) ctx.bezierCurveTo(cp.x1, cp.y1, cp.x2, cp.y2, b.x, b.y);
@@ -3802,15 +4029,18 @@
     const kind = Object.hasOwn(SIGIL_PERIODS, o.kind) ? o.kind : "session";
     const cp = o.curved === true && o.cp ? o.cp : null;
     const active = o.active === true, overlays = !rail && o.far !== true;
-    const base = sigilBase(ctx);
-    ctx.save();
-    ctx.lineCap = "butt"; ctx.lineJoin = "round"; ctx.strokeStyle = tones.edgeS;
+    const flowing = typeof o.flow === "boolean" ? o.flow : active;
+    const runes = rail || active || flowing || o.inspected === true || kind === "task" || kind === "folded" || kind === "tether";
+    const base = sigilBase(ctx), cap = ctx.lineCap;
+    ctx.strokeStyle = tones.edgeS;
     if (active && overlays) {
       ctx.beginPath(); sigilWirePath(ctx, a, b, cp);
       ctx.globalAlpha = base * alpha * 0.28; ctx.lineWidth = width + 2; ctx.stroke();
     }
-    ctx.setLineDash(SIGIL_DASHES[kind]);
-    ctx.lineDashOffset = still ? 0 : -((time / (o.march === true || rail ? 55 : 400)) % SIGIL_PERIODS[kind]);
+    if (runes) {
+      ctx.lineCap = "butt"; ctx.setLineDash(SIGIL_DASHES[kind]);
+      ctx.lineDashOffset = still ? 0 : -((time / (o.march === true || rail ? 55 : 400)) % SIGIL_PERIODS[kind]);
+    }
     ctx.beginPath();
     if (o.double === true && !cp) {
       const nx = -dy / len * 1.6, ny = dx / len * 1.6;
@@ -3818,19 +4048,21 @@
       ctx.moveTo(a.x - nx, a.y - ny); ctx.lineTo(b.x - nx, b.y - ny);
     } else sigilWirePath(ctx, a, b, cp);
     ctx.globalAlpha = base * alpha; ctx.lineWidth = width; ctx.stroke();
-    const flowing = typeof o.flow === "boolean" ? o.flow : active;
+    if (runes) { ctx.setLineDash(SIGIL_NO_DASH); ctx.lineDashOffset = 0; ctx.lineCap = cap; }
     if (flowing && overlays && sigilNum(o.detail, 3) >= 1) {
-      ctx.setLineDash(SIGIL_NO_DASH);
       const seed = sigilNum(o.seed, 0), turn = still ? 0 : time / 520, cos = Math.cos(turn), sin = Math.sin(turn);
       ctx.beginPath();
       for (let k = 0; k < (still ? 1 : 2); k += 1) {
         const u = still ? 0.5 : sigilFrac(time / 1900 + seed + k / 2);
         const at = sigilAlong(a, b, cp, u);
-        sigilHexTurned(ctx, at.x, at.y, 2.6 * Math.min(1, 4 * Math.sin(Math.PI * u)), cos, sin);
+        sigilHexTurned(ctx, at.x, at.y, 3.5 * Math.min(1, 4 * Math.sin(Math.PI * u)), cos, sin);
       }
       ctx.globalAlpha = base * 0.95 * clamp01(sigilNum(o.lifetime, 1)); ctx.fillStyle = tones.accentS; ctx.fill();
+      const join = ctx.lineJoin;
+      ctx.lineJoin = "miter"; ctx.strokeStyle = tones.bgS; ctx.lineWidth = 1; ctx.stroke();
+      ctx.lineJoin = join;
     }
-    ctx.restore();
+    ctx.globalAlpha = base;
     return true;
   }
 
@@ -3855,7 +4087,7 @@
     if (!(len > 2)) return true;
     const live = pulse ?? o.pulse ?? null;
     const tones = sigilPaints(ctx, sigilPulseRgb(live), sigilThemeOf(o));
-    const size = live?.packet ? 4.2 : live?.small ? 2.4 : 3.4;
+    const size = live?.packet ? 4.2 : 3.5;
     const cp = o.cp ?? null;
     const base = sigilBase(ctx);
     ctx.save();
@@ -3893,7 +4125,7 @@
     const at = sigilAlong(from, to, cp, head), hx = at.x, hy = at.y;
     ctx.beginPath(); sigilHexTurned(ctx, hx, hy, size, cos, sin);
     ctx.globalAlpha = base * show; ctx.fill();
-    ctx.globalAlpha = base * 0.9 * show; ctx.strokeStyle = tones.hotS; ctx.lineWidth = 1; ctx.stroke();
+    ctx.lineJoin = "miter"; ctx.globalAlpha = base * 0.9 * show; ctx.strokeStyle = tones.bgS; ctx.lineWidth = 1; ctx.stroke();
     if (live?.packet) {
       ctx.beginPath(); ctx.arc(hx, hy, size * 0.35, 0, TAU);
       ctx.globalAlpha = base * show; ctx.fillStyle = tones.hotS; ctx.fill();
@@ -3932,6 +4164,8 @@
     return 1 + Math.max(0.55 * work, sel * (0.3 + 0.4 * work));
   }
 
+  // The seal's outline for the caller's rims: a pointy-top hexagon at .98.
+  OUTLINES.sigil = (ctx, x, y, r) => { sigilHex(ctx, x, y, SIGIL_SEAL * r); return 6; };
   LOOKS.sigil = { speedup: 3, paint: paintSigil, glyph: { scale: 0.52, ringGap: 3.5, ink: sigilGlyphInk }, ring: sigilRing, hubDress: sigilHub, orbit: sigilOrbit, arrival: sigilArrival, select: sigilSelect, wire: sigilWire, surge: sigilSurge, land: sigilLand, reach: sigilReach };
 
 // ===== overlays =====
@@ -3967,8 +4201,8 @@
 
   // The state colours as marks on the theme: the done green and the amber
   // themselves on a dark theme; on a light one they sink toward the
-  // highlight (the rings a little, the error "!" more) so they still read
-  // against a pale background and a pale well. Cached per theme.
+  // highlight so they still read against a pale background (the badges'
+  // wells and their cut-out marks come from the theme). Cached per theme.
   const stateInks = new WeakMap();
   function overlayInks(currentTheme) {
     let inks = stateInks.get(currentTheme);
@@ -4029,7 +4263,7 @@
       ctx.strokeStyle = rgba(currentTheme.doneInk, 1); ctx.lineWidth = 1.4;
       ctx.beginPath(); ctx.moveTo(-2.6, 0); ctx.lineTo(-0.8, 1.9); ctx.lineTo(2.6, -2); ctx.stroke();
     } else {
-      ctx.fillStyle = rgba(overlayInks(currentTheme).mark, 1);
+      ctx.fillStyle = rgba(currentTheme.amberInk ?? overlayInks(currentTheme).mark, 1);
       ctx.font = '700 8px system-ui, "Segoe UI", sans-serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText("!", 0, 0.5);
     }
@@ -4209,13 +4443,14 @@
   }
 
   // Normalised paint options, one scratch reused by every call.
-  const NORMAL = { kind: "task", selected: false, chosen: false, active: false, alpha: 1, glyph: false, monogram: false, motion: null, time: 0, still: false, detail: 3, extraGlow: false, theme: INK_DEFAULTS };
+  const NORMAL = { kind: "task", selected: false, chosen: false, active: false, stale: false, alpha: 1, glyph: false, monogram: false, motion: null, time: 0, still: false, detail: 3, extraGlow: false, theme: INK_DEFAULTS };
   function normalise(o, radius) {
     const n = NORMAL;
     n.kind = typeof o.kind === "string" ? o.kind : "task";
     n.selected = o.selected === true;
     n.chosen = o.chosen === true;
     n.active = o.active === true;
+    n.stale = o.stale === true;
     n.alpha = Number.isFinite(o.alpha) ? o.alpha : 1;
     n.monogram = typeof o.monogram === "boolean" ? o.monogram : n.kind === "assistant" || n.kind === "music";
     n.glyph = typeof o.glyph === "boolean" ? o.glyph : n.monogram || n.kind === "agent" && radius >= 4.5;
@@ -4280,6 +4515,19 @@
   function select(ctx, style, p, radius, tint, o) {
     const hook = hookOf(style, "select", OVERLAY_DEFAULTS);
     return hook !== null && hook(ctx, p, radius, tint, o ?? EMPTY, style) !== false;
+  }
+  // A node's silhouette at radius r round (x, y), for the rims a caller draws
+  // around a node (the collision rim, the done echo): one closed subpath
+  // added to the current path (the caller begins and strokes it) in the
+  // style's own shape: Sigil's seal (a pointy-top hexagon at .98 r),
+  // Crystal's octagon turned with the gem (m, the node's motion record,
+  // turns it; none holds the still pose), Prism's kite; a circle for every
+  // other style. Answers the vertex count (0 for a circle).
+  function outline(ctx, style, x, y, r, m = null) {
+    const shape = OUTLINES[style];
+    if (shape && lookOf(style)) return shape(ctx, x, y, r, m);
+    ctx.moveTo(x + r, y); ctx.arc(x, y, r, 0, TAU);
+    return 0;
   }
   // How far past its radius a style draws (a multiple of the radius), so labels
   // can clear it; 1 for a style that stays on its disc.
@@ -4638,7 +4886,10 @@
   // (o.flow; o.march for a caller without it) runs the style's flow over it:
   // a session or todo wire (a hop on the way to the work) at .7 of the pace
   // and .6 of the alpha, so the task's own wire stays the brightest. The far
-  // (blurred) pen gets the line alone. The context comes back as it was.
+  // (blurred) pen gets the line alone. The canvas comes back with its alpha,
+  // cap, dash and offset, set back by hand (a save and a restore per edge
+  // cost more than the line): a plain wire, most of a board, sets no dash at
+  // all and no cap on a caller that already draws round ones.
   function wireDefault(ctx, a, b, o, style) {
     const tint = o.tint;
     if (!tint || !a || !b) return false;
@@ -4656,10 +4907,8 @@
     const carries = typeof o.flow === "boolean" ? o.flow : o.march === true;
     const flows = near && !double && o.active === true && carries;
     const relay = o.kind === "session" || o.kind === "todo";
-    const base = ctx.globalAlpha;
-    ctx.save();
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
+    const base = ctx.globalAlpha, cap = ctx.lineCap;
+    if (cap !== "round") ctx.lineCap = "round";
     ctx.strokeStyle = rgba(tint, 1);
     if (lit) {
       const breath = still ? 0.5 : 0.5 + 0.5 * Math.sin(TAU * (time / 2600 + seed));
@@ -4669,7 +4918,6 @@
       const spread = (double ? pack.glow + 3.2 : pack.glow) * (railed ? 0.7 : 1);
       const outer = wireTier(detail, thin, 2);
       wireTrace(ctx, a, b, cp);
-      ctx.setLineDash?.(NO_DASH);
       if (outer > 0) {
         ctx.globalAlpha = glow * 0.5 * outer;
         ctx.lineWidth = Math.min(WIRE_MAX, width + spread);
@@ -4687,16 +4935,20 @@
       ctx.moveTo(a.x + nx, a.y + ny); ctx.lineTo(b.x + nx, b.y + ny);
       ctx.moveTo(a.x - nx, a.y - ny); ctx.lineTo(b.x - nx, b.y - ny);
     } else if (!lit) wireTrace(ctx, a, b, cp);
-    const dash = o.dash && o.dash.length ? o.dash : NO_DASH;
-    const period = o.march === true && !still ? dashPeriod(dash) : 0;
-    ctx.setLineDash?.(dash);
-    // The dashes march toward b (a tether's faster), as the plain lines did.
-    ctx.lineDashOffset = period > 0 ? -((time / (o.kind === "tether" ? 40 : 60)) % period) : 0;
+    const dash = o.dash && o.dash.length ? o.dash : null;
+    if (dash) {
+      // The dashes march toward b (a tether's faster), as the plain lines did.
+      const period = o.march === true && !still ? dashPeriod(dash) : 0;
+      ctx.setLineDash?.(dash);
+      ctx.lineDashOffset = period > 0 ? -((time / (o.kind === "tether" ? 40 : 60)) % period) : 0;
+    }
     ctx.globalAlpha = base * alpha;
     ctx.lineWidth = width;
     ctx.stroke();
     if (flows) wireFlow(ctx, a, b, cp, pack, tint, o.theme ?? INK_DEFAULTS, width, base * lifetime * (relay ? 0.6 : 1), detail, thin, seed, time, still, relay ? 0.7 : 1);
-    ctx.restore();
+    if (dash || flows) { ctx.setLineDash?.(NO_DASH); ctx.lineDashOffset = 0; }
+    ctx.globalAlpha = base;
+    if (cap !== "round") ctx.lineCap = cap;
     return true;
   }
 
@@ -4973,10 +5225,53 @@
   }
 
   const WIRE_DEFAULTS = { wire: wireDefault, surge: surgeDefault, land: landDefault };
+  // A wire leaves and meets its nodes at their surfaces, not their centres,
+  // so a translucent body (glass, a halo's ring, Sigil's seal, any node at
+  // its quiet alpha) never shows the lines crossing its face; pulses still
+  // ride to the centre. How far in along the end's radius (o.rA, o.rB, the
+  // radii the caller painted) each look lets a wire stop without leaving a
+  // gap: just inside its narrowest edge (Sigil's flat sides .85, Crystal's
+  // tilting octagon .86, Prism's kite .58, Minimal's breathing dot .4).
+  // Singularity keeps its whole bend: its pulses ride that same curve.
+  const WIRE_INSET = Object.freeze(Object.assign(Object.create(null), {
+    orbs: 0.96, glass: 0.96, minimal: 0.38, halo: 0.96, crystal: 0.85, singularity: 0, prism: 0.56, sigil: 0.84,
+  }));
+  const TRIM_A = { x: 0, y: 0 }, TRIM_B = { x: 0, y: 0 }, TRIM_CP = { x1: 0, y1: 0, x2: 0, y2: 0 };
+  // The tree's S-curve (a cubic through the caller's controls) between t0
+  // and t1, by its blossoms, into TRIM_A, TRIM_CP and TRIM_B.
+  function trimCurve(a, b, cp, t0, t1) {
+    PATH.cubic = true; PATH.straight = false;
+    PATH.x0 = a.x; PATH.y0 = a.y; PATH.x1 = cp.x1; PATH.y1 = cp.y1; PATH.x2 = cp.x2; PATH.y2 = cp.y2; PATH.x3 = b.x; PATH.y3 = b.y;
+    pathBlossom(PATH, t0, t0, t0, TRIM_A);
+    pathBlossom(PATH, t0, t0, t1, PATH_C1); TRIM_CP.x1 = PATH_C1.x; TRIM_CP.y1 = PATH_C1.y;
+    pathBlossom(PATH, t0, t1, t1, PATH_C2); TRIM_CP.x2 = PATH_C2.x; TRIM_CP.y2 = PATH_C2.y;
+    pathBlossom(PATH, t1, t1, t1, TRIM_B);
+  }
   // One connection between two painted points (a and b are {x, y}).
   function wire(ctx, style, a, b, o) {
     const hook = hookOf(style, "wire", WIRE_DEFAULTS);
-    return hook !== null && hook(ctx, a, b, o ?? EMPTY, style) !== false;
+    if (hook === null) return false;
+    const given = o ?? EMPTY;
+    const inset = WIRE_INSET[style] ?? 0;
+    const rA = given.rA > 0 ? given.rA * inset : 0, rB = given.rB > 0 ? given.rB * inset : 0;
+    if (!(rA > 0 || rB > 0) || !a || !b) return hook(ctx, a, b, given, style) !== false;
+    const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
+    // Ends that touch or overlap hide the whole wire under their bodies.
+    if (!(len > rA + rB + 1)) return true;
+    const cp = given.curved === true && given.cp ? given.cp : null;
+    if (cp && !Object.isFrozen(given)) {
+      // On the S-curve, the curve's own piece between the two surfaces (its
+      // speed at either end is three times the leg to the nearer control).
+      const speedA = 3 * Math.hypot(cp.x1 - a.x, cp.y1 - a.y), speedB = 3 * Math.hypot(b.x - cp.x2, b.y - cp.y2);
+      const t0 = Math.min(0.45, rA / (speedA > 1 ? speedA : len)), t1 = Math.max(0.55, 1 - rB / (speedB > 1 ? speedB : len));
+      trimCurve(a, b, cp, t0, t1);
+      given.cp = TRIM_CP;
+      try { return hook(ctx, TRIM_A, TRIM_B, given, style) !== false; } finally { given.cp = cp; }
+    }
+    const ux = dx / len, uy = dy / len;
+    TRIM_A.x = a.x + ux * rA; TRIM_A.y = a.y + uy * rA;
+    TRIM_B.x = b.x - ux * rB; TRIM_B.y = b.y - uy * rB;
+    return hook(ctx, TRIM_A, TRIM_B, given, style) !== false;
   }
   // A travelling pulse at t (0..1) from `from` to `to`.
   function surge(ctx, style, from, to, t, pulse, o) {
@@ -4993,6 +5288,7 @@
 
   for (const style of STYLES) Object.freeze(LOOKS[style]);
   Object.freeze(LOOKS);
+  Object.freeze(OUTLINES);
   Object.freeze(OVERLAY_DEFAULTS);
   Object.freeze(WIRE_DEFAULTS);
   // Infra helpers the style sections share; named here so the ones no look
@@ -5002,6 +5298,6 @@
     version: 1, STYLES, PREMIUM, shapes: SHAPES,
     seed, hash, approach, motionRecord, stepMotion, shownTint, theme, inkOf, tier,
     paint, glyph, ring, hubDress, orbit, arrival, select,
-    wire, surge, land, reach, cacheStats,
+    wire, surge, land, reach, cacheStats, outline,
   });
 })();

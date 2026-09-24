@@ -182,18 +182,21 @@ test("Prism's small kite (T0) is lit like the larger gem and catches the light b
     assert.ok(lit >= 0.6 * luminance(tint) && lit > plane, `${tint}: the lit plane reads (${lit.toFixed(0)} of ${luminance(tint).toFixed(0)})`);
     assert.ok(lit >= luminance(tint) && plane >= 0.4 * luminance(tint) && plane + lit >= 1.4 * luminance(tint), `${tint}: a lit crystal, not a grey chip (${plane.toFixed(0)} / ${lit.toFixed(0)})`);
   }
-  // The band crosses it in the big gem's rhythm: a spec flash over the whole
-  // kite rises and falls, and is gone while the band is away.
+  // The band crosses it in the big gem's rhythm: the lit plane steps up the
+  // tone ramp as it passes (no third fill) and back down, resting while the
+  // band is away. A resting kite is two fills and a stroke, traced in pixels
+  // (no save, no transform).
   const { record, step } = recordFor(styles, {});
-  const levels = new Set();
-  let away = 0;
+  const tones = [];
   for (let frame = 0; frame < 120; frame += 1) {
     stepOn(styles, record, step, 1);
     const ctx = paintOnce(styles, 4.5, { motion: record, time: step.time, detail: 0, theme });
-    if (ctx.calls.fill === 2) away += 1;
-    else levels.add(Math.round(ctx.calls.fills[2].alpha * 40));
+    assert.deepEqual([ctx.calls.fill, ctx.calls.stroke, ctx.calls.saves, ctx.calls.log.filter(([name]) => name === "scale" || name === "translate").length], [2, 1, 1, 0], "two fills, a stroke, the dispatcher's save alone");
+    tones.push(luminance(channels(ctx.calls.fills[1].style)));
   }
-  assert.ok(levels.size >= 6 && away >= 20, `the band's flash sweeps in and out (${levels.size} levels, ${away} frames dark)`);
+  const rest = Math.min(...tones), levels = new Set(tones);
+  const away = tones.filter((tone) => tone === rest).length;
+  assert.ok(levels.size >= 6 && away >= 20 && Math.max(...tones) > rest + 10, `the band lights the kite and leaves it (${levels.size} levels, ${away} frames at rest)`);
 });
 
 test("Prism's working shards are two-tone crystals on a traced, tilted orbit, the caustics secondary", () => {
@@ -335,11 +338,18 @@ test("Prism stays legible on a light theme: every facet off the ground, a pale g
   styles.paint(dark, "prism", P, 15, tint, { kind: "task", selected: true, time: 0, detail: 3, theme: styles.theme(DARK) });
   assert.equal(dark.calls.gradients.find(({ kind }) => kind === "radial").stops[0][1], "rgba(160,110,60,0.3)", "a dark theme keeps the tint's own glow");
   // The error and done rings deepen their state colours on the cream.
+  // The badge is a filled well in the state's deepened hue, its mark cut out
+  // in the page's own colour.
+  const pageInk = `rgba(${plain(theme.bg).join(",")},1)`;
   for (const [status, raw] of [["error", "rgba(255,212,121,1)"], ["done", "rgba(104,236,164,1)"]]) {
     const ctx = recordingContext({ center: P });
     styles.ring(ctx, "prism", P, 8, TINT, { status, builder: false, ring: 11.5, time: 1000, still: true, detail: 3, motion: null, theme });
-    const edges = ctx.calls.strokes.map(({ style }) => style);
+    const edges = ctx.calls.strokes.map(({ style }) => style).filter((style) => style !== pageInk);
     assert.ok(!edges.includes(raw) && edges.every((style) => ground - luminance(channels(style)) > 60), `${status}: a deeper ink on a light theme (${edges})`);
+    const well = ctx.calls.fills.find(({ style }) => style === `rgba(${plain(status === "error" ? theme.amberWell : theme.doneWell).join(",")},1)`);
+    assert.ok(well && ground - luminance(channels(well.style)) > 60, `${status}: a filled well`);
+    const mark = status === "error" ? ctx.calls.texts[0]?.ink : ctx.calls.strokes.at(-1).style;
+    assert.equal(mark, pageInk, `${status}: its mark in the page's colour`);
   }
 });
 
@@ -551,6 +561,15 @@ test("Prism's hub dress, work orbit, arrival and selection draw in the spectrum"
   }
 });
 
+test("Prism's reach grows with the eased selection: a hover glides the labels out, never hops them", () => {
+  const styles = loadNodeStyles();
+  const reach = (sel, work = 0) => styles.reach("prism", { sel, work });
+  assert.ok(reach(0.02) - reach(0) < 0.05, `the first hover frame moves it ${((reach(0.02) - reach(0)) * 12).toFixed(2)} px at r 12`);
+  for (let sel = 0; sel < 1; sel += 0.05) assert.ok(reach(sel + 0.05) - reach(sel) <= 0.05 * 0.5 + 1e-9, "it never jumps");
+  assert.equal(reach(1), 1.6, "a full selection still covers the chosen ring (1.6 r)");
+  assert.equal(reach(0, 1), 1.55, "the shards while it works");
+});
+
 test("Prism's wires refract: a glint runs the beam and splits into three strands near a large target", () => {
   const styles = loadNodeStyles();
   const a = { x: 10, y: 150 }, b = { x: 210, y: 40 };
@@ -565,16 +584,24 @@ test("Prism's wires refract: a glint runs the beam and splits into three strands
   assert.equal(active.answer, true);
   assert.equal(active.ctx.calls.saves, active.ctx.calls.restores);
   assert.deepEqual(active.ctx.getLineDash(), [], "the pen's dash comes back");
-  assert.deepEqual(plain(active.ctx.calls.log.filter(([name]) => name === "setLineDash")).map((call) => call.slice(1)), [[], [2, 4], []], "the beam's underlay is solid, the line keeps the pen's dash, the overlays are solid");
+  assert.deepEqual(plain(active.ctx.calls.log.filter(([name]) => name === "setLineDash")).map((call) => call.slice(1)), [[2, 4], []], "the line keeps the pen's dash; the overlays after it are solid");
+  assert.equal(active.ctx.calls.saves, 0, "no save per edge: the canvas's alpha, cap and dash are set back by hand");
+  assert.equal(wire({ dash: [], march: false }).ctx.calls.setLineDash, 0, "a solid pen never touches the dash");
   const strands = active.ctx.calls.strokes.filter(({ width }) => Math.abs(width - 1.19) < 0.01);
   assert.equal(strands.length, 3, "three strands");
   assert.deepEqual(new Set(strands.map(({ style }) => style)).size, 3, "rose, the tint and blue");
-  assert.ok(active.ctx.calls.log.some(([name, x, y]) => name === "lineTo" && Math.hypot(x - b.x, y - b.y) < 12 * 0.36 + 1e-9 && Math.hypot(x - b.x, y - b.y) > 0.1), "the strands fan into the node");
+  // (the wire stops inside the gem's kite, .56 of its radius short of the
+  // centre, so the strands fan into the node's face without crossing it)
+  const len = Math.hypot(b.x - a.x, b.y - a.y), end = { x: b.x - (b.x - a.x) / len * 12 * 0.56, y: b.y - (b.y - a.y) / len * 12 * 0.56 };
+  assert.ok(active.ctx.calls.log.some(([name, x, y]) => name === "lineTo" && Math.hypot(x - end.x, y - end.y) < 12 * 0.36 + 1e-9 && Math.hypot(x - end.x, y - end.y) > 0.1 && Math.hypot(x - b.x, y - b.y) < 12), "the strands fan into the node");
   assert.equal(gradientsBuilt(active.ctx), 0);
   assert.deepEqual(active.ctx.calls.shadowBlurs, []);
-  // Quiet and small: no split; the glint still runs.
+  // Quiet and small: no split, and no glint (it runs only where it is seen:
+  // a wire carrying work, a lit one, or one between T2+ gems).
   const quiet = wire({ active: false, dash: [], march: false, detail: 1, rB: 5 });
-  assert.equal(quiet.ctx.calls.stroke, 2, "the line and its glint");
+  assert.equal(quiet.ctx.calls.stroke, 1, "the line alone");
+  assert.equal(wire({ active: false, dash: [], march: false, detail: 2, rB: 5 }).ctx.calls.stroke, 2, "between larger gems: the line and its glint");
+  assert.equal(wire({ active: false, dash: [], march: false, detail: 1, rB: 5, flow: true }).ctx.calls.stroke, 2, "carrying work: the line and its glint");
   // The far (blurred) pen: the line alone. The hub's double line stays double.
   const far = wire({ far: true });
   assert.equal(far.ctx.calls.stroke, 1);

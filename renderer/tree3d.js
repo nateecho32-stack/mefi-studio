@@ -1324,8 +1324,8 @@
     if (railFrame % 64 === 0) for (const [id, record] of railMotion) if (railFrame - record.seen > 90) railMotion.delete(id);
     if (railMotion.size > RAIL_MOTION_MAX) for (const [id, record] of railMotion) if (railFrame - record.seen > 1) railMotion.delete(id);
   }
-  const railStep = { style: "orbs", active: false, selected: false, lift: 0, progress: null, orbit: 0, status: null, time: 0, frame: 0 };
-  const railPaint = { kind: "session", selected: false, chosen: false, active: false, alpha: 1, glyph: false, monogram: false, motion: null, time: 0, still: false, detail: 2, extraGlow: false, theme: null };
+  const railStep = { style: "orbs", active: false, selected: false, lift: 0, progress: null, orbit: 0, status: null, stale: false, time: 0, frame: 0 };
+  const railPaint = { kind: "session", selected: false, chosen: false, active: false, stale: false, alpha: 1, glyph: false, monogram: false, motion: null, time: 0, still: false, detail: 2, extraGlow: false, theme: null };
   // The agent ring's and the work orbit's options, one scratch each, filled
   // per node (a style's hook reads them at once and never keeps them); their
   // detail is the node's own tier, as its paint has.
@@ -1537,13 +1537,16 @@
       const detail = styles ? styles.tier(radius, 2) : 2;
       if (styles) {
         railStep.active = working; railStep.selected = Boolean(selected); railStep.lift = isHover ? 1 : 0;
-        railStep.progress = node.progress; railStep.orbit = working && !isAgent ? 1.1 : 0; railStep.status = isAgent ? node.status ?? null : null;
+        railStep.progress = node.progress; railStep.orbit = working && !isAgent ? 1.8 : 0; railStep.status = isAgent ? node.status ?? null : null;
+        railStep.stale = node.stale === true || node.state === "stale";
         styles.stepMotion(record, railStep, dt, still);
         record.tint = tint;
         const paint = railPaint;
         paint.kind = node.kind; paint.selected = Boolean(selected); paint.chosen = Boolean(selected) && !isHover; paint.active = working;
-        // The orbs keep the freshness fade they always had on the rail.
-        paint.alpha = visibility * (nodeStyle === "orbs" ? Math.max(0.5, fresh) : 1);
+        // The orbs keep the freshness fade they always had on the rail (on a
+        // light page no deeper than .85, so a state still reads on the pale ground).
+        paint.alpha = visibility * (nodeStyle === "orbs" ? Math.max(theme?.light === true ? 0.85 : 0.5, fresh) : 1);
+        paint.stale = railStep.stale;
         paint.glyph = isAgent && radius >= 4.5; paint.motion = record; paint.time = time; paint.still = still;
         paint.detail = detail; paint.extraGlow = appearance.extraGlow === true; paint.theme = theme;
         styles.paint(ctx, nodeStyle, p, radius, tint, paint);
@@ -1591,9 +1594,10 @@
         } else trails.delete(node.role);
       }
       if (appearance.orbitTrails === true && !isAgent && working) {
-        // The motion record integrates the orbit (1.1 s a turn), so it never
-        // jumps as the node starts or stops working; without one, the clock.
-        const phase = still ? Math.PI / 3 : Number.isFinite(record?.orbit) ? record.orbit : time / 1100 * Math.PI * 2;
+        // The motion record integrates the orbit (1.8 s a turn, as in the
+        // Command view), so it never jumps as the node starts or stops
+        // working; without one, the clock.
+        const phase = still ? Math.PI / 3 : Number.isFinite(record?.orbit) ? record.orbit : time / 1800 * Math.PI * 2;
         // A style may draw the orbit in its own language; otherwise the blue arcs.
         let orbitDrawn = false;
         if (styles) {

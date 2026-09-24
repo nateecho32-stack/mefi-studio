@@ -201,7 +201,7 @@ test("a new status pops its badge in with a little overshoot and sends one ring 
   styles.ring(pale, "orbs", P, 10, TINT, { status: "error", ring: 13.5, time: 1000, still: true, detail: 3, motion: null, theme: light });
   assert.notEqual(plain(light.amberWell).join(","), plain(theme.amberWell).join(","));
   assert.ok(pale.calls.fills.some(({ style }) => style === `rgba(${plain(light.amberWell).join(",")},1)`));
-  assert.notEqual(pale.calls.texts[0].ink, "rgba(255,212,121,1)", "the \"!\" darkens to read on a pale well");
+  assert.equal(pale.calls.texts[0].ink, `rgba(${plain(light.bg).join(",")},1)`, "the \"!\" is cut out of a filled amber well in the page's colour");
   assert.ok(!pale.calls.strokes[0].style.startsWith("rgba(255,212,121,"), "and the amber ring deepens to read on a pale background");
   // Smaller nodes wear smaller badges.
   const small = recordingContext();
@@ -394,13 +394,34 @@ test("a held done task stays on the board through its grace, then flies home", (
   assert.deepEqual(finalized, []);
 });
 
-function badgeEnv(theme = null) {
-  const state = { nodeTheme: theme };
+function badgeEnv(theme = null, styles = null, nodeStyle = "orbs") {
+  const state = { nodeTheme: theme, nodeStyle };
   const rgba = (triple, alpha) => `rgba(${triple.join(",")},${alpha})`;
-  const env = vm.createContext({ state, Math, rgba, NODE_RGB: { done: [104, 236, 164] }, window: {} });
+  const env = vm.createContext({ state, Math, rgba, NODE_RGB: { done: [104, 236, 164] }, window: styles ? { MefiNodeStyles: styles } : {} });
   vm.runInContext(section("  const DONE_BADGE_WELL", "  function drawWorkOrbit("), env);
   return env;
 }
+
+test("the done badge's echo ring follows the style's silhouette; on a light page its marks take the well's deep green", () => {
+  const styles = loadNodeStyles();
+  const node = { id: "task:t1", _m: { seed: 0.1 } };
+  // At time 800 the beat is past its peak: the node's ring echo is out.
+  const echo = (style) => {
+    const ctx = recordingContext();
+    badgeEnv(null, styles, style).drawDoneBadge(ctx, node, { x: 100, y: 100 }, 10, 200, false);
+    const at = ctx.calls.log.findIndex(([name]) => name === "stroke");
+    const path = ctx.calls.log.slice(0, at);
+    return [path.filter(([name]) => name === "lineTo").length, path.filter(([name]) => name === "arc").length];
+  };
+  assert.deepEqual(echo("sigil"), [5, 0], "a hexagon round Sigil's seal");
+  assert.deepEqual(echo("crystal"), [7, 0], "an octagon round Crystal");
+  assert.deepEqual(echo("prism"), [3, 0], "a kite round Prism");
+  assert.deepEqual(echo("orbs"), [0, 1], "a circle round the round looks");
+  const light = styles.theme(LIGHT), ctx = recordingContext();
+  badgeEnv(light, styles, "orbs").drawDoneBadge(ctx, node, { x: 100, y: 100 }, 10, 200, false);
+  assert.ok(ctx.calls.strokes.every(({ style }) => style.startsWith(`rgba(${plain(light.doneWell).join(",")},`)), "echoes and edge in the well's deep green");
+  assert.equal(ctx.calls.texts[0].ink, `rgba(${plain(light.bg).join(",")},1)`, "the \"!\" cut out in the page's colour");
+});
 
 test("the done-hold badge beats, echoes and wiggles, while its label box never moves", () => {
   const env = badgeEnv();
@@ -614,17 +635,20 @@ test("the node loop cross-fades tints, pops the hover, pulses the clash rim and 
     "rgba(NODE_RGB.collision, 0.55)",
     // A fading work orbit keeps turning at its speed.
     "const orbiting = node._workLabel === \"Running\" || node._workLabel === \"Next\" ? node._workLabel : motion.orbitLabel;",
-    "stepFlags.orbit = orbiting === \"Running\" ? 1.1 : orbiting === \"Next\" ? 2.4 : 0;",
+    // A Running orbit turns in 1.8 s (at the hot cadence, about 1.4 px a frame at r 15).
+    "stepFlags.orbit = orbiting === \"Running\" ? 1.8 : orbiting === \"Next\" ? 2.4 : 0;",
+    // A stale node's clock runs slow (stepMotion's STALE_TEMPO).
+    "stepFlags.stale = node.stale === true || node.state === \"stale\";",
     // On a light theme the clash rim takes the amber's darker ink and pulses higher.
     "const clash = state.nodeTheme?.light === true ? nodeStyles?.inkOf(NODE_RGB.collision, state.nodeTheme).hot ?? null : null;",
     "clash ? rgba(clash, Math.round((0.5 + 0.25 * beat) * 32) / 32)",
-    // Sigil's clash rim follows its hexagonal seal instead of circling it.
-    "if (state.nodeStyle === \"sigil\" && nodeStyles) {",
-    "const rim = 0.98 * radius + 2.6 + beat;",
+    // The clash rim follows the style's silhouette (Sigil's seal, Crystal's
+    // octagon, Prism's kite) instead of circling it.
+    "nodeStyles.outline(ctx, state.nodeStyle ?? \"orbs\", p.x, p.y, radius + 2.6 + beat, motion);",
     "} else traceNodeSurface(ctx, visual.shape, p.x, p.y, radius + 2 + beat);",
   ]) assert.ok(loop.includes(line), `the node loop carries ${line}`);
   assert.ok(loop.indexOf("nodeStyles.stepMotion(") < loop.indexOf("const radius ="), "the motion steps before the radius reads its eased hover");
-  for (const gone of ["motion.tint = tint", "#303947", "#173025", "#a7e5c0", "fillRect("]) assert.ok(!loop.includes(gone), `the loop no longer carries ${gone}`);
+  for (const gone of ["motion.tint = tint", "#303947", "#173025", "#a7e5c0", "fillRect(", "state.nodeStyle === \"sigil\""]) assert.ok(!loop.includes(gone), `the loop no longer carries ${gone}`);
   // appendDoneHoldNodes keeps the held entry through the sweep.
   assert.ok(section("function appendDoneHoldNodes(", "// After a rebuild").includes("fx.seen = true;"));
 });

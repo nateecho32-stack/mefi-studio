@@ -77,6 +77,13 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
     step clear of a look that reaches past its node, and the picker
     thumbnails animate when motion is allowed. Paints are cached per canvas:
     a steady frame builds no gradients.
+  - Wires stop at each node's edge instead of crossing a see-through body,
+    and the rims round a node (the file-clash rim, the done echo) follow its
+    shape: a hexagon round Sigil, an octagon round Crystal, a kite round Prism.
+  - On light themes a resting node keeps its state readable: done, blocked
+    and stale rims stand at least 3:1 off the page, status badges are filled
+    wells, and a Singularity stays a black core in a coloured ring. A stale
+    session reads as stalled: its rim is dashed and it moves at a slower pace.
 
 ### Security
 - The Analyzer's GitHub issue read runs `gh` without a shell and without

@@ -242,16 +242,18 @@ body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + var(--m
 }
 
 /* node style: minimal */
-/* Quiet points that breathe; a sonar ring leaves the main one. */
+/* Quiet points that breathe; a sonar ring leaves the main one (a solid dot,
+   no ring standing round it: the ring only ever travels out and fades). */
 .music-preview-minimal i { width: 6px; height: 6px; top: 17.5px; left: calc(50% - 3px); border: 0; background: currentColor; }
+.music-preview-minimal i:first-child { width: 8px; height: 8px; top: 16.5px; left: calc(50% - 4px); }
 .music-preview-minimal i:nth-child(2) { width: 5px; height: 5px; top: 7px; left: calc(50% - 28px); }
 .music-preview-minimal i:nth-child(3) { width: 5px; height: 5px; top: 30px; left: calc(50% + 26px); }
-.music-preview-minimal i:first-child::after { content: ""; position: absolute; inset: -3px; border: 1px solid currentColor; border-radius: 50%; opacity: .3; }
+.music-preview-minimal i:first-child::after { content: ""; position: absolute; inset: -1px; border: 1px solid currentColor; border-radius: 50%; opacity: 0; }
 @media (prefers-reduced-motion: no-preference) {
   .music-preview-minimal i { animation: music-node-pulse calc(3.6s * var(--node-tempo)) ease-in-out infinite; }
   .music-preview-minimal i:nth-child(2) { animation-delay: -1.2s; }
   .music-preview-minimal i:nth-child(3) { animation-delay: -2.4s; }
-  .music-preview-minimal i:first-child::after { animation: music-node-sonar calc(4.2s * var(--node-tempo)) cubic-bezier(.2, .6, .35, 1) infinite; }
+  .music-preview-minimal i:first-child::after { animation: music-node-sonar calc(3.6s * var(--node-tempo)) cubic-bezier(.2, .6, .35, 1) infinite; }
 }
 
 /* node style: halo */

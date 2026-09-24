@@ -583,7 +583,7 @@ test("drawNodeSurface hands each node to MefiNodeStyles, and a bare harness pain
   const [call] = painted;
   assert.ok(call.ctx === ctx && call.p === p && call.tint === tint, "the canvas, point and tint pass through as given");
   assert.deepEqual([call.style, call.radius], ["prism", 12]);
-  assert.deepEqual({ ...call.o, motion: call.o.motion === motion, theme: call.o.theme === theme }, { kind: "agent", selected: true, chosen: true, active: false, alpha: 0.2, glyph: true, monogram: false, motion: true, time: 1234, still: true, detail: 2, extraGlow: true, theme: true }, "flags, the fade × emphasis alpha, the clock, the tier and the theme are forwarded");
+  assert.deepEqual({ ...call.o, motion: call.o.motion === motion, theme: call.o.theme === theme }, { kind: "agent", selected: true, chosen: true, active: false, stale: false, alpha: 0.2, glyph: true, monogram: false, motion: true, time: 1234, still: true, detail: 2, extraGlow: true, theme: true }, "flags, the fade × emphasis alpha, the clock, the tier and the theme are forwarded");
   assert.equal(agent._extraGlow, true);
   assert.deepEqual([agent.x, agent.y, agent.z], [1, 2, 3], "painting never moves a node");
   env.drawNodeSurface(ctx, { kind: "assistant" }, p, 15, tint);
@@ -593,6 +593,10 @@ test("drawNodeSurface hands each node to MefiNodeStyles, and a bare harness pain
   state.nodeStyle = undefined; state.extraGlow = false;
   env.drawNodeSurface(ctx, { kind: "task" }, p, 12, tint, { active: true });
   assert.deepEqual([painted[3].style, painted[3].o.extraGlow, painted[3].o.active], ["orbs", false, true]);
+  // A stale session is told so (its rim is dashed, its clock slowed).
+  env.drawNodeSurface(ctx, { kind: "session", stale: true }, p, 12, tint);
+  env.drawNodeSurface(ctx, { kind: "session", state: "stale" }, p, 12, tint);
+  assert.deepEqual([painted[4].o.stale, painted[5].o.stale], [true, true]);
   // No module (a bare harness, a slice sandbox): one plain disc.
   const bare = vm.createContext({ state: { nodeStyle: "sigil", extraGlow: true }, Math, rgba: (_tint, alpha) => `rgba(1,2,3,${alpha})` });
   vm.runInContext(section("function traceNodeSurface(", "function drawWorkOrbit("), bare);
@@ -714,6 +718,11 @@ test("a landed pulse kicks its node's motion once and belongs to the style for t
   assert.ok(frame.includes("now - pulse.start < pulse.duration + (pulse._landed ? 0 : landTail)"));
   assert.ok(frame.includes("if (!still && now - pulse.start >= pulse.duration) continue;"));
   assert.ok(frame.includes("pulseLook.detail = pulse.to?._detail ?? 3;"), "a travelling pulse carries its target's tier to surge");
+  // A style's pulse to a node that left the graph (folded, absorbed) would
+  // fly to where it last stood and land there as a stray mark: it is dropped.
+  assert.ok(frame.includes("if (pulseLook && !screenPoints.has(pulse.to?.id)) { pulse._landed = true; continue; }"));
+  const landing = frame.indexOf("landPulse(ctx, nodeStyles, pulse, screenPoints.get(pulse.to.id), since, pulseLook, time, still);");
+  assert.ok(landing > 0 && frame.lastIndexOf("if (!screenPoints.has(pulse.to?.id)) { pulse._landed = true; continue; }", landing) > frame.lastIndexOf("for (const pulse of state.pulses)", landing), "and so is its landing");
   assert.ok(frame.includes("node._detail = detail;"), "the node loop leaves each node's tier for its hooks, wires and pulses");
 });
 

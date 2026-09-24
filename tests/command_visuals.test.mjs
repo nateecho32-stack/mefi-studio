@@ -859,7 +859,12 @@ test("a style switch or a new selection draws at the display's rate for a moment
   const select = section(idle, "  function selectNode(", "    state.selected = node ?");
   assert.ok(select.includes("state.styleBurstUntil = (globalThis.performance?.now?.() ?? Date.now()) + 400"), "a new selection settles at the hot cadence too");
   const frame = section(idle, "  function drawFrame(", "    const { ctx } = el;");
-  assert.ok(/state\.motionHot = !still && \(.*\|\| state\.styleBurstUntil > time\);/.test(frame), "the burst joins motionHot, so the frame-cost gate still decides");
+  assert.ok(/state\.motionHot = !still && \(.*\|\| state\.styleBurstUntil > time \|\| state\.orbitHotAt > time - 100\);/.test(frame), "the burst joins motionHot, so the frame-cost gate still decides");
+  // A Running work orbit drawn in the last 100 ms earns it too: at 1.8 s a
+  // turn it glides about 1.4 px a frame at the hot rate (2.8 at 30 Hz).
+  const orbit = section(idle, "  function drawWorkOrbit(", "  const ORBIT_OUT_MS");
+  assert.ok(orbit.includes("if (running && !still) state.orbitHotAt = time;"), "a Running orbit marks the frame it was drawn");
+  assert.ok(orbit.includes("time / (running ? 1800 : 2400)"), "a Running turn is 1.8 s without a record too");
   // The scheduler itself still reads only state (the gate tests above).
   assert.ok(!section(idle, "  // Animation state belongs", "  function drawFrame(").includes("styleBurstUntil"));
 });

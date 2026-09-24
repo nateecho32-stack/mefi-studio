@@ -216,8 +216,9 @@ revision history stay in the project's ignored local `planning.json`.
   members) and arrangement (**Constellation**, **Branches**, **Rings**,
   **Helix**, **Terraces**) per project, in 2D or real 3D. Every node style
   moves all the time and faster while its node works (a Sigil's hex cells
-  assemble, a Singularity's disc spins up, a Prism's shards orbit); reduced
-  motion holds each in a still pose.
+  assemble, a Singularity's disc spins up, a Prism's shards orbit); a stale
+  session's rim is dashed and it moves at a slower pace; reduced motion holds
+  each in a still pose. Wires stop at each node's edge.
 - The sky follows the colour theme — Aurora ribbons, Deep space, Nebula,
   Rising embers, Fireflies, Soft bokeh, Warm dust — or pick a **Backdrop**
   (plus Quiet grid and Minimal) in the Ambience pop. **Speech bubbles** beside

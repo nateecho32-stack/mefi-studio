@@ -109,10 +109,12 @@ test("Sigil steps down through the detail tiers to a seal and one turning rune t
   const styles = loadNodeStyles();
   // [radius, detail]: [quiet, working, chosen] counts in the still pose.
   const table = [
-    [4, 0, [{ lineTo: 6, arc: 1, fill: 2, stroke: 2 }, { lineTo: 6, arc: 2, fill: 3, stroke: 2 }, { lineTo: 6, arc: 2, fill: 3, stroke: 2 }]],
+    // (a resting todo: the seal, then its rim, tick and centre dot in one stroke)
+    [4, 0, [{ lineTo: 9, arc: 0, fill: 1, stroke: 1 }, { lineTo: 6, arc: 2, fill: 3, stroke: 2 }, { lineTo: 6, arc: 2, fill: 3, stroke: 2 }]],
     [7, 1, [{ lineTo: 16, arc: 0, fill: 3, stroke: 3 }, { lineTo: 46, arc: 1, fill: 5, stroke: 4 }, { lineTo: 16, arc: 1, fill: 4, stroke: 3 }]],
     [9.5, 2, [{ lineTo: 27, arc: 0, fill: 3, stroke: 5 }, { lineTo: 57, arc: 1, fill: 7, stroke: 7 }, { lineTo: 27, arc: 1, fill: 4, stroke: 5 }]],
-    [12, 3, [{ lineTo: 32, arc: 1, fill: 4, stroke: 5 }, { lineTo: 59, arc: 2, fill: 8, stroke: 7 }, { lineTo: 32, arc: 2, fill: 5, stroke: 5 }]],
+    // (the head's spark is a hex at rest; at work the lit cell carries the scan)
+    [12, 3, [{ lineTo: 37, arc: 0, fill: 4, stroke: 5 }, { lineTo: 59, arc: 1, fill: 7, stroke: 7 }, { lineTo: 37, arc: 1, fill: 5, stroke: 5 }]],
   ];
   for (const [radius, detail, expected] of table) {
     const got = [{}, { active: true }, { selected: true, chosen: true }].map((options) => counts(paint(styles, { detail, ...options }, { radius })));
@@ -122,9 +124,14 @@ test("Sigil steps down through the detail tiers to a seal and one turning rune t
   const tiny = paint(styles, { detail: 0, active: true }, { radius: 4 });
   assert.equal(tiny.calls.moveTo, 2);
   assert.deepEqual(cellsOf(tiny), []);
-  // T0's one moving mark wears the state's own hue (risen toward white), not the theme's second.
+  // A resting todo is the seal and ONE stroke in the state's own edge tone
+  // (never the theme's second hue): its rim, its turning tick and its centre
+  // dot, traced in pixels (no transform of its own).
   const ticked = paint(styles, { detail: 0, theme: styles.theme(ACCENT) }, { radius: 4 });
-  assert.deepEqual(ticked.calls.strokes.map(({ style }) => style), ["rgba(120,180,220,1)", "rgba(194,221,239,1)"], "the rim, then the tick");
+  assert.deepEqual(ticked.calls.strokes.map(({ style }) => style), ["rgba(120,180,220,1)"], "the rim, the tick and the dot in one stroke");
+  assert.equal(ticked.calls.log.filter(([name]) => name === "translate" || name === "scale" || name === "transform").length, 0, "in pixels");
+  const turning = [0, 1.5].map((clock) => plain(paint(styles, { detail: 0, motion: { ...stepped(styles, {}), clock, still: false } }, { radius: 4 }).calls.log));
+  assert.notDeepEqual(turning[0], turning[1], "the tick turns");
   // T1 keeps the whole honeycomb (plain, one path: no scan).
   const small = paint(styles, { detail: 1, active: true }, { radius: 7 });
   assert.deepEqual(cellsOf(small), [0, 1, 2, 3, 4, 5], "T1 keeps all six cells");
@@ -178,9 +185,11 @@ test("Sigil builds its three radials once per canvas and tint, never in a steady
   const ctx = recordingContext(), theme = styles.theme(ACCENT);
   const record = stepped(styles, { active: true, selected: true, time: 800 });
   const flags = { style: "sigil", active: true, selected: true, progress: null, orbit: 0, status: null, time: 800, frame: 24 };
+  // (the head's spark marks the resting runes: a resting seal beside the working one)
   const frame = (tint = TINT, time = flags.time) => {
     styles.paint(ctx, "sigil", P, 12, tint, { kind: "task", active: true, selected: true, motion: record, time, detail: 3, theme });
     styles.paint(ctx, "sigil", { x: 90, y: 30 }, 7, tint, { kind: "todo", motion: null, time, detail: 1, theme });
+    styles.paint(ctx, "sigil", { x: 30, y: 90 }, 12, tint, { kind: "task", motion: null, time, detail: 3, theme });
   };
   record.kick = 1; frame();
   const warm = gradientsBuilt(ctx);
@@ -200,7 +209,7 @@ test("Sigil builds its three radials once per canvas and tint, never in a steady
   assert.equal(gradientsBuilt(ctx), changed, "a tint change and back reuses both");
   const other = recordingContext();
   styles.paint(other, "sigil", P, 12, TINT, { kind: "task", active: true, selected: true, motion: record, theme });
-  assert.equal(gradientsBuilt(other), 3, "each canvas owns its paints");
+  assert.equal(gradientsBuilt(other), 2, "each canvas owns its paints (a working seal: glow and well)");
   assert.equal(ctx.calls.shadowBlurs.length + other.calls.shadowBlurs.length, 0, "no shadowBlur, ever");
 });
 
@@ -458,7 +467,10 @@ test("Sigil's cell just left fades in the second hue, or cools into the tint whe
   };
   const plainSeal = paint(styles, { glyph: false, theme: voidTheme }), glyphSeal = paint(styles, { glyph: true, theme: voidTheme });
   assert.ok(Math.abs(runeAlpha(glyphSeal) - 0.55 * runeAlpha(plainSeal)) < 1e-9, `${runeAlpha(glyphSeal)} against ${runeAlpha(plainSeal)}`);
-  assert.deepEqual([plainSeal.calls.arc, glyphSeal.calls.arc], [1, 0], "the head's spark only round a plain seal");
+  const sparks = (ctx) => ctx.calls.log.filter(([name, value]) => name === "set:fillStyle" && String(value).includes("(0,0,0,0,0,1)")).length;
+  assert.deepEqual([sparks(plainSeal), sparks(glyphSeal)], [1, 0], "the head's spark only round a plain seal");
+  // The spark is a hex of light, never a round dot.
+  assert.equal(plainSeal.calls.arc, 0, "no round marks on a resting seal");
 });
 
 test("Sigil's runes are written in turn at rest, and at work the rune beside the lit cell strikes", () => {
@@ -798,16 +810,21 @@ test("Sigil wires are cut in the rune rhythm; active ones march with a groove an
   };
   const dashOf = (pen) => pen.calls.log.filter(([name]) => name === "setLineDash").map(([, ...dash]) => dash.join())[0];
   const offsetOf = (pen) => pen.calls.log.filter(([name]) => name === "set:lineDashOffset").map(([, value]) => value)[0];
+  // A resting session or todo wire (most of a board) is one plain line: no
+  // dash, no save. Its runes show once the branch is inspected, drifting.
   const quiet = wire();
   assert.equal(quiet.drawn, true);
-  assert.deepEqual([quiet.pen.calls.stroke, quiet.pen.calls.fill, dashOf(quiet.pen)], [1, 0, "5,2,1.5,2"], "one stroke in the rune rhythm");
+  assert.deepEqual([quiet.pen.calls.stroke, quiet.pen.calls.fill, dashOf(quiet.pen), quiet.pen.calls.saves], [1, 0, undefined, 0], "one plain line at rest");
   assert.deepEqual(quiet.pen.calls.alphas, [0.4]);
-  assert.ok(Math.abs(offsetOf(wire({ time: 1400 }).pen) - offsetOf(quiet.pen)) === 1, "drifting slowly at rest (1 px in 400 ms)");
+  const inspected = wire({ inspected: true });
+  assert.deepEqual([inspected.pen.calls.stroke, dashOf(inspected.pen)], [1, "5,2,1.5,2"], "inspected: one stroke in the rune rhythm");
+  assert.ok(Math.abs(offsetOf(wire({ inspected: true, time: 1400 }).pen) - offsetOf(inspected.pen)) === 1, "drifting slowly (1 px in 400 ms)");
   assert.equal(dashOf(wire({ kind: "task" }).pen), "1.5,2.5,1.5,5");
   assert.equal(dashOf(wire({ kind: "folded" }).pen), "1,5");
   assert.equal(dashOf(wire({ kind: "tether" }).pen), "6,2,1.5,2");
   const active = wire({ kind: "task", active: true, march: true, width: 1.4, alpha: 0.55 });
-  assert.deepEqual([active.pen.calls.stroke, active.pen.calls.fill, active.pen.calls.lineTo], [2, 1, 12], "the groove, the runes and two hex packets");
+  assert.deepEqual([active.pen.calls.stroke, active.pen.calls.fill, active.pen.calls.lineTo], [3, 1, 12], "the groove, the runes and two hex packets (edged in the page's colour)");
+  assert.equal(active.pen.calls.strokes.at(-1).style, "rgba(5,5,7,1)", "the packets' edge is the page's colour");
   assert.equal(active.pen.calls.lineWidths[0], 3.4, "the groove lies two pixels wider");
   assert.equal(active.pen.calls.fills[0].style, "rgba(194,221,239,1)", "no second hue known yet: packets in the whitened tint");
   assert.notDeepEqual(plain(wire({ kind: "task", active: true, march: true, time: 1100 }).pen.calls.log), plain(active.pen.calls.log), "marching");

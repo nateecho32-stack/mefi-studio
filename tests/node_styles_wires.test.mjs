@@ -74,11 +74,21 @@ test("a quiet wire is exactly one round-capped stroke, as the caller asked for i
       assert.deepEqual(calls.strokes[0], { style: "rgba(120,180,220,1)", alpha: 0.55, width: 1.4 }, `${style} ${kind}: its tint, alpha and width`);
       const at = calls.log.findIndex(([name]) => name === "stroke");
       assert.ok(calls.log.slice(0, at).some(([name, value]) => name === "set:lineCap" && value === "round"), `${style} ${kind}: round caps`);
-      assert.deepEqual(plain(calls.log.filter(([name]) => name === "setLineDash").at(-1)?.slice(1) ?? []), dash, `${style} ${kind}: its dash`);
+      assert.deepEqual(plain(calls.log.slice(0, at).filter(([name]) => name === "setLineDash").at(-1)?.slice(1) ?? []), dash, `${style} ${kind}: its dash`);
+      // No save per edge: the canvas gets its alpha, cap, dash and offset back
+      // by hand, and a solid line never touches the dash at all.
+      assert.equal(calls.saves, 0, `${style} ${kind}: no save`);
+      if (!dash.length) assert.equal(calls.setLineDash, 0, `${style} ${kind}: a solid line sets no dash`);
       assert.equal(gradientsBuilt(ctx), 0);
       assert.equal(ctx.lineCap, "butt", "the canvas comes back as it was");
-      assert.deepEqual(ctx.getLineDash(), []);
+      assert.deepEqual([ctx.getLineDash(), ctx.lineDashOffset, ctx.globalAlpha], [[], 0, 1]);
     }
+    // A caller that already draws round caps (the Command view's edge pass)
+    // is not asked again.
+    const round = recordingContext({ center: B });
+    round.lineCap = "round";
+    styles.wire(round, style, A, B, wire({ kind: "session", dash: [] }));
+    assert.equal(round.calls.log.filter(([name]) => name === "set:lineCap").length, 1, `${style}: a round pen keeps its cap (the one set is the test's own)`);
     // The far (blurred) pen gets the line alone, even for a working wire.
     assert.equal(draw(styles, style, working({ far: true })).calls.stroke, 1, `${style}: the far pen draws no overlays`);
     // A working wire with motion on but not marching (a Next branch) flows nothing.
@@ -148,7 +158,8 @@ test("a curved wire keeps the caller's S-curve, the hub link stays doubled, and 
   const styles = loadNodeStyles();
   const cp = { x1: 20, y1: 60, x2: 260, y2: 60 };
   for (const style of FREE) {
-    const { calls } = draw(styles, style, working({ curved: true, cp }));
+    // (ends of unknown size: the whole curve, as the caller traced it)
+    const { calls } = draw(styles, style, working({ curved: true, cp, rA: 0, rB: 0 }));
     const curves = calls.log.filter(([name]) => name === "bezierCurveTo");
     assert.ok(curves.length >= 1 && curves.every((entry) => plain(entry.slice(1)).join() === [20, 60, 260, 60, 260, 40].join()), `${style}: the S-curve through the caller's controls`);
     assert.ok(style === "crystal" ? calls.lineTo > 0 && calls.lineTo % 7 === 0 && calls.closePath === calls.lineTo / 7 : calls.lineTo === 0, `${style}: no straight chord drawn (crystal's sparkles aside: closed eight-point stars)`);
@@ -172,6 +183,49 @@ test("detail tiers trim the overlays from the tail down, never the line", () => 
     const full = draw(styles, style, working({ detail: 2, rA: 12, rB: 20, time: 700 })).calls.alphas;
     assert.ok(edge.reduce((sum, alpha) => sum + alpha, 0) <= full.reduce((sum, alpha) => sum + alpha, 0) + 1e-9, `${style}: fading in at the tier's cut`);
   }
+});
+
+test("every wire stops at its ends' surfaces (inside each look's narrowest edge); pulses still ride to the centre", () => {
+  const styles = loadNodeStyles();
+  const ends = (style, extra = {}) => {
+    const ctx = recordingContext({ center: B });
+    styles.wire(ctx, style, A, B, wire({ kind: "session", dash: [], ...extra }));
+    // (the line itself: the path up to the first stroke)
+    const line = ctx.calls.log.slice(0, ctx.calls.log.findIndex(([name]) => name === "stroke"));
+    const moves = line.filter(([name]) => name === "moveTo" || name === "lineTo" || name === "bezierCurveTo" || name === "quadraticCurveTo").map((entry) => plain(entry.slice(1)).slice(-2));
+    return { from: moves[0], to: moves.at(-1), ctx };
+  };
+  const len = Math.hypot(B.x - A.x, B.y - A.y);
+  const inset = { orbs: 0.96, glass: 0.96, minimal: 0.38, halo: 0.96, crystal: 0.85, prism: 0.56, sigil: 0.84, singularity: 0 };
+  for (const [style, share] of Object.entries(inset)) {
+    const { from, to } = ends(style);
+    assert.ok(Math.abs(Math.hypot(from[0] - A.x, from[1] - A.y) - 9 * share) < 1e-6, `${style}: leaves a at ${share} of its radius`);
+    assert.ok(Math.abs(Math.hypot(to[0] - B.x, to[1] - B.y) - 12 * share) < 1e-6, `${style}: meets b at ${share} of its radius`);
+    // On the line between the centres.
+    const cross = (to[0] - A.x) * (B.y - A.y) - (to[1] - A.y) * (B.x - A.x);
+    assert.ok(Math.abs(cross / len) < 1e-6, `${style}: on the chord`);
+  }
+  // Ends of unknown size (0), and ends that overlap: nothing is cut / nothing shows.
+  assert.deepEqual(ends("orbs", { rA: 0, rB: 0 }).from, [A.x, A.y]);
+  const close = recordingContext();
+  assert.equal(styles.wire(close, "glass", { x: 0, y: 0 }, { x: 15, y: 0 }, wire({ rA: 9, rB: 9 })), true, "overlapping ends: drawn (as nothing)");
+  assert.equal(close.calls.stroke, 0);
+  // On the tree's S-curve the wire is the curve's own piece: its ends sit on
+  // the caller's curve, the caller's controls are handed back afterwards.
+  const cp = { x1: 20, y1: 60, x2: 260, y2: 60 };
+  const o = wire({ kind: "session", dash: [], curved: true, cp });
+  const ctx = recordingContext();
+  styles.wire(ctx, "glass", A, B, o);
+  assert.equal(o.cp, cp, "the caller's controls come back");
+  const curve = (u) => { const v = 1 - u; return [v * v * v * A.x + 3 * v * v * u * cp.x1 + 3 * v * u * u * cp.x2 + u * u * u * B.x, v * v * v * A.y + 3 * v * v * u * cp.y1 + 3 * v * u * u * cp.y2 + u * u * u * B.y]; };
+  const onCurve = ([x, y]) => { let best = Infinity; for (let index = 0; index <= 4000; index += 1) { const [cx, cy] = curve(index / 4000); best = Math.min(best, Math.hypot(cx - x, cy - y)); } return best; };
+  const start = plain(ctx.calls.log.find(([name]) => name === "moveTo").slice(1)), end = plain(ctx.calls.log.find(([name]) => name === "bezierCurveTo").slice(5));
+  assert.ok(onCurve(start) < 0.05 && onCurve(end) < 0.05, "both ends on the caller's curve");
+  assert.ok(Math.hypot(start[0] - A.x, start[1] - A.y) > 7 && Math.hypot(end[0] - B.x, end[1] - B.y) > 9, "and cut at the surfaces");
+  // A pulse still rides to the target's centre.
+  const surge = recordingContext();
+  styles.surge(surge, "glass", A, B, 1, pulse(), look());
+  assert.ok(surge.calls.log.some(([name, x, y]) => (name === "arc" || name === "moveTo") && Math.hypot(x - B.x, y - B.y) < 1e-6), "the pulse reaches the centre");
 });
 
 test("every wire alpha follows the canvas alpha and the wire's lifetime", () => {

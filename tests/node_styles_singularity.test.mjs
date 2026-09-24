@@ -62,7 +62,12 @@ test("a black horizon, a photon ring lit from the top, a Doppler disc and a turn
     const far = channels(doppler.stops.find(([offset]) => offset === 0.5)[1]);
     const accent = palette === VOID ? [54, 209, 255] : TINT.map((channel) => Math.round(channel + (255 - channel) * 0.72));
     const gap = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
-    assert.ok(gap(far, TINT) < gap(far, accent) / 2, `the receding side is the tint's (${far})`);
+    // (on a pale page the disc is lit in the tint deepened a third of the
+    // way to the ink: a quiet hole there is a black core in a coloured ring,
+    // never a grey planet)
+    const disc = palette === VOID ? TINT : TINT.map((channel, index) => Math.round(channel + ([12, 14, 20][index] - channel) * 0.35));
+    assert.equal(doppler.stops.find(([offset]) => offset === 0.1)[1], `rgba(${disc.join(",")},1)`, "the disc wears the state's own colour");
+    assert.ok(gap(far, disc) < gap(far, accent) / 2, `the receding side is the tint's (${far})`);
     assert.ok(doppler.stops.every(([, colour]) => !colour.startsWith(`rgba(${accent.join(",")},`)), "never the second hue alone");
     assert.equal(streaks.stops.length >= 20, true, "the streak conic carries its irregular bands");
     const core = gradients.find(({ kind, args }) => kind === "radial" && args[5] === 0.52);
@@ -139,12 +144,37 @@ test("every tier steps down to a clean small node: exact budgets for the still p
   assert.ok(flat.every(([, value]) => !String(value).startsWith("grad:conic")), "under 6 px the Doppler light is a flat left-to-right paint, no conic");
 });
 
+test("a todo-sized hole wears its state's colour: its ring in the disc's tone, the white-hot spot only while lit", () => {
+  const styles = loadNodeStyles();
+  const theme = styles.theme(VOID);
+  const pens = (tint, options = {}) => {
+    const ctx = recordingContext();
+    styles.paint(ctx, "singularity", P, 4, tint, { kind: "todo", detail: 0, theme, ...options });
+    return ctx.calls.strokes.map(({ style }) => style);
+  };
+  const chroma = (text) => { const [r, g, b] = text.match(/[\d.]+/g).slice(0, 3).map(Number); return Math.max(r, g, b) - Math.min(r, g, b); };
+  for (const tint of [[104, 236, 164], [255, 212, 121]]) {
+    const [ring, spot] = pens(tint);
+    assert.ok(chroma(ring) >= 0.6 * chroma(`rgb(${tint})`), `the ring keeps the state's hue (${ring})`);
+    assert.equal(spot ?? ring, ring, "at rest the spot shares the ring's pen");
+    const lit = pens(tint, { active: true });
+    assert.ok(lit.length >= 2 && chroma(lit.at(-1)) < chroma(ring), "lit, the spot burns white-hot");
+  }
+  assert.notEqual(pens([104, 236, 164])[0], pens([255, 212, 121])[0], "a done and a blocked todo are told apart");
+  // The flat light keeps the beam to its very edge (the disc is the state's colour).
+  const ctx = recordingContext();
+  styles.paint(ctx, "singularity", P, 4, [104, 236, 164], { kind: "todo", detail: 0, theme });
+  const flat = ctx.calls.gradients.find(({ kind, args }) => kind === "linear" && args[0] === -1.08);
+  assert.deepEqual(plain(flat.stops.map(([offset]) => offset)), [0, 0.08, 0.2, 0.5, 0.8, 1]);
+});
+
 test("a steady node costs few canvas operations: 23 at T0 at rest (most of a board's todos), and fixed ceilings above it", () => {
   const styles = loadNodeStyles();
   // Every call and property set of one warm paint, the dispatcher's save,
   // alpha and restore included; the ceiling over 150 animated frames. A T0
   // node draws its aura only while lit.
-  const CEILINGS = { 4.5: { quiet: 23, working: 28, chosen: 28 }, 7: { quiet: 49, working: 74, chosen: 49 }, 9.5: { quiet: 74, working: 88, chosen: 74 }, 12: { quiet: 78, working: 101, chosen: 78 } };
+  // (a lit T0 node's hot spot turns white-hot: one pen more than at rest)
+  const CEILINGS = { 4.5: { quiet: 23, working: 29, chosen: 29 }, 7: { quiet: 49, working: 74, chosen: 49 }, 9.5: { quiet: 74, working: 88, chosen: 74 }, 12: { quiet: 78, working: 101, chosen: 78 } };
   for (const [radius, ceiling] of Object.entries(CEILINGS)) {
     for (const [state, flags] of Object.entries({ quiet: {}, working: { active: true }, chosen: { selected: true, chosen: true }, glyph: { kind: "agent", glyph: true, active: true } })) {
       const live = record(styles, { active: flags.active === true, selected: flags.selected === true });
@@ -604,14 +634,14 @@ test("wires bend under gravity with motes falling into the target; far pens and 
   const styles = loadNodeStyles();
   const a = { x: 20, y: 120 }, b = { x: 220, y: 40 };
   const base = { kind: "task", tint: TINT, alpha: 0.4, width: 1.2, dash: Object.freeze([2, 4]), march: true, double: false, active: false, inspected: false, curved: false, cp: null, far: false, time: 1000, still: false, seed: 0.3, rA: 8, rB: 10, detail: 3, lifetime: 1 };
-  // One save/restore per edge: the alpha, stroke style, width, cap, dash and
-  // its offset go back as they were.
+  // No save/restore per edge: the alpha, cap, dash and its offset are set
+  // back by hand (every alpha a gain on the caller's).
   const wire = (extra = {}, from = a, to = b) => {
     const ctx = recordingContext({ center: to });
     ctx.globalAlpha = 0.9; ctx.lineCap = "butt"; ctx.strokeStyle = "#123456"; ctx.lineWidth = 2;
     assert.equal(styles.wire(ctx, "singularity", from, to, { ...base, ...extra }), true);
-    assert.ok(ctx.calls.saves <= 1 && ctx.calls.saves === ctx.calls.restores);
-    assert.deepEqual([ctx.globalAlpha, ctx.strokeStyle, ctx.lineWidth, ctx.lineCap, ctx.lineDashOffset, ctx.getLineDash()], [0.9, "#123456", 2, "butt", 0, []]);
+    assert.equal(ctx.calls.saves, 0, "no save per edge");
+    assert.deepEqual([ctx.globalAlpha, ctx.lineCap, ctx.lineDashOffset, ctx.getLineDash()], [0.9, "butt", 0, []]);
     return ctx;
   };
   const quiet = wire();
@@ -637,9 +667,10 @@ test("wires bend under gravity with motes falling into the target; far pens and 
   assert.equal(wire({ detail: 1 }).calls.stroke, 1, "a quiet wire to a T1 node: the line alone");
   assert.equal(wire({ detail: 1, kind: "session" }).calls.stroke, 2, "a session's wire keeps its mote");
   assert.equal(wire({ detail: 1, inspected: true }).calls.stroke, 2, "so does an inspected one");
-  // Motes follow the wire's own alpha (half as bright again), so dimming reads even.
+  // Motes follow the wire's own alpha (half as bright again), so dimming
+  // reads even (and the canvas's: wire() hands them a pen at .9).
   const moteAlpha = (alpha) => wire({ alpha }).calls.strokes.at(-1).alpha;
-  assert.ok(Math.abs(moteAlpha(0.4) - 0.6) < 1e-12 && Math.abs(moteAlpha(0.08) - 0.12) < 1e-12, "a dimmed wire's mote dims with it");
+  assert.ok(Math.abs(moteAlpha(0.4) - 0.9 * 0.6) < 1e-12 && Math.abs(moteAlpha(0.08) - 0.9 * 0.12) < 1e-12, "a dimmed wire's mote dims with it");
   // Motes speed up into the target: a mote's step grows as it falls in.
   const moteAt = (time) => { const ctx = wire({ time }); const moves = ctx.calls.log.filter(([name]) => name === "lineTo"); return moves.at(-1).slice(1); };
   const gap = (t0, t1) => { const [x0, y0] = moteAt(t0), [x1, y1] = moteAt(t1); return Math.hypot(x1 - x0, y1 - y0); };
@@ -662,6 +693,46 @@ test("wires bend under gravity with motes falling into the target; far pens and 
   assert.equal(wire({ rail: true, active: true, detail: 2 }).calls.moveTo, 3, "motes only on the rail's active edges (two)");
   const tetherLike = recordingContext();
   assert.equal(styles.wire(tetherLike, "singularity", a, b, { ...base, tint: null }), false, "no tint: the caller's own line");
+});
+
+test("wires, pulses and landings follow the caller's alpha, and keep their hue on a pale page", () => {
+  const styles = loadNodeStyles();
+  const a = { x: 20, y: 120 }, b = { x: 220, y: 40 };
+  const wireO = { kind: "task", tint: TINT, alpha: 0.4, width: 1, dash: Object.freeze([2, 4]), march: true, flow: true, active: true, inspected: false, curved: false, cp: null, far: false, time: 1000, still: false, seed: 0.3, rA: 8, rB: 10, detail: 3, lifetime: 1 };
+  const pulse = { color: "#f1dcae", glow: "#e6c98d", wave: false, small: false, packet: true, start: 0, duration: 900 };
+  const look = { kind: "dot", time: 1000, still: false, rTo: 10, detail: 3, pulse, motion: null, cp: null };
+  const draws = {
+    wire: (ctx, theme) => styles.wire(ctx, "singularity", a, b, { ...wireO, theme }),
+    surge: (ctx, theme) => styles.surge(ctx, "singularity", a, b, 0.6, pulse, { ...look, theme }),
+    land: (ctx, theme) => styles.land(ctx, "singularity", b, 10, [241, 220, 174], 0.4, { ...look, theme, pulse: { ...pulse, _holeAngle: 1, _holeDir: 1 } }),
+  };
+  for (const [hook, draw] of Object.entries(draws)) {
+    const full = recordingContext(), dim = recordingContext();
+    dim.globalAlpha = 0.4;
+    draw(full, null); draw(dim, null);
+    assert.ok(full.calls.alphas.length > 0 && dim.calls.alphas.length === full.calls.alphas.length, `${hook}: the same marks`);
+    assert.ok(dim.calls.alphas.every((alpha, index) => Math.abs(alpha - 0.4 * full.calls.alphas[index]) < 1e-9), `${hook}: every alpha scales with the caller's (${full.calls.alphas} vs ${dim.calls.alphas})`);
+    assert.equal(dim.globalAlpha, 0.4, `${hook}: and the canvas gets its own back`);
+  }
+  // On a pale page: the wire and its motes, the pulse and its landing in the
+  // colour deepened as far as it needs; the head 3:1 or more on the page, no
+  // pale haze, a tether at least 1.2 px.
+  const light = styles.theme(LIGHT);
+  const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const lum = (text) => { const [r, g, bl] = text.match(/[\d.]+/g).slice(0, 3).map(Number); return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(bl); };
+  const ratio = (x, y) => (Math.max(lum(x), lum(y)) + 0.05) / (Math.min(lum(x), lum(y)) + 0.05);
+  const page = "rgb(243,240,232)";
+  const surge = recordingContext();
+  draws.surge(surge, light);
+  assert.equal(gradientsBuilt(surge), 0, "no haze sprite on a pale page");
+  const head = surge.calls.fills.at(-1);
+  assert.ok(head.alpha >= 0.9 && ratio(head.style, page) >= 3, `the head ${head.style} reads ${ratio(head.style, page).toFixed(2)}:1 on the page`);
+  const wired = recordingContext();
+  draws.wire(wired, light);
+  assert.ok(wired.calls.strokes.every(({ style }) => !style.startsWith(`rgba(${TINT.join(",")},`)), "the wire and its motes deepen on a pale page");
+  const tether = recordingContext();
+  styles.wire(tether, "singularity", a, b, { ...wireO, kind: "tether", width: 1, theme: light });
+  assert.ok(tether.calls.strokes[0].width >= 1.2, "a tether is at least 1.2 px on a pale page");
 });
 
 test("a pulse accelerates along the bend and is captured by its target without braking; the landing implodes and swirls; the rail's ride the bent edge", () => {
