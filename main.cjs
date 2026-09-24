@@ -390,6 +390,7 @@ async function resourcePass({ kill = true, reason = "poll", withProcesses = true
       const action = { at: Date.now(), reason, pid: verdict.pid, status: verdict.status, label: verdict.name, commandLine: verdict.commandLine };
       actions.push(action);
       machineEvents.unshift(action);
+      if (machineEvents.length > 60) machineEvents.length = 60;
       logLine(`[machine] killed pid ${verdict.pid} (${verdict.status})`);
       await queueRequests([
         {
@@ -428,8 +429,22 @@ async function resourcePass({ kill = true, reason = "poll", withProcesses = true
     );
     status.history = machineStatusHistory;
   }
-  await eyes.writeJson(MACHINE_STATUS_PATH, status);
-  await eyes.writeJson(RESOURCE_LOG_PATH, { updatedAt: status.updatedAt, events: machineEvents.slice(0, 60) });
+  // Both files are diagnostics nothing in the app reads back, and every tick
+  // rewrote them: 6-12 atomic writes a minute into the synced data folder.
+  // The status file is written when what it says changes (leases, verdicts,
+  // kills, the capacity decision) and at least once a minute to refresh its
+  // readings and history; the resource log when a kill added to it.
+  const now = Date.now();
+  const written = resourcePass.written ?? (resourcePass.written = { key: null, at: 0, newest: undefined });
+  const key = JSON.stringify([status.leases, verdicts.map((verdict) => [verdict.pid, verdict.status, verdict.killable === true]), actions.length, capacity?.canStart, capacity?.reason ?? null, status.wait]);
+  if (key !== written.key || now - written.at >= 60000) {
+    await eyes.writeJson(MACHINE_STATUS_PATH, status);
+    Object.assign(written, { key, at: now });
+  }
+  if (written.newest !== (machineEvents[0] ?? null)) {
+    await eyes.writeJson(RESOURCE_LOG_PATH, { updatedAt: status.updatedAt, events: machineEvents.slice(0, 60) });
+    written.newest = machineEvents[0] ?? null;
+  }
   send("machine:status", status);
   return status;
 }
@@ -4580,15 +4595,20 @@ function assistantWrite() {
 }
 
 // The journal: every job start and finish lands on disk at once, so a crash
-// leaves the truth in the file for the next boot.
-function assistantJournal(entry) {
+// leaves the truth in the file for the next boot. A hop only moves a running
+// job's target and progress, several times a second while AI roles work, so
+// it rides the throttled save (at most one whole-state write per 2 s); the
+// quit path still saves the latest progress synchronously.
+function assistantJournal(entry, { lazy = false } = {}) {
   if (!assistantState) return;
   try {
     if (assistantModule?.applyWork) assistantState = assistantModule.applyWork(assistantState, entry, Date.now());
   } catch (error) {
     logLine(`[assistant] journal update failed: ${error.message}`);
   }
-  if (!CLI_MODE) assistantWrite().catch(() => {});
+  if (CLI_MODE) return;
+  if (lazy) saveAssistant().catch(() => {});
+  else assistantWrite().catch(() => {});
 }
 
 function assistantJobId() {
@@ -4652,7 +4672,7 @@ async function assistantHop(entry, target, { progress = null, label = null } = {
   entry.progress = progress;
   if (entry.work) {
     Object.assign(entry.work, { target, targets: entry.targets, progress });
-    assistantJournal(entry.work);
+    assistantJournal(entry.work, { lazy: true });
   }
   assistantRowTargets(entry.role, { target, targets: entry.targets, progress });
   if (progress !== 1 && Date.now() - (entry.lastHopAt || 0) < ASSISTANT_HOP_MS) return;
@@ -7442,7 +7462,14 @@ function refreshTray() {
     const paused = assistantState.status === "paused";
     const held = autopilot.held === true;
     const summary = assistantModule?.summarizeForTree?.(assistantState, Date.now());
-    tray.setToolTip(`Mefi's Studio AI+ · ${held ? "agents waiting for you" : (summary?.sublabel ?? (paused ? "assistant paused" : "assistant running"))}`);
+    // Every assistant push lands here (up to four a second); the OS call only
+    // when the words change.
+    const tip = `Mefi's Studio AI+ · ${held ? "agents waiting for you" : (summary?.sublabel ?? (paused ? "assistant paused" : "assistant running"))}`;
+    if (refreshTray.tip !== tip || refreshTray.tray !== tray) {
+      tray.setToolTip(tip);
+      refreshTray.tip = tip;
+      refreshTray.tray = tray;
+    }
     // The menu is rebuilt only when its one variable entry would change.
     const menuState = `${held ? "held" : "released"}:${paused ? "paused" : "running"}`;
     if (trayPaused === menuState) return;
@@ -9282,7 +9309,23 @@ function queuedWorkCount(requests, tasks) {
   return waiting + open;
 }
 
+// Command, the Workspace and the Tasks sheet ask for the queue status on
+// their own timers and pushes. Asks that overlap for one project share one
+// read of the three board files (a read that waits its turn behind board
+// writes), so a burst of pushes costs one multi-megabyte read, not one each.
 async function backlogStatus() {
+  const projectId = projects.current().id;
+  const pending = backlogStatusReads.get(projectId);
+  if (pending) return pending;
+  const read = readBacklogStatus().finally(() => {
+    if (backlogStatusReads.get(projectId) === read) backlogStatusReads.delete(projectId);
+  });
+  backlogStatusReads.set(projectId, read);
+  return read;
+}
+const backlogStatusReads = new Map();
+
+async function readBacklogStatus() {
   await ensureAssistant();
   const assistant = await getAssistant();
   const board = await withBoardLock(async () => {
@@ -10297,8 +10340,10 @@ async function mutateBoard(mutator) {
       const { contextHistory, ...body } = task;
       return { ...structuredClone(body), ...(contextHistory ? { contextHistory } : {}) };
     };
-    const applyMutation = (board) => {
-      const previous = new Map(board.tasks.filter(Boolean).map((task) => [task.id, cloneTask(task)]));
+    // `pristine` is the file path's untouched read: its rows are already a
+    // snapshot the mutator never sees, so they stand in for a third clone.
+    const applyMutation = (board, pristine = null) => {
+      const previous = new Map((pristine ?? board.tasks).filter(Boolean).map((task) => [task.id, pristine ? task : cloneTask(task)]));
       const returned = mutator(board, eyes);
       if (isThenable(returned)) throw new TypeError("mutateBoard: mutator must be synchronous — await inputs before the gateway, not inside it");
       const patch = returned ?? {};
@@ -10350,7 +10395,7 @@ async function mutateBoard(mutator) {
       ideas: Array.isArray(ideas) ? ideas : [],
     };
     const board = { requests: structuredClone(original.requests), tasks: original.tasks.map(cloneTask), ideas: structuredClone(original.ideas) };
-    const returned = applyMutation(board);
+    const returned = applyMutation(board, original.tasks);
     if (isThenable(returned)) {
       throw new TypeError("mutateBoard: mutator must be synchronous — await inputs before the gateway, not inside it");
     }
@@ -12063,11 +12108,23 @@ async function spawnNextJob() {
       // are worth the prompt one.
       queueExecutorCheckpoint(entry, entry.sawDone !== sawDoneBefore || entry.resultNote !== resultBefore ? {} : { delay: 30000 });
     };
+    // Only the new chunk is split, and a line that never ends (a spinner
+    // redrawn with bare carriage returns, a runaway dump) is kept to its
+    // first 64 KiB: re-splitting a growing buffer on every chunk was
+    // quadratic, and the whole line went to the log and the renderer.
     stream.on("data", (chunk) => {
-      buffer += chunk;
-      const lines = buffer.split(/\r?\n/);
-      buffer = lines.pop();
-      for (const line of lines) if (line.trim()) take(line);
+      const pieces = chunk.split(/\r?\n/);
+      if (pieces.length === 1) {
+        if (buffer.length < 65536) buffer = (buffer + chunk).slice(0, 65536);
+        return;
+      }
+      const first = (buffer + pieces[0]).slice(0, 65536).replace(/\r$/, "");
+      if (first.trim()) take(first);
+      for (let index = 1; index < pieces.length - 1; index += 1) {
+        const line = pieces[index].length > 65536 ? pieces[index].slice(0, 65536) : pieces[index];
+        if (line.trim()) take(line);
+      }
+      buffer = pieces[pieces.length - 1].slice(0, 65536);
     });
     stream.on("end", () => {
       if (buffer.trim()) take(buffer);
@@ -13695,7 +13752,40 @@ function updateSettings(mutate) {
 
 function send(channel, payload) {
   if (projects.current().id !== projects.active().id && (channel.startsWith("eyes:") || channel === "assistant:status")) return;
+  if (BOARD_PUSH_CHANNELS.has(channel)) {
+    pushBoardList(channel, payload);
+    return;
+  }
   if (window && !window.isDestroyed()) window.webContents.send(channel, payload);
+}
+
+// Board pushes carry whole lists (eyes:tasks is every card on the board), and
+// a busy executor mutates the board several times a second: each push was
+// copied into every renderer listener and rebuilt the Command graph, the
+// Tasks sheet and the Workspace. The first push of a quiet window still goes
+// at once; later pushes inside BOARD_PUSH_MS share one trailing push of the
+// newest list. A list queued in one project is dropped if the owner switches
+// to another before it goes out; the switch sends its own lists.
+const BOARD_PUSH_MS = 250;
+const BOARD_PUSH_CHANNELS = new Set(["eyes:tasks", "eyes:requests", "eyes:ideas"]);
+const boardPushes = new Map(); // channel -> { timer, pending: { payload, projectId } | null }
+
+function pushBoardList(channel, payload) {
+  const projectId = projects.active().id;
+  const slot = boardPushes.get(channel);
+  if (slot) {
+    slot.pending = { payload, projectId };
+    return;
+  }
+  if (window && !window.isDestroyed()) window.webContents.send(channel, payload);
+  const next = { timer: null, pending: null };
+  next.timer = setTimeout(() => {
+    boardPushes.delete(channel);
+    const pending = next.pending;
+    if (pending && pending.projectId === projects.active().id) pushBoardList(channel, pending.payload);
+  }, BOARD_PUSH_MS);
+  next.timer.unref?.();
+  boardPushes.set(channel, next);
 }
 
 // registerIpc installs the real auto setup (it needs the CLI probes that live
@@ -13726,8 +13816,42 @@ async function firstLaunchAutoSetup() {
   return { ...result, record };
 }
 
+// Worker output reaches the log a dozen lines a second per builder, and in
+// bursts of thousands. One IPC message per line made every line its own
+// renderer task, so lines are held for one STUDIO_LOG_FLUSH_MS beat and sent
+// as an array (preload.cjs unpacks it: renderer listeners still see one line
+// per call). A burst keeps its newest STUDIO_LOG_BATCH_MAX lines, which is
+// all the renderer's log keeps anyway, and each line is clipped for reading;
+// a run's own tails and sentinels are parsed before this, from the full line.
+const STUDIO_LOG_FLUSH_MS = 100;
+const STUDIO_LOG_BATCH_MAX = 400;
+const STUDIO_LOG_LINE_MAX = 4000;
+let studioLogPending = [];
+let studioLogDropped = 0;
+let studioLogTimer = null;
+
+function flushStudioLog() {
+  studioLogTimer = null;
+  if (!studioLogPending.length) return;
+  const lines = studioLogPending;
+  if (studioLogDropped) lines.unshift(`[studio] ${studioLogDropped} earlier log line${studioLogDropped === 1 ? "" : "s"} skipped in a burst`);
+  studioLogPending = [];
+  studioLogDropped = 0;
+  send("studio:log", lines);
+}
+
 function logLine(line) {
-  send("studio:log", String(line).replace(/\r?\n$/, ""));
+  let text = String(line).replace(/\r?\n$/, "");
+  if (text.length > STUDIO_LOG_LINE_MAX) text = `${text.slice(0, STUDIO_LOG_LINE_MAX)}… (${text.length - STUDIO_LOG_LINE_MAX} more characters)`;
+  studioLogPending.push(text);
+  if (studioLogPending.length > STUDIO_LOG_BATCH_MAX) {
+    studioLogDropped += studioLogPending.length - STUDIO_LOG_BATCH_MAX;
+    studioLogPending.splice(0, studioLogPending.length - STUDIO_LOG_BATCH_MAX);
+  }
+  if (!studioLogTimer) {
+    studioLogTimer = setTimeout(flushStudioLog, STUDIO_LOG_FLUSH_MS);
+    studioLogTimer.unref?.();
+  }
 }
 
 function streamChild(child, label) {
@@ -13736,11 +13860,18 @@ function streamChild(child, label) {
   const wire = (stream) => {
     stream.setEncoding("utf8");
     let buffer = "";
+    // Split only the new chunk and keep an unending line to 64 KiB, as the
+    // executor's wire does.
     stream.on("data", (chunk) => {
-      buffer += chunk;
-      const lines = buffer.split(/\r?\n/);
-      buffer = lines.pop();
-      for (const line of lines) if (line.trim()) logLine(line);
+      const pieces = chunk.split(/\r?\n/);
+      if (pieces.length === 1) {
+        if (buffer.length < 65536) buffer = (buffer + chunk).slice(0, 65536);
+        return;
+      }
+      const first = (buffer + pieces[0]).replace(/\r$/, "");
+      if (first.trim()) logLine(first);
+      for (let index = 1; index < pieces.length - 1; index += 1) if (pieces[index].trim()) logLine(pieces[index]);
+      buffer = pieces[pieces.length - 1].slice(0, 65536);
     });
     stream.on("end", () => {
       if (buffer.trim()) logLine(buffer);
@@ -15211,6 +15342,21 @@ function registerIpc() {
   });
 
   // ---- A-Eyes -------------------------------------------------------------
+  // The evidence walk behind eyes:state (tools/logs, two levels, one stat per
+  // PNG) is shared by overlapping reads and kept for 30 s per folder: several
+  // surfaces read the state together, and screenshots arrive far less often.
+  const pngReads = new Map(); // root -> { at, pngs, pending }
+  const recentPngs = (eyes, root) => {
+    const entry = pngReads.get(root) ?? { at: 0, pngs: null, pending: null };
+    pngReads.set(root, entry);
+    if (entry.pngs && Date.now() - entry.at < 30000) return Promise.resolve(entry.pngs);
+    entry.pending ??= Promise.resolve(eyes.listPngs({ roots: [root] })).then((pngs) => {
+      entry.pngs = pngs;
+      entry.at = Date.now();
+      return pngs;
+    }).finally(() => { entry.pending = null; });
+    return entry.pending;
+  };
   ipcMain.handle("eyes:state", async (_event, { sessionId = null } = {}) => {
     try {
       const eyes = await getEyes();
@@ -15218,7 +15364,7 @@ function registerIpc() {
         eyes.listSessions(),
         eyes.listChanges({ sessionId, limit: 300 }),
         eyes.listTodos(),
-        eyes.listPngs({ roots: [path.join(projectRoot(), "tools", "logs")] }),
+        recentPngs(eyes, path.join(projectRoot(), "tools", "logs")),
       ]);
       // An empty listing from a store file that has no session schema is
       // explained on the empty card rather than shown as "no recent sessions".

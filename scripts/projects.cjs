@@ -33,6 +33,7 @@ function projectFromPath(value, { name, legacy = false, explicit = false } = {})
 
 function createProjects({ defaultRoot, studioRoot, saved = {}, preferredRoot = null, isDirectory = () => true }) {
   const context = new AsyncLocalStorage();
+  const facades = new WeakMap(); // store module -> project -> facade (see eyes() below)
   const legacyRoot = typeof saved?.legacyPath === "string" && path.isAbsolute(saved.legacyPath) ? saved.legacyPath : defaultRoot;
   const legacy = projectFromPath(legacyRoot, { legacy: true });
   const projects = new Map([[legacy.id, legacy]]);
@@ -136,7 +137,13 @@ function createProjects({ defaultRoot, studioRoot, saved = {}, preferredRoot = n
     },
     // One facade per operation binds all awaited reads/writes to its project.
     // No files are moved or rewritten just by listing or changing projects.
+    // The facade is kept per store module and project, so its short session
+    // scope (SESSION_SCOPE_MS) carries from one getEyes() call to the next:
+    // building a new one per call made nearly every scoped read pay its own
+    // listSessionIds round trip on the store worker.
     eyes(eyes, project = current()) {
+      const kept = facades.get(eyes)?.get(project);
+      if (kept) return kept;
       const scoped = Object.create(null);
       Object.assign(scoped, eyes);
       const boardNames = new Set(["eyes-tasks.json", "eyes-requests.json", "eyes-feature-ideas.json"]);
@@ -245,6 +252,10 @@ function createProjects({ defaultRoot, studioRoot, saved = {}, preferredRoot = n
         const facts = await eyes.assistantFacts({ ...options, root: project.path, sessions, changes, todos });
         return { ...facts, project, sessions: (facts.sessions || []).filter((session) => ids.has(session.id)) };
       };
+      if (eyes && typeof eyes === "object") {
+        if (!facades.has(eyes)) facades.set(eyes, new WeakMap());
+        facades.get(eyes).set(project, scoped);
+      }
       return scoped;
     },
   };
