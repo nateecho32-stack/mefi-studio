@@ -66,6 +66,9 @@
     for (const question of open) {
       if (knownQuestions.has(question.id)) continue;
       knownQuestions.add(question.id);
+      // A routine card the companion is about to settle is announced by the
+      // companion when it settles (renderer/companion.js, handleNow).
+      if (window.MefiCompanion?.willHandle?.(question)) continue;
       window.MefiToast?.(`Decision needed: ${question.title}`, "warn", { action: { label: "Answer", run: () => go("command", { rail: "ask" }) } });
     }
   }

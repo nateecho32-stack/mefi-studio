@@ -11,12 +11,13 @@ walk through the agent loop read [agent-loop.md](agent-loop.md).
 | --- | --- |
 | **Menu** (the rail) | The navigation down the left edge: **Home**, **Work**, **Live**, **Models** and **Settings**, with **Search**, **Start here**, **Shortcuts** and **Community** at its foot. The code calls it the rail (`#app-rail`, `renderRail` in `renderer/nav.js`). **M+** at its top opens the project panel. |
 | **Workspace** | The home screen (`H`): project header, the "Studio at a glance" strip, the conversation with your companion, and **Your work**. |
+| **Companion** | Mefi (or the name you give it): the character that roams every view (`renderer/companion.js`). It walks to what it is talking about, comments on changes, takes typed requests, and handles the agents' routine requests. `J` or Search calls it from anywhere. |
 | **Command view** | The 3D node tree (`D`): sessions, tasks and agents as orbs, with a panel on the right for Work, Agents, Assistant, Done and Ask. |
 | **Booklet** | Historically the single-file model catalog; today `renderer/booklet.html` is the whole app bundled into one file by `npm run build-booklet`. The **Model catalog** tab (`1`) is the part that kept the name. |
 | **Model Lab** | Tab `2`: measured latency, throughput, cost and the usage tracker per project. |
 | **Activity & evidence** (A-Eyes) | Tab `3`: a read-only view of the OpenCode session store: change feed, diffs, screenshots with pins, log tail. The "eyes worker" is the thread that reads that store. |
 | **Settings** | Tab `4`, or `Ctrl ,` from anywhere: a **Find a setting** field over three groups of cards. **Connections**: Auto setup, Providers, Model routing, Coding workers and Jev. **Personal**: Your Studio and Community. **System**: Updates, Diagnostics, Integrations, Discord Server Styler and the Connection log. Two rows marked ↗ open another view: **Agents & queue** (Command's Agents panel) and **Style & sound**. `MefiNav.go("studio", { section: "settings-updates" })` opens one card. |
-| **Your Studio** | Settings › Your Studio: your name, the companion's name, a theme quick select, **Motion** (Full · Calm · Off), whether the companion moves, **Blur behind panels** and **Open Workspace on launch**. It took over the project panel's *Make yourself at home*, the page header's Motion switch and the Task board's blur switch. |
+| **Your Studio** | Settings › Your Studio: your name, the companion's name, **Where your companion goes** (Roams around Studio · Stays where you put it · Hidden), a theme quick select, **Motion** (Full · Calm · Off), whether the companion moves, whether it may **handle requests**, **Blur behind panels** and **Open Workspace on launch**. It took over the project panel's *Make yourself at home*, the page header's Motion switch and the Task board's blur switch. |
 | **Diagnostics** | Settings › Diagnostics: the speed probe, **Open profiler**, **Run auditor** and **Machine**. The auditor's findings and the machine readout open in the Explorer. |
 | **Search Studio** | The palette (`Ctrl K`), once called Key commands. It finds any page, tool, Settings card, action, task, node or model by familiar terms, and groups its results by menu section. |
 | **`RAIL_SLOTS`** | The map in `renderer/nav.js` that gives the menu a place for a destination whose kind would keep it out; other actions stay in Search only. Its one entry, `community: "foot"`, puts **Community**, which `renderer/community.js` registers late, at the menu foot. |
@@ -113,6 +114,54 @@ walk through the agent loop read [agent-loop.md](agent-loop.md).
 - **Search Studio** (`Ctrl K`) finds pages, tools, tasks and settings by
   familiar terms; **Settings › Your Studio** sets your name, the companion's
   name, the theme, motion, panel blur and where a launch lands.
+
+### The companion
+
+- The companion is no longer pinned to a Listen · Make · Review track above
+  the conversation. It lives above every view: on the workspace it rests on
+  its spot beside the narration; everywhere else it keeps to the bottom
+  right, stepping left of Command's panel. With Motion on Full and **Let your
+  companion move** on, it wanders along the edges and walks over to whatever
+  it is talking about (the Needs you tile, the Pause button, the workers).
+  Calm, Off, that switch and the system's reduce-motion keep it in place; it
+  still talks.
+- **It comments** when something changes: an agent's question only you can
+  answer, a build waiting for approval, a blocked task, finished work, a
+  worker starting, new work held or resumed, a lost AI connection, and a
+  reply that landed while you were on another view. Each remark carries its
+  next step as a button (Answer, Review, Resume, Open Settings). It also says
+  one line the first time you open a view in a session. **Quiet** keeps only
+  what needs you; nothing is said over the palette, help or the walkthrough.
+- **Click it** (or press `J`) to talk and manage. The panel shows the
+  project's state and the actions that fit the moment (Start agents or
+  Resume, Answer questions, Handle requests now, Review, Work through
+  backlog, Pause or Stop all), and a box that takes plain requests: "pause",
+  "resume", "stop all", "open settings", "take me to the task board", "show
+  me the review", "make a task to …", "what's waiting?", "handle the
+  requests", "stay here", "be quiet", "go away". Anything else goes to the
+  assistant as a chat message in the same project conversation, and the
+  reply appears in the panel.
+- **Drag it** anywhere and it stays there (**Stay here** / **Roam** in its
+  panel, or Settings › Your Studio › Where your companion goes). Arrow keys
+  move it while it has focus. **Hide** steps it away; `J` or Search brings it
+  back.
+- **Handle requests for me** (on by default, and in Your Studio as **Let your
+  companion handle requests**) lets it settle the agents' routine requests
+  itself. It answers an Ask card only with the card's own recommended choice,
+  and only when that choice re-arms or narrows the same task (Try again, Try
+  again with a heavier model, Keep to the brief) or accepts the assistant's
+  suggested next task, and it answers for a task at most once a day, so a
+  failing loop comes back to you. Inbox requests that are still waiting after
+  a couple of minutes, with nothing running, start **Work through backlog**,
+  at most every fifteen minutes. It never grants access, accepts a risky
+  change, picks which duplicate card to keep, approves a Verify-first build,
+  or does anything while new work is on hold or the agents wait for Start.
+  Every card it settles is announced, and the "Decision needed" toast is not
+  raised for a card it is about to settle.
+- The workspace owns the state: it publishes a snapshot on
+  `mefi:companion-state` whenever that changes, visible or not, and exposes
+  `MefiWorkspace.companion` (snapshot, ask, createTask, control, showWork), so
+  a pause from the companion is the Service tile's pause.
 
 ### Planning
 

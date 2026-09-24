@@ -43,6 +43,7 @@ const INLINE_SCRIPTS = [
   "boot.js",
   "startup.js",
   "workspace.js",
+  "companion.js",
   "planning.js",
   "music.js",
   "onboarding.js",

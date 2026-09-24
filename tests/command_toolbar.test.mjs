@@ -328,3 +328,33 @@ test("the stylesheet draws the clusters, drops the separators at 760px and anima
   assert.ok(start >= 0 && rules.length > 0, "the toolbar rules sit in one block");
   assert.ok(!/transition:[^;]*\d+m?s\b/.test(rules), "no raw durations in the toolbar rules");
 });
+
+// The Agents view is a short form. The rail used to run to the floor whatever
+// it showed, so on a 2560×1440 window Agents stood 1260px tall around 740px
+// of controls. setRailTab now names the view on the rail and the stylesheet
+// lets that one view hug its content, still capped at the same floor.
+test("the Agents view sizes the rail to its controls instead of the window", () => {
+  const rail = { dataset: {} };
+  const sandbox = {
+    RAIL_VIEWS: ["node", "work", "settings", "assistant", "done", "ask"],
+    state: { selected: null, railHome: "work" },
+    el: { rail, railTabs: [], settings: { hidden: true }, feed: { hidden: false } },
+    writeStore() {}, applyRailCollapsed() {}, renderInfo() {}, renderSettingsPanel() {}, loadDoneLog: async () => {}, renderAsks() {},
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(`${section("function setRailTab(", "function railQuestions(")}; globalThis.setRailTab = setRailTab;`, sandbox);
+  sandbox.setRailTab("settings");
+  assert.equal(rail.dataset.view, "settings");
+  assert.equal(sandbox.el.settings.hidden, false);
+  sandbox.setRailTab("work");
+  assert.equal(rail.dataset.view, "work", "a feed goes back to the full height");
+  const hug = styles.match(/#idle-hud \.cmd-rail\[data-view="settings"\] \{([^}]*)\}/g) ?? [];
+  assert.equal(hug.length, 2, "one rule at every width, and one for the 1600px floor");
+  for (const rule of hug) {
+    assert.match(rule, /bottom: auto;/);
+    assert.match(rule, /max-height: calc\(100vh - var\(--command-panel-top\) - /);
+  }
+  const floor = styles.indexOf("@media (min-width: 1600px) {");
+  assert.ok(floor > 0 && styles.indexOf('#idle-hud .cmd-rail[data-view="settings"]', floor) > floor, "the wide-screen floor keeps the hug");
+  assert.match(styles, /#idle-hud \.cmd-settings \.settings-scroll \{[^}]*overflow-y: auto;/, "a short window still scrolls inside it");
+});

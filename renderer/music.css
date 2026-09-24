@@ -10,7 +10,6 @@
 :root[data-studio-theme] :is(.ws-modes button[aria-pressed="true"], .ws-work-tabs button[aria-pressed="true"], .ws-project:hover, .ws-dash-tile:hover, .ws-dash-tile:focus-visible) { background: var(--tint-gold-3); border-color: var(--hairline-strong); }
 :root[data-studio-theme] :is(.ws-companion-copy p, .ws-welcome p, .ws-project-path, .ws-sidebar-note, .ws-work-summary, .ws-dash-note) { color: var(--muted); }
 :root[data-studio-theme] .ws-work-search input::placeholder { color: var(--muted); }
-:root[data-studio-theme] .ws-buddy-face { background: radial-gradient(circle at 35% 20%, var(--tint-gold-3), var(--panel-solid) 75%); }
 /* Void collection tier: the members' themes add a second hue (--accent-2, set by music.js with the tier flag). */
 :root[data-studio-theme-tier="premium"] .primary { background: linear-gradient(120deg, var(--gold-bright), var(--gold) 52%, var(--accent-2)); }
 /* Only a primary that can be pressed glows; a disabled or busy one stays flat. */

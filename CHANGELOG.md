@@ -7,7 +7,30 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Your companion roams Studio.** Mefi left its fixed Listen · Make · Review
+  track and now lives above every view: it walks over to what it is talking
+  about, comments when something changes (a question only you can answer, a
+  build to approve, finished work, a hold), and offers the next step as a
+  button. Click it or press J to talk: it takes plain requests ("pause",
+  "open settings", "make a task to …", "what's waiting?") and passes anything
+  else to the assistant. Drag it and it stays put; Settings › Your Studio
+  sets whether it roams, stays or hides, and Calm or Off motion keep it
+  still.
+- **The companion handles routine requests.** With **Let your companion
+  handle requests** on (the default) it answers an agent's question with the
+  card's own recommended choice when that only re-arms or narrows the same
+  task (Try again, a heavier model, Keep to the brief) or accepts the
+  assistant's suggested next task, once per task a day, and works queued
+  inbox requests through the backlog when nothing is running. It never
+  grants access, accepts a risky change, approves a Verify-first build or
+  acts while new work is on hold, and it says what it did each time.
+
 ### Fixed
+- **The Command view's Agents panel is its own size.** It ran to the bottom
+  of the window whatever it held, so on a large screen it stood 1260px tall
+  around 740px of controls. It now ends under its last control, still capped
+  at the old floor and scrolling inside on a short window.
 - **A machine that settles just under busy no longer holds new workers
   forever.** After a lag spike, new worker starts waited for two readings at
   40 ms or less, and a laptop that settled at 41–99 ms never got there. Once

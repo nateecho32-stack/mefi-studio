@@ -417,17 +417,19 @@
     } finally { buildModeSaving = false; renderBuildMode(); controls(); }
   }
   async function controlBacklog(action, payload = {}) {
-    if (!api()?.backlogControl || !state.activeId || state.switching || state.busyAction) return;
+    if (!api()?.backlogControl || !state.activeId || state.switching || state.busyAction) return { ok: false, error: "Another action is still finishing. Try again in a moment." };
     const id = state.activeId;
     state.busyAction = action; controls(); renderBacklog();
     feedback(action === "run" ? "Preparing existing tasks and ideas…" : "Updating your backlog…");
     try {
       const result = guard(await api().backlogControl({ action, ...payload, projectId: id }));
-      if (id !== state.activeId) return;
+      if (id !== state.activeId) return { ok: false, error: "The project changed before that finished." };
       if (result.backlog) state.backlog = result.backlog;
       if (action === "promote") { state.filter = "open"; state.query = ""; $("work-search").value = ""; state.limit = 20; }
-      if (await refresh(true)) feedback(result.message || ({ run: "Backlog mode is on. The queue shows the next step and anything holding it up.", pause: "Backlog paused. Running jobs finish normally.", retry: "Task returned to the queue for another attempt.", promote: "Idea linked to a task. Follow it in the queue.", prioritize: "Moved ahead of other waiting work." }[action]));
-    } catch (error) { feedback(error.message, true); }
+      const message = result.message || ({ run: "Backlog mode is on. The queue shows the next step and anything holding it up.", pause: "Backlog paused. Running jobs finish normally.", retry: "Task returned to the queue for another attempt.", promote: "Idea linked to a task. Follow it in the queue.", prioritize: "Moved ahead of other waiting work." }[action]);
+      if (await refresh(true)) feedback(message);
+      return { ok: true, message };
+    } catch (error) { feedback(error.message, true); return { ok: false, error: error.message }; }
     finally { state.busyAction = null; renderBacklog(); controls(); }
   }
   function scheduleBacklogRead() {
@@ -451,16 +453,113 @@
   // The brake: stop every running agent now, save each run's progress, and
   // park new dispatch until the operator resumes.
   async function stopAllAgents() {
-    if (!api()?.assistantControl || state.switching || state.busyAction) return;
+    if (!api()?.assistantControl || state.switching || state.busyAction) return { ok: false, error: "Another action is still finishing. Try again in a moment." };
     state.busyAction = "stop-all"; controls();
     feedback("Stopping every agent and saving progress…");
     try {
       const result = guard(await api().assistantControl("stop-all"));
       const stopped = Number(result.stopped) || 0;
-      feedback(stopped ? `Stopped ${stopped} agent(s). Progress saved; their work stays queued.` : "No agents were running. New work is off.");
+      const message = stopped ? `Stopped ${stopped} agent(s). Progress saved; their work stays queued.` : "No agents were running. New work is off.";
+      feedback(message);
       await refresh(true);
-    } catch (error) { feedback(error.message, true); }
+      return { ok: true, message };
+    } catch (error) { feedback(error.message, true); return { ok: false, error: error.message }; }
     finally { state.busyAction = null; controls(); }
+  }
+  // The one pause control, shared by the Service tile's button and the
+  // companion. With no wish it does what the button reads: Start agents after
+  // the launch hold, Resume while held, Pause otherwise. A wish that already
+  // holds is answered without touching the host.
+  async function runControl(wish = null) {
+    const want = state.status.held === true ? "start" : runState().held ? "resume" : "pause";
+    // Start and Resume are one wish: let new work begin, whichever hold is on.
+    if (wish && (wish === "pause") !== (want === "pause")) {
+      const message = wish === "pause" ? "New work is already on hold." : "New work can already start.";
+      controls();
+      return { ok: true, unchanged: true, message };
+    }
+    let message = "";
+    try {
+      if (want === "start") {
+        // The launch screen left the agents off; this is the user's Start.
+        const result = guard(await api().assistantControl("start"));
+        if (result.state) state.assistant = result.state;
+        state.status = { ...state.status, ...(result.autopilot || {}), held: false };
+        message = result.running ? "Agents started. New work can begin." : "Agents are on. The assistant was paused last time; press Resume to let new work start.";
+      } else if (want === "resume") {
+        // Resume reopens admission and wakes the assistant in one step, so a
+        // hold left by Stop all or a tripped breaker clears with the pause.
+        const result = guard(await api().assistantControl("start-work"));
+        if (result.state) state.assistant = result.state;
+        if (result.autopilot) state.status = { ...state.status, ...result.autopilot };
+        message = "New work can start again.";
+      } else {
+        if (!api()?.backlogControl) throw new Error("Open the updated desktop app to pause new work.");
+        const result = guard(await api().backlogControl({ action: "pause", projectId: state.activeId }));
+        if (result.backlog) state.backlog = result.backlog;
+        state.status = { ...state.status, execute: false };
+        message = "New work paused. Running jobs finish normally.";
+      }
+      feedback(message);
+      renderCompanion(); renderBacklog(); scheduleBacklogRead();
+      return { ok: true, message };
+    }
+    catch (error) { feedback(error.message, true); return { ok: false, error: error.message }; }
+    finally { controls(); }
+  }
+  // What the roaming companion can do for you, through the same calls the
+  // workspace's own controls make. Each answers { ok, message | error }.
+  async function ask(value) {
+    value = String(value ?? "").trim();
+    if (!value) return { ok: false, error: "Say something first." };
+    if (!api()?.assistantMessage) return { ok: false, error: "Talking to your companion needs the desktop app." };
+    if (!state.activeId) return { ok: false, error: "Open a project folder first, then we can talk about it." };
+    if (state.pending || state.switching) return { ok: false, error: "One moment: I'm still on your last message." };
+    const id = state.activeId;
+    state.pending = true; controls(); renderCompanion();
+    try {
+      const result = guard(await api().assistantMessage(value, id));
+      if (id === state.activeId && result.state) { revisions.assistant += 1; state.assistant = result.state; renderThread(); }
+      const messages = (state.assistant.messages || []).filter((message) => !message.projectId || message.projectId === id);
+      const asked = messages.findLastIndex((message) => message.role === "user" && String(message.text || "").trim() === value);
+      const reply = asked < 0 ? null : messages.slice(asked + 1).find((message) => message.role === "assistant") || null;
+      return { ok: true, reply: reply ? String(reply.text || "") : "", pending: !reply };
+    } catch (error) { return { ok: false, error: error.message }; }
+    finally { state.pending = false; controls(); renderCompanion(); }
+  }
+  async function createTask(value) {
+    value = String(value ?? "").trim();
+    if (!value) return { ok: false, error: "Tell me what the task should do." };
+    if (!api()?.tasksCreate) return { ok: false, error: "Adding tasks needs the desktop app." };
+    if (!state.activeId) return { ok: false, error: "Open a project folder first." };
+    if (state.pending || state.switching) return { ok: false, error: "One moment: I'm still on your last request." };
+    const id = state.activeId;
+    state.pending = true; controls(); renderCompanion();
+    try {
+      const result = guard(await api().tasksCreate({ title: value.split("\n")[0].slice(0, 180), prompt: value, projectId: id }));
+      if (result.task?.id) announce("mefi:task-created", { taskId: result.task.id, projectId: id });
+      await refresh(true);
+      const message = state.status.autoBuild === false ? "Task added. It waits in Review for your approval before it builds." : runState().held ? "Task added. New work is on hold, so it waits until you resume." : "Task added to the queue.";
+      return { ok: true, taskId: result.task?.id || null, message };
+    } catch (error) { return { ok: false, error: error.message }; }
+    finally { state.pending = false; controls(); renderCompanion(); }
+  }
+  async function companionControl(action) {
+    if (!api()) return { ok: false, error: "That needs the desktop app." };
+    if (state.switching) return { ok: false, error: "A project is opening. Try again in a moment." };
+    if (["start", "resume", "pause"].includes(action)) {
+      if (!api().assistantControl) return { ok: false, error: "That needs the desktop app." };
+      return runControl(action);
+    }
+    if (action === "stop-all") {
+      if (!api().assistantControl) return { ok: false, error: "That needs the desktop app." };
+      return stopAllAgents();
+    }
+    if (action === "run-backlog" || action === "pause-backlog") {
+      if (!state.activeId || !state.backlog || !api().backlogControl) return { ok: false, error: "The backlog isn't loaded yet." };
+      return controlBacklog(action === "run-backlog" ? "run" : "pause");
+    }
+    return { ok: false, error: "I don't know how to do that yet." };
   }
   // Restart with the agents stopped first, so a running build cannot defer the
   // relaunch. Studio comes back paused; Resume starts work again.
@@ -475,7 +574,10 @@
     } catch (error) { feedback(String(error?.message ?? error), true); }
     finally { state.busyAction = null; controls(); }
   }
-  function renderCompanion() {
+  // What the companion says about the project right now. The bar above the
+  // conversation paints it, and the roaming companion (renderer/companion.js)
+  // reads the same words from the snapshot, so the two never disagree.
+  function companionWords() {
     const assistant = state.assistant;
     const paused = assistant.status === "paused" || assistant.prefs?.paused;
     const held = state.status.held === true; // launch hold: agents wait for Start agents
@@ -484,13 +586,23 @@
     const working = running.length > 0;
     const reviewing = state.tasks.some((task) => taskView(task).filter === "review");
     const nickname = companion();
-    $("companion-name").textContent = held && !working ? `${nickname} is waiting for you` : paused ? `${nickname} is taking a breath` : working ? `${nickname} is making progress` : `${nickname} is here`;
+    const headline = held && !working ? `${nickname} is waiting for you` : paused ? `${nickname} is taking a breath` : working ? `${nickname} is making progress` : `${nickname} is here`;
     const action = assistant.action;
     const waiting = state.backlog?.waiting || state.status.waiting;
     const narration = working ? `Working on ${running[0].title || "your task"}${running.length > 1 ? ` · ${running.length} jobs running` : ""}.` : paused ? "New work is paused. Any running jobs will finish normally." : state.pending ? "I'm listening. Your message is on its way." : waiting ? (typeof waiting === "string" ? waiting : waiting.text || waiting.reason || "Work is queued and waiting for an available worker.") : state.backlog?.draining && state.backlog?.next?.length ? `Next I'll pick up ${state.backlog.next[0].title}.` : reviewing ? "There's work that needs a closer look. Open Review to see results and blockers." : action?.text && !["idle", "listening"].includes(action.text) ? action.text : "Tell me what you have in mind. We can take it one step at a time.";
-    $("narration").textContent = held && !working ? "Agents are waiting for you. Press Start agents when you're ready; your tasks and ideas are saved." : !working && !paused && workersOff ? "Coding workers are off. Your tasks are saved; use Work through backlog when you're ready to start them." : narration;
-    $("companion-track").dataset.station = working ? "make" : reviewing ? "review" : "listen";
-    $("companion-track").classList.toggle("busy", working || state.pending);
+    return {
+      headline,
+      narration: held && !working ? "Agents are waiting for you. Press Start agents when you're ready; your tasks and ideas are saved." : !working && !paused && workersOff ? "Coding workers are off. Your tasks are saved; use Work through backlog when you're ready to start them." : narration,
+      station: working ? "make" : reviewing ? "review" : "listen",
+      busy: working || state.pending,
+    };
+  }
+  function renderCompanion() {
+    const assistant = state.assistant;
+    const words = companionWords();
+    const working = (state.status.running || []).length > 0;
+    $("companion-name").textContent = words.headline;
+    $("narration").textContent = words.narration;
     renderDashboard();
     // The pill reads the same run state as the Service tile and its button.
     $("connection").textContent = runState().label;
@@ -503,6 +615,53 @@
       if (!logs.length) $("activity-list").append(text("li", "", "Real activity will appear here as the assistant works."));
       $("activity-count").textContent = logs.length || "";
     }
+    publishCompanion();
+  }
+  // The roaming companion lives above every view, so it hears about the
+  // project from here whether or not the workspace is on screen. One event per
+  // real change: the snapshot is compared before it is sent.
+  let companionSignature = "";
+  function companionSnapshot() {
+    const assistant = state.assistant;
+    const run = runState();
+    const words = companionWords();
+    const questions = (Array.isArray(assistant.questions) ? assistant.questions : []).filter((question) => question?.status === "open");
+    const review = scoped(state.tasks).filter((task) => taskView(task).filter === "review");
+    const stages = review.map((task) => taskView(task).stage);
+    const approvals = stages.filter((stage) => stage === "approval").length;
+    const blocked = stages.filter((stage) => stage === "blocked").length;
+    const next = (state.backlog?.next || [])[0] || null;
+    const reply = (assistant.messages || []).filter((message) => message.role === "assistant" && (!message.projectId || message.projectId === state.activeId)).at(-1) || null;
+    return {
+      projectId: state.activeId,
+      projectName: project()?.name || "",
+      desktop: Boolean(api()),
+      name: companion(),
+      person: person(),
+      ...words,
+      pending: state.pending,
+      switching: state.switching,
+      run: { label: run.label, note: run.note, tone: run.tone, held: run.held, launchHold: run.launchHold },
+      paused: assistant.status === "paused" || assistant.prefs?.paused === true,
+      admissionOff: state.status.execute === false,
+      autoBuild: state.status.autoBuild !== false,
+      keyMissing: assistant.ai?.keyPresent === false,
+      running: run.running.map((job) => ({ title: String(job?.title || "your task"), taskId: job?.taskId || null })),
+      questions,
+      review: { total: review.length, approvals, blocked, checks: review.length - approvals - blocked, first: review[0]?.title || "" },
+      next: next ? { id: next.id || null, title: String(next.title || "") } : null,
+      ready: state.backlog?.counts?.ready || 0,
+      backlog: state.backlog ? { draining: Boolean(state.backlog.draining), paused: Boolean(state.backlog.paused) } : null,
+      reply: reply ? { id: reply.id || null, at: reply.at || 0, text: String(reply.text || "") } : null,
+    };
+  }
+  function publishCompanion() {
+    if (typeof window.dispatchEvent !== "function" || typeof CustomEvent !== "function") return;
+    const snapshot = companionSnapshot();
+    const signature = JSON.stringify(snapshot);
+    if (signature === companionSignature) return;
+    companionSignature = signature;
+    try { window.dispatchEvent(new CustomEvent("mefi:companion-state", { detail: snapshot })); } catch {}
   }
   // The real run state, read from the two switches the backend actually has:
   // the assistant service (paused / running) and work admission (execute).
@@ -819,36 +978,7 @@
     // builds, the assistant's own suggestions) exactly as Command's New work
     // switch does; Resume reopens admission and wakes the assistant. Running
     // jobs are never interrupted by either.
-    $("pause").addEventListener("click", async () => {
-      $("pause").disabled = true;
-      try {
-        if (state.status.held === true) {
-          // The launch screen left the agents off; this is the user's Start.
-          const result = guard(await api().assistantControl("start"));
-          if (result.state) state.assistant = result.state;
-          state.status = { ...state.status, ...(result.autopilot || {}), held: false };
-          renderCompanion(); renderBacklog(); scheduleBacklogRead();
-          feedback(result.running ? "Agents started. New work can begin." : "Agents are on. The assistant was paused last time; press Resume to let new work start.");
-          return;
-        }
-        if (runState().held) {
-          // Resume reopens admission and wakes the assistant in one step, so a
-          // hold left by Stop all or a tripped breaker clears with the pause.
-          const result = guard(await api().assistantControl("start-work"));
-          if (result.state) state.assistant = result.state;
-          if (result.autopilot) state.status = { ...state.status, ...result.autopilot };
-          feedback("New work can start again.");
-        } else {
-          if (!api()?.backlogControl) throw new Error("Open the updated desktop app to pause new work.");
-          const result = guard(await api().backlogControl({ action: "pause", projectId: state.activeId }));
-          if (result.backlog) state.backlog = result.backlog;
-          state.status = { ...state.status, execute: false };
-          feedback("New work paused. Running jobs finish normally.");
-        }
-        renderCompanion(); renderBacklog(); scheduleBacklogRead();
-      }
-      catch (error) { feedback(error.message, true); } finally { controls(); }
-    });
+    $("pause").addEventListener("click", () => { $("pause").disabled = true; void runControl(); });
     for (const [id, key, fallback] of [["person-name", "person", ""], ["agent-name", "companion", "Mefi"], ["accent", "accent", "aurora"]]) {
       $(id).value = storage.get(key, fallback);
       $(id).addEventListener("input", () => {
@@ -876,10 +1006,10 @@
     $("motion").addEventListener("change", () => { storage.set("motion", $("motion").checked ? "1" : "0"); personalize(); });
     window.MefiNav?.renderWorkspaceTools?.($("tool-links"));
     api()?.onProjects?.((result) => { adoptProjects(result); refresh(true); });
-    api()?.onTasks?.((tasks) => { if (tasks?.some((task) => task.projectId && task.projectId !== state.activeId)) return; revisions.tasks += 1; state.tasks = tasks || []; if (active()) { renderWork(); renderCompanion(); } scheduleBacklogRead(); });
+    api()?.onTasks?.((tasks) => { if (tasks?.some((task) => task.projectId && task.projectId !== state.activeId)) return; revisions.tasks += 1; state.tasks = tasks || []; if (active()) { renderWork(); renderCompanion(); } else publishCompanion(); scheduleBacklogRead(); });
     api()?.onIdeas?.((ideas) => { if (ideas?.some((idea) => idea.projectId && idea.projectId !== state.activeId)) return; revisions.ideas += 1; state.ideas = ideas || []; if (active()) renderWork(); scheduleBacklogRead(); });
-    api()?.onAssistant?.((payload) => { if (payload?.state?.projectId && payload.state.projectId !== state.activeId) return; revisions.assistant += 1; if (payload?.state) state.assistant = payload.state; if (active()) { renderThread(); renderCompanion(); } });
-    api()?.onAssistantStatus?.((status) => { if (status?.projectId && status.projectId !== state.activeId) return; revisions.status += 1; state.status = status || {}; renderBuildMode(); controls(); if (active()) { renderCompanion(); renderWork(); } scheduleBacklogRead(); });
+    api()?.onAssistant?.((payload) => { if (payload?.state?.projectId && payload.state.projectId !== state.activeId) return; revisions.assistant += 1; if (payload?.state) state.assistant = payload.state; if (active()) { renderThread(); renderCompanion(); } else publishCompanion(); });
+    api()?.onAssistantStatus?.((status) => { if (status?.projectId && status.projectId !== state.activeId) return; revisions.status += 1; state.status = status || {}; renderBuildMode(); controls(); if (active()) { renderCompanion(); renderWork(); } else publishCompanion(); scheduleBacklogRead(); });
     api()?.onMachineStatus?.((status) => { state.machine = status || null; if (active()) renderMachineTile(); });
     window.addEventListener("mefi:usage-report", (event) => { state.usage = event.detail || null; if (active()) renderUsageTile(); });
     $("dash-attention")?.addEventListener("click", () => { if ($("dash-attention").dataset.target === "ask") window.MefiNav?.go?.("command", { rail: "ask" }); else showFilter("review"); });
@@ -891,6 +1021,9 @@
     window.MefiBoot?.pollStart?.("workspace.refresh", () => { if (!document.hidden && active()) refresh(); }, 15000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden && active()) refresh(); });
   }
-  window.MefiWorkspace = { enter, exit, refresh, ready, isActive: active, buildMode, setAutoBuild, agentMode, setAgentMode };
+  // The roaming companion's reach: a snapshot to read, and the same actions
+  // the workspace's own buttons take (renderer/companion.js).
+  const companionApi = { snapshot: companionSnapshot, ask, createTask, control: companionControl, showWork: (filter) => { showFilter(["open", "review", "done", "ideas", "all"].includes(filter) ? filter : "open"); } };
+  window.MefiWorkspace = { enter, exit, refresh, ready, isActive: active, buildMode, setAutoBuild, agentMode, setAgentMode, companion: companionApi };
   init();
 })();

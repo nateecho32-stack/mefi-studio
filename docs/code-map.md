@@ -155,6 +155,7 @@ imports.
 | `booklet.js` | 1,318 | The model catalog, filters, the studio launcher and the boot sequence. |
 | `music.js` | 1,291 | Style & sound: Studio's colour themes, node styles and layouts, the members' Void collection (its own premium store, gated by `MefiCommunity`), the local-file player and the ad-free radio decks. |
 | `workspace.js` | 865 | The home screen: project context, the conversation and durable results. |
+| `companion.js` | 957 | `window.MefiCompanion`: the companion as a character above every view. It roams, comments on what changes, takes typed requests, manages work through `MefiWorkspace.companion`, and settles the agents' routine Ask cards within fixed rules (`MefiCompanion.rules`, pinned by `tests/companion.test.mjs`). Bundled right after `workspace.js`. |
 | `planning.js` | 764 | The plan interview and reviewed task handoffs. |
 | `onboarding.js` | 692 | The resumable *Start here* walkthrough. |
 | `community.js` | 726 | `window.MefiCommunity`: the perk gate the Style pickers ask (`has`, with a boot hint so a member's theme does not flash), the quiet weekly "join the Discord" card, Settings › Community, the in-place explanation of a locked item, and the action that Search lists and `nav.js`'s `RAIL_SLOTS` puts at the menu foot as Community. It sees only the public status from main, never a token. Bundled after `music.js` and before `booklet.js`. |

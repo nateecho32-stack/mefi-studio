@@ -1996,6 +1996,9 @@
     if (el.chatLog) el.chatLog.hidden = view !== "assistant";
     if (el.done) el.done.hidden = view !== "done";
     if (el.asks) el.asks.hidden = view !== "ask";
+    // The stylesheet sizes the rail by what it shows: a feed runs to the
+    // floor, a short form like Agents hugs its content.
+    if (el.rail?.dataset) el.rail.dataset.view = view;
     // Never remember "node": it belongs to a selection, not to a launch.
     if (save && view !== "node") writeStore("mefiStudio.cmdRailTab", view);
     applyRailCollapsed();
