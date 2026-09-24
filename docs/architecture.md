@@ -62,8 +62,13 @@ walk through the agent loop read [agent-loop.md](agent-loop.md).
   here**, **Shortcuts** (`?`), **Community** and the update badge. At rest it
   is five icons with their names; hover it or Tab into it and it opens over the
   page to list every destination with its key, without moving anything
-  underneath. The section you are in lights up and the destination you are on
-  is marked.
+  underneath. Opened, each section's name becomes a small capitals heading
+  over its destinations (it still goes to the section's main page), and the
+  whole menu fits a 900px window. Below 820px tall the foot folds into one
+  row of icons, each named by its tooltip, and a list that still has to
+  scroll fades out at its hidden edge. The section you are in lights up and
+  the destination you are on is marked. Toasts step aside while the menu is
+  open.
 - **Keep menu open** pins it and the page makes room. In a window narrower
   than 1100px a pinned menu behaves as if unpinned and opens over the page;
   the pin comes back when the window widens. The window never shrinks below
