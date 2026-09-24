@@ -425,6 +425,22 @@
     applyTheme("custom", save);
     return true;
   }
+  // The palette on screen, read every frame by the tree rail and the Command
+  // view. resolvePalette runs dozens of contrast searches (about 70 µs), so
+  // the answer is kept until the theme or a custom colour changes, and every
+  // reader shares one frozen copy.
+  let paletteKey = null, paletteMemo = null;
+  function themePalette() {
+    const theme = effective.theme;
+    const custom = prefs.customColors;
+    const key = theme === "custom" ? `custom|${custom.accent}|${custom.background}|${custom.surface}|${custom.text}` : theme;
+    if (key !== paletteKey || !paletteMemo) {
+      const palette = resolvePalette(theme, custom);
+      paletteMemo = Object.freeze({ theme, ...palette, canvas: Object.freeze(palette.canvas) });
+      paletteKey = key;
+    }
+    return paletteMemo;
+  }
   // Read per node per frame by the tree rail: plain fields, no storage reads.
   function graphPreferences() { return { nodeStyle: effective.nodeStyle, nodeLayout: prefs.nodeLayout, orbitTrails: prefs.orbitTrails, extraGlow: prefs.extraGlow }; }
   function syncTreePreferences(save) {
@@ -1847,7 +1863,7 @@
     linkElement: () => { const frame = els.linkFrame; return frame && state.link && state.source === "link" ? { url: state.link.url, kind: state.link.kind, provider: state.link.provider, element: frame } : null; },
     togetherHost: () => { init(); return els.together; },
     linkInfo: (raw) => { const link = mediaLink(raw); return link ? { provider: link.provider, providerName: link.providerName, kind: link.kind, label: link.label, url: link.url, playable: Boolean(playableLink(link)) } : null; },
-    customColors: () => ({ ...prefs.customColors }), themePalette: () => ({ theme: effective.theme, ...resolvePalette(effective.theme, prefs.customColors) }),
+    customColors: () => ({ ...prefs.customColors }), themePalette,
     // isNodeStyle is for the tree painters; the catalog feeds Settings › Community.
     isNodeStyle,
     premiumCatalog: () => ({
