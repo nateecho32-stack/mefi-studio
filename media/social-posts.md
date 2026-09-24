@@ -29,7 +29,9 @@ What would you build with it?
 
 ## X
 
-Mefi's Studio AI+ since 0.3.0: visible agent pipelines, an explorable project map, reusable Playbook recipes, OpenRouter, and floating media.
+From chaos to connected work.
+
+Mefi's Studio AI+ development preview: agent pipelines, project maps, Playbook recipes, OpenRouter and floating media.
 
 Your idea. A whole studio.
 
