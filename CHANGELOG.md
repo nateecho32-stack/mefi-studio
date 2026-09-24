@@ -8,6 +8,13 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- **A test run that pauses for a few seconds is no longer killed as hung.**
+  One unchanged CPU sample counted as the whole four-minute idle window, so
+  during a busy test run (a scan every 5 s) a test waiting briefly on a file
+  or a frame could be killed. Idle time is now measured in real time.
+- The facts sent with a brief or an overseer review are trimmed field by
+  field and stay valid JSON; cutting them at 14,000 characters broke the
+  JSON and dropped the machine, work and inbox facts first.
 - **A machine that settles just under busy no longer holds new workers
   forever.** After a lag spike, new worker starts waited for two readings at
   40 ms or less, and a laptop that settled at 41–99 ms never got there. Once
@@ -47,6 +54,21 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   settled checkout was kept as if it held unsaved edits.
 
 ### Changed
+- **Studio does much less work while nothing changes.** Command draws about
+  ten frames a second when nothing on it is moving, and wakes the moment you
+  touch it or data arrives. The task rail stops under full-window sheets and
+  no longer re-reads the whole session store on every agent action. Agent
+  sparks drop their per-spark blur. Blurs behind opaque panels and endless
+  paint animations are gone. Worker output, board updates and the
+  assistant's progress reach the window in batches instead of one message
+  per line or per change. The agent loop skips no-op board transactions,
+  scans ideas and duplicate declarations without re-reading unchanged
+  files, and runs git off the store worker's queue.
+  [docs/performance.md](docs/performance.md) has the measurements.
+- **Builders get a small context file instead of the whole board.** Each
+  task run writes its own saved record, grouped members and dependencies to
+  `task-runs/<runId>.json`, and the brief points there instead of at the
+  multi-megabyte task board.
 - **`npm test` runs every leg and every stage**, even after one fails, and
   ends with a pass/FAIL line per leg; one red suite used to hide whether the
   Electron lane, the Python contracts and the path lock passed.

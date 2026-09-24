@@ -184,7 +184,8 @@ under `data/projects/<id>/` — its board is `eyes-tasks.json` there, and
 project, which owns the top-level `data/eyes-*.json` files so data written
 before projects existed stays reachable. Alongside sit the inbox
 (`eyes-requests.json`), ideas, checkpoints, chat, pins and briefing
-(`eyes-*.json`), the durable executor log (`executor-log.jsonl`) and the Policy
+(`eyes-*.json`), the durable executor log (`executor-log.jsonl`), each task
+run's read-only context file (`task-runs/<runId>.json`) and the Policy
 Lab's receipts (`policy-lab/`). An optional SQLite authority for the board is
 kept outside the synced tree (`MEFI_STUDIO_BOARD_DB`); when it is on, every
 commit rewrites the JSON view as well.
