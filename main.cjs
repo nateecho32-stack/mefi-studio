@@ -11361,9 +11361,9 @@ async function spawnNextJob() {
   // fresh parked entry exists, a dispatch-time porcelain probe re-derives the
   // same caution straight from git, so the advice survives restarts (and
   // persists for as long as the files are genuinely staged) without a
-  // file-backed store. The production probe is synchronous (spawnSync in
-  // scripts/eyes.mjs), so the typeof keeps the common path await-free; async
-  // git observation (the vm test hosts) rides the same await.
+  // file-backed store. The production probe answers a promise (an async git
+  // child on the eyes worker); the typeof lets a synchronous probe skip the
+  // await.
   if (!collabBit) {
     try {
       const probed = typeof eyes.gitPorcelain === "function" && typeof eyes.parsePorcelain === "function" ? eyes.gitPorcelain({ root: runRoot }) : "";
