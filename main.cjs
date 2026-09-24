@@ -27,7 +27,7 @@ const { spawn } = optionalHelper(
   () => require("./scripts/platform.cjs"),
   { spawn: require("node:child_process").spawn },
 );
-const { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } = require("node:fs");
+const { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } = require("node:fs");
 const { appendFile, copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } = require("node:fs/promises");
 const os = require("node:os");
 const crypto = require("node:crypto");
@@ -4339,31 +4339,40 @@ const EXECUTOR_CALLABLE = new Set(["auditor", "reference", "ideas", "improver", 
 // trees dwarf the source tree and cannot own a moved project file.
 const SCOPE_WALK_SKIP = new Set(["node_modules", ".git", "dist", "out", "build", "data", "__pycache__", "venv"]);
 
-// Bounded breadth-first search for one basename under a project root — the
-// locator behind stale file-scope healing (resolveStaleFileScope). Shallowest
-// match wins, the walk caps entries and depth, and every filesystem error
-// reads as "not here". Returns an absolute path or null.
-function findBasenameUnderRoot(root, base, { maxEntries = 20000, maxDepth = 6 } = {}) {
-  const name = String(base ?? "").trim();
+// Bounded breadth-first search for basenames under a project root — the
+// locator behind stale file-scope healing (resolveStaleFileScope). One walk
+// answers every name asked for, and each answer is the one a walk for that
+// name alone gives: the same visit order and entry count, so the shallowest
+// match wins (ties by directory order) within the first maxEntries entries,
+// and the walk ends once every name is found. Every filesystem error reads as
+// "not here". Async, so a 20k-entry walk no longer blocks the main thread.
+// Returns a Map from each found (trimmed) name to its absolute path.
+async function findBasenamesUnderRoot(root, bases, { maxEntries = 20000, maxDepth = 6 } = {}) {
+  const found = new Map();
+  const wanted = new Set([...(bases ?? [])].map((base) => String(base ?? "").trim()).filter(Boolean));
   const start = String(root ?? "").trim();
-  if (!name || !start) return null;
-  let stat;
-  try { stat = statSync(start, { throwIfNoEntry: false }); } catch { return null; }
-  if (!stat?.isDirectory()) return null;
+  if (!wanted.size || !start) return found;
+  let info;
+  try { info = await stat(start); } catch { return found; }
+  if (!info?.isDirectory()) return found;
   const queue = [[start, 0]];
+  let head = 0;
   let seen = 0;
-  let best = null;
-  while (queue.length && seen < maxEntries && !best) {
-    const [dir, depth] = queue.shift();
+  while (head < queue.length && seen < maxEntries && found.size < wanted.size) {
+    const [dir, depth] = queue[head];
+    head += 1;
     let list;
-    try { list = readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    try { list = await readdir(dir, { withFileTypes: true }); } catch { continue; }
     for (const item of list) {
       if (++seen > maxEntries) break;
-      if (item.isFile() && item.name === name) { best = path.join(dir, item.name); break; }
+      if (item.isFile() && wanted.has(item.name) && !found.has(item.name)) {
+        found.set(item.name, path.join(dir, item.name));
+        if (found.size === wanted.size) break;
+      }
       if (item.isDirectory() && depth < maxDepth && !item.name.startsWith(".") && !SCOPE_WALK_SKIP.has(item.name.toLowerCase())) queue.push([path.join(dir, item.name), depth + 1]);
     }
   }
-  return best;
+  return found;
 }
 
 // Pull the handoffs out of one line of a run's output.
@@ -11622,10 +11631,9 @@ async function spawnNextJob() {
     let scopeHeal = null;
     if (job.kind === "task") {
       try {
-        scopeHeal = taskContext.resolveStaleFileScope(job.ref, {
-          exists: (candidate) => { try { return statSync(candidate, { throwIfNoEntry: false })?.isFile() === true; } catch { return false; } },
-          locate: (base, ref) => findBasenameUnderRoot(ref?.projectPath || projectRoot(), base),
-        });
+        // The same locator as the board-wide heal: an async walk, and a
+        // basename it recently missed is not walked for again.
+        scopeHeal = taskContext.resolveStaleFileScope(job.ref, await staleScopeLocator([job.ref]));
       } catch {}
     }
     // Settlement rides ONE transactional mutation for the board stores: the
@@ -12815,27 +12823,58 @@ const LEASE_REFRESH_MS = 10 * 60 * 1000; // how often a live owner re-stamps its
 // stale path is still the saved one, so a concurrent edit is never clobbered.
 // Studio heals its own saved scope — a worker run may not rewrite it.
 // A basename the walk could not find (a deleted file, one the task has yet
-// to create) is not walked for again for 30 minutes: the walk is synchronous
-// on the main thread and costs tens of ms in a game-sized tree.
+// to create) is not walked for again for 30 minutes, here or at settlement:
+// the walk covers up to 20k entries of a game-sized tree.
 const SCOPE_HEAL_INTERVAL_MS = 5 * 60 * 1000;
 let scopeHealAt = null;
 const scopeMisses = new Map(); // `${root}\n${base}` → retry-after ms, oldest first
-async function healBoardFileScopes(reason = "housekeeping") {
-  const eyes = await getEyes();
-  const saved = await eyes.readJson(TASKS_PATH, []);
+// The exists/locate pair resolveStaleFileScope takes, for these tasks. The
+// resolver is synchronous, so every basename it could ask for (a saved path
+// that is not a file, whose miss is not remembered) is found first: one async
+// walk per project root for all of them (findBasenamesUnderRoot). locate then
+// answers from those results and keeps scopeMisses exactly as a walk per call
+// did; a name no walk covered (the file vanished meanwhile) reads as not found.
+async function staleScopeLocator(tasks, now = Date.now()) {
   const exists = (candidate) => { try { return statSync(candidate, { throwIfNoEntry: false })?.isFile() === true; } catch { return false; } };
+  const rootOf = (ref) => ref?.projectPath || projectRoot();
+  const missKey = (root, base) => `${root}\n${base}`;
+  const wanted = new Map();
+  for (const task of Array.isArray(tasks) ? tasks : []) {
+    if (!task?.id) continue;
+    const saved = [...(Array.isArray(task?.files) ? task.files : []), task?.file].filter((entry) => typeof entry === "string" && entry);
+    if (!saved.length) continue;
+    const root = rootOf(task);
+    for (const entry of new Set(saved)) {
+      if (exists(entry)) continue;
+      const base = entry.split(/[\\/]/).pop();
+      if ((scopeMisses.get(missKey(root, base)) ?? 0) > now) continue;
+      if (!wanted.has(root)) wanted.set(root, new Set());
+      wanted.get(root).add(base);
+    }
+  }
+  const walked = new Map();
+  for (const [root, bases] of wanted) {
+    const found = await findBasenamesUnderRoot(root, bases);
+    for (const base of bases) walked.set(missKey(root, base), found.get(String(base ?? "").trim()) ?? null);
+  }
   const locate = (base, ref) => {
-    const root = ref?.projectPath || projectRoot();
-    const key = `${root}\n${base}`;
-    if ((scopeMisses.get(key) ?? 0) > Date.now()) return null;
-    const found = findBasenameUnderRoot(root, base);
+    const key = missKey(rootOf(ref), base);
+    if ((scopeMisses.get(key) ?? 0) > now || !walked.has(key)) return null;
+    const found = walked.get(key);
     scopeMisses.delete(key);
     if (!found) {
-      scopeMisses.set(key, Date.now() + 30 * 60 * 1000);
+      scopeMisses.set(key, now + 30 * 60 * 1000);
       if (scopeMisses.size > 200) scopeMisses.delete(scopeMisses.keys().next().value);
     }
     return found;
   };
+  return { exists, locate };
+}
+
+async function healBoardFileScopes(reason = "housekeeping") {
+  const eyes = await getEyes();
+  const saved = await eyes.readJson(TASKS_PATH, []);
+  const { exists, locate } = await staleScopeLocator(saved);
   const heals = new Map();
   for (const task of Array.isArray(saved) ? saved : []) {
     if (!task?.id || (!Array.isArray(task.files) || !task.files.length) && !task.file) continue;
