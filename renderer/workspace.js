@@ -42,6 +42,9 @@
   const companion = () => storage.get("companion", "Mefi").trim() || "Mefi";
   const project = () => state.projects.find((item) => item.id === state.activeId);
   const text = (tag, className, value) => { const node = document.createElement(tag); node.className = className; node.textContent = String(value ?? ""); return node; };
+  // Writes that skip themselves when nothing changes (see renderWork).
+  const setAttr = (node, name, value) => { if (node.getAttribute(name) !== value) node.setAttribute(name, value); };
+  const setHidden = (node, hidden) => { if (node.hidden !== hidden) node.hidden = hidden; };
   const done = (task) => ["done", "archived", "completed"].includes(task.status);
   const describe = (task) => window.MefiTasks?.describe?.(task) ?? { stage: done(task) ? "done" : task.status === "awaiting_verification" ? "review" : "open", label: task.status === "active" ? "Working" : done(task) ? "Completed" : task.status === "awaiting_verification" ? "Needs review" : "Queued", summary: task.result?.summary || task.logs?.at(-1)?.text || "" };
   const when = (at) => { const value = new Date(at); return Number.isFinite(value.getTime()) ? value.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : ""; };
@@ -235,10 +238,15 @@
     const matchingTasks = tasks.filter(matches), matchingIdeas = ideas.filter(matches);
     const counts = { all: matchingTasks.length + matchingIdeas.length, open: 0, review: 0, done: 0, ideas: matchingIdeas.length };
     for (const task of matchingTasks) counts[taskView(task).filter] += 1;
+    // Every eyes:tasks and assistant:status push lands here, so each write
+    // below only happens when its value moved: an identical write still
+    // replaces the text node or re-runs attribute invalidation.
     for (const button of $("layer").querySelectorAll("[data-work-filter]")) {
-      button.setAttribute("aria-pressed", String(button.dataset.workFilter === state.filter));
-      button.querySelector("span").textContent = counts[button.dataset.workFilter] || 0;
-      button.setAttribute("aria-label", `${workLabels[button.dataset.workFilter]}: ${counts[button.dataset.workFilter] || 0}${state.query ? " matches" : " items"}`);
+      const count = String(counts[button.dataset.workFilter] || 0);
+      setAttr(button, "aria-pressed", String(button.dataset.workFilter === state.filter));
+      const badge = button.querySelector("span");
+      if (badge.textContent !== count) badge.textContent = count;
+      setAttr(button, "aria-label", `${workLabels[button.dataset.workFilter]}: ${count}${state.query ? " matches" : " items"}`);
     }
     const ranks = new Map((state.backlog?.next || []).map((item, index) => [item.id, index]));
     const taskRows = matchingTasks.filter((task) => state.filter === "all" || taskView(task).filter === state.filter)
@@ -248,17 +256,22 @@
       .map((item) => ({ item, isIdea: true }));
     const visible = state.filter === "all" ? [...taskRows, ...ideaRows] : state.filter === "ideas" ? ideaRows : taskRows;
     const page = visible.slice(0, state.limit);
-    const signature = JSON.stringify([page, counts, state.filter, state.query, state.limit, state.backlog?.taskStates, state.backlog?.next, state.status.running, companion()]);
-    $("work-search").placeholder = state.filter === "all" ? "Search all tasks and ideas…" : `Search ${workLabels[state.filter].toLowerCase()}…`;
-    $("work-search").setAttribute("aria-label", `Search ${workLabels[state.filter].toLowerCase()}`);
-    $("clear-search").hidden = !state.query;
+    // A card never shows runProgress (its bar reads state.status.running), and
+    // the executor rewrites it on every checkpoint push, so it stays out.
+    const signature = JSON.stringify([page.map(({ item, isIdea }) => [isIdea, item.runProgress === undefined ? item : { ...item, runProgress: undefined }]), counts, state.filter, state.query, state.limit, state.backlog?.taskStates, state.backlog?.next, state.status.running, companion()]);
+    const searchLabel = workLabels[state.filter].toLowerCase();
+    const placeholder = state.filter === "all" ? "Search all tasks and ideas…" : `Search ${searchLabel}…`;
+    if ($("work-search").placeholder !== placeholder) $("work-search").placeholder = placeholder;
+    setAttr($("work-search"), "aria-label", `Search ${searchLabel}`);
+    setHidden($("clear-search"), !state.query);
     const summary = `${workLabels[state.filter]} · ${visible.length > page.length ? `${page.length} of ` : ""}${visible.length} ${state.query ? visible.length === 1 ? "match" : "matches" : visible.length === 1 ? "item" : "items"}`;
     if ($("work-summary").textContent !== summary) $("work-summary").textContent = summary;
     // The tabs already carry the counts; the line earns its row only while it
     // says more (a search is narrowing the list, or it is paged).
-    $("work-summary").hidden = !state.query && visible.length <= page.length;
-    $("show-more").hidden = visible.length <= state.limit;
-    $("show-more").textContent = `Show ${Math.min(20, Math.max(0, visible.length - state.limit))} more · ${Math.max(0, visible.length - state.limit)} remaining`;
+    setHidden($("work-summary"), !state.query && visible.length <= page.length);
+    setHidden($("show-more"), visible.length <= state.limit);
+    const more = `Show ${Math.min(20, Math.max(0, visible.length - state.limit))} more · ${Math.max(0, visible.length - state.limit)} remaining`;
+    if ($("show-more").textContent !== more) $("show-more").textContent = more;
     if (signature === workSignature) return;
     workSignature = signature;
     const top = $("work-list").scrollTop;
@@ -430,16 +443,26 @@
     } catch (error) { feedback(error.message, true); }
     finally { state.busyAction = null; renderBacklog(); controls(); }
   }
-  function scheduleBacklogRead() {
+  // Every assistant:status, eyes:tasks and eyes:ideas push asks for a fresh
+  // snapshot, and the host takes the board lock and re-reads the board for
+  // each one, so pushes read it at most once per 3.5 s (one trailing read
+  // catches the last push). A user action passes force and reads after the
+  // usual 300 ms settle.
+  const BACKLOG_MIN_MS = 3500;
+  let backlogReadAt = 0;
+  function scheduleBacklogRead(force = false) {
     revisions.backlog += 1;
+    if (force && backlogTimer) { clearTimeout(backlogTimer); backlogTimer = null; }
     if (backlogTimer || !active() || document.hidden) return;
-    backlogTimer = setTimeout(() => { backlogTimer = null; if (active() && !document.hidden) void readBacklog(); }, 300);
+    const wait = force ? 300 : Math.max(300, backlogReadAt + BACKLOG_MIN_MS - Date.now());
+    backlogTimer = setTimeout(() => { backlogTimer = null; if (active() && !document.hidden) void readBacklog(); }, wait);
   }
   // A push already carried its own slice; only the backlog snapshot is derived.
   // The 15 s backstop / visibility refresh still re-reads every panel.
   let backlogFlight = null;
   function readBacklog() {
     if (!api()?.backlogStatus || !state.activeId || backlogFlight) return backlogFlight;
+    backlogReadAt = Date.now();
     const epoch = state.epoch, revision = revisions.backlog;
     backlogFlight = readWithDeadline(() => api().backlogStatus()).then((result) => {
       if (epoch !== state.epoch || revision !== revisions.backlog || !result?.ok || (result.projectId && result.projectId !== state.activeId)) return;
@@ -689,6 +712,8 @@
     const sequence = ++readSequence;
     const before = { ...revisions };
     const belongs = (value) => !value?.projectId || value.projectId === state.activeId;
+    // This reads the backlog too, so the push reads count their interval from here.
+    backlogReadAt = Date.now();
     const run = Promise.allSettled(["tasksList", "assistantState", "assistantStatus", "jevStatus", "ideasList", "backlogStatus"].map((method) => readWithDeadline(() => api()[method]?.()))).then((results) => {
       if (epoch !== state.epoch || sequence !== readSequence) return;
       if (before.tasks === revisions.tasks && results[0].status === "fulfilled" && results[0].value?.tasks && belongs(results[0].value)) state.tasks = results[0].value.tasks;
@@ -827,7 +852,7 @@
           const result = guard(await api().assistantControl("start"));
           if (result.state) state.assistant = result.state;
           state.status = { ...state.status, ...(result.autopilot || {}), held: false };
-          renderCompanion(); renderBacklog(); scheduleBacklogRead();
+          renderCompanion(); renderBacklog(); scheduleBacklogRead(true);
           feedback(result.running ? "Agents started. New work can begin." : "Agents are on. The assistant was paused last time; press Resume to let new work start.");
           return;
         }
@@ -845,7 +870,7 @@
           state.status = { ...state.status, execute: false };
           feedback("New work paused. Running jobs finish normally.");
         }
-        renderCompanion(); renderBacklog(); scheduleBacklogRead();
+        renderCompanion(); renderBacklog(); scheduleBacklogRead(true);
       }
       catch (error) { feedback(error.message, true); } finally { controls(); }
     });
