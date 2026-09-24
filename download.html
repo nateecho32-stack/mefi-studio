@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Download — Mefi's Studio AI+</title>
+  <meta name="description" content="Download the portable Windows build of Mefi's Studio AI+, verify its SHA-256, or run it from source with Node 24.">
+  <meta name="theme-color" content="#050d13">
+  <link rel="icon" href="assets/favicon.ico">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="brand" href="index.html"><img src="assets/icon-256.png" alt="" width="30" height="30">Mefi's Studio AI+</a>
+      <nav class="nav-links" aria-label="Site">
+        <a href="index.html">Home</a>
+        <a href="download.html" aria-current="page">Download</a>
+        <a href="wiki/">Wiki</a>
+        <a href="community.html">Community</a>
+        <a href="https://github.com/nateecho32-stack/mefi-studio" data-repo-link="repo" rel="noopener">GitHub ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container page-head">
+      <div class="eyebrow">Download</div>
+      <h1>Get Mefi's Studio AI+</h1>
+      <p>A portable Windows build: download the zip, extract the whole folder, open the app. No installer, no account, no telemetry. Prefer source? Four commands with Node 24.</p>
+    </div>
+
+    <section style="padding-top:0">
+      <div class="container release">
+        <div class="release-card" id="release" aria-live="polite">
+          <p class="dim"><span class="spinner" aria-hidden="true"></span>Checking GitHub for the latest release…</p>
+        </div>
+        <div class="release-side">
+          <div class="card">
+            <h3>Requirements</h3>
+            <ul class="checklist">
+              <li><strong>Windows 10 or 11.</strong> Saved keys are protected by the Windows keystore (DPAPI). Other platforms are untested.</li>
+              <li><strong>A builder CLI to build (optional).</strong> <code>opencode</code> is preferred; <code>claude</code>, <code>codex</code>, <code>grok</code> and <code>agy</code> are detected too. Without one, Studio still plans, chats and browses the catalog.</li>
+              <li><strong>An API key or a local model (optional)</strong> for the companion: z.ai, OpenCode Go, a CLI login, LM Studio or any OpenAI-compatible endpoint.</li>
+              <li><strong>Node 24 and npm</strong> only for a source install, <strong>Git</strong> only to clone, <strong>Python 3</strong> on PATH as <code>python</code> only for <code>npm test</code>.</li>
+            </ul>
+          </div>
+          <div class="notice info">
+            <p><strong>Source and portable installs keep separate project stores.</strong> Tasks, conversations and plans do not travel between them. Saved keys are bound to your Windows account and cannot be decrypted on another machine.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="portable">
+      <div class="container">
+        <div class="section-head">
+          <div class="eyebrow">Portable install</div>
+          <h2>Five steps, nothing to install</h2>
+        </div>
+        <div class="steps">
+          <div class="step"><h3>Download the zip</h3><p>Grab the <code>win32-x64</code> zip from the latest release above, and the <code>.sha256</code> file beside it if you want to verify.</p></div>
+          <div class="step"><h3>Extract the whole folder</h3><p>Right-click the zip and choose <strong>Extract All…</strong>. Keep the <code>Mefi Studio AI+</code> folder together; the app keeps its own data next to the executable.</p></div>
+          <div class="step"><h3>Open the app</h3><p>Double-click <code>Mefi Studio AI+.exe</code>. The build is not code-signed, so SmartScreen may ask once; after checking the digest, choose <strong>More info → Run anyway</strong>.</p></div>
+          <div class="step"><h3>Choose a project</h3><p>The launch screen asks for a folder first. Pick one, then <strong>Open studio</strong> (agents stay off) or <strong>Open and start agents</strong>.</p></div>
+          <div class="step"><h3>Follow Start here</h3><p>The first launch runs auto setup from what is already on the machine, then the walkthrough takes you through seven stops to your first verified task.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="verify">
+      <div class="container two-col">
+        <div>
+          <div class="eyebrow">Verify the download</div>
+          <h2>Check the SHA-256 before you run it</h2>
+          <p class="muted">Every release ships a <code>.sha256</code> file next to the zip. Studio's own updater checks it before installing; you can do the same by hand in PowerShell from the folder you downloaded into. The two hashes must match exactly.</p>
+        </div>
+        <div>
+<pre><code>Get-FileHash ".\<span data-asset-name>Mefi-Studio-AI+-vX.Y.Z-win32-x64.zip</span>" -Algorithm SHA256
+Get-Content ".\<span data-asset-name>Mefi-Studio-AI+-vX.Y.Z-win32-x64.zip</span>.sha256"</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="source">
+      <div class="container two-col">
+        <div>
+          <div class="eyebrow">Run from source</div>
+          <h2>Clone, install, build the booklet, start</h2>
+          <p class="muted"><code>npm ci</code> downloads Electron once, about 110 MB. <code>npm start</code> needs a normal shell: if <code>ELECTRON_RUN_AS_NODE</code> is set, as some agent harnesses do, Studio refuses to start and prints the fix.</p>
+          <p class="muted">Double-clicking <code>Run Mefi's Studio AI+.cmd</code> starts a portable build in <code>dist/</code> when one exists, otherwise the source install. The browser preview on port 4173 cannot launch workers; keep that port on localhost.</p>
+          <p><a href="wiki/#/installation">Full installation notes in the wiki →</a></p>
+        </div>
+        <div>
+<pre><code>git clone https://github.com/nateecho32-stack/mefi-studio.git
+cd mefi-studio
+npm ci                   # once; downloads Electron
+npm run build-booklet    # bundles renderer/ into booklet.html
+npm start                # desktop app
+
+npm run start:web        # browser-only preview, no workers
+npm run package          # refresh a portable build in dist/</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="release-vs-source">
+      <div class="container">
+        <div class="section-head">
+          <div class="eyebrow">Release or source?</div>
+          <h2>The release is the tested snapshot; source moves daily</h2>
+          <p>v0.2.0 is the first public release. The source on <code>main</code> has since added a left navigation rail, a separate <code>auth.json</code> for saved keys, a full node editor for Brain maps, ad-free radio and a pause for providers that keep failing. They arrive with the next release, which a portable copy offers to install for you.</p>
+          <p><a href="wiki/#/whats-new">What changed since v0.2.0 →</a></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="contents">
+      <div class="container two-col">
+        <div>
+          <h3>What a release zip contains</h3>
+          <ul class="checklist">
+            <li>The Electron runtime and the app under <code>resources/app</code></li>
+            <li>The two public model catalogs, <code>curated.json</code> and <code>models.json</code></li>
+            <li>A sibling <code>.sha256</code> digest published with every release</li>
+          </ul>
+        </div>
+        <div>
+          <h3>What it never contains</h3>
+          <ul class="checklist no">
+            <li>The maintainer's projects, tasks or conversations</li>
+            <li>Any credentials, settings or caches</li>
+            <li>Telemetry, a hosted account, or an updater that sends anything but a release check</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="updates">
+      <div class="container">
+        <div class="section-head">
+          <div class="eyebrow">Staying current</div>
+          <h2>Updates install in place and never touch your data</h2>
+          <p>A packaged copy reads the repository's latest release every 20 minutes. When a newer build exists, <strong>App updates</strong> in <strong>Settings › Updates &amp; diagnostics</strong> offers <strong>Update to vX.Y.Z</strong>. It downloads the zip, verifies the published digest, stages the folder, and a helper waits for the app to exit, copies the payload into place and relaunches. <code>resources/app/data</code> is never overwritten.</p>
+          <p><a href="wiki/#/updates">How live update and release updates work →</a></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container foot-inner">
+      <div>© <span data-year>2026</span> MefiMaxi · MIT License</div>
+      <div class="foot-links">
+        <a href="https://github.com/nateecho32-stack/mefi-studio" data-repo-link="repo" rel="noopener">Source</a>
+        <a href="https://github.com/nateecho32-stack/mefi-studio/releases" data-repo-link="releases" rel="noopener">All releases</a>
+        <a href="https://github.com/nateecho32-stack/mefi-studio/blob/main/CHANGELOG.md" data-repo-link="changelog" rel="noopener">Changelog</a>
+        <a href="https://github.com/nateecho32-stack/mefi-studio/issues" data-repo-link="issues" rel="noopener">Issues</a>
+        <a href="wiki/">Wiki</a>
+        <a href="community.html">Community</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/site.js"></script>
+  <script>
+    (function () {
+      const box = document.getElementById("release");
+      const S = window.SITE;
+      const esc = (s) => S.escapeHtml(s);
+
+      function fillAssetNames(name) {
+        document.querySelectorAll("[data-asset-name]").forEach((el) => { el.textContent = name; });
+      }
+
+      function renderNone() {
+        box.innerHTML = `
+          <span class="badge dim">No public release yet</span>
+          <div class="version" style="margin-top:10px">Coming soon</div>
+          <p class="muted" style="margin-top:10px">No portable build is published on GitHub Releases yet. You can run Studio from source today, or watch the releases page so the first build finds you.</p>
+          <div class="release-actions">
+            <a class="btn btn-primary" href="#source">Run from source</a>
+            <a class="btn" href="${S.urls.releases}" rel="noopener">Releases on GitHub</a>
+          </div>`;
+      }
+
+      function renderError() {
+        box.innerHTML = `
+          <span class="badge dim">Could not reach GitHub</span>
+          <div class="version" style="margin-top:10px">Latest release</div>
+          <p class="muted" style="margin-top:10px">The release list could not be loaded just now (offline, or this network hit GitHub's hourly API limit). The releases page always has the current build.</p>
+          <div class="release-actions">
+            <a class="btn btn-primary" href="${S.urls.latest}" rel="noopener">Open the latest release</a>
+            <a class="btn" href="${S.urls.releases}" rel="noopener">All releases</a>
+          </div>`;
+      }
+
+      function renderRelease(rel) {
+        const a = rel.asset;
+        const rows = [
+          rel.publishedAt ? `<dt>Published</dt><dd>${esc(S.formatDate(rel.publishedAt))}</dd>` : "",
+          a ? `<dt>File</dt><dd>${esc(a.name)}</dd><dt>Size</dt><dd>${esc(S.formatBytes(a.size))}</dd>` : "",
+          `<dt>Platform</dt><dd>Windows 10/11, x64, portable</dd>`,
+          rel.checksum ? `<dt>Checksum</dt><dd><a href="${esc(rel.checksum.browser_download_url)}" rel="noopener">${esc(rel.checksum.name)}</a></dd>` : `<dt>Checksum</dt><dd class="dim">not attached to this release</dd>`,
+        ].join("");
+        const primary = a
+          ? `<a class="btn btn-primary" href="${esc(a.browser_download_url)}" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>Download ${esc(rel.tag)} for Windows</a>`
+          : `<a class="btn btn-primary" href="${esc(rel.htmlUrl)}" rel="noopener">Open release ${esc(rel.tag)}</a>`;
+        box.innerHTML = `
+          <span class="badge live">Latest release</span>${rel.prerelease ? ' <span class="badge">pre-release</span>' : ""}
+          <div class="version" style="margin-top:10px">${esc(rel.tag)}</div>
+          ${a ? "" : '<p class="muted" style="margin-top:8px">This release has no Windows zip attached; open it on GitHub to see what was published.</p>'}
+          <dl>${rows}</dl>
+          <div class="release-actions">
+            ${primary}
+            <a class="btn" href="${esc(rel.htmlUrl)}" rel="noopener">Release notes</a>
+            <a class="btn" href="${S.urls.changelog}" rel="noopener">Changelog</a>
+          </div>`;
+        if (a) fillAssetNames(a.name);
+      }
+
+      S.fetchLatestRelease().then((rel) => { rel.none ? renderNone() : renderRelease(rel); }).catch(renderError);
+    })();
+  </script>
+</body>
+</html>

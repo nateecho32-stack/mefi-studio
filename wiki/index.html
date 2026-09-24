@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wiki — Mefi's Studio AI+</title>
+  <meta name="description" content="Community wiki for Mefi's Studio AI+: installation, your first project, connections and providers, the agent loop, verification, troubleshooting and contributing.">
+  <meta name="theme-color" content="#070a0e">
+  <link rel="icon" href="../assets/favicon.ico">
+  <link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="brand" href="../index.html"><img src="../assets/icon-256.png" alt="" width="30" height="30">Mefi's Studio AI+</a>
+      <nav class="nav-links" aria-label="Site">
+        <a href="../index.html">Home</a>
+        <a href="../download.html">Download</a>
+        <a href="./" aria-current="page">Wiki</a>
+        <a href="../community.html">Community</a>
+        <a href="https://github.com/nateecho32-stack/mefi-studio" data-repo-link="repo" rel="noopener">GitHub ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container wiki" id="main">
+    <aside class="wiki-side" id="side">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="search" type="search" placeholder="Search the wiki…" aria-label="Search the wiki" autocomplete="off">
+      </div>
+      <div class="search-results" id="results" hidden></div>
+      <nav id="sidenav" aria-label="Wiki pages"></nav>
+    </aside>
+
+    <div class="wiki-main">
+      <button class="btn btn-sm wiki-toggle" id="toggle" type="button" aria-expanded="false" aria-controls="side">☰ Pages</button>
+      <div class="wiki-crumbs" id="crumbs"><a href="../index.html">Home</a> › <a href="#/home">Wiki</a> › <span id="crumb-current">…</span></div>
+      <div id="notice" hidden></div>
+      <article class="prose" id="article" aria-live="polite">
+        <p class="dim"><span class="spinner" aria-hidden="true"></span>Loading the wiki…</p>
+      </article>
+      <nav class="wiki-nav" id="pagenav" aria-label="Previous and next page"></nav>
+      <div class="wiki-foot" id="foot"></div>
+    </div>
+
+    <aside class="wiki-toc" id="toc" aria-label="On this page"></aside>
+  </div>
+
+  <footer>
+    <div class="container foot-inner">
+      <div>© <span data-year>2026</span> MefiMaxi · MIT License</div>
+      <div class="foot-links">
+        <a href="https://github.com/nateecho32-stack/mefi-studio" data-repo-link="repo" rel="noopener">Source</a>
+        <a href="https://github.com/nateecho32-stack/mefi-studio/issues" data-repo-link="issues" rel="noopener">Issues</a>
+        <a href="../download.html">Download</a>
+        <a href="../community.html">Community</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/site.js"></script>
+  <script src="../assets/wiki.js"></script>
+</body>
+</html>

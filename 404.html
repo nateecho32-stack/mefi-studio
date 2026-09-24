@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Not found — Mefi's Studio AI+</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#070a0e">
+  <link rel="stylesheet" href="assets/site.css" id="css">
+  <style>
+    body { background: #070a0e; color: #e4e9ec; font-family: system-ui, "Segoe UI", sans-serif; margin: 0; }
+    .lost { min-height: 80vh; display: grid; place-items: center; text-align: center; padding: 48px 16px; }
+    .lost h1 { font-size: clamp(2.4rem, 8vw, 5rem); margin-bottom: 0.2em; }
+  </style>
+</head>
+<body>
+  <main class="lost">
+    <div>
+      <div class="eyebrow">404</div>
+      <h1>That page went idle</h1>
+      <p class="muted" style="max-width:48ch;margin:0 auto 24px">The address does not match anything on this site. Wiki pages live behind the <code>#/</code> hash, so a copied link may just need <code>wiki/</code> in front of it.</p>
+      <div class="hero-actions" style="justify-content:center;margin:0">
+        <a class="btn btn-primary" data-root-link="index.html" href="index.html">Home</a>
+        <a class="btn" data-root-link="wiki/" href="wiki/">Wiki</a>
+        <a class="btn" data-root-link="download.html" href="download.html">Download</a>
+      </div>
+    </div>
+  </main>
+  <script>
+    // GitHub Pages serves this file for any missing path, so relative links can
+    // resolve from a deep folder. Probe for the site root (a user site lives at
+    // "/", a project site at "/<repo>/") and rewrite the links and stylesheet.
+    (async function () {
+      const segs = location.pathname.split("/").filter(Boolean);
+      const candidates = ["/"];
+      if (segs.length) candidates.push("/" + segs[0] + "/");
+      for (const root of candidates) {
+        try {
+          const r = await fetch(root + "assets/site.css", { method: "HEAD", cache: "no-store" });
+          if (!r.ok) continue;
+          document.querySelectorAll("[data-root-link]").forEach((a) => { a.href = root + a.dataset.rootLink; });
+          const css = document.getElementById("css");
+          if (css.getAttribute("href") !== root + "assets/site.css") css.href = root + "assets/site.css";
+          break;
+        } catch (_) { /* try the next candidate */ }
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,130 @@
+{
+  "title": "Mefi's Studio AI+ wiki",
+  "sections": [
+    {
+      "title": "Start here",
+      "pages": [
+        {
+          "slug": "home",
+          "title": "Wiki home",
+          "summary": "What Studio is, where to start, and release versus source"
+        },
+        {
+          "slug": "installation",
+          "title": "Installation",
+          "summary": "Portable build, source install, requirements, environment variables"
+        },
+        {
+          "slug": "getting-started",
+          "title": "Your first project",
+          "summary": "The launch screen, the seven-stop walkthrough and the first task"
+        },
+        {
+          "slug": "connections",
+          "title": "Connections and providers",
+          "summary": "Assistant routes, builder CLIs, coding tiers, Jev and keys"
+        },
+        {
+          "slug": "whats-new",
+          "title": "What's new",
+          "summary": "Released changes since 0.3.0 and the Agent Brain development preview"
+        }
+      ]
+    },
+    {
+      "title": "Using Studio",
+      "pages": [
+        {
+          "slug": "shortcuts",
+          "title": "Getting around and shortcuts",
+          "summary": "The rail, the classic menus and every key"
+        },
+        {
+          "slug": "workflow",
+          "title": "Tasks and the board",
+          "summary": "Give a task, task states, Verify first, backlog and parallel builds"
+        },
+        {
+          "slug": "planning",
+          "title": "Plan an idea",
+          "summary": "The interview, What we understand, specification and tasks"
+        },
+        {
+          "slug": "assistant",
+          "title": "The assistant and the agent loop",
+          "summary": "Service loop, roles, agent mail, the overseer and the tray"
+        },
+        {
+          "slug": "command-center",
+          "title": "Command view and the node tree",
+          "summary": "Live work, the rail tabs, Ask, inspect mode and styles"
+        },
+        {
+          "slug": "brain-maps",
+          "title": "Brain maps and the decision lane",
+          "summary": "The pipeline as a map, gates, agent issues and answers"
+        },
+        {
+          "slug": "model-lab",
+          "title": "Models, Model Lab and usage",
+          "summary": "The catalog, measurements, the usage tracker and Jev intake"
+        },
+        {
+          "slug": "tools",
+          "title": "Activity, Explorer, Analyzer and tools",
+          "summary": "The observation surfaces, Settings sections and developer tools"
+        },
+        {
+          "slug": "updates",
+          "title": "Live update and release updates",
+          "summary": "Source hot reload, in-place portable updates, publishing"
+        }
+      ]
+    },
+    {
+      "title": "Reference",
+      "pages": [
+        {
+          "slug": "verification",
+          "title": "Verification and storage",
+          "summary": "Evidence, awaiting verification, the board store, Policy Lab"
+        },
+        {
+          "slug": "privacy",
+          "title": "Privacy and security",
+          "summary": "Keys, local data, what leaves the machine, reporting problems"
+        },
+        {
+          "slug": "troubleshooting",
+          "title": "Troubleshooting",
+          "summary": "Start-up refusals, stuck work, connection errors and recovery"
+        },
+        {
+          "slug": "faq",
+          "title": "FAQ",
+          "summary": "Short answers to the questions that come up first"
+        }
+      ]
+    },
+    {
+      "title": "Project",
+      "pages": [
+        {
+          "slug": "contributing",
+          "title": "Contributing",
+          "summary": "Repository map, check gates, test trees and conventions"
+        },
+        {
+          "slug": "ruins-runner",
+          "title": "Ruins Runner (optional)",
+          "summary": "The LÖVE game integration in Settings › Integrations"
+        },
+        {
+          "slug": "about-this-wiki",
+          "title": "About this wiki",
+          "summary": "Where pages live, how to add one and how the site is hosted"
+        }
+      ]
+    }
+  ]
+}

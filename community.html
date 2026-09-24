@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Community — Mefi's Studio AI+</title>
+  <meta name="description" content="Where to ask questions, report bugs and security problems, suggest features and contribute to Mefi's Studio AI+ and its wiki.">
+  <meta name="theme-color" content="#050d13">
+  <link rel="icon" href="assets/favicon.ico">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="brand" href="index.html"><img src="assets/icon-256.png" alt="" width="30" height="30">Mefi's Studio AI+</a>
+      <nav class="nav-links" aria-label="Site">
+        <a href="index.html">Home</a>
+        <a href="download.html">Download</a>
+        <a href="wiki/">Wiki</a>
+        <a href="community.html" aria-current="page">Community</a>
+        <a href="https://github.com/nateecho32-stack/mefi-studio" data-repo-link="repo" rel="noopener">GitHub ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container page-head">
+      <div class="eyebrow">Community</div>
+      <h1>Questions, bugs, ideas and wiki edits all start on GitHub</h1>
+      <p>Mefi's Studio AI+ is a small open-source project. The app's source, releases, issue tracker and docs live in one repository; this site and its wiki live in a second one that anyone can send a pull request to.</p>
+    </div>
+
+    <section style="padding-top:0">
+      <div class="container links-grid">
+        <a class="card" href="https://github.com/nateecho32-stack/mefi-studio/issues/new?template=bug_report.md" data-repo-link="bugReport" rel="noopener"><h3>Report a bug</h3><p>Opens the bug template: version, route and builder, steps, and what happened instead.</p></a>
+        <a class="card" href="https://github.com/nateecho32-stack/mefi-studio/issues/new?template=feature_request.md" data-repo-link="featureRequest" rel="noopener"><h3>Suggest a feature</h3><p>Describe what you are trying to do and what gets in the way today.</p></a>
+        <a class="card" id="discussions-card" href="https://github.com/nateecho32-stack/mefi-studio/discussions" data-repo-link="discussions" rel="noopener" hidden><h3>Discussions</h3><p>Open-ended threads: show what you built, compare provider routes, propose ideas.</p></a>
+        <a class="card" href="https://github.com/nateecho32-stack/mefi-studio/issues" data-repo-link="issues" rel="noopener"><h3>Browse issues</h3><p>Search before posting; someone may already be on it.</p></a>
+        <a class="card" href="https://github.com/nateecho32-stack/mefi-studio/releases" data-repo-link="releases" rel="noopener"><h3>Releases</h3><p>Every portable build with its SHA-256 digest. Watch the repository to hear about new ones.</p></a>
+        <a class="card" href="https://github.com/nateecho32-stack/mefi-studio/blob/main/CHANGELOG.md" data-repo-link="changelog" rel="noopener"><h3>Changelog</h3><p>What each release changed, and what is waiting under <em>Unreleased</em>.</p></a>
+        <a class="card" href="https://github.com/nateecho32-stack/mefi-studio/blob/main/docs/architecture.md" data-repo-link="architecture" rel="noopener"><h3>Architecture &amp; glossary</h3><p>The full feature walkthrough in Studio's own vocabulary.</p></a>
+        <a class="card" href="https://github.com/nateecho32-stack/mefi-studio/blob/main/CONTRIBUTING.md" data-repo-link="contributing" rel="noopener"><h3>Contributing guide</h3><p>The check gates, the two test trees and the repository hygiene rules.</p></a>
+        <a class="card" href="https://github.com/nateecho32-stack/mefi-studio" data-repo-link="siteRepo" rel="noopener"><h3>This site's repository</h3><p>Every wiki page is a markdown file. Fix a page or add one with a pull request.</p></a>
+      </div>
+    </section>
+
+    <section id="discussions-note" hidden>
+      <div class="container">
+        <div class="notice">
+          <p><strong>Discussions are not switched on yet.</strong> Until they are, questions and ideas are welcome as issues: use the feature template for ideas, and a plain issue for questions.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="security">
+      <div class="container two-col">
+        <div>
+          <div class="eyebrow">Security</div>
+          <h2>Found a security problem? Report it privately.</h2>
+          <p class="muted">Please do not open a public issue for anything that could expose keys, project files or the machine Studio runs on. The security policy explains how to reach the maintainer privately and what to include.</p>
+          <p><a class="btn btn-sm" href="https://github.com/nateecho32-stack/mefi-studio/blob/main/SECURITY.md" data-repo-link="security" rel="noopener">Read the security policy</a></p>
+        </div>
+        <div>
+          <ul class="checklist">
+            <li><strong>Include</strong> the Studio version from App updates, whether you run the portable build or from source, and steps to reproduce.</li>
+            <li><strong>Expect</strong> an acknowledgement within a week. Fixes ship as a normal release, and the changelog credits the reporter unless asked otherwise.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="bug-report">
+      <div class="container two-col">
+        <div>
+          <div class="eyebrow">Before you post</div>
+          <h2>What makes a bug report useful</h2>
+          <p class="muted">Studio has many moving parts: a provider route, a builder CLI, the service loop and your project. A report that names each one gets fixed faster. The bug template asks for exactly this.</p>
+        </div>
+        <div>
+          <ul class="checklist">
+            <li><strong>Version and install kind.</strong> The version in Settings › App updates, and portable or source.</li>
+            <li><strong>Route and builder.</strong> Which assistant route and builder CLI were selected, and what the readiness line said.</li>
+            <li><strong>Steps and outcome.</strong> What you did, what you expected, what happened instead. Task state names help: Ready, Working, Awaiting verification, Needs attention.</li>
+            <li><strong>Evidence.</strong> Lines from the studio log (Settings › Log) or the task's activity. Screenshots are fine if they show no private paths.</li>
+            <li><strong>Never paste</strong> API keys, <code>settings.json</code>, <code>auth.json</code>, or anything from your <code>data/</code> folder.</li>
+          </ul>
+          <p style="margin-top:14px"><a class="btn btn-sm" href="https://github.com/nateecho32-stack/mefi-studio/issues/new?template=bug_report.md" data-repo-link="bugReport" rel="noopener">Open a bug report</a></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="wiki-help">
+      <div class="container two-col">
+        <div>
+          <div class="eyebrow">Help with the wiki</div>
+          <h2>Every page is a markdown file</h2>
+          <p class="muted">The wiki is plain markdown under <code>wiki/pages/</code> in this site's repository, rendered in the browser. Each page ends with an <strong>Edit this page on GitHub</strong> link that opens the file in GitHub's editor and turns your change into a pull request.</p>
+          <p><a href="wiki/#/about-this-wiki">How the wiki is organised and how to add a page →</a></p>
+        </div>
+        <div>
+          <h3>Good wiki pages</h3>
+          <ul class="checklist">
+            <li>Describe what Studio does today. When unsure, check the architecture doc and the changelog.</li>
+            <li>Use the names Studio shows on screen: <strong>Give a task</strong>, <strong>Verify first</strong>, <strong>Live work</strong>, <strong>Awaiting verification</strong>.</li>
+            <li>Say whether something is in the latest release or only in source.</li>
+            <li>Keep provider prices and quotas out; they change faster than docs do.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="code">
+      <div class="container two-col">
+        <div>
+          <div class="eyebrow">Contribute code</div>
+          <h2>Three gates, two test trees</h2>
+          <p class="muted">Every application change must pass <code>npm run check</code>, <code>npm test</code> and <code>npm run audit</code>. Iterate with <code>npm run test:fast</code> and <code>npm run lint</code>, rebuild the booklet after renderer edits, and describe the change with the pull-request template.</p>
+          <p><a href="wiki/#/contributing">The full conventions in the wiki →</a></p>
+        </div>
+        <div>
+<pre><code>npm run test:fast       # Node suites without Electron, about 20 s
+npm run lint            # eslint, check-only
+npm run check           # syntax, targets, spec collisions, CSS gates
+npm test                # the gate: Node + Electron fixtures + Python
+npm run audit           # renderer/template contracts
+npm run build-booklet   # after editing renderer sources</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="rules">
+      <div class="container">
+        <div class="section-head">
+          <div class="eyebrow">House rules</div>
+          <h2>Short, because this is a small place</h2>
+        </div>
+        <div class="strip">
+          <div><strong>Be kind and specific</strong><span>Assume good faith. Say what you saw, not who is to blame.</span></div>
+          <div><strong>Stay on topic</strong><span>Provider pricing debates and model wars belong elsewhere; how Studio uses them belongs here.</span></div>
+          <div><strong>No secrets, ever</strong><span>No keys, tokens, settings files or private paths in issues, pull requests or screenshots.</span></div>
+          <div><strong>Respect the maintainer's time</strong><span>One issue per problem, with the details above. Check the changelog before asking for something.</span></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container foot-inner">
+      <div>© <span data-year>2026</span> MefiMaxi · MIT License</div>
+      <div class="foot-links">
+        <a href="https://github.com/nateecho32-stack/mefi-studio" data-repo-link="repo" rel="noopener">Source</a>
+        <a href="https://github.com/nateecho32-stack/mefi-studio/releases" data-repo-link="releases" rel="noopener">Releases</a>
+        <a href="https://github.com/nateecho32-stack/mefi-studio/issues" data-repo-link="issues" rel="noopener">Issues</a>
+        <a href="wiki/">Wiki</a>
+        <a href="download.html">Download</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/site.js"></script>
+  <script>
+    // Show the Discussions card only when the repository has Discussions on,
+    // and the "not switched on yet" note only when it does not.
+    document.addEventListener("DOMContentLoaded", () => {
+      const card = document.getElementById("discussions-card");
+      const note = document.getElementById("discussions-note");
+      window.SITE.fetchRepo()
+        .then((repo) => { card.hidden = !repo.has_discussions; note.hidden = Boolean(repo.has_discussions); })
+        .catch(() => { card.hidden = true; note.hidden = true; });
+    });
+  </script>
+</body>
+</html>
