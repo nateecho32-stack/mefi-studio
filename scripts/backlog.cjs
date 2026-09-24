@@ -32,16 +32,39 @@ function completedTask(task) {
   return task?.status === "done" || (task?.status === "archived" && Boolean(task.doneAt || task.verification?.state === "verified" || task.completionFromTaskId));
 }
 
-function dependencyState(item, tasks = []) {
+// A pass over the whole board (summarizeBacklog) asks the same questions of
+// every row. The memo keeps the id maps it builds (one per project scope, and
+// the unscoped one duplicateState reads) and each row's dependency state, so a
+// pass indexes the board once instead of once or twice per row. It is only
+// consulted for the exact tasks array it was made for.
+function boardMemo(tasks) {
+  return { tasks, scoped: new Map(), byId: null, states: new WeakMap() };
+}
+
+const normalizedPath = (value) => String(value).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+
+function dependencyState(item, tasks = [], memo = null) {
   // Most rows have no prerequisites; skip building the whole-board map for them.
   const ids = dependencyIds(item);
   if (!ids.length) return { dependencies: [] };
+  const shared = memo && memo.tasks === tasks ? memo : null;
+  if (shared && item && typeof item === "object" && shared.states.has(item)) return shared.states.get(item);
   const projectId = item?.projectId ?? item?.delegation?.projectId;
   const projectPath = item?.projectPath ?? item?.delegation?.projectPath;
-  const normalizedPath = (value) => String(value).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
   const inProject = (task) => !(projectId != null && task.projectId != null && task.projectId !== projectId)
     && !(projectPath && task.projectPath && normalizedPath(task.projectPath) !== normalizedPath(projectPath));
-  const byId = new Map(rows(tasks).filter(inProject).map((task) => [task.id, task]));
+  const scope = shared ? JSON.stringify([projectId ?? null, projectPath ? normalizedPath(projectPath) : null]) : null;
+  let byId = shared ? shared.scoped.get(scope) : null;
+  if (!byId) {
+    byId = new Map(rows(tasks).filter(inProject).map((task) => [task.id, task]));
+    if (shared) shared.scoped.set(scope, byId);
+  }
+  const state = dependencyStateFrom(item, ids, byId);
+  if (shared && item && typeof item === "object") shared.states.set(item, state);
+  return state;
+}
+
+function dependencyStateFrom(item, ids, byId) {
   const dependencies = ids.map((id) => {
     const task = byId.get(id);
     return { id, title: task?.title || id, status: task?.status || "missing", done: completedTask(task) };
@@ -88,10 +111,12 @@ function validateDependencies(tasks, taskId, dependsOn) {
 // is itself blocked (held, parked, or waiting on a blocked card in turn), the
 // wait is blocked too and names that card's hold, so a handoff parent counts
 // this child as needing review instead of waiting on it forever.
-function duplicateState(item, tasks, now, autoBuild) {
+function duplicateState(item, tasks, now, autoBuild, memo = null) {
   const target = typeof item?.duplicateOf === "string" ? item.duplicateOf.trim() : "";
   if (!target || target === item.id) return null;
-  const byId = new Map(rows(tasks).map((task) => [task.id, task]));
+  const shared = memo && memo.tasks === tasks ? memo : null;
+  const byId = shared?.byId ?? new Map(rows(tasks).map((task) => [task.id, task]));
+  if (shared) shared.byId = byId;
   const original = byId.get(target);
   if (!original || (original.status === "archived" && !completedTask(original))) return null;
   for (let id = target, hops = 0; typeof id === "string" && hops <= byId.size; hops += 1) {
@@ -100,24 +125,24 @@ function duplicateState(item, tasks, now, autoBuild) {
   }
   const title = String(original.title ?? "").trim().slice(0, 120) || original.id;
   if (completedTask(original)) return { stage: "waiting", blockedBy: "duplicate", reason: `${title} is done; this card closes as the same work`, duplicateOf: original.id };
-  const held = workState(original, now, { tasks, autoBuild });
+  const held = workState(original, now, { tasks, autoBuild, memo: shared });
   if (held.stage === "blocked") return { stage: "blocked", blockedBy: "duplicate", reason: `Waiting for ${title} (the same work), which is blocked: ${String(held.reason ?? "").slice(0, 400)}`, duplicateOf: original.id };
   return { stage: "waiting", blockedBy: "duplicate", reason: `Waiting for ${title} (the same work)`, duplicateOf: original.id };
 }
 
-function workState(item, now = Date.now(), { tasks = null, autoBuild = true } = {}) {
+function workState(item, now = Date.now(), { tasks = null, autoBuild = true, memo = null } = {}) {
   if (item.absorbedInto) return { stage: "grouped", reason: "Included in a task group", groupId: item.absorbedInto };
   if (item.status === "done" || item.status === "archived") return { stage: "done", reason: item.status === "archived" ? "Archived completion" : "Completed" };
   if (item.status === "awaiting_verification" || item.status === "verifying") {
     if (item.handoffState?.pending > 0) return { stage: item.handoffState.state === "blocked" ? "blocked" : "waiting", reason: item.handoffState.reason || "Waiting for delegated work to finish", blockedBy: "handoffs", canRetry: false, childTaskIds: item.handoffState.childTaskIds ?? [] };
     if (item.delegation && Array.isArray(tasks)) {
-      const delegated = dependencyState(item, tasks);
+      const delegated = dependencyState(item, tasks, memo);
       if (delegated.stage) return delegated;
     }
     return { stage: "review", reason: "Run finished; checking its completion evidence" };
   }
   if (item.status === "active" || item.status === "running") return { stage: "running", reason: "A worker holds this task" };
-  const dependency = Array.isArray(tasks) ? dependencyState(item, tasks) : { dependencies: [] };
+  const dependency = Array.isArray(tasks) ? dependencyState(item, tasks, memo) : { dependencies: [] };
   if (dependency.stage) return dependency;
   if (item.verification?.state === "failed" || Number(item.verifyAttempts) >= 3) {
     const attempts = Math.max(0, Number(item.verifyAttempts) || 0);
@@ -135,7 +160,7 @@ function workState(item, now = Date.now(), { tasks = null, autoBuild = true } = 
   }
   // The owner's duplicate link waits the card on the one it names; the card's
   // own parks and hold above come first, so a link never masks them.
-  const duplicate = Array.isArray(tasks) ? duplicateState(item, tasks, now, autoBuild) : null;
+  const duplicate = Array.isArray(tasks) ? duplicateState(item, tasks, now, autoBuild, memo) : null;
   if (duplicate) return duplicate;
   if (Number(item.nextRunAt) > now) return { stage: "cooling", reason: "Waiting before another attempt", retryAt: Number(item.nextRunAt) };
   if (item.status && item.status !== "open" && item.status !== "pending" && item.status !== "queued") return { stage: "blocked", reason: `Held (${String(item.status).slice(0, 40)})` };
@@ -145,8 +170,9 @@ function workState(item, now = Date.now(), { tasks = null, autoBuild = true } = 
 
 function summarizeBacklog({ tasks = [], requests = [], ideas = [], jobs = [], compare, ideaEligible, now = Date.now(), paused = false, draining = false, waiting = null, lastError = null, parkedUntil = 0, autoBuild = true } = {}) {
   const board = rows(tasks);
+  const memo = boardMemo(board);
   const heldIds = new Set(rows(jobs).map((job) => job.taskId).filter(Boolean));
-  const taskStates = board.map((task) => ({ id: task.id, kind: "task", title: String(task.title ?? "Untitled task"), dependencies: dependencyState(task, board).dependencies, ...(heldIds.has(task.id) ? { stage: "running", reason: "A worker is building this task" } : workState(task, now, { tasks: board, autoBuild })) }));
+  const taskStates = board.map((task) => ({ id: task.id, kind: "task", title: String(task.title ?? "Untitled task"), dependencies: dependencyState(task, board, memo).dependencies, ...(heldIds.has(task.id) ? { stage: "running", reason: "A worker is building this task" } : workState(task, now, { tasks: board, autoBuild, memo })) }));
   const represented = new Set(board.filter((task) => task.status !== "archived").map((task) => key(task.title)).filter(Boolean));
   const uniqueRequests = rows(requests).filter((request) => {
     const titleKey = key(request.title || request.prompt);
@@ -154,7 +180,7 @@ function summarizeBacklog({ tasks = [], requests = [], ideas = [], jobs = [], co
     if (titleKey) represented.add(titleKey);
     return true;
   });
-  const requestStates = uniqueRequests.map((request, index) => ({ id: request.id ?? `request_${index}`, kind: "request", title: String(request.title || request.prompt || "Queued request").slice(0, 120), ...workState(request, now, { tasks: board, autoBuild }) }));
+  const requestStates = uniqueRequests.map((request, index) => ({ id: request.id ?? `request_${index}`, kind: "request", title: String(request.title || request.prompt || "Queued request").slice(0, 120), ...workState(request, now, { tasks: board, autoBuild, memo }) }));
   const all = [...taskStates, ...requestStates];
   const counts = Object.fromEntries(["ready", "running", "review", "blocked", "cooling", "done", "grouped", "waiting", "approval"].map((stage) => [stage, all.filter((row) => row.stage === stage).length]));
   counts.requests = requestStates.filter((item) => item.stage !== "done").length;
