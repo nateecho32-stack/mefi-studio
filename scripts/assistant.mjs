@@ -3738,7 +3738,9 @@ export function promoteIdeaBacklog({ tasks = [], ideas = [], now = Date.now(), l
 // anchored to the start of the line, so a wrapped line must be unwrapped
 // before it is matched or the mark never lands at index 0.
 export function stripAnsi(value) {
-  return String(value ?? "").replace(/\u001b\[[0-9;]*m/g, "");
+  // Every CSI sequence, not only colour: a CLI that clears or moves the
+  // cursor before its last line ("\x1b[2K\x1b[1GMEFI_JOB_DONE") still said it.
+  return String(value ?? "").replace(/\u001b\[[0-?]*[ -\/]*[@-~]/g, "");
 }
 export const EXECUTOR_DONE_MARK_TEXT = "MEFI_JOB_DONE";
 export function isDoneMarkerLine(line, mark = EXECUTOR_DONE_MARK_TEXT) {

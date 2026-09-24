@@ -557,7 +557,7 @@ test("editing an open task during dispatch forces a fresh selection and file cla
   assert.deepEqual(host.askedPaths, [path.resolve(host.root, "src/a.js"), path.resolve(host.root, "src/b.js")]);
 });
 
-function childHost({ throwFallback = false, throwKill = false, pool = {} } = {}) {
+function childHost({ throwFallback = false, throwKill = false, pool = {}, label = "grok" } = {}) {
   const makeChild = (pid) => {
     const child = new EventEmitter();
     Object.assign(child, { pid, stdout: new EventEmitter(), stderr: new EventEmitter(), stdin: Object.assign(new EventEmitter(), { write() {}, end() {} }) });
@@ -592,8 +592,8 @@ function childHost({ throwFallback = false, throwKill = false, pool = {} } = {})
   const body = section('  const isCliRun = runRoute.cli === "grok"', '  try {\n    child = spawnAttempt(runRoute');
   vm.runInContext(`function fixtureChildController() { let timeout = null, startWatchdog = null; ${body}\nreturn { attach, fallbackToOpencode }; }`, env);
   const controller = env.fixtureChildController();
-  controller.attach(first, "grok", env.runRoute, true);
-  return { first, fallback, entry, finishes, timers, spawns, watches, killers, autopilot: env.autopilot, advance: (ms) => { now += ms; } };
+  controller.attach(first, label, env.runRoute, true);
+  return { env, first, fallback, entry, finishes, timers, spawns, watches, killers, autopilot: env.autopilot, advance: (ms) => { now += ms; } };
 }
 
 test("late output, close, errors and timers from Grok cannot settle or kill its OpenCode replacement", () => {
@@ -851,4 +851,142 @@ test("a narrowed pool saves the chosen limit, and an explicit choice ends the na
   assert.equal(autopilot.parallel, 1);
   assert.equal(autopilot.parallelNarrowedFrom, null);
   assert.equal(saved().ui.autopilot.parallel, 1);
+});
+
+// The breaker is for a CLI that cannot start. A stop reason is an
+// errorMessage too, so three long tasks hitting their 25-minute budget used to
+// park the whole executor as if opencode were broken.
+test("a run that worked until its budget ran out does not trip the infrastructure breaker", async () => {
+  const worked = finishHost();
+  worked.autopilot.infraFailures = 2;
+  await worked.finish(1, "killed after budget");
+  assert.equal(worked.autopilot.infraFailures, 0, "the job ran: the infrastructure works");
+  assert.equal(worked.autopilot.execute, true);
+  const silent = finishHost();
+  silent.autopilot.infraFailures = 2;
+  Object.assign(silent.entry, { spoke: false, startKilled: true });
+  await silent.finish(1, "no session and no output for 3m after spawn — killed as a wedged start");
+  assert.equal(silent.autopilot.execute, false, "a third silent start still parks the executor");
+});
+
+test("a breaker park is not saved as the operator switching the executor off", async () => {
+  const { env, autopilot, saved } = settingsHost();
+  await env.setAutopilot({ execute: true });
+  // finish() trips the breaker with exactly these assignments.
+  autopilot.execute = false;
+  autopilot.parkedUntil = Date.now() + 600000;
+  await env.setAutopilot({ minutes: 6 });
+  assert.equal(saved().ui.autopilot.execute, true, "the next launch comes back with the executor on");
+  await env.setAutopilot({ execute: false });
+  assert.equal(saved().ui.autopilot.execute, false, "an explicit stop is still saved as off");
+});
+
+test("a stale run raises no questions about a card a newer run now owns", async () => {
+  for (const [owner, expected] of [["run_200_7", 0], ["run_100_1", 3]]) {
+    const h = finishHost({ owner });
+    const raised = [];
+    h.env.agentIssues = agentIssues;
+    h.env.assistantRaiseIssue = async (raw) => { raised.push(raw.kind); return null; };
+    h.env.assistantBuildFailureQuestion = () => { raised.push("run-failed"); return Promise.resolve(null); };
+    h.entry.issues = [{ kind: "scope", title: "Should I also rewrite the loader?" }];
+    h.entry.resultNote = { raw: "done: x; owner: flip the card on the live board", parts: { done: "x", owner: "flip the card on the live board" } };
+    await h.finish(1);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(raised.length, expected, `owner ${owner}: ${raised.join(", ")}`);
+  }
+});
+
+test("a run that started and then failed ends the card's run of start kills", async () => {
+  const h = finishHost();
+  h.board().tasks[0].startFailures = 4;
+  await h.finish(1);
+  assert.equal(h.board().tasks[0].startFailures, undefined, "only consecutive failures to start count against the grace");
+  assert.equal(h.board().tasks[0].runFailures, 5);
+  assert.equal(backlog.retryTask({ id: "t", startFailures: 5, runFailures: 5 }).startFailures, undefined, "Try again restarts the grace too");
+});
+
+test("an operator stop and an uncharged requeue are not announced as failures", async () => {
+  const said = async (setup) => {
+    const h = finishHost();
+    const replies = [];
+    h.env.assistantAppendReply = (text) => replies.push(text);
+    setup(h);
+    await h.finish(1, h.entry.stopUser ? "stopped by user" : "no session and no output for 3m after spawn — killed as a wedged start");
+    return { reply: replies[0], history: h.effects.filter((effect) => effect.startsWith("history:")) };
+  };
+  const stopped = await said((h) => { h.entry.stopUser = true; });
+  assert.equal(stopped.reply, "Stopped (progress saved): Fixture work.");
+  const requeued = await said((h) => Object.assign(h.entry, { spoke: false, startKilled: true }));
+  assert.equal(requeued.reply, "Waiting to retry (not charged): Fixture work.");
+  assert.deepEqual(requeued.history, ["history:requeued"]);
+});
+
+// `claude -p --output-format text` and `agy -p` print their answer once, at
+// the end, and register no OpenCode session: every run longer than the start
+// budget was killed as wedged, and the ones that finished taught the budget
+// their whole run time as a "start".
+test("a print-mode CLI is not start-killed for working quietly, and its answer is not a start sample", () => {
+  const h = childHost({ label: "claude", pool: { startSamples: [20000] } });
+  assert.equal(h.entry.bufferedOutput, true);
+  assert.equal(h.timers.some((timer) => timer.delay === 120000), false, "no start watchdog; the hard kill budget still bounds the run");
+  assert.ok(h.timers.some((timer) => timer.delay === 600000));
+  h.advance(420000);
+  h.first.stdout.emit("data", "Done: the loader is rewritten.\n");
+  assert.deepEqual(h.autopilot.startSamples, [20000]);
+  assert.equal(h.entry.spoke, true);
+});
+
+test("Stop all during a wedged CLI's termination settles the stop instead of launching the fallback", () => {
+  const h = childHost();
+  h.advance(120001);
+  h.timers.find((timer) => timer.delay === 120000)();
+  assert.deepEqual(h.spawns, ["taskkill"]);
+  // Stop all marks the run while its kill is in flight; stop() ignores the
+  // second reason, so the fallback check is the last gate.
+  h.entry.stopUser = true;
+  h.killers[0].emit("close", 0);
+  assert.deepEqual(h.spawns, ["taskkill"], "no fresh paid worker after the operator stopped everything");
+  assert.equal(h.finishes.length, 1);
+  assert.match(h.finishes[0].error, /wedged start/);
+});
+
+test("a start watchdog delivered a millisecond early by the wall clock still kills a wedged start", () => {
+  const h = childHost();
+  h.advance(119999);
+  h.timers.find((timer) => timer.delay === 120000)();
+  assert.equal(h.entry.startKilled, true, "the timer firing is itself proof the budget passed");
+});
+
+test("a run whose session registered after the poll gave up is not killed as a wedged start", async () => {
+  const h = childHost();
+  h.env.attributeRunSession = async (_eyes, entry) => { entry.sessionId = "ses_late"; return true; };
+  h.advance(120001);
+  h.timers.find((timer) => timer.delay === 120000)();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(h.entry.startKilled ?? false, false);
+  assert.deepEqual(h.spawns, [], "a run that owns a session is not wedged");
+});
+
+test("escape codes alone are not speech, and cursor codes do not hide the verdict", () => {
+  const h = childHost();
+  h.first.stdout.emit("data", "\u001b[?25l\n\u001b[0m\n");
+  assert.equal(h.entry.spoke, false, "a hidden cursor keeps the start watchdog armed");
+  assert.equal(h.autopilot.startSamples, undefined, "and records no 0 ms start");
+  assert.equal(assistant.isDoneMarkerLine("\u001b[2K\u001b[1GMEFI_JOB_DONE"), true);
+  assert.equal(assistant.stripAnsi("\u001b[?25l\u001b[2KMEFI_RESULT: done: x"), "MEFI_RESULT: done: x");
+});
+
+test("supervision measures an opencode fallback from its own start, not from the claim", () => {
+  const stopped = [];
+  const fallback = { startedAt: 1, attachedAt: 500000, pid: 22, child: { pid: 22 }, title: "Replacement run", stop: (reason) => stopped.push(reason) };
+  const env = vm.createContext({
+    SMOKE: false, CAPTURE: false, CLI_MODE: false, ASSISTANT_JOB_WEDGED_MS: 600000,
+    autopilot: { execute: true, jobs: [fallback], parallel: 1, queueDepth: 0 },
+    assistantClip: (value) => value, assistantSetProblems() {},
+  });
+  vm.runInContext(section("function assistantSuperviseJobs(", "function assistantStaleWork("), env);
+  env.assistantSuperviseJobs(700000);
+  assert.deepEqual(stopped, [], "the replacement is inside its own kill budget");
+  env.assistantSuperviseJobs(1100001);
+  assert.deepEqual(stopped, ["wedged — kill timed out"]);
 });

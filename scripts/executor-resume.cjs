@@ -74,7 +74,10 @@ function brief(row, maxChars = 2200) {
     Number.isFinite(saved.progress) ? `Last reported progress: ${Math.round(saved.progress * 100)}%.` : "",
     saved.scope && saved.scope !== backlog.buildScope(row) ? "The brief has changed; follow the current requirements and recheck saved progress against them." : "",
     ...rows(saved.todos).filter(Boolean).map((todo) => `[${todo.status}] ${todo.content}`),
-    saved.result?.raw || "", ...rows(saved.outputTail),
+    // Quoted, so no saved line begins with a protocol mark: a CLI that echoes
+    // its prompt (codex exec) would otherwise replay the old run's
+    // MEFI_JOB_DONE, MEFI_RESULT and MEFI_NEXT lines as this run's own.
+    ...[saved.result?.raw, ...rows(saved.outputTail)].filter(Boolean).map((line) => `> ${line}`),
   ].filter(Boolean);
   return details.join("\n").slice(0, maxChars);
 }

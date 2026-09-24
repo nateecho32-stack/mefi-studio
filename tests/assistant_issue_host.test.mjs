@@ -520,6 +520,11 @@ test("a provider outage is not the card's fault: nothing is raised, settled or r
   const h = issueHost();
   const question = await h.env.assistantBuildFailureQuestion({ ...job, ref: { ...job.ref, runFailures: 4, lastRunError: "Usage limit reached" } }, 5, { outputTail: ["FAIL tests/board.test.mjs"] });
   assert.ok(question, "an ordinary failure is still raised");
+  assert.match(question.title, /FAIL tests\/board\.test\.mjs/, "and it is named by this run's words");
+  assert.doesNotMatch(question.title, /Usage limit/, "not by the error the previous run ended on");
+  // This run's own error, when it has one, names it.
+  const killed = await issueHost().env.assistantBuildFailureQuestion(job, 2, { runError: "killed after budget", outputTail: ["still editing"] });
+  assert.match(killed.title, /killed after budget/);
 });
 
 test("a provider failure raises no issue and makes no board write or backlog call", async () => {
