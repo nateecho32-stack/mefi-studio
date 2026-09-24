@@ -12,6 +12,16 @@
   const el = {};
   let initialized = false;
   let raf = null;
+  // About 30 fps, as the tree rail draws: the gate sits under the two-tick
+  // spacing at 60 Hz, and a 120 or 144 Hz display no longer paints the sheet
+  // at its full rate. The slow turn is paced by time, as it was at 60 Hz.
+  const FRAME_MS = 30;
+  const TURN_PER_MS = 0.0009 * 60 / 1000;
+  let lastDraw = -Infinity;
+  // The focused box's glow: faint strokes, widest first, under its rim. A
+  // canvas shadow (shadowBlur 18) blurred the stroke in a separate pass.
+  const FOCUS_GLOW_WIDTHS = [36, 28.5, 21, 13.5, 6];
+  const FOCUS_GLOW_ALPHA = 0.025;
 
   // Task/snapshot refresh cadence while the sheet is open. Polls pause while
   // document.hidden and back off while a poll reads the same data, so an idle
@@ -46,6 +56,20 @@
 
   const keywords = (text) => new Set((String(text).toLowerCase().match(/[a-z][a-z0-9_-]{3,}/g) ?? []).slice(0, 10));
 
+  // Each task's session, matched once per task and node list (load() brings
+  // fresh ones): draw() used to rescan every session's label for every task
+  // on every frame.
+  let anchors = new WeakMap();
+  let anchorNodes = null;
+  function anchorOf(task) {
+    if (anchorNodes !== state.nodes) {
+      anchors = new WeakMap();
+      anchorNodes = state.nodes;
+    }
+    if (!anchors.has(task)) anchors.set(task, anchorFor(task));
+    return anchors.get(task);
+  }
+
   function anchorFor(task) {
     const keys = keywords(`${task.title} ${task.prompt ?? ""}`);
     let best = null;
@@ -79,6 +103,12 @@
 
   function draw(time) {
     if (el.canvas.hidden) return;
+    if (time - lastDraw < FRAME_MS) {
+      raf = requestAnimationFrame(draw);
+      return;
+    }
+    const elapsed = Number.isFinite(lastDraw) ? Math.min(100, time - lastDraw) : 0;
+    lastDraw = time;
     const ctx = el.ctx;
     ctx.clearRect(0, 0, el.width, el.height);
     ctx.fillStyle = "#030304";
@@ -90,7 +120,7 @@
       state.cycleIndex = (state.cycleIndex + 1) % active.length;
     }
     const focusTask = state.overview ? active[state.cycleIndex % Math.max(1, active.length)] : null;
-    const focusAnchor = focusTask ? anchorFor(focusTask) : null;
+    const focusAnchor = focusTask ? anchorOf(focusTask) : null;
     const offset = focusAnchor ? { x: focusAnchor.x * 0.6, y: 0, z: focusAnchor.z * 0.6 } : { x: 0, y: 0, z: 0 };
 
     const projected = state.nodes.map((node) => ({ node, p: project(node, offset) }));
@@ -149,7 +179,7 @@
 
     boxes.clear();
     active.forEach((task, index) => {
-      const anchor = anchorFor(task);
+      const anchor = anchorOf(task);
       const fallbackAngle = (index / Math.max(1, active.length)) * Math.PI * 2;
       const position = anchor
         ? project(anchor, offset)
@@ -187,13 +217,19 @@
       const top = slot.top;
       ctx.globalAlpha = focused || !focusTask ? 1 : 0.62;
       ctx.strokeStyle = task.color ?? "#e6c98d";
-      ctx.lineWidth = focused ? 2.4 : 1.4;
-      ctx.shadowColor = focused ? task.color : "transparent";
-      ctx.shadowBlur = focused ? 18 : 0;
       ctx.beginPath();
       ctx.roundRect(left, top, BOX_WIDTH, BOX_HEIGHT, 10);
+      if (focused) {
+        const alpha = ctx.globalAlpha;
+        ctx.globalAlpha = alpha * FOCUS_GLOW_ALPHA;
+        for (const glow of FOCUS_GLOW_WIDTHS) {
+          ctx.lineWidth = glow;
+          ctx.stroke();
+        }
+        ctx.globalAlpha = alpha;
+      }
+      ctx.lineWidth = focused ? 2.4 : 1.4;
       ctx.stroke();
-      ctx.shadowBlur = 0;
       ctx.fillStyle = "rgba(8,8,11,0.82)";
       ctx.fill();
       ctx.stroke();
@@ -215,7 +251,7 @@
       boxes.set(task.id, { x: left, y: top, w: BOX_WIDTH, h: BOX_HEIGHT });
     });
 
-    if (!window.MefiNav?.noMotion?.()) state.angle += 0.0009;
+    if (!window.MefiNav?.noMotion?.()) state.angle += TURN_PER_MS * elapsed;
     raf = requestAnimationFrame(draw);
   }
 
@@ -270,6 +306,7 @@
     if (el.overlay.hidden) return;
     resize();
     cancelAnimationFrame(raf);
+    lastDraw = -Infinity;
     raf = requestAnimationFrame(draw);
     pollDelay = POLL_INTERVAL_MS;
     schedulePoll();

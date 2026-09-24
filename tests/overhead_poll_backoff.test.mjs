@@ -11,11 +11,15 @@ import vm from "node:vm";
 
 const source = await readFile(new URL("../renderer/overhead.js", import.meta.url), "utf8");
 
-function environment() {
+function environment({ motion = false } = {}) {
   const timers = new Map(), frames = new Map(), elements = new Map(), navigations = [];
-  let timerId = 0, frameId = 0, fetches = 0;
+  let timerId = 0, frameId = 0, fetches = 0, paints = 0, labelReads = 0;
+  const writes = [];
   let tasks = [{ id: "task-1", title: "Overhead poll backoff", prompt: "", status: "open", color: "#57ff9a" }];
-  const ctx = new Proxy({}, { get: () => () => {}, set: () => true });
+  const ctx = new Proxy({}, {
+    get: (_target, key) => key === "clearRect" ? () => { paints += 1; } : () => {},
+    set: (_target, key, value) => { writes.push([key, value]); return true; },
+  });
   const element = () => ({
     hidden: false, textContent: "", title: "", className: "", checked: false, children: [], listeners: {},
     style: { setProperty() {} }, classList: { add() {} }, parentElement: { clientWidth: 800 },
@@ -34,9 +38,9 @@ function environment() {
   const window = {
     devicePixelRatio: 1,
     addEventListener() {},
-    MefiNav: { noMotion: () => true, claim() {}, release() {}, go: (tab, options) => navigations.push([tab, { ...options }]) },
+    MefiNav: { noMotion: () => !motion, claim() {}, release() {}, go: (tab, options) => navigations.push([tab, { ...options }]) },
     // Fresh objects on every read, as the real snapshot and IPC answers are.
-    MefiTree: { snapshot: () => ({ nodes: [{ id: "session-1", kind: "session", label: "overhead poll backoff", x: 0, y: 0, z: 0, r: 4, state: "active" }], edges: [] }) },
+    MefiTree: { snapshot: () => ({ nodes: [{ id: "session-1", kind: "session", get label() { labelReads += 1; return "overhead poll backoff"; }, x: 0, y: 0, z: 0, r: 4, state: "active" }], edges: [] }) },
     mefiStudio: { tasksList: async () => { fetches += 1; return { tasks: structuredClone(tasks) }; }, onTasks() {} },
   };
   vm.runInContext(source, vm.createContext({
@@ -47,8 +51,8 @@ function environment() {
     cancelAnimationFrame: (id) => frames.delete(id),
   }));
   return {
-    window, get, navigations,
-    fetches: () => fetches,
+    window, get, navigations, writes, frames,
+    fetches: () => fetches, paints: () => paints, labelReads: () => labelReads,
     setTasks: (next) => { tasks = next; },
     frame(time) { const pending = [...frames.values()]; frames.clear(); pending.forEach((fn) => fn(time)); },
     // The single live poll timer: its delay, and a runner that awaits the poll.
@@ -91,4 +95,33 @@ test("hover and click still find the painted task box", async () => {
   assert.deepEqual(env.navigations, [["tasks", { taskId: "task-1" }]]);
   canvas.dispatch("mousemove", { clientX: 40, clientY: 40 });
   assert.equal(canvas.style.cursor, "default");
+});
+
+test("the sheet paints at about 30 fps whatever the display rate", async () => {
+  const env = environment({ motion: true });
+  await env.window.MefiOverhead.open();
+  for (let tick = 0; tick < 25; tick += 1) env.frame(1000 + tick * 1000 / 144);
+  assert.equal(env.paints(), 5, "a 144 Hz display paints every fifth tick");
+  const before = env.paints();
+  for (let tick = 1; tick <= 12; tick += 1) env.frame(1200 + tick * 1000 / 60);
+  assert.equal(env.paints() - before, 6, "a 60 Hz display paints every other tick");
+  assert.equal(env.frames.size, 1, "one callback stays armed between paints");
+});
+
+test("task anchors are matched once per load, and the focused box glows without a canvas shadow", async () => {
+  const env = environment();
+  await env.window.MefiOverhead.open();
+  const toggle = env.get("overhead-overview");
+  toggle.checked = true;
+  toggle.dispatch("change");
+  env.frame(5000);
+  const reads = env.labelReads();
+  assert.ok(reads > 0, "the first frame matches the task to its session");
+  for (let frame = 1; frame <= 20; frame += 1) env.frame(5000 + frame * 40);
+  assert.equal(env.labelReads(), reads, "later frames reuse the match instead of rescanning every session");
+  await env.poll().run();
+  env.frame(6000);
+  assert.ok(env.labelReads() > reads, "a new load matches again against its fresh nodes");
+  assert.equal(env.writes.some(([key, value]) => key === "shadowBlur" && value > 0), false, "no shadow pass for the focused box");
+  assert.ok(env.writes.some(([key, value]) => key === "lineWidth" && value === 36), "its glow is a wide faint stroke instead");
 });
