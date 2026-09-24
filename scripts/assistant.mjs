@@ -3868,14 +3868,16 @@ export function focusedTestsForTask(task = null, resultNote = null) {
   const candidates = [];
   const source = isObject(task) ? task : {};
   candidates.push(...asArray(source.files), source.file, ...asArray(source.refs));
-  const ran = str(isObject(resultNote) ? resultNote.parts?.ran : "").toLowerCase();
+  // The path keeps its case: it becomes the command, and a lowercased path
+  // names no file on a case-sensitive filesystem. Only the dedupe folds case.
+  const ran = str(isObject(resultNote) ? resultNote.parts?.ran : "");
   if (ran) candidates.push(...ran.split(/[\s,;]+/));
   const seen = new Set();
   const tests = [];
   for (const candidate of candidates) {
     const value = str(candidate).trim().replace(/\\/g, "/");
-    if (!value || seen.has(value) || !FOCUSED_TEST_RE.test(value)) continue;
-    seen.add(value);
+    if (!value || seen.has(value.toLowerCase()) || !FOCUSED_TEST_RE.test(value)) continue;
+    seen.add(value.toLowerCase());
     // Executable form, following the repo's own documented pipelines. The
     // runner executes this string via shell:true, so every path segment is
     // double-quoted — an unquoted "Coding projects" was split by cmd.exe and
@@ -4002,10 +4004,13 @@ export function isVerificationCommand(value) {
     || /^(?:"[^"\r\n]*[\\/]love\d*\.exe"|love\d*\.exe)\s+(?:"[^"\r\n]+"|'[^'\r\n]+'|[^\s;|&`<>]+)\s*$/i.test(command);
 }
 
+// `runnerIssued` rows are the overseer's own verification run: the runner
+// chose those commands (the LÖVE harness pipes love.exe and reads result.txt),
+// so the shape filter meant for a worker's shell history does not apply.
 export function summarizeObservedChecks(checks = []) {
   const latest = new Map();
   for (const check of asArray(checks)) {
-    if (!isObject(check) || check.commandTruncated || !isVerificationCommand(check.command)) continue;
+    if (!isObject(check) || check.commandTruncated || (check.runnerIssued !== true && !isVerificationCommand(check.command))) continue;
     const key = str(check.command).trim().replace(/\s+/g, " ");
     const at = Number(check.startedAt);
     if (!Number.isFinite(at) || at <= 0) continue;
@@ -4061,13 +4066,17 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerCh
   // (overseerChecks) are judged together — latest-wins across both — but
   // summarized apart too, so the verdict's reason names who ran the check.
   const summarize = (checks) => hasSession === true ? summarizeObservedChecks(checks) : { total: 0, passed: 0, failed: 0, pending: 0 };
+  // Which argument a row arrived in is what marks it runner-issued; a
+  // session row can never carry the mark in.
+  const sessionRows = asArray(observedChecks).filter(isObject).map(({ runnerIssued: _runnerIssued, ...check }) => check);
+  const runnerRows = asArray(overseerChecks).filter(isObject).map((check) => ({ ...check, runnerIssued: true }));
   // Attribution only: a command the overseer also ran is judged by that later
   // run, so the session's earlier copy is neither blamed nor credited.
   const commandKey = (check) => str(check?.command).trim().replace(/\s+/g, " ");
-  const theirCommands = new Set(asArray(overseerChecks).map(commandKey));
-  const own = summarize(asArray(observedChecks).filter((check) => !theirCommands.has(commandKey(check))));
-  const theirs = summarize(overseerChecks);
-  const observedSummary = summarize([...asArray(observedChecks), ...asArray(overseerChecks)]);
+  const theirCommands = new Set(runnerRows.map(commandKey));
+  const own = summarize(sessionRows.filter((check) => !theirCommands.has(commandKey(check))));
+  const theirs = summarize(runnerRows);
+  const observedSummary = summarize([...sessionRows, ...runnerRows]);
   const totalChanges = Math.max(0, Number(changedFiles) || 0);
   const ledgerOwed = Math.max(0, Number(ledgerChanges) || 0);
   const ledger = Math.min(ledgerOwed, totalChanges);

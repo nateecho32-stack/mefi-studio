@@ -12455,7 +12455,10 @@ const VERIFICATION_COMMAND_BUDGET_MS = 15 * 60 * 1000;
 // worker pool so a verification burst cannot crowd out the machine.
 const VERIFICATION_PARALLEL = 2;
 const runCheckCommand = (command, cwd) => new Promise((resolve) => {
-  const child = spawn(String(command), { cwd, shell: true, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+  // Three arguments: platform.cjs strips Studio's credentials into the options
+  // it passes on, and the two-argument form put the options in the args slot,
+  // where Node read them as options and dropped the stripped environment.
+  const child = spawn(String(command), [], { cwd, shell: true, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
   let tail = "";
   const note = (chunk) => {
     tail += String(chunk);
@@ -12463,14 +12466,26 @@ const runCheckCommand = (command, cwd) => new Promise((resolve) => {
   };
   child.stdout?.on("data", note);
   child.stderr?.on("data", note);
-  const killTimer = setTimeout(() => { try { child.kill(); } catch {} }, VERIFICATION_COMMAND_BUDGET_MS);
-  child.on("error", (error) => { clearTimeout(killTimer); resolve({ command: String(command), ok: false, timedOut: false, exitCode: null, tail: String(error?.message ?? error).slice(-200) }); });
+  let timedOut = false;
+  let closeGrace = null;
+  const done = (result) => { clearTimeout(killTimer); if (closeGrace) clearTimeout(closeGrace); resolve(result); };
+  // Out of budget: the whole tree goes, not just the shell (child.kill() on
+  // Windows ended cmd.exe and left npm and node running). "close" waits for
+  // every holder of the pipes, so a survivor could keep this job — and its
+  // drain slot — forever; the grace settles it as timed out regardless.
+  const killTimer = setTimeout(() => {
+    timedOut = true;
+    try { spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" })?.on?.("error", () => {}); } catch {}
+    try { child.kill(); } catch {}
+    closeGrace = setTimeout(() => done({ command: String(command), ok: false, timedOut: true, exitCode: null, tail: `timed out after ${Math.round(VERIFICATION_COMMAND_BUDGET_MS / 60000)}m` }), 15000);
+    closeGrace.unref?.();
+  }, VERIFICATION_COMMAND_BUDGET_MS);
+  child.on("error", (error) => done({ command: String(command), ok: false, timedOut: false, exitCode: null, tail: String(error?.message ?? error).slice(-200) }));
   child.on("close", (code, signal) => {
-    clearTimeout(killTimer);
-    const timedOut = signal === "SIGTERM";
-    const exitCode = Number.isSafeInteger(code) ? code : null;
+    const late = timedOut || signal === "SIGTERM";
+    const exitCode = late ? null : Number.isSafeInteger(code) ? code : null;
     const last = tail.trim().split(/\r?\n/).filter(Boolean).slice(-2).join(" | ");
-    resolve({ command: String(command), ok: exitCode === 0, timedOut, exitCode, tail: timedOut ? `timed out after ${Math.round(VERIFICATION_COMMAND_BUDGET_MS / 60000)}m` : last.slice(-200) });
+    done({ command: String(command), ok: exitCode === 0, timedOut: late, exitCode, tail: late ? `timed out after ${Math.round(VERIFICATION_COMMAND_BUDGET_MS / 60000)}m` : last.slice(-200) });
   });
 });
 // A burst of done reports schedules the same base check (`npm run check` in
@@ -12522,7 +12537,9 @@ async function runVerificationJob(planned) {
   const notBefore = Number(planned.createdAt) || 0;
   for (const command of planned.commands) {
     const result = await runSharedCheck(command, cwd, notBefore);
-    results.push(result);
+    // An npm command moved to the Studio checkout checked Studio's tree, not
+    // the card's project: it is kept on the stamp but is nobody's evidence.
+    results.push(cwd !== requested && /^\s*npm\b/.test(String(command)) ? { ...result, relocated: true } : result);
     if (!result.ok) break; // a failed check ends the run; the tail says why
   }
   const failed = results.filter((row) => !row.ok);
@@ -12687,6 +12704,11 @@ const VERIFY_DWELL_MS = 30 * 1000; // allow the finished session's evidence to f
 // without this, "waiting for evidence" meant one full tick per attempt.
 const VERIFY_EVIDENCE_RETRY_MS = 15 * 1000;
 const VERIFY_EVIDENCE_RETRY_MAX = 8;
+// Some gaps never close: a check history longer than the read's cap, or a
+// session row gone from the store (which reads exactly like an outage). Past
+// this long waiting the card is parked for the owner instead of sitting in
+// review for good; a rerun could not make that evidence readable either.
+const VERIFY_EVIDENCE_WAIT_MAX_MS = 2 * 60 * 60 * 1000;
 let verificationEvidenceRetries = 0;
 const LEASE_REFRESH_MS = 10 * 60 * 1000; // how often a live owner re-stamps its claims
 // Board-wide stale-scope heal. The settlement heal only touches the card a run
@@ -12890,7 +12912,7 @@ async function autopilotHousekeeping() {
       }
       if (!evidence.checks.has(key) && typeof eyes.listSessionChecks === "function") {
         try {
-          evidence.checks.set(key, { read: await eyes.listSessionChecks({ sessionId: attempt.sessionId, ...window, limit: 200 }) });
+          evidence.checks.set(key, { read: await eyes.listSessionChecks({ sessionId: attempt.sessionId, ...window, limit: 1000 }) });
         } catch (error) {
           evidence.checks.set(key, { error: String(error?.message ?? error) });
         }
@@ -12954,14 +12976,30 @@ async function autopilotHousekeeping() {
     // The studio log hears about a waiting card once per streak — when its
     // pending stamp is written — not again on every short retry pass.
     let evidenceGap = "";
+    // True while the row should keep waiting; false once it has waited past
+    // VERIFY_EVIDENCE_WAIT_MAX_MS, when the caller settles it as unverified.
+    // The pending stamp keeps the moment the wait began.
     const waitForEvidence = (row) => {
       const reason = "Waiting for the attempt's recorded execution evidence";
+      if (row.verification?.state === "pending" && row.verification.reason === reason) {
+        if (now - (Number(row.verification.at) || now) >= VERIFY_EVIDENCE_WAIT_MAX_MS) return false;
+        followUp.evidenceWaiting = true;
+        return true;
+      }
       followUp.evidenceWaiting = true;
-      if (row.verification?.state === "pending" && row.verification.reason === reason) return;
       row.verification = { state: "pending", at: now, reason };
       changedByVerify = true;
       verifyNotes.push(`verification waiting for "${assistantClip(row.title, 60)}" — ${evidenceGap}`);
+      return true;
     };
+    // The verdict for evidence that never became readable: parked for the
+    // owner, like a run whose route leaves no session, with no paid rerun.
+    const evidenceNeverRead = (row) => ({
+      state: "failed",
+      reason: `the attempt's recorded evidence could not be read for ${Math.round(VERIFY_EVIDENCE_WAIT_MAX_MS / 3600000)} hours (${evidenceGap || "unavailable"}); check the work and confirm it yourself, or retry it`,
+      attemptNo: (Number(row.verifyAttempts) || 0) + 1,
+      evidence: null,
+    });
     // Builders other than OpenCode (claude, grok, codex, antigravity) leave no
     // session the evidence readers can see, so waiting or retrying cannot
     // produce proof: the verifier hands those straight to the owner.
@@ -13016,7 +13054,8 @@ async function autopilotHousekeeping() {
       if (!run || !Array.isArray(run.results) || !run.results.length) return [];
       const startedAt = Number(run.at);
       if (!Number.isFinite(startedAt) || startedAt <= 0) return [];
-      return run.results.map((row) => {
+      // A relocated command (runVerificationJob) proved Studio's own tree.
+      return run.results.filter((row) => row?.relocated !== true).map((row) => {
         const timedOut = row?.timedOut === true;
         // Rows stamped before exitCode was recorded carry only `ok`.
         const exitCode = Number.isSafeInteger(row?.exitCode) ? row.exitCode : row?.ok === true ? 0 : null;
@@ -13058,19 +13097,40 @@ async function autopilotHousekeeping() {
         // this attempt's run counts, only a result that landed after the
         // verdict it contradicts, and never against the user's manual Done.
         const doneRun = task?.status === "done" && task.verification?.state !== "manual" ? overseerRunFor(task, task.lastAttempt) : null;
-        if (doneRun?.state === "failed" && Array.isArray(doneRun.results) && doneRun.results.length && Number(doneRun.at) > Number(task.verification?.at || task.doneAt || 0)) {
+        // Only a counted failure reopens: a relocated check's red is Studio's.
+        const doneChecks = doneRun?.state === "failed" ? verificationRunChecks(doneRun) : [];
+        if (doneChecks.some((check) => check.passed !== true) && Number(doneRun.at) > Number(task.verification?.at || task.doneAt || 0)) {
           const attempt = task.lastAttempt ?? {};
           const verdict = verify({
             verdictOk: true,
             changedFiles: 0,
             hasSession: Boolean(attempt.sessionId),
             observedChecks: [],
-            overseerChecks: verificationRunChecks(doneRun),
+            overseerChecks: doneChecks,
             resolvedHandoffs: task.handoffState?.resolvedTitles ?? [],
             remaining: Array.isArray(task.remaining) ? task.remaining : [],
             resultNote: attempt.result ?? null,
             priorAttempts: Number(task.verifyAttempts) || 0,
           });
+          // The reopen is a verdict too. Without its own receipt the attempt's
+          // earlier "verified" receipt stayed the last word the lab reads.
+          const reopenReceipt = receiptsModule?.buildReceipt
+            ? receiptsModule.buildReceipt({
+                attemptId: attempt.runId,
+                workItem: { kind: "task", id: task.id ?? null, title: task.title, prompt: task.prompt ?? "" },
+                contract: "implementation",
+                attempt,
+                verdict,
+                changedFiles: 0,
+                remaining: Array.isArray(task.remaining) ? task.remaining : [],
+                evaluator: evaluatorIdentity,
+                now,
+              })
+            : null;
+          if (reopenReceipt) {
+            task.verificationReceiptId = reopenReceipt.id;
+            policyReceipts.push(reopenReceipt);
+          }
           task.verifyAttempts = verdict.attemptNo;
           task.status = "open";
           delete task.doneAt;
@@ -13114,12 +13174,13 @@ async function autopilotHousekeeping() {
           const all = Array.isArray(rows) ? rows.flatMap((row) => (row?.files?.length ? row.files : [row?.file])).filter(Boolean).map(String) : [];
           return all.length > 0 && all.every(ledgerFile);
         };
-        const files = attemptChanges(attempt);
-        if (files === null) { waitForEvidence(task); continue; }
-        const observedChecks = attemptChecks(attempt);
-        if (observedChecks === null) { waitForEvidence(task); continue; }
+        let files = attemptChanges(attempt);
+        const observedChecks = files === null ? null : attemptChecks(attempt);
+        const unread = files === null || observedChecks === null;
+        if (unread && waitForEvidence(task)) continue;
+        if (unread) files = Array.isArray(files) ? files : [];
         const overseerChecks = verificationRunChecks(overseerRunFor(task, attempt));
-        const verdict = verify({
+        const verdict = unread ? evidenceNeverRead(task) : verify({
           verdictOk: attempt.sawDone === true || attempt.code === 0,
           changedFiles: Array.isArray(files) ? files.length : 0,
           ledgerChanges: ledgerChanges(files),
@@ -13208,11 +13269,12 @@ async function autopilotHousekeeping() {
         const attempt = request.lastAttempt ?? {};
         if (dwelling(attempt)) continue;
         if (overseerRunPending(request)) continue;
-        const files = attemptChanges(attempt);
-        if (files === null) { waitForEvidence(request); continue; }
-        const observedChecks = attemptChecks(attempt);
-        if (observedChecks === null) { waitForEvidence(request); continue; }
-        const verdict = verify({
+        let files = attemptChanges(attempt);
+        const observedChecks = files === null ? null : attemptChecks(attempt);
+        const unread = files === null || observedChecks === null;
+        if (unread && waitForEvidence(request)) continue;
+        if (unread) files = Array.isArray(files) ? files : [];
+        const verdict = unread ? evidenceNeverRead(request) : verify({
           verdictOk: attempt.sawDone === true || attempt.code === 0,
           changedFiles: Array.isArray(files) ? files.length : 0,
           hasSession: Boolean(attempt.sessionId),
