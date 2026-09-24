@@ -4634,7 +4634,10 @@ export function tidy({ tasks, ideas, requests, checkpoints, nodeFolders = null, 
     checkpoints: isObject(checkpoints) ? tidyCheckpoints(checkpoints, sessions, now, report) : {},
     nodeFolders: isObject(nodeFolders) ? tidyNodeFolders(nodeFolders, { sessions, tasks, now, staleHours: rules.tidyDoneAfterHours }, report) : {},
   };
-  const differs = (before, after) => before != null && JSON.stringify(before) !== JSON.stringify(after);
+  // The tidy helpers hand back the very collection they were given when they
+  // change nothing, so identity settles most calls without stringifying the
+  // board (multi-MB with contextHistory) twice.
+  const differs = (before, after) => before != null && before !== after && JSON.stringify(before) !== JSON.stringify(after);
   const changed = differs(tasks, out.tasks) || differs(ideas, out.ideas) || differs(requests, out.requests) || differs(checkpoints, out.checkpoints) || differs(nodeFolders, out.nodeFolders);
   const parts = [];
   if (report.tasksArchived) parts.push(`archived ${plural(report.tasksArchived, "done task")}`);
