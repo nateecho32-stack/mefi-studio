@@ -57,6 +57,24 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 - A run that started ends the card's streak of failed starts, and Try again
   resets it. A reopened done card gets its own receipt. "Let it run" and "Keep
   them all" no longer erase each other.
+- **The menu shows every destination again.** Opened, it needed about 990px,
+  so a 900px window hid Style & sound and Profiler behind the foot and a
+  720px window hid all of Settings, with no sign the list scrolled. Opened,
+  Work, Live, Models and Settings are now short capitals headings over their
+  destinations, lined up in one column of icons, and the whole menu fits
+  900px. Below 820px tall the foot folds into one row of icons. When the
+  list still has to scroll, its hidden edge fades out. At rest, "Settings" is
+  no longer cut to "Setti…".
+- **Toasts no longer cover the opened menu.** A tip in the bottom-left corner
+  sat over Shortcuts, Community and Keep menu open; it now steps aside while
+  the menu is open.
+- **Search Studio names each section once.** Every row repeated its section
+  ("WORK", "WORK", "WORK"…); the name now heads its group, and shows faintly
+  on the row you are on. The search field's focus ring follows the sheet's
+  rounded corner instead of cutting across it.
+- The project panel's "Mefi's Studio" heading no longer wears the current-page
+  highlight on Home, and the Shortcuts sheet's key column is narrowed to its
+  longest key.
 - **A machine that settles just under busy no longer holds new workers
   forever.** After a lag spike, new worker starts waited for two readings at
   40 ms or less, and a laptop that settled at 41–99 ms never got there. Once

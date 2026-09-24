@@ -1946,7 +1946,9 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 }
 .palette-sheet input:focus { box-shadow: none; border-color: var(--hairline); }
 .palette-search-row { display: flex; align-items: center; border-bottom: 1px solid var(--hairline); padding-right: var(--s3); gap: var(--s2); }
-.palette-search-row input { flex: 1; min-width: 0; border-bottom: 0; }
+/* The field starts in the sheet's rounded corner, so its keyboard ring follows
+   that corner instead of drawing a square one across it. */
+.palette-search-row input { flex: 1; min-width: 0; border-bottom: 0; border-radius: var(--r-lg) var(--r-xs) var(--r-xs) var(--r-xs); }
 .palette-search-row button { flex-shrink: 0; }
 .palette-result-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 #palette-list .description { color: var(--dim); font-size: var(--fs-xs); line-height: 1.45; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1964,6 +1966,12 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
   cursor: pointer;
 }
 #palette-list li .kind { color: var(--gold); font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.08em; min-width: 64px; }
+/* A section's name heads its group once instead of on every row. The rest keep
+   it (it is part of each option's spoken name) but only show it, faintly, on the
+   row you are on, so a long group scrolled past its first row still says where
+   you are. Opacity, not visibility, so screen readers hear it unchanged. */
+#palette-list li:not(.palette-group-start) .kind { opacity: 0; }
+#palette-list li:not(.palette-group-start):is(.active, :hover) .kind { opacity: .5; }
 #palette-list li .label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #palette-list li .count { position: static; }
 #palette-list li .hint { color: var(--dim); font-size: var(--fs-xs); margin-left: auto; display: inline-flex; align-items: center; gap: var(--s1); }
@@ -2010,7 +2018,9 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 #help-grid { display: block; columns: 2 20rem; column-gap: var(--s7); }
 .help-section {
   break-inside: avoid;
-  display: grid; grid-template-columns: 112px minmax(0, 1fr);
+  /* Wide enough for the longest keycap (Right-drag), and no wider: the old
+     112px left a gutter between each key and what it does. */
+  display: grid; grid-template-columns: 88px minmax(0, 1fr);
   gap: 7px var(--s4); align-items: baseline;
   margin: 0 0 var(--s5);
 }
@@ -2768,7 +2778,9 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 #workspace-sidebar .ws-home .label { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #workspace-sidebar .ws-home kbd { margin-left: 0; }
 #workspace-sidebar .ws-home:hover { background: rgba(var(--ws-accent-rgb), 0.08); border-color: rgba(var(--ws-accent-rgb), 0.22); color: var(--ivory); }
-#workspace-sidebar [data-nav][aria-current="page"] { background: rgba(var(--ws-accent-rgb), 0.14); border-color: rgba(var(--ws-accent-rgb), 0.35); color: var(--ivory); box-shadow: inset 3px 0 0 var(--ws-accent); }
+/* The brand links home too, but it is the panel's heading, not a row: on Home
+   it must not wear the current-page pill (a filled box with an accent bar). */
+#workspace-sidebar [data-nav][aria-current="page"]:not(.ws-brand) { background: rgba(var(--ws-accent-rgb), 0.14); border-color: rgba(var(--ws-accent-rgb), 0.35); color: var(--ivory); box-shadow: inset 3px 0 0 var(--ws-accent); }
 /* projects */
 #workspace-sidebar .ws-section-label { display: flex; align-items: center; justify-content: space-between; padding: 14px 8px 6px; color: var(--dim); font-size: 10px; letter-spacing: 1.6px; }
 #workspace-sidebar .ws-section-label button { font-size: 20px; min-height: 24px; min-width: 24px; padding: 0 4px; border: 1px solid transparent; border-radius: 7px; color: var(--ws-accent); }
@@ -4427,14 +4439,17 @@ html[data-shell="rail"][data-rail-pinned] { --shell-rail-w: var(--shell-rail-ope
 #app-rail .app-rail-brand,
 #app-rail .app-rail-foot,
 #app-rail .app-rail-pin { flex: none; }
+/* At rest the tile spends the rail's whole inner width on its word, so the
+   longest section name ("Settings") fits instead of ending in an ellipsis. */
 #app-rail .app-rail-head {
   flex-direction: column; justify-content: center; gap: 3px;
-  min-height: 52px; padding: 6px 2px; font-size: 10.5px; text-align: center;
+  min-height: 52px; padding: 6px 0; font-size: 10.5px; letter-spacing: -0.01em; text-align: center;
 }
 #app-rail .app-rail-head .app-rail-text { flex: none; max-width: 100%; }
 #app-rail .app-rail-head .count { position: absolute; top: 3px; right: 5px; min-width: 15px; height: 15px; padding: 0 4px; font-size: 9.5px; }
-#app-rail .app-rail-children { display: none; flex-direction: column; gap: 1px; padding: 2px 0 8px 14px; }
-#app-rail .app-rail-item { min-height: 32px; padding: 0 10px; font-size: var(--fs-xs); }
+#app-rail .app-rail-children { display: none; flex-direction: column; gap: 1px; padding: 0 0 6px; }
+/* Items line their glyphs up with the heads' and Home's, one column of icons. */
+#app-rail .app-rail-item { min-height: 30px; padding: 0 15px; font-size: var(--fs-sm); }
 #app-rail .app-rail-item .key { margin-left: auto; opacity: .62; font-size: 10px; }
 #app-rail .app-rail-item .count { margin-left: 4px; }
 
@@ -4442,8 +4457,25 @@ html[data-shell="rail"][data-rail-pinned] { --shell-rail-w: var(--shell-rail-ope
 #app-rail:has(:focus-visible) .app-rail-head,
 html[data-rail-pinned] #app-rail .app-rail-head {
   flex-direction: row; justify-content: flex-start; gap: 10px;
-  min-height: 40px; padding: 0 15px; font-size: var(--fs-sm); text-align: left;
+  min-height: 40px; padding: 0 15px; font-size: var(--fs-sm); letter-spacing: normal; text-align: left;
 }
+/* Open, a head with a list under it is that list's heading: a short, quiet
+   capitals row, so the eye reads sections and destinations as two levels and
+   the whole menu fits a 900px window. It still goes to its main destination.
+   Home lists nothing beneath it and keeps the full row. */
+#app-rail:hover .app-rail-section:has(> .app-rail-children) > .app-rail-head,
+#app-rail:has(:focus-visible) .app-rail-section:has(> .app-rail-children) > .app-rail-head,
+html[data-rail-pinned] #app-rail .app-rail-section:has(> .app-rail-children) > .app-rail-head {
+  min-height: 28px; margin-top: 4px; color: var(--rail-head-ink, var(--dim));
+  font: 600 var(--fs-2xs)/1.2 var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase;
+}
+/* The heading's quiet ink still brightens on hover and lights for the section
+   you are in: those rules set the ink rather than fight its specificity. */
+#app-rail .app-rail-head:hover { --rail-head-ink: var(--ivory); }
+#app-rail .app-rail-section.current > .app-rail-head { --rail-head-ink: var(--gold-bright); }
+#app-rail:hover .app-rail-section:has(> .app-rail-children) > .app-rail-head .glyph,
+#app-rail:has(:focus-visible) .app-rail-section:has(> .app-rail-children) > .app-rail-head .glyph,
+html[data-rail-pinned] #app-rail .app-rail-section:has(> .app-rail-children) > .app-rail-head .glyph { width: 14px; height: 14px; margin-inline: 1px; }
 #app-rail:hover .app-rail-head .count,
 #app-rail:has(:focus-visible) .app-rail-head .count,
 html[data-rail-pinned] #app-rail .app-rail-head .count { position: static; margin-left: auto; }
@@ -4455,28 +4487,60 @@ html[data-rail-pinned] #app-rail .app-rail-children { display: flex; }
 #app-rail .app-rail-section.current > .app-rail-head { color: var(--gold-bright); }
 #app-rail .app-rail-section.current > .app-rail-head .glyph { color: var(--gold); }
 #app-rail [aria-current="page"] { color: var(--gold-bright); background: var(--tint-gold-3); border-color: var(--hairline-strong); }
+#app-rail .app-rail-item[aria-current="page"] .glyph { color: var(--gold); }
+
+/* A list taller than the window says so: its scrolled-off edges fade out. The
+   fade depths follow the scroll position (a scroll-driven animation), so a
+   list that fits, or sits at an end, shows a hard edge there. */
+@property --rail-fade-top { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --rail-fade-bottom { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@keyframes rail-scroll-fade {
+  0% { --rail-fade-top: 0px; --rail-fade-bottom: 28px; }
+  6%, 94% { --rail-fade-top: 28px; --rail-fade-bottom: 28px; }
+  100% { --rail-fade-top: 28px; --rail-fade-bottom: 0px; }
+}
+#app-rail .app-rail-sections {
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--rail-fade-top), #000 calc(100% - var(--rail-fade-bottom)), transparent);
+  animation: rail-scroll-fade linear both;
+  animation-timeline: scroll(self);
+}
 
 /* At rest the one-line buttons (brand, foot, pin) are icon only: their words,
    keycaps and counts wait for the rail to open instead of peeking out clipped. */
 html:not([data-rail-pinned]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-brand, .app-rail-foot-item, .app-rail-pin) :is(.label, .key, .app-rail-text, .count) { display: none; }
 #app-rail .app-rail-foot { display: flex; flex-direction: column; gap: 1px; padding-top: 8px; border-top: 1px solid var(--hairline); }
-#app-rail .app-rail-foot .app-rail-item { min-height: 36px; padding: 0 15px; }
+#app-rail .app-rail-foot .app-rail-item { min-height: 34px; padding: 0 15px; }
 #app-rail .app-rail-pin { min-height: 34px; margin-top: 2px; }
 #app-rail .app-rail-pin[aria-pressed="true"] { color: var(--gold-bright); }
 /* Short windows: the open rail lists every destination, so its rows tighten
-   (about 110px back at 720px tall); at rest the section tiles shrink too. */
+   and the foot folds into one row of icons (each keeps its name as a tooltip
+   and accessible name), which gives back about 150px at 720px tall. At rest
+   the section tiles shrink too. */
 @media (max-height: 820px) {
   #app-rail .app-rail-brand { min-height: 40px; margin-bottom: 4px; }
   #app-rail:hover .app-rail-head,
   #app-rail:has(:focus-visible) .app-rail-head,
   html[data-rail-pinned] #app-rail .app-rail-head { min-height: 34px; }
+  #app-rail:hover .app-rail-section:has(> .app-rail-children) > .app-rail-head,
+  #app-rail:has(:focus-visible) .app-rail-section:has(> .app-rail-children) > .app-rail-head,
+  html[data-rail-pinned] #app-rail .app-rail-section:has(> .app-rail-children) > .app-rail-head { min-height: 24px; margin-top: 0; }
   #app-rail .app-rail-item { min-height: 28px; }
   #app-rail .app-rail-foot .app-rail-item { min-height: 32px; }
   #app-rail .app-rail-pin { min-height: 30px; }
+  #app-rail:hover .app-rail-foot,
+  #app-rail:has(:focus-visible) .app-rail-foot,
+  html[data-rail-pinned] #app-rail .app-rail-foot { flex-flow: row wrap; gap: 2px; }
+  #app-rail:hover .app-rail-foot :is(.app-rail-item, .update-pill),
+  #app-rail:has(:focus-visible) .app-rail-foot :is(.app-rail-item, .update-pill),
+  html[data-rail-pinned] #app-rail .app-rail-foot :is(.app-rail-item, .update-pill) { flex: 1 1 0; justify-content: center; width: auto; min-width: 36px; padding: 0; }
+  #app-rail:hover .app-rail-foot :is(.app-rail-item, .update-pill) :is(.label, .key, .count),
+  #app-rail:has(:focus-visible) .app-rail-foot :is(.app-rail-item, .update-pill) :is(.label, .key, .count),
+  html[data-rail-pinned] #app-rail .app-rail-foot :is(.app-rail-item, .update-pill) :is(.label, .key, .count) { display: none; }
 }
 @media (max-height: 640px) {
   #app-rail .app-rail-head { min-height: 44px; }
-  #app-rail .app-rail-head .app-rail-text { font-size: 9.5px; }
+  /* The smaller word is for the resting tile; open, heads keep their size. */
+  html:not([data-rail-pinned]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head .app-rail-text { font-size: 9.5px; }
 }
 
 /* Every full-window layer makes room for the rail. The Command canvas stays
@@ -4502,7 +4566,13 @@ html[data-shell="rail"] #workspace-sidebar-panel { left: var(--shell-rail-w); }
 html[data-shell="rail"] .overlay .sheet { width: min(620px, calc(92vw - var(--shell-rail-w))); }
 html[data-shell="rail"] .palette-sheet { width: min(640px, calc(92vw - var(--shell-rail-w))); }
 /* toasts clear the rail (Settings' sticky list sits with the Settings rules) */
-html[data-shell="rail"] #toast-host { left: calc(var(--shell-rail-w) + 22px); }
+html[data-shell="rail"] #toast-host {
+  left: calc(var(--shell-rail-w) + 22px);
+  transition: bottom var(--dur-2) var(--ease), left var(--motion-menu) var(--ease);
+}
+/* The rail opens over the page, and toasts paint above it: while it is open
+   they step aside to its edge instead of covering its foot. */
+html[data-shell="rail"]:has(#app-rail:hover, #app-rail :focus-visible) #toast-host { left: calc(var(--shell-rail-open) + 22px); }
 html[data-shell="rail"] .explorer-sheet { width: min(1460px, calc(97vw - var(--shell-rail-w))); }
 html[data-shell="rail"] .overlay .walkthrough-sheet { width: min(740px, calc(94vw - var(--shell-rail-w))); }
 
@@ -4528,7 +4598,7 @@ body.command-zen #app-rail { opacity: 0; pointer-events: none; }   /* fades both
 body.command-active #app-rail { background: color-mix(in srgb, var(--panel-solid) 94%, var(--cmd-bg)); backdrop-filter: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  #app-rail { transition: none; }
+  #app-rail, html[data-shell="rail"] #toast-host { transition: none; }
 }
 @media print {
   #app-rail { display: none; }
