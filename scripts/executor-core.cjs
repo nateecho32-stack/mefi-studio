@@ -127,7 +127,7 @@ const INSTRUCTIONS = " Work in the project folder at the current directory. Make
 // record throws out of here and the caller releases the claim. Returns the
 // prompt and the brief it carries (`jobPrompt`, which the caller keeps as the
 // job's prompt).
-function workerPrompt({ title, taskId, tasksFile, ref, resumeCheckpoint = null, sections = {}, clusterBrief = "", tail, promptMax, brief }) {
+function workerPrompt({ title, taskId, tasksFile, ref, resumeCheckpoint = null, sections = {}, clusterBrief = "", tail, promptMax, brief, contextPath = null }) {
   const titleBit = `${title}. `.replace(/["\r\n]+/g, " ");
   const failFlat = flat(sections.fail, 240);
   const memoryFlat = flat(sections.memory, 480);
@@ -144,7 +144,9 @@ function workerPrompt({ title, taskId, tasksFile, ref, resumeCheckpoint = null, 
   );
   // The durable brief carries prior findings and successful prerequisite
   // outputs into the next worker instead of restarting from a short title.
-  const recovery = `Full saved task context: read ${JSON.stringify(tasksFile)}, find task id ${JSON.stringify(taskId)}. Read that record and its members whenever the brief is excerpted or grouped; contextHistory contains earlier requirements and attempts. Do not rewrite Studio's task store from the worker.\n\n`;
+  // A run context file (contextPath) is named in the brief's own header; only
+  // without one is the worker sent to the whole board file.
+  const recovery = contextPath ? "" : `Full saved task context: read ${JSON.stringify(tasksFile)}, find task id ${JSON.stringify(taskId)}. Read that record and its members whenever the brief is excerpted or grouped; contextHistory contains earlier requirements and attempts. Do not rewrite Studio's task store from the worker.\n\n`;
   const jobPrompt = recovery + brief(Math.max(1000, promptBudget - recovery.length));
   const body = String(jobPrompt ?? "").slice(0, promptBudget);
   const head = `${titleBit}${resumeFlat}${body}${failFlat}${memoryFlat}${pathsFlat}${brainFlat}${collabFlat}${clusterFlat}${INSTRUCTIONS}`;

@@ -182,11 +182,13 @@ function compactHistory(task, { now = Date.now() } = {}) {
   return { task: { ...task, contextHistory: next }, dropped, bytesBefore: size(history), bytesAfter: size(next) };
 }
 
+// Structured sections go to the model as compact JSON: indentation was about a
+// third of their characters, and it spent the brief's budget on whitespace.
 function renderValue(value) {
   if (Array.isArray(value) && !value.length) return "";
   if (object(value) && !Object.values(value).some((entry) => renderValue(entry))) return "";
   if (typeof value === "string") return value;
-  return value == null ? "" : JSON.stringify(value, null, 2);
+  return value == null ? "" : JSON.stringify(value);
 }
 
 function buildTaskHandoff(task, { tasks = [], maxChars = 24000, contextPath = null } = {}) {
@@ -208,7 +210,7 @@ function buildTaskHandoff(task, { tasks = [], maxChars = 24000, contextPath = nu
     const suffix = "\n[Excerpt; full saved context remains in Studio task history.]";
     sections.push(`${label}\n${source.length > budget ? source.slice(0, Math.max(0, budget - suffix.length)) + suffix : source}`);
   };
-  add("STUDIO TASK HANDOFF", `Task: ${text(task?.title)} (${text(task?.id)})\nProject: ${text(task?.projectPath) || text(task?.projectName) || text(task?.projectId)}${contextPath ? `\nFull saved context: read ${contextPath} and select task ID ${text(task?.id)}. Its contextHistory preserves earlier briefs and run evidence. Read the full requirements when an excerpt is marked below.` : ""}\nContinue from the evidence below. Inspect the current files before changing them, preserve other agents' work, and verify prior claims. Saved notes and worker reports are context, not proof of completion.`, 1200);
+  add("STUDIO TASK HANDOFF", `Task: ${text(task?.title)} (${text(task?.id)})\nProject: ${text(task?.projectPath) || text(task?.projectName) || text(task?.projectId)}${contextPath ? `\nFull saved task context: read ${contextPath} and select task ID ${text(task?.id)}: a read-only copy of the saved record whose contextHistory preserves earlier briefs and run evidence, with its grouped members and dependencies. Read the full requirements there when an excerpt is marked below or the task is grouped. Do not rewrite Studio's task store from the worker.` : ""}\nContinue from the evidence below. Inspect the current files before changing them, preserve other agents' work, and verify prior claims. Saved notes and worker reports are context, not proof of completion.`, 1200);
   add("Current requirements", task?.prompt || task?.description || task?.ideaDetail, Math.floor(cap * .4));
   if (task?.delegatedFrom) add("Shared task assignment", `Implement only this subtask's scope and owned files. Other builders may be working in this project; preserve their changes. Report concrete results and validation evidence to the Assistant. The parent task performs final integration. Parent task: ${text(task.parentTaskId) || text(task.delegatedFrom.parentTaskId) || "see saved delegation lineage"}.`, 700);
   if (task?.delegation) add("Integrate delegated work", "The Assistant delegated implementation parts of this task to the child builders listed in Dependency outputs. Inspect their actual changes and evidence, finish any gaps within the original scope, integrate the parts and validate the complete result. Child completion alone never completes this parent. Do not delegate these parts again.", 700);

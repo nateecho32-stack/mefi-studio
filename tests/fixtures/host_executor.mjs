@@ -68,7 +68,12 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
     ...(gitStage != null ? { gitPorcelain: async () => gitStage, parsePorcelain: eyesModule.parsePorcelain } : {}),
   };
   const stream = () => Object.assign(new EventEmitter(), { setEncoding() {} });
+  // The per-run task context files (writeTaskRunContext), kept in memory.
+  const runFiles = new Map();
   const env = vm.createContext({
+    mkdir: async () => {}, writeFile: async (file, text) => { runFiles.set(file, String(text)); },
+    readdir: async (dir) => [...runFiles.keys()].filter((file) => path.dirname(file) === dir).map((file) => path.basename(file)),
+    rm: async (file) => { runFiles.delete(file); },
     Date: class extends Date { static now() { return now; } }, crypto, path, console,
     process: { pid, env: {}, kill: (target) => {
       if (unknownPids.includes(target)) throw Object.assign(new Error("fixture process access denied"), { code: "EPERM" });
@@ -204,7 +209,7 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
   }
   return {
     env, get state() { return env.assistantState; }, pool, autopilot, starts, verificationStarts, logs, roleRequests, records, registry, timers, terminations, machine, capacityCalls, supportCalls, supportJobs, contextCalls, routeCalls,
-    board: () => copy(board), edit: (fn) => fn(board), now: () => now, settings: () => copy(settings),
+    board: () => copy(board), edit: (fn) => fn(board), now: () => now, settings: () => copy(settings), runFiles: () => new Map(runFiles),
     advance: (ms) => { now += ms; }, failNextWrite: () => { pendingWriteFailures += 1; },
     evidence: (id, value) => changes.set(id, value),
     session: (runId, sessionId, rows = []) => { sessions.set(runId, { id: sessionId }); todos.set(sessionId, copy(rows)); },

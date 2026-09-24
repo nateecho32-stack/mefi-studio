@@ -13183,10 +13183,22 @@ async function spawnNextJob(options) {
   let prompt = "";
   try {
     const skillInstructions = typeof agentAddons === "undefined" ? "" : scrubOutbound(await agentAddons.instructions(projectRoot(), entry.agentConfiguration?.configuration || await readAgentSettings(), "builder"));
+    // A task's saved record goes to the worker as its own small run file
+    // (writeTaskRunContext); the handoff header points at it. Only when that
+    // write fails is the builder sent to the whole board file, as before.
+    let contextPath = null;
+    if (job.kind === "task") {
+      try {
+        contextPath = JSON.stringify(await writeTaskRunContext(entry.id, job.ref, tasks));
+      } catch (error) {
+        logLine(`[autopilot] could not write the run context for "${assistantClip(job.title, 60)}": ${String(error?.message ?? error).slice(0, 160)}`);
+      }
+    }
     const built = executorCore.workerPrompt({
       title: job.title, taskId: job.ref.id, tasksFile: projectDataPath(TASKS_PATH), ref: job.ref, resumeCheckpoint: entry.resumeCheckpoint,
       sections: { fail: failBit, memory: memoryBit, paths: pathsBit, brain: brainHints.brief, collab: collabBit }, clusterBrief, tail, promptMax: EXECUTOR_PROMPT_MAX - skillInstructions.length,
-      brief: (maxChars) => taskContext.buildTaskHandoff(job.ref, { tasks, maxChars }),
+      contextPath,
+      brief: (maxChars) => taskContext.buildTaskHandoff(job.ref, { tasks, maxChars, contextPath }),
     });
     job.prompt = built.jobPrompt;
     prompt = skillInstructions ? skillInstructions + "\n\n" + built.prompt : built.prompt;
@@ -13948,6 +13960,58 @@ async function spawnNextJob(options) {
   if (!fellBack) watchRunSession(eyes, startedAt, entry);
   watchJobProgress(eyes, entry);
   return "spawned";
+}
+
+// A task run's saved context, as a small read-only file. The worker prompt
+// used to send the builder to the whole board file (megabytes: every task's
+// contextHistory) to find its one record. It now points at data/task-runs/
+// <run id>.json in the project's data folder (git-ignored with the rest of
+// data/): the task row as saved, with its contextHistory and grouped members,
+// plus its dependencies and its delegation or split parent without their
+// histories. Only the newest TASK_RUN_CONTEXT_KEEP files are kept, and none
+// younger than TASK_RUN_CONTEXT_MIN_AGE_MS is removed, so a live run's file
+// stays in place.
+const TASK_RUN_CONTEXT_KEEP = 48;
+const TASK_RUN_CONTEXT_MIN_AGE_MS = 2 * 60 * 60 * 1000;
+function taskRunContext(runId, task, tasks, now = Date.now()) {
+  const byId = new Map((Array.isArray(tasks) ? tasks : []).filter((row) => row && typeof row === "object" && row.id).map((row) => [row.id, row]));
+  const related = (id) => {
+    const row = byId.get(id);
+    if (!row) return { id, status: "missing" };
+    const { contextHistory: _history, ...rest } = row;
+    return rest;
+  };
+  const parentId = task?.parentTaskId || task?.delegatedFrom?.parentTaskId || null;
+  return {
+    note: "Read-only copy of this run's saved task context, written by Studio at dispatch. Studio's task store stays the authority; do not edit it from the worker.",
+    runId,
+    writtenAt: new Date(now).toISOString(),
+    task,
+    dependencies: backlog.dependencyIds(task).map(related),
+    ...(parentId ? { parent: related(parentId) } : {}),
+    ...(task?.splitFrom ? { splitFrom: related(task.splitFrom) } : {}),
+  };
+}
+
+async function writeTaskRunContext(runId, task, tasks) {
+  const dir = path.join(path.dirname(projectDataPath(TASKS_PATH)), "task-runs");
+  const file = path.join(dir, `${runId}.json`);
+  await mkdir(dir, { recursive: true });
+  await writeFile(file, JSON.stringify(taskRunContext(runId, task, tasks)), "utf8");
+  pruneTaskRunContexts(dir).catch(() => {});
+  return file;
+}
+
+// Run ids carry their start time (run_<ms>_<seq>), so age is read from the
+// name; a file that does not follow the pattern is never touched.
+async function pruneTaskRunContexts(dir, now = Date.now()) {
+  const runs = (await readdir(dir))
+    .map((name) => ({ name, at: Number(/^run_(\d+)_\d+\.json$/.exec(name)?.[1]) }))
+    .filter((row) => Number.isFinite(row.at) && row.at > 0)
+    .sort((a, b) => b.at - a.at || b.name.localeCompare(a.name));
+  const stale = runs.slice(TASK_RUN_CONTEXT_KEEP).filter((row) => now - row.at >= TASK_RUN_CONTEXT_MIN_AGE_MS);
+  await Promise.all(stale.map((row) => rm(path.join(dir, row.name), { force: true }).catch(() => {})));
+  return stale.length;
 }
 
 // npm scripts exist only where a package.json defines them. Kept above the
