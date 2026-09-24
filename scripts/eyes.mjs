@@ -15,7 +15,7 @@
 //    the JSON files then become exported views. See "board store" below.
 
 import { DatabaseSync } from "node:sqlite";
-import { spawnSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { existsSync, readFileSync, mkdirSync } from "node:fs";
 import { open, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -1186,11 +1186,31 @@ export function parsePorcelain(text) {
   return rows;
 }
 
-export function gitPorcelain({ root, run = spawnSync } = {}) {
+// git runs as an async child: gitPorcelain and commitEvidence run on the eyes
+// worker's single thread, where a synchronous spawn (100-185 ms, up to its
+// 8 s timeout) held every queued store read behind it. The result keeps
+// spawnSync's shape — { status, stdout }, status null when the child was
+// killed (timeout, maxBuffer) or never started — and its 1 MiB output cap,
+// so every caller reads it exactly as before. A `run` seam may still hand in
+// a synchronous spawnSync-shaped function.
+function runGit(command, args, options = {}) {
+  return new Promise((resolve) => {
+    try {
+      execFile(command, args, { maxBuffer: 1024 * 1024, ...options }, (error, stdout) => {
+        const status = !error ? 0 : typeof error.code === "number" ? error.code : null;
+        resolve({ status, stdout: typeof stdout === "string" ? stdout : String(stdout ?? ""), ...(error ? { error } : {}) });
+      });
+    } catch (error) {
+      resolve({ status: null, stdout: "", error });
+    }
+  });
+}
+
+export async function gitPorcelain({ root, run = runGit } = {}) {
   if (!root) return "";
   if (!existsSync(path.join(root, ".git"))) return "";
   try {
-    const result = run("git", ["-C", root, "status", "--porcelain=v1"], {
+    const result = await run("git", ["-C", root, "status", "--porcelain=v1"], {
       encoding: "utf8",
       timeout: 8000,
       windowsHide: true,
@@ -1205,16 +1225,16 @@ export function gitPorcelain({ root, run = spawnSync } = {}) {
 // Commit evidence for the verification pass: does the claimed hash resolve to
 // a real commit, and is the scoped path clean afterwards? A commit-only
 // deliverable edits nothing after committing, so `changedFiles: 0` is its
-// success shape, not a false negative. Both git spawns wait here on the
-// worker for the same reason gitPorcelain does. A command that fails reports
-// clean: null — unknown, never "clean" — so the evaluator can only accept a
-// positive read; an unscoped check reads the whole repository.
-export function commitEvidence({ root, hash, paths = [], run = spawnSync } = {}) {
+// success shape, not a false negative. Both git calls run on the worker, as
+// async children, for the same reason gitPorcelain's does. A command that
+// fails reports clean: null — unknown, never "clean" — so the evaluator can
+// only accept a positive read; an unscoped check reads the whole repository.
+export async function commitEvidence({ root, hash, paths = [], run = runGit } = {}) {
   const claim = String(hash ?? "").trim();
   if (!root || !/^[0-9a-f]{7,40}$/i.test(claim)) return { hash: null, clean: null, error: "no claimable commit hash" };
   let resolved = claim.toLowerCase();
   try {
-    const exists = run("git", ["-C", root, "rev-parse", "--verify", "--quiet", `${claim}^{commit}`], { encoding: "utf8", timeout: 8000, windowsHide: true });
+    const exists = await run("git", ["-C", root, "rev-parse", "--verify", "--quiet", `${claim}^{commit}`], { encoding: "utf8", timeout: 8000, windowsHide: true });
     if (!exists || exists.status !== 0) return { hash: null, clean: null, error: "commit not found in the repository" };
     resolved = String(exists.stdout ?? "").trim().toLowerCase() || resolved;
   } catch (error) {
@@ -1222,7 +1242,7 @@ export function commitEvidence({ root, hash, paths = [], run = spawnSync } = {})
   }
   try {
     const scope = (Array.isArray(paths) ? paths : []).filter((value) => typeof value === "string" && value.trim());
-    const status = run("git", ["-C", root, "status", "--porcelain=v1", ...(scope.length ? ["--", ...scope] : [])], { encoding: "utf8", timeout: 8000, windowsHide: true });
+    const status = await run("git", ["-C", root, "status", "--porcelain=v1", ...(scope.length ? ["--", ...scope] : [])], { encoding: "utf8", timeout: 8000, windowsHide: true });
     if (!status || status.status !== 0) return { hash: resolved, clean: null, error: "path status could not be read" };
     return { hash: resolved, clean: String(status.stdout ?? "").trim().length === 0 };
   } catch (error) {
@@ -1560,11 +1580,11 @@ export function listChatTexts({ dbPath = DEFAULT_DB, after = { at: 0, id: "" }, 
   return rows.map((row) => ({ id: row.id, sessionId: row.session_id, at: row.time_created, text: row.text }));
 }
 
-export function assistantFacts({ dbPath = DEFAULT_DB, sessionLimit = 10, changeLimit = 60, todoLimitPerSession = 12, root = null, now = Date.now(), porcelain = null, sessions: scopedSessions = null, changes: scopedChanges = null, todos: scopedTodos = null } = {}) {
+export async function assistantFacts({ dbPath = DEFAULT_DB, sessionLimit = 10, changeLimit = 60, todoLimitPerSession = 12, root = null, now = Date.now(), porcelain = null, sessions: scopedSessions = null, changes: scopedChanges = null, todos: scopedTodos = null } = {}) {
   const sessions = scopedSessions ?? listSessions({ dbPath, limit: sessionLimit });
   const changes = scopedChanges ?? listChanges({ dbPath, limit: changeLimit });
   const todos = scopedTodos ?? listTodos({ dbPath });
-  const dirtyText = porcelain != null ? porcelain : gitPorcelain({ root });
+  const dirtyText = porcelain != null ? porcelain : await gitPorcelain({ root });
   const bySession = changes.reduce((map, change) => {
     const entry = map.get(change.sessionId) ?? { files: new Set(), additions: 0, deletions: 0, samples: [] };
     if (change.file) entry.files.add(change.file);
@@ -1938,7 +1958,7 @@ async function cli() {
         changes: listChanges({ dbPath: fixture, limit: 50 }),
         root,
       }),
-      facts: assistantFacts({ dbPath: fixture, root, now, porcelain }),
+      facts: await assistantFacts({ dbPath: fixture, root, now, porcelain }),
     };
     console.log(JSON.stringify(payload, null, 2));
   }
