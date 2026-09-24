@@ -38,6 +38,13 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   summary and the Analyzer. The 300-plan cap now counts only plans in play.
 
 ### Fixed
+- **A test run that pauses for a few seconds is no longer killed as hung.**
+  One unchanged CPU sample counted as the whole four-minute idle window, so
+  during a busy test run (a scan every 5 s) a test waiting briefly on a file
+  or a frame could be killed. Idle time is now measured in real time.
+- The facts sent with a brief or an overseer review are trimmed field by
+  field and stay valid JSON; cutting them at 14,000 characters broke the
+  JSON and dropped the machine, work and inbox facts first.
 - Vibe: **Build it** no longer promises the task will start when the agents
   are off, paused or have no AI; it says so and points at the control that
   starts them. Work the checker is still verifying shows under Building now
@@ -61,6 +68,23 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   being discarded. Plan tasks you dropped or deleted read "Dropped by you" or
   "No longer on the board", not "Done · Review evidence" or "Waiting for board
   status".
+
+### Changed
+- **Studio does less work while nothing changes.** Command draws about ten
+  frames a second when nothing on it is moving and wakes the moment you touch
+  it or data arrives. The task rail stops under full-window sheets, resolves
+  the theme once per frame instead of once per node, and no longer re-reads
+  the whole session store on every agent action. Agent sparks drop their
+  per-spark blur, and the Overhead sheet is capped at 30 fps. The agent loop
+  skips no-op promotion transactions, indexes the board once per pass, scans
+  ideas and duplicate declarations without re-reading unchanged files, heals
+  stale file scopes with one async walk, and runs git off the store
+  worker's queue. [docs/performance.md](docs/performance.md) has the
+  measurements.
+- **Builders get a small context file instead of the whole board.** Each
+  task run writes its own saved record, grouped members and dependencies to
+  `task-runs/<runId>.json`, and the brief points there instead of at the
+  multi-megabyte task board.
 
 ## [0.4.0] - 2026-09-25
 

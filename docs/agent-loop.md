@@ -264,9 +264,14 @@ handoff protocol (`MEFI_NEXT:`, at most `EXECUTOR_MAX_HANDOFFS` = 3 per run;
 role), the owner-question line (`agentIssues.issuePromptLine`), the ~15-minute
 budget warning (`EXECUTOR_BUDGET_MINUTES`), `MEFI_RESULT:` (asked for as one
 line under 300 characters) and the verdict sentinel `MEFI_JOB_DONE`
-(`EXECUTOR_DONE_MARK`). For tasks, the brief tells the worker to re-read its
-full record in `data/eyes-tasks.json` via `taskContext.buildTaskHandoff` —
-exactly the handoff this walkthrough was dispatched with.
+(`EXECUTOR_DONE_MARK`). For tasks, the brief points the worker at its full
+saved record through `taskContext.buildTaskHandoff`'s `contextPath`: a small
+read-only run file, `task-runs/<runId>.json` beside the project's board
+(`writeTaskRunContext` in `main.cjs`), holding the task row with its
+`contextHistory` and grouped members, plus its dependencies and split or
+delegation parent without their histories. The whole multi-megabyte
+`data/eyes-tasks.json` is named only when that write fails. Run files are
+pruned to the newest 48, never one under two hours old.
 
 The run is a child process (`spawnAttempt`): `cmd.exe /c opencode run
 --auto` with the prompt on **stdin** (never the command line), tools

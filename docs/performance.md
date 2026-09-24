@@ -76,6 +76,195 @@ rebuilding the thread is the next lever. The benchmark changes the thinking
 line on every push, so these numbers are an upper bound for a quiet
 assistant.
 
+## Nothing pays for what nobody is looking at, September 24, 2026
+
+A pass across the three places the app spends its time: the renderer's
+frames, the main process's pushes and writes, and the agent loop's own
+bookkeeping. The theme is the same throughout: work that ran on a timer or a
+push whether or not anything had changed, or whether or not anyone could see
+it.
+
+These numbers were taken in a Linux container on Node 22, not on the
+Windows development machine, and without Electron: launching it there needs
+the Chromium sandbox off, which was not allowed. Host and harness figures
+are Node micro-benchmarks run on the real code. Canvas figures come from the
+real renderer functions drawing into Skia (`@napi-rs/canvas`, kept outside
+the repository), which is the rasterizer Chromium uses. Pixel deltas are old
+code against new on the same Skia build. None of the numbers are pass/fail
+thresholds, and the Electron fixtures (the heavy lane of `npm test`) still
+need a desktop run.
+
+### Renderer: frames that change nothing are not drawn
+
+- **The tree rail read the whole theme palette per node per frame.**
+  `colorOf` called `MefiMusic.themePalette()`, and each call re-ran
+  `resolvePalette`'s contrast searches. `themePalette` now keeps one frozen
+  palette per theme and custom-colour set. The rail also reads the palette
+  and `graphPreferences()` once per frame, and caches the orbs, glow,
+  crystal and glass gradients in unit space, as Command's `orbPaints`
+  already did.
+- **The rail stopped only for Home and Command.** It kept drawing at 30 fps
+  under every full-window sheet (Tasks, Explorer, Brains, Planning), whose
+  12 px scrim blur was then recomputed each frame. It now also stops while
+  `body.dataset.sheet` is set to anything but `music`, which has no scrim.
+  Its hover tip is written only when its text or position changes.
+- **Every activity push reloaded all of `eyes:state` for the rail.** That is
+  sessions, 300 diffs and a PNG directory walk, every 2 s while agents work,
+  and the rail used none of the diffs. The rail now rebuilds from the todos
+  the push carries and its last sessions. It reads everything again only for
+  an unknown session, after 15 s, or after a project switch. The host keeps
+  the PNG walk for 30 s per folder.
+- **Command at rest.** After 30 calm frames with a slow sky (minimal, grid,
+  nebula, aurora, bokeh, or any sky with motion off), Command draws every
+  96 ms instead of every 30 ms. Anything that could move keeps it at 30 fps:
+  pulses, specks, agents, running work, speech, easing, orbit or audio. So
+  do any pointer, key, wheel or resize input and every data push, and the
+  first of those wakes it at once.
+- **Specks without `shadowBlur`.** Each speck and pulse dot set
+  `shadowBlur`, a separate blur pass per draw, and a busy tool stream kept
+  up to 600 of them alive. A speck is now one slightly wider fill (fitted
+  against Skia's real shadow output) with its colour fixed at spawn. The
+  pool is capped at 200, and a tool call spawns 5 specks (8 for web tools)
+  instead of 10 to 18.
+- **Far canvas.** It is opaque (`alpha: false`), and its sky and vignette
+  gradients are cached per size and palette. It is not drawn at a lower
+  resolution: unfocused, it shows crisp stars and 1 px grid lines.
+- **Coalesced pushes.** Command's graph refresh on `eyes:tasks`, activity
+  todos and checkpoints shares one trailing refresh per 250 ms. The Tasks
+  sheet does the same and repaints its list and detail only when a row
+  signature changed; `runProgress` is left out except for the selected
+  task's live attempt. The Workspace skips every unchanged write in
+  `renderWork`. Both read the scheduler snapshot at most once per 3.5 s.
+- **Smaller items.** The Overhead sheet was uncapped at 60–144 Hz and
+  matched every task to a session per frame; it is now capped at 30 fps and
+  matches once per load. Label sorting uses a shared `Intl.Collator`. The
+  Explorer ran a full PowerShell process scan (`machineStatus`) on every
+  5 s poll; it now scans once per open and follows the watcher's push. The
+  Server Styler status poll runs through `MefiBoot.pollStart`, only while
+  Settings is on screen.
+- **CSS.** Several backdrop blurs sat behind fills that are opaque in every
+  theme, so they re-blurred the canvas under them on every Command frame:
+  the HUD's tools, card, dock, legend and the controls inside them, plus the
+  rail over Command and the catalog cards. Those blurs are gone. Infinite
+  paint-driven loops are now bounded (the lit Brains wire flows four times,
+  or while hovered; the walkthrough outline pulses four times) or moved to
+  opacity on a pseudo-element (the Brains drop target, Planning's thinking
+  dot).
+
+| Renderer measurement | Before | After |
+|---|---:|---:|
+| `themePalette()` per call | 172–193 µs | 0.02–0.03 µs |
+| Tree rail frame, 58 nodes (JS + Skia raster) | 15.3 ms | 3.4 ms |
+| Palette resolutions in 3 rail frames | 174 | 3 |
+| Speck pass, full pool (600 before, 200 after) | 4.62 ms | 1.32 ms |
+| Speck pass, 200 specks each | 1.57 ms | 1.32 ms |
+| Command frames per second at rest (whole idle.js in a harness) | 30 | about 10 |
+
+Rail pixels moved by at most 2/255 in 32 or fewer channels across all eight
+node styles, glow on and off, DPR 1 and 2. Command node pixels moved by at
+most 5/255, and the `node-paint-cache` fixture's own checks, run on Skia,
+read a maximum delta of 1 with unchanged gradient-creation counts.
+
+### Main process: batched pushes, fewer writes
+
+- **Worker output.** `logLine` sent one IPC message per line, a dozen a
+  second per builder and thousands in a burst. Lines now go out as one
+  array per 100 ms beat. `preload.cjs` unpacks it, so listeners still get
+  one line per call. A burst keeps its newest 400 lines with a count of the
+  rest, and a line is clipped at 4,000 characters for the log. Both stdout
+  wires split only the new chunk and hold a line that never ends (a
+  spinner, a dump) to 64 KiB. Before, a growing buffer was re-split on
+  every chunk.
+- **Board pushes.** `eyes:tasks`, `eyes:requests` and `eyes:ideas` carry
+  whole lists, and each was copied into every renderer listener (seven for
+  tasks), up to once a second per running job. `send()` now pushes the
+  first of a quiet window at once, and later pushes inside 250 ms share one
+  trailing push of the newest list. That list is dropped if the project
+  changed before it went out.
+- **Assistant hops.** Every hop of an AI role (one per 900 ms for the whole
+  call) rewrote the whole pretty-printed assistant state. Hops now ride the
+  2 s throttled save. Job start and finish still write at once, and quitting
+  still saves synchronously.
+- **Machine watch.** It rewrote `machine-status.json` and
+  `resource-manager.json` on every 5–20 s tick, although nothing reads them
+  back. It now writes the status only when leases, verdicts, kills or the
+  capacity decision change (and at least once a minute), and the resource
+  log only after a kill. Overlapping queue-status reads share one board
+  read. The project store facade is kept per module and project, so its 2 s
+  session scope survives from one `getEyes()` call to the next. The board
+  gateway uses its untouched read as the revision baseline instead of a
+  third clone, and the tray tooltip is set only when its words change.
+
+| Board gateway, 84 tasks, 1.1 MB synthetic board, median of 15 | Before | After |
+|---|---:|---:|
+| No-op mutation, CPU | 13.9–14.7 ms | 11.1–11.2 ms |
+| Executor checkpoint (`runProgress` on one row), CPU | 20.6–24.3 ms | 18.1–19.8 ms |
+
+### Agent loop: less work per pass, fewer wasted tokens
+
+- **The idea scan behind every claim.** `analyzer.verifyIdea` lowercased
+  every line once per keyword. It now lowercases each file once, uses
+  `indexOf`, and keeps file text by path, size and mtime. The hits are
+  identical, and a test pins them against the old scan.
+- **The keeper** stringified the whole board twice to learn whether `tidy`
+  changed anything, when `tidyTasks` hands back the same array if it did
+  not. An identity check comes first now.
+- **The thinker** read the store twice a minute and built full chat facts:
+  planning, a project-work scan that can spawn `gh`, four board files,
+  machine status and a backlog summary. It used only the log, suggestions
+  and executor facts. It now passes its own store read and asks for lite
+  facts. Chat replies are unchanged.
+- **The foreman** runs a board transaction to promote requests only when
+  the requests file holds one that `promotableRequest` would take. The
+  gateway is still the authority, and housekeeping still runs every pass.
+- **The worker brief** pointed builders at the whole board file (8.1 MB on
+  the live project), which a builder that opened or grepped it paid for in
+  tokens. Each task run now writes `task-runs/<runId>.json` beside the
+  board, and the brief's structured sections are compact JSON.
+- **Host facts** were cut with `JSON.stringify(facts).slice(0, 14000)`,
+  which handed the model invalid JSON and dropped the trailing keys first:
+  machine, work, chatter and inbox. `assistant.boundedFactsJson` shrinks
+  the largest array or string until the facts fit, always returns valid
+  JSON, and names what it trimmed. The brief's machine tail reuses a status
+  up to 150 s old instead of running a fresh resource pass.
+- **The store worker.** `gitPorcelain` and `commitEvidence` were `spawnSync`
+  calls on the single worker thread (100–185 ms, up to 8 s), and every
+  store read queued behind them. They are async children now. The
+  duplicate-declaration scan keeps its findings per file by mtime and size.
+  The recent-edit scan behind collisions and file presence is reused while
+  SQLite's `data_version` says no other connection has committed.
+- **Routing.** With auto-fallback off, route resolution stops at the first
+  usable provider. A compatible endpoint's `/models` probe is kept 60 s
+  (15 s for a miss), and concurrent callers share it.
+- **Scope heal.** A synchronous `readdirSync` walk of up to 20,000 entries
+  ran for every missing file name, on the main thread, every 5 minutes and
+  at every job finish. It is now one async walk per root for all missing
+  names, with the same order, limits and tie-breaking. Settlement uses the
+  30-minute miss cache too.
+- **Per-pass indexes.** `summarizeBacklog` builds its id maps and each
+  row's dependency state once, and `overlappingSessions` builds its session
+  haystacks once per sessions snapshot. Both give identical results.
+
+| Agent-loop measurement | Before | After |
+|---|---:|---:|
+| `verifyIdea`, rare keywords, 395 files (CPU) | 556 ms | 76 ms warm, 254 ms cold |
+| `verifyIdea`, broad idea | 60 ms | 11 ms |
+| Keeper tidy with nothing to tidy, 8.1 MB board | 54.3 ms | 0.1 ms |
+| Duplicate-declaration scan, 109 files (wall / CPU) | 80 / 68 ms | 8 / 7 ms |
+| Recent-edit scan, 12k-part store, commit between passes / none | 71 ms / 71 ms | 57 ms / 3 ms |
+| `summarizeBacklog`, 84 / 600 tasks | 4.05 / 190 ms | 1.43 / 30 ms |
+| `overlappingSessions`, 60 candidates × 40 sessions × 400 todos | 51 ms | 4.7 ms |
+| Scope heal, six missing names over a large tree | 249–516 ms blocking | one 170–190 ms async walk, worst event-loop stall about 5 ms |
+| Task context a builder is pointed at | 8.1 MB board | about 95 KB run file |
+| Host facts at 29.7k characters | invalid JSON, machine and inbox lost | 11.7k, valid, every small key kept (1.7 ms) |
+
+**One real bug on the way:** a test process was classed as hung when one
+CPU sample matched the previous one. That single unchanged sample counted
+as the whole 240 s idle window, so at the 5 s scan cadence of a busy lease
+a test that sat idle for a few seconds was killed. `scripts/machine.mjs` now
+keeps when each process's CPU last moved and measures idle time in elapsed
+time (tests/machine_hang_window.test.mjs).
+
 ## Home's tree backdrop, September 24, 2026
 
 Home now draws the Command tree behind its frosted panels
