@@ -22,6 +22,15 @@ assistant`, and dedupes on a compact title key so a retried send cannot
 double the work. Tasks live in the project's `data/eyes-tasks.json`; requests
 (a lighter inbox) live in `data/eyes-requests.json`.
 
+Promotion (`promoteRequestsToTasks`) turns inbox requests into cards and
+stamps each source request with `promotedTo`, the card's id. The request stays
+in the inbox until the compactor absorbs it, and dispatch, the queue count and
+the compactor all skip it by that id. They used to match the pair by title key
+only, and a title cut to 90 characters, or one with no ASCII letters (an empty
+key), left the request running beside its own card. A request typed into the
+Explorer's inbox has no title and is not promoted; dispatch names it by its
+prompt's first line.
+
 ## 2. The tick: autopilotPass
 
 The loop's heartbeat is `autopilotPass`, scheduled by `setAutopilot` every
@@ -106,7 +115,18 @@ free slot:
   (`clusterAdvice` above `prepareClusterJob`): a re-claim within 30 minutes
   whose brief, mode and last finished run are unchanged reuses it instead of
   paying for the two calls and the reference search again. Advice where both
-  advisors failed is not kept, so a re-claim asks again.
+  advisors failed is not kept, so a re-claim asks again, and neither is
+  advice for a claim already released (a breaker trip, an update drain, the
+  ghost sweep): an answer that lands then is a failed report, never
+  "findings", and nothing is cached.
+- The claim is for the active project only. A project switch abandons a
+  running roster pass and goes on, while that pass still runs scoped to the
+  project left behind; the foreman returns before dispatch when its pass was
+  abandoned, and `spawnNextJob`, the claim transaction and the launch gate
+  all refuse a project that is no longer the active one. A per-run worktree
+  checkout that outlasted the supervisor's two-minute ghost sweep finds its
+  claim released (`entry.finished`) and discards the checkout instead of
+  starting an untracked twin of the reopened card.
 
 ## 4. The worker: a headless CLI agent
 
@@ -129,13 +149,25 @@ auto-approved because nobody is at the keyboard. `grok`, `claude`, `codex` and
 `antigravity` are alternative routes with the same contract (`isCliRun` and
 the CLI branches of `spawnAttempt`) — except `grok`, which takes the prompt as
 a positional argument rather than on stdin, so a run's brief is visible in
-that process's command line. A one-shot fallback to opencode
+that process's command line. `claude` and `antigravity` run in print mode,
+which says nothing until the answer and registers no OpenCode session, so they
+arm no wedged-start watchdog (the hard kill still bounds them) and their first
+line is not a start sample. A one-shot fallback to opencode
 (`fallbackToOpencode`, from `attach`) covers a CLI that exits non-zero without
 ever writing to stdout; output on stderr alone — a deprecation notice, say —
-does not count as the CLI having reported on the work.
+does not count as the CLI having reported on the work. The replacement is
+judged on its own start and its own verdict: the CLI attempt's `spoke`,
+`startKilled` and verdict flags are cleared before it attaches, and no
+replacement starts once the run was stopped by the operator, the executor
+paused or stopped, or its project left.
+
+A resumed run's brief carries the previous run's saved output and result line
+quoted (`> `, `executorResume.brief`), so a CLI that echoes its prompt (codex
+does, on stderr) cannot replay them as its own verdict, result and hand-offs.
 
 Output is line-buffered by `wire()`: every line marks `spoke` (and, on
-stdout, `spokeOut`), the strict line-match `isDoneMarkerLine`
+stdout, `spokeOut`), except a line of terminal escape codes alone, which is
+no line at all; the strict line-match `isDoneMarkerLine`
 (scripts/assistant.mjs) sets `sawDone` — quoting the sentinel in prose never
 counts — `MEFI_RESULT:` is parsed into `resultNote` by `parseExecutorResult`
 (same file) — a line over 300 characters is clipped, not dropped, since
@@ -149,10 +181,11 @@ discharge. That card failed verification three times, re-running each time,
 was parked, and left every ancestor waiting forever — one seed that used the
 protocol as written ended as 15 cards, none done after four hours. Declined
 titles are named on the card's "run finished" log line instead. All three marks are
-anchored to the start of the line and read through the same colour strip, so
-a run can neither talk itself into being done nor talk the board into new
-work by quoting the protocol, and a CLI that wraps its last line in colour
-still has its verdict counted. The last 8/40 non-empty lines, colour codes
+anchored to the start of the line and read through the same escape strip
+(every CSI sequence, not only colour), so a run can neither talk itself into
+being done nor talk the board into new work by quoting the protocol, and a CLI
+that wraps its last line in colour, or clears the line before it, still has
+its verdict counted. The last 8/40 non-empty lines, colour codes
 stripped, feed `outputTail`/`outputLog` (the comment "The kept tails must
 never…" in `wire`), so a bare colour reset can no longer become the run's
 recorded last line; the live
@@ -183,6 +216,12 @@ nothing completed at all. The budget now moves with evidence:
   speaks is exactly what this watchdog exists to stop;
 - any start resets the kill count, and nothing waits longer than **ten
   minutes**.
+
+Before it kills, the watchdog looks for the run's session once more
+(`attributeRunSession`): the session poll gives up after a minute, and a
+store that registered the run later still proves it started. The timer firing
+counts as the budget having passed, since Node may deliver it a millisecond
+early by the wall clock.
 
 Measured with the monitor (§9), nine tasks over two hours: a runner needing
 3.5 or 5 minutes to first output went from 0 of 9 done (19 kills, 57
@@ -238,8 +277,14 @@ When the child closes, `finish()` (`const finish = async` in
     charged (the `userStop` branch).
   - **failure** → `runFailures += 1`, backoff 1 min, then 20m/40m/80m;
     after 5 tries parked for manual reopen ("gave up after 5 tries"). Infra
-    failures (spawn error or a silent death <15s) trip an executor breaker
-    that parks all dispatch (`infraFail`, `AUTOPILOT_PARK_MS`, in `finish`).
+    failures trip an executor breaker that parks all dispatch (`infraFail`,
+    `AUTOPILOT_PARK_MS`, in `finish`), and only a run that never spoke is
+    one: a spawn error, a start kill, or a silent death <15 s. A stop reason
+    is an error message too, and a run that worked until the 25-minute kill
+    used to count, so three long tasks parked every worker. The park is
+    saved as the executor still on (`setAutopilot`): saved as off, it never
+    came back after a restart. A run that started (it spoke or bound a
+    session) and then failed ends the card's streak of start kills.
   - **start kill** → the wedged-start watchdog killed a run that never
     registered a session and never printed a line. The runner failed, not the
     work, so the card goes back to `open` on its own cooldown (1m, 2m, 4m…
@@ -247,12 +292,19 @@ When the child closes, `finish()` (`const finish = async` in
     (the `startKilled(task)` branch). Past `EXECUTOR_START_FAILURE_GRACE`
     (5) consecutive start kills the card is charged as an ordinary failure after all, so a task that
     really does wedge its runner still reaches review; any run that does start
-    clears the streak. Before this, a stretch of slow CLI starts spent every
+    clears the streak, and so does Try again. Before this, a stretch of slow CLI starts spent every
     card's five tries without a single brief being read — the studio's own
     executor log for 2026-09-18 shows 91 of 160 runs killed that way and not
     one task reaching `done`.
-- Chat-sourced work gets a thread reply ("Finished (verifying)"), and the
-  freed slot is refilled (`assistantAskForWork("a slot came free")`).
+- Only after that fenced commit are the run's own asks (`MEFI_ASK`, its
+  result's `owner:` part) and its failure question raised
+  (`raiseRunIssues`). A stale run whose card a newer run owns raises
+  nothing, and the failure question is named by this run's error or last
+  words, never the previous run's `lastRunError`.
+- Chat-sourced work gets a thread reply ("Finished (verifying)", "Stopped
+  (progress saved)", "Waiting to retry (not charged)" for a start kill in
+  grace or a provider outage, or "Failed"), and the freed slot is refilled
+  (`assistantAskForWork("a slot came free")`).
 
 ## 6. Verification: autopilotHousekeeping
 
@@ -300,7 +352,20 @@ check" line (`renderDetail` in renderer/tasks.js) in place of the old
 verification job carries its card's `projectPath` (`scheduleVerificationOnDone`)
 and `runVerificationJob` runs it there; a job without one runs in the active
 project root. A job whose commands use `npm` in a folder with no
-`package.json` moves to the Studio checkout instead, and logs that it did.
+`package.json` moves to the Studio checkout instead, and logs that it did;
+those results checked Studio's tree, so they are stamped `relocated` and are
+nobody's evidence: they neither verify the card nor reopen it.
+
+The overseer's own rows are runner-issued (`runnerIssued`, set by
+`verifyCompletion` for whatever arrives as `overseerChecks`), so they skip the
+shape filter meant for a worker's shell history. The LÖVE harness pipes
+love.exe and reads result.txt, a shape that filter rejects, and its result
+used to be dropped. Verification commands run with the same
+credential-stripped environment as every child (`runCheckCommand` passes an
+args array, so platform.cjs's stripped options survive), and a command past
+its 15-minute budget is killed with its whole process tree; a grace timer
+settles it as timed out if a survivor keeps its pipes open. Reopening a done
+card on a failed overseer run writes its own receipt.
 
 Evidence is fetched only for cards the pass can actually judge. The prefetch
 above runs outside the board lock, so it used to read `listChanges` and
@@ -332,7 +397,11 @@ The pass no longer waits for the next tick to look again (2026-09-21):
 - Housekeeping re-arms itself for what it had to skip: a card still inside
   its dwell (`followUp.dwellMs`), or a card whose evidence store did not
   answer (`VERIFY_EVIDENCE_RETRY_MS`, bounded by `VERIFY_EVIDENCE_RETRY_MAX`
-  per streak, then the foreman's cadence owns it).
+  per streak, then the foreman's cadence owns it). Some gaps never close — a
+  check history past the store's 1000-row read, a session row gone from the
+  store — so a card whose evidence is still unreadable two hours into its
+  wait (`VERIFY_EVIDENCE_WAIT_MAX_MS`) is parked for the owner with the gap
+  named, with no rerun.
 - A card whose overseer check is queued or in flight in THIS process
   (`verificationJobs` / `verificationInFlight`) waits for that result instead
   of settling ahead of it and being reopened by the failing run minutes
@@ -580,8 +649,9 @@ run, the owner is asked once: "This work keeps coming back" — *Hold it for my
 review* (recommended) or *Let it run*. A hold stamps `loopGuard` with
 `kind: "family"` and `by: "owner"` on the waiting cards, shown and released
 like any loop hold (Try again), but never by the loop-guard switches. Either
-answer stamps every member, and only runs after the answer count towards
-asking again. The ask is superseded once none of the cards it would hold is
+answer stamps every member's `churnDecision` (the duplicate answer above is
+`familyDecision`; the two shared that field once, and each erased the other),
+and only runs after the answer count towards asking again. The ask is superseded once none of the cards it would hold is
 still open.
 
 Issue asks on finished cards: the keeper supersedes an open issue ask whose
