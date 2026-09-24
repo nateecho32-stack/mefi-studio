@@ -630,6 +630,32 @@ test("a CLI that only writes to stderr and dies is a broken route, not a failed 
   assert.equal(host.finishes.length, 0, "the job is not charged a failure before the replacement has run");
 });
 
+test("a CLI's stderr notice does not disarm its replacement's wedged-start watchdog", () => {
+  const host = childHost();
+  host.first.stderr.emit("data", "warning: --always-approve is deprecated\n");
+  host.first.emit("close", 1);
+  assert.equal(host.entry.child, host.fallback);
+  assert.equal(host.entry.spoke, false, "the replacement has not said anything yet");
+  host.advance(120001);
+  host.timers.filter((timer) => timer.delay === 120000).at(-1)();
+  assert.equal(host.entry.startKilled, true, "a silent replacement is a wedged start like any other run");
+  assert.match(host.entry.stopping.reason, /wedged start/);
+});
+
+test("a replacement that ran and failed after a wedged CLI start is not a start kill", () => {
+  const host = childHost();
+  host.advance(120001);
+  host.timers.find((timer) => timer.delay === 120000)();
+  assert.equal(host.entry.startKilled, true);
+  host.killers[0].emit("close", 0);
+  assert.equal(host.entry.child, host.fallback);
+  assert.equal(host.entry.startKilled, false, "the start kill belonged to the CLI attempt");
+  host.fallback.stdout.emit("data", "Editing renderer/idle.js\n");
+  host.fallback.emit("close", 1);
+  assert.deepEqual(host.finishes, [{ code: 1, error: null }]);
+  assert.equal(host.entry.startKilled, false, "the replacement's failure is charged like any job failure");
+});
+
 test("a CLI that reported on stdout and then failed is the job failing, not the route", () => {
   const host = childHost();
   host.first.stdout.emit("data", "Editing renderer/idle.js\n");

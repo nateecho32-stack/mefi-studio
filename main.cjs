@@ -12353,6 +12353,16 @@ async function spawnNextJob() {
       title: String(job.title ?? "").slice(0, 160),
       reason: String(reason).slice(0, 120),
     }).catch(() => {});
+    // The replacement is judged on its own start and its own verdict. A CLI
+    // that died after one stderr notice left `spoke` set, which disarmed the
+    // replacement's wedged-start watchdog; a CLI the watchdog killed left
+    // `startKilled` set, so a replacement that ran and then failed was
+    // requeued as "never started" with no attempt charged.
+    entry.spoke = false;
+    entry.spokeOut = false;
+    entry.startKilled = false;
+    entry.sawDone = false;
+    if (entry.resultNote) entry.resultNote = null;
     try {
       attach(spawnAttempt(fallbackRoute, null), "opencode", fallbackRoute, false);
       watchRunSession(eyes, startedAt, entry);
