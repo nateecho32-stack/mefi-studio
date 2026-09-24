@@ -1283,7 +1283,7 @@
       const css = (triple) => `#${triple.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
       const deep = mix(rgb, [7, 8, 16], 0.86);
       derived = { hex, rgb, hot: css(mix(rgb, [255, 255, 255], 0.6)), ink: css(mix(rgb, [255, 255, 255], 0.86)), deep: css(deep), shade: css(mix(deep, rgb, 0.4)),
-        accent: undefined, glow: [null, null], disc: [null, null], fade: [null, null], core: null, halo: null, well: [null, null] };
+        accent: undefined, glow: [null, null], disc: [null, null], fade: [null, null], core: null, halo: null, well: [null, null], free: {} };
       derivedColors.set(color, derived);
     }
     return derived;
@@ -1339,8 +1339,48 @@
     return derived.well[index];
   }
 
+  // The free styles' gradients (the orbs' halo and body, the extra glow, the
+  // crystal's gem and the glass wash), cached per colour in unit space like
+  // the Void collection's: a node's path is traced in screen space and filled
+  // under translate(p) and scale(radius), which maps the unit paint onto it,
+  // so a frame builds no gradient per node.
+  function freePaint(color, kind, variant = 0) {
+    const paints = derivedColor(color).free;
+    const key = variant ? `${kind}${variant}` : kind;
+    let paint = paints[key];
+    if (paint) return paint;
+    if (kind === "glow") {
+      paint = ctx.createRadialGradient(0, 0, 0, 0, 0, 2.8);
+      paint.addColorStop(0, color + "77"); paint.addColorStop(0.45, color + "33"); paint.addColorStop(1, color + "00");
+    } else if (kind === "halo") {
+      // variant 2: working, 1: selected, 0: at rest
+      paint = ctx.createRadialGradient(0, 0, 0.4, 0, 0, variant ? 2.4 : 1.8);
+      paint.addColorStop(0, color + (variant === 2 ? "44" : "20")); paint.addColorStop(1, color + "00");
+    } else if (kind === "body") {
+      paint = ctx.createRadialGradient(-0.25, -0.3, 0, 0, 0, 1);
+      paint.addColorStop(0, color + "dd"); paint.addColorStop(0.5, color + "88"); paint.addColorStop(1, color + "22");
+    } else if (kind === "gem") {
+      paint = ctx.createLinearGradient(-1, -1, 1, 1);
+      paint.addColorStop(0, color + "cc"); paint.addColorStop(0.45, color + "44"); paint.addColorStop(1, "#0c131f");
+    } else {
+      paint = ctx.createLinearGradient(-1, -1, 1, 1);
+      paint.addColorStop(0, color + "66"); paint.addColorStop(1, color + "08");
+    }
+    paints[key] = paint;
+    return paint;
+  }
+  // Fills the current (screen-space) path with a unit-space paint.
+  function fillUnit(paint, x, y, radius) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(radius, radius);
+    ctx.fillStyle = paint; ctx.fill();
+    ctx.restore();
+  }
+
+  // The theme's canvas palette as of this frame: draw() reads it once and every
+  // node's colour comes from that copy instead of asking music.js per node.
+  let framePalette = null;
   function colorOf(node) {
-    const palette = window.MefiMusic?.themePalette?.()?.canvas;
+    const palette = framePalette;
     if (node.kind === "assistant") return palette?.bright ?? COLORS.assistant;
     if (node.kind === "agent") {
       // status first: amber on error, green when the last job is done, dim
@@ -1440,10 +1480,9 @@
     }
   }
 
-  function drawStars() {
+  function drawStars(palette) {
     // The rail's sky follows the colour theme: a faint accent wash rises from
     // the foot of the strip and the stars take the theme's text tone.
-    const palette = window.MefiMusic?.themePalette?.()?.canvas;
     if (palette?.accent) {
       const accent = hexRgb(palette.accent);
       const wash = ctx.createRadialGradient(width * 0.5, height * 1.05, 0, width * 0.5, height * 1.05, height * 0.8);
@@ -1465,7 +1504,11 @@
   function draw(time) {
     if (!width || !height) resize();
     ctx.clearRect(0, 0, width, height);
-    drawStars();
+    // Theme and graph preferences change between frames, never inside one.
+    framePalette = window.MefiMusic?.themePalette?.()?.canvas ?? null;
+    const appearance = window.MefiMusic?.graphPreferences?.() ?? {};
+    const nodeStyle = appearance.nodeStyle ?? "orbs";
+    drawStars(framePalette);
 
     const projected = new Map();
     for (const node of nodes) projected.set(node, project(node));
@@ -1588,12 +1631,8 @@
       if (node.stale) fresh = Math.min(fresh, 0.45);
       const focused = assistant.state?.focus;
       const selected = isHover || node.kind === "session" && node.id === activeSessionId || focused && node.kind === focused.kind && node.id === focused.id;
-      const appearance = window.MefiMusic?.graphPreferences?.() ?? {};
-      const nodeStyle = appearance.nodeStyle ?? "orbs";
       if (appearance.extraGlow === true) {
-        const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius * 2.8);
-        glow.addColorStop(0, color + "77"); glow.addColorStop(0.45, color + "33"); glow.addColorStop(1, color + "00");
-        ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(p.x, p.y, radius * 2.8, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(p.x, p.y, radius * 2.8, 0, Math.PI * 2); fillUnit(freePaint(color, "glow"), p.x, p.y, radius);
       }
       if (nodeStyle === "minimal") {
         ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, radius * (working ? 0.65 : 0.48)), 0, Math.PI * 2);
@@ -1606,12 +1645,16 @@
         ctx.beginPath(); ctx.arc(p.x, p.y, radius * 0.6, 0, Math.PI * 2); ctx.globalAlpha = 0.3 * visibility; ctx.lineWidth = 0.8; ctx.stroke(); ctx.globalAlpha = visibility;
         ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1.5, radius * 0.16), 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill(); ctx.restore();
       } else if (nodeStyle === "crystal") {
-        ctx.save(); const points = Array.from({ length: 6 }, (_, index) => ({ x: p.x + Math.cos(index * Math.PI / 3 - Math.PI / 2) * radius, y: p.y + Math.sin(index * Math.PI / 3 - Math.PI / 2) * radius }));
-        ctx.beginPath(); points.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y)); ctx.closePath();
-        const gem = ctx.createLinearGradient(p.x - radius, p.y - radius, p.x + radius, p.y + radius);
-        gem.addColorStop(0, color + "cc"); gem.addColorStop(0.45, color + "44"); gem.addColorStop(1, "#0c131f");
-        ctx.fillStyle = gem; ctx.fill(); ctx.strokeStyle = color; ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke();
-        ctx.globalAlpha = 0.35 * visibility; ctx.beginPath(); points.filter((_, index) => index % 2 === 0).forEach((point) => { ctx.moveTo(p.x, p.y); ctx.lineTo(point.x, point.y); }); ctx.lineWidth = 0.7; ctx.stroke(); ctx.restore();
+        ctx.save(); ctx.beginPath();
+        for (let index = 0; index < 6; index += 1) {
+          const x = p.x + Math.cos(index * Math.PI / 3 - Math.PI / 2) * radius, y = p.y + Math.sin(index * Math.PI / 3 - Math.PI / 2) * radius;
+          if (index) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        }
+        ctx.closePath();
+        fillUnit(freePaint(color, "gem"), p.x, p.y, radius); ctx.strokeStyle = color; ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke();
+        ctx.globalAlpha = 0.35 * visibility; ctx.beginPath();
+        for (let index = 0; index < 6; index += 2) { ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + Math.cos(index * Math.PI / 3 - Math.PI / 2) * radius, p.y + Math.sin(index * Math.PI / 3 - Math.PI / 2) * radius); }
+        ctx.lineWidth = 0.7; ctx.stroke(); ctx.restore();
       } else if (nodeStyle === "singularity") {
         // A near-black core behind a thin photon ring, inside an accretion disc
         // whose brightness turns with the angle, over a faint outer glow.
@@ -1684,22 +1727,22 @@
         ctx.globalAlpha = visibility;
       } else if (nodeStyle === "glass") {
         ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, Math.PI * 2); ctx.fillStyle = "#172331"; ctx.fill();
-        const glass = ctx.createLinearGradient(p.x - radius, p.y - radius, p.x + radius, p.y + radius);
-        glass.addColorStop(0, color + "66"); glass.addColorStop(1, color + "08"); ctx.fillStyle = glass; ctx.fill();
+        fillUnit(freePaint(color, "glass"), p.x, p.y, radius);
         ctx.strokeStyle = color; ctx.globalAlpha = (selected ? 0.95 : working ? 0.72 : 0.42) * visibility; ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke(); ctx.globalAlpha = visibility;
         ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, radius - 2), Math.PI * 1.13, Math.PI * 1.6);
         ctx.strokeStyle = "rgba(231,243,255,0.55)"; ctx.lineWidth = 1; ctx.stroke();
       } else {
         // Restrained luminous orbs retain the constellation's visual identity.
+        // Halo and body are unit-space paints filled under one transform; the
+        // circles are traced in that space and the rim strokes in screen space.
         const spread = working || selected ? 2.4 : 1.8;
-        const halo = ctx.createRadialGradient(p.x, p.y, radius * 0.4, p.x, p.y, radius * spread);
-        halo.addColorStop(0, color + (working ? "44" : "20")); halo.addColorStop(1, color + "00");
-        ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(p.x, p.y, radius * spread, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+        ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius);
+        ctx.fillStyle = freePaint(color, "halo", working ? 2 : selected ? 1 : 0); ctx.beginPath(); ctx.arc(0, 0, spread, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2);
         ctx.fillStyle = "#151a22"; ctx.fill();
-        const body = ctx.createRadialGradient(p.x - radius * 0.25, p.y - radius * 0.3, 0, p.x, p.y, radius);
-        body.addColorStop(0, color + "dd"); body.addColorStop(0.5, color + "88"); body.addColorStop(1, color + "22");
-        ctx.globalAlpha = Math.max(0.5, fresh) * visibility; ctx.fillStyle = body; ctx.fill(); ctx.globalAlpha = visibility;
+        ctx.globalAlpha = Math.max(0.5, fresh) * visibility; ctx.fillStyle = freePaint(color, "body"); ctx.fill();
+        ctx.restore();
+        ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
         ctx.strokeStyle = color; ctx.globalAlpha = (selected ? 0.95 : working ? 0.8 : 0.35) * visibility;
         ctx.lineWidth = selected ? 1.6 : 1; ctx.stroke(); ctx.globalAlpha = visibility;
       }
@@ -1816,7 +1859,7 @@
     ctx.globalAlpha = 1;
 
     if (hover) {
-      tip.hidden = false;
+      let text;
       if (hover.kind === "assistant") {
         const summary = assistantSummary(assistant.state);
         const log = Array.isArray(assistant.state?.log) ? assistant.state.log : [];
@@ -1824,16 +1867,16 @@
         // What is in flight beats what last happened.
         const work = Array.isArray(assistant.state?.work) ? assistant.state.work : [];
         const line = work.length ? `working on: ${String(work[0]?.text ?? work[0]?.kind ?? "").slice(0, 100)}` : last ? String(last.text).slice(0, 100) : "";
-        tip.textContent =
+        text =
           `${summary.label} · ${summary.sublabel}${line ? ` · ${line}` : ""}` +
           "\nclick: focus the assistant · double-click: open in the Explorer";
       } else if (hover.kind === "folded") {
-        tip.textContent = `${plural(hover.count, "finished session")} · click to list them in the Explorer`;
+        text = `${plural(hover.count, "finished session")} · click to list them in the Explorer`;
       } else if (hover.kind === "agent") {
         const detail = hover.status === "error" && hover.error ? hover.error : hover.text;
         const progress = typeof hover.progress === "number" ? ` · ${Math.round(hover.progress * 100)}%` : "";
         const where = hover.targetLabel && (hover.phase === "flying" || hover.phase === "hovering") ? `\n→ ${String(hover.targetLabel).slice(0, 60)}` : "";
-        tip.textContent = `${hover.role} · ${hover.status}${detail ? ` · ${String(detail).slice(0, 100)}` : ""}${progress}${where}\nclick: focus the assistant`;
+        text = `${hover.role} · ${hover.status}${detail ? ` · ${String(detail).slice(0, 100)}` : ""}${progress}${where}\nclick: focus the assistant`;
       } else {
         const ageMinutes = hover.updated ? Math.round((Date.now() - hover.updated) / 60000) : null;
         const ageLabel = ageMinutes == null ? "" : ageMinutes < 1 ? " · active now" : ` · updated ${ageMinutes}m ago`;
@@ -1843,23 +1886,37 @@
         const focused = assistant.state?.focus;
         const isFocused = focused && hover.kind === focused.kind && hover.id === focused.id;
         const reach = `\nclick: filter the feed · ${isFocused ? "unfocus the assistant" : "point the assistant at it"} · double-click: open in the Explorer`;
-        tip.textContent =
+        text =
           (hover.kind === "todo"
             ? `${hover.status}: ${hover.label}`
             : `${hover.label} · ${hover.agent ?? ""} ${hover.model ?? ""}${ageLabel}${staleLabel}${noteLabel}`) + reach;
       }
-      tip.style.left = Math.min(width - 250, hover._px + 14) + "px";
-      tip.style.top = Math.max(10, hover._py - 10) + "px";
-    } else {
+      placeTip(text, Math.min(width - 250, hover._px + 14) + "px", Math.max(10, hover._py - 10) + "px");
+    } else if (!tip.hidden) {
       tip.hidden = true;
     }
+  }
+
+  // What the tooltip shows: a frame writes its text and position only when
+  // they change, since every write dirties the rail's layout.
+  let tipText = null, tipLeft = null, tipTop = null;
+  function placeTip(text, left, top) {
+    if (tip.hidden) tip.hidden = false;
+    if (text !== tipText) { tip.textContent = text; tipText = text; }
+    if (left !== tipLeft) { tip.style.left = left; tipLeft = left; }
+    if (top !== tipTop) { tip.style.top = top; tipTop = top; }
   }
 
   let lastDraw = -Infinity;
   let animationFrame = null;
 
+  // Home and Command cover the rail, and so does every sheet but Style &
+  // sound: the others lay a blurred scrim over the whole window, while that
+  // one has none and sits beside the rail.
   function railVisible() {
+    const sheet = document.body.dataset?.sheet;
     return !document.hidden && width > 0 && height > 0 &&
+      !(sheet && sheet !== "music") &&
       !document.body.classList.contains("workspace-active") &&
       !document.body.classList.contains("command-active");
   }
@@ -2178,6 +2235,7 @@
 
   function loadResult(result) {
     if (!result?.ok) {
+      lastRead = null;
       storeNote = null;
       buildGraph([], [], {
         status: "unavailable",
@@ -2189,7 +2247,40 @@
     // An empty read may carry why: a store file whose session schema is
     // missing. The empty card shows the note instead of "no recent sessions".
     storeNote = typeof result.note === "string" && result.note ? result.note : null;
+    const sessions = Array.isArray(result.sessions) ? result.sessions : [];
+    lastRead = { sessions, ids: new Set(sessions.map((session) => session.id)), at: performance.now() };
     buildGraph(result.sessions, result.todos);
+  }
+
+  // Tool activity arrives every couple of seconds while agents work, and each
+  // push already carries the store's todo list. A full eyes:state read (the
+  // sessions, 300 diffs and a walk of the screenshot folder) is only needed
+  // for a session this rail has not read yet, or once FULL_READ_MS has passed;
+  // otherwise the graph is rebuilt from the pushed todos and the sessions of
+  // the last read, each touched session carrying its newest activity time.
+  const FULL_READ_MS = 15000;
+  let lastRead = null;
+  function takeActivity(data) {
+    const items = Array.isArray(data?.activity) ? data.activity : [];
+    if (!Array.isArray(data?.todos) || !lastRead || performance.now() - lastRead.at >= FULL_READ_MS ||
+      items.some((item) => item?.sessionId != null && !lastRead.ids.has(item.sessionId))) {
+      load().catch(() => {});
+      return;
+    }
+    const touched = new Map();
+    for (const item of items) {
+      const at = Number(item?.time);
+      if (item?.sessionId != null && Number.isFinite(at)) touched.set(item.sessionId, Math.max(touched.get(item.sessionId) ?? -Infinity, at));
+    }
+    if (touched.size) {
+      // Copies, not edits: the read's rows may be shared with other surfaces.
+      const sessions = lastRead.sessions.map((session) => {
+        const at = touched.get(session.id);
+        return at > (Number(session.timeUpdated) || 0) ? { ...session, timeUpdated: at } : session;
+      });
+      lastRead = { ...lastRead, sessions };
+    }
+    buildGraph(lastRead.sessions, data.todos);
   }
 
   // The rail's pinned state is a preference: it must survive a reload, and the
@@ -2245,10 +2336,11 @@
       setKbdFocus(null);
       activeSessionId = null;
       sessionSlots = new Map();
+      lastRead = null;
       load().catch(() => {});
     });
     if (typeof MutationObserver !== "undefined") {
-      new MutationObserver(syncAnimation).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+      new MutationObserver(syncAnimation).observe(document.body, { attributes: true, attributeFilter: ["class", "data-sheet"] });
     }
     // The rail animates its width; the canvas bitmap must follow or the tree
     // renders stretched while expanding.
@@ -2296,8 +2388,10 @@
       checkpoints = data ?? {};
     });
     window.mefiStudio?.onEyesActivity?.((data) => {
+      // Rebuild before the pulses: a pulse holds node objects, and a rebuild
+      // replaces every one of them.
+      if (data.todos) takeActivity(data);
       for (const item of data.activity ?? []) spawnPulse(item.sessionId);
-      if (data.todos) load().catch(() => {});
     });
     window.mefiStudio?.onAssistant?.((payload) => applyAssistant(payload));
     try {

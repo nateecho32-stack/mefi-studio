@@ -462,6 +462,34 @@ test("theme events carry readable UI and canvas palettes without changing graph 
   assert.equal(env.music.customColors().text, "#222222", "the chosen color remains saved even when displayed text needs contrast correction");
 });
 
+// The rail and the Command view read the palette every frame (the rail once
+// per node), so it is resolved once per theme and custom palette and shared.
+test("themePalette is resolved once per theme and custom palette, frozen, and follows every change", () => {
+  const env = environment({ saved: { theme: "aurora" } });
+  const first = env.music.themePalette();
+  assert.equal(env.music.themePalette(), first, "an unchanged theme hands back the same palette");
+  assert.ok(Object.isFrozen(first) && Object.isFrozen(first.canvas), "readers share it, so nobody can edit it");
+  assert.deepEqual(JSON.parse(JSON.stringify(first)), JSON.parse(JSON.stringify({ theme: "aurora", ...helpers.resolvePalette("aurora", {}) })));
+  env.music.applyTheme("rose");
+  const rose = env.music.themePalette();
+  assert.notEqual(rose, first);
+  assert.equal(rose.theme, "rose");
+  assert.equal(rose.canvas.background, helpers.resolvePalette("rose", {}).canvas.background);
+  env.music.applyCustomColors({ accent: "#777777", background: "#FFFFFF", surface: "#000000", text: "#222222" });
+  const custom = env.music.themePalette();
+  assert.equal(custom.theme, "custom");
+  assert.equal(custom.background, "#FFFFFF");
+  assert.equal(env.music.themePalette(), custom);
+  env.music.applyCustomColors({ background: "#101010" });
+  const edited = env.music.themePalette();
+  assert.notEqual(edited, custom, "a custom colour change resolves a new palette");
+  assert.equal(edited.background, "#101010");
+  assert.deepEqual(JSON.parse(JSON.stringify(edited)), JSON.parse(JSON.stringify({ theme: "custom", ...helpers.resolvePalette("custom", env.music.customColors()) })));
+  env.music.applyTheme("aurora");
+  assert.equal(env.music.themePalette().theme, "aurora");
+  assert.equal(env.music.themePalette().background, first.background);
+});
+
 test("live preview view controls change the real tree and follow external view changes", () => {
   const env = environment({ preview: true });env.music.open();
   const flat=env.ids.get("music-tree-view-2d"),solid=env.ids.get("music-tree-view-3d");
