@@ -2337,23 +2337,42 @@ function sessionTodoText(session, todosById) {
   return [...nested, ...extra].filter(Boolean).join(" ");
 }
 
-function overlappingSessions(job, sessions, todos = []) {
-  const needles = collabNeedles(job);
-  if (!needles.length) return [];
+// Each top-level session with the text a feature-overlap check searches. The
+// spawn loop checks every ranked candidate against the same store snapshot,
+// and each check rebuilt the todo index and lowercased every session again,
+// so the rows are kept per snapshot: keyed on the sessions array, valid for
+// the same todos array (or any empty one) and unchanged lengths.
+const sessionHaystacks = new WeakMap();
+function sessionHaystackRows(sessions, todos) {
+  const cacheable = Array.isArray(sessions);
+  const todoRows = asArray(todos);
+  const known = cacheable ? sessionHaystacks.get(sessions) : null;
+  if (known && known.sessionCount === sessions.length && (known.todos === todos || (!known.todoCount && !todoRows.length)) && known.todoCount === todoRows.length) return known.rows;
   const todosById = new Map();
-  for (const todo of asArray(todos).filter(isObject)) {
+  for (const todo of todoRows.filter(isObject)) {
     const id = str(todo.sessionId);
     if (!id) continue;
     const list = todosById.get(id) ?? [];
     list.push(todo);
     todosById.set(id, list);
   }
-  const hits = [];
-  const seen = new Set();
+  const rows = [];
   for (const session of asArray(sessions).filter(isObject)) {
     const id = str(session.id || session.sessionId);
-    if (!id || session.parentId || seen.has(id)) continue;
-    const hay = compactKey(`${str(session.title)} ${sessionTodoText(session, todosById)}`);
+    if (!id || session.parentId) continue;
+    rows.push({ id, session, hay: compactKey(`${str(session.title)} ${sessionTodoText(session, todosById)}`) });
+  }
+  if (cacheable) sessionHaystacks.set(sessions, { todos, sessionCount: sessions.length, todoCount: todoRows.length, rows });
+  return rows;
+}
+
+function overlappingSessions(job, sessions, todos = []) {
+  const needles = collabNeedles(job);
+  if (!needles.length) return [];
+  const hits = [];
+  const seen = new Set();
+  for (const { id, session, hay } of sessionHaystackRows(sessions, todos)) {
+    if (seen.has(id)) continue;
     if (!needles.some((word) => hay.includes(word))) continue;
     seen.add(id);
     hits.push({
