@@ -9781,6 +9781,13 @@ function requestsFromExpand(briefing, existing = [], source = "grow") {
 // the compactor's own output instead of being overwritten by it (or vice
 // versa).
 async function promoteRequestsToTasks() {
+  // Most foreman wakes find nothing to promote, and the gateway's own early
+  // exit only runs after its locked read, clone and change detection. A plain
+  // read of the inbox through the same reader skips that transaction when no
+  // request could be promoted; the gateway below still decides, so a request
+  // filed in between is promoted on the next pass, as one filed just after a
+  // pass always was.
+  if (!(await promotableRequestsWaiting())) return 0;
   const patch = await mutateBoard((board, eyes) => {
     const requests = board.requests;
     if (!requests.length) return { added: 0 };
@@ -9788,7 +9795,7 @@ async function promoteRequestsToTasks() {
     // Moving work onto the board cannot clear a hold or claim. Pins and age
     // use the dispatch ordering so a capped pass admits the chosen task first.
     const candidates = requests
-      .filter((request) => request?.title && !request.runId && !request.runProgress?.pending && !request.absorbedInto && (!request.status || ["open", "pending", "queued"].includes(request.status)))
+      .filter(promotableRequest)
       .sort(compareWork);
     const created = [];
     for (const request of candidates) {
@@ -9882,6 +9889,26 @@ async function promoteRequestsToTasks() {
     return { tasks: board.tasks, added };
   });
   return patch.added ?? 0;
+}
+
+// A request the promotion pass may move onto the board: titled, unclaimed,
+// not mid-run, not absorbed, and still open.
+function promotableRequest(request) {
+  return Boolean(request?.title && !request.runId && !request.runProgress?.pending && !request.absorbedInto && (!request.status || ["open", "pending", "queued"].includes(request.status)));
+}
+
+// The pre-check behind promoteRequestsToTasks: true unless a plain read of the
+// inbox shows no promotable request. A read that fails, or a reader that is
+// not there, answers true and leaves the decision to the gateway.
+async function promotableRequestsWaiting() {
+  try {
+    const eyes = await getEyes();
+    if (typeof eyes?.readJson !== "function") return true;
+    const requests = await eyes.readJson(REQUESTS_PATH, []);
+    return !Array.isArray(requests) || requests.some(promotableRequest);
+  } catch {
+    return true;
+  }
 }
 
 // Chat work lands straight on the task board. "Add …" in the thread, the

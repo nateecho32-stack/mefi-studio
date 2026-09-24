@@ -109,6 +109,29 @@ test("promotion does not reopen completed, held, grouped or reviewing inbox work
   assert.deepEqual(copy(board.requests), requests);
 });
 
+test("an inbox with nothing promotable skips the board transaction; the gateway still decides the rest", async () => {
+  const held = [{ title: "Done", status: "done" }, { title: "Claimed", runId: "live" }, { title: "Absorbed", absorbedInto: "t" }, { title: "Mid-run", runProgress: { pending: true } }, { prompt: "untitled" }];
+  const { context, board } = host({ requests: held });
+  let transactions = 0, reads = 0;
+  const gateway = context.mutateBoard;
+  context.mutateBoard = async (mutate) => { transactions += 1; return gateway(mutate); };
+  context.REQUESTS_PATH = "requests";
+  context.getEyes = async () => ({ readJson: async (key, fallback) => { reads += 1; return key === "requests" ? copy(board.requests) : fallback; } });
+  assert.equal(await context.promoteRequestsToTasks(), 0);
+  assert.equal(transactions, 0, "no promotable request, no transaction");
+  assert.equal(reads, 1);
+  board.requests.push({ title: "Ready now", status: "open", at: 5 });
+  assert.equal(await context.promoteRequestsToTasks(), 1);
+  assert.equal(transactions, 1);
+  // A promotable request that is already on the board reaches the gateway, which refuses it.
+  assert.equal(await context.promoteRequestsToTasks(), 0);
+  assert.equal(transactions, 2);
+  // A reader that fails leaves the decision to the gateway.
+  context.getEyes = async () => { throw new Error("store closed"); };
+  assert.equal(await context.promoteRequestsToTasks(), 0);
+  assert.equal(transactions, 3);
+});
+
 test("explicit task admission retains a full brief and focused handoff beyond the old character cap", async () => {
   const { context, board } = host();
   const prompt = `${"Detailed requirement. ".repeat(100)}Final acceptance: verify keyboard navigation.`;
