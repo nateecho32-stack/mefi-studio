@@ -628,3 +628,25 @@ test("the Needs you tile names which decision each waiting task needs", async ()
   assert.equal(env.el("dash-attention-note").textContent, "1 awaiting approval · 1 blocked · 1 to review");
   assert.equal(env.el("dash-attention").dataset.target, "review");
 });
+
+test("status pushes leave unchanged work tabs untouched and read the backlog at most once per 3.5 s", async () => {
+  const timerQueue = [];
+  const env = await environment({ timerQueue });
+  const tab = env.el("open"), badge = tab.children[0];
+  const writes = [];
+  const setAttribute = tab.setAttribute.bind(tab);
+  tab.setAttribute = (name, value) => { writes.push(name); setAttribute(name, value); };
+  let text = badge.textContent;
+  Object.defineProperty(badge, "textContent", { get: () => text, set: (value) => { writes.push("count"); text = String(value); } });
+  const pending = () => timerQueue.filter((timer) => !timer.cancelled && timer.delay !== 12000);
+  const before = pending().length;
+  env.events.status({ projectId: "project-a", running: [], execute: true });
+  env.events.status({ projectId: "project-a", running: [], execute: true });
+  assert.deepEqual(writes, [], "an unchanged push rewrites neither the counts nor the tab attributes");
+  const queued = pending().slice(before);
+  assert.equal(queued.length, 1, "pushes share one queued backlog read");
+  assert.ok(queued[0].delay > 3000 && queued[0].delay <= 3500, `a push right after a refresh waits out the interval (queued ${queued[0].delay} ms)`);
+  env.events.tasks([{ id: "original", projectId: "project-a", title: "Original task", status: "open" }, { id: "second", projectId: "project-a", title: "Second task", status: "open" }]);
+  assert.equal(text, "2", "a real change still updates the count");
+  assert.equal(pending().slice(before).length, 1, "and joins the same queued read");
+});

@@ -104,10 +104,12 @@ function environment(bridge = {}, { readyState = "complete" } = {}) {
   class CustomEvent {
     constructor(type, init = {}) { this.type = type; this.detail = init?.detail; }
   }
+  // The shared poll guard's callbacks, by key, so a test can fire a tick.
+  const ticks = {};
   const window = {
     addEventListener: (type, fn) => { if (!listeners.has(type)) listeners.set(type, []); listeners.get(type).push(fn); },
     dispatchEvent: (event) => { for (const fn of listeners.get(event.type) ?? []) fn(event); },
-    MefiBoot: { pollStart() {} },
+    MefiBoot: { pollStart(key, fn) { ticks[key] = fn; } },
     mefiStudio: {
       eyesState: async () => ({ ok: true, sessions: sessionsFixture(), todos: todosFixture(), changes: [] }),
       machineStatus: async () => ({ ok: false, error: "stub" }),
@@ -120,6 +122,7 @@ function environment(bridge = {}, { readyState = "complete" } = {}) {
   return {
     window,
     document,
+    ticks,
     explorer: window.MefiExplorer,
     get lookups() { return lookups; },
     tree: () => element("explorer-tree"),
@@ -424,4 +427,27 @@ test("the request inbox adds and removes through targeted actions and reports a 
   assert.deepEqual(JSON.parse(JSON.stringify(calls[1])), { action: "remove", key: { at: 1, prompt: "Older" } });
   assert.match(env.element("request-list").textContent, /Older/, "a refused remove leaves the request listed");
   assert.match(env.element("assistant-status").textContent, /A worker holds this request/);
+});
+
+test("the Machine panel scans once per open, then follows the machine:status push instead of rescanning every poll tick", async () => {
+  let scans = 0;
+  const feeds = [];
+  const status = (lines) => ({ lines, wait: false, leases: { exclusive: false, busy: false, holders: [] }, running: [], processes: [], actions: [], capacity: { canStart: true, resources: {} } });
+  const env = environment({
+    machineStatus: async () => { scans += 1; return { ok: true, status: status(`scan ${scans}`) }; },
+    onMachineStatus: (fn) => feeds.push(fn),
+  });
+  await env.open();
+  const lines = env.element("machine-lines");
+  assert.equal(scans, 1, "opening the sheet reads the machine once");
+  assert.equal(lines.text, "scan 1");
+  for (let tick = 0; tick < 3; tick += 1) { env.ticks["explorer.state"](); await flush(); }
+  assert.equal(scans, 1, "the 5 s store poll never triggers a host process scan");
+  feeds.forEach((fn) => fn(status("watcher pass")));
+  assert.equal(lines.text, "watcher pass", "the push paints the same panel the scan did");
+  env.explorer.close();
+  await env.open();
+  assert.equal(scans, 2, "reopening reads the machine once more");
+  await env.explorer.refresh(); await flush();
+  assert.equal(scans, 3, "an explicit refresh rescans");
 });

@@ -61,7 +61,7 @@
     els.status.style.color = isError ? "var(--bad)" : "";
   }
 
-  async function load() {
+  async function load(options = {}) {
     if (!window.mefiStudio?.eyesState) {
       status("Desktop mode only — run npm start inside mefi-studio.", true);
       treeNote("Desktop mode only — run npm start inside mefi-studio.");
@@ -111,16 +111,24 @@
         treeNote(`session store unavailable: ${stateResult?.error ?? "unknown error"}`);
       }
       if (!state.audit) runAudit();
-      window.mefiStudio?.machineStatus?.().then((result) => {
-        // A failed scan must read as degraded, never as a free machine.
-        if (result?.ok) renderMachine(result.status);
-        else if (els.machineLines) {
-          els.machineLines.textContent = `machine scan unavailable: ${result?.error ?? "unknown error"}`;
-          els.machineLines.style.color = "var(--bad)";
-        }
-      }).catch((error) => {
-        if (els.machineLines) els.machineLines.textContent = `machine scan failed: ${String(error?.message ?? error)}`;
-      });
+      // Once per open (or an explicit refresh), never per poll tick: the
+      // machineStatus IPC is a full host process scan plus two file writes
+      // and a broadcast, and its 2 s cache never survives a 5 s poll. The
+      // onMachineStatus push (init) carries every watcher pass after that
+      // into the same renderMachine, as nav.js's badge already relies on.
+      if (!state.machineRead || options.machine) {
+        state.machineRead = true;
+        window.mefiStudio?.machineStatus?.().then((result) => {
+          // A failed scan must read as degraded, never as a free machine.
+          if (result?.ok) renderMachine(result.status);
+          else if (els.machineLines) {
+            els.machineLines.textContent = `machine scan unavailable: ${result?.error ?? "unknown error"}`;
+            els.machineLines.style.color = "var(--bad)";
+          }
+        }).catch((error) => {
+          if (els.machineLines) els.machineLines.textContent = `machine scan failed: ${String(error?.message ?? error)}`;
+        });
+      }
       // Read once per open, and read-only: machineSet({}) as a read rewrote
       // settings.json and auth.json on every 5 s tick.
       if (!state.machinePrefsRead) {
@@ -1312,6 +1320,7 @@
     const params = optionsOf(options);
     els.overlay.hidden = false;
     state.machinePrefsRead = false;
+    state.machineRead = false;
     if (typeof params.sessionId === "string" && params.sessionId) {
       state.selected = params.sessionId;
       // The shared "current session" signal: the rail highlights it, A-Eyes
@@ -1432,8 +1441,11 @@
     els.pause?.addEventListener("click", () => control(state.assistant?.status === "paused" ? "start-work" : "pause"));
     els.stopAll?.addEventListener("click", () => control("stop-all"));
     els.restart?.addEventListener("click", () => restartStudio());
+    // No MefiTree.applyAssistant here: nav.js's listener (registered first, as
+    // nav.js loads first) and tree3d.js's own already apply every push, and a
+    // third state-only apply only rewrote the rail's stats line again. This
+    // sheet renders from its own state.assistant.
     window.mefiStudio?.onAssistant?.((payload) => {
-      window.MefiTree?.applyAssistant?.(payload);
       if (payload?.state) state.assistant = payload.state;
       if (els.overlay?.hidden) return;
       renderAssistantService();
@@ -1577,7 +1589,8 @@
     return { sessionId: state.selected ?? null, folded: Boolean(state.foldedOpen) };
   }
 
-  window.MefiExplorer = { init, open, close, refresh: load, runAssistant, saveState };
+  // refresh() is the explicit re-read, so it also rescans the machine.
+  window.MefiExplorer = { init, open, close, refresh: () => load({ machine: true }), runAssistant, saveState };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
 })();

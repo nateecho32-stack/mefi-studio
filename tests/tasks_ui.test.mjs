@@ -33,7 +33,7 @@ class Element {
   click() { for (const fn of this.listeners.click ?? []) fn({ target: this, stopPropagation() {}, preventDefault() {} }); }
 }
 
-function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = null, bridge = {}, overview = false } = {}) {
+function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = null, bridge = {}, overview = false, timers = null, clock = null } = {}) {
   const els = new Map();
   const get = (id) => { if (!els.has(id)) els.set(id, new Element()); return els.get(id); };
   for (const filter of ["all", "open", "done"]) {
@@ -58,7 +58,10 @@ function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = nu
     },
     CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options?.detail; } },
     document: { readyState: "loading", getElementById: get, createElement: (tag) => new Element(tag), querySelectorAll: () => [], addEventListener() {} },
-    setTimeout() {}, setInterval() {}, console,
+    // Timers stay inert unless a test collects them to fire by hand.
+    setTimeout: (fn, delay) => { timers?.push({ fn, delay }); return timers ? timers.length : undefined; }, setInterval() {}, console,
+    // A test clock moves Date.now() by hand; new Date(value) stays real.
+    ...(clock ? { Date: class extends Date { static now() { return clock.now; } } } : {}),
   });
   vm.runInContext(stageSource, context);
   if (overview) vm.runInContext(groupsSource, context);
@@ -783,4 +786,60 @@ test("the run a completion check belongs to carries that check's result", async 
   const rows = descendants(env.get("task-detail")).filter((element) => element.dataset.runId);
   assert.match(rows[0].textContent, /Reported done[\s\S]*Completion check for this run: /);
   assert.doesNotMatch(rows[1].textContent, /Completion check/);
+});
+
+test("live pushes coalesce, leave unchanged rows and details in place, and read the scheduler at most once per 3.5 s", async () => {
+  const timers = [], clock = { now: 1_000_000 };
+  let reads = 0;
+  const running = { id: "run", projectId: "p", title: "Running task", status: "active", runId: "r1", updatedAt: 5, runProgress: { runId: "r1", progress: 0.1 } };
+  const other = { id: "other", projectId: "p", title: "Other task", status: "open", updatedAt: 4 };
+  const env = environment({ tasks: [running, other], timers, clock, bridge: { backlogStatus: async () => { reads += 1; return { ok: true, projectId: "p", taskStates: [] }; } } });
+  await env.api.open({ taskId: "other" }); await settle();
+  assert.equal(reads, 1, "opening reads the scheduler once");
+  const list = env.get("task-list"), detail = env.get("task-detail");
+  const row = list.children[0], meta = detail.children[0];
+  assert.match(row.textContent, /Running task/);
+  // An executor checkpoint: only runProgress moved, and only the running
+  // task's own detail would show it.
+  clock.now += 1000;
+  env.broadcast([{ ...running, runProgress: { runId: "r1", progress: 0.2 } }, other]); await settle();
+  assert.equal(list.children[0], row, "a progress-only push leaves the list's rows in place");
+  assert.equal(detail.children[0], meta, "and the detail of another task in place");
+  assert.equal(reads, 1, "a push inside 3.5 s of the last scheduler read does not read it again");
+  const backlogTimers = timers.filter((timer) => timer.delay > 250);
+  assert.equal(backlogTimers.length, 1, "one trailing scheduler read is due instead");
+  // Two real changes right after the first paint share one trailing paint.
+  env.broadcast([{ ...running, title: "Renamed task" }, other]);
+  env.broadcast([{ ...running, title: "Renamed again" }, other]);
+  assert.doesNotMatch(list.textContent, /Renamed/, "pushes inside the 250 ms window wait for the trailing paint");
+  const paints = timers.filter((timer) => timer.delay <= 250);
+  assert.equal(paints.length, 1, "pushes inside the window share one trailing paint");
+  assert.equal(timers.filter((timer) => timer.delay > 250).length, 1, "and the one queued scheduler read");
+  clock.now += 250; paints[0].fn();
+  assert.match(list.textContent, /Renamed again/);
+  assert.doesNotMatch(list.textContent, /Renamed task/);
+  clock.now += 2500; backlogTimers[0].fn(); await settle();
+  assert.equal(reads, 2, "the trailing read lands once 3.5 s have passed");
+  // A push after a quiet spell paints at once again.
+  clock.now += 1000;
+  env.broadcast([{ ...running, title: "Renamed a third time" }, other]);
+  assert.match(list.textContent, /Renamed a third time/);
+});
+
+test("the selected running task's detail follows its live progress while the list stays put", async () => {
+  const timers = [], clock = { now: 2_000_000 };
+  const running = { id: "run", projectId: "p", title: "Running task", status: "active", runId: "r1", updatedAt: 5, runProgress: { runId: "r1", progress: 0.1, outputTail: ["first line"] } };
+  const env = environment({ tasks: [running], timers, clock, bridge: {
+    backlogStatus: async () => ({ ok: true, projectId: "p", taskStates: [] }),
+    tasksAttempts: async () => ({ ok: true, attempts: [{ runId: "r1", outcome: "unrecorded", startedAt: 1 }] }),
+  } });
+  await env.api.open({ taskId: "run" }); await settle();
+  const list = env.get("task-list"), detail = env.get("task-detail");
+  const row = list.children[0];
+  assert.match(detail.textContent, /Working now 10%/);
+  clock.now += 1000;
+  env.broadcast([{ ...running, runProgress: { runId: "r1", progress: 0.4, outputTail: ["first line", "second line"] } }]); await settle();
+  assert.equal(list.children[0], row, "the list does not show progress, so it keeps its rows");
+  assert.match(detail.textContent, /Working now 40%/, "the live attempt repaints with the checkpoint");
+  assert.match(detail.textContent, /second line/);
 });
