@@ -15,7 +15,7 @@ import {
 
 const missingPath = () => path.join(os.tmpdir(), `mefi-eyes-missing-${process.pid}-${Math.random().toString(36).slice(2)}`, "opencode.db");
 
-test("a never-created OpenCode store reads as empty, not as a failure", () => {
+test("a never-created OpenCode store reads as empty, not as a failure", async () => {
   const dbPath = missingPath();
   assert.deepEqual(listSessions({ dbPath }), []);
   assert.deepEqual(listChanges({ dbPath }), []);
@@ -27,7 +27,7 @@ test("a never-created OpenCode store reads as empty, not as a failure", () => {
   assert.equal(findRunSession({ dbPath, runId: "run_absent" }), null);
   const checks = listSessionChecks({ dbPath, sessionId: "ses_missing", since: 1, until: 2 });
   assert.equal(checks.available, false, "check evidence stays explicitly unavailable without a store");
-  const facts = assistantFacts({ dbPath, root: null, porcelain: "" });
+  const facts = await assistantFacts({ dbPath, root: null, porcelain: "" });
   assert.deepEqual(facts.sessions, []);
   assert.deepEqual(facts.collisions, []);
   assert.deepEqual(facts.presence, []);
