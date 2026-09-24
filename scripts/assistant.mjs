@@ -6775,6 +6775,71 @@ export function buildFacts({ sessions = null, todos = null, collisions = null, p
   };
 }
 
+// Facts for an AI pass as JSON that always parses and fits `limit` characters.
+// A plain slice of the serialized facts cut mid-value: the model got invalid
+// JSON, and the keys serialized last (machine, work, resumed, chatter, inbox)
+// were the first to go. Here the largest array or string anywhere in the tree
+// gives way first, by at most half of itself per step (an array loses its
+// tail, a string is clipped), until the whole fits, so small keys come through
+// whole. `truncatedKeys` names the top-level keys that were cut. The caller's
+// facts are never modified.
+const FACTS_CLIP_MIN = 24;
+export function boundedFactsJson(facts, limit = 14000) {
+  const text = JSON.stringify(facts);
+  if (text === undefined) return "null";
+  if (text.length <= limit) return text;
+  // A private copy in a box, so the root is clipped like any other value.
+  const box = { root: JSON.parse(text) };
+  const cut = new Set();
+  const render = () => JSON.stringify(cut.size && isObject(box.root) ? { ...box.root, truncatedKeys: [...cut] } : box.root);
+  const sizeOf = (node) => JSON.stringify(node).length;
+  let out = render();
+  for (let pass = 0; out.length > limit && pass < 1000; pass += 1) {
+    // Serialized sizes, bottom up, and the largest shrinkable value: an array
+    // of two or more rows, or a string with room to clip.
+    let best = null;
+    const consider = (candidate) => { if (!best || candidate.size > best.size) best = candidate; };
+    const walk = (node, holder, key, top) => {
+      if (typeof node === "string") {
+        const size = sizeOf(node);
+        if (node.length > FACTS_CLIP_MIN + 8) consider({ size, holder, key, top });
+        return size;
+      }
+      if (!node || typeof node !== "object") return sizeOf(node);
+      let size = 2;
+      if (Array.isArray(node)) {
+        node.forEach((child, index) => { size += (index ? 1 : 0) + walk(child, node, index, top ?? String(index)); });
+        if (node.length > 1) consider({ size, rows: node, top });
+      } else {
+        Object.entries(node).forEach(([name, child], index) => { size += (index ? 1 : 0) + sizeOf(name) + 1 + walk(child, node, name, top ?? name); });
+      }
+      return size;
+    };
+    walk(box.root, box, "root", null);
+    if (!best) break;
+    const reduce = Math.max(1, Math.min(out.length - limit, Math.ceil(best.size / 2)));
+    if (best.rows) {
+      let removed = 0;
+      while (best.rows.length > 1 && removed < reduce) removed += sizeOf(best.rows.pop()) + 1;
+    } else {
+      const current = best.holder[best.key];
+      best.holder[best.key] = `${current.slice(0, Math.max(FACTS_CLIP_MIN, current.length - reduce - 1))}…`;
+    }
+    cut.add(best.top ?? "(root)");
+    out = render();
+  }
+  // Nothing left to shrink (many small keys): the largest top-level keys go.
+  if (out.length > limit && isObject(box.root)) {
+    for (const [name] of Object.entries(box.root).map(([key, child]) => [key, sizeOf(child)]).sort((a, b) => b[1] - a[1])) {
+      delete box.root[name];
+      cut.add(name);
+      out = render();
+      if (out.length <= limit) break;
+    }
+  }
+  return out.length <= limit ? out : "null";
+}
+
 // One fixture in, everything out: what the Python contract pins.
 export function runFixture(fixture) {
   const source = isObject(fixture) ? fixture : {};

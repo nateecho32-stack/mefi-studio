@@ -4358,6 +4358,21 @@ function normalizeBriefing(result) {
   return result;
 }
 
+// The machine tail of an AI pass's facts reuses a status read in the last
+// MACHINE_FACTS_FRESH_MS (the machine role's two-minute pass, or a UI read)
+// instead of running a resource pass of its own; only when neither is that
+// fresh does the pass scan.
+const MACHINE_FACTS_FRESH_MS = 150 * 1000;
+function freshMachineStatus(now = Date.now()) {
+  let best = null, bestAt = 0;
+  for (const status of [assistantCache?.machine, machineReadCache?.status]) {
+    if (!status || typeof status !== "object" || !status.leases || !Array.isArray(status.leases.holders) || !Array.isArray(status.running)) continue;
+    const at = Date.parse(status.updatedAt);
+    if (Number.isFinite(at) && at > bestAt) { best = status; bestAt = at; }
+  }
+  return best && now - bestAt <= MACHINE_FACTS_FRESH_MS && bestAt <= now + 1000 ? best : null;
+}
+
 // Whether any assistant route can answer: a saved key for a keyed provider, or
 // a keyless one (a CLI on its own login, the local LM Studio server) in the
 // main choice, the auto order or a per-role pick. One definition for the
@@ -4433,7 +4448,7 @@ async function runAssistant(mode = "brief", sessionId = null, payload = null) {
             ? ASSISTANT_AUDIT_SYSTEM
             : ASSISTANT_SYSTEM;
   try {
-    const machineStatus = await resourcePass({ kill: false, reason: "facts", withProcesses: false });
+    const machineStatus = freshMachineStatus() ?? (await resourcePass({ kill: false, reason: "facts", withProcesses: false }));
     const leases = machineStatus.leases ?? {};
     facts = {
       ...facts,
@@ -4457,7 +4472,9 @@ async function runAssistant(mode = "brief", sessionId = null, payload = null) {
     const seat = ASSISTANT_RUN_ROLES[mode] ?? (mode === "brief" ? "briefer" : null);
     facts = { ...facts, chatter: assistantModule.mailLines(assistantState, Date.now(), { limit: 8 }), ...(seat ? { inbox: assistantModule.mailLines(assistantState, Date.now(), { limit: 6, role: seat }) } : {}) };
   }
-  const user = JSON.stringify(facts).slice(0, 14000);
+  // Valid JSON within the budget: the largest lists and texts give way first,
+  // so the machine, work, chatter and inbox tails are no longer cut off.
+  const user = (await getAssistant()).boundedFactsJson(facts, 14000);
   // The improver rewrites the assistant's own playbook — the one pass that
   // earns the always-reasoning glm-5.3 route; everything else rides flash.
   const call = await assistantFetch(system, user, 6000, { role: mode === "improve" ? "heavy" : "routine", taskType: mode });
@@ -6931,7 +6948,7 @@ async function assistantOverseerJob(now, entry) {
   let aiNote = `local review · ${aiPlan.reason}`;
   if (!aiPlan.call) Object.assign(aiRecord, { skippedAt: now, skipped: aiPlan.reason });
   else {
-    const reviewInput = JSON.stringify(overseerFacts(now, board)).slice(0, 14000);
+    const reviewInput = assistant.boundedFactsJson(overseerFacts(now, board), 14000);
     const reviewFallback = (system = ASSISTANT_OVERSEER_SYSTEM, fromSeat = false) => assistantFetch(system, reviewInput, 6000, { role: "heavy", taskType: "overseer", skillRole: fromSeat ? null : "heavy" });
     const call = typeof seatFetch === "function" ? await seatFetch("overseer", ASSISTANT_OVERSEER_SYSTEM, reviewInput, 6000, { fallback: reviewFallback }) : await reviewFallback();
     if (call.ok) {
