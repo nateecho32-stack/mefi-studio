@@ -1361,18 +1361,41 @@ export function duplicateDeclarations(text) {
   return [...names.values()].filter((entry) => entry.lines.length > 1).sort((a, b) => a.lines[0] - b.lines[0]);
 }
 
+// The watcher scans a hundred-odd source files every two minutes, and the
+// line-by-line scan above ran on the main thread for each of them. A file's
+// findings are kept while its size and modification time hold, so an
+// unchanged file costs one stat. Callers get copies; the cache is bounded.
+const DUPLICATE_SCAN_CACHE_MAX = 2000;
+const duplicateScanCache = new Map();
+
 export async function scanDuplicateDeclarations(files = []) {
   const findings = [];
   for (const file of files) {
     if (!file || !/\.(?:js|mjs|cjs)$/i.test(String(file))) continue;
-    let text;
+    let info;
     try {
-      text = await readFile(file, "utf8");
+      info = await stat(file);
     } catch {
+      duplicateScanCache.delete(file);
       continue;
     }
-    const duplicates = duplicateDeclarations(text);
-    if (duplicates.length) findings.push({ file, duplicates });
+    const cached = duplicateScanCache.get(file);
+    let duplicates;
+    if (cached && cached.mtimeMs === info.mtimeMs && cached.size === info.size) {
+      duplicates = cached.duplicates;
+    } else {
+      let text;
+      try {
+        text = await readFile(file, "utf8");
+      } catch {
+        continue;
+      }
+      duplicates = duplicateDeclarations(text);
+      duplicateScanCache.delete(file);
+      duplicateScanCache.set(file, { mtimeMs: info.mtimeMs, size: info.size, duplicates });
+      if (duplicateScanCache.size > DUPLICATE_SCAN_CACHE_MAX) duplicateScanCache.delete(duplicateScanCache.keys().next().value);
+    }
+    if (duplicates.length) findings.push({ file, duplicates: duplicates.map((row) => ({ name: row.name, lines: [...row.lines] })) });
   }
   return findings;
 }
