@@ -734,6 +734,87 @@ test("with the window unfocused and no input for a minute, Command draws at the 
   assert.equal(run(4000), 30, "focus brings the full rate back at once");
 });
 
+test("a scene that stays still drops to ten frames a second, and any wake restores the ambient pace at once", () => {
+  const drawn = [];
+  const state = { active: true, motionHot: false, frameCost: 4, calmFrames: 0 };
+  const env = vm.createContext({ state, document: { hidden: false, body: { dataset: {} } }, pickerHeld: () => false, drawFrame: (time) => drawn.push(time), requestAnimationFrame: () => 1, cancelAnimationFrame: () => {}, setTimeout: () => 1, clearTimeout: () => {}, console });
+  vm.runInContext(section(idle, "  // Animation state belongs", "  function drawFrame("), env);
+  const REST_AFTER_FRAMES = read(env, "REST_AFTER_FRAMES");
+  state.calmFrames = REST_AFTER_FRAMES - 1;
+  for (const time of [100, 116.7, 133.4]) env.frame(time);
+  assert.deepEqual(drawn, [100, 133.4], "until enough calm frames have passed, the ambient 30 fps holds");
+  drawn.length = 0;
+  state.calmFrames = REST_AFTER_FRAMES;
+  for (let tick = 1; tick <= 12; tick += 1) env.frame(133.4 + tick * 16.7);
+  assert.deepEqual(drawn.map((time) => Math.round(time * 10) / 10), [233.6, 333.8], "at rest a frame comes every six 60 Hz ticks");
+  drawn.length = 0;
+  env.wakeFrames();
+  assert.equal(state.calmFrames, 0);
+  env.frame(350.5);
+  env.frame(367.2);
+  assert.deepEqual(drawn, [367.2], "a wake lets the next frame through at the ambient gate");
+  state.calmFrames = REST_AFTER_FRAMES;
+  state.motionHot = true;
+  drawn.length = 0;
+  for (const time of [383.9, 400.6]) env.frame(time);
+  assert.deepEqual(drawn, [383.9, 400.6], "moving the camera is never held to the rest pace");
+});
+
+test("only a scene with nothing moving but a slow sky counts as at rest", () => {
+  let now = 500000, scene = "aurora";
+  const calm = () => ({
+    active: true, motionHot: false, cameraMoving: false, panning: null, rotating: null, morph: null, lifeHot: false, farHold: null,
+    zoomTarget: null, fitTarget: null, pulses: [], particles: [], agentTrails: new Map(), speech: new Map(), deferred: [], doneHold: new Map(),
+    orbitVel: 0, reactive: false, camMode: "orbit", fx: new Map([["task:a", { bornAt: now - 5000, absorbAt: null }]]), cardLift: new Map([["task:a", 0], ["s1", 1]]),
+  });
+  const state = calm();
+  const env = vm.createContext({ state, Date: class extends Date { static now() { return now; } }, activeBackdrop: () => scene, NODE_GROW_MS: 650, document: { hidden: false, body: { dataset: {} } }, console });
+  vm.runInContext(section(idle, "  // Animation state belongs", "  function drawFrame("), env);
+  const nodes = () => [{ node: { id: "s1", kind: "session", _lift: 0 } }, { node: { id: "task:a", kind: "task", _lift: 1 } }, { node: { id: "__assistant__", kind: "assistant", _lift: 1 } }];
+  const atRest = (projected = nodes(), running = new Set(), still = false, audio = false) => env.sceneAtRest(projected, running, still, audio);
+  assert.equal(atRest(), true, "a paused tree under a slow sky rests");
+  const moving = [
+    ["a pulse in flight", () => { state.pulses.push({}); }],
+    ["a speck of dust", () => { state.particles.push({}); }],
+    ["the orbit still turning", () => { state.orbitVel = 0.002; }],
+    ["a camera glide", () => { state.motionHot = true; }],
+    ["a zoom glide", () => { state.zoomTarget = 1.4; }],
+    ["a refit", () => { state.fitTarget = 0.9; }],
+    ["a speech bubble", () => { state.speech.set("s1", {}); }],
+    ["a node growing in", () => { state.fx.get("task:a").bornAt = now - 100; }],
+    ["a node flying home", () => { state.fx.get("task:a").absorbAt = now - 100; }],
+    ["a card easing its lift", () => { state.cardLift.set("task:a", 0.4); }, [{ node: { id: "task:a", kind: "task", _lift: 1, _callout: {} } }]],
+    ["a finished node waiting for its read", () => { state.doneHold.set("task:a", {}); }],
+    ["live sound", () => { state.reactive = true; state.localAudio = {}; }],
+    ["a fast sky", () => { scene = "embers"; }],
+  ];
+  for (const [label, change, projected] of moving) {
+    Object.assign(state, calm());
+    scene = "aurora";
+    change();
+    assert.equal(atRest(projected), false, `${label} keeps the ambient pace`);
+  }
+  Object.assign(state, calm());
+  scene = "aurora";
+  state.cardLift.set("gone", 0.4);
+  assert.equal(atRest(), true, "a card no longer drawn cannot hold the pace up with a stale lift");
+  Object.assign(state, calm());
+  assert.equal(atRest(nodes(), new Set(["task:a"])), false, "running work keeps the ambient pace");
+  assert.equal(atRest([...nodes(), { node: { id: "__agent__:watcher", kind: "agent" } }]), false, "an agent keeps the ambient pace");
+  assert.equal(atRest([{ node: { id: "t", kind: "todo", _workLabel: "Running" } }]), false, "a running step keeps the ambient pace");
+  assert.equal(atRest([{ node: { id: "s1", kind: "session", _lift: 0.5 } }]), false, "an orb easing forward keeps the ambient pace");
+  assert.equal(atRest(nodes(), new Set(), false, true), false, "an audio-linked frame keeps the ambient pace");
+  scene = "fireflies";
+  assert.equal(atRest(nodes(), new Set(), true), true, "with motion off every sky is still");
+  for (const quiet of ["minimal", "grid", "nebula", "aurora", "bokeh"]) { scene = quiet; assert.equal(atRest(), true, `${quiet} drifts slowly enough to rest`); }
+  for (const busy of ["dust", "deepspace", "embers", "fireflies"]) { scene = busy; assert.equal(atRest(), false, `${busy} keeps the ambient pace`); }
+  for (const marker of [
+    "state.calmFrames = sceneAtRest(projected, runningIds, still, audioLinked) ? (state.calmFrames ?? 0) + 1 : 0;",
+    "state.calmFrames = 0; // a rebuild can change anything on screen",
+    'for (const type of ["pointerdown", "pointermove", "pointerup", "wheel", "keydown", "keyup", "focusin", "resize"]) window.addEventListener(type, wakeFrames, { capture: true, passive: true });',
+  ]) assert.ok(idle.includes(marker), `idle.js carries ${marker}`);
+});
+
 test("a floating panel carves the clear rectangle without re-seeding the tree, and the projection centre glides after it", () => {
   // The selection card opens on every click. Before, its rectangle keyed the
   // persisted layout and set the projection centre, so a click re-seeded

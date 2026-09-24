@@ -739,13 +739,22 @@ test("Extra glow adds a bounded visible halo to every chosen style without chang
   vm.runInContext(section("function traceNodeSurface(", "function drawWorkOrbit("), env);
   const node = { id: "task", kind: "task", x: 10, y: 20, z: 30 };
   for (const style of ["orbs", "glass", "minimal"]) {
-    const radii = [];
-    const ctx = { save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, arc() {}, fill() {}, stroke() {}, createRadialGradient(...args) { radii.push(args[5]); return { addColorStop() {} }; }, createLinearGradient: () => ({ addColorStop() {} }) };
+    // Paints may be built in unit space and filled under scale(radius), so a
+    // radial paint's reach is its outer radius times the scale at fill time.
+    const created = [], filled = [], stack = [];
+    let scale = 1;
+    const ctx = {
+      save() { stack.push(scale); }, restore() { scale = stack.pop() ?? 1; }, translate() {}, scale(factor) { scale *= factor; }, beginPath() {}, arc() {}, stroke() {},
+      fill() { if (this.fillStyle?.outer != null) filled.push({ paint: this.fillStyle, reach: this.fillStyle.outer * scale }); },
+      createRadialGradient(...args) { const paint = { outer: args[5], addColorStop() {} }; created.push(paint); return paint; }, createLinearGradient: () => ({ addColorStop() {} }),
+    };
     state.nodeStyle = style; state.extraGlow = false;
-    env.drawNodeSurface(ctx, node, { x: 100, y: 100 }, 12, [220, 180, 110]); const normal = radii.length;
-    state.extraGlow = true; env.drawNodeSurface(ctx, node, { x: 100, y: 100 }, 12, [220, 180, 110]);
-    assert.equal(radii.length - normal, style === "orbs" ? 1 : normal + 1, "orbs reuse their base paints; enabling glow adds one new halo"); assert.equal(node._extraGlow, true);
-    assert.ok(radii.some((radius) => radius > 12 && radius <= 12 * 2.25)); assert.ok(Math.max(...radii) <= 12 * 2.25, "glow leaves a crisp edge instead of filling the surrounding branch");
+    env.drawNodeSurface(ctx, node, { x: 100, y: 100 }, 12, [220, 180, 110]); const normal = created.length;
+    state.extraGlow = true; filled.length = 0; env.drawNodeSurface(ctx, node, { x: 100, y: 100 }, 12, [220, 180, 110]);
+    assert.equal(created.length - normal, style === "orbs" ? 1 : normal + 1, "orbs reuse their base paints; enabling glow adds one new halo"); assert.equal(node._extraGlow, true);
+    const glow = filled.filter(({ paint }) => created.indexOf(paint) >= normal);
+    assert.ok(glow.length === 1 && glow[0].reach > 12 && glow[0].reach <= 12 * 2.25, "the glow reaches past the orb");
+    assert.ok(Math.max(...filled.map(({ reach }) => reach)) <= 12 * 2.25, "glow leaves a crisp edge instead of filling the surrounding branch");
   }
   assert.deepEqual([node.x, node.y, node.z], [10, 20, 30]);
 });
@@ -1680,7 +1689,7 @@ test("Halo and Crystal use distinct bounded surfaces while preserving node posit
   const node = { kind: "task", x: 1, y: 2, z: 3 };
   for (const style of ["halo", "crystal"]) {
     const calls = { arcs: 0, lines: 0, saves: 0, restores: 0 };
-    const ctx = { save() { calls.saves++; }, restore() { calls.restores++; }, beginPath() {}, closePath() {}, moveTo() {}, lineTo() { calls.lines++; }, arc() { calls.arcs++; }, stroke() {}, fill() {}, createLinearGradient() { return { addColorStop() {} }; } };
+    const ctx = { save() { calls.saves++; }, restore() { calls.restores++; }, translate() {}, scale() {}, beginPath() {}, closePath() {}, moveTo() {}, lineTo() { calls.lines++; }, arc() { calls.arcs++; }, stroke() {}, fill() {}, createLinearGradient() { return { addColorStop() {} }; } };
     env.state.nodeStyle = style;
     env.drawNodeSurface(ctx, node, { x: 50, y: 50 }, 12, [120,180,220]);
     assert.equal(calls.saves, calls.restores);

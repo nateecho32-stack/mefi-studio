@@ -882,6 +882,7 @@
   }
 
   function refreshGraph() {
+    state.calmFrames = 0; // a rebuild can change anything on screen
     const profiler = globalThis.window?.MefiProfiler;
     const span = profiler?.begin("command.graph");
     try { return refreshGraphImpl(); }
@@ -3309,6 +3310,7 @@
   }
 
   function onAssistantEvent(payload) {
+    state.calmFrames = 0;
     const applied = window.MefiTree?.applyAssistant?.(payload) ?? Promise.resolve();
     refreshAssistantCache();
     updateAssistantPill();
@@ -4107,6 +4109,39 @@
     return paints;
   }
 
+  // The extra glow, the crystal's gem and the glass wash as unit-space paints,
+  // cached per context like orbPaints. The node's path stays in screen space;
+  // fillUnit fills it under translate(p) and scale(radius), which maps the
+  // unit paint onto it.
+  function surfacePaint(ctx, kind, tint, lit) {
+    const contexts = state.surfacePaintCache ??= new WeakMap();
+    let cache = contexts.get(ctx);
+    if (!cache) { cache = new Map(); contexts.set(ctx, cache); }
+    const key = `${kind}|${tint.join(",")}|${Boolean(lit)}`;
+    let paint = cache.get(key);
+    if (paint) return paint;
+    if (kind === "glow") {
+      paint = ctx.createRadialGradient(0, 0, 0.25, 0, 0, lit ? 2.25 : 1.8);
+      paint.addColorStop(0, rgba(tint, lit ? 0.32 : 0.16));
+      paint.addColorStop(0.45, rgba(tint, lit ? 0.14 : 0.05));
+      paint.addColorStop(1, rgba(tint, 0));
+    } else if (kind === "gem") {
+      paint = ctx.createLinearGradient(-1, -1, 1, 1);
+      paint.addColorStop(0, rgba(tint, 0.8)); paint.addColorStop(0.45, rgba(tint, 0.28)); paint.addColorStop(1, "rgba(12,19,31,0.96)");
+    } else {
+      paint = ctx.createLinearGradient(-1, -1, 1, 1);
+      paint.addColorStop(0, rgba(tint, lit ? 0.42 : 0.22)); paint.addColorStop(0.55, "rgba(31,43,59,0.15)"); paint.addColorStop(1, rgba(tint, 0.06));
+    }
+    if (cache.size >= 128) cache.delete(cache.keys().next().value);
+    cache.set(key, paint);
+    return paint;
+  }
+  function fillUnit(ctx, paint, p, radius) {
+    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius);
+    ctx.fillStyle = paint; ctx.fill();
+    ctx.restore();
+  }
+
   // ---------- the Void collection's node styles ----------
   // The orbs' frame budget applies: every gradient (the conic accretion disc
   // included) is a unit-space paint cached per context, tint and theme hue;
@@ -4314,11 +4349,8 @@
     }
     if (node._extraGlow) {
       const spread = radius * (active || selected ? 2.25 : 1.8);
-      const glow = ctx.createRadialGradient(p.x, p.y, radius * 0.25, p.x, p.y, spread);
-      glow.addColorStop(0, rgba(tint, active || selected ? 0.32 : 0.16));
-      glow.addColorStop(0.45, rgba(tint, active || selected ? 0.14 : 0.05));
-      glow.addColorStop(1, rgba(tint, 0));
-      ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(p.x, p.y, spread, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(p.x, p.y, spread, 0, Math.PI * 2);
+      fillUnit(ctx, surfacePaint(ctx, "glow", tint, active || selected), p, radius);
     }
     const style = state.nodeStyle ?? "orbs";
     if (style === "halo") {
@@ -4331,12 +4363,15 @@
       ctx.restore(); return;
     }
     if (style === "crystal") {
-      const points = Array.from({ length: 6 }, (_, index) => ({ x: p.x + Math.cos(index * Math.PI / 3 - Math.PI / 2) * radius, y: p.y + Math.sin(index * Math.PI / 3 - Math.PI / 2) * radius }));
-      ctx.beginPath(); points.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y)); ctx.closePath();
-      const gem = ctx.createLinearGradient(p.x - radius, p.y - radius, p.x + radius, p.y + radius);
-      gem.addColorStop(0, rgba(tint, 0.8)); gem.addColorStop(0.45, rgba(tint, 0.28)); gem.addColorStop(1, "rgba(12,19,31,0.96)");
-      ctx.fillStyle = gem; ctx.fill(); ctx.strokeStyle = rgba(tint, active || selected ? 0.95 : 0.6); ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke();
-      ctx.beginPath(); for (const point of points.filter((_, index) => index % 2 === 0)) { ctx.moveTo(p.x, p.y); ctx.lineTo(point.x, point.y); }
+      ctx.beginPath();
+      for (let index = 0; index < 6; index += 1) {
+        const x = p.x + Math.cos(index * Math.PI / 3 - Math.PI / 2) * radius, y = p.y + Math.sin(index * Math.PI / 3 - Math.PI / 2) * radius;
+        if (index) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+      }
+      ctx.closePath();
+      fillUnit(ctx, surfacePaint(ctx, "gem", tint, false), p, radius); ctx.strokeStyle = rgba(tint, active || selected ? 0.95 : 0.6); ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke();
+      ctx.beginPath();
+      for (let index = 0; index < 6; index += 2) { ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + Math.cos(index * Math.PI / 3 - Math.PI / 2) * radius, p.y + Math.sin(index * Math.PI / 3 - Math.PI / 2) * radius); }
       ctx.strokeStyle = rgba(tint, 0.35); ctx.lineWidth = 0.7; ctx.stroke();
       ctx.restore(); return;
     }
@@ -4365,9 +4400,7 @@
     if (style === "glass") {
       traceNodeSurface(ctx, "circle", p.x, p.y, radius);
       ctx.fillStyle = "#172331"; ctx.fill();
-      const glass = ctx.createLinearGradient(p.x - radius, p.y - radius, p.x + radius, p.y + radius);
-      glass.addColorStop(0, rgba(tint, active || selected ? 0.42 : 0.22)); glass.addColorStop(0.55, "rgba(31,43,59,0.15)"); glass.addColorStop(1, rgba(tint, 0.06));
-      ctx.fillStyle = glass; ctx.fill(); ctx.strokeStyle = rgba(tint, selected ? 0.95 : active ? 0.72 : 0.42); ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke();
+      fillUnit(ctx, surfacePaint(ctx, "glass", tint, active || selected), p, radius); ctx.strokeStyle = rgba(tint, selected ? 0.95 : active ? 0.72 : 0.42); ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke();
       ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, radius - 3), Math.PI * 1.13, Math.PI * 1.6);
       ctx.strokeStyle = "rgba(231,243,255,0.55)"; ctx.lineWidth = 1; ctx.stroke();
       ctx.restore(); return;
@@ -5431,6 +5464,7 @@
   // `kind` shapes the marker: say · send (→) · receive (←) · think · done · error.
   function say(node, text, { kind = "say", ttl = SPEECH_TTL, tint = null, delay = 0, update = false } = {}) {
     if (!state.bubbles || !node || !text) return null;
+    state.calmFrames = 0;
     const id = typeof node === "string" ? node : node.id;
     if (!id) return null;
     if (delay > 0) {
@@ -5786,24 +5820,30 @@
   // log), and a worker's stdout arrives here a line at a time, a dozen a
   // second with several running. A push after a quiet FEED_PUSH_MS paints at
   // once; pushes inside that window share one trailing paint, so a burst
-  // costs at most four rail rebuilds a second instead of one per line.
+  // costs at most four rail rebuilds a second instead of one per line. The
+  // graph pushes (the board, the store's todos, checkpoints; up to once a
+  // second per running job) share their refreshGraph the same way.
   const FEED_PUSH_MS = 250;
-  let feedPaintTimer = 0;
-  let feedPaintedAt = 0;
-  function paintFeedSoon() {
-    if (feedPaintTimer) return;
-    const wait = feedPaintedAt + FEED_PUSH_MS - Date.now();
-    if (wait <= 0) {
-      feedPaintedAt = Date.now();
-      renderFeed();
-      return;
-    }
-    feedPaintTimer = setTimeout(() => {
-      feedPaintTimer = 0;
-      feedPaintedAt = Date.now();
-      if (state.active) renderFeed();
-    }, wait);
+  function coalescedPush(run) {
+    let timer = 0;
+    let ranAt = 0;
+    return () => {
+      if (timer) return;
+      const wait = ranAt + FEED_PUSH_MS - Date.now();
+      if (wait <= 0) {
+        ranAt = Date.now();
+        run();
+        return;
+      }
+      timer = setTimeout(() => {
+        timer = 0;
+        ranAt = Date.now();
+        if (state.active) run();
+      }, wait);
+    };
   }
+  const paintFeedSoon = coalescedPush(() => renderFeed());
+  const refreshGraphSoon = coalescedPush(() => refreshGraph());
 
   function feedLine(item) {
     if (item.kind === "tool") return `${item.tool ?? "tool"} ${item.file ?? ""}`.trim();
@@ -6685,6 +6725,7 @@
 
   function onActivity(data) {
     if (!state.active) return;
+    state.calmFrames = 0;
     const now = Date.now();
     for (const item of data.activity ?? []) {
       pushFeed({ id: item.id, at: item.time, kind: "tool", tool: item.tool, file: basename(item.file), sessionId: item.sessionId });
@@ -6703,20 +6744,24 @@
         bell({ long: item.tool === "patch", level: 0.9 });
       } else {
         // external work (reads, greps, fetches) vaporizes into blue-white dust
-        spawnParticles(session, item.tool === "websearch" || item.tool === "webfetch" ? 18 : 10);
+        spawnParticles(session, item.tool === "websearch" || item.tool === "webfetch" ? 8 : 5);
         bell({ quick: true, level: 0.6 });
       }
     }
-    if (data.todos) refreshGraph();
+    if (data.todos) refreshGraphSoon();
     else if (state.camMode === "follow") updateFollowCamera(now, true);
   }
 
+  // A tool call throws a handful of specks, and the pool keeps the newest
+  // PARTICLE_MAX: each speck is a fill per frame, and a busy run of reads
+  // used to keep hundreds of them in the air.
+  const PARTICLE_MAX = 200;
   function spawnParticles(node, count, { gold = false, tint = null } = {}) {
     const projected = project(node);
     for (let index = 0; index < count; index += 1) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 0.4 + Math.random() * 1.6;
-      state.particles.push({
+      const particle = {
         x: projected.x,
         y: projected.y,
         vx: Math.cos(angle) * speed * (gold ? 8 : 14),
@@ -6728,9 +6773,14 @@
         gold,
         // "r,g,b" when the specks should carry an agent's role colour
         tint: tint ? tint.join(",") : null,
-      });
+      };
+      // The colour and the opacity at full life are fixed at birth, so a
+      // frame only sets the alpha instead of building a colour string.
+      particle.fill = particle.tint ? `rgb(${particle.tint})` : gold ? "rgb(241,220,174)" : particle.blue ? "rgb(157,183,255)" : "rgb(255,255,255)";
+      particle.peak = particle.tint || gold ? 0.9 : particle.blue ? 0.85 : 0.8;
+      state.particles.push(particle);
     }
-    if (state.particles.length > 600) state.particles.splice(0, state.particles.length - 600);
+    if (state.particles.length > PARTICLE_MAX) state.particles.splice(0, state.particles.length - PARTICLE_MAX);
   }
 
   // The tree owns the agents' flights; this surface advances them while its
@@ -6970,9 +7020,11 @@
   }
 
   // Animation state belongs to the scheduler, independent of graph styling.
-  // Command draws at 30 fps at rest and at the display's rate (capped near
-  // 60-75 fps) while the camera, a zoom or a drag is moving, as long as the
-  // measured frame cost leaves room for it.
+  // Command draws at 30 fps, and at the display's rate (capped near 60-75
+  // fps) while the camera, a zoom or a drag is moving, as long as the
+  // measured frame cost leaves room for it. Once REST_AFTER_FRAMES frames in a
+  // row have shown nothing moving but a slow sky (sceneAtRest), it draws about
+  // ten times a second; any input or data push ends the rest (wakeFrames).
   const AMBIENT_FRAME_MS = 30;
   const HOT_FRAME_MS = 12;
   const HOT_FRAME_BUDGET_MS = 9;
@@ -6981,6 +7033,8 @@
   // with motion off one frame a second is enough to pick up graph changes.
   const BACKDROP_FRAME_MS = 80;
   const BACKDROP_STILL_FRAME_MS = 1000;
+  const REST_FRAME_MS = 96; // just under six ticks at 60 Hz
+  const REST_AFTER_FRAMES = 30;
   let lastFrameAt = 0;
   let frameRequest = 0;
   let frameTimer = 0;
@@ -6992,8 +7046,8 @@
   let inputAt = Date.now();
   for (const type of ["pointermove", "pointerdown", "keydown", "wheel", "focus"]) globalThis.addEventListener?.(type, () => { inputAt = Date.now(); }, { capture: true, passive: true });
   const resting = () => typeof document.hasFocus === "function" && !document.hasFocus() && Date.now() - inputAt > REST_AFTER_MS;
-  function frameGap(hot) {
-    if (state.active) return resting() ? BACKDROP_FRAME_MS : hot ? HOT_FRAME_MS : AMBIENT_FRAME_MS;
+  function frameGap(hot, calm = false) {
+    if (state.active) return resting() ? BACKDROP_FRAME_MS : hot ? HOT_FRAME_MS : calm ? REST_FRAME_MS : AMBIENT_FRAME_MS;
     return typeof noMotion === "function" && noMotion() ? BACKDROP_STILL_FRAME_MS : BACKDROP_FRAME_MS;
   }
   // A wait longer than a couple of display ticks (a sheet over the canvas, the
@@ -7026,7 +7080,8 @@
     // tick that missed a 33 ms gate cost a whole extra tick — a 50 ms hitch
     // that read as judder in every camera glide.
     const hot = state.motionHot && Number.isFinite(state.frameCost) && state.frameCost < HOT_FRAME_BUDGET_MS;
-    if (!document.hidden && time - lastFrameAt >= frameGap(hot)) {
+    const calm = !hot && state.calmFrames >= REST_AFTER_FRAMES;
+    if (!document.hidden && time - lastFrameAt >= frameGap(hot, calm)) {
       lastFrameAt = time;
       const profiler = globalThis.window?.MefiProfiler;
       const span = profiler?.begin("command.frame");
@@ -7351,12 +7406,23 @@
     const diagonal = Math.hypot(width, height);
     const clock = still ? 0 : time;
     const breathe = still ? 0.5 : (Math.sin(time / 14000) + 1) / 2;
-    const skyTint = backdrop.map((channel, index) => Math.round(channel * 0.95 + accent[index] * 0.05));
-    const sky = ctx.createLinearGradient(0, 0, 0, height);
-    sky.addColorStop(0, rgb(skyTint));
-    sky.addColorStop(0.55, rgb(backdrop));
-    sky.addColorStop(1, rgb(backdrop.map((channel) => Math.round(channel * 0.97))));
-    ctx.fillStyle = sky;
+    // The sky and the vignette only change with the window and the palette:
+    // their gradients are built once per size and colours, per canvas.
+    const skyKey = `${width}x${height}|${backdrop}|${accent}`;
+    let skyPaints = state.skyPaints;
+    if (skyPaints?.key !== skyKey || skyPaints.ctx !== ctx) {
+      const skyTint = backdrop.map((channel, index) => Math.round(channel * 0.95 + accent[index] * 0.05));
+      const sky = ctx.createLinearGradient(0, 0, 0, height);
+      sky.addColorStop(0, rgb(skyTint));
+      sky.addColorStop(0.55, rgb(backdrop));
+      sky.addColorStop(1, rgb(backdrop.map((channel) => Math.round(channel * 0.97))));
+      const outer = diagonal / 2;
+      const vignette = ctx.createRadialGradient(width / 2, height / 2, outer * 0.45, width / 2, height / 2, outer);
+      vignette.addColorStop(0, rgba(backdrop, 0));
+      vignette.addColorStop(1, rgba(backdrop, 0.55));
+      skyPaints = state.skyPaints = { key: skyKey, ctx, sky, vignette };
+    }
+    ctx.fillStyle = skyPaints.sky;
     ctx.fillRect(0, 0, width, height);
     const nebula = (x, y, r, triple, alpha) => {
       if (alpha <= 0.002) return;
@@ -7580,11 +7646,7 @@
     ctx.fillStyle = coreGlow;
     ctx.fillRect(core.x - coreR, core.y - coreR, coreR * 2, coreR * 2);
     // vignette: the constellation sits in the middle of the frame, the edges fall away
-    const outer = diagonal / 2;
-    const vignette = ctx.createRadialGradient(width / 2, height / 2, outer * 0.45, width / 2, height / 2, outer);
-    vignette.addColorStop(0, rgba(backdrop, 0));
-    vignette.addColorStop(1, rgba(backdrop, 0.55));
-    ctx.fillStyle = vignette;
+    ctx.fillStyle = skyPaints.vignette;
     ctx.fillRect(0, 0, width, height);
   }
 
@@ -8173,6 +8235,64 @@
     return state.cardStyle;
   }
 
+  // Skies that drift slowly enough to draw ten times a second unchanged to the
+  // eye: a few tenths of a pixel of drift and about a hundredth of a star's
+  // alpha per rest frame. Dust's motes, embers, fireflies and the deep-space
+  // meteor move further than that and keep the ambient pace.
+  const REST_SCENES = new Set(["minimal", "grid", "nebula", "aurora", "bokeh"]);
+  // Whether this frame showed nothing moving but such a sky and the hub's slow
+  // breathing: no glide, zoom, drag, orbit or refit, no pulse, speck, trail,
+  // speech or done-hold, no agent or running work, no node growing, leaving
+  // or easing its lift, no sound driving the picture. Whatever might animate
+  // counts as motion.
+  function sceneAtRest(projected, runningIds, still, audioLinked) {
+    if (state.motionHot || state.cameraMoving || state.panning || state.rotating || state.morph || state.lifeHot || state.farHold) return false;
+    if (state.zoomTarget != null || Number.isFinite(state.fitTarget)) return false;
+    if (state.pulses.length || state.particles.length || state.agentTrails?.size || state.speech?.size || state.deferred?.length || state.doneHold?.size) return false;
+    if (runningIds?.size) return false;
+    if (!still) {
+      if (Math.abs(state.orbitVel ?? 0) > 1e-5) return false;
+      if (audioLinked || state.reactive && (state.inputStream || state.localAudio)) return false;
+      if (state.camMode === "follow" && state.followZoomTarget != null && Math.abs(state.followZoomTarget - state.zoom) > 0.003) return false;
+      if (!REST_SCENES.has(activeBackdrop())) return false;
+    }
+    const now = Date.now();
+    for (const fx of state.fx?.values() ?? []) {
+      if (fx.absorbAt != null || fx.resumeAt != null || fx.builder) return false;
+      if (Number.isFinite(fx.bornAt) && now - fx.bornAt < NODE_GROW_MS) return false;
+    }
+    // A card keeps its lift only while above 0; one drawn this frame at
+    // anything short of 1 is still easing.
+    const cardLift = state.cardLift;
+    for (const { node } of projected) {
+      if (node.kind === "agent" || node.dying || node.doneHold || node.state === "active") return false;
+      if (node._workLabel === "Running" || node._workLabel === "Next") return false;
+      if (node._lift != null && node._lift !== 0 && node._lift !== 1) return false;
+      if (node._callout && cardLift?.has(node.id) && cardLift.get(node.id) !== 1) return false;
+    }
+    return true;
+  }
+  // Ends a rest: the next frame comes at the ambient pace (or sooner).
+  function wakeFrames() {
+    state.calmFrames = 0;
+  }
+
+  // A pulse's head glow (see drawFrame) and its comet tail's two stops,
+  // built once per pulse colour instead of parsed every frame.
+  const PULSE_GLOW_PX = 0.8;
+  const PULSE_GLOW_ALPHA = 0.3;
+  const pulseTails = new Map();
+  function pulseTail(color) {
+    let tail = pulseTails.get(color);
+    if (!tail) {
+      const [red, green, blue] = hexToRgb(color);
+      tail = { from: `rgba(${red},${green},${blue},0)`, to: `rgba(${red},${green},${blue},0.55)` };
+      if (pulseTails.size >= 64) pulseTails.clear();
+      pulseTails.set(color, tail);
+    }
+    return tail;
+  }
+
   function drawFrame(time) {
     // One clock per frame: how long since the last draw, clamped to 50 ms, as
     // a hidden tab, an open sheet or a held picker pauses the loop and
@@ -8401,10 +8521,10 @@
         const tailT = Math.max(0, t - 0.18);
         const tx = from.x + (to.x - from.x) * tailT;
         const ty = from.y + (to.y - from.y) * tailT;
-        const [pr, pg, pb] = hexToRgb(pulse.color ?? "#a9ffcd");
+        const tail = pulseTail(pulse.color ?? "#a9ffcd");
         const trail = ctx.createLinearGradient(tx, ty, x, y);
-        trail.addColorStop(0, `rgba(${pr},${pg},${pb},0)`);
-        trail.addColorStop(1, `rgba(${pr},${pg},${pb},0.55)`);
+        trail.addColorStop(0, tail.from);
+        trail.addColorStop(1, tail.to);
         ctx.strokeStyle = trail;
         ctx.lineWidth = pulse.small ? 0.8 : 1.2;
         ctx.lineCap = "round";
@@ -8413,15 +8533,22 @@
         ctx.lineTo(x, y);
         ctx.stroke();
       }
-      ctx.beginPath();
-      ctx.arc(x, y, pulse.small ? 1.5 : 2.2 + musicBands.bass * 0.5, 0, Math.PI * 2);
-      ctx.fillStyle = pulse.color ?? "#a9ffcd";
+      const dot = pulse.small ? 1.5 : 2.2 + musicBands.bass * 0.5;
       if (!still) {
-        ctx.shadowColor = pulse.glow ?? "#57ff9a";
-        ctx.shadowBlur = 3;
+        // The glow: a wider disc at a third of the alpha under the head. A
+        // canvas shadow (shadowBlur) cost a separate blur pass per pulse.
+        const alpha = ctx.globalAlpha;
+        ctx.globalAlpha = alpha * PULSE_GLOW_ALPHA;
+        ctx.fillStyle = pulse.glow ?? "#57ff9a";
+        ctx.beginPath();
+        ctx.arc(x, y, dot + PULSE_GLOW_PX, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = alpha;
       }
+      ctx.beginPath();
+      ctx.arc(x, y, dot, 0, Math.PI * 2);
+      ctx.fillStyle = pulse.color ?? "#a9ffcd";
       ctx.fill();
-      ctx.shadowBlur = 0;
     }
     ctx.lineCap = "butt";
     if (still) state.pulses = [];
@@ -8431,22 +8558,25 @@
     // Particles were tuned at 0.016 of their velocity per 30 fps frame.
     const frames30 = still ? 0 : dt * 30;
     const step = 0.016 * frames30;
+    // One fill per speck and no canvas shadow: shadowBlur (2) ran a separate
+    // blur pass for every speck. The light that glow added is kept by drawing
+    // the speck a hair wider and, where its core is faint, a little brighter
+    // (fitted against Skia's own shadowBlur output).
+    const particleAlpha = ctx.globalAlpha;
     for (const particle of state.particles) {
       particle.x += particle.vx * step;
       particle.y += particle.vy * step;
       particle.vy += 6 * step;
       particle.life -= particle.decay * frames30;
       const life = Math.max(0, particle.life);
+      const alpha = life * (particle.peak ?? 0.8);
+      ctx.globalAlpha = particleAlpha * (still ? alpha : Math.min(1, alpha + 0.9 * alpha * (1 - alpha)));
+      ctx.fillStyle = particle.fill ?? "rgb(255,255,255)";
       ctx.beginPath();
-      ctx.arc(particle.x, particle.y, Math.max(0, particle.size * life), 0, Math.PI * 2);
-      ctx.fillStyle = particle.tint ? `rgba(${particle.tint},${life * 0.9})` : particle.gold ? `rgba(241,220,174,${life * 0.9})` : particle.blue ? `rgba(157,183,255,${life * 0.85})` : `rgba(255,255,255,${life * 0.8})`;
-      if (!still) {
-        ctx.shadowColor = particle.tint ? `rgb(${particle.tint})` : particle.gold ? "#e6c98d" : particle.blue ? "#9db7ff" : "#ffffff";
-        ctx.shadowBlur = 2;
-      }
+      ctx.arc(particle.x, particle.y, Math.max(0, particle.size * life) + (still ? 0 : 0.1), 0, Math.PI * 2);
       ctx.fill();
-      ctx.shadowBlur = 0;
     }
+    ctx.globalAlpha = particleAlpha;
     if (still) state.particles = [];
 
     // wakes: what a flying agent leaves behind, under the orbs
@@ -8540,6 +8670,7 @@
     ctx.restore();
     if (far !== ctx) far.restore();
     syncFarLayer(liveFocusIds);
+    state.calmFrames = sceneAtRest(projected, runningIds, still, audioLinked) ? (state.calmFrames ?? 0) + 1 : 0;
   }
 
   // ---------- labels ----------
@@ -8662,6 +8793,10 @@
     return area.w < 800 || area.h < 480 ? 6 : 8;
   }
 
+  // Equal-priority labels keep their locale order. String#localeCompare with
+  // no locale compares exactly like a default Intl.Collator, but builds one
+  // per call, and this sort runs every frame.
+  const labelIdCollator = typeof Intl !== "undefined" && Intl.Collator ? new Intl.Collator() : { compare: (a, b) => a.localeCompare(b) };
   function labelCandidates(projected) {
     const mode = state.labels;
     const selectedId = state.selected?.id ?? null;
@@ -8723,7 +8858,7 @@
       list.push({ node, p: item.p, priority });
     }
     // Stable ties keep Orbit from constantly swapping the labels being read.
-    list.sort((a, b) => a.priority - b.priority || String(a.node.id).localeCompare(String(b.node.id)));
+    list.sort((a, b) => a.priority - b.priority || labelIdCollator.compare(String(a.node.id), String(b.node.id)));
     if (mode === "auto") {
       let quietSessions = 0;
       const budget = labelBudget();
@@ -11037,6 +11172,7 @@
     // underneath): it takes the canvas over from the backdrop where it stands.
     releaseHomeBackdrop();
     state.active = true;
+    state.calmFrames = 0;
     state.lastInput = Date.now();
     state.frameError = false;
     state.ambient = !force;
@@ -11214,7 +11350,12 @@
     if (pickerHeld()) return; // an opening picker gets the main thread; the next tick catches up
     if (document.hidden) return; // hidden app: make no fetch; the visibilitychange listener snaps the view back on show
     refreshCommandBacklog();
+    // This periodic catch-up alone does not end a rest (refreshGraph wakes for
+    // pushes and input): anything it brings that moves shows in the next frame's
+    // sceneAtRest, at most one rest frame later.
+    const calmFrames = state.calmFrames;
     refreshGraph();
+    state.calmFrames = calmFrames;
     checkCollisions();
     updateTelemetry();
     if (autopilotJobs(state.assistant).length || chatMode()) state.feedDirty = true; // "running: … · Ns" and the chat status line age between status pushes
@@ -11257,16 +11398,23 @@
     const bitmapW = Math.round(width * dpr);
     const bitmapH = Math.round(height * dpr);
     const fit = (canvas, ctx) => {
-      if (canvas.width !== bitmapW || canvas.height !== bitmapH) {
+      const cleared = canvas.width !== bitmapW || canvas.height !== bitmapH;
+      if (cleared) {
         canvas.width = bitmapW;
         canvas.height = bitmapH;
       }
       canvas.style.width = width + "px";
       canvas.style.height = height + "px";
       ctx.setTransform(bitmapW / width, 0, 0, bitmapH / height, 0, 0);
+      return cleared;
     };
     fit(el.canvas, el.ctx);
-    if (el.far && el.farCtx) fit(el.far, el.farCtx);
+    // A fresh opaque bitmap is black: until the next frame paints the sky it
+    // shows the theme's background, as the element's CSS background did.
+    if (el.far && el.farCtx && fit(el.far, el.farCtx)) {
+      el.farCtx.fillStyle = state.canvasPalette?.background ?? "#050507";
+      el.farCtx.fillRect(0, 0, width, height);
+    }
     el.width = width;
     el.height = height;
     state.labelWidths.clear();
@@ -11349,7 +11497,10 @@
       el.canvas = document.getElementById("idle-layer");
     // The far layer: the sky, and whatever a focused branch pushes behind it.
     el.far = document.getElementById("idle-layer-far");
-    el.farCtx = el.far?.getContext?.("2d") ?? null;
+    // Opaque: drawBackdrop paints the whole sky first every frame, and nothing
+    // reads the layer's transparency, so the compositor need not blend it
+    // with what lies under it.
+    el.farCtx = el.far?.getContext?.("2d", { alpha: false }) ?? null;
       el.hud = document.getElementById("idle-hud");
       if (!el.canvas) return;
       el.ctx = el.canvas.getContext("2d");
@@ -11729,9 +11880,10 @@
     // The broadcast carries the list that was just written. Using it skips a
     // second read that could land inside the next save and come back empty.
     window.mefiStudio?.onTasks?.(async (tasks) => {
+      state.calmFrames = 0;
       if (Array.isArray(tasks)) takeTasks(tasks);
       else await refreshTasks();
-      if (state.active || state.homeBackdrop) refreshGraph();
+      if (state.active || state.homeBackdrop) refreshGraphSoon();
     });
     window.addEventListener("resize", () => (state.active || state.homeBackdrop) && resize());
 
@@ -11911,6 +12063,7 @@
       if (state.active) renderFeed();
     });
     window.mefiStudio?.onRequests?.((requests) => {
+      state.calmFrames = 0; // a pinned request marks its node Next
       state.requests = Array.isArray(requests) ? requests : [];
       state.feedDirty = true;
       if (state.active) renderFeed();
@@ -11919,6 +12072,7 @@
     // {ok, status} — accept either shape here. The roster counts the graph
     // rebuild put in this slot survive the push (adoptAssistantStatus).
     window.mefiStudio?.onAssistantStatus?.((status) => {
+      state.calmFrames = 0;
       adoptAssistantStatus(status?.status ?? status ?? null);
       renderNewWorkControl();
       // Autopilot history (started/done/failed/paused) becomes gold "a-eyes"
@@ -11980,8 +12134,9 @@
       if (state.active) renderFeed();
     });
     window.mefiStudio?.onCheckpoints?.((data) => {
+      state.calmFrames = 0;
       state.checkpoints = data ?? {};
-      if (state.active) refreshGraph();
+      if (state.active) refreshGraphSoon();
     });
     window.mefiStudio?.onAssistant?.(onAssistantEvent);
     // The rail's click on its assistant node lands here while Command is up.
@@ -12061,6 +12216,11 @@
     )
   );
 
+  // Input anywhere in the window, and the page's own change events, end a rest
+  // before their handlers run (capture), so the answer is never a rest frame late.
+  for (const type of ["pointerdown", "pointermove", "pointerup", "wheel", "keydown", "keyup", "focusin", "resize"]) window.addEventListener(type, wakeFrames, { capture: true, passive: true });
+  for (const type of ["mefi-music-change", "mefi-theme-change", "mefi-tree-preferences", "mefi:nav", "mefi:tree-select", "mefi:assistant-focus", "mefi:project-changed"]) window.addEventListener(type, wakeFrames, true);
+  document.addEventListener?.("visibilitychange", wakeFrames);
   window.addEventListener("mefi-music-change", syncMusicNode);
   window.addEventListener("mefi-theme-change", syncGraphTheme);
   window.addEventListener("mefi-tree-preferences", (event) => applyTreePreferences(event.detail ?? {}));
