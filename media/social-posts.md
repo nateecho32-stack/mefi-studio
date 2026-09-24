@@ -1,19 +1,20 @@
 # Since 0.3.0: social posts
 
-Attach `mefi-thought-form.mp4` as the main announcement video.
+Attach `mefi-work-in-motion.mp4` as the main announcement video.
 This is the current single design: a silent, 30-second, 1920 × 1080 film.
-Dimensional ASCII agents exchange signals over a charcoal-to-teal atmosphere.
-Their animated thoughts include rowing a boat, hammering a problem and a happy
-robot jumping. Quick reactions sit inside slower drifting forms, with layered
-ASCII depth and color separating surfaces, shadows and tools. It is a
-conceptual workflow illustration, not a UI recording.
-Earlier circle films are superseded.
+A traveling agent builds a branching task tree against a dark starfield.
+Tasks grow, turn amber during work and settle green as reports return.
+The agent inspects images and reacts through quick, dimensional ASCII
+vignettes: rowing a boat, hammering a problem and a happy jumping robot.
+The camera follows the work with no headline overlays. This is an original
+workflow animation inspired by the app's tree, not a UI recording.
+Earlier promotional directions are superseded.
 
 ## Discord
 
-**A thought is just the start. Meet Mefi's Studio AI+.**
+**Watch an idea turn into work. Mefi's Studio AI+.**
 
-Agents with a direction. Ideas turning into connected work. Here’s a 30-second look at the development work since 0.3.0:
+One task grows into a tree. Agents get to work. Results come back together. Here’s a 30-second animation of that flow, alongside what’s changed since 0.3.0:
 
 - **Agent Brain:** see the pipeline, its steps and the agents working on them.
 - **Project map:** explore your systems, their parts and the files inside.
@@ -36,7 +37,7 @@ What would you build with it?
 
 ## X
 
-A thought is just the start.
+Watch an idea turn into work.
 
 Mefi's Studio AI+ development preview: agent pipelines, project maps, Playbook recipes, OpenRouter and floating media.
 
@@ -47,7 +48,7 @@ https://github.com/nateecho32-stack/mefi-studio
 
 ## Release coverage
 
-The film groups the major changes to remain readable in 30 seconds. Link
+The film illustrates the agent workflow; the post lists the broader changes. Link
 `CHANGELOG.md` for the full history, including fixes to task admission,
 delegation, verification, routing, interrupted work, project switching, usage
 readings, Brain map drafts, navigation, community perks and Server Styler

@@ -25,6 +25,6 @@ Desk tools, nested delegation and head drafts are optional and start off. Shared
 
 ## Watch and share
 
-[Thought / Form — 30-second showcase](../../media/mefi-thought-form.mp4)
+[Work in Motion — 30-second showcase](../../media/mefi-work-in-motion.mp4)
 
 [Read every change](https://github.com/nateecho32-stack/mefi-studio/blob/main/CHANGELOG.md).
