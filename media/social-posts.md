@@ -4,7 +4,9 @@ Attach `mefi-thought-form.mp4` as the main announcement video.
 This is the current single design: a silent, 30-second, 1920 × 1080 film.
 Dimensional ASCII agents exchange signals over a charcoal-to-teal atmosphere.
 Their animated thoughts include rowing a boat, hammering a problem and a happy
-robot jumping. It is a conceptual workflow illustration, not a UI recording.
+robot jumping. Quick reactions sit inside slower drifting forms, with layered
+ASCII depth and color separating surfaces, shadows and tools. It is a
+conceptual workflow illustration, not a UI recording.
 Earlier circle films are superseded.
 
 ## Discord
