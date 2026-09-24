@@ -5149,7 +5149,9 @@ export function auditPass({ tasks, nodeFolders, questions = [], sessions = null,
     const memberIds = new Set(members.map((task) => str(task.id)));
     const free = members.filter((task) => !str(task.duplicateOf) && !lineageOf(task, board).some((id) => memberIds.has(id)));
     for (const [part, group] of familyParts(key, free, board)) {
-      if (group.length < 2 || group.every((task) => isObject(task.familyDecision)) || group.every((task) => cardHold(task))) continue;
+      // Only a duplicate answer settles a duplicate ask. A churn answer lives in
+      // churnDecision; rows written before the split kept it in familyDecision.
+      if (group.length < 2 || group.every((task) => isObject(task.familyDecision) && !CHURN_CHOICES.has(task.familyDecision.choice)) || group.every((task) => cardHold(task))) continue;
       report.familiesWaiting += 1;
       const asked = askedFamilies.has(part) || group.some((task) => askedCards.has(str(task.id)));
       if (askFamilies && !asked && familyAsks.length < FAMILY_ASKS_PER_PASS) familyAsks.push(familyAsk(part, group, board, now));
@@ -5172,7 +5174,11 @@ export function auditPass({ tasks, nodeFolders, questions = [], sessions = null,
     if (members.length < CHURN_MIN_CARDS || members.some(busyTask)) continue;
     const waiting = members.filter((task) => unresolvedTask(task) && loopHoldable(task) && !isObject(task.loopGuard) && !str(task.duplicateOf));
     if (!waiting.length) continue;
-    const decidedAt = Math.max(0, ...members.map((task) => (isObject(task.familyDecision) && CHURN_CHOICES.has(task.familyDecision.choice) ? num(task.familyDecision.at, 0) : 0)));
+    // The churn answer's own field: a later duplicate answer (keep all, keep
+    // the oldest) used to overwrite it and bring the ask back over runs the
+    // owner had already answered.
+    const churnAt = (decision) => (isObject(decision) && CHURN_CHOICES.has(decision.choice) ? num(decision.at, 0) : 0);
+    const decidedAt = Math.max(0, ...members.map((task) => Math.max(churnAt(task.churnDecision), churnAt(task.familyDecision))));
     const runs = familyRuns(members).filter((run) => run.at > decidedAt).slice(0, CHURN_WINDOW);
     const idle = runs.filter((run) => run.idle).length;
     if (idle < CHURN_IDLE) continue;

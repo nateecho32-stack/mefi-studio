@@ -749,6 +749,7 @@ async function awaitPause(kind) {
 // A pending restart drains the current workers without changing the user's
 // saved run/pause preference. Their existing timeout/recovery rules still apply.
 let updateDrainRequested = false;
+let manualRestartRetry = null; // a deferred manual restart waiting for the builds to end
 let executorClosing = false;
 function executorUpdateHold() {
   if (executorClosing) return "Studio is saving work before closing";
@@ -777,6 +778,23 @@ async function applyRestart(files, { counted = true } = {}) {
   const running = autopilot.jobs.filter((job) => !job.finished || job.settlementPending);
   if (running.length) {
     updateDrainRequested = true;
+    // An updater restart is finished by the updater's own phase events. A
+    // manual one has none: the drain held every later dispatch and no restart
+    // ever followed. It retries itself once the builds end, and gives the
+    // queue back if they never do (the hard kill bounds every run).
+    if (!counted && !manualRestartRetry && typeof waitForExecutorIdle === "function") {
+      const budget = (typeof EXECUTOR_KILL_MS === "number" ? EXECUTOR_KILL_MS : 25 * 60 * 1000) + 5 * 60 * 1000;
+      manualRestartRetry = waitForExecutorIdle(budget)
+        .then((idle) => {
+          manualRestartRetry = null;
+          if (idle) return applyRestart(files, { counted: false });
+          if (updateDrainRequested) {
+            updateDrainRequested = false;
+            if (typeof assistantAskForWork === "function") assistantAskForWork("restart abandoned: builds still running");
+          }
+        })
+        .catch((error) => { manualRestartRetry = null; if (typeof logLine === "function") logLine(`[update] manual restart retry failed: ${error?.message ?? error}`); });
+    }
     return { deferred: true, reason: `${running.length} build job(s) finishing before update; new dispatches wait` };
   }
   await updateSettings((settings) => {
@@ -5771,6 +5789,14 @@ async function assistantForemanJob(now, entry) {
   // executeNextRequest, so a foreman that skipped the call also skipped every
   // recovery — a parked executor stayed parked until an unrelated code path
   // happened to run it. The gate below reports the post-call state instead.
+  // A project switch abandons a running pass (drainProjectGate clears it from
+  // the pool) and moves on, while this body still runs inside the old
+  // project's scope: a dispatch from here claimed the old project's card and
+  // started a worker in the folder the owner had just left.
+  const leftProject = typeof projects !== "undefined" && typeof projects?.active === "function" && typeof projects?.current === "function" && projects.current()?.id !== projects.active()?.id;
+  if (entry?.abandoned === true || leftProject) {
+    return { ok: true, text: "project changed · nothing dispatched", intel: { handedOut: 0, building: autopilot.jobs.length, slotsFree: null }, messages: [] };
+  }
   const before = autopilot.jobs.map((job) => job.id);
   await executeNextRequest();
   const started = autopilot.jobs.filter((job) => !before.includes(job.id));
@@ -7046,7 +7072,14 @@ function assistantSchedule(ms = assistantState?.intervalMs ?? 30000) {
 // at once; the pool does the work. Anything but the timer queues every
 // cadence role.
 async function assistantTick(reason = "timer") {
-  if (projectSwitching) return { skipped: "switching project", queued: [] };
+  if (projectSwitching) {
+    // The timer is a one-shot chain. Only a switch that completes re-arms it,
+    // so a timer tick skipped here during a switch that was then refused
+    // (the gate still busy) stopped every cadence role for good. A skipped
+    // timer tick re-arms itself; assistantSchedule replaces any earlier timer.
+    if (reason === "timer") assistantSchedule();
+    return { skipped: "switching project", queued: [] };
+  }
   if (assistantTickInFlight) {
     if (reason === "timer") return assistantTickInFlight;
     // Keep an explicit run-once request that arrives during a timer pass.
@@ -8630,7 +8663,9 @@ async function assistantChurnAction(choice, memberIds, action = {}) {
     const at = Date.now();
     let held = 0;
     for (const task of members) {
-      task.familyDecision = { at, choice, keepId: null };
+      // Its own field: familyDecision is the duplicate answer, and each used
+      // to erase the other (assistant.mjs auditPass reads both).
+      task.churnDecision = { at, choice };
       const waiting = !task.runId && !task.lease && !task.absorbedInto && (!task.status || ["open", "pending", "queued"].includes(task.status));
       if (!holdIds.has(task.id) || !waiting) continue;
       task.loopGuard = { v: 1, at, kind: "family", count: 0, reason: `you held it for review: ${reason}`, remedy: "Read the last attempts, then edit, split or close the brief, or choose Try again to run it as it is.", by: "owner" };
@@ -10565,8 +10600,11 @@ async function spawnNextJob() {
       && (autopilot.adaptiveParallel === true || others.length < Math.max(1, autopilot.parallel || 1));
   };
   // The pause can land mid-fill (an infra breaker tripped on a sibling job),
-  // so re-check instead of trusting the dispatcher's one-time gate.
+  // so re-check instead of trusting the dispatcher's one-time gate. A caller
+  // still scoped to a project the owner has left (an abandoned roster pass)
+  // dispatches nothing there.
   if (projectSwitching) return "empty";
+  if (typeof projects.active === "function" && runProject?.id !== projects.active()?.id) return "empty";
   // No folder is open: nothing may build in the app's own seed store.
   if (!projects.open()) return "noproject";
   if (!autopilot.execute || assistantState?.status === "paused" || executorUpdateHold()) return "empty";
@@ -11020,8 +11058,9 @@ async function spawnNextJob() {
     // SQLite serializes the writes but cannot make a separately performed
     // check atomic. The lease ({ pid, at }) rides the claim so housekeeping
     // can tell our own dead runs from another process's live ones.
+    const projectLeft = () => typeof projects.active === "function" && runProject?.id !== projects.active()?.id;
     await mutateBoard((board) => {
-      if (!autopilot.execute || assistantState?.status === "paused" || executorUpdateHold() || !manualCapacityAvailable(entry)) return null;
+      if (!autopilot.execute || assistantState?.status === "paused" || executorUpdateHold() || !manualCapacityAvailable(entry) || projectLeft()) return null;
       // The operator can edit an open card while the route/policy reads await.
       // Its new scope needs a new collaboration decision and file reservation;
       // never run an updated brief under the old selection's file locks.
@@ -11126,7 +11165,8 @@ async function spawnNextJob() {
         && !backlog.dependencyState(current, currentTasks).stage);
     });
   } catch {}
-  if (!launchAllowed || !autopilot.execute || assistantState?.status === "paused" || executorUpdateHold() || !manualCapacityAvailable(entry) || !backlog.buildAllowed(job.ref, autopilot)) {
+  if (!launchAllowed || !autopilot.execute || assistantState?.status === "paused" || executorUpdateHold() || !manualCapacityAvailable(entry) || !backlog.buildAllowed(job.ref, autopilot)
+    || (typeof projects.active === "function" && runProject?.id !== projects.active()?.id)) {
     await cancelClaim("claim or scope changed before launch");
     return "lost";
   }
@@ -13650,8 +13690,14 @@ async function stopAllAgents({ reason = "stopped by user", pauseAssistant = true
     // 1. No new dispatch while the brake is on. Persisting execute=false keeps
     //    the stop durable across a restart; the project-switch path leaves the
     //    operator's execute preference alone and only stops what is running.
-    if (pauseExecutor) await setAutopilot({ execute: false });
-    else {
+    //    setAutopilot turns execute off before its first await; the save is
+    //    awaited last, so a settings file that cannot be written (locked by
+    //    a sync client, a full disk) no longer aborts the brake before a
+    //    single worker is stopped.
+    const executorSaved = pauseExecutor
+      ? setAutopilot({ execute: false }).catch((error) => logLine(`[autopilot] stop applied, but not saved: ${error?.message ?? error}`))
+      : null;
+    if (!pauseExecutor) {
       autopilot.waiting = null;
       autopilot.clusterCancel?.("Agents stopped");
     }
@@ -13683,6 +13729,7 @@ async function stopAllAgents({ reason = "stopped by user", pauseAssistant = true
       else if (!CLI_MODE) await saveAssistant({ force: true }).catch(() => {});
     }
     const idle = await waitForExecutorIdle(waitMs);
+    await executorSaved;
     emitAutopilot();
     return { ok: true, reason, stopped: stopped.length, idle, state: assistantState, autopilot: autopilotStatus() };
   })().finally(() => { stopAllPromise = null; });
