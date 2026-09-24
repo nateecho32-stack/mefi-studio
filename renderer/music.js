@@ -65,6 +65,7 @@
     waves: { title: "Connection waves", detail: "Let sound gently bend the connections.", enabled: true },
     splitBands: { title: "Separate frequency lines", detail: "Bass, mids and treble drive different connections.", enabled: true },
     nodes: { title: "Node glow", detail: "Light the nodes with the music.", enabled: true },
+    motion: { title: "Tree motion", detail: "Let the beat turn, sway and swell the spinning tree. It stays in frame.", enabled: true },
     percussion: { title: "Drum accents", detail: "Add sharper ripples on drum hits.", enabled: false },
     background: { title: "Background glow", detail: "Let the space behind the tree pulse.", enabled: false },
   };
@@ -1076,7 +1077,7 @@
     const audioLink = element("section", "music-audio-link", null, main);
     audioLink.setAttribute("aria-labelledby", "music-audio-heading");
     const audioHeading = element("h3", null, "Audio link", audioLink); audioHeading.id = "music-audio-heading";
-    element("p", "music-fineprint", "Gentle waves and node glow follow quiet or loud music. Add drum accents or background glow when you want more movement.", audioLink);
+    element("p", "music-fineprint", "Gentle waves, node glow and tree motion follow quiet or loud music. Add drum accents or background glow when you want more movement.", audioLink);
     const audioControls = element("div", "music-audio-controls", null, audioLink);
     const sourceLabel = element("label", null, "Listen to", audioControls);
     els.audioSource = element("select", null, null, sourceLabel); els.audioSource.id = "music-audio-source";

@@ -85,7 +85,7 @@ const runFixture = async () => {
     assert.equal(report.audio.paused.playing, false);
     assert.equal(report.audio.stableGeometry, true);
     assert.equal(report.audio.defaults.response, .35);
-    assert.deepEqual(report.audio.defaults.effects, { waves: true, nodes: true, percussion: false, background: false, splitBands: true });
+    assert.deepEqual(report.audio.defaults.effects, { waves: true, nodes: true, percussion: false, background: false, splitBands: true, motion: true });
     const controls = report.audio.controls;
     assert.equal(controls.wavesOff.connections.length, 0);
     assert.ok(controls.wavesOff.nodeLevels.some(level=>level>0.02));

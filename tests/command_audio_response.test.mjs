@@ -80,14 +80,14 @@ function graphFixture(nodeLayout = "constellation") {
 }
 
 test("audio preferences start gently and normalize malformed saved controls", () => {
-  const defaults = { response: 0.35, waves: true, nodes: true, percussion: false, background: false, splitBands: true };
+  const defaults = { response: 0.35, waves: true, nodes: true, percussion: false, background: false, splitBands: true, motion: true };
   for (const raw of [undefined, "broken json", "null", "[]", "42", '"loud"']) {
     const f = preferences(new Map([["mefiStudio.audioVisuals.v1", raw]]));
     assert.deepEqual({ response: f.state.audioResponse, ...f.state.audioEffects }, defaults);
   }
   for (const [saved, expected] of [
-    [{ response: 0, waves: false, nodes: false, percussion: true, background: true, splitBands: false }, { response: 0, waves: false, nodes: false, percussion: true, background: true, splitBands: false }],
-    [{ response: 100, waves: "false", nodes: 0, percussion: "true", background: 1, splitBands: "false" }, { ...defaults, response: 2 }],
+    [{ response: 0, waves: false, nodes: false, percussion: true, background: true, splitBands: false, motion: false }, { response: 0, waves: false, nodes: false, percussion: true, background: true, splitBands: false, motion: false }],
+    [{ response: 100, waves: "false", nodes: 0, percussion: "true", background: 1, splitBands: "false", motion: "false" }, { ...defaults, response: 2 }],
     [{ response: -4, waves: false }, { ...defaults, response: 0, waves: false }],
     [{ response: "1.8", unrelated: true }, defaults],
   ]) {
@@ -105,10 +105,10 @@ test("legacy response becomes gentler once, while new choices and zero survive r
   }
   const f = preferences(new Map([["mefiStudio.audioResponse", "2"]]));
   f.env.setAudioResponse(1.25);
-  f.env.setAudioEffects({ waves: false, nodes: false, percussion: true, background: true, splitBands: false });
+  f.env.setAudioEffects({ waves: false, nodes: false, percussion: true, background: true, splitBands: false, motion: false });
   let reloaded = preferences(f.stored);
   assert.equal(reloaded.state.audioResponse, 1.25);
-  assert.deepEqual(reloaded.state.audioEffects, { waves: false, nodes: false, percussion: true, background: true, splitBands: false });
+  assert.deepEqual(reloaded.state.audioEffects, { waves: false, nodes: false, percussion: true, background: true, splitBands: false, motion: false });
   reloaded.state.audioWaves = [{ from: "old" }];
   reloaded.env.setAudioResponse(0);
   assert.equal(reloaded.state.audioWaves.length, 0);
@@ -128,16 +128,16 @@ test("effect changes save independently and preserve connected audio and playbac
   Object.assign(f.env, { useReactiveInput: unexpected, stopReactiveInput: unexpected, ensureAudio: unexpected });
   const before = { ...f.state };
   f.env.setAudioEffects({ nodes: false, percussion: true });
-  assert.deepEqual({ ...f.state.audioEffects }, { waves: true, nodes: false, percussion: true, background: false, splitBands: true });
+  assert.deepEqual({ ...f.state.audioEffects }, { waves: true, nodes: false, percussion: true, background: false, splitBands: true, motion: true });
   f.state.audioWaves = [{ from: "previous frame" }];
-  f.env.setAudioEffects({ waves: false, background: true, splitBands: false });
+  f.env.setAudioEffects({ waves: false, background: true, splitBands: false, motion: false });
   assert.equal(f.state.audioWaves.length, 0, "switching off waves releases their last frame immediately");
-  f.env.setAudioEffects({ waves: "yes", nodes: 1, splitBands: 1, response: 2, unexpected: true });
+  f.env.setAudioEffects({ waves: "yes", nodes: 1, splitBands: 1, motion: "on", response: 2, unexpected: true });
   f.env.setAudioEffects(null);
   f.env.setAudioResponse(0.2);
-  assert.deepEqual({ ...f.state.audioEffects }, { waves: false, nodes: false, percussion: true, background: true, splitBands: false });
+  assert.deepEqual({ ...f.state.audioEffects }, { waves: false, nodes: false, percussion: true, background: true, splitBands: false, motion: false });
   const saved = JSON.parse(f.stored.get("mefiStudio.audioVisuals.v1"));
-  assert.deepEqual(saved, { response: 0.2, waves: false, nodes: false, percussion: true, background: true, splitBands: false });
+  assert.deepEqual(saved, { response: 0.2, waves: false, nodes: false, percussion: true, background: true, splitBands: false, motion: false });
   for (const key of ["reactive", "localAudio", "inputStream", "inputSource", "inputPending", "inputGeneration", "audioSource", "captureArmed"]) assert.equal(f.state[key], before[key], key);
   assert.equal(localAudio.paused, false);
 });

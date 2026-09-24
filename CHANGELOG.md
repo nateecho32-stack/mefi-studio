@@ -16,6 +16,14 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   second (one a second with Motion off), paused under a sheet. It costs
   about a third of Command's frame time. Every theme tints the glass with
   its own colours, and **Blur behind panels** off makes the panels solid.
+- **Tree motion.** With the Audio link on and the Overview spinning in 3D,
+  the music moves the tree: the spin quickens with the music's energy, each
+  kick drum steps it on, the bass swells it, the mids sway it round a small
+  figure of eight and the snare nods it toward you. It all happens inside
+  room the frame keeps for it, so no node leaves the view, and it settles
+  back when the music stops, the spin pauses or a node is focused. Response
+  sets how much (full from 50%); **Tree motion** under Style & sound ›
+  Reactions turns it off.
 
 ### Fixed
 - **Claude Code and Antigravity builders are no longer killed for working
@@ -75,6 +83,13 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 - The project panel's "Mefi's Studio" heading no longer wears the current-page
   highlight on Home, and the Shortcuts sheet's key column is narrowed to its
   longest key.
+- **The spinning tree stays in frame, turning in place.** The Overview
+  turned the tree about the world's origin rather than its own centre, so a
+  lopsided tree swung up to a few hundred pixels to one side, and the frame
+  shrank and grew with every turn (down to a seventh of its size for
+  Branches and Terraces on a wide window). It now turns about the tree's
+  centre, sizes the frame once for the whole turn, and keeps the camera far
+  enough back that the near end of a wide tree no longer balloons.
 - **A machine that settles just under busy no longer holds new workers
   forever.** After a lag spike, new worker starts waited for two readings at
   40 ms or less, and a laptop that settled at 41–99 ms never got there. Once
