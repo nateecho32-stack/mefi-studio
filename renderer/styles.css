@@ -44,6 +44,22 @@
   --tint-gold-2: rgba(113, 203, 183, 0.09);
   --tint-gold-3: rgba(113, 203, 183, 0.14);
 
+  /* ---- frost: glass over the live tree (Home, the menu, the project panel) ----
+     Mixed from the theme's own tokens, so every theme keeps its hue; the Blur
+     behind panels switch (html[data-no-blur], under "Home over the live tree")
+     makes them dense. */
+  --frost: blur(18px) saturate(1.6);
+  --frost-veil: color-mix(in srgb, var(--bg) 18%, transparent);          /* over the tree itself */
+  --frost-glass: color-mix(in srgb, var(--panel-solid) 40%, transparent); /* a top-level panel */
+  --frost-glass-strong: color-mix(in srgb, var(--panel-solid) 60%, transparent);
+  --frost-tint: color-mix(in srgb, color-mix(in srgb, var(--gold) 7%, var(--panel-solid)) 36%, transparent); /* a card inside one */
+  --frost-tint-strong: color-mix(in srgb, color-mix(in srgb, var(--gold) 8%, var(--panel-solid)) 52%, transparent);
+  --frost-tint-hover: color-mix(in srgb, color-mix(in srgb, var(--gold) 14%, var(--panel-solid)) 54%, transparent);
+  --frost-well: color-mix(in srgb, var(--bg-deep) 55%, transparent);     /* fields and counters */
+  --frost-edge: color-mix(in srgb, var(--hairline-strong) 62%, transparent);
+  --frost-edge-soft: color-mix(in srgb, var(--hairline-strong) 34%, transparent);
+  --frost-lift: 0 18px 44px -24px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
   /* ---- spacing ---- */
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px; --s6: 24px; --s7: 32px;
   --gutter: 26px;
@@ -2704,7 +2720,8 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 #workspace-sidebar-panel {
   position: absolute; inset: 0 auto 0 0; width: var(--sidebar-width); height: 100%;
   padding: 14px 16px 16px; border-left: 0; border-right: 1px solid var(--hairline-strong);
-  background: radial-gradient(120% 34% at 0 0, rgba(var(--ws-accent-rgb), 0.12), transparent 60%), var(--panel-solid);
+  background: radial-gradient(120% 34% at 0 0, rgba(var(--ws-accent-rgb), 0.12), transparent 60%), var(--frost-glass-strong);
+  backdrop-filter: var(--frost);
   color: var(--ivory); overflow-y: auto;
   overscroll-behavior: contain; scrollbar-gutter: stable; pointer-events: none;
   transform: translateX(-100%); visibility: hidden;
@@ -2792,6 +2809,70 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
   #workspace-sidebar-panel { transition: none; }
 }
 @media (max-width: 650px) { .ws-section-label { display: flex; padding: 2px 6px 6px; } }
+/* ---- Home over the live tree ------------------------------------------------
+   idle.js draws the node tree behind Home as scenery (startHomeBackdrop, which
+   sets body.home-backdrop) and the workspace layer itself is clear, so Home is
+   glass over the tree. The top-level panels (the glance tiles, the
+   conversation, Your work, the connection pill, the setup card, the project
+   panel and the menu) frost what is behind them. What sits inside a panel
+   (the composer, messages, cards, the backlog) is a lighter tint over that
+   frost with no filter of its own: a nested backdrop-filter would only see its
+   own panel. Blur behind panels off (html[data-no-blur]) makes every surface
+   dense and unfiltered. The ids outrank the theme rules in music.css on
+   purpose: this is Home's one skin, in every theme. */
+body.home-backdrop :is(#idle-layer, #idle-layer-far) { z-index: calc(var(--z-workspace) - 1); pointer-events: none; }
+html[data-no-blur] {
+  --frost: none;
+  --frost-glass: color-mix(in srgb, var(--panel-solid) 94%, transparent);
+  --frost-glass-strong: var(--panel-solid);
+  --frost-tint: color-mix(in srgb, var(--gold) 6%, var(--panel-solid));
+  --frost-tint-strong: color-mix(in srgb, var(--gold) 8%, var(--panel-solid));
+  --frost-tint-hover: color-mix(in srgb, var(--gold) 13%, var(--panel-solid));
+  --frost-well: var(--bg-deep);
+}
+#workspace-layer { background: transparent; }
+/* The veil keeps the tree a backdrop: a little deeper behind the headline,
+   lighter lower down where the panels already frost it. */
+#workspace-layer .ws-main { background: radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent), var(--frost-veil) 260px); }
+:root[data-studio-theme-tier="premium"] #workspace-layer .ws-main { background: radial-gradient(ellipse at 12% 100%, rgba(var(--accent-2-rgb), .07), transparent 46%), radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent), var(--frost-veil) 260px); }
+#workspace-layer :is(.ws-topbar, .ws-heading) { text-shadow: 0 1px 14px rgba(0, 0, 0, 0.6); }
+#workspace-layer .ws-topbar { border-color: var(--frost-edge-soft); }
+
+/* top-level panels: the frost itself */
+#workspace-layer :is(.ws-dash-tile, .ws-conversation, .ws-work, .ws-connection, .walkthrough-invitation:not(.community-invitation)) {
+  background: var(--frost-glass); border: 1px solid var(--frost-edge); box-shadow: var(--frost-lift);
+  backdrop-filter: var(--frost);
+}
+#workspace-layer .ws-dash-tile:is(:hover, :focus-visible) { background: var(--frost-tint-hover); border-color: var(--hairline-strong); }
+#workspace-layer .ws-dash-service:hover { background: var(--frost-glass); border-color: var(--frost-edge); }
+#workspace-layer .ws-dash-tile[data-tone="warn"] { border-color: rgba(230, 168, 90, 0.55); }
+#workspace-layer .ws-dash-tile[data-tone="held"] { border-color: rgba(200, 120, 120, 0.5); }
+#workspace-layer .ws-connection { color: var(--ivory); }
+/* The conversation and Your work become the two panes they already were,
+   each with its own frosted pane instead of a rule between them. */
+#workspace-layer .ws-conversation { border-radius: var(--r-lg); padding: 2px 16px 12px; }
+#workspace-layer .ws-work { border-radius: var(--r-lg); padding: 4px 14px 12px; }
+#workspace-layer :is(.ws-companion-bar, .ws-work-tabs) { border-color: var(--frost-edge-soft); }
+#workspace-layer .ws-conversation > .ws-activity { border-color: var(--frost-edge-soft); }
+
+/* inside a panel: tints over its frost */
+#workspace-layer :is(.ws-composer, .ws-backlog) { background: var(--frost-tint-strong); border-color: var(--frost-edge); }
+#workspace-layer .ws-composer:focus-within { border-color: var(--ws-accent); }
+#workspace-layer .ws-message.user { background: var(--frost-tint); border-color: var(--frost-edge-soft); }
+#workspace-layer :is(.ws-work-card, .ws-idea-card) { background: var(--frost-tint); border-top-color: var(--frost-edge-soft); border-right-color: var(--frost-edge-soft); border-bottom-color: var(--frost-edge-soft); }
+#workspace-layer .ws-work-card:is([data-stage="running"], [data-status="active"], [data-status="running"]) { background: color-mix(in srgb, color-mix(in srgb, var(--gold) 16%, var(--panel-solid)) 56%, transparent); }
+#workspace-layer .ws-work-card:hover { background: var(--frost-tint-hover); }
+#workspace-layer :is(.ws-work-search, .ws-modes, .ws-work-tabs button span) { background: var(--frost-well); }
+#workspace-layer .ws-work-search { border-color: var(--frost-edge); }
+#workspace-layer .ghost { border-color: var(--frost-edge); }
+#workspace-layer .ghost:hover { background: var(--tint-gold-2); border-color: var(--hairline-strong); }
+
+/* the project panel's rows, over its own frost */
+#workspace-sidebar .ws-project.selected { background: var(--frost-tint-strong); }
+#workspace-sidebar .ws-project-icon { background: var(--frost-well); }
+
+/* Stacked (a narrow window), Your work is a full pane under the conversation. */
+@media (max-width: 960px) { #workspace-layer .ws-work { padding: 12px 14px; } }
 #tasks-overlay .explorer-grid { grid-template-columns: minmax(270px,31%) minmax(0,1fr); }
 /* The overview follows saved plan and conversation relationships. Nested rows
    retain the original task controls without competing with the goal cards. */
@@ -4285,8 +4366,8 @@ html[data-shell="rail"][data-rail-pinned] { --shell-rail-w: var(--shell-rail-ope
   position: fixed; top: 0; bottom: 0; left: 0; z-index: var(--z-shell);
   width: var(--shell-rail-w); box-sizing: border-box;
   display: flex; flex-direction: column; gap: 4px; padding: 10px 8px;
-  background: var(--glass-hard); border-right: 1px solid var(--hairline);
-  backdrop-filter: var(--blur);
+  background: var(--frost-glass-strong); border-right: 1px solid var(--hairline);
+  backdrop-filter: var(--frost);
   /* Only the section list scrolls (below); the brand, the foot and the pin
      stay on screen however tall the open rail grows. */
   overflow: hidden;

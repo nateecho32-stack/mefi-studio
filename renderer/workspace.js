@@ -742,9 +742,18 @@
     init();
     return retry ? loadInitialWorkspace() : startupPromise ?? Promise.resolve(!api());
   }
+  // The live node tree drawn behind Home's frosted panels (idle.js owns it).
+  // It waits for the startup layer to lift, so Home's first paint never shares
+  // the thread with it, and starts only if Home is still showing by then.
+  function showBackdrop() {
+    const start = () => { if (active()) window.MefiIdle?.setHomeBackdrop?.(true); };
+    if (window.MefiBoot?.isActive?.()) Promise.resolve(window.MefiBoot.ready?.()).then(start, start);
+    else start();
+  }
   function enter() {
     init(); window.MefiIdle?.exit?.(); $("layer").hidden = false;
     document.body.classList.add("workspace-active");
+    showBackdrop();
     renderMachineTile(); renderUsageTile();
     // Usage has no push; one read on entry (cached 5 min by the tracker).
     if (api()) window.MefiUsageTracker?.refresh?.()?.catch?.(() => {});
@@ -753,7 +762,7 @@
     // the loading layer joins that work instead of issuing a second batch.
     return startupPending || window.MefiBoot?.isActive?.() ? ready() : refresh(true);
   }
-  function exit() { if (!$("layer")) return; $("layer").hidden = true; document.body.classList.remove("workspace-active"); saveDraft(); }
+  function exit() { if (!$("layer")) return; $("layer").hidden = true; document.body.classList.remove("workspace-active"); window.MefiIdle?.setHomeBackdrop?.(false); saveDraft(); }
   function init() {
     if (initialized || !$("layer")) return; initialized = true;
     $("form").addEventListener("submit", submit);

@@ -12,7 +12,7 @@ const stageSource = await readFile(new URL("../renderer/stage-labels.js", import
 const flush = async () => { for (let i = 0; i < 30; i += 1) await Promise.resolve(); };
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 
-async function environment({ timerQueue = null, bridgeOverrides = {}, autoEnter = true, desktop = true, bootActive = () => false } = {}) {
+async function environment({ timerQueue = null, bridgeOverrides = {}, autoEnter = true, desktop = true, bootActive = () => false, windowOverrides = {} } = {}) {
   const elements = new Map(); const storage = new Map(); const events = {}; const dispatched = [];
   const get = (id) => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
   const el = (name) => get(`workspace-${name}`);
@@ -45,6 +45,7 @@ async function environment({ timerQueue = null, bridgeOverrides = {}, autoEnter 
       mefiStudio: desktop ? bridge : undefined, dispatchEvent: (event) => { dispatched.push(event); return true; }, addEventListener() {},
       MefiNav: { list: () => [], go() {} }, MefiIdle: { exit() {} }, MefiBoot: { pollStart() {}, isActive: bootActive },
       MefiTasks: { describe: (task) => ({ stage: task.status === "done" ? "done" : task.status === "awaiting_verification" ? "review" : "open", label: task.status, summary: task.prompt || "" }) },
+      ...windowOverrides,
     },
     document: { body: new Element(), hidden: false, getElementById: get, createElement: (tag) => new Element(tag), addEventListener() {} },
     localStorage: { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) },
@@ -86,6 +87,27 @@ test("startup readiness waits for projects and populated panels without duplicat
   loading = false;
   await env.workspace.enter();
   assert.equal(taskCalls, 2, "later visits still refresh current data");
+});
+
+test("Home shows the live tree behind its glass, after the startup layer lifts, and hands it back on leaving", async () => {
+  const calls = []; let loading = true; const boot = deferred();
+  const idle = { exit() { calls.push("exit"); }, setHomeBackdrop(on) { calls.push(on ? "backdrop on" : "backdrop off"); return on; } };
+  const env = await environment({ autoEnter: false, bootActive: () => loading, windowOverrides: { MefiIdle: idle, MefiBoot: { pollStart() {}, isActive: () => loading, ready: () => boot.promise } } });
+  env.workspace.enter(); await flush();
+  assert.deepEqual(calls, ["exit"], "Command lets go first; the tree waits for the startup layer");
+  loading = false; boot.resolve(true); await flush();
+  assert.deepEqual(calls, ["exit", "backdrop on"]);
+  env.workspace.exit();
+  assert.deepEqual(calls, ["exit", "backdrop on", "backdrop off"]);
+  calls.length = 0;
+  env.workspace.enter(); await flush();
+  assert.deepEqual(calls, ["exit", "backdrop on"], "a later visit shows it at once");
+  env.workspace.exit(); calls.length = 0;
+  loading = true; const late = deferred();
+  const lateEnv = await environment({ autoEnter: false, windowOverrides: { MefiIdle: idle, MefiBoot: { pollStart() {}, isActive: () => loading, ready: () => late.promise } } });
+  lateEnv.workspace.enter(); await flush(); lateEnv.workspace.exit(); calls.length = 0;
+  late.resolve(true); await flush();
+  assert.deepEqual(calls, [], "Home already left: the startup handoff does not start the tree");
 });
 
 test("startup reports project and panel failures and an explicit retry recovers", async () => {

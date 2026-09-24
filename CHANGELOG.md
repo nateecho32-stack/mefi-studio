@@ -7,6 +7,16 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Home is glass over the live node tree.** The workspace used to sit on a
+  flat, opaque background. Now the Command constellation draws behind it,
+  and the glance tiles, the conversation, Your work, the menu and the
+  project panel are frosted glass that shows the tree through, blurred.
+  Behind Home the tree is scenery: no labels or input, about 12 frames a
+  second (one a second with Motion off), paused under a sheet. It costs
+  about a third of Command's frame time. Every theme tints the glass with
+  its own colours, and **Blur behind panels** off makes the panels solid.
+
 ### Fixed
 - **A machine that settles just under busy no longer holds new workers
   forever.** After a lag spike, new worker starts waited for two readings at

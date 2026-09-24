@@ -7,6 +7,8 @@
 // After five quiet minutes it opens itself in ambient mode; D (or the dock, the
 // rail button, the palette) opens it as the menu. Keys, layers and every
 // destination belong to nav.js — this file owns the canvas and its HUD.
+// Behind Home it draws the same tree as scenery for the workspace's frosted
+// panels (startHomeBackdrop): no HUD, no input, no text, a slow cadence.
 (function () {
   "use strict";
 
@@ -272,7 +274,12 @@
     analyser: null,
     inputStream: null,
     inputPending: null, // source kind of the in-flight capture request
-    timers: { idle: null, refresh: null },
+    timers: { idle: null, refresh: null, backdrop: null },
+    // Home's backdrop (startHomeBackdrop): the tree drawn as scenery behind
+    // the workspace. `homeBackdrop` is true while it draws; `homeBackdropWanted`
+    // remembers that Home asked for it while Command held the canvas.
+    homeBackdrop: false,
+    homeBackdropWanted: false,
     lastFrame: 0,
     lastInput: Date.now(),
     checkpoints: {},
@@ -3330,6 +3337,11 @@
       state.graphFrame = { x: 28, y: 28, w: Math.max(1, el.width - 56), h: Math.max(1, el.height - 56) };
       return { ...state.graphFrame };
     }
+    // Behind Home there is no HUD to keep clear: the tree spreads edge to edge.
+    if (state.homeBackdrop && !state.active) {
+      state.graphFrame = { x: 0, y: 0, w: Math.max(1, el.width), h: Math.max(1, el.height) };
+      return { ...state.graphFrame };
+    }
     const now = Date.now();
     if (state.graphArea && now - state.graphAreaAt < 250) return state.graphArea;
     const visibleBox = (node) => {
@@ -6226,10 +6238,19 @@
   const AMBIENT_FRAME_MS = 30;
   const HOT_FRAME_MS = 12;
   const HOT_FRAME_BUDGET_MS = 9;
+  // Behind Home the tree is scenery under frosted glass: about 12 fps keeps a
+  // slow orbit smooth through the blur for well under half Command's cost, and
+  // with motion off one frame a second is enough to pick up graph changes.
+  const BACKDROP_FRAME_MS = 80;
+  const BACKDROP_STILL_FRAME_MS = 1000;
   let lastFrameAt = 0;
   let frameRequest = 0;
+  function frameGap(hot) {
+    if (state.active) return hot ? HOT_FRAME_MS : AMBIENT_FRAME_MS;
+    return typeof noMotion === "function" && noMotion() ? BACKDROP_STILL_FRAME_MS : BACKDROP_FRAME_MS;
+  }
   function frame(time) {
-    if (!state.active) return;
+    if (!state.active && !state.homeBackdrop) return;
     if (document.body.dataset.sheet && !(state.settingsPreview && document.body.dataset.sheet === "music") || pickerHeld(time)) {
       frameRequest = requestAnimationFrame(frame);
       return;
@@ -6239,7 +6260,7 @@
     // tick that missed a 33 ms gate cost a whole extra tick — a 50 ms hitch
     // that read as judder in every camera glide.
     const hot = state.motionHot && Number.isFinite(state.frameCost) && state.frameCost < HOT_FRAME_BUDGET_MS;
-    if (!document.hidden && time - lastFrameAt >= (hot ? HOT_FRAME_MS : AMBIENT_FRAME_MS)) {
+    if (!document.hidden && time - lastFrameAt >= frameGap(hot)) {
       lastFrameAt = time;
       const profiler = globalThis.window?.MefiProfiler;
       const span = profiler?.begin("command.frame");
@@ -7686,9 +7707,14 @@
     }
     } finally { profiler?.end(nodesSpan); }
 
+    // Behind Home the tree is scenery seen through frosted glass: orbs, links
+    // and sky only. Its words would blur into smudges, so the text layers
+    // (checkpoint badges, callouts, speech and labels) wait for Command.
+    const scenery = state.homeBackdrop && !state.active;
     // Checkpoint notes stay discoverable without competing with current work.
-    const badgeExclusions = [...hudRects()];
+    const badgeExclusions = scenery ? [] : [...hudRects()];
     for (const { node, p } of projected) {
+      if (scenery) break;
       if (node.kind !== "session" || !node._pr) continue;
       const notes = state.checkpoints?.[node.id];
       if (!notes?.length) continue;
@@ -7707,9 +7733,11 @@
     // bubbles and the compact labels stepping around them
     stepDeferred(Date.now());
     stepSpeech(Date.now());
-    drawCallouts(projected, { near: ctx, far, focusIds, dt });
-    drawSpeech(projected);
-    drawLabels(projected);
+    if (!scenery) {
+      drawCallouts(projected, { near: ctx, far, focusIds, dt });
+      drawSpeech(projected);
+      drawLabels(projected);
+    }
     ctx.restore();
     if (far !== ctx) far.restore();
     syncFarLayer(liveFocusIds);
@@ -10083,12 +10111,79 @@
     return { selected: state.selected?.id ?? null, zoom: state.zoom };
   }
 
+  // Home's backdrop: the same tree drawn behind the workspace, as scenery for
+  // its frosted panels. It is not Command. state.active stays false, so nav,
+  // keys, bells, audio capture, the HUD and the mefi:command event all still
+  // read "closed". The canvases sit under the workspace layer
+  // (body.home-backdrop in styles.css), take no input, draw without text at
+  // BACKDROP_FRAME_MS, and pick up graph changes on a slow tick. enter() takes
+  // the canvas over, and exit() hands it back while Home still wants it.
+  const BACKDROP_REFRESH_MS = 6000;
+  function setBackdropSurfaces(on) {
+    // No focus stop, no pointer and nothing for a screen reader: Home's own
+    // controls are the page.
+    el.canvas.inert = on;
+    if (on) el.canvas.setAttribute?.("aria-hidden", "true");
+    else el.canvas.removeAttribute?.("aria-hidden");
+    document.body.classList.toggle("home-backdrop", on);
+  }
+  function backdropTick() {
+    if (!state.homeBackdrop || state.active) return;
+    if (document.hidden || document.body.dataset.sheet || pickerHeld()) return;
+    refreshGraph();
+  }
+  function startHomeBackdrop() {
+    state.homeBackdropWanted = true;
+    if (!el.canvas || state.active || state.homeBackdrop) return;
+    state.homeBackdrop = true;
+    setBackdropSurfaces(true);
+    el.canvas.hidden = false;
+    if (el.far) el.far.hidden = false;
+    resize();
+    // The tree Command last drew is still in state.nodes, so a return from
+    // Command shows it at once; a cold start fills in once the reads land.
+    Promise.all([refreshTasks(true), window.MefiTree?.ready?.()])
+      .catch(() => {})
+      .then(() => { if (state.homeBackdrop) refreshGraph(); })
+      .catch(() => {});
+    clearInterval(state.timers.backdrop);
+    state.timers.backdrop = setInterval(backdropTick, BACKDROP_REFRESH_MS);
+    cancelAnimationFrame(frameRequest);
+    frameRequest = requestAnimationFrame(frame);
+  }
+  // Stops the backdrop's drawing and hands the surfaces back; the canvases
+  // stay as they are, for enter() to take over or stopHomeBackdrop() to hide.
+  function releaseHomeBackdrop() {
+    if (!state.homeBackdrop) return false;
+    state.homeBackdrop = false;
+    clearInterval(state.timers.backdrop);
+    state.timers.backdrop = null;
+    cancelAnimationFrame(frameRequest);
+    frameRequest = 0;
+    setBackdropSurfaces(false);
+    return true;
+  }
+  function stopHomeBackdrop() {
+    state.homeBackdropWanted = false;
+    if (!releaseHomeBackdrop() || state.active) return;
+    el.canvas.hidden = true;
+    if (el.far) el.far.hidden = true;
+  }
+  function setHomeBackdrop(on) {
+    if (on) startHomeBackdrop();
+    else stopHomeBackdrop();
+    return state.homeBackdrop;
+  }
+
   function enter(force = false, params = {}) {
     if (!el.canvas || !el.hud) return;
     if (state.active) {
       applyEnterParams(params);
       return;
     }
+    // Command opens over Home (the quiet clock, or a jump that keeps Home
+    // underneath): it takes the canvas over from the backdrop where it stands.
+    releaseHomeBackdrop();
     state.active = true;
     state.lastInput = Date.now();
     state.frameError = false;
@@ -10255,6 +10350,9 @@
     }
     document.body.classList.remove("command-active");
     window.dispatchEvent(new CustomEvent("mefi:command", { detail: { active: false } }));
+    // Home is still underneath (the quiet clock opened Command over it, or
+    // Home asked for the tree while Command held it): it stays as scenery.
+    if (state.homeBackdropWanted) startHomeBackdrop();
   }
 
   function tick() {
@@ -10765,9 +10863,9 @@
     window.mefiStudio?.onTasks?.(async (tasks) => {
       if (Array.isArray(tasks)) takeTasks(tasks);
       else await refreshTasks();
-      if (state.active) refreshGraph();
+      if (state.active || state.homeBackdrop) refreshGraph();
     });
-    window.addEventListener("resize", () => state.active && resize());
+    window.addEventListener("resize", () => (state.active || state.homeBackdrop) && resize());
 
     // Mouse interacts with the constellation instead of dismissing it.
     // A right-drag orbits the camera; the menu key/gesture must not interrupt it.
@@ -11116,6 +11214,9 @@
     graphViewport: () => ({ ...usableArea() }),
     geometryStatus: () => ({ view: state.view, angle: state.angle, pitch: state.pitch, links: state.edges.map(({ a, b }) => ({ from: state.nodes[a]?.id ?? null, to: state.nodes[b]?.id ?? null })), nodes: state.nodes.map((node) => ({ id: node.id, anchor: node._layoutAnchor ? { ...node._layoutAnchor } : null, world: { x: node.x, y: node.y, z: node.z }, projected: project(node._layoutAnchor ?? node) })) }),
     setSettingsPreview,
+    // Home's backdrop: workspace.js turns it on when Home shows and off when it leaves.
+    setHomeBackdrop,
+    homeBackdropStatus: () => ({ drawing: state.homeBackdrop, wanted: state.homeBackdropWanted, commandActive: state.active }),
     ambientZenStatus: () => ({ enabled: state.ambientZenEnabled, active: state.ambientZen, delayMs: AMBIENT_ZEN_MS, idleMs: Math.max(0, Date.now() - state.lastInput), eligible: canAmbientZen(), feedCollapsed: state.feedCollapsed }),
     settingsPreviewStatus: () => ({ active: Boolean(state.settingsPreview), viewport: state.settingsPreview ? { ...state.settingsPreview } : null, camera: { ...state.camera }, zoom: state.zoom, fit: state.fit, previousWasActive: state.previewRestore?.wasActive ?? null }),
     followStatus: () => ({ mode: state.camMode, taskId: state.follow?.taskId ?? null, nodeId: state.follow?.key ?? null, title: state.follow?.title ?? null, stage: state.follow?.stage ?? null, reason: state.follow?.reason ?? null, since: state.follow?.since ?? null, zoom: state.zoom, targetZoom: state.followZoomTarget }),

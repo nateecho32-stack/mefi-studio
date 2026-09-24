@@ -10,7 +10,7 @@ walk through the agent loop read [agent-loop.md](agent-loop.md).
 | Term | Meaning |
 | --- | --- |
 | **Menu** (the rail) | The navigation down the left edge: **Home**, **Work**, **Live**, **Models** and **Settings**, with **Search**, **Start here**, **Shortcuts** and **Community** at its foot. The code calls it the rail (`#app-rail`, `renderRail` in `renderer/nav.js`). **M+** at its top opens the project panel. |
-| **Workspace** | The home screen (`H`): project header, the "Studio at a glance" strip, the conversation with your companion, and **Your work**. |
+| **Workspace** | The home screen (`H`): project header, the "Studio at a glance" strip, the conversation with your companion, and **Your work**, as frosted glass over the live node tree. |
 | **Command view** | The 3D node tree (`D`): sessions, tasks and agents as orbs, with a panel on the right for Work, Agents, Assistant, Done and Ask. |
 | **Booklet** | Historically the single-file model catalog; today `renderer/booklet.html` is the whole app bundled into one file by `npm run build-booklet`. The **Model catalog** tab (`1`) is the part that kept the name. |
 | **Model Lab** | Tab `2`: measured latency, throughput, cost and the usage tracker per project. |
@@ -90,6 +90,17 @@ walk through the agent loop read [agent-loop.md](agent-loop.md).
 
 ### Workspace and work
 
+- **Home sits over the live tree.** The node tree from Command view draws
+  behind the workspace, and every panel on Home (the glance tiles, the
+  conversation, **Your work**, the connection pill and the setup card) is
+  frosted glass that shows it through, blurred; the menu and the project
+  panel frost whatever they open over. The tree is scenery only: orbs, links
+  and sky with no labels, no pointer or keyboard input, about 12 frames a
+  second (one a second with Motion off), paused while a sheet covers Home.
+  Opening Command takes the canvas over, and closing it hands the tree back
+  while Home is still underneath. **Blur behind panels** off makes the panels
+  solid. The glass is mixed from the theme's own colours, so every theme
+  keeps its hue.
 - **Projects** keeps each folder's tasks, conversations, drafts, references and
   work logs together. **M+** at the top of the menu opens the project panel
   beside it: the project list and **+** to add a folder. Running work must
