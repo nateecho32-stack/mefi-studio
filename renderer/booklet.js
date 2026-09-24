@@ -412,7 +412,11 @@
     }
     if (name === "eyes") window.MefiEyes?.init();
     if (name === "studio") {
+      // The first show checks Server Styler inside initStudio; later shows
+      // check once here, since the poll skipped while another tab was up.
+      const firstShow = !state.studioInitialized;
       initStudio();
+      if (!firstShow) void refreshStyler?.();
       paintSettingsRows();
       syncSettingsNav();
       syncBlurBox();
@@ -737,6 +741,8 @@
   const studioLogLines = [];
   let studioLogFrame = 0;
   let studioLogStale = false;
+  // initStudio's Server Styler status check, once the desktop bridge has one.
+  let refreshStyler = null;
   function paintStudioLog() {
     studioLogFrame = 0;
     const log = document.getElementById("studio-log");
@@ -805,9 +811,18 @@
       }
     }
     void refreshStylerStatus();
-    if (typeof setInterval === "function") setInterval(() => {
-      if (!document.getElementById("tab-studio").hidden) void refreshStylerStatus();
-    }, 5000);
+    // Each check costs the host a file read and a localhost fetch, so it runs
+    // only while Settings is what you are looking at: never while the window
+    // hides (boot.js's shared guard clears the timer), nor while Command, the
+    // workspace or a sheet covers the tab. showTab("studio") checks at once.
+    refreshStyler = refreshStylerStatus;
+    const stylerTick = () => {
+      const body = document.body;
+      if (document.getElementById("tab-studio").hidden || body?.classList?.contains?.("command-active") || body?.classList?.contains?.("workspace-active") || body?.dataset?.sheet) return;
+      void refreshStylerStatus();
+    };
+    if (window.MefiBoot?.pollStart) window.MefiBoot.pollStart("booklet.styler", stylerTick, 5000);
+    else if (typeof setInterval === "function") setInterval(stylerTick, 5000);
     stylerActions.addEventListener("click", async (event) => {
       const button = event.target.closest("button[data-styler-action]");
       if (!button || button.disabled) return;

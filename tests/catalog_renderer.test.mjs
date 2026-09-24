@@ -248,3 +248,30 @@ test("refresh shares pending speed reads and updates model choices and existing 
   env.get("model-lab-catalog").dispatch("toggle");
   assert.equal(env.paints(), paints, "offscreen model maps stay idle");
 });
+
+test("the Server Styler check polls through the shared guard only while Settings is on screen", async () => {
+  const polls = {};
+  const classes = new Set();
+  const body = { classList: { contains: (name) => classes.has(name), toggle() {}, add() {}, remove() {} }, dataset: {}, style: {} };
+  let checks = 0;
+  const env = environment(
+    { serverStylerStatus: async () => { checks += 1; return { state: "online", message: "Server Styler is running." }; } },
+    { window: { MefiBoot: { pollStart: (key, fn, ms) => { polls[key] = { fn, ms }; } } }, document: { body } },
+  );
+  await flush();
+  env.window.MefiBooklet.showTab("studio"); await flush();
+  assert.equal(checks, 1, "opening Settings checks once");
+  const poll = polls["booklet.styler"];
+  assert.equal(poll?.ms, 5000, "the check registers with boot.js's shared poll guard, which stops it while the window hides");
+  poll.fn(); await flush();
+  assert.equal(checks, 2, "a tick on the shown Settings tab checks");
+  for (const cover of ["command-active", "workspace-active"]) { classes.add(cover); poll.fn(); classes.delete(cover); }
+  body.dataset.sheet = "tasks"; poll.fn(); delete body.dataset.sheet;
+  await flush();
+  assert.equal(checks, 2, "no check while Command, the workspace or a sheet covers Settings");
+  env.window.MefiBooklet.showTab("booklet"); poll.fn(); await flush();
+  assert.equal(checks, 2, "no check while another tab is shown");
+  env.window.MefiBooklet.showTab("studio"); await flush();
+  assert.equal(checks, 3, "coming back to Settings checks at once");
+  assert.equal(env.get("server-styler-status").textContent, "Server Styler is running.");
+});
