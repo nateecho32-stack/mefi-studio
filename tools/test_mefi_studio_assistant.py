@@ -696,7 +696,9 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertIn("EXECUTOR_KILL_MS + 90 * 1000", self.main, "wedged is after the kill, or live jobs get flagged while still allowed to work")
         self.assertIn("EXECUTOR_PROMPT_MAX - tailFlat.length", self.main, "the sentinel instruction is never what gets truncated")
         self.assertIn("const body = String(job.prompt ?? \"\")", self.main, "the task's own text is budgeted separately — obligations are trimmed last, not first")
-        self.assertIn("!ok && !entry.spoke", self.main, "a run that talked is never an infrastructure failure")
+        # A stop reason (the budget kill, a supervisor kill) arrives as an
+        # errorMessage too, so silence gates the whole breaker condition.
+        self.assertIn("const infraFail = !userStop && !entry.spoke && (", self.main, "a run that talked is never an infrastructure failure")
 
     def test_the_assistant_hands_out_the_work(self):
         # The auto builder files requests and owns the child processes; deciding

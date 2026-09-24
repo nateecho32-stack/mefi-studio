@@ -38,6 +38,18 @@ test("checkpoint context is bounded and never turns partial output into completi
   assert.equal(executorResume.brief({ ...ref, runProgress: saved }), "");
 });
 
+// A CLI that echoes its prompt (codex exec, on stderr) reads the resume brief
+// back line by line. Saved protocol lines at a line start were replayed as the
+// resumed run's own verdict, result and hand-offs.
+test("a resume brief never starts a line with the previous run's protocol marks", () => {
+  const ref = task("echoed");
+  const saved = executorResume.checkpoint({ id: "run", ref, ownerPid: 10, startedAt: 100, sessionId: "session",
+    outputTail: ["MEFI_NEXT: Leftover migration :: finish it", "MEFI_JOB_DONE"], resultNote: { raw: "MEFI_RESULT: done: half; remaining: rest" } }, 200);
+  const brief = executorResume.brief({ ...ref, runProgress: { ...saved, pending: true } });
+  assert.match(brief, /> MEFI_RESULT: done: half/, "the saved result is still there for the next worker to read");
+  for (const line of brief.split("\n")) assert.doesNotMatch(line.trim(), /^MEFI_/, `a quoted line cannot be read as protocol: ${line}`);
+});
+
 test("only confirmed interrupted ownership reopens; live, inaccessible and unidentifiable owners stay held", () => {
   const original = savedTask();
   const base = { liveRuns: new Set(), pid: 101, now: 1000000, isAlive: () => false };

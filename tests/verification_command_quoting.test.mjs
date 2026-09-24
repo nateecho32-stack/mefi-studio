@@ -54,3 +54,10 @@ test("relative spaced paths stay quoted too", () => {
   const commands = focusedTestsForTask({ files: ["my spaced dir/tests/probe.test.mjs"] }, null);
   assert.deepEqual(commands, ['node --test "my spaced dir/tests/probe.test.mjs"']);
 });
+
+// The path becomes the command, so its case is the file's case: lowercased,
+// it named no file on a case-sensitive filesystem and failed the card.
+test("a reported test path keeps its case, and one test is scheduled once whatever its case", () => {
+  const commands = focusedTestsForTask({ files: ["tests/Physics.test.mjs"] }, { parts: { ran: "node --test /home/Dev/Game/tests/Physics.test.mjs, tests/physics.test.mjs" } });
+  assert.deepEqual(commands, ['node --test "tests/Physics.test.mjs"', 'node --test "/home/Dev/Game/tests/Physics.test.mjs"']);
+});

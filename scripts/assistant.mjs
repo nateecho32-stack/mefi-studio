@@ -3383,6 +3383,12 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
       outRequests.push(request);
       continue;
     }
+    // Promotion stamps the card it made (main.cjs promoteRequestsToTasks), so
+    // a request whose title key cannot match its card's is still absorbed.
+    if (request.promotedTo) {
+      report.absorbed += 1;
+      continue;
+    }
     if (hasDelegation(request)) {
       if (representedDelegations.has(delegationIdentity(request))) report.absorbed += 1;
       else outRequests.push(request);
@@ -3732,7 +3738,9 @@ export function promoteIdeaBacklog({ tasks = [], ideas = [], now = Date.now(), l
 // anchored to the start of the line, so a wrapped line must be unwrapped
 // before it is matched or the mark never lands at index 0.
 export function stripAnsi(value) {
-  return String(value ?? "").replace(/\u001b\[[0-9;]*m/g, "");
+  // Every CSI sequence, not only colour: a CLI that clears or moves the
+  // cursor before its last line ("\x1b[2K\x1b[1GMEFI_JOB_DONE") still said it.
+  return String(value ?? "").replace(/\u001b\[[0-?]*[ -\/]*[@-~]/g, "");
 }
 export const EXECUTOR_DONE_MARK_TEXT = "MEFI_JOB_DONE";
 export function isDoneMarkerLine(line, mark = EXECUTOR_DONE_MARK_TEXT) {
@@ -3862,14 +3870,16 @@ export function focusedTestsForTask(task = null, resultNote = null) {
   const candidates = [];
   const source = isObject(task) ? task : {};
   candidates.push(...asArray(source.files), source.file, ...asArray(source.refs));
-  const ran = str(isObject(resultNote) ? resultNote.parts?.ran : "").toLowerCase();
+  // The path keeps its case: it becomes the command, and a lowercased path
+  // names no file on a case-sensitive filesystem. Only the dedupe folds case.
+  const ran = str(isObject(resultNote) ? resultNote.parts?.ran : "");
   if (ran) candidates.push(...ran.split(/[\s,;]+/));
   const seen = new Set();
   const tests = [];
   for (const candidate of candidates) {
     const value = str(candidate).trim().replace(/\\/g, "/");
-    if (!value || seen.has(value) || !FOCUSED_TEST_RE.test(value)) continue;
-    seen.add(value);
+    if (!value || seen.has(value.toLowerCase()) || !FOCUSED_TEST_RE.test(value)) continue;
+    seen.add(value.toLowerCase());
     // Executable form, following the repo's own documented pipelines. The
     // runner executes this string via shell:true, so every path segment is
     // double-quoted — an unquoted "Coding projects" was split by cmd.exe and
@@ -3996,10 +4006,13 @@ export function isVerificationCommand(value) {
     || /^(?:"[^"\r\n]*[\\/]love\d*\.exe"|love\d*\.exe)\s+(?:"[^"\r\n]+"|'[^'\r\n]+'|[^\s;|&`<>]+)\s*$/i.test(command);
 }
 
+// `runnerIssued` rows are the overseer's own verification run: the runner
+// chose those commands (the LÖVE harness pipes love.exe and reads result.txt),
+// so the shape filter meant for a worker's shell history does not apply.
 export function summarizeObservedChecks(checks = []) {
   const latest = new Map();
   for (const check of asArray(checks)) {
-    if (!isObject(check) || check.commandTruncated || !isVerificationCommand(check.command)) continue;
+    if (!isObject(check) || check.commandTruncated || (check.runnerIssued !== true && !isVerificationCommand(check.command))) continue;
     const key = str(check.command).trim().replace(/\s+/g, " ");
     const at = Number(check.startedAt);
     if (!Number.isFinite(at) || at <= 0) continue;
@@ -4055,13 +4068,17 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerCh
   // (overseerChecks) are judged together — latest-wins across both — but
   // summarized apart too, so the verdict's reason names who ran the check.
   const summarize = (checks) => hasSession === true ? summarizeObservedChecks(checks) : { total: 0, passed: 0, failed: 0, pending: 0 };
+  // Which argument a row arrived in is what marks it runner-issued; a
+  // session row can never carry the mark in.
+  const sessionRows = asArray(observedChecks).filter(isObject).map(({ runnerIssued: _runnerIssued, ...check }) => check);
+  const runnerRows = asArray(overseerChecks).filter(isObject).map((check) => ({ ...check, runnerIssued: true }));
   // Attribution only: a command the overseer also ran is judged by that later
   // run, so the session's earlier copy is neither blamed nor credited.
   const commandKey = (check) => str(check?.command).trim().replace(/\s+/g, " ");
-  const theirCommands = new Set(asArray(overseerChecks).map(commandKey));
-  const own = summarize(asArray(observedChecks).filter((check) => !theirCommands.has(commandKey(check))));
-  const theirs = summarize(overseerChecks);
-  const observedSummary = summarize([...asArray(observedChecks), ...asArray(overseerChecks)]);
+  const theirCommands = new Set(runnerRows.map(commandKey));
+  const own = summarize(sessionRows.filter((check) => !theirCommands.has(commandKey(check))));
+  const theirs = summarize(runnerRows);
+  const observedSummary = summarize([...sessionRows, ...runnerRows]);
   const totalChanges = Math.max(0, Number(changedFiles) || 0);
   const ledgerOwed = Math.max(0, Number(ledgerChanges) || 0);
   const ledger = Math.min(ledgerOwed, totalChanges);
@@ -5132,7 +5149,9 @@ export function auditPass({ tasks, nodeFolders, questions = [], sessions = null,
     const memberIds = new Set(members.map((task) => str(task.id)));
     const free = members.filter((task) => !str(task.duplicateOf) && !lineageOf(task, board).some((id) => memberIds.has(id)));
     for (const [part, group] of familyParts(key, free, board)) {
-      if (group.length < 2 || group.every((task) => isObject(task.familyDecision)) || group.every((task) => cardHold(task))) continue;
+      // Only a duplicate answer settles a duplicate ask. A churn answer lives in
+      // churnDecision; rows written before the split kept it in familyDecision.
+      if (group.length < 2 || group.every((task) => isObject(task.familyDecision) && !CHURN_CHOICES.has(task.familyDecision.choice)) || group.every((task) => cardHold(task))) continue;
       report.familiesWaiting += 1;
       const asked = askedFamilies.has(part) || group.some((task) => askedCards.has(str(task.id)));
       if (askFamilies && !asked && familyAsks.length < FAMILY_ASKS_PER_PASS) familyAsks.push(familyAsk(part, group, board, now));
@@ -5155,7 +5174,11 @@ export function auditPass({ tasks, nodeFolders, questions = [], sessions = null,
     if (members.length < CHURN_MIN_CARDS || members.some(busyTask)) continue;
     const waiting = members.filter((task) => unresolvedTask(task) && loopHoldable(task) && !isObject(task.loopGuard) && !str(task.duplicateOf));
     if (!waiting.length) continue;
-    const decidedAt = Math.max(0, ...members.map((task) => (isObject(task.familyDecision) && CHURN_CHOICES.has(task.familyDecision.choice) ? num(task.familyDecision.at, 0) : 0)));
+    // The churn answer's own field: a later duplicate answer (keep all, keep
+    // the oldest) used to overwrite it and bring the ask back over runs the
+    // owner had already answered.
+    const churnAt = (decision) => (isObject(decision) && CHURN_CHOICES.has(decision.choice) ? num(decision.at, 0) : 0);
+    const decidedAt = Math.max(0, ...members.map((task) => Math.max(churnAt(task.churnDecision), churnAt(task.familyDecision))));
     const runs = familyRuns(members).filter((run) => run.at > decidedAt).slice(0, CHURN_WINDOW);
     const idle = runs.filter((run) => run.idle).length;
     if (idle < CHURN_IDLE) continue;

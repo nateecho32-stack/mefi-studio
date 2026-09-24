@@ -289,3 +289,21 @@ test("main.cjs delegates the base-check decision to projectBaseCheck and judges 
   assert.match(body, /\|\| projectRoot\(\)/, "a row without a project path is judged against the same root the runner uses as cwd");
   for (const flag of ["hasPackageJson", "hasRepoCheck", "hasLoveHarness"]) assert.match(body, new RegExp(`shape\\.${flag} = existsSync\\(`), `${flag} is observed on disk`);
 });
+
+// The LÖVE harness is the overseer's own command: it pipes love.exe and reads
+// result.txt, a shape the filter for a worker's shell history rejects. Its
+// result was dropped, so a failing suite never blocked and a passing one
+// never counted.
+test("the overseer's own harness run counts, and only the overseer's run can carry that trust", () => {
+  const harness = loveHarnessCheckCommand();
+  assert.equal(isVerificationCommand(harness), false, "a worker typing the same line still proves nothing");
+  const failed = verifyCompletion({ verdictOk: true, hasSession: true, changedFiles: 2, overseerChecks: [check(harness, { exitCode: 1, passed: false })] });
+  assert.equal(failed.state, "unverified");
+  assert.equal(failed.reason, "recorded checks failed in the overseer's verification run");
+  const passed = verifyCompletion({ verdictOk: true, hasSession: true, overseerChecks: [check(harness)] });
+  assert.equal(passed.state, "verified");
+  assert.equal(passed.reason, "1 recorded check(s) passed in the overseer's verification run");
+  const smuggled = verifyCompletion({ verdictOk: true, hasSession: true, observedChecks: [check(harness, { runnerIssued: true })] });
+  assert.equal(smuggled.state, "unverified", "a session row cannot mark itself runner-issued");
+  assert.equal(summarizeObservedChecks([check(harness)]).total, 0);
+});

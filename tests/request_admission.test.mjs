@@ -106,7 +106,32 @@ test("promotion does not reopen completed, held, grouped or reviewing inbox work
   const { context, board } = host({ requests });
   assert.equal(await context.promoteRequestsToTasks(), 1);
   assert.deepEqual(copy(board.tasks.map((task) => task.title)), ["Ready"]);
-  assert.deepEqual(copy(board.requests), requests);
+  // Only the promoted row changes, and only by naming the card it became.
+  assert.deepEqual(copy(board.requests), requests.map((request) => request.title === "Ready" ? { ...request, promotedTo: board.tasks[0].id } : request));
+});
+
+test("a promoted request is linked to its card, whatever its title key", async () => {
+  const long = "Expand the explorer tree so collapsed folders remember their state across project switches and restarts";
+  for (const request of [
+    { title: long, prompt: "Persist collapsed folder state per project.", at: 5, source: "expand" },
+    { title: "修复登录页面的错误", prompt: "登录页面在提交后崩溃，请修复。", at: 5, source: "manual" },
+  ]) {
+    const { context, board } = host({ requests: [request] });
+    assert.equal(await context.promoteRequestsToTasks(), 1);
+    assert.equal(await context.promoteRequestsToTasks(), 0, "a second pass does not promote the same request again");
+    assert.equal(board.tasks.length, 1);
+    assert.equal(board.requests[0].promotedTo, board.tasks[0].id);
+    const compacted = assistant.compact({ requests: copy(board.requests), tasks: copy(board.tasks), ideas: [], now: 10 });
+    assert.equal(compacted.requests.length, 0, "the compactor absorbs the request into its card");
+  }
+});
+
+test("two different titles with no compact key are not each other's duplicate", async () => {
+  const { context, board } = host();
+  assert.ok(await context.assistantCreateTask({ title: "修复登录页面" }));
+  assert.ok(await context.assistantCreateTask({ title: "添加深色模式" }), "an unrelated non-Latin title is new work");
+  assert.equal(await context.assistantCreateTask({ title: "修复登录页面" }), null, "the same title is still a duplicate");
+  assert.equal(board.tasks.length, 2);
 });
 
 test("explicit task admission retains a full brief and focused handoff beyond the old character cap", async () => {

@@ -380,3 +380,62 @@ test("evidence waits re-arm on the short cadence, bounded per streak", async () 
   assert.equal(board().tasks[0].verification.state, "pending");
   assert.deepEqual(kicks, Array(8).fill(15000), "eight short retries, then the autopilot tick owns it");
 });
+
+// Some evidence gaps never close (a check history past the read cap, a session
+// row gone from the store). Such a card used to sit in review for good with
+// its verify budget untouched; past the bound it is parked for the owner.
+test("evidence that stays unreadable past its bound parks the card for the owner without a rerun", async () => {
+  const attempt = (sessionId) => ({ startedAt: 1, at: 2, code: 0, sessionId, runId: sessionId });
+  const waiting = (at) => ({ state: "pending", at, reason: "Waiting for the attempt's recorded execution evidence" });
+  const { env, board } = verificationHost({
+    tasks: [
+      { id: "stuck", title: "Evidence gone for good", status: "awaiting_verification", verification: waiting(NOW - 2 * 3600 * 1000), lastAttempt: attempt("gone") },
+      { id: "recent", title: "Store briefly down", status: "awaiting_verification", verification: waiting(NOW - 60 * 1000), lastAttempt: attempt("gone") },
+    ],
+    requests: [{ title: "Request evidence gone", status: "verifying", at: 5, verification: waiting(NOW - 3 * 3600 * 1000), lastAttempt: attempt("gone") }],
+    unavailable: ["gone"],
+  });
+  await env.autopilotHousekeeping();
+  const [stuck, recent] = board().tasks;
+  assert.equal(stuck.status, "open");
+  assert.equal(stuck.verification.state, "failed");
+  assert.match(stuck.verification.reason, /could not be read for 2 hours .*fixture evidence store unavailable.*confirm it yourself/);
+  assert.equal(stuck.nextRunAt, undefined, "no automatic rerun: a new run cannot make old evidence readable");
+  assert.equal(backlog.workState(stuck, NOW).stage, "blocked");
+  assert.equal(recent.status, "awaiting_verification", "a short outage still waits without spending anything");
+  assert.equal(recent.verifyAttempts, undefined);
+  assert.equal(board().requests[0].status, undefined, "the request is released from verifying");
+  assert.equal(board().requests[0].nextRunAt, undefined);
+  assert.match(board().requests[0].lastRunError, /could not be read/);
+});
+
+// A project with no package.json has its `npm run check` moved to the Studio
+// checkout; that run checked Studio's tree, so its red is not the card's.
+test("a done card is not reopened by a relocated check that only failed on Studio's own tree", async () => {
+  const { env, board } = verificationHost({ tasks: [{
+    id: "notes", title: "Notes project card", status: "done", doneAt: NOW - 500,
+    lastAttempt: { startedAt: 1, at: 2, code: 0, sessionId: "notes-session" },
+    verificationRun: { key: "verification:notes:run_1", state: "failed", at: NOW - 100, results: [{ command: "npm run check", ok: false, exitCode: 1, relocated: true, tail: "Studio lint" }] },
+  }] });
+  await env.autopilotHousekeeping();
+  assert.equal(board().tasks[0].status, "done");
+});
+
+test("a reopened done card gets a receipt of its own, so the earlier verified one is not the last word", async () => {
+  const { env, board } = verificationHost({ tasks: [{
+    id: "raced", title: "Settled before its run finished", status: "done", doneAt: NOW - 500, verificationReceiptId: "rcp_verified",
+    lastAttempt: { startedAt: 1, at: 2, code: 0, sessionId: "raced-session", runId: "run_1" },
+    verificationRun: { key: "verification:raced:run_1", state: "failed", at: NOW - 100, results: [{ command: "npm run check", ok: false, exitCode: 1, tail: "1 failing" }] },
+  }] });
+  const appended = [];
+  env.RECEIPTS_PATH = "receipts";
+  env.getReceiptsModule = async () => ({
+    buildReceipt: ({ attemptId, verdict }) => ({ id: `rcp_${verdict.state}_${attemptId}`, attemptId, result: verdict.state, trust: "runner", workItem: { intentKey: "raced" }, acceptance: { remaining: [] } }),
+    appendReceipt: async (_file, receipt) => { appended.push(receipt); },
+  });
+  await env.autopilotHousekeeping();
+  const task = board().tasks[0];
+  assert.equal(task.status, "open");
+  assert.equal(task.verificationReceiptId, "rcp_unverified_run_1");
+  assert.deepEqual(appended.map((receipt) => receipt.result), ["unverified"]);
+});

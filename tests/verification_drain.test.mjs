@@ -27,7 +27,11 @@ function drainHost({ tasks = [], requests = [] } = {}) {
   const pkgRoots = new Set(["C:/fixture-root", "C:/fixture-studio"]);
   const env = vm.createContext({
     // Every command is a controllable child: the test closes it by hand.
-    spawn: (command, options) => {
+    // Three arguments, as platform.cjs requires: its credential-stripped env
+    // rides the options, which Node reads from the args slot when args is
+    // left out, dropping the stripped copy.
+    spawn: (command, args, options) => {
+      assert.ok(Array.isArray(args), "verification commands pass an args array so options keep the withheld environment");
       const child = new EventEmitter();
       child.command = String(command);
       child.cwd = options?.cwd;
@@ -141,6 +145,29 @@ test("a project folder without package.json has its verification moved to the St
   assert.equal(host.spawns[0].cwd, "C:/fixture-studio", "npm cannot run where no package.json defines the script");
   assert.ok(host.logs.some((line) => line.includes("has no package.json")), "the move is logged");
   assert.equal(host.board().tasks[0].verificationRun.state, "passed", "the check itself still settles the card");
+  assert.equal(host.board().tasks[0].verificationRun.results[0].relocated, true, "but it checked Studio's tree, so it is marked as nobody's evidence");
+});
+
+test("a check past its budget is killed as a tree and settles even if a survivor holds its pipes", async () => {
+  const host = drainHost({ tasks: [{ id: "t-hung", title: "Hung", verificationRun: { key: "k-hung", state: "queued" } }] });
+  host.queue({ key: "k-hung", taskId: "t-hung", commands: ["npm run check", "node --test tests/hung.test.mjs"] });
+  const drain = host.env.runVerificationJobs();
+  const check = host.spawns[0];
+  check.pid = 4242;
+  host.timers.find((timer) => timer.delay === 15 * 60 * 1000).fn();
+  const killer = host.spawns.find((child) => child.command === "taskkill");
+  assert.ok(killer, "the whole process tree is terminated, not only the shell");
+  assert.equal(check.killed, true);
+  // A grandchild still holds stdout, so "close" never arrives.
+  host.timers.find((timer) => timer.delay === 15000).fn();
+  await drain;
+  const run = host.board().tasks[0].verificationRun;
+  assert.equal(run.state, "failed");
+  assert.equal(run.results[0].timedOut, true);
+  assert.equal(run.results.length, 1, "a timed-out check ends the job");
+  check.close(1);
+  await host.flush();
+  assert.equal(host.board().tasks[0].verificationRun.results.length, 1, "the late close changes nothing");
 });
 
 test("a project that defines its own npm scripts keeps its own root", async () => {
