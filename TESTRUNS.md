@@ -34,6 +34,10 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-25 - Release gate for v0.4.0
+
+Windows 11, local Electron 44.4.1, Node 24, gated in a detached worktree at the release commit (201103b landed the 0.4.0 work from the shared tree; fbc64b4 bumps package.json and package-lock.json to 0.4.0, cuts [Unreleased] into [0.4.0] and updates the README). A fresh npm run build-booklet reproduced the committed renderer/booklet.html blob exactly. npm run check ok (140 targets, 300 specs, all selectors used). npm run audit 0 findings. npm test: Node suites 3393 pass / 0 fail / 4 skipped; Python contracts 248 OK (1 skipped); path lock pass; serialized stage 1 pass; occlusion probe 1 pass / 1 skipped. Electron stage 34 pass / 1 fail / 1 skipped. The failure was command_render: its fixture was killed by the harness timeout at 81 s before it wrote a report, with no assertion failing inside the app. Run alone on the same commit it passed in 61.6 s, and it passed in both earlier full runs of the same tree that day (listed under Known environmental failures above). The three unmerged cloud branches (claude/friendly-ride-453f4z, claude/gallant-babbage-lshjfb, claude/pensive-dirac-fkvdzi) are not in this release.
+
 ## 2026-09-25 - Pushes cross the context bridge once
 
 Windows 11, local Electron 44.4.1, Node 24. The commit was built on 8fd7ac1 in a detached worktree, because the shared tree carries other uncommitted work. preload.cjs now installs window.mefiStudio with contextBridge.executeInMainWorld, so each push crosses into the page once and every on* subscriber shares that copy. eyes:assistant sends keys the page already holds as references (scripts/assistant-push.cjs), and tasks.js edits copies of pushed rows. npm run build-booklet ok. npm run check ok (110 targets, 248 specs, all selectors used). npm run audit 0 findings. eslint on the touched files: 0 errors. npm test exit 0: Node suites 2642 pass / 0 fail / 3 skipped; Electron stage 26 pass / 1 skipped; serialized stage 1 pass; occlusion probe 1 pass / 1 skipped (capability absent on this desktop); Python contracts 248 OK (1 skipped); path lock pass. The new tests/preload_fanout suite has 8 tests; five preload suites moved from an exposeInMainWorld fake to executeInMainWorld. A real app smoke run (main.cjs --smoke with a scratch userData) booted the booklet with 39 cards. Two onTasks subscribers got the same object, the bridge was frozen and read-only, eyes:assistant-sync arrived, and the first assistant push was whole. Before/after numbers are in docs/performance.md.
@@ -451,14 +455,6 @@ Electron stage on this shared working tree.
 Logs: %TEMP%/mefi-agent-panel-polish-{check,audit,render,full-test,render-retry}.log.
 Screenshots and report: %TEMP%/mefi-agent-panel-polish/. All captures used an
 isolated synthetic profile; no live application data or portable data changed.
-
-## 2026-09-24 afternoon - Live-view 3D rotation and navigation review (node visual refresh, motion review)
-
-Review-only follow-up; no application source changes. PASS: node --test tests/command_graph.test.mjs tests/command_motion.test.mjs tests/command_visuals.test.mjs tests/command_director.test.mjs tests/camera_tour.test.mjs tests/tree3d_performance.test.mjs tests/node_visuals.test.mjs (176/176, 4.3 s). PASS: solo node --test tests/command_render.test.mjs (1/1, 59.9 s), including native navigation, stable agent retargeting/rebuilds, completion, and hidden-view suspension.
-
-A separate temporary Electron driver built a snapshot of the current renderer and used only the synthetic node-view fixture, with no real host, data, providers, outbound calls, or spawned work. It captured 196 frames and checked 233 states: a 6.40-radian native right-drag turn, all eight finishes, all five layouts at 1440x900 and 600x560, native wheel zoom/middle-drag pan, Fit, click selection after navigation, 46 agent-travel samples, automatic spin, and reduced motion. World anchors remained fixed; no fitted node bodies clipped; no renderer errors/network/process attempts. Reduced motion stopped spin. The first scratch-driver attempts were harness errors (select(null) does not clear selection; a poll can rebuild debug nodes between paint/read); clearing via escape and waiting for painted nodes resolved those without renderer changes.
-
-VISUAL FINDINGS remain: full cards can overlap during rotation because the 260 ms blocked-placement hold retains an obstructed card (captured overlap includes a running title); 600x560 loses full callouts in all five layouts and the captured compact view loses the visible running-task name. Functional pass is not visual sign-off. Rotation/styles/navigation MP4s preserve captured timestamps and are not an FPS measurement. Evidence and review page are outside Git under %TEMP%/mefi-node-refresh/motion/; focused/Command logs under %TEMP%/mefi-node-refresh/. No full npm test/check/audit rerun for this review-only turn.
 
 ## Read Before Any Tests
 

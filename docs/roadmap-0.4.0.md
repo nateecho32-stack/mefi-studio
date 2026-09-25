@@ -28,9 +28,9 @@ project from one place.
   notification manager and the place you act, it greets you with what
   happened while you were away, and it rests when nothing runs.
 
-## Status (2026-09-23, night)
+## Status (2026-09-25: released in 0.4.0)
 
-Built and tested, uncommitted in the shared tree; the details are in
+Shipped in v0.4.0 with the table below as it stood; the details are in
 [agent-loop.md §13](agent-loop.md#13-the-agent-brain) and the TESTRUNS row of
 the same night.
 
@@ -46,7 +46,7 @@ the same night.
 | M7 project map | Built | Filled from the project's git history as well as verified runs, so it is useful before any agent has run; large folders split into co-change groups (named by their shared word); links weighted by cosine strength; the task overlay, related systems in the brief, file trails, hover cards, a system picker and the systems a pipeline touches; naming by the lead seat on demand. |
 | M8 Hub | Built | Home shows the map beside the conversation (collapsible); a system's tasks, ideas and plans with **Work on this region**; ideas and plans can be placed on a system (`map-places.json`). Ideas and Plans keep their own views under Work. |
 | M9 companion | Built | The orb in the menu foot with four states and the node style, the welcome-back digest (on focus after 10 minutes away, and on wake or unlock), the one needs-you queue with actions, the tray count, looks, this-project or all-projects reach (app-wide `companion.json`), and learned preferences. |
-| M10 launch | Owner | Recording the ads from the real build, the README images and the tag are the owner's call. |
+| M10 launch | Tagged | v0.4.0 tagged on 2026-09-25. Recording the ads from the real build and the README images are still the owner's call. |
 
 ## Where we start (checked against the code on 2026-09-23)
 

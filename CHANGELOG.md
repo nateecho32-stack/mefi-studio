@@ -7,6 +7,8 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-25
+
 ### Added
 - Command's node labels now include Updates, showing code/task reports and task progress while hiding idle names and routine agent chatter.
 - Refined glass panels with softer edge highlights and layered shadows.
@@ -968,7 +970,8 @@ which installed copies pick up through the in-app updater.
   locked or the cover window is destroyed.
 - Project switch drains background work instead of refusing it.
 
-[Unreleased]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.3.3...main
+[Unreleased]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.4.0...main
+[0.4.0]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.3.0...v0.3.3
 [0.3.0]: https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.3.0
 [0.2.0]: https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.2.0

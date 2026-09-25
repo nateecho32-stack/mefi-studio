@@ -6,6 +6,14 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-24 afternoon - Live-view 3D rotation and navigation review (node visual refresh, motion review)
+
+Review-only follow-up; no application source changes. PASS: node --test tests/command_graph.test.mjs tests/command_motion.test.mjs tests/command_visuals.test.mjs tests/command_director.test.mjs tests/camera_tour.test.mjs tests/tree3d_performance.test.mjs tests/node_visuals.test.mjs (176/176, 4.3 s). PASS: solo node --test tests/command_render.test.mjs (1/1, 59.9 s), including native navigation, stable agent retargeting/rebuilds, completion, and hidden-view suspension.
+
+A separate temporary Electron driver built a snapshot of the current renderer and used only the synthetic node-view fixture, with no real host, data, providers, outbound calls, or spawned work. It captured 196 frames and checked 233 states: a 6.40-radian native right-drag turn, all eight finishes, all five layouts at 1440x900 and 600x560, native wheel zoom/middle-drag pan, Fit, click selection after navigation, 46 agent-travel samples, automatic spin, and reduced motion. World anchors remained fixed; no fitted node bodies clipped; no renderer errors/network/process attempts. Reduced motion stopped spin. The first scratch-driver attempts were harness errors (select(null) does not clear selection; a poll can rebuild debug nodes between paint/read); clearing via escape and waiting for painted nodes resolved those without renderer changes.
+
+VISUAL FINDINGS remain: full cards can overlap during rotation because the 260 ms blocked-placement hold retains an obstructed card (captured overlap includes a running title); 600x560 loses full callouts in all five layouts and the captured compact view loses the visible running-task name. Functional pass is not visual sign-off. Rotation/styles/navigation MP4s preserve captured timestamps and are not an FPS measurement. Evidence and review page are outside Git under %TEMP%/mefi-node-refresh/motion/; focused/Command logs under %TEMP%/mefi-node-refresh/. No full npm test/check/audit rerun for this review-only turn.
+
 ## 2026-09-24 midday - Agent settings in the Command top toolbar
 
 Moved the immediate agent queue controls out of the right rail into an Agents

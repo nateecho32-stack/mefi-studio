@@ -20,7 +20,21 @@
   <img src="docs/images/workspace.png" width="900" alt="The workspace: a status strip, a conversation with the companion, and the project's work queue">
 </p>
 
-**Quick links:** [What's new](#whats-new-in-033) · [Install](#install-and-run) · [First launch](#first-launch) · [Tour](#a-short-tour) · [Keys and privacy](#keys-and-privacy) · [Community](#community--perks) · [Docs](#documentation) · [Contributing](#contributing)
+**Quick links:** [What's new](#whats-new-in-040) · [Install](#install-and-run) · [First launch](#first-launch) · [Tour](#a-short-tour) · [Keys and privacy](#keys-and-privacy) · [Community](#community--perks) · [Docs](#documentation) · [Contributing](#contributing)
+
+## What's new in 0.4.0
+
+The Agent Brain: every task gets a pipeline you can watch (**Agent brain**,
+`J`), sub-agents report up to their lead, a desk worker answers stuck
+workers, a Playbook keeps the recipes that verified, and a project map built
+from git history shows the project's systems on Home. A companion greets you
+with what happened while you were away and keeps one list of everything that
+needs you. The interface is glass over the live node tree, with a Links
+player for music and video, and board and assistant updates now reach the
+window once instead of once per panel. Get the portable build from the
+[0.4.0 release](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.0);
+installed copies are offered it under **App updates**. The full list is in
+the [changelog](CHANGELOG.md).
 
 ## What's new in 0.3.3
 
