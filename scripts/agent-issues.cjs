@@ -427,7 +427,10 @@ function questionForIssue(issue, { now = Date.now(), policy = DEFAULT_POLICY } =
   const kind = ISSUE_KINDS[normalized.kind];
   const subject = normalized.taskTitle ? `"${clean(normalized.taskTitle, 90)}"` : "This work";
   const context = { subject };
-  const evidence = normalized.evidence.length ? ` Last output: ${normalized.evidence.slice(-1)[0]}` : "";
+  // The last line only when it adds something: a card titled with that line
+  // already says it, and the rail draws the evidence underneath anyway.
+  const lastLine = normalized.evidence.slice(-1)[0] ?? "";
+  const evidence = lastLine && lastLine !== normalized.title ? ` Last output: ${lastLine}` : "";
   const where = normalized.file ? ` In ${normalized.file}.` : normalized.check ? ` Check: ${normalized.check}.` : "";
   // Split is offered only where it can land: a chain already as deep as the
   // live map allows would refuse it after the owner picked it.
@@ -436,13 +439,24 @@ function questionForIssue(issue, { now = Date.now(), policy = DEFAULT_POLICY } =
   const splitNote = !noSplit ? ""
     : limit === 0 ? "Split is turned off in the live brain map."
     : `Split is not offered: this follow-up chain is already ${normalized.splitDepth} deep.`;
+  // Only a worker's own words are quoted as the agent's: a host-raised issue
+  // (a run that stopped) is Studio's account of the run, not the agent's.
   const said = [
-    normalized.detail ? `The agent says: ${normalized.detail}` : kind.lead,
+    normalized.detail ? normalized.source === "host" ? normalized.detail : `The agent says: ${normalized.detail}` : kind.lead,
     where.trim(),
     evidence.trim(),
   ].filter(Boolean).join(" ");
   const detail = splitNote ? `${said.slice(0, 399 - splitNote.length)} ${splitNote}` : said.slice(0, 400);
-  const options = kind.options.filter((id) => !(noSplit && id === "split")).map((id) => {
+  const offered = kind.options.filter((id) => !(noSplit && id === "split"));
+  // A task that has already failed and been retried is not helped by the same
+  // retry again: that is the answer the executor (or the assistant) already
+  // gave. Recommend a real change instead — a heavier model where it is on
+  // offer, else a one-line instruction — and say how often it has failed.
+  const retried = normalized.attempts >= 2;
+  const recommend = retried && kind.recommend === "retry"
+    ? offered.includes("retry-deep") ? "retry-deep" : offered.includes("instruct") ? "instruct" : kind.recommend
+    : kind.recommend;
+  const options = offered.map((id) => {
     const option = ISSUE_OPTIONS[id];
     // Every answer carries what was asked, so the decision written on the
     // task (and a split card's brief) says what it was about.
@@ -452,9 +466,12 @@ function questionForIssue(issue, { now = Date.now(), policy = DEFAULT_POLICY } =
       ...(option.verb === "split" && normalized.detail ? { detail: clean(normalized.detail, 300) } : {}) };
     return {
       id,
-      label: option.verb === "grant" && normalized.permission ? `Grant ${normalized.permission} for this task` : option.label,
-      description: option.description,
-      recommended: id === kind.recommend,
+      label: option.verb === "grant" && normalized.permission ? `Grant ${normalized.permission} for this task`
+        : id === "retry" && retried ? "Try again unchanged" : option.label,
+      description: id === "retry" && retried
+        ? `It has failed ${normalized.attempts} times; the next worker gets this decision and the last error, nothing else changes.`
+        : option.description,
+      recommended: id === recommend,
       ...(option.text ? { text: true } : {}),
       ...(option.dismiss ? { dismiss: true } : {}),
       action: { kind: "issue", action: option.verb, payload },
@@ -480,22 +497,70 @@ function questionForIssue(issue, { now = Date.now(), policy = DEFAULT_POLICY } =
   };
 }
 
+// The lines of a run's tail that are the run talking: the protocol marks
+// (MEFI_JOB_DONE, MEFI_RESULT, MEFI_ASK, MEFI_STEP, …) are bookkeeping the host
+// already read, and a card that quoted them back said nothing about the work.
+const PROTOCOL_LINE = /^MEFI_[A-Z_]+:?/;
+const saidLines = (outputTail) => (Array.isArray(outputTail) ? outputTail : [])
+  .map((line) => clean(line, 200)).filter((line) => line && !PROTOCOL_LINE.test(line));
+
+// A line that names what went wrong, over a line that only narrates progress
+// ("running npm test"): the card's title should be the cause, not the last
+// thing the worker happened to print.
+const FAILURE_LINE = /\b(?:error|errors|fail(?:s|ed|ing|ure)?|cannot|can['’]t|couldn['’]t|unable|not found|no such|denied|refused|exception|traceback|timed?\s?out|missing|panic|fatal|abort(?:ed)?|invalid|undefined|unexpected)\b/i;
+
+// The host's own stop reasons, which say how the process ended rather than
+// what went wrong with the work, read in the owner's words. A bare exit code
+// says nothing at all, so it gives way to the run's own words when it has any.
+const HOST_STOPS = [
+  [/^killed after budget/i, () => "ran past its time budget and was stopped"],
+  [/^wedged/i, () => "hung and had to be killed"],
+  [/^no session and no output for (.+?) after spawn/i, (match) => `the coding tool never started (no output for ${match[1]})`],
+  [/^silent exit (\S+)/i, (match) => `the coding tool exited (${match[1]}) without saying anything`],
+  [/^spawn failed: (.+)/i, (match) => `the coding tool could not be started: ${match[1]}`],
+  [/^fallback could not start: (.+)/i, (match) => `the fallback tool could not be started: ${match[1]}`],
+];
+const BARE_EXIT = /^(?:exit(?:ed)?(?:\s+with)?(?:\s+(?:code|status))?\s*[-\d?]+|code\s+[-\d?]+|process exited.*)$/i;
+
+function stopReason(error, said) {
+  const text = clean(error, 200);
+  const cause = [...said].reverse().find((line) => FAILURE_LINE.test(line)) ?? null;
+  if (text && !BARE_EXIT.test(text)) {
+    for (const [pattern, word] of HOST_STOPS) {
+      const match = pattern.exec(text);
+      if (match) return clean(word(match), 160);
+    }
+    return clean(text, 160);
+  }
+  const words = cause ?? said.at(-1) ?? null;
+  if (words) return clean(words, 160);
+  return text ? `${text}, with no output` : "it printed nothing and never reported done";
+}
+
 /**
  * A run that ended without the verdict, as an issue rather than a bare retry
  * prompt: the task, why it stopped, what it last said, and how many tries it
  * has had. This is what replaces "has failed N times".
+ *
+ * The host only raises it once the executor's own repair loop is spent (each
+ * of those retries already carried the previous error), so the card says so:
+ * a plain Try again is the one answer that has already been tried.
  */
 function runFailureIssue({ task, failures = 1, error = null, outputTail = [], runId = null, sessionId = null, checks = [] } = {}, { now = Date.now() } = {}) {
   const title = clean(task?.title, TITLE_MAX) || "A task";
-  const reason = clean(error, 160) || clean([...(Array.isArray(outputTail) ? outputTail : [])].slice(-1)[0], 160) || "it stopped without reporting done";
+  const said = saidLines(outputTail);
+  const reason = stopReason(error, said);
   const attempts = Math.max(0, Math.floor(Number(failures) || 0));
   const failedCheck = (Array.isArray(checks) ? checks : []).find((check) => check && check.ok === false);
+  const report = [...(Array.isArray(outputTail) ? outputTail : [])].map((line) => clean(line, 400))
+    .reverse().find((line) => line.startsWith("MEFI_RESULT:"))?.slice("MEFI_RESULT:".length).trim() || null;
+  const tries = attempts > 1
+    ? `Attempt ${attempts} failed too; each earlier retry already had the previous error in its brief, so trying again unchanged is unlikely to help.`
+    : attempts === 1 ? "Attempt 1 failed." : null;
   return normalizeIssue({
     kind: failedCheck ? "check-failed" : "run-failed",
     title: reason,
-    detail: attempts > 1
-      ? `Attempt ${attempts}. The worker ended without printing the done line.`
-      : "The worker ended without printing the done line.",
+    detail: [tries, report ? `Its last report: ${report}` : "The worker never printed its done line."].filter(Boolean).join(" "),
     source: "host",
     taskId: task?.id ?? null,
     taskTitle: title,
@@ -503,7 +568,7 @@ function runFailureIssue({ task, failures = 1, error = null, outputTail = [], ru
     sessionId,
     check: failedCheck ? clean(failedCheck.command ?? failedCheck.name, 120) : null,
     attempts,
-    evidence: Array.isArray(outputTail) ? outputTail.slice(-EVIDENCE_LINES) : [],
+    evidence: said.slice(-EVIDENCE_LINES),
   }, { now });
 }
 

@@ -35,6 +35,7 @@ function questionHost({ executorLog = "", offers = [], tasks = [] } = {}) {
     rm: async () => {},
     assistantCaps: () => assistant.CAPS,
     assistantTrim(list, cap) { if (list.length > cap) list.splice(0, list.length - cap); },
+    assistantClip(value, max) { const line = String(value ?? "").replace(/\s+/g, " ").trim(); return line.length > max ? `${line.slice(0, max - 1)}…` : line; },
     assistantLog(kind, text) { logs.push({ kind, text }); },
     assistantEmit(event) { events.push(event); },
     saveAssistant: async (options) => { saves.push(options ?? null); },
@@ -249,6 +250,28 @@ test("the offer question recommends the first title and supersedes the last", as
   assert.equal(first.options[0].reply, "work on \"Fix the renderer\"");
   assert.equal(first.options.at(-1).dismiss, true);
   assert.equal(await h.env.assistantOfferQuestion(), first, "the same offer is not asked twice");
+  assert.equal(first.title, 'Start "Fix the renderer" or "Tidy the board" next?', "the card is named after the work it offers");
+});
+
+test("an offer the owner turned down or took is not filed again by the next reply", async () => {
+  const offers = ["Fix the renderer"];
+  const h = questionHost({ offers });
+  const first = await h.env.assistantOfferQuestion();
+  assert.equal(first.title, 'Start "Fix the renderer" next?');
+  assert.equal((await h.env.assistantAnswer({ id: first.id, optionId: "not_now" })).ok, true);
+  assert.equal(await h.env.assistantOfferQuestion(), null, "Not now keeps it off the rail");
+  assert.equal(h.state.questions.length, 1);
+  // A different pick is still offered, without the declined one.
+  offers.push("Tidy the board");
+  const next = await h.env.assistantOfferQuestion();
+  assert.equal(next.title, 'Start "Tidy the board" next?');
+  assert.deepEqual(next.options.map((option) => option.id), ["offer_1", "not_now"]);
+  // After a day the declined offer may come back.
+  h.state.questions[0].answer.at -= 25 * 60 * 60 * 1000;
+  h.state.questions[0].at -= 25 * 60 * 60 * 1000;
+  offers.splice(1);
+  const again = await h.env.assistantOfferQuestion();
+  assert.equal(again.title, 'Start "Fix the renderer" next?');
 });
 
 test("a newer offer supersedes the previous open one", async () => {

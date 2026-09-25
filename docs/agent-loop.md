@@ -430,7 +430,11 @@ When the child closes, `finish()` (`const finish = async` in
     (`failureBackoffMs`); after 5 tries parked for manual reopen ("gave up
     after 5 tries"). The next worker receives the prior error and repairs the
     task without an Ask card while retries remain. The fifth charged failure
-    reaches Ask with its run evidence. Infra failures trip an executor breaker that parks all
+    reaches Ask with its run evidence, named by its cause: a host stop reason
+    in plain words ("ran past its time budget"), else the last output line
+    that names an error, never a bare exit code or a `MEFI_*` protocol line
+    (`runFailureIssue`). Since those retries are spent, the card recommends a
+    heavier model rather than *Try again unchanged*. Infra failures trip an executor breaker that parks all
     dispatch after three in a row (`classifyRunEnd(…).infra` read into
     `infraFail`, and `AUTOPILOT_PARK_MS`, in `finish`). An attempt records
     how it ended (`entry.endKind`, set by `stop()`, the watchdogs and the spawn
@@ -889,6 +893,13 @@ out). Naming the same cards is not enough on its own: "task_205… duplicates
 the parent gate card" and "both duplicate gate cards are already done" are
 different questions. A grant or a risk is never folded, nor is a host-raised
 run failure, and an answer that failed to apply is not carried over.
+
+**Retried asks.** An issue on a task that has already failed twice or more
+does not recommend a plain retry, which is the answer already given: it
+recommends *Try again with a heavier model* where the kind offers it, else
+*Answer it in one line*, and its retry option reads *Try again unchanged*
+with the failure count. Only a worker's own detail is quoted as "The agent
+says"; a host-raised issue's detail is Studio's account of the run.
 `repeatAsks: "ask"` asks every one.
 
 **The remaining-prose pattern is frozen.** The verifier's remaining-work
@@ -993,8 +1004,11 @@ the pure `scripts/task-oversight.cjs`:
   counts as asked and named for every offered card and no other
   (`pluralAffirmation`). Starting or retrying an offered card from the chat
   answers the Pick-the-next-work card that offers it
-  (`assistantSettleOfferAsks`). Replies apply their actions in the order the
-  messages arrived (`assistantChatSlot`).
+  (`assistantSettleOfferAsks`). The offer card is titled after the work it
+  offers ("Start "X" next?"), carries the reply that offered it, and an offer
+  the owner answered or turned down (*Not now*) is not filed again for 24
+  hours, however often the chat names it (`assistantOfferQuestion`). Replies
+  apply their actions in the order the messages arrived (`assistantChatSlot`).
 - **Fallbacks.** A bare brake ("pause", "stop everything", "resume") runs at
   once, before any model call. With no usable model (no key, a backoff, a
   timeout, a reply that was not an envelope) the local classifier answers as

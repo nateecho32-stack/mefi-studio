@@ -9995,6 +9995,8 @@ async function assistantChurnAction(choice, memberIds, action = {}) {
 // message takes, so the thread stays the single record of what was decided.
 let assistantQuestionSeq = 0;
 const ASSISTANT_QUESTION_TTL_MS = 48 * 60 * 60 * 1000;
+// How long an offer the owner turned down or took stays off the rail.
+const ASSISTANT_OFFER_QUIET_MS = 24 * 60 * 60 * 1000;
 
 function assistantQuestionId() {
   assistantQuestionSeq = (assistantQuestionSeq + 1) % 1000;
@@ -10219,8 +10221,24 @@ async function assistantOfferQuestion() {
     offers = targets.length ? targets.map((offer) => offer.title) : assistant?.pendingOffers?.(assistantState) ?? [];
   } catch {}
   if (!offers.length) return null;
+  // An offer the owner already turned down (Not now) or already took is not
+  // put back on the rail by the next reply that mentions it: the chat keeps
+  // offering its top pick, and every reply used to file the same card again.
+  const now = Date.now();
+  const settled = new Set();
+  for (const question of assistantState.questions) {
+    if (question?.source !== "offer" || !["dismissed", "answered"].includes(question.status)) continue;
+    if (now - (question.answer?.at || question.at || 0) > ASSISTANT_OFFER_QUIET_MS) continue;
+    const taken = question.status === "answered" ? question.options?.find((option) => option.id === question.answer?.optionId) : null;
+    for (const option of taken ? [taken] : question.options ?? []) {
+      const title = /^work on "(.+)"$/.exec(String(option?.reply ?? ""))?.[1];
+      if (title) settled.add(title);
+    }
+  }
+  offers = offers.filter((offer) => !settled.has(offer));
+  if (!offers.length) return null;
   const open = assistantState.questions.filter((question) => question.status === "open" && question.source === "offer");
-  const sameAsk = open.find((question) => question.title === offers[0] || question.options?.some((option) => option.reply?.includes(`"${offers[0]}"`)));
+  const sameAsk = open.find((question) => question.options?.some((option) => option.reply === `work on "${offers[0]}"`));
   if (sameAsk) return sameAsk;
   for (const question of open) question.status = "superseded";
   // An offer that names a board card starts that card the way its own Work on
@@ -10237,11 +10255,18 @@ async function assistantOfferQuestion() {
     };
   });
   options.push({ id: "not_now", label: "Not now", description: "Leave the queue as it is; the suggestion stays in the thread.", dismiss: true });
+  // Named after the work it offers, with the reply that offered it as the
+  // detail: every offer card used to read "Pick the next piece of work".
+  const named = offers.slice(0, 4).map((offer) => `"${assistantClip(offer, 60)}"`);
+  const title = named.length === 1 ? `Start ${named[0]} next?`
+    : named.length === 2 ? `Start ${named[0]} or ${named[1]} next?`
+    : `Start ${named[0]} next, or one of ${named.length - 1} others?`;
+  const reply = [...(assistantState.messages ?? [])].reverse().find((message) => message?.role === "assistant" && message.kind !== "notice" && typeof message.text === "string");
   return assistantQuestion({
     kind: "suggestion",
     source: "offer",
-    title: "Pick the next piece of work",
-    detail: `The assistant suggested: ${offers.map((offer) => `"${offer}"`).join(", ")}.`,
+    title,
+    detail: reply ? `From the chat: ${assistantClip(reply.text, 300)}` : null,
     options,
   });
 }
