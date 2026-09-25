@@ -20,6 +20,13 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   a drawer with the question, the task it blocks, the agent's last lines and
   its options (the recommended one first), or takes your own words, then
   moves on to the next decision.
+- Vibe can run on its own: everything that stops the agents is shown and
+  cleared from Vibe. A banner under the box offers **Start agents** after a
+  launch that left them off, **Resume** when new work is paused, and
+  **Connect an AI** when none is. Under Verify first, **Review** shows a
+  build's brief and approves it (or turns Verify first off); a stuck task
+  shows why and can be tried again, resumed, marked done or dropped. The
+  drawer steps through each in order.
 - Vibe mode's menus match Vibe: Search, Shortcuts, the project panel, the
   section bar and its hover menus, Command's pop-overs, dropdowns and toasts
   are rounder, denser glass with pill selection. Search and Shortcuts list
@@ -31,6 +38,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   summary and the Analyzer. The 300-plan cap now counts only plans in play.
 
 ### Fixed
+- Vibe: **Build it** no longer promises the task will start when the agents
+  are off, paused or have no AI; it says so and points at the control that
+  starts them. Work the checker is still verifying shows under Building now
+  as "checking its work" instead of under Needs you, and stuck tasks and
+  pending approvals are listed one by one instead of as bare counts.
 - Vibe: the dock floats over the page instead of cutting the lanes off at a
   hard band, sheets opened on the Vibe page no longer leave a strip at the
   left edge, and the page under Vibe no longer shows its scroll arrow.

@@ -147,6 +147,19 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-feedback[data-tone="warn"] { color: var(--warn); }
 .vibe-feedback[data-tone="bad"] { color: var(--bad); }
 
+/* What holds the agents back (launch hold, pause, no AI), with its fix. */
+.vibe-gate { display: flex; align-items: center; gap: 14px; width: min(860px, 100%) !important; margin: 8px auto 0; padding: 12px 12px 12px 18px; border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); border-radius: 18px; background: linear-gradient(135deg, color-mix(in srgb, var(--warn) 14%, transparent), color-mix(in srgb, var(--warn) 4%, transparent)), var(--v-glass); backdrop-filter: var(--v-blur); box-shadow: 0 0 40px -22px color-mix(in srgb, var(--warn) 70%, transparent); animation: vibe-rise var(--motion-base) var(--ease-out) both; }
+.vibe-gate[hidden] { display: none; }
+.vibe-gate[data-tone="held"] { border-color: color-mix(in srgb, var(--info) 38%, transparent); background: linear-gradient(135deg, color-mix(in srgb, var(--info) 12%, transparent), transparent), var(--v-glass); box-shadow: none; }
+.vibe-gate[data-tone="quiet"] { border-color: var(--v-edge); background: var(--v-glass); box-shadow: none; }
+.vibe-gate-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 12px var(--warn); animation: vibe-breathe 2.4s var(--ease-in-out) infinite; }
+.vibe-gate[data-tone="held"] .vibe-gate-dot { background: var(--info); box-shadow: 0 0 10px var(--info); }
+.vibe-gate[data-tone="quiet"] .vibe-gate-dot { background: var(--v-faint); box-shadow: none; animation: none; }
+.vibe-gate-copy { display: grid; flex: 1; min-width: 0; gap: 2px; font-size: 13px; line-height: 1.4; }
+.vibe-gate-copy b { color: var(--v-ink); font-size: 14px; font-weight: 650; }
+.vibe-gate-copy span { color: var(--v-soft); }
+.vibe-gate .vibe-btn { flex: none; }
+
 /* ---- lanes ---------------------------------------------------------------- */
 .vibe-lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: clamp(14px, 3vh, 34px); }
 .vibe-lane { --lane: var(--live); position: relative; display: flex; flex-direction: column; min-height: 214px; padding: 18px 18px 12px; border: 1px solid var(--v-edge); border-radius: var(--v-r); background: var(--v-glass); backdrop-filter: var(--v-blur); box-shadow: var(--v-lift); overflow: hidden; animation: vibe-rise var(--motion-spring) var(--ease-spring) both; transition: border-color var(--motion-slow) var(--ease-out), transform var(--motion-base) var(--ease-out); }
@@ -173,6 +186,7 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-row.is-review .vibe-row-dot { background: var(--info); }
 .vibe-row.is-bad .vibe-row-dot { background: var(--bad); }
 .vibe-row.is-done .vibe-row-dot { background: var(--good); }
+.vibe-row.is-check .vibe-row-dot { background: var(--info); box-shadow: 0 0 8px var(--info); animation: vibe-breathe 2.2s var(--ease-in-out) infinite; }
 .vibe-row-title { overflow: hidden; font-size: 14px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
 .vibe-row.is-next .vibe-row-title { color: var(--v-soft); font-weight: 450; }
 .vibe-row-meta { grid-column: 2; color: var(--v-faint); font-size: 12px; }
@@ -252,6 +266,12 @@ button.vibe-ask-chip:hover { border-color: var(--v-edge-hi); color: var(--v-ink)
 .vibe-ask-option-label { display: flex; align-items: center; justify-content: flex-start; gap: 8px; font-size: 14px; font-weight: 600; text-align: left; }
 .vibe-ask-rec { margin-left: auto; padding: 2px 8px; border-radius: 999px; background: linear-gradient(135deg, var(--gold-bright), var(--gold)); color: var(--ink); font-size: 10.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
 .vibe-ask-option-desc { text-align: left; color: var(--v-soft); font-size: 12.5px; line-height: 1.45; }
+.vibe-ask-brief { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--v-edge); border-radius: 14px; background: color-mix(in srgb, var(--bg-deep) 45%, transparent); }
+.vibe-ask-label { color: var(--v-faint); font-size: 11px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+.vibe-ask-brief .vibe-ask-detail { max-height: 220px; overflow-y: auto; font-size: 13.5px; }
+.vibe-ask-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.vibe-ask-actions .vibe-btn { height: 40px; }
+.vibe-ask-auto { align-self: flex-start; padding: 2px 0; }
 .vibe-ask-own { display: flex; align-items: flex-end; gap: 8px; }
 .vibe-ask-own textarea { flex: 1; min-height: 42px; max-height: 140px; padding: 10px 12px; border: 1px solid var(--v-edge); border-radius: 14px; background: color-mix(in srgb, var(--bg-deep) 50%, transparent); color: var(--v-ink); font: 14px/1.45 var(--font-ui); resize: vertical; }
 .vibe-ask-own textarea:focus { outline: none; border-color: var(--v-edge-hi); }
@@ -270,6 +290,7 @@ button.vibe-ask-chip:hover { border-color: var(--v-edge-hi); color: var(--v-ink)
   .vibe-lane:nth-child(3) { grid-column: 1 / -1; min-height: 0; }
 }
 @media (max-width: 760px) {
+  .vibe-gate { flex-wrap: wrap; }
   .vibe-top { grid-template-columns: 1fr auto; padding: 14px 16px 0; }
   .vibe-top .mode-switch { grid-column: 1 / -1; grid-row: 2; justify-self: center; }
   .vibe-pulse { display: none; }

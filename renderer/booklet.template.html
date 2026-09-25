@@ -260,6 +260,9 @@
     </form>
     <div id="vibe-sparks" class="vibe-sparks" role="group" aria-label="Ways to start"></div>
     <p id="vibe-feedback" class="vibe-feedback" role="status" aria-live="polite"></p>
+    <!-- What stops the agents from working on their own, and the one control
+         that fixes it: Start agents, Resume, Connect an AI (vibe.js). -->
+    <div id="vibe-gate" class="vibe-gate" role="status" aria-live="polite" hidden><i class="vibe-gate-dot" aria-hidden="true"></i><span class="vibe-gate-copy"><b id="vibe-gate-title"></b><span id="vibe-gate-text"></span></span><button id="vibe-gate-action" class="vibe-btn primary" type="button" hidden></button></div>
     <section class="vibe-lanes" aria-label="What is happening">
       <article class="vibe-lane" data-lane="building" aria-labelledby="vibe-lane-building-title">
         <header><span class="vibe-lane-mark" aria-hidden="true"></span><h2 id="vibe-lane-building-title">Building now</h2><span id="vibe-count-building" class="vibe-count"></span></header>

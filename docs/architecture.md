@@ -113,6 +113,20 @@ configuration. Changes use the existing project/default scope and Apply flow.
   recommended one first, or a box for your own words. An answer goes through
   the same call as Command's Ask tab, then the drawer moves to the next
   decision or closes. **Open in Watch** shows the decision in Command instead.
+- Vibe can run on its own. When something holds every agent back, a banner
+  under the box names it and carries its fix: **Start agents** after a launch
+  that left them off (the launch screen's plain Open), **Resume** when new
+  work is paused, **Connect an AI** when none is connected. **Build it** says
+  when its task will wait for that. Needs you lists only what cannot move
+  without you, one row each: decisions, builds waiting for your go-ahead under
+  Verify first (the drawer shows the brief, approves it with its reviewed
+  scope, or turns Verify first off), and stuck tasks (the drawer shows why and
+  offers Try again, Resume or Run anyway, It's done and Drop it). Work the
+  checker is still verifying sits under Building now as "checking its work".
+  Every action uses the host call its Build surface uses, and the drawer moves
+  forward to the next thing waiting. `MefiVibe.snapshot()` reads the same state
+  (what holds the agents, what needs you, what is building) for tests and
+  automation.
 - In Vibe mode every menu takes Vibe's look (rounder, denser glass, an accent
   rim, pill selection): Search, Shortcuts, the project panel, the section bar
   and its hover menus, Command's pop-overs, dropdowns and toasts. Search and
