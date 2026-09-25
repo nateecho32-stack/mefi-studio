@@ -292,6 +292,12 @@
     <ol id="vibe-thread" class="vibe-thread"></ol>
     <p class="vibe-chat-note">Reply in the box in the middle. Enter talks, Ctrl + Enter builds.</p>
   </aside>
+  <!-- A decision from Needs you, answered without leaving Vibe (vibe.js). -->
+  <aside id="vibe-ask" class="vibe-chat vibe-ask" aria-labelledby="vibe-ask-title" hidden>
+    <header class="vibe-chat-head"><div><small id="vibe-ask-kicker">Needs you</small><h2 id="vibe-ask-title">A decision</h2></div><button id="vibe-ask-close" class="vibe-icon" type="button" aria-label="Close the decision" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
+    <div id="vibe-ask-body" class="vibe-ask-body"></div>
+    <footer class="vibe-ask-foot"><span id="vibe-ask-note" class="vibe-ask-note" role="status" aria-live="polite"></span><button id="vibe-ask-watch" class="vibe-ask-link" type="button">Open in Watch</button></footer>
+  </aside>
 </section>
 <!-- Vibe's frame for every other page (renderer/vibe.js). In Vibe mode this
      rail stands in for Build's #app-rail on Tasks, Plans, Command, Settings
@@ -562,9 +568,14 @@
           <div class="settings-you-switches">
             <label class="switch" id="settings-companion-motion" title="Your companion floats and blinks beside the conversation. Calm and Off keep it still."><input id="workspace-motion" type="checkbox" checked><span class="track"></span><span>Let your companion move</span></label>
             <label class="switch" title="Blur what sits behind every sheet, menu and Home panel. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
-            <label class="switch" title="On: every launch lands on Your workspace. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span>Open Workspace on launch</span></label>
+            <label class="switch" id="idle-home-switch" title="On: every launch lands on Your workspace. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Workspace on launch</span></label>
           </div>
-          <p class="muted">When disabled, Studio opens Command view after the project chooser.</p>
+          <p class="muted" id="idle-home-hint">When disabled, Studio opens Command view after the project chooser.</p>
+          <!-- The Vibe / Build choice, switched in place (vibe.js keeps you on Settings). -->
+          <div class="settings-mode-row" id="settings-mode">
+            <span class="settings-mode-text"><b>Studio mode</b><span id="settings-mode-hint">Vibe is the calm front door. Build is the full studio.</span></span>
+            <div class="mode-switch" role="radiogroup" aria-label="Studio mode" data-mode="vibe" data-mode-stay><i class="mode-thumb" aria-hidden="true"></i><button type="button" role="radio" data-ui-mode="vibe" aria-checked="true" title="Vibe: the calm front door"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Vibe</span></button><button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button></div>
+          </div>
         </details>
 <details class="settings-optional settings-card" id="settings-community"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-community"/></svg></span><span class="settings-summary-text"><b>Community</b><span>Discord membership and the Void theme collection</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
           <section class="community-showcase" id="community-showcase" aria-labelledby="community-showcase-title"><div class="community-showcase-copy"><span class="community-showcase-kicker">Void collection</span><strong id="community-showcase-title">Four themes, three node styles</strong><span class="community-showcase-state" id="community-showcase-state" data-unlocked="false">For members of the Void Engine Discord</span><button type="button" class="primary mini community-choose" id="community-choose" title="Open Appearance at the Void collection" hidden>Choose a Void theme</button></div><div class="community-showcase-items" id="community-showcase-items" aria-hidden="true"></div></section>

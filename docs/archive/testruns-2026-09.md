@@ -6,6 +6,38 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-24 - Dense agent setup rows and compact controls
+
+Condensed Agents setup into short desktop rows: add button, role, model,
+effort/fast controls and corner provider icon sit alongside each other.
+Reduced row gaps, control heights, header, toolbar and footer spacing; bounded
+the team list to 1120px and grouped toolbar actions together. All eight main
+agents fit at 1440x900, six at 1100x720 and three at 600x600. Narrower/zoomed
+views wrap controls. Provider and skill tiles keep their selected states.
+The render fixture seeds a larger roster and waits for the search menu so it
+exercises catalog search after the shared short-menu tile picker changed.
+
+Validation: build-booklet, npm run check and npm run audit passed (zero final
+audit findings). Agent setup's isolated Electron interaction check passed
+solo and in the full run. All 12 window/zoom combinations pass without
+horizontal overflow, renderer errors, network requests or worker starts.
+Desktop, narrow and expanded-provider captures were visually reviewed.
+
+Full npm test completed with failures outside the changed panels. Parallel
+Node: 3315 pass, 1 fail, 4 skipped. renderer_startup.test.mjs stalled with no
+further output; its verified isolated test subprocess was stopped after more
+than four minutes, and the runner recorded that failure before continuing.
+Electron lane: 32 pass, 1 fail, 1 skipped; the failure is command_toolbar's
+stylesheet contract. The actual rendering workflows passed. Eyes-toggle 1/1
+passed; occlusion 1 passed with 1 capability skip. Python 248/248 and all six
+normalized-path lock checks passed. Sources changed during this shared-tree
+run; no full-suite pass is claimed. An early audit flagged the dynamically
+created walkthrough companion ID; the final audit is clean.
+
+Logs: %TEMP%/mefi-agent-compact-{check,audit,render,full-test}.log.
+Captures/report: %TEMP%/mefi-agent-compact/. No live application data or
+portable data was changed.
+
 ## 2026-09-24 midday - Plans glass surfaces and background readability
 
 Plans now uses translucent theme-tinted writing panels, fields, stage controls

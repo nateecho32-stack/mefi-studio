@@ -158,3 +158,31 @@ test("vibe.js and vibe.css wire the rail to the mode", () => {
   assert.match(vibeCss, /html\[data-ui-mode="vibe"\] :is\(#app-rail, #tabs, #workspace-sidebar-toggle, body > footer\) \{ display: none !important; \}/, "Build's frame never shows in Vibe mode");
   assert.match(vibeCss, /body:has\(\.workspace-page:not\(\[hidden\]\)\) #vibe-layer \{ visibility: hidden;/, "pages cover Vibe instead of showing it through");
 });
+
+test("Search and Shortcuts name Home as Vibe in Vibe mode and list it once", () => {
+  const loaded = load();
+  // vibe.js hides its own record in Vibe mode and Switch to Build in Build.
+  loaded.nav.get("vibe").hidden = () => true;
+  const palette = loaded.nav.list({ showIn: "palette" }).map((dest) => dest.id);
+  assert.equal(palette.includes("vibe"), false, "no second entry for the same place");
+  const home = loaded.nav.get("workspace");
+  assert.equal(home.label, "Vibe");
+  assert.equal(home.key, "H");
+  assert.match(home.desc, /calm front door/);
+  const build = load({ mode: "build", view: "workspace" });
+  assert.equal(build.nav.get("workspace").label, "Home", "Build keeps its Home");
+  assert.equal(build.nav.list({ showIn: "palette" }).some((dest) => dest.id === "workspace"), true);
+});
+
+test("Settings carries a Studio mode switch that changes the frame in place, and the decision drawer ships in Vibe", () => {
+  const settings = template.match(/<div class="settings-mode-row" id="settings-mode">[\s\S]*?<\/div>\s*<\/div>/)?.[0];
+  assert.ok(settings, "Settings > General has the Studio mode row");
+  assert.match(settings, /class="mode-switch"[^>]*data-mode-stay/, "the switch stays on Settings");
+  assert.deepEqual([...settings.matchAll(/data-ui-mode="([^"]+)"/g)].map((match) => match[1]), ["vibe", "build"]);
+  assert.match(vibeSource, /closest\("\[data-mode-stay\]"\)/, "vibe.js honours data-mode-stay");
+  for (const id of ["vibe-ask", "vibe-ask-body", "vibe-ask-close", "vibe-ask-watch", "vibe-ask-note", "idle-home-label", "idle-home-hint"]) {
+    assert.ok(template.includes(`id="${id}"`), `${id} is in the template`);
+  }
+  assert.match(vibeSource, /api\(\)\.assistantAnswer\(\{ id: question\.id, optionId, text \}\)/, "answers go through the same host call Command's Ask tab uses");
+  assert.doesNotMatch(vibeSource, /run: \(\) => go\("command", \{ rail: "ask" \}\)/, "Answer no longer leaves Vibe");
+});

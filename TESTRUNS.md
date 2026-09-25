@@ -34,6 +34,10 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-25 - Vibe menus, decisions and layout
+
+Linux cloud container, Node 22 (the repo asks for 24), no Electron installed, shared tree at 206b9ca plus this uncommitted work. Changes in Vibe mode: decisions under Needs you are answered in a Vibe drawer through assistantAnswer; every menu takes Vibe's shape; Search and Shortcuts list Home once as Vibe; Settings gains an in-place Studio mode switch and relabels the launch switch; the dock floats over the page; sheets on the Vibe page use the full width. Checked in Chromium against npm run start:web, with a stubbed window.mefiStudio holding a sample project, running work and two decisions. Screenshots covered Search, Shortcuts, the project panel, the Agents hover menus, Settings in both modes, Command's View and Agents pop-overs, Tasks, Plans, the Vibe page and the decision drawer at 1440x900 and 760x720. Both decisions were answered from the drawer; it advanced, then closed, and the lanes and status pill updated. The Settings switch flipped the frame both ways without leaving Settings. All 174 registry destinations opened from Vibe stayed in Vibe mode. tests/vibe_frame.test.mjs now has 10 tests. npm run build-booklet ok. npm run check ok (141 targets, 301 specs). npm run audit 0 errors / 0 warnings. npm run test:fast 3408 pass / 0 fail / 15 skipped. Full npm test (Electron stage and Python contracts) was not run: this container has no Electron.
+
 ## 2026-09-25 - Vibe mode keeps every click in Vibe
 
 Linux cloud container, Node 22 (the repo asks for 24), no Electron installed, shared tree at a14df38 plus this uncommitted work. In Vibe mode every other page now opens inside Vibe's own rail (#vibe-rail) instead of Build's menu. Home, leaving Command and Back on a Work page return to Vibe. Build's section bar no longer covers Vibe's top buttons, and pages no longer show Vibe through their glass. A restored session or closing Appearance no longer opens Build's Home. Checked in a browser against npm run start:web with Playwright and Chromium. Every one of the 172 registry destinations opened from Vibe stayed in Vibe mode with neither Build's rail nor its Home showing. Dock, lanes, rail, Command exit, Tasks Back and the Build/Vibe round trip were also clicked by hand. New tests/vibe_frame.test.mjs: 8 tests, 7 of which fail against the old renderer. npm run build-booklet ok. npm run check ok (141 targets, 301 specs). npm run audit 0 errors / 0 warnings. npm run test:fast 3406 pass / 0 fail / 15 skipped. Full npm test (Electron stage and Python contracts) was not run: this container has no Electron.
@@ -376,38 +380,6 @@ PASS: isolated synthetic Electron capture, 122 sampled states and 100 captured f
 Full npm test was not a clean pass: parallel stage 3315 pass / 1 fail / 4 skipped, Electron lane 32 pass / 1 fail / 1 skipped, eyes-toggle 1/1 and occlusion 1 pass / 1 skip (probe window closed externally). The startup unit-test child stalled without CPU progress for several minutes; only that verified child of this run was stopped so remaining stages could finish. It passed 9/9 on an immediate bounded solo retry. The toolbar CSS contract failed against an in-flight stylesheet and passed 10/10 on solo retry. The runner detected concurrent source changes in both failing stages. Real Command interaction passed in the full run (66.9 s), including navigation and agent movement. Logs: %TEMP%/mefi-overview-{build,check,audit,focused,render,full-test,startup-retry,toolbar-retry}.log.
 
 The full gate completed: Python contracts 248/248 passed (312 s reported by unittest; 339 s including process startup), and all six normalized-path lock checks passed. npm test exited 1 because of the two Node-stage results above (674 s). Both named failures passed their isolated retries; no second full-run pass is claimed.
-
-## 2026-09-24 - Dense agent setup rows and compact controls
-
-Condensed Agents setup into short desktop rows: add button, role, model,
-effort/fast controls and corner provider icon sit alongside each other.
-Reduced row gaps, control heights, header, toolbar and footer spacing; bounded
-the team list to 1120px and grouped toolbar actions together. All eight main
-agents fit at 1440x900, six at 1100x720 and three at 600x600. Narrower/zoomed
-views wrap controls. Provider and skill tiles keep their selected states.
-The render fixture seeds a larger roster and waits for the search menu so it
-exercises catalog search after the shared short-menu tile picker changed.
-
-Validation: build-booklet, npm run check and npm run audit passed (zero final
-audit findings). Agent setup's isolated Electron interaction check passed
-solo and in the full run. All 12 window/zoom combinations pass without
-horizontal overflow, renderer errors, network requests or worker starts.
-Desktop, narrow and expanded-provider captures were visually reviewed.
-
-Full npm test completed with failures outside the changed panels. Parallel
-Node: 3315 pass, 1 fail, 4 skipped. renderer_startup.test.mjs stalled with no
-further output; its verified isolated test subprocess was stopped after more
-than four minutes, and the runner recorded that failure before continuing.
-Electron lane: 32 pass, 1 fail, 1 skipped; the failure is command_toolbar's
-stylesheet contract. The actual rendering workflows passed. Eyes-toggle 1/1
-passed; occlusion 1 passed with 1 capability skip. Python 248/248 and all six
-normalized-path lock checks passed. Sources changed during this shared-tree
-run; no full-suite pass is claimed. An early audit flagged the dynamically
-created walkthrough companion ID; the final audit is clean.
-
-Logs: %TEMP%/mefi-agent-compact-{check,audit,render,full-test}.log.
-Captures/report: %TEMP%/mefi-agent-compact/. No live application data or
-portable data was changed.
 
 ## Read Before Any Tests
 

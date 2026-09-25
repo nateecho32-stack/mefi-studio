@@ -186,11 +186,13 @@
       open: (params) => window.MefiAgents?.open?.(params), close: () => window.MefiAgents?.close?.(), isOpen: () => overlayOpen("agents-overlay"),
     },
     {
-      id: "workspace", label: "Home", short: "Home", kind: "view", layer: null,
+      // In Vibe mode Home is Vibe (go() lands there), so Search, Shortcuts
+      // and the rail name it that instead of listing Home and Vibe twice.
+      id: "workspace", get label() { return vibeMode() ? "Vibe" : "Home"; }, get short() { return vibeMode() ? "Vibe" : "Home"; }, kind: "view", layer: null,
       commandPrimary: true, section: "home",
-      group: "surfaces", key: "H", glyph: "g-home", badge: null,
-      desc: "Project overview, conversation and work queue",
-      searchTerms: "home project folder conversation chat give task review done",
+      group: "surfaces", key: "H", get glyph() { return vibeMode() ? "g-spark" : "g-home"; }, badge: null,
+      get desc() { return vibeMode() ? "The calm front door: talk or build from one box, see what's building and what needs you" : "Project overview, conversation and work queue"; },
+      searchTerms: "home vibe project folder conversation chat give task review done",
       showIn: showIn({ dock: true, palette: true, help: true, footer: true }),
       open: () => window.MefiWorkspace?.enter?.(), close: () => window.MefiWorkspace?.exit?.(),
       isOpen: () => Boolean(window.MefiWorkspace?.isActive?.()),
@@ -731,8 +733,10 @@
     });
   }
 
+  // A record may hide itself for now (hidden(): true), such as Switch to
+  // Build while Build is already the mode; menus built from list() skip it.
   function list(filter) {
-    if (filter?.showIn) return registry.filter((dest) => Boolean(dest.showIn?.[filter.showIn]));
+    if (filter?.showIn) return registry.filter((dest) => Boolean(dest.showIn?.[filter.showIn]) && !dest.hidden?.());
     if (filter?.group) return registry.filter((dest) => dest.group === filter.group);
     return registry.slice();
   }

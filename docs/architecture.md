@@ -108,6 +108,17 @@ configuration. Changes use the existing project/default scope and Apply flow.
   a restored session land there. Leaving Command goes back to the page it was
   opened from, and **Back** on a Work page with nothing behind it returns to
   Vibe. Build's classic-tabs choice is kept for Build; Vibe always uses its rail.
+- **Answer** on a decision under Needs you opens it beside Vibe: what is asked,
+  the task it blocks, the last lines the agent saw, and its options with the
+  recommended one first, or a box for your own words. An answer goes through
+  the same call as Command's Ask tab, then the drawer moves to the next
+  decision or closes. **Open in Watch** shows the decision in Command instead.
+- In Vibe mode every menu takes Vibe's look (rounder, denser glass, an accent
+  rim, pill selection): Search, Shortcuts, the project panel, the section bar
+  and its hover menus, Command's pop-overs, dropdowns and toasts. Search and
+  Shortcuts list Home once, as **Vibe** on `H`. Settings › General has a
+  **Studio mode** switch that changes mode in place, and the launch switch
+  there reads **Open Vibe on launch** (off opens Watch).
 - Click the companion or press **Escape** on a workspace page to open its
   compact bubble menu over the current view. The center returns to Studio;
   the surrounding bubbles open conversation, friends and listening rooms,

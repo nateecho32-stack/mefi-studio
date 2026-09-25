@@ -7691,7 +7691,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
   inset: 0;
   z-index: var(--z-workspace);
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
   color: var(--v-ink);
   font-family: var(--font-ui);
@@ -7711,6 +7711,8 @@ html[data-no-blur] #vibe-layer { --v-blur: none; --v-glass: color-mix(in srgb, v
    Vibe's own top bar, where it swallowed the Search and Settings buttons. */
 body.vibe-active :is(#app-rail, #workspace-sidebar-toggle, body > header.page-head, #tabs, #tree-rail) { visibility: hidden; }
 body.vibe-active:not(:has(.workspace-page:not([hidden]))) #app-local-nav { display: none; }
+/* The page under Vibe does not scroll (or offer its scroll arrows) through it. */
+body.vibe-active { overflow: hidden; }
 /* A page opened from Vibe (Tasks, Plans, Ideas...) covers it the way it
    covers Home, instead of letting the front door show through its glass. */
 html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { visibility: hidden; pointer-events: none; }
@@ -7766,7 +7768,9 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .mode-switch[data-mode="build"] .mode-thumb { transform: translateX(100%); }
 
 /* ---- stage ---------------------------------------------------------------- */
-.vibe-stage { display: flex; flex-direction: column; align-items: center; min-height: 0; padding: clamp(18px, 5vh, 64px) 28px 18px; overflow-y: auto; scrollbar-width: none; }
+/* The dock floats over the stage's foot, so a busy page scrolls up from
+   under it and fades out there instead of stopping at a hard edge. */
+.vibe-stage { grid-row: 2; grid-column: 1; display: flex; flex-direction: column; align-items: center; min-height: 0; padding: clamp(18px, 4vh, 56px) 28px 118px; overflow-y: auto; scrollbar-width: none; -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 128px), transparent calc(100% - 36px)); mask-image: linear-gradient(to bottom, #000 calc(100% - 128px), transparent calc(100% - 36px)); }
 .vibe-stage::-webkit-scrollbar { display: none; }
 .vibe-stage > * { width: min(1180px, 100%); }
 .vibe-hero { display: grid; justify-items: center; gap: 8px; text-align: center; animation: vibe-rise var(--motion-spring) var(--ease-spring) both; }
@@ -7780,7 +7784,7 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 @keyframes vibe-turn { to { transform: rotate(360deg); } }
 @keyframes vibe-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 .vibe-kicker { margin: 0; color: var(--v-soft); font-size: 15px; letter-spacing: .01em; }
-.vibe-hero h1 { max-width: 20ch; margin: 0; background: linear-gradient(180deg, var(--ivory) 30%, color-mix(in srgb, var(--gold-bright) 70%, var(--ivory))); -webkit-background-clip: text; background-clip: text; color: transparent; font: 650 clamp(32px, 3vw, 52px)/1.08 var(--font-display); letter-spacing: -.025em; text-wrap: balance; }
+.vibe-hero h1 { max-width: 30ch; margin: 0; background: linear-gradient(180deg, var(--ivory) 30%, color-mix(in srgb, var(--gold-bright) 70%, var(--ivory))); -webkit-background-clip: text; background-clip: text; color: transparent; font: 650 clamp(30px, 2.7vw, 46px)/1.1 var(--font-display); letter-spacing: -.025em; text-wrap: balance; }
 
 /* ---- composer ------------------------------------------------------------- */
 .vibe-compose { position: relative; width: min(860px, 100%) !important; margin-top: clamp(22px, 3.4vh, 38px); padding: 18px 18px 14px 22px; border: 1px solid var(--v-edge); border-radius: 26px; background: var(--v-glass-hi); backdrop-filter: var(--v-blur); box-shadow: var(--v-lift), 0 0 0 0 transparent; transition: box-shadow var(--motion-slow) var(--ease-out), border-color var(--motion-slow) var(--ease-out); animation: vibe-rise var(--motion-spring) var(--ease-spring) 60ms both; }
@@ -7861,7 +7865,7 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-last-open { flex: none; padding: 5px 10px; border-radius: 9px; background: color-mix(in srgb, var(--ivory) 7%, transparent); color: var(--v-ink); font-size: 12px; font-weight: 600; }
 
 /* ---- dock ----------------------------------------------------------------- */
-.vibe-dock { justify-self: center; display: flex; gap: 4px; margin: 0 0 22px; padding: 6px; border: 1px solid var(--v-edge); border-radius: 22px; background: var(--v-glass-hi); backdrop-filter: var(--v-blur); box-shadow: 0 24px 50px -28px rgba(0, 0, 0, .95), inset 0 1px 0 color-mix(in srgb, var(--ivory) 7%, transparent); animation: vibe-dock-in var(--motion-spring) var(--ease-spring) 200ms both; }
+.vibe-dock { grid-row: 2; grid-column: 1; align-self: end; justify-self: center; position: relative; z-index: 1; display: flex; gap: 4px; margin: 0 0 22px; padding: 6px; border: 1px solid var(--v-edge); border-radius: 22px; background: var(--v-glass-hi); backdrop-filter: var(--v-blur); box-shadow: 0 24px 50px -28px rgba(0, 0, 0, .95), inset 0 1px 0 color-mix(in srgb, var(--ivory) 7%, transparent); animation: vibe-dock-in var(--motion-spring) var(--ease-spring) 200ms both; }
 @keyframes vibe-dock-in { from { opacity: 0; transform: translateY(24px) scale(.96); } to { opacity: 1; transform: none; } }
 .vibe-dock button { position: relative; display: grid; justify-items: center; align-content: center; gap: 5px; width: 76px; height: 60px; padding: 0; border: 0; border-radius: 16px; background: none; color: var(--v-soft); font-size: 11.5px; font-weight: 550; cursor: pointer; transition: color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out), transform var(--motion-base) var(--ease-spring); }
 .vibe-dock .glyph { width: 20px; height: 20px; transition: transform var(--motion-base) var(--ease-spring); }
@@ -7875,7 +7879,7 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-chat { position: absolute; top: 84px; right: 24px; bottom: 24px; z-index: 2; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(420px, calc(100vw - 48px)); border: 1px solid var(--v-edge); border-radius: 24px; background: color-mix(in srgb, var(--panel-solid) 78%, transparent); backdrop-filter: var(--v-blur); box-shadow: -30px 0 80px -40px rgba(0, 0, 0, .9), inset 0 1px 0 color-mix(in srgb, var(--ivory) 7%, transparent); opacity: 1; transform: none; transition: opacity var(--motion-slow) var(--ease-out), transform var(--motion-slow) var(--ease-emphasized), display var(--motion-slow) allow-discrete; }
 @starting-style { .vibe-chat { opacity: 0; transform: translateX(28px); } }
 .vibe-chat[hidden] { display: none; opacity: 0; transform: translateX(28px); }
-.vibe-chat-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 12px 20px; border-bottom: 1px solid var(--v-edge); }
+.vibe-chat-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 12px; padding: 16px 16px 12px 20px; border-bottom: 1px solid var(--v-edge); }
 .vibe-chat-head small { color: var(--v-faint); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
 .vibe-chat-head h2 { margin: 2px 0 0; font: 650 18px/1.2 var(--font-display); }
 .vibe-thread { display: flex; flex-direction: column; gap: 14px; margin: 0; padding: 18px 18px 8px; overflow-y: auto; list-style: none; scrollbar-width: thin; }
@@ -7892,6 +7896,41 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 @keyframes vibe-bounce { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-4px); opacity: 1; } }
 .vibe-chat-note { margin: 0; padding: 10px 20px 16px; color: var(--v-faint); font-size: 12px; }
 
+/* ---- decisions ------------------------------------------------------------ */
+/* The decision drawer shares the conversation's place and glass. */
+.vibe-ask { grid-template-rows: auto minmax(0, 1fr) auto; border-color: color-mix(in srgb, var(--warn) 30%, var(--v-edge)); box-shadow: -30px 0 80px -40px rgba(0, 0, 0, .9), 0 0 60px -30px color-mix(in srgb, var(--warn) 50%, transparent), inset 0 1px 0 color-mix(in srgb, var(--ivory) 7%, transparent); }
+.vibe-ask .vibe-chat-head small { color: var(--warn); }
+.vibe-ask .vibe-chat-head h2 { font-size: 17px; line-height: 1.3; text-wrap: balance; }
+.vibe-ask-body { display: flex; flex-direction: column; gap: 14px; min-height: 0; padding: 16px 20px; overflow-y: auto; scrollbar-width: thin; }
+.vibe-ask-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.vibe-ask-chip { max-width: 100%; padding: 4px 10px; overflow: hidden; border: 1px solid var(--v-edge); border-radius: 999px; background: color-mix(in srgb, var(--ivory) 5%, transparent); color: var(--v-soft); font: 550 12px/1.3 var(--font-ui); text-overflow: ellipsis; white-space: nowrap; }
+.vibe-ask-chip.is-blocker { border-color: color-mix(in srgb, var(--bad) 45%, transparent); background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--v-ink); }
+.vibe-ask-chip.is-decision { border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 12%, transparent); color: var(--v-ink); }
+button.vibe-ask-chip { cursor: pointer; }
+button.vibe-ask-chip:hover { border-color: var(--v-edge-hi); color: var(--v-ink); }
+.vibe-ask-when { margin-left: auto; color: var(--v-faint); font-size: 12px; }
+.vibe-ask-detail { margin: 0; color: var(--v-ink); font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.vibe-ask-evidence { margin: 0; padding: 10px 12px; max-height: 110px; overflow: auto; border-radius: 12px; background: color-mix(in srgb, var(--bg-deep) 70%, transparent); color: var(--v-soft); font: 12px/1.5 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.vibe-ask-options { display: grid; gap: 8px; }
+.vibe-ask-option { display: grid; grid-template-columns: minmax(0, 1fr); justify-content: stretch; justify-items: stretch; gap: 4px; width: 100%; padding: 12px 14px; border: 1px solid var(--v-edge); border-radius: 16px; background: color-mix(in srgb, var(--ivory) 4%, transparent); color: var(--v-ink); text-align: left; cursor: pointer; transition: border-color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out); animation: vibe-rise var(--motion-base) var(--ease-out) both; }
+.vibe-ask-option:hover { transform: translateY(-1px); border-color: var(--v-edge-hi); background: color-mix(in srgb, var(--gold) 8%, transparent); }
+.vibe-ask-option:disabled { opacity: .55; cursor: progress; transform: none; }
+.vibe-ask-option.is-recommended { border-color: color-mix(in srgb, var(--gold) 50%, transparent); background: linear-gradient(135deg, color-mix(in srgb, var(--gold) 18%, transparent), color-mix(in srgb, var(--gold) 6%, transparent)); }
+.vibe-ask-option-label { display: flex; align-items: center; justify-content: flex-start; gap: 8px; font-size: 14px; font-weight: 600; text-align: left; }
+.vibe-ask-rec { margin-left: auto; padding: 2px 8px; border-radius: 999px; background: linear-gradient(135deg, var(--gold-bright), var(--gold)); color: var(--ink); font-size: 10.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.vibe-ask-option-desc { text-align: left; color: var(--v-soft); font-size: 12.5px; line-height: 1.45; }
+.vibe-ask-own { display: flex; align-items: flex-end; gap: 8px; }
+.vibe-ask-own textarea { flex: 1; min-height: 42px; max-height: 140px; padding: 10px 12px; border: 1px solid var(--v-edge); border-radius: 14px; background: color-mix(in srgb, var(--bg-deep) 50%, transparent); color: var(--v-ink); font: 14px/1.45 var(--font-ui); resize: vertical; }
+.vibe-ask-own textarea:focus { outline: none; border-color: var(--v-edge-hi); }
+.vibe-ask-foot { display: flex; align-items: center; gap: 12px; padding: 10px 20px 16px; border-top: 1px solid var(--v-edge); }
+.vibe-ask-note { flex: 1; min-width: 0; color: var(--v-soft); font-size: 12.5px; }
+.vibe-ask-note[data-tone="good"] { color: var(--good); }
+.vibe-ask-note[data-tone="warn"] { color: var(--warn); }
+.vibe-ask-note[data-tone="bad"] { color: var(--bad); }
+.vibe-ask-link { flex: none; padding: 6px 4px; border: 0; background: none; color: var(--v-soft); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.vibe-ask-link:hover { color: var(--v-accent-hi); text-decoration: underline; text-underline-offset: 3px; }
+:is(.vibe-ask-option, .vibe-ask-link, button.vibe-ask-chip):focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+
 /* ---- smaller windows ------------------------------------------------------- */
 @media (max-width: 1100px) {
   .vibe-lanes { grid-template-columns: 1fr 1fr; }
@@ -7901,7 +7940,8 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
   .vibe-top { grid-template-columns: 1fr auto; padding: 14px 16px 0; }
   .vibe-top .mode-switch { grid-column: 1 / -1; grid-row: 2; justify-self: center; }
   .vibe-pulse { display: none; }
-  .vibe-stage { padding: 20px 16px 12px; }
+  .vibe-stage { padding: 20px 16px 100px; }
+  .vibe-dock { margin-bottom: 12px; }
   .vibe-lanes { grid-template-columns: 1fr; }
   .vibe-lane { min-height: 0; }
   .vibe-hint { display: none; }
@@ -7923,7 +7963,7 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 html[data-ui-mode="vibe"][data-shell="rail"],
 html[data-ui-mode="vibe"][data-shell="rail"][data-rail-pinned] { --shell-rail-w: 72px; }
 html[data-ui-mode="vibe"] :is(#app-rail, #tabs, #workspace-sidebar-toggle, body > footer) { display: none !important; }
-html[data-ui-mode="vibe"] #app-local-nav { background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(18px) saturate(1.3); }
+html[data-ui-mode="vibe"] #app-local-nav { background: color-mix(in srgb, var(--bg) 95%, transparent); backdrop-filter: blur(18px) saturate(1.3); }
 
 .vibe-rail {
   position: fixed; top: 0; bottom: 0; left: 0; z-index: var(--z-shell);
@@ -7970,6 +8010,92 @@ html[data-no-blur] .vibe-rail { backdrop-filter: none; background: color-mix(in 
   .vibe-rail .vibe-rail-home { min-height: 46px; margin-bottom: 4px; }
 }
 @media (prefers-reduced-motion: reduce) { .vibe-rail { animation: none; } }
+
+/* ---- menus in Vibe mode ----------------------------------------------------- */
+/* Every menu Vibe mode can open (Search, Shortcuts, the project panel, the
+   section bar and its hover menus, Command's pop-overs, dropdowns, toasts)
+   takes Vibe's shape: rounder corners, a denser glass that stays readable
+   over busy pages, a faint accent rim and glow, and pill-shaped selection.
+   The shared tokens carry most of it; no-blur, reduced transparency and
+   light themes keep their own fills. */
+html[data-ui-mode="vibe"] {
+  --r-xl: 26px; --r-lg: 18px; --r-md: 12px;
+  --v-menu-edge: color-mix(in srgb, var(--gold) 24%, transparent);
+  --v-menu-pick: linear-gradient(135deg, color-mix(in srgb, var(--gold) 20%, transparent), color-mix(in srgb, var(--gold) 6%, transparent));
+  --studio-glide: color-mix(in srgb, var(--gold) 14%, transparent);
+  --studio-selection: var(--v-menu-pick);
+  --studio-float-shadow: inset 0 1px color-mix(in srgb, var(--ivory) 10%, transparent), 0 0 0 1px color-mix(in srgb, var(--gold) 14%, transparent), 0 30px 70px -30px rgb(0 0 0 / .8), 0 0 50px -26px color-mix(in srgb, var(--gold) 45%, transparent);
+}
+@media not (prefers-reduced-transparency: reduce) {
+  html[data-ui-mode="vibe"]:not([data-no-blur]) { --studio-float-fill: color-mix(in srgb, var(--theme-panel-solid) 86%, transparent); }
+  html[data-ui-mode="vibe"]:not([data-no-blur]):not([data-studio-theme-tone="light"]) { --studio-float-blur: blur(26px) saturate(1.5) brightness(.9); }
+}
+
+/* On Vibe's own page there is no rail, so sheets and the project panel use
+   the whole window instead of leaving a strip where the rail would be. */
+body.vibe-active:not(:has(.workspace-page:not([hidden]))) :is(.overlay, .planning-overlay, .profiler-overlay, .music-overlay) { left: 0; }
+body.vibe-active:not(:has(.workspace-page:not([hidden]))) #toast-host { left: 24px; bottom: 104px; }
+
+/* Search */
+html[data-ui-mode="vibe"] #palette-overlay { padding-top: 11vh; background: color-mix(in srgb, var(--bg-deep) 50%, transparent); }
+html[data-ui-mode="vibe"] .palette-sheet { border: 1px solid var(--v-menu-edge); border-radius: 26px; }
+html[data-ui-mode="vibe"] .palette-search-row { gap: 10px; padding: 10px 12px; border-bottom-color: color-mix(in srgb, var(--ivory) 8%, transparent); }
+html[data-ui-mode="vibe"] .palette-search-row input { min-height: 52px; padding: 12px 18px; border: 1px solid color-mix(in srgb, var(--ivory) 10%, transparent); border-radius: 18px; background: color-mix(in srgb, var(--bg-deep) 45%, transparent); font-size: 17px; transition: border-color var(--motion-fast) var(--ease-out), box-shadow var(--motion-base) var(--ease-out); }
+html[data-ui-mode="vibe"] .palette-search-row input:focus { border-color: color-mix(in srgb, var(--gold) 45%, transparent); box-shadow: 0 0 34px -14px color-mix(in srgb, var(--gold) 70%, transparent); }
+html[data-ui-mode="vibe"] .palette-search-row input:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 1px; }
+html[data-ui-mode="vibe"] .palette-search-row button { min-height: 34px; padding: 4px 12px; border-radius: 12px; }
+html[data-ui-mode="vibe"] #palette-list { padding: 10px; }
+html[data-ui-mode="vibe"] #palette-list li { border-radius: 14px; transition: background var(--motion-fast) var(--ease-out); }
+html[data-ui-mode="vibe"] #palette-list li:hover { background: color-mix(in srgb, var(--ivory) 6%, transparent); }
+html[data-ui-mode="vibe"] #palette-list li.active { background: var(--v-menu-pick); outline-color: color-mix(in srgb, var(--gold) 30%, transparent); }
+html[data-ui-mode="vibe"] #palette-list li.palette-group-start .kind { color: var(--gold-bright); font-weight: 600; }
+html[data-ui-mode="vibe"] :is(#palette-list, #help-overlay, #vibe-ask) .key { border-radius: 8px; border-color: color-mix(in srgb, var(--gold) 30%, transparent); background: color-mix(in srgb, var(--gold) 10%, transparent); color: var(--ivory); }
+html[data-ui-mode="vibe"] .palette-footer { border-top-color: color-mix(in srgb, var(--ivory) 8%, transparent); }
+
+/* Shortcuts, Start here and the other small sheets */
+html[data-ui-mode="vibe"] .overlay:not(.workspace-page) > :is(.sheet, .walkthrough-sheet) { border: 1px solid var(--v-menu-edge); border-radius: 26px; box-shadow: var(--studio-float-shadow); }
+html[data-ui-mode="vibe"] #help-overlay .sheet-head { border-radius: 18px; }
+html[data-ui-mode="vibe"] #help-overlay .eyebrow { color: var(--gold-bright); }
+html[data-ui-mode="vibe"] .overlay:not(.workspace-page) .sheet-close { border-radius: 12px; }
+
+/* The project panel: a floating card beside the rail, or under Vibe's
+   project button on the Vibe page. */
+html[data-ui-mode="vibe"] #workspace-sidebar-panel { top: 10px; bottom: 10px; left: calc(var(--shell-rail-w) + 10px); height: auto; padding: 16px; border: 1px solid var(--v-menu-edge); border-radius: 24px; background: var(--studio-wash), var(--studio-float-fill); backdrop-filter: var(--studio-float-blur); transform: translateX(-24px) scale(.98); opacity: 0; transition: transform var(--motion-slow) var(--ease-emphasized), opacity var(--motion-base) var(--ease-out), visibility var(--motion-slow); }
+html[data-ui-mode="vibe"] #workspace-sidebar[data-open="true"] #workspace-sidebar-panel { transform: none; opacity: 1; box-shadow: var(--studio-float-shadow); }
+body.vibe-active:not(:has(.workspace-page:not([hidden]))) #workspace-sidebar-panel { top: 80px; left: 24px; bottom: 24px; }
+html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project { border-radius: 14px; font-size: 13px; }
+html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project:hover { background: color-mix(in srgb, var(--ivory) 6%, transparent); }
+html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project.selected { color: var(--ivory); background: var(--v-menu-pick); border-color: color-mix(in srgb, var(--gold) 30%, transparent); }
+html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project-icon { border-radius: 10px; background: linear-gradient(140deg, var(--gold-bright), var(--gold)); color: var(--ink); }
+html[data-ui-mode="vibe"] #workspace-sidebar-panel :is(button.primary, .primary) { border-radius: 14px; }
+
+/* The section bar over Work, Agents and Settings: pills, not underlines. */
+html[data-ui-mode="vibe"] #app-local-nav { gap: 6px; padding: 8px 18px; border-bottom-color: color-mix(in srgb, var(--ivory) 7%, transparent); }
+html[data-ui-mode="vibe"] #app-local-nav .app-local-link { min-height: 38px; padding: 7px 14px; border: 0; border-radius: 999px; }
+html[data-ui-mode="vibe"] #app-local-nav .app-local-link:hover { background: color-mix(in srgb, var(--ivory) 7%, transparent); }
+html[data-ui-mode="vibe"] #app-local-nav .app-local-link[aria-current="page"] { background: var(--v-menu-pick); color: var(--ivory); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 32%, transparent); }
+html[data-ui-mode="vibe"] #app-local-nav .studio-history { border-right-color: color-mix(in srgb, var(--ivory) 8%, transparent); }
+html[data-ui-mode="vibe"] #app-local-nav :is(.studio-history, .app-task-context) button { border-radius: 12px; }
+/* The bar's own blur leaves a nested menu nothing to blur, so it is near solid. */
+html[data-ui-mode="vibe"] #app-local-nav .agents-nav-subsections { gap: 2px; padding: 8px; border-color: var(--v-menu-edge); background: var(--studio-wash), color-mix(in srgb, var(--theme-panel-solid, var(--panel-solid)) 97%, transparent); }
+html[data-ui-mode="vibe"] #app-local-nav .agents-nav-subsections .app-local-link { border-radius: 12px; }
+
+/* Command's pop-overs (View, Agents, More) and the shared dropdowns */
+html[data-ui-mode="vibe"] #idle-hud :is(.cmd-view-pop, .cmd-agents-pop, .cmd-more-links, .pop) { border-color: var(--v-menu-edge); border-radius: 20px; }
+html[data-ui-mode="vibe"] .studio-choice-popup { border: 1px solid var(--v-menu-edge); border-radius: 18px; }
+html[data-ui-mode="vibe"] .studio-choice-option { border-radius: 12px; }
+html[data-ui-mode="vibe"] .studio-choice-option[aria-selected="true"] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent); }
+html[data-ui-mode="vibe"] .toast { border-color: var(--v-menu-edge); border-radius: 18px; }
+
+/* Settings' own list and its mode switch */
+html[data-ui-mode="vibe"] .settings-nav { border-radius: 22px; }
+html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
+.settings-mode-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--studio-glass-edge, var(--hairline)); }
+.settings-mode-text { display: grid; gap: 3px; min-width: 0; }
+.settings-mode-text b { color: var(--ivory); font-size: 14px; font-weight: 600; }
+.settings-mode-text span { color: var(--muted); font-size: 12.5px; }
+.settings-mode-row .mode-switch { box-shadow: none; }
+.settings-mode-row .mode-switch button { min-width: 96px; height: 34px; font-size: 13px; }
 
 /* ---- the Build rail's way back ------------------------------------------- */
 #app-rail .app-rail-vibe { margin-bottom: 6px; background: linear-gradient(135deg, color-mix(in srgb, var(--gold) 20%, transparent), color-mix(in srgb, var(--gold) 6%, transparent)); color: var(--gold-bright); font-weight: 600; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 26%, transparent); }
@@ -8303,6 +8429,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     <ol id="vibe-thread" class="vibe-thread"></ol>
     <p class="vibe-chat-note">Reply in the box in the middle. Enter talks, Ctrl + Enter builds.</p>
   </aside>
+  <!-- A decision from Needs you, answered without leaving Vibe (vibe.js). -->
+  <aside id="vibe-ask" class="vibe-chat vibe-ask" aria-labelledby="vibe-ask-title" hidden>
+    <header class="vibe-chat-head"><div><small id="vibe-ask-kicker">Needs you</small><h2 id="vibe-ask-title">A decision</h2></div><button id="vibe-ask-close" class="vibe-icon" type="button" aria-label="Close the decision" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
+    <div id="vibe-ask-body" class="vibe-ask-body"></div>
+    <footer class="vibe-ask-foot"><span id="vibe-ask-note" class="vibe-ask-note" role="status" aria-live="polite"></span><button id="vibe-ask-watch" class="vibe-ask-link" type="button">Open in Watch</button></footer>
+  </aside>
 </section>
 <!-- Vibe's frame for every other page (renderer/vibe.js). In Vibe mode this
      rail stands in for Build's #app-rail on Tasks, Plans, Command, Settings
@@ -8573,9 +8705,14 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
           <div class="settings-you-switches">
             <label class="switch" id="settings-companion-motion" title="Your companion floats and blinks beside the conversation. Calm and Off keep it still."><input id="workspace-motion" type="checkbox" checked><span class="track"></span><span>Let your companion move</span></label>
             <label class="switch" title="Blur what sits behind every sheet, menu and Home panel. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
-            <label class="switch" title="On: every launch lands on Your workspace. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span>Open Workspace on launch</span></label>
+            <label class="switch" id="idle-home-switch" title="On: every launch lands on Your workspace. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Workspace on launch</span></label>
           </div>
-          <p class="muted">When disabled, Studio opens Command view after the project chooser.</p>
+          <p class="muted" id="idle-home-hint">When disabled, Studio opens Command view after the project chooser.</p>
+          <!-- The Vibe / Build choice, switched in place (vibe.js keeps you on Settings). -->
+          <div class="settings-mode-row" id="settings-mode">
+            <span class="settings-mode-text"><b>Studio mode</b><span id="settings-mode-hint">Vibe is the calm front door. Build is the full studio.</span></span>
+            <div class="mode-switch" role="radiogroup" aria-label="Studio mode" data-mode="vibe" data-mode-stay><i class="mode-thumb" aria-hidden="true"></i><button type="button" role="radio" data-ui-mode="vibe" aria-checked="true" title="Vibe: the calm front door"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Vibe</span></button><button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button></div>
+          </div>
         </details>
 <details class="settings-optional settings-card" id="settings-community"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-community"/></svg></span><span class="settings-summary-text"><b>Community</b><span>Discord membership and the Void theme collection</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
           <section class="community-showcase" id="community-showcase" aria-labelledby="community-showcase-title"><div class="community-showcase-copy"><span class="community-showcase-kicker">Void collection</span><strong id="community-showcase-title">Four themes, three node styles</strong><span class="community-showcase-state" id="community-showcase-state" data-unlocked="false">For members of the Void Engine Discord</span><button type="button" class="primary mini community-choose" id="community-choose" title="Open Appearance at the Void collection" hidden>Choose a Void theme</button></div><div class="community-showcase-items" id="community-showcase-items" aria-hidden="true"></div></section>
@@ -14714,11 +14851,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       open: (params) => window.MefiAgents?.open?.(params), close: () => window.MefiAgents?.close?.(), isOpen: () => overlayOpen("agents-overlay"),
     },
     {
-      id: "workspace", label: "Home", short: "Home", kind: "view", layer: null,
+      // In Vibe mode Home is Vibe (go() lands there), so Search, Shortcuts
+      // and the rail name it that instead of listing Home and Vibe twice.
+      id: "workspace", get label() { return vibeMode() ? "Vibe" : "Home"; }, get short() { return vibeMode() ? "Vibe" : "Home"; }, kind: "view", layer: null,
       commandPrimary: true, section: "home",
-      group: "surfaces", key: "H", glyph: "g-home", badge: null,
-      desc: "Project overview, conversation and work queue",
-      searchTerms: "home project folder conversation chat give task review done",
+      group: "surfaces", key: "H", get glyph() { return vibeMode() ? "g-spark" : "g-home"; }, badge: null,
+      get desc() { return vibeMode() ? "The calm front door: talk or build from one box, see what's building and what needs you" : "Project overview, conversation and work queue"; },
+      searchTerms: "home vibe project folder conversation chat give task review done",
       showIn: showIn({ dock: true, palette: true, help: true, footer: true }),
       open: () => window.MefiWorkspace?.enter?.(), close: () => window.MefiWorkspace?.exit?.(),
       isOpen: () => Boolean(window.MefiWorkspace?.isActive?.()),
@@ -15259,8 +15398,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     });
   }
 
+  // A record may hide itself for now (hidden(): true), such as Switch to
+  // Build while Build is already the mode; menus built from list() skip it.
   function list(filter) {
-    if (filter?.showIn) return registry.filter((dest) => Boolean(dest.showIn?.[filter.showIn]));
+    if (filter?.showIn) return registry.filter((dest) => Boolean(dest.showIn?.[filter.showIn]) && !dest.hidden?.());
     if (filter?.group) return registry.filter((dest) => dest.group === filter.group);
     return registry.slice();
   }
@@ -55273,6 +55414,20 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const rail = $("rail");
     if (rail) rail.hidden = current !== "vibe";
     paintRail();
+    paintSettings(current);
+  }
+  // Settings speaks the mode's language: the launch switch opens Vibe (or
+  // Build's workspace), and its Off lands in Watch or Command.
+  function paintSettings(current) {
+    const vibe = current === "vibe";
+    const label = document.getElementById("idle-home-label");
+    if (label) label.textContent = vibe ? "Open Vibe on launch" : "Open Workspace on launch";
+    const hint = document.getElementById("idle-home-hint");
+    if (hint) hint.textContent = vibe ? "When disabled, Studio opens Watch, the live node tree, after the project chooser." : "When disabled, Studio opens Command view after the project chooser.";
+    const toggle = document.getElementById("idle-home-switch");
+    if (toggle) toggle.title = vibe ? "On: every launch lands on Vibe. Off: Studio opens straight into Watch. The project chooser comes first either way." : "On: every launch lands on Your workspace. Off: Studio opens straight into Command view. The project chooser comes first either way.";
+    const modeHint = document.getElementById("settings-mode-hint");
+    if (modeHint) modeHint.textContent = vibe ? "Vibe: the calm front door, where every page opens in Vibe's rail." : "Build: the full studio, with Home, the menu and every tool.";
   }
   // Switching remembers the choice and lands on that mode's home. Vibe keeps
   // the rail shell on (nav.js asks mode()); Build gets the saved shell back.
@@ -55281,7 +55436,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const was = mode();
     write(MODE_KEY, next);
     paintMode();
-    if (was !== next) window.MefiNav?.applyShell?.();
+    if (was !== next) { window.MefiNav?.applyShell?.(); window.MefiNav?.paintCurrent?.(); }
     if (go) window.MefiNav?.go?.(next === "vibe" ? "vibe" : "workspace");
     return next;
   }
@@ -55305,7 +55460,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
 
   // ---- data -----------------------------------------------------------------
-  const state = { projects: [], activeId: null, tasks: [], assistant: {}, status: {}, backlog: null, pending: false, chatOpen: false, seenMessages: 0 };
+  const state = { projects: [], activeId: null, tasks: [], assistant: {}, status: {}, backlog: null, pending: false, chatOpen: false, seenMessages: 0, askId: null, askSending: false };
   let initialized = false;
   let refreshFlight = null;
   const projectId = () => window.MefiWorkspace?.activeProjectId?.() || state.activeId;
@@ -55409,7 +55564,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
     const needs = $("lane-needs");
     needs.replaceChildren();
-    for (const question of data.questions.slice(0, 3)) needs.append(row({ tone: "ask", title: question.title || "A decision", meta: "decision", action: { label: "Answer", run: () => go("command", { rail: "ask" }) }, onOpen: () => go("command", { rail: "ask" }) }));
+    for (const question of data.questions.slice(0, 3)) needs.append(row({ tone: "ask", title: question.title || "A decision", meta: question.context?.severity === "blocker" ? "blocking a task" : "decision", action: { label: "Answer", run: () => openAsk(question.id) }, onOpen: () => openAsk(question.id) }));
     for (const task of data.review.slice(0, Math.max(0, 3 - needs.children.length))) needs.append(row({ tone: "review", title: task.title || "A finished task", meta: "ready for your review", action: { label: "Review", run: () => go("tasks", { taskId: task.id }) }, onOpen: () => go("tasks", { taskId: task.id }) }));
     if (data.counts.approval) needs.append(row({ tone: "ask", title: `${data.counts.approval} task${data.counts.approval === 1 ? "" : "s"} waiting for your go-ahead`, meta: "approval", onOpen: () => go("tasks") }));
     if (data.counts.blocked) needs.append(row({ tone: "bad", title: `${data.counts.blocked} task${data.counts.blocked === 1 ? "" : "s"} stuck`, meta: "needs attention", onOpen: () => go("tasks") }));
@@ -55466,7 +55621,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   function render() {
     if (!active()) return;
-    renderHead(); renderLanes(); renderChat();
+    renderHead(); renderLanes(); renderChat(); renderAsk();
   }
 
   // ---- composer -------------------------------------------------------------
@@ -55524,6 +55679,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
   // ---- conversation drawer --------------------------------------------------
   function openChat() {
+    closeAsk({ quiet: true });
     state.chatOpen = true; $("chat").hidden = false; layer.dataset.chat = "open";
     $("chat-toggle").setAttribute("aria-expanded", "true");
     state.seenMessages = messages().length;
@@ -55535,6 +55691,115 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     $("chat-toggle").setAttribute("aria-expanded", "false");
     state.seenMessages = messages().length;
     signatures.delete("chat"); renderChat();
+  }
+
+  // ---- decisions ------------------------------------------------------------
+  // A decision from Needs you opens here, beside the front door, instead of
+  // sending you to Command's Ask tab: what is being asked, the task it
+  // blocks and the last lines the agent saw, its options with the
+  // recommended one first, and a box for your own answer. Answering moves on
+  // to the next open decision, and closes when none is left.
+  const openQuestions = () => (Array.isArray(state.assistant.questions) ? state.assistant.questions : []).filter((question) => question?.status === "open" && belongs(question));
+  function openAsk(id) {
+    if (state.chatOpen) closeChat();
+    state.askId = id;
+    $("ask").hidden = false; layer.dataset.ask = "open";
+    signatures.delete("ask"); $("ask-note").textContent = "";
+    renderAsk();
+    requestAnimationFrame(() => $("ask").querySelector(".vibe-ask-option, textarea, button")?.focus({ preventScroll: true }));
+  }
+  function closeAsk({ quiet = false } = {}) {
+    if ($("ask").hidden) return;
+    state.askId = null;
+    $("ask").hidden = true; layer.dataset.ask = "closed";
+    if (!quiet) layer.focus({ preventScroll: true });
+  }
+  function renderAsk() {
+    if (state.askId === null || $("ask").hidden) return;
+    const open = openQuestions();
+    const index = open.findIndex((question) => question.id === state.askId);
+    const question = open[index];
+    if (!changed("ask", [question ?? null, open.length, state.askSending])) return;
+    const body = $("ask-body");
+    body.replaceChildren();
+    if (!question) {
+      // Answered here, elsewhere, or withdrawn: move on, or say so and close.
+      if (open.length) { state.askId = open[0].id; signatures.delete("ask"); renderAsk(); return; }
+      $("ask-kicker").textContent = "Needs you";
+      $("ask-title").textContent = "You're all caught up";
+      body.append(el("p", "vibe-ask-detail", "Nothing else is waiting on you. New decisions show up under Needs you."));
+      return;
+    }
+    const context = question.context || {};
+    $("ask-kicker").textContent = open.length > 1 ? `Needs you · ${index + 1} of ${open.length}` : "Needs you";
+    $("ask-title").textContent = question.title || "A decision";
+    const chips = el("div", "vibe-ask-chips");
+    if (context.severity) chips.append(el("span", `vibe-ask-chip is-${context.severity}`, context.severity === "blocker" ? "Blocking" : context.severity === "decision" ? "Decision" : "Note"));
+    if (context.taskTitle) {
+      const task = el(context.taskId ? "button" : "span", "vibe-ask-chip is-task", context.taskTitle);
+      if (context.taskId) { task.type = "button"; task.title = "Open this task"; task.addEventListener("click", () => go("tasks", { taskId: context.taskId, filter: "all" })); }
+      chips.append(task);
+    }
+    if (context.file || context.check) chips.append(el("span", "vibe-ask-chip", context.check ? `check: ${context.check}` : context.file));
+    if (question.at) chips.append(el("span", "vibe-ask-when", ago(question.at)));
+    body.append(chips);
+    if (question.detail) body.append(el("p", "vibe-ask-detail", question.detail));
+    if (Array.isArray(context.evidence) && context.evidence.length) {
+      const evidence = el("pre", "vibe-ask-evidence", context.evidence.slice(-3).join("\n"));
+      evidence.title = "The last lines the agent printed before it asked";
+      body.append(evidence);
+    }
+    const options = el("div", "vibe-ask-options");
+    options.setAttribute("role", "group");
+    options.setAttribute("aria-label", "Your answer");
+    const choices = (Array.isArray(question.options) ? question.options : []).slice().sort((a, b) => Number(Boolean(b.recommended)) - Number(Boolean(a.recommended)));
+    for (const option of choices) {
+      const button = el("button", `vibe-ask-option${option.recommended ? " is-recommended" : ""}`);
+      button.type = "button";
+      const label = el("span", "vibe-ask-option-label", option.label);
+      if (option.recommended) label.append(el("span", "vibe-ask-rec", "Recommended"));
+      button.append(label);
+      if (option.description) button.append(el("span", "vibe-ask-option-desc", option.description));
+      button.disabled = state.askSending;
+      button.addEventListener("click", () => void answer(question, { optionId: option.id, label: option.label }));
+      options.append(button);
+    }
+    body.append(options);
+    const own = el("form", "vibe-ask-own");
+    const input = el("textarea");
+    input.rows = 2; input.placeholder = choices.length ? "Or say it in your own words…" : "Your answer…";
+    input.setAttribute("aria-label", "Write your own answer");
+    const send = el("button", "vibe-btn quiet", "Send");
+    send.type = "submit"; send.disabled = state.askSending;
+    own.append(input, send);
+    own.addEventListener("submit", (event) => { event.preventDefault(); const text = input.value.trim(); if (text) void answer(question, { text, label: text }); else input.focus(); });
+    input.addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); own.requestSubmit(); } });
+    body.append(own);
+  }
+  async function answer(question, { optionId = null, text = null, label = "" }) {
+    if (state.askSending) return;
+    const note = $("ask-note");
+    if (!api()?.assistantAnswer) { note.textContent = "Answers are available in the desktop app."; note.dataset.tone = "warn"; return; }
+    state.askSending = true; signatures.delete("ask"); renderAsk();
+    note.textContent = "Sending your answer…"; note.dataset.tone = "";
+    try {
+      const result = await api().assistantAnswer({ id: question.id, optionId, text });
+      if (result?.ok === false) throw Object.assign(new Error(result.error || "That didn't go through."), { gone: result.gone });
+      if (result?.state && belongs(result.state)) state.assistant = result.state;
+      else state.assistant = { ...state.assistant, questions: (state.assistant.questions || []).map((item) => item.id === question.id ? { ...item, status: "answered" } : item) };
+      note.textContent = `Answered: ${label.length > 60 ? `${label.slice(0, 57)}…` : label}. ${companion()} carries on.`; note.dataset.tone = "good";
+      state.askSending = false;
+      const next = openQuestions()[0];
+      if (next) { state.askId = next.id; signatures.delete("ask"); renderAsk(); }
+      else { closeAsk(); feedback(note.textContent, "good"); }
+      renderLanes();
+      void refresh();
+    } catch (error) {
+      state.askSending = false;
+      note.textContent = error.gone ? error.message : `${error?.message || "That didn't go through."} Try again, or open it in Watch.`;
+      note.dataset.tone = error.gone ? "" : "bad";
+      signatures.delete("ask"); renderAsk();
+    }
   }
 
   // ---- surface --------------------------------------------------------------
@@ -55559,6 +55824,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (layer.hidden) return;
     layer.hidden = true;
     document.body.classList.remove("vibe-active");
+    closeAsk({ quiet: true });
     paintRail();
     if (!window.MefiWorkspace?.isActive?.()) window.MefiIdle?.setHomeBackdrop?.(false);
   }
@@ -55581,12 +55847,16 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     $("chat-toggle").addEventListener("click", () => (state.chatOpen ? closeChat() : openChat()));
     $("chat-close").addEventListener("click", () => { closeChat(); $("chat-toggle").focus(); });
     $("last").addEventListener("click", openChat);
+    $("ask-close").addEventListener("click", () => closeAsk());
+    $("ask-watch").addEventListener("click", () => { closeAsk({ quiet: true }); go("command", { rail: "ask" }); });
     layer.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && state.chatOpen) { event.preventDefault(); event.stopPropagation(); closeChat(); $("chat-toggle").focus(); }
+      if (event.key !== "Escape") return;
+      if (!$("ask").hidden) { event.preventDefault(); event.stopPropagation(); closeAsk(); return; }
+      if (state.chatOpen) { event.preventDefault(); event.stopPropagation(); closeChat(); $("chat-toggle").focus(); }
     });
     api()?.onProjects?.((payload) => { if (payload?.projects) { state.projects = payload.projects; state.activeId = payload.activeId ?? state.activeId; } signatures.clear(); if (active()) void refresh(); });
     api()?.onTasks?.((tasks) => { if (!Array.isArray(tasks) || tasks.some((task) => task.projectId && task.projectId !== projectId())) return; state.tasks = tasks; if (active()) { renderLanes(); renderHead(); } });
-    api()?.onAssistant?.((payload) => { if (!payload?.state || !belongs(payload.state)) return; state.assistant = payload.state; if (active()) { renderLanes(); renderChat(); } });
+    api()?.onAssistant?.((payload) => { if (!payload?.state || !belongs(payload.state)) return; state.assistant = payload.state; if (active()) { renderLanes(); renderChat(); renderAsk(); } });
     api()?.onAssistantStatus?.((status) => { if (!status || !belongs(status)) return; state.status = status; if (active()) renderLanes(); });
     // The greeting follows the clock without a timer of its own.
     document.addEventListener("visibilitychange", () => { if (!document.hidden && active()) { renderHead(); void refresh(); } });
@@ -55598,6 +55868,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const button = event.target?.closest?.("button[data-ui-mode]");
     if (!button) return;
     event.preventDefault();
+    // A switch marked data-mode-stay (Settings) changes the frame in place.
+    const stay = Boolean(button.closest("[data-mode-stay]"));
+    if (stay) { if (button.dataset.uiMode !== mode()) setMode(button.dataset.uiMode, { go: false }); return; }
     if (button.dataset.uiMode !== mode() || !active()) setMode(button.dataset.uiMode);
   });
   document.addEventListener("keydown", (event) => {
@@ -55668,6 +55941,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     glyph: "g-spark", badge: null, desc: "The calm front door: talk or build from one box, see what's building and what needs you",
     searchTerms: "vibe mode simple calm easy home start switch",
     showIn: { tabs: false, tools: false, dock: false, palette: true, help: true, footer: false },
+    // In Vibe mode Home is Vibe, and Search lists it once, as Home's record.
+    hidden: () => mode() === "vibe",
     open: () => enter(), close: () => exit(), isOpen: () => active(),
   });
   window.MefiNav?.register?.({
@@ -55675,6 +55950,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     glyph: "g-wrench", badge: null, desc: "The full studio: Home, Command, boards, models and every setting",
     searchTerms: "build mode full classic advanced studio switch",
     showIn: { tabs: false, tools: false, dock: false, palette: true, help: true, footer: false },
+    hidden: () => mode() === "build",
     run: () => setMode("build"),
   });
   window.MefiNav?.register?.({

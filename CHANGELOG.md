@@ -16,11 +16,24 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   through their glass, leaving Command or pressing Back on a Work page returns
   to Vibe instead of Build's Agents page or nowhere, and a restored session or
   closing Appearance never reopens Build's Home.
+- Vibe: answer decisions without leaving it. **Answer** under Needs you opens
+  a drawer with the question, the task it blocks, the agent's last lines and
+  its options (the recommended one first), or takes your own words, then
+  moves on to the next decision.
+- Vibe mode's menus match Vibe: Search, Shortcuts, the project panel, the
+  section bar and its hover menus, Command's pop-overs, dropdowns and toasts
+  are rounder, denser glass with pill selection. Search and Shortcuts list
+  Home once, as Vibe on `H`. Settings › General gains a **Studio mode** switch
+  that changes mode without leaving Settings, and its launch switch reads
+  **Open Vibe on launch** in Vibe mode.
 - Plans: **Archive plan** and **Restore plan**. An archived plan is read-only,
   folds under **Show archived** in the list, and leaves the assistant's plan
   summary and the Analyzer. The 300-plan cap now counts only plans in play.
 
 ### Fixed
+- Vibe: the dock floats over the page instead of cutting the lanes off at a
+  hard band, sheets opened on the Vibe page no longer leave a strip at the
+  left edge, and the page under Vibe no longer shows its scroll arrow.
 - Plans: one bad reference in Mefi's suggested questions no longer throws away
   the whole batch. Unknown prerequisites are dropped, a stale unknown is left
   alone, and malformed proposals are skipped and counted.
