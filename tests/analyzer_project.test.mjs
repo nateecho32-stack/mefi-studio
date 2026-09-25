@@ -240,3 +240,13 @@ test("idea keyword coverage across many files never claims implementation", asyn
   const result = await verifyIdea("orbital orbit capability", { root });
   assert.equal(result.verdict, "related work exists");
 });
+
+test("an archived Studio plan is set aside and is not compared with the code", async (t) => {
+  const root = await fixture(t, { "src/comet.js": "export const comet = true;" });
+  const result = await analyzeProject({ root, projectId: "selected", plans: [
+    { id: "live", projectId: "selected", title: "Live plan", destination: "Start a comet journey" },
+    { id: "shelved", projectId: "selected", title: "Shelved plan", destination: "Paint the nebula", archivedAt: 1 },
+  ] });
+  const studio = result.plans.filter((plan) => plan.sourceType === "studio").map((plan) => plan.title);
+  assert.deepEqual(studio, ["Live plan"]);
+});

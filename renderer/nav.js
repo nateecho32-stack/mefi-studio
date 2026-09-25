@@ -689,7 +689,7 @@
   const isWorkspacePage = (dest) => document.documentElement?.dataset?.shell === "rail" && WORKSPACE_PAGES.has(dest?.id);
   function syncPageInert() {
     const page = isWorkspacePage(get(state.sheet));
-    for (const node of document.querySelectorAll?.("body > header, #tab-booklet, #tab-graph, #tab-eyes, #tab-studio, #workspace-layer, #idle-layer, #idle-hud, #tree-rail") ?? []) {
+    for (const node of document.querySelectorAll?.("body > header, #tab-booklet, #tab-graph, #tab-eyes, #tab-studio, #workspace-layer, #vibe-layer, #idle-layer, #idle-hud, #tree-rail") ?? []) {
       if (page && !node.inert) { node.inert = true; node.dataset.pageInert = ""; }
       else if (!page && "pageInert" in node.dataset) { node.inert = false; delete node.dataset.pageInert; }
     }
@@ -861,12 +861,12 @@
       state.transient = id;
     }
     if (!state.focusReturn[dest.layer]) state.focusReturn[dest.layer] = document.activeElement;
-    state.returnTo = idleActive() ? "command" : window.MefiWorkspace?.isActive?.() ? "workspace" : null;
+    state.returnTo = idleActive() ? "command" : window.MefiWorkspace?.isActive?.() ? "workspace" : window.MefiVibe?.isActive?.() ? "vibe" : null;
     const root = dest.element ? document.getElementById(dest.element) : null;
     root?.classList.toggle("from-command", Boolean(state.returnTo));
     const back = root?.querySelector(".sheet-back");
     if (back) {
-      const label = state.returnTo === "workspace" ? "Workspace" : "Command";
+      const label = state.returnTo === "workspace" ? "Workspace" : state.returnTo === "vibe" ? "Vibe" : "Command";
       back.title = `Back to ${label} (Esc)`;
       const copy = back.querySelector(".label");
       if (copy) copy.textContent = label;
@@ -973,6 +973,8 @@
   function go(id, params = {}, options = {}) {
     const redirected = window.MefiAgents?.redirect?.(id, params);
     if (redirected) return go(redirected.id, redirected.params, options);
+    // In Vibe mode, Home is Vibe: every Home button, H and Esc out of Command land there.
+    if (id === "workspace" && window.MefiVibe?.mode?.() === "vibe") id = "vibe";
     closeHelpMenu();
     delete document.documentElement.dataset.railDrawer;
     const dest = get(id);
@@ -996,6 +998,7 @@
       if (id === "command" && !idleActive()) state.commandFrom = underlyingView();
       closeAll();
       if (id !== "workspace") window.MefiWorkspace?.exit?.();
+      if (id !== "vibe") window.MefiVibe?.exit?.();
       if (id !== "command" && idleActive()) window.MefiIdle?.exit?.();
       state.returnTo = null;
       navCommand?.classList.remove("return");
@@ -1006,6 +1009,7 @@
     if (dest.kind === "tab") {
       closeAll();
       window.MefiWorkspace?.exit?.();
+      window.MefiVibe?.exit?.();
       if (idleActive()) {
         window.MefiIdle?.exit?.();
         state.returnTo = "command";
@@ -1033,6 +1037,7 @@
   // The surface under any sheet: the workspace, or the active tab.
   function underlyingView() {
     if (window.MefiWorkspace?.isActive?.()) return "workspace";
+    if (window.MefiVibe?.isActive?.()) return "vibe";
     const tab = document.querySelector?.(".tab.active")?.dataset?.tab ?? null;
     return tab === "graph" ? modelRoute : tab;
   }
@@ -1403,7 +1408,9 @@
     const composeLabel = document.createElement("span"); composeLabel.className = "label"; composeLabel.textContent = "New task"; compose.append(composeLabel);
     compose.addEventListener("click", () => window.MefiWorkspace?.composeTask?.());
     const search = navButton(get("palette"), "app-rail-item app-rail-search");
-    sections.append(compose, search);
+    const vibe = get("vibe") ? navButton(get("vibe"), "app-rail-item app-rail-vibe", { key: false }) : null;
+    if (vibe) { vibe.id = "app-rail-vibe"; vibe.title = "Vibe: the calm front door"; vibe.querySelector(".label").textContent = "Vibe mode"; }
+    sections.append(...[vibe, compose, search].filter(Boolean));
     for (const section of RAIL_SECTIONS) {
       const target = get(section.target);
       const group = document.createElement("div");
@@ -2064,6 +2071,7 @@
     if (window.MefiMusic?.settingsAppearanceActive?.()) return "studio";
     if (idleActive()) return "command";
     if (window.MefiWorkspace?.isActive?.()) return "workspace";
+    if (window.MefiVibe?.isActive?.()) return "vibe";
     const tab = document.querySelector?.(".tab.active")?.dataset?.tab ?? null;
     return tab === "graph" ? modelRoute : tab;
   }
@@ -2617,6 +2625,7 @@
       // truthy when the Command view was up; then also its selection and zoom
       command: commandActive ? { active: true, ...(window.MefiIdle?.saveState?.() ?? {}) } : false,
       workspace: Boolean(window.MefiWorkspace?.isActive?.()),
+      vibe: Boolean(window.MefiVibe?.isActive?.()),
       sheet: state.sheet ?? null,
       tab: readStore("mefiStudio.tab") ?? "booklet",
       at: Date.now(),
@@ -2699,6 +2708,10 @@
       await ready(window.MefiWorkspace);
       if (!isCurrent()) return canceled();
     }
+    if (saved.vibe && window.MefiVibe) {
+      await window.MefiVibe.enter();
+      if (!isCurrent()) return canceled();
+    }
     if (saved.command) {
       const commandState = typeof saved.command === "object" ? saved.command : {};
       await window.MefiIdle?.enter?.(true, commandState);
@@ -2722,7 +2735,7 @@
     if (!isCurrent()) return canceled();
     let finished = false;
     return {
-      restored: Boolean(saved.workspace || saved.command || sheet),
+      restored: Boolean(saved.workspace || saved.vibe || saved.command || sheet),
       finish() {
         if (finished) return;
         finished = true;
@@ -2739,6 +2752,7 @@
     if (saved.tab && saved.tab !== readStore("mefiStudio.tab")) window.MefiBooklet?.showTab?.(saved.tab);
     const commandState = saved.command && typeof saved.command === "object" ? saved.command : {};
     if (saved.workspace) window.MefiWorkspace?.enter?.();
+    if (saved.vibe) window.MefiVibe?.enter?.();
     if (saved.command) setTimeout(() => window.MefiIdle?.enter?.(true, commandState), 1200);
     if (saved.sheet && get(saved.sheet)) {
       const sheetState = saved.sheet === "explorer" ? saved.explorer : saved.sheet === "tasks" ? saved.tasks : null;
@@ -2748,7 +2762,7 @@
     // Command view, which open on the timers above.
     requestAnimationFrame(() => setTimeout(() => restoreDetails(saved), 300));
     setTimeout(() => restoreDetails(saved), 1600);
-    return Boolean(saved.workspace || saved.command || saved.sheet);
+    return Boolean(saved.workspace || saved.vibe || saved.command || saved.sheet);
   }
 
   // ---- boot --------------------------------------------------------------

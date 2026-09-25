@@ -7,6 +7,28 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Plans: **Archive plan** and **Restore plan**. An archived plan is read-only,
+  folds under **Show archived** in the list, and leaves the assistant's plan
+  summary and the Analyzer. The 300-plan cap now counts only plans in play.
+
+### Fixed
+- Plans: one bad reference in Mefi's suggested questions no longer throws away
+  the whole batch. Unknown prerequisites are dropped, a stale unknown is left
+  alone, and malformed proposals are skipped and counted.
+- Plans: a failed Mefi reply no longer leaves your already-saved answer in the
+  box, where sending it again filed it twice. The box clears, and **Continue with
+  Mefi** resumes the interview without resending.
+- Plans: renaming a plan keeps its confirmed understanding and approved
+  specification, and re-saving an unchanged specification no longer withdraws
+  its approval. Reopening a question that is still open is refused instead of
+  withdrawing the review.
+- Plans: Mefi re-asking a question you already decided no longer produces an
+  empty turn, and a long explanation is kept up to the note limit instead of
+  being discarded. Plan tasks you dropped or deleted read "Dropped by you" or
+  "No longer on the board", not "Done · Review evidence" or "Waiting for board
+  status".
+
 ## [0.4.0] - 2026-09-25
 
 ### Added

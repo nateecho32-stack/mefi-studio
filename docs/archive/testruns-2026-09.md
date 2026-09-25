@@ -6,6 +6,35 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-24 - Compact agent setup panel polish
+
+Refined Agents setup with compact role headers, aligned model and settings
+controls, a corner provider chip, a solid left-side add button, theme-tinted
+surfaces, and clearer selected provider/skill tiles. Removed inherited modal
+padding and outer scrolling so the workspace has one scrollable content area.
+Narrow windows use provider icons and a smaller toolbar. Retained the existing
+scope, model, skills, MCP, draft and Apply behavior. The Electron fixture now
+waits for resize/zoom to reach the requested viewport before measuring it.
+
+Validation: build-booklet, npm run check and npm run audit passed (zero audit
+findings). Agent setup's isolated Electron interaction check passed, including
+12 viewport/zoom combinations from 600x600 to 1920x1080 and 100-150% zoom,
+without horizontal overflow, renderer errors, network requests or worker
+starts. Desktop, narrow, provider and skills captures were visually reviewed.
+
+Full npm test completed with Node parallel 3319 pass / 0 fail / 4 skipped;
+Electron lane 31 pass / 2 fail / 1 skipped; eyes-toggle 1/1 and occlusion 2/2
+passed. Python 248/248 and all six normalized-path lock checks passed.
+The full run is not green: planning_render fails its writing-panel backdrop
+visibility check and startup_render fails its light-surfaces color assertion.
+Both failures reproduced in a separate sequential run. These concern panels
+outside this change; the runner also detected source changes during the
+Electron stage on this shared working tree.
+
+Logs: %TEMP%/mefi-agent-panel-polish-{check,audit,render,full-test,render-retry}.log.
+Screenshots and report: %TEMP%/mefi-agent-panel-polish/. All captures used an
+isolated synthetic profile; no live application data or portable data changed.
+
 ## 2026-09-24 afternoon - Live-view 3D rotation and navigation review (node visual refresh, motion review)
 
 Review-only follow-up; no application source changes. PASS: node --test tests/command_graph.test.mjs tests/command_motion.test.mjs tests/command_visuals.test.mjs tests/command_director.test.mjs tests/camera_tour.test.mjs tests/tree3d_performance.test.mjs tests/node_visuals.test.mjs (176/176, 4.3 s). PASS: solo node --test tests/command_render.test.mjs (1/1, 59.9 s), including native navigation, stable agent retargeting/rebuilds, completion, and hidden-view suspension.

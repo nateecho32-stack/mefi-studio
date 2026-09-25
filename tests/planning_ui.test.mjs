@@ -378,7 +378,7 @@ test("the activity indicator represents only an actual pending AI request and st
 test("converted plans read real task progress without treating creation or an exit as verification", async () => {
   const item = savedPlan(); item.status = "converted"; item.taskIds = ["first", "second"];
   const env = await environment(item);
-  assert.equal(env.el("work-first").dataset.taskStage, "unknown");
+  assert.equal(env.el("work-first").dataset.taskStage, "missing", "a board read that lacks the task says so instead of waiting forever");
   assert.equal(env.el("stage-build").dataset.state, "current");
   env.tasks["project-a"] = [
     { id: "first", title: "Build it", projectId: "project-a", planningId: item.id, status: "active" },
@@ -412,7 +412,7 @@ test("task polling is visible-only, stops on close, and rejects late or foreign 
   const read = env.polls.get("planning.work")(); await flush();
   env.ui.close(); assert.equal(env.polls.size, 0);
   pending.resolve({ ok: true, projectId: "project-a", tasks: [{ id: "first", status: "done", verification: { state: "verified" } }] }); await read;
-  assert.equal(env.el("work-first").dataset.taskStage, "unknown", "a closed view ignores its late read");
+  assert.equal(env.el("work-first").dataset.taskStage, "missing", "a closed view ignores its late read and keeps its last board reading");
   env.bridge.tasksList = async () => ({ ok: true, projectId: "project-b", tasks: [{ id: "first", status: "done", verification: { state: "verified" } }] });
   await env.ui.open({ planId: item.id }); await flush();
   assert.equal(env.el("work-first").dataset.taskStage, "unknown");
@@ -639,4 +639,80 @@ test("a failed scan and a bare folder explain themselves in the panel", async ()
   const plain = await environment();
   await plain.ui.open({ create: true }); await flush();
   assert.equal(plain.el("existing-section"), undefined, "no panel without a scan");
+});
+
+test("a failed reply clears your saved answer and offers Continue with Mefi instead of a resend", async () => {
+  const item = interviewPlan(); item.questions[0].notes = [];
+  const env = await environment(item);
+  env.bridge.planningAssist = async (payload) => {
+    env.calls.push(structuredClone(payload));
+    if (payload.message) {
+      const question = env.data["project-a"][0].questions[0];
+      question.notes.push({ id: `n${question.notes.length + 1}`, at: Date.now(), author: "user", kind: "answer", text: payload.message });
+      env.data["project-a"][0].version += 1;
+    }
+    return { ok: false, error: "Connection unavailable", projectId: "project-a", plans: structuredClone(env.data["project-a"]), ...(payload.message ? { answerSaved: true } : {}) };
+  };
+  await env.input("interview-answer", "Just what I can see on screen.");
+  await env.el("interview-send").trigger("click"); await flush();
+  assert.match(env.el("notice").textContent, /Your answer is saved/);
+  assert.equal(env.el("interview-answer").value, "", "the box no longer holds words that are already on the record");
+  assert.ok(env.el("interview-continue"), "Mefi can be asked to carry on");
+  assert.match(env.el("interview-section").textContent, /Your answer is saved/);
+  await env.el("interview-continue").trigger("click"); await flush();
+  assert.equal(env.calls.at(-1).kind, "interview");
+  assert.equal(env.calls.at(-1).questionId, "rows");
+  assert.equal(env.calls.at(-1).message, undefined, "continuing never resends the answer");
+});
+
+test("plan tasks the owner dropped or deleted are not shown as done", async () => {
+  const item = savedPlan();
+  const project = { id: "project-a" };
+  let result = planning.applyPlanningAction([item], { action: "approve-spec", planId: item.id, version: item.version }, { project });
+  assert.equal(result.ok, true, result.error);
+  result = planning.applyPlanningAction(result.plans, { action: "begin-conversion", planId: item.id, version: result.plan.version }, { project, actor: "host" });
+  assert.equal(result.ok, true, result.error);
+  result = planning.applyPlanningAction(result.plans, { action: "mark-converted", planId: item.id, version: result.plan.version, taskIds: result.plan.taskIds }, { project, actor: "host" });
+  assert.equal(result.ok, true, result.error);
+  const converted = result.plan;
+  const env = await environment(converted);
+  env.tasks["project-a"] = [{ id: converted.taskIds[0], projectId: "project-a", title: "Build the thing", status: "archived", dropped: { at: 1, reason: "Not needed" } }];
+  await env.el("refresh").trigger("click"); await flush();
+  assert.match(env.el("execution").textContent, /Dropped by you/);
+  assert.notEqual(env.el("stage-verify").dataset.state, "complete", "dropped work does not confirm the plan");
+  env.tasks["project-a"] = [];
+  await env.el("refresh").trigger("click"); await flush();
+  assert.match(env.el("execution").textContent, /No longer on the board/);
+});
+
+test("an answer Mefi already acted on does not hold the interview on Continue", async () => {
+  const item = interviewPlan();
+  item.questions[0].notes = [{ id: "n1", at: 1, author: "user", kind: "answer", text: "Just what I can see on screen." }];
+  item.questions.push({ id: "name", question: "Should the file name include the date?", type: "discussion", status: "open", dependsOn: [], resolution: "", evidence: "", resolvedBy: null, notes: [] });
+  const env = await environment(item);
+  assert.match(env.el("interview-ask").textContent, /include the date/, "Mefi's newer question leads");
+  assert.equal(env.el("interview-continue"), undefined);
+});
+
+test("archiving folds a plan under Archived as read-only, and Restore brings it back", async () => {
+  const env = await environment();
+  const id = env.data["project-a"][0].id;
+  await env.el("archive").trigger("click"); await flush();
+  assert.equal(env.calls.at(-1).action, "archive");
+  assert.ok(env.data["project-a"][0].archivedAt);
+  assert.match(env.el("workflow").textContent, /Archived/);
+  assert.match(env.el("approval-section").textContent, /archived/);
+  assert.equal(env.el("approve"), undefined, "an archived plan offers no approval or task creation");
+  assert.equal(env.el("title").disabled, true, "an archived plan is read-only");
+  await env.el("new").trigger("click"); await flush();
+  assert.equal(env.el("list").children.some((row) => row.dataset?.planId === id), false, "the archived plan folds out of the list");
+  assert.match(env.el("archived-toggle").textContent, /Show archived · 1/);
+  await env.el("archived-toggle").trigger("click");
+  const row = env.el("list").children.find((child) => child.dataset?.planId === id);
+  assert.equal(row.dataset.archived, "true");
+  await row.trigger("click"); await flush();
+  await env.el("restore").trigger("click"); await flush();
+  assert.equal(env.calls.at(-1).action, "restore");
+  assert.equal(env.data["project-a"][0].archivedAt, undefined);
+  assert.equal(env.el("approve").disabled, false, "the restored plan is back as it was");
 });

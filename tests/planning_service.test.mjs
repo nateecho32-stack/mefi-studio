@@ -99,7 +99,7 @@ test("project mismatches and host-only action attempts cannot mutate planning or
   assert.equal(f.state.board.tasks.length, 0);
 });
 
-test("AI question proposals apply atomically, map dependencies, and never resolve or start work", async (t) => {
+test("AI question proposals apply in one save, map dependencies, and never resolve or start work", async (t) => {
   const f = await fixture(t);
   f.state.reply = { ok: true, text: JSON.stringify({ questions: [
     { id: "first", question: "Which format is needed?", type: "discussion", dependsOn: [] },
@@ -114,13 +114,29 @@ test("AI question proposals apply atomically, map dependencies, and never resolv
   assert.equal(result.plan.unknowns.length, 1);
   assert.equal(f.state.board.tasks.length, 0); assert.equal(f.state.wakeups, 0);
   const saved = await f.plan();
+  // One bad reference no longer sinks the batch: the missing prerequisite is
+  // dropped, a stale unknown stays an unknown, a malformed proposal is left
+  // out and counted, and a label reusing a real question ID keeps its meaning.
+  const realId = saved.questions[0].id;
   f.state.reply.text = JSON.stringify({ questions: [
     { id: "third", question: "Which encoding?", type: "research", dependsOn: [] },
-    { id: "fourth", question: "What else?", type: "discussion", dependsOn: ["missing"] },
-  ], unknowns: [] });
-  const invalid = await f.service.assist({ projectId: f.project.id, planId: saved.id, version: saved.version, kind: "questions" });
+    { id: "fourth", question: "What else?", type: "discussion", dependsOn: ["missing", "third", "third"], unknownId: "unknown_gone" },
+    { id: "fifth", question: "Invented type", type: "decision", dependsOn: [] },
+    { id: realId, question: "Who downloads it?", type: "discussion", dependsOn: [realId] },
+  ], unknowns: ["", 7] });
+  const tolerant = await f.service.assist({ projectId: f.project.id, planId: saved.id, version: saved.version, kind: "questions" });
+  assert.equal(tolerant.ok, true, tolerant.error);
+  const byText = new Map(tolerant.plan.questions.map((question) => [question.question, question]));
+  assert.deepEqual(byText.get("What else?").dependsOn, [byText.get("Which encoding?").id]);
+  assert.deepEqual(byText.get("Who downloads it?").dependsOn, [realId]);
+  assert.equal(byText.has("Invented type"), false);
+  assert.equal(tolerant.plan.unknowns.length, 1, "the stale unknown ID consumed nothing");
+  assert.match(tolerant.note, /3 of Mefi's suggestions were unusable/);
+  f.state.reply.text = JSON.stringify({ note: "No lists at all" });
+  const after = await f.plan();
+  const invalid = await f.service.assist({ projectId: f.project.id, planId: after.id, version: after.version, kind: "questions" });
   assert.equal(invalid.ok, false);
-  assert.deepEqual(await f.plan(), saved);
+  assert.deepEqual(await f.plan(), after);
 });
 
 test("discussion saves user intent on transport failure and assistant advice cannot confirm a decision", async (t) => {
@@ -425,4 +441,82 @@ test("list carries what the folder already holds, and a failed scan leaves the p
   assert.equal(result.existing.error, "gh exploded");
   const plain = await fixture(t);
   assert.equal((await plain.service.list({ projectId: plain.project.id })).existing, null, "no scanner means no panel, not an error");
+});
+
+test("a failed reply keeps your answer once: a retry is not filed twice and Mefi can continue without it", async (t) => {
+  const f = await fixture(t);
+  await f.action("add-question", { question: "Which rows should the export contain?", type: "discussion", dependsOn: [] });
+  let plan = await f.plan();
+  const questionId = plan.questions[0].id;
+  f.state.reply = { ok: false, error: "Offline" };
+  const failed = await f.service.assist({ projectId: f.project.id, planId: plan.id, version: plan.version, kind: "interview", questionId, message: "Just what I can see on screen." });
+  assert.equal(failed.ok, false);
+  assert.equal(failed.answerSaved, true, "the page is told your words are on the record");
+  plan = failed.plans[0];
+  const retry = await f.service.assist({ projectId: f.project.id, planId: plan.id, version: plan.version, kind: "interview", questionId, message: "Just what I can see on screen." });
+  assert.equal(retry.ok, false);
+  plan = retry.plans[0];
+  assert.deepEqual(plan.questions[0].notes.map((note) => [note.author, note.kind, note.text]), [["user", "answer", "Just what I can see on screen."]], "the same words sent again are filed once");
+  f.state.reply = { ok: true, text: JSON.stringify({ understood: "Only the rows left after the active filters.", conflict: null, question: null, type: "discussion", dependsOn: [], followUp: false, complete: true }) };
+  const resumed = await f.service.assist({ projectId: f.project.id, planId: plan.id, version: plan.version, kind: "interview", questionId });
+  assert.equal(resumed.ok, true, resumed.error);
+  assert.deepEqual(resumed.plan.questions[0].notes.map((note) => note.kind), ["answer", "interpretation"]);
+  assert.match(f.state.prompts.at(-1).prompt.user, /Just what I can see on screen/, "continuing sends Mefi the saved answer");
+  f.state.reply = { ok: false, error: "Offline" };
+  const bare = await f.service.assist({ projectId: f.project.id, planId: resumed.plan.id, version: resumed.plan.version, kind: "interview", questionId });
+  assert.equal(bare.answerSaved, undefined, "nothing was saved when you sent nothing");
+});
+
+test("Mefi re-asking a decided question opens nothing and says so", async (t) => {
+  const f = await fixture(t);
+  await f.action("add-question", { question: "Which format is needed?", type: "discussion", dependsOn: [] });
+  const questionId = (await f.plan()).questions[0].id;
+  await f.action("resolve", { questionId, resolution: "CSV" });
+  f.state.reply = { ok: true, text: JSON.stringify({ understood: null, conflict: null, question: "Which format is needed?", type: "discussion", dependsOn: [], followUp: false, complete: false }) };
+  const plan = await f.plan();
+  const result = await f.service.assist({ projectId: f.project.id, planId: plan.id, version: plan.version, kind: "interview" });
+  assert.equal(result.ok, true, result.error);
+  assert.equal(result.askedQuestionId, null, "a decided question is not pointed at as the next ask");
+  assert.equal(result.plan.questions.length, 1);
+  assert.equal(result.plan.questions[0].status, "resolved");
+  assert.match(result.note, /already recorded/);
+});
+
+test("an explanation longer than a note is kept up to the note limit instead of discarded", async (t) => {
+  const f = await fixture(t);
+  await f.action("add-question", { question: "Which format is needed?", type: "discussion", dependsOn: [] });
+  const plan = await f.plan();
+  f.state.reply = { ok: true, text: "x".repeat(20000) };
+  const result = await f.service.assist({ projectId: f.project.id, planId: plan.id, version: plan.version, kind: "question", questionId: plan.questions[0].id });
+  assert.equal(result.ok, true, result.error);
+  assert.equal(result.plan.questions[0].notes.at(-1).text.length, 16000);
+});
+
+test("archived plans are set aside: counted, not ranked, and closed to Mefi until restored", async (t) => {
+  const f = await fixture(t);
+  await f.action("create", { title: "Second idea", destination: "Share a report link" });
+  let plans = await f.store.list();
+  const [first] = plans;
+  const archived = await f.service.action({ projectId: f.project.id, planId: first.id, version: first.version, action: "archive" });
+  assert.equal(archived.ok, true, archived.error);
+  const summary = await f.service.summary({ projectId: f.project.id, query: "export reports" });
+  assert.equal(summary.total, 2);
+  assert.equal(summary.archived, 1);
+  assert.equal(summary.active, 1);
+  assert.deepEqual(summary.plans.map((plan) => plan.title), ["Second idea"]);
+  plans = await f.store.list();
+  const shelved = plans.find((plan) => plan.id === first.id);
+  const asked = await f.service.assist({ projectId: f.project.id, planId: shelved.id, version: shelved.version, kind: "questions" });
+  assert.equal(asked.ok, false);
+  assert.match(asked.error, /archived/);
+  assert.equal(f.state.calls, 0, "no model call for an archived plan");
+  const explored = await f.service.explore({ projectId: f.project.id, planId: shelved.id, version: shelved.version, draft: { title: shelved.title, destination: shelved.destination } });
+  assert.equal(explored.ok, false);
+  assert.match(explored.error, /archived/);
+  const edited = await f.service.action({ projectId: f.project.id, planId: shelved.id, version: shelved.version, action: "update", title: "Renamed" });
+  assert.equal(edited.ok, false);
+  const restored = await f.service.action({ projectId: f.project.id, planId: shelved.id, version: shelved.version, action: "restore" });
+  assert.equal(restored.ok, true, restored.error);
+  assert.equal(restored.plan.archivedAt, undefined);
+  assert.equal((await f.service.summary({ projectId: f.project.id })).archived, 0);
 });

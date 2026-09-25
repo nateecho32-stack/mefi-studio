@@ -14,9 +14,9 @@
 //     board gateway (`mutateBoard`), so a retry never duplicates or rewrites
 //     admitted work.
 
-const { applyPlanningAction, buildImplementationTasks } = require("./planning.cjs");
+const { applyPlanningAction, buildImplementationTasks, LIMITS } = require("./planning.cjs");
 
-const USER_ACTIONS = new Set(["create", "update", "add-unknown", "remove-unknown", "add-question", "edit-question", "resolve", "reopen", "add-note", "confirm-understanding", "draft-spec", "approve-spec"]);
+const USER_ACTIONS = new Set(["create", "update", "add-unknown", "remove-unknown", "add-question", "edit-question", "resolve", "reopen", "add-note", "confirm-understanding", "draft-spec", "approve-spec", "archive", "restore"]);
 const TYPES = new Set(["discussion", "research", "prototype", "prerequisite"]);
 const BASE_PROMPT = [
   "You interview a human about one bounded project outcome before implementation.",
@@ -75,12 +75,15 @@ function interview(draft, focusId, change, read) {
   // offered anyway would be the model's own words, never something you said.
   if (focusId && understood) change({ action: "add-note", questionId: focusId, kind: "interpretation", text: understood });
   if (focusId && conflict) change({ action: "add-note", questionId: focusId, kind: "conflict", text: conflict });
-  let askedQuestionId = null;
+  let askedQuestionId = null, repeated = null;
   if (ask && draft.followUp === true && focusId) { change({ action: "add-note", questionId: focusId, kind: "question", text: ask }); askedQuestionId = focusId; }
   else if (ask) {
     if (!TYPES.has(draft.type)) throw new Error("The AI reply asked a question with an invalid type. Your saved plan has not changed.");
     const existing = read().questions.find((item) => item.question.trim().toLowerCase() === ask.toLowerCase());
-    if (existing) askedQuestionId = existing.id;
+    // Asking a decided question again is not a new ask: pointing the
+    // interview at it would leave nothing open for you to answer.
+    if (existing?.status === "resolved") repeated = existing;
+    else if (existing) askedQuestionId = existing.id;
     else {
       const dependsOn = (Array.isArray(draft.dependsOn) ? draft.dependsOn : []).filter((id) => read().questions.some((item) => item.id === id));
       const before = new Set(read().questions.map((item) => item.id));
@@ -89,7 +92,7 @@ function interview(draft, focusId, change, read) {
     }
   }
   const done = complete && !ask;
-  const note = [typeof draft.note === "string" ? draft.note.slice(0, 2000) : "", done ? "Mefi has nothing further to ask. Review what we understand." : ""].filter(Boolean).join(" ");
+  const note = [typeof draft.note === "string" ? draft.note.slice(0, 2000) : "", done ? "Mefi has nothing further to ask. Review what we understand." : "", repeated ? `Mefi asked again about a decision you already recorded ("${repeated.question.slice(0, 160)}"). Reopen it there if you want to change it, or ask Mefi for something else.` : ""].filter(Boolean).join(" ");
   return { plan: read(), askedQuestionId, interviewComplete: done, ...(note ? { note } : {}) };
 }
 
@@ -102,12 +105,15 @@ function parseReply(raw) {
   } catch { throw new Error("The AI reply was not a usable planning draft. Your saved plan has not changed."); }
 }
 
-function summarizePlanning(plans, query = "") {
+// Archived plans are set aside: counted, never ranked or offered as work.
+function summarizePlanning(all, query = "") {
+  const plans = all.filter((plan) => plan.archivedAt == null);
   const words = String(query).toLowerCase().match(/[a-z0-9]{4,}/g) || [];
   const score = (plan) => words.reduce((total, word) => total + Number(`${plan.title} ${plan.destination}`.toLowerCase().includes(word)), 0);
   const ranked = [...plans].sort((a, b) => score(b) - score(a) || Number(a.status === "converted") - Number(b.status === "converted") || b.updatedAt - a.updatedAt);
   return {
-    total: plans.length,
+    total: all.length,
+    archived: all.length - plans.length,
     active: plans.filter((plan) => plan.status !== "converted").length,
     ready: plans.filter((plan) => plan.status === "ready").length,
     converting: plans.filter((plan) => plan.status === "converting").length,
@@ -203,6 +209,7 @@ function createPlanningService({ project, store, mutateBoard, onConverted = asyn
         const saved = payload.planId ? (await store.list()).find((item) => item.id === payload.planId) : null;
         if (payload.planId && (!saved || saved.version !== payload.version)) throw new Error("The saved plan changed. Refresh it before exploring again.");
         if (["converting", "converted"].includes(saved?.status)) throw new Error("This plan has already been handed to the task board.");
+        if (saved?.archivedAt != null) throw new Error("This plan is archived. Restore it before exploring it.");
         const focus = Object.hasOwn(limits, payload.focus) ? payload.focus : "destination";
         const query = `${draft.title}\n${draft.destination}\n${draft[focus]}`.slice(0, 24000);
         references = exploreContext ? await exploreContext({ query, project }) : await (await import("./analyzer.mjs")).explorePlanningFiles(query, { root: project.path });
@@ -251,12 +258,14 @@ function createPlanningService({ project, store, mutateBoard, onConverted = asyn
       try { checkProject(payload); } catch (error) { return errorResult(error); }
       if (assisting) return errorResult(new Error("A planning reply is already on its way for this project."));
       assisting = true;
+      let answerSaved = false;
       try {
         if (!["interview", "questions", "spec", "question"].includes(payload.kind)) throw new Error("Choose the interview, more questions, an explanation, or a specification draft.");
         let plan = (await store.list()).find((item) => item.id === payload.planId);
         if (!plan) throw new Error("Plan not found in this project.");
         if (plan.version !== payload.version) throw new Error("The plan changed. Reload it before asking for help.");
         if (["converting", "converted"].includes(plan.status)) throw new Error("This plan has already been handed to the task board.");
+        if (plan.archivedAt != null) throw new Error("This plan is archived. Restore it before asking Mefi about it.");
         if (payload.kind === "spec" && (plan.unknowns.length || plan.questions.some((question) => question.status !== "resolved"))) throw new Error("Resolve the questions and remaining unknowns before drafting a specification.");
         if (payload.kind === "spec" && !plan.reviewedAt) throw new Error("Review what this plan now says the feature is, and confirm it, before drafting a specification.");
         if (payload.kind === "question" && !plan.questions.some((question) => question.id === payload.questionId)) throw new Error("Choose a question from this plan.");
@@ -266,10 +275,17 @@ function createPlanningService({ project, store, mutateBoard, onConverted = asyn
         if (payload.kind === "interview" && message && !focusId) throw new Error("Answer an open question so your reply is recorded against what was asked.");
         // Saved before the model call: the human's own words survive a failed
         // reply, and an answer is filed as an answer, never as a suggestion.
+        // A retry after a failed reply sends the same words again: they are
+        // already the question's last line, so they are filed once.
         if (message && ["question", "interview"].includes(payload.kind)) {
-          const saved = await store.mutate({ action: "add-note", planId: plan.id, version: plan.version, questionId: focusId || payload.questionId, text: message, ...(payload.kind === "interview" ? { kind: "answer" } : {}) }, { actor: "user" });
-          if (!saved.ok) throw new Error(saved.error);
-          plan = saved.plan;
+          const questionId = focusId || payload.questionId;
+          const last = plan.questions.find((question) => question.id === questionId)?.notes?.at(-1);
+          if (!(last?.author === "user" && last.text === message)) {
+            const saved = await store.mutate({ action: "add-note", planId: plan.id, version: plan.version, questionId, text: message, ...(payload.kind === "interview" ? { kind: "answer" } : {}) }, { actor: "user" });
+            if (!saved.ok) throw new Error(saved.error);
+            plan = saved.plan;
+          }
+          answerSaved = true;
         }
         const references = await gatherContext({ plan, questionId: payload.questionId, useWeb: payload.useWeb === true });
         const prompt = planningPrompt(plan, payload.kind, { ...payload, message, references });
@@ -281,41 +297,56 @@ function createPlanningService({ project, store, mutateBoard, onConverted = asyn
         const result = await store.transaction((plans) => {
           let current = plans.find((item) => item.id === plan.id);
           if (!current || current.version !== plan.version) throw new Error("The plan changed while the AI was replying. Reload it and ask again; the reply was not applied.");
+          let skipped = 0;
           const change = (fields) => {
             const result = apply(plans, { ...fields, planId: current.id, version: current.version }, "assistant");
             current = result.plan;
             return result;
           };
-          if (payload.kind === "question") change({ action: "add-note", questionId: payload.questionId, text });
+          // The prompt asks for 500 words; a longer reply is kept up to the
+          // note limit rather than thrown away after the call was paid for.
+          if (payload.kind === "question") change({ action: "add-note", questionId: payload.questionId, text: text.slice(0, LIMITS.note) });
           else if (payload.kind === "spec") change({ action: "draft-spec", text: draft.text, tasks: draft.tasks });
           else if (payload.kind === "interview") return { ok: true, ...interview(draft, focusId, change, () => current) };
           else {
-            if (!Array.isArray(draft.questions) || draft.questions.length > 4 || !Array.isArray(draft.unknowns) || draft.unknowns.length > 3) throw new Error("The AI draft did not contain a bounded list of questions and unknowns.");
+            // Applied in one transaction, but one bad proposal no longer sinks
+            // the batch: a prerequisite Mefi named but never proposed is
+            // dropped (as the interview does), a stale unknown stays an
+            // unknown, and a malformed proposal is left out and counted.
+            if (!Array.isArray(draft.questions) && !Array.isArray(draft.unknowns)) throw new Error("The AI draft did not contain a list of questions or unknowns.");
             const ids = new Map(current.questions.map((question) => [question.id, question.id]));
             const seen = new Set(current.questions.map((question) => question.question.trim().toLowerCase()));
-            for (const question of draft.questions) {
-              if (!question || typeof question.id !== "string" || ids.has(question.id) || !TYPES.has(question.type) || typeof question.question !== "string" || !Array.isArray(question.dependsOn)) throw new Error("The AI draft contained an invalid question.");
-              const duplicate = current.questions.find((item) => item.question.trim().toLowerCase() === question.question.trim().toLowerCase());
-              if (duplicate) { ids.set(question.id, duplicate.id); continue; }
-              if (seen.has(question.question.trim().toLowerCase())) continue;
-              const dependsOn = question.dependsOn.map((id) => { if (!ids.has(id)) throw new Error("The AI draft referred to an unknown prerequisite question."); return ids.get(id); });
+            for (const question of (Array.isArray(draft.questions) ? draft.questions : []).slice(0, 4)) {
+              const asked = typeof question?.question === "string" ? question.question.trim() : "";
+              if (!asked || asked.length > LIMITS.question || !TYPES.has(question.type)) { skipped += 1; continue; }
+              const key = asked.toLowerCase(), label = typeof question.id === "string" ? question.id : null;
+              const duplicate = current.questions.find((item) => item.question.trim().toLowerCase() === key);
+              if (duplicate) { if (label && !ids.has(label)) ids.set(label, duplicate.id); continue; }
+              if (seen.has(key)) continue;
+              const dependsOn = [...new Set((Array.isArray(question.dependsOn) ? question.dependsOn : []).filter((id) => ids.has(id)).map((id) => ids.get(id)))];
+              const unknownId = typeof question.unknownId === "string" && current.unknowns.some((unknown) => unknown.id === question.unknownId) ? question.unknownId : null;
               const previousIds = new Set(current.questions.map((item) => item.id));
-              change({ action: "add-question", question: question.question, type: question.type, dependsOn, ...(question.unknownId ? { unknownId: question.unknownId } : {}) });
-              ids.set(question.id, current.questions.find((item) => !previousIds.has(item.id)).id);
-              seen.add(question.question.trim().toLowerCase());
+              change({ action: "add-question", question: asked, type: question.type, dependsOn, ...(unknownId ? { unknownId } : {}) });
+              // A label that repeats a real question ID keeps pointing at it.
+              if (label && !ids.has(label)) ids.set(label, current.questions.find((item) => !previousIds.has(item.id)).id);
+              seen.add(key);
             }
-            for (const unknown of draft.unknowns) {
-              if (typeof unknown !== "string") throw new Error("The AI draft contained an invalid unknown.");
-              if (!current.unknowns.some((item) => item.text.trim().toLowerCase() === unknown.trim().toLowerCase())) change({ action: "add-unknown", text: unknown });
+            for (const unknown of (Array.isArray(draft.unknowns) ? draft.unknowns : []).slice(0, 3)) {
+              const text = typeof unknown === "string" ? unknown.trim() : "";
+              if (!text || text.length > LIMITS.question) { skipped += 1; continue; }
+              if (!current.unknowns.some((item) => item.text.trim().toLowerCase() === text.toLowerCase())) change({ action: "add-unknown", text });
             }
           }
-          return { ok: true, plan: current, ...(typeof draft?.note === "string" ? { note: draft.note.slice(0, 2000) } : {}) };
+          const note = [typeof draft?.note === "string" ? draft.note.slice(0, 2000) : "", skipped ? `${skipped} of Mefi's suggestions ${skipped === 1 ? "was" : "were"} unusable and left out.` : ""].filter(Boolean).join(" ");
+          return { ok: true, plan: current, ...(note ? { note } : {}) };
         });
         return snapshot(result);
       } catch (error) {
         // A user's discussion message may already have been saved before a
-        // transport failure. Return fresh state so retry uses its current version.
-        try { return { ...await snapshot(), ...errorResult(error) }; } catch { return errorResult(error); }
+        // transport failure. Return fresh state so retry uses its current
+        // version, and say so, so the page can clear the box it came from.
+        const saved = answerSaved ? { answerSaved: true } : {};
+        try { return { ...await snapshot(), ...errorResult(error), ...saved }; } catch { return { ...errorResult(error), ...saved }; }
       } finally { assisting = false; }
     },
   };

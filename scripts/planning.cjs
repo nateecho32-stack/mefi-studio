@@ -14,7 +14,8 @@ const QUESTION_TYPES = ["discussion", "research", "prototype", "prerequisite"];
 // question. Kinds are scoped by author so a model reply can never be filed as
 // something the human said. Notes saved before kinds existed read as "note".
 const NOTE_KINDS = Object.freeze({ user: ["note", "answer"], assistant: ["question", "interpretation", "advice", "conflict"] });
-const LIMITS = Object.freeze({ plans: 300, title: 180, destination: 16000, outOfScope: 12000, unknowns: 80, questions: 80, question: 4000, resolution: 16000, evidence: 16000, spec: 60000, tasks: 40, prompt: 16000, acceptance: 4000, notes: 200, note: 16000 });
+// `plans` caps the plans in play; archived plans stay on file up to `stored`.
+const LIMITS = Object.freeze({ plans: 300, stored: 1000, title: 180, destination: 16000, outOfScope: 12000, unknowns: 80, questions: 80, question: 4000, resolution: 16000, evidence: 16000, spec: 60000, tasks: 40, prompt: 16000, acceptance: 4000, notes: 200, note: 16000 });
 const lockKey = Symbol.for("mefi-studio.planning-store-locks");
 const locks = globalThis[lockKey] ??= new Map();
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -117,6 +118,8 @@ function validatePlan(plan, projectId, { history = true } = {}) {
   if (!Number.isSafeInteger(plan.version) || plan.version < 1) fail("Plan version is invalid.");
   time(plan.createdAt, "Plan creation time"); time(plan.updatedAt, "Plan update time");
   if (plan.reviewedAt != null) time(plan.reviewedAt, "Understanding review time");
+  if (plan.archivedAt != null) time(plan.archivedAt, "Archive time");
+  if (plan.archivedAt != null && plan.status === "converting") fail("A plan still creating its tasks cannot be archived.");
   if (!["planning", "ready", "converting", "converted"].includes(plan.status)) fail("Plan status is invalid.");
   const unknowns = array(plan.unknowns, "Unknowns", LIMITS.unknowns);
   for (const unknown of unknowns) { identifier(unknown?.id, "Unknown ID"); string(unknown?.text, "Unknown", LIMITS.question); }
@@ -226,7 +229,8 @@ function applyPlanningAction(plans, payload, { project, now = Date.now(), actor 
     time(now, "Mutation time");
     if (!Array.isArray(plans)) fail("Planning data is invalid.");
     if (action === "create") {
-      if (plans.length >= LIMITS.plans) fail(`This project already has ${LIMITS.plans} plans.`);
+      if (plans.filter((plan) => plan.archivedAt == null).length >= LIMITS.plans) fail(`This project already has ${LIMITS.plans} plans in play. Archive one you no longer need.`);
+      if (plans.length >= LIMITS.stored) fail(`This project already keeps ${LIMITS.stored} plans, including archived ones.`);
       const plan = { id: `plan_${randomUUID()}`, projectId: project.id, title: string(payload.title, "Plan title", LIMITS.title), destination: string(payload.destination, "Destination", LIMITS.destination), outOfScope: string(payload.outOfScope, "Out of scope", LIMITS.outOfScope, { optional: true }), unknowns: [], questions: [], spec: null, status: "planning", version: 1, history: [], createdAt: now, updatedAt: now, taskIds: [] };
       record(plan, action, now); validatePlan(plan, project.id); plans.push(plan);
       return { ok: true, plan: copy(plan), plans: copy(plans) };
@@ -235,7 +239,18 @@ function applyPlanningAction(plans, payload, { project, now = Date.now(), actor 
     if (index < 0) fail("Plan not found in this project.");
     const previous = plans[index];
     if (!Number.isSafeInteger(payload.version) || payload.version !== previous.version) fail("This plan changed. Refresh it before saving your changes.");
-    if (previous.status === "converted") {
+    // Archiving sets a plan aside without deleting it. An archived plan is
+    // read-only until restored; one mid-way through creating tasks has to
+    // finish first, so no approved work is left half-admitted.
+    const shelving = action === "archive" || action === "restore";
+    if (shelving) {
+      if (actor !== "user") fail("Only you can archive or restore a plan.");
+      if (action === "archive" && previous.archivedAt != null) fail("This plan is already archived.");
+      if (action === "archive" && previous.status === "converting") fail("Finish creating this plan's tasks before archiving it.");
+      if (action === "restore" && previous.archivedAt == null) fail("This plan is not archived.");
+      if (action === "restore" && previous.status !== "converted" && plans.filter((plan) => plan.archivedAt == null).length >= LIMITS.plans) fail(`This project already has ${LIMITS.plans} plans in play. Archive one before restoring this plan.`);
+    } else if (previous.archivedAt != null) fail("This plan is archived. Restore it before changing it.");
+    if (previous.status === "converted" && !shelving) {
       if (action === "mark-converted" && JSON.stringify(payload.taskIds) === JSON.stringify(previous.taskIds)) return { ok: true, plan: copy(previous), plans: copy(plans), duplicate: true };
       fail("This plan has already created implementation tasks. Start another plan for new scope.");
     }
@@ -248,8 +263,13 @@ function applyPlanningAction(plans, payload, { project, now = Date.now(), actor 
         const destination = own(payload, "destination") ? string(payload.destination, "Destination", LIMITS.destination) : plan.destination;
         const outOfScope = own(payload, "outOfScope") ? string(payload.outOfScope, "Out of scope", LIMITS.outOfScope, { optional: true }) : plan.outOfScope;
         if (title === plan.title && destination === plan.destination && outOfScope === plan.outOfScope) return { ok: true, plan: copy(previous), plans: copy(plans) };
-        if (destination !== plan.destination || outOfScope !== plan.outOfScope) details.reopened = reopenQuestions(plan, plan.questions.map((item) => item.id));
-        Object.assign(plan, { title, destination, outOfScope }); invalidate(plan); break;
+        // A rename changes no decision: the confirmed reading and an approved
+        // specification stand. Only a changed scope reopens and withdraws them.
+        const scoped = destination !== plan.destination || outOfScope !== plan.outOfScope;
+        if (scoped) details.reopened = reopenQuestions(plan, plan.questions.map((item) => item.id));
+        Object.assign(plan, { title, destination, outOfScope });
+        if (scoped) invalidate(plan);
+        break;
       }
       case "add-unknown": {
         if (plan.unknowns.length >= LIMITS.unknowns) fail(`A plan can have at most ${LIMITS.unknowns} unknowns.`);
@@ -290,7 +310,9 @@ function applyPlanningAction(plans, payload, { project, now = Date.now(), actor 
         item.status = "resolved"; item.resolvedBy = "user"; item.resolvedAt = now; invalidate(plan); break;
       }
       case "reopen": {
-        const item = question(); details.reopened = reopenQuestions(plan, [item.id]); invalidate(plan); break;
+        const item = question();
+        if (item.status !== "resolved") fail("This question is still open; there is no decision to reopen.");
+        details.reopened = reopenQuestions(plan, [item.id]); invalidate(plan); break;
       }
       case "add-note": {
         const item = question();
@@ -306,7 +328,11 @@ function applyPlanningAction(plans, payload, { project, now = Date.now(), actor 
       }
       case "draft-spec": {
         settled(plan); reviewed(plan);
-        plan.spec = { id: `spec_${randomUUID()}`, text: string(payload.text, "Specification", LIMITS.spec), tasks: normalizeTasks(payload.tasks), stale: false, createdAt: now };
+        const text = string(payload.text, "Specification", LIMITS.spec), tasks = normalizeTasks(payload.tasks);
+        // Saving the current wording again is not a revision: it keeps the
+        // draft, its task IDs and any approval you already gave it.
+        if (plan.spec && !plan.spec.stale && plan.spec.text === text && JSON.stringify(plan.spec.tasks) === JSON.stringify(tasks)) return { ok: true, plan: copy(previous), plans: copy(plans) };
+        plan.spec = { id: `spec_${randomUUID()}`, text, tasks, stale: false, createdAt: now };
         plan.status = "planning"; break;
       }
       case "approve-spec": {
@@ -327,6 +353,8 @@ function applyPlanningAction(plans, payload, { project, now = Date.now(), actor 
         if (JSON.stringify(taskIds) !== JSON.stringify(implementationIds(plan))) fail("Implementation task IDs must match this approved specification.");
         plan.status = "converted"; plan.taskIds = taskIds; plan.convertedAt = now; break;
       }
+      case "archive": plan.archivedAt = now; break;
+      case "restore": delete plan.archivedAt; break;
       default: fail("Unknown planning action.");
     }
     plan.version += 1; plan.updatedAt = now; record(plan, action, now, details); validatePlan(plan, project.id); plans[index] = plan;
@@ -363,7 +391,7 @@ function createPlanningStore({ filePath, project, now = Date.now } = {}) {
     return result;
   }
   function validate(plans) {
-    array(plans, "Project plans", LIMITS.plans);
+    array(plans, "Project plans", LIMITS.stored);
     if (new Set(plans.map((plan) => plan?.id)).size !== plans.length) fail("Plan IDs must be unique.");
     for (const plan of plans) validatePlan(plan, capturedProject.id);
   }

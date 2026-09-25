@@ -42,6 +42,8 @@ body:has(#plans-overlay:not([hidden])) #idle-layer { opacity: .18; }
 .planning-list button strong { overflow-wrap: anywhere; }
 .planning-list button small { color: var(--muted); }
 .planning-library-empty { padding: 22px 8px; }
+.planning-list-divider { margin: 14px 6px 6px; font-size: 10px; letter-spacing: .13em; text-transform: uppercase; }
+.planning-list button[data-archived="true"] { opacity: .72; }
 .planning-library-empty > span { display: block; margin-bottom: 12px; color: var(--gold); font-size: 25px; }
 .planning-library-empty > strong { font-size: 12px; font-weight: 500; }
 .planning-library-empty p { margin: 7px 0 0; font-size: 11px; }

@@ -303,17 +303,29 @@ Every line of the interview is labelled by where it came from — your answer,
 Mefi's reading, its recommendation, its question — and only a decision you
 record yourself becomes a requirement. You can still ask for a batch of
 questions, ask it to explain the tradeoffs on one, or write the whole plan by
-hand.
+hand. Your answer is saved before Mefi is asked, so a failed reply loses
+nothing: the answer box clears and **Continue with Mefi** picks the interview
+back up without filing the same words twice.
 
 Once every unknown is settled and every question decided, **What we understand**
 reads the plan back to you and waits for your confirmation; no specification is
 drafted or approved until you give it, and changing the destination, an unknown
-or any decision withdraws it. Then write or request a specification with small
+or any decision withdraws it. Renaming a plan changes no decision and keeps
+both, and saving an unchanged specification keeps its approval. Then write or request a specification with small
 tasks, acceptance checks and prerequisites, approve the draft, and explicitly
 create its tasks. Assistant suggestions and interview lines never resolve a
 question, confirm the understanding or approve work, and planning itself cannot
 launch coding workers. Manual controls work without an AI key; plans and their
 revision history stay in the project's ignored local `planning.json`.
+
+**Archive plan** sets a plan aside without deleting it: it becomes read-only,
+folds under **Show archived** in the list, and drops out of the assistant's
+plan summary and the Analyzer. **Restore plan** brings it back exactly as it
+was. A plan still creating its tasks has to finish first. Up to 300 plans can
+be in play per project; archived ones don't count toward that. When Mefi
+suggests a batch of questions, a proposal with a bad reference no longer
+discards the batch: an unknown prerequisite is dropped, and a malformed
+proposal is left out and counted in its note.
 
 ### The assistant and the agent loop
 

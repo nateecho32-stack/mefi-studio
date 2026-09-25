@@ -224,6 +224,94 @@
 
   </div>
 </section>
+<!-- Vibe: the calm front door (renderer/vibe.js). One box to talk or build,
+     what is building, what needs you and what just finished, and a five-stop
+     dock. The Build view (everything above and below) is one switch away. -->
+<section id="vibe-layer" class="vibe" aria-label="Vibe" hidden tabindex="-1">
+  <div class="vibe-sky" aria-hidden="true"><i class="vibe-aurora one"></i><i class="vibe-aurora two"></i><i class="vibe-aurora three"></i></div>
+  <header class="vibe-top">
+    <button id="vibe-project" class="vibe-project" type="button" title="Switch project" aria-controls="workspace-sidebar-panel"><span class="vibe-project-mark" aria-hidden="true">M+</span><span class="vibe-project-text"><small>Project</small><b id="vibe-project-name">Choose a project</b></span><svg class="glyph vibe-chev" aria-hidden="true"><use href="#g-chev"/></svg></button>
+    <div class="mode-switch" role="radiogroup" aria-label="Studio mode" data-mode="vibe">
+      <i class="mode-thumb" aria-hidden="true"></i>
+      <button type="button" role="radio" data-ui-mode="vibe" aria-checked="true" title="Vibe: the calm front door"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Vibe</span></button>
+      <button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button>
+    </div>
+    <div class="vibe-top-actions">
+      <span id="vibe-pulse" class="vibe-pulse" data-tone="quiet" role="status"><i aria-hidden="true"></i><span id="vibe-pulse-text">All quiet</span></span>
+      <button class="vibe-icon" type="button" data-nav="palette" title="Search everything (Ctrl K)" aria-label="Search everything"><svg class="glyph" aria-hidden="true"><use href="#g-search"/></svg></button>
+      <button id="vibe-chat-toggle" class="vibe-icon" type="button" aria-controls="vibe-chat" aria-expanded="false" title="Conversation" aria-label="Conversation"><svg class="glyph" aria-hidden="true"><use href="#g-plane"/></svg><i id="vibe-chat-dot" class="vibe-dot" hidden></i></button>
+      <button class="vibe-icon" type="button" data-nav="studio" title="Settings (Ctrl ,)" aria-label="Settings"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg></button>
+    </div>
+  </header>
+  <div class="vibe-stage">
+    <div class="vibe-hero">
+      <div class="vibe-orb" aria-hidden="true"><i></i><i></i><i></i></div>
+      <p id="vibe-kicker" class="vibe-kicker">Welcome back</p>
+      <h1 id="vibe-title">What should we make next?</h1>
+    </div>
+    <form id="vibe-compose" class="vibe-compose" autocomplete="off">
+      <label for="vibe-input" class="sr-only">Describe what you want</label>
+      <textarea id="vibe-input" rows="2" placeholder="Describe an idea, a fix or a question…"></textarea>
+      <div class="vibe-compose-foot">
+        <span id="vibe-hint" class="vibe-hint">Enter to talk · Ctrl + Enter to build</span>
+        <button id="vibe-talk" class="vibe-btn quiet" type="button"><svg class="glyph" aria-hidden="true"><use href="#g-plane"/></svg>Talk it over</button>
+        <button id="vibe-build" class="vibe-btn primary" type="submit"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg>Build it</button>
+      </div>
+    </form>
+    <div id="vibe-sparks" class="vibe-sparks" role="group" aria-label="Ways to start"></div>
+    <p id="vibe-feedback" class="vibe-feedback" role="status" aria-live="polite"></p>
+    <section class="vibe-lanes" aria-label="What is happening">
+      <article class="vibe-lane" data-lane="building" aria-labelledby="vibe-lane-building-title">
+        <header><span class="vibe-lane-mark" aria-hidden="true"></span><h2 id="vibe-lane-building-title">Building now</h2><span id="vibe-count-building" class="vibe-count"></span></header>
+        <ol id="vibe-lane-building" class="vibe-rows"></ol>
+        <button class="vibe-lane-link" type="button" data-nav="command">Watch it live <span aria-hidden="true">→</span></button>
+      </article>
+      <article class="vibe-lane" data-lane="needs" aria-labelledby="vibe-lane-needs-title">
+        <header><span class="vibe-lane-mark" aria-hidden="true"></span><h2 id="vibe-lane-needs-title">Needs you</h2><span id="vibe-count-needs" class="vibe-count"></span></header>
+        <ol id="vibe-lane-needs" class="vibe-rows"></ol>
+        <button class="vibe-lane-link" type="button" data-nav="tasks">All your tasks <span aria-hidden="true">→</span></button>
+      </article>
+      <article class="vibe-lane" data-lane="done" aria-labelledby="vibe-lane-done-title">
+        <header><span class="vibe-lane-mark" aria-hidden="true"></span><h2 id="vibe-lane-done-title">Freshly done</h2><span id="vibe-count-done" class="vibe-count"></span></header>
+        <ol id="vibe-lane-done" class="vibe-rows"></ol>
+        <button class="vibe-lane-link" type="button" data-nav="eyes">See the evidence <span aria-hidden="true">→</span></button>
+      </article>
+    </section>
+    <button id="vibe-last" class="vibe-last" type="button" hidden><span id="vibe-last-who" class="vibe-last-who">Mefi</span><span id="vibe-last-text" class="vibe-last-text"></span><span class="vibe-last-open">Open conversation</span></button>
+  </div>
+  <nav id="vibe-dock" class="vibe-dock" aria-label="Go to">
+    <button type="button" data-nav="command" title="Watch the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span></button>
+    <button type="button" data-nav="tasks" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
+    <button type="button" data-nav="plans" title="Plan an idea before building it (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span></button>
+    <button type="button" data-nav="ideas" title="Ideas the agents noticed (I)"><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg><span>Ideas</span><span class="count" data-badge="ideas" hidden></span></button>
+    <button type="button" data-nav="agents" title="Your agents, models and usage"><svg class="glyph" aria-hidden="true"><use href="#g-agents"/></svg><span>Agents</span></button>
+    <button type="button" data-nav="palette" title="Everything else (Ctrl K)"><svg class="glyph" aria-hidden="true"><use href="#g-more"/></svg><span>More</span></button>
+  </nav>
+  <aside id="vibe-chat" class="vibe-chat" aria-labelledby="vibe-chat-title" hidden>
+    <header class="vibe-chat-head"><div><small>Conversation</small><h2 id="vibe-chat-title">Mefi</h2></div><button id="vibe-chat-close" class="vibe-icon" type="button" aria-label="Close the conversation" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
+    <ol id="vibe-thread" class="vibe-thread"></ol>
+    <p class="vibe-chat-note">Reply in the box in the middle. Enter talks, Ctrl + Enter builds.</p>
+  </aside>
+</section>
+<!-- The one-time "what's new" card an existing user sees on the first launch
+     with Vibe (renderer/vibe.js decides; it never shows on a first run). -->
+<div id="vibe-notes" class="vibe-notes" hidden>
+  <div class="vibe-notes-card" role="dialog" aria-modal="true" aria-labelledby="vibe-notes-title" aria-describedby="vibe-notes-lede">
+    <header class="vibe-notes-head"><span class="vibe-notes-tag"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg>What's new</span><button id="vibe-notes-close" class="vibe-icon" type="button" aria-label="Close what's new" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
+    <h2 id="vibe-notes-title">Two ways to work: Vibe and Build</h2>
+    <p id="vibe-notes-lede" class="vibe-notes-lede">Studio now opens in <b>Vibe</b>, a calmer front door. Everything you already use lives in <b>Build</b>, one click away.</p>
+    <div class="vibe-notes-modes">
+      <figure class="vibe-notes-mode is-vibe"><div class="vibe-mini" aria-hidden="true"><i class="mini-orb"></i><i class="mini-box"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-dock"></i></div><figcaption><b>Vibe</b><span>Say what you want, watch it build, answer what needs you.</span></figcaption></figure>
+      <figure class="vibe-notes-mode is-build"><div class="build-mini" aria-hidden="true"><i class="mini-rail"></i><i class="mini-head"></i><i class="mini-panel"></i><i class="mini-side"></i></div><figcaption><b>Build</b><span>The full studio: Command, boards, models and every setting.</span></figcaption></figure>
+    </div>
+    <ul class="vibe-notes-list">
+      <li>Switch any time with the <b>Vibe / Build</b> toggle at the top, or from the menu and Search.</li>
+      <li>One box: <b>Talk it over</b> with Mefi, or <b>Build it</b> as a task.</li>
+      <li>Building now, Needs you and Freshly done share one screen.</li>
+    </ul>
+    <footer class="vibe-notes-foot"><button id="vibe-notes-changelog" class="vibe-notes-link" type="button">Full changelog<svg class="glyph" aria-hidden="true"><use href="#g-external"/></svg></button><button id="vibe-notes-build" class="vibe-btn quiet" type="button">Keep Build</button><button id="vibe-notes-ok" class="vibe-btn primary" type="button">Try Vibe</button></footer>
+  </div>
+</div>
 <!-- The tab pages' header: the page you are on and, when Command sent you here,
      the way back to it (nav.js paints both on mefi:nav). On the rail shell the
      menu carries the brand, Shortcuts and the update badge, so the screen shows

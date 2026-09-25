@@ -333,3 +333,93 @@ test("interrupted board promotion resumes deterministic tasks and never unlocks 
   assert.equal((await store.list())[0].status, "converted");
   assert.deepEqual((await store.list())[0].taskIds, [...board.keys()]);
 });
+
+test("renaming a plan keeps the confirmed reading and the approved specification", () => {
+  const f = fixture();
+  f.ok("add-question", { question: "Choose format", type: "discussion" });
+  f.ok("resolve", { questionId: f.current().questions[0].id, resolution: "JSON" });
+  const approved = f.ready();
+  const renamed = f.ok("update", { title: "Project settings" });
+  assert.equal(renamed.title, "Project settings");
+  assert.equal(renamed.status, "ready", "a new name is not a new decision");
+  assert.equal(renamed.reviewedAt, approved.reviewedAt);
+  assert.equal(renamed.spec.approvedAt, approved.spec.approvedAt);
+  assert.equal(renamed.spec.stale, false);
+  assert.equal(renamed.questions[0].status, "resolved");
+  const rescoped = f.ok("update", { outOfScope: "Cloud sync and sharing" });
+  assert.equal(rescoped.status, "planning", "a changed scope still withdraws both");
+  assert.equal(rescoped.reviewedAt, undefined);
+  assert.equal(rescoped.spec.stale, true);
+});
+
+test("saving an unchanged specification keeps its approval, and a changed one withdraws it", () => {
+  const f = fixture();
+  const approved = f.ready();
+  const again = f.ok("draft-spec", draft);
+  assert.equal(again.version, approved.version, "the same wording is not a revision");
+  assert.equal(again.spec.id, approved.spec.id);
+  assert.equal(again.spec.approvedAt, approved.spec.approvedAt);
+  assert.equal(again.status, "ready");
+  const revised = f.ok("draft-spec", { ...draft, text: `${draft.text} Keep a backup.` });
+  assert.notEqual(revised.spec.id, approved.spec.id);
+  assert.equal(revised.spec.approvedAt, undefined);
+  assert.equal(revised.status, "planning");
+});
+
+test("reopening a question that is still open is refused instead of withdrawing your review", () => {
+  const f = fixture();
+  f.ok("add-question", { question: "Choose format", type: "discussion" });
+  const questionId = f.current().questions[0].id;
+  f.ok("resolve", { questionId, resolution: "JSON" });
+  f.ok("confirm-understanding");
+  f.ok("add-question", { question: "Name the file", type: "discussion" });
+  const open = f.current().questions[1].id;
+  const before = structuredClone(f.current());
+  assert.equal(f.action("reopen", { questionId: open }).ok, false);
+  assert.deepEqual(f.current(), before);
+  assert.equal(f.ok("reopen", { questionId }).questions[0].status, "open");
+});
+
+test("archiving sets a plan aside read-only, only you can do it, and restoring brings it back unchanged", () => {
+  const f = fixture();
+  f.ok("add-question", { question: "Choose format", type: "discussion" });
+  const before = f.current();
+  assert.equal(f.action("archive", {}, "assistant").ok, false);
+  assert.equal(f.action("archive", {}, "host").ok, false);
+  const archived = f.ok("archive");
+  assert.ok(Number.isSafeInteger(archived.archivedAt));
+  assert.equal(archived.history.at(-1).action, "archive");
+  for (const [kind, fields] of [["update", { title: "Renamed" }], ["add-unknown", { text: "Gap" }], ["add-note", { questionId: before.questions[0].id, text: "Hi" }], ["archive", {}]]) {
+    assert.equal(f.action(kind, fields).ok, false, kind);
+  }
+  const restored = f.ok("restore");
+  assert.equal(restored.archivedAt, undefined);
+  const { version, updatedAt, history, ...body } = restored;
+  const { version: _v, updatedAt: _u, history: _h, ...original } = before;
+  assert.deepEqual(body, original, "restoring changes nothing else about the plan");
+  assert.equal(f.action("restore").ok, false, "a plan in play cannot be restored again");
+});
+
+test("a plan creating its tasks cannot be archived, and a converted plan can be archived and restored", () => {
+  const f = fixture();
+  const ready = f.ready();
+  const converting = applyPlanningAction(f.plans, { action: "begin-conversion", planId: ready.id, version: ready.version }, { project, actor: "host", now: 500 });
+  assert.equal(converting.ok, true, converting.error);
+  assert.equal(f.action("archive").ok, false);
+  const converted = applyPlanningAction(f.plans, { action: "mark-converted", planId: ready.id, version: converting.plan.version, taskIds: converting.plan.taskIds }, { project, actor: "host", now: 501 });
+  assert.equal(converted.ok, true, converted.error);
+  assert.equal(f.ok("archive").status, "converted");
+  assert.equal(f.ok("restore").status, "converted");
+});
+
+test("the plan cap counts plans in play, so archiving one makes room", () => {
+  const plans = [];
+  for (let index = 0; index < LIMITS.plans; index += 1) assert.equal(applyPlanningAction(plans, { action: "create", title: `Plan ${index}`, destination: "Somewhere" }, { project, now: 1 }).ok, true);
+  const refused = applyPlanningAction(plans, { action: "create", title: "One more", destination: "Somewhere" }, { project, now: 2 });
+  assert.equal(refused.ok, false);
+  assert.match(refused.error, /Archive one/);
+  assert.equal(applyPlanningAction(plans, { action: "archive", planId: plans[0].id, version: plans[0].version }, { project, now: 3 }).ok, true);
+  assert.equal(applyPlanningAction(plans, { action: "create", title: "One more", destination: "Somewhere" }, { project, now: 4 }).ok, true);
+  const full = applyPlanningAction(plans, { action: "restore", planId: plans[0].id, version: plans[0].version }, { project, now: 5 });
+  assert.equal(full.ok, false, "restoring would exceed the plans in play");
+});

@@ -34,6 +34,19 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-25 - Planning pipeline review fixes
+
+Windows 11, local Electron, Node 24, shared tree at 5f84d28 plus this uncommitted work. This is a review of the Plans pipeline (scripts/planning.cjs, scripts/planning-service.cjs, renderer/planning.js). Fixes:
+- A failed Mefi reply no longer leaves the already-saved answer in the box. Previously a resend filed it twice. The host now files an identical trailing answer once and returns answerSaved; the page clears the box and offers Continue with Mefi.
+- A rename keeps the confirmed reading and the approved specification.
+- Re-saving an unchanged specification is a no-op that keeps its approval.
+- Reopening a still-open question is refused.
+- A re-asked decided question is no longer pointed at as the next ask.
+- A long explanation is clipped to the note limit instead of discarded.
+- Dropped or deleted plan tasks read "Dropped by you" or "No longer on the board".
+
+Two planning_ui expectations moved from "unknown" to "missing", because the fixture's successful read of an empty board is exactly that case. Nine new tests. Eight of them were run against HEAD in a scratch worktree and all fail there; the ninth guards a regression in this change's own Continue rule. Planning suites 112/112. npm run build-booklet ok. npm run check ok (140 files). npm run audit 0 errors / 0 warnings. Full npm test: Node suites 3402 pass / 0 fail / 4 skipped; Python contracts 248 OK; path lock pass. Electron stage 34 pass / 1 fail / 1 skipped. The failure was command_render: its fixture reported passing in 77 s but hit the harness timeout (a known environmental failure). It passed on a solo rerun.
+
 ## 2026-09-25 - Release gate for v0.4.0
 
 Windows 11, local Electron 44.4.1, Node 24, gated in a detached worktree at the release commit (201103b landed the 0.4.0 work from the shared tree; fbc64b4 bumps package.json and package-lock.json to 0.4.0, cuts [Unreleased] into [0.4.0] and updates the README). A fresh npm run build-booklet reproduced the committed renderer/booklet.html blob exactly. npm run check ok (140 targets, 300 specs, all selectors used). npm run audit 0 findings. npm test: Node suites 3393 pass / 0 fail / 4 skipped; Python contracts 248 OK (1 skipped); path lock pass; serialized stage 1 pass; occlusion probe 1 pass / 1 skipped. Electron stage 34 pass / 1 fail / 1 skipped. The failure was command_render: its fixture was killed by the harness timeout at 81 s before it wrote a report, with no assertion failing inside the app. Run alone on the same commit it passed in 61.6 s, and it passed in both earlier full runs of the same tree that day (listed under Known environmental failures above). The three unmerged cloud branches (claude/friendly-ride-453f4z, claude/gallant-babbage-lshjfb, claude/pensive-dirac-fkvdzi) are not in this release.
@@ -426,35 +439,6 @@ passed before the full run, now reports one shared-workspace DOM error: the
 missing walkthrough-agent id. The companion-hub build finding has cleared.
 The planning stylesheet is unchanged from the passing render runs; source diff
 whitespace checks pass. No live app state or screenshots were added to Git.
-
-## 2026-09-24 - Compact agent setup panel polish
-
-Refined Agents setup with compact role headers, aligned model and settings
-controls, a corner provider chip, a solid left-side add button, theme-tinted
-surfaces, and clearer selected provider/skill tiles. Removed inherited modal
-padding and outer scrolling so the workspace has one scrollable content area.
-Narrow windows use provider icons and a smaller toolbar. Retained the existing
-scope, model, skills, MCP, draft and Apply behavior. The Electron fixture now
-waits for resize/zoom to reach the requested viewport before measuring it.
-
-Validation: build-booklet, npm run check and npm run audit passed (zero audit
-findings). Agent setup's isolated Electron interaction check passed, including
-12 viewport/zoom combinations from 600x600 to 1920x1080 and 100-150% zoom,
-without horizontal overflow, renderer errors, network requests or worker
-starts. Desktop, narrow, provider and skills captures were visually reviewed.
-
-Full npm test completed with Node parallel 3319 pass / 0 fail / 4 skipped;
-Electron lane 31 pass / 2 fail / 1 skipped; eyes-toggle 1/1 and occlusion 2/2
-passed. Python 248/248 and all six normalized-path lock checks passed.
-The full run is not green: planning_render fails its writing-panel backdrop
-visibility check and startup_render fails its light-surfaces color assertion.
-Both failures reproduced in a separate sequential run. These concern panels
-outside this change; the runner also detected source changes during the
-Electron stage on this shared working tree.
-
-Logs: %TEMP%/mefi-agent-panel-polish-{check,audit,render,full-test,render-retry}.log.
-Screenshots and report: %TEMP%/mefi-agent-panel-polish/. All captures used an
-isolated synthetic profile; no live application data or portable data changed.
 
 ## Read Before Any Tests
 

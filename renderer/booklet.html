@@ -5666,6 +5666,8 @@ body:has(#plans-overlay:not([hidden])) #idle-layer { opacity: .18; }
 .planning-list button strong { overflow-wrap: anywhere; }
 .planning-list button small { color: var(--muted); }
 .planning-library-empty { padding: 22px 8px; }
+.planning-list-divider { margin: 14px 6px 6px; font-size: 10px; letter-spacing: .13em; text-transform: uppercase; }
+.planning-list button[data-archived="true"] { opacity: .72; }
 .planning-library-empty > span { display: block; margin-bottom: 12px; color: var(--gold); font-size: 25px; }
 .planning-library-empty > strong { font-size: 12px; font-weight: 500; }
 .planning-library-empty p { margin: 7px 0 0; font-size: 11px; }
@@ -7662,6 +7664,297 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
 @media (prefers-reduced-motion: reduce) { .agent-hub, .agent-hub *, .agent-creature *, .agent-play, .walkthrough-sheet, .walkthrough-coach { animation: none !important; transition: none !important; } }
 @media (prefers-reduced-transparency: reduce) { .agent-hub, .agent-hub-center, .agent-hub-node, .agent-hub .companion-panel.companion-in-hub { background: var(--panel-solid); backdrop-filter: none; } }
 @media print { .agent-hub, .agent-handoff { display: none !important; } }
+
+/* Vibe: the calm front door (renderer/vibe.js), the Vibe / Build switch and
+   the one-time "what's new" card. Inlined last, so it wins ties. Every colour
+   comes from the active theme's tokens (--gold is the accent, --ivory the
+   ink), so custom palettes, light ones included, carry over. The live node
+   tree is the sky: idle.js draws it under this layer as it does under Home,
+   and the layer itself is a veil plus three slow aurora washes. */
+
+@property --vibe-spin { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+
+#vibe-layer {
+  --v-ink: var(--ivory);
+  --v-soft: var(--muted);
+  --v-faint: var(--dim);
+  --v-accent: var(--gold);
+  --v-accent-hi: var(--gold-bright);
+  --v-glass: color-mix(in srgb, var(--panel-solid) 52%, transparent);
+  --v-glass-hi: color-mix(in srgb, color-mix(in srgb, var(--gold) 6%, var(--panel-solid)) 70%, transparent);
+  --v-edge: color-mix(in srgb, var(--ivory) 10%, transparent);
+  --v-edge-hi: color-mix(in srgb, var(--gold) 38%, transparent);
+  --v-blur: blur(22px) saturate(1.45);
+  --v-lift: 0 30px 60px -34px rgba(0, 0, 0, .85), inset 0 1px 0 color-mix(in srgb, var(--ivory) 7%, transparent);
+  --v-r: 22px;
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-workspace);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  color: var(--v-ink);
+  font-family: var(--font-ui);
+  background:
+    radial-gradient(120% 80% at 50% 118%, color-mix(in srgb, var(--bg-deep) 94%, transparent), transparent 62%),
+    color-mix(in srgb, var(--bg) 58%, transparent);
+  isolation: isolate;
+  outline: none;
+  opacity: 1;
+  transition: opacity var(--motion-slow) var(--ease-out), display var(--motion-slow) allow-discrete;
+}
+@starting-style { #vibe-layer { opacity: 0; } }
+#vibe-layer[hidden] { display: none; opacity: 0; }
+html[data-no-blur] #vibe-layer { --v-blur: none; --v-glass: color-mix(in srgb, var(--panel-solid) 94%, transparent); --v-glass-hi: color-mix(in srgb, var(--gold) 7%, var(--panel-solid)); }
+/* The Build frame steps aside while Vibe is up; the tree stays as the sky. */
+body.vibe-active :is(#app-rail, #workspace-sidebar-toggle, body > header.page-head, #tabs, #tree-rail) { visibility: hidden; }
+
+/* ---- sky ------------------------------------------------------------------ */
+.vibe-sky { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.vibe-aurora { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .34; mix-blend-mode: screen; animation: vibe-drift 26s var(--ease-in-out) infinite alternate; }
+.vibe-aurora.one { width: 54vw; height: 42vw; left: -12vw; top: -18vw; background: radial-gradient(circle, color-mix(in srgb, var(--gold) 70%, transparent), transparent 68%); }
+.vibe-aurora.two { width: 46vw; height: 38vw; right: -14vw; top: 8vh; background: radial-gradient(circle, color-mix(in srgb, var(--info) 55%, transparent), transparent 70%); animation-duration: 32s; animation-delay: -9s; opacity: .22; }
+.vibe-aurora.three { width: 60vw; height: 30vw; left: 20vw; bottom: -22vw; background: radial-gradient(circle, color-mix(in srgb, var(--gold-bright) 45%, transparent), transparent 70%); animation-duration: 38s; animation-delay: -17s; opacity: .2; }
+:root[data-studio-theme-tone="light"] .vibe-aurora { mix-blend-mode: multiply; opacity: .16; }
+@keyframes vibe-drift {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(4vw, 3vh, 0) scale(1.08); }
+  100% { transform: translate3d(-3vw, 5vh, 0) scale(.96); }
+}
+
+/* ---- top bar -------------------------------------------------------------- */
+.vibe-top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; padding: 18px 28px 0; }
+.vibe-project { justify-self: start; display: inline-flex; align-items: center; gap: 12px; min-height: 48px; max-width: 100%; padding: 6px 14px 6px 6px; border: 1px solid var(--v-edge); border-radius: 16px; background: var(--v-glass); backdrop-filter: var(--v-blur); color: var(--v-ink); cursor: pointer; transition: border-color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out); }
+.vibe-project:hover { border-color: var(--v-edge-hi); background: var(--v-glass-hi); }
+.vibe-project-mark { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 11px; background: linear-gradient(140deg, var(--v-accent-hi), var(--v-accent)); color: var(--ink); font: 700 12px/1 var(--font-display); letter-spacing: .02em; box-shadow: 0 6px 18px -8px var(--v-accent); }
+.vibe-project-text { display: grid; min-width: 0; text-align: left; line-height: 1.2; }
+.vibe-project-text small { color: var(--v-faint); font-size: 11px; }
+.vibe-project-text b { overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.vibe-project .vibe-chev { width: 14px; height: 14px; color: var(--v-soft); }
+
+.vibe-top-actions { justify-self: end; display: flex; align-items: center; gap: 8px; }
+.vibe-icon { position: relative; display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 1px solid var(--v-edge); border-radius: 13px; background: var(--v-glass); backdrop-filter: var(--v-blur); color: var(--v-soft); cursor: pointer; transition: color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out); }
+.vibe-icon:hover { color: var(--v-ink); border-color: var(--v-edge-hi); transform: translateY(-1px); }
+.vibe-icon .glyph { width: 17px; height: 17px; }
+.vibe-dot { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 50%; background: var(--v-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--panel-solid) 80%, transparent), 0 0 10px var(--v-accent); }
+.vibe-dot[hidden] { display: none; }
+
+.vibe-pulse { display: inline-flex; align-items: center; gap: 9px; height: 40px; padding: 0 16px 0 14px; border: 1px solid var(--v-edge); border-radius: 999px; background: var(--v-glass); backdrop-filter: var(--v-blur); color: var(--v-soft); font-size: 13px; white-space: nowrap; }
+.vibe-pulse > i { position: relative; width: 8px; height: 8px; border-radius: 50%; background: var(--v-faint); }
+.vibe-pulse[data-tone="live"] { color: var(--v-ink); }
+.vibe-pulse[data-tone="live"] > i { background: var(--live); box-shadow: 0 0 10px var(--live); }
+.vibe-pulse[data-tone="ask"] { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 36%, transparent); }
+.vibe-pulse[data-tone="ask"] > i { background: var(--warn); box-shadow: 0 0 10px var(--warn); }
+.vibe-pulse:is([data-tone="live"], [data-tone="ask"]) > i::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 1.5px solid currentColor; opacity: 0; animation: vibe-ping 2.4s var(--ease-out) infinite; }
+.vibe-pulse[data-tone="live"] > i::after { color: var(--live); }
+@keyframes vibe-ping { 0% { transform: scale(.4); opacity: .8; } 100% { transform: scale(1.6); opacity: 0; } }
+
+/* ---- the Vibe / Build switch (also in the Build rail's tooltip copy) ------ */
+.mode-switch { position: relative; display: inline-grid; grid-template-columns: 1fr 1fr; padding: 4px; border: 1px solid var(--v-edge, var(--hairline)); border-radius: 999px; background: color-mix(in srgb, var(--panel-solid) 62%, transparent); backdrop-filter: blur(22px) saturate(1.45); box-shadow: 0 14px 34px -22px rgba(0, 0, 0, .9); }
+.mode-switch button { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 112px; height: 38px; padding: 0 18px; border: 0; border-radius: 999px; background: none; color: var(--muted); font: 600 14px/1 var(--font-ui); letter-spacing: .01em; cursor: pointer; transition: color var(--motion-base) var(--ease-out); }
+.mode-switch button:hover { color: var(--ivory); }
+.mode-switch button[aria-checked="true"] { color: var(--ink); }
+.mode-switch button:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+.mode-switch .glyph { width: 15px; height: 15px; }
+.mode-thumb { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px); border-radius: 999px; background: linear-gradient(135deg, var(--gold-bright), var(--gold)); box-shadow: 0 6px 20px -6px color-mix(in srgb, var(--gold) 80%, transparent), inset 0 1px 0 rgba(255, 255, 255, .35); transition: transform var(--motion-spring) var(--ease-spring); }
+.mode-switch[data-mode="build"] .mode-thumb { transform: translateX(100%); }
+
+/* ---- stage ---------------------------------------------------------------- */
+.vibe-stage { display: flex; flex-direction: column; align-items: center; min-height: 0; padding: clamp(18px, 5vh, 64px) 28px 18px; overflow-y: auto; scrollbar-width: none; }
+.vibe-stage::-webkit-scrollbar { display: none; }
+.vibe-stage > * { width: min(1180px, 100%); }
+.vibe-hero { display: grid; justify-items: center; gap: 8px; text-align: center; animation: vibe-rise var(--motion-spring) var(--ease-spring) both; }
+.vibe-orb { position: relative; width: 72px; height: 72px; margin-bottom: 10px; }
+.vibe-orb i { position: absolute; inset: 0; border-radius: 50%; }
+.vibe-orb i:nth-child(1) { background: radial-gradient(circle at 35% 30%, #fff 0 6%, var(--gold-bright) 22%, var(--gold) 52%, transparent 72%); filter: blur(.5px); animation: vibe-breathe 5.5s var(--ease-in-out) infinite; }
+.vibe-orb i:nth-child(2) { inset: -14px; background: conic-gradient(from 0deg, transparent, color-mix(in srgb, var(--gold) 55%, transparent), transparent 40%, color-mix(in srgb, var(--info) 45%, transparent), transparent 80%); filter: blur(10px); animation: vibe-turn 9s linear infinite; }
+.vibe-orb i:nth-child(3) { inset: -30px; background: radial-gradient(circle, color-mix(in srgb, var(--gold) 30%, transparent), transparent 64%); animation: vibe-breathe 5.5s var(--ease-in-out) infinite reverse; }
+#vibe-layer[data-pending="yes"] .vibe-orb i:nth-child(2) { animation-duration: 2.2s; }
+@keyframes vibe-breathe { 0%, 100% { transform: scale(.94); opacity: .9; } 50% { transform: scale(1.06); opacity: 1; } }
+@keyframes vibe-turn { to { transform: rotate(360deg); } }
+@keyframes vibe-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.vibe-kicker { margin: 0; color: var(--v-soft); font-size: 15px; letter-spacing: .01em; }
+.vibe-hero h1 { max-width: 20ch; margin: 0; background: linear-gradient(180deg, var(--ivory) 30%, color-mix(in srgb, var(--gold-bright) 70%, var(--ivory))); -webkit-background-clip: text; background-clip: text; color: transparent; font: 650 clamp(32px, 3vw, 52px)/1.08 var(--font-display); letter-spacing: -.025em; text-wrap: balance; }
+
+/* ---- composer ------------------------------------------------------------- */
+.vibe-compose { position: relative; width: min(860px, 100%) !important; margin-top: clamp(22px, 3.4vh, 38px); padding: 18px 18px 14px 22px; border: 1px solid var(--v-edge); border-radius: 26px; background: var(--v-glass-hi); backdrop-filter: var(--v-blur); box-shadow: var(--v-lift), 0 0 0 0 transparent; transition: box-shadow var(--motion-slow) var(--ease-out), border-color var(--motion-slow) var(--ease-out); animation: vibe-rise var(--motion-spring) var(--ease-spring) 60ms both; }
+.vibe-compose::before { content: ""; position: absolute; inset: -1px; padding: 1px; border-radius: inherit; background: conic-gradient(from var(--vibe-spin), transparent 0 12%, var(--gold-bright) 22%, transparent 34% 62%, color-mix(in srgb, var(--info) 80%, transparent) 72%, transparent 84%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; opacity: .28; pointer-events: none; animation: vibe-ring 8s linear infinite; transition: opacity var(--motion-slow) var(--ease-out); }
+.vibe-compose:focus-within { border-color: transparent; box-shadow: var(--v-lift), 0 0 60px -20px color-mix(in srgb, var(--gold) 55%, transparent); }
+.vibe-compose:focus-within::before { opacity: 1; }
+#vibe-layer[data-pending="yes"] .vibe-compose::before { opacity: 1; animation-duration: 1.6s; }
+@keyframes vibe-ring { to { --vibe-spin: 360deg; } }
+.vibe-compose textarea { display: block; width: 100%; min-height: 56px; max-height: 220px; padding: 2px 0 8px; border: 0; background: none; box-shadow: none; color: var(--v-ink); font: 400 18px/1.5 var(--font-ui); resize: none; outline: none; }
+.vibe-compose textarea::placeholder { color: color-mix(in srgb, var(--muted) 78%, transparent); }
+.vibe-compose-foot { display: flex; align-items: center; gap: 10px; }
+.vibe-hint { margin-right: auto; color: var(--v-faint); font-size: 12px; }
+.vibe-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 42px; padding: 0 18px; border: 1px solid var(--v-edge, var(--hairline)); border-radius: 14px; background: color-mix(in srgb, var(--ivory) 5%, transparent); color: var(--ivory); font: 600 14px/1 var(--font-ui); cursor: pointer; transition: transform var(--motion-fast) var(--ease-out), box-shadow var(--motion-base) var(--ease-out), background var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out); }
+.vibe-btn .glyph { width: 15px; height: 15px; }
+.vibe-btn:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--gold) 40%, transparent); background: color-mix(in srgb, var(--ivory) 9%, transparent); }
+.vibe-btn:active { transform: translateY(0) scale(.98); }
+.vibe-btn.primary { border-color: transparent; background: linear-gradient(135deg, var(--gold-bright), var(--gold)); color: var(--ink); box-shadow: 0 10px 26px -12px color-mix(in srgb, var(--gold) 90%, transparent), inset 0 1px 0 rgba(255, 255, 255, .35); }
+.vibe-btn.primary:hover { background: linear-gradient(135deg, var(--gold-bright), var(--gold-bright)); box-shadow: 0 14px 32px -12px color-mix(in srgb, var(--gold) 100%, transparent), inset 0 1px 0 rgba(255, 255, 255, .45); }
+.vibe-btn:disabled { opacity: .5; cursor: progress; transform: none; }
+.vibe-btn:focus-visible, .vibe-icon:focus-visible, .vibe-project:focus-visible, .vibe-spark:focus-visible, .vibe-dock button:focus-visible, .vibe-row :is(button):focus-visible, .vibe-lane-link:focus-visible, .vibe-last:focus-visible, .vibe-notes-link:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+
+.vibe-sparks { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: min(860px, 100%) !important; margin-top: 14px; animation: vibe-rise var(--motion-spring) var(--ease-spring) 120ms both; }
+.vibe-spark { height: 34px; padding: 0 15px; border: 1px solid var(--v-edge); border-radius: 999px; background: color-mix(in srgb, var(--panel-solid) 38%, transparent); backdrop-filter: var(--v-blur); color: var(--v-soft); font-size: 13px; cursor: pointer; transition: color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out); }
+.vibe-spark:hover { color: var(--v-ink); border-color: var(--v-edge-hi); transform: translateY(-1px); }
+.vibe-feedback { min-height: 20px; margin: 10px 0 0; color: var(--v-soft); font-size: 13px; text-align: center; }
+.vibe-feedback[data-tone="good"] { color: var(--good); }
+.vibe-feedback[data-tone="warn"] { color: var(--warn); }
+.vibe-feedback[data-tone="bad"] { color: var(--bad); }
+
+/* ---- lanes ---------------------------------------------------------------- */
+.vibe-lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: clamp(14px, 3vh, 34px); }
+.vibe-lane { --lane: var(--live); position: relative; display: flex; flex-direction: column; min-height: 214px; padding: 18px 18px 12px; border: 1px solid var(--v-edge); border-radius: var(--v-r); background: var(--v-glass); backdrop-filter: var(--v-blur); box-shadow: var(--v-lift); overflow: hidden; animation: vibe-rise var(--motion-spring) var(--ease-spring) both; transition: border-color var(--motion-slow) var(--ease-out), transform var(--motion-base) var(--ease-out); }
+.vibe-lane:nth-child(1) { animation-delay: 170ms; }
+.vibe-lane:nth-child(2) { --lane: var(--warn); animation-delay: 220ms; }
+.vibe-lane:nth-child(3) { --lane: var(--good); animation-delay: 270ms; }
+.vibe-lane::before { content: ""; position: absolute; left: 18px; right: 18px; top: 0; height: 1px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--lane) 70%, transparent), transparent); opacity: .7; }
+.vibe-lane::after { content: ""; position: absolute; inset: auto -30% -60% auto; width: 70%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--lane) 16%, transparent), transparent 70%); pointer-events: none; }
+.vibe-lane:hover { border-color: color-mix(in srgb, var(--lane) 30%, transparent); }
+#vibe-layer[data-needs="yes"] .vibe-lane[data-lane="needs"] { border-color: color-mix(in srgb, var(--warn) 42%, transparent); box-shadow: var(--v-lift), 0 0 44px -18px color-mix(in srgb, var(--warn) 60%, transparent); }
+.vibe-lane > header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.vibe-lane h2 { margin: 0; font: 600 15px/1.2 var(--font-display); letter-spacing: .005em; }
+.vibe-lane-mark { width: 9px; height: 9px; border-radius: 50%; background: var(--lane); box-shadow: 0 0 12px var(--lane); }
+.vibe-count { margin-left: auto; min-width: 24px; padding: 3px 8px; border-radius: 999px; background: color-mix(in srgb, var(--lane) 16%, transparent); color: var(--lane); font: 600 12px/1.2 var(--font-mono); text-align: center; }
+.vibe-count:empty { display: none; }
+.vibe-rows { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.vibe-row { display: flex; align-items: center; gap: 6px; border-radius: 14px; transition: background var(--motion-fast) var(--ease-out); animation: vibe-rise var(--motion-base) var(--ease-out) both; }
+.vibe-row:hover { background: color-mix(in srgb, var(--ivory) 5%, transparent); }
+.vibe-row-main { display: grid; grid-template-columns: 14px minmax(0, 1fr); column-gap: 8px; row-gap: 3px; flex: 1; min-width: 0; padding: 9px 10px; border: 0; border-radius: 14px; background: none; color: var(--v-ink); text-align: left; cursor: pointer; }
+.vibe-row-dot { align-self: center; width: 7px; height: 7px; margin-left: 3px; border-radius: 50%; background: var(--v-faint); }
+.vibe-row.is-live .vibe-row-dot { background: var(--live); box-shadow: 0 0 8px var(--live); animation: vibe-breathe 1.8s var(--ease-in-out) infinite; }
+.vibe-row.is-next .vibe-row-dot { background: transparent; border: 1.5px solid var(--v-faint); }
+.vibe-row.is-ask .vibe-row-dot { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+.vibe-row.is-review .vibe-row-dot { background: var(--info); }
+.vibe-row.is-bad .vibe-row-dot { background: var(--bad); }
+.vibe-row.is-done .vibe-row-dot { background: var(--good); }
+.vibe-row-title { overflow: hidden; font-size: 14px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.vibe-row.is-next .vibe-row-title { color: var(--v-soft); font-weight: 450; }
+.vibe-row-meta { grid-column: 2; color: var(--v-faint); font-size: 12px; }
+.vibe-bar { grid-column: 2; position: relative; height: 3px; margin-top: 4px; border-radius: 3px; background: color-mix(in srgb, var(--ivory) 8%, transparent); overflow: hidden; }
+.vibe-bar i { position: absolute; inset: 0 auto 0 0; width: 40%; border-radius: inherit; background: linear-gradient(90deg, color-mix(in srgb, var(--live) 60%, transparent), var(--live)); transition: width var(--motion-slow) var(--ease-out); }
+.vibe-bar i::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent); transform: translateX(-100%); animation: vibe-sheen 2.2s var(--ease-in-out) infinite; }
+.vibe-bar.is-flowing i { width: 34%; animation: vibe-flow 1.8s var(--ease-in-out) infinite; }
+@keyframes vibe-sheen { to { transform: translateX(260%); } }
+@keyframes vibe-flow { 0% { left: -34%; } 100% { left: 100%; } }
+.vibe-row-action { flex: none; height: 30px; margin-right: 8px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--lane) 45%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--lane) 12%, transparent); color: var(--v-ink); font-size: 12px; font-weight: 600; cursor: pointer; transition: background var(--motion-fast) var(--ease-out); }
+.vibe-row-action:hover { background: color-mix(in srgb, var(--lane) 24%, transparent); }
+.vibe-empty { padding: 14px 10px; color: var(--v-faint); font-size: 13px; line-height: 1.5; list-style: none; }
+.vibe-lane-link { align-self: flex-start; margin-top: auto; padding: 10px 10px 4px; border: 0; background: none; color: var(--v-soft); font-size: 13px; font-weight: 550; cursor: pointer; transition: color var(--motion-fast) var(--ease-out); }
+.vibe-lane-link span { display: inline-block; transition: transform var(--motion-base) var(--ease-spring); }
+.vibe-lane-link:hover { color: var(--lane); }
+.vibe-lane-link:hover span { transform: translateX(4px); }
+
+.vibe-last { display: flex; align-items: center; gap: 12px; width: min(860px, 100%) !important; margin-top: 18px; padding: 10px 12px 10px 16px; border: 1px solid var(--v-edge); border-radius: 16px; background: color-mix(in srgb, var(--panel-solid) 40%, transparent); backdrop-filter: var(--v-blur); color: var(--v-soft); font-size: 13px; text-align: left; cursor: pointer; animation: vibe-rise var(--motion-spring) var(--ease-spring) 320ms both; }
+.vibe-last[hidden] { display: none; }
+.vibe-last:hover { border-color: var(--v-edge-hi); color: var(--v-ink); }
+.vibe-last-who { flex: none; color: var(--v-accent-hi); font-weight: 650; }
+.vibe-last-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vibe-last-open { flex: none; padding: 5px 10px; border-radius: 9px; background: color-mix(in srgb, var(--ivory) 7%, transparent); color: var(--v-ink); font-size: 12px; font-weight: 600; }
+
+/* ---- dock ----------------------------------------------------------------- */
+.vibe-dock { justify-self: center; display: flex; gap: 4px; margin: 0 0 22px; padding: 6px; border: 1px solid var(--v-edge); border-radius: 22px; background: var(--v-glass-hi); backdrop-filter: var(--v-blur); box-shadow: 0 24px 50px -28px rgba(0, 0, 0, .95), inset 0 1px 0 color-mix(in srgb, var(--ivory) 7%, transparent); animation: vibe-dock-in var(--motion-spring) var(--ease-spring) 200ms both; }
+@keyframes vibe-dock-in { from { opacity: 0; transform: translateY(24px) scale(.96); } to { opacity: 1; transform: none; } }
+.vibe-dock button { position: relative; display: grid; justify-items: center; align-content: center; gap: 5px; width: 76px; height: 60px; padding: 0; border: 0; border-radius: 16px; background: none; color: var(--v-soft); font-size: 11.5px; font-weight: 550; cursor: pointer; transition: color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out), transform var(--motion-base) var(--ease-spring); }
+.vibe-dock .glyph { width: 20px; height: 20px; transition: transform var(--motion-base) var(--ease-spring); }
+.vibe-dock button:hover { color: var(--v-ink); background: color-mix(in srgb, var(--ivory) 7%, transparent); }
+.vibe-dock button:hover .glyph { transform: translateY(-2px) scale(1.08); color: var(--v-accent-hi); }
+.vibe-dock .count { position: absolute; top: 5px; right: 12px; min-width: 17px; height: 17px; padding: 0 5px; border-radius: 999px; background: var(--gold); color: var(--ink); font: 700 10px/17px var(--font-mono); text-align: center; }
+.vibe-dock .count.warn { background: var(--warn); }
+.vibe-dock .count[hidden] { display: none; }
+
+/* ---- conversation --------------------------------------------------------- */
+.vibe-chat { position: absolute; top: 84px; right: 24px; bottom: 24px; z-index: 2; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(420px, calc(100vw - 48px)); border: 1px solid var(--v-edge); border-radius: 24px; background: color-mix(in srgb, var(--panel-solid) 78%, transparent); backdrop-filter: var(--v-blur); box-shadow: -30px 0 80px -40px rgba(0, 0, 0, .9), inset 0 1px 0 color-mix(in srgb, var(--ivory) 7%, transparent); opacity: 1; transform: none; transition: opacity var(--motion-slow) var(--ease-out), transform var(--motion-slow) var(--ease-emphasized), display var(--motion-slow) allow-discrete; }
+@starting-style { .vibe-chat { opacity: 0; transform: translateX(28px); } }
+.vibe-chat[hidden] { display: none; opacity: 0; transform: translateX(28px); }
+.vibe-chat-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 12px 20px; border-bottom: 1px solid var(--v-edge); }
+.vibe-chat-head small { color: var(--v-faint); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.vibe-chat-head h2 { margin: 2px 0 0; font: 650 18px/1.2 var(--font-display); }
+.vibe-thread { display: flex; flex-direction: column; gap: 14px; margin: 0; padding: 18px 18px 8px; overflow-y: auto; list-style: none; scrollbar-width: thin; }
+.vibe-msg { display: grid; gap: 4px; max-width: 88%; animation: vibe-rise var(--motion-base) var(--ease-out) both; }
+.vibe-msg-who { color: var(--v-faint); font-size: 11.5px; font-weight: 600; }
+.vibe-msg-text { margin: 0; padding: 10px 14px; border-radius: 16px 16px 16px 6px; background: color-mix(in srgb, var(--ivory) 6%, transparent); color: var(--v-ink); font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.vibe-msg.is-user { align-self: flex-end; justify-items: end; }
+.vibe-msg.is-user .vibe-msg-text { border-radius: 16px 16px 6px 16px; background: linear-gradient(135deg, color-mix(in srgb, var(--gold) 30%, transparent), color-mix(in srgb, var(--gold) 16%, transparent)); }
+.vibe-msg.is-notice .vibe-msg-text { background: none; padding: 2px 0; color: var(--v-soft); font-size: 13px; }
+.vibe-typing { display: inline-flex; gap: 5px; padding: 12px 14px; border-radius: 16px 16px 16px 6px; background: color-mix(in srgb, var(--ivory) 6%, transparent); }
+.vibe-typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--v-soft); animation: vibe-bounce 1.2s var(--ease-in-out) infinite; }
+.vibe-typing i:nth-child(2) { animation-delay: .15s; }
+.vibe-typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes vibe-bounce { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-4px); opacity: 1; } }
+.vibe-chat-note { margin: 0; padding: 10px 20px 16px; color: var(--v-faint); font-size: 12px; }
+
+/* ---- smaller windows ------------------------------------------------------- */
+@media (max-width: 1100px) {
+  .vibe-lanes { grid-template-columns: 1fr 1fr; }
+  .vibe-lane:nth-child(3) { grid-column: 1 / -1; min-height: 0; }
+}
+@media (max-width: 760px) {
+  .vibe-top { grid-template-columns: 1fr auto; padding: 14px 16px 0; }
+  .vibe-top .mode-switch { grid-column: 1 / -1; grid-row: 2; justify-self: center; }
+  .vibe-pulse { display: none; }
+  .vibe-stage { padding: 20px 16px 12px; }
+  .vibe-lanes { grid-template-columns: 1fr; }
+  .vibe-lane { min-height: 0; }
+  .vibe-hint { display: none; }
+  .vibe-dock button { width: 54px; font-size: 10.5px; }
+  .vibe-chat { top: 12px; right: 12px; bottom: 12px; width: calc(100vw - 24px); }
+}
+@media (max-height: 820px) {
+  .vibe-orb { width: 54px; height: 54px; margin-bottom: 4px; }
+  .vibe-lane { min-height: 170px; }
+}
+
+/* ---- the Build rail's way back ------------------------------------------- */
+#app-rail .app-rail-vibe { margin-bottom: 6px; background: linear-gradient(135deg, color-mix(in srgb, var(--gold) 20%, transparent), color-mix(in srgb, var(--gold) 6%, transparent)); color: var(--gold-bright); font-weight: 600; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 26%, transparent); }
+#app-rail .app-rail-vibe:hover { background: linear-gradient(135deg, color-mix(in srgb, var(--gold) 30%, transparent), color-mix(in srgb, var(--gold) 10%, transparent)); color: var(--ivory); }
+html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-vibe .label { display: none; }
+
+/* ---- what's new ------------------------------------------------------------ */
+.vibe-notes { position: fixed; inset: 0; z-index: calc(var(--z-toast) - 2); display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg-deep) 52%, transparent); backdrop-filter: blur(6px); opacity: 1; transition: opacity var(--motion-slow) var(--ease-out), display var(--motion-slow) allow-discrete; }
+@starting-style { .vibe-notes { opacity: 0; } }
+.vibe-notes[hidden] { display: none; opacity: 0; }
+.vibe-notes-card { position: relative; width: min(580px, 100%); max-height: calc(100vh - 32px); padding: 22px 24px 20px; overflow: auto; border: 1px solid color-mix(in srgb, var(--ivory) 12%, transparent); border-radius: 26px; background: linear-gradient(180deg, color-mix(in srgb, color-mix(in srgb, var(--gold) 9%, var(--panel-solid)) 94%, transparent), color-mix(in srgb, var(--panel-solid) 96%, transparent)); color: var(--ivory); box-shadow: 0 40px 100px -40px rgba(0, 0, 0, .95), 0 0 0 1px rgba(0, 0, 0, .2), inset 0 1px 0 color-mix(in srgb, var(--ivory) 9%, transparent); animation: vibe-card-in var(--motion-spring) var(--ease-spring) both; }
+.vibe-notes-card::before { content: ""; position: absolute; inset: 0 0 auto; height: 140px; border-radius: 26px 26px 0 0; background: radial-gradient(80% 100% at 50% 0%, color-mix(in srgb, var(--gold) 22%, transparent), transparent 70%); pointer-events: none; }
+@keyframes vibe-card-in { from { opacity: 0; transform: translateY(16px) scale(.96); } to { opacity: 1; transform: none; } }
+.vibe-notes-head { position: relative; display: flex; align-items: center; justify-content: space-between; }
+.vibe-notes-tag { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 12px; border-radius: 999px; background: color-mix(in srgb, var(--gold) 18%, transparent); color: var(--gold-bright); font-size: 12px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
+.vibe-notes-tag .glyph { width: 13px; height: 13px; }
+.vibe-notes .vibe-icon { --v-edge: color-mix(in srgb, var(--ivory) 10%, transparent); --v-glass: transparent; --v-blur: none; --v-soft: var(--muted); --v-ink: var(--ivory); --v-edge-hi: color-mix(in srgb, var(--gold) 38%, transparent); width: 34px; height: 34px; border-radius: 11px; }
+.vibe-notes-card h2 { position: relative; margin: 16px 0 6px; font: 650 25px/1.2 var(--font-display); letter-spacing: -.015em; }
+.vibe-notes-lede { position: relative; margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.55; }
+.vibe-notes-lede b, .vibe-notes-list b { color: var(--ivory); font-weight: 600; }
+.vibe-notes-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 18px 0 14px; }
+.vibe-notes-mode { margin: 0; padding: 10px; border: 1px solid color-mix(in srgb, var(--ivory) 9%, transparent); border-radius: 18px; background: color-mix(in srgb, var(--bg-deep) 40%, transparent); transition: transform var(--motion-base) var(--ease-spring), border-color var(--motion-base) var(--ease-out); }
+.vibe-notes-mode:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--gold) 34%, transparent); }
+.vibe-notes-mode figcaption { display: grid; gap: 3px; padding: 10px 4px 2px; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.vibe-notes-mode figcaption b { color: var(--ivory); font-size: 14px; }
+.vibe-notes-mode.is-vibe figcaption b { color: var(--gold-bright); }
+.vibe-mini, .build-mini { position: relative; height: 112px; border-radius: 12px; overflow: hidden; }
+.vibe-mini { background: radial-gradient(70% 90% at 30% 0%, color-mix(in srgb, var(--gold) 34%, transparent), transparent 70%), radial-gradient(60% 80% at 100% 30%, color-mix(in srgb, var(--info) 22%, transparent), transparent 70%), color-mix(in srgb, var(--bg) 80%, transparent); }
+.vibe-mini i, .build-mini i { position: absolute; display: block; border-radius: 6px; background: color-mix(in srgb, var(--ivory) 14%, transparent); }
+.vibe-mini .mini-orb { left: calc(50% - 7px); top: 10px; width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, var(--gold-bright) 40%, var(--gold)); box-shadow: 0 0 14px var(--gold); animation: vibe-breathe 4s var(--ease-in-out) infinite; }
+.vibe-mini .mini-box { left: 20%; right: 20%; top: 32px; height: 20px; border-radius: 8px; background: color-mix(in srgb, var(--ivory) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 50%, transparent); }
+.vibe-mini .mini-lane { top: 60px; width: 26%; height: 28px; background: color-mix(in srgb, var(--ivory) 9%, transparent); }
+.vibe-mini .mini-lane:nth-of-type(3) { left: 9%; box-shadow: inset 0 2px 0 var(--live); }
+.vibe-mini .mini-lane:nth-of-type(4) { left: 37%; box-shadow: inset 0 2px 0 var(--warn); }
+.vibe-mini .mini-lane:nth-of-type(5) { left: 65%; box-shadow: inset 0 2px 0 var(--good); }
+.vibe-mini .mini-dock { left: 34%; right: 34%; bottom: 8px; height: 10px; border-radius: 6px; }
+.build-mini { background: color-mix(in srgb, var(--bg) 85%, transparent); }
+.build-mini .mini-rail { left: 0; top: 0; bottom: 0; width: 18%; border-radius: 0; background: color-mix(in srgb, var(--ivory) 8%, transparent); }
+.build-mini .mini-head { left: 22%; right: 4%; top: 8px; height: 10px; }
+.build-mini .mini-panel { left: 22%; right: 34%; top: 26px; bottom: 8px; background: color-mix(in srgb, var(--ivory) 10%, transparent); }
+.build-mini .mini-side { right: 4%; width: 26%; top: 26px; bottom: 8px; background: color-mix(in srgb, var(--ivory) 7%, transparent); }
+.vibe-notes-list { display: grid; gap: 8px; margin: 0 0 18px; padding: 0; list-style: none; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.vibe-notes-list li { position: relative; padding-left: 20px; }
+.vibe-notes-list li::before { content: ""; position: absolute; left: 4px; top: .62em; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+.vibe-notes-foot { display: flex; align-items: center; gap: 10px; padding-top: 14px; border-top: 1px solid color-mix(in srgb, var(--ivory) 8%, transparent); }
+.vibe-notes-link { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; padding: 6px 4px; border: 0; background: none; color: var(--gold-bright); font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.vibe-notes-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.vibe-notes-link .glyph { width: 13px; height: 13px; }
+@media (max-width: 560px) { .vibe-notes-modes { grid-template-columns: 1fr; } .vibe-notes-foot { flex-wrap: wrap; } }
 </style>
 <div id="boot-layer" role="dialog" aria-modal="true" aria-labelledby="boot-title" aria-describedby="boot-detail" tabindex="-1">
   <section class="boot-card">
@@ -7878,6 +8171,94 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
 
   </div>
 </section>
+<!-- Vibe: the calm front door (renderer/vibe.js). One box to talk or build,
+     what is building, what needs you and what just finished, and a five-stop
+     dock. The Build view (everything above and below) is one switch away. -->
+<section id="vibe-layer" class="vibe" aria-label="Vibe" hidden tabindex="-1">
+  <div class="vibe-sky" aria-hidden="true"><i class="vibe-aurora one"></i><i class="vibe-aurora two"></i><i class="vibe-aurora three"></i></div>
+  <header class="vibe-top">
+    <button id="vibe-project" class="vibe-project" type="button" title="Switch project" aria-controls="workspace-sidebar-panel"><span class="vibe-project-mark" aria-hidden="true">M+</span><span class="vibe-project-text"><small>Project</small><b id="vibe-project-name">Choose a project</b></span><svg class="glyph vibe-chev" aria-hidden="true"><use href="#g-chev"/></svg></button>
+    <div class="mode-switch" role="radiogroup" aria-label="Studio mode" data-mode="vibe">
+      <i class="mode-thumb" aria-hidden="true"></i>
+      <button type="button" role="radio" data-ui-mode="vibe" aria-checked="true" title="Vibe: the calm front door"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Vibe</span></button>
+      <button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button>
+    </div>
+    <div class="vibe-top-actions">
+      <span id="vibe-pulse" class="vibe-pulse" data-tone="quiet" role="status"><i aria-hidden="true"></i><span id="vibe-pulse-text">All quiet</span></span>
+      <button class="vibe-icon" type="button" data-nav="palette" title="Search everything (Ctrl K)" aria-label="Search everything"><svg class="glyph" aria-hidden="true"><use href="#g-search"/></svg></button>
+      <button id="vibe-chat-toggle" class="vibe-icon" type="button" aria-controls="vibe-chat" aria-expanded="false" title="Conversation" aria-label="Conversation"><svg class="glyph" aria-hidden="true"><use href="#g-plane"/></svg><i id="vibe-chat-dot" class="vibe-dot" hidden></i></button>
+      <button class="vibe-icon" type="button" data-nav="studio" title="Settings (Ctrl ,)" aria-label="Settings"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg></button>
+    </div>
+  </header>
+  <div class="vibe-stage">
+    <div class="vibe-hero">
+      <div class="vibe-orb" aria-hidden="true"><i></i><i></i><i></i></div>
+      <p id="vibe-kicker" class="vibe-kicker">Welcome back</p>
+      <h1 id="vibe-title">What should we make next?</h1>
+    </div>
+    <form id="vibe-compose" class="vibe-compose" autocomplete="off">
+      <label for="vibe-input" class="sr-only">Describe what you want</label>
+      <textarea id="vibe-input" rows="2" placeholder="Describe an idea, a fix or a question…"></textarea>
+      <div class="vibe-compose-foot">
+        <span id="vibe-hint" class="vibe-hint">Enter to talk · Ctrl + Enter to build</span>
+        <button id="vibe-talk" class="vibe-btn quiet" type="button"><svg class="glyph" aria-hidden="true"><use href="#g-plane"/></svg>Talk it over</button>
+        <button id="vibe-build" class="vibe-btn primary" type="submit"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg>Build it</button>
+      </div>
+    </form>
+    <div id="vibe-sparks" class="vibe-sparks" role="group" aria-label="Ways to start"></div>
+    <p id="vibe-feedback" class="vibe-feedback" role="status" aria-live="polite"></p>
+    <section class="vibe-lanes" aria-label="What is happening">
+      <article class="vibe-lane" data-lane="building" aria-labelledby="vibe-lane-building-title">
+        <header><span class="vibe-lane-mark" aria-hidden="true"></span><h2 id="vibe-lane-building-title">Building now</h2><span id="vibe-count-building" class="vibe-count"></span></header>
+        <ol id="vibe-lane-building" class="vibe-rows"></ol>
+        <button class="vibe-lane-link" type="button" data-nav="command">Watch it live <span aria-hidden="true">→</span></button>
+      </article>
+      <article class="vibe-lane" data-lane="needs" aria-labelledby="vibe-lane-needs-title">
+        <header><span class="vibe-lane-mark" aria-hidden="true"></span><h2 id="vibe-lane-needs-title">Needs you</h2><span id="vibe-count-needs" class="vibe-count"></span></header>
+        <ol id="vibe-lane-needs" class="vibe-rows"></ol>
+        <button class="vibe-lane-link" type="button" data-nav="tasks">All your tasks <span aria-hidden="true">→</span></button>
+      </article>
+      <article class="vibe-lane" data-lane="done" aria-labelledby="vibe-lane-done-title">
+        <header><span class="vibe-lane-mark" aria-hidden="true"></span><h2 id="vibe-lane-done-title">Freshly done</h2><span id="vibe-count-done" class="vibe-count"></span></header>
+        <ol id="vibe-lane-done" class="vibe-rows"></ol>
+        <button class="vibe-lane-link" type="button" data-nav="eyes">See the evidence <span aria-hidden="true">→</span></button>
+      </article>
+    </section>
+    <button id="vibe-last" class="vibe-last" type="button" hidden><span id="vibe-last-who" class="vibe-last-who">Mefi</span><span id="vibe-last-text" class="vibe-last-text"></span><span class="vibe-last-open">Open conversation</span></button>
+  </div>
+  <nav id="vibe-dock" class="vibe-dock" aria-label="Go to">
+    <button type="button" data-nav="command" title="Watch the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span></button>
+    <button type="button" data-nav="tasks" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
+    <button type="button" data-nav="plans" title="Plan an idea before building it (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span></button>
+    <button type="button" data-nav="ideas" title="Ideas the agents noticed (I)"><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg><span>Ideas</span><span class="count" data-badge="ideas" hidden></span></button>
+    <button type="button" data-nav="agents" title="Your agents, models and usage"><svg class="glyph" aria-hidden="true"><use href="#g-agents"/></svg><span>Agents</span></button>
+    <button type="button" data-nav="palette" title="Everything else (Ctrl K)"><svg class="glyph" aria-hidden="true"><use href="#g-more"/></svg><span>More</span></button>
+  </nav>
+  <aside id="vibe-chat" class="vibe-chat" aria-labelledby="vibe-chat-title" hidden>
+    <header class="vibe-chat-head"><div><small>Conversation</small><h2 id="vibe-chat-title">Mefi</h2></div><button id="vibe-chat-close" class="vibe-icon" type="button" aria-label="Close the conversation" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
+    <ol id="vibe-thread" class="vibe-thread"></ol>
+    <p class="vibe-chat-note">Reply in the box in the middle. Enter talks, Ctrl + Enter builds.</p>
+  </aside>
+</section>
+<!-- The one-time "what's new" card an existing user sees on the first launch
+     with Vibe (renderer/vibe.js decides; it never shows on a first run). -->
+<div id="vibe-notes" class="vibe-notes" hidden>
+  <div class="vibe-notes-card" role="dialog" aria-modal="true" aria-labelledby="vibe-notes-title" aria-describedby="vibe-notes-lede">
+    <header class="vibe-notes-head"><span class="vibe-notes-tag"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg>What's new</span><button id="vibe-notes-close" class="vibe-icon" type="button" aria-label="Close what's new" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
+    <h2 id="vibe-notes-title">Two ways to work: Vibe and Build</h2>
+    <p id="vibe-notes-lede" class="vibe-notes-lede">Studio now opens in <b>Vibe</b>, a calmer front door. Everything you already use lives in <b>Build</b>, one click away.</p>
+    <div class="vibe-notes-modes">
+      <figure class="vibe-notes-mode is-vibe"><div class="vibe-mini" aria-hidden="true"><i class="mini-orb"></i><i class="mini-box"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-dock"></i></div><figcaption><b>Vibe</b><span>Say what you want, watch it build, answer what needs you.</span></figcaption></figure>
+      <figure class="vibe-notes-mode is-build"><div class="build-mini" aria-hidden="true"><i class="mini-rail"></i><i class="mini-head"></i><i class="mini-panel"></i><i class="mini-side"></i></div><figcaption><b>Build</b><span>The full studio: Command, boards, models and every setting.</span></figcaption></figure>
+    </div>
+    <ul class="vibe-notes-list">
+      <li>Switch any time with the <b>Vibe / Build</b> toggle at the top, or from the menu and Search.</li>
+      <li>One box: <b>Talk it over</b> with Mefi, or <b>Build it</b> as a task.</li>
+      <li>Building now, Needs you and Freshly done share one screen.</li>
+    </ul>
+    <footer class="vibe-notes-foot"><button id="vibe-notes-changelog" class="vibe-notes-link" type="button">Full changelog<svg class="glyph" aria-hidden="true"><use href="#g-external"/></svg></button><button id="vibe-notes-build" class="vibe-btn quiet" type="button">Keep Build</button><button id="vibe-notes-ok" class="vibe-btn primary" type="button">Try Vibe</button></footer>
+  </div>
+</div>
 <!-- The tab pages' header: the page you are on and, when Command sent you here,
      the way back to it (nav.js paints both on mefi:nav). On the rail shell the
      menu carries the brand, Shortcuts and the update badge, so the screen shows
@@ -14752,7 +15133,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
   const isWorkspacePage = (dest) => document.documentElement?.dataset?.shell === "rail" && WORKSPACE_PAGES.has(dest?.id);
   function syncPageInert() {
     const page = isWorkspacePage(get(state.sheet));
-    for (const node of document.querySelectorAll?.("body > header, #tab-booklet, #tab-graph, #tab-eyes, #tab-studio, #workspace-layer, #idle-layer, #idle-hud, #tree-rail") ?? []) {
+    for (const node of document.querySelectorAll?.("body > header, #tab-booklet, #tab-graph, #tab-eyes, #tab-studio, #workspace-layer, #vibe-layer, #idle-layer, #idle-hud, #tree-rail") ?? []) {
       if (page && !node.inert) { node.inert = true; node.dataset.pageInert = ""; }
       else if (!page && "pageInert" in node.dataset) { node.inert = false; delete node.dataset.pageInert; }
     }
@@ -14924,12 +15305,12 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
       state.transient = id;
     }
     if (!state.focusReturn[dest.layer]) state.focusReturn[dest.layer] = document.activeElement;
-    state.returnTo = idleActive() ? "command" : window.MefiWorkspace?.isActive?.() ? "workspace" : null;
+    state.returnTo = idleActive() ? "command" : window.MefiWorkspace?.isActive?.() ? "workspace" : window.MefiVibe?.isActive?.() ? "vibe" : null;
     const root = dest.element ? document.getElementById(dest.element) : null;
     root?.classList.toggle("from-command", Boolean(state.returnTo));
     const back = root?.querySelector(".sheet-back");
     if (back) {
-      const label = state.returnTo === "workspace" ? "Workspace" : "Command";
+      const label = state.returnTo === "workspace" ? "Workspace" : state.returnTo === "vibe" ? "Vibe" : "Command";
       back.title = `Back to ${label} (Esc)`;
       const copy = back.querySelector(".label");
       if (copy) copy.textContent = label;
@@ -15036,6 +15417,8 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
   function go(id, params = {}, options = {}) {
     const redirected = window.MefiAgents?.redirect?.(id, params);
     if (redirected) return go(redirected.id, redirected.params, options);
+    // In Vibe mode, Home is Vibe: every Home button, H and Esc out of Command land there.
+    if (id === "workspace" && window.MefiVibe?.mode?.() === "vibe") id = "vibe";
     closeHelpMenu();
     delete document.documentElement.dataset.railDrawer;
     const dest = get(id);
@@ -15059,6 +15442,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
       if (id === "command" && !idleActive()) state.commandFrom = underlyingView();
       closeAll();
       if (id !== "workspace") window.MefiWorkspace?.exit?.();
+      if (id !== "vibe") window.MefiVibe?.exit?.();
       if (id !== "command" && idleActive()) window.MefiIdle?.exit?.();
       state.returnTo = null;
       navCommand?.classList.remove("return");
@@ -15069,6 +15453,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
     if (dest.kind === "tab") {
       closeAll();
       window.MefiWorkspace?.exit?.();
+      window.MefiVibe?.exit?.();
       if (idleActive()) {
         window.MefiIdle?.exit?.();
         state.returnTo = "command";
@@ -15096,6 +15481,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
   // The surface under any sheet: the workspace, or the active tab.
   function underlyingView() {
     if (window.MefiWorkspace?.isActive?.()) return "workspace";
+    if (window.MefiVibe?.isActive?.()) return "vibe";
     const tab = document.querySelector?.(".tab.active")?.dataset?.tab ?? null;
     return tab === "graph" ? modelRoute : tab;
   }
@@ -15466,7 +15852,9 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
     const composeLabel = document.createElement("span"); composeLabel.className = "label"; composeLabel.textContent = "New task"; compose.append(composeLabel);
     compose.addEventListener("click", () => window.MefiWorkspace?.composeTask?.());
     const search = navButton(get("palette"), "app-rail-item app-rail-search");
-    sections.append(compose, search);
+    const vibe = get("vibe") ? navButton(get("vibe"), "app-rail-item app-rail-vibe", { key: false }) : null;
+    if (vibe) { vibe.id = "app-rail-vibe"; vibe.title = "Vibe: the calm front door"; vibe.querySelector(".label").textContent = "Vibe mode"; }
+    sections.append(...[vibe, compose, search].filter(Boolean));
     for (const section of RAIL_SECTIONS) {
       const target = get(section.target);
       const group = document.createElement("div");
@@ -16127,6 +16515,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
     if (window.MefiMusic?.settingsAppearanceActive?.()) return "studio";
     if (idleActive()) return "command";
     if (window.MefiWorkspace?.isActive?.()) return "workspace";
+    if (window.MefiVibe?.isActive?.()) return "vibe";
     const tab = document.querySelector?.(".tab.active")?.dataset?.tab ?? null;
     return tab === "graph" ? modelRoute : tab;
   }
@@ -16680,6 +17069,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
       // truthy when the Command view was up; then also its selection and zoom
       command: commandActive ? { active: true, ...(window.MefiIdle?.saveState?.() ?? {}) } : false,
       workspace: Boolean(window.MefiWorkspace?.isActive?.()),
+      vibe: Boolean(window.MefiVibe?.isActive?.()),
       sheet: state.sheet ?? null,
       tab: readStore("mefiStudio.tab") ?? "booklet",
       at: Date.now(),
@@ -16762,6 +17152,10 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
       await ready(window.MefiWorkspace);
       if (!isCurrent()) return canceled();
     }
+    if (saved.vibe && window.MefiVibe) {
+      await window.MefiVibe.enter();
+      if (!isCurrent()) return canceled();
+    }
     if (saved.command) {
       const commandState = typeof saved.command === "object" ? saved.command : {};
       await window.MefiIdle?.enter?.(true, commandState);
@@ -16785,7 +17179,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
     if (!isCurrent()) return canceled();
     let finished = false;
     return {
-      restored: Boolean(saved.workspace || saved.command || sheet),
+      restored: Boolean(saved.workspace || saved.vibe || saved.command || sheet),
       finish() {
         if (finished) return;
         finished = true;
@@ -16802,6 +17196,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
     if (saved.tab && saved.tab !== readStore("mefiStudio.tab")) window.MefiBooklet?.showTab?.(saved.tab);
     const commandState = saved.command && typeof saved.command === "object" ? saved.command : {};
     if (saved.workspace) window.MefiWorkspace?.enter?.();
+    if (saved.vibe) window.MefiVibe?.enter?.();
     if (saved.command) setTimeout(() => window.MefiIdle?.enter?.(true, commandState), 1200);
     if (saved.sheet && get(saved.sheet)) {
       const sheetState = saved.sheet === "explorer" ? saved.explorer : saved.sheet === "tasks" ? saved.tasks : null;
@@ -16811,7 +17206,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
     // Command view, which open on the timers above.
     requestAnimationFrame(() => setTimeout(() => restoreDetails(saved), 300));
     setTimeout(() => restoreDetails(saved), 1600);
-    return Boolean(saved.workspace || saved.command || saved.sheet);
+    return Boolean(saved.workspace || saved.vibe || saved.command || saved.sheet);
   }
 
   // ---- boot --------------------------------------------------------------
@@ -47900,7 +48295,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
   const announce = (name, detail) => {
     try { if (typeof CustomEvent === "function" && typeof window.dispatchEvent === "function") window.dispatchEvent(new CustomEvent(name, { detail })); } catch {}
   };
-  const state = { projectId: null, projectName: "Your project", plans: [], selected: "new", busy: false, pending: null, tasks: null, workError: null, epoch: 0, opened: false, readId: 0, workReadId: 0, existing: null, existingOpen: false };
+  const state = { projectId: null, projectName: "Your project", plans: [], selected: "new", busy: false, pending: null, tasks: null, workError: null, epoch: 0, opened: false, readId: 0, workReadId: 0, existing: null, existingOpen: false, showArchived: false };
   let initialized = false;
   let workTimer = null;
   let workFlight = null;
@@ -47926,7 +48321,11 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
   const draftKey = () => JSON.stringify([state.projectId, state.selected]);
   const draft = () => drafts[draftKey()] ||= {};
   const plan = () => state.plans.find((item) => item.id === state.selected);
-  const frozen = (item) => ["converted", "converting"].includes(item?.status);
+  // On the board: its tasks exist, so its view follows their progress.
+  // Frozen: read-only, which also covers a plan you archived.
+  const onBoard = (item) => ["converted", "converting"].includes(item?.status);
+  const archived = (item) => item?.archivedAt != null;
+  const frozen = (item) => onBoard(item) || archived(item);
   const ready = (item, question) => (question.dependsOn || []).every((id) => item.questions.some((other) => other.id === id && other.status === "resolved"));
   const settled = (item) => !(item.unknowns || []).length && (item.questions || []).every((question) => question.status === "resolved");
   const confirmed = (item) => Boolean(item?.reviewedAt);
@@ -47939,12 +48338,18 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
   // opened that you have not answered, else the next question ready to explore.
   // `awaiting` separates the first two — your turn to answer — from the last,
   // where the interview has said its piece and the decision is yours to record.
+  // `answered` is the turn in between: your words are the last thing saved to
+  // the plan and Mefi has not replied (its reply failed, or you saved a note
+  // yourself). A note and the plan share one save time, so any later change,
+  // such as Mefi opening a new question, means the answer was already heard.
   function pendingAsk(item) {
     const open = (item?.questions || []).filter((question) => question.status === "open");
     for (const question of [...open].reverse()) {
       const last = (question.notes || []).at(-1);
       if (last?.author === "assistant" && ["question", "conflict"].includes(last.kind)) return { question, ask: last.text, followUp: true, awaiting: true };
     }
+    const answered = open.find((question) => { const last = (question.notes || []).at(-1); return last?.author === "user" && last.at >= item.updatedAt; });
+    if (answered) return { question: answered, ask: answered.question, followUp: false, awaiting: false, answered: true };
     const fresh = [...open].reverse().find((question) => !(question.notes || []).some((note) => note.author === "user"));
     if (fresh) return { question: fresh, ask: fresh.question, followUp: false, awaiting: true };
     const next = open.find((question) => ready(item, question)) || open[0];
@@ -48203,7 +48608,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
     const status = node("p", "planning-copilot-status", undefined, chrome); status.id = "plans-copilot-status"; status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
     status.dataset.active = String(assisted && copilot.status === "exploring");
     status.dataset.error = String(Boolean(copilot.error));
-    status.textContent = locked ? "This plan is on the task board." : !assisted ? "Your words, your pace. Mefi is paused." : !api()?.planningExplore ? "AI help is available in the desktop app." : copilot.error || ({ idle: "Write a little. Mefi will follow along.", waiting: "Following your draft…", exploring: "Reading files and connecting the details…", ready: `${copilot.result?.suggestions?.length || 0} suggestions ready to explore.` }[copilot.status] || "Keep writing, or try exploring again.");
+    status.textContent = locked ? archived(plan()) ? "This plan is archived. Restore it to keep planning." : "This plan is on the task board." : !assisted ? "Your words, your pace. Mefi is paused." : !api()?.planningExplore ? "AI help is available in the desktop app." : copilot.error || ({ idle: "Write a little. Mefi will follow along.", waiting: "Following your draft…", exploring: "Reading files and connecting the details…", ready: `${copilot.result?.suggestions?.length || 0} suggestions ready to explore.` }[copilot.status] || "Keep writing, or try exploring again.");
     const result = copilot.result;
     const showSuggestions = assisted && !locked && draft().copilotTab === "suggestions";
     if (assisted && !locked) {
@@ -48292,8 +48697,12 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
     if (id) result.id = `plans-${id}`; result.dataset.navigate = "true"; result.addEventListener("click", run); return result;
   }
   function taskProgress(task, tasks) {
-    if (!task) return { stage: "unknown", label: "Waiting for board status" };
+    // Once the board has been read, a linked task it does not hold was deleted.
+    if (!task) return state.tasks ? { stage: "missing", label: "No longer on the board" } : { stage: "unknown", label: "Waiting for board status" };
     const label = (stage, fallback) => window.MefiStage?.label?.(stage, task) ?? fallback;
+    // The owner's "won't do" (backlog.cjs droppedTask): archived unfinished,
+    // never a completion, so it neither reads as done nor confirms the plan.
+    if (task.status === "archived" && task.dropped && typeof task.dropped === "object" && !task.doneAt && task.verification?.state !== "verified" && !task.completionFromTaskId) return { stage: "dropped", label: "Dropped by you" };
     if (["done", "archived", "completed"].includes(task.status)) {
       if (task.verification?.state === "verified") return { stage: "done", label: label("done", "Done · Verified") };
       if (task.verification?.state === "manual") return { stage: "done", label: label("done", "Done · Confirmed by you") };
@@ -48320,9 +48729,9 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
     const resolved = questions.filter((question) => question.status === "resolved");
     const frontier = questions.filter((question) => question.status !== "resolved" && ready(item, question));
     const blocked = questions.filter((question) => question.status !== "resolved" && !ready(item, question));
-    const work = frozen(item) ? executionRows(item) : [];
+    const work = onBoard(item) ? executionRows(item) : [];
     const complete = work.length > 0 && work.every((task) => task.stage === "done");
-    let current = !item ? "idea" : frozen(item) ? (complete || work.some((task) => task.stage === "review") ? "verify" : "build")
+    let current = !item ? "idea" : onBoard(item) ? (complete || work.some((task) => task.stage === "review") ? "verify" : "build")
       : unknowns || (!questions.length && !item.spec) ? "explore"
       : resolved.length < questions.length ? (!pendingAsk(item)?.awaiting && frontier.some((question) => question.notes?.length) ? "decisions" : "explore")
       : !confirmed(item) ? "review"
@@ -48348,8 +48757,16 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
     const heading = node("div", "", undefined, head);
     node("span", "planning-flow-kicker", `Step ${flowStages.findIndex(([key]) => key === flow.current) + 1} of ${flowStages.length} · ${flowStages.find(([key]) => key === flow.current)?.[1] || "Planning"}`, heading);
     node("h3", "", composeSnapshot().title || "New plan", heading).id = "plans-draft-title";
-    const badge = node("span", "planning-flow-badge", flow.complete ? "Work confirmed" : item?.status === "converting" ? "Finish task creation" : item?.status === "converted" ? "On the task board" : item ? "Planning" : "Draft", head);
+    const badge = node("span", "planning-flow-badge", archived(item) ? "Archived" : flow.complete ? "Work confirmed" : item?.status === "converting" ? "Finish task creation" : item?.status === "converted" ? "On the task board" : item ? "Planning" : "Draft", head);
     badge.dataset.state = flow.complete ? "complete" : "waiting";
+    // Set a plan aside without deleting it; a plan still creating its tasks
+    // has to finish first. Restoring brings it back exactly as it was.
+    if (item && item.status !== "converting") {
+      const shelf = archived(item)
+        ? button("Restore plan", head, () => act("restore", {}, null, "Plan restored. It is back in your list."), "restore", true)
+        : button("Archive plan", head, () => act("archive", {}, null, "Plan archived. Find it under Archived in the list; restoring brings it back as it was."), "archive");
+      shelf.classList.add("mini");
+    }
     const rail = node("ol", "planning-flow-rail", undefined, area); rail.setAttribute("aria-label", "Planning and work stages");
     const decided = `${flow.resolved.length}/${flow.questions.length} recorded`;
     const subtitles = { idea: item ? "Destination saved" : "Set a destination", explore: flow.ask?.awaiting ? "Waiting for your answer" : `${flow.frontier.length} ready · ${flow.blocked.length} blocked`, decisions: decided, review: confirmed(item) ? "Confirmed by you" : "Review decisions", spec: item?.spec?.stale ? "Needs revision" : item?.spec ? "Draft saved" : "Draft specification", approval: item?.spec?.approvedAt ? "Approved by you" : "Review specification", build: frozen(item) ? `${flow.work.filter((task) => task.stage === "running").length} working · ${countLabel(item.taskIds?.length || 0, "task")}` : "Create tasks", verify: frozen(item) ? `${flow.work.filter((task) => task.stage === "done").length}/${flow.work.length} confirmed` : "Check the result" };
@@ -48383,9 +48800,9 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
     node("span", "planning-flow-dot", "", status).setAttribute("aria-hidden", "true");
     const next = { idea: "Start with the outcome. Build work begins after your approval.", explore: flow.ask?.awaiting ? "Mefi is waiting for your answer. Reply in your own words; it reads your answer back before moving on." : flow.unknowns ? `${flow.unknowns} unknown${flow.unknowns === 1 ? " needs" : "s need"} a question or a reason to set aside.` : "Let Mefi ask you the next question, or add one yourself.", decisions: "Read the interview back, then record your own decisions.", review: "Read what this plan now says the feature is. Nothing is drafted until you confirm it.", spec: "The decisions are settled. Draft the specification and its small implementation tasks.", approval: "Review the saved specification, task briefs, and acceptance checks before approving.", build: item?.status === "converted" ? "Tasks follow the current queue and Pause settings. Their board status is shown below." : item?.status === "converting" ? "Finish creating the approved tasks. Existing tasks will be reused." : "Your specification is approved. Create its tasks when you are ready.", verify: flow.complete ? "Every linked task has verified evidence or your recorded confirmation." : "A worker result is ready for verification. Open the task to inspect its evidence." };
     const pendingQuestion = flow.questions.find((question) => question.id === state.pending?.questionId);
-    node("span", "", state.pending?.assist ? state.pending.kind === "spec" ? "Mefi is drafting the specification from your saved decisions…" : state.pending.kind === "interview" ? "Mefi is reading your answer and working out what to ask next…" : state.pending.kind === "question" ? `Mefi is exploring: ${pendingQuestion?.question || "the selected question"}` : "Mefi is looking for questions in your saved destination…" : next[flow.current], status);
+    node("span", "", state.pending?.assist ? state.pending.kind === "spec" ? "Mefi is drafting the specification from your saved decisions…" : state.pending.kind === "interview" ? "Mefi is reading your answer and working out what to ask next…" : state.pending.kind === "question" ? `Mefi is exploring: ${pendingQuestion?.question || "the selected question"}` : "Mefi is looking for questions in your saved destination…" : archived(item) ? "This plan is archived. Restore it to pick up where you left off." : next[flow.current], status);
     if (item && !frozen(item)) renderQuestionMap(area, item, flow);
-    if (frozen(item)) renderExecution(area, item, flow.work);
+    if (onBoard(item)) renderExecution(area, item, flow.work);
   }
   function renderQuestionMap(area, item, flow) {
     const map = node("details", "planning-question-map", undefined, area); map.id = "plans-question-map";
@@ -48459,8 +48876,14 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
     const request = { projectId, ...(current ? { planId: current.id, version: current.version } : {}), ...payload, ...(assist ? {} : { action }) };
     stopExploration(); copilot.status = "idle";
     state.busy = true; state.pending = { assist, kind: payload.kind || action, questionId: payload.questionId }; persist(); renderWorkflow(current); renderCopilot(); controls(); note(assist ? "Mefi is thinking through the saved plan…" : "Saving your plan…");
+    let answerSaved = false;
     try {
-      const result = guard(await (assist ? api().planningAssist(request) : api().planningAction(request)));
+      const reply = await (assist ? api().planningAssist(request) : api().planningAction(request));
+      // The host filed your words before Mefi's reply failed. Clear the box
+      // they came from, so a retry asks Mefi to continue instead of sending
+      // the same answer again.
+      if (reply?.ok === false && reply.answerSaved && epoch === state.epoch && projectId === state.projectId) { answerSaved = true; if (clean) clean(savedDraft); persist(); }
+      const result = guard(reply);
       if (epoch !== state.epoch || projectId !== state.projectId || selected !== state.selected) return false;
       accept(result); if (clean) clean(savedDraft); if (action === "create") { drafts[draftKey()] = savedDraft; delete drafts[key]; } persist();
       render(); note(result.note || success);
@@ -48473,20 +48896,30 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
         // A stale-version error needs a fresh saved plan, while keeping every
         // local field. Retrying then uses the latest version, never a blind save.
         try { const fresh = guard(await api().planningList({ projectId })); if (epoch === state.epoch && projectId === state.projectId && (!fresh.projectId || fresh.projectId === projectId)) { state.plans = fresh.plans || []; render(); } } catch {}
-        if (epoch === state.epoch) note(`${error.message} Your entered text is kept.`, true);
+        if (epoch === state.epoch) note(answerSaved ? `${error.message} Your answer is saved; choose Continue with Mefi to try again.` : `${error.message} Your entered text is kept.`, true);
       }
       return false;
-    } finally { if (epoch === state.epoch) { state.busy = false; state.pending = null; renderWorkflow(plan()); renderCopilot(); controls(); if (frozen(plan())) void refreshWork(); } }
+    } finally { if (epoch === state.epoch) { state.busy = false; state.pending = null; renderWorkflow(plan()); renderCopilot(); controls(); if (onBoard(plan())) void refreshWork(); } }
   }
   function renderList() {
     $("project").textContent = state.projectName; $("list").replaceChildren();
-    for (const item of state.plans) {
+    // Archived plans fold under one toggle; a selected one stays visible.
+    const shelved = state.plans.filter(archived);
+    const showShelf = state.showArchived || archived(plan());
+    const rows = [...state.plans.filter((item) => !archived(item)), ...(showShelf ? shelved : [])];
+    for (const [index, item] of rows.entries()) {
+      if (archived(item) && !archived(rows[index - 1])) node("p", "planning-subtle planning-list-divider", "Archived", $("list"));
       const row = button("", $("list"), () => { if (state.busy) return; window.MefiNav?.note?.("plans", { planId: item.id }); state.selected = item.id; state.workReadId += 1; render(); note(); void refreshWork(); }, null);
       row.dataset.planId = item.id; row.setAttribute("aria-pressed", String(item.id === state.selected));
       node("strong", "", item.title, row);
       const open = (item.questions || []).filter((question) => question.status !== "resolved").length;
       const taskCount = item.taskIds?.length || 0;
-      node("small", "", item.status === "converted" ? `${countLabel(taskCount, "task")} created` : item.status === "converting" ? "Task creation needs finishing" : item.spec?.approvedAt ? "Approved · ready for tasks" : `${countLabel(open, "open question")} · ${countLabel(item.unknowns?.length || 0, "unknown")}`, row);
+      if (archived(item)) row.dataset.archived = "true";
+      node("small", "", archived(item) ? `Archived${item.status === "converted" ? ` · ${countLabel(item.taskIds?.length || 0, "task")} created` : ""}` : item.status === "converted" ? `${countLabel(taskCount, "task")} created` : item.status === "converting" ? "Task creation needs finishing" : item.spec?.approvedAt ? "Approved · ready for tasks" : `${countLabel(open, "open question")} · ${countLabel(item.unknowns?.length || 0, "unknown")}`, row);
+    }
+    if (shelved.length && !archived(plan())) {
+      const toggle = navigation(state.showArchived ? `Hide archived · ${shelved.length}` : `Show archived · ${shelved.length}`, $("list"), () => { state.showArchived = !state.showArchived; renderList(); controls(); }, "archived-toggle", "ghost mini");
+      toggle.setAttribute("aria-expanded", String(state.showArchived));
     }
     if (!state.plans.length) {
       const empty = node("div", "planning-library-empty", undefined, $("list"));
@@ -48559,7 +48992,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
   function interviewPanel(item) {
     const area = section("2. Mefi's questions for you", "Mefi asks, you answer in your own words, and it reads your answer back before moving on. Nothing here records a decision — you do that under each question.");
     area.id = "plans-interview-section"; area.tabIndex = -1;
-    if (frozen(item)) { node("p", "planning-subtle", "This plan is on the task board. Its interview stays below as a record.", area); return; }
+    if (frozen(item)) { node("p", "planning-subtle", archived(item) && !onBoard(item) ? "This plan is archived. Its interview stays below as a record; restore the plan to continue it." : "This plan is on the task board. Its interview stays below as a record.", area); return; }
     const local = draft(); const values = local.interview ||= { message: "", useWeb: false };
     const pending = unsavedPlan(item); const ask = pendingAsk(item);
     const card = node("article", "planning-card planning-interview", undefined, area);
@@ -48572,7 +49005,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
       return;
     }
     const index = item.questions.indexOf(ask.question) + 1;
-    node("span", "planning-pill", ask.followUp ? `Follow-up on Q${index}` : `Q${index} · ${typeChoices.find(([type]) => type === ask.question.type)?.[1] || ask.question.type}`, card).dataset.state = "ready";
+    node("span", "planning-pill", ask.followUp ? `Follow-up on Q${index}` : ask.answered ? `Q${index} · Your answer is saved` : `Q${index} · ${typeChoices.find(([type]) => type === ask.question.type)?.[1] || ask.question.type}`, card).dataset.state = "ready";
     node("p", "planning-interview-ask", ask.ask, card).id = "plans-interview-ask";
     const talk = node("details", "", undefined, card); talk.open = local.interviewOpen !== false;
     node("summary", "", `What we've said about this${ask.question.notes?.length ? ` · ${countLabel(ask.question.notes.length, "line")}` : ""}`, talk);
@@ -48584,10 +49017,15 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
     check.addEventListener("change", () => { values.useWeb = check.checked; persist(); });
     const actions = node("div", "planning-actions", undefined, card);
     const clean = (saved) => { delete saved.interview; };
-    button("Send answer", actions, async () => {
+    // Your answer is on the record but Mefi has not replied: ask it to read
+    // what you said and carry on, without sending the words a second time.
+    if (ask.answered) button("Continue with Mefi", actions, async () => {
+      if (await act("interview", { kind: "interview", questionId: ask.question.id, useWeb: values.useWeb }, null, "Mefi read your answer back. Check what it understood, then answer the next question.", true)) navigateTo("interview-answer", "interview-start");
+    }, "interview-continue", true, pending);
+    button(ask.answered ? "Add to my answer" : "Send answer", actions, async () => {
       if (!values.message.trim()) { note("Type your answer first, or ask Mefi to explain the tradeoffs.", true); navigateTo("interview-answer"); return; }
       if (await act("interview", { kind: "interview", questionId: ask.question.id, message: values.message, useWeb: values.useWeb }, clean, "Mefi read your answer back. Check what it understood, then answer the next question.", true)) navigateTo("interview-answer", "interview-start");
-    }, "interview-send", true, pending);
+    }, "interview-send", !ask.answered, pending);
     button("Explain the tradeoffs", actions, () => act("question", { kind: "question", questionId: ask.question.id, message: values.message, useWeb: values.useWeb }, clean, "Mefi explained the tradeoffs. It still needs your answer.", true), "interview-explain", false, pending);
     navigation("Record my decision ↓", actions, () => navigateTo(`resolution-${ask.question.id}`, `question-card-${ask.question.id}`), "interview-to-decision", "ghost mini");
     node("p", "planning-subtle", pending ? "Save your destination, unknown, or question edits first." : "Uses your configured assistant connection. Mefi does the asking and the organizing; every decision stays yours.", card);
@@ -48728,6 +49166,8 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
       node("p", "", `${count} ${count === 1 ? "task was" : "tasks were"} added to this project's queue. Open one to follow its progress.`, approve);
       const actions = node("div", "planning-actions", undefined, approve);
       for (const [index, id] of (item.taskIds || []).entries()) button(item.spec?.tasks?.[index]?.title || `Open task ${index + 1}`, actions, () => window.MefiNav?.go?.("tasks", { taskId: id }));
+    } else if (archived(item)) {
+      node("p", "", "This plan is archived. Restore it to review, approve or create its tasks.", approve);
     } else if (item.status === "converting") {
       node("p", "", "Task creation started. Finish adding the approved tasks to the queue. Existing tasks will be reused.", approve);
       button("Finish creating tasks", approve, () => act("convert", {}, null, "Approved tasks are in your project's queue."), "convert", true);
@@ -48744,7 +49184,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
     const local = draft(); const area = node("details", "planning-card", undefined, $("editor") || $("detail")); area.id = "plans-history";
     node("summary", "", `Plan history · ${countLabel(item.history.length, "saved revision")}`, area);
     node("p", "planning-subtle", "Earlier decisions and specifications remain available here after you change the plan. Copy any text you want to use in a new revision.", area);
-    const labels = { create: "Plan created", update: "Destination saved", "add-unknown": "Unknown added", "remove-unknown": "Unknown set aside", "add-question": "Question added", "edit-question": "Question edited", resolve: "Decision recorded", reopen: "Decision reopened", "add-note": "Interview line saved", "confirm-understanding": "Understanding confirmed", "draft-spec": "Specification drafted", "approve-spec": "Specification approved", "begin-conversion": "Task creation started", "mark-converted": "Tasks created" };
+    const labels = { create: "Plan created", update: "Destination saved", "add-unknown": "Unknown added", "remove-unknown": "Unknown set aside", "add-question": "Question added", "edit-question": "Question edited", resolve: "Decision recorded", reopen: "Decision reopened", "add-note": "Interview line saved", "confirm-understanding": "Understanding confirmed", "draft-spec": "Specification drafted", "approve-spec": "Specification approved", "begin-conversion": "Task creation started", "mark-converted": "Tasks created", archive: "Plan archived", restore: "Plan restored" };
     const limit = local.historyLimit || 12;
     for (const entry of [...item.history].reverse().slice(0, limit)) {
       const row = node("details", "", undefined, area);
@@ -48883,7 +49323,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
   }
   async function refreshWork() {
     const item = plan();
-    if (!state.opened || document.hidden || !frozen(item) || state.busy) return;
+    if (!state.opened || document.hidden || !onBoard(item) || state.busy) return;
     const epoch = state.epoch, projectId = state.projectId, selected = state.selected;
     const key = JSON.stringify([epoch, projectId, selected]);
     if (workFlight?.key === key) return workFlight.promise;
@@ -48939,7 +49379,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
     if (!state.opened) return;
     if (options.create) { state.selected = "new"; if (options.destination && !draft().details?.destination) { draft().details = { title: "", destination: String(options.destination), outOfScope: "" }; persist(); } }
     else if (options.planId) state.selected = options.planId;
-    else if (state.selected === "new" && state.plans.length) state.selected = state.plans[0].id;
+    else if (state.selected === "new" && state.plans.some((item) => !archived(item))) state.selected = state.plans.find((item) => !archived(item)).id;
     render(); if (state.projectId && api()?.planningList && $("notice").dataset.error !== "true") note();
     startWorkPoll();
     (options.create ? $("title") : $("new"))?.focus();
@@ -54668,6 +55108,446 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();
 
+// Vibe: the calm front door, and the Vibe / Build mode that picks it.
+// Vibe is the default mode. It shows one box to talk or build, what is
+// building, what needs you and what just finished, over the live tree, with a
+// five-stop dock; every Build surface stays one click away. The mode lives in
+// localStorage (mefiStudio.uiMode) so it survives restarts. Diagnostic
+// launches (?capture=1, ?smoke=1) keep Build unless a mode was saved, so the
+// render fixtures and screenshots see the view they were written for.
+// Existing users get a one-time "what's new" card; a first run never does.
+(function () {
+  "use strict";
+  const MODE_KEY = "mefiStudio.uiMode";
+  const NOTES_KEY = "mefiStudio.whatsNew.seen";
+  const NOTES_ID = "vibe-build-1";
+  const CHANGELOG_URL = "https://github.com/nateecho32-stack/mefi-studio/blob/main/CHANGELOG.md";
+  const layer = document.getElementById("vibe-layer");
+  if (!layer) return;
+  const $ = (id) => document.getElementById(`vibe-${id}`);
+  const api = () => window.mefiStudio;
+  const read = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
+  const write = (key, value) => { try { localStorage.setItem(key, value); } catch { /* private store */ } };
+  const headless = /[?&](?:smoke|capture)=1(?:&|$)/.test(String(window.location?.search || ""));
+
+  // Read before anything this launch writes: a profile that already holds
+  // Home's drafts, a selected task or the start-on-Home preference has used
+  // an earlier Studio, so it gets the card; an empty one is a first run.
+  const returning = (() => {
+    try {
+      if (read("mefiStudio.commandHome") !== null || read("mefiStudio.resume") !== null) return true;
+      for (let index = 0; index < localStorage.length; index += 1) {
+        const key = localStorage.key(index) || "";
+        if (key.startsWith("mefiStudio.workspace.") || key.startsWith("mefiStudio.taskContext.")) return true;
+      }
+    } catch { /* no store: treat as a first run */ }
+    return false;
+  })();
+
+  const mode = () => {
+    const saved = read(MODE_KEY);
+    if (saved === "vibe" || saved === "build") return saved;
+    return headless ? "build" : "vibe";
+  };
+  function paintMode() {
+    const current = mode();
+    document.documentElement.dataset.uiMode = current;
+    for (const group of document.querySelectorAll(".mode-switch")) {
+      group.dataset.mode = current;
+      for (const button of group.querySelectorAll("[data-ui-mode]")) button.setAttribute("aria-checked", String(button.dataset.uiMode === current));
+    }
+  }
+  // Switching remembers the choice and lands on that mode's home.
+  function setMode(next, { go = true } = {}) {
+    next = next === "build" ? "build" : "vibe";
+    write(MODE_KEY, next);
+    paintMode();
+    if (go) window.MefiNav?.go?.(next === "vibe" ? "vibe" : "workspace");
+    return next;
+  }
+
+  // ---- data -----------------------------------------------------------------
+  const state = { projects: [], activeId: null, tasks: [], assistant: {}, status: {}, backlog: null, pending: false, chatOpen: false, seenMessages: 0 };
+  let initialized = false;
+  let refreshFlight = null;
+  const projectId = () => window.MefiWorkspace?.activeProjectId?.() || state.activeId;
+  const belongs = (value) => !value?.projectId || value.projectId === projectId();
+  const scoped = (rows) => (Array.isArray(rows) ? rows : []).filter(belongs);
+  const done = (task) => ["done", "archived", "completed"].includes(task.status);
+  const describe = (task) => window.MefiTasks?.describe?.(task) ?? { stage: done(task) ? "done" : task.status === "awaiting_verification" ? "review" : "open" };
+  const stamp = (task) => Number(task.updatedAt || task.createdAt) || Date.parse(task.updatedAt || task.createdAt || "") || 0;
+  const companion = () => { try { return (localStorage.getItem("mefiStudio.workspace.companion") || "Mefi").trim() || "Mefi"; } catch { return "Mefi"; } };
+  const person = () => { try { return (localStorage.getItem("mefiStudio.workspace.person") || "").trim(); } catch { return ""; } };
+
+  async function refresh() {
+    if (!api()) { render(); return; }
+    if (refreshFlight) return refreshFlight;
+    const calls = ["projectsList", "tasksList", "assistantState", "assistantStatus", "backlogStatus"];
+    refreshFlight = Promise.allSettled(calls.map((method) => Promise.resolve().then(() => api()[method]?.()))).then((results) => {
+      const value = (index) => results[index].status === "fulfilled" ? results[index].value : null;
+      const projects = value(0);
+      if (projects?.projects) { state.projects = projects.projects; state.activeId = projects.activeId ?? state.activeId; }
+      if (value(1)?.tasks && belongs(value(1))) state.tasks = value(1).tasks;
+      if (value(2)?.state && belongs(value(2).state)) state.assistant = value(2).state;
+      if (value(3)?.status && belongs(value(3).status)) state.status = value(3).status;
+      if (value(4)?.ok && belongs(value(4))) state.backlog = value(4);
+      render();
+    }).finally(() => { refreshFlight = null; });
+    return refreshFlight;
+  }
+
+  // ---- render ---------------------------------------------------------------
+  const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = String(text); return node; };
+  const signatures = new Map();
+  // Skip a paint when its inputs are unchanged, so a push storm stays cheap.
+  function changed(key, value) {
+    const signature = JSON.stringify(value);
+    if (signatures.get(key) === signature) return false;
+    signatures.set(key, signature);
+    return true;
+  }
+  function ago(at) {
+    const ms = Date.now() - (Number(at) || Date.parse(at) || Date.now());
+    if (ms < 60000) return "just now";
+    if (ms < 3600000) return `${Math.round(ms / 60000)} min ago`;
+    if (ms < 86400000) return `${Math.round(ms / 3600000)} h ago`;
+    return `${Math.round(ms / 86400000)} d ago`;
+  }
+  function greeting() {
+    const hour = new Date().getHours();
+    const part = hour < 5 ? "Up late" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+    const name = person();
+    return name ? `${part}, ${name}` : part;
+  }
+  function lanes() {
+    const running = scoped(state.status.running);
+    const runningIds = new Set(running.map((job) => job.taskId).filter(Boolean));
+    const tasks = scoped(state.tasks);
+    const questions = (Array.isArray(state.assistant.questions) ? state.assistant.questions : []).filter((question) => question?.status === "open" && belongs(question));
+    const review = tasks.filter((task) => !runningIds.has(task.id) && describe(task).stage === "review");
+    const counts = state.backlog?.counts || {};
+    const next = (Array.isArray(state.backlog?.next) ? state.backlog.next : []).filter((item) => !runningIds.has(item.id)).slice(0, 2);
+    const finished = tasks.filter((task) => done(task) && describe(task).stage !== "review").sort((a, b) => stamp(b) - stamp(a)).slice(0, 3);
+    return { running, questions, review, counts, next, finished };
+  }
+  function row({ tone, title, meta, progress, action, onOpen }) {
+    const item = el("li", `vibe-row${tone ? ` is-${tone}` : ""}`);
+    const open = el("button", "vibe-row-main");
+    open.type = "button";
+    open.append(el("span", "vibe-row-dot"), el("span", "vibe-row-title", title));
+    if (meta) open.append(el("span", "vibe-row-meta", meta));
+    if (progress !== undefined) {
+      const bar = el("span", "vibe-bar");
+      const fill = el("i");
+      if (typeof progress === "number" && Number.isFinite(progress)) fill.style.width = `${Math.max(6, Math.min(100, progress * 100))}%`;
+      else bar.classList.add("is-flowing");
+      bar.append(fill); open.append(bar);
+    }
+    open.addEventListener("click", onOpen);
+    item.append(open);
+    if (action) {
+      const button = el("button", "vibe-row-action", action.label);
+      button.type = "button";
+      button.addEventListener("click", action.run);
+      item.append(button);
+    }
+    return item;
+  }
+  function empty(text) { return el("li", "vibe-empty", text); }
+  const go = (id, params) => window.MefiNav?.go?.(id, params);
+
+  function renderLanes() {
+    const data = lanes();
+    if (!changed("lanes", [data, projectId()])) return;
+    const building = $("lane-building");
+    building.replaceChildren();
+    for (const job of data.running.slice(0, 3)) {
+      const phase = job.phase ? String(job.phase).replace(/_/g, " ") : "working";
+      building.append(row({ tone: "live", title: job.title || "A task", meta: `${phase} · started ${ago(job.startedAt)}`, progress: job.progress, onOpen: () => go("command", job.taskId ? { selected: `task:${job.taskId}` } : {}) }));
+    }
+    for (const item of data.next) building.append(row({ tone: "next", title: item.title || "Next task", meta: "up next", onOpen: () => go("tasks", item.id ? { taskId: item.id } : {}) }));
+    if (!building.children.length) building.append(empty("Nothing is building. Describe something above and it starts here."));
+    $("count-building").textContent = data.running.length ? String(data.running.length) : "";
+
+    const needs = $("lane-needs");
+    needs.replaceChildren();
+    for (const question of data.questions.slice(0, 3)) needs.append(row({ tone: "ask", title: question.title || "A decision", meta: "decision", action: { label: "Answer", run: () => go("command", { rail: "ask" }) }, onOpen: () => go("command", { rail: "ask" }) }));
+    for (const task of data.review.slice(0, Math.max(0, 3 - needs.children.length))) needs.append(row({ tone: "review", title: task.title || "A finished task", meta: "ready for your review", action: { label: "Review", run: () => go("tasks", { taskId: task.id }) }, onOpen: () => go("tasks", { taskId: task.id }) }));
+    if (data.counts.approval) needs.append(row({ tone: "ask", title: `${data.counts.approval} task${data.counts.approval === 1 ? "" : "s"} waiting for your go-ahead`, meta: "approval", onOpen: () => go("tasks") }));
+    if (data.counts.blocked) needs.append(row({ tone: "bad", title: `${data.counts.blocked} task${data.counts.blocked === 1 ? "" : "s"} stuck`, meta: "needs attention", onOpen: () => go("tasks") }));
+    const needCount = data.questions.length + data.review.length + (data.counts.approval || 0) + (data.counts.blocked || 0);
+    if (!needs.children.length) needs.append(empty("You're all caught up."));
+    $("count-needs").textContent = needCount ? String(needCount) : "";
+    layer.dataset.needs = needCount ? "yes" : "no";
+
+    const finished = $("lane-done");
+    finished.replaceChildren();
+    for (const task of data.finished) {
+      const verified = task.verification?.state === "verified";
+      finished.append(row({ tone: "done", title: task.title || "A task", meta: `${verified ? "verified" : "done"} · ${ago(task.updatedAt || task.createdAt)}`, onOpen: () => go("tasks", { taskId: task.id }) }));
+    }
+    if (!finished.children.length) finished.append(empty("Finished work lands here."));
+    $("count-done").textContent = "";
+
+    const pulse = $("pulse");
+    const tone = data.questions.length ? "ask" : data.running.length ? "live" : "quiet";
+    pulse.dataset.tone = tone;
+    $("pulse-text").textContent = data.questions.length ? `${data.questions.length} need${data.questions.length === 1 ? "s" : ""} you` : data.running.length ? `${data.running.length} building` : state.assistant.status === "paused" ? "Paused" : "All quiet";
+  }
+  function messages() {
+    return (Array.isArray(state.assistant.messages) ? state.assistant.messages : []).filter((message) => ["user", "assistant"].includes(message?.role) && belongs(message)).slice(-60);
+  }
+  function renderChat() {
+    const list = messages();
+    const thinking = state.pending ? "pending" : "";
+    if (!changed("chat", [list, thinking, companion(), person()])) return;
+    $("chat-title").textContent = companion();
+    const thread = $("thread");
+    const pinned = thread.scrollTop + thread.clientHeight >= thread.scrollHeight - 40;
+    thread.replaceChildren();
+    if (!list.length) thread.append(el("li", "vibe-empty", `Ask ${companion()} anything about this project. Replies show up here.`));
+    for (const message of list) {
+      const item = el("li", `vibe-msg is-${message.role}${message.kind === "notice" ? " is-notice" : ""}`);
+      item.append(el("span", "vibe-msg-who", message.role === "user" ? person() || "You" : companion()), el("p", "vibe-msg-text", message.text));
+      thread.append(item);
+    }
+    if (state.pending) { const typing = el("li", "vibe-msg is-assistant is-typing"); typing.append(el("span", "vibe-msg-who", companion()), el("span", "vibe-typing")); typing.lastChild.append(el("i"), el("i"), el("i")); thread.append(typing); }
+    if (pinned || state.pending) thread.scrollTop = thread.scrollHeight;
+    const last = [...list].reverse().find((message) => message.role === "assistant");
+    $("last").hidden = !last || state.chatOpen;
+    if (last) { $("last-who").textContent = companion(); $("last-text").textContent = last.text; }
+    const unread = list.length > state.seenMessages && !state.chatOpen && list.at(-1)?.role === "assistant";
+    $("chat-dot").hidden = !unread;
+  }
+  function renderHead() {
+    const project = state.projects.find((item) => item.id === projectId());
+    $("project-name").textContent = project?.name || "Choose a project";
+    $("kicker").textContent = greeting();
+    const hasWork = scoped(state.tasks).some((task) => !done(task));
+    $("title").textContent = !project ? "Pick a project to begin" : hasWork ? `What's next for ${project.name}?` : `What should we make in ${project.name}?`;
+  }
+  function render() {
+    if (!active()) return;
+    renderHead(); renderLanes(); renderChat();
+  }
+
+  // ---- composer -------------------------------------------------------------
+  const SPARKS = [
+    ["Fix something broken", "Something is broken: "],
+    ["Add a feature", "Add a feature: "],
+    ["Polish the look", "Polish the look of "],
+    ["What should we do next?", "What should we work on next in this project?"],
+  ];
+  function renderSparks() {
+    const holder = $("sparks");
+    holder.replaceChildren();
+    for (const [label, prompt] of SPARKS) {
+      const chip = el("button", "vibe-spark", label);
+      chip.type = "button";
+      chip.addEventListener("click", () => { const input = $("input"); input.value = prompt; input.focus(); input.setSelectionRange(prompt.length, prompt.length); grow(); });
+      holder.append(chip);
+    }
+  }
+  function grow() { const input = $("input"); input.style.height = "auto"; input.style.height = `${Math.min(220, input.scrollHeight)}px`; }
+  function feedback(text, tone = "") { const node = $("feedback"); node.textContent = text; node.dataset.tone = tone; }
+  function busy(on) {
+    state.pending = on;
+    layer.dataset.pending = on ? "yes" : "no";
+    for (const id of ["talk", "build"]) $(id).disabled = on;
+  }
+  async function send(intent) {
+    const input = $("input");
+    const value = input.value.trim();
+    const id = projectId();
+    if (state.pending) return;
+    if (!value) { input.focus(); feedback("Describe what you have in mind first."); return; }
+    if (!id || !api()) { feedback("Choose a project first: select the project name at the top left.", "warn"); return; }
+    if (intent === "build" && value.replace(/[^\p{L}\p{N}]/gu, "").length < 3) { feedback("Say a little more about what to build.", "warn"); return; }
+    busy(true);
+    if (intent === "talk") openChat();
+    feedback(intent === "build" ? "Adding it to the build queue…" : `${companion()} is thinking…`);
+    renderChat();
+    try {
+      const result = intent === "build"
+        ? await api().tasksCreate({ title: value.split("\n")[0].slice(0, 180), prompt: value, projectId: id })
+        : await api().assistantMessage(value, id, { view: "Vibe", companion: companion() });
+      if (!result || result.ok === false) throw new Error(result?.error || "That didn't go through.");
+      if (input.value.trim() === value) { input.value = ""; grow(); }
+      if (result.state) state.assistant = result.state;
+      if (intent === "build") {
+        feedback(state.status.autoBuild === false ? "Added. It waits for your go-ahead under Needs you." : "Added. It shows under Building now as soon as an agent picks it up.", "good");
+        window.dispatchEvent(new CustomEvent("mefi:task-created", { detail: { taskId: result.task?.id, projectId: id } }));
+      } else feedback("");
+      await refresh();
+    } catch (error) {
+      feedback(`${error?.message || "That didn't go through."} Your text is still in the box.`, "bad");
+    } finally { busy(false); renderChat(); }
+  }
+
+  // ---- conversation drawer --------------------------------------------------
+  function openChat() {
+    state.chatOpen = true; $("chat").hidden = false; layer.dataset.chat = "open";
+    $("chat-toggle").setAttribute("aria-expanded", "true");
+    state.seenMessages = messages().length;
+    signatures.delete("chat"); renderChat();
+    const thread = $("thread"); thread.scrollTop = thread.scrollHeight;
+  }
+  function closeChat() {
+    state.chatOpen = false; $("chat").hidden = true; layer.dataset.chat = "closed";
+    $("chat-toggle").setAttribute("aria-expanded", "false");
+    state.seenMessages = messages().length;
+    signatures.delete("chat"); renderChat();
+  }
+
+  // ---- surface --------------------------------------------------------------
+  function active() { return !layer.hidden; }
+  function enter() {
+    init();
+    if (mode() !== "vibe") setMode("vibe", { go: false });
+    window.MefiWorkspace?.exit?.();
+    window.MefiIdle?.exit?.();
+    layer.hidden = false;
+    document.body.classList.add("vibe-active");
+    // The live tree is Vibe's sky, as it is Home's; it waits for the startup gate.
+    const sky = () => { if (active()) window.MefiIdle?.setHomeBackdrop?.(true); };
+    if (window.MefiBoot?.isActive?.()) Promise.resolve(window.MefiBoot.ready?.()).then(sky, sky); else sky();
+    signatures.clear();
+    render();
+    if (!window.MefiBoot?.isActive?.()) layer.focus({ preventScroll: true });
+    return refresh();
+  }
+  function exit() {
+    if (layer.hidden) return;
+    layer.hidden = true;
+    document.body.classList.remove("vibe-active");
+    if (!window.MefiWorkspace?.isActive?.()) window.MefiIdle?.setHomeBackdrop?.(false);
+  }
+  // Where Studio lands when it opens on its home.
+  function landing() { return mode() === "vibe" ? "vibe" : "workspace"; }
+
+  function init() {
+    if (initialized) return;
+    initialized = true;
+    renderSparks();
+    $("compose").addEventListener("submit", (event) => { event.preventDefault(); void send("build"); });
+    $("talk").addEventListener("click", () => void send("talk"));
+    $("input").addEventListener("input", () => { grow(); if ($("feedback").textContent && !state.pending) feedback(""); });
+    $("input").addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+      event.preventDefault();
+      void send(event.ctrlKey || event.metaKey ? "build" : "talk");
+    });
+    $("project").addEventListener("click", () => window.MefiSidebar?.open?.({ focus: true }));
+    $("chat-toggle").addEventListener("click", () => (state.chatOpen ? closeChat() : openChat()));
+    $("chat-close").addEventListener("click", () => { closeChat(); $("chat-toggle").focus(); });
+    $("last").addEventListener("click", openChat);
+    layer.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && state.chatOpen) { event.preventDefault(); event.stopPropagation(); closeChat(); $("chat-toggle").focus(); }
+    });
+    api()?.onProjects?.((payload) => { if (payload?.projects) { state.projects = payload.projects; state.activeId = payload.activeId ?? state.activeId; } signatures.clear(); if (active()) void refresh(); });
+    api()?.onTasks?.((tasks) => { if (!Array.isArray(tasks) || tasks.some((task) => task.projectId && task.projectId !== projectId())) return; state.tasks = tasks; if (active()) { renderLanes(); renderHead(); } });
+    api()?.onAssistant?.((payload) => { if (!payload?.state || !belongs(payload.state)) return; state.assistant = payload.state; if (active()) { renderLanes(); renderChat(); } });
+    api()?.onAssistantStatus?.((status) => { if (!status || !belongs(status)) return; state.status = status; if (active()) renderLanes(); });
+    // The greeting follows the clock without a timer of its own.
+    document.addEventListener("visibilitychange", () => { if (!document.hidden && active()) { renderHead(); void refresh(); } });
+  }
+
+  // ---- mode switches everywhere ---------------------------------------------
+  document.addEventListener("click", (event) => {
+    const button = event.target?.closest?.(".mode-switch [data-ui-mode]");
+    if (!button) return;
+    event.preventDefault();
+    if (button.dataset.uiMode !== mode() || !active()) setMode(button.dataset.uiMode);
+  });
+  document.addEventListener("keydown", (event) => {
+    const button = event.target?.closest?.(".mode-switch [data-ui-mode]");
+    if (!button || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+    event.preventDefault();
+    const target = button.parentElement.querySelector(`[data-ui-mode="${button.dataset.uiMode === "vibe" ? "build" : "vibe"}"]`);
+    target?.focus();
+    target?.click();
+  });
+
+  // ---- what's new -----------------------------------------------------------
+  const notes = document.getElementById("vibe-notes");
+  let notesReturn = null;
+  function closeNotes() {
+    if (!notes || notes.hidden) return;
+    write(NOTES_KEY, NOTES_ID);
+    notes.hidden = true;
+    document.removeEventListener("keydown", notesKeys, true);
+    (notesReturn && document.contains(notesReturn) ? notesReturn : active() ? layer : null)?.focus?.({ preventScroll: true });
+  }
+  function notesKeys(event) {
+    if (notes.hidden) return;
+    if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeNotes(); return; }
+    if (event.key !== "Tab") return;
+    const stops = [...notes.querySelectorAll("button")].filter((button) => !button.disabled);
+    const first = stops[0], last = stops.at(-1);
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  }
+  function showNotes({ force = false } = {}) {
+    if (!notes || (!force && read(NOTES_KEY) === NOTES_ID)) return false;
+    notesReturn = document.activeElement;
+    notes.hidden = false;
+    document.addEventListener("keydown", notesKeys, true);
+    requestAnimationFrame(() => document.getElementById("vibe-notes-ok")?.focus({ preventScroll: true }));
+    return true;
+  }
+  if (notes) {
+    document.getElementById("vibe-notes-close")?.addEventListener("click", closeNotes);
+    document.getElementById("vibe-notes-ok")?.addEventListener("click", () => { closeNotes(); if (!active()) setMode("vibe"); });
+    document.getElementById("vibe-notes-build")?.addEventListener("click", () => { closeNotes(); setMode("build"); });
+    document.getElementById("vibe-notes-changelog")?.addEventListener("click", () => {
+      const opened = api()?.openExternal?.(CHANGELOG_URL);
+      if (!opened) window.open?.(CHANGELOG_URL, "_blank", "noopener");
+    });
+    notes.addEventListener("click", (event) => { if (event.target === notes) closeNotes(); });
+  }
+  // Called once the studio is up (booklet.js). A first run marks the card
+  // seen, since everything is new to it; a returning profile sees it once,
+  // after any sheet the launch opened has closed.
+  function startup() {
+    if (headless || !notes) return;
+    if (!returning) { if (read(NOTES_KEY) === null) write(NOTES_KEY, NOTES_ID); return; }
+    if (read(NOTES_KEY) === NOTES_ID) return;
+    let tries = 0;
+    const attempt = () => {
+      const nav = window.MefiNav?.state;
+      if ((nav?.sheet || nav?.transient) && tries++ < 90) { setTimeout(attempt, 2000); return; }
+      showNotes();
+    };
+    setTimeout(attempt, 700);
+  }
+
+  // The palette and help list both modes; the rail's switch reads the same record.
+  window.MefiNav?.register?.({
+    id: "vibe", label: "Vibe", short: "Vibe", kind: "view", layer: null, section: "home", group: "surfaces",
+    glyph: "g-spark", badge: null, desc: "The calm front door: talk or build from one box, see what's building and what needs you",
+    searchTerms: "vibe mode simple calm easy home start switch",
+    showIn: { tabs: false, tools: false, dock: false, palette: true, help: true, footer: false },
+    open: () => enter(), close: () => exit(), isOpen: () => active(),
+  });
+  window.MefiNav?.register?.({
+    id: "build-mode", label: "Switch to Build", short: "Build", kind: "action", layer: null, section: "home", group: "surfaces",
+    glyph: "g-wrench", badge: null, desc: "The full studio: Home, Command, boards, models and every setting",
+    searchTerms: "build mode full classic advanced studio switch",
+    showIn: { tabs: false, tools: false, dock: false, palette: true, help: true, footer: false },
+    run: () => setMode("build"),
+  });
+  window.MefiNav?.register?.({
+    id: "whats-new", label: "What's new", short: "What's new", kind: "action", layer: null, section: "help", group: "system",
+    glyph: "g-spark", badge: null, desc: "The Vibe and Build modes, and a link to the full changelog",
+    searchTerms: "whats new changelog release notes patch notes update",
+    showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
+    run: () => showNotes({ force: true }),
+  });
+
+  paintMode();
+  window.MefiVibe = { enter, exit, isActive: active, refresh, mode, setMode, landing, startup, showNotes, closeNotes, ready: () => refreshFlight ?? Promise.resolve() };
+})();
+
 // Mefi's Studio AI+ — booklet renderer, filters, refresh-on-open, studio launcher UI.
 (function () {
   "use strict";
@@ -56576,6 +57456,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   } else {
     let home = wantCommand;
     let restored = null;
+    // Home is the mode's own: Vibe by default, Build's workspace when chosen.
+    const enterHome = () => (window.MefiVibe?.landing?.() === "vibe" ? window.MefiVibe.enter() : window.MefiWorkspace?.enter?.());
     let viewPrepared = false;
     const prepareView = async ({ isCurrent }) => {
       if (window.mefiStudio?.prefsGet) {
@@ -56592,7 +57474,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         restored = result;
       }
       if (!isCurrent()) return false;
-      if (!restored.restored && home) window.MefiWorkspace?.enter?.();
+      if (!restored.restored && home) enterHome();
       if (window.MefiIdle?.isActive?.()) await window.MefiIdle.ready();
       viewPrepared = true;
       return true;
@@ -56613,11 +57495,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       { id: "view", label: "Saved view and preferences", load: prepareView },
       { id: "fonts", label: "Fonts and interface", load: () => document.fonts?.ready },
     ], (complete, choice) => {
-      if (!viewPrepared && !restored?.restored && home) window.MefiWorkspace?.enter?.();
+      if (!viewPrepared && !restored?.restored && home) enterHome();
       if (restored?.restored) restored.finish?.();
       else if (window.MefiWorkspace?.isActive?.()) document.getElementById("workspace-layer")?.focus({ preventScroll: true });
+      else if (window.MefiVibe?.isActive?.()) document.getElementById("vibe-layer")?.focus({ preventScroll: true });
       else document.getElementById("search")?.focus({ preventScroll: true });
       window.MefiOnboarding?.startup?.({ automatic: true });
+      // The one-time "what's new" card for a returning profile (renderer/vibe.js).
+      window.MefiVibe?.startup?.();
       // Community status, the member-perk boot hint and the weekly Discord
       // card's quiet schedule (renderer/community.js). Diagnostic launches skip it.
       window.MefiCommunity?.startup?.();

@@ -429,7 +429,9 @@ function collectProjectPlans(textFiles, savedPlans, projectId, limitations) {
     filePlans.push({ id: `file:${file.file}`, title: safeExcerpt(headings[0]?.replace(/^#+\s*/, "") || path.basename(file.file), 180), source: file.file, sourceType: "file", line: 1, items: planItems(file.text, limitations) });
   }
   if (!Array.isArray(savedPlans)) { limitations.add("Saved plans were unavailable or invalid."); savedPlans = []; }
-  for (const plan of savedPlans.slice(0, PROJECT_LIMITS.plans)) {
+  // An archived Studio plan is set aside by its owner: it is not compared with
+  // the code, and it does not use up the plan limit.
+  for (const plan of savedPlans.filter((plan) => plan?.archivedAt == null).slice(0, PROJECT_LIMITS.plans)) {
     if (!plan || typeof plan !== "object") continue;
     if (plan.projectId && plan.projectId !== projectId) { limitations.add("Saved plans belonging to another project were excluded."); continue; }
     const pieces = [plan.destination, plan.spec?.text, plan.text, plan.content].filter((value) => typeof value === "string").map((value) => {

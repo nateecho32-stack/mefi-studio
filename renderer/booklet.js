@@ -1906,6 +1906,8 @@
   } else {
     let home = wantCommand;
     let restored = null;
+    // Home is the mode's own: Vibe by default, Build's workspace when chosen.
+    const enterHome = () => (window.MefiVibe?.landing?.() === "vibe" ? window.MefiVibe.enter() : window.MefiWorkspace?.enter?.());
     let viewPrepared = false;
     const prepareView = async ({ isCurrent }) => {
       if (window.mefiStudio?.prefsGet) {
@@ -1922,7 +1924,7 @@
         restored = result;
       }
       if (!isCurrent()) return false;
-      if (!restored.restored && home) window.MefiWorkspace?.enter?.();
+      if (!restored.restored && home) enterHome();
       if (window.MefiIdle?.isActive?.()) await window.MefiIdle.ready();
       viewPrepared = true;
       return true;
@@ -1943,11 +1945,14 @@
       { id: "view", label: "Saved view and preferences", load: prepareView },
       { id: "fonts", label: "Fonts and interface", load: () => document.fonts?.ready },
     ], (complete, choice) => {
-      if (!viewPrepared && !restored?.restored && home) window.MefiWorkspace?.enter?.();
+      if (!viewPrepared && !restored?.restored && home) enterHome();
       if (restored?.restored) restored.finish?.();
       else if (window.MefiWorkspace?.isActive?.()) document.getElementById("workspace-layer")?.focus({ preventScroll: true });
+      else if (window.MefiVibe?.isActive?.()) document.getElementById("vibe-layer")?.focus({ preventScroll: true });
       else document.getElementById("search")?.focus({ preventScroll: true });
       window.MefiOnboarding?.startup?.({ automatic: true });
+      // The one-time "what's new" card for a returning profile (renderer/vibe.js).
+      window.MefiVibe?.startup?.();
       // Community status, the member-perk boot hint and the weekly Discord
       // card's quiet schedule (renderer/community.js). Diagnostic launches skip it.
       window.MefiCommunity?.startup?.();

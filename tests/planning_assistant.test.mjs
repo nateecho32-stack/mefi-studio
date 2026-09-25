@@ -158,3 +158,11 @@ test("folder scan facts stay bounded and the keyless planning reply names them",
   const status = localReply({ text: "status", facts });
   assert.ok(status.text.includes('Project: "2d Trippy Hell" at C:/work/2d Trippy Hell.'), status.text);
 });
+
+test("archived plans are counted in the planning reply only when there are some", () => {
+  const withArchive = localReply({ text: "show my plans", facts: buildFacts({ planning: { ...summary, archived: 2 } }) });
+  assert.match(withArchive.text, /2 archived/);
+  const none = localReply({ text: "show my plans", facts: buildFacts({ planning: { ...summary, archived: 0 } }) });
+  assert.doesNotMatch(none.text, /archived/);
+  assert.equal(buildFacts({ planning: { ...summary, archived: 0 } }).planning.archived, undefined);
+});

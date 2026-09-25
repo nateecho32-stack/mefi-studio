@@ -6083,8 +6083,8 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
         lines.push(scanLine ? `No Studio plans are saved in this project. ${scanLine}` : "No saved plans in this project. Choose Plan an idea to work through an outcome and its unanswered questions before creating tasks.");
         break;
       }
-      const counts = [["active", "active"], ["ready", "ready to create tasks"], ["converting", "creating tasks"], ["converted", "handed to the task board"]]
-        .filter(([key]) => planning[key] !== null).map(([key, label]) => `${planning[key]} ${label}`);
+      const counts = [["active", "active"], ["ready", "ready to create tasks"], ["converting", "creating tasks"], ["converted", "handed to the task board"], ["archived", "archived"]]
+        .filter(([key]) => planning[key] != null).map(([key, label]) => `${planning[key]} ${label}`);
       lines.push(`${plural(planning.total, "saved plan")}${counts.length ? `: ${counts.join("; ")}` : ""}.`);
       lines.push("Open Plans to review decisions and explicitly create approved tasks.");
       if (planning.plans.length) lines.push(`Plans: ${planning.plans.slice(0, 3).map((plan) => `"${clip(plan.title, 40)}"`).join(", ")}.`);
@@ -6569,7 +6569,7 @@ function planningSummaryFacts(value) {
     readyQuestions: asArray(plan.readyQuestions).filter((question) => isObject(question) && typeof question.id === "string" && typeof question.question === "string").slice(0, 2).map((question) => ({ id: clip(question.id, 160), question: clip(question.question, 250) })),
   }));
   return {
-    total: count(value.total), active: count(value.active), ready: count(value.ready), converting: count(value.converting), converted: count(value.converted),
+    total: count(value.total), active: count(value.active), ready: count(value.ready), converting: count(value.converting), converted: count(value.converted), ...(count(value.archived) ? { archived: count(value.archived) } : {}),
     plans, truncated: (count(value.truncated) ?? 0) + Math.max(0, value.plans.length - plans.length),
   };
 }

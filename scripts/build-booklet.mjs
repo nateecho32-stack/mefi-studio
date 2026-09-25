@@ -54,6 +54,7 @@ const CODE_SOURCES = [
   "demo-panel.js",
   "companion-ui.js", "companion-hub.js", "project-map-view.js", "agent-brain.js",
   "agents.js",
+  "vibe.js",
   "booklet.js",
 ];
 
@@ -138,7 +139,7 @@ export async function build({ root = ROOT } = {}) {
     readFile(path.join(RENDERER, "profiler.js"), "utf8"),
     readFile(path.join(RENDERER, "stage-labels.js"), "utf8"),
   ]);
-  const [studioUi, studioUiStyles, agents, agentsStyles, companionUi, companionStyles, companionHub, companionHubStyles] = await Promise.all([
+  const [studioUi, studioUiStyles, agents, agentsStyles, companionUi, companionStyles, companionHub, companionHubStyles, vibe, vibeStyles] = await Promise.all([
     readFile(path.join(RENDERER, "studio-ui.js"), "utf8"),
     readFile(path.join(RENDERER, "studio-ui.css"), "utf8"),
     readFile(path.join(RENDERER, "agents.js"), "utf8"),
@@ -147,14 +148,16 @@ export async function build({ root = ROOT } = {}) {
     readFile(path.join(RENDERER, "companion-ui.css"), "utf8"),
     readFile(path.join(RENDERER, "companion-hub.js"), "utf8"),
     readFile(path.join(RENDERER, "companion-hub.css"), "utf8"),
+    readFile(path.join(RENDERER, "vibe.js"), "utf8"),
+    readFile(path.join(RENDERER, "vibe.css"), "utf8"),
   ]);
   const nodeVisuals = await readFile(path.join(RENDERER, "node-visuals.js"), "utf8");
   const projectMapView = await readFile(path.join(RENDERER, "project-map-view.js"), "utf8");
-  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, nav, sidebar, graph, modelLab, tracker, tree, idle, cameraTour, explorer, analyzer, tasks, ideas, overhead, brains, palette, eyes, boot, startup, workspace, mediaWindow, music, together, planning, onboarding, community, demoPanel, companionUi, companionHub, projectMapView, agentBrain, agents, booklet];
+  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, nav, sidebar, graph, modelLab, tracker, tree, idle, cameraTour, explorer, analyzer, tasks, ideas, overhead, brains, palette, eyes, boot, startup, workspace, mediaWindow, music, together, planning, onboarding, community, demoPanel, companionUi, companionHub, projectMapView, agentBrain, agents, vibe, booklet];
   const code = codeParts.join("\n");
   const html = template
     .replace("__BOOKLET_DATA__", () => catalog.trim())
-    .replace("__BOOKLET_STYLES__", () => `${styles}\n${musicStyles}\n${planningStyles}\n${brainStyles}\n${profilerStyles}\n${agentBrainStyles}\n${agentsStyles}\n${companionStyles}\n${studioUiStyles}\n${companionHubStyles}`)
+    .replace("__BOOKLET_STYLES__", () => `${styles}\n${musicStyles}\n${planningStyles}\n${brainStyles}\n${profilerStyles}\n${agentBrainStyles}\n${agentsStyles}\n${companionStyles}\n${studioUiStyles}\n${companionHubStyles}\n${vibeStyles}`)
     .replace("__BOOKLET_CODE__", () => code);
 
   const out = path.join(RENDERER, "booklet.html");
