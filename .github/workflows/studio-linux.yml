@@ -46,6 +46,11 @@ jobs:
           # for whichever this runner actually has.
           sudo apt-get install -y --no-install-recommends libasound2t64 \
             || sudo apt-get install -y --no-install-recommends libasound2
+      # Electron 44 no longer downloads its binary on install: the package's
+      # launcher fetches it on the first require('electron'). The smoke below
+      # runs the binary by path, so fetch it first.
+      - name: Fetch the Electron binary
+        run: node -e "require('electron')"
       - name: Headless smoke under Xvfb
         run: |
           xvfb-run -a node_modules/electron/dist/electron --no-sandbox --disable-gpu --disable-dev-shm-usage --password-store=basic --user-data-dir="$RUNNER_TEMP/mefi-user-data" . --smoke

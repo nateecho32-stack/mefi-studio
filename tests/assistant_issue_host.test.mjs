@@ -592,7 +592,7 @@ test("a provider outage is not the card's fault: nothing is raised, settled or r
   // This run's own error, when it has one, names it (asked on the fifth
   // charged failure, once the repair retries are spent).
   const killed = await issueHost().env.assistantBuildFailureQuestion(job, 5, { runError: "killed after budget", outputTail: ["still editing"] });
-  assert.match(killed.title, /killed after budget/);
+  assert.match(killed.title, /ran past its time budget/, "a host stop reason reads in the owner's words");
 });
 
 test("a provider failure raises no issue and makes no board write or backlog call", async () => {

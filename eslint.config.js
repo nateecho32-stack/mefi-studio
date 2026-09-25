@@ -62,6 +62,8 @@ export default [
   { files: ["**/*.cjs"], languageOptions: { ecmaVersion: 2024, sourceType: "commonjs", globals: node }, rules },
   { files: ["renderer/**/*.js"], languageOptions: { ecmaVersion: 2024, sourceType: "script", globals: browser }, rules },
   { files: ["tests/**/*.mjs", "tests/**/*.cjs"], languageOptions: { globals: { ...node, ...browser } } },
+  // The promo stages are ES modules loaded by their .html pages in a browser.
+  { files: ["tools/promo/*.mjs"], languageOptions: { globals: browser } },
   // The Electron fixtures ship page-side code as strings evaluated inside a
   // BrowserWindow, where the renderer's own functions exist; no-undef cannot see that.
   { files: ["tests/fixtures/*-electron.cjs"], rules: { "no-undef": "off" } },

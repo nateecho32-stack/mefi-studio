@@ -113,8 +113,34 @@ test("a run that stopped becomes an issue with its own evidence, not a bare retr
   const question = questionForIssue(issue);
   assert.match(question.title, /"Commit the memory-cap telemetry" stopped without finishing/);
   assert.match(question.detail, /Attempt 3/);
-  assert.match(question.detail, /1 failing/);
+  assert.match(question.title, /1 failing/);
+  assert.doesNotMatch(question.detail, /1 failing/, "the title's line is not repeated as the last output");
+  assert.doesNotMatch(question.detail, /The agent says/, "the host's account is not quoted as the agent's");
   assert.ok(question.options.some((option) => option.id === "retry-deep"));
+});
+
+test("a run failure is named by its cause, never by a protocol line or a bare exit", () => {
+  const tail = ["running npm test", "Error: Cannot find module './board'", "at Module._resolve", "MEFI_RESULT: done=the view; remaining=the store", "MEFI_JOB_DONE"];
+  const issue = runFailureIssue({ task: { id: "task_2", title: "Wire the board" }, failures: 5, error: "exit 1", outputTail: tail });
+  assert.equal(issue.title, "Error: Cannot find module './board'");
+  assert.deepEqual(issue.evidence, ["running npm test", "Error: Cannot find module './board'", "at Module._resolve"]);
+  assert.match(issue.detail, /Its last report: done=the view; remaining=the store/);
+  assert.equal(runFailureIssue({ task: { id: "t", title: "t" }, error: "killed after budget", outputTail: ["still editing"] }).title, "ran past its time budget and was stopped");
+  assert.equal(runFailureIssue({ task: { id: "t", title: "t" }, outputTail: ["MEFI_RESULT: partial"] }).title, "it printed nothing and never reported done");
+  assert.equal(runFailureIssue({ task: { id: "t", title: "t" }, error: "exited with code 2" }).title, "exited with code 2, with no output");
+});
+
+test("a task that already failed and was retried is not recommended the same retry", () => {
+  const recommended = (question) => question.options.find((option) => option.recommended).id;
+  const spent = questionForIssue(runFailureIssue({ task: { id: "task_2", title: "Wire the board" }, failures: 5, outputTail: ["FAIL tests/board.test.mjs"] }));
+  assert.equal(recommended(spent), "retry-deep");
+  const retry = spent.options.find((option) => option.id === "retry");
+  assert.equal(retry.label, "Try again unchanged");
+  assert.match(retry.description, /failed 5 times/);
+  // No heavier model on offer: a one-line instruction is the change to make.
+  assert.equal(recommended(questionForIssue(worker("verify", "no test shows it works", { attempts: 3 }))), "instruct");
+  // A first ask keeps its kind's own pick.
+  assert.equal(recommended(questionForIssue(worker("check-failed", "the css gate is red", { attempts: 0 }))), "retry");
 });
 
 test("a failing named check is filed as a failing check, with the check named", () => {
