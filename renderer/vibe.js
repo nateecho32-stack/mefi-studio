@@ -6,6 +6,9 @@
 // launches (?capture=1, ?smoke=1) keep Build unless a mode was saved, so the
 // render fixtures and screenshots see the view they were written for.
 // Existing users get a one-time "what's new" card; a first run never does.
+// In Vibe mode every other page opens inside Vibe's own rail (#vibe-rail)
+// instead of Build's, and Home is always Vibe, so no click leaves the mode;
+// only the Build switch does.
 (function () {
   "use strict";
   const MODE_KEY = "mefiStudio.uiMode";
@@ -46,14 +49,38 @@
       group.dataset.mode = current;
       for (const button of group.querySelectorAll("[data-ui-mode]")) button.setAttribute("aria-checked", String(button.dataset.uiMode === current));
     }
+    const rail = $("rail");
+    if (rail) rail.hidden = current !== "vibe";
+    paintRail();
   }
-  // Switching remembers the choice and lands on that mode's home.
+  // Switching remembers the choice and lands on that mode's home. Vibe keeps
+  // the rail shell on (nav.js asks mode()); Build gets the saved shell back.
   function setMode(next, { go = true } = {}) {
     next = next === "build" ? "build" : "vibe";
+    const was = mode();
     write(MODE_KEY, next);
     paintMode();
+    if (was !== next) window.MefiNav?.applyShell?.();
     if (go) window.MefiNav?.go?.(next === "vibe" ? "vibe" : "workspace");
     return next;
+  }
+
+  // ---- the Vibe rail --------------------------------------------------------
+  // Marks where you are: the page itself, or the stop that owns its section
+  // (Analyzer lights Tasks, the model pages and Evidence light Agents).
+  function paintRail() {
+    const rail = $("rail");
+    if (!rail || rail.hidden) return;
+    const nav = window.MefiNav;
+    const id = nav?.current?.() ?? null;
+    const buttons = [...rail.querySelectorAll("button[data-nav]")];
+    const section = nav?.railSection?.(nav?.get?.(id));
+    const match = buttons.find((button) => button.dataset.nav === id)
+      ?? buttons.find((button) => (section === "work" && button.dataset.nav === "tasks") || (section === "agents" && button.dataset.nav === "agents"));
+    for (const button of buttons) {
+      if (button === match) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
+    }
   }
 
   // ---- data -----------------------------------------------------------------
@@ -303,6 +330,7 @@
     if (window.MefiBoot?.isActive?.()) Promise.resolve(window.MefiBoot.ready?.()).then(sky, sky); else sky();
     signatures.clear();
     render();
+    paintRail();
     if (!window.MefiBoot?.isActive?.()) layer.focus({ preventScroll: true });
     return refresh();
   }
@@ -310,6 +338,7 @@
     if (layer.hidden) return;
     layer.hidden = true;
     document.body.classList.remove("vibe-active");
+    paintRail();
     if (!window.MefiWorkspace?.isActive?.()) window.MefiIdle?.setHomeBackdrop?.(false);
   }
   // Where Studio lands when it opens on its home.
@@ -344,7 +373,8 @@
 
   // ---- mode switches everywhere ---------------------------------------------
   document.addEventListener("click", (event) => {
-    const button = event.target?.closest?.(".mode-switch [data-ui-mode]");
+    // The switches and the Vibe rail's Build stop; never <html>, which carries the mode too.
+    const button = event.target?.closest?.("button[data-ui-mode]");
     if (!button) return;
     event.preventDefault();
     if (button.dataset.uiMode !== mode() || !active()) setMode(button.dataset.uiMode);
@@ -434,6 +464,7 @@
     run: () => showNotes({ force: true }),
   });
 
+  window.addEventListener("mefi:nav", paintRail);
   paintMode();
   window.MefiVibe = { enter, exit, isActive: active, refresh, mode, setMode, landing, startup, showNotes, closeNotes, ready: () => refreshFlight ?? Promise.resolve() };
 })();

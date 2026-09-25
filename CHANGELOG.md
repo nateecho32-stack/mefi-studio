@@ -8,6 +8,14 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- Vibe mode stays Vibe: every page opened from it (Tasks, Plans, Ideas,
+  Agents, Command, Settings, the model pages, Search results and links inside
+  them) opens inside Vibe's own rail instead of Build's menu, with the way
+  back to Vibe always at the top and the Build switch as the only exit. Build's
+  section bar no longer covers Vibe's top buttons, pages no longer show Vibe
+  through their glass, leaving Command or pressing Back on a Work page returns
+  to Vibe instead of Build's Agents page or nowhere, and a restored session or
+  closing Appearance never reopens Build's Home.
 - Plans: **Archive plan** and **Restore plan**. An archived plan is read-only,
   folds under **Show archived** in the list, and leaves the assistant's plan
   summary and the Analyzer. The 300-plan cap now counts only plans in play.

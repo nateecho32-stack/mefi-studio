@@ -58,10 +58,12 @@
     if (!row) { row = document.createElement("div"); row.id = "app-task-context"; row.className = "app-task-context"; nav.insertBefore(row, nav.firstChild); }
     const context = taskContext();
     row.hidden = !["work", "agents"].includes(nav.dataset.section);
-    const signature = JSON.stringify([context, current()]);
+    // In Vibe mode Home is Vibe (go() lands there), so the button says so.
+    const homeLabel = vibeMode() ? "Vibe" : "Home";
+    const signature = JSON.stringify([context, current(), homeLabel]);
     if (row.dataset.signature === signature) return;
     row.dataset.signature = signature; row.textContent = "";
-    const home = document.createElement("button"); home.type = "button"; home.className = "ghost mini"; home.textContent = "Home";
+    const home = document.createElement("button"); home.type = "button"; home.className = "ghost mini"; home.textContent = homeLabel;
     home.addEventListener("click", () => go("workspace")); row.append(home);
     if (context) {
       const task = document.createElement("button"); task.type = "button"; task.className = "ghost mini";
@@ -945,6 +947,9 @@
   function close(id) {
     if (WORKSPACE_PAGES.has(id) && current() === id) {
       if (historyState().canBack) return back();
+      // In Vibe mode these pages open from Vibe, so Back with nothing behind
+      // it goes there instead of stopping on Build's section home.
+      if (vibeMode()) return go("vibe");
       const home = sectionOf(get(id)) === "agents" ? "agents" : "tasks";
       if (id !== home) return go(home);
       return;
@@ -1047,6 +1052,14 @@
   // canvas, and go("command") had already left the workspace, so whatever tab
   // sat underneath (the Model catalog) used to show through.
   function leaveCommand() {
+    // In Vibe mode Command is Vibe's Watch stop, not a page of Build's Agents
+    // section: leaving it goes back to the page it was opened from, Vibe by default.
+    if (vibeMode()) {
+      const from = state.commandFrom && state.commandFrom !== "command" && get(state.commandFrom) ? state.commandFrom : "vibe";
+      state.commandFrom = null;
+      window.MefiIdle?.exit?.();
+      return go(from);
+    }
     if (sectionOf(get(current())) === "agents") { if (historyState().canBack) return back(); return go("agents"); }
     const destination = state.commandFrom && state.commandFrom !== "command" ? state.commandFrom : "workspace";
     state.commandFrom = null;
@@ -1565,7 +1578,13 @@
     if (list?.style) list.style.display = "";
   }
 
+  // Vibe has one frame, its own rail on the rail shell's geometry; the
+  // classic-tabs choice is kept, and only shapes Build.
+  function vibeMode() { return window.MefiVibe?.mode?.() === "vibe"; }
   function shellOn() {
+    return vibeMode() || shellPreferred();
+  }
+  function shellPreferred() {
     try {
       const param = new URLSearchParams(location.search).get("shell");
       if (param) return param !== "classic";
@@ -1623,7 +1642,7 @@
 
   function setShell(on) {
     try { localStorage.setItem(SHELL_KEY, on ? "rail" : "classic"); } catch { /* this launch only */ }
-    return applyShell(Boolean(on));
+    return applyShell(Boolean(on) || vibeMode());
   }
 
   function wireRail() {
@@ -1705,7 +1724,8 @@
     desc: "Swap the navigation rail for the classic tabs row, Command dock and hover sidebar, or back",
     searchTerms: ["shell", "sidebar", "navigation", "menu", "layout"],
     showIn: showIn({ palette: true }),
-    run: () => setShell(document.documentElement.dataset.shell !== "rail"),
+    // Vibe always shows the rail, so there it flips the choice Build will use.
+    run: () => setShell(vibeMode() ? !shellPreferred() : document.documentElement.dataset.shell !== "rail"),
   });
 
   function renderTools(target) {
@@ -2845,7 +2865,8 @@
     const attempt = () => {
       if ((state.transient !== null || booting()) && tries++ < 120) { setTimeout(attempt, booting() ? 1500 : 5000); return; }
       try { localStorage.setItem(KEY_HINT_STORE, "1"); } catch { /* the tip may show again next launch */ }
-      window.MefiToast("Tip: outside a text field, single keys move around Studio. H workspace, D Command view, T task board. Press ? for the full list.", "info", {
+      const home = vibeMode() ? "Vibe" : "workspace";
+      window.MefiToast(`Tip: outside a text field, single keys move around Studio. H ${home}, D Command view, T task board. Press ? for the full list.`, "info", {
         duration: 12000,
         action: { label: "Show keys", run: () => go("help") },
       });

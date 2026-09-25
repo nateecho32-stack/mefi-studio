@@ -34,6 +34,10 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-25 - Vibe mode keeps every click in Vibe
+
+Linux cloud container, Node 22 (the repo asks for 24), no Electron installed, shared tree at a14df38 plus this uncommitted work. In Vibe mode every other page now opens inside Vibe's own rail (#vibe-rail) instead of Build's menu. Home, leaving Command and Back on a Work page return to Vibe. Build's section bar no longer covers Vibe's top buttons, and pages no longer show Vibe through their glass. A restored session or closing Appearance no longer opens Build's Home. Checked in a browser against npm run start:web with Playwright and Chromium. Every one of the 172 registry destinations opened from Vibe stayed in Vibe mode with neither Build's rail nor its Home showing. Dock, lanes, rail, Command exit, Tasks Back and the Build/Vibe round trip were also clicked by hand. New tests/vibe_frame.test.mjs: 8 tests, 7 of which fail against the old renderer. npm run build-booklet ok. npm run check ok (141 targets, 301 specs). npm run audit 0 errors / 0 warnings. npm run test:fast 3406 pass / 0 fail / 15 skipped. Full npm test (Electron stage and Python contracts) was not run: this container has no Electron.
+
 ## 2026-09-25 - Planning pipeline review fixes
 
 Windows 11, local Electron, Node 24, shared tree at 5f84d28 plus this uncommitted work. This is a review of the Plans pipeline (scripts/planning.cjs, scripts/planning-service.cjs, renderer/planning.js). Fixes:
@@ -404,41 +408,6 @@ created walkthrough companion ID; the final audit is clean.
 Logs: %TEMP%/mefi-agent-compact-{check,audit,render,full-test}.log.
 Captures/report: %TEMP%/mefi-agent-compact/. No live application data or
 portable data was changed.
-
-## 2026-09-24 midday - Plans glass surfaces and background readability
-
-Plans now uses translucent theme-tinted writing panels, fields, stage controls
-and library chrome, with softer outlines and restrained focus glow. The ambient
-canvas remains visible while the underlying page controls are hidden and the
-foreground graph is dimmed. Closing Plans restores those controls and the graph.
-The existing glass, blur and reduced-transparency preferences apply. Scoped
-planning tokens preserve the lighter reading tint alongside concurrent shared
-appearance changes. Updated architecture and changelog; rebuilt booklet.
-
-The isolated Electron planning fixture passes solo and in the full suite. It
-covers native Enter and reduced-motion behavior, responsive layouts, preserved
-suggestion editing, Undo, evidence tabs, saved decision navigation, and the real
-Command backdrop. Teal, violet and blur-off captures were inspected. Black/white
-backdrop probes changed the rendered writing-panel pixel by 105 RGB levels;
-reduced transparency yielded zero change. Closing restored the underlying UI.
-There were no renderer errors or external requests. Synthetic captures and
-report.json remain in the OS temp directory, mefi-planning-glass-captures.
-
-Full npm test: parallel Node 3320 pass / 0 fail / 4 skip; Electron 32 pass /
-1 fail / 1 skip; serialized visibility and both occlusion tests pass. The sole
-Electron failure was startup_render's custom light-theme surface assertion
-against color(srgb 1 1 1 / 0.783). Python 247 pass / 1 fail: the live auditor
-observed the concurrent companion-hub integration and a missing walkthrough-agent
-DOM id. All six normalized-path checks pass. The runner reported source changes
-during the Electron stage. Complete output is in the OS temp directory as
-mefi-planning-glass-full-test.log; the full gate is not claimed green.
-
-Final refresh at 18:06 UTC: npm run build-booklet and npm run check pass (138
-syntax targets, 295 unique specs, all selectors used). npm run audit, which
-passed before the full run, now reports one shared-workspace DOM error: the
-missing walkthrough-agent id. The companion-hub build finding has cleared.
-The planning stylesheet is unchanged from the passing render runs; source diff
-whitespace checks pass. No live app state or screenshots were added to Git.
 
 ## Read Before Any Tests
 

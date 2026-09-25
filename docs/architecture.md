@@ -94,6 +94,20 @@ configuration. Changes use the existing project/default scope and Apply flow.
 
 ### Getting around
 
+- Studio has two modes, switched at the top of Vibe, from the foot of Vibe's
+  rail, or with **Switch to Build** in Search. **Vibe** is the calm front
+  door: one box to talk it over with Mefi or build it as a task, what is
+  building, what needs you and what just finished, and a dock to Watch
+  (Command), Tasks, Plans, Ideas, Agents and Search. **Build** is the full
+  studio described below. The choice is remembered across launches.
+- Nothing you click in Vibe mode leaves it. Every other page, whether opened
+  from the dock, a lane, Search, a key, the companion or a link inside
+  another page, opens inside Vibe's own narrow rail instead of Build's menu:
+  the spark at its top returns to Vibe, and the Build switch at its foot is
+  the only way out of the mode. Home is Vibe, so **H**, every Home button and
+  a restored session land there. Leaving Command goes back to the page it was
+  opened from, and **Back** on a Work page with nothing behind it returns to
+  Vibe. Build's classic-tabs choice is kept for Build; Vibe always uses its rail.
 - Click the companion or press **Escape** on a workspace page to open its
   compact bubble menu over the current view. The center returns to Studio;
   the surrounding bubbles open conversation, friends and listening rooms,

@@ -293,6 +293,26 @@
     <p class="vibe-chat-note">Reply in the box in the middle. Enter talks, Ctrl + Enter builds.</p>
   </aside>
 </section>
+<!-- Vibe's frame for every other page (renderer/vibe.js). In Vibe mode this
+     rail stands in for Build's #app-rail on Tasks, Plans, Command, Settings
+     and the rest, so leaving the front door never lands in the Build view; the
+     spark at the top goes back to Vibe and only the switch at the foot leaves
+     the mode. Hidden in Build, and on the Vibe page itself, where the dock is. -->
+<nav id="vibe-rail" class="vibe-rail" aria-label="Vibe" hidden>
+  <button id="vibe-rail-home" class="vibe-rail-home" type="button" data-nav="vibe" title="Back to Vibe (H)"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Vibe</span></button>
+  <div class="vibe-rail-items">
+    <button type="button" data-nav="command" data-vibe-section="agents" title="Watch the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span></button>
+    <button type="button" data-nav="tasks" data-vibe-section="work" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
+    <button type="button" data-nav="plans" title="Plan an idea before building it (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span></button>
+    <button type="button" data-nav="ideas" title="Ideas the agents noticed (I)"><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg><span>Ideas</span><span class="count" data-badge="ideas" hidden></span></button>
+    <button type="button" data-nav="agents" title="Your agents, models and usage"><svg class="glyph" aria-hidden="true"><use href="#g-agents"/></svg><span>Agents</span></button>
+    <button type="button" data-nav="palette" title="Search everything (Ctrl K)"><svg class="glyph" aria-hidden="true"><use href="#g-search"/></svg><span>Search</span></button>
+  </div>
+  <div class="vibe-rail-foot">
+    <button type="button" data-nav="studio" title="Settings (Ctrl ,)"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg><span>Settings</span></button>
+    <button id="vibe-rail-build" type="button" data-ui-mode="build" title="Switch to Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button>
+  </div>
+</nav>
 <!-- The one-time "what's new" card an existing user sees on the first launch
      with Vibe (renderer/vibe.js decides; it never shows on a first run). -->
 <div id="vibe-notes" class="vibe-notes" hidden>

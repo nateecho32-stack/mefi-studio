@@ -1685,6 +1685,9 @@
       || window.MefiScroll?.owns?.(drawer, target);
   }
   function appearanceOutside(event) {
+    // Vibe's rail is how Vibe mode moves between pages: its clicks navigate
+    // (go() leaves the preview) instead of dismissing into Command.
+    if (event.target?.closest?.("#vibe-rail")) return;
     const consume = () => { event.preventDefault(); event.stopImmediatePropagation(); };
     const canDismiss = () => {
       const transient = window.MefiNav?.state?.transient;
