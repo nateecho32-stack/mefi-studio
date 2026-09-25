@@ -273,16 +273,29 @@ def _run_fixture(fixture):
 
 
 def _agent_roles_table():
-    """AGENT_ROLES from scripts/assistant.mjs as [{role, cadenceMs, ai}], in order."""
+    """AGENT_ROLES from scripts/assistant.mjs as [{role, cadenceMs, spendsAi, gates, readsMail, ai}], in order.
+
+    The table is the one policy the host derives from: `spendsAi` is "always"
+    (the run is a model call and waits for a key), "when-usable" or "never";
+    `gates` are the owner switches that hold it. `ai` is kept for the older
+    contracts below and means spendsAi == "always"."""
     source = ASSISTANT.read_text(encoding="utf-8")
     block = re.search(r"export const AGENT_ROLES = \[(.*?)\n\];", source, re.S)
     assert block, "AGENT_ROLES table not found"
     rows = []
-    for role, cadence, ai in re.findall(
-        r'\{\s*role:\s*"([\w-]+)",\s*cadenceMs:\s*([^,]+),\s*ai:\s*(true|false)\s*\}', block.group(1)
+    for role, cadence, spends, gates, reads in re.findall(
+        r'\{\s*role:\s*"([\w-]+)",\s*cadenceMs:\s*([^,]+),\s*spendsAi:\s*"(always|when-usable|never)",\s*gates:\s*\[([^\]]*)\](?:,\s*readsMail:\s*(true|false))?\s*\}',
+        block.group(1),
     ):
         expression = cadence.strip().replace("MINUTE", "60000")
-        rows.append({"role": role, "cadenceMs": int(eval(expression)), "ai": ai == "true"})  # noqa: S307 - fixed table
+        rows.append({
+            "role": role,
+            "cadenceMs": int(eval(expression)),  # noqa: S307 - fixed table
+            "spendsAi": spends,
+            "gates": re.findall(r'"([\w-]+)"', gates),
+            "readsMail": reads == "true",
+            "ai": spends == "always",
+        })
     return rows
 
 
@@ -291,7 +304,16 @@ def _function_body(source, name):
     match = re.search(r"(?:async\s+)?function\s+" + re.escape(name) + r"\s*\(", source)
     if not match:
         return ""
-    start = source.index("{", match.end())
+    # Destructured option defaults belong to the signature, not the body.
+    depth = 1
+    index = match.end()
+    while index < len(source) and depth:
+        if source[index] == "(":
+            depth += 1
+        elif source[index] == ")":
+            depth -= 1
+        index += 1
+    start = source.index("{", index)
     depth = 0
     for index in range(start, len(source)):
         if source[index] == "{":
@@ -405,35 +427,43 @@ class MefiStudioAssistantTests(unittest.TestCase):
         # A fat facts/thread payload once pushed `message` past the 14k slice
         # and the model replied "no new message reached me". The user's text
         # must head the payload so trimming can never cut it.
-        payload = self.main.index("{ message: text, did: done, thread, facts }")
-        respond = self.main.index("async function assistantRespond")
-        self.assertGreater(payload, respond, "the chat payload lives in assistantRespond")
-        self.assertIn("slice(0, 14000)", self.main)
+        # The overseer's payload is packed by section, message first, and the
+        # serialized JSON is never sliced (a sliced tail was invalid JSON).
+        turn = self.main[self.main.index("async function assistantOverseerTurn(") : self.main.index("// Keyless (or model-less this turn) control")]
+        self.assertIn("taskOversight.packChatPayload({ message: text, did,", turn, "the owner's words lead the chat payload")
+        self.assertIn("sectionBudgets: CHAT_SECTION_BUDGETS", turn, "each section keeps its own budget before the global one")
+        self.assertNotIn("body.slice(", turn, "the packed body is never cut mid-JSON")
+        oversight = (STUDIO / "scripts" / "task-oversight.cjs").read_text(encoding="utf-8")
+        self.assertIn('PACK_ORDER = Object.freeze(["message", "did"', oversight, "message and did are packed first and dropped last")
 
     def test_chat_requests_kick_the_executor_and_report_back(self):
         action = self.main.index('action === "queue-request"')
         region = self.main[action : self.main.index('} else if (action === "compact")', action)]
         self.assertIn('assistantAskForWork("chat instruction")', region, "a chat request starts work now, not on the next tick")
-        self.assertIn('if (created) assistantAskForWork', region, "reusing existing work does not dispatch it again")
+        self.assertIn("if (created) {", region, "reusing existing work does not dispatch it again")
         self.assertIn("assistantCreateTask", region, "chat work lands on the task board, not the inbox")
+        # What a run came to reaches the thread through the board (the task
+        # notice feed), not from finish(): the owner hears verifying, then the
+        # verdict, retry, stop or park, on one line that updates in place.
         finish = self.main.index("pushAutopilotHistory(\"paused\"")
         report = self.main[finish : finish + 1600]
-        self.assertIn('job.source === "chat"', report, "a finished chat job posts its result to the thread")
-        self.assertNotIn(
-            'job.kind === "request" && job.source === "chat"',
-            report,
-            "chat work is a board task; gating the report on kind===request swallowed every finish",
-        )
+        self.assertNotIn('"Finished (verifying)"', report, "finish() no longer posts its own lifecycle line")
+        self.assertIn("boardWritten(committed, project)", _function_body(self.main, "mutateBoard"), "every task write feeds the notice feed")
+        observe = _function_body(self.main, "assistantObserveTasks")
+        self.assertIn("taskOversight.taskEvents(", observe)
+        self.assertIn("assistantTaskNotice(event, projectId)", observe)
+        self.assertIn("assistantTaskStarted(job)", self.main, "a start is announced from the real spawn, never from a claim")
 
-    def test_chat_requests_dispatch_the_roster(self):
-        # "the only working job is this responder" was the bug: a work
-        # instruction must send every roster agent out, in parallel.
-        action = self.main.index('action === "agents"')
-        self.assertIn("assistantDispatchAgents", self.main[action : action + 300])
-        body = _function_body(self.main, "assistantDispatchAgents")
-        for role in ("watcher", "machine", "auditor", "keeper", "briefer", "thinker", "improver", "grower", "ideas", "reference"):
-            with self.subTest(role=role):
-                self.assertIn(f'"{role}"', body)
+    def test_chat_work_asks_the_foreman_not_the_whole_roster(self):
+        # A chat instruction used to send the whole roster out: twelve roles,
+        # two of them paid improve/grow passes whose briefing nothing read, and
+        # a reference gather whose result was thrown away. Now the foreman is
+        # asked and the card gets its references saved on it.
+        self.assertNotIn("function assistantDispatchAgents", self.main)
+        self.assertNotIn('action === "agents"', self.main)
+        gather = _function_body(self.main, "assistantGatherTaskReferences")
+        self.assertIn("attachTaskRefs(taskId, result.references)", gather, "the gathered references land on the card")
+        self.assertIn("taskId, text:", gather, "the journal keeps the card so a resumed gather still lands on it")
         self.assertIn("roster", self.main[self.main.index("ASSISTANT_CHAT_SYSTEM") : self.main.index("assistantFetch")], "the chat model is told it has agents")
 
     def test_node_focus_reaches_the_responder(self):
@@ -443,7 +473,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
         respond = _function_body(self.main, "assistantRespond")
         self.assertIn("assistantFocusSubject(facts)", respond, "the focus grounds a reply that names nothing")
         action = self.main.index('action === "queue-request"')
-        region = self.main[action : action + 1600]
+        region = self.main[action : action + 2800]
         self.assertIn("assistantFocusSubject(facts)", region, "the focus rides the queued work")
         self.assertIn("focused,", region, "the focused node rides along as claim context on the board task")
         focus_fn = _function_body(self.main, "assistantFocus")
@@ -465,10 +495,10 @@ class MefiStudioAssistantTests(unittest.TestCase):
         chat = self.main[self.main.index("ASSISTANT_CHAT_SYSTEM") : self.main.index("async function assistantSessionId")]
         self.assertIn("suggestions", chat, "the chat model is told the picks exist")
         self.assertIn("facts.log", chat, "the chat model is told the activity log exists")
-        respond = _function_body(self.main, "assistantRespond")
-        self.assertIn("(facts?.ideas ?? []).slice(0, 8)", respond, "the payload trim shrinks facts, never drops them")
-        dispatch = _function_body(self.main, "assistantDispatchAgents")
-        self.assertIn("isFresh", dispatch, "a role that just ran is not fired again on the next instruction")
+        # The overseer sees the board as a digest: every live task grouped by
+        # stage with its reason, worker and verdict, and the open Asks.
+        self.assertIn("assistantBoardFacts(facts, raw, readiness, now)", body, "the reply facts carry the board digest")
+        self.assertIn("taskOversight.boardDigest(", _function_body(self.main, "assistantBoardFacts"))
 
     def test_executor_width_scales_with_the_machine(self):
         # The parallel executor: the default width comes from the host's core
@@ -502,7 +532,9 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertIn('assistantAskForWork("the pool was widened")', self.main, "widening the pool fills the new slots at once")
         self.assertIn('stop === "lost"', dispatch, "a lost claim retries the next piece instead of parking the fill")
         self.assertIn("claimWork", next_job, "file claims and live editors are checked before the board claim lands")
-        self.assertIn('return deferred ? "deferred"', next_job, "a blocked file skips this pick; the executor is not parked")
+        # With every candidate held the pick is deferred; the old ternary's
+        # "empty" arm could never be reached (an empty ranking returns first).
+        self.assertIn('if (!job) return "deferred"', next_job, "a blocked file skips this pick; the executor is not parked")
         self.assertIn("waiting on live editors", dispatch, "deferred file claims surface as waiting, not as a machine-busy park")
         self.assertEqual(len(re.findall(r"async function releaseExecutorClaim\(", self.main)), 1, "claim release must be declared once")
         self.assertIn("watches test leases", self.architecture, "the lease-aware machine coordination is documented")
@@ -665,6 +697,12 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertIn("assistant-overseer", self.idle, "the assistant card carries the overseer line")
         self.assertNotIn('role !== "overseer"', self.main, "the cadence filter never gates the overseer — it runs 24/7")
         job = _function_body(self.main, "assistantOverseerJob")
+        # The role runs 24/7; only the paid call is gated, on a change in the
+        # digest's signature or on the owner's request.
+        self.assertIn("assistant.overseerSignature(digest)", job)
+        self.assertIn("assistant.overseerAiPlan({ signature, overseer: assistantState.overseer, manual, usable: assistantAiUsable() })", job)
+        self.assertIn("export function overseerSignature(digest)", self.module)
+        self.assertIn("overseerFailureWakeAt", _function_body(self.main, "assistantHearBuilder"), "a failure wakes the overseer at most once per window")
         self.assertIn("overseerTalk", job, "the overseer speaks findings to the assistant instead of only filing upgrades")
         self.assertIn('assistantCommitThought(talk.say, "overseer")', job)
         self.assertIn('assistantCommitThought(talk.reply, "thinker")', job)
@@ -677,15 +715,21 @@ class MefiStudioAssistantTests(unittest.TestCase):
         # collected runFailures until they were dropped at 5, and three short
         # runs tripped the infra breaker and parked the executor. The run is
         # asked to print a sentinel instead, and that is the verdict.
+        # The prompt tail, the line reader, the prompt budget and the infra rule
+        # live in the pure executor core since spawnNextJob was split; the host
+        # hands it the constants.
+        core = (STUDIO / "scripts" / "executor-core.cjs").read_text(encoding="utf-8")
         self.assertIn('EXECUTOR_DONE_MARK = "MEFI_JOB_DONE"', self.main)
-        self.assertIn("${EXECUTOR_DONE_MARK} as the last thing you say", self.main, "the prompt has to ask for the sentinel")
-        self.assertIn("isDoneMarkerLine(line, EXECUTOR_DONE_MARK)", self.main, "the stream sets sawDone by STRICT line match — quoting the protocol in prose must not fake a verdict")
+        self.assertIn("${doneMark} as the last thing you say", core, "the prompt has to ask for the sentinel")
+        self.assertIn("doneMark: EXECUTOR_DONE_MARK", self.main, "the host hands the core its sentinel")
+        self.assertIn("isDoneMarkerLine(line, doneMark)", core, "the stream sets sawDone by STRICT line match — quoting the protocol in prose must not fake a verdict")
         self.assertIn("export function isDoneMarkerLine", self.module, "the strict match is a pure, tested rule")
         self.assertIn("parseExecutorResult", self.module, "the worker may attach its own account of done/remaining to the attempt")
         self.assertIn("const ok = errorMessage == null && (entry.sawDone || code === 0);", self.main)
         body = _function_body(self.main, "spawnNextJob")
         self.assertNotIn("if (code === 0) {", body, "nothing inside the executor may branch on the exit code alone")
-        self.assertIn("opencode run --auto", self.main, "a headless run has nobody to answer a permission prompt")
+        self.assertNotIn("if (code === 0) {", core, "nothing inside the executor may branch on the exit code alone")
+        self.assertIn("opencode run --auto", core, "a headless run has nobody to answer a permission prompt")
         # A run killed at the deadline can never print the sentinel, so it is
         # always a failure however much it achieved. The budget it is told about
         # has to leave headroom before the kill, and the tail carrying the
@@ -694,11 +738,11 @@ class MefiStudioAssistantTests(unittest.TestCase):
         kill_minutes = int(re.search(r"EXECUTOR_KILL_MS = (\d+) \* 60 \* 1000", self.main).group(1))
         self.assertLess(budget, kill_minutes, "the told budget must leave room to wrap up before the hard kill")
         self.assertIn("EXECUTOR_KILL_MS + 90 * 1000", self.main, "wedged is after the kill, or live jobs get flagged while still allowed to work")
-        self.assertIn("EXECUTOR_PROMPT_MAX - tailFlat.length", self.main, "the sentinel instruction is never what gets truncated")
-        self.assertIn("const body = String(job.prompt ?? \"\")", self.main, "the task's own text is budgeted separately — obligations are trimmed last, not first")
-        # A stop reason (the budget kill, a supervisor kill) arrives as an
-        # errorMessage too, so silence gates the whole breaker condition.
-        self.assertIn("const infraFail = !userStop && !entry.spoke && (", self.main, "a run that talked is never an infrastructure failure")
+        self.assertIn("promptMax - tailFlat.length", core, "the sentinel instruction is never what gets truncated")
+        self.assertIn("promptMax: EXECUTOR_PROMPT_MAX", self.main)
+        self.assertIn("const body = String(jobPrompt ?? \"\")", core, "the task's own text is budgeted separately — obligations are trimmed last, not first")
+        self.assertIn("!ok && !spoke", core, "a run that talked is never an infrastructure failure")
+        self.assertIn("spoke: entry.spoke", self.main)
 
     def test_the_assistant_hands_out_the_work(self):
         # The auto builder files requests and owns the child processes; deciding
@@ -768,7 +812,11 @@ class MefiStudioAssistantTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.main)
         body = _function_body(self.main, "assistantCompactorJob")
-        self.assertIn('assistantAskForWork("compacted")', body, "compacting without handing the work on is only half the job")
+        # The compactor hands the shaped queue on as a note to the foreman,
+        # which runs every minute and after every finish; its own "compacted"
+        # ask only doubled the foreman's passes.
+        self.assertNotIn('assistantAskForWork("compacted")', body, "one dispatch trigger: the compactor asks for no pass of its own")
+        self.assertIn('to: "foreman"', body, "the ready count goes to the seat that starts it")
         # Ideas pile up faster than anyone reads them, so they fold into plans.
         self.assertIn("function planIdeas", self.module)
         for marker in ("planMinIdeas", "maxPlansPerPass", "planIdeaCap", "stalePlanHours"):
@@ -887,10 +935,16 @@ class MefiStudioAssistantTests(unittest.TestCase):
         spawn = _function_body(self.main, "spawnNextJob")
         self.assertIn("await mutateBoard(", spawn, "the claim is one transactional mutation")
         self.assertIn("lease = { pid: process.pid, at: startedAt }", spawn, "the claim stamps a durable lease")
-        self.assertIn('"verifying"', spawn, "a request mid-verification is not re-spawnable")
+        # Only tasks are claimed (an inbox request runs as its promoted task),
+        # so no request is ever stamped running, nor settled to "verifying".
+        self.assertIn('current.status = "active";', spawn, "the claim flips a task to active")
+        self.assertNotIn('current.status = "running";', spawn, "no inbox request is claimed directly")
+        self.assertNotIn('status: "verifying"', spawn, "no run settles a request to verifying")
         release = _function_body(self.main, "releaseExecutorClaim")
         self.assertIn("await mutateBoard(", release, "claim release rides the same transactional path")
-        settle = _function_body(self.main, "autopilotHousekeeping")
+        # autopilotHousekeeping is the single-flight wrapper; the pass is its own function.
+        self.assertIn("autopilotHousekeepingPass()", _function_body(self.main, "autopilotHousekeeping"), "overlapping housekeeping calls coalesce into one pass")
+        settle = _function_body(self.main, "autopilotHousekeepingPass")
         self.assertIn("verifyCompletion", settle, "verification uses the acceptance contract")
         self.assertIn("verifyAttempts", settle, "verification retries are bounded, not an infinite respawn loop")
         fix = _function_body(self.main, "assistantFixPass")
@@ -917,18 +971,35 @@ class MefiStudioAssistantTests(unittest.TestCase):
         # The overseer files upkeep chores by the dozen. Picking on
         # source == "a-eyes" meant those took every executor slot the moment it
         # warmed up (20 of 34 open tasks) while the app and game work waited.
-        # The pick is now one ranking across the inbox and the board
-        # (compareWork / workPriority), so a chat task never waits behind
-        # auto-filed requests whatever either is worth.
+        # The pick is now one worth ranking (compareWork / workPriority), so a
+        # chat task never waits behind auto-filed requests whatever either is
+        # worth. Only board tasks run: an inbox request reaches the ranking by
+        # promotion, which orders the inbox the same way (pins first).
         self.assertIn("function workPriority", self.main)
         self.assertNotIn('runnable.find((item) => item.source === "a-eyes")', self.main, "the old pick order starved real work")
         spawn = _function_body(self.main, "spawnNextJob")
-        self.assertIn("compareWork(a.ref, b.ref)", spawn, "one ranking across the inbox and the board, worth first")
-        self.assertIn("workTitleKey", spawn, "inbox titles already on the board must not spawn a second run")
+        # The ranking itself is the pure executor core's (selectCandidates);
+        # spawnNextJob hands it the host's worth order.
+        core = (STUDIO / "scripts" / "executor-core.cjs").read_text(encoding="utf-8")
+        self.assertIn("compare: compareWork", spawn, "one ranking, worth first")
+        self.assertIn("executorResume.compare(a.ref, b.ref) || compare(a.ref, b.ref)", core, "one ranking, worth first")
+        self.assertIn('.map((ref) => ({ kind: "task", ref }))', core, "only board tasks are candidates")
+        self.assertNotIn('kind: "request"', spawn, "direct request execution is retired; requests run as promoted tasks")
+        self.assertNotIn('kind: "request"', core, "direct request execution is retired; requests run as promoted tasks")
+        self.assertIn(".sort(compareWork)", _function_body(self.main, "promoteRequestsToTasks"), "promotion admits the inbox in the dispatcher's order")
+        self.assertIn("workTitleKey", spawn, "a title a live worker holds must not spawn a second run")
         self.assertIn("conflictsWithLiveFix", spawn, "two Fix: jobs on the same subsystem must not fill two slots")
         self.assertIn("compileMemory", spawn, "builders get a pushed memory primer, they do not have to search")
         self.assertIn("DIG REQUIRED", spawn)
-        self.assertIn("status !== \"archived\"", spawn, "a finished task's title stays taken so a leftover request cannot re-run it")
+        # Deliberately changed: promotion, intake and compaction share one
+        # "a card stands until it is archived" rule (work-admission.cjs), and a
+        # promoted inbox row is stamped with its card so it is never promoted
+        # into a second run.
+        promote = _function_body(self.main, "promoteRequestsToTasks")
+        self.assertIn("workAdmission.standsOnBoard(task)", promote, "a finished task's title stays taken")
+        self.assertIn("request.promotedTo", promote, "a leftover inbox copy is never promoted into a second run")
+        admission = (STUDIO / "scripts" / "work-admission.cjs").read_text(encoding="utf-8")
+        self.assertIn('text(row.status).toLowerCase() !== "archived"', admission, "only an archived card stops standing for its work")
         # The worth ranking lives behind the Policy Lab's frozen baseline
         # policy (scripts/policy.mjs) with the inline port as the load-failure
         # fallback: compareWork delegates, and BOTH paths must keep the pin
@@ -957,7 +1028,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
         # so these pin the sweep-unique lines in the module source.
         self.assertIn("No queue-length truncation", self.module, "bounded scheduling retains all accepted work")
         self.assertIn("if (task.runId) return true", self.module, "never cut a task a run is holding")
-        self.assertIn("assistant.housekeepingSweep(", _function_body(self.main, "autopilotHousekeeping"), "the host applies the pure sweep under the board lock")
+        self.assertIn("assistant.housekeepingSweep(", _function_body(self.main, "autopilotHousekeepingPass"), "the host applies the pure sweep under the board lock")
 
     def test_assistant_is_always_on_and_owns_the_active_jobs(self):
         # The roster and the executor used to run blind to each other: the
@@ -966,9 +1037,12 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertIn("function assistantSuperviseJobs", self.main)
         self.assertIn("assistantSuperviseJobs(now)", _function_body(self.main, "assistantTick"))
         supervise = _function_body(self.main, "assistantSuperviseJobs")
-        for marker in ("autopilot.execute", "ASSISTANT_JOB_WEDGED_MS", "assistantAskForWork(", 'assistantSetProblems(["executor"]'):
+        for marker in ("autopilot.execute", "ASSISTANT_JOB_WEDGED_MS", 'assistantSetProblems(["executor"]'):
             with self.subTest(marker=marker):
                 self.assertIn(marker, supervise)
+        # Supervision reports the idle queue; the foreman's own minute (it skips
+        # the pool cap) retries it, so a 30 s ask from here only doubled passes.
+        self.assertNotIn("assistantAskForWork(", supervise, "supervision reports; it does not wake the foreman itself")
         self.assertIn("function queuedWorkCount", self.main)
         self.assertIn("async function refreshAutopilotQueue", self.main)
         self.assertIn("PROBLEM_ROLES", self.module)
@@ -1026,7 +1100,11 @@ class MefiStudioAssistantTests(unittest.TestCase):
         # The chain survives the request -> task promotion, or the guard stops biting.
         promote = _function_body(self.main, "promoteRequestsToTasks")
         self.assertIn("Number(request.depth)", promote)
-        self.assertIn('request.source === "collision"', promote, "collision ownership survives promotion onto the board")
+        # Promotion keeps the request's own source and fields (collision
+        # ownership among them) instead of rewriting every source but two to
+        # "a-eyes", so its worth band survives the move onto the board.
+        self.assertIn("...request,", promote, "collision ownership survives promotion onto the board")
+        self.assertNotIn('? "chat" : "a-eyes"', promote, "promotion no longer rewrites the filer's source")
         self.assertIn("request.files", promote, "promoted collision tasks keep the file list the spawn claim reads")
         self.assertIn("request.owner", promote, "promoted collision tasks keep the assigned owner")
 
@@ -1038,11 +1116,27 @@ class MefiStudioAssistantTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.main)
         self.assertIn("requestsFromExpand(briefing, await requestBaseline(eyes), role)", self.main, "a build pass queues its expand[] as requests")
-        self.assertIn('ASSISTANT_AI_ROLES = new Set(["briefer", "improver", "grower"])', self.main)
         for role in ("improver", "grower", "ideas"):
             with self.subTest(role=role):
                 self.assertIn(f'"{role}"', self.main)
         roles = _agent_roles_table()
+        self.assertEqual(AGENT_ROLES, [row["role"] for row in roles], "every seat parses, in roster order")
+        # One table decides who spends AI: the host's AI roles, the pool's AI
+        # accounting and the backlog hold derive from AGENT_ROLES instead of
+        # keeping their own lists (which disagreed about ideas and the overseer).
+        self.assertEqual(["briefer", "improver", "grower"], [row["role"] for row in roles if row["cadenceMs"] > 0 and row["spendsAi"] == "always"])
+        self.assertEqual({"overseer": "when-usable", "ideas": "when-usable"}, {row["role"]: row["spendsAi"] for row in roles if row["role"] in ("overseer", "ideas")})
+        self.assertEqual(["briefer", "improver", "ideas", "grower"], [row["role"] for row in roles if "backlog" in row["gates"]])
+        self.assertNotIn("ASSISTANT_AI_ROLES", self.main, "the host keeps no copy of the AI roles")
+        self.assertNotIn("ASSISTANT_CADENCE_ROLES", self.main, "nor of the cadence roles")
+        self.assertIn("assistant?.AI_ROLES", _function_body(self.main, "assistantTick"))
+        self.assertIn("assistant.CADENCE_ROLES", _function_body(self.main, "assistantTick"))
+        # _function_body cannot parse assistantEnqueueRole's destructured
+        # signature, so its region is read up to the next section comment.
+        enqueue_role = self.main[self.main.index("function assistantEnqueueRole(") : self.main.index("// On-demand roles")]
+        self.assertIn("ai: assistantRoleSpendsCall(role)", enqueue_role)
+        self.assertIn('assistantRoleGated(role, "backlog")', enqueue_role)
+        self.assertIn("ai: assistantRoleSpendsCall(role)", _function_body(self.main, "assistantWorkJob"))
         on_demand = [row for row in roles if row["cadenceMs"] == 0]
         self.assertEqual(["responder", "reference", "cluster-planner", "cluster-reviewer"], [row["role"] for row in on_demand], "cluster advisors run only for a claimed task")
         for role in ("improver", "grower", "ideas"):
@@ -1052,21 +1146,33 @@ class MefiStudioAssistantTests(unittest.TestCase):
 
     def test_thinker_reads_the_log_and_works_proactively(self):
         # The assistant box is where the agent thinks: a thinker role reads
-        # the activity log, posts inner monologue (no unread), and kicks the
-        # foreman when the board is idle with a real pick. Proactive off holds it.
+        # the activity log and a light slice of the board, posts inner
+        # monologue (no unread), and with the board idle either pins a ready
+        # pick through Work on it or only names it. It never announces a start
+        # it does not control (it used to say "starting work on X" and wake the
+        # foreman, which then ran whatever ranked first), and it leaves the tree
+        # pass to the watcher. Proactive off holds it.
         self.assertIn("thinker: assistantThinkerJob", self.main)
         self.assertIn("function assistantThink(", self.main)
         self.assertIn("function assistantCommitThought(", self.main)
-        self.assertIn('assistantAskForWork(`thinker: ${title}`)', self.main)
-        self.assertIn("assistantOrganize(now, store)", _function_body(self.main, "assistantThinkerJob"), "the assistant itself reshapes the node tree")
-        self.assertIn("overseer: assistantState.overseer", _function_body(self.main, "assistantThinkerJob"), "the thinker hears what the overseer found")
+        thinker_job = _function_body(self.main, "assistantThinkerJob")
+        self.assertNotIn("assistantAskForWork(", thinker_job, "the thinker never wakes the foreman to start a pick it cannot name")
+        self.assertNotIn("starting work on", thinker_job)
+        self.assertIn('assistantWorkOn({ kind: "task", id: plan.act.taskId', thinker_job, "a pin goes through the Work on it path")
+        self.assertNotIn("assistantOrganize(", thinker_job, "the watcher owns the tree pass")
+        self.assertNotIn("assistantMessageFacts(", thinker_job, "the full chat facts are not rebuilt every minute")
+        self.assertIn("assistantThinkerFacts(now, assistant)", thinker_job, "a light board read instead")
+        self.assertIn("assistantOrganize(now, store)", _function_body(self.main, "assistantWatcherJob"), "the watcher reshapes the node tree")
+        self.assertIn("overseer: assistantState.overseer", thinker_job, "the thinker hears what the overseer found")
         self.assertIn("assistantState.log", _function_body(self.main, "assistantMessageFacts"))
-        self.assertIn("call.reasoning", _function_body(self.main, "assistantRespond"))
+        self.assertIn("call.reasoning", self.main[self.main.index("async function assistantOverseerTurn(") : self.main.index("// Keyless (or model-less this turn) control")])
         roles = _agent_roles_table()
         thinker = next(row for row in roles if row["role"] == "thinker")
         self.assertGreater(thinker["cadenceMs"], 0)
         self.assertFalse(thinker["ai"], "the inner monologue is local; a missing key must not hold it")
-        self.assertIn("role === \"thinker\" && !rules.proactive", self.module)
+        self.assertEqual("never", thinker["spendsAi"])
+        self.assertEqual(["proactive"], thinker["gates"], "Proactive off holds it (dueRoles reads the table's gates)")
+        self.assertIn('gates.includes("proactive") && !rules.proactive', self.module)
         if not NODE:
             self.skipTest("Node unavailable; static contracts still ran")
         fixture = _fixture()
@@ -1343,16 +1449,16 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertEqual(["pause"], replies["pause"]["actions"])
         self.assertEqual([], replies["resume"]["actions"], "resume while running is a no-op")
         self.assertIn("already running", replies["resume"]["text"])
-        for piece in ("status", "tasks", "ideas", "collisions", "machine", "tidy", "fix", "organize", "pause", "resume", "request inbox", "agents", "roster", "the log"):
+        for piece in ("status", "tasks", "ideas", "collisions", "machine", "tidy", "fix", "organize", "pause", "resume", "task board", "agents", "roster", "the log"):
             with self.subTest(help_piece=piece):
                 self.assertIn(piece, replies["help"]["text"])
         request = replies["Add a night mode to the booklet"]
-        self.assertEqual(["queue-request", "agents"], request["actions"], "a request queues the executor and sends the roster out")
+        self.assertEqual(["queue-request"], request["actions"], "a request goes on the board for the foreman; the roster keeps its own clocks")
         self.assertIn("put on the task board", request["text"])
         self.assertIn("kept in the thread", request["text"].lower())
-        self.assertIn("roster", request["text"])
+        self.assertNotIn("roster goes out", request["text"], "no dispatch is claimed that no longer happens")
         work = replies["Work on the upgrade this app so that the agent task I made"]
-        self.assertEqual(["queue-request", "agents"], work["actions"], "a work verb in front of a query keyword is an instruction")
+        self.assertEqual(["queue-request"], work["actions"], "a work verb in front of a query keyword is an instruction")
         self.assertIn("put on the task board", work["text"])
         related = replies["Update the README for the crafting bench"]["text"]
         self.assertTrue("Crafting bench recipes" in related or "Fix the crafting bench" in related, related)

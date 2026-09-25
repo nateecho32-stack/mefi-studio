@@ -13,11 +13,13 @@ function element() {
 function environment({ full = { status: "paused" }, assistant = { execute: true }, control } = {}) {
   const el = Object.fromEntries(["chatLogNewWork", "chatPause", "chatLogNewWorkState", "chatNewWorkState"].map((key) => [key, element()]));
   const state = { assistant, newWorkBusy: false, active: false };
-  const messages = [], calls = [];
+  const messages = [], calls = [], events = [];
   let backlogReads = 0;
   const context = vm.createContext({
     el, state,
+    CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options.detail; } },
     window: {
+      dispatchEvent: (event) => events.push(event),
       mefiStudio: control ? { assistantControl: (action) => { calls.push(action); return control(action); } } : {},
       MefiTree: { applyAssistant: (payload) => { full = payload.state; } },
       MefiToast: (...args) => messages.push(args),
@@ -27,7 +29,7 @@ function environment({ full = { status: "paused" }, assistant = { execute: true 
     refreshCommandBacklog: async () => { backlogReads += 1; },
   });
   vm.runInContext(`${controlSource}\nthis.api = { changeNewWork, renderNewWorkControl };`, context);
-  return { ...context.api, state, el, messages, calls, pushFull: (value) => { full = value; }, backlogReads: () => backlogReads };
+  return { ...context.api, state, el, messages, calls, events, pushFull: (value) => { full = value; }, backlogReads: () => backlogReads };
 }
 
 test("New work reflects both service pause and executor preference without dispatching during render", () => {
@@ -130,4 +132,22 @@ test("A failed save retains a newer pushed state instead of reverting an already
   assert.equal(env.el.chatLogNewWork.checked, true);
   assert.equal(env.el.chatPause.checked, true);
   assert.equal(env.el.chatNewWorkState.textContent, "On");
+});
+
+
+test("service-only pause pushes publish confirmed Settings snapshots once per change", () => {
+  const env = environment({ full: { status: "idle" }, assistant: { enabled: true, execute: true }, control: async () => ({ ok: true }) });
+  env.renderNewWorkControl();
+  assert.equal(env.events.at(-1).detail.newWork, true);
+  const count = env.events.length;
+  env.renderNewWorkControl();
+  env.renderNewWorkControl();
+  assert.equal(env.events.length, count, "unchanged feed paints are quiet");
+  env.pushFull({ status: "paused" });
+  env.renderNewWorkControl();
+  assert.equal(env.events.length, count + 1);
+  assert.equal(env.events.at(-1).type, "mefi:queue-settings");
+  assert.equal(env.events.at(-1).detail.newWork, false);
+  assert.equal(env.events.at(-1).detail.enabled, true, "service pause does not alter the queue preference");
+  assert.deepEqual(env.calls, [], "sync never sends host commands");
 });

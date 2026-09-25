@@ -5,6 +5,7 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { randomUUID, createHash } = require("node:crypto");
+const { taskRow } = require("./work-admission.cjs");
 
 const FORMAT_VERSION = 1;
 const QUESTION_TYPES = ["discussion", "research", "prototype", "prerequisite"];
@@ -339,12 +340,14 @@ function buildImplementationTasks(plan, { project, now = Date.now() } = {}) {
   const ids = implementationIds(plan), idMap = new Map(plan.spec.tasks.map((task, index) => [task.id, ids[index]]));
   const decisions = plan.questions.map((question, index) => `${index + 1}. ${question.question}\nType: ${question.type}\nDecision confirmed by you: ${question.resolution}${question.evidence ? `\nEvidence: ${question.evidence}` : ""}${question.notes.length ? `\nInterview record (context, not additional decisions):\n${question.notes.map((note) => `${noteLabel(note)}: ${note.text}`).join("\n")}` : ""}`).join("\n\n");
   const breakdown = plan.spec.tasks.map((task) => `${task.id}: ${task.title}\n${task.prompt}\nAcceptance criteria:\n${task.acceptance.map((criterion) => `- ${criterion}`).join("\n")}${task.dependsOn.length ? `\nPrerequisites: ${task.dependsOn.join(", ")}` : ""}`).join("\n\n");
-  return plan.spec.tasks.map((task, index) => ({
+  // The admission module's card skeleton. The owner approved this plan, so its
+  // tasks are the owner's work and rank with it (origin), whatever their source.
+  return plan.spec.tasks.map((task, index) => taskRow({
     id: ids[index], title: task.title, projectId: project.id, projectPath: project.path, projectName: project.name,
     prompt: `YOUR TASK: ${task.title}\n${task.prompt}\n\nAcceptance criteria for this task\n${task.acceptance.map((criterion) => `- ${criterion}`).join("\n")}\n\nImplement this task within the approved scope, use prerequisite outputs, and verify its acceptance criteria. Preserve the other tasks for their assigned work.\n\nImplementation task from approved plan: ${plan.title}\nPlanning ID: ${plan.id}\n\nDestination\n${plan.destination}\n\nOut of scope\n${plan.outOfScope || "None recorded."}\n\nConfirmed planning decisions\n${decisions || "No additional decisions were needed."}\n\nApproved specification\n${plan.spec.text}\n\nImplementation breakdown (context for this task)\n${breakdown}`,
     acceptance: copy(task.acceptance), dependsOn: task.dependsOn.map((id) => idMap.get(id)), source: "planning", planningId: plan.id, planningSpecId: plan.spec.id, planningTaskId: task.id,
-    status: "open", createdAt: now, updatedAt: now, logs: [{ at: now, text: `Created from approved plan: ${plan.title}` }], refs: [], ideas: [],
-  }));
+    createdAt: now,
+  }, { now, log: `Created from approved plan: ${plan.title}`, origin: { kind: "planning", by: "owner" } }));
 }
 
 function createPlanningStore({ filePath, project, now = Date.now } = {}) {

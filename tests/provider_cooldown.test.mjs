@@ -95,11 +95,8 @@ test("a second outage in a row doubles the cooldown, and an ordinary failure aft
   assert.equal(row.nextRunAt, h.now() + MINUTE);
   assert.equal(row.lastRunError, "FAIL tests/board.test.mjs");
   assert.equal(row.logs.at(-1).text, "autopilot run failed (exit 1) · FAIL tests/board.test.mjs · retry 1/5");
-  assert.deepEqual(asked.map((call) => call.result === null), [true, true, false], "only the ordinary failure is put to triage");
-  assert.equal(raised.length, 1);
-  assert.equal(raised[0].kind, "run-failed");
-  assert.equal(raised[0].taskId, "outage");
-  assert.deepEqual([...raised[0].evidence], ["npm test", "FAIL tests/board.test.mjs"]);
+  assert.deepEqual(asked.map((call) => call.result === null), [true, true, true], "the ordinary failure gets an automatic repair attempt");
+  assert.equal(raised.length, 0, "Ask waits until the five-try repair budget is spent");
 
   // The next outage starts its streak over, and the charged try stays charged.
   h.advance(MINUTE);
@@ -107,7 +104,7 @@ test("a second outage in a row doubles the cooldown, and an ordinary failure aft
   assert.equal(row.runFailures, 1);
   assert.equal(row.providerFailures, 1);
   assert.equal(row.nextRunAt, h.now() + 5 * MINUTE);
-  assert.equal(raised.length, 1);
+  assert.equal(raised.length, 0);
 });
 
 test("a long outage waits at most two hours between tries, and past seven in a row the try is charged", async () => {
@@ -160,7 +157,8 @@ test("a genuine failure that only mentions a provider word is charged and parks"
   const parked = h.board().tasks[0];
   assert.equal(parked.nextRunAt, undefined, "parked after five tries");
   assert.match(parked.logs.at(-1).text, / · gave up after 5 tries$/);
-  assert.equal(raised.length, 5, "every one is put to triage");
+  assert.equal(raised.length, 1, "only the fifth failure reaches Ask");
+  assert.equal(raised[0].attempts, 5);
 });
 
 test("once the route has finished a run since the card's last outage, the next outage-looking failure is charged", async () => {
@@ -181,7 +179,7 @@ test("once the route has finished a run since the card's last outage, the next o
   assert.equal(row.runFailures, 1, "the provider was answering: this try is charged");
   assert.equal(row.providerFailures, 2);
   assert.equal(row.logs.at(-1).text, "autopilot run failed (exit 1) · Error: Rate limit reached for requests · retry 1/5");
-  assert.equal(raised.length, 1);
+  assert.equal(raised.length, 0, "the first charged failure still has repair attempts");
 
   // A finished run of its own ends the streak.
   h.advance(MINUTE);
@@ -209,48 +207,27 @@ test("a run that finished before the card's outage is no evidence the provider i
   assert.deepEqual(raised, []);
 });
 
-test("an inbox request that hits an outage is requeued the same way without spending its tries", async () => {
-  const request = { title: "Implement direct request", prompt: "Complete the direct request and its tests", at: 1, source: "manual", pin: true, runFailures: 1 };
+// Only tasks run: an inbox request reaches a worker as its promoted card,
+// with the tries it already spent, and an outage is settled the task's way.
+test("an inbox request that hits an outage runs as its promoted task and is requeued the same way without spending its tries", async () => {
+  const request = { title: "Implement inbox request", prompt: "Complete the inbox request and its tests", at: 1, source: "manual", pin: true, runFailures: 1 };
   const { h, asked, raised } = outageHost({ mode: "cluster", adaptiveParallel: true, requests: [request] });
-  assert.equal(await h.env.spawnNextJob(), "spawned");
-  assert.equal(h.starts[0].taskId, null, "the request runs as itself");
-  await h.finish(null, { code: 1, lines: ["You've hit your usage limit"] });
-  let saved = h.board().requests[0];
-  assert.equal(saved.status, undefined, "back in the inbox");
+  h.wake(); await h.pump();
+  const card = h.board().tasks.find((row) => row.title === request.title);
+  assert.ok(card, "the foreman promoted the request");
+  assert.deepEqual(h.starts.map((row) => row.taskId), [card.id], "the card runs, never the inbox row");
+  assert.equal(card.runFailures, 1, "promotion keeps the tries the request already spent");
+  await h.finish(card.id, { code: 1, lines: ["You've hit your usage limit"] }); await h.pump();
+  const saved = h.board().tasks.find((row) => row.id === card.id);
+  assert.equal(saved.status, "open");
   assert.equal(saved.runId, undefined);
   assert.equal(saved.runFailures, 1, "the outage's try is not charged");
   assert.equal(saved.providerFailures, 1);
   assert.equal(saved.nextRunAt, h.now() + 5 * MINUTE);
   assert.equal(saved.lastRunError, "You've hit your usage limit");
-  assert.equal(saved.lastAttempt.runId, h.starts[0].runId);
-  assert.equal(h.board().tasks.length, 0, "no card is made from an outage");
-
-  h.advance(5 * MINUTE);
-  assert.equal(await h.env.spawnNextJob(), "spawned");
-  await h.finish(null, { code: 1, lines: ["Cannot connect to API"] });
-  saved = h.board().requests[0];
-  assert.equal(saved.runFailures, 1);
-  assert.equal(saved.providerFailures, 2);
-  assert.equal(saved.nextRunAt, h.now() + 10 * MINUTE);
-
-  h.advance(10 * MINUTE);
-  assert.equal(await h.env.spawnNextJob(), "spawned");
-  await h.finish(null, { code: 1, lines: ["FAIL tests/board.test.mjs"] });
-  saved = h.board().requests[0];
-  assert.equal(saved.runFailures, 2, "an ordinary failure is charged");
-  assert.equal(saved.providerFailures, undefined);
-  assert.equal(saved.lastRunError, "FAIL tests/board.test.mjs");
-  assert.equal(saved.nextRunAt, h.now() + 20 * MINUTE);
-
-  // Past seven outages in a row a request's try is charged too.
-  h.edit((board) => { board.requests[0].providerFailures = 7; });
-  h.advance(20 * MINUTE);
-  assert.equal(await h.env.spawnNextJob(), "spawned");
-  await h.finish(null, { code: 1, lines: ["You've hit your usage limit"] });
-  saved = h.board().requests[0];
-  assert.equal(saved.runFailures, 3);
-  assert.equal(saved.providerFailures, 8);
-  // Requests are not put to triage: the failure question is for cards.
-  assert.deepEqual(asked, []);
+  assert.equal(saved.logs.at(-1).text, "provider unavailable (exit 1) · You've hit your usage limit · requeued in 5m, no attempt charged");
+  assert.equal(h.board().tasks.length, 1, "no second card is made from the inbox copy");
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0].result, null, "the outage is put to no one");
   assert.deepEqual(raised, []);
 });

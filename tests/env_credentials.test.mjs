@@ -69,7 +69,9 @@ test("the host reads the three sources in the documented order and never gates a
   );
   assert.ok(!decrypt.includes("safeStorage"), "only savedKey() touches the keystore");
   assert.ok(!/Encrypted\)\s*&&\s*safeStorage\.isEncryptionAvailable\(\)/.test(main), "no gate pairs a saved ciphertext with the keystore directly");
-  assert.ok(section("async function runAssistant(", "const eyes = await getEyes();").includes("keyAvailable(settings, field)"), "the assistant's key gate accepts any source");
+  assert.ok(section("function aiRouteConfigured(", "async function runAssistant(").includes("keyAvailable(settings, field)"), "the assistant's key gate accepts any source");
+  assert.ok(section("async function runAssistant(", "const eyes = await getEyes();").includes("aiRouteConfigured(settings)"), "the passes gate on the shared predicate");
+  assert.ok(section("async function assistantKeyPresent(", "async function loadAssistant(").includes("aiRouteConfigured("), "the chat's gate is the same predicate, so Zen and keyless CLI routes count");
   assert.ok(
     section('ipcMain.handle("settings:get-key"', 'ipcMain.handle("settings:set-key"').includes("via: keySourceFor(settings, field)"),
     "the renderer learns which source holds the key, never the key",

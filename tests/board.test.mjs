@@ -23,6 +23,7 @@ import {
   verifyCompletion,
   VERIFY_MAX_ATTEMPTS,
 } from "../scripts/assistant.mjs";
+import { requestsFromBriefing } from "../scripts/eyes.mjs";
 
 const HOUR = 3600 * 1000;
 const ide = (id, title, detail = "", tags = [], extra = {}) => ({ id, title, detail, tags, status: "new", at: 1, ...extra });
@@ -323,6 +324,17 @@ test("fix tickets in one family but aimed at different files stay separate", () 
   assert.equal(fixThemeKey(dupA), fixThemeKey(dupA2), "same family, same target: one job");
   // fileless tickets share the bare family (nothing to scope on)
   assert.equal(fixThemeKey({ title: "Fix: stalled work", source: "fix" }), "fix:stale");
+});
+
+test("the briefing's closing instruction does not give every Fix: brief the duplicate theme", () => {
+  const filed = [
+    { severity: "warn", title: "stale lock file blocks the updater", detail: "The updater waits on a stale lock.", sessionIds: ["ses_u"] },
+    { severity: "warn", title: "Test suite fails on CI", detail: "Three suites time out.", sessionIds: ["ses_t"] },
+    { severity: "warn", title: "Duplicate root-cause sessions", detail: "Two sessions chase one bug.", sessionIds: ["ses_x", "ses_y"] },
+  ].flatMap((alert) => requestsFromBriefing({ alerts: [alert] }));
+  assert.equal(filed.length, 3, "fixture: the briefing files all three");
+  assert.ok(filed.every((request) => /Find the root cause, fix it/.test(request.prompt)), "fixture: each brief ends with the instruction");
+  assert.deepEqual(filed.map(fixThemeKey), ["fix:stale", null, "fix:dup"], "only the alert itself names the problem");
 });
 
 test("compaction collapses only same-target fix tickets", () => {

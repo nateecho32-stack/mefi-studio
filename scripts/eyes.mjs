@@ -472,6 +472,38 @@ export function listReads({ dbPath = DEFAULT_DB, sessionId, since, until, limit 
   }
 }
 
+// Pending/running tools explain quiet workers before their command finishes.
+// Read one attributed session and bounded input fields, never tool output.
+export function listSessionActiveTools({ dbPath = DEFAULT_DB, sessionId, since, until, limit = 4 } = {}) {
+  const unavailable = () => ({ available: false, tools: [], truncated: false });
+  if (!checkWindow({ sessionId, since, until })) return unavailable();
+  const cap = Number.isFinite(limit) ? Math.max(1, Math.min(12, Math.floor(limit))) : 4;
+  try {
+    const rows = openDb(dbPath).prepare(`
+      with scoped as (
+        select id, session_id, time_created, time_updated,
+          case when json_valid(data) then data else '{}' end payload
+        from part where session_id = ? and time_created >= ? and time_created <= ?
+      )
+      select id, session_id sessionId, time_created, time_updated updatedAt,
+        substr(json_extract(payload, '$.tool'), 1, 40) tool,
+        json_extract(payload, '$.state.status') status,
+        substr(coalesce(nullif(json_extract(payload, '$.state.input.description'), ''), json_extract(payload, '$.state.title'), ''), 1, 240) description,
+        substr(coalesce(json_extract(payload, '$.state.input.command'), ''), 1, 2000) command,
+        json_extract(payload, '$.state.time.start') startedAt
+      from scoped where json_extract(payload, '$.type') = 'tool'
+        and json_extract(payload, '$.state.status') in ('running', 'pending')
+        and json_extract(payload, '$.state.time.end') is null
+      order by case json_extract(payload, '$.state.status') when 'running' then 0 else 1 end, time_created asc limit ?
+    `).all(sessionId, since, until, cap + 1);
+    const tools = rows.slice(0, cap).filter((row) => row.startedAt == null || (finiteTime(row.startedAt) && row.startedAt >= since && row.startedAt <= until))
+      .map((row) => ({ id: row.id, sessionId: row.sessionId, tool: typeof row.tool === "string" ? row.tool : "tool", status: row.status,
+        description: typeof row.description === "string" ? row.description : "", command: typeof row.command === "string" ? row.command : "",
+        startedAt: finiteTime(row.startedAt) ? row.startedAt : row.time_created, updatedAt: finiteTime(row.updatedAt) ? row.updatedAt : row.time_created }));
+    return { available: true, tools, truncated: rows.length > cap };
+  } catch { return unavailable(); }
+}
+
 export function listTodos({ dbPath = DEFAULT_DB, sessionId = null } = {}) {
   if (!storePresent(dbPath)) return [];
   const db = openDb(dbPath);
@@ -918,6 +950,22 @@ function editWindowsByFile({ dbPath = DEFAULT_DB, since, root = null } = {}) {
     window.edits += 1;
     sessions.set(row.session_id, window);
   }
+  // Recent edits are not proof that a worker is still running. Use the same
+  // final step-finish/stop evidence as listSessions; a resumed session with a
+  // newer part becomes active again. Unknown or aborted tails stay conservative.
+  const lastPart = db.prepare(`select time_created, json_extract(data,'$.type') type, json_extract(data,'$.reason') reason
+    from part where rowid = (select rowid from part where session_id = ? order by time_created desc, id desc limit 1)`);
+  const sessionStart = db.prepare("select time_created from session where id = ?");
+  const lifecycle = new Map();
+  const ids = new Set([...byFile.values()].flatMap((sessions) => [...sessions.keys()]));
+  for (const id of ids) {
+    const last = lastPart.get(id);
+    const finished = last?.type === "step-finish" && last.reason === "stop";
+    lifecycle.set(id, { finished, finishedAt: finished ? last.time_created : null, startedAt: sessionStart.get(id)?.time_created ?? null });
+  }
+  for (const sessions of byFile.values()) {
+    for (const [id, window] of sessions) Object.assign(window, lifecycle.get(id));
+  }
   return byFile;
 }
 
@@ -931,14 +979,24 @@ export function collisions({ dbPath = DEFAULT_DB, windowMs = 60 * 60 * 1000, sin
     if (overlapping.size < 2) continue;
     const included = [...sessions.entries()]
       .filter(([sessionId]) => overlapping.has(sessionId))
-      .map(([sessionId, window]) => ({ sessionId, edits: window.edits, first: window.first, last: window.last }));
+      .map(([sessionId, window]) => ({ sessionId, ...window }));
     const key = included.map((entry) => entry.sessionId).sort().join("|");
-    if (!groups.has(key)) groups.set(key, { bySession: new Map(), lastEdit: new Map(), firstEdit: new Map(), fileEntries: [], fileSessions: new Map() });
+    if (!groups.has(key)) groups.set(key, { bySession: new Map(), lastEdit: new Map(), firstEdit: new Map(), fileEntries: [], fileSessions: new Map(), finished: new Set(), concurrent: false, sequential: true });
     const group = groups.get(key);
-    for (const { sessionId, edits, first, last } of included) {
+    // Preserve gap-tolerated history in the inspector, but distinguish it
+    // from actual pairwise overlap on a file. A three-session chain can have
+    // genuine pair overlaps even when its overall intersection is empty.
+    group.concurrent ||= temporallyOverlappingSessions(sessions, 0).size > 1;
+    // Only proven sequential session lifetimes retire an alert. Two workers
+    // can run together yet make one edit each a few seconds apart; a finished
+    // peer alone must not erase that possible live conflict.
+    const endedBefore = (a, b) => a.finished && Number.isFinite(a.finishedAt) && Number.isFinite(b.startedAt) && a.finishedAt <= b.startedAt;
+    group.sequential &&= included.every((a, index) => included.every((b, other) => index === other || endedBefore(a, b) || endedBefore(b, a)));
+    for (const { sessionId, edits, first, last, finished } of included) {
       group.bySession.set(sessionId, (group.bySession.get(sessionId) ?? 0) + edits);
       group.lastEdit.set(sessionId, Math.max(group.lastEdit.get(sessionId) ?? 0, last));
       group.firstEdit.set(sessionId, Math.min(group.firstEdit.get(sessionId) ?? first, first));
+      if (finished) group.finished.add(sessionId);
     }
     group.fileEntries.push({ file, last: Math.max(...included.map((entry) => entry.last)) });
     group.fileSessions.set(file, included.map(({ sessionId, edits, first, last }) => ({ sessionId, edits, firstEdit: first, lastEdit: last })));
@@ -952,7 +1010,8 @@ export function collisions({ dbPath = DEFAULT_DB, windowMs = 60 * 60 * 1000, sin
       edits,
       firstEdit: group.firstEdit.get(sessionId) ?? 0,
       lastEdit: group.lastEdit.get(sessionId) ?? 0,
-      active: now - (group.lastEdit.get(sessionId) ?? 0) <= ACTIVE_EDIT_MS,
+      finished: group.finished.has(sessionId),
+      active: !group.finished.has(sessionId) && now - (group.lastEdit.get(sessionId) ?? 0) <= ACTIVE_EDIT_MS,
       files: group.fileEntries
         .map((entry) => entry.file)
         .filter((file) => (group.fileSessions.get(file) ?? []).some((row) => row.sessionId === sessionId)),
@@ -976,6 +1035,8 @@ export function collisions({ dbPath = DEFAULT_DB, windowMs = 60 * 60 * 1000, sin
       edits: sessions.reduce((sum, entry) => sum + entry.edits, 0),
       active: sessions.some((entry) => entry.active),
       handoff: ownerIsInactive({ owner, sessions }),
+      concurrent: group.concurrent,
+      historyOnly: !group.concurrent && group.sequential,
     });
   }
   return result.sort((a, b) => b.sessions.length - a.sessions.length || b.edits - a.edits || b.files.length - a.files.length);
@@ -1040,6 +1101,7 @@ export function overlapRangeOf(collision) {
 // session on two different partners is two groups and two requests.
 export function requestsFromCollisions(collisions, existing = []) {
   return collisions
+    .filter((collision) => collision.historyOnly !== true)
     .filter((collision) => {
       const files = collision.files ?? [collision.file];
       const sessionIds = collision.sessions.map((entry) => entry.sessionId);
@@ -1055,6 +1117,7 @@ export function requestsFromCollisions(collisions, existing = []) {
       const label = files.length > 1 ? `${files[0].split(/[\\/]/).pop()} +${files.length - 1} more` : files[0].split(/[\\/]/).pop();
       const owner = collision.owner ?? collision.sessions[0]?.sessionId ?? null;
       const others = collision.sessions.map((entry) => entry.sessionId).filter((id) => id !== owner);
+      const unfinishedOthers = others.filter((id) => !collision.sessions.find((entry) => entry.sessionId === id)?.finished);
       const ownership = (collision.ownership ?? [])
         .filter((row) => row && row.file)
         .map((row) => ({ file: row.file, owner: row.owner ?? null }));
@@ -1066,12 +1129,15 @@ export function requestsFromCollisions(collisions, existing = []) {
       const collaborating = splitOwners.length > 1;
       const resolveBit = collaborating
         ? `These sessions are collaborating on one feature: each keep the files they own and adopt missing pieces on the rest instead of clobbering. `
-        : `${others.join(", ") || "the other sessions"} must stop or rebase onto that work instead of pushing competing edits. Adopt ${owner}'s work and add missing pieces rather than clobbering it. `;
+        : `${unfinishedOthers.length ? `${unfinishedOthers.join(", ")} must stop or rebase onto that work instead of pushing competing edits.` : "The other sessions have finished; inspect their saved edits."} Adopt ${owner}'s work and add missing pieces rather than clobbering it. `;
       const activeIds = collision.sessions.filter((entry) => entry.active === true).map((entry) => entry.sessionId);
       const handoff = ownerIsInactive({ ...collision, owner });
+      const ownerFinished = collision.sessions.find((entry) => entry.sessionId === owner)?.finished === true;
       const idleBit = "No session has touched it in the last 10 minutes — finish and merge rather than re-editing.";
       const liveBit = activeIds.length ? `Active on it right now: ${activeIds.join(", ")}.` : "";
-      const activity = handoff
+      const activity = ownerFinished
+        ? `Owner ${owner} has finished; adopt its saved work.${liveBit ? ` ${liveBit}` : ""}`
+        : handoff
         ? `Owner ${owner} is marked inactive; confirm handoff before further edits.${liveBit ? ` ${liveBit}` : ` ${idleBit}`}`
         : liveBit || idleBit;
       // The clash's time range, mirroring the explorer's overlapRange: the
@@ -1135,7 +1201,7 @@ export function filePresence({ dbPath = DEFAULT_DB, windowMs = ACTIVE_EDIT_MS, s
         sessionId,
         edits: window.edits,
         lastEdit: window.last,
-        active: now - window.last <= ACTIVE_EDIT_MS,
+        active: !window.finished && now - window.last <= ACTIVE_EDIT_MS,
       }))
       .filter((entry) => entry.active)
       .sort((a, b) => b.lastEdit - a.lastEdit || b.edits - a.edits || String(a.sessionId).localeCompare(String(b.sessionId)));
@@ -1574,7 +1640,7 @@ export function assistantFacts({ dbPath = DEFAULT_DB, sessionLimit = 10, changeL
           }
         : null,
     })),
-    collisions: collisions({ dbPath, root, now }).slice(0, 8).map((collision) => {
+    collisions: collisions({ dbPath, root, now }).filter((collision) => !collision.historyOnly).slice(0, 8).map((collision) => {
       const sessions = collision.sessions.map((entry) => ({
         sessionId: entry.sessionId,
         edits: entry.edits,
@@ -1582,6 +1648,7 @@ export function assistantFacts({ dbPath = DEFAULT_DB, sessionLimit = 10, changeL
         lastEdit: entry.lastEdit,
         files: entry.files,
         active: entry.active === true,
+        finished: entry.finished === true,
       }));
       return {
         file: collision.file,

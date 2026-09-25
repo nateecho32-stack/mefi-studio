@@ -384,6 +384,17 @@
 
     let points = [];
     let tableSort = { key: "quality", dir: -1 };
+    const sortHeaders = [...document.querySelectorAll("#table th")];
+    function syncSortHeaders() {
+      for (const header of sortHeaders) {
+        const selected = header.dataset.k === tableSort.key;
+        if (selected) header.setAttribute("aria-sort", tableSort.dir === 1 ? "ascending" : "descending");
+        else header.removeAttribute("aria-sort");
+        const button = header.querySelector("button");
+        if (button) button.setAttribute("aria-label", `Sort by ${button.textContent}, ${selected && tableSort.dir === -1 ? "ascending" : "descending"}`);
+      }
+    }
+    syncSortHeaders();
 
     function redraw() {
       // The catalog map sits inside a closed disclosure beneath Model Lab.
@@ -419,10 +430,11 @@
 
     taskSelect.addEventListener("change", () => renderRank(rankEl, taskSelect, doc));
     document.getElementById("model-lab-catalog")?.addEventListener("toggle", (event) => { if (event.target.open) redraw(); });
-    document.querySelectorAll("#table th").forEach((th) => {
-      th.addEventListener("click", () => {
+    sortHeaders.forEach((th) => {
+      th.querySelector("button")?.addEventListener("click", () => {
         const key = th.dataset.k;
         tableSort = { key, dir: tableSort.key === key ? -tableSort.dir : -1 };
+        syncSortHeaders();
         fillTable(doc, tableBody, tableSort.key, tableSort.dir);
       });
     });

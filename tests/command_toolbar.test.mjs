@@ -42,12 +42,12 @@ const toolbar = block('<div class="cmd-tools"');
 const viewMenu = block('<div id="idle-view-pop"');
 const ambience = block('<div id="idle-ambience-pop"');
 
-test("the toolbar is four labelled groups and Leave: nine controls where there were thirteen", () => {
+test("the toolbar groups Agents settings, Camera, View and Sound beside Leave", () => {
   assert.match(toolbar, /^<div class="cmd-tools" role="toolbar" aria-label="Command view controls">/);
   const groups = [...toolbar.matchAll(/<div class="cmd-tools-group" role="group" aria-label="([^"]+)">/g)].map((match) => match[1]);
   assert.deepEqual(groups, ["Agents", "Camera", "View", "Sound"]);
   assert.deepEqual(controlIds(toolbar), [
-    "idle-feed-agent-mode",
+    "idle-agent-settings", "idle-feed-agent-mode",
     "idle-fit", "idle-cam-orbit", "idle-cam-follow", "idle-orbit",
     "idle-view-menu",
     "idle-music-toggle", "idle-ambience",
@@ -151,11 +151,12 @@ function hudFixture({
     hud: node("hud", { getBoundingClientRect: () => box(hud) }),
     viewMenuBtn: inStrip("view-menu", view), viewPop,
     ambienceBtn: inStrip("ambience", sound), pop: node("ambience-pop", { hidden: true, offsetWidth: 280 }),
+    agentSettingsBtn: inStrip("agent-settings", view), settings: node("agent-settings-pop", { hidden: true, offsetWidth: 400 }),
     usagePop: null, legendList: null,
   };
   const window = { MefiUsageTracker: null };
   const calls = [];
-  const env = vm.createContext({ el, document, window, state: { active: true }, Math, bumpHud() {} });
+  const env = vm.createContext({ el, document, window, state: { active: true }, Math, bumpHud() {}, renderSettingsPanel() {} });
   vm.runInContext(section("  // The toolbar's popovers hang from the button that opened them", "  // ---------- keyboard ----------"), env);
   const key = (name) => {
     const event = { key: name, prevented: false, stopped: false, preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; } };
@@ -164,6 +165,36 @@ function hudFixture({
   };
   return { env, el, document, window, items, key, calls };
 }
+
+test("Agents opens from the toolbar without changing selection and keeps owned dropdowns interactive", () => {
+  const { env, el, document, window } = hudFixture();
+  env.state.selected = "task:kept";
+  env.state.railTab = "node";
+  env.openViewMenu();
+  env.openAgentSettings({ focus: true });
+  assert.equal(el.viewPop.hidden, true);
+  assert.equal(el.settings.hidden, false);
+  assert.equal(el.agentSettingsBtn.attrs["aria-expanded"], "true");
+  assert.equal(document.activeElement, el.settings);
+  assert.equal(el.settings.style.top, "71px");
+  assert.equal(env.state.selected, "task:kept");
+  assert.equal(env.state.railTab, "node");
+  const outside = document.listeners.find(([type]) => type === "pointerdown")[1];
+  const option = {};
+  let selectClosed = false;
+  window.MefiSelect = { owns: (owner) => owner === el.settings, contains: (target) => target === option, close: () => { selectClosed = true; } };
+  outside({ target: option });
+  outside({ target: { parent: el.settings } });
+  assert.equal(el.settings.hidden, false, "portal options and panel controls keep settings open");
+  env.closeAgentSettings({ focus: true });
+  assert.equal(selectClosed, true);
+  assert.equal(el.settings.hidden, true);
+  assert.equal(document.activeElement, el.agentSettingsBtn);
+  assert.equal(document.listeners.length, 0);
+  env.openAgentSettings();
+  outside({ target: { name: "canvas" } });
+  assert.equal(el.settings.hidden, true);
+});
 
 test("View ▾ opens onto its first item, arrows walk it, Esc and Tab hand focus back to its button", () => {
   const { env, el, document, items, key } = hudFixture();
@@ -294,7 +325,7 @@ test("Esc closes what opened last: View ▾, Ambience, Usage and the Legend befo
   assert.equal(state.legendOpen, true);
 });
 
-test("Ambience reads Look → Sound → Calm, keeps every id, drops the Audio link row and links on to Style & sound", () => {
+test("Ambience keeps Look, Sound and Calm controls and links to canonical settings categories", () => {
   assert.ok(!template.includes("Ambience and startup"), "startup moved to Settings; the name follows");
   assert.match(button(toolbar, "idle-ambience"), /aria-haspopup="dialog" aria-expanded="false" aria-controls="idle-ambience-pop" title="Ambience: look, sound and calm" aria-label="Ambience"/);
   assert.match(ambience, /^<div id="idle-ambience-pop" class="pop" role="dialog" aria-label="Ambience" tabindex="-1" hidden>/);
@@ -311,7 +342,8 @@ test("Ambience reads Look → Sound → Calm, keeps every id, drops the Audio li
   assert.match(ambience, /\n\s*<input type="checkbox" id="idle-reactive" hidden>\n/);
   const footer = ambience.slice(ambience.lastIndexOf('<hr class="pop-sep">'));
   // "Style & sound ↗" is held together, so a wrap never strands the arrow.
-  assert.match(footer, /<button class="ghost mini pop-link" type="button" data-nav="music" [^>]*>Theme, node style &amp; music: Style&nbsp;&amp;&nbsp;sound&nbsp;↗<\/button>/);
+  assert.match(footer, /data-nav="studio" data-nav-params='\{"category":"appearance"\}'/);
+  assert.match(footer, /data-nav="studio" data-nav-params='\{"category":"audio"\}'/);
   // Following the link out closes the popover on the way.
   assert.ok(idle.includes('el.pop?.addEventListener("click", (event) => { if (event.target?.closest?.("[data-nav]")) closeAmbience(); });'));
 });
@@ -320,7 +352,7 @@ test("the stylesheet draws the clusters, drops the separators at 760px and anima
   assert.match(styles, /#idle-hud \.cmd-tools-group \{[^}]*display: flex;[^}]*flex: none;/);
   assert.match(styles, /@media \(max-width: 760px\) \{ #idle-hud \.cmd-tools \.tools-sep \{ display: none; \} \}/);
   assert.match(styles, /#idle-hud \.cmd-seg > button:first-child \{/);
-  assert.match(styles, /#idle-hud \.cmd-view-pop \{[^}]*width: auto;/);
+  assert.match(styles, /#idle-hud \.cmd-view-pop \{[^}]*max-width: calc\(100vw - 32px\);/, "the compact View menu stays bounded by the viewport");
   const chevron = styles.match(/#idle-hud #idle-view-menu \.chev \{([^}]*)\}/)?.[1] ?? "";
   assert.match(chevron, /transition: rotate var\(--motion-fast\) var\(--ease-out\)/);
   const start = styles.indexOf("/* --- Command toolbar clusters (menu regroup)");

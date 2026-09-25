@@ -9,8 +9,10 @@
   "key present / absent" status crosses into the renderer. Keys are bound to
   the Windows account that saved them and cannot be decrypted elsewhere.
 - **No telemetry, no hosted account.** Studio only talks to the providers and
-  CLIs you connect, to GitHub's release API when it checks for updates, and to
-  `discord.com` if you choose to link a Discord account (next point).
+  CLIs you connect, to GitHub's release API when it checks for updates, to
+  `discord.com` if you choose to link a Discord account (next point), to a
+  media service when you play a link from it, and to the Void Engine rooms
+  hub when you use Listen together or share what you play (the point after).
 - **Optional Discord link.** Nothing contacts Discord until you press **Link
   my Discord** in Settings › Community. Linking reads your Discord user id,
   username and display name, and your role ids and join date in the Void
@@ -29,6 +31,18 @@
   Discord and deletes `community-auth.json`, or remove "Mefi Studio Link"
   under Discord › User Settings › Authorized Apps. See
   [docs/community.md](docs/community.md).
+- **Links, Listen together and now playing.** A link played in Settings ›
+  Audio › Links loads that service's official player (YouTube's
+  privacy-enhanced one, Spotify, SoundCloud or Vimeo), or fetches the file
+  straight from its host. YouTube's player is told it is embedded in Studio
+  through a fixed app `Referer`. Nothing reaches the Void Engine rooms hub
+  until you pick a room or turn on **Share what I'm playing**. Studio then
+  sends the hub your Discord access token once per 15-minute hub session.
+  The hub checks it with Discord and drops it; the access token itself never
+  leaves main. A room's shared player carries the link you put on and your
+  Discord name. The share, which is off unless you turn it on, carries only
+  the link and its label, a radio station's name, or just "Local music":
+  never a local file's name or path. The hub keeps both in memory only.
 - **Local state is never committed or packaged.** Tasks, conversations,
   databases and captures live under `data/` (source install) or the portable
   build's own `resources/app/data`; both are ignored by git and skipped by the

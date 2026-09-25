@@ -29,6 +29,8 @@ const settle = async () => { for (let turn = 0; turn < 8; turn += 1) await Promi
 // window.innerWidth and `host` the preload bridge.
 function load({ search = "", stored = {}, view = "workspace", sidebar = null, init = false, ids = [], width, host } = {}) {
   const { document, get } = createDom({ ids: [...RAIL_IDS, ...ids] });
+  const lookupId = document.getElementById;
+  document.getElementById = (id) => lookupId(id) ?? document.querySelector(`#${id}`);
   document.readyState = "loading"; // init() runs only when a test asks for it
   document.documentElement.dataset = {};
   // renderHelp builds each key row in a fragment; the stand-in keeps the
@@ -40,6 +42,7 @@ function load({ search = "", stored = {}, view = "workspace", sidebar = null, in
   get("app-rail").hidden = true;
   const store = new Map(Object.entries(stored));
   const events = [];
+  const frames = [];
   const listeners = {};
   const tabs = [];
   const toasts = [];
@@ -71,13 +74,14 @@ function load({ search = "", stored = {}, view = "workspace", sidebar = null, in
     CustomEvent: class { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
     URLSearchParams,
     setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
-    requestAnimationFrame: () => 0,
+    requestAnimationFrame: (fn) => { frames.push(fn); return frames.length; },
   });
   vm.runInContext(source, context);
   const nav = window.MefiNav;
   if (init) nav.init();
   return {
     nav, document, get, store, events, tabs, toasts, window,
+    flushFrames: () => { for (const frame of frames.splice(0)) frame(); },
     rail: () => get("app-rail"),
     setView: (next) => { view = next; },
     fire: (type, event = {}) => { for (const fn of listeners[type] ?? []) fn({ type, ...event }); },
@@ -98,6 +102,7 @@ test("the rail is the default navigation", () => {
   assert.equal(nav.applyShell(), true);
   assert.equal(rail().hidden, false);
   assert.equal(document.documentElement.dataset.shell, "rail");
+  assert.equal(document.documentElement.dataset.railPinned, "", "wide windows show the destination names by default");
 });
 
 test("classic stays one switch away, and turning it on leaves the old chromes untouched", () => {
@@ -109,12 +114,48 @@ test("classic stays one switch away, and turning it on leaves the old chromes un
   assert.equal(load({ search: "?shell=rail", stored: { "mefiStudio.shell": "classic" } }).nav.applyShell(), true, "the URL wins over the stored choice");
 });
 
-test("five sections in order, each head going straight to its main destination", () => {
+test("three sections in order, each head going straight to its main destination", () => {
   const { nav, rail } = load({ search: "?shell=rail" });
   nav.applyShell();
-  assert.deepEqual(heads(rail()), ["home", "work", "live", "models", "settings"]);
+  assert.deepEqual(heads(rail()), ["home", "work", "agents"]);
   const targets = Object.fromEntries(rail().querySelectorAll(".app-rail-head").map((head) => [head.dataset.section, head.dataset.nav]));
-  assert.deepEqual(targets, { home: "workspace", work: "tasks", live: "command", models: "booklet", settings: "studio" });
+  assert.deepEqual(targets, { home: "workspace", work: "tasks", agents: "agents" });
+  const labels = rail().querySelectorAll(".app-rail-head .app-rail-text").map((label) => label.textContent);
+  assert.deepEqual(labels, ["Home", "Work", "Agents"]);
+  for (const head of rail().querySelectorAll(".app-rail-head")) {
+    assert.equal(head.getAttribute("aria-label"), head.querySelector(".app-rail-text").textContent, "accessible names match the visible destination labels");
+  }
+});
+
+test("main rail buttons reopen the last view in each section", async () => {
+  const loaded = load({ search: "?shell=rail" });
+  loaded.nav.applyShell();
+  const opened = [];
+  loaded.window.MefiTasks = { open: (params) => opened.push(["tasks", params]) };
+  loaded.window.MefiPlanning = { open: (params) => opened.push(["plans", params]) };
+  loaded.window.MefiAgents = { open: (params) => opened.push(["agents", params]) };
+  const head = (section) => loaded.rail().querySelector(`.app-rail-head[data-section="${section}"]`);
+  const clickHead = (section) => loaded.document.body.trigger("click", { target: head(section) });
+
+  await clickHead("work");
+  assert.equal(opened.at(-1)[0], "tasks", "an unvisited section opens its default");
+  loaded.nav.go("plans", { planId: "draft" });
+  loaded.nav.go("agents", { section: "setup", pane: "routing" });
+  loaded.nav.go("workspace");
+  await clickHead("work");
+  assert.equal(opened.at(-1)[0], "plans");
+  assert.equal(opened.at(-1)[1].planId, "draft");
+  loaded.nav.state.sheet = "plans";
+  await clickHead("work");
+  assert.equal(opened.at(-1)[0], "tasks", "clicking the current main tab returns to its default");
+  loaded.nav.state.sheet = "tasks";
+  await clickHead("agents");
+  assert.equal(opened.at(-1)[0], "agents");
+  assert.equal(opened.at(-1)[1].pane, "routing");
+  loaded.nav.state.sheet = "agents";
+  loaded.window.MefiIdle.enter = () => opened.push(["command", {}]);
+  await clickHead("agents");
+  assert.equal(opened.at(-1)[0], "command", "a second click on Agents returns to Command");
 });
 
 test("every destination in the registry lands in exactly one place, and actions without a RAIL_SLOTS place stay in the palette", async () => {
@@ -123,9 +164,11 @@ test("every destination in the registry lands in exactly one place, and actions 
   nav.register(COMMUNITY);
   await settle();
   const placed = rail().querySelectorAll("[data-nav]").map((button) => button.dataset.nav);
+  assert.equal(new Set(placed).size, placed.length, "primary buttons and child rows never repeat a destination");
   const destinations = nav.list().filter((dest) => nav.railSection(dest));
-  for (const dest of destinations) assert.ok(placed.includes(dest.id), `${dest.id} is reachable from the rail`);
-  const members = rail().querySelectorAll(".app-rail-item").map((button) => button.dataset.nav);
+  const local = Object.values(nav.LOCAL_ROUTES).flat();
+  for (const dest of destinations) assert.ok(placed.includes(dest.id) || local.includes(dest.id), `${dest.id} is reachable from the shell`);
+  const members = rail().querySelectorAll(".app-rail-item[data-nav]").map((button) => button.dataset.nav);
   assert.equal(new Set(members).size, members.length, "no destination is listed twice");
   for (const dest of nav.list().filter((item) => item.kind === "action" && !Object.hasOwn(nav.RAIL_SLOTS, item.id))) {
     assert.equal(nav.railSection(dest), null, `${dest.id} is an action and stays in the palette`);
@@ -133,15 +176,20 @@ test("every destination in the registry lands in exactly one place, and actions 
   }
 });
 
-test("the sections follow the approved menu: Analyzer with the Work tools, the Profiler with Settings", () => {
-  const { nav, rail } = load({ search: "?shell=rail" });
+test("each group has one local navigation row and the foot groups Help", () => {
+  const { nav, rail, document } = load({ search: "?shell=rail" });
   nav.applyShell();
-  assert.deepEqual(itemsIn(rail(), "home"), [], "Home lists nothing twice: its head is the workspace");
-  assert.deepEqual(itemsIn(rail(), "work"), ["tasks", "plans", "ideas", "brains", "analyzer"]);
-  assert.deepEqual(itemsIn(rail(), "live"), ["command", "eyes", "explorer", "overhead"]);
-  assert.deepEqual(itemsIn(rail(), "models"), ["booklet", "graph"]);
-  assert.deepEqual(itemsIn(rail(), "settings"), ["studio", "music", "profiler"]);
-  assert.deepEqual(footOf(rail()), ["palette", "onboarding", "help"], "Search, Start here and Shortcuts sit at the foot");
+  assert.equal(rail().querySelectorAll(".app-rail-children").length, 1, "only recent tasks expand with the rail");
+  for (const [section, routes] of Object.entries({work: ["tasks", "plans", "ideas", "analyzer"], agents: ["agents", "command", "eyes", "explorer", "overhead", "agent-brain", "brains", "context", "booklet", "graph", "usage"]})) {
+    nav.paintLocalNav(section, routes[1]);
+    const local = document.getElementById("app-local-nav");
+    assert.deepEqual(local.querySelectorAll("[data-nav]").map(button => button.dataset.nav), routes);
+    assert.equal(local.querySelector('[aria-current="page"]').dataset.nav, routes[1]);
+    assert.equal(local.getAttribute("aria-label"), `${section[0].toUpperCase()}${section.slice(1)} views`);
+  }
+  assert.deepEqual(footOf(rail()), ["studio", "onboarding", "help"]);
+  assert.equal(rail().querySelector('.app-rail-search').dataset.nav, "palette", "Search sits beside New task above the main destinations");
+  assert.equal(document.getElementById("app-help-menu").hidden, true);
 });
 
 test("each head draws its target's own glyph, and no two foot icons are the same", () => {
@@ -152,12 +200,77 @@ test("each head draws its target's own glyph, and no two foot icons are the same
     assert.equal(glyph, `#${nav.get(head.dataset.nav).glyph}`, `the ${head.dataset.section} head and ${head.dataset.nav} share one icon`);
   }
   const icons = rail().querySelectorAll("#app-rail-foot .app-rail-foot-item use").map((use) => use.getAttribute("href"));
-  assert.equal(icons.length, 3);
+  assert.equal(icons.length, 2);
   assert.equal(new Set(icons).size, icons.length, "Start here and Shortcuts no longer share the ? icon");
   assert.equal(nav.get("onboarding").glyph, "g-flag");
   assert.equal(nav.get("help").glyph, "g-help");
   assert.equal(nav.get("palette").label, "Search Studio");
   assert.equal(nav.get("palette").short, "Search");
+});
+
+test("recent tasks stay scoped, ordered and stable across board refreshes and open the precise task", async () => {
+  const loaded = load({ init: true });
+  const { nav, window, document } = loaded;
+  const opened = [];
+  window.MefiWorkspace.state = { activeId: "p" };
+  window.MefiTasks = { shortTitle: (task) => task.title.split(".")[0], open: (params) => opened.push(params) };
+  const rows = Array.from({ length: 8 }, (_, index) => ({ id: `task-${index}`, title: `Task ${index}. Full instructions`, updatedAt: index + 1 }));
+  nav.setRecentTasks({ projectId: "p", tasks: [...rows, rows[7], { id: "foreign", projectId: "q", title: "Private" }, { id: "archived", status: "archived", title: "Archived" }] });
+  const list = document.getElementById("app-rail-recent-list");
+  assert.deepEqual(list.children.map((button) => button.dataset.taskId), ["task-7", "task-6", "task-5", "task-4", "task-3", "task-2"]);
+  const first = list.children[0];
+  assert.equal(first.textContent, "Task 7");
+  assert.equal(first.title, "Task 7. Full instructions");
+  document.activeElement = first;
+  nav.setRecentTasks({ projectId: "p", tasks: rows });
+  assert.equal(list.children[0], first, "refresh does not replace a focused history button");
+  assert.equal(document.activeElement, first);
+  await first.click();
+  assert.equal(opened.at(-1).taskId, "task-7");
+  assert.equal(opened.at(-1).projectId, "p");
+  assert.equal(first.getAttribute("aria-pressed"), "true");
+  nav.setRecentTasks({ projectId: "q", tasks: [{ id: "q-task", title: "Other project" }] });
+  assert.equal(list.children[0], first, "a background project update cannot replace the current history");
+  window.MefiWorkspace.state.activeId = "q";
+  nav.paintRail();
+  assert.deepEqual(list.children.map((button) => button.dataset.taskId), ["q-task"]);
+  window.MefiWorkspace.state.activeId = "p";
+  nav.paintRail();
+  assert.equal(list.children[0].dataset.taskId, "task-7", "switching projects restores its own history");
+});
+
+test("New task delegates to the composer and survives late menu registration with focus", async () => {
+  const loaded = load({ init: true });
+  let composed = 0;
+  loaded.window.MefiWorkspace.composeTask = () => { composed += 1; };
+  const button = loaded.document.getElementById("app-rail-compose");
+  await button.click();
+  assert.equal(composed, 1);
+  loaded.document.activeElement = button;
+  loaded.nav.register(COMMUNITY); await settle();
+  const restored = loaded.document.getElementById("app-rail-compose");
+  assert.notEqual(restored, button);
+  assert.equal(restored.focused, true);
+});
+
+test("an empty project clears previous recent tasks before a new board arrives, without public workspace state", () => {
+  let onProjects;
+  const { nav, document, window } = load({ init: true, host: { onProjects: (fn) => { onProjects = fn; } } });
+  assert.equal(window.MefiWorkspace.state, undefined);
+  nav.setRecentTasks({ projectId: "old", tasks: [{ id: "old-task", title: "Old project work" }] });
+  nav.selectTask({ projectId: "old", taskId: "old-task" });
+  const list = document.getElementById("app-rail-recent-list");
+  assert.equal(list.children.length, 1);
+  onProjects({ activeId: "empty" });
+  assert.equal(list.children.length, 0, "project push immediately removes the previous history before any board read");
+  nav.setRecentTasks({ projectId: "empty", tasks: [] });
+  assert.equal(list.children.length, 0);
+  assert.equal(nav.taskContext(), null);
+  nav.setRecentTasks({ projectId: "old", tasks: [{ id: "old-task", title: "Old project work" }] });
+  assert.equal(list.children.length, 1);
+  nav.setRecentTasks({ projectId: "another-empty", tasks: [] });
+  assert.equal(list.children.length, 0, "initial project reads without a push also clear a prior selection");
+  assert.equal(nav.taskContext(), null);
 });
 
 test("Community joins the foot when community.js registers late: one redraw on a microtask, and keyboard focus stays put", async () => {
@@ -175,10 +288,10 @@ test("Community joins the foot when community.js registers late: one redraw on a
   assert.equal(loaded.nav.railSection({ id: "community", kind: "action" }), "foot", "RAIL_SLOTS places the palette action");
   loaded.nav.register(COMMUNITY);
   loaded.nav.register({ ...COMMUNITY });
-  assert.deepEqual(footOf(rail), ["palette", "onboarding", "help"], "the redraw waits for the microtask");
+  assert.deepEqual(footOf(rail), ["studio", "onboarding", "help"], "the redraw waits for the microtask");
   await settle();
   assert.equal(draws, 1, "registrations in one task redraw the rail once");
-  assert.deepEqual(footOf(rail), ["palette", "onboarding", "help", "community"]);
+  assert.deepEqual(footOf(rail), ["studio", "onboarding", "help", "community"]);
   const again = rail.querySelector('#app-rail-foot [data-nav="help"]');
   assert.notEqual(again, help, "the foot was redrawn");
   assert.equal(again.focused, true, "focus comes back to the same destination");
@@ -205,9 +318,9 @@ test("sectionLabel names every record's section, the palette's result kinds", ()
   const { nav } = load();
   const label = (id) => nav.sectionLabel(nav.get(id));
   assert.equal(label("workspace"), "Home");
-  for (const id of ["tasks", "plans", "ideas", "brains", "analyzer", "scanIdeas"]) assert.equal(label(id), "Work", id);
-  for (const id of ["command", "eyes", "explorer", "overhead", "pinRail", "audit", "machine"]) assert.equal(label(id), "Live", id);
-  for (const id of ["booklet", "graph", "search", "refresh", "print"]) assert.equal(label(id), "Models", id);
+  for (const id of ["tasks", "plans", "ideas", "analyzer", "scanIdeas"]) assert.equal(label(id), "Work", id);
+  for (const id of ["brains", "command", "eyes", "explorer", "overhead", "pinRail", "audit", "machine"]) assert.equal(label(id), "Agents", id);
+  for (const id of ["booklet", "graph", "search", "refresh", "print"]) assert.equal(label(id), "Agents", id);
   for (const id of ["studio", "music", "profiler", "motion", "shellRail"]) assert.equal(label(id), "Settings", id);
   for (const id of ["palette", "onboarding", "help"]) assert.equal(label(id), "Help", id);
   assert.equal(nav.sectionLabel(COMMUNITY), "Community");
@@ -231,29 +344,29 @@ test("the rail is one tab stop, resting on a button the collapsed rail still sho
   command.nav.applyShell();
   const stops = tabStops(command.rail());
   assert.equal(stops.length, 1);
-  assert.ok(stops[0].classList.contains("app-rail-head") && stops[0].dataset.section === "live", "Command is folded under Live at rest, so Live's head holds the stop");
-  assert.equal(command.rail().querySelector('[aria-current="page"]').dataset.nav, "command");
+  assert.ok(stops[0].classList.contains("app-rail-head") && stops[0].dataset.section === "agents", "Command's primary button holds the stop");
+  assert.equal(command.rail().querySelector('[aria-current="page"]').dataset.nav, "agents");
 });
 
 test("the arrows walk the rail and stop there, so Command's canvas never sees them", async () => {
   const loaded = load({ search: "?shell=rail", view: "command", init: true });
   const rail = loaded.rail();
-  const all = rail.querySelectorAll("button");
-  const live = all.find((button) => button.classList.contains("app-rail-head") && button.dataset.section === "live");
+  const all = rail.querySelectorAll("button").filter(button => !button.closest("[hidden]"));
+  const live = all.find((button) => button.classList.contains("app-rail-head") && button.dataset.section === "agents");
   const press = async (key, target, extra = {}) => {
     const seen = { prevented: false, stopped: false };
     await rail.trigger("keydown", { key, target, preventDefault() { seen.prevented = true; }, stopPropagation() { seen.stopped = true; }, ...extra });
     return seen;
   };
   const down = await press("ArrowDown", live);
-  const commandItem = all[all.indexOf(live) + 1];
-  assert.equal(commandItem.dataset.nav, "command");
-  assert.equal(commandItem.focused, true);
+  const activityItem = all[all.indexOf(live) + 1];
+  assert.equal(activityItem.dataset.nav, "studio");
+  assert.equal(activityItem.focused, true);
   assert.deepEqual(down, { prevented: true, stopped: true }, "the rail keeps the arrow");
-  assert.deepEqual(tabStops(rail), [commandItem], "the stop follows the arrows");
+  assert.deepEqual(tabStops(rail), [activityItem], "the stop follows the arrows");
   await press("ArrowUp", all[0]);
   assert.equal(all.at(-1).focused, true, "Up from the top wraps to the foot");
-  await press("Home", commandItem);
+  await press("Home", activityItem);
   assert.deepEqual(tabStops(rail), [all[0]]);
   await press("End", all[0]);
   assert.deepEqual(tabStops(rail), [all.at(-1)]);
@@ -268,9 +381,9 @@ test("exactly one aria-current, on where you are, and its section lights up", ()
   loaded.nav.applyShell();
   const current = () => loaded.rail().querySelectorAll('[aria-current="page"]');
   assert.equal(current().length, 1);
-  assert.equal(current()[0].dataset.nav, "command");
-  assert.equal(current()[0].classList.contains("app-rail-item"), true, "a listed destination carries it, not its section head");
-  assert.deepEqual(loaded.rail().querySelectorAll(".app-rail-section.current").map((group) => group.dataset.section), ["live"]);
+  assert.equal(current()[0].dataset.nav, "agents");
+  assert.equal(current()[0].classList.contains("app-rail-head"), true, "Command's primary button carries its current state");
+  assert.deepEqual(loaded.rail().querySelectorAll(".app-rail-section.current").map((group) => group.dataset.section), ["agents"]);
   loaded.setView("workspace");
   loaded.nav.paintRail();
   assert.equal(current().length, 1);
@@ -289,6 +402,102 @@ test("pinning is remembered and never outlives the rail itself", () => {
   const off = load({ stored: { "mefiStudio.railPinned": "1", "mefiStudio.shell": "classic" } });
   off.nav.applyShell();
   assert.equal(off.document.documentElement.dataset.railPinned, undefined, "a saved pin does nothing while the rail is off");
+});
+
+test("the default pin yields in narrow windows and honours an explicit collapsed preference", () => {
+  const narrow = load({ init: true, width: 900 });
+  assert.equal(narrow.document.documentElement.dataset.railPinned, undefined);
+  assert.equal(narrow.store.has("mefiStudio.railPinned"), false, "responsive layout does not write a preference");
+  narrow.window.innerWidth = 1280;
+  narrow.fire("resize");
+  assert.equal(narrow.document.documentElement.dataset.railPinned, "");
+  const collapsed = load({ init: true, width: 1280, stored: { "mefiStudio.railPinned": "0" } });
+  assert.equal(collapsed.document.documentElement.dataset.railPinned, undefined);
+  assert.equal(collapsed.get("app-rail-pin").getAttribute("aria-pressed"), "false");
+});
+
+test("the section stays selected while local navigation identifies the current view", () => {
+  const loaded = load({ init: true, width: 1280 });
+  loaded.nav.state.sheet = "plans";
+  loaded.nav.paintRail();
+  assert.equal(tabStops(loaded.rail())[0].dataset.nav, "tasks");
+  assert.equal(loaded.document.getElementById("app-local-nav").querySelector('[aria-current="page"]').dataset.nav, "plans");
+  loaded.nav.setRailPinned(false);
+  assert.equal(tabStops(loaded.rail())[0].dataset.nav, "tasks");
+});
+
+test("Help opens its grouped menu and Escape closes it with focus restored", async () => {
+  const loaded = load({ init: true });
+  const toggle = loaded.document.getElementById("app-help-toggle");
+  await toggle.click();
+  assert.equal(loaded.document.getElementById("app-help-menu").hidden, false);
+  loaded.nav.handleKey({key: "Escape", preventDefault() {}});
+  assert.equal(loaded.document.getElementById("app-help-menu").hidden, true);
+  assert.equal(toggle.focused, true);
+});
+
+test("workspace tools are regions while temporary sheets stay modal", () => {
+  const loaded = load({ ids: ["tasks-overlay", "profiler-overlay"] });
+  for (const id of ["tasks-overlay", "profiler-overlay"]) {
+    const sheet = loaded.document.createElement("section");
+    sheet.className = "sheet";
+    loaded.get(id).append(sheet);
+  }
+  loaded.nav.applyShell();
+  loaded.nav.claim("tasks");
+  assert.equal(loaded.get("tasks-overlay").classList.contains("workspace-page"), true);
+  assert.equal(loaded.get("tasks-overlay").querySelector(".sheet").getAttribute("role"), "region");
+  assert.equal(loaded.get("tasks-overlay").querySelector(".sheet").getAttribute("aria-modal"), null);
+  loaded.nav.claim("profiler");
+  assert.equal(loaded.get("profiler-overlay").querySelector(".sheet").getAttribute("role"), "dialog");
+  assert.equal(loaded.get("profiler-overlay").querySelector(".sheet").getAttribute("aria-modal"), "true");
+});
+
+test("opening a workspace page skips hidden focus targets and keeps background controls inert", () => {
+  const loaded = load({ids:["analyzer-overlay","analyzer-idea","tab-studio"]});
+  const sheet = loaded.document.createElement("section"); sheet.className="sheet";
+  const selected = loaded.document.createElement("button"); selected.setAttribute("aria-selected","true");
+  const field = loaded.get("analyzer-idea"); field.hidden=true;
+  sheet.append(field,selected); loaded.get("analyzer-overlay").append(sheet);
+  loaded.nav.applyShell(); loaded.nav.claim("analyzer"); loaded.flushFrames();
+  assert.equal(field.focused, undefined);
+  assert.equal(selected.focused,true);
+  assert.equal(loaded.get("tab-studio").inert,true);
+  loaded.nav.release("analyzer");
+  assert.equal(loaded.get("tab-studio").inert,false);
+});
+
+test("model routes and legacy appearance/audio shortcuts use their canonical views", () => {
+  const loaded = load(); const views = [];
+  loaded.window.MefiModelLab = {show: view => views.push(view)};
+  let audioOpened = 0;
+  loaded.window.MefiMusic = {openAudio: () => { audioOpened++; }};
+  for (const route of ["graph", "usage", "context"]) loaded.nav.go(route);
+  assert.deepEqual(views, ["rankings", "usage", "context"]);
+  loaded.nav.go("music");
+  assert.deepEqual({...loaded.tabs.at(-1)[1]}, {section:"appearance"});
+  loaded.nav.go("music", {group:"sound"});
+  assert.equal(audioOpened, 1);
+  assert.deepEqual({...loaded.tabs.at(-1)[1]}, {section:"appearance"}, "the audio dropdown leaves the underlying page in place");
+});
+
+test("model routes survive Command and retain the selected Usage reading", () => {
+  const loaded = load({view:"page"}), views=[];
+  const tab=loaded.document.createElement("button"); tab.className="tab active"; tab.dataset.tab="graph"; loaded.document.body.append(tab);
+  loaded.window.MefiModelLab={show:view=>views.push(view)};
+  loaded.window.MefiIdle.enter=()=>loaded.setView("command");
+  loaded.window.MefiIdle.exit=()=>loaded.setView("page");
+  loaded.nav.go("usage");
+  loaded.fire("mefi:model-view",{detail:{view:"tracker"}});
+  loaded.nav.go("command");
+  assert.equal(loaded.nav.state.commandFrom,"usage");
+  loaded.nav.leaveCommand();
+  assert.equal(views.at(-1),"tracker");
+  loaded.nav.go("context");
+  loaded.nav.go("command");
+  assert.equal(loaded.nav.state.commandFrom,"context");
+  loaded.nav.leaveCommand();
+  assert.equal(views.at(-1),"context");
 });
 
 test("a pinned rail yields below 1100px wide and comes back when the window widens", async () => {
@@ -365,11 +574,10 @@ test("the shortcut sheet groups every key by the rail's sections, with Esc under
   const grid = document.createElement("div");
   nav.renderHelp(grid);
   const title = (group) => group.querySelector("h4").textContent;
-  assert.deepEqual(grid.children.map(title), ["Home & Work", "Live", "Models", "Settings", "Help"]);
+  assert.deepEqual(grid.children.map(title), ["Home & Work", "Agents", "Settings", "Help"]);
   const keysIn = (name) => grid.children.find((group) => title(group) === name).querySelectorAll("kbd").map((cap) => cap.textContent);
-  assert.deepEqual(keysIn("Home & Work"), ["H", "T", "P", "I", "B", "A"]);
-  assert.deepEqual(keysIn("Live"), ["D", "3", "E", "O", "G"]);
-  assert.deepEqual(keysIn("Models"), ["1", "2", "/", "R"]);
+  assert.deepEqual(keysIn("Home & Work"), ["H", "T", "P", "I", "A"]);
+  assert.deepEqual(new Set(keysIn("Agents")), new Set(["B", "D", "3", "E", "J", "O", "G", "1", "2", "/", "R"]));
   assert.deepEqual(keysIn("Settings"), ["4", "Ctrl ,", "U"]);
   assert.deepEqual(keysIn("Help"), ["Ctrl K", "?", "Esc"]);
   for (const group of grid.children) assert.equal(group.getAttribute("aria-labelledby"), group.querySelector("h4").id);
@@ -395,7 +603,7 @@ test("the tab pages' header names the page and offers the way back to Command", 
   loaded.setView("workspace");
   loaded.nav.go("graph");
   await settle();
-  assert.equal(loaded.get("page-title").textContent, "Model Lab");
+  assert.equal(loaded.get("page-title").textContent, "Performance");
   assert.equal(loaded.get("page-return").hidden, true, "a page opened from the workspace has no Command to return to");
 });
 

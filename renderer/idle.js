@@ -85,6 +85,7 @@
     { key: "pending", sw: rgb(NODE_RGB.pending), label: "pending todo" },
     { key: "stale", sw: rgb(NODE_RGB.stale), label: "stale session — pushed to the outer ring" },
     { key: "task", sw: rgb(NODE_RGB.task), label: "saved task — brighter while active" },
+    { key: "held", sw: rgb(NODE_RGB.amber), label: "held task — amber when blocked or awaiting your approval, dim while it waits or cools before a retry" },
     { key: "checkpoint", sw: rgb(NODE_RGB.warm), label: "checkpoint note" },
     { key: "pulse", sw: rgb(NODE_RGB.pulse), label: "edit landing" },
     { key: "dust", sw: rgb(NODE_RGB.dust), label: "external read / web" },
@@ -147,7 +148,6 @@
   // while music plays, and always allows for the nod, so none of it can push
   // work out of view.
   const GROOVE_SPIN = 1.8; // the spin quickens by up to this share with the music's energy
-  const GROOVE_KICK = 0.0045; // radians/frame a kick drum adds to the spin; it glides off at ORBIT_EASE
   const GROOVE_SWELL = 0.07; // share of the frame the bass breathes the tree out by
   const GROOVE_SWAY = 0.035; // share of the half-frame the figure-of-eight sway travels
   const GROOVE_NOD = 0.06; // radians the snare tips the tree toward the camera
@@ -196,15 +196,15 @@
   const CALLOUT_SIN = Math.sin(CALLOUT_ANGLE);
   const CALLOUT_LENGTHS = [46, 74, 106, 140];
   const CALLOUT_MIN_W = 116;
-  const CALLOUT_MAX_W = 236;
-  const CALLOUT_TITLE_H = 17;
-  const CALLOUT_SUB_H = 13; // the status line under the title (done/left, %, verifying)
-  const CALLOUT_LINE_H = 14;
+  const CALLOUT_MAX_W = 252;
+  const CALLOUT_TITLE_H = 21;
+  const CALLOUT_SUB_H = 15; // the status line under the title (done/left, %, verifying)
+  const CALLOUT_LINE_H = 16;
   const CALLOUT_BUDGET = 6; // full cards at rest; the rest fall back to compact labels, cards on hover / selection / focus
   const CALLOUT_HOLD_MS = 260;
-  const CALLOUT_TITLE_FONT = '600 12.5px system-ui, "Segoe UI", sans-serif';
+  const CALLOUT_TITLE_FONT = '600 13px system-ui, "Segoe UI", sans-serif';
   const CALLOUT_NUMBER_FONT = '700 9.5px system-ui, "Segoe UI", sans-serif';
-  const CALLOUT_COUNTS_FONT = '10.5px system-ui, "Segoe UI", sans-serif';
+  const CALLOUT_COUNTS_FONT = '11px system-ui, "Segoe UI", sans-serif';
   const CALLOUT_LINE_FONT = SPEECH_FONT;
   const CARD_STYLES = ["auto", "outline", "filled"];
   // Focus: how close a click brings the camera, by what was clicked — less
@@ -217,6 +217,9 @@
   // The camera's glide: seconds for a critically damped approach (95% in
   // about 2.4x this, velocity kept across retargets). See smoothDamp().
   const CAMERA_SMOOTH = 0.38;
+  // Waking from Zen springs home on a slower glide (state.returning), so the
+  // tree eases back into place instead of rushing in from a close-up.
+  const CAMERA_RETURN_SMOOTH = 0.8;
   // A critically damped step toward target that keeps its velocity in
   // vel[key] (the Game Programming Gems 4 form): no overshoot, no lurch from
   // rest, and a retarget mid-flight bends the path instead of restarting it.
@@ -234,7 +237,7 @@
   const HUD_DIM_MS = 6000;
   const AMBIENT_ZEN_MS = 30000;
   const DEFAULT_HINT = "click a node to zoom in · drag to pan · right-drag to orbit · wheel to zoom · V 2D/3D · Esc leaves";
-  const LABEL_MODES = ["auto", "all", "none"];
+  const LABEL_MODES = ["auto", "updates", "all", "none"];
 
   // Camera autopilot modes: "orbit" keeps the whole tree framed at the largest
   // zoom that still shows every node, "follow" tracks the node the agent's
@@ -295,7 +298,7 @@
     hudTimer: null,
     ambientZenEnabled: readStore("mefiStudio.ambientZen") === "1",
     ambientZen: false,
-    zenRestore: null,
+    zenDirector: null, // the camera tour Zen is flying, while it flies
     tasks: [],
     allTasks: [],
     taskGroups: [],
@@ -331,9 +334,9 @@
     legendOpen: readStore("mefiStudio.cmdLegend") === "1",
     feedMenuOpen: readStore("mefiStudio.cmdFeedMenu") === "1",
     feedCollapsed: readStore("mefiStudio.cmdFeedCollapsed") === "1",
-    railTab: ["work", "settings", "assistant", "done", "ask"].includes(readStore("mefiStudio.cmdRailTab")) ? readStore("mefiStudio.cmdRailTab") : "work",
+    railTab: ["work", "assistant", "done", "ask"].includes(readStore("mefiStudio.cmdRailTab")) ? readStore("mefiStudio.cmdRailTab") : "work",
     // The tab to come back to when a selection clears. "node" is never stored.
-    railHome: ["work", "settings", "assistant", "done", "ask"].includes(readStore("mefiStudio.cmdRailTab")) ? readStore("mefiStudio.cmdRailTab") : "work",
+    railHome: ["work", "assistant", "done", "ask"].includes(readStore("mefiStudio.cmdRailTab")) ? readStore("mefiStudio.cmdRailTab") : "work",
     focusMode: false,
     // Set when Esc takes the menus back by hand. Selecting another node then
     // leaves the chrome where the owner put it, until the selection clears.
@@ -675,13 +678,12 @@
     state.musicUiAt = now;
     const status = audioStatus();
     const { listening } = status;
-    const enabled = state.reactive && (listening || state.inputPending || state.audioSource === "local" && !state.inputError);
-    if (el.musicStatus) el.musicStatus.textContent = status.text;
+    const buttonLabel = status.phase === "off" ? "Connect audio" : status.text;
+    if (el.musicStatus) el.musicStatus.textContent = buttonLabel;
     if (el.musicToggle) {
-      el.musicToggle.setAttribute("aria-pressed", String(Boolean(enabled)));
       el.musicToggle.dataset.state = state.inputError ? "error" : listening ? "listening" : state.inputPending ? "pending" : "off";
-      el.musicToggle.title = `${status.description} ${enabled ? "Click to stop linking." : "Click to connect."} Change source in Style & sound.`;
-      el.musicToggle.setAttribute("aria-label", status.text);
+      el.musicToggle.title = `${status.description} Open music, video and audio setup.`;
+      el.musicToggle.setAttribute("aria-label", `${buttonLabel} · Music and video`);
     }
     if (el.musicLevel) {
       el.musicLevel.style.setProperty("--music-level", String(listening && !noMotion() ? state.music?.energy ?? 0 : 0));
@@ -925,7 +927,8 @@
         rosterQueued: summary.queued,
       };
     }
-    appendMusicNode();
+    // Audio controls live in the toolbar; the companion is the assistant's
+    // visible home. Keep the internal assistant anchor for agent routing.
     appendTaskNodes();
     appendDoneHoldNodes();
     appendBuilderNodes();
@@ -970,7 +973,9 @@
     // the fit instead of spilling out of frame, follow re-resolves the work
     // node. Neither ever pans to the most recently updated session — the graph
     // changing shape is not a reason to move the camera.
-    if (state.camMode === "orbit") setZoom(1);
+    // A glide already on its way (Zen handing the camera home) is retargeted,
+    // not snapped.
+    if (state.camMode === "orbit") { if (state.zoomTarget != null) state.zoomTarget = 1; else setZoom(1); }
     else if (state.camMode === "follow" && state.active) applyCamMode();
   }
 
@@ -980,7 +985,8 @@
     const title = String(player.title || "Music player");
     return {
       music: player,
-      label: player.source === "spotify" ? "Spotify · open player" : player.playing ? `Playing · ${title}` : player.source === "radio" ? `Radio · ${title}` : player.queueLength ? `Music · ${title}` : "Music · add tracks",
+      // An embedded link's own playback is unknown, so it only offers the player.
+      label: player.externalPlayback && !player.playing ? `${player.provider || (player.source === "link" ? "Links" : "Spotify")} · open player` : player.playing ? `Playing · ${title}` : player.source === "radio" ? `Radio · ${title}` : player.queueLength ? `Music · ${title}` : "Music · add tracks",
       state: player.playing ? "active" : "music",
     };
   }
@@ -995,7 +1001,6 @@
     const details = musicNodeDetails();
     const node = state.nodes.find((entry) => entry.kind === "music");
     if (node && details) Object.assign(node, details);
-    else if (details && state.active) refreshGraph();
     if (details?.music.playing && state.audio?.state === "suspended") state.audio.resume().catch(() => {});
     if (!state.reactive || !state.active) return;
     const element = localMusicElement();
@@ -1066,7 +1071,10 @@
   // into the hub that filed them instead of earning a node and a label each.
   // A pin is the user pointing at one: pinned work always keeps its node.
   const AGENT_FILED_SOURCES = new Set(["a-eyes", "overseer", "audit", "collision", "duplicate", "fix", "improver", "grow", "idea", "agent", "uncommitted"]);
-  const agentFiledTask = (task) => AGENT_FILED_SOURCES.has(String(task?.source ?? "")) && !task?.pin && !task?.pinnedAt && !task?.workPin;
+  // The host writes pin/pinAt (Work on it, Do next, tasks:create); workPin and
+  // pinnedAt are the older grouped-parent spellings, still read as a fallback.
+  const workPinned = (task) => Boolean(task?.pin || task?.pinAt || task?.workPin || task?.pinnedAt);
+  const agentFiledTask = (task) => AGENT_FILED_SOURCES.has(String(task?.source ?? "")) && !workPinned(task);
   const FILED_LIMIT = 12;
 
   // Open/active tasks join the constellation: anchored to a matching session
@@ -1076,7 +1084,7 @@
   // The assistant's own chores ride the hub (see drawFiledWork and the card).
   function appendTaskNodes() {
     const runningTasks = new Set(autopilotJobs(state.assistant).map((job) => job.taskId).filter(Boolean));
-    const rank = (task) => runningTasks.has(task.id) ? 0 : task.status === "active" ? 1 : task.workPin || task.pinnedAt ? 2 : 3;
+    const rank = (task) => runningTasks.has(task.id) ? 0 : task.status === "active" ? 1 : workPinned(task) ? 2 : 3;
     const entries = window.MefiTaskGroups?.graphTasks(state.allTasks, { groups: state.taskGroups, runningIds: runningTasks, expanded: state.expandedTaskGroups }) ?? [...(state.tasks ?? [])]
       .sort((a, b) => rank(a) - rank(b) || (b.updatedAt ?? b.createdAt ?? 0) - (a.updatedAt ?? a.createdAt ?? 0))
       .slice(0, 12).map((task) => ({ task }));
@@ -1816,7 +1824,9 @@
     for (const message of raw) {
       if (!message) continue;
       const prev = out[out.length - 1];
-      if (prev && prev.role === message.role && String(prev.text ?? "") === String(message.text ?? "")) continue;
+      // Only a true repeat folds: a notice about another task, or one that
+      // echoes a reply's words, keeps its own row.
+      if (prev && prev.role === message.role && isNotice(prev) === isNotice(message) && (prev.taskId ?? null) === (message.taskId ?? null) && String(prev.text ?? "") === String(message.text ?? "")) continue;
       out.push(message);
       if (out.length < 4) continue;
       const a = out[out.length - 4];
@@ -1828,6 +1838,8 @@
         c.role === "user" &&
         b.role !== "user" &&
         d.role !== "user" &&
+        !isNotice(b) &&
+        !isNotice(d) &&
         String(a.text ?? "") === String(c.text ?? "") &&
         String(b.text ?? "") === String(d.text ?? "")
       ) {
@@ -1835,6 +1847,25 @@
       }
     }
     return out.slice(-30);
+  }
+
+  // Lifecycle notices ({ role: "assistant", kind: "notice", taskId, text,
+  // at, id }) are the host's status lines about work, updated in place, not
+  // the assistant answering the owner: they draw as one quiet row, and a
+  // notice never stands in for the reply to the owner's last message.
+  const isNotice = (message) => message?.kind === "notice";
+
+  // The assistant's newest answer: the last row that is not a notice, when
+  // that row is the assistant's. A notice landing after a question is not an
+  // answer to it, and a notice after an answer does not hide the answer.
+  function latestReply(full) {
+    const raw = Array.isArray(full?.messages) ? full.messages : [];
+    for (let index = raw.length - 1; index >= 0; index -= 1) {
+      const message = raw[index];
+      if (!message || isNotice(message)) continue;
+      return message.role === "assistant" ? message : null;
+    }
+    return null;
   }
 
   // One thread renderer for both surfaces (the rail console and the right-side
@@ -1849,7 +1880,10 @@
     if (!container) return;
     const bridge = Boolean(window.mefiStudio?.assistantMessage);
     const messages = threadMessages(full);
+    // Each row's words and age are in the paint signature, so a notice the
+    // host rewrites in place (same id, new text or at) repaints its row.
     const rows = messages.map((message) => {
+      if (isNotice(message)) return ["notice muted", String(message.text ?? "").replace(/\s+/g, " ").trim(), agoLabel(message.at) ?? "", true];
       const thought = message.role === "thinking";
       return [
         message.role === "user" ? "user" : thought ? "assistant thinking" : "assistant",
@@ -1857,6 +1891,7 @@
         thought
           ? `${agoLabel(message.at) ?? ""} · thinking`
           : `${agoLabel(message.at) ?? ""}${message.role !== "user" && message.via === "local" ? " · local" : ""}`,
+        false,
       ];
     });
     const live = String(full?.thinking?.text ?? "").trim();
@@ -1875,9 +1910,18 @@
       empty.textContent = bridge ? "No messages yet — ask for a status, or give it work." : "The thread lives in the desktop app.";
       container.append(empty);
     }
-    for (const [kind, text, label] of rows) {
+    for (const [kind, text, label, notice] of rows) {
       const bubble = document.createElement("div");
       bubble.className = `assistant-msg ${kind}`;
+      if (notice) {
+        // One quiet line, no bubble chrome: the status and its age inline
+        // (the .when caption is its own line), the full text on hover.
+        const line = text.length > 140 ? `${text.slice(0, 139)}…` : text;
+        bubble.textContent = label ? `${line} · ${label}` : line;
+        bubble.title = text;
+        container.append(bubble);
+        continue;
+      }
       bubble.textContent = text;
       const when = document.createElement("span");
       when.className = "when";
@@ -1982,7 +2026,7 @@
   // "node" is the selected node's own detail. It is a view, not a destination:
   // its tab only exists while something is picked, and it is never written to
   // the remembered tab, so clearing the selection lands you back where you were.
-  const RAIL_VIEWS = ["node", "work", "settings", "assistant", "done", "ask"];
+  const RAIL_VIEWS = ["node", "work", "assistant", "done", "ask"];
 
   function applyRailCollapsed() {
     const collapsed = state.railTab === "work" ? state.feedCollapsed
@@ -1994,6 +2038,8 @@
   }
 
   function setRailTab(name, { save = true, focus = false } = {}) {
+    // Older links open the toolbar dropdown without replacing the rail view.
+    if (name === "settings") { openAgentSettings({ focus }); return; }
     let view = RAIL_VIEWS.includes(name) ? name : "work";
     // The node view cannot be entered without a node; a stale one falls back to
     // whatever the owner last chose for themselves.
@@ -2008,7 +2054,6 @@
     }
     if (el.nodePanel) el.nodePanel.hidden = view !== "node";
     if (el.feed) el.feed.hidden = view !== "work";
-    if (el.settings) el.settings.hidden = view !== "settings";
     if (el.chatLog) el.chatLog.hidden = view !== "assistant";
     if (el.done) el.done.hidden = view !== "done";
     if (el.asks) el.asks.hidden = view !== "ask";
@@ -2016,7 +2061,6 @@
     if (save && view !== "node") writeStore("mefiStudio.cmdRailTab", view);
     applyRailCollapsed();
     if (view === "node") renderInfo();
-    if (view === "settings") renderSettingsPanel();
     if (view === "done") void loadDoneLog();
     if (view === "ask") renderAsks();
     state.graphAreaAt = 0;
@@ -2034,20 +2078,25 @@
     const jobs = autopilotJobs(state.assistant);
     if (el.railWorkBadge) {
       el.railWorkBadge.hidden = !jobs.length;
-      el.railWorkBadge.textContent = String(jobs.length);
+      el.railWorkBadge.textContent = jobs.length > 99 ? "99+" : String(jobs.length);
       el.railWorkBadge.title = jobs.length ? `${jobs.length} build${jobs.length === 1 ? "" : "s"} running` : "";
     }
     const unread = Number(full?.unread ?? assistantFull()?.unread ?? state.assistant?.unread) || 0;
     if (el.railAssistantBadge) {
       el.railAssistantBadge.hidden = !unread;
-      el.railAssistantBadge.textContent = String(unread);
+      el.railAssistantBadge.textContent = unread > 99 ? "99+" : String(unread);
       el.railAssistantBadge.title = unread ? `${unread} unread repl${unread === 1 ? "y" : "ies"}` : "";
     }
     const waiting = railQuestions(full).filter((question) => question.status === "open").length;
     if (el.railAskBadge) {
       el.railAskBadge.hidden = !waiting;
-      el.railAskBadge.textContent = String(waiting);
+      el.railAskBadge.textContent = waiting > 99 ? "99+" : String(waiting);
       el.railAskBadge.title = waiting ? `${waiting} decision${waiting === 1 ? "" : "s"} waiting` : "";
+    }
+    for (const [view, label, badge] of [["work", "Work", el.railWorkBadge], ["assistant", "Assistant", el.railAssistantBadge], ["ask", "Ask", el.railAskBadge]]) {
+      const tab = (el.railTabs ?? []).find((button) => button.dataset.railView === view);
+      tab?.setAttribute("aria-label", badge && !badge.hidden ? `${label}, ${badge.title}` : label);
+      badge?.setAttribute("aria-hidden", "true");
     }
   }
 
@@ -2099,8 +2148,7 @@
     const entries = state.doneEntries ?? [];
     if (!entries.length) return;
     if (typeof window.MefiConfirm === "function") {
-      const count = entries.length;
-      const approved = await window.MefiConfirm(`Clear ${count} record${count === 1 ? "" : "s"} from the done log? This cannot be undone.`, { label: "Clear" });
+      const approved = await window.MefiConfirm("Clear all recent run records? This cannot be undone.", { label: "Clear" });
       if (!approved || state.doneClearing) return;
     }
     state.doneClearing = true;
@@ -2113,7 +2161,7 @@
       }
       state.doneEntries = [];
       state.doneAt = Date.now();
-      window.MefiToast?.(`cleared ${entries.length} record${entries.length === 1 ? "" : "s"} from the done log`, "good");
+      window.MefiToast?.(`cleared ${result.records ?? 0} run record${result.records === 1 ? "" : "s"}`, "good");
     } catch (error) {
       window.MefiToast?.(`clear failed · ${String(error?.message ?? error)}`, "bad");
     } finally {
@@ -2127,6 +2175,11 @@
   // without switching.
   const DONE_FILTERS = ["all", "ok", "failed"];
   const doneOk = (entry) => entry?.ok !== false;
+  const DONE_STATES = {
+    verified: "Verified", verifying: "Verifying", working: "Working",
+    retrying: "Retrying", attention: "Needs review", queued: "Queued",
+    archived: "Archived", manual: "Marked done", reported: "Reported", failed: "Failed",
+  };
 
   function setDoneFilter(name) {
     state.doneFilter = DONE_FILTERS.includes(name) ? name : "all";
@@ -2141,7 +2194,7 @@
     if (el.doneClear) {
       el.doneClear.disabled = state.doneClearing || !entries.length;
       el.doneClear.title = entries.length
-        ? `Clear ${entries.length} record${entries.length === 1 ? "" : "s"} — the done log clears for good`
+        ? "Clear all recent run records permanently"
         : "Nothing to clear yet";
     }
     const filter = DONE_FILTERS.includes(state.doneFilter) ? state.doneFilter : "all";
@@ -2157,20 +2210,21 @@
       const empty = document.createElement("li");
       empty.className = "done-empty";
       empty.textContent = !window.mefiStudio ? "The done log is available in the desktop app."
-        : !entries.length ? "Nothing has finished yet. Builds that finish off land here."
-        : filter === "failed" ? "No failed builds in this log." : "No successful builds in this log.";
+        : !entries.length ? "No recent runs. Completed tasks remain on the task board."
+        : filter === "failed" ? "No tasks with a failed latest run." : "No tasks with a successful latest run.";
       el.doneList.append(empty);
     }
     for (const entry of shown) {
       const row = document.createElement("li");
       row.className = "done-row";
       row.dataset.ok = String(doneOk(entry));
+      row.dataset.state = DONE_STATES[entry.state] ? entry.state : doneOk(entry) ? "reported" : "failed";
       row.dataset.kind = entry.kind === "build" ? "build" : "run";
       const head = document.createElement("div");
       head.className = "done-row-head";
       const verdict = document.createElement("span");
       verdict.className = "done-verdict";
-      verdict.textContent = doneOk(entry) ? "Done" : "Failed";
+      verdict.textContent = DONE_STATES[row.dataset.state];
       const when = document.createElement("span");
       when.className = "done-when";
       when.textContent = agoLabel(entry.at) ?? "";
@@ -2187,17 +2241,25 @@
         title.addEventListener("click", () => nav("explorer", { sessionId: entry.sessionId }));
       }
       row.append(head, title);
-      if (entry.detail) {
+      const count = Number(entry.attempts) || 1;
+      const failures = Number(entry.failures) || 0;
+      const summary = count > 1 ? `${count} runs${failures ? ` · ${failures} failed` : ""}` : "";
+      const retry = row.dataset.state === "retrying" && Number(entry.nextRunAt) > Date.now()
+        ? `Automatic retry in ${Math.max(1, Math.ceil((entry.nextRunAt - Date.now()) / 60000))}m`
+        : "";
+      const detailText = [summary, retry, entry.detail].filter(Boolean).join(" · ");
+      if (detailText) {
         const detail = document.createElement("span");
         detail.className = "done-detail";
-        detail.textContent = entry.detail;
+        detail.textContent = detailText;
         row.append(detail);
       }
       el.doneList.append(row);
     }
+    const attentionCount = entries.filter((entry) => entry.state === "attention" || entry.state === "failed").length;
     if (el.doneState) el.doneState.textContent = !entries.length ? "Nothing yet"
-      : failedCount ? `${okCount} done · ${failedCount} failed`
-      : `${entries.length} record${entries.length === 1 ? "" : "s"}`;
+      : attentionCount ? `${entries.length} tasks · ${attentionCount} need review`
+      : `${entries.length} task${entries.length === 1 ? "" : "s"}`;
   }
 
   // The Ask cards: every open decision with its options, the recommended one
@@ -2380,7 +2442,8 @@
     if (button) button.disabled = true;
     try {
       const result = await window.mefiStudio.assistantAnswer({ id, optionId, text });
-      if (result?.ok === false && result?.error) window.MefiToast?.(result.error, "warn");
+      // A card that left the board clears its question: a notice, not a failure.
+      if (result?.ok === false && result?.error) window.MefiToast?.(result.error, result.gone ? "info" : "warn");
     } catch (error) {
       window.MefiToast?.(`Answer failed: ${error.message}`, "warn");
     } finally {
@@ -2439,6 +2502,27 @@
   // built reads as "nothing busy" instead of throwing on `.size`.
   const isBusyNode = (node, ids) => Boolean(node) && (ids?.size ?? 0) > 0 && (ids.has(node.id) || ids.has(node.sessionId) || ids.has(node.task?.id));
 
+  // The scheduler's row for an open board task (backlog.taskStates: stage
+  // ready, blocked, approval, cooling, waiting, grouped or running, and its
+  // reason), or null when the snapshot does not know it. Command already
+  // polls backlogStatus into state.backlog; the id index is rebuilt only when
+  // that object changes (a read landed), never per frame. A running,
+  // verifying or settled status is newer than a snapshot a few seconds old,
+  // so only an open task takes the scheduler's word.
+  function taskStageOf(task) {
+    const status = task?.status ?? "open";
+    if (task?.id == null || (status !== "open" && status !== "pending" && status !== "queued")) return null;
+    const backlog = state.backlog ?? null;
+    if (!state.taskStages || state.taskStagesOf !== backlog) {
+      state.taskStagesOf = backlog;
+      state.taskStages = new Map();
+      for (const row of Array.isArray(backlog?.taskStates) ? backlog.taskStates : []) {
+        if (row?.id != null && row.kind !== "request") state.taskStages.set(String(row.id), row);
+      }
+    }
+    return state.taskStages.get(String(task.id)) ?? null;
+  }
+
   // The ids behind Work on it: pinned open/active board tasks, and the node
   // targets of pinned inbox requests that have not been claimed yet. The blue
   // work ring rides from the click until the work finishes — queued first,
@@ -2451,15 +2535,23 @@
       const targetId = request?.target?.id;
       if (request?.pin && request.status !== "running" && targetId) ids.add(String(targetId));
     }
+    // Only work the scheduler would start is up next: a pinned task that is
+    // blocked, awaiting approval, cooling or waiting is held, not "Next".
+    // Without a snapshot (browser mode, a failed read) the pin alone decides.
+    // `pin` only: it is the field the scheduler's pick order honours.
+    const upNext = (task) => {
+      if (!task?.pin || (task.status !== "open" && task.status !== "active")) return false;
+      const stage = taskStageOf(task)?.stage;
+      return !stage || stage === "ready";
+    };
     for (const node of state.nodes) {
-      const task = node.task;
-      if (node.kind === "task" && task?.pin && (task.status === "open" || task.status === "active")) ids.add(String(task.id));
+      if (node.kind === "task" && upNext(node.task)) ids.add(String(node.task.id));
     }
     // A pinned task drawn on its target node instead of its own keeps the
     // "up next" ring on that node.
     for (const task of state.allTasks ?? []) {
       const target = task?.target;
-      if (task?.pin && (task.status === "open" || task.status === "active") && ["session", "todo"].includes(String(target?.kind ?? "")) && target?.id) ids.add(String(target.id));
+      if (upNext(task) && ["session", "todo"].includes(String(target?.kind ?? "")) && target?.id) ids.add(String(target.id));
     }
     // The seen set is the bridge across the handoff: the claim clears the pin
     // exactly when the build starts, so the ring keys off "was pinned and is
@@ -2483,7 +2575,8 @@
       if (task && (task.dying || ["done", "archived"].includes(task.task?.status))) continue;
       // Work on it draws the task on the node it was pinned to: Follow frames
       // that node instead of falling back to the worker's own session.
-      const target = !task && job.taskId ? (state.allTasks ?? []).find((entry) => entry?.id === job.taskId)?.target : null;
+      const owned = !task && job.taskId ? (state.allTasks ?? []).find((entry) => entry?.id === job.taskId) ?? null : null;
+      const target = owned?.target ?? null;
       const targetId = ["session", "todo"].includes(String(target?.kind ?? "")) ? String(target?.id ?? "") : "";
       const host = targetId ? nodes.find((entry) => (entry.kind === "session" || entry.kind === "todo") && !entry.dying && (entry.id === targetId || entry.sessionId === targetId)) : null;
       const session = job.sessionId ? nodes.find((node) => node.kind === "session" && (node.id === job.sessionId || node.sessionId === job.sessionId)) : null;
@@ -2500,7 +2593,9 @@
         taskId: task?.task?.id ?? job.taskId ?? null,
         activityAt: Math.max(at(node.id), at(task?.task?.id), at(job.sessionId)),
         startedAt: Number(job.startedAt) || 0,
-        pinned: Boolean(task?.task?.workPin || task?.task?.pinnedAt),
+        // The host pins with pin/pinAt (workPin/pinnedAt are the legacy
+        // spellings); a task drawn on its Work-on host is read off the board.
+        pinned: [task?.task, owned].some((entry) => Boolean(entry?.pin || entry?.pinAt || entry?.workPin || entry?.pinnedAt)),
         stage: job.phase === "verifying" || job.stage === "verifying" ? "Verifying" : todo?.label ? String(todo.label) : "Working",
       });
     }
@@ -2556,6 +2651,179 @@
     }
     const scale = Math.min(Math.max(100, area.w - 180) / (reachX * 2.5), Math.max(90, area.h - 120) / (reachY * 2.5));
     return { x: -center.x, y: -center.y, z: -center.z, zoom: Math.max(0.65, Math.min(2.35, scale / Math.max(0.01, fit * overviewScale))) };
+  }
+
+  // An outside camera director: Zen's flight (camera-tour.js, see
+  // setAmbientZen). While one is set, drawFrame asks it for a shot every frame and takes the
+  // shot as given (the director smooths its own path), so Orbit's refits,
+  // Follow and any glide stand aside. Reduced motion, a drag, a right-drag or
+  // the Settings preview hand the frame back. A shot is { x, y, z, zoom,
+  // pitch?, spin? } in the camera's own terms: x/y/z is the offset added to
+  // world positions and spin is radians per 30 fps frame. null lets go for
+  // that frame.
+  function directorNodes() {
+    return state.nodes.flatMap((node) => {
+      const point = directorPoint(node);
+      return point ? [{ id: node.id, kind: node.kind, ...point, parentId: state.branchParents?.get(node.id), running: node._workLabel === "Running" }] : [];
+    });
+  }
+
+  function directorPoint(node) {
+    if (!node || node.dying || node.retiring || node._absorbed || node.kind === "assistant" || node.kind === "music") return null;
+    // Layout anchors are where the tree is painted; raw graph coordinates can
+    // be hundreds of units away after Fit or an arrangement change.
+    const point = node._layoutAnchor ?? node;
+    return { x: point.x || 0, y: point.y || 0, z: point.z || 0 };
+  }
+
+  function directorPosition(id) {
+    return directorPoint(state.nodes.find((candidate) => candidate.id === id));
+  }
+
+  function stepDirector(dt, still) {
+    state.directed = false;
+    const director = state.director;
+    if (!director) {
+      stepPitchHome(dt, still);
+      stepReturn();
+      return false;
+    }
+    if (still || state.panning || state.rotating || state.settingsPreview) return false;
+    let shot = null;
+    try {
+      shot = director.step({
+        dt, view: state.view, angle: state.angle, pitch: state.pitch, zoom: state.zoom,
+        camera: { x: state.camera.x, y: state.camera.y, z: state.camera.z },
+        nodes: directorNodes, position: directorPosition,
+        viewport: { x: 0, y: 0, w: el.width, h: el.height }, project,
+      });
+    } catch (error) {
+      console.error("[command] the camera director failed; the camera is handed back", error);
+      setDirector(null);
+      return false;
+    }
+    if (!shot || ![shot.x, shot.y, shot.z, shot.zoom].every(Number.isFinite)) return false;
+    state.camera.x = state.camera.tx = shot.x;
+    state.camera.y = state.camera.ty = shot.y;
+    state.camera.z = state.camera.tz = shot.z;
+    if (state.camVel) { state.camVel.x = 0; state.camVel.y = 0; state.camVel.z = 0; state.camVel.zoom = 0; state.camVel.pitch = 0; }
+    // A flight may close in past the 2.6 a wheel stops at; handing back glides
+    // inside it again.
+    state.zoom = Math.min(3.6, Math.max(0.45, shot.zoom));
+    state.zoomTarget = null;
+    if (Number.isFinite(shot.pitch)) state.pitch = Math.max(-PITCH_MAX, Math.min(PITCH_MAX, shot.pitch));
+    state.directedSpin = Number.isFinite(shot.spin) ? shot.spin : ORBIT_BASE;
+    state.directed = true;
+    return true;
+  }
+
+  // After a flight the tilt springs back to where the owner had it, beside
+  // the camera and zoom glides; a right-drag takes it over.
+  function stepPitchHome(dt, still) {
+    if (!Number.isFinite(state.pitchHome)) return;
+    if (still || state.rotating || state.view === "2d") {
+      if (still || state.view === "2d") state.pitch = state.pitchHome;
+      state.pitchHome = null;
+      return;
+    }
+    const vel = (state.camVel ??= { x: 0, y: 0, z: 0, zoom: 0 });
+    state.pitch = smoothDamp(state.pitch, state.pitchHome, vel, "pitch", state.returning ? CAMERA_RETURN_SMOOTH : CAMERA_SMOOTH, dt);
+    if (Math.abs(state.pitch - state.pitchHome) < 0.0005 && Math.abs(vel.pitch ?? 0) < 0.002) {
+      state.pitch = state.pitchHome;
+      state.pitchHome = null;
+      vel.pitch = 0;
+    }
+  }
+
+  // A flight hands back on a return glide (state.returning): the camera,
+  // zoom and tilt spring home on the slower CAMERA_RETURN_SMOOTH. Orbit
+  // re-frames the whole overview every frame from the live zoom
+  // (overviewScale), so turning it back on while the camera is still closed
+  // in would shrink the tree in one frame; a return to Orbit glides in Free
+  // and becomes Orbit once the camera, zoom and tilt are home. A drag, a
+  // wheel zoom or a mode click on the way (anything that leaves the camera
+  // short of home) ends the return and keeps the view the user made.
+  function stepReturn(now = Date.now()) {
+    const back = state.returning;
+    if (!back) return;
+    const moved = Math.hypot(state.camera.x - state.camera.tx, state.camera.y - state.camera.ty, state.camera.z - state.camera.tz);
+    const settled = state.zoomTarget == null && !Number.isFinite(state.pitchHome) && moved < 0.05;
+    const taken = state.panning || state.rotating || now - back.at > 6000 ||
+      (back.camMode && (state.camMode !== "free" || (settled && (Math.abs(state.zoom - back.zoom) >= 0.005 ||
+        Math.hypot(state.camera.x - back.tx, state.camera.y - back.ty, state.camera.z - back.tz) >= 0.5))));
+    if (!settled && !taken) return;
+    state.returning = null;
+    // A spring never quite arrives; land the last hair of it exactly, or the
+    // tree keeps drifting by a rounding error long after it looks still.
+    if (settled) {
+      state.camera.x = state.camera.tx;
+      state.camera.y = state.camera.ty;
+      state.camera.z = state.camera.tz;
+      if (state.camVel) { state.camVel.x = 0; state.camVel.y = 0; state.camVel.z = 0; }
+    }
+    if (taken || !back.camMode) return;
+    state.camMode = back.camMode;
+    syncViewControls();
+    renderHint();
+    renderFollowStatus();
+  }
+
+  // Setting a director parks the camera in Free for the flight: Orbit re-pins
+  // the zoom on every graph rebuild, which would jolt a close-up. Clearing it
+  // hands the camera back: the owner's own mode resumes and the camera, zoom
+  // and tilt spring home from wherever the flight left them, carrying the
+  // flight's speed into the turn, or with { stay: true } (the user grabbed
+  // the tree) the view stays put in Free.
+  function setDirector(director, { stay = false } = {}) {
+    const next = director && typeof director.step === "function" ? director : null;
+    const previous = state.director ?? null;
+    if (next === previous) return;
+    state.director = next;
+    state.directed = false;
+    state.hudRectsAt = 0;
+    if (next) {
+      if (state.ambientZen && next !== state.zenDirector) setAmbientZen(false);
+      // A flight that starts while the last one is still landing returns to
+      // the mode that landing was headed for.
+      if (!previous) state.directorRestore = { camMode: state.returning?.camMode ?? state.camMode, tx: state.camera.tx, ty: state.camera.ty, tz: state.camera.tz, zoom: state.zoomTarget ?? state.zoom, pitch: state.pitchHome ?? state.pitch };
+      state.returning = null;
+      state.pitchHome = null;
+      state.camMode = "free";
+      state.followZoomTarget = null;
+      renderFollowStatus();
+      return;
+    }
+    const back = state.directorRestore;
+    state.directorRestore = null;
+    if (!back) return;
+    if (stay) {
+      state.camera.tx = state.camera.x;
+      state.camera.ty = state.camera.y;
+      state.camera.tz = state.camera.z;
+      if (state.zoom > 2.6) glideZoom(2.6);
+    } else {
+      state.camMode = back.camMode === "orbit" ? "free" : back.camMode;
+      if (back.camMode === "follow") updateFollowCamera(Date.now(), true);
+      else {
+        const home = back.camMode === "orbit" ? { tx: 0, ty: 0, tz: 0, zoom: 1 } : back;
+        state.camera.tx = home.tx;
+        state.camera.ty = home.ty;
+        state.camera.tz = home.tz;
+        glideZoom(home.zoom);
+      }
+      state.returning = back.camMode === "orbit" ? { camMode: "orbit", tx: 0, ty: 0, tz: 0, zoom: 1, at: Date.now() } : { camMode: null, at: Date.now() };
+      if (Number.isFinite(back.pitch)) state.pitchHome = back.pitch;
+      // The glide home starts at the flight's own speed, so the camera turns
+      // for home instead of stopping dead and setting off again.
+      const carried = previous?.velocity?.();
+      if (carried && !noMotion()) {
+        const vel = (state.camVel ??= { x: 0, y: 0, z: 0, zoom: 0 });
+        for (const key of ["x", "y", "z", "zoom", "pitch"]) if (Number.isFinite(carried[key])) vel[key] = carried[key];
+      }
+    }
+    syncViewControls();
+    renderHint();
+    renderFollowStatus();
   }
 
   function updateFollowCamera(now = Date.now(), force = false) {
@@ -2756,7 +3024,7 @@
     let sent = false;
     if (state.selected?.kind === "assistant") renderInfo();
     try {
-      const result = await window.mefiStudio.assistantMessage(message);
+      const result = await window.mefiStudio.assistantMessage(message, undefined, window.MefiCompanionUI?.context?.());
       if (!result?.ok) {
         window.MefiToast?.(`not sent · ${result?.error ?? "unknown error"}`, "bad");
         return null;
@@ -2914,6 +3182,90 @@
     return { known, enabled: known && full.status !== "paused" && state.assistant.execute !== false };
   }
 
+  // Settings and the live controls share confirmed state and the same saves.
+  function queueSettings() {
+    if (window.MefiAgentControls) return window.MefiAgentControls.snapshot();
+    const admission = newWorkStatus();
+    return {
+      known: typeof state.assistant?.enabled === "boolean",
+      newWorkKnown: admission.known, newWork: admission.enabled,
+      enabled: state.assistant?.enabled === true,
+      parallel: state.assistant?.parallel ?? 1,
+      adaptiveParallel: state.assistant?.adaptiveParallel !== false,
+      autoBuild: state.assistant?.autoBuild !== false,
+      mode: state.assistant?.mode === "cluster" ? "cluster" : "swarm",
+    };
+  }
+
+  let queueSettingsSignature = "";
+  function publishQueueSettings() {
+    const snapshot = queueSettings();
+    const signature = JSON.stringify(snapshot);
+    if (signature === queueSettingsSignature) return;
+    queueSettingsSignature = signature;
+    window.dispatchEvent?.(new CustomEvent("mefi:queue-settings", { detail: snapshot }));
+  }
+
+  let queueSettingsRead = null;
+  function refreshQueueSettings() {
+    if (window.MefiAgentControls) return window.MefiAgentControls.refresh();
+    if (queueSettingsRead) return queueSettingsRead;
+    const current = queueSettings();
+    if (current.known && current.newWorkKnown) return Promise.resolve(current);
+    const full = assistantFull();
+    const reads = [];
+    // Settings can load the controls before Command has ever entered. Read only
+    // missing state; a newer push or completed save always wins over this read.
+    if (!current.known && window.mefiStudio?.assistantStatus) reads.push(Promise.resolve().then(() => window.mefiStudio.assistantStatus()).then((result) => {
+      const status = result?.status ?? result;
+      if (result?.ok !== false && typeof status?.enabled === "boolean" && !queueSettings().known) adoptAssistantStatus(status);
+    }));
+    if (!full?.status && window.mefiStudio?.assistantState) reads.push(Promise.resolve().then(() => window.mefiStudio.assistantState()).then((result) => {
+      if (result?.ok !== false && result?.state?.status && assistantFull() === full) {
+        window.MefiTree?.applyAssistant?.({ state: result.state });
+        refreshAssistantCache();
+      }
+    }));
+    queueSettingsRead = Promise.allSettled(reads).then(() => {
+      publishQueueSettings();
+      return queueSettings();
+    }).finally(() => { queueSettingsRead = null; });
+    return queueSettingsRead;
+  }
+
+  async function changeQueueEnabled(wanted) {
+    if (typeof wanted !== "boolean" || state.queueSaving || !window.mefiStudio?.assistantAutopilot) return false;
+    state.queueSaving = true;
+    renderSettingsPanel();
+    try {
+      const result = await window.mefiStudio.assistantAutopilot({ enabled: wanted, execute: wanted });
+      if (!result || result.ok === false) throw new Error(result?.error ?? "The host did not confirm it.");
+      state.assistant = { ...(state.assistant ?? {}), ...result };
+      state.feedDirty = true;
+      if (state.active) renderFeed();
+      return true;
+    } catch (error) {
+      window.MefiToast?.(`Queue setting not saved · ${String(error?.message ?? error)}`, "bad");
+      return false;
+    } finally {
+      state.queueSaving = false;
+      renderSettingsPanel();
+      publishQueueSettings();
+    }
+  }
+
+  async function setQueueSetting(name, value) {
+    if (window.MefiAgentControls) return window.MefiAgentControls.set(name, value);
+    let result = false;
+    if (name === "newWork") result = await changeNewWork(value);
+    else if (name === "enabled") return changeQueueEnabled(value);
+    else if (name === "parallel") result = await changeBuildParallel(String(value));
+    else if (name === "autoBuild") result = await changeBuildMode(value ? "auto" : "verify");
+    else if (name === "mode") result = await changeAgentMode(value);
+    publishQueueSettings();
+    return result;
+  }
+
   function renderNewWorkControl() {
     const { known, enabled } = newWorkStatus();
     const available = typeof window.mefiStudio?.assistantControl === "function";
@@ -2930,6 +3282,9 @@
     for (const note of [el.chatLogNewWorkState, el.chatNewWorkState]) {
       if (note) note.textContent = label;
     }
+    // Both service and executor pushes render here, after their state is adopted.
+    // Deduplication keeps ordinary feed paints from producing Settings updates.
+    publishQueueSettings();
   }
 
   async function changeNewWork(enabled) {
@@ -2963,6 +3318,7 @@
     if (state.railTab === "done" && typeof loadDoneLog === "function" && Date.now() - (state.doneAt ?? 0) > 4000) void loadDoneLog();
     const kind = payload?.event?.kind ?? null;
     if (!kind) return;
+    seedHeard(assistantFull(), kind);
     if (kind === "tick") {
       // The pill only — unless the card is open, whose heartbeat, next-tick and
       // problem rows would otherwise go stale (the draft survives the rebuild).
@@ -3022,8 +3378,9 @@
         // arrives, so a hand-over reads as one exchange.
         const finding = agentRemark(payload?.event?.text, role);
         if (finding) {
-          say(satellite, finding, { kind: "send", ttl: SPEECH_TTL_LONG });
-          say(hub, `${role}: ${finding}`, { kind: "receive", ttl: SPEECH_TTL_LONG, delay: 1000 });
+          const update = role === "builder" || Boolean(payload?.event?.taskId);
+          say(satellite, finding, { kind: "send", ttl: SPEECH_TTL_LONG, update });
+          say(hub, `${role}: ${finding}`, { kind: "receive", ttl: SPEECH_TTL_LONG, delay: 1000, update });
         }
       }
       if (state.selected?.kind === "assistant" || state.selected?.kind === "agent") renderInfo();
@@ -3102,33 +3459,89 @@
       if (state.selected) renderInfo();
       return;
     }
-    if (!["message", "reply", "tidy", "fix"].includes(kind)) return;
+    if (!["message", "reply", "notice", "tidy", "fix"].includes(kind)) return;
     const selectedAssistant = state.selected?.kind === "assistant";
-    if (state.active) {
+    // What a push brings is read from the thread by identity, never from its
+    // last row: the host edits a notice in place, and the notice it edits can
+    // sit above a newer reply. A notice push names its notice; a reply push
+    // brings the newest answer the first time the hub sees it, or else the
+    // status line the host appended as a reply. Whatever the hub has already
+    // said stays unsaid, so a status edit never brings an old answer back.
+    const full = kind === "reply" || kind === "notice" ? assistantFull() : null;
+    const threadless = !Array.isArray(full?.messages);
+    const reply = kind === "reply" && !threadless ? freshReply(full) : null;
+    const notice = kind === "notice" ? freshNotice(full, payload?.event ?? {}) : kind === "reply" && !reply && !threadless ? freshNotice(full, null) : null;
+    // Only a reply push with no thread to read falls back to its own line.
+    const news = kind === "notice" ? Boolean(notice) : kind === "reply" ? Boolean(reply || notice) || threadless : true;
+    if (state.active && news) {
       const root = rootNode();
       const node = assistantNode();
       if (root && node) {
-        const inbound = kind === "message" || kind === "reply";
+        const inbound = kind === "message" || kind === "reply" || kind === "notice";
         state.pulses.push({ from: inbound ? node : root, to: inbound ? root : node, start: Date.now(), duration: 1400, color: "#f1dcae", glow: "#e6c98d" });
         if (state.pulses.length > 24) state.pulses.shift();
         // The conversation on the tree: your message lands on the hub, the
-        // reply is said from it; tidy and fix passes get a plain remark.
+        // reply is said from it and a notice quietly; tidy and fix passes get
+        // a plain remark.
         const line = String(payload?.event?.text ?? "").trim();
-        if (kind === "reply") {
-          const messages = assistantFull()?.messages ?? [];
-          const last = messages[messages.length - 1];
-          say(node, last?.role === "assistant" && last.text ? last.text : line || "replied", { ttl: SPEECH_TTL_LONG });
-        } else if (kind === "message") say(node, line ? `you: ${line}` : "reading your message", { kind: "receive" });
+        if (notice) say(node, notice.text);
+        else if (kind === "reply") say(node, reply?.text ? reply.text : line || "replied", { ttl: SPEECH_TTL_LONG });
+        else if (kind === "message") say(node, line ? `you: ${line}` : "reading your message", { kind: "receive" });
         else say(node, line || (kind === "tidy" ? "tidied up" : "fixed things"), { kind: "done" });
       }
     }
     if (selectedAssistant) renderInfo();
-    if (kind === "reply" && state.active && !document.body.dataset.sheet && !selectedAssistant) {
-      const messages = assistantFull()?.messages ?? [];
-      const last = messages[messages.length - 1];
-      const text = last?.role === "assistant" ? last.text : payload?.event?.text;
+    if (news && (kind === "reply" || kind === "notice") && state.active && !document.body.dataset.sheet && !selectedAssistant) {
+      // An answer is toasted; a notice only when a notice push names one that
+      // ends a task or waits on the owner.
+      const text = reply ? reply.text : notice ? (kind === "notice" && NOTICE_TOASTS.has(notice.event) ? notice.text : null) : payload?.event?.text;
       if (text) window.MefiToast?.(`assistant · ${String(text).slice(0, 90)}`, "info");
     }
+  }
+
+  // What the hub has already said from the thread: the newest reply's key
+  // (undefined until a push other than a reply seeds it from the thread, so
+  // opening the app or another project replays no old answer), and each
+  // notice's key with the words it had when said.
+  const heard = { project: null, reply: undefined, notices: new Map() };
+  // Notices that end a task or wait on the owner are worth a toast.
+  const NOTICE_TOASTS = new Set(["verified", "parked", "held", "needs-approval", "needs-you"]);
+  const threadKey = (message) => (message ? String(message.id ?? `${message.at ?? ""}:${message.text ?? ""}`) : null);
+
+  function seedHeard(full, kind) {
+    const project = full?.projectId ?? null;
+    if (project !== heard.project) Object.assign(heard, { project, reply: undefined, notices: new Map() });
+    if (heard.reply === undefined && kind !== "reply") heard.reply = threadKey(latestReply(full));
+  }
+
+  // The answer a reply push brings, once. Before any push seeded the memory
+  // the answer counts only as the thread's newest row, so a status line the
+  // host appended after an old answer does not announce that answer.
+  function freshReply(full) {
+    const reply = latestReply(full);
+    const key = threadKey(reply);
+    const fresh = Boolean(reply) && (heard.reply === undefined ? full.messages[full.messages.length - 1] === reply : key !== heard.reply);
+    heard.reply = key;
+    return fresh ? reply : null;
+  }
+
+  // The notice a push brings while its words are new to the hub: the one a
+  // notice push names (by id, else the newest for its task), or with no event
+  // the thread's newest notice.
+  function freshNotice(full, event) {
+    const notices = (Array.isArray(full?.messages) ? full.messages : []).filter(isNotice);
+    const notice = !event
+      ? notices[notices.length - 1]
+      : notices.find((message) => event.id != null && message.id === event.id) ??
+        notices.findLast((message) => event.taskId != null && message.taskId === event.taskId);
+    if (!notice) return null;
+    const key = threadKey(notice);
+    const text = String(notice.text ?? "");
+    if (heard.notices.get(key) === text) return null;
+    heard.notices.delete(key);
+    heard.notices.set(key, text);
+    if (heard.notices.size > 40) heard.notices.delete(heard.notices.keys().next().value);
+    return notice;
   }
 
   function focusNextInProgress() {
@@ -3158,7 +3571,11 @@
     if (!el.empty) return;
     // Tasks, plans and builders are the constellation now: zero OpenCode
     // sessions must not drop a "No recent sessions" card over live work.
-    if (constellationHasWork()) {
+    // A readable store with the assistant on the graph is a finished board,
+    // not an empty one: the card only speaks up for a store problem.
+    const storeFine = !!window.mefiStudio && state.treeStatus !== "unavailable" &&
+      !(typeof window.MefiTree?.note?.() === "string" && window.MefiTree.note());
+    if (constellationHasWork() || (storeFine && assistantNode())) {
       if (!el.empty.hidden) state.hudRectsAt = 0;
       el.empty.hidden = true;
       return;
@@ -3258,7 +3675,9 @@
   function stepCenter(area, still, ease = CAMERA_EASE) {
     const frame = state.graphFrame ?? area;
     const frameKey = `${frame.x},${frame.y},${frame.w},${frame.h}`;
-    const tx = area.x + area.w / 2, ty = area.y + area.h / 2;
+    const touring = !still && state.director;
+    const tx = touring ? el.width / 2 : area.x + area.w / 2;
+    const ty = touring ? el.height / 2 : area.y + area.h / 2;
     const center = state.center;
     const left = center ? Math.hypot(tx - center.x, ty - center.y) : 0;
     if (!center || still || state.camMode === "orbit" || center.frameKey !== frameKey || left < 0.25) {
@@ -3301,29 +3720,32 @@
   }
 
   // The tilt the tree turns under: the slow nod the spin carries, the
-  // owner's right-drag pitch, and the snare's nod while music plays.
-  function cameraTilt() {
-    return Math.sin(state.angle * 0.37) * 0.35 + state.pitch + (state.groove?.nod ?? 0);
+  // owner's right-drag pitch (or a director shot's), and the snare's nod
+  // while music plays.
+  function cameraTilt(pitch = state.pitch) {
+    return Math.sin(state.angle * 0.37) * 0.35 + pitch + (state.groove?.nod ?? 0);
   }
 
-  function project(node) {
-    const scale = state.fit * state.zoom;
+  function project(node, shot = null) {
+    const camera = shot ?? state.camera;
+    const scale = state.fit * (shot?.zoom ?? state.zoom);
     const framing = state.overviewScale ?? 1;
+    const offset = state.overviewOffset ?? { x: 0, y: 0 };
     if (state.view === "2d") {
       // flat top-down map: x → screen x, z → screen y, no rotation or depth
       return {
-        x: centerX() + (node.x + state.camera.x) * scale * framing,
-        y: centerY() + (node.z + state.camera.z) * scale * framing,
+        x: centerX() + offset.x + (node.x + camera.x) * scale * framing,
+        y: centerY() + offset.y + (node.z + camera.z) * scale * framing,
         k: 1,
         depth: 500,
       };
     }
     const cos = Math.cos(state.angle);
     const sin = Math.sin(state.angle);
-    const tilt = cameraTilt();
-    const x0 = (node.x + state.camera.x) * scale;
-    const z0 = (node.z + state.camera.z) * scale;
-    const y0 = (node.y + state.camera.y) * scale;
+    const tilt = cameraTilt(shot?.pitch ?? state.pitch);
+    const x0 = (node.x + camera.x) * scale;
+    const z0 = (node.z + camera.z) * scale;
+    const y0 = (node.y + camera.y) * scale;
     const rx = x0 * cos - z0 * sin;
     const rz = x0 * sin + z0 * cos;
     const ry = y0 * Math.cos(tilt) - rz * Math.sin(tilt) * 0.4;
@@ -3332,16 +3754,17 @@
     // `depth` orders the paint. It is reported on the 900 baseline the camera
     // stood at before it backed off to the frame, so a volume measures the
     // same however far the camera now stands.
-    return { x: centerX() + rx * k * framing, y: centerY() + ry * k * framing, k, depth: 900 + rz / Math.max(1, scale / 1.6) };
+    return { x: centerX() + offset.x + rx * k * framing, y: centerY() + offset.y + ry * k * framing, k, depth: 900 + rz / Math.max(1, scale / 1.6) };
   }
 
   function unprojectForLayout(point, source) {
     const scale = Math.max(0.01, state.fit * state.zoom);
     const framing = state.overviewScale ?? 1;
-    if (state.view === "2d") return { x: (point.x - centerX()) / (scale * framing) - state.camera.x, y: source.y, z: (point.y - centerY()) / (scale * framing) - state.camera.z };
+    const offset = state.overviewOffset ?? { x: 0, y: 0 };
+    if (state.view === "2d") return { x: (point.x - centerX() - offset.x) / (scale * framing) - state.camera.x, y: source.y, z: (point.y - centerY() - offset.y) / (scale * framing) - state.camera.z };
     const base = project(source);
     const rz = (base.depth - 900) * Math.max(1, scale / 1.6);
-    const rx = (point.x - centerX()) / (base.k * framing), ry = (point.y - centerY()) / (base.k * framing);
+    const rx = (point.x - centerX() - offset.x) / (base.k * framing), ry = (point.y - centerY() - offset.y) / (base.k * framing);
     const cos = Math.cos(state.angle), sin = Math.sin(state.angle);
     const tilt = cameraTilt();
     return { x: (rx * cos + rz * sin) / scale - state.camera.x, y: (ry + rz * Math.sin(tilt) * 0.4) / Math.cos(tilt) / scale - state.camera.y, z: (-rx * sin + rz * cos) / scale - state.camera.z };
@@ -3363,10 +3786,6 @@
       const area = state.settingsPreview;
       state.graphFrame = { x: area.x, y: area.y, w: area.w, h: area.h };
       return { x: area.x, y: area.y, w: area.w, h: area.h };
-    }
-    if (state.ambientZen) {
-      state.graphFrame = { x: 28, y: 28, w: Math.max(1, el.width - 56), h: Math.max(1, el.height - 56) };
-      return { ...state.graphFrame };
     }
     // Behind Home there is no HUD to keep clear: the tree spreads edge to edge.
     if (state.homeBackdrop && !state.active) {
@@ -3541,6 +3960,9 @@
     if (state.active && typeof beginLayoutMorph === "function") beginLayoutMorph();
     state.screenLayout = null;
     state.overviewScale = 1;
+    state.overviewOffset = null;
+    state.overviewMotion = null;
+    state.overviewAt = null;
     state.center = null; // the centre snaps to the refit frame
     state.camera.tx = 0;
     state.camera.ty = 0;
@@ -3577,7 +3999,15 @@
     if (node._workLabel === "Verifying" || (node.task ?? node.workTask)?.status === "awaiting_verification") return NODE_RGB.verify;
     if (node._workLabel === "Running") return NODE_RGB.warm;
     if (node._workLabel === "Next") return NODE_RGB.dust;
+    // Held work is not ready work (drawFrame sets _stage from the scheduler):
+    // blocked or awaiting approval needs the owner, so it wears the attention
+    // amber; waiting on another task or cooling before a retry just dims.
+    if (node._stage === "blocked" || node._stage === "approval") return NODE_RGB.amber;
+    if (node._stage === "waiting" || node._stage === "cooling") return NODE_RGB.stale;
     if (node.state === "stale") return NODE_RGB.stale;
+    // A cancelled todo is closed ("done") but was never finished: dim, not
+    // green, as the rail paints it (tree3d colorOf).
+    if (node.kind === "todo" && node.status === "cancelled") return NODE_RGB.stale;
     if (node.state === "done") return NODE_RGB.done;
     if (node.state === "active") return NODE_RGB.warm;
     if (node.kind === "task") return NODE_RGB.task;
@@ -3602,14 +4032,14 @@
     // node._lift); working orbs and the hub stay forward. Without a stepped
     // value the profile answers at once, as it always did.
     const lift = always ? 1 : Number.isFinite(node._lift) ? node._lift : focused ? 1 : 0;
-    return { prominent: always || focused, maxRadius: 11 + 4 * lift, alpha: 0.65 + 0.35 * lift, shape: "circle" };
+    return { prominent: always || focused, maxRadius: (node.kind === "assistant" ? 14 : node.kind === "session" ? 12 : 11) + 4 * lift, alpha: 0.76 + 0.24 * lift, shape: "circle" };
   }
 
-  function setSettingsPreview(rect) {
+  function setSettingsPreview(rect, { keepActive = false } = {}) {
     if (state.ambientZen) setAmbientZen(false);
     if (rect && [rect.x, rect.y, rect.w, rect.h].every(Number.isFinite) && rect.w >= 160 && rect.h >= 160) {
       const next = { x: Math.max(0, rect.x), y: Math.max(0, rect.y), w: rect.w, h: rect.h };
-      if (!state.previewRestore) state.previewRestore = { wasActive: state.active, camera: { ...state.camera }, camMode: state.camMode, fit: state.fit, zoom: state.zoom, overviewScale: state.overviewScale ?? 1, angle: state.angle, pitch: state.pitch, follow: state.follow, followZoomTarget: state.followZoomTarget, screenLayout: state.screenLayout, nodeLayout: state.nodeLayout };
+      if (!state.previewRestore) state.previewRestore = { wasActive: state.active, camera: { ...state.camera }, camMode: state.camMode, fit: state.fit, zoom: state.zoom, overviewScale: state.overviewScale ?? 1, overviewOffset: state.overviewOffset, overviewMotion: state.overviewMotion, angle: state.angle, pitch: state.pitch, follow: state.follow, followZoomTarget: state.followZoomTarget, screenLayout: state.screenLayout, nodeLayout: state.nodeLayout };
       const changed = !state.settingsPreview || Object.keys(next).some((key) => next[key] !== state.settingsPreview[key]);
       state.settingsPreview = next;
       state.graphArea = null; state.graphAreaAt = 0;
@@ -3626,9 +4056,10 @@
     state.settingsPreview = null; state.previewRestore = null;
     state.graphArea = null; state.graphAreaAt = 0;
     if (!previous) return;
-    for (const key of ["camera", "camMode", "fit", "zoom", "overviewScale", "angle", "pitch", "follow", "followZoomTarget"]) state[key] = previous[key];
+    for (const key of ["camera", "camMode", "fit", "zoom", "overviewScale", "overviewOffset", "overviewMotion", "angle", "pitch", "follow", "followZoomTarget"]) state[key] = previous[key];
+    state.overviewAt = null;
     state.screenLayout = previous.nodeLayout === state.nodeLayout ? previous.screenLayout : null;
-    if (!previous.wasActive) exit();
+    if (!previous.wasActive && !keepActive) exit();
     else { syncViewControls(); renderHint(); }
   }
 
@@ -3870,6 +4301,17 @@
     ctx.save();
     ctx.globalAlpha = (node._fade ?? 1) * alpha;
     node._extraGlow = state.extraGlow === true;
+    const monogram = node.kind === "assistant" || node.kind === "music";
+    if (globalThis.window?.MefiNodeVisuals?.drawNode(ctx, p, radius, tint, {
+      style: state.nodeStyle ?? "orbs", active, selected, glyph: monogram || node.kind === "agent", extraGlow: node._extraGlow,
+    })) {
+      if (monogram && radius >= 5) {
+        ctx.font = '600 11px system-ui, "Segoe UI", sans-serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillStyle = window.MefiNodeVisuals.palette().text;
+        ctx.fillText(node.kind === "music" ? "♪" : "M", p.x, p.y + 0.5);
+      }
+      ctx.restore(); return;
+    }
     if (node._extraGlow) {
       const spread = radius * (active || selected ? 2.25 : 1.8);
       const glow = ctx.createRadialGradient(p.x, p.y, radius * 0.25, p.x, p.y, spread);
@@ -3969,7 +4411,7 @@
     // On the Void collection's near-black bodies the glyph takes a light ink
     // and sits inside the core.
     const premiumInk = premiumGlyphInk(ctx, tint);
-    window.MefiTree?.agentGlyph?.(ctx, node.role, p.x, p.y, radius * (premiumInk ? 0.56 : 0.7), premiumInk ?? window.MefiTree?.glyphInk?.(hex) ?? "#0b1016");
+    window.MefiTree?.agentGlyph?.(ctx, node.role, p.x, p.y, radius * (premiumInk ? 0.56 : 0.7), window.MefiNodeVisuals?.palette().text ?? premiumInk ?? window.MefiTree?.glyphInk?.(hex) ?? "#0b1016");
     const ring = radius + 3.5;
     if (node.status === "running" || node.builder) {
       const phase = still ? 0 : time / 380;
@@ -4456,7 +4898,10 @@
       // Reserve the largest work rim even while idle. Appearance/effect or
       // status changes must never trigger a reflow of established anchors.
       const diameter = (node.kind === "todo" ? 14 : 38) + rotationRoom;
-      const size = { w: diameter, h: diameter };
+      // Parents need a small label gutter before their world anchors settle.
+      // Never recompute this from changing activity or hover state.
+      const labelRoom = !fixedIds.size && ["session", "task", "task-group", "assistant"].includes(node.kind) ? Math.min(24, Math.max(0, (area.w - 320) / 20)) : 0;
+      const size = { w: diameter + labelRoom, h: diameter + labelRoom * 0.4 };
       const bounds = (x, y) => ({ x: x - size.w / 2 - 7, y: y - size.h / 2 - 7, w: size.w + 14, h: size.h + 14 });
       if (fixedIds.has(node.id)) {
         const rect = bounds(p.x, p.y);
@@ -4605,6 +5050,9 @@
     if (state.screenLayout?.key !== key) {
       state.screenLayout = { key, nodes: new Map(), slots: new Map(), fresh: true };
       state.overviewScale = 1;
+      state.overviewOffset = null;
+      state.overviewMotion = null;
+      state.overviewAt = null;
     }
     const layout = state.screenLayout.nodes;
     const anchors = projected.filter(({ node }) => node.kind !== "agent");
@@ -4702,6 +5150,9 @@
       const cx = area.x + area.w / 2 + swayX, cy = area.y + area.h / 2 + swayY;
       const halfW = Math.max(1, area.w / 2 - 28), halfH = Math.max(1, area.h / 2 - 28);
       const previousScale = state.overviewScale ?? 1;
+      const previousOffset = state.overviewOffset ?? { x: 0, y: 0 };
+      const moving = !still && state.view === "3d" && state.orbit === "auto" && !state.selected && !state.query && !state.focus && !state.panning && !state.rotating && !state.settingsPreview && Number.isFinite(animationTime) && Date.now() >= (state.settleUntil ?? 0);
+      if (moving && !state.overviewMotion) state.overviewMotion = globalThis.window?.MefiCameraTour?.createOverview?.();
       let scale = 1;
       if (state.view !== "2d") {
         const live = anchors.filter(({ node }) => !node.dying && !node._absorbed && node._layoutAnchor).map(({ node }) => node._layoutAnchor);
@@ -4710,10 +5161,23 @@
       const roomX = Math.max(1, halfW - Math.abs(swayX)), roomY = Math.max(1, halfH - Math.abs(swayY));
       for (const { node, p } of anchors) {
         if (node.dying || node._absorbed) continue;
-        scale = Math.min(scale, roomX / Math.max(1, Math.abs(p.x - cx) / previousScale), roomY / Math.max(1, Math.abs(p.y - cy) / previousScale));
+        scale = Math.min(scale, roomX / Math.max(1, Math.abs(p.x - cx - previousOffset.x) / previousScale), roomY / Math.max(1, Math.abs(p.y - cy - previousOffset.y) / previousScale));
       }
+      // Overview + Spin also drifts (camera-tour's createOverview): a slow pan
+      // and a gentle breath under the frame above, so the tree moves about
+      // while the whole turn stays in view. The music's swell rides on top of
+      // the drift, and the sway's room is kept out of the viewport it pans in.
+      if (state.overviewMotion) {
+        const frame = groove?.frame > 0 ? groove.frame : 1;
+        const points = anchors.filter(({ node }) => !node.dying && !node._absorbed).map(({ p }) => ({ x: (p.x - cx - previousOffset.x) / previousScale, y: (p.y - cy - previousOffset.y) / previousScale }));
+        const viewport = { ...area, w: Math.max(1, area.w - 2 * Math.abs(swayX)), h: Math.max(1, area.h - 2 * Math.abs(swayY)) };
+        const shot = state.overviewMotion.step({ points, viewport, dt: (animationTime - (state.overviewAt ?? animationTime)) / 1000, moving, still, initial: { scale: previousScale / frame, ...previousOffset }, ceiling: scale / frame });
+        scale = shot.scale * frame;
+        state.overviewOffset = { x: shot.x, y: shot.y };
+      }
+      state.overviewAt = animationTime;
       state.overviewScale = scale;
-      if (scale !== previousScale) for (const { node, p } of anchors) Object.assign(p, project(node._layoutAnchor));
+      if (scale !== previousScale || state.overviewOffset?.x !== previousOffset.x || state.overviewOffset?.y !== previousOffset.y) for (const { node, p } of anchors) Object.assign(p, project(node._layoutAnchor));
     }
     const occupied = anchors.filter(({ node }) => !node.dying && !node._absorbed).map(({ node, p }) => ({ x: p.x, y: p.y, radius: node.kind === "todo" ? 8 : 25 }));
     const agentLayout = state.agentLayout ??= new Map();
@@ -4965,24 +5429,24 @@
   // One bubble per node. A repeat of the same remark only refreshes the
   // clock; a new remark replaces the old bubble and restarts its fade.
   // `kind` shapes the marker: say · send (→) · receive (←) · think · done · error.
-  function say(node, text, { kind = "say", ttl = SPEECH_TTL, tint = null, delay = 0 } = {}) {
+  function say(node, text, { kind = "say", ttl = SPEECH_TTL, tint = null, delay = 0, update = false } = {}) {
     if (!state.bubbles || !node || !text) return null;
     const id = typeof node === "string" ? node : node.id;
     if (!id) return null;
     if (delay > 0) {
-      later(delay, () => say(id, text, { kind, ttl, tint }));
+      later(delay, () => say(id, text, { kind, ttl, tint, update }));
       return null;
     }
     const remark = String(text).replace(/\s+/g, " ").trim().slice(0, 160);
     if (!remark) return null;
     const now = Date.now();
     const existing = state.speech.get(id);
-    if (existing && existing.text === remark && existing.kind === kind) {
+    if (existing && existing.text === remark && existing.kind === kind && existing.update === update) {
       existing.at = now;
       existing.ttl = Math.max(existing.ttl, ttl);
       return existing;
     }
-    const bubble = { id, text: remark, kind, at: now, ttl, tint, lines: null };
+    const bubble = { id, text: remark, kind, at: now, ttl, tint, update, lines: null };
     state.speech.set(id, bubble);
     if (state.speech.size > SPEECH_MAX) {
       const oldest = [...state.speech.values()].sort((a, b) => a.at - b.at)[0];
@@ -4994,6 +5458,26 @@
   function clearSpeech(id = null) {
     if (id == null) state.speech.clear();
     else state.speech.delete(id);
+  }
+
+  // Only structured work reports qualify; routine agent chatter can mention
+  // files or tasks too, so matching words would let unrelated notes through.
+  function updateSpeech(node) {
+    const bubble = state.speech?.get(node.id);
+    return bubble?.update && Date.now() - bubble.at <= bubble.ttl ? bubble : null;
+  }
+
+  function nodeHasUpdate(node) {
+    if (updateSpeech(node)) return true;
+    if (node.kind === "task" || node.kind === "task-group") {
+      const task = node.task ?? node.workTask ?? {};
+      if (node.state === "active" || ["Running", "Verifying"].includes(node._workLabel)) return true;
+      if (["done", "failed", "blocked", "awaiting_verification"].includes(task.status)
+        && Date.now() - (Number(task.updatedAt) || 0) < SPEECH_TTL_LONG) return true;
+    }
+    if (node.kind === "todo" && node.status === "in_progress") return true;
+    return (state.nodes ?? []).some((worker) => worker.kind === "agent" && !worker.dying && !worker._absorbed
+      && (worker.targetNode?.id === node.id || worker.hostId === node.id || worker.targetId === node.id) && updateSpeech(worker));
   }
 
   // Expiry runs on the frame clock, so a bubble under the pointer stays up
@@ -5080,6 +5564,7 @@
     const maxWidth = Math.min(210, Math.max(120, area.w * 0.28));
     const bubbles = [...state.speech.values()].sort((a, b) => b.at - a.at);
     for (const bubble of bubbles) {
+      if (state.labels === "updates" && !bubble.update) continue;
       const node = byId.get(bubble.id)?.node;
       // a node with a callout says it inside the card instead, and an agent on
       // a card-bearing node speaks through that card
@@ -5123,7 +5608,7 @@
       if (!rect) continue;
       const triple = bubble.tint ? hexToRgb(bubble.tint) : node.kind === "agent" ? agentRgb(node.role) : node.kind === "assistant" ? NODE_RGB.assistant : NODE_RGB.session;
       const mark = bubble.kind === "error" ? rgb(NODE_RGB.amber) : bubble.kind === "done" ? rgb(NODE_RGB.done) : rgb(triple);
-      const paper = state.canvasPalette?.background ?? "#101620";
+      const paper = globalThis.window?.MefiNodeVisuals?.palette().surface ?? state.canvasPalette?.background ?? "#101620";
       // a bubble outside the focused branch paints on the far (blurred) layer
       const pen = state.focusIds && el.farCtx && !state.focusIds.has(node.id) ? el.farCtx : ctx;
       pen.save();
@@ -5167,8 +5652,8 @@
     const title = String(builder.job?.title ?? builder.label ?? "work").replace(/^Work on\s+/i, "").replace(/^["']|["']$/g, "").slice(0, 48);
     state.pulses.push({ from: foreman, to: builder, start: Date.now(), duration: 900, color: agentHex("foreman"), glow: agentHex("foreman"), wave: true, packet: true });
     if (state.pulses.length > 24) state.pulses.shift();
-    say(foreman, `handed out "${title}"`, { kind: "send" });
-    say(builder, `on it: "${title}"`, { kind: "receive", delay: 900 });
+    say(foreman, `handed out "${title}"`, { kind: "send", update: true });
+    say(builder, `on it: "${title}"`, { kind: "receive", delay: 900, update: true });
   }
 
   function speechAt(x, y) {
@@ -5372,10 +5857,20 @@
     const helper = preparing && (state.assistant?.clusterAgents || []).find((agent) => agent.status === "running" && (!agent.taskId || agent.taskId === job.taskId));
     return {
       title: String(job.title || "Untitled task"),
-      stage: job.stopping ? `Stopping worker safely · ${job.stopping.reason || "waiting for the worker to exit"}${job.stopping.error ? ` · ${job.stopping.error}` : ""}` : preparing ? helper?.step || "Preparing task context before the builder starts" : current?.label ? String(current.label) : progress === 1 ? "Reported steps complete · finishing the run" : "Worker is running · waiting for its next update",
+      stage: job.stopping ? `Stopping worker safely · ${job.stopping.reason || "waiting for the worker to exit"}${job.stopping.error ? ` · ${job.stopping.error}` : ""}` : preparing ? helper?.step || "Preparing task context before the builder starts" : job.phase === "finishing" ? "Worker reported completion · waiting for its process to finish" : job.currentStep || (current?.label ? String(current.label) : job.activity ? `Worker output: ${job.activity}` : progress === 1 ? "Reported steps complete · finishing the run" : "Worker is running · waiting for its next update"),
       progress: job.stopping || preparing ? null : progress,
       elapsed: elapsedLabel(job.startedAt),
     };
+  }
+
+  function commandJobClock(job) {
+    const at = Math.max(Number(job.lastOutputAt) || 0, Number(job.stepUpdatedAt) || 0);
+    const update = at ? `Updated ${elapsedLabel(at).replace(/ elapsed$/, " ago")}` : "No update yet";
+    return [job.route, update].filter(Boolean).join(" · ");
+  }
+
+  function commandJobKey(job) {
+    return JSON.stringify([job.id || job.taskId || job.sessionId || job.title, job.startedAt]);
   }
 
   function commandQueue(assistant, requests, backlog) {
@@ -5389,7 +5884,7 @@
     ).map((request) => ({ ...request, kind: "request", stage: "queued", title: request.title || request.prompt || "Queued request" }));
   }
 
-  function currentWorkCard(job) {
+  function currentWorkCard(job, expanded = false) {
     const detail = commandJobDetail(job, state.nodes);
     const card = document.createElement("article");
     card.className = "feed-current-card";
@@ -5397,21 +5892,42 @@
     head.className = "feed-current-head";
     const badge = document.createElement("span");
     badge.className = "feed-current-label";
-    badge.textContent = job.stopping ? "Stopping safely" : job.phase === "preparing" ? "Task preparation" : "Working now";
+    badge.textContent = job.stopping ? "Stopping safely" : job.phase === "preparing" ? "Task preparation" : job.phase === "finishing" ? "Finishing run" : "";
     const time = document.createElement("span");
     time.className = "feed-current-time";
-    time.textContent = detail.elapsed;
-    state.currentJobTimes.push({ element: time, startedAt: job.startedAt });
-    head.append(badge, time);
+    time.textContent = detail.elapsed.replace(/ elapsed$/, "");
+    time.title = detail.elapsed;
     const title = document.createElement(job.taskId || job.sessionId ? "button" : "strong");
     title.className = "feed-current-title";
     title.textContent = detail.title;
+    title.title = detail.title;
     if (job.taskId) title.addEventListener("click", () => nav("tasks", { taskId: job.taskId, filter: "all" }));
     else if (job.sessionId) title.addEventListener("click", () => nav("explorer", { sessionId: job.sessionId }));
     const stage = document.createElement("p");
     stage.className = "feed-current-stage";
     stage.textContent = detail.stage;
-    card.append(head, title, stage);
+    if (badge.textContent) card.append(badge);
+    head.append(title, time);
+    card.append(head);
+    let activity = null;
+    if (detail.stage.length > 80) {
+      activity = document.createElement("details");
+      activity.className = "feed-current-details";
+      activity.open = expanded;
+      const summary = document.createElement("summary");
+      // Keep the tool and its clock visible; the command itself remains
+      // available without making a long path the headline of the Work tab.
+      const tool = /^(.+? (?:running|queued|stopped)(?: after [^·]+)?)(?: · ([\d hms]+))?(?: ·|$)/.exec(detail.stage);
+      summary.textContent = tool ? [tool[1], tool[2]].filter(Boolean).join(" · ") : `${detail.stage.slice(0, 64).trimEnd()}…`;
+      summary.title = "Full activity details";
+      activity.append(summary, stage);
+      card.append(activity);
+    } else card.append(stage);
+    const meta = document.createElement("span");
+    meta.className = "feed-current-meta";
+    meta.textContent = commandJobClock(job);
+    meta.title = meta.textContent;
+    state.currentJobTimes.push({ element: time, meta, activity, title, key: commandJobKey(job), job });
     if (detail.progress != null) {
       const progress = document.createElement("progress");
       progress.className = "feed-current-progress";
@@ -5423,6 +5939,7 @@
       caption.textContent = `${Math.round(detail.progress * 100)}% of reported steps · verification follows`;
       card.append(progress, caption);
     }
+    card.append(meta);
     return card;
   }
 
@@ -5491,25 +6008,25 @@
       control.disabled = Boolean(state.agentModeSaving) || !known || !window.mefiStudio?.assistantAutopilot;
       if (!state.agentModeSaving) control.value = assistant?.mode === "cluster" ? "cluster" : "swarm";
       control.setAttribute("aria-busy", String(Boolean(state.agentModeSaving)));
-      control.title = "Both modes use the Assistant to plan, delegate subtasks and review results. Swarm also works across ready tasks; Cluster keeps agents on one shared task. Applies to all projects; current work finishes when switching.";
+      control.title = "Swarm uses one builder per ready task. Cluster adds planning, review and scoped delegation for a shared task. Applies to all projects; current work finishes when switching.";
     }
     if (el.feedAgentModeNote) el.feedAgentModeNote.textContent = state.agentModeSaving ? "Saving agent mode…" : !window.mefiStudio ? "Available in the desktop app." : !known ? "Loading agent mode…" : assistant.mode === "swarm"
-      ? "Swarm · agents collaborate on tasks and their subtasks across the queue. Pause, approvals and capacity still apply."
+      ? "Swarm · one builder per ready task, with independent tasks running across the queue. Pause, approvals and capacity still apply."
       : assistant.clusterFocus?.title ? `Cluster · agents focus on: ${assistant.clusterFocus.title}`
       : autopilotJobs(assistant).length ? "Cluster · current workers finish before agents focus on one task."
       : "Cluster · the Assistant and builders share one task, delegate independent subtasks, then combine the results.";
     renderAgentsGlance();
   }
 
-  // Settings live in their own rail view. The same renderers also run on every
-  // work-feed pass, so the two views can never disagree about saved state.
+  // The toolbar settings and work feed share confirmed state on every pass.
   function renderSettingsPanel() {
     renderParallelControl();
     renderBuildModeControl();
     renderAgentModeControl();
     if (el.autopilotToggle) {
       el.autopilotToggle.checked = Boolean(state.assistant?.enabled);
-      el.autopilotToggle.disabled = state.treeStatus !== "ok";
+      el.autopilotToggle.disabled = Boolean(state.queueSaving) || state.treeStatus !== "ok";
+      el.autopilotToggle.setAttribute("aria-busy", String(Boolean(state.queueSaving)));
       const wrap = el.autopilotToggle.closest(".setting-row") ?? el.autopilotToggle.closest(".switch");
       if (wrap) wrap.hidden = !window.mefiStudio;
     }
@@ -5583,10 +6100,11 @@
   // only those survive, so a push that drops a list (clusterAgents) drops it.
   const GRAPH_SUMMARY_KEYS = ["status", "tone", "sublabel", "unread", "rosterAgents", "rosterRunning", "rosterQueued"];
   function adoptAssistantStatus(next) {
-    if (!next) { state.assistant = null; return; }
+    if (!next) { state.assistant = null; publishQueueSettings(); return; }
     const kept = {};
     for (const key of GRAPH_SUMMARY_KEYS) if (state.assistant && key in state.assistant) kept[key] = state.assistant[key];
     state.assistant = { ...kept, ...next };
+    publishQueueSettings();
   }
 
   function commandAgentRoster(assistant, full) {
@@ -5603,7 +6121,14 @@
     const service = (Array.isArray(full?.agents) ? full.agents : [])
       .filter((agent) => !helperRoles.has(agent.role))
       .map((agent) => /^cluster-(planner|reviewer)$/.test(agent.role) ? { ...agent, label: agent.role.replace("cluster-", "").replace(/^./, (letter) => letter.toUpperCase()), cluster: true } : agent);
-    return [...helpers, ...service];
+    return [...helpers, ...service].map((agent) => {
+      // A deliberate mode switch/hold cancels preparation. Older host
+      // snapshots record that cancellation as an error; it is not a failure
+      // the owner needs to fix. Keep actual provider/worker failures visible.
+      const reason = String(agent.error || agent.step || agent.text || "").trim();
+      return agent.cluster && agent.status === "error" && reason === "Mode changed or work paused"
+        ? { ...agent, status: "stopped", error: null, text: reason } : agent;
+    });
   }
 
   async function changeBuildMode(value) {
@@ -5766,16 +6291,24 @@
       text = foreman?.text ? `assistant · ${foreman.text.replace(/^foreman (?:done|running) · /, "")}` : `auto · ${assistant.minutes ?? 5}m`;
     }
     if (el.feedDot) el.feedDot.dataset.state = dot;
-    if (el.feedState) el.feedState.textContent = text;
+    if (el.feedState) { el.feedState.textContent = text; el.feedState.title = text; }
 
     const workSignature = JSON.stringify(jobs.length
-      ? jobs.map((job) => { const detail = commandJobDetail(job, state.nodes); return [job.taskId, job.sessionId, job.startedAt, job.phase, detail.title, detail.stage, detail.progress]; })
+      ? jobs.map((job) => { const detail = commandJobDetail(job, state.nodes); return [job.id, job.taskId, job.sessionId, job.startedAt, job.phase, detail.title, detail.stage, detail.progress]; })
       : [activeAgent?.role, activeAgent?.text, assistant?.execute, full?.status, state.backlog?.waiting, state.backlog?.summary, assistant?.waiting, assistant?.lastError, bridge]);
     if (el.feedNow && state.currentWorkSignature !== workSignature) {
       state.currentWorkSignature = workSignature;
+      const previous = state.currentJobTimes ?? [];
+      const expanded = new Set(previous.filter((clock) => clock.activity?.open).map((clock) => clock.key));
+      const focused = document.activeElement && previous.find((clock) => clock.title === document.activeElement || clock.activity?.children[0] === document.activeElement);
+      const focusActivity = focused && focused.title !== document.activeElement;
       state.currentJobTimes = [];
       el.feedNow.textContent = "";
-      for (const job of jobs) el.feedNow.append(currentWorkCard(job));
+      for (const job of jobs) el.feedNow.append(currentWorkCard(job, expanded.has(commandJobKey(job))));
+      if (focused) {
+        const replacement = state.currentJobTimes.find((clock) => clock.key === focused.key);
+        (focusActivity && replacement?.activity ? replacement.activity.children[0] : replacement?.title)?.focus({ preventScroll: true });
+      }
       if (!jobs.length) {
         const card = document.createElement("article");
         card.className = "feed-current-card quiet";
@@ -5794,7 +6327,13 @@
     }
     // Frequent log pushes should update the clock without replacing a
     // focused task-details button underneath the reader.
-    for (const clock of state.currentJobTimes ?? []) clock.element.textContent = elapsedLabel(clock.startedAt);
+    for (const clock of state.currentJobTimes ?? []) {
+      const job = jobs.find((entry) => clock.job.taskId ? entry.taskId === clock.job.taskId : clock.job.sessionId ? entry.sessionId === clock.job.sessionId : entry.title === clock.job.title) || clock.job;
+      clock.element.title = elapsedLabel(job.startedAt);
+      clock.element.textContent = clock.element.title.replace(/ elapsed$/, "");
+      clock.meta.textContent = commandJobClock(job);
+      clock.meta.title = clock.meta.textContent;
+    }
 
     const metricSignature = JSON.stringify(state.backlog?.counts ?? null);
     if (el.feedMetrics && state.feedMetricSignature !== metricSignature) {
@@ -5802,11 +6341,12 @@
       el.feedMetrics.textContent = "";
       const counts = state.backlog?.counts;
       if (counts) {
-        for (const [kind, value, label] of [["ready", counts.ready, "Ready"], ["review", counts.review, "Verifying"], ["waiting", (counts.waiting ?? 0) + (counts.cooling ?? 0), "Waiting"], ["blocked", (counts.blocked ?? 0) + (counts.approval ?? 0), "Needs attention"]]) {
+        for (const [kind, value, label] of [["ready", counts.ready, "Ready"], ["review", counts.review, "Verifying"], ["waiting", (counts.waiting ?? 0) + (counts.cooling ?? 0), "Waiting"], ["blocked", (counts.blocked ?? 0) + (counts.approval ?? 0), "Attention"]]) {
           const metric = document.createElement("button");
           metric.className = "feed-metric";
           metric.dataset.state = kind;
           metric.dataset.empty = String(!(value > 0));
+          metric.setAttribute("aria-label", `${value ?? 0} ${value === 1 ? "task" : "tasks"} ${kind === "blocked" ? "needing attention" : label.toLowerCase()}`);
           const number = document.createElement("strong");
           number.textContent = String(value ?? 0);
           const name = document.createElement("span");
@@ -5874,11 +6414,13 @@
     }
 
     if (el.feedAgents) {
-      // The whole roster, not just the executor's in-flight jobs: every agent
-      // the service runs, sorted so whoever is working floats to the top.
-      const rank = { running: 0, queued: 1, error: 2, done: 3, idle: 4 };
+      // Keep live work and real failures in view. Completed, stopped and idle
+      // service roles stay available in one persistent disclosure below the queue.
+      const rank = { running: 0, queued: 1, error: 2, stopped: 3, done: 4, idle: 5 };
       const roster = commandAgentRoster(assistant, full)
-        .sort((a, b) => (rank[a?.status] ?? 5) - (rank[b?.status] ?? 5));
+        .sort((a, b) => (rank[a?.status] ?? 6) - (rank[b?.status] ?? 6));
+      const current = roster.filter((agent) => ["running", "queued", "error"].includes(agent.status));
+      const recent = roster.filter((agent) => !current.includes(agent));
       if (el.feedAgentsCount) {
         const active = roster.filter((agent) => agent?.status === "running").length;
         const problems = roster.filter((agent) => agent?.status === "error").length;
@@ -5886,8 +6428,11 @@
         el.feedAgentsCount.dataset.state = problems ? "error" : active ? "running" : "idle";
       }
       el.feedAgents.textContent = "";
-      el.feedAgents.hidden = !roster.length;
-      if (el.feedAgentsSection) el.feedAgentsSection.hidden = !roster.length || chatting;
+      el.feedAgents.hidden = !current.length;
+      if (el.feedAgentsSection) el.feedAgentsSection.hidden = !current.length || chatting;
+      if (el.feedRecentAgents) el.feedRecentAgents.hidden = !recent.length || chatting;
+      if (el.feedRecentCount) el.feedRecentCount.textContent = String(recent.length);
+      if (el.feedRecentList) el.feedRecentList.textContent = "";
       for (const agent of roster) {
         const status = agent.status ?? "idle";
         const li = document.createElement("li");
@@ -5902,7 +6447,6 @@
         tag.textContent = status.toUpperCase();
         const name = document.createElement("b");
         name.textContent = agent.label || agent.role;
-        if (status !== "error") name.style.color = agentHex(agent.role);
         const when = document.createElement("span");
         when.className = "when";
         when.textContent = agent.cluster ? agent.status === "running" && agent.since ? elapsedLabel(agent.since) : "" : status === "running" ? elapsedLabel(agent.since) : agent.lastRunAt ? agoShort(agent.lastRunAt) : "Not run yet";
@@ -5913,7 +6457,7 @@
         li.title = `${agent.role} · ${status}${text.textContent ? ` — ${text.textContent}` : ""}`;
         li.append(head);
         if (text.textContent) li.append(text);
-        el.feedAgents.append(li);
+        (current.includes(agent) ? el.feedAgents : el.feedRecentList)?.append(li);
       }
     }
 
@@ -6298,6 +6842,7 @@
 
   // ---------- render ----------
   function orbitTarget(energy) {
+    if (state.directed) return state.directedSpin ?? ORBIT_BASE; // the demo tour sets its own spin
     if (state.ambientZen) return noMotion() || state.view === "2d" ? 0 : ORBIT_BASE * 0.65;
     if (state.camMode === "follow") return 0; // the working branch stays readable while its agents move.
     if (state.view === "2d") return 0; // the flat map does not revolve
@@ -6315,18 +6860,17 @@
   // Tree motion (Audio link): how the music moves the overview while the
   // spin runs. Every voice is eased, so nothing snaps:
   //  - spin: the turn quickens with the music's energy;
-  //  - kick: each kick drum steps the turn on, and it glides off again;
   //  - swell: the bass breathes the tree out into the room the frame keeps;
-  //  - sway: the tree steps round a small figure of eight, a quarter of it
-  //    per kick, as wide as the mids are loud;
+  //  - sway: the tree travels around a small figure of eight, as wide as the
+  //    mids are loud and a little faster on a kick;
   //  - nod: the snare tips it toward the camera.
   // `room` eases in while music is heard (to the Response share, full from
   // 50%) and out again after three quiet seconds or when the spin stops, and
   // every voice is a share of it, so the layout's frame reserve
   // (groove.frame) always covers the swell and the sway. Returns the spin's
-  // multiplier and this frame's kick, in radians per 30 fps frame.
+  // multiplier for the normal orbit velocity.
   function stepGroove(music, dt, live, still, area) {
-    const groove = (state.groove ??= { room: 0, swell: 0, sway: 0, phase: 0, step: 0, nod: 0, px: 0, py: 0, kickAt: null, heardAt: -Infinity });
+    const groove = (state.groove ??= { room: 0, energy: 0, swell: 0, sway: 0, phase: 0, nod: 0, px: 0, py: 0, heardAt: -Infinity });
     groove.tiltRoom = GROOVE_NOD;
     const clamp = (value) => Math.max(0, Math.min(1, Number(value) || 0));
     const ease = (from, to, attack, release = attack) => (dt > 0 ? from + (to - from) * (1 - Math.exp(-dt / (to > from ? attack : release))) : from);
@@ -6334,27 +6878,16 @@
     const energy = clamp(music?.energy);
     if (live && energy > 0.04) groove.heardAt = now;
     const hearing = live && !still && now - groove.heardAt < 3000;
-    let kick = 0;
-    // A kick is the bass band's onset clock moving on. The first reading only
-    // sets the clock, so linking mid-track does not jolt the tree.
-    const onset = music?.bandState?.bass?.lastOnset;
-    if (Number.isFinite(onset) && onset !== groove.kickAt) {
-      if (hearing && groove.kickAt != null) {
-        kick = GROOVE_KICK * Math.max(0.5, clamp(music.kick)) * groove.room;
-        groove.step += Math.PI / 2;
-      }
-      groove.kickAt = onset;
-    }
-    if (still) Object.assign(groove, { room: 0, swell: 0, sway: 0, nod: 0 });
+    if (still) Object.assign(groove, { room: 0, energy: 0, swell: 0, sway: 0, nod: 0 });
     else {
       groove.room = ease(groove.room, hearing ? Math.min(1, Math.max(0, state.audioResponse ?? 0.35) / 0.5) : 0, 0.9, 1.2);
-      groove.swell = ease(groove.swell, hearing ? clamp(clamp(music?.kick) * 0.8 + clamp(music?.bassline) * 0.35) : 0, 0.05, 0.28);
+      groove.energy = ease(groove.energy, hearing ? energy : 0, 0.3, 0.5);
+      groove.swell = ease(groove.swell, hearing ? clamp(clamp(music?.kick) * 0.8 + clamp(music?.bassline) * 0.35) : 0, 0.28, 0.5);
       groove.sway = ease(groove.sway, hearing ? clamp(clamp(music?.mid) * 0.7 + energy * 0.3) : 0, 0.4, 0.9);
-      groove.nod = ease(groove.nod, hearing ? GROOVE_NOD * clamp(music?.snare) * groove.room : 0, 0.06, 0.35);
-      // Between kicks the figure of eight drifts on with the energy.
-      if (hearing) groove.step += dt * (0.15 + energy * 0.45);
-      groove.phase = ease(groove.phase, groove.step, 0.22);
-      if (groove.step > Math.PI * 8) { groove.step -= Math.PI * 4; groove.phase -= Math.PI * 4; }
+      groove.nod = ease(groove.nod, hearing ? GROOVE_NOD * clamp(music?.snare) * groove.room : 0, 0.22, 0.4);
+      // Keep the phase continuous even when the onset detector fires. Its
+      // old quarter-turn jumps made the entire projection jerk on a beat.
+      if (hearing) groove.phase = (groove.phase + dt * (0.4 + groove.energy * 2.2 + clamp(music?.kick) * 0.4)) % (Math.PI * 4);
     }
     const room = groove.room;
     groove.frame = 1 - room * (GROOVE_SWELL * (1 - groove.swell) + GROOVE_SWAY);
@@ -6362,7 +6895,7 @@
     groove.px = reach ? Math.sin(groove.phase) * reach * Math.max(0, area.w / 2 - 28) : 0;
     groove.py = reach ? Math.sin(groove.phase * 2) * 0.5 * reach * Math.max(0, area.h / 2 - 28) : 0;
     groove.moving = room > 0.002;
-    return { spin: 1 + GROOVE_SPIN * energy * room, kick };
+    return { spin: 1 + GROOVE_SPIN * groove.energy * room };
   }
 
   function computeBranch() {
@@ -6450,13 +6983,41 @@
   const BACKDROP_STILL_FRAME_MS = 1000;
   let lastFrameAt = 0;
   let frameRequest = 0;
+  let frameTimer = 0;
+  // Nobody at the window: it lost focus and no pointer, key or wheel input has
+  // reached it for a minute (Command left up on a second screen, or entered by
+  // the idle clock). Command then draws at the backdrop's scenery cadence;
+  // input or focus brings the full rate back on the next frame.
+  const REST_AFTER_MS = 60000;
+  let inputAt = Date.now();
+  for (const type of ["pointermove", "pointerdown", "keydown", "wheel", "focus"]) globalThis.addEventListener?.(type, () => { inputAt = Date.now(); }, { capture: true, passive: true });
+  const resting = () => typeof document.hasFocus === "function" && !document.hasFocus() && Date.now() - inputAt > REST_AFTER_MS;
   function frameGap(hot) {
-    if (state.active) return hot ? HOT_FRAME_MS : AMBIENT_FRAME_MS;
+    if (state.active) return resting() ? BACKDROP_FRAME_MS : hot ? HOT_FRAME_MS : AMBIENT_FRAME_MS;
     return typeof noMotion === "function" && noMotion() ? BACKDROP_STILL_FRAME_MS : BACKDROP_FRAME_MS;
+  }
+  // A wait longer than a couple of display ticks (a sheet over the canvas, the
+  // backdrop's cadence) sleeps on a timer instead of waking the page on every
+  // refresh; Command's own 30 fps stays on requestAnimationFrame.
+  const SHEET_WAIT_MS = 200;
+  function scheduleFrame(delay = 0) {
+    cancelFrame();
+    if (delay > 40) frameTimer = setTimeout(() => { frameTimer = 0; frameRequest = requestAnimationFrame(frame); }, delay - 8);
+    else frameRequest = requestAnimationFrame(frame);
+  }
+  function cancelFrame() {
+    cancelAnimationFrame(frameRequest);
+    clearTimeout(frameTimer);
+    frameRequest = 0;
+    frameTimer = 0;
   }
   function frame(time) {
     if (!state.active && !state.homeBackdrop) return;
-    if (document.body.dataset.sheet && !(state.settingsPreview && document.body.dataset.sheet === "music") || pickerHeld(time)) {
+    if (document.body.dataset.sheet && !(state.settingsPreview && document.body.dataset.sheet === "music")) {
+      scheduleFrame(SHEET_WAIT_MS);
+      return;
+    }
+    if (pickerHeld(time)) {
       frameRequest = requestAnimationFrame(frame);
       return;
     }
@@ -6490,7 +7051,7 @@
         }
       }
     }
-    frameRequest = requestAnimationFrame(frame);
+    scheduleFrame(frameGap(hot) - (time - lastFrameAt));
   }
 
   function normalizeAudioPreferences(value, legacyResponse = null) {
@@ -6679,10 +7240,10 @@
   function edgeStyleFor(edge, a, b, { active = false, inspected = false, primary = false } = {}) {
     const hub = Boolean(edge.assistant) || (a.node.kind === "root" && b.node.kind === "assistant") || (a.node.kind === "assistant" && b.node.kind === "root");
     if (hub) return { kind: "hub", dash: [], width: 1, alpha: 0.34, double: true };
-    if (edge.task || b.node.kind === "task" || b.node.kind === "task-group") return { kind: "task", dash: [2, 4], width: active || inspected ? 1.4 : 1, alpha: inspected ? 0.7 : active ? 0.55 : primary ? 0.32 : 0.12, march: active };
-    if (b.node.kind === "todo") return { kind: "todo", dash: [], width: active ? 1.2 : 0.8, alpha: b.node.state === "done" ? 0.3 : inspected ? 0.6 : active ? 0.5 : 0.14 };
+    if (edge.task || b.node.kind === "task" || b.node.kind === "task-group") return { kind: "task", dash: [2, 4], width: active || inspected ? 1.4 : 1, alpha: inspected ? 0.78 : active ? 0.62 : primary ? 0.38 : 0.16, march: active };
+    if (b.node.kind === "todo") return { kind: "todo", dash: [], width: active ? 1.2 : 0.8, alpha: b.node.state === "done" ? 0.26 : inspected ? 0.7 : active ? 0.56 : 0.23 };
     if (b.node.kind === "folded") return { kind: "folded", dash: [1, 5], width: 0.9, alpha: 0.22 };
-    return { kind: "session", dash: [], width: inspected ? 1.3 : 0.9, alpha: inspected ? 0.65 : active ? 0.5 : primary ? 0.3 : 0.16 };
+    return { kind: "session", dash: [], width: inspected ? 1.3 : 0.9, alpha: inspected ? 0.74 : active ? 0.58 : primary ? 0.36 : 0.19 };
   }
 
   function drawGraphConnectionsImpl(ctx, projected, runningIds, audioLinked, time, layers = null) {
@@ -6714,19 +7275,20 @@
       pen.lineWidth = style.width + light * 1.8;
       pen.setLineDash?.(style.dash);
       pen.lineDashOffset = style.march && marching ? -((time / 60) % 6) : 0;
+      const ends = globalThis.window?.MefiNodeVisuals?.endpoints(a.p, b.p, a.node._pr ?? 5, b.node._pr ?? 5) ?? { a: a.p, b: b.p };
       if (style.double) {
-        const dx = b.p.x - a.p.x, dy = b.p.y - a.p.y, len = Math.hypot(dx, dy) || 1;
+        const dx = ends.b.x - ends.a.x, dy = ends.b.y - ends.a.y, len = Math.hypot(dx, dy) || 1;
         const nx = (-dy / len) * 1.6, ny = (dx / len) * 1.6;
         pen.beginPath();
-        pen.moveTo(a.p.x + nx, a.p.y + ny); pen.lineTo(b.p.x + nx, b.p.y + ny);
-        pen.moveTo(a.p.x - nx, a.p.y - ny); pen.lineTo(b.p.x - nx, b.p.y - ny);
+        pen.moveTo(ends.a.x + nx, ends.a.y + ny); pen.lineTo(ends.b.x + nx, ends.b.y + ny);
+        pen.moveTo(ends.a.x - nx, ends.a.y - ny); pen.lineTo(ends.b.x - nx, ends.b.y - ny);
         pen.stroke();
       } else {
-        pen.beginPath(); pen.moveTo(a.p.x, a.p.y);
+        pen.beginPath(); pen.moveTo(ends.a.x, ends.a.y);
         if (primary && branches) {
-          const middle = (a.p.y + b.p.y) / 2;
-          pen.bezierCurveTo(a.p.x, middle, b.p.x, middle, b.p.x, b.p.y);
-        } else pen.lineTo(b.p.x, b.p.y);
+          const middle = (ends.a.y + ends.b.y) / 2;
+          pen.bezierCurveTo(ends.a.x, middle, ends.b.x, middle, ends.b.x, ends.b.y);
+        } else pen.lineTo(ends.b.x, ends.b.y);
         pen.stroke();
       }
       pen.setLineDash?.([]);
@@ -7069,7 +7631,9 @@
       const task = node.task ?? {};
       const members = node.taskGroup?.members ?? null;
       if (members?.length) {
-        const done = members.filter((member) => ["done", "archived", "absorbed"].includes(member.status)).length;
+        // Members are task-groups.js wrappers ({ id, task, snapshot, ... }):
+        // the status lives on the wrapped task, as the group card reads it.
+        const done = members.filter((member) => ["done", "archived"].includes(member.task?.status)).length;
         counts = `${done} done · ${members.length - done} left`;
       } else if (typeof node.progress === "number" && Number.isFinite(node.progress)) counts = `${Math.round(node.progress * 100)}%`;
       else counts = node._workLabel === "Verifying" ? "verifying" : node._workLabel === "Next" ? "up next" : node._workLabel === "Running" ? "running" : task.status === "done" ? "done" : null;
@@ -7097,6 +7661,11 @@
       number = null;
       counts = `${node.count ?? 0} finished`;
       mark = "check";
+    }
+    if (state.labels === "updates") {
+      const report = updateSpeech(node) ?? workers.map(updateSpeech).filter(Boolean).sort((a, b) => b.at - a.at)[0];
+      if (report) lines.push({ text: report.text, kind: report.kind });
+      return { number, title, mark, counts, lines };
     }
     if (speech) lines.push({ text: speech.text, kind: speech.kind });
     else if (workers.length) {
@@ -7314,6 +7883,7 @@
     // Only an agent working somewhere without a card (a todo, the open ring)
     // gets a card of its own; the rest speak through their host's card.
     const wanted = projected
+      .filter(({ node }) => state.labels !== "updates" || nodeHasUpdate(node))
       .filter(({ node, p }) => CALLOUT_KINDS.has(node.kind) && !node.dying && !node._absorbed && node._px != null && (node._fade ?? 1) > 0.02 && (node.kind !== "agent" || ((node.status === "running" || node.builder) && !hostedOnCard(node))))
       .filter(({ node, p }) => p.k >= 0.55 || state.hoverCallout === node.id || state.selected?.id === node.id)
       .map((entry) => ({ entry, priority: calloutPriority(entry.node, focusIds, hosted), id: String(entry.node.id) }))
@@ -7386,7 +7956,7 @@
     const forwardMix = selected ? 1 : Math.max(0, Math.min(1, lift));
     const baseFilled = state.cardStyle === "auto" ? selected || content.mark === "live" : state.cardStyle === "filled";
     const fillMix = baseFilled ? 1 : state.cardStyle === "auto" ? forwardMix : 0;
-    const alpha = (node._fade ?? 1) * (dimmed ? 0.5 : 0.86 + 0.14 * forwardMix) * Math.max(0.4, emphasis(node));
+    const alpha = (node._fade ?? 1) * (dimmed ? 0.65 : 0.96 + 0.04 * forwardMix) * Math.max(0.4, emphasis(node));
     const paper = state.canvasPalette?.background ?? "#101620";
     const { sx, sy, ex, ey, side, rect, bubble, w } = layout;
     const plateH = layout.plateH ?? CALLOUT_TITLE_H + 3 + (size.subH ?? 0);
@@ -7394,7 +7964,7 @@
     ctx.save();
     ctx.globalAlpha = alpha;
     if (lift > 0.001 && !still) {
-      const s = 1 + 0.06 * lift;
+      const s = 1 + 0.015 * lift;
       ctx.translate(ex, ey); ctx.scale(s, s); ctx.translate(-ex, -ey);
       ctx.shadowColor = rgba(tint, 0.35 * lift); ctx.shadowBlur = 14 * lift;
     }
@@ -7402,7 +7972,7 @@
     // a wash of the node's tint, then a hairline in it.
     const plate = () => { ctx.beginPath(); ctx.roundRect(rect.x, rect.y, w, plateH, [7, 7, 0, 0]); };
     plate();
-    ctx.fillStyle = paper; ctx.globalAlpha = alpha * (0.78 + 0.16 * fillMix); ctx.fill(); ctx.globalAlpha = alpha;
+    ctx.fillStyle = paper; ctx.globalAlpha = alpha * (0.96 + 0.04 * fillMix); ctx.fill(); ctx.globalAlpha = alpha;
     ctx.fillStyle = rgba(tint, 0.06 + 0.08 * fillMix); ctx.fill();
     ctx.shadowBlur = 0;
     plate();
@@ -7425,8 +7995,8 @@
       if (node.kind === "task" || node.kind === "task-group") { ctx.fillStyle = rgba(tint, 0.95); ctx.fillRect(barEnd - (side > 0 ? 3.5 : 0), ey - 2, 3.5, 4); }
     }
     // The title row: mark, number chip, title.
-    let x = rect.x + 6;
-    const baseline = rect.y + 14;
+    let x = rect.x + 8;
+    const baseline = rect.y + 16;
     drawCalloutMark(ctx, content.mark, x + 5, baseline - 4, tint);
     x += 15;
     if (content.number) {
@@ -7437,7 +8007,7 @@
       x += nw + 5;
     }
     ctx.font = CALLOUT_TITLE_FONT; ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = rgba(NODE_RGB.session, 0.96);
+    ctx.fillStyle = state.canvasPalette?.text ?? rgba(NODE_RGB.session, 0.96);
     ctx.fillText(size.title, x, baseline);
     // The status line under the title, in the colour of what it says.
     if (content.counts && size.subH) {
@@ -7643,12 +8213,13 @@
     const cameraEase = perSec(CAMERA_EASE, dt);
     const centerFlight = stepCenter(graphArea, still, cameraEase);
     updateFollowCamera(Date.now());
+    const directed = stepDirector(dt, still);
     const target = orbitTarget(energy);
     // Tree motion: in the overview, with the spin running and music linked,
-    // the music quickens the turn and each kick steps it on (see stepGroove).
+    // the music quickens the turn while the sway and swell follow its beat.
     const grooveLive = audioLinked && state.audioEffects?.motion !== false && state.audioResponse > 0 && target > 0 && state.camMode === "orbit" && state.view !== "2d" && !state.focus && !state.ambientZen;
     const groove = stepGroove(state.music, dt, grooveLive, still, graphArea);
-    state.orbitVel += (target * groove.spin - state.orbitVel) * perSec(ORBIT_EASE, dt) + groove.kick;
+    state.orbitVel += (target * groove.spin - state.orbitVel) * perSec(ORBIT_EASE, dt);
     if (still) state.orbitVel = 0;
     // orbitVel is radians per 30 fps frame, as tuned
     state.angle += state.orbitVel * dt * 30;
@@ -7656,7 +8227,9 @@
     // eases out of rest instead of lurching at full speed, settles in about
     // 0.9 s instead of crawling for two, and a click that retargets mid-glide
     // keeps the velocity it has. A drag moves the camera directly (x = tx)
-    // and leaves no velocity behind.
+    // and leaves no velocity behind. Waking from Zen glides home on the
+    // slower CAMERA_RETURN_SMOOTH.
+    const glide = state.returning ? CAMERA_RETURN_SMOOTH : CAMERA_SMOOTH;
     const camVel = (state.camVel ??= { x: 0, y: 0, z: 0, zoom: 0 });
     if (still || state.panning) {
       state.camera.x = state.camera.tx;
@@ -7664,9 +8237,16 @@
       state.camera.z = state.camera.tz;
       camVel.x = 0; camVel.y = 0; camVel.z = 0;
     } else {
-      state.camera.x = smoothDamp(state.camera.x, state.camera.tx, camVel, "x", CAMERA_SMOOTH, dt);
-      state.camera.y = smoothDamp(state.camera.y, state.camera.ty, camVel, "y", CAMERA_SMOOTH, dt);
-      state.camera.z = smoothDamp(state.camera.z, state.camera.tz, camVel, "z", CAMERA_SMOOTH, dt);
+      state.camera.x = smoothDamp(state.camera.x, state.camera.tx, camVel, "x", glide, dt);
+      state.camera.y = smoothDamp(state.camera.y, state.camera.ty, camVel, "y", glide, dt);
+      state.camera.z = smoothDamp(state.camera.z, state.camera.tz, camVel, "z", glide, dt);
+      // A spring never quite arrives; land the last hair of it exactly, or the
+      // tree keeps drifting by a rounding error long after it looks still.
+      const hair = Math.abs(state.camera.x - state.camera.tx) + Math.abs(state.camera.y - state.camera.ty) + Math.abs(state.camera.z - state.camera.tz);
+      if (hair < 1e-4 && Math.abs(camVel.x) + Math.abs(camVel.y) + Math.abs(camVel.z) < 1e-3) {
+        state.camera.x = state.camera.tx; state.camera.y = state.camera.ty; state.camera.z = state.camera.tz;
+        camVel.x = 0; camVel.y = 0; camVel.z = 0;
+      }
     }
     if (state.camMode === "follow" && state.followZoomTarget != null && !still) state.zoom += (state.followZoomTarget - state.zoom) * perSec(0.065, dt);
     if (state.zoomTarget != null) {
@@ -7678,7 +8258,7 @@
       } else {
         // In log space, so doubling and halving the scale take the same time;
         // the same spring as the pan, so scale and pan settle together.
-        state.zoom = Math.exp(smoothDamp(Math.log(state.zoom), Math.log(state.zoomTarget), camVel, "zoom", CAMERA_SMOOTH, dt));
+        state.zoom = Math.exp(smoothDamp(Math.log(state.zoom), Math.log(state.zoomTarget), camVel, "zoom", glide, dt));
       }
     } else camVel.zoom = 0;
     // Callouts keep their spots while the camera is in flight (placeCallout):
@@ -7688,6 +8268,7 @@
     // What earns the display's full rate: a glide, a zoom, a hand on the
     // tree, or the music moving it.
     state.motionHot = !still && (state.cameraMoving || flightPx > 0.5 || centerFlight > 0.5 || state.zoomTarget != null || Number.isFinite(state.fitTarget) || groove.moving || Boolean(state.morph || state.lifeHot || state.panning || state.rotating));
+    if (directed) state.motionHot = true; // a directed flight moves every frame
 
     const { ctx } = el;
     // Two layers: the sky, and while a node is focused or a card hovered
@@ -7706,16 +8287,20 @@
 
     // A followed branch can be zoomed past the rest of the constellation.
     // Keep those distant nodes from drawing through the header and work rails.
+    // Zen (and any directed flight) has faded the rails out, so it paints the
+    // whole canvas; the frame itself stays put: changing it would re-seed the
+    // layout, and waking would snap it back.
+    const clip = directed || state.ambientZen ? { x: 0, y: 0, w: el.width, h: el.height } : graphArea;
     ctx.save();
     ctx.beginPath();
-    ctx.rect(graphArea.x, graphArea.y, graphArea.w, graphArea.h);
+    ctx.rect(clip.x, clip.y, clip.w, clip.h);
     ctx.clip();
-    if (far !== ctx) { far.save(); far.beginPath(); far.rect(graphArea.x, graphArea.y, graphArea.w, graphArea.h); far.clip(); }
+    if (far !== ctx) { far.save(); far.beginPath(); far.rect(clip.x, clip.y, clip.w, clip.h); far.clip(); }
 
     syncAgentMotion(Date.now(), time);
     stepFx(Date.now());
     stepDoneHold(Date.now());
-    const projected = state.nodes.map((node) => ({ node, p: project(node) }));
+    const projected = state.nodes.filter((node) => node.kind !== "assistant" && node.kind !== "music").map((node) => ({ node, p: project(node) }));
     const runningIds = autopilotBusyIds(state.assistant);
     const runningJobs = autopilotJobs(state.assistant);
     for (const { node } of projected) {
@@ -7727,6 +8312,8 @@
       const ids = [node.id, node.sessionId, node.task?.id, node.workTask?.id].filter(Boolean).map(String);
       const work = node.task ?? node.workTask ?? null;
       node._workLabel = work?.status === "awaiting_verification" ? "Verifying" : (ids.some((id) => runningIds.has(id)) || node.kind === "todo" && node.status === "in_progress") ? "Running" : ids.some((id) => pinnedIds.has(id)) ? "Next" : null;
+      // The scheduler's stage tints held work (colorOf); one indexed lookup.
+      node._stage = node.kind === "task" || node.kind === "task-group" ? taskStageOf(node.task)?.stage ?? null : null;
       if (node.kind === "task") {
         const job = runningJobs.find((entry) => entry.taskId === node.task?.id);
         node.progress = typeof job?.progress === "number" && Number.isFinite(job.progress) ? job.progress : null;
@@ -8089,11 +8676,13 @@
     for (const item of projected) {
       const node = item.node;
       if (node.dying || node._absorbed || node._callout || (node._fade ?? 1) <= 0.02) continue; // ghosts do not get a name; a callout already carries it
+      if (mode === "updates" && !nodeHasUpdate(node)) continue;
       let priority = -1;
       if (node.id === selectedId) priority = 0;
       else if (state.hoverNode === node) priority = 1;
       else if (state.camMode === "follow" && state.follow?.key === node.id) priority = 1.5;
       else if (state.query && state.matchSet.has(node.id)) priority = 2;
+      else if (mode === "updates") priority = 2.1;
       else if (mode !== "none") {
         if (node.kind === "task" && node._workLabel !== "Verifying" && (node._workLabel === "Running" || node.state === "active")) priority = 2.15;
         else if (node.kind === "assistant") priority = 2.22;
@@ -8239,7 +8828,7 @@
   // Panels are opaque; labels step around them instead of the constellation
   // moving out of the way. Rects are CSS pixels, the canvas coordinate space.
   function hudRects() {
-    if (state.ambientZen) return [];
+    if (state.ambientZen || state.director) return []; // the HUD is faded out
     const now = Date.now();
     if (now - state.hudRectsAt < 250) return state.hudRects;
     state.hudRectsAt = now;
@@ -8260,6 +8849,7 @@
     push(el.appRail);
     push(el.empty);
     push(el.pop);
+    push(el.settings);
     state.hudRects = rects;
     return rects;
   }
@@ -8517,7 +9107,7 @@
     if (x < area.x || y < area.y || x > area.x + area.w || y > area.y + area.h) return null;
     let best = null;
     for (const node of state.nodes) {
-      if (node._px == null || node.dying || node._absorbed || (node._fade ?? 1) <= 0.02) continue;
+      if (node.kind === "assistant" || node.kind === "music" || node._px == null || node.dying || node._absorbed || (node._fade ?? 1) <= 0.02) continue;
       const distance = Math.hypot(node._px - x, node._py - y);
       const hit = node.kind === "task" ? Math.abs(node._px - x) <= node._pr + 6 && Math.abs(node._py - y) <= node._pr + 6 : distance <= node._pr + 8;
       if (hit && (!best || distance < best.distance)) best = { node, distance };
@@ -8525,6 +9115,7 @@
     if (best) return best.node;
     // labels are part of the node: clicking the text selects it
     for (const node of state.nodes) {
+      if (node.kind === "assistant" || node.kind === "music") continue;
       const rect = node._label;
       if (!rect) continue;
       if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) return node;
@@ -8582,7 +9173,7 @@
 
   function selectNode(node, options = {}) {
     if (node?.kind === "music") {
-      window.MefiMusic?.open?.();
+      window.MefiMusic?.openAudio?.(el.musicToggle);
       bumpHud();
       return;
     }
@@ -8772,8 +9363,12 @@
       return { text, className };
     }
     const status = node.task?.status ?? "open";
-    const className = status === "active" ? "badge premium" : status === "done" ? "badge free" : "badge";
-    return { text: window.MefiStage?.label?.(status, node.task) ?? status, className };
+    // An open task reads what the scheduler says about it (Ready, Needs
+    // attention, Awaiting approval, Retry scheduled, Waiting, In a plan), so
+    // held work never passes for "Open" work that is about to run.
+    const stage = taskStageOf(node.task)?.stage ?? null;
+    const className = status === "active" || stage === "running" ? "badge premium" : status === "done" ? "badge free" : stage === "blocked" || stage === "approval" ? "badge trains" : "badge";
+    return { text: window.MefiStage?.label?.(stage ?? status, node.task) ?? stage ?? status, className };
   }
 
   function appendTaskGroupInfo(info, node) {
@@ -9122,7 +9717,7 @@
         for (const task of filed.slice(0, 8)) {
           const item = document.createElement("div");
           item.className = "cp-note checkpoint-note";
-          const status = busy.has(task.id) ? (window.MefiStage?.label?.("running") ?? "running") : (window.MefiStage?.label?.(task.status, task, { short: true }) ?? String(task.status ?? "open").replace("_", " "));
+          const status = busy.has(task.id) ? (window.MefiStage?.label?.("running") ?? "running") : (window.MefiStage?.label?.(taskStageOf(task)?.stage ?? task.status, task, { short: true }) ?? String(task.status ?? "open").replace("_", " "));
           item.classList.add("filed-row");
           if (busy.has(task.id)) item.classList.add("is-running");
           const name = document.createElement("span");
@@ -9736,8 +10331,8 @@
       const on = state.camMode === "orbit";
       el.camOrbitBtn.setAttribute("aria-pressed", on ? "true" : "false");
       el.camOrbitBtn.title = on
-        ? "Camera: overview — the whole tree stays framed · click for a free camera (C cycles overview / follow / free)"
-        : "Camera: overview — keep the whole tree framed (C)";
+        ? "Camera: overview — gently pan and resize with Spin on, keeping the whole tree in view · click for a free camera (C cycles overview / follow / free)"
+        : "Camera: overview — keep the whole tree framed; Spin adds gentle pan and zoom (C)";
     }
     if (el.camFollowBtn) {
       const on = state.camMode === "follow";
@@ -9757,7 +10352,7 @@
       el.labelsBtn.dataset.labels = state.labels;
       const label = el.labelsBtn.querySelector(".label");
       if (label) label.textContent = state.labels;
-      el.labelsBtn.title = state.labels === "auto" ? "Auto labels: current work and inspected nodes · hover or search for more (L cycles labels)" : `Node labels: ${state.labels} (L cycles auto / all / none)`;
+      el.labelsBtn.title = state.labels === "auto" ? "Auto labels: current work and inspected nodes · hover or search for more (L cycles labels)" : state.labels === "updates" ? "Updates: code changes and task progress only (L cycles labels)" : `Node labels: ${state.labels} (L cycles auto / updates / all / none)`;
       el.labelsBtn.setAttribute("aria-label", `Node labels: ${state.labels}`);
     }
     // Map and Labels sit one menu away, so View ▾ carries their state.
@@ -9905,6 +10500,41 @@
     return true;
   }
 
+  function agentSettingsOwns(target) {
+    return el.settings?.contains(target) || el.agentSettingsBtn?.contains(target) ||
+      (window.MefiSelect?.owns?.(el.settings) && window.MefiSelect?.contains?.(target)) ||
+      window.MefiScroll?.owns?.(el.settings, target);
+  }
+
+  function onAgentSettingsOutside(event) {
+    if (!agentSettingsOwns(event.target)) closeAgentSettings();
+  }
+
+  function openAgentSettings({ focus = false } = {}) {
+    if (!el.settings || !el.agentSettingsBtn) return;
+    closeAmbience(); closeViewMenu(); closeUsagePop();
+    window.MefiMusic?.closeAudio?.();
+    renderSettingsPanel();
+    el.settings.hidden = false;
+    el.agentSettingsBtn.setAttribute("aria-expanded", "true");
+    placePop(el.settings, el.agentSettingsBtn);
+    document.addEventListener("pointerdown", onAgentSettingsOutside);
+    window.MefiScroll?.scan(el.settings);
+    if (focus) el.settings.focus({ preventScroll: true });
+    state.hudRectsAt = 0;
+    bumpHud();
+  }
+
+  function closeAgentSettings({ focus = false } = {}) {
+    if (!el.settings) return;
+    if (window.MefiSelect?.owns?.(el.settings)) window.MefiSelect.close();
+    el.settings.hidden = true;
+    el.agentSettingsBtn?.setAttribute("aria-expanded", "false");
+    document.removeEventListener("pointerdown", onAgentSettingsOutside);
+    state.hudRectsAt = 0;
+    if (focus) el.agentSettingsBtn?.focus({ preventScroll: true });
+  }
+
   function onAmbienceOutside(event) {
     if (el.pop?.contains(event.target) || el.ambienceBtn?.contains(event.target)) return;
     closeAmbience();
@@ -9913,6 +10543,7 @@
   function toggleAmbience(event) {
     if (!el.pop) return;
     if (el.pop.hidden) {
+      closeAgentSettings();
       closeViewMenu();
       closeUsagePop();
       el.pop.hidden = false;
@@ -9953,6 +10584,7 @@
 
   function openViewMenu() {
     if (!el.viewPop || el.viewPop.hidden === false) return;
+    closeAgentSettings();
     closeAmbience();
     closeUsagePop();
     el.viewPop.hidden = false;
@@ -10153,6 +10785,10 @@
   // One Esc step per press; nav owns focus and the layers above this one.
   function escape() {
     if (!state.active) return false;
+    if (el.settings?.hidden === false) {
+      closeAgentSettings({ focus: true });
+      return true;
+    }
     // What opened last closes first: the toolbar's popovers, then the
     // corner's Usage and Legend lists (only while they can be seen), and only
     // then the search, the inspected node and Command itself.
@@ -10199,12 +10835,13 @@
   function canAmbientZen() {
     const top = window.MefiNav?.top?.();
     const focus = document.activeElement;
-    return Boolean(state.ambientZenEnabled && state.active && !document.hidden && !state.settingsPreview &&
+    return Boolean((!state.director || state.director === state.zenDirector) && state.ambientZenEnabled && state.active && !document.hidden && !state.settingsPreview &&
       !document.body.dataset.sheet && (!top || top === "command") &&
       !state.panning && !state.rotating && !state.query &&
       // No open menu or popover fades out from under the pointer: Ambience,
       // View and the Usage breakdown all hold Zen off while they are up.
-      el.pop?.hidden !== false && el.viewPop?.hidden !== false &&
+      el.pop?.hidden !== false && el.viewPop?.hidden !== false && el.settings?.hidden !== false &&
+      document.getElementById?.("music-dropdown")?.hidden !== false &&
       document.getElementById?.("cmd-usage-pop")?.hidden !== false && (!state.feedMenuOpen || state.feedCollapsed) &&
       !Array.from(document.querySelectorAll?.("#idle-hud details[open]") ?? []).some((node) => !node.closest?.("[hidden]")) &&
       !focus?.matches?.("input, textarea, select, [contenteditable='true']"));
@@ -10215,19 +10852,24 @@
     if (next === state.ambientZen || (next && !canAmbientZen())) return false;
     state.ambientZen = next;
     if (next) {
-      state.zenRestore = { camera: { ...state.camera }, camMode: state.camMode, orbit: state.orbit, orbitVel: state.orbitVel, angle: state.angle, pitch: state.pitch, follow: state.follow, followZoomTarget: state.followZoomTarget };
-      state.camMode = "orbit";
-      state.orbit = noMotion() ? "paused" : "auto";
-      state.orbitVel = 0;
-      // Preserve managed anchors and framing. Ambient mode is a temporary
-      // camera movement, never a layout change or an audio/capture gesture.
+      // Zen flies the camera round the tree (camera-tour.js through
+      // setDirector); with reduced motion it only fades the panels. Either
+      // way the graph frame stays put, so waking never re-seeds the layout.
+      // Ambient mode is a temporary camera movement, never a layout change
+      // or an audio/capture gesture.
       hideTip();
-    } else if (state.zenRestore) {
-      // Resume the prior camera mode from this angle. Rewinding the ambient
-      // orbit on the first mouse move would make every fixed point jump.
-      const currentView = { camera: state.camera, angle: state.angle, pitch: state.pitch, orbitVel: 0 };
-      Object.assign(state, state.zenRestore, currentView);
-      state.zenRestore = null;
+      const tour = noMotion() ? null : window.MefiCameraTour?.create?.();
+      if (tour) {
+        state.zenDirector = tour;
+        setDirector(tour);
+      }
+    } else if (state.zenDirector) {
+      // Waking glides home from wherever the flight is, at the flight's own
+      // speed, and keeps the angle it reached: rewinding the spin would make
+      // every fixed point jump.
+      const tour = state.zenDirector;
+      state.zenDirector = null;
+      if (state.director === tour) setDirector(null);
     }
     document.body.classList.toggle("command-zen", next);
     state.graphAreaAt = 0;
@@ -10360,8 +11002,7 @@
       .catch(() => {});
     clearInterval(state.timers.backdrop);
     state.timers.backdrop = setInterval(backdropTick, BACKDROP_REFRESH_MS);
-    cancelAnimationFrame(frameRequest);
-    frameRequest = requestAnimationFrame(frame);
+    scheduleFrame();
   }
   // Stops the backdrop's drawing and hands the surfaces back; the canvases
   // stay as they are, for enter() to take over or stopHomeBackdrop() to hide.
@@ -10370,8 +11011,7 @@
     state.homeBackdrop = false;
     clearInterval(state.timers.backdrop);
     state.timers.backdrop = null;
-    cancelAnimationFrame(frameRequest);
-    frameRequest = 0;
+    cancelFrame();
     setBackdropSurfaces(false);
     return true;
   }
@@ -10413,6 +11053,7 @@
     if (el.searchCount) el.searchCount.textContent = "";
     closeAmbience();
     closeViewMenu();
+    closeAgentSettings();
     el.canvas.hidden = false;
     if (el.far) el.far.hidden = false;
     el.hud.hidden = false;
@@ -10492,7 +11133,7 @@
     // can leave this pending — the input listener below retries on the first
     // real key/click.
     if (state.reactive && !state.settingsPreview) ensureReactiveInput();
-    frameRequest = requestAnimationFrame(frame);
+    scheduleFrame();
     state.timers.refresh = setInterval(tick, 4000);
     // A sheet may already cover the constellation (the quiet clock can open it
     // underneath one); stealing focus would break that dialog.
@@ -10504,10 +11145,10 @@
     if (!state.active) return;
     setAmbientZen(false);
     state.active = false;
-    cancelAnimationFrame(frameRequest);
-    frameRequest = 0;
+    cancelFrame();
     closeAmbience();
     closeViewMenu();
+    closeAgentSettings();
     hideTip();
     clearSearch();
     el.canvas.hidden = true;
@@ -10697,7 +11338,7 @@
     ["cmd-orbit", "Space", "Pause / resume the spin"],
     ["cmd-cam", "C", "Camera: overview / follow / free"],
     ["cmd-view", "V", "Switch 3D orbit / flat 2D map"],
-    ["cmd-labels", "L", "Node labels: auto / all / none"],
+    ["cmd-labels", "L", "Node labels: auto / updates / all / none"],
     ["cmd-search", "S", "Find a session, todo or task"],
     ["cmd-compose", "N", "Add a task"],
     ["cmd-assistant", "M", "Message the assistant"],
@@ -10738,6 +11379,7 @@
     el.railAssistantBadge = document.getElementById("cmd-rail-assistant-badge");
     el.railAskBadge = document.getElementById("cmd-rail-ask-badge");
     el.settings = document.getElementById("cmd-settings");
+    el.agentSettingsBtn = document.getElementById("idle-agent-settings");
     el.settingsState = document.getElementById("cmd-settings-state");
     el.glanceAutopilot = document.getElementById("cmd-glance-autopilot");
     el.glanceWorkers = document.getElementById("cmd-glance-workers");
@@ -10802,6 +11444,9 @@
     el.feedAgents = document.getElementById("idle-feed-agents");
     el.feedAgentsCount = document.getElementById("idle-feed-agents-count");
     el.feedAgentsSection = document.getElementById("idle-feed-agent-section");
+    el.feedRecentAgents = document.getElementById("idle-feed-recent-agents");
+    el.feedRecentCount = document.getElementById("idle-feed-recent-count");
+    el.feedRecentList = document.getElementById("idle-feed-recent-list");
     el.feedMenu = document.getElementById("idle-feed-menu");
     el.feedDrop = document.getElementById("idle-feed-drop");
     el.feedMeta = document.getElementById("idle-feed-meta");
@@ -10864,7 +11509,10 @@
       el.reactive.checked = state.reactive;
       el.reactive.addEventListener("change", () => setMusicReactive(el.reactive.checked));
     }
-    el.musicToggle?.addEventListener("click", () => setMusicReactive(!state.reactive || !state.inputStream && !state.localAudio && !state.inputPending && (state.audioSource !== "local" || Boolean(state.inputError))));
+    el.musicToggle?.addEventListener("click", () => {
+      closeAmbience(); closeViewMenu(); closeUsagePop(); closeAgentSettings();
+      window.MefiMusic?.toggleAudio?.(el.musicToggle);
+    });
     renderMusicStatus(true);
     if (el.source) {
       el.source.value = state.audioSource;
@@ -10895,31 +11543,41 @@
       const text = el.taskInput?.value.trim();
       if (!text) return null;
       el.taskInput.value = "";
-      // Adding a task IS messaging the assistant: the ask rides the thread
-      // (visible in the chat log), the assistant creates the board task at
-      // chat worth, kicks the executor, and both land without waiting for a
-      // cadence. The direct board write is the browser-mode fallback only.
-      if (window.mefiStudio?.assistantMessage) {
-        const sent = await sendAssistant(text);
-        if (sent?.ok) {
-          window.MefiToast?.(`sent to the assistant · it is on the board and being scheduled`, "good");
-          return sent;
+      let created = null;
+      if (window.mefiStudio?.tasksCreate) {
+        // A board task, straight through tasks:create: the path Work mode
+        // uses (assistantCreateTask pinned, then the executor is asked for
+        // work). Never the chat classifier: there a statement without a work
+        // verb made no task, "Pause button in the music player" paused the
+        // service, and the toast still said the task was on the board.
+        let result = null;
+        try {
+          result = await window.mefiStudio.tasksCreate({ title: text.split("\n")[0].slice(0, 180), prompt: text, ...(state.projectId ? { projectId: state.projectId } : {}) });
+        } catch (error) {
+          result = { ok: false, error: String(error?.message ?? error) };
         }
-        if (!el.taskInput.value) el.taskInput.value = text; // hand the text back
-        return null;
-      }
-      // Await the add so the list read below happens after the write landed.
-      const created = await window.MefiTasks?.addTask(text);
-      if (!created) {
-        // Nothing was saved (tasks.js toasts the reason when it is loaded): hand
-        // the text back unless the field has been typed into since.
-        if (!el.taskInput.value) el.taskInput.value = text;
-        return null;
+        created = result?.ok && result.task?.id ? result.task : null;
+        if (!created) {
+          // The host's own reason (a duplicate title, a project switch).
+          window.MefiToast?.(`task not added · ${result?.error || "the task store did not return a task"}`, "bad");
+          if (!el.taskInput.value) el.taskInput.value = text; // hand the text back
+          return null;
+        }
+      } else {
+        // Browser mode: tasks.js writes the board. Await the add so the list
+        // read below happens after the write landed.
+        created = await window.MefiTasks?.addTask(text);
+        if (!created) {
+          // Nothing was saved (tasks.js toasts the reason when it is loaded): hand
+          // the text back unless the field has been typed into since.
+          if (!el.taskInput.value) el.taskInput.value = text;
+          return null;
+        }
       }
       await refreshTasks();
       refreshGraph();
       updateTelemetry();
-      window.MefiToast?.(`task added · ${text.slice(0, 40)}`, "good");
+      window.MefiToast?.(`on the board · ${String(created.title || text).slice(0, 48)}`, "good");
       if (state.active) {
         const node = state.nodes.find((entry) => entry.id === `task:${created.id}`);
         if (node) {
@@ -10954,23 +11612,7 @@
     el.viewBtn?.addEventListener("click", () => setView(state.view === "2d" ? "3d" : "2d"));
     // Busy while the host saves, and back to the confirmed state on failure:
     // a switch that shows On when nothing was saved would say work is running.
-    el.autopilotToggle?.addEventListener("change", async () => {
-      const toggle = el.autopilotToggle;
-      const wanted = toggle.checked;
-      if (!window.mefiStudio?.assistantAutopilot) return;
-      toggle.disabled = true;
-      toggle.setAttribute("aria-busy", "true");
-      try {
-        const result = await window.mefiStudio.assistantAutopilot({ enabled: wanted, execute: wanted });
-        if (!result || result.ok === false) throw new Error(result?.error ?? "the host did not confirm it");
-      } catch (error) {
-        toggle.checked = !wanted;
-        window.MefiToast?.(`Autopilot not saved · ${String(error?.message ?? error)}`, "bad");
-      } finally {
-        toggle.disabled = false;
-        toggle.removeAttribute("aria-busy");
-      }
-    });
+    el.autopilotToggle?.addEventListener("change", () => changeQueueEnabled(el.autopilotToggle.checked));
     el.chatSend?.addEventListener("click", () => sendAssistant(el.chatInput?.value));
     el.chatInput?.addEventListener("keydown", (event) => {
       if (event.key === "Enter" && !event.shiftKey) {
@@ -11030,6 +11672,19 @@
     for (const button of el.doneFilters ?? []) button.addEventListener("click", () => setDoneFilter(button.dataset.doneFilter));
     setDoneCollapsed(state.doneCollapsed, { save: false });
     setRailTab(state.railTab, { save: false });
+    el.agentSettingsBtn?.addEventListener("click", (event) => {
+      if (el.settings?.hidden === false) closeAgentSettings({ focus: true });
+      else openAgentSettings({ focus: event.detail === 0 });
+    });
+    document.getElementById("idle-agent-settings-close")?.addEventListener("click", () => closeAgentSettings({ focus: true }));
+    el.settings?.addEventListener("click", (event) => { if (event.target?.closest?.("[data-nav]")) closeAgentSettings(); });
+    el.settings?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") { event.preventDefault(); closeAgentSettings({ focus: true }); }
+      event.stopPropagation(); // settings keys must not also move the canvas
+    });
+    el.settings?.addEventListener("focusout", (event) => {
+      if (event.relatedTarget && !agentSettingsOwns(event.relatedTarget)) closeAgentSettings();
+    });
     document.getElementById("idle-chat-explorer")?.addEventListener("click", () => nav("explorer", { assistant: true }));
     el.ambienceBtn?.addEventListener("click", toggleAmbience);
     // A way out of Ambience (Style & sound ↗) closes it on the way.
@@ -11041,6 +11696,7 @@
     window.addEventListener("resize", () => {
       if (el.pop?.hidden === false) placePop(el.pop, el.ambienceBtn);
       if (el.viewPop?.hidden === false) placePop(el.viewPop, el.viewMenuBtn);
+      if (el.settings?.hidden === false) placePop(el.settings, el.agentSettingsBtn);
     });
     el.legendToggle?.addEventListener("click", () => setLegend(!state.legendOpen));
     el.feedMenu?.addEventListener("click", () => setFeedMenu(!state.feedMenuOpen));
@@ -11068,7 +11724,7 @@
     pillOf("sessions")?.addEventListener("click", () => setCamMode("orbit"));
     pillOf("progress")?.addEventListener("click", () => focusNextInProgress());
     pillOf("assistant")?.addEventListener("click", () => selectAssistant());
-    el.emptyAssistant?.addEventListener("click", () => selectAssistant({ focus: true }));
+    el.emptyAssistant?.addEventListener("click", () => window.MefiCompanion?.open?.());
 
     // The broadcast carries the list that was just written. Using it skips a
     // second read that could land inside the next save and come back empty.
@@ -11411,6 +12067,9 @@
   applyTreePreferences(window.MefiMusic?.graphPreferences?.() ?? {});
 
   window.MefiIdle = {
+    queueSettings,
+    refreshQueueSettings,
+    setQueueSetting,
     init,
     enter,
     exit,
@@ -11462,6 +12121,15 @@
     enterFocus: (id) => enterFocus(typeof id === "string" ? state.nodes.find((node) => node.id === id) ?? null : id),
     exitFocus,
     setCardStyle,
+    setDirector,
+    // Zen now: switches Zen on if it is off (the Ambience toggle, saved) and
+    // enters it at once when the view allows it.
+    enterZen: () => {
+      if (!state.ambientZenEnabled) setAmbientZenEnabled(true);
+      state.lastInput = 0;
+      return checkAmbientZen();
+    },
+    directorStatus: () => ({ active: Boolean(state.director), directed: Boolean(state.directed), zen: Boolean(state.zenDirector && state.director === state.zenDirector), camMode: state.camMode, zoom: state.zoom, zoomTarget: state.zoomTarget ?? null, pitch: state.pitch, pitchHome: Number.isFinite(state.pitchHome) ? state.pitchHome : null, returning: state.returning ? state.returning.camMode ?? true : null, restore: state.directorRestore ? { ...state.directorRestore } : null }),
     focusStatus: () => ({ id: state.focus?.id ?? null, kind: state.focus?.kind ?? null, since: state.focus?.since ?? null, restore: state.focusRestore ? { ...state.focusRestore } : null, sharp: state.focusIds ? [...state.focusIds] : null, farLayer: Boolean(el.farCtx), hover: state.hoverCallout, zoom: state.zoom, orbit: state.orbit }),
     calloutStatus: () => state.nodes.filter((node) => node._callout).map((node) => ({ id: node.id, kind: node.kind, side: node._callout.side, vert: node._callout.vert, length: node._callout.length, rect: { ...node._callout.rect }, hit: { ...node._callout.hit }, leader: { x1: node._callout.sx, y1: node._callout.sy, x2: node._callout.ex, y2: node._callout.ey }, title: node._callout.content.title, number: node._callout.content.number, counts: node._callout.content.counts, mark: node._callout.content.mark, lines: node._callout.content.lines.map((line) => line.text) })),
     search,

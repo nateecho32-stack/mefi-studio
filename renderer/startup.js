@@ -44,12 +44,13 @@
       row.type = "button";
       row.setAttribute("role", "radio");
       row.setAttribute("aria-checked", String(selected));
+      row.tabIndex = selected ? 0 : -1;
       row.dataset.projectId = project.id;
       row.title = project.path || "";
       const text = node("span", "boot-project-text");
       text.append(node("span", "boot-project-name", project.name || project.path || "Project"), node("span", "boot-project-path", project.path || ""));
       row.append(node("span", "boot-project-icon", String(project.name || "P").slice(0, 1).toUpperCase()), text);
-      row.addEventListener("click", () => { if (state.busy) return; state.selectedId = project.id; render(); note(""); });
+      row.addEventListener("click", () => { if (state.busy) return; state.selectedId = project.id; render(); note(""); focusSelected(); });
       list.append(row);
     }
     if ($("open")) $("open").textContent = state.selectedId ? "Open studio" : "Continue without a project";
@@ -64,6 +65,17 @@
   function focusSelected() {
     const row = $("projects")?.querySelector?.('[aria-checked="true"]');
     (row || $("open"))?.focus?.({ preventScroll: true });
+  }
+  // The gate captures keyboard events before they reach the rows, so it
+  // delegates radio navigation here while keeping workspace shortcuts locked.
+  function navigateProjects(key) {
+    if (state.busy || !state.projects.length || !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End"].includes(key)) return false;
+    const index = state.projects.findIndex((project) => project.id === state.selectedId);
+    const next = key === "Home" ? 0 : key === "End" ? state.projects.length - 1 :
+      (index + (["ArrowUp", "ArrowLeft"].includes(key) ? -1 : 1) + state.projects.length) % state.projects.length;
+    state.selectedId = state.projects[next].id;
+    render(); note(""); focusSelected();
+    return true;
   }
 
   // Resolves with the choice once the host has the project open, or with null
@@ -125,5 +137,5 @@
     catch (error) { console.warn("Starting the agents failed", error); return { ok: false, error: error?.message || "Starting the agents failed." }; }
   }
 
-  window.MefiStartup = { choose, begin, available, state: () => ({ projects: state.projects.map((project) => project.id), selectedId: state.selectedId, busy: state.busy }) };
+  window.MefiStartup = { choose, begin, available, navigateProjects, state: () => ({ projects: state.projects.map((project) => project.id), selectedId: state.selectedId, busy: state.busy }) };
 })();

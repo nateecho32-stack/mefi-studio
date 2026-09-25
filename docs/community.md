@@ -40,22 +40,25 @@ colors** and the five original node styles. The Void collection adds:
 - The node-style painters in `renderer/idle.js` and `renderer/tree3d.js` build
   their geometry once and cache their gradients per canvas, like the existing
   orb paints, so the Command frame budget does not grow.
-- The pickers in **Style & sound** show the collection as its own "Void
+- The pickers in **Settings › Appearance** show the collection as its own "Void
   collection" group under the free choices. The **Studio theme** quick select
-  in Settings › Your Studio has a "Void collection · Discord members" group,
-  whose options read "Void · members" and so on while they are locked.
+  there has a "Void collection · Discord members" group,
+  whose options read "Void · preview" and so on without membership.
 
-### Locked, unlocked, and losing access
+### Previewing, keeping, and losing access
 
-- **Locked items** stay focusable. They carry `aria-disabled="true"` (never
-  `disabled`) and a **Members** badge. Clicking one changes nothing: the
-  current theme or style is announced again, so the Your Studio theme select
-  rolls back. The lock is then explained in place, and the view does not
-  change. On the workspace the inline card shows a note such as "Void is part
-  of the Void collection. Link your Discord membership to use it, or build it
-  yourself (see below)." Anywhere else, Style & sound and Settings included, a
-  12-second toast says so, and its **See the perks** opens **Settings ›
-  Community** with that note and the item marked in the collection strip.
+- **Unentitled items** stay focusable and clickable, with a **Members** badge.
+  Clicking one paints the real theme or node style in the current view. It
+  writes neither the ordinary nor the premium preference store. The choice
+  resets when the canvas preview closes or you leave Settings; a restart also
+  restores the saved choice. The preview is explained in place without moving
+  the view. On the workspace the inline card says you can preview now and
+  must link your Discord membership to keep it. Anywhere else, a 12-second
+  toast says so, and its **See the perks**
+  opens **Settings › Community** with the item marked in the collection strip.
+- **A successful member link during a preview** saves the active premium
+  choice. A linked account that is not in the Void Engine server can still
+  preview, but its choice remains temporary.
 - Every locked group shows the same fine print:
 
   > Members of the Void Engine Discord unlock these. Studio is MIT-licensed:
@@ -329,11 +332,11 @@ The status is:
 In the renderer, `window.MefiCommunity` offers:
 - `has(perk)`, `status()`, `refresh()`
 - `offer({ kind, key, name, navigate })`, `open({ note, lead, key })`. Every
-  locked picker passes `navigate: false`: the Void tiles in Style & sound,
-  which would otherwise close their sheet, and the Your Studio theme select,
-  which fires on every arrow key. The item is then explained in place, in the
-  inline card or a toast, and the view never changes. Without it, `offer()`
-  opens Settings › Community.
+  temporary Void picker passes `navigate: false`: the tiles in Appearance,
+  which must keep the controls open, and the Studio theme select,
+  which fires on every arrow key. The preview and how to keep it are explained
+  in place, in the inline card or a toast, and the view never changes. Without
+  it, `offer()` opens Settings › Community.
 - `join()`, `link()`, `cancelLink()`, `check()`, `unlink()`
 - `copyAgentPrompt()`
 - the `FORK_COPY` and `AGENT_PROMPT` strings
@@ -423,7 +426,20 @@ own plan when they start:
   Helper and others). `ROLE_PERKS` then maps those role ids to extra perks. The
   bot never needs to be online for Studio's membership check.
 - **Phase 3, rooms.** Chat rooms you join by invite or request, backed by
-  Discord and mirrored inside Studio.
+  Discord and mirrored inside Studio. A media link posted in a room can play
+  in Studio's Links player: `MefiMusic.linkInfo(url)` reports whether and
+  how a link plays, and `MefiMusic.playLink(url)` plays it.
+  **Listen together** is the first piece of rooms that Studio ships. In
+  Settings › Audio › Links, a member picks one of their rooms and plays the
+  loaded link for it. The hub keeps the room's shared player (link, host,
+  playing or paused, position) in memory. It pushes every change to members
+  subscribed in Studio and posts one line in the room's Discord thread.
+  Whoever put it on, or the room's owner, steers it. Everyone else chooses
+  **Listen along**. **Share what I'm playing**, off by default, feeds the
+  bot's `/nowplaying`. Both run through `scripts/hub-client.cjs` (main's
+  "Rooms hub" block) and `renderer/together.js`. They need the hub's address
+  in `hub-client.cjs`'s `HUB_URL` (or `MEFI_STUDIO_HUB_URL`) and a linked
+  Discord account.
 - **Phase 4, cowork rooms.** Rooms that grant GitHub access to a project,
   where members' agents coordinate so they don't collide.
 - **Phase 5, capacity pools.** Members can offer their coding-agent capacity

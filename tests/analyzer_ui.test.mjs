@@ -50,6 +50,22 @@ function environment(bridge = {}) {
   return { get, window, document, calls, aiCalls, analyzer: window.MefiAnalyzer, project: (projectId) => listeners.get("mefi:project-changed")({ detail: { projectId } }), descendants };
 }
 
+test("Analyzer mode navigation preserves typed ideas and does not start analysis", async () => {
+  const env = environment();
+  env.get("tab-idea").click();
+  env.get("idea").value = "Keep this draft";
+  assert.equal(env.get("mode-project").hidden, true);
+  assert.equal(env.get("mode-idea").hidden, false);
+  env.get("tab-idea").dispatch("keydown", { key: "Home" });
+  assert.equal(env.document.activeElement, env.get("tab-project"));
+  assert.equal(env.get("mode-project").hidden, false);
+  assert.equal(env.get("idea").value, "Keep this draft");
+  assert.equal(env.calls.length, 0);
+  env.analyzer.open({ idea: "Linked idea" });
+  assert.equal(env.get("mode-idea").hidden, false);
+  assert.equal(env.calls.length, 0);
+});
+
 test("initial project load scans locally, shows evidence and preserves explicit AI consent", async () => {
   const env = environment();
   env.get("ai").checked = true;

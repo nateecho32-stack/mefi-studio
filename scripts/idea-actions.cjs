@@ -1,3 +1,5 @@
+const { OWNER_REQUEST_SOURCES, requestTitle } = require("./work-admission.cjs");
+
 // Apply one UI intent to the latest board, so reading or keeping an idea
 // cannot replace a promotion or erase ideas that arrived in the meantime.
 function applyIdeaAction(ideas, { action, ideaId, ideaIds } = {}, now = Date.now()) {
@@ -23,17 +25,26 @@ const REQUEST_SOURCES = new Set(["manual", "expand", "improver", "grow"]);
 // applies to the latest rows, so a request a worker has claimed, or one the
 // scheduler promoted to a task meanwhile, is never undone by an older copy.
 // Added rows keep only what a person or a draft supplies; claims, approvals
-// and results stay host-owned.
+// and results stay host-owned. A typed ask with no title is titled from its
+// first line, since promotion (the only way a request reaches a worker) needs
+// one, and the owner's own rows carry origin by "owner" so their cards rank in
+// the owner band instead of below every roster-filed request.
 function applyRequestAction(requests, { action, requests: incoming, key } = {}, now = Date.now()) {
   const rows = Array.isArray(requests) ? requests : [];
   if (action === "add") {
     const added = (Array.isArray(incoming) ? incoming : [])
-      .map((row) => ({
-        ...(typeof row?.title === "string" && row.title.trim() ? { title: row.title.trim().slice(0, 200) } : {}),
-        prompt: typeof row?.prompt === "string" ? row.prompt.trim().slice(0, 20000) : "",
-        at: now,
-        source: REQUEST_SOURCES.has(row?.source) ? row.source : "manual",
-      }))
+      .map((row) => {
+        const prompt = typeof row?.prompt === "string" ? row.prompt.trim().slice(0, 20000) : "";
+        const title = typeof row?.title === "string" && row.title.trim() ? row.title.trim().slice(0, 200) : requestTitle({ prompt });
+        const source = REQUEST_SOURCES.has(row?.source) ? row.source : "manual";
+        return {
+          ...(title ? { title } : {}),
+          prompt,
+          at: now,
+          source,
+          ...(OWNER_REQUEST_SOURCES.has(source) ? { origin: { kind: "request", by: "owner" } } : {}),
+        };
+      })
       .filter((row) => row.prompt);
     if (!added.length) return { ok: false, error: "Write a request first." };
     return { ok: true, requests: [...added, ...rows], added: added.length };

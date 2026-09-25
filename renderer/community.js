@@ -19,12 +19,13 @@
   // tests/community_ui.test.mjs pins both sentences to it.
   const FORK_COPY = "Members of the Void Engine Discord unlock these. Studio is MIT-licensed: fork the project and unlock it yourself, or ask an agent to do it for you.";
   const AGENT_PROMPT = "In my fork of Mefi's Studio AI+, set SELF_UNLOCKED to true in scripts/community.cjs so the Void collection themes and node styles unlock without Discord, then run npm run check and npm test.";
-  const PITCH = "Share what you're making, swap model setups, and hang out with other builders. Members unlock the Void collection: four themes and three node styles.";
+  const PITCH = "Share what you're making, swap model setups, and hang out with other builders. Preview the Void collection now; members can keep its four themes and three node styles.";
   // A failed check retries after an hour, then six, then daily (scripts/community.cjs).
   const PRIVACY = "Linking reads your Discord id and name, and your roles and join date in the Void Engine server: when you link, about once a week (sooner after a failed check, then daily), and when you press Check now. Studio keeps them in its settings on this computer, with the sign-in encrypted in community-auth.json. Nothing about your projects is sent. Unlink revokes the sign-in and deletes both.";
   const PERK_COPY = { premium: "Void collection — 4 themes and 3 node styles" };
-  // The Workspace theme select names a locked Void collection theme like this.
-  const LOCKED_OPTION = (name) => `${name} · members`;
+  // The Preferences theme select marks a temporary Void collection choice.
+  const LOCKED_OPTION = (name) => `${name} · preview`;
+  const PREVIEW_HINT = "Preview it now; it resets when you close the canvas preview or leave Settings.";
   // One name for the link action on every surface (the Style pickers' Void
   // boxes say the same); relinking after Discord asks is the same button.
   const LINK_LABEL = "Link my Discord";
@@ -224,7 +225,7 @@
       if (copy) ok = (await copy(AGENT_PROMPT))?.ok !== false;
       else if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) { await navigator.clipboard.writeText(AGENT_PROMPT); ok = true; }
     } catch { ok = false; }
-    toast(ok ? "Agent prompt copied" : "Couldn't copy the agent prompt. Settings › Community shows it under “What the agent will change”.", ok ? "good" : "bad");
+    toast(ok ? "Agent prompt copied" : "Couldn't copy the agent prompt. Settings › General › Community shows it under “What the agent will change”.", ok ? "good" : "bad");
     return ok;
   }
   // Opens Style & sound at the Void collection's themes, with keyboard focus on
@@ -243,7 +244,7 @@
   function never() {
     hideCard();
     void call("communityPrompt", "never");
-    toast("Settings › Community has the link any time.", "info");
+    toast("Settings › General › Community has the link any time.", "info");
   }
 
   // ---- Settings › Community --------------------------------------------------------
@@ -275,7 +276,7 @@
     later(() => { try { card.scrollIntoView?.({ block: "start", behavior: noMotion() ? "auto" : "smooth" }); } catch {} });
     return true;
   }
-  // Explains a locked item without moving the view: the inline card while the
+  // Explains a preview choice without moving the view: the inline card while the
   // workspace shows, else a toast whose action opens Settings › Community. A
   // picker that changes on a keystroke (the Workspace theme select) asks for
   // this, so arrowing through its options never carries anyone away (WCAG 3.2.2).
@@ -283,18 +284,18 @@
     init();
     if (!desktop()) { desktopOnly(); return false; }
     if (window.MefiWorkspace?.isActive?.() && showCard("offer", note)) return true;
-    toast(`${lead} ${FORK_COPY}`, "info", { duration: 12000, action: { label: "See the perks", run: () => open({ note, key, lead }) } });
+    toast(`${lead} ${PREVIEW_HINT} ${FORK_COPY}`, "info", { duration: 12000, action: { label: "See the perks", run: () => open({ note, key, lead }) } });
     return true;
   }
   // How this account could unlock the item: link (or join first), and the
   // fork path the card shows below the note either way.
   function unlockHint() {
-    if (last && last.configured === false) return "Build it yourself to use it (see below).";
-    if (last?.linked === true && last.state === "not-member") return "Join the Void Engine Discord to use it, or build it yourself (see below).";
-    return "Link your Discord membership to use it, or build it yourself (see below).";
+    if (last && last.configured === false) return `${PREVIEW_HINT} Build it yourself to keep it (see below).`;
+    if (last?.linked === true && last.state === "not-member") return `${PREVIEW_HINT} Join the Void Engine Discord to keep it, or build it yourself (see below).`;
+    return `${PREVIEW_HINT} Link your Discord membership to keep it, or build it yourself (see below).`;
   }
   // navigate:false keeps the user where they are (see explain); by default a
-  // click on a locked button opens Settings › Community.
+  // click on a preview choice opens Settings › Community.
   function offer(item) {
     const { kind, key, name, navigate } = item && typeof item === "object" ? item : {};
     const label = String(name || key || "This item");
@@ -370,10 +371,10 @@
       return value && Array.isArray(value.themes) && Array.isArray(value.nodeStyles) ? value : null;
     } catch { return null; }
   }
-  // The Workspace theme select (workspace.js) lists the Void collection in its
-  // own optgroup. While it is locked each option says so; the options stay
-  // enabled, since choosing one explains the lock in place. Unlocking brings the
-  // plain names back. Only the labels change: the template's markup stays put.
+  // The Preferences theme select (workspace.js) lists the Void collection in
+  // its own optgroup. Unentitled options say they preview, and stay enabled so
+  // the user can try them. Entitlement brings the plain names back. Only the
+  // labels change: the template's markup stays put.
   function labelThemeOptions(unlocked) {
     const select = $("workspace-accent");
     const themes = catalog()?.themes;

@@ -47,7 +47,7 @@ function environment(overrides = {}, bridge = {}) {
     ...bridge,
   };
   const document = { getElementById: (id) => ids.get(id) || null, createElement: (tag) => new Element(tag), querySelectorAll: () => [] };
-  const context = vm.createContext({ document, window: { mefiStudio: api }, state: { doc: { models: [] } }, updateSpeedModels() {}, studioLog: (line) => logs.push(line) });
+  const context = vm.createContext({ document, window: { mefiStudio: api, addEventListener() {} }, state: { doc: { models: [] } }, updateSpeedModels() {}, studioLog: (line) => logs.push(line) });
   vm.runInContext(`${announce}\n${studio}\ninitStudio();`, context);
   return { get: (id) => ids.get(id), settings, writes, saved, api, logs, reads: () => reads };
 }
@@ -351,6 +351,29 @@ test("the coding tier saves on its own and the model field follows the tier and 
   assert.deepEqual(env.writes.at(-1), { executorModels: { codex: "gpt-5.5-codex" } }, "Auto keeps the pinned per-CLI override");
 });
 
+test("Auto on OpenCode says each task's model is picked by its record, and the placeholder names the route in use", async () => {
+  const executorTierDefaults = { opencode: { free: { model: "", source: "none" }, fast: { model: "", source: "cli-default" }, heavy: { model: "", source: "cli-default" } } };
+  const placeholder = async (overrides) => {
+    const env = environment({ executorCli: "opencode", executorModel: "", executorTier: "auto", executorTierModels: { opencode: {} }, executorTierDefaults, ...overrides }); await flush();
+    return { env, text: env.get("executor-model").placeholder };
+  };
+  const onGo = "routed per task · deepseek-v4.1-flash on OpenCode Go by default · CLI default without an OpenCode Go login";
+  const go = await placeholder({ provider: "opencode" });
+  assert.equal(go.env.get("executor-model-label").textContent, "Pinned model");
+  assert.equal(go.text, onGo, "the unpinned Go route is routed, not the CLI default, once OpenCode holds a Go login");
+  assert.match(go.env.get("executor-tier-status").textContent, /^Auto: picks each task's model by its verified record, on the z\.ai plan and on OpenCode Go; a pinned model wins\./);
+  assert.doesNotMatch(go.env.get("executor-tier-status").textContent, /within your provider/);
+  assert.equal((await placeholder({ provider: "auto", hasZai: true })).text, "routed per task · glm-5.3-flash on your z.ai plan by default");
+  assert.equal((await placeholder({ provider: "auto", hasZai: false })).text, onGo, "z.ai without its key falls through to Go");
+  assert.equal((await placeholder({ provider: "auto", autoProviders: ["opencode", "zai"], hasZai: true })).text, onGo);
+  assert.equal((await placeholder({ provider: "auto", autoProviders: ["lmstudio"], hasZai: false })).text, "CLI default", "no routed runner in the order: the CLI default runs");
+  // Another assistant route never puts builders on Go; z.ai still leads while its key is saved.
+  assert.equal((await placeholder({ provider: "claude", autoProviders: ["opencode", "zai"], hasZai: true })).text, "CLI default");
+  assert.equal((await placeholder({ provider: "lmstudio", hasZai: false })).text, "CLI default");
+  assert.equal((await placeholder({ provider: "claude", hasZai: true })).text, "routed per task · glm-5.3-flash on your z.ai plan by default");
+  assert.equal((await placeholder({ provider: "opencode", executorCli: "codex" })).text, "CLI default", "other builders keep their CLI default");
+});
+
 test("the auto order renders as a numbered preference list and saves whole-list edits", async () => {
   const env = environment({ provider: "auto", autoProviders: ["zai", "grok", "opencode"] }); await flush();
   const list = env.get("auto-order-list");
@@ -401,7 +424,7 @@ test("role fields name their provider, show what runs when empty, and Zen reads 
 test("the auto order adds and removes providers and never leaves it empty", async () => {
   const env = environment({ provider: "auto", autoProviders: ["zai"] }); await flush();
   const add = env.get("auto-order-add");
-  assert.deepEqual(add.children.map((option) => option.value), ["opencode", "zen", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"], "the picker lists exactly the missing providers");
+  assert.deepEqual(add.children.map((option) => option.value), ["opencode", "zen", "openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"], "the picker lists exactly the missing providers");
   add.value = "opencode";
   await env.get("auto-order-add-button").trigger("click");
   assert.deepEqual(env.writes, [{ autoProviders: ["zai", "opencode"] }]);
@@ -412,6 +435,27 @@ test("the auto order adds and removes providers and never leaves it empty", asyn
   assert.equal(env.get("auto-order-add-button").disabled, false, "removing frees the provider for the picker again");
   await env.get("auto-order-list").children[0].children[4].trigger("click");
   assert.equal(env.writes.length, 2, "the last provider cannot be removed");
+});
+
+test("OpenRouter lists free chat models and assigns a picked slug to a role", async () => {
+  const models = [
+    { id: "openrouter/free", name: "Free Models Router", free: true },
+    { id: "qwen/qwen3.8-27b:free", name: "Qwen3.8 27B", free: true },
+    { id: "x-ai/grok-4.7", name: "Grok 4.7", free: false },
+  ];
+  const env = environment({ provider: "openrouter", hasOpenRouter: true }, { openrouterModels: async () => ({ ok: true, models }) });
+  await flush();
+  assert.equal(env.get("openrouter-model-browser").hidden, false);
+  env.get("openrouter-free-only").checked = true;
+  await env.get("openrouter-free-only").trigger("change");
+  assert.deepEqual(env.get("openrouter-model-list").children.map((option) => option.value), ["openrouter/free", "qwen/qwen3.8-27b:free"]);
+  env.get("openrouter-model-list").value = "qwen/qwen3.8-27b:free";
+  await env.get("openrouter-use-heavy").trigger("click");
+  await flush();
+  assert.deepEqual(env.writes[0], { providerModels: { openrouter: { heavy: "qwen/qwen3.8-27b:free" } } });
+  env.get("openrouter-free-only").checked = false;
+  await env.get("openrouter-free-only").trigger("change");
+  assert.equal(env.get("openrouter-model-list").children.length, 3);
 });
 
 test("the fallback switch saves the generalized auto fallback and auto readiness names the order", async () => {

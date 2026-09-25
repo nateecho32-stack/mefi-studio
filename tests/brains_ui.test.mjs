@@ -170,6 +170,72 @@ test("the shipped pipeline draws every part and every wire", async () => {
   assert.equal(parts.length, brains.NODE_TYPES.length);
 });
 
+test("the narrow inspector keeps a visible focus target on reopen and Add part returns to the map", async () => {
+  const ui = await editor({ extraIds: ["brains-body", "brains-mobile-map", "brains-mobile-inspector", "brains-add-part"] });
+  const body = ui.elements.get("brains-body");
+  await ui.elements.get("brains-mobile-inspector").fire("click");
+  assert.equal(body.dataset.mobileView, "inspector");
+  ui.elements.get("brains-canvas-wrap").getClientRects = () => [];
+  ui.context.window.MefiBrains.close();
+  await ui.context.window.MefiBrains.open();
+  assert.equal(ui.elements.get("brains-mobile-inspector").focused, true);
+  await ui.elements.get("brains-add-part").fire("click");
+  assert.equal(body.dataset.mobileView, "map");
+  assert.equal(ui.elements.get("brains-search").hidden, false);
+  assert.equal(ui.elements.get("brains-mobile-map").attrs["aria-pressed"], "true");
+});
+
+test("Escape and deletion in the narrow Inspector retain a visible editor focus target", async () => {
+  const ui = await editor({ extraIds: ["brains-body", "brains-mobile-map", "brains-mobile-inspector"] });
+  focusDocument = ui.context.document;
+  try {
+    await pick(ui, "n_jev_classify");
+    const inspectorTab = ui.elements.get("brains-mobile-inspector");
+    await inspectorTab.fire("click");
+    ui.elements.get("brains-canvas-wrap").getClientRects = () => [];
+    const field = ui.inspector().querySelector("input");
+    assert.ok(field, "a selected part has an editable inspector field");
+    field.focus();
+    await ui.key({ key: "Escape", target: field });
+    assert.equal(focusDocument.activeElement, inspectorTab, "Escape cannot focus the hidden canvas");
+    const remove = ui.inspector().querySelectorAll("button").find((button) => button.textContent === "Delete this part");
+    assert.ok(remove);
+    remove.focus();
+    await remove.fire("click");
+    assert.equal(ui.nodes().length, 17);
+    assert.equal(focusDocument.activeElement, inspectorTab, "deletion cannot leave focus in the replaced inspector or hidden canvas");
+  } finally { focusDocument = null; }
+});
+
+test("a drafted map lists what the host repaired in its wiring until it is saved", async () => {
+  const wire = (from, fromPort, to, toPort) => ({ from: { node: from, port: fromPort }, to: { node: to, port: toPort } });
+  const { map, fixes } = brains.repairDraft({
+    id: "map_draft", name: "Ask first",
+    nodes: [{ id: "you", type: "user.request", x: 0, y: 0 }, { id: "clarity", type: "check.model", x: 260, y: 0 },
+      { id: "approve", type: "check.user", x: 520, y: 160 }, { id: "scope", type: "analyze.scope", x: 780, y: 0 }],
+    edges: [wire("you", "request", "clarity", "in"), wire("clarity", "clear", "scope", "in"), wire("clarity", "unclear", "approve", "in"), wire("approve", "approved", "scope", "in")],
+  });
+  assert.equal(fixes.length, 2);
+  const asked = [];
+  const ui = await editor({
+    extraIds: ["brains-banner", "brains-banner-text"],
+    bridge: { brainsDraft: async (text) => { asked.push(text); return { ok: true, map, compiled: brains.compileMap(map), model: "model-x", fixes: [...fixes, 42, ""] }; } },
+  });
+  await ui.elements.get("brains-draft").fire("click");
+  await flush();
+  assert.deepEqual(asked, ["Prompted name"]);
+  const repairs = () => ui.inspector().querySelectorAll("details").find((item) => item.dataset.section === "draft-fixes") ?? null;
+  assert.ok(repairs(), "the map inspector lists the repairs");
+  assert.match(repairs().textContent, /Repaired in the draft/);
+  assert.deepEqual(repairs().querySelectorAll("li").map((item) => item.textContent), fixes, "only the host's sentences, nothing else it sent");
+  assert.match(ui.status(), /Drafted by model-x\. 2 repairs to its wiring are listed in the inspector\. Nothing is saved yet/);
+  assert.match(ui.elements.get("brains-banner-text").textContent, /^Drafted by model-x, with 2 repairs listed in the inspector\./);
+  await ui.elements.get("brains-save").fire("click");
+  await flush();
+  assert.equal(ui.saves.length, 1);
+  assert.equal(repairs(), null, "a saved map is the owner's; the draft's list goes with the draft");
+});
+
 test("a wire starts and ends on the port dot it was drawn from", async () => {
   const ui = await editor();
   const dot = (node, port, dir) => {

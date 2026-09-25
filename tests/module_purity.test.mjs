@@ -23,6 +23,15 @@ const PROMISES = [
   { file: "scripts/task-delegation.cjs", says: "This pure module runs inside the board mutation gateway", keeps: ["electron", "filesystem", "network", "processes"] },
   { file: "scripts/provider-breaker.cjs", says: "no module-level singleton", keeps: ["filesystem", "network", "processes", "timers"] },
   { file: "scripts/community.cjs", says: "Pure module: no Electron, no filesystem, no network. Time is injectable", keeps: ["electron", "filesystem", "network", "injectableClock"] },
+  { file: "scripts/task-oversight.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time is", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/work-admission.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/executor-core.cjs", says: "Pure module: no Electron, no filesystem, no network, no processes, no", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // The Agent Brain's pure halves (docs/roadmap-0.4.0.md); agent-brain-host.cjs owns their I/O.
+  { file: "scripts/pipelines.cjs", says: "Pure module: no Electron, no filesystem, no clock reads (time is injected),", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/playbook.cjs", says: "Pure module: no Electron, no filesystem, no clock reads (time is injected),", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/project-map.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/desk.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/companion.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
 ];
 
 const CLOCK = /\bDate\.now\s*\(|new\s+Date\s*\(\s*\)|\bperformance\.now\s*\(/;

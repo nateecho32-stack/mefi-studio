@@ -29,7 +29,7 @@ const RUN_OK = [
 ].join("\n") + "\n";
 const RUN_REFUSED = JSON.stringify({ type: "error", sessionID: "ses_x", error: { name: "APIError", data: { message: "Error from provider (Console): OpenCode's free tier can only be used from within OpenCode", statusCode: 403 } } }) + "\n";
 
-function harness({ settings = {}, exec, projectOpen = true, ideas = [], analyze = async () => ({ inventory: { files: 3 } }), assistant = { ok: false }, smoke = false, autoSetup = null } = {}) {
+function harness({ settings = {}, exec, projectOpen = true, ideas = [], analyze = async () => ({ inventory: { files: 3 } }), assistant = { ok: false }, smoke = false, autoSetup = null, admitIdeas = null } = {}) {
   const state = { settings: structuredClone(settings), writes: [], ideas: structuredClone(ideas), ideaWrites: [], mapFiles: [], sent: [], progress: [], logs: [], calls: [] };
   const scanOutputs = {
     "where opencode": "C:\\Users\\me\\AppData\\Roaming\\npm\\opencode\n", "opencode --version": "1.18.31\n", "opencode auth list": AUTH,
@@ -53,6 +53,7 @@ function harness({ settings = {}, exec, projectOpen = true, ideas = [], analyze 
     runEnv: () => ({ OPENCODE_CONFIG_CONTENT: '{"snapshot":false}' }),
     readIdeas: async () => structuredClone(state.ideas),
     writeIdeas: async (rows) => { state.ideas = structuredClone(rows); state.ideaWrites.push(rows.length); },
+    ...(admitIdeas ? { admitIdeas } : {}),
     writeMapFile: async (name, value) => state.mapFiles.push({ name, value }),
     send: (channel, payload) => state.sent.push({ channel, size: Array.isArray(payload) ? payload.length : null }),
     progress: (payload) => state.progress.push(payload),
@@ -184,6 +185,31 @@ test("map spawns the stock plan agent in the project, streams progress, saves id
   // A second map updates the same idea instead of duplicating it.
   const again = await service.map();
   assert.deepEqual(again.ideas, { added: 0, updated: 1, total: 2 });
+});
+
+test("a host's gateway merges the map's ideas against the ideas as they are then, never a copy read before the map ran", async () => {
+  const exec = async (_command, _args, options) => {
+    for (const line of RUN_OK.split("\n").filter(Boolean)) options.onData(line + "\n");
+    return { code: 0, stdout: RUN_OK, stderr: "", timedOut: false, error: null };
+  };
+  // A promotion lands while the explorer runs: the board's idea gains its task.
+  const board = [{ id: "idea_keep", title: "Keep me", status: "keep" }];
+  const admitted = [];
+  const admitIdeas = async (ideas) => {
+    admitted.push(ideas);
+    const merged = mapper.mergeIdeas([{ ...board[0], status: "planned", taskId: "task_x" }], ideas);
+    return { ideas: merged.ideas, added: merged.added, updated: merged.updated };
+  };
+  const { service, state } = harness({ exec, ideas: board, admitIdeas });
+  await service.scan();
+  await service.apply();
+  const result = await service.map({ projectId: "project_1" });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(admitted.length, 1);
+  assert.equal(admitted[0].length, 1, "the host receives only the map's own ideas");
+  assert.deepEqual(result.ideas, { added: 1, updated: 0, total: 2 });
+  assert.deepEqual(state.ideaWrites, [], "no whole-array write from a stale read");
+  assert.deepEqual(state.sent, [], "the gateway broadcasts its own write");
 });
 
 test("map reports a free-tier refusal, a timeout, a start failure and an unparsable reply as closed failures", async () => {

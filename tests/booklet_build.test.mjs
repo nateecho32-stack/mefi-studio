@@ -9,7 +9,7 @@
 // build(), so this exercises the path `npm run build-booklet` takes.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,7 +24,8 @@ const INLINE_SCRIPTS = [
   "performance-core.js",
   "profiler.js",
   "stage-labels.js",
-  "task-groups.js",
+  "node-visuals.js",
+  "task-groups.js", "studio-ui.js", "agents.js", "companion-ui.js", "companion-hub.js",
   "nav.js",
   "sidebar.js",
   "graph.js",
@@ -32,6 +33,7 @@ const INLINE_SCRIPTS = [
   "tracker.js",
   "tree3d.js",
   "idle.js",
+  "camera-tour.js",
   "explorer.js",
   "analyzer.js",
   "tasks.js",
@@ -44,9 +46,14 @@ const INLINE_SCRIPTS = [
   "startup.js",
   "workspace.js",
   "planning.js",
+  "media-window.js",
   "music.js",
+  "together.js",
   "onboarding.js",
   "community.js",
+  "demo-panel.js",
+  "agent-brain.js",
+  "project-map-view.js",
   "booklet.js",
 ];
 
@@ -83,6 +90,8 @@ async function makeFixtureRoot() {
   await copyFile(path.join(RENDERER, "planning.css"), path.join(renderer, "planning.css"));
   await copyFile(path.join(RENDERER, "profiler.css"), path.join(renderer, "profiler.css"));
   await copyFile(path.join(RENDERER, "brains.css"), path.join(renderer, "brains.css"));
+  await copyFile(path.join(RENDERER, "agent-brain.css"), path.join(renderer, "agent-brain.css"));
+  for (const name of ["studio-ui.css", "agents.css", "companion-ui.css", "companion-hub.css"]) await copyFile(path.join(RENDERER, name), path.join(renderer, name));
   for (const name of INLINE_SCRIPTS) {
     await copyFile(path.join(RENDERER, name), path.join(renderer, name));
   }
@@ -168,6 +177,22 @@ test("booklet build on fixtures: a rebuild over identical inputs is a no-op", as
     const second = await build({ root });
     assert.equal(second.changed, false, "identical inputs must not rewrite the booklet");
     assert.equal(await readFile(out, "utf8"), html);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("overlapping booklet builds keep complete output and clean up their own temporary files", async () => {
+  const root = await makeFixtureRoot();
+  try {
+    const results = await Promise.allSettled(Array.from({ length: 8 }, () => build({ root })));
+    assert.deepEqual(results.filter((result) => result.status === "rejected"), [], "concurrent writers must not consume each other's temp files");
+    const html = await readFile(path.join(root, "renderer", "booklet.html"), "utf8");
+    const data = bakedSection(html, /<script id="booklet-data" type="application\/json">([\s\S]*?)<\/script>/, "catalog block");
+    assert.deepEqual(JSON.parse(data), FIXTURE_CATALOG);
+    assert.ok(JSON.parse(await readFile(path.join(root, "renderer", "booklet.sources.json"), "utf8")));
+    assert.equal((await build({ root })).changed, false, "the final output is exactly the complete input snapshot");
+    assert.deepEqual((await readdir(path.join(root, "renderer"))).filter((name) => name.endsWith(".tmp")), []);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

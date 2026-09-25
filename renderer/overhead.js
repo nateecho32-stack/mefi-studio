@@ -64,7 +64,7 @@
   }
 
   function project(node, offset) {
-    const scale = 1.5;
+    const scale = 1.5 * Math.min(1, el.width / 760, el.height / 450);
     const cos = Math.cos(state.angle);
     const sin = Math.sin(state.angle);
     const x = (node.x - offset.x) * scale;
@@ -78,14 +78,19 @@
   }
 
   function draw(time) {
-    if (el.canvas.hidden) return;
+    raf = null;
+    if (el.canvas.hidden || el.overlay.hidden || document.hidden) return;
+    const still = window.MefiNav?.noMotion?.() === true;
     const ctx = el.ctx;
     ctx.clearRect(0, 0, el.width, el.height);
-    ctx.fillStyle = "#030304";
+    const visuals = window.MefiNodeVisuals;
+    const P = visuals?.palette() ?? { background: "#071117", surface: "#10232c", accent: "#71cbb7", text: "#e7f5ee", muted: "#abc4c9", live: "#57ff9a", good: "#afdfc2" };
+    const tint = (color, alpha) => visuals?.rgba(color, alpha) ?? color;
+    ctx.fillStyle = P.background;
     ctx.fillRect(0, 0, el.width, el.height);
 
     const active = state.tasks.filter((task) => task.status === "open" || task.status === "active");
-    if (state.overview && active.length && time - state.lastCycle > 4000) {
+    if (!still && state.overview && active.length && time - state.lastCycle > 4000) {
       state.lastCycle = time;
       state.cycleIndex = (state.cycleIndex + 1) % active.length;
     }
@@ -98,15 +103,17 @@
       const a = projected[edge.a];
       const b = projected[edge.b];
       if (!a || !b) continue;
-      ctx.strokeStyle = "rgba(201,168,106,0.2)";
+      ctx.strokeStyle = tint(P.accent, 0.28);
       ctx.lineWidth = 1;
+      const ends = visuals?.endpoints(a.p, b.p, a.node.r * a.p.k * 1.6, b.node.r * b.p.k * 1.6) ?? { a: a.p, b: b.p };
       ctx.beginPath();
-      ctx.moveTo(a.p.x, a.p.y);
-      ctx.lineTo(b.p.x, b.p.y);
+      ctx.moveTo(ends.a.x, ends.a.y);
+      ctx.lineTo(ends.b.x, ends.b.y);
       ctx.stroke();
     }
     for (const { node, p } of projected) {
-      const colour = node.state === "done" ? "rgba(87,255,154,0.85)" : node.state === "active" ? "rgba(201,168,106,0.9)" : "rgba(236,229,216,0.5)";
+      const colour = node.state === "done" ? P.good : node.state === "active" ? P.live : P.muted;
+      if (visuals?.drawNode(ctx, p, Math.max(2, node.r * p.k * 1.6), colour, { style: window.MefiMusic?.graphPreferences?.().nodeStyle ?? "orbs", active: node.state === "active" })) continue;
       ctx.beginPath();
       ctx.arc(p.x, p.y, Math.max(2, node.r * p.k * 1.6), 0, Math.PI * 2);
       ctx.fillStyle = colour;
@@ -117,20 +124,22 @@
     // on top of the last one. Each box now hunts for a free slot: the four
     // sides of its node first, then a widening fan — the connector line keeps
     // the box tied to the node it describes.
-    const BOX_WIDTH = 200;
-    const BOX_HEIGHT = 40;
+    const BOX_WIDTH = Math.min(228, Math.max(120, el.width - 24));
+    const BOX_HEIGHT = 48;
     const placed = [];
+    const nodeRims = projected.map(({ node, p }) => ({ x: p.x, y: p.y, r: Math.max(2, node.r * p.k * 1.6) + 4 }));
     const hits = (left, top) =>
       placed.some(
         (rect) =>
           left - 6 < rect.x + rect.w && left + BOX_WIDTH + 6 > rect.x && top - 6 < rect.y + rect.h && top + BOX_HEIGHT + 6 > rect.y
-      );
+      ) || nodeRims.some(({ x, y, r }) => Math.hypot(x - Math.max(left, Math.min(x, left + BOX_WIDTH)), y - Math.max(top, Math.min(y, top + BOX_HEIGHT))) < r);
     // A title is fitted to the box by its drawn width and marked when shortened;
     // a fixed 30 characters overran the box with wide letters and cut others
     // with no sign. A canvas that measures nothing keeps the old cut.
     const width = (text) => ctx.measureText?.(text)?.width;
     const fitTitle = (text) => {
       const title = String(text ?? "");
+      if (visuals) return visuals.fitText(ctx, title, BOX_WIDTH - 24);
       if (!Number.isFinite(width(title))) return title.slice(0, 30);
       const key = `${ctx.font}|${title}`;
       if (titleFits.has(key)) return titleFits.get(key);
@@ -148,7 +157,7 @@
     const clampTop = (top) => Math.min(el.height - BOX_HEIGHT - 12, Math.max(12, top));
 
     boxes.clear();
-    active.forEach((task, index) => {
+    [...active].sort((a, b) => Number(b.id === (state.hover ?? focusTask?.id)) - Number(a.id === (state.hover ?? focusTask?.id))).forEach((task, index) => {
       const anchor = anchorFor(task);
       const fallbackAngle = (index / Math.max(1, active.length)) * Math.PI * 2;
       const position = anchor
@@ -181,28 +190,30 @@
           }
         }
       }
-      if (!slot) slot = { left: clampLeft(slots[0].left), top: clampTop(slots[0].top) };
+      // Overflow remains reachable in the native task list; never stack
+      // unreadable cards. The focused task receives first choice of slots.
+      if (!slot) return;
       placed.push({ x: slot.left, y: slot.top, w: BOX_WIDTH, h: BOX_HEIGHT });
       const left = slot.left;
       const top = slot.top;
-      ctx.globalAlpha = focused || !focusTask ? 1 : 0.62;
-      ctx.strokeStyle = task.color ?? "#e6c98d";
-      ctx.lineWidth = focused ? 2.4 : 1.4;
-      ctx.shadowColor = focused ? task.color : "transparent";
-      ctx.shadowBlur = focused ? 18 : 0;
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = tint(task.color ?? P.accent, focused ? 0.9 : 0.45);
+      ctx.lineWidth = focused ? 1.8 : 1;
+      ctx.shadowColor = focused ? task.color ?? P.accent : "transparent";
+      ctx.shadowBlur = 0;
       ctx.beginPath();
       ctx.roundRect(left, top, BOX_WIDTH, BOX_HEIGHT, 10);
-      ctx.stroke();
       ctx.shadowBlur = 0;
-      ctx.fillStyle = "rgba(8,8,11,0.82)";
+      ctx.fillStyle = P.surface;
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = task.color ?? "#e6c98d";
-      ctx.font = "600 10.5px system-ui";
+      ctx.fillStyle = task.status === "active" ? P.live : P.muted;
+      ctx.font = "600 11px system-ui";
       ctx.fillText(`${task.status.toUpperCase()}`, left + 10, top + 15);
-      ctx.fillStyle = "#ece5d8";
-      ctx.fillText(fitTitle(task.title), left + 10, top + 31);
-      ctx.strokeStyle = `${task.color ?? "#e6c98d"}66`;
+      ctx.fillStyle = P.text;
+      ctx.font = "600 13px system-ui";
+      ctx.fillText(fitTitle(task.title), left + 12, top + 34);
+      ctx.strokeStyle = tint(task.color ?? P.accent, focused ? 0.65 : 0.32);
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(
@@ -215,7 +226,7 @@
       boxes.set(task.id, { x: left, y: top, w: BOX_WIDTH, h: BOX_HEIGHT });
     });
 
-    if (!window.MefiNav?.noMotion?.()) state.angle += 0.0009;
+    if (!still) state.angle += 0.0009;
     raf = requestAnimationFrame(draw);
   }
 
@@ -229,6 +240,7 @@
   }
 
   function renderLegend() {
+    const focusedTask = document.activeElement?.dataset?.overheadTask;
     el.legend.textContent = "";
     const active = state.tasks.filter((task) => task.status === "open" || task.status === "active");
     if (!active.length) {
@@ -236,26 +248,52 @@
       li.className = "muted";
       li.textContent = "No open tasks — add one in Tasks.";
       el.legend.append(li);
+      if (focusedTask) el.inspectorToggle?.focus?.();
       return;
     }
+    let focusTarget = null, firstButton = null;
     active.forEach((task) => {
       const li = document.createElement("li");
       li.classList.add("task-row");
       li.style.setProperty("--task-color", task.color);
-      li.textContent = `${task.status}: ${task.title}`;
-      li.title = task.prompt ?? "";
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "overhead-task-button";
+      button.dataset.overheadTask = task.id;
+      button.textContent = `${task.status}: ${task.title}`;
+      button.title = task.prompt ?? "";
+      button.setAttribute("aria-label", `Open task: ${task.title} (${task.status})`);
+      button.addEventListener("click", () => openTask(task.id));
+      button.addEventListener("focus", () => { state.hover = task.id; });
+      button.addEventListener("blur", () => { if (state.hover === task.id) state.hover = null; });
+      if (!firstButton) firstButton = button;
+      if (focusedTask === task.id) focusTarget = button;
+      li.append(button);
       el.legend.append(li);
     });
+    if (focusedTask) (focusTarget ?? firstButton)?.focus();
+  }
+
+  function openTask(taskId) {
+    if (!state.tasks.some((task) => task.id === taskId)) return;
+    if (window.MefiNav) window.MefiNav.go("tasks", { taskId });
+    else {
+      window.MefiTasks?.open();
+      window.MefiTasks?.selectTask?.(taskId);
+    }
   }
 
   function resize() {
     const dpr = window.devicePixelRatio || 1;
-    const width = el.canvas.parentElement.clientWidth - 30;
-    const height = 560;
+    el.canvas.style.width = Math.max(120, el.canvas.parentElement.clientWidth - 30) + "px";
+    el.canvas.style.height = "560px";
+    // Compact panes constrain the displayed canvas. Match its bitmap and hit
+    // coordinates to that box so CSS never squashes the graph or its text.
+    const box = el.canvas.getBoundingClientRect();
+    const width = Math.max(120, Math.round(box.width));
+    const height = Math.max(120, Math.round(box.height));
     el.canvas.width = width * dpr;
     el.canvas.height = height * dpr;
-    el.canvas.style.width = width + "px";
-    el.canvas.style.height = height + "px";
     el.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     el.width = width;
     el.height = height;
@@ -294,6 +332,8 @@
       canvas: "overhead-canvas",
       legend: "overhead-legend",
       overviewToggle: "overhead-overview",
+      inspectorToggle: "overhead-inspector-toggle",
+      inspector: "overhead-inspector",
       close: "overhead-close",
       openButton: "overhead-open",
     })) {
@@ -301,6 +341,13 @@
     }
     el.ctx = el.canvas.getContext("2d");
     el.openButton?.addEventListener("click", open);
+    el.inspectorToggle?.addEventListener("click", () => {
+      if (!el.inspector) return;
+      el.inspector.hidden = !el.inspector.hidden;
+      el.inspectorToggle.setAttribute?.("aria-expanded", String(!el.inspector.hidden));
+      el.overlay.classList.toggle?.("overhead-inspector-hidden", el.inspector.hidden);
+      resize();
+    });
     window.mefiStudio?.onTasks?.(() => {
       if (!initialized || el.overlay?.hidden || document.visibilityState !== "visible") return;
       clearTimeout(pollTimer);
@@ -319,7 +366,9 @@
     // A hidden app makes no poll fetches; showing it snaps a fresh poll now
     // instead of waiting out the remaining interval.
     document.addEventListener("visibilitychange", () => {
-      if (document.hidden || !initialized || el.overlay.hidden) return;
+      if (document.hidden) { cancelAnimationFrame(raf); raf = null; return; }
+      if (!initialized || el.overlay.hidden) return;
+      if (raf === null) raf = requestAnimationFrame(draw);
       clearTimeout(pollTimer);
       poll();
     });
@@ -338,14 +387,8 @@
       el.canvas.style.cursor = "default";
     });
     el.canvas.addEventListener("click", () => {
-      const task = state.tasks.find((item) => item.id === state.hover);
-      if (!task) return;
       // Clicking a task box takes you to that task — Tasks replaces this sheet.
-      if (window.MefiNav) window.MefiNav.go("tasks", { taskId: task.id });
-      else {
-        window.MefiTasks?.open();
-        window.MefiTasks?.selectTask?.(task.id);
-      }
+      openTask(state.hover);
     });
     window.addEventListener("resize", () => !el.overlay.hidden && resize());
   }

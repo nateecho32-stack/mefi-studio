@@ -1061,6 +1061,7 @@
       state.map.edges = state.map.edges.filter((item) => item.id !== state.selection.id);
       state.selection = null;
       touch(edge ? "Wire removed. Ctrl Z brings it back." : "");
+      focusEditor();
       return;
     }
     const doomed = pickedNodes();
@@ -1076,7 +1077,7 @@
     state.selection = null;
     state.picked = new Set();
     touch(doomed.length === 1 ? `Removed "${doomed[0].title}" and its wires.` : `Removed ${doomed.length} parts and their wires. Ctrl Z brings them back.`);
-    el.canvasWrap?.focus?.({ preventScroll: true });
+    focusEditor();
   }
 
   function touch(message = "") {
@@ -1522,6 +1523,7 @@
   // typed, parts already here); "find" (Ctrl F) lists only this map's parts.
   function openSearch(at = null, { fromDrop = false, mode = "add" } = {}) {
     if (!state.catalog || (mode === "find" && !state.map?.nodes.length)) return;
+    setMobileView("map");
     state.search = { open: true, query: "", index: 0, at, fromDrop, mode };
     el.search.hidden = false;
     el.searchInput.value = "";
@@ -1871,7 +1873,7 @@
     // What it did in the last day, when the host can say.
     const lately = state.activity?.parts?.[node.type];
     if (lately?.headline) {
-      const recent = section("activity", "Last 24 hours", { count: `${lately.headline.label} ${lately.headline.count}` });
+      const recent = section("activity", "Last 24 hours", { count: `${lately.headline.label} ${lately.headline.count}`, open: false });
       const listing = document.createElement("ul");
       listing.className = "brains-activity";
       for (const line of Array.isArray(lately.lines) ? lately.lines : []) {
@@ -1941,10 +1943,10 @@
 
     // Permissions, and whether this map actually grants them.
     const missing = spec.permissions.filter((key) => !state.map.grants.includes(key));
-    const perms = section("permissions", "Reach it needs", {
+    const perms = section("permissions", "Permissions", {
       count: spec.permissions.length ? `${spec.permissions.length - missing.length}/${spec.permissions.length}` : 0,
       tone: missing.length ? "error" : "",
-      open: true,
+      open: missing.length > 0,
     });
     if (!spec.permissions.length) perms.body.append(note("This part needs no reach at all.", "brains-field-help"));
     else perms.body.append(note("Grants belong to the whole map: ticking one here grants it to every part on this map.", "brains-field-help"));
@@ -1977,13 +1979,13 @@
 
     // What is wired into it, and out of it.
     const wiredCount = state.map.edges.filter((edge) => edge.from.node === node.id || edge.to.node === node.id).length;
-    const wires = section("wires", "Wires", { count: wiredCount });
+    const wires = section("wires", "Connections", { count: wiredCount, open: false });
     for (const port of spec.inputs) wires.body.append(wireRow(node, port, "in"));
     for (const port of spec.outputs) wires.body.append(wireRow(node, port, "out"));
     if (!spec.inputs.length && !spec.outputs.length) wires.body.append(note("This part has no ends to wire.", "brains-field-help"));
     el.inspector.append(wires.wrap);
 
-    const does = section("does", "What it can and cannot do");
+    const does = section("does", "Capabilities & limits", { open: false });
     does.body.append(list("It can", spec.can, "brains-can"), list("It cannot", spec.cannot, "brains-cannot"));
     if (spec.hostNote) does.body.append(note(spec.hostNote, "brains-note quiet"));
     el.inspector.append(does.wrap);
@@ -2249,6 +2251,22 @@
     el.inspector.append(stats);
     el.inspector.append(note("Select a part or a wire to see what it may do. Press Space on the canvas to search the parts, or to jump to one already here."));
 
+    // A drafted map says what the host changed in the model's wiring, until it is saved.
+    const repairs = state.draft?.fixes ?? [];
+    if (repairs.length) {
+      const fixed = section("draft-fixes", "Repaired in the draft", { count: repairs.length });
+      fixed.body.append(note("The model's wiring was checked against what each end carries and takes. These changes were made before you saw it.", "brains-field-help"));
+      const listing = document.createElement("ul");
+      listing.className = "brains-activity";
+      for (const line of repairs) {
+        const item = document.createElement("li");
+        item.textContent = line;
+        listing.append(item);
+      }
+      fixed.body.append(listing);
+      el.inspector.append(fixed.wrap);
+    }
+
     if (state.compiled?.gates) {
       const entries = Object.entries(state.catalog?.gates ?? {});
       const set = entries.filter(([key]) => state.compiled.gates[key] !== null && state.compiled.gates[key] !== undefined).length;
@@ -2488,7 +2506,7 @@
     if (el.bannerText) {
       el.bannerText.textContent = state.draft.local
         ? (empty ? "A new map, not saved yet. It is kept once it has a part." : "A new map, not saved yet.")
-        : `Drafted${state.draft.model ? ` by ${state.draft.model}` : ""}. Nothing is saved yet — check the wiring, then save it as a new map.`;
+        : `Drafted${state.draft.model ? ` by ${state.draft.model}` : ""}${state.draft.fixes?.length ? `, with ${plural(state.draft.fixes.length, "repair")} listed in the inspector` : ""}. Nothing is saved yet — check the wiring, then save it as a new map.`;
     }
     if (el.bannerSave) {
       el.bannerSave.disabled = state.busy || empty;
@@ -2758,6 +2776,17 @@
 
   function saveLayout() {
     writeJson(LAYOUT_KEY, state.layout);
+  }
+
+  function setMobileView(view) {
+    if (el.body) el.body.dataset.mobileView = view;
+    for (const name of ["map", "inspector"]) document.getElementById(`brains-mobile-${name}`)?.setAttribute("aria-pressed", String(name === view));
+    frame(() => renderMinimapView());
+  }
+
+  function focusEditor() {
+    const canvasVisible = el.canvasWrap?.getClientRects?.().length !== 0;
+    (canvasVisible ? el.canvasWrap : document.getElementById("brains-mobile-inspector"))?.focus?.({ preventScroll: true });
   }
 
   function applyLayout() {
@@ -3085,6 +3114,7 @@
   async function draft() {
     const api = bridge();
     if (!api?.brainsDraft || state.busy) return;
+    setMenu(false);
     if (!(await settleChanges("draft a new map"))) return;
     let drafted = null;
     const answer = await ask({
@@ -3117,13 +3147,16 @@
     state.selection = null;
     state.picked = new Set();
     state.pending = null;
-    state.draft = { from, model: drafted.model ?? null };
+    // What the host's repair pass changed, listed in the inspector until saved.
+    const fixes = Array.isArray(drafted.fixes) ? drafted.fixes.filter((line) => typeof line === "string" && line) : [];
+    state.draft = { from, model: drafted.model ?? null, fixes };
     resetHistory();
     // A model's coordinates are a suggestion; parts it piled on top of each
     // other are laid out before anyone has to untangle them by hand.
     const piled = state.map.nodes.some((node) => overlaps(node.x, node.y, nodeHeight(node), node, 0));
     if (piled) layoutPipeline();
-    status(`Drafted${drafted.model ? ` by ${drafted.model}` : ""}${piled ? " and laid out in pipeline order" : ""}. Nothing is saved yet — read it, fix what it got wrong, then Save.`);
+    const repaired = fixes.length ? ` ${plural(fixes.length, "repair")} to its wiring ${fixes.length === 1 ? "is" : "are"} listed in the inspector.` : "";
+    status(`Drafted${drafted.model ? ` by ${drafted.model}` : ""}${piled ? " and laid out in pipeline order" : ""}.${repaired} Nothing is saved yet — read it, fix what it got wrong, then Save.`);
     renderAll();
     fit({ animate: true });
   }
@@ -3176,7 +3209,7 @@
       if (node) { select({ kind: "node", id: node.id }); scrollTo(node.id); }
     }
     startActivity();
-    el.canvasWrap?.focus?.({ preventScroll: true });
+    focusEditor();
   }
 
   function close() {
@@ -3712,7 +3745,7 @@
       if (key === "Escape") {
         stop(event);
         target.blur?.();
-        el.canvasWrap?.focus?.({ preventScroll: true });
+        focusEditor();
       }
       return;
     }
@@ -3802,7 +3835,7 @@
     if (!el.overlay) return;
     loadLayout();
     applyLayout();
-    el.close?.addEventListener("click", close);
+    el.close?.addEventListener("click", () => window.MefiNav?.close ? window.MefiNav.close("brains") : close());
     el.overlay.addEventListener("click", (event) => { if (event.target === el.overlay && pressedOnBackdrop(el.overlay)) close(); });
     el.save?.addEventListener("click", () => void save());
     el.activate?.addEventListener("click", () => void activate());
@@ -3814,6 +3847,10 @@
     el.draft?.addEventListener("click", () => void draft());
     el.emptyDraft?.addEventListener("click", () => void draft());
     el.emptyAdd?.addEventListener("click", () => openSearch());
+    document.getElementById("brains-add-part")?.addEventListener("click", () => openSearch());
+    for (const view of ["map", "inspector"]) document.getElementById(`brains-mobile-${view}`)?.addEventListener("click", () => {
+      setMobileView(view);
+    });
     el.bannerSave?.addEventListener("click", () => void save());
     el.bannerDiscard?.addEventListener("click", () => void discardDraft());
     el.undo?.addEventListener("click", () => stepHistory("undo"));

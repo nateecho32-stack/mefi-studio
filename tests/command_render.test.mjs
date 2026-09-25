@@ -34,7 +34,7 @@ const runFixture = async () => {
     child.stderr.on("data", (chunk) => { output = (output + chunk).slice(-10000); });
     // The fixture's full pass takes ~45s under load; keep the kill bound well
     // clear of a legitimate run (occlusion_probe uses the same 80s convention).
-    const timer = setTimeout(() => child.kill(), 80000);
+    const timer = setTimeout(() => child.kill(), process.env.MEFI_MENU_CAPTURE_DIR ? 120000 : 80000);
     const code = await new Promise((resolve, reject) => { child.once("error", reject); child.once("close", resolve); }).finally(() => clearTimeout(timer));
     // Electron can exit before its error stream flushes. Read its synchronously
     // saved report before asserting the exit code or deleting the fixture.
@@ -47,6 +47,9 @@ const runFixture = async () => {
     assert.deepEqual(report.errors, []);
     assert.deepEqual(report.networkAttempts, []);
     assert.deepEqual(report.processAttempts, []);
+    assert.equal(report.menus.filter(sample => sample.route).length,60,"every primary destination renders at three sizes plus increased scaling");
+    assert.equal(report.menus.filter(sample => sample.category).length,16,"all four Studio settings categories render at three sizes plus increased scaling");
+    assert.equal(report.menus.filter(sample => sample.submenu?.startsWith('sessions:')).length,12,"all Session tools tabs fit at three sizes plus increased scaling");
     assert.ok(report.first.frames >= 4 && report.reentered.frames >= report.stoppedFrames + 3);
     assert.equal(report.exited, true);
     assert.equal(report.homeRailPaints, 0);
@@ -56,12 +59,11 @@ const runFixture = async () => {
     assert.equal(report.motion.completed, true);
     assert.ok(report.motion.samples >= 6 && report.motion.travel > 3 && report.motion.maxFrameStep <= report.motion.travel * 0.4);
     assert.deepEqual(report.grouping, { members: 2, expanded: true, verifyingVisible: true });
-    assert.equal(report.agentModes.homeSaving, true);
     assert.equal(report.agentModes.commandSaving, true);
     assert.equal(report.agentModes.paused, true);
     assert.equal(report.agentModes.helperCount, 1);
-    assert.deepEqual(report.agentModes.patches, [{ mode: "cluster" }, { mode: "swarm" }]);
-    assert.equal(report.agentModes.layouts.length, 4);
+    assert.deepEqual(report.agentModes.patches, [{ mode: "cluster" }]);
+    assert.equal(report.agentModes.layouts.length, 0);
     assert.deepEqual(report.newWork.actions, ["start-work", "pause", "start-work", "pause"]);
     assert.deepEqual(report.newWork.saving, [true, true]);
     assert.equal(report.newWork.layouts.length, 2);

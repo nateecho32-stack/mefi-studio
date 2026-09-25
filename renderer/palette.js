@@ -370,6 +370,11 @@
   }
 
   function open() {
+    // Opening Search twice keeps the query and its original focus return.
+    if (!el.overlay.hidden && el.input.getAttribute("aria-expanded") === "true") {
+      el.input.focus();
+      return;
+    }
     // Remember what the user came from (tool button, dock item, a text field
     // mid-type) so Escape can hand focus back even without MefiNav's layer
     // bookkeeping to do it for us.

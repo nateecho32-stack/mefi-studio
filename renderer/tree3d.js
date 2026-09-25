@@ -940,6 +940,13 @@
     return out;
   }
 
+  // The host's isOpenTodo (scripts/assistant.mjs) twin: completed and cancelled
+  // are both closed, so a dropped step counts toward done and a session whose
+  // work ended that way folds on the host and reads done here.
+  function isClosedTodo(todo) {
+    return todo.status === "completed" || todo.status === "cancelled";
+  }
+
   // `fallback` names the empty state when the store gave no roots: the store is
   // offline, the app runs in a browser, or there simply is nothing recent. The
   // root and the assistant node are built either way, so the assistant stays
@@ -1027,17 +1034,21 @@
           x: node.x + Math.cos(todoAngle) * 46,
           y: node.y + 34 + Math.sin(todoIndex * 1.3) * 8,
           z: node.z + Math.sin(todoAngle) * 46,
-          state: todo.status === "completed" ? "done" : todo.status === "in_progress" ? "active" : "pending",
+          // A cancelled todo is closed: it takes the "done" state every counter
+          // (here and in idle.js) reads; its raw status stays on the node, so a
+          // painter can dim it instead of lighting it green (the rail does).
+          state: isClosedTodo(todo) ? "done" : todo.status === "in_progress" ? "active" : "pending",
           r: 4,
         };
         nodes.push(todoNode);
         edges.push({ a: node, b: todoNode, sessionId: session.id });
       });
-      const done = sessionTodos.filter((todo) => todo.status === "completed").length;
+      const done = sessionTodos.filter(isClosedTodo).length;
       const active = sessionTodos.some((todo) => todo.status === "in_progress");
-      // A stale session keeps a done/active colour its todos earned; with
-      // none to show it takes the dim stale tone.
-      node.state = active ? "active" : sessionTodos.length && done === sessionTodos.length ? "done" : stale ? "stale" : "session";
+      // Stale wins: organize() calls a session stale only while it holds an
+      // in_progress todo untouched for staleAfterHours, so "active" is always
+      // true for it and would paint that rot as live work.
+      node.state = stale ? "stale" : active ? "active" : sessionTodos.length && done === sessionTodos.length ? "done" : "session";
       node.progress = sessionTodos.length ? done / sessionTodos.length : 0;
     });
     if (foldedIds.length) {
@@ -1350,7 +1361,8 @@
       if (node.status === "queued") return COLORS.pending;
       return agentColor(node.role);
     }
-    if (node.state === "stale") return palette?.dim ?? COLORS.stale;
+    // A cancelled todo is closed ("done") but was never finished: dim, not green.
+    if (node.state === "stale" || node.kind === "todo" && node.status === "cancelled") return palette?.dim ?? COLORS.stale;
     if (node.state === "done") return COLORS.done;
     if (node.state === "active") return palette?.bright ?? COLORS.active;
     if (node.state === "session") return node.progress === 1 ? COLORS.done : node.progress ? palette?.bright ?? COLORS.active : palette?.text ?? COLORS.session;
@@ -1478,11 +1490,13 @@
       if (a.depth < 60 || b.depth < 60) continue;
       ctx.globalAlpha = edge.agent ? edge.b.opacity ?? 1 : 1;
       ctx.strokeStyle = edge.sessionId && edge.sessionId === activeSessionId ? COLORS.edgeActive : COLORS.edge;
-      ctx.lineWidth = 1;
+      ctx.lineWidth = edge.sessionId && edge.sessionId === activeSessionId ? 1.35 : 0.9;
+      const ends = window.MefiNodeVisuals?.endpoints(a, b, edge.a.r * a.k, edge.b.r * b.k) ?? { a, b };
+      ctx.setLineDash(edge.agent ? [5, 4] : []);
       ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.stroke();
+      ctx.moveTo(ends.a.x, ends.a.y);
+      ctx.lineTo(ends.b.x, ends.b.y);
+      ctx.stroke(); ctx.setLineDash([]);
     }
     ctx.globalAlpha = 1;
 
@@ -1590,12 +1604,14 @@
       const selected = isHover || node.kind === "session" && node.id === activeSessionId || focused && node.kind === focused.kind && node.id === focused.id;
       const appearance = window.MefiMusic?.graphPreferences?.() ?? {};
       const nodeStyle = appearance.nodeStyle ?? "orbs";
-      if (appearance.extraGlow === true) {
+      if (appearance.extraGlow === true && !window.MefiNodeVisuals) {
         const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius * 2.8);
         glow.addColorStop(0, color + "77"); glow.addColorStop(0.45, color + "33"); glow.addColorStop(1, color + "00");
         ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(p.x, p.y, radius * 2.8, 0, Math.PI * 2); ctx.fill();
       }
-      if (nodeStyle === "minimal") {
+      if (window.MefiNodeVisuals?.drawNode(ctx, p, radius, color, { style: nodeStyle, active: working, selected: Boolean(selected), glyph: isAgent || isAssistant, extraGlow: appearance.extraGlow })) {
+        // All graph canvases use the same finish; glyphs and status remain here.
+      } else if (nodeStyle === "minimal") {
         ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, radius * (working ? 0.65 : 0.48)), 0, Math.PI * 2);
         ctx.fillStyle = color; ctx.globalAlpha = (selected || working ? 0.95 : 0.6) * visibility; ctx.fill(); ctx.globalAlpha = visibility;
         if (selected) { ctx.strokeStyle = "#eef3fa"; ctx.lineWidth = 1.5; ctx.stroke(); }
@@ -1710,7 +1726,7 @@
         // On the Void collection's dark bodies (Singularity's core, Prism's
         // table, Sigil's seal) the glyph takes a light ink and sits inside.
         const premiumInk = nodeStyle === "singularity" || nodeStyle === "prism" || nodeStyle === "sigil" ? derivedColor(color).ink : null;
-        agentGlyph(ctx, node.role, p.x, p.y, radius * (premiumInk ? 0.56 : 0.7), premiumInk ?? glyphInk(color));
+        agentGlyph(ctx, node.role, p.x, p.y, radius * (premiumInk ? 0.56 : 0.7), window.MefiNodeVisuals?.palette().text ?? premiumInk ?? glyphInk(color));
         if (node.status === "running") {
           const phase = noMotion() ? 0 : time / 380;
           ctx.beginPath(); ctx.arc(p.x, p.y, radius + 3.5, phase, phase + Math.PI * 1.3);
@@ -1859,7 +1875,9 @@
   let animationFrame = null;
 
   function railVisible() {
-    return !document.hidden && width > 0 && height > 0 &&
+    // A sheet (Tasks, Plans, Settings pages…) hides the rail with CSS but
+    // leaves it its size, so the flag is checked as well as the box.
+    return !document.hidden && width > 0 && height > 0 && !document.body.dataset?.sheet &&
       !document.body.classList.contains("workspace-active") &&
       !document.body.classList.contains("command-active");
   }
@@ -2248,7 +2266,7 @@
       load().catch(() => {});
     });
     if (typeof MutationObserver !== "undefined") {
-      new MutationObserver(syncAnimation).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+      new MutationObserver(syncAnimation).observe(document.body, { attributes: true, attributeFilter: ["class", "data-sheet"] });
     }
     // The rail animates its width; the canvas bitmap must follow or the tree
     // renders stretched while expanding.

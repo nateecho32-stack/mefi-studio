@@ -80,6 +80,7 @@
 
   function renderFeed() {
     const items = visibleChanges();
+    const focusedId = els.feed.contains(document.activeElement) ? document.activeElement?.dataset.changeId : null;
     updateSummary(items);
     els.feed.textContent = "";
     if (!items.length) {
@@ -114,9 +115,16 @@
       const when = document.createElement("span");
       when.textContent = ago(change.time) + " ago";
       meta.append(tag, plus, minus, when);
-      li.append(file, meta);
-      li.addEventListener("click", () => selectChange(change.id));
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "eyes-change";
+      button.dataset.changeId = change.id;
+      button.setAttribute("aria-pressed", String(change.id === state.changeId));
+      button.append(file, meta);
+      button.addEventListener("click", () => selectChange(change.id));
+      li.append(button);
       els.feed.append(li);
+      if (focusedId === change.id) button.focus();
     }
   }
 
@@ -126,11 +134,13 @@
 
   function selectChange(id) {
     state.changeId = id;
+    document.getElementById("tab-eyes")?.classList.add("eyes-detail-open");
     renderFeed();
     renderInspector();
     const change = findChange(id);
     if (change) setMode("diff");
     renderDiff();
+    if (window.matchMedia?.("(max-width: 760px)").matches) document.getElementById("eyes-back")?.focus();
   }
 
   function renderDiff() {
@@ -339,7 +349,11 @@
   let fallbackLogTimer = null;
   function setMode(mode) {
     state.mode = mode;
-    document.querySelectorAll(".mode-row .chip").forEach((chip) => chip.classList.toggle("on", chip.dataset.mode === mode));
+    document.querySelectorAll(".mode-row .chip").forEach((chip) => {
+      chip.classList.toggle("on", chip.dataset.mode === mode);
+      chip.setAttribute?.("aria-selected", String(chip.dataset.mode === mode));
+      chip.tabIndex = chip.dataset.mode === mode ? 0 : -1;
+    });
     els.modePng.hidden = mode !== "png";
     els.modeDiff.hidden = mode !== "diff";
     els.modeLog.hidden = mode !== "log";
@@ -404,6 +418,32 @@
   }
 
   function wire() {
+    const inspectorToggle = document.getElementById("eyes-inspector-toggle");
+    inspectorToggle?.addEventListener("click", () => {
+      const panel = document.getElementById("eyes-inspector-panel");
+      if (!panel) return;
+      panel.hidden = !panel.hidden;
+      document.getElementById("tab-eyes")?.classList.toggle("eyes-inspector-open", !panel.hidden);
+      inspectorToggle.setAttribute("aria-expanded", String(!panel.hidden));
+      requestAnimationFrame(drawPins);
+    });
+    document.getElementById("eyes-back")?.addEventListener("click", () => {
+      document.getElementById("tab-eyes")?.classList.remove("eyes-detail-open");
+      const selected = Array.from(els.feed.querySelectorAll(".eyes-change")).find((button) => button.dataset.changeId === state.changeId);
+      (selected || document.getElementById("eyes-view-evidence"))?.focus();
+    });
+    document.getElementById("eyes-view-evidence")?.addEventListener("click", () => {
+      document.getElementById("tab-eyes")?.classList.add("eyes-detail-open");
+      document.getElementById("eyes-back")?.focus();
+    });
+    document.querySelectorAll(".mode-row .chip").forEach((chip) => chip.addEventListener("keydown", (event) => {
+      const modes = ["png", "diff", "log"];
+      const index = modes.indexOf(chip.dataset.mode);
+      const target = event.key === "ArrowRight" ? (index + 1) % 3 : event.key === "ArrowLeft" ? (index + 2) % 3 : event.key === "Home" ? 0 : event.key === "End" ? 2 : -1;
+      if (target < 0) return;
+      event.preventDefault(); setMode(modes[target]);
+      document.querySelector(`.mode-row [data-mode="${modes[target]}"]`)?.focus();
+    }));
     els.session.addEventListener("change", () => {
       state.sessionId = els.session.value || null;
       state.changeId = null;
@@ -465,6 +505,8 @@
         x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
         y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)),
       };
+      const inspectorPanel = document.getElementById("eyes-inspector-panel");
+      if (inspectorPanel?.hidden) inspectorToggle?.click();
       renderPinList();
     });
     window.addEventListener("resize", () => requestAnimationFrame(drawPins));

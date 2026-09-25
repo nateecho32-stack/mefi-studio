@@ -17,6 +17,9 @@ function section(start, end) {
 }
 const okReply = () => ({ ok: true, json: async () => ({ model: "reported-model", usage: { prompt_tokens: 20, completion_tokens: 30, total_tokens: 50 }, choices: [{ message: { content: "Planning reply" } }] }) });
 function host(settings, responses = [okReply()], { clis = [], claudeReply = null } = {}) {
+  // These cases exercise an explicit provider order, independent of the
+  // optional subscription-first policy covered by the routing policy suite.
+  settings = { aiSubscriptionFirst: false, ...settings };
   const calls = [], cliCalls = [], observations = [], admitted = [], wakes = [], project = { id: "fixture", path: "/fixture" };
   const installed = new Set(clis);
   const context = vm.createContext({
@@ -28,9 +31,9 @@ function host(settings, responses = [okReply()], { clis = [], claudeReply = null
     jevShadowIntake: (tasks) => { admitted.push(structuredClone(tasks)); return new Promise(() => {}); },
     ensureAssistant: async () => {}, refreshAutopilotQueue: async () => {}, assistantAskForWork: (reason) => wakes.push(reason),
     mutateBoard() { throw new Error("Model suggestions must not create tasks"); },
-    AI_PROVIDERS: ["auto", "zai", "opencode", "zen", "grok", "claude", "codex", "antigravity"],
-    AI_AUTO_PROVIDERS: ["zai", "opencode", "zen", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"],
-    AUTO_PROVIDER_NAMES: { zai: "z.ai GLM", opencode: "OpenCode Go", zen: "OpenCode Zen", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio", custom: "custom endpoint" },
+    AI_PROVIDERS: ["auto", "zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "antigravity"],
+    AI_AUTO_PROVIDERS: ["zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"],
+    AUTO_PROVIDER_NAMES: { zai: "z.ai GLM", opencode: "OpenCode Go", zen: "OpenCode Zen", openrouter: "OpenRouter", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio", custom: "custom endpoint" },
     grokCliAvailable: async () => installed.has("grok"),
     claudeCliAvailable: async () => installed.has("claude"),
     codexCliAvailable: async () => installed.has("codex"),
@@ -40,6 +43,7 @@ function host(settings, responses = [okReply()], { clis = [], claudeReply = null
     ASSISTANT_MODEL: "routine-go", ZAI_MODEL_ROUTINE: "routine-zai", ZAI_MODEL_HEAVY: "heavy-zai",
     ZEN_ENDPOINT: "https://zen.invalid/v1/chat/completions", ZEN_RESPONSES_ENDPOINT: "https://zen.invalid/v1/responses",
     ZEN_MODEL_ROUTINE: "routine-zen", ZEN_MODEL_HEAVY: "heavy-zen",
+    OPENROUTER_ENDPOINT: "https://openrouter.invalid/api/v1/chat/completions", OPENROUTER_MODEL: "openrouter/free",
     claudeCompletion: async (system, user, model) => { cliCalls.push({ system, user, model }); return claudeReply ?? { ok: true, text: "Planned on Claude Code", model: model || "claude-default" }; },
     readSettings: async () => structuredClone(settings), decryptKey: (value, key) => value[key] ? `fixture-${key}` : null,
     applyModelRouting: async (route) => route,
@@ -87,6 +91,18 @@ test("planning uses each explicit model override without changing the provider",
   assert.deepEqual(h.calls.map((call) => call.body.model), ["custom-routine", "custom-heavy"]);
   assert.ok(h.calls.every((call) => call.endpoint === "https://opencode.invalid"));
   assert.ok(h.calls.every((call) => call.options.headers["x-opencode-session"] === "fixture-session"));
+});
+
+test("OpenRouter planning uses its own key, free router default and saved model slug", async () => {
+  const h = host({ aiProvider: "openrouter", openrouterApiKeyEncrypted: "fixture", aiModelsByProvider: { openrouter: { heavy: "qwen/qwen3.8-27b:free" } } });
+  await h.complete("questions");
+  await h.complete("spec");
+  assert.deepEqual(h.calls.map((call) => call.endpoint), ["https://openrouter.invalid/api/v1/chat/completions", "https://openrouter.invalid/api/v1/chat/completions"]);
+  assert.deepEqual(h.calls.map((call) => call.body.model), ["openrouter/free", "qwen/qwen3.8-27b:free"]);
+  assert.ok(h.calls.every((call) => call.body.usage?.include === true));
+  assert.ok(h.calls.every((call) => call.options.headers.authorization === "Bearer fixture-openrouterApiKeyEncrypted"));
+  assert.ok(h.calls.every((call) => !call.options.headers["x-opencode-session"]));
+  assert.deepEqual(h.observations.map((row) => row.provider), ["openrouter", "openrouter"]);
 });
 
 test("planning with Grok selected uses saved HTTP credentials and never invokes a CLI", async () => {

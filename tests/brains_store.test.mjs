@@ -410,6 +410,84 @@ test("a store that cannot be read right now is not seeded over", async () => {
   assert.ok(state.maps.some((map) => map.id === "mine"));
 });
 
+// Build with AI through the host: replies are handed out in order, and each
+// call's prompt is kept so a test can read what the model was told.
+function draftHost(replies) {
+  const calls = [];
+  const h = storeHost({
+    env: {
+      DATA_ONLY_CLIS: new Set(["claude"]),
+      resolveAiRoute: async () => ({ ok: true, provider: "zen" }),
+      httpAssistantCall: async (_route, system, user, maxTokens, options) => {
+        calls.push({ system, user, maxTokens, options });
+        const reply = replies[calls.length - 1];
+        return reply === undefined ? { ok: false, error: "no more replies" } : { ok: true, text: typeof reply === "string" ? reply : JSON.stringify(reply), model: `model-${calls.length}` };
+      },
+    },
+  });
+  return { ...h, calls };
+}
+const draftNode = (id, type, x = 0, y = 0) => ({ id, type, x, y });
+const draftWire = (from, fromPort, to, toPort) => ({ from: { node: from, port: fromPort }, to: { node: to, port: toPort } });
+
+test("a drafted map comes back with its wiring repaired and every repair listed, in one call", async () => {
+  const h = draftHost([`Here it is:\n${JSON.stringify({
+    name: "Ask first",
+    nodes: [draftNode("you", "user.request"), draftNode("clarity", "check.model", 260), draftNode("approve", "check.user", 520, 160), draftNode("scope", "analyze.scope", 780)],
+    edges: [draftWire("you", "request", "clarity", "in"), draftWire("clarity", "clear", "scope", "in"), draftWire("clarity", "unclear", "approve", "in"), draftWire("approve", "approved", "scope", "in")],
+  })}`]);
+  const result = await h.env.brainsDraft({ text: "Ask me before anything is planned" });
+  assert.equal(result.ok, true, result.error);
+  assert.equal(h.calls.length, 1, "a draft the repairs settle costs one call");
+  assert.match(h.calls[0].system, /only where the out port carries a kind the in port takes/);
+  assert.match(h.calls[0].user, /out: clear <request>, unclear <rejected>/, "the model is told what each end carries");
+  assert.match(h.calls[0].user, /Build a pipeline for this request:\nAsk me before anything is planned$/);
+  assert.equal(result.compiled.problems.filter((item) => item.level === "error").length, 0);
+  assert.equal(result.map.id, "map_abcd");
+  assert.equal(result.map.builtIn, false);
+  assert.deepEqual(plain(result.map.grants).sort(), brains.requiredGrants(result.map).sort());
+  assert.ok(plain(result.fixes).some((line) => line.startsWith("Removed the wire from \"A model checks it\" · Needs work")));
+  assert.equal(result.redrawn, false);
+  assert.equal(result.model, "model-1");
+  assert.ok(h.logs.some((row) => row.kind === "brains" && /drafted "Ask first" · 4 parts, 2 repairs, 0 errors left/.test(row.text)));
+  assert.equal(h.disk.size, 0, "a draft is not saved until the owner saves it");
+});
+
+test("errors the repairs cannot settle go back to the model once, in the validator's words", async () => {
+  const lonely = { name: "Jev only", nodes: [draftNode("you", "user.request"), draftNode("jev", "jev.classify", 260)], edges: [] };
+  const fixed = {
+    name: "Jev with a question",
+    nodes: [draftNode("you", "user.request"), draftNode("scope", "analyze.scope", 260), draftNode("setup", "assistant.setup", 520), draftNode("jev", "jev.classify", 780)],
+    edges: [draftWire("you", "request", "scope", "in"), draftWire("scope", "direct", "setup", "in"), draftWire("setup", "question", "jev", "in")],
+  };
+  const h = draftHost([lonely, fixed]);
+  const result = await h.env.brainsDraft({ text: "Only Jev" });
+  assert.equal(result.ok, true);
+  assert.equal(h.calls.length, 2);
+  assert.match(h.calls[1].user, /Your map still has these errors:\n- "Jev" has nothing wired into Jev question\./);
+  assert.match(h.calls[1].user, /Build a pipeline for this request:\nOnly Jev\n/, "the second pass still carries the catalog and the request");
+  assert.equal(result.redrawn, true);
+  assert.equal(result.model, "model-2");
+  assert.equal(result.map.name, "Jev with a question");
+  assert.equal(result.compiled.problems.filter((item) => item.level === "error").length, 0);
+  assert.ok(plain(result.fixes).some((line) => /^Sent 1 error the repairs could not settle back to the model/.test(line)));
+
+  // A second pass that is no better leaves the first draft, errors drawn on it.
+  const stuck = draftHost([lonely, lonely]);
+  const kept = await stuck.env.brainsDraft({ text: "Only Jev" });
+  assert.equal(kept.ok, true);
+  assert.equal(kept.redrawn, false);
+  assert.equal(kept.model, "model-1");
+  assert.ok(kept.compiled.problems.some((item) => item.code === "missing-input"));
+
+  // Two replies that are not maps are an error, not an empty map.
+  const prose = draftHost(["I would suggest a pipeline with a check.", "Still prose."]);
+  const refused = await prose.env.brainsDraft({ text: "Anything" });
+  assert.equal(refused.ok, false);
+  assert.match(refused.error, /was not a map/);
+  assert.match(prose.calls[1].user, /Your reply was not a map in the format asked for/);
+});
+
 test("the activity read gives the map's parts their last day, from a bounded ledger tail", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "brains-activity-"));
   try {

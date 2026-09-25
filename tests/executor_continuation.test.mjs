@@ -11,6 +11,7 @@ import backlog from "../scripts/backlog.cjs";
 import taskHandoffs from "../scripts/task-handoffs.cjs";
 import taskDelegation from "../scripts/task-delegation.cjs";
 import executorResume from "../scripts/executor-resume.cjs";
+import executorActivity from "../scripts/executor-activity.cjs";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
 const section = (start, end) => {
@@ -47,6 +48,57 @@ function verificationHost({ tasks = [], requests = [], unavailable = [], changes
   return { env, board: () => board, notes };
 }
 
+// The foreman, the post-verification kick and backlogControl "run" can all
+// ask for housekeeping at once. Each pass loads its history module first, so
+// the loads count the passes.
+test("overlapping housekeeping calls share one pass and buy exactly one re-run", async () => {
+  const { env } = verificationHost({ tasks: [{ id: "open", title: "Open task", status: "open" }] });
+  let passes = 0;
+  env.loadModule = async () => { passes += 1; return history; };
+  await Promise.all([env.autopilotHousekeeping(), env.autopilotHousekeeping(), env.autopilotHousekeeping()]);
+  assert.equal(passes, 2, "the first call's pass, then one re-run for everything that asked during it");
+  await env.autopilotHousekeeping();
+  await env.autopilotHousekeeping();
+  assert.equal(passes, 4, "calls that do not overlap each get their own pass");
+});
+
+test("a failed housekeeping pass rejects its joined callers and does not wedge the next call", async () => {
+  const { env } = verificationHost();
+  let passes = 0;
+  env.loadModule = async () => {
+    passes += 1;
+    if (passes === 1) throw new Error("fixture module load failed");
+    return history;
+  };
+  const results = await Promise.allSettled([env.autopilotHousekeeping(), env.autopilotHousekeeping()]);
+  assert.deepEqual(results.map((result) => result.status), ["rejected", "rejected"]);
+  assert.equal(passes, 1, "a failed pass is not re-run behind its callers' backs");
+  await env.autopilotHousekeeping();
+  assert.equal(passes, 2, "the next call starts a fresh pass");
+});
+
+test("a housekeeping call for another project waits for the running pass instead of joining it", async () => {
+  const { env } = verificationHost();
+  let project = "first";
+  env.projects = { current: () => ({ id: project }) };
+  const gates = [];
+  let passes = 0;
+  env.loadModule = async () => { passes += 1; await new Promise((resolve) => gates.push(resolve)); return history; };
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+  const first = env.autopilotHousekeeping();
+  project = "second";
+  const second = env.autopilotHousekeeping();
+  await flush();
+  assert.equal(passes, 1, "nothing for the second project runs under the first project's pass");
+  gates[0]();
+  const firstEnded = await Promise.race([first.then(() => true), flush().then(() => false)]);
+  assert.equal(firstEnded, true, "the first project's flight ends after its own pass: no re-run was bought for it");
+  await flush();
+  assert.equal(passes, 2, "then the second project gets a pass of its own");
+  gates[1]();
+  await second;
+});
+
 test("each ordinary foreman pass verifies prerequisites before dispatching the next task", async () => {
   const first = { id: "first", title: "First task", status: "awaiting_verification", lastAttempt: { startedAt: 1, at: 2, code: 0, sessionId: "first-session" } };
   const second = { id: "second", title: "Next task", status: "open", dependsOn: ["first"] };
@@ -73,6 +125,8 @@ test("each ordinary foreman pass verifies prerequisites before dispatching the n
   assert.equal(result.intel.handedOut, 1);
 });
 
+// Legacy "verifying" inbox rows (direct request execution is retired) are
+// moved onto the board by the same pass and settle as ordinary tasks.
 test("one unavailable session leaves its verification budget intact while other work settles", async () => {
   const attempt = (sessionId) => ({ startedAt: 1, at: 2, code: 0, sessionId, runId: sessionId });
   const { env, board, notes } = verificationHost({
@@ -88,13 +142,22 @@ test("one unavailable session leaves its verification budget intact while other 
   });
   await env.autopilotHousekeeping();
   const data = board();
-  assert.equal(data.tasks[0].status, "awaiting_verification");
-  assert.equal(data.tasks[0].verifyAttempts, 2);
-  assert.equal(data.tasks[1].status, "done");
-  assert.equal(data.requests.length, 1);
-  assert.equal(data.requests[0].verifyAttempts, 1);
-  assert.ok(data.tasks.some((task) => task.title === "Verified request" && task.status === "done"));
+  const byTitle = (title) => data.tasks.find((task) => task.title === title);
+  assert.equal(byTitle("Waiting on evidence").status, "awaiting_verification");
+  assert.equal(byTitle("Waiting on evidence").verifyAttempts, 2);
+  assert.equal(byTitle("Evidenced work").status, "done");
+  // Deliberately changed: the move is two-phase (the file store writes the
+  // inbox before the tasks), so the rows stay until a pass sees their tasks.
+  assert.equal(data.requests.length, 2, "both legacy rows stay until their tasks are saved");
+  assert.equal(byTitle("Request waiting on evidence").status, "awaiting_verification", "an unavailable store spends no budget on the migrated card either");
+  assert.equal(byTitle("Request waiting on evidence").verifyAttempts, 1);
+  assert.equal(byTitle("Verified request").status, "done");
   assert.equal(notes.filter((line) => line.includes("verification waiting")).length, 2);
+  assert.equal(notes.filter((line) => /legacy request .* was verifying; moved to the board/.test(line)).length, 2, "one line per migrated row");
+  await env.autopilotHousekeeping();
+  assert.equal(board().requests.length, 0, "both legacy rows left the inbox once their tasks were on the board");
+  assert.equal(board().tasks.length, 4, "no task is added twice");
+  assert.equal(board().tasks.find((task) => task.title === "Verified request").status, "done");
 });
 
 test("malformed review rows recover through the bounded retry gate instead of waiting forever", async () => {
@@ -113,17 +176,43 @@ test("malformed review rows recover through the bounded retry gate instead of wa
   assert.equal(board().tasks[2].status, "awaiting_verification", "fresh evidence retains the flush dwell");
 });
 
-test("a direct request cannot verify while its handed-on obligations remain open", async () => {
+test("a legacy verifying request cannot verify while its handed-on obligations remain open", async () => {
   const { env, board } = verificationHost({ requests: [{
     title: "Partially implemented request", at: 5, status: "verifying", remaining: ["Finish the requested integration"],
     lastAttempt: { startedAt: 1, at: 2, code: 0, sessionId: "partial-session", runId: "partial-run", result: { parts: { remaining: "none" } } },
   }] });
   await env.autopilotHousekeeping();
-  assert.equal(board().requests.length, 1, "a partial request stays on the board for retry or review");
-  assert.equal(board().requests[0].verifyAttempts, 1);
-  assert.equal(board().requests[0].nextRunAt, NOW + 60000);
-  assert.deepEqual(board().requests[0].remaining, ["Finish the requested integration"]);
-  assert.equal(board().tasks.length, 0, "no durable Done entry is invented for unfinished work");
+  assert.equal(board().tasks.length, 1);
+  await env.autopilotHousekeeping();
+  assert.equal(board().requests.length, 0, "the row moved onto the board (it leaves on the pass after its task is saved)");
+  assert.equal(board().tasks.length, 1);
+  const task = board().tasks[0];
+  assert.equal(task.status, "open", "a partial attempt goes back for retry or review, as any task's does");
+  assert.equal(task.verifyAttempts, 1);
+  assert.equal(task.nextRunAt, NOW + 60000);
+  assert.deepEqual(task.remaining, ["Finish the requested integration"]);
+  assert.equal(task.verification.state, "unverified", "no Done is invented for unfinished work");
+});
+
+test("a legacy verifying coordinator's delegated children name its migrated task on the board", async () => {
+  const scope = "b".repeat(64);
+  const ids = ["task_delegate_00000000000000000000000a", "task_delegate_00000000000000000000000b"];
+  const child = (id) => ({ id, title: `Slice ${id.slice(-1)}`, status: "done", doneAt: 3, parentTaskId: null, fromRun: "run-c",
+    delegatedFrom: { parentTaskId: null, parentRequestKey: "request:c", scope } });
+  const { env, board, notes } = verificationHost({ tasks: [child(ids[0]), child(ids[1])], requests: [{
+    title: "Shared coordinator", at: 5, status: "verifying", delegation: { version: 1, childTaskIds: ids, scope, fromRun: "run-c", admissions: [] },
+    lastAttempt: { startedAt: 1, at: 2, code: 0, sessionId: "coord-session", runId: "run-coord" },
+  }] });
+  await env.autopilotHousekeeping();
+  const coordinator = board().tasks.find((task) => task.title === "Shared coordinator");
+  assert.ok(coordinator, "the coordinator moved onto the board");
+  for (const id of ids) {
+    const row = board().tasks.find((task) => task.id === id);
+    assert.equal(row.parentTaskId, coordinator.id, id);
+    assert.equal(row.delegatedFrom.parentTaskId, coordinator.id, id);
+  }
+  assert.equal(board().tasks.length, 3, "no child is duplicated");
+  assert.ok(notes.some((line) => /its 2 delegated tasks now name it/.test(line)));
 });
 
 test("completion reports distinguish no remaining work from real obligations", () => {
@@ -287,28 +376,70 @@ test("a queued verification run is not yet evidence", async () => {
   assert.equal(task.verifyAttempts, 1);
 });
 
-test("a verified request's durable completion record carries the overseer run's checks", async () => {
-  const { env, board } = verificationHost({ requests: [{
-    title: "Overseen request", at: 5, status: "verifying",
-    lastAttempt: { startedAt: 1, at: 2, code: 0, sessionId: "request-session", runId: "run_9" },
-    verificationRun: { key: "verification:run_9:attempt", state: "passed", at: NOW - 100, results: [{ command: "npm run check", exitCode: 0, tail: "ok" }] },
+test("an unavailable local check blocks automatic completion even when the worker changed files", async () => {
+  const { env, board } = verificationHost({ tasks: [{
+    id: "fresh-project", title: "New project", status: "awaiting_verification",
+    lastAttempt: { startedAt: 1, at: 2, code: 0, sessionId: "project-session", runId: "run_fresh" },
+    verificationRun: { key: "verification:fresh-project:run_fresh", state: "failed", at: NOW - 100,
+      results: [{ command: "Project verification", unavailable: true, ok: false, exitCode: null, cwd: "C:/fresh-project", tail: "No supported check found" }] },
   }] });
   await env.autopilotHousekeeping();
-  assert.equal(board().requests.length, 0, "the evidenced inbox row is released");
-  const completed = board().tasks.find((task) => task.completedFrom === "request");
-  assert.equal(completed?.status, "done");
-  assert.equal(completed.verification.evidenceKind, "runner-observed-checks");
-  assert.deepEqual(completed.verification.checks, { passed: 1, failed: 0, pending: 0 });
+  const task = board().tasks[0];
+  assert.notEqual(task.status, "done");
+  assert.equal(task.verification.reason, "no project-local verification check is available");
+});
+
+test("a migrated verifying request verifies to done through the ordinary task verification, with the overseer run's checks", async () => {
+  const { env, board, notes } = verificationHost({ requests: [{
+    title: "Overseen request", at: 5, status: "verifying", runId: "run_9", lease: { pid: 7, at: 2 },
+    lastAttempt: { startedAt: 1, at: 2, code: 0, sessionId: "request-session", runId: "run_9" },
+    verificationRun: { key: "verification:request:abc:run_9", state: "passed", at: NOW - 100, results: [{ command: "npm run check", exitCode: 0, tail: "ok" }] },
+  }] });
+  await env.autopilotHousekeeping();
+  assert.equal(board().requests.length, 1, "the inbox row stays until a pass sees its task saved");
+  await env.autopilotHousekeeping();
+  assert.equal(board().requests.length, 0, "the inbox row is released");
+  assert.equal(board().tasks.length, 1);
+  const done = board().tasks[0];
+  assert.match(done.id, /^task_/);
+  assert.equal(done.status, "done");
+  assert.equal(done.verification.state, "verified");
+  assert.equal(done.verification.checks.passed, 1, "the overseer's run is this attempt's observed check");
+  assert.equal(done.verification.checks.failed, 0);
+  assert.equal(done.runId, undefined, "verification releases the finished run like any task's");
+  assert.equal(done.lastAttempt.runId, "run_9");
+  assert.deepEqual(Array.from(done.logs, (row) => row.text.split(" — ")[0]), ["moved from the request inbox to the board", "verified"]);
+  assert.ok(notes.some((line) => /legacy request "Overseen request" was verifying; moved to the board/.test(line)));
+  assert.ok(notes.some((line) => /verified "Overseen request"/.test(line)));
+});
+
+test("a legacy running request with no live worker goes back to the inbox; one a live run holds stays", async () => {
+  const running = (title, runId) => ({ title, prompt: `${title} brief`, at: 5, source: "chat", status: "running", runId, runningAt: 3, lease: { pid: 7, at: 3 },
+    runProgress: { version: 1, runId, pending: false, sessionId: `${runId}-session`, outputTail: ["half way"] } });
+  const { env, board, notes } = verificationHost({ requests: [running("Lost direct run", "run_lost"), running("Held direct run", "run_live")] });
+  env.autopilot.jobs.push({ id: "run_live" });
+  await env.autopilotHousekeeping();
+  const [lost, held] = board().requests;
+  for (const gone of ["status", "runId", "lease", "runningAt"]) assert.equal(lost[gone], undefined, gone);
+  assert.equal(lost.runProgress.sessionId, "run_lost-session");
+  assert.equal(lost.runProgress.pending, false, "promotion can take it");
+  assert.equal(lost.interruptedAttempt.sessionId, "run_lost-session");
+  assert.equal(held.status, "running");
+  assert.equal(held.runId, "run_live");
+  assert.equal(board().tasks.length, 0, "promotion, not housekeeping, puts it on the board");
+  assert.deepEqual(notes.filter((line) => /legacy request/.test(line)), ["[autopilot] legacy request \"Lost direct run\" was running (run_lost) with no live worker; back in the inbox for promotion"]);
 });
 
 test("live worker status excludes finished entries and never exposes an invalid progress fraction", () => {
   const stopping = { since: 1000, reason: "time budget", error: "access denied", retryAt: 16000 };
   const env = vm.createContext({
-    EXECUTOR_PARALLEL_CAP: 3, autopilot: { jobs: [
-      { title: "Still running", taskId: "current", progress: .3, pid: 123, stopping },
+    EXECUTOR_PARALLEL_CAP: 3, executorActivity, autopilot: { jobs: [
+      { title: "Still running", taskId: "current", progress: .3, pid: 123, stopping,
+        child: {}, routeLabel: "Codex CLI", activity: { text: "Checking collisions", at: 2000 }, lastOutputAt: 2000,
+        todos: [{ status: "in_progress", content: "Test wall collisions" }], todosUpdatedAt: 1500 },
       { title: "Finished and saving", finished: true, progress: 1 },
       { title: "Unknown progress", progress: NaN },
-      { title: "Out of bounds", progress: 4 },
+      { title: "Out of bounds", progress: 4, child: {}, sawDone: true },
     ] }, foremanStatus: () => ({ status: "done" }),
   });
   vm.runInContext(section("function autopilotStatus()", "function emitAutopilot()"), env);
@@ -316,10 +447,18 @@ test("live worker status excludes finished entries and never exposes an invalid 
   assert.equal(status.running.length, 3);
   assert.equal(status.running[0].progress, .3);
   assert.equal(status.running[0].pid, undefined);
+  assert.equal(status.running[0].phase, "building");
+  assert.equal(status.running[0].route, "Codex CLI");
+  assert.equal(status.running[0].activity, "Checking collisions");
+  assert.equal(status.running[0].lastOutputAt, 2000);
+  assert.equal(status.running[0].currentStep, "Test wall collisions");
+  assert.equal(status.running[0].stepUpdatedAt, 1500);
   assert.deepEqual({ ...status.running[0].stopping }, stopping);
   assert.notEqual(status.running[0].stopping, stopping, "status cannot mutate the recovery controller");
   assert.equal(status.running[1].progress, undefined);
+  assert.equal(status.running[1].phase, "preparing");
   assert.equal(status.running[2].progress, 1);
+  assert.equal(status.running[2].phase, "finishing");
 });
 
 // Verification used to wait for the next autopilot tick (minutes) whenever a
@@ -396,7 +535,8 @@ test("evidence that stays unreadable past its bound parks the card for the owner
     unavailable: ["gone"],
   });
   await env.autopilotHousekeeping();
-  const [stuck, recent] = board().tasks;
+  const byId = (id) => board().tasks.find((task) => task.id === id);
+  const stuck = byId("stuck"), recent = byId("recent");
   assert.equal(stuck.status, "open");
   assert.equal(stuck.verification.state, "failed");
   assert.match(stuck.verification.reason, /could not be read for 2 hours .*fixture evidence store unavailable.*confirm it yourself/);
@@ -404,9 +544,12 @@ test("evidence that stays unreadable past its bound parks the card for the owner
   assert.equal(backlog.workState(stuck, NOW).stage, "blocked");
   assert.equal(recent.status, "awaiting_verification", "a short outage still waits without spending anything");
   assert.equal(recent.verifyAttempts, undefined);
-  assert.equal(board().requests[0].status, undefined, "the request is released from verifying");
-  assert.equal(board().requests[0].nextRunAt, undefined);
-  assert.match(board().requests[0].lastRunError, /could not be read/);
+  // A legacy "verifying" inbox row moves onto the board as a task with the
+  // same attempt and settles by the same rule (the row leaves on a later pass).
+  const moved = board().tasks.find((task) => task.title === "Request evidence gone");
+  assert.equal(moved?.status, "open", "the request's evidence gap parks its task for the owner");
+  assert.match(moved.verification.reason, /could not be read/);
+  assert.equal(moved.nextRunAt, undefined);
 });
 
 // A project with no package.json has its `npm run check` moved to the Studio

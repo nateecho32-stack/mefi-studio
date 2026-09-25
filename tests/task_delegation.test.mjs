@@ -173,6 +173,22 @@ test("delegated children retain an explicit parent priority without inventing a 
   }
 });
 
+test("a card the thinker pinned splits into slices that stay the thinker's, not the owner's", () => {
+  const { board, parent, options } = fixture(); Object.assign(parent, { pin: true, pinAt: 42, thinkerPin: 42 });
+  admit(board, options);
+  const slices = board.tasks.filter((task) => task.delegatedFrom);
+  assert.ok(slices.length >= 2);
+  for (const child of slices) assert.deepEqual([child.pin, child.pinAt, child.thinkerPin], [true, 42, 42]);
+  // Recovered from the parent's saved admission, a slice keeps the mark too.
+  board.tasks = board.tasks.filter((task) => !task.delegatedFrom);
+  reconcile(board, { now: 500 });
+  for (const child of board.tasks.filter((task) => task.delegatedFrom)) assert.equal(child.thinkerPin, 42);
+  // The owner's own pin (the mark gone, or a newer pinAt) is the owner's.
+  const owned = fixture(); Object.assign(owned.parent, { pin: true, pinAt: 43, thinkerPin: 42 });
+  admit(owned.board, owned.options);
+  for (const child of owned.board.tasks.filter((task) => task.delegatedFrom)) assert.equal(child.thinkerPin, undefined);
+});
+
 test("recovery restores a partially saved request family's exact child scope once", () => {
   const { board, parent, options } = fixture("request"); admit(board, options);
   const expected = structuredClone(board.tasks);
@@ -247,4 +263,36 @@ test("integration awaiting verification waits again if a child is reopened or mi
   board.tasks[0].status = "open";
   assert.equal(workState(parent, 500, { tasks: board.tasks }).stage, "waiting");
   assert.equal(workState(parent, 500, { tasks: board.tasks.slice(1) }).stage, "blocked");
+});
+
+test("nested delegation is the owner's switch and stops at the depth cap", () => {
+  const slice = { prompt: "Build the parser part", parentTaskId: "parent", fromRun: "run-parent", depth: 1, delegatedFrom: { parentTaskId: "parent", scope: "x" } };
+  // Off by default: exactly the pre-0.4.0 rule.
+  assert.equal(canPlan(slice), false);
+  assert.equal(canPlan(slice, { nest: true, maxDepth: 3 }), true);
+  // Never at the cap, and never a hand-off, a follow-up or a card already split.
+  assert.equal(canPlan({ ...slice, depth: 2 }, { nest: true, maxDepth: 3 }), false);
+  assert.equal(canPlan({ ...slice, handoffId: "h1" }, { nest: true, maxDepth: 3 }), false);
+  assert.equal(canPlan({ ...slice, delegatedFrom: null }, { nest: true, maxDepth: 3 }), false);
+  assert.equal(canPlan({ ...slice, delegation: {} }, { nest: true, maxDepth: 3 }), false);
+  assert.equal(canPlan({ ...slice, runProgress: { pending: true } }, { nest: true, maxDepth: 3 }), false);
+  // An original task is unaffected by the switch.
+  assert.equal(canPlan({ prompt: "Original" }, { nest: true }), true);
+});
+
+test("a nested slice admits its own children one level deeper", () => {
+  const { board, parent, options } = fixture();
+  Object.assign(parent, { parentTaskId: "grand", fromRun: "run-grand", depth: 1, delegatedFrom: { parentTaskId: "grand", scope: "s" } });
+  const scope = buildScope(parent);
+  parent.buildApproval = { version: 1, scope };
+  const ref = structuredClone(parent);
+  assert.equal(admit(board, { ...options, ref, scope }).admitted, false);
+  const nested = admit(board, { ...options, ref, scope, nest: true, maxDepth: 3 });
+  assert.equal(nested.admitted, true);
+  const children = board.tasks.filter((task) => nested.childTaskIds.includes(task.id));
+  assert.ok(children.length >= 2);
+  for (const child of children) {
+    assert.equal(child.depth, 2);
+    assert.equal(canPlan(child, { nest: true, maxDepth: 3 }), false);
+  }
 });

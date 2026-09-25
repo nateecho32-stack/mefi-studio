@@ -1,8 +1,11 @@
 // Style & sound: Studio's color themes, node styles and layouts, the members'
 // Void collection (its own premium store, gated by MefiCommunity), the
-// local-file player and the ad-free radio decks. Streaming stays inside
-// Spotify's official embed; its cross-origin playback state is deliberately
-// not guessed.
+// local-file player, the ad-free radio decks and the Links player. A pasted
+// link plays in its service's official embed (YouTube, Spotify, SoundCloud,
+// Vimeo) or, for a plain audio or video file such as a Discord attachment, in
+// a <video> element of its own; an embed's cross-origin playback state is
+// deliberately not guessed. Links no embed can play (a Spotify Jam, Twitch,
+// any other page) are handed to their own app or the browser.
 (() => {
   "use strict";
   const STORAGE_KEY = "mefiStudio.music.v1";
@@ -122,43 +125,132 @@
   function resolvePalette(theme, customColors) {
     const custom = safeCustomColors(customColors);
     const base = theme === "custom" ? { accent: custom.accent, bright: mixColor(custom.accent, "#FFFFFF", .3), bg: custom.background, panel: custom.surface, text: custom.text } : THEMES[theme] || THEMES[DEFAULT_THEME];
-    const text = readableColor(base.text || "#ece5d8", base.panel);
-    const bright = readableColor(base.bright, base.panel, 3);
-    const muted = readableColor(base.muted || mixColor(text, base.panel, .32), base.panel);
-    const dim = readableColor(mixColor(text, base.panel, .5), base.panel, 3);
+    // Leave contrast headroom for the translucent panels and their subtle sheen.
+    const text = readableColor(base.text || "#ece5d8", base.panel, 5.5);
+    const bright = readableColor(base.bright, base.panel, 4.5);
+    const muted = readableColor(base.muted || mixColor(text, base.panel, .32), base.panel, 5.5);
+    const dim = readableColor(mixColor(text, base.panel, .5), base.panel, 4.5);
     const border = readableColor(mixColor(base.accent, base.panel, .6), base.panel, 3);
     const canvasText = readableColor(base.text || "#ece5d8", base.bg);
-    return { accent: base.accent, bright, accent2: base.accent2 || bright, background: base.bg, surface: base.panel, text, muted, dim, border,
+    // Custom background and surface colours may have opposite tones. Reading
+    // areas use the safe base; the canvas keeps the exact chosen background.
+    const readingBackground = [text, muted, bright].every((ink) => contrast(ink, base.bg) >= 4.5) ? base.bg : base.panel;
+    const onAccent = contrast("#FFFFFF", base.accent) > contrast("#000000", base.accent) ? "#FFFFFF" : "#000000";
+    const actionEnd = mixColor(base.accent, onAccent === "#FFFFFF" ? "#000000" : "#FFFFFF", .18);
+    return { accent: base.accent, bright, accent2: base.accent2 || bright, background: base.bg, readingBackground, actionEnd, surface: base.panel, text, muted, dim, border,
       rgb: channels(base.accent).join(","), surfaceRgb: channels(base.panel).join(","),
-      onAccent: contrast("#FFFFFF", base.accent) > contrast("#000000", base.accent) ? "#FFFFFF" : "#000000",
+      onAccent,
       canvas: { background: base.bg, accent: base.accent, bright: readableColor(base.bright, base.bg, 3), accent2: base.accent2 || readableColor(base.bright, base.bg, 3), text: canvasText, muted: readableColor(mixColor(canvasText, base.bg, .32), base.bg), dim: readableColor(mixColor(canvasText, base.bg, .5), base.bg, 3) } };
   }
 
+  const SPOTIFY_TYPES = { track: "track", album: "album", playlist: "playlist", episode: "episode", show: "podcast", artist: "artist" };
   function spotifyLink(raw) {
     const value = String(raw ?? "").trim();
-    let match = /^spotify:(track|album|playlist):([A-Za-z0-9]{22})$/.exec(value);
+    let match = /^spotify:(track|album|playlist|episode|show|artist):([A-Za-z0-9]{22})$/.exec(value);
     if (!match) {
       try {
         const url = new URL(value);
         if (url.protocol !== "https:" || !["open.spotify.com", "spotify.com", "www.spotify.com"].includes(url.hostname) || url.username || url.password || url.port) return null;
-        match = /^\/(?:intl-[a-z]{2}\/)?(?:embed\/)?(track|album|playlist)\/([A-Za-z0-9]{22})\/?$/.exec(url.pathname);
+        match = /^\/(?:intl-[a-z]{2}\/)?(?:embed\/)?(track|album|playlist|episode|show|artist)\/([A-Za-z0-9]{22})\/?$/.exec(url.pathname);
       } catch { return null; }
     }
     if (!match) return null;
     const [, type, id] = match;
-    return { type, id, url: `https://open.spotify.com/${type}/${id}`, embed: `https://open.spotify.com/embed/${type}/${id}` };
+    return { type, id, url: `https://open.spotify.com/${type}/${id}`, embed: `https://open.spotify.com/embed/${type}/${id}`,
+      provider: "spotify", providerName: "Spotify", kind: "embed", label: `Spotify ${SPOTIFY_TYPES[type]}`, short: `${SPOTIFY_TYPES[type]} · ${id.slice(0, 7)}…`,
+      shape: type === "track" || type === "episode" ? "compact" : "tall", autoplay: "" };
   }
+  // "90", "90s", "1m30s" or "1h2m3s" as whole seconds; anything else is 0.
+  function startSeconds(value) {
+    const match = /^(?:(\d{1,2})h)?(?:(\d{1,4})m)?(?:(\d{1,6})s?)?$/.exec(String(value ?? ""));
+    if (!match || !value) return 0;
+    const seconds = Number(match[1] || 0) * 3600 + Number(match[2] || 0) * 60 + Number(match[3] || 0);
+    return Number.isFinite(seconds) && seconds > 0 && seconds < 86400 ? seconds : 0;
+  }
+  const MEDIA_FILE = /\.(mp3|m4a|aac|flac|wav|ogg|oga|opus|weba|mp4|m4v|webm|mov|ogv)$/i;
+  const VIDEO_FILE = /\.(mp4|m4v|webm|mov|ogv)$/i;
+  const DISCORD_CDN = ["cdn.discordapp.com", "media.discordapp.net"];
+  // Any pasted link, as what Studio can do with it: "embed" (an official
+  // player in an iframe), "media" (a plain file in Studio's own <video>) or
+  // "external" (a page only its own app or the browser can open). Only https,
+  // with no credentials or port; every embed URL is rebuilt from validated
+  // ids, never copied from the paste.
+  function mediaLink(raw) {
+    const value = String(raw ?? "").trim();
+    if (!value || value.length > 2048) return null;
+    const spotify = spotifyLink(value);
+    if (spotify) return spotify;
+    let url;
+    try { url = new URL(value); } catch { return null; }
+    if (url.protocol !== "https:" || url.username || url.password || url.port) return null;
+    const host = url.hostname.toLowerCase().replace(/^(?:www|m)\./, "");
+    const path = url.pathname;
+    const external = (provider, providerName, label, extra = {}) => ({ provider, providerName, kind: "external", url: url.href.replace(/#.*$/, ""), label, short: label, ...extra });
+    if (["youtube.com", "music.youtube.com", "youtube-nocookie.com", "youtu.be"].includes(host)) {
+      let id = null;
+      if (host === "youtu.be") id = path.slice(1).replace(/\/$/, "");
+      else if (path === "/watch") id = url.searchParams.get("v");
+      else id = /^\/(?:shorts|live|embed|v)\/([^/]+)\/?$/.exec(path)?.[1] ?? null;
+      const list = /^[A-Za-z0-9_-]{10,64}$/.test(url.searchParams.get("list") || "") ? url.searchParams.get("list") : null;
+      if (id === "videoseries") id = null;
+      if (id != null && !/^[A-Za-z0-9_-]{11}$/.test(id)) return null;
+      if (!id && !list) return external("youtube", "YouTube", "YouTube page");
+      const music = host === "music.youtube.com";
+      const name = music ? "YouTube Music" : "YouTube";
+      if (!id) return { provider: "youtube", providerName: name, kind: "embed", shape: "video", autoplay: "&autoplay=1", label: `${name} playlist`, short: `playlist · ${list.slice(0, 7)}…`,
+        url: `https://www.youtube.com/playlist?list=${list}`, embed: `https://www.youtube-nocookie.com/embed/videoseries?list=${list}&rel=0&playsinline=1&enablejsapi=1` };
+      const start = startSeconds(url.searchParams.get("t") || url.searchParams.get("start"));
+      return { provider: "youtube", providerName: name, kind: "embed", shape: "video", autoplay: "&autoplay=1", label: music ? "YouTube Music track" : list ? "YouTube playlist" : "YouTube video", short: `${list ? "playlist" : "video"} · ${id.slice(0, 7)}…`,
+        url: `https://www.youtube.com/watch?v=${id}${list ? `&list=${list}` : ""}${start ? `&t=${start}s` : ""}`,
+        embed: `https://www.youtube-nocookie.com/embed/${id}?rel=0&playsinline=1&enablejsapi=1${list ? `&list=${list}` : ""}${start ? `&start=${start}` : ""}` };
+    }
+    if (host === "vimeo.com" || host === "player.vimeo.com") {
+      const match = /^\/(?:video\/|channels\/[\w-]{1,64}\/|groups\/[\w-]{1,64}\/videos\/)?(\d{5,12})(?:\/([0-9a-f]{6,20}))?\/?$/.exec(path);
+      if (!match) return external("vimeo", "Vimeo", "Vimeo page");
+      const hash = match[2] || (/^[0-9a-f]{6,20}$/.test(url.searchParams.get("h") || "") ? url.searchParams.get("h") : null);
+      return { provider: "vimeo", providerName: "Vimeo", kind: "embed", shape: "video", autoplay: "&autoplay=1", label: "Vimeo video", short: `video · ${match[1]}`,
+        url: `https://vimeo.com/${match[1]}${hash ? `/${hash}` : ""}`, embed: `https://player.vimeo.com/video/${match[1]}?dnt=1${hash ? `&h=${hash}` : ""}` };
+    }
+    if (host === "soundcloud.com") {
+      const match = /^\/([\w-]{1,64})\/(sets\/)?([\w-]{1,128})(\/s-[A-Za-z0-9]{4,32})?\/?$/.exec(path);
+      if (!match || (!match[2] && ["sets", "tracks", "albums", "reposts", "likes", "followers", "following", "popular-tracks"].includes(match[3]))) return external("soundcloud", "SoundCloud", "SoundCloud page");
+      const canonical = `https://soundcloud.com/${match[1]}/${match[2] || ""}${match[3]}${match[4] || ""}`;
+      return { provider: "soundcloud", providerName: "SoundCloud", kind: "embed", shape: "tall", autoplay: "&auto_play=true", label: match[2] ? "SoundCloud playlist" : "SoundCloud track", short: `${match[2] ? "playlist" : "track"} · ${match[3].slice(0, 12)}`,
+        url: canonical, embed: `https://w.soundcloud.com/player/?url=${encodeURIComponent(canonical)}&visual=true&show_comments=false` };
+    }
+    if (MEDIA_FILE.test(path)) {
+      let name = path.split("/").pop() || "media";
+      try { name = decodeURIComponent(name); } catch {}
+      name = name.slice(0, 80);
+      const discord = DISCORD_CDN.includes(host);
+      const video = VIDEO_FILE.test(path);
+      // A Discord attachment link is signed; its query is the signature, so it
+      // is kept whole.
+      return { provider: discord ? "discord" : "file", providerName: discord ? "Discord" : "Web", host, kind: "media", media: video ? "video" : "audio", shape: video ? "video" : "audio",
+        label: `${discord ? "Discord attachment" : video ? "Video file" : "Audio file"} · ${name}`, short: `${discord ? "attachment" : video ? "video" : "audio"} · ${name.slice(0, 24)}`, url: url.href.replace(/#.*$/, "") };
+    }
+    if (host === "open.spotify.com" && /^\/(?:intl-[a-z]{2}\/)?socialsession\/[A-Za-z0-9_-]{6,128}\/?$/.test(path)) return external("spotify", "Spotify", "Spotify Jam", { jam: true });
+    if (host === "spotify.link" || host === "spotify.app.link") return external("spotify", "Spotify", "Spotify share link");
+    if (host === "open.spotify.com" || host === "spotify.com") return external("spotify", "Spotify", "Spotify page");
+    if (host === "twitch.tv" || host === "clips.twitch.tv") return external("twitch", "Twitch", "Twitch stream");
+    if (host === "on.soundcloud.com") return external("soundcloud", "SoundCloud", "SoundCloud share link");
+    return external("web", host, host);
+  }
+  const playableLink = (link) => link && (link.kind === "embed" || link.kind === "media") ? link : null;
 
   function safePreferences(value) {
     const raw = value && typeof value === "object" ? value : {};
     const volume = Number(raw.volume);
-    const spotify = [...new Set((Array.isArray(raw.spotify) ? raw.spotify : []).map((item) => spotifyLink(item)?.url).filter(Boolean))].slice(0, 6);
-    return { theme: isFreeTheme(raw.theme) ? raw.theme : DEFAULT_THEME, customColors: safeCustomColors(raw.customColors), volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : .7, spotify,
+    // Links that can play again, newest first; `spotify` is the list's name
+    // from before the Links tab, read once and never written again.
+    const links = [...new Set([...(Array.isArray(raw.links) ? raw.links : []), ...(Array.isArray(raw.spotify) ? raw.spotify : [])]
+      .map((item) => playableLink(mediaLink(item))?.url).filter(Boolean))].slice(0, 8);
+    return { theme: isFreeTheme(raw.theme) ? raw.theme : DEFAULT_THEME, customColors: safeCustomColors(raw.customColors), volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : .7, links,
       nodeStyle: isFreeNodeStyle(raw.nodeStyle) ? raw.nodeStyle : "orbs",
       nodeLayout: Object.hasOwn(NODE_LAYOUTS, raw.nodeLayout) ? raw.nodeLayout : "constellation",
       station: STATION_IDS.has(raw.station) ? raw.station : null,
       // The source tab, and whether a station was sounding when Studio closed.
-      source: raw.source === "radio" || raw.source === "spotify" ? raw.source : "local", radioOn: raw.radioOn === true,
+      source: raw.source === "radio" ? "radio" : raw.source === "link" || raw.source === "spotify" ? "link" : "local", radioOn: raw.radioOn === true,
       orbitTrails: raw.orbitTrails === true, extraGlow: raw.extraGlow === true };
   }
   function audioFile(file) { return Boolean(file && (String(file.type || "").startsWith("audio/") || /\.(mp3|m4a|aac|flac|wav|ogg|opus|webm)$/i.test(file.name || ""))); }
@@ -183,7 +275,14 @@
   // member gets it back; `effective` is what is actually on screen.
   const premium = safePremium(storedPremium);
   const effective = { theme: prefs.theme, nodeStyle: prefs.nodeStyle };
-  const state = { source: "local", tracks: [], selected: -1, spotify: null, opened: false, sending: false, notice: "", error: false,
+  // A locked Void choice can be tried on screen, but never enters either store.
+  const previewing = { theme: false, nodeStyle: false };
+  // Search may expose configuration without changing the active look or audio.
+  const settingsReveal = { custom: false, source: null };
+  const keepAfterUnlock = { theme: false, nodeStyle: false };
+  // link: what the Links tab plays; handoff: the last link only its own app can
+  // open; linkPlaying is real only for a plain file in Studio's own element.
+  const state = { source: "local", tracks: [], selected: -1, link: null, handoff: null, linkPlaying: false, linkAutoplay: false, linkStartMs: 0, opened: false, sending: false, notice: "", error: false,
     station: null, mirror: 0, deck: "a", radioPhase: "idle", radioNote: "" };
   const els = {};
   let audio = null;
@@ -191,7 +290,9 @@
   let recommender = null;
   let priorFocus = null;
   let previewFrame = 0;
-  let jumpFrame = 0;
+  let dropdownFrame = 0;
+  let dropdownAnchor = null;
+  let dropdownFocus = null;
   let restoreWorkspace = false;
   let deckB = null;
   let pendingDeck = null;
@@ -236,14 +337,18 @@
   function status() {
     const track = state.tracks[state.selected];
     const tuned = station(state.station);
-    const title = state.source === "spotify" ? state.spotify ? `Spotify ${state.spotify.type}` : "Choose Spotify music"
+    const title = state.source === "link" ? state.link ? state.link.label : "Paste a link"
       : state.source === "radio" ? tuned ? tuned.name : "Choose a station"
       : track?.title || "Choose your music";
     const deck = activeDeck();
     const playing = state.source === "radio" ? (state.radioPhase === "playing" || state.radioPhase === "buffering") && Boolean(deck?.src) && !deck.paused
+      : state.source === "link" ? state.link?.kind === "media" && state.linkPlaying
       : state.source === "local" && Boolean(audio?.src) && !audio.paused && !audio.ended;
+    // Links never reach the analyser: an embed is another origin and a pasted
+    // file is not CORS-cleared, so the audio link listens to the desktop.
     return { source: state.source, playing, title, track: title, theme: effective.theme, ...graphPreferences(),
-      queueLength: state.tracks.length, externalPlayback: state.source === "spotify", supported: true,
+      queueLength: state.tracks.length, externalPlayback: state.source === "link", supported: true,
+      provider: state.source === "link" ? state.link?.providerName ?? null : null, link: state.source === "link" ? state.link?.url ?? null : null,
       station: state.station, stationName: tuned?.name || null, radioPhase: state.source === "radio" ? state.radioPhase : "idle" };
   }
   const announce = () => event("mefi-music-change", status());
@@ -264,37 +369,46 @@
     root.style.setProperty("--studio-accent-rgb", detail.rgb);
     root.style.setProperty("--accent-2", detail.accent2);
     root.style.setProperty("--accent-2-rgb", channels(detail.accent2).join(","));
+    root.style.setProperty("--studio-reading-bg", detail.readingBackground);
+    root.style.setProperty("--studio-action-end", detail.actionEnd);
     root.dataset.studioTheme = key;
     root.dataset.studioThemeTier = detail.tier;
+    // Shared glass surfaces adapt their edge and shadow to a light palette.
+    root.dataset.studioThemeTone = luminance(detail.readingBackground) > 0.35 ? "light" : "dark";
     effective.theme = key;
     for (const button of [...els.themes?.children || [], ...els.premiumThemes?.children || []]) {
       button.setAttribute("aria-pressed", String(button.dataset.theme === key));
       if (button.dataset.theme === "custom") button.style.setProperty("--swatch", prefs.customColors.accent);
     }
-    if (els.customPalette) els.customPalette.hidden = key !== "custom";
+    if (els.customPalette) els.customPalette.hidden = key !== "custom" && !settingsReveal.custom;
     for (const [name, pair] of Object.entries(els.customInputs || {})) {
       pair.picker.value = prefs.customColors[name]; pair.hex.value = prefs.customColors[name]; pair.hex.setAttribute("aria-invalid", "false");
     }
     return detail;
   }
-  // options.navigate === false: a locked choice is explained in place (the
-  // Workspace select fires on every arrow key, so it must not change the view,
-  // and a Void tile in this sheet must not close it).
+  // options.navigate === false: explain a temporary preview without leaving
+  // the picker (the Workspace select also fires on every arrow key).
   function applyTheme(theme, save = true, options) {
+    settingsReveal.custom = false;
     if (isPremiumTheme(theme)) {
       if (!premiumAllowed()) {
-        // Locked: nothing changes. Announcing what is still on screen rolls
-        // back any picker that already moved (the Workspace theme select).
-        event("mefi-theme-change", themeDetail(effective.theme));
+        previewing.theme = true;
+        keepAfterUnlock.theme = save === true;
+        const detail = paintTheme(theme);
+        event("mefi-theme-change", { ...detail, preview: true });
         offerUnlock("theme", theme, THEMES[theme].name, options?.navigate !== false);
-        return effective.theme;
+        return theme;
       }
+      previewing.theme = false;
+      keepAfterUnlock.theme = false;
       const detail = paintTheme(theme);
       if (save && premium.theme !== theme) { premium.theme = theme; persistPremium(); }
       event("mefi-theme-change", detail);
       return theme;
     }
     const key = isFreeTheme(theme) ? theme : DEFAULT_THEME;
+    previewing.theme = false;
+    keepAfterUnlock.theme = false;
     prefs.theme = key;
     const detail = paintTheme(key);
     if (save) {
@@ -328,16 +442,22 @@
   function applyNodeStyle(style, save = true, options) {
     if (isPremiumNodeStyle(style)) {
       if (!premiumAllowed()) {
-        // Locked: keep the style on screen and re-announce it for any picker.
+        previewing.nodeStyle = true;
+        keepAfterUnlock.nodeStyle = save === true;
+        effective.nodeStyle = style;
         syncTreePreferences(false);
         offerUnlock("nodeStyle", style, NODE_STYLES[style].name, options?.navigate !== false);
-        return effective.nodeStyle;
+        return style;
       }
+      previewing.nodeStyle = false;
+      keepAfterUnlock.nodeStyle = false;
       effective.nodeStyle = style;
       if (save && premium.nodeStyle !== style) { premium.nodeStyle = style; persistPremium(); }
       syncTreePreferences(false);
       return style;
     }
+    previewing.nodeStyle = false;
+    keepAfterUnlock.nodeStyle = false;
     prefs.nodeStyle = isFreeNodeStyle(style) ? style : "orbs";
     effective.nodeStyle = prefs.nodeStyle;
     if (save && premium.nodeStyle) { delete premium.nodeStyle; persistPremium(); }
@@ -350,28 +470,41 @@
   // own verdict is used as given, so it cannot race MefiCommunity's status.
   function syncPremium(allowed = premiumAllowed()) {
     if (allowed) {
-      if (premium.theme && effective.theme !== premium.theme) event("mefi-theme-change", paintTheme(premium.theme));
-      if (premium.nodeStyle && effective.nodeStyle !== premium.nodeStyle) { effective.nodeStyle = premium.nodeStyle; syncTreePreferences(false); }
+      if (previewing.theme && keepAfterUnlock.theme) {
+        previewing.theme = false;
+        keepAfterUnlock.theme = false;
+        if (premium.theme !== effective.theme) { premium.theme = effective.theme; persistPremium(); }
+        event("mefi-theme-change", themeDetail(effective.theme));
+      } else if (!previewing.theme && premium.theme && effective.theme !== premium.theme) event("mefi-theme-change", paintTheme(premium.theme));
+      if (previewing.nodeStyle && keepAfterUnlock.nodeStyle) {
+        previewing.nodeStyle = false;
+        keepAfterUnlock.nodeStyle = false;
+        if (premium.nodeStyle !== effective.nodeStyle) { premium.nodeStyle = effective.nodeStyle; persistPremium(); }
+        syncTreePreferences(false);
+      } else if (!previewing.nodeStyle && premium.nodeStyle && effective.nodeStyle !== premium.nodeStyle) { effective.nodeStyle = premium.nodeStyle; syncTreePreferences(false); }
     } else {
       let revoked = false;
-      if (isPremiumTheme(effective.theme)) { applyTheme(prefs.theme, false); revoked = true; }
-      if (isPremiumNodeStyle(effective.nodeStyle)) { effective.nodeStyle = prefs.nodeStyle; syncTreePreferences(false); revoked = true; }
+      if (isPremiumTheme(effective.theme) && !previewing.theme) { applyTheme(prefs.theme, false); revoked = true; }
+      if (isPremiumNodeStyle(effective.nodeStyle) && !previewing.nodeStyle) { effective.nodeStyle = prefs.nodeStyle; syncTreePreferences(false); revoked = true; }
       if (revoked) window.MefiToast?.("Void collection locked again; your choice is saved.", "info");
     }
     renderPremiumLocks(allowed);
+  }
+  function endPreview() {
+    if (previewing.theme) applyTheme(premiumAllowed() && premium.theme ? premium.theme : prefs.theme, false);
+    if (previewing.nodeStyle) applyNodeStyle(premiumAllowed() && premium.nodeStyle ? premium.nodeStyle : prefs.nodeStyle, false);
   }
   // A fork with SELF_UNLOCKED says so instead of thanking a membership.
   function selfUnlocked() {
     try { return window.MefiCommunity?.status?.()?.selfUnlocked === true; } catch { return false; }
   }
-  // Locked choices keep their full colour and art with a small lock; the
-  // pointer's tooltip gives the reason. Only a locked picker shows the fork
-  // path and its buttons; a member gets one quiet line instead.
+  // Locked choices stay clickable for a temporary preview. Only a locked
+  // picker shows the link and fork actions; a member gets one quiet line.
   function renderPremiumLocks(allowed = premiumAllowed()) {
     for (const [group, className, what] of [[els.premiumThemes, "music-theme-locked", "theme"], [els.premiumStyles, "music-node-locked", "node style"]]) {
       for (const choice of group?.children || []) {
         if (allowed) { choice.classList.remove(className); choice.removeAttribute("aria-disabled"); choice.title = ""; }
-        else { choice.classList.add(className); choice.setAttribute("aria-disabled", "true"); choice.title = `A Void collection ${what} for Void Engine Discord members. Choose it to see how to unlock it.`; }
+        else { choice.classList.add(className); choice.removeAttribute("aria-disabled"); choice.title = `Preview this Void collection ${what}. Link your Discord membership to keep it.`; }
         const badge = els.premiumBadges?.get(choice);
         if (badge) badge.hidden = allowed;
       }
@@ -383,6 +516,7 @@
     const fork = forkCopy();
     for (const box of els.premiumBoxes || []) {
       box.tag.hidden = allowed;
+      box.previewNote.hidden = allowed;
       box.fineprint.hidden = allowed;
       if (box.fineprint.textContent !== fork) box.fineprint.textContent = fork;
       box.actions.hidden = allowed || !actions;
@@ -391,7 +525,7 @@
       box.member.hidden = !allowed;
       if (box.memberText.textContent !== unlockedLine) box.memberText.textContent = unlockedLine;
       box.manage.hidden = !manageable;
-      box.group.setAttribute("aria-describedby", allowed ? box.member.id : box.fineprint.id);
+      box.group.setAttribute("aria-describedby", allowed ? box.member.id : `${box.previewNote.id} ${box.fineprint.id}`);
     }
   }
   function applyNodeLayout(layout, save = true) {
@@ -452,6 +586,8 @@
     // The caller names the group (a literal id, which scripts/auditor.mjs can see).
     const group = element("div", kind === "theme" ? "music-themes" : "music-node-choices", null, box);
     group.setAttribute("role", "group"); group.setAttribute("aria-labelledby", title.id);
+    const previewNote = element("p", "music-fineprint", "Preview any look now. Your saved choice returns when you close the canvas preview or leave Settings; link your Discord membership to keep it.", box);
+    previewNote.id = `music-premium-${kind}-preview-note`;
     const fineprint = element("p", "music-fineprint", forkCopy(), box);
     fineprint.id = `music-premium-${kind}-fineprint`;
     group.setAttribute("aria-describedby", fineprint.id);
@@ -465,7 +601,7 @@
     member.id = `music-premium-${kind}-member`;
     const memberText = element("span", "music-premium-member-text", "Unlocked with your Void Engine membership", member);
     const manage = button("Manage in Settings › Community", "music-premium-manage", member, () => window.MefiCommunity?.open?.(), `music-premium-${kind}-manage`);
-    (els.premiumBoxes ||= []).push({ tag, group, fineprint, actions, desktop, link, member, memberText, manage });
+    (els.premiumBoxes ||= []).push({ tag, group, previewNote, fineprint, actions, desktop, link, member, memberText, manage });
     return group;
   }
   // The lock reads as a glyph; "Members" stays in the button's name for
@@ -609,6 +745,7 @@
     if (!tuned) { note("That station is not on the list.", true); return false; }
     const url = tuned.mirrors[mirrorIndex];
     if (!url) return false;
+    if (!viaFailover) { settingsReveal.source = null; renderSourcePanels(); }
     // Choosing the station that is already sounding is not a reason to reconnect.
     if (!viaFailover && state.source === "radio" && state.station === id && state.radioPhase === "playing" && !activeDeck().paused) return true;
     // Every tune supersedes the last: a slow answer that arrives after a newer
@@ -632,7 +769,7 @@
     pendingDeck = target;
     if (!viaFailover) state.radioNote = "";
     prefs.station = id; prefs.source = "radio"; prefs.radioOn = true; persist();
-    if (els.embed) { els.embed.remove(); els.embed = null; }
+    unmountLink();
     target.crossOrigin = "anonymous";
     target.volume = live ? 0 : prefs.volume;
     target.src = url;
@@ -684,7 +821,9 @@
     if (els.radioVolume) els.radioVolume.value = String(prefs.volume);
   }
   function setSource(source) {
-    const next = source === "spotify" ? "spotify" : source === "radio" ? "radio" : "local";
+    settingsReveal.source = null;
+    // "spotify" is the Links tab's name from before it played other services.
+    const next = source === "link" || source === "spotify" ? "link" : source === "radio" ? "radio" : "local";
     const previous = state.source;
     if (next !== previous) {
       if (previous === "radio") stopRadio();
@@ -696,36 +835,133 @@
     // it: loaded, not playing.
     const track = state.tracks[state.selected];
     if (next === "local" && previous !== "local" && track && audio.src !== track.url) { audio.src = track.url; audio.load(); }
-    if (next !== "spotify" && els.embed) { els.embed.remove(); els.embed = null; }
-    if (next === "spotify" && state.spotify) mountSpotify();
+    if (next !== "link") unmountLink();
+    if (next === "link" && state.link) mountLink();
     render(); announce();
   }
-  function mountSpotify() {
-    if (!state.spotify || state.source !== "spotify" || !els.spotifyPlayer) return;
-    if (els.embed?.src === state.spotify.embed) return;
-    els.embed?.remove();
-    const frame = element("iframe", "music-spotify-frame", null, els.spotifyPlayer);
-    frame.src = state.spotify.embed;
-    frame.title = `Spotify ${state.spotify.type} player`;
+  // The player for state.link, built once per link: reopening the sheet or
+  // repainting keeps the same frame, so nothing restarts. Autoplay is asked for
+  // only by a Play that just happened, never by a restore after a relaunch.
+  function mountLink() {
+    const link = state.link;
+    if (!link || state.source !== "link" || !els.linkPlayer) return;
+    if (els.linkFrame?.dataset.url === link.url) { els.floatingPlayer?.show(link); return; }
+    unmountLink();
+    els.floatingPlayer?.show(link);
+    const autoplay = state.linkAutoplay;
+    // Listen together joins a session part-way through: the offset rides the
+    // embed's own start parameter where it has one, and a file seeks once
+    // its length is known.
+    const startSeconds = Math.floor(state.linkStartMs / 1000);
+    state.linkAutoplay = false; state.linkStartMs = 0;
+    if (link.kind === "media") {
+      const player = element("video", "music-link-frame music-link-media", null, els.linkPlayer);
+      player.dataset.url = link.url; player.dataset.shape = link.shape;
+      player.controls = true; player.preload = "metadata"; player.playsInline = true;
+      player.title = link.label;
+      player.volume = prefs.volume;
+      const sync = () => { if (els.linkFrame !== player) return; state.linkPlaying = !player.paused && !player.ended; renderLinkNow(); announce(); };
+      for (const name of ["play", "playing", "pause", "ended"]) player.addEventListener(name, sync);
+      player.addEventListener("volumechange", () => { if (els.linkFrame === player && Number.isFinite(player.volume)) { prefs.volume = player.volume; persist(); } });
+      player.addEventListener("error", () => {
+        if (els.linkFrame !== player) return;
+        state.linkPlaying = false;
+        note(link.provider === "discord" ? "Discord could not send that file. Attachment links expire; copy a fresh one from Discord." : "That file could not be played. The link may have expired, or the format is not supported.", true);
+        announce();
+      });
+      if (startSeconds > 0) {
+        const seekOnce = () => { player.removeEventListener?.("loadedmetadata", seekOnce); try { player.currentTime = startSeconds; } catch {} };
+        player.addEventListener("loadedmetadata", seekOnce);
+      }
+      player.src = link.url;
+      els.linkFrame = player;
+      if (autoplay && typeof player.play === "function") {
+        try { Promise.resolve(player.play()).catch(() => {}); } catch {}
+      }
+      return;
+    }
+    const frame = element("iframe", "music-link-frame", null, els.linkPlayer);
+    frame.dataset.url = link.url; frame.dataset.shape = link.shape; frame.dataset.provider = link.provider;
+    let src = link.embed;
+    if (startSeconds > 0 && link.provider === "youtube") src = `${src.replace(/&start=\d+/, "")}&start=${startSeconds}`;
+    if (autoplay && link.autoplay) src = `${src}${src.includes("?") ? link.autoplay : `?${link.autoplay.slice(1)}`}`;
+    if (startSeconds > 0 && link.provider === "vimeo") src = `${src}#t=${startSeconds}s`;
+    frame.src = src;
+    frame.title = `${link.label} player`;
     frame.setAttribute("allow", "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture");
     frame.setAttribute("allowfullscreen", "");
+    // The booklet's own policy is no-referrer (SomaFM needs it); the players
+    // may see the origin, and main.cjs names Studio to YouTube's.
     frame.referrerPolicy = "strict-origin-when-cross-origin";
-    els.embed = frame;
+    els.linkFrame = frame;
   }
-  function loadSpotify(raw) {
+  function unmountLink() {
+    els.floatingPlayer?.hide();
+    const frame = els.linkFrame;
+    if (!frame) return;
+    els.linkFrame = null;
+    state.linkPlaying = false;
+    if (frame.tagName === "video" || frame.tagName === "VIDEO") { try { frame.pause?.(); frame.removeAttribute("src"); frame.load?.(); } catch {} }
+    frame.remove();
+  }
+  // The one door for every link, from the Links field, a recent chip, a drop,
+  // or another part of Studio (MefiMusic.playLink). Returns true when the link
+  // is now the playing source; a hand-off leaves whatever is playing alone.
+  function playLink(raw, { autoplay = true, startMs = 0 } = {}) {
     init();
-    const link = spotifyLink(raw);
-    if (!link) { note("Paste a Spotify playlist, album or track link.", true); return false; }
-    state.spotify = link;
-    prefs.spotify = [link.url, ...prefs.spotify.filter((url) => url !== link.url)].slice(0, 6);
+    const link = mediaLink(raw);
+    if (!link) { note("That doesn't look like a link. Paste a YouTube, Spotify, SoundCloud or Vimeo link, or a link to an audio or video file.", true); return false; }
+    if (!playableLink(link)) {
+      state.handoff = link;
+      if (els.linkInput) els.linkInput.value = link.url;
+      settingsReveal.source = "link";
+      render();
+      note(handoffNote(link), link.provider === "web");
+      return false;
+    }
+    state.handoff = null;
+    if (state.link?.url !== link.url) unmountLink();
+    state.link = link;
+    state.linkAutoplay = autoplay;
+    state.linkStartMs = Number.isFinite(startMs) && startMs > 0 ? Math.min(startMs, 86_400_000) : 0;
+    prefs.links = [link.url, ...prefs.links.filter((url) => url !== link.url)].slice(0, 8);
     persist();
-    setSource("spotify");
-    if (els.spotifyInput) els.spotifyInput.value = link.url;
-    note("Spotify is ready. Use its player below; availability depends on Spotify.");
+    setSource("link");
+    // Choosing the link that is already loaded plays it rather than reloading.
+    if (autoplay && link.kind === "media" && els.linkFrame?.paused && typeof els.linkFrame.play === "function") { try { Promise.resolve(els.linkFrame.play()).catch(() => {}); } catch {} }
+    state.linkAutoplay = false; state.linkStartMs = 0;
+    if (els.linkInput) els.linkInput.value = link.url;
+    note(link.kind === "media" ? `${link.label} is loaded in the floating player.` : `${link.providerName} is ready in the floating player; availability depends on ${link.providerName}.`);
     return true;
   }
+  function handoffNote(link) {
+    if (link.jam) return "Spotify only lets its own app join a Jam. Open it in Spotify below: listening remotely needs Premium there, joining in person does not.";
+    if (link.provider === "twitch") return "Twitch only plays inside its own site from a desktop app. Open the stream below.";
+    if (link.provider === "web") return `Studio can't play ${link.label} here. It plays YouTube, Spotify, SoundCloud and Vimeo links and audio or video files.`;
+    return `${link.label} opens in ${link.providerName}. Open it below.`;
+  }
+  function openLink(url) {
+    if (!window.mefiStudio?.openExternal) { note("Opening links needs the Studio desktop app.", true); return; }
+    Promise.resolve(window.mefiStudio.openExternal(url)).then((result) => { if (result && result.ok === false) note(result.error || "That link could not be opened.", true); }, () => note("That link could not be opened.", true));
+  }
+  function copyLink(url) {
+    const done = () => note("Link copied. Paste it in Discord or anywhere else to share it.");
+    try {
+      const clipboard = window.navigator?.clipboard;
+      if (clipboard?.writeText) { clipboard.writeText(url).then(done, () => note("The link could not be copied.", true)); return; }
+    } catch {}
+    note("The link could not be copied.", true);
+  }
+  // A link dragged in from Discord, a browser tab or a chat arrives as a URI
+  // list or as text.
+  function droppedLink(transfer) {
+    if (!transfer?.getData) return "";
+    let text = "";
+    try { text = transfer.getData("text/uri-list") || transfer.getData("text/plain") || ""; } catch {}
+    return String(text).split(/\r?\n/).map((line) => line.trim()).find((line) => line && !line.startsWith("#")) || "";
+  }
   async function play() {
-    if (state.source !== "local") return;
+    if (state.source !== "local") setSource("local");
     if (!state.tracks[state.selected]) { els.files?.click(); return; }
     try { await audio.play(); note(""); }
     catch (error) { note(`Could not play this file: ${error?.message || "format unavailable"}`, true); }
@@ -785,11 +1021,11 @@
     els.trackTitle.textContent = current?.title || "Your own soundtrack";
     els.trackSub.textContent = current ? `Track ${state.selected + 1} of ${state.tracks.length} · Local audio` : "Add music from your computer to get started.";
     els.play.textContent = !audio.paused && state.source === "local" ? "Pause" : "Play";
-    els.play.setAttribute("aria-label", !audio.paused ? "Pause local music" : "Play local music");
+    els.play.setAttribute("aria-label", !audio.paused && state.source === "local" ? "Pause local music" : "Play local music");
     els.previous.disabled = !current;
     els.next.disabled = !current;
     const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
-    els.seek.disabled = !duration;
+    els.seek.disabled = !duration || state.source !== "local";
     els.seek.max = String(duration || 1);
     if (document.activeElement !== els.seek) els.seek.value = String(Number.isFinite(audio.currentTime) ? audio.currentTime : 0);
     els.elapsed.textContent = timeLabel(audio.currentTime);
@@ -811,24 +1047,64 @@
       remove.setAttribute("aria-label", `Remove ${track.title}`);
     }
   }
-  function render() {
-    if (!initialized) return;
-    const local = state.source === "local";
-    const radio = state.source === "radio";
-    els.local.hidden = !local; els.radio.hidden = !radio; els.spotify.hidden = !(state.source === "spotify");
+  function renderSourcePanels() {
+    const shownSource = settingsReveal.source ?? state.source;
+    const local = shownSource === "local";
+    const radio = shownSource === "radio";
+    els.local.hidden = !local; els.radio.hidden = !radio; els.link.hidden = shownSource !== "link";
     els.localTab.setAttribute("aria-selected", String(local));
     els.radioTab.setAttribute("aria-selected", String(radio));
-    els.spotifyTab.setAttribute("aria-selected", String(state.source === "spotify"));
-    renderTransport(); renderQueue(); renderRadio(); renderAudioLink();
-    els.recent.textContent = "";
-    for (const url of prefs.spotify) {
-      const item = spotifyLink(url);
-      const recent = button(`${item.type} · ${item.id.slice(0, 7)}…`, "ghost music-recent-link", els.recent, () => loadSpotify(url));
-      recent.title = url;
+    els.linkTab.setAttribute("aria-selected", String(shownSource === "link"));
+    for (const [source, tab] of [["local", els.localTab], ["radio", els.radioTab], ["link", els.linkTab]]) tab.tabIndex = source === shownSource ? 0 : -1;
+    els.dropdown.dataset.source = shownSource;
+    els.dropdown.dataset.video = String(shownSource === "link" && state.link?.shape === "video");
+    scheduleDropdown();
+    if (els.sourcePreview) {
+      const names = { local: "Local music", radio: "Radio", link: "Links" };
+      els.sourcePreview.hidden = shownSource === state.source;
+      els.sourcePreview.textContent = shownSource === state.source ? "" : `Viewing ${names[shownSource]} controls. ${names[state.source]} remains the active source.`;
     }
+  }
+  function render() {
+    if (!initialized) return;
+    renderSourcePanels();
+    renderTransport(); renderQueue(); renderRadio(); renderAudioLink(); renderLinks();
     els.recommend.disabled = state.sending || !(recommender || window.mefiStudio?.musicRecommend);
     els.recommend.textContent = state.sending ? "Finding a direction…" : "Ask for recommendations";
     els.aiHint.textContent = recommender || window.mefiStudio?.musicRecommend ? "Uses Studio’s configured assistant. Recommendations appear here." : "Music recommendations need Studio’s assistant connection.";
+  }
+  function renderLinks() {
+    if (!els.recent) return;
+    els.recent.textContent = "";
+    for (const url of prefs.links) {
+      const item = mediaLink(url);
+      if (!item) continue;
+      const recent = button(`${item.providerName} ${item.short}`, "ghost music-recent-link", els.recent, () => playLink(url));
+      recent.title = url;
+      recent.dataset.provider = item.provider;
+      if (state.source === "link" && state.link?.url === url) recent.setAttribute("aria-current", "true");
+    }
+    const handoff = state.handoff;
+    els.linkHandoff.hidden = !handoff;
+    els.linkHandoff.textContent = "";
+    if (handoff) {
+      element("strong", null, handoff.label, els.linkHandoff);
+      element("p", null, handoffNote(handoff), els.linkHandoff);
+      const open = button(handoff.jam ? "Open the Jam in Spotify ↗" : `Open in ${handoff.provider === "web" ? "your browser" : handoff.providerName} ↗`, "primary", els.linkHandoff, () => openLink(handoff.url), "music-link-handoff-open");
+      open.title = handoff.url;
+      if (handoff.jam) element("small", null, "Tip: choose Desktop audio under Listen to and the node tree follows the Jam.", els.linkHandoff);
+    }
+    renderLinkNow();
+  }
+  // The loaded link's line: what it is, where it came from, and the two ways
+  // to take it elsewhere (its own site, or a copy to post in Discord).
+  function renderLinkNow() {
+    if (!els.linkNow) return;
+    const link = state.source === "link" ? state.link : null;
+    els.linkNow.hidden = !link;
+    if (!link) return;
+    els.linkNowTitle.textContent = link.label;
+    els.linkNowDetail.textContent = link.kind === "media" ? `${state.linkPlaying ? "Playing in Studio" : "Studio's player"} · from ${link.host}` : `${link.providerName} player · Studio's buttons don't control it`;
   }
   function renderRadio() {
     if (!els.radioState) return;
@@ -868,6 +1144,7 @@
       els.audioEffects[key].checked = status?.effects?.[key] ?? effect.enabled;
       els.audioEffects[key].disabled = !window.MefiIdle?.setAudioEffects;
     }
+    scheduleDropdown();
   }
   function audioLinkEnabled(status) {
     return Boolean(status?.reactive && (status.listening || status.pending || status.selection === "local" && !status.error));
@@ -914,26 +1191,18 @@
     const header = element("header", "music-header", null, sheet);
     els.header = header;
     const heading = element("div", null, null, header);
-    element("span", "eyebrow", "Your look. Your sound.", heading);
-    const title = element("h2", null, "Style & sound", heading); title.id = "music-heading";
-    // The jump strip: Look · Sound, the group in view marked as you scroll.
-    const jump = element("nav", "music-jump", null, heading); jump.setAttribute("aria-label", "Style & sound groups");
-    els.jumps = {};
-    for (const [group, label, hint] of [["look", "Look", "Color theme and node tree"], ["sound", "Sound", "Music, audio link and recommendations"]]) {
-      if (group === "sound") element("span", "music-jump-dot", "·", jump).setAttribute("aria-hidden", "true");
-      els.jumps[group] = button(label, "music-jump-link", jump, () => jumpTo(group), `music-jump-${group}`);
-      els.jumps[group].title = hint;
-    }
+    const title = element("h2", null, "Canvas preview", heading); title.id = "music-heading";
     button("Close", "ghost", header, close, "music-close");
     const body = element("div", "music-body", null, sheet);
-    // Look first: the color theme, then the node tree with its Void styles.
-    // The header strip jumps between Look and Sound; a jump lands on the
-    // group's label, so the next Tab continues inside that group.
+    els.body = body;
+    // Appearance owns only the color theme and node tree. The players stay
+    // mounted in their own dropdown, including while this preview is open.
     const settings = element("div", "music-settings", null, body);
     settings.id = "music-look"; settings.setAttribute("role", "region"); settings.setAttribute("aria-labelledby", "music-look-label");
     const lookLabel = element("p", "eyebrow music-group-label", "Look", settings); lookLabel.id = "music-look-label"; lookLabel.tabIndex = -1;
     const themeSection = element("section", "music-section music-colors", null, settings);
-    element("span", "eyebrow", "Set the mood", themeSection); element("h3", null, "Color theme", themeSection);
+    themeSection.dataset.appearancePanel = "themes";
+    element("h3", null, "Color theme", themeSection);
     els.themes = element("div", "music-themes", null, themeSection);
     els.themes.setAttribute("role", "group"); els.themes.setAttribute("aria-label", "Color theme");
     for (const [key, palette] of [...Object.entries(THEMES).filter(([key]) => isFreeTheme(key)), ["custom", { name: "Custom palette", bright: prefs.customColors.accent }]]) {
@@ -942,7 +1211,7 @@
     }
     els.customPalette = element("fieldset", "music-custom-palette", null, themeSection); els.customPalette.id = "music-custom-palette";
     element("legend", null, "Your colors", els.customPalette);
-    const help = element("p", "music-fineprint", "Choose a color or enter #RRGGBB. Studio adjusts text and borders when needed for readability.", els.customPalette); help.id = "music-custom-help";
+    const help = element("p", "music-fineprint", "Changing a color applies your custom palette. Choose a color or enter #RRGGBB; Studio adjusts text and borders for readability.", els.customPalette); help.id = "music-custom-help";
     els.customInputs = {};
     for (const [key, title] of [["accent", "Accent"], ["background", "Background"], ["surface", "Panels"], ["text", "Text"]]) {
       const row = element("div", "music-color-row", null, els.customPalette);
@@ -962,13 +1231,17 @@
     els.premiumThemes = premiumThemeChoices(themeSection);
     element("p", "music-fineprint", "Colors are separate from node style and layout.", themeSection);
     const nodeSection = element("section", "music-node-settings", null, settings);
+    nodeSection.dataset.appearancePanel = "nodes";
     nodeSection.setAttribute("aria-labelledby", "music-node-heading");
     const nodeHeading = element("h3", null, "Node tree", nodeSection); nodeHeading.id = "music-node-heading";
-    element("p", "music-node-intro", "See your changes in the live tree. Appearance and arrangement are independent.", nodeSection);
+    element("p", "music-node-intro", "Give your work a different shape. Changes appear on the live tree.", nodeSection);
     els.nodeStyles = graphChoices(nodeSection, "style", Object.fromEntries(Object.entries(NODE_STYLES).filter(([key]) => isFreeNodeStyle(key))), effective.nodeStyle, applyNodeStyle);
     els.premiumStyles = premiumStyleChoices(nodeSection);
-    els.nodeLayouts = graphChoices(nodeSection, "layout", NODE_LAYOUTS, prefs.nodeLayout, applyNodeLayout);
-    const layoutHint = element("p", "music-fineprint", "Choosing a layout rearranges the tree. Existing nodes keep their places as work updates.", nodeSection);
+    const layoutSection = element("section", "music-section", null, settings);
+    layoutSection.dataset.appearancePanel = "layout";
+    element("h3", null, "Arrange the tree", layoutSection);
+    els.nodeLayouts = graphChoices(layoutSection, "layout", NODE_LAYOUTS, prefs.nodeLayout, applyNodeLayout);
+    const layoutHint = element("p", "music-fineprint", "Choosing a layout rearranges the tree. Existing nodes keep their places as work updates.", layoutSection);
     layoutHint.id = "music-node-layout-hint";
     els.nodeLayouts.setAttribute("aria-describedby", layoutHint.id);
     const effectsHeading = element("h4", "music-node-label", "Effects", nodeSection); effectsHeading.id = "music-effects-label";
@@ -988,27 +1261,36 @@
       els[key] = input;
     }
     element("p", "music-fineprint", "Decorative effects keep work nodes in place. Reduced motion pauses the orbit trails.", nodeSection);
-    // Sound: the player, the audio link directly under it, then the
-    // listening companion (the aside).
-    const main = element("main", "music-main", null, body);
+    const dropdown = element("section", "music-dropdown", null, document.body);
+    els.dropdown = dropdown; dropdown.id = "music-dropdown"; dropdown.hidden = true; dropdown.tabIndex = -1;
+    dropdown.setAttribute("role", "dialog"); dropdown.setAttribute("aria-modal", "false"); dropdown.setAttribute("aria-labelledby", "music-dropdown-heading");
+    const dropdownHeader = element("header", "music-dropdown-header", null, dropdown);
+    const dropdownTitle = element("h2", null, "Music & video", dropdownHeader); dropdownTitle.id = "music-dropdown-heading";
+    button("Close", "ghost mini", dropdownHeader, () => closeAudio({ focus: true }), "music-dropdown-close");
+    const dropdownBody = element("div", "music-dropdown-body", null, dropdown);
+    els.dropdownBody = dropdownBody;
+    const connection = element("div", "music-connection", null, dropdownBody);
+    const main = element("section", "music-main", null, dropdownBody);
     main.id = "music-sound"; main.setAttribute("aria-labelledby", "music-sound-label");
     const soundLabel = element("p", "eyebrow music-group-label", "Sound", main); soundLabel.id = "music-sound-label"; soundLabel.tabIndex = -1;
     els.groups = { look: { group: settings, label: lookLabel }, sound: { group: main, label: soundLabel } };
     const tabs = element("div", "music-tabs", null, main); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Music source");
     els.localTab = button("Local music", "music-tab", tabs, () => setSource("local"), "music-local-tab");
     els.radioTab = button("Ad-free radio", "music-tab", tabs, () => setSource("radio"), "music-radio-tab");
-    els.spotifyTab = button("Spotify", "music-tab", tabs, () => setSource("spotify"), "music-spotify-tab");
-    const tabFor = (source) => source === "local" ? els.localTab : source === "radio" ? els.radioTab : els.spotifyTab;
-    for (const [tab, panelId] of [[els.localTab, "music-local-panel"], [els.radioTab, "music-radio-panel"], [els.spotifyTab, "music-spotify-panel"]]) { tab.setAttribute("role", "tab"); tab.setAttribute("aria-controls", panelId); }
+    els.linkTab = button("YouTube / links", "music-tab", tabs, () => setSource("link"), "music-link-tab");
+    els.linkTab.title = "YouTube, Spotify, SoundCloud, Vimeo and audio or video file links";
+    const tabFor = (source) => source === "local" ? els.localTab : source === "radio" ? els.radioTab : els.linkTab;
+    for (const [tab, panelId] of [[els.localTab, "music-local-panel"], [els.radioTab, "music-radio-panel"], [els.linkTab, "music-link-panel"]]) { tab.setAttribute("role", "tab"); tab.setAttribute("aria-controls", panelId); }
     tabs.addEventListener("keydown", (event) => {
       if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
       event.preventDefault();
-      const order = ["local", "radio", "spotify"];
-      const index = Math.max(0, order.indexOf(state.source));
+      const order = ["local", "radio", "link"];
+      const index = Math.max(0, order.indexOf(settingsReveal.source ?? state.source));
       const source = event.key === "Home" ? order[0] : event.key === "End" ? order[order.length - 1]
         : order[(index + (event.key === "ArrowRight" ? 1 : -1) + order.length) % order.length];
       setSource(source); tabFor(source).focus();
     });
+    els.sourcePreview = element("p", "music-fineprint", null, main); els.sourcePreview.id = "music-source-preview"; els.sourcePreview.hidden = true; els.sourcePreview.setAttribute("role", "status");
     els.local = element("section", "music-local", null, main); els.local.id = "music-local-panel"; els.local.setAttribute("role", "tabpanel"); els.local.setAttribute("aria-labelledby", "music-local-tab");
     const player = element("div", "music-player", null, els.local);
     const art = element("div", "music-art", "♫", player); art.setAttribute("aria-hidden", "true");
@@ -1018,7 +1300,7 @@
     els.trackSub = element("p", "music-subtitle", null, track);
     const transport = element("div", "music-transport", null, track);
     els.previous = button("Previous", "ghost", transport, () => audio.currentTime > 3 ? (audio.currentTime = 0) : move(-1), "music-previous");
-    els.play = button("Play", "primary", transport, () => audio.paused ? void play() : audio.pause(), "music-play");
+    els.play = button("Play", "primary", transport, () => state.source !== "local" || audio.paused ? void play() : audio.pause(), "music-play");
     els.next = button("Next", "ghost", transport, () => move(1), "music-next");
     const timeline = element("div", "music-timeline", null, els.local);
     els.elapsed = element("span", null, "0:00", timeline);
@@ -1064,21 +1346,55 @@
     els.radioVolume.value = String(prefs.volume);
     els.radioVolume.addEventListener("input", () => setVolume(els.radioVolume.value));
     element("p", "music-fineprint", "Each station lists several mirrors. If one stops sending, Studio brings the next one up on a second deck and crosses over, so the music keeps playing through the handover.", els.radio);
-    els.spotify = element("section", "music-spotify", null, main); els.spotify.id = "music-spotify-panel"; els.spotify.setAttribute("role", "tabpanel"); els.spotify.setAttribute("aria-labelledby", "music-spotify-tab");
-    element("h3", null, "Bring a Spotify playlist", els.spotify);
-    element("p", "music-subtitle", "Paste a playlist, album or song link. Spotify’s controls stay right here.", els.spotify);
-    const spotifyForm = element("form", "music-link-form", null, els.spotify);
-    els.spotifyInput = element("input", null, null, spotifyForm); els.spotifyInput.id = "music-spotify-url"; els.spotifyInput.type = "text"; els.spotifyInput.inputMode = "url"; els.spotifyInput.placeholder = "https://open.spotify.com/playlist/…"; els.spotifyInput.setAttribute("aria-label", "Spotify playlist, album or track link");
-    button("Load", "primary", spotifyForm, () => loadSpotify(els.spotifyInput.value), "music-spotify-load");
-    spotifyForm.addEventListener("submit", (event) => { event.preventDefault(); loadSpotify(els.spotifyInput.value); });
-    els.recent = element("div", "music-recent", null, els.spotify);
-    els.spotifyPlayer = element("div", "music-spotify-player", null, els.spotify);
-    element("p", "music-fineprint", "Spotify manages playback and may offer previews or ask you to sign in. Local player controls do not control Spotify.", els.spotify);
-    const audioLink = element("section", "music-audio-link", null, main);
+    els.link = element("section", "music-link", null, main); els.link.id = "music-link-panel"; els.link.setAttribute("role", "tabpanel"); els.link.setAttribute("aria-labelledby", "music-link-tab");
+    element("h3", null, "Play a link", els.link);
+    element("p", "music-subtitle", "Paste or drop a YouTube, Spotify, SoundCloud or Vimeo link, or a link to an audio or video file. Discord attachments work too.", els.link);
+    const linkForm = element("form", "music-link-form", null, els.link);
+    els.linkInput = element("input", null, null, linkForm); els.linkInput.id = "music-link-url"; els.linkInput.type = "text"; els.linkInput.inputMode = "url"; els.linkInput.placeholder = "https://youtu.be/… or https://open.spotify.com/…"; els.linkInput.setAttribute("aria-label", "Media link");
+    els.linkInput.autocomplete = "off"; els.linkInput.spellcheck = false;
+    button("Play", "primary", linkForm, () => playLink(els.linkInput.value), "music-link-load");
+    linkForm.addEventListener("submit", (event) => { event.preventDefault(); playLink(els.linkInput.value); });
+    els.linkHandoff = element("div", "music-link-handoff", null, els.link); els.linkHandoff.id = "music-link-handoff"; els.linkHandoff.hidden = true;
+    els.recent = element("div", "music-recent", null, els.link); els.recent.setAttribute("aria-label", "Recent links");
+    // renderer/together.js fills this, above the player, with Listen together and the
+    // now-playing share (both need the rooms hub).
+    els.together = element("section", "music-together", null, els.link); els.together.hidden = true;
+    els.linkNow = element("div", "music-link-now", null, els.link); els.linkNow.hidden = true;
+    const nowCopy = element("span", "music-link-now-copy", null, els.linkNow);
+    els.linkNowTitle = element("strong", null, null, nowCopy);
+    els.linkNowDetail = element("small", null, null, nowCopy);
+    const nowTools = element("span", "music-link-tools", null, els.linkNow);
+    button("Show player", "ghost", nowTools, () => { mountLink(); els.floatingPlayer?.reveal(); }, "music-link-show");
+    button("Copy link", "ghost", nowTools, () => state.link && copyLink(state.link.url), "music-link-copy").title = "Copy the link to share it in Discord";
+    button("Open ↗", "ghost", nowTools, () => state.link && openLink(state.link.url), "music-link-open").title = "Open the original page";
+    els.linkPlayer = element("div", "music-link-player", null, els.link);
+    els.floatingPlayer = window.MefiMediaWindow?.create({
+      content: els.linkPlayer,
+      onSettings: () => open("sound"),
+      onClose: () => { unmountLink(); state.link = null; render(); announce(); },
+    });
+    element("p", "music-fineprint", "Media opens in a floating window. Hover for controls, drag the grip to move, or drag an edge to resize. In menus it moves aside once; follow it to use the player, or turn on Pin to keep it still.", els.link);
+    element("p", "music-fineprint", "Embedded players belong to their services, so their sign-in, ads and availability rules apply and Studio’s transport buttons don’t control them. Set the audio link to Desktop audio and the node tree follows them.", els.link);
+    els.link.addEventListener("dragover", (event) => {
+      const types = Array.from(event.dataTransfer?.types || []);
+      if (!types.includes("text/uri-list") && !types.includes("text/plain")) return;
+      event.preventDefault(); els.link.classList.add("drag-over");
+    });
+    els.link.addEventListener("dragleave", () => els.link.classList.remove("drag-over"));
+    els.link.addEventListener("drop", (event) => {
+      const text = droppedLink(event.dataTransfer);
+      els.link.classList.remove("drag-over");
+      if (!text) return;
+      event.preventDefault();
+      playLink(text);
+    });
+    const audioLink = element("details", "music-audio-link", null, dropdownBody);
+    els.audioLink = audioLink;
+    audioLink.id = "music-audio-reactions";
     audioLink.setAttribute("aria-labelledby", "music-audio-heading");
-    const audioHeading = element("h3", null, "Audio link", audioLink); audioHeading.id = "music-audio-heading";
+    const audioHeading = element("summary", null, "Audio reactions", audioLink); audioHeading.id = "music-audio-heading";
     element("p", "music-fineprint", "Gentle waves, node glow and tree motion follow quiet or loud music. Add drum accents or background glow when you want more movement.", audioLink);
-    const audioControls = element("div", "music-audio-controls", null, audioLink);
+    const audioControls = element("div", "music-audio-controls", null, connection);
     const sourceLabel = element("label", null, "Listen to", audioControls);
     els.audioSource = element("select", null, null, sourceLabel); els.audioSource.id = "music-audio-source";
     for (const [value, title] of [["auto", "Auto · local or desktop"], ["local", "Local player"], ["desktop", "Desktop audio / Spotify"], ["mic", "Microphone"]]) {
@@ -1090,8 +1406,8 @@
       window.MefiIdle?.setMusicReactive?.(!audioLinkEnabled(status));
       renderAudioLink();
     }, "music-audio-toggle");
-    els.audioState = element("p", "music-audio-state", "Audio link off", audioLink); els.audioState.id = "music-audio-state"; els.audioState.setAttribute("role", "status");
-    els.audioHint = element("p", "music-fineprint", "", audioLink); els.audioHint.id = "music-audio-hint";
+    els.audioState = element("p", "music-audio-state", "Audio link off", connection); els.audioState.id = "music-audio-state"; els.audioState.setAttribute("role", "status");
+    els.audioHint = element("p", "music-fineprint", "", connection); els.audioHint.id = "music-audio-hint";
     els.audioSource.setAttribute("aria-describedby", els.audioHint.id);
     const responseLabel = element("label", "music-audio-response", "Response", audioLink);
     els.audioResponse = element("input", null, null, responseLabel); els.audioResponse.id = "music-audio-response";
@@ -1114,15 +1430,20 @@
       input.addEventListener("change", () => { window.MefiIdle?.setAudioEffects?.({ [key]: input.checked }); renderAudioLink(); });
       els.audioEffects[key] = input;
     }
-    const aside = element("aside", "music-side", null, body);
+    const aside = element("details", "music-side", null, dropdownBody);
+    els.recommendations = aside;
+    element("summary", null, "Music recommendations", aside);
     const ai = element("section", "music-section music-ai", null, aside);
-    element("span", "eyebrow", "A listening companion", ai); element("h3", null, "Find your next sound", ai);
     const moodLabel = element("label", "music-mood-label", "What are you in the mood for?", ai);
     els.mood = element("textarea", null, null, moodLabel); els.mood.id = "music-mood"; els.mood.rows = 3; els.mood.maxLength = 600; els.mood.placeholder = "Warm ambient, no vocals, a little energy…";
     els.recommend = button("Ask for recommendations", "ghost", ai, () => void recommend(), "music-recommend");
     els.aiHint = element("p", "music-fineprint", null, ai);
     els.recommendation = element("div", "music-recommendation", "", ai); els.recommendation.id = "music-recommendation"; els.recommendation.setAttribute("aria-live", "polite");
-    els.notice = element("p", "music-notice", "", sheet); els.notice.setAttribute("role", "status");
+    els.notice = element("p", "music-notice", "", dropdownBody); els.notice.setAttribute("role", "status");
+    dropdown.addEventListener("keydown", audioKey);
+    dropdown.addEventListener("focusout", (event) => {
+      if (event.relatedTarget && !dropdown.contains(event.relatedTarget) && !dropdownAnchor?.contains(event.relatedTarget)) closeAudio();
+    });
     const preview = element("section", "music-preview", null, els.overlay);
     preview.setAttribute("aria-labelledby", "music-preview-heading");
     const previewHeader = element("header", "music-preview-header", null, preview);
@@ -1144,59 +1465,87 @@
     sheet.addEventListener("keydown", (event) => {
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); }
     });
-    sheet.addEventListener("scroll", scheduleJump, { passive: true });
   }
-  // A jump scrolls the group to just under the sticky header (Look is the top)
-  // and moves focus to its label without a second scroll; the scroll itself
-  // updates the strip's mark.
-  function jumpTo(group) {
-    const target = els.groups?.[group];
-    if (!target || !els.sheet) return;
-    let top = 0;
-    if (group !== "look") {
-      try { top = els.sheet.scrollTop + target.group.getBoundingClientRect().top - els.header.getBoundingClientRect().bottom + 1; } catch { top = 0; }
-    }
-    let still = false;
-    try { still = Boolean(window.MefiNav?.noMotion?.()); } catch {}
-    try { els.sheet.scrollTo({ top: Math.max(0, top), behavior: still ? "auto" : "smooth" }); } catch {}
-    target.label.focus?.({ preventScroll: true });
+  // Height follows the visible controls. Width grows for stations and video;
+  // only the available space below the opener limits the scrollable panel.
+  function positionDropdown() {
+    dropdownFrame = 0;
+    if (els.dropdown?.hidden !== false) return;
+    const edge = 12;
+    const width = window.innerWidth || 1024, height = window.innerHeight || 768;
+    const anchor = dropdownAnchor?.getBoundingClientRect?.();
+    const strip = dropdownAnchor?.closest?.(".cmd-tools")?.getBoundingClientRect?.();
+    const bottom = anchor?.height ? Math.max(anchor.bottom, strip?.bottom || 0) : 64;
+    const top = Math.max(edge, Math.min(bottom + 8, height - 160));
+    const panelWidth = els.dropdown.getBoundingClientRect().width;
+    const right = anchor?.width ? width - anchor.right : edge;
+    els.dropdown.style.top = `${Math.round(top)}px`;
+    els.dropdown.style.right = `${Math.round(Math.max(edge, Math.min(right, width - panelWidth - edge)))}px`;
+    els.dropdown.style.maxHeight = `${Math.max(0, height - top - edge)}px`;
   }
-  // Sound is marked once its group reaches the header, or the sheet is at its
-  // end (a short Sound group never reaches the top); Look otherwise.
-  function syncJump() {
-    jumpFrame = 0;
-    if (!state.opened || !els.groups) return;
-    let current = "look";
-    try {
-      const room = els.sheet.scrollHeight - els.sheet.clientHeight;
-      const line = els.header.getBoundingClientRect().bottom + 32;
-      if ((room > 2 && els.sheet.scrollTop >= room - 2) || els.groups.sound.group.getBoundingClientRect().top <= line) current = "sound";
-    } catch {}
-    for (const [group, link] of Object.entries(els.jumps || {})) {
-      if (group === current) { if (link.getAttribute?.("aria-current") !== "true") link.setAttribute("aria-current", "true"); }
-      else link.removeAttribute("aria-current");
+  function scheduleDropdown() {
+    if (els.dropdown?.hidden !== false || dropdownFrame) return;
+    if (typeof window.requestAnimationFrame === "function") dropdownFrame = window.requestAnimationFrame(positionDropdown);
+    else positionDropdown();
+  }
+  function audioOutside(event) {
+    if (!els.dropdown?.contains(event.target) && !dropdownAnchor?.contains(event.target)) closeAudio();
+  }
+  function audioKey(event) {
+    if (event.key === "Escape" && els.dropdown?.hidden === false) {
+      event.preventDefault(); event.stopPropagation(); closeAudio({ focus: true });
     }
   }
-  function scheduleJump() {
-    if (!state.opened || jumpFrame) return;
-    if (typeof window.requestAnimationFrame === "function") jumpFrame = window.requestAnimationFrame(syncJump);
-    else syncJump();
+  function openAudio(anchor) {
+    init();
+    if (!els.dropdown.hidden) { els.dropdown.focus(); return; }
+    if (state.opened) close();
+    const toolbar = document.getElementById?.("idle-music-toggle");
+    dropdownAnchor = anchor || (toolbar?.getBoundingClientRect?.().width ? toolbar : document.getElementById?.("settings-audio-open"));
+    dropdownFocus = document.activeElement;
+    dropdownAnchor?.setAttribute("aria-expanded", "true");
+    els.dropdown.hidden = false;
+    mountLink(); render(); positionDropdown();
+    document.addEventListener("pointerdown", audioOutside);
+    document.addEventListener("keydown", audioKey, true);
+    window.addEventListener("scroll", scheduleDropdown, true);
+    els.dropdown.focus({ preventScroll: true });
+  }
+  function closeAudio({ focus = false } = {}) {
+    if (els.dropdown?.hidden !== false) return;
+    els.dropdown.hidden = true;
+    dropdownAnchor?.setAttribute("aria-expanded", "false");
+    document.removeEventListener?.("pointerdown", audioOutside);
+    document.removeEventListener?.("keydown", audioKey, true);
+    window.removeEventListener?.("scroll", scheduleDropdown, true);
+    if (dropdownFrame) window.cancelAnimationFrame?.(dropdownFrame);
+    dropdownFrame = 0;
+    settingsReveal.source = null;
+    if (focus) (dropdownAnchor || dropdownFocus)?.focus?.({ preventScroll: true });
+    dropdownAnchor = null; dropdownFocus = null;
+  }
+  function toggleAudio(anchor) {
+    if (els.dropdown?.hidden === false) closeAudio({ focus: true });
+    else openAudio(anchor);
   }
   function updatePreview() {
     previewFrame = 0;
-    if (!state.opened || !window.MefiIdle?.setSettingsPreview) return;
-    const rect = els.preview?.getBoundingClientRect?.();
+    if ((!state.opened && !settingsAppearance) || !window.MefiIdle?.setSettingsPreview) return;
+    const rect = (settingsAppearance ? els.settingsViewport : els.preview)?.getBoundingClientRect?.();
     if (!rect || rect.width < 160 || rect.height < 160) return;
+    const focused = document.activeElement;
     window.MefiIdle.setSettingsPreview({ x: rect.x, y: rect.y, w: rect.width, h: rect.height });
+    // Entering Command starts the real canvas; the setting being edited keeps focus.
+    if (settingsAppearance && document.getElementById("tab-studio")?.contains(focused)) focused.focus?.({ preventScroll: true });
   }
   function schedulePreview() {
-    if (!state.opened || previewFrame) return;
+    if ((!state.opened && !settingsAppearance) || previewFrame) return;
     if (typeof window.requestAnimationFrame === "function") previewFrame = window.requestAnimationFrame(updatePreview);
     else updatePreview();
   }
   function syncTreeView(view = null) {
     const selected = view || window.MefiIdle?.status?.()?.view || window.MefiIdle?.geometryStatus?.()?.view || "3d";
-    for (const choice of els.previewViews?.children || []) {
+    for (const choice of [...els.previewViews?.children || [], ...els.settingsViews?.children || []]) {
       if (!choice.dataset.view) continue;
       choice.setAttribute("aria-pressed", String(choice.dataset.view === selected));
       choice.disabled = typeof window.MefiIdle?.setView !== "function";
@@ -1222,10 +1571,11 @@
     bindDeck(audio);
     state.station = prefs.station;
     // The last session's source comes back with it. Local files are granted
-    // per session and must be chosen again; a Spotify link returns to its tab
-    // and its player mounts when the sheet opens, since Spotify owns playback.
-    const lastSpotify = prefs.source === "spotify" ? spotifyLink(prefs.spotify[0]) : null;
-    if (lastSpotify) { state.spotify = lastSpotify; state.source = "spotify"; }
+    // per session and must be chosen again; a link returns to the Links tab
+    // and its player mounts, without playing, when the dropdown opens, so nothing
+    // is fetched from the service before then.
+    const lastLink = prefs.source === "link" ? playableLink(mediaLink(prefs.links[0])) : null;
+    if (lastLink) { state.link = lastLink; state.source = "link"; }
     else if (prefs.source === "radio") state.source = "radio";
     // A member's premium choice is painted straight away, in place of the free
     // one rather than after it, and nothing is written back.
@@ -1235,51 +1585,265 @@
     if (unlocked && premium.theme) event("mefi-theme-change", paintTheme(premium.theme));
     else applyTheme(prefs.theme, false);
     syncTreePreferences(false); renderPremiumLocks(unlocked); render();
-    if (lastSpotify) els.spotifyInput.value = lastSpotify.url;
+    if (lastLink) els.linkInput.value = lastLink.url;
     // A station that was sounding when Studio closed is tuned again. Smoke and
     // capture runs share the owner's profile, so they stay silent.
     const headless = /[?&](?:smoke|capture)=1(?:&|$)/.test(String(window.location?.search || ""));
     if (state.source === "radio" && prefs.radioOn && station(state.station) && !headless) tune(state.station);
-    window.addEventListener("resize", schedulePreview);
+    window.addEventListener("resize", () => { schedulePreview(); scheduleDropdown(); });
+    // Capture the complete dismissal gesture before the tree or rail sees it.
+    for (const type of ["pointerdown", "pointerup", "pointercancel", "click", "auxclick", "contextmenu"]) window.addEventListener(type, appearanceOutside, true);
+    window.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || !settingsAppearance || window.MefiNav?.state?.transient || window.MefiNav?.state?.sheet) return;
+      const drawer = document.getElementById("tab-studio");
+      if (window.MefiSelect?.owns?.(drawer)) { event.preventDefault(); event.stopImmediatePropagation(); window.MefiSelect.close(true); return; }
+      if (event.target?.id === "settings-find" && event.target.value) return;
+      event.preventDefault(); event.stopImmediatePropagation(); dismissAppearance();
+    }, true);
     window.addEventListener("mefi-tree-view", (event) => syncTreeView(event.detail?.view));
     window.addEventListener("mefi-audio-change", (event) => renderAudioLink(event.detail));
     window.addEventListener("mefi-community-change", (event) => syncPremium(typeof event?.detail?.premium === "boolean" ? event.detail.premium : premiumAllowed()));
     // Linking can become possible or moot with the entitlement unchanged.
     window.addEventListener("mefi-community-status", () => renderPremiumLocks());
-    if (typeof window.ResizeObserver === "function") new window.ResizeObserver(schedulePreview).observe(els.preview);
+    // Settings can preview a Void look without opening the canvas. Auxiliary
+    // overlays leave Settings underneath, so only a page change ends it.
+    window.addEventListener("mefi:nav", (event) => {
+      if (event?.detail?.action !== "open") return;
+      const id = event.detail.id;
+      if (id === "audio" || id === "music" && (event.detail.params === "sound" || event.detail.params?.group === "sound")) return;
+      closeAudio();
+      if (["studio", "music", "appearancePreview"].includes(id)) return;
+      const kind = window.MefiNav?.get?.(id)?.kind;
+      if (kind === "overlay" || kind === "action") return;
+      endPreview();
+      activateSettings(null);
+    });
+    if (typeof window.ResizeObserver === "function") {
+      new window.ResizeObserver(schedulePreview).observe(els.preview);
+      const dropdownObserver = new window.ResizeObserver(scheduleDropdown);
+      dropdownObserver.observe(els.dropdown); dropdownObserver.observe(els.dropdownBody);
+    }
     window.addEventListener("beforeunload", () => { for (const track of state.tracks) URL.revokeObjectURL(track.url); });
   }
-  function open() {
+  let settingsHosts = null;
+  let previewRoute = "music";
+  let settingsAppearance = false;
+  let appearanceSection = "themes";
+  let appearanceDock = "left";
+  try { if (localStorage.getItem("mefiStudio.appearanceDock") === "right") appearanceDock = "right"; } catch {}
+  let dismissPointer = null, dismissClick = false;
+  function selectAppearanceSection(section) {
+    if (!["themes", "nodes", "layout", "interface"].includes(section)) return;
+    appearanceSection = section;
+    const pane = document.getElementById("settings-category-appearance");
+    for (const panel of pane?.querySelectorAll?.("[data-appearance-panel]") || []) panel.hidden = settingsAppearance && panel.dataset.appearancePanel !== section;
+    for (const control of pane?.querySelectorAll?.("[data-appearance-section]") || []) control.setAttribute("aria-pressed", String(control.dataset.appearanceSection === section));
+    document.getElementById("settings-sections")?.scrollTo?.({ top: 0, behavior: "instant" });
+    window.MefiScroll?.refresh?.();
+  }
+  function syncAppearanceDock() {
+    document.body.dataset.appearanceDock = appearanceDock;
+    const dock = document.getElementById("appearance-dock");
+    if (dock) {
+      const label = `Move sidebar to the ${appearanceDock === "left" ? "right" : "left"}`;
+      dock.textContent = appearanceDock === "left" ? "⇥" : "⇤";
+      dock.title = label; dock.setAttribute("aria-label", label);
+    }
+    schedulePreview();
+  }
+  function setSettingsAppearance(active, { keepTree = false, keepLook = false } = {}) {
+    if (active === settingsAppearance) { if (active) schedulePreview(); return; }
+    settingsAppearance = active;
+    if (active) {
+      document.body.classList.add("appearance-settings-active");
+      els.settingsStage.hidden = false;
+      syncAppearanceDock(); syncTreeView(); selectAppearanceSection(appearanceSection);
+      schedulePreview();
+    } else {
+      document.body.classList.remove("appearance-settings-active");
+      if (els.settingsStage) els.settingsStage.hidden = true;
+      selectAppearanceSection(appearanceSection);
+      if (previewFrame) window.cancelAnimationFrame?.(previewFrame);
+      previewFrame = 0;
+      window.MefiIdle?.setSettingsPreview?.(null, { keepActive: keepTree });
+      if (!keepLook) endPreview();
+    }
+  }
+  function dismissAppearance() {
+    if (settingsAppearance) {
+      setSettingsAppearance(false, { keepTree: true });
+      // Dismissing is not a task selection, including the navigation layer's
+      // remembered task. Leave the tree ready for a separate, deliberate click.
+      window.MefiNav?.go?.("command", { preserveSelection: true });
+      document.getElementById("idle-layer")?.focus?.({ preventScroll: true });
+    } else if (state.opened) close();
+  }
+  function appearanceOwns(target) {
+    const drawer = settingsAppearance ? document.getElementById("tab-studio") : els.sheet;
+    return drawer?.contains(target) || (settingsAppearance ? els.settingsViews : els.previewViews)?.contains(target)
+      || window.MefiSelect?.owns?.(drawer) && window.MefiSelect?.contains?.(target)
+      || window.MefiScroll?.owns?.(drawer, target);
+  }
+  function appearanceOutside(event) {
+    const consume = () => { event.preventDefault(); event.stopImmediatePropagation(); };
+    const canDismiss = () => {
+      const transient = window.MefiNav?.state?.transient;
+      return (settingsAppearance || state.opened) && !appearanceOwns(event.target)
+        && (!transient || transient === previewRoute) && !window.MefiNav?.state?.sheet;
+    };
+    if (event.type === "pointerdown") {
+      // A fresh gesture always releases the previous dismissal latch, even if
+      // its pointerup happened outside the window and no click was delivered.
+      dismissPointer = null; dismissClick = false;
+      if (!canDismiss()) return;
+      dismissPointer = event.pointerId; dismissClick = true;
+      consume(); dismissAppearance();
+    } else if (event.type === "pointercancel") {
+      dismissPointer = null; dismissClick = false;
+    } else if (event.type === "pointerup" && dismissClick && event.pointerId === dismissPointer) {
+      consume();
+    } else if (["click", "auxclick", "contextmenu"].includes(event.type) && dismissClick) {
+      consume();
+      if (event.type !== "contextmenu") { dismissPointer = null; dismissClick = false; }
+    } else if (event.type === "click" && canDismiss()) {
+      // Keyboard/assistive clicks need the same dismissal rule without a pointer.
+      consume(); dismissAppearance();
+    }
+  }
+  function mountAppearanceSidebar() {
+    const pane = document.getElementById("settings-category-appearance");
+    if (!pane || els.settingsStage) return;
+    const stage = element("section", "appearance-stage", null, document.body);
+    stage.id = "appearance-stage"; stage.hidden = true; stage.setAttribute("aria-label", "Live appearance preview");
+    els.settingsStage = stage;
+    const header = element("header", "appearance-stage-header", null, stage);
+    const copy = element("div", null, null, header);
+    element("p", "appearance-live-label", "Live preview", copy);
+    element("h2", null, "Your live tree", copy);
+    element("p", "appearance-stage-hint", "Click outside the sidebar to close it. Click again to explore.", copy);
+    els.settingsViews = element("div", "music-preview-views", null, header);
+    els.settingsViews.setAttribute("role", "group"); els.settingsViews.setAttribute("aria-label", "Live tree view");
+    for (const view of ["2d", "3d"]) {
+      const choice = button(view.toUpperCase(), "ghost", els.settingsViews, () => { window.MefiIdle?.setView?.(view); syncTreeView(view); }, `appearance-view-${view}`);
+      choice.dataset.view = view;
+    }
+    button("Fit", "ghost music-preview-fit", els.settingsViews, () => window.MefiIdle?.fitAll?.(), "appearance-tree-fit");
+    els.settingsViewport = element("div", "appearance-viewport", null, stage);
+    els.settingsViewport.setAttribute("aria-hidden", "true");
+    const controls = document.getElementById("settings-appearance");
+    if (controls) controls.dataset.appearancePanel = "interface";
+    const tree = document.getElementById("settings-tree");
+    if (tree) tree.dataset.appearancePanel = "nodes";
+    document.getElementById("appearance-sections")?.addEventListener("click", (event) => {
+      const section = event.target.closest?.("[data-appearance-section]");
+      if (section) selectAppearanceSection(section.dataset.appearanceSection);
+    });
+    document.getElementById("appearance-close")?.addEventListener("click", dismissAppearance);
+    document.getElementById("appearance-dock")?.addEventListener("click", () => {
+      appearanceDock = appearanceDock === "left" ? "right" : "left";
+      try { localStorage.setItem("mefiStudio.appearanceDock", appearanceDock); } catch {}
+      syncAppearanceDock();
+    });
+    if (typeof window.ResizeObserver === "function") new window.ResizeObserver(schedulePreview).observe(els.settingsViewport);
+    syncAppearanceDock();
+  }
+  function mountSettings(hosts) {
     init();
+    settingsHosts = hosts;
+    if (state.opened) return;
+    const move = (node, host) => {
+      if (!node || !host || (node.parentElement ?? node.parentNode) === host) return;
+      if (typeof host.moveBefore === "function") { try { host.moveBefore(node, null); return; } catch {} }
+      node.remove?.(); host.append(node);
+    };
+    if (hosts.look && !document.getElementById("settings-canvas-preview")) {
+      const preview = button("Preview canvas", "ghost settings-preview-button", hosts.look, openPreview);
+      preview.id = "settings-canvas-preview";
+      preview.title = "Open the live canvas beside these appearance controls";
+    }
+    move(els.groups.look.group, hosts.look);
+    mountAppearanceSidebar();
+    renderPremiumLocks(); render();
+  }
+  function activateSettings(category) {
+    const active = category === "appearance" && document.getElementById("tab-studio")?.hidden === false && Boolean(els.settingsStage) && !state.opened;
+    setSettingsAppearance(active);
+    if (category !== "appearance" && settingsReveal.custom) {
+      settingsReveal.custom = false;
+      if (els.customPalette) els.customPalette.hidden = effective.theme !== "custom";
+    }
+    if (category !== "audio" && settingsReveal.source) { settingsReveal.source = null; renderSourcePanels(); }
+  }
+  function revealSettingsTarget(target) {
+    init();
+    for (let node = target; node; node = node.parentElement ?? node.parentNode) {
+      if (node.dataset?.appearancePanel) selectAppearanceSection(node.dataset.appearancePanel);
+      if (node === els.customPalette) {
+        selectAppearanceSection("themes");
+        settingsReveal.custom = true; els.customPalette.hidden = false;
+        return true;
+      }
+      for (const source of ["local", "radio", "link"]) if (node === els[source]) {
+        settingsReveal.source = source;
+        renderSourcePanels();
+        return true;
+      }
+    }
+    return false;
+  }
+  function open(group = "look") {
+    if (group === "sound") { openAudio(); return; }
+    if (window.MefiBooklet?.jumpToSettings && window.MefiNav?.go) {
+      window.MefiNav.go("studio", { section: "appearance" });
+      return;
+    }
+    openPreview();
+  }
+  function openPreview() {
+    init();
+    closeAudio();
+    setSettingsAppearance(false, { keepLook: true });
     if (state.opened) { els.sheet.focus(); schedulePreview(); return; }
     priorFocus = document.activeElement;
+    if (settingsHosts) { els.groups.look.group.remove?.(); els.body.append(els.groups.look.group); }
     restoreWorkspace = Boolean(window.MefiIdle?.setSettingsPreview && window.MefiWorkspace?.isActive?.());
     state.opened = true; els.overlay.hidden = false;
     // Claim before opening the canvas, so navigation retains the true origin.
-    window.MefiNav?.claim?.("music");
+    previewRoute = settingsHosts || window.MefiNav?.get?.("appearancePreview") ? "appearancePreview" : "music";
+    window.MefiNav?.claim?.(previewRoute);
     els.sheet.setAttribute("aria-modal", "false");
     if (restoreWorkspace) window.MefiWorkspace.exit();
     document.body.classList.add("music-preview-active");
-    mountSpotify();
     renderPremiumLocks();
-    render(); syncTreeView(); els.sheet.focus(); schedulePreview(); scheduleJump();
+    render(); syncTreeView(); els.sheet.focus(); schedulePreview();
   }
   function close() {
     if (!els.overlay || els.overlay.hidden) return;
+    endPreview();
     state.opened = false; els.overlay.hidden = true;
     if (previewFrame) window.cancelAnimationFrame?.(previewFrame);
     previewFrame = 0;
-    if (jumpFrame) window.cancelAnimationFrame?.(jumpFrame);
-    jumpFrame = 0;
     window.MefiIdle?.setSettingsPreview?.(null);
     document.body.classList.remove("music-preview-active");
     if (restoreWorkspace) window.MefiWorkspace?.enter?.();
     restoreWorkspace = false;
-    window.MefiNav?.release?.("music");
+    window.MefiNav?.release?.(previewRoute);
+    if (settingsHosts) {
+      mountSettings(settingsHosts);
+      document.getElementById("settings-canvas-preview")?.focus?.();
+    }
     if (!window.MefiNav?.release) priorFocus?.focus?.();
   }
-  window.MefiMusic = { init, open, close, status, graphPreferences, applyNodeStyle, applyNodeLayout, applyNodeEffects, getAudioElement: () => { init(); return activeDeck(); }, tune, stopRadio,
-    stations: () => STATIONS.map((item) => ({ id: item.id, name: item.name, detail: item.detail, origin: item.origin, mirrors: item.mirrors.length })), setRecommender: (fn) => { recommender = typeof fn === "function" ? fn : null; render(); }, addFiles, loadSpotify, setSource, applyTheme, applyCustomColors,
+  window.MefiMusic = { init, open, openPreview, openAudio, closeAudio, toggleAudio, mountSettings, activateSettings, revealSettingsTarget, settingsAppearanceActive: () => settingsAppearance, leaveSettingsAppearance: (options) => setSettingsAppearance(false, options), close, status, graphPreferences, applyNodeStyle, applyNodeLayout, applyNodeEffects, getAudioElement: () => { init(); return activeDeck(); }, tune, stopRadio,
+    stations: () => STATIONS.map((item) => ({ id: item.id, name: item.name, detail: item.detail, origin: item.origin, mirrors: item.mirrors.length })), setRecommender: (fn) => { recommender = typeof fn === "function" ? fn : null; render(); }, addFiles, setSource, applyTheme, applyCustomColors,
+    // Links from anywhere in Studio (a chat, a mirrored Discord room): linkInfo
+    // says whether and how a link plays, without touching the player.
+    playLink, loadSpotify: (raw) => playLink(raw),
+    // For renderer/together.js: the Links player that is mounted right now
+    // (an iframe, or the <video> of a plain file), and where its section goes.
+    linkElement: () => { const frame = els.linkFrame; return frame && state.link && state.source === "link" ? { url: state.link.url, kind: state.link.kind, provider: state.link.provider, element: frame } : null; },
+    togetherHost: () => { init(); return els.together; },
+    linkInfo: (raw) => { const link = mediaLink(raw); return link ? { provider: link.provider, providerName: link.providerName, kind: link.kind, label: link.label, url: link.url, playable: Boolean(playableLink(link)) } : null; },
     customColors: () => ({ ...prefs.customColors }), themePalette: () => ({ theme: effective.theme, ...resolvePalette(effective.theme, prefs.customColors) }),
     // isNodeStyle is for the tree painters; the catalog feeds Settings › Community.
     isNodeStyle,

@@ -7,6 +7,7 @@ import {
   NODE_TYPES, PERMISSION_KEYS, GATES, MAX_NEST, MAX_PARALLEL,
   catalog, makeNode, defaultMap, normalizeMap, requiredGrants,
   validateMap, compileMap, gatesFor, issuePolicyFor, partActivity, summarize,
+  draftPrompt, draftFixPrompt, repairDraft,
 } from "../scripts/brains.cjs";
 import issues from "../scripts/agent-issues.cjs";
 
@@ -388,6 +389,164 @@ test("only the settings the studio reads are marked wired", () => {
     assert.ok((type.settings ?? []).some((setting) => setting.wired === true), `${type.type} claims Live`);
   }
   assert.ok(catalog().nodes.find((type) => type.type === "work.dispatch").settings.find((setting) => setting.key === "parallel").wired, "the catalog carries the mark to the editor");
+});
+
+// ---- drafts -----------------------------------------------------------------------
+
+// What a model really sent back for "rebuild the project's brain" (2026-09-23):
+// every part right, four wires into ends that do not take what they carry.
+function brokenDraft() {
+  const node = (id, type, x, y) => ({ id, type, x, y });
+  const edge = (from, fromPort, to, toPort) => ({ from: { node: from, port: fromPort }, to: { node: to, port: toPort } });
+  return {
+    name: "Project Brain Rebuild",
+    nodes: [
+      node("req_user", "user.request", 0, 0), node("req_inbox", "inbox.request", 0, 160), node("clarity", "check.model", 260, 0),
+      node("approve", "check.user", 520, 160), node("scope", "analyze.scope", 780, 0), node("plan", "plan.build", 1040, 0),
+      node("brief", "brief.write", 1300, 0), node("review", "assistant.review", 1560, 0), node("setup", "assistant.setup", 1820, 0),
+      node("jev", "jev.classify", 2080, 0), node("pick", "model.pick", 2340, 0), node("dispatch", "work.dispatch", 2600, 0),
+      node("verify", "verify.evidence", 2860, 0), node("intake", "issue.intake", 2860, 160), node("triage", "issue.triage", 3120, 160),
+      node("ask", "ask.user", 3380, 160), node("apply", "answer.apply", 3640, 160), node("readme", "note", 0, 320),
+    ],
+    edges: [
+      edge("req_user", "request", "clarity", "in"), edge("req_inbox", "request", "clarity", "in"), edge("clarity", "clear", "scope", "in"),
+      edge("clarity", "unclear", "approve", "in"), edge("approve", "approved", "scope", "in"), edge("scope", "needs-plan", "plan", "in"),
+      edge("scope", "direct", "brief", "in"), edge("plan", "plan", "brief", "in"), edge("plan", "questions", "approve", "in"),
+      edge("brief", "brief", "review", "in"), edge("review", "issues", "brief", "in"), edge("review", "accepted", "setup", "in"),
+      edge("review", "accepted", "pick", "brief"), edge("review", "accepted", "dispatch", "brief"), edge("setup", "question", "jev", "in"),
+      edge("jev", "values", "pick", "values"), edge("pick", "route", "dispatch", "route"), edge("dispatch", "run", "verify", "run"),
+      edge("dispatch", "run", "intake", "run"), edge("dispatch", "issues", "intake", "run"), edge("verify", "issues", "intake", "run"),
+      edge("intake", "issue", "triage", "issue"), edge("triage", "ask", "ask", "ask"), edge("ask", "answer", "apply", "answer"),
+      edge("apply", "request", "clarity", "in"),
+    ],
+  };
+}
+const wired = (map) => map.edges.map((edge) => `${edge.from.node}.${edge.from.port}>${edge.to.node}.${edge.to.port}${edge.feedback ? "~" : ""}`);
+
+test("a drafted map's misfit wires are moved to where their kind goes, or removed, and each repair is said", () => {
+  const before = validateMap(normalizeMap({ ...brokenDraft(), grants: requiredGrants(brokenDraft()) }));
+  assert.equal(codes(before).filter((code) => code === "type-mismatch").length, 4, "the draft as the model sent it");
+  const { map, fixes } = repairDraft({ ...brokenDraft(), id: "draft" });
+  const after = validateMap(map);
+  assert.equal(after.errors, 0, after.problems.map((problem) => problem.text).join("; "));
+  assert.equal(after.warnings, 0, after.problems.map((problem) => problem.text).join("; "));
+  const edges = wired(map);
+  // A brief into the part that writes briefs goes past it, to what reads them.
+  assert.ok(edges.includes("scope.direct>review.in"));
+  assert.ok(!edges.includes("scope.direct>brief.in"));
+  // Plan questions and review issues go to the one part here made for each.
+  assert.ok(edges.includes("plan.questions>ask.ask"));
+  assert.ok(edges.includes("review.issues>triage.issue"));
+  // Nothing here takes a turned-away ask, so that wire goes, and the approval
+  // it fed is put in line on the path it sat beside rather than left empty.
+  assert.ok(!edges.some((item) => item.startsWith("clarity.unclear>")));
+  assert.ok(edges.includes("clarity.clear>approve.in"));
+  assert.ok(edges.includes("approve.approved>scope.in"));
+  assert.ok(!edges.includes("clarity.clear>scope.in"));
+  // The answer going back to the check is the loop, and only it.
+  assert.deepEqual(edges.filter((item) => item.endsWith("~")), ["apply.request>clarity.in~"]);
+  assert.equal(compileMap(map).ok, true);
+  assert.deepEqual(map.grants, requiredGrants(map), "exactly the reach its parts need");
+  // Every repair is a sentence naming the parts it touched.
+  assert.equal(fixes.length, 6);
+  assert.ok(fixes.some((line) => /^Removed the wire from "A model checks it" · Needs work into "You verify it" · Work: .*no part here takes rejected/.test(line)));
+  assert.ok(fixes.some((line) => /past "Write the brief" to "Assistant reviews it"/.test(line)));
+  assert.ok(fixes.some((line) => /^Moved the wire from "Make the plan" · Questions to "Ask you" · Ask/.test(line)));
+  assert.ok(fixes.some((line) => /^Ran "A model checks it" · Clear through "You verify it"/.test(line)));
+  assert.ok(fixes.some((line) => /loops back as feedback/.test(line)));
+});
+
+test("a map that is already right comes through the repair unchanged", () => {
+  const shipped = defaultMap();
+  const { map, fixes } = repairDraft(JSON.parse(JSON.stringify(shipped)));
+  assert.deepEqual(fixes, []);
+  assert.deepEqual(wired(map), wired(shipped));
+  assert.deepEqual(map.nodes.map((node) => [node.id, node.type, node.x, node.y]), shipped.nodes.map((node) => [node.id, node.type, node.x, node.y]));
+  assert.equal(map.builtIn, false, "a draft is never the shipped map");
+});
+
+test("a draft's loosely named parts and ports are matched, and parts this build lacks are left out", () => {
+  const { map, fixes } = repairDraft({
+    id: "loose", name: "Loose",
+    nodes: [
+      { id: "you", type: "User Request", x: 0, y: 0 },
+      { id: "again", type: "user.request", x: 0, y: 160 },
+      { id: "check.model", type: "check.model", x: 260, y: 0 },
+      { id: "size", type: "Analyse the ask", x: 520, y: 0 },
+      { id: "plan", type: "plan.build", x: 780, y: 0 },
+      { id: "dream", type: "vibes.oracle", title: "Oracle", x: 780, y: 160 },
+      { id: "elsewhere", type: "brain.call", config: { map: "nowhere" }, x: 900, y: 0 },
+    ],
+    edges: [
+      { from: "you.request", to: "check.model.in" },
+      { from: { node: "again", port: "out" }, to: { node: "check_model", port: "Ask" } },
+      { from: { node: "check.model", port: "Clear" }, to: { node: "size", port: "input" } },
+      { from: { node: "size", port: "Needs a plan" }, to: { node: "plan", port: "in" } },
+      { from: { node: "plan", port: "plan" }, to: { node: "dream", port: "in" } },
+      { from: { node: "size", port: "direct" }, to: { node: "elsewhere", port: "in" } },
+    ],
+  });
+  assert.deepEqual(map.nodes.map((node) => node.type), ["user.request", "check.model", "analyze.scope", "plan.build"]);
+  assert.ok(map.nodes.every((node) => /^[a-z0-9][a-z0-9_-]*$/i.test(node.id)), "a type used as an id is made a usable id");
+  assert.deepEqual(wired(map), ["you.request>check_model.in", "check_model.clear>size.in", "size.needs-plan>plan.in"]);
+  assert.equal(validateMap(map).errors, 0);
+  assert.ok(fixes.some((line) => /^Left out "Oracle": this build has no vibes\.oracle part/.test(line)));
+  assert.ok(fixes.some((line) => /^Left out .*calls a brain that is not saved here/.test(line)));
+  assert.ok(fixes.some((line) => /^Kept one "You ask for it"/.test(line)));
+  assert.ok(fixes.some((line) => /^Matched \d+ wire ends to the port/.test(line)));
+  assert.ok(fixes.some((line) => /^Removed 2 wires that joined no real parts/.test(line)));
+  // A call to a map that is saved here stays.
+  const kept = repairDraft({ id: "k", nodes: [{ id: "c", type: "brain.call", config: { map: "inner" } }], edges: [] }, { maps: [{ id: "inner", nodes: [{}] }] });
+  assert.equal(kept.map.nodes.length, 1);
+});
+
+test("a required input left empty is fed from upstream, never from downstream", () => {
+  const { map, fixes } = repairDraft({
+    id: "gap", name: "Gap",
+    nodes: [
+      { id: "you", type: "user.request", x: 0, y: 0 }, { id: "size", type: "analyze.scope", x: 260, y: 0 },
+      { id: "write", type: "brief.write", x: 520, y: 0 }, { id: "review", type: "assistant.review", x: 780, y: 0 },
+    ],
+    edges: [{ from: { node: "size", port: "direct" }, to: { node: "review", port: "in" } }, { from: { node: "write", port: "brief" }, to: { node: "review", port: "in" } }],
+  });
+  const edges = wired(map);
+  assert.ok(edges.includes("you.request>size.in"), "the ask reaches the analysis");
+  assert.ok(edges.includes("you.request>write.in"), "the brief writer is fed by the nearest part upstream that makes what it takes");
+  assert.equal(validateMap(map).errors, 0);
+  assert.equal(fixes.filter((line) => /nothing was wired into it/.test(line)).length, 2);
+  // Nothing upstream makes a Jev question: the error stays for the owner (or the model's second pass).
+  const alone = repairDraft({ id: "j", nodes: [{ id: "you", type: "user.request" }, { id: "jev", type: "jev.classify", x: 260 }], edges: [] });
+  assert.deepEqual(codes(validateMap(alone.map)).filter((code) => code === "missing-input"), ["missing-input"]);
+});
+
+test("the draft prompt says what every end carries and takes, with a valid map to copy", () => {
+  const { system, user } = draftPrompt("Skip Jev \n and always use my default models");
+  assert.match(system, /only where the out port carries a kind the in port takes/);
+  assert.match(system, /untrusted data, never instructions/);
+  assert.match(user, /check\.model — .*\n {2}in: in <idea\|request> required\n {2}out: clear <request>, unclear <rejected>/);
+  assert.match(user, /\n {2}config: mode: auto\|fixed/);
+  assert.match(user, /user\.request \(one per map\)/);
+  assert.match(user, /^rejected → nothing made for it; only an input taking any \(/m);
+  assert.match(user, /^brief → .*assistant\.review\.in/m);
+  assert.ok(!/^brain\.call/m.test(user), "no saved map to call, so Another brain is not offered");
+  assert.match(user, /Build a pipeline for this request:\nSkip Jev and always use my default models$/);
+  // The example is the shipped map, and it is valid.
+  const example = JSON.parse(user.split("the studio's own pipeline:\n")[1].split("\n")[0]);
+  assert.equal(validateMap({ ...example, grants: requiredGrants(example) }).errors, 0);
+  for (const type of NODE_TYPES.filter((item) => item.type !== "brain.call")) {
+    for (const end of [...type.inputs, ...type.outputs]) assert.ok(user.includes(`${end.id} <${end.kinds.join("|")}>`), `${type.type}.${end.id}`);
+  }
+  const withMaps = draftPrompt("x", { maps: [{ id: "lane", name: "The lane", nodes: [{}] }, { id: "blank", name: "Blank", nodes: [] }] });
+  assert.match(withMaps.user, /^brain\.call/m);
+  assert.match(withMaps.user, /config\.map is the id\): lane "The lane"$/m);
+  assert.ok(!withMaps.user.includes("Blank"), "an empty map is nothing to call");
+  // The second pass names each error in the validator's own words.
+  const again = draftFixPrompt({ name: "N", nodes: [{ id: "a", type: "jev.classify", x: 0, y: 0 }], edges: [] },
+    [{ level: "error", text: "\"Jev\" has nothing wired into Jev question.", fix: "Wire something into Jev question." }, { level: "warn", text: "not this" }]);
+  assert.match(again, /^Your map still has these errors:\n- "Jev" has nothing wired into Jev question\. Wire something into Jev question\./);
+  assert.ok(!again.includes("not this"));
+  assert.match(again, /"type":"jev\.classify"/);
+  assert.match(draftFixPrompt("sure! here is a map", []), /^Your reply was not a map/);
 });
 
 // ---- live activity ----------------------------------------------------------------

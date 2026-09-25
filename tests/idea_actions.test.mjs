@@ -35,6 +35,21 @@ test("inbox adds apply to the latest requests and keep only what a person or dra
   assert.equal(applyRequestAction([], { action: "add", requests: [] }, 1).ok, false);
 });
 
+test("a typed inbox ask is titled from its first line, and the owner's own adds carry the owner's origin", () => {
+  // The Explorer inbox sends a prompt alone; promotion needs a title, and
+  // nothing else runs an inbox request, so a title-less ask never ran.
+  const typed = applyRequestAction([], { action: "add", requests: [{ prompt: "  Make the save button bigger\nand keep it blue  ", source: "manual" }] }, 7).requests[0];
+  assert.equal(typed.title, "Make the save button bigger");
+  assert.equal(typed.prompt, "Make the save button bigger\nand keep it blue");
+  const long = applyRequestAction([], { action: "add", requests: [{ prompt: "x".repeat(300) }] }, 7).requests[0];
+  assert.equal(long.title.length, 90, "clipped to the card cap");
+  // Typed asks and expanded checkpoints are the owner's (band "owner" once on
+  // the board); Grow and Improve drafts keep their filed band.
+  assert.deepEqual({ ...typed.origin }, { kind: "request", by: "owner" });
+  const drafts = applyRequestAction([], { action: "add", requests: ["expand", "grow", "improver"].map((source) => ({ title: `Draft ${source}`, prompt: "p", source })) }, 8).requests;
+  assert.deepEqual(drafts.map((row) => row.origin?.by ?? null), ["owner", null, null]);
+});
+
 test("an inbox remove targets one request by identity and never drops a claimed or vanished one", () => {
   const rows = [
     { at: 5, prompt: "Same prompt", title: "A" },

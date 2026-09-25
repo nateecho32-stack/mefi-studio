@@ -12,6 +12,8 @@
     review: "Verifying", verifying: "Verifying", awaiting_verification: "Verifying",
     blocked: "Needs attention",
     grouped: "In a plan", absorbed: "In a plan",
+    // An inbox request a board card already carries (backlog.summarizeBacklog).
+    represented: "On the board",
     cooling: "Retry scheduled",
     planning: "Planning",
     done: "Done", completed: "Done", archived: "Archived",

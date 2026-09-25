@@ -2,14 +2,14 @@
 
 A-Eyes overseer directive: when a builder reports MEFI_RESULT: done,
 scripts/assistant.mjs must schedule the overseer's own verification run
-(npm run check plus the task's focused tests) before the task card closes,
-and a done report must queue EXACTLY ONE verification job. Direct requests
-settle through the same scheduler, keyed by request identity instead of a
-task id. The behavioral half drives the real exports (scheduleVerificationOnDone,
+(the project's local check plus the task's focused tests) before the task card closes,
+and a done report must queue EXACTLY ONE verification job. The scheduler keys
+a job by whatever row identity it is handed (driver case 8 keeps that
+property); only tasks run now, so main.cjs settles and stamps task rows alone.
+The behavioral half drives the real exports (scheduleVerificationOnDone,
 focusedTestsForTask, verificationJobKey, parseExecutorResult) through a Node
 stdin driver; the static half pins the exports and the main.cjs settlement
-wiring for both the task and request settle paths. Node checks skip cleanly
-without Node.
+wiring for the task settle path. Node checks skip cleanly without Node.
 """
 from pathlib import Path
 import json
@@ -98,7 +98,8 @@ console.log(JSON.stringify({ bareCommands: bareQueue[0]?.commands }));
 const fromScope = focusedTestsForTask(task, done);
 const fromNothing = focusedTestsForTask(null, null);
 console.log(JSON.stringify({ fromScope, fromNothing }));
-// 8. A direct request's settle path keys its job by request identity.
+// 8. The scheduler keys a job by the row identity it is handed (a legacy
+// request key here): one job per attempt, never colliding with a task's.
 const { requestKey } = await import(
   pathToFileURL(path.resolve(process.argv[2], "scripts", "agent-modes.cjs")).href
 );
@@ -133,6 +134,11 @@ console.log(JSON.stringify({
   missingNull: missing === null,
   notDoneNull: notDone === null,
 }));
+// 10. An observed project with no check must not regain the legacy npm default.
+const localTask = { ...bare, projectPath: "C:/fixture-game" };
+const noCheck = scheduleVerificationOnDone({ resultNote: secondLine, task: localTask, attemptKey: "run_no_check", queue: [], baseCheck: null });
+const localCheck = scheduleVerificationOnDone({ resultNote: secondLine, task: localTask, attemptKey: "run_local_check", queue: [], baseCheck: 'node --test "tests.js"' });
+console.log(JSON.stringify({ noCheckCommands: noCheck.commands, localCommands: localCheck.commands, projectPath: localCheck.projectPath }));
 """
 
 
@@ -147,9 +153,10 @@ class VerificationSchedulingTests(unittest.TestCase):
         self.assertIn('asArray(queue).some((job) => isObject(job) && job.key === key)', module)
         # Only a done claim queues; the result field is read start-anchored.
         self.assertIn("VERIFICATION_RESULT_RE", module)
-        # The queued run is the project's base check (npm run check by
-        # default) plus the task's focused tests.
-        self.assertIn('commands: [str(baseCheck).trim() || "npm run check", ...tests]', module)
+        # Only an unspecified legacy chooser keeps the npm default. Explicit
+        # absence from the project observer remains absent, plus focused tests.
+        self.assertIn('baseCheck === undefined ? ["npm run check"]', module)
+        self.assertIn('str(baseCheck).trim() ? [str(baseCheck).trim()] : []', module)
         # Spaced Windows paths survive the shell:true runner: every path
         # segment is double-quoted ("Coding projects" was once split by
         # cmd.exe and recorded as "Coding, projects").
@@ -169,18 +176,19 @@ class VerificationSchedulingTests(unittest.TestCase):
         # a settle kick that closes the card without waiting for the next pass.
         self.assertIn("const VERIFICATION_PARALLEL = 2", main, "the drain runs a bounded pair of verification jobs")
         self.assertIn("kickVerificationSettlement()", main, "a landed result settles its card immediately")
-        # Direct requests settle through the same scheduler, keyed by request
-        # identity (agentModes.requestKey), and the runner stamps the observed
-        # state back onto the request row by that same identity.
-        self.assertIn("agentModes.requestKey(owned)", main, "the request settle path keys by request identity")
-        self.assertIn("agentModes.requestKey(row) !== planned.taskId", main, "the runner stamps request rows by request identity")
+        # Direct request execution is retired: only tasks settle and are
+        # stamped. No settle path keys a job by request identity, and the
+        # runner no longer stamps inbox rows.
+        self.assertNotIn("agentModes.requestKey(owned)", main, "no request settle path remains")
+        self.assertNotIn("agentModes.requestKey(row) !== planned.taskId", main, "the runner stamps task rows only")
+        self.assertIn("task?.id !== planned.taskId || task.verificationRun?.key !== planned.key", main, "the runner stamps the task the job was queued for")
 
     def test_done_report_queues_exactly_one_verification_job(self):
         if not NODE:
             self.skipTest("Node unavailable; static contracts still ran")
         result = _run_driver(DRIVER)
         self.assertEqual(0, result.returncode, result.stderr)
-        queued, negatives, quoted, bare, focused, request, recovery = (json.loads(line) for line in result.stdout.splitlines())
+        queued, negatives, quoted, bare, focused, request, recovery, local = (json.loads(line) for line in result.stdout.splitlines())
         # 1–3. One done report, one job; retries and duplicate lines queue none.
         self.assertTrue(queued["queued"], "a done report queues a verification job")
         self.assertEqual(1, queued["queueLength"], f"exactly one job expected: {queued}")
@@ -208,8 +216,8 @@ class VerificationSchedulingTests(unittest.TestCase):
         # 7. Focused resolution never invents tests.
         self.assertEqual(2, len(focused["fromScope"]))
         self.assertEqual([], focused["fromNothing"])
-        # 8. A request's done report queues one job keyed by request identity,
-        # with the same command shape and no collision with the task's key.
+        # 8. The scheduler is identity-agnostic: a request-keyed row queues one
+        # job with the same command shape and no collision with the task's key.
         self.assertTrue(request["requestQueued"], "a request done report queues a verification job")
         self.assertFalse(request["requestRetryQueued"], "the retried request report queues nothing")
         self.assertEqual(1, request["requestQueueLength"], f"exactly one request job expected: {request}")
@@ -224,6 +232,10 @@ class VerificationSchedulingTests(unittest.TestCase):
         self.assertEqual(["npm run check", 'node --test "tests/foo.test.mjs"', 'python -m unittest discover -s "tools" -p "test_mefi_studio_tasks.py"'], recovery["recoveredCommands"])
         self.assertTrue(recovery["missingNull"], "an attempt that never queued finds nothing")
         self.assertTrue(recovery["notDoneNull"], "a non-done report has no job to recover")
+        # 10. Project-local selection survives scheduling without a Studio fallback.
+        self.assertEqual([], local["noCheckCommands"])
+        self.assertEqual(['node --test "tests.js"'], local["localCommands"])
+        self.assertEqual("C:/fixture-game", local["projectPath"])
 
 
 if __name__ == "__main__":

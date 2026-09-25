@@ -2,7 +2,7 @@
 (function () {
   "use strict";
 
-  const state = { ideas: [], selected: null, view: "graph", clusterFilter: null, projectId: null };
+  const state = { ideas: [], selected: null, view: "list", clusterFilter: null, projectId: null };
   const el = {};
   let initialized = false;
   let ideaRevision = 0;
@@ -21,8 +21,10 @@
 
   function updateBadge() {
     const unread = unreadCount();
-    // The id is guaranteed by the DOM contract; nav owns the element's hidden state.
-    document.getElementById("ideas-badge").textContent = String(unread);
+    // The classic link is replaced when nav builds the shared sheet links.
+    // Its badge may no longer exist; the registry owns current navigation badges.
+    const legacyBadge = document.getElementById("ideas-badge");
+    if (legacyBadge) legacyBadge.textContent = String(unread);
     el.unread.textContent = String(unread);
     window.MefiNav?.setBadge?.("ideas", unread);
   }
@@ -67,7 +69,7 @@
 
   function renderList() {
     el.list.textContent = "";
-    const ordered = [...state.ideas].sort((a, b) => Number(a.read) - Number(b.read) || b.at - a.at);
+    const ordered = [...state.ideas].sort((a, b) => Number(a.read) - Number(b.read) || (Number(b.at) || 0) - (Number(a.at) || 0));
     const filtered = state.clusterFilter ? ordered.filter((idea) => (idea.tags ?? []).includes(state.clusterFilter)) : ordered;
     if (!filtered.length) {
       const li = document.createElement("li");
@@ -79,13 +81,16 @@
     for (const idea of filtered.slice(0, 60)) {
       const li = document.createElement("li");
       li.classList.add("task-row");
-      li.style.setProperty("--task-color", idea.read ? "rgba(201,168,106,0.25)" : "#e6c98d");
+      li.style.setProperty("--task-color", idea.read ? "var(--gold-dim)" : "var(--gold-bright)");
       if (idea.id === state.selected) li.classList.add("selected");
       li.append(statusTag(idea));
       li.append(document.createTextNode(` ${idea.title ?? idea.detail}`));
       const meta = document.createElement("div");
       meta.className = "who";
-      meta.textContent = `${idea.source} · ${new Date(idea.at).toLocaleString()}${idea.read ? "" : " · unread"}`;
+      // A sparse row (no source, no time) leaves those parts out rather than
+      // printing "undefined · Invalid Date".
+      const at = idea.at == null || idea.at === "" ? NaN : new Date(idea.at).getTime();
+      meta.textContent = [idea.source, Number.isFinite(at) ? new Date(at).toLocaleString() : "", idea.read ? "" : "unread"].filter(Boolean).join(" · ");
       li.append(meta);
       // Focusable because nav's claim() focuses "#ideas-list li".
       li.tabIndex = 0;
@@ -104,6 +109,7 @@
     const idea = state.ideas.find((item) => item.id === id);
     if (!idea) return;
     state.selected = id;
+    el.overlay.dataset.detail = "true";
     if (!idea.read) {
       if (window.mefiStudio?.ideasAction) act("read", { ideaId: id });
       else { idea.read = true; save(); }
@@ -111,6 +117,7 @@
     renderList();
     renderDetail();
     drawGraph();
+    if (window.matchMedia?.("(max-width: 760px)")?.matches) el.back?.focus();
   }
 
   function renderDetail() {
@@ -129,11 +136,15 @@
     const tags = document.createElement("div");
     tags.className = "keyword-row";
     for (const tag of idea.tags ?? []) {
-      const chip = document.createElement("span");
-      chip.className = "chip";
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "chip idea-tag-filter";
       chip.textContent = tag;
+      chip.setAttribute("aria-label", `Filter ideas tagged ${tag}`);
+      chip.setAttribute("aria-pressed", String(state.clusterFilter === tag));
       chip.addEventListener("click", () => {
         state.clusterFilter = state.clusterFilter === tag ? null : tag;
+        for (const button of tags.children) button.setAttribute("aria-pressed", String(state.clusterFilter === button.textContent));
         renderList();
       });
       tags.append(chip);
@@ -358,6 +369,7 @@
   function close() {
     if (el.overlay.hidden) return;
     el.overlay.hidden = true;
+    if (el.tools) el.tools.open = false;
     window.MefiNav?.release?.("ideas");
   }
 
@@ -377,6 +389,9 @@
       clean: "ideas-clean",
       close: "ideas-close",
       openButton: "ideas-open",
+      graphCol: "ideas-graph-col",
+      tools: "ideas-tools",
+      back: "ideas-back",
     })) {
       el[key] = document.getElementById(id);
     }
@@ -387,6 +402,12 @@
     });
     el.scan?.addEventListener("click", () => scan(false));
     el.ai?.addEventListener("click", () => scan(true));
+    el.tools?.addEventListener("click", (event) => { if (event.target.closest?.("button")) el.tools.open = false; });
+    el.tools?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && el.tools.open) { event.preventDefault(); event.stopPropagation(); el.tools.open = false; el.tools.querySelector("summary")?.focus(); }
+    });
+    document.addEventListener("pointerdown", (event) => { if (el.tools?.open && !el.tools.contains(event.target)) el.tools.open = false; });
+    el.back?.addEventListener("click", () => { el.overlay.dataset.detail = "false"; el.list?.querySelector("li.selected")?.focus(); });
     el.clean?.addEventListener("click", async () => {
       if (window.mefiStudio?.ideasAction) {
         if (await act("clean", { ideaIds: state.ideas.filter((idea) => idea.status === "done").map((idea) => idea.id) })) el.status.textContent = "Removed finished ideas; accepted work stays available.";
@@ -398,7 +419,12 @@
     });
     el.view?.addEventListener("click", () => {
       state.view = state.view === "graph" ? "list" : "graph";
-      el.view.textContent = state.view === "graph" ? "Feature graph" : "List view";
+      el.view.textContent = state.view === "graph" ? "List" : "Graph";
+      el.view.setAttribute("aria-pressed", String(state.view === "graph"));
+      el.view.title = state.view === "graph" ? "Show the idea list" : "Show the feature graph";
+      if (el.graphCol) el.graphCol.hidden = state.view !== "graph";
+      el.overlay.dataset.view = state.view;
+      el.overlay.dataset.detail = "false";
       // `hidden`, not display: it is what drawGraph()'s early return reads.
       el.canvas.hidden = state.view !== "graph";
       drawGraph();

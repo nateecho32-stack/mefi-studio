@@ -11,7 +11,7 @@ const deferred = () => {
 };
 const flush = async () => { for (let count = 0; count < 20; count += 1) await Promise.resolve(); };
 
-function bootEnvironment({ bridge = {}, reducedMotion = false, domLoading = false } = {}) {
+function bootEnvironment({ bridge = {}, startup = null, reducedMotion = false, domLoading = false } = {}) {
   let now = 0, nextId = 0;
   const timers = new Map(), frames = new Map(), listeners = new Map(), windowListeners = new Map();
   const document = { readyState: domLoading ? "loading" : "complete", hidden: false, activeElement: null };
@@ -38,7 +38,7 @@ function bootEnvironment({ bridge = {}, reducedMotion = false, domLoading = fals
   });
   const context = vm.createContext({
     window: {
-      mefiStudio: bridge, MefiNav: { noMotion: () => reducedMotion },
+      mefiStudio: bridge, MefiStartup: startup, MefiNav: { noMotion: () => reducedMotion },
       addEventListener: (name, fn) => windowListeners.set(name, fn),
       removeEventListener: (name, fn) => { if (windowListeners.get(name) === fn) windowListeners.delete(name); },
     }, document, performance: { now: () => now },
@@ -102,7 +102,7 @@ test("startup prepares independent steps together and progress only follows real
   projects.resolve(true); await flush();
   assert.equal(env.boot.state().progress, 50);
   assert.equal(opened, 0); assert.equal(env.layer.hidden, false);
-  catalog.resolve(true); await env.advance(240);
+  catalog.resolve(true); await env.advance(600);
   assert.equal(await ready, true); assert.equal(opened, 1);
   assert.equal(env.elements["boot-progress"].value, 100);
   assert.equal(env.main.inert, false);
@@ -153,6 +153,24 @@ test("a gate without a launch choice and a failing choice both proceed straight 
   await failing.advance(300);
   assert.deepEqual(loads, ["view"], "a broken choice never strands the launch");
   assert.equal(await result, true);
+});
+
+test("the launch gate routes radio arrows and skips unselected projects in its Tab cycle", async () => {
+  const keys = [];
+  const env = bootEnvironment({ startup: { navigateProjects: (key) => { keys.push(key); return key === "ArrowDown"; } } });
+  env.boot.run([], () => {}, { choose: () => new Promise(() => {}) });
+  await env.advance(20);
+  const radio = { tabIndex: 0, getAttribute: (name) => name === "role" ? "radio" : null, focus: () => { env.document.activeElement = radio; } };
+  const unselected = { tabIndex: -1, focus: () => { throw new Error("An unchecked project cannot be a Tab stop"); } };
+  const open = { tabIndex: 0, focus: () => { env.document.activeElement = open; } };
+  env.elements["boot-choose"].querySelectorAll = () => [unselected, radio, open];
+  const arrow = env.key("ArrowDown", radio);
+  assert.deepEqual(keys, ["ArrowDown"]);
+  assert.equal(arrow.prevented, true);
+  assert.equal(arrow.stopped, true, "workspace shortcuts remain locked during selection");
+  env.document.activeElement = open;
+  env.key("Tab", open);
+  assert.equal(env.document.activeElement, radio, "Tab wraps to the selected project only");
 });
 
 test("Escape, Enter, pointer clicks and shortcuts cannot bypass pending preloads", async () => {

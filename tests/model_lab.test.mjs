@@ -30,8 +30,8 @@ function environment(bridge = {}) {
   const get = (id) => ids.get(id.startsWith("model-lab") || id === "tab-graph" ? id : `model-lab-${id}`);
   get("context-budget").value = "4000";
   document = { getElementById: (id) => ids.get(id) || null, createElement: (tag) => new Element(tag), activeElement: null };
-  const window = { mefiStudio: { modelPerformanceSnapshot: async () => emptySnapshot(), tasksList: async () => ({ ok: true, tasks: [] }), ...bridge }, addEventListener: (type, fn) => listeners.set(type, fn) };
-  vm.runInContext(source, vm.createContext({ window, document, Date, Number, String, Set, Math }));
+  const window = { mefiStudio: { modelPerformanceSnapshot: async () => emptySnapshot(), tasksList: async () => ({ ok: true, tasks: [] }), ...bridge }, addEventListener: (type, fn) => listeners.set(type, fn), dispatchEvent: (event) => listeners.get(event.type)?.(event) };
+  vm.runInContext(source, vm.createContext({ window, document, Date, Number, String, Set, Math, CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options?.detail; } } }));
   window.MefiModelLab.open();
   return { get, ids, window, document, emit: (name) => listeners.get(name)?.({}), lab: window.MefiModelLab };
 }
@@ -48,6 +48,24 @@ function populated() {
   };
 }
 
+test("Usage keeps recorded calls and provider accounts distinct and tells the shell which view is active", async () => {
+  const env = environment();
+  const views = [];
+  env.window.addEventListener("mefi:model-view", (event) => views.push(event.detail.view));
+  env.lab.show("usage");
+  assert.equal(env.get("usage-switch").hidden, false);
+  assert.equal(env.get("usage").hidden, false);
+  assert.equal(env.get("tracker").hidden, true);
+  env.get("accounts").click();
+  assert.equal(env.get("usage").hidden, true);
+  assert.equal(env.get("tracker").hidden, false);
+  env.get("accounts").dispatch("keydown", { key: "ArrowLeft" });
+  assert.equal(env.document.activeElement, env.get("recorded"));
+  env.lab.show("context");
+  assert.equal(env.get("usage-switch").hidden, true);
+  assert.deepEqual(views, ["usage", "tracker", "usage", "context"]);
+});
+
 test("empty Model Lab stays honest and does not start measurements, context reads or paid comparisons", async () => {
   let snapshots = 0;
   let contextReads = 0;
@@ -55,7 +73,10 @@ test("empty Model Lab stays honest and does not start measurements, context read
   await flush();
   assert.equal(snapshots, 1);
   assert.match(env.get("ranking-list").textContent, /no measured calls/i);
-  assert.match(env.get("usage-totals").textContent, /Unknown/);
+  // No call recorded yet: one empty state says so, and no totals invent zeros.
+  assert.match(env.get("usage-list").textContent, /No calls recorded yet/);
+  assert.equal(env.get("usage-totals").hidden, true);
+  assert.doesNotMatch(env.get("usage-totals").textContent, /\$0|\b0\b|Unknown/);
   env.lab.show("context"); await flush();
   assert.equal(contextReads, 0);
   assert.match(env.get("context-status").textContent, /Choose a saved task/);
@@ -78,6 +99,8 @@ test("rankings keep human/model ratings separate and unknown cost does not rende
   assert.match(env.get("usage-list").textContent, /60 \/ 20/);
   assert.match(env.get("usage-coverage").textContent, /fixture requests only/);
   assert.match(env.get("usage-totals").textContent, /2 calls did not report this/);
+  // Once calls exist, a value they did not report still reads Unknown.
+  assert.match(env.get("usage-totals").textContent, /Recorded cost\s*Unknown/);
 });
 
 test("a later snapshot response wins over an older request", async () => {

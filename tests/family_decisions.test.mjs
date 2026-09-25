@@ -7,7 +7,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
+import { once } from "node:events";
 import { readFile } from "node:fs/promises";
+import { Worker } from "node:worker_threads";
 import * as assistant from "../scripts/assistant.mjs";
 import backlog from "../scripts/backlog.cjs";
 import taskContext from "../scripts/task-context.cjs";
@@ -647,6 +649,34 @@ test("a Work on it card is the work it points at, even with its title clipped", 
   const clipped = card("task_clip", `Work on "${label}"`.slice(0, 60), { prompt: `Work on "${label}". Queued with Work on it — the user pointed at task (id: task_x).` });
   const [family] = pass([card("task_b", "Rebuild the booklet from staged sources after the release cut"), clipped]).report.familyGroups;
   assert.deepEqual(family.members.map((member) => member.id), ["task_b", "task_clip"], "the full label comes from the prompt");
+});
+
+// familyKey used to read the prompt's label on every unwrap step. A label that
+// is itself a Work on title unwrapping back into the card's own (the review's
+// `Work on "Work on "auth" middleware"`, or a chat ask for
+// `Work on "Work on "A" b"`) cycled forever, freezing the main process inside
+// the keeper's board mutation on every pass, finished cards included. The
+// pass runs in a worker so a regression fails here instead of hanging the suite.
+test("a Work on label that unwraps back into its own card does not cycle the family key", async () => {
+  const label = 'Work on "Work on "auth" middleware"';
+  const chat = 'Work on "Work on "A" b"';
+  const tasks = [
+    card("task_auth", "Auth middleware"),
+    card("task_nested", `Work on "${label}"`, { createdAt: NOW - 2 * DAY, prompt: `Work on "${label}". Queued with Work on it — the user pointed at todo (id: s1:t1).` }),
+    card("task_chat", chat, { status: "done", doneAt: NOW - HOUR, createdAt: NOW - 2 * DAY, prompt: `Work on "${chat}". Queued from the assistant chat — the user said "work on 'x'".` }),
+  ];
+  const worker = new Worker(`
+    const { parentPort, workerData } = require("node:worker_threads");
+    import(workerData.url).then((assistant) => {
+      const result = assistant.auditPass(workerData.input);
+      parentPort.postMessage(result.report.familyGroups.map((family) => [family.key, family.members.map((member) => member.id)]));
+    });`, { eval: true, workerData: { url: new URL("../scripts/assistant.mjs", import.meta.url).href, input: { tasks, nodeFolders: {}, now: NOW, armedAt: NOW - HOUR, hostCaps: { loopHold: true, duplicateWait: true } } } });
+  let timer = null;
+  const groups = await Promise.race([
+    once(worker, "message").then(([message]) => message),
+    new Promise((resolve) => { timer = setTimeout(resolve, 15000, "timed out"); }),
+  ]).finally(() => { clearTimeout(timer); return worker.terminate(); });
+  assert.deepEqual(groups, [["auth middleware", ["task_auth", "task_nested"]]], "the keeper's pass returns, and the prompt's label is read once");
 });
 
 const idleRun = (at, extra = {}) => ({ state: "verified", at, reason: "2 recorded checks passed", changedFiles: 0, ...extra });

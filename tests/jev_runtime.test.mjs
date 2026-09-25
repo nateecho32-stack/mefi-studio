@@ -4,6 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import boardGrowth from "../scripts/board-growth.cjs";
+import workAdmission from "../scripts/work-admission.cjs";
 import { readFile } from "node:fs/promises";
 import * as decisionClient from "../scripts/decision-client.mjs";
 import * as workClassification from "../scripts/work-classification.mjs";
@@ -43,7 +44,7 @@ function host({ settings = { gatewayApiKeyEncrypted: "fixture-encrypted" }, requ
   const experience = { spendBudget: async (file, entry) => { charges.push({ file, ...entry }); } };
   const context = vm.createContext({
     projects: { current: () => ({ id: "fixture" }), run: (_project, fn) => fn(), stamp: (row) => row },
-    console, SMOKE: false, CAPTURE: false, CLI_MODE: false,
+    workAdmission, console, SMOKE: false, CAPTURE: false, CLI_MODE: false,
     REQUESTS_PATH: "requests", TASKS_PATH: "tasks", POLICY_BUDGET_PATH: "budget",
     readSettings: async () => settings,
     decryptKey: () => secret,
@@ -75,7 +76,7 @@ test("request admission sends only accepted records to Jev and never awaits the 
   const queued = [], board = { requests: [incoming] };
   const added = { title: "Repair launch settings", prompt: "Restore missing settings", source: "audit" };
   const context = vm.createContext({
-    boardGrowth,
+    boardGrowth, workAdmission,
     projects: { stamp: (row) => row },
     workTitleKey: (title) => String(title).toLowerCase().trim(),
     mutateBoard: async (mutate) => mutate(board),

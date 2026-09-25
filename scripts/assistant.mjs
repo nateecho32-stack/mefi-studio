@@ -11,6 +11,9 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { dependencyIds } from "./backlog.cjs";
+import workAdmission from "./work-admission.cjs";
+// A cycle (policy.mjs imports compactKey from here): only read inside functions.
+import { BAND, baselineTaskPriority, baselineWorkPriority } from "./policy.mjs";
 
 const MINUTE = 60000;
 const HOUR = 60 * MINUTE;
@@ -82,41 +85,76 @@ const FOLDER_NODE_KINDS = new Set(["session", "todo", "task"]);
 export const MEMORY_CELLS = ["dec", "obs", "bel", "rsk", "ver"];
 const MEMORY_CELL_WEIGHT = { ver: 5, dec: 4, rsk: 4, bel: 3, obs: 2 };
 
-// The agent pool: one job per role, in roster order. cadenceMs 0 = on demand
-// (a message, a UI action); `ai` jobs also count against prefs.aiParallel.
+// The agent pool: one job per role, in roster order, and the one table that
+// decides who runs when and who spends AI. The host derives its cadence list,
+// its AI-role list, the pool's AI accounting and the backlog hold from here.
+//   cadenceMs  0 = on demand (a message, a UI action).
+//   spendsAi   "always": the run is a model call, so it waits for a usable key
+//              and counts against prefs.aiParallel; "when-usable": it calls
+//              when the AI is usable (and counts then) and runs a local pass
+//              otherwise; "never": keyless.
+//   gates      the owner's switches that hold it: "proactive" (Proactive off),
+//              "backlog" (backlog mode drains existing work first) and
+//              "growth" (the board's growthHeld, which only the job itself
+//              can read, so the build job checks it).
+//   readsMail  its job consumes entry.inbox, so an unread note pulls it due.
+//              Other recipients read their notes on their own cadence.
 export const AGENT_ROLES = [
   // The watcher only reorganises the tree. At 30 s it ran 4x more than every
   // other role put together and owned a pool slot a third of the time, which
   // is what made the roster look like a watcher loop with nothing behind it.
-  { role: "watcher", cadenceMs: 2 * MINUTE, ai: false },
-  { role: "machine", cadenceMs: 2 * MINUTE, ai: false },
-  { role: "auditor", cadenceMs: 5 * MINUTE, ai: false },
-  { role: "keeper", cadenceMs: 10 * MINUTE, ai: false },
+  { role: "watcher", cadenceMs: 2 * MINUTE, spendsAi: "never", gates: [] },
+  { role: "machine", cadenceMs: 2 * MINUTE, spendsAi: "never", gates: [] },
+  { role: "auditor", cadenceMs: 5 * MINUTE, spendsAi: "never", gates: [] },
+  { role: "keeper", cadenceMs: 10 * MINUTE, spendsAi: "never", gates: [] },
   // Keyless, and deliberately brisk: it is the role that keeps the queue
   // runnable, so the executor always has something clean to pick up.
-  { role: "compactor", cadenceMs: 7 * MINUTE, ai: false },
+  { role: "compactor", cadenceMs: 7 * MINUTE, spendsAi: "never", gates: [] },
   // The foreman hands work out. The auto builder files requests and owns the
   // child processes; deciding WHAT runs belongs to the assistant, so this is
   // the only role that fills an executor slot. Brisk cadence: it is the
-  // heartbeat that keeps the builders fed.
-  { role: "foreman", cadenceMs: MINUTE, ai: false },
-  // Reads the activity log, thinks in the assistant box, and kicks the
-  // foreman when the board is idle and a real pick is waiting. Proactive
-  // off holds it (dueRoles); no key required — the plan is local.
-  { role: "thinker", cadenceMs: MINUTE, ai: false },
-  { role: "briefer", cadenceMs: 5 * MINUTE, ai: true },
-  { role: "overseer", cadenceMs: 15 * MINUTE, ai: false },
+  // heartbeat that keeps the builders fed. Its status line reports the notes
+  // it took (the machine's hold, the compactor's ready count).
+  { role: "foreman", cadenceMs: MINUTE, spendsAi: "never", gates: [], readsMail: true },
+  // Reads a light slice of the board and thinks in the assistant box; with
+  // Proactive on it may pin a ready pick through Work on it. No key required:
+  // the plan is local.
+  { role: "thinker", cadenceMs: MINUTE, spendsAi: "never", gates: ["proactive"] },
+  { role: "briefer", cadenceMs: 5 * MINUTE, spendsAi: "always", gates: ["proactive", "backlog"] },
+  // Runs 24/7: its local review never waits on a switch or a key. The paid
+  // review inside it is gated on change (overseerAiPlan).
+  { role: "overseer", cadenceMs: 15 * MINUTE, spendsAi: "when-usable", gates: [] },
   // The build half of the roster. These were on-demand only, so they had never
   // run once: the app watched itself all day and proposed nothing. On a cadence
   // they each end by queueing real requests for the executor.
-  { role: "improver", cadenceMs: 20 * MINUTE, ai: true },
-  { role: "ideas", cadenceMs: 30 * MINUTE, ai: true },
-  { role: "grower", cadenceMs: 45 * MINUTE, ai: true },
-  { role: "responder", cadenceMs: 0, ai: false },
-  { role: "reference", cadenceMs: 0, ai: false },
-  { role: "cluster-planner", cadenceMs: 0, ai: true },
-  { role: "cluster-reviewer", cadenceMs: 0, ai: true },
+  { role: "improver", cadenceMs: 20 * MINUTE, spendsAi: "always", gates: ["proactive", "growth", "backlog"] },
+  // Keyless it only counts new chat material for the next AI review.
+  { role: "ideas", cadenceMs: 30 * MINUTE, spendsAi: "when-usable", gates: ["proactive", "backlog"] },
+  { role: "grower", cadenceMs: 45 * MINUTE, spendsAi: "always", gates: ["proactive", "growth", "backlog"] },
+  { role: "responder", cadenceMs: 0, spendsAi: "when-usable", gates: [] },
+  { role: "reference", cadenceMs: 0, spendsAi: "never", gates: [] },
+  { role: "cluster-planner", cadenceMs: 0, spendsAi: "always", gates: [] },
+  { role: "cluster-reviewer", cadenceMs: 0, spendsAi: "always", gates: [] },
 ];
+const ROLE_POLICY = new Map(AGENT_ROLES.map((row) => [row.role, row]));
+// A role's row in the table above, or null for anything that is not a seat.
+export function rolePolicy(role) {
+  return ROLE_POLICY.get(typeof role === "string" ? role : "") ?? null;
+}
+// Cadence seats in roster order, and the ones among them that cannot run
+// without a model call (a keyless or non-proactive tick never fires them).
+export const CADENCE_ROLES = AGENT_ROLES.filter((row) => row.cadenceMs > 0).map((row) => row.role);
+export const AI_ROLES = AGENT_ROLES.filter((row) => row.cadenceMs > 0 && row.spendsAi === "always").map((row) => row.role);
+// Whether a run of `role` pays for a model call right now, given whether the
+// AI is usable: what the pool counts against prefs.aiParallel.
+export function roleSpendsAi(role, usable = false) {
+  const spends = rolePolicy(role)?.spendsAi;
+  return spends === "always" || (spends === "when-usable" && usable === true);
+}
+// Whether one of the owner's switches ("proactive", "backlog", "growth") holds `role`.
+export function roleGatedBy(role, gate) {
+  return (rolePolicy(role)?.gates ?? []).includes(gate);
+}
 export const AGENT_STATUSES = ["idle", "queued", "running", "done", "error"];
 const ROLE_VERBS = { watcher: "watching", machine: "scanning", auditor: "auditing", keeper: "tidying", compactor: "compacting the queue", foreman: "handing out work", thinker: "thinking", briefer: "briefing", overseer: "overseeing", responder: "replying", improver: "improving", grower: "growing", ideas: "scanning ideas", reference: "gathering references" };
 const ROLE_ACTION_KINDS = { watcher: "organize", machine: "fix", auditor: "audit", keeper: "tidy", compactor: "tidy", foreman: "tick", thinker: "tick", briefer: "brief", overseer: "overseer", responder: "message", improver: "brief", grower: "brief", ideas: "brief", reference: "brief" };
@@ -327,10 +365,25 @@ function normalizeResumed(raw) {
   };
 }
 
+// A reply's offers are structured: the title shown and, when the offer is a
+// board task, its id, so "yes" starts that card instead of re-parsing quoted
+// titles out of the prose.
+function normalizeOffers(raw) {
+  return asArray(raw)
+    .slice(0, 4)
+    .map((offer) => {
+      if (!isObject(offer)) return null;
+      const title = clip(str(offer.title), 160);
+      const target = isObject(offer.target) && offer.target.kind === "task" && str(offer.target.id) ? { kind: "task", id: clip(str(offer.target.id), 80) } : null;
+      return title ? { title, ...(target ? { target } : {}) } : null;
+    })
+    .filter(Boolean);
+}
+
 function normalizeMessage(entry, index) {
   if (!isObject(entry) || typeof entry.text !== "string") return null;
   const at = num(entry.at, 0);
-  return {
+  const message = {
     id: str(entry.id) || `msg_${at}_${index}`,
     at,
     role: oneOf(entry.role, ["user", "assistant", "thinking"], "user"),
@@ -338,7 +391,22 @@ function normalizeMessage(entry, index) {
     via: oneOf(entry.via, ["ai", "local"], "local"),
     intent: oneOf(entry.intent, INTENTS, "chat"),
   };
+  // The project the line was said in (the thread filters by it), and a
+  // notice's identity: a notice is the assistant reporting on a task the owner
+  // cares about, never an answer to what the owner said.
+  if (str(entry.projectId)) message.projectId = clip(str(entry.projectId), 80);
+  if (message.role === "assistant" && entry.kind === "notice") {
+    message.kind = "notice";
+    if (str(entry.taskId)) message.taskId = clip(str(entry.taskId), 80);
+    if (str(entry.event)) message.event = clip(str(entry.event), 24);
+  }
+  const offers = normalizeOffers(entry.offers);
+  if (message.role === "assistant" && offers.length) message.offers = offers;
+  return message;
 }
+
+// A reply to the owner, as opposed to a notice about a task.
+const isReply = (message) => isObject(message) && message.role === "assistant" && message.kind !== "notice";
 
 function normalizeLog(entry) {
   if (!isObject(entry) || typeof entry.text !== "string" || typeof entry.kind !== "string" || !entry.kind) return null;
@@ -443,6 +511,15 @@ function normalizeQuestion(entry, index) {
         // Why an answer could not be applied (the task moved on, the split
         // chain is at its limit), kept so the card still says so after a reload.
         ...(str(entry.answer.error).trim() ? { error: str(entry.answer.error).trim().slice(0, 200) } : {}),
+        ...(isObject(entry.answer.dispatch) ? { dispatch: {
+          requested: entry.answer.dispatch.requested === true,
+          held: entry.answer.dispatch.held === true,
+          phase: str(entry.answer.dispatch.phase).slice(0, 24),
+          reason: str(entry.answer.dispatch.reason).slice(0, 40) || null,
+          message: str(entry.answer.dispatch.message).slice(0, 240),
+          taskId: str(entry.answer.dispatch.taskId).slice(0, 200) || null,
+          runId: str(entry.answer.dispatch.runId).slice(0, 80) || null,
+        } } : {}),
       }
     : null;
   return {
@@ -676,7 +753,7 @@ const OVERSEER_SEVERITIES = ["info", "warn", "critical"];
 const OVERSEER_DIRECTIVE_KINDS = ["pref", "request", "lesson", "finding"];
 
 export function emptyOverseer() {
-  return { reviews: 0, lastReviewAt: 0, lastSummary: "", score: null, health: "unknown", findings: [], lessons: [], directives: [], scores: [], digest: null, hotPaths: [], coldPaths: [] };
+  return { reviews: 0, lastReviewAt: 0, lastSummary: "", score: null, health: "unknown", findings: [], lessons: [], directives: [], scores: [], digest: null, hotPaths: [], coldPaths: [], ai: { lastAt: 0, signature: "", reason: "", skippedAt: 0, skipped: "" } };
 }
 
 // A path is remembered by its repository-relative form with forward slashes, so
@@ -761,6 +838,14 @@ const normalizeOverseerDirective = (entry) =>
   isObject(entry) && str(entry.text).trim()
     ? { at: num(entry.at, 0), kind: oneOf(entry.kind, OVERSEER_DIRECTIVE_KINDS, "finding"), text: clip(entry.text, 240) }
     : null;
+// The paid half of the review: when the AI last reviewed, the digest
+// signature it reviewed (overseerSignature) and why it was called; when a pass
+// last skipped the call and why. The roster line reads it, so a local pass
+// never passes for an AI review.
+const normalizeOverseerAi = (raw) => {
+  const source = isObject(raw) ? raw : {};
+  return { lastAt: num(source.lastAt, 0), signature: str(source.signature).slice(0, 600), reason: clip(source.reason, 80), skippedAt: num(source.skippedAt, 0), skipped: clip(source.skipped, 120) };
+};
 
 // A valid overseer slice from anything. lessons/directives/scores keep their
 // newest entries; findings are only the last review's set.
@@ -785,6 +870,7 @@ export function normalizeOverseer(raw) {
     digest: isObject(source.digest) ? source.digest : null,
     hotPaths: clampTail(asArray(source.hotPaths).map(normalizePathRow).filter(Boolean), PATH_LIMITS.hot),
     coldPaths: clampTail(asArray(source.coldPaths).map(normalizePathRow).filter(Boolean), PATH_LIMITS.cold),
+    ai: normalizeOverseerAi(source.ai),
   };
 }
 
@@ -818,9 +904,9 @@ export function overseerDigest(state, now = Date.now()) {
     .map((row) => Math.max(0, Math.floor(Number(row.facts.inProgress))))[0];
   let unanswered = 0;
   for (const message of messages.slice().reverse()) {
-    if (message.role === "assistant") break;
-    if (message.role === "thinking") continue;
-    if (message.role === "user") unanswered += 1;
+    if (isReply(message)) break;
+    if (message.role !== "user") continue;
+    unanswered += 1;
   }
   return {
     at: now,
@@ -843,8 +929,8 @@ export function overseerDigest(state, now = Date.now()) {
     problems: { count: problems.length, kinds: problems.map((entry) => str(entry.kind)).filter(Boolean), aged: problems.filter((entry) => now - num(entry.since, 0) > HOUR).length },
     fixes: { total: fixes.length, failed: fixes.filter((entry) => entry.ok === false).length },
     replies: {
-      ai: messages.filter((entry) => entry.role === "assistant" && entry.via === "ai").length,
-      local: messages.filter((entry) => entry.role === "assistant" && entry.via !== "ai").length,
+      ai: messages.filter((entry) => isReply(entry) && entry.via === "ai").length,
+      local: messages.filter((entry) => isReply(entry) && entry.via !== "ai").length,
       unanswered,
     },
     work: { inFlight: watcherInProgress ?? work.length, stale: work.filter((entry) => now - num(entry.startedAt, 0) > WORK_STALE_MS).length },
@@ -887,6 +973,34 @@ export function overseerDigest(state, now = Date.now()) {
       return { reports: rows.filter((row) => row.facts?.ok !== false).length, fails: rows.filter((row) => row.facts?.ok === false).length };
     })(),
   };
+}
+
+// The digest reduced to what makes a paid review worth running again: the
+// local finding set (by identity, so "2 open problems" and "3 open problems"
+// are one finding, and "briefer failing" and "auditor failing" are two), the
+// open problem kinds, the roles in error and the local score in 20-point
+// bands. Counts that only drift, clocks and log text stay out, so a board
+// that is merely still busy signs the same. Pure: same digest, same signature.
+export function overseerSignature(digest) {
+  const d = isObject(digest) ? digest : {};
+  const review = overseerReview(d);
+  const set = (list) => [...new Set(asArray(list).map((item) => str(item)).filter(Boolean))].sort();
+  const findings = set(review.findings.map((entry) => localFindingKey(entry.title) || compactKey(entry.title)));
+  const band = Math.floor(num(review.score, 100) / 20);
+  return `findings:${findings.join(",")}|problems:${set(d.problems?.kinds).join(",")}|errors:${set(d.errorRoles).join(",")}|band:${band}`;
+}
+
+// Whether this overseer pass pays for the heavy AI review, and why either
+// way. The local review runs on every pass, keyless or not; the model is
+// called only when the owner asked for a review (the Oversee button, chat's
+// run_role overseer) or the digest signature moved since the last AI review.
+export function overseerAiPlan({ signature = "", overseer = null, manual = false, usable = false } = {}) {
+  if (!usable) return { call: false, reason: "AI not usable" };
+  if (manual) return { call: true, reason: "asked for a review" };
+  const last = normalizeOverseer(overseer).ai;
+  if (!last.lastAt || !last.signature) return { call: true, reason: "no AI review yet" };
+  if (last.signature !== str(signature)) return { call: true, reason: "the board changed" };
+  return { call: false, reason: "nothing changed since the last AI review" };
 }
 
 // The titles overseerReview's add() below can produce, one pattern per title
@@ -1088,7 +1202,7 @@ export function overseerTune(prefs, tune) {
 // lesson retires after LESSON_QUIET_MERGES merges without its finding. Path
 // memory is not the review's to change: mergePaths owns it, so it rides
 // through untouched.
-export function overseerMerge(overseer, review, now = Date.now(), { digest = null, via = "local", directives = [] } = {}) {
+export function overseerMerge(overseer, review, now = Date.now(), { digest = null, via = "local", directives = [], ai = null } = {}) {
   const base = normalizeOverseer(overseer);
   const source = isObject(review) ? review : {};
   const incoming = [...base.lessons];
@@ -1152,6 +1266,8 @@ export function overseerMerge(overseer, review, now = Date.now(), { digest = nul
     digest: digest ?? base.digest,
     hotPaths: base.hotPaths,
     coldPaths: base.coldPaths,
+    // The AI review record (overseerAiPlan) is the caller's to update.
+    ai: ai ? normalizeOverseerAi(ai) : base.ai,
   };
 }
 
@@ -1209,31 +1325,52 @@ export function rolesForProblems(state, now = Date.now()) {
   return due;
 }
 
+// Why the policy table holds a role right now, or "" when nothing does: a role
+// that is a model call ("always") waits for a key and the end of a backoff, and
+// its gates follow the owner's switches — Proactive off, backlog mode on. The
+// growth gate needs the board, so the build job checks it itself.
+function policyHold(policy, rules, ai, now) {
+  if (policy.spendsAi === "always" && (!ai.keyPresent || now < num(ai.backoffUntil, 0))) return "ai";
+  const gates = asArray(policy.gates);
+  if (gates.includes("proactive") && !rules.proactive) return "proactive";
+  if (gates.includes("backlog") && rules.backlogMode) return "backlog";
+  return "";
+}
+
+// The same hold for one role by name, for the ways a role starts outside
+// dueRoles: a forced tick (main.cjs assistantTick) skips the cadence, never a
+// gate, so Proactive off holds the thinker and the ideas scan there too.
+export function roleHold(role, prefs = null, ai = null, now = Date.now()) {
+  const policy = rolePolicy(role);
+  if (!policy) return "";
+  return policyHold(policy, normalizePrefs({ ...DEFAULT_PREFS, ...(isObject(prefs) ? prefs : {}) }), isObject(ai) ? ai : {}, now);
+}
+
 // Cadence roles whose interval elapsed since their last start (or that never
-// ran), in roster order; queued/running roles are never re-enqueued, and AI
-// roles (the briefer) wait for proactive mode, a key and the end of a backoff.
-// An open problem pulls its owner due immediately the first time.
+// ran), in roster order; queued/running roles are never re-enqueued, and the
+// policy table's holds apply (policyHold). An open problem pulls its owner due
+// immediately the first time; unread mail pulls only a seat that reads it.
 export function dueRoles(state, now = Date.now(), prefs = null) {
   const current = isObject(state) ? state : {};
   const rules = normalizePrefs({ ...DEFAULT_PREFS, ...(isObject(current.prefs) ? current.prefs : {}), ...(isObject(prefs) ? prefs : {}) });
   const rows = new Map(asArray(current.agents).filter((row) => isObject(row) && typeof row.role === "string").map((row) => [row.role, row]));
   const ai = isObject(current.ai) ? current.ai : {};
   const problemDue = new Set(rolesForProblems(current, now));
-  // Unread mail pulls its recipient due the same way: another agent asked
-  // for it, so it runs on this tick rather than when its cadence next elapses.
-  const mailDue = new Set(rolesWithMail(current));
+  // Another agent asked for this seat, and the seat acts on what it is told,
+  // so it runs on this tick rather than when its cadence next elapses. A note
+  // to a seat that ignores its inbox used to multiply its cadence (the keeper
+  // ran every 2 min behind the watcher's stale-session note, not every 10).
+  const mailDue = new Set(rolesWithMail(current).filter((role) => rolePolicy(role)?.readsMail === true));
   const due = [];
-  for (const { role, cadenceMs, ai: needsAi } of AGENT_ROLES) {
+  for (const policy of AGENT_ROLES) {
+    const { role, cadenceMs } = policy;
     if (!cadenceMs) continue;
     const row = rows.get(role);
     if (row && (row.status === "queued" || row.status === "running")) continue;
     const lastRunAt = num(row?.lastRunAt, 0);
     const cadenceElapsed = !lastRunAt || now - lastRunAt >= cadenceMs * CADENCE_TOLERANCE;
     if (!cadenceElapsed && !problemDue.has(role) && !mailDue.has(role)) continue;
-    if (needsAi && (!rules.proactive || !ai.keyPresent || now < num(ai.backoffUntil, 0))) continue;
-    // The thinker is the proactive inner monologue: off the switch, it
-    // stays quiet. No key required — it reads the log locally.
-    if (role === "thinker" && !rules.proactive) continue;
+    if (policyHold(policy, rules, ai, now)) continue;
     due.push(role);
   }
   return due;
@@ -1301,8 +1438,8 @@ export function pendingWork(rawState, now = Date.now(), { exclude = [] } = {}) {
   for (const [index, raw] of asArray(source.messages).entries()) {
     const message = normalizeMessage(raw, index);
     if (!message) continue;
-    if (message.role === "assistant") unanswered.length = 0;
-    else if (message.role === "thinking") continue;
+    if (isReply(message)) unanswered.length = 0;
+    else if (message.role !== "user") continue;
     else if (!skip.has(message.id) && !skip.has(message.text)) unanswered.push({ id: message.id, at: message.at, text: message.text });
   }
   const live = new Set(
@@ -1446,10 +1583,12 @@ export function hearReport(state, report, now = Date.now()) {
 // another. A scout that sees something another role owns (the watcher sees
 // stale sessions the keeper tidies, the machine sees capacity the foreman
 // hands work out against) writes it here instead of hoping the assistant
-// relays it. Unread mail pulls its recipient due on the next tick; the host
-// hands the inbox to the job when it starts, and the job reads it however it
-// likes. Bounded: MAIL_CAP rows overall, MAIL_UNREAD_PER_ROLE unread per
-// recipient — a chatty sender cannot flood a slow reader.
+// relays it. The host hands the inbox to the job when it starts, and the job
+// reads it however it likes; unread mail pulls its recipient due on the next
+// tick only when the seat reads it (readsMail in AGENT_ROLES), so a note never
+// multiplies the cadence of a seat that would ignore it. Bounded: MAIL_CAP
+// rows overall, MAIL_UNREAD_PER_ROLE unread per recipient — a chatty sender
+// cannot flood a slow reader.
 export const MAIL_CAP = 48;
 export const MAIL_UNREAD_PER_ROLE = 6;
 const MAIL_TEXT_MAX = 200;
@@ -1518,6 +1657,7 @@ export function readMail(state, role, now = Date.now()) {
 
 // Roster roles holding unread mail that are free to run. Order is roster
 // order, like dueRoles; queued/running rows read their mail when they start.
+// dueRoles pulls only the ones whose policy row says they read it.
 export function rolesWithMail(state) {
   const current = isObject(state) ? state : {};
   const rows = new Map(asArray(current.agents).filter((row) => isObject(row) && typeof row.role === "string").map((row) => [row.role, row]));
@@ -1930,7 +2070,9 @@ function tidyRequests(requests, { now, collisions, audit, duplicates }, report) 
     if (request.source === "audit" && findings && !findings.some((message) => prompt.includes(message))) return false;
     if (request.source === "collision" && live && !collisionRequestLive(request, live)) return false;
     if (request.source === "duplicate" && scannedDupes && scannedDupes.has(request.file) && dirtyDupes && !dirtyDupes.has(request.file)) return false;
-    const at = num(request.at, 0);
+    // Aged from when it was last filed: a lost claim put back in the inbox
+    // (requeuedAt) gets a fresh window to be promoted, as in housekeeping.
+    const at = filedAt(request);
     if (at && at < cutoff) return false;
     return true;
   });
@@ -2021,20 +2163,11 @@ export const isSelfMaintenance = (item) => SELF_MAINTENANCE_TITLE.test(String(it
 // Titles are matched loosely so "Fix the auditor role" and "fix the auditor
 // role." collapse; punctuation and run-on whitespace carry no meaning here.
 // The same title key the executor's spawn guard uses to keep one copy of a
-// job in flight — exported so main never grows a second normaliser.
-// "Work on it" titles a card with the label it points at ("Work on \"X\"")
-// while the underlying work may already be titled "X". Unwrap that pure
-// display form so both name one piece of work — otherwise promotion stacks a
-// duplicate card beside the live task the button pointed at.
-export const compactKey = (value) => {
-  const raw = String(value ?? "").trim();
-  const wrapped = raw.match(/^work on\s+["'\u2018\u2019\u201c\u201d]([\s\S]+?)["'\u2018\u2019\u201c\u201d][.!?]*$/i);
-  return (wrapped ? wrapped[1] : raw)
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-};
+// job in flight — exported so main never grows a second normaliser. It is the
+// admission module's key (scripts/work-admission.cjs): "Work on \"X\"" names
+// the work X it points at, and accented and non-Latin titles keep their
+// letters instead of keying to spaces (an all-Chinese title keyed to "").
+export const compactKey = (value) => workAdmission.titleKey(value);
 
 // A request's payload is what it asks, not how it is titled: the prompt,
 // source, area, file set and session pair normalised into one stable hash.
@@ -2631,8 +2764,14 @@ function isFixTicket(item) {
 // different files. The named targets scope the family — two tickets share a
 // theme only when they are the same kind of problem about the same files (or
 // when neither names any).
+// The closing instruction on every briefing Fix: brief ("Find the root
+// cause, fix it, and run the relevant test set…", eyes.requestsFromBriefing)
+// names no problem. Read as one, its "root cause" gave every file-less
+// briefing fix the dup theme, so unrelated alerts blocked each other.
+const FIX_BRIEF_CLOSING = /\bfind the root cause, fix it\b[^.]*\.?/gi;
+
 export function fixThemeKey(item) {
-  const hay = compactKey(`${item?.alertTitle ?? ""} ${item?.title ?? ""} ${item?.prompt ?? ""}`);
+  const hay = compactKey(`${item?.alertTitle ?? ""} ${item?.title ?? ""} ${str(item?.prompt).replace(FIX_BRIEF_CLOSING, " ")}`);
   if (!hay) return null;
   let family = null;
   if (/\b(duplicat\w*|overlap\w*|collid\w*|collision\w*|redundant|root cause|same subsystem)\b/.test(hay)) family = "fix:dup";
@@ -2988,6 +3127,12 @@ export function groupTasks({ tasks = [], ideas = [], groups = [], now = Date.now
   const result = planTaskGroups(tasks, ideas, groups, now, rules, allocateId);
   return { ...result, tasks: [...result.plans, ...result.tasks] };
 }
+
+// When an inbox request's age clock started: its filing, or the pass that put
+// a lost claim back in the inbox (requeuedAt, scripts/task-history.mjs), which
+// the age prunes below and in housekeepingSweep read so the row lives to be
+// promoted instead of dying in the pass that requeued it.
+const filedAt = (request) => Math.max(num(request?.at, 0), num(request?.requeuedAt, 0));
 
 export function compact({ requests = [], tasks = [], ideas = [], collisions = null, now = Date.now(), limits = {}, taskGroups = null, allocateId = null, promoteIdeas = true } = {}) {
   const rules = { ...COMPACT_LIMITS, ...(isObject(limits) ? limits : {}) };
@@ -3350,9 +3495,11 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
 
   // 5. Requests: drop duplicates, then drop anything already on the board —
   //    live or done. Done titles stay taken so a leftover request cannot re-run
-  //    work that just succeeded (same rule as spawnNextJob's liveBoard).
+  //    work that just succeeded: the same rule the filers' intake and
+  //    promotion apply (workAdmission.standsOnBoard), so a finding is never
+  //    admitted by one and absorbed by the other.
   const boardKeys = new Set(
-    outTasks.filter((task) => task.status !== "archived").map((task) => compactKey(task.title)).filter(Boolean),
+    outTasks.filter((task) => workAdmission.standsOnBoard(task)).map((task) => compactKey(task.title)).filter(Boolean),
   );
   const boardThemes = new Set();
   // A handoff is an accepted obligation with stable lineage. Titles, prompt
@@ -3361,7 +3508,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
   const representedHandoffs = new Set(outTasks.flatMap((task) => [task, ...asArray(task.members)]).map(handoffIdentity).filter(Boolean));
   const representedDelegations = new Set(outTasks.flatMap((task) => [task, ...asArray(task.members)]).map(delegationIdentity).filter(Boolean));
   for (const task of outTasks) {
-    if (task.status === "archived" || !isFixTicket(task)) continue;
+    if (!workAdmission.standsOnBoard(task) || !isFixTicket(task)) continue;
     const theme = fixThemeKey(task);
     if (theme) boardThemes.add(theme);
   }
@@ -3397,6 +3544,13 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
     if (hasHandoffLineage(request)) {
       if (representedHandoffs.has(handoffIdentity(request))) report.absorbed += 1;
       else outRequests.push(request);
+      continue;
+    }
+    // Promotion made this row a card (promotedTo): the card stands for it, so
+    // the copy goes even when the card's title no longer keys like it (a
+    // title-less ask titled from its brief, a delegation suffix).
+    if (str(request.promotedTo)) {
+      report.absorbed += 1;
       continue;
     }
     // Exact payload duplicates drop before enqueue: a refiled snapshot under
@@ -3508,7 +3662,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
   const fresh = outRequests.filter((request) => {
     if (request.status === "running" || request.status === "verifying" || hasHandoffLineage(request) || hasDelegation(request) || hasPendingContinuation(request)) return true;
     if (request.source === "chat" || !AUTO_SOURCES.has(request.source)) return true;
-    const at = num(request.at, 0);
+    const at = filedAt(request);
     return at >= staleCutoff;
   });
   report.stale = outRequests.length - fresh.length;
@@ -3692,6 +3846,9 @@ export function promoteIdeaBacklog({ tasks = [], ideas = [], now = Date.now(), l
   const taskIds = [];
   const usedIds = new Set(outTasks.map((task) => str(task.id)));
   let serial = 0;
+  // Ideas the owner picked by id are the owner's work and rank with it; a
+  // drain admits the oldest on the assistant's say.
+  const origin = { kind: "idea", by: requested ? "owner" : "assistant" };
   for (const idea of candidates) {
     if (changes.size >= count) break;
     const body = str(idea.detail).trim() || str(idea.title).trim();
@@ -3705,18 +3862,17 @@ export function promoteIdeaBacklog({ tasks = [], ideas = [], now = Date.now(), l
       // A similar title alone is not authority to discard a different idea.
       // Distinguish the card so legacy title-based queue guards preserve it.
       const collision = outTasks.some((task) => isLiveTask(task) && compactKey(task.title) === compactKey(idea.title));
-      target = {
+      // The admission module's card skeleton (status, color, stamps, logs).
+      target = workAdmission.taskRow({
         id, title: `${str(idea.title).trim()}${collision ? ` (idea ${str(idea.id)})` : ""}`,
         prompt: `Work on this saved idea in the selected project. Check existing work first, implement the applicable requirements, and report checks plus anything still remaining.\n\n${str(idea.title).trim()}\n${body}`,
-        ideaDetail: body, status: "open", source: "idea", color: "#e6c98d",
-        createdAt: now, updatedAt: now, backlogAt: num(idea.at, num(idea.createdAt, now)),
+        ideaDetail: body, source: "idea", backlogAt: num(idea.at, num(idea.createdAt, now)),
         ideas: [idea.id], refs: asArray(idea.refs),
         ...(idea.projectId ? { projectId: idea.projectId } : {}),
         ...(idea.projectPath ? { projectPath: idea.projectPath } : {}),
         ...(idea.file ? { file: idea.file } : {}),
         ...(Array.isArray(idea.files) ? { files: [...idea.files] } : {}),
-        logs: [{ at: now, kind: "status", text: "Saved idea added to the work queue" }],
-      };
+      }, { now, origin, log: "Saved idea added to the work queue" });
       outTasks = [...outTasks, target];
     } else if (!asArray(target.ideas).includes(idea.id)) {
       target = { ...target, ideas: [...asArray(target.ideas), idea.id] };
@@ -3848,14 +4004,19 @@ export function repoCheckCommand({ file = "test\\run-check.ps1" } = {}) {
   return `powershell -NoProfile -ExecutionPolicy Bypass -File "${script}"`;
 }
 
-export function projectBaseCheck({ hasPackageJson = null, hasLoveHarness = false, hasRepoCheck = false, repoCheckFile = null } = {}) {
-  // package.json keeps the npm default even when a repo check exists (pkg wins
-  // over wrapper); otherwise a repo-named check is the base — it is the shape
-  // whose execution lands in the verification log as an attributable command —
-  // and the bare LÖVE harness remains the fallback when no wrapper exists.
-  if (hasPackageJson !== true && hasRepoCheck) return repoCheckCommand({ file: repoCheckFile });
+export function projectBaseCheck({ hasPackageJson = null, packageScripts = null, nodeTestFile = null, hasLoveHarness = false, hasRepoCheck = false, repoCheckFile = null } = {}) {
+  // Only project-local, observed entry points may verify a new project. A
+  // package file alone does not establish that it defines a check script.
+  if (hasPackageJson === true) {
+    if (packageScripts === null || str(packageScripts?.check).trim()) return "npm run check";
+    if (str(packageScripts?.test).trim()) return "npm test";
+  }
+  if (hasRepoCheck) return repoCheckCommand({ file: repoCheckFile });
   if (hasPackageJson === false && hasLoveHarness) return loveHarnessCheckCommand();
-  return "npm run check";
+  if (/^tests?\.(?:js|cjs|mjs)$/.test(str(nodeTestFile))) return `node --test "${nodeTestFile}"`;
+  // An omitted observation is retained only for older callers. An observed
+  // package-free or script-free project has no automatic base check.
+  return hasPackageJson === null ? "npm run check" : null;
 }
 
 export function verificationJobKey(taskId = null, attemptKey = null) {
@@ -3897,7 +4058,7 @@ export function focusedTestsForTask(task = null, resultNote = null) {
 // queued job, or null when the report is not a done claim or the attempt
 // already has its job queued (the duplicate case — recover that job with
 // findQueuedVerification, never by queueing again).
-export function scheduleVerificationOnDone({ resultNote = null, task = null, attemptKey = null, queue = [], now = Date.now(), baseCheck = null } = {}) {
+export function scheduleVerificationOnDone({ resultNote = null, task = null, attemptKey = null, queue = [], now = Date.now(), baseCheck = undefined } = {}) {
   const parsed = isObject(resultNote) && resultNote.parts ? resultNote : (resultNote ? parseExecutorResult(resultNote) : null);
   const resultField = str(parsed?.raw).trim();
   if (!parsed || !VERIFICATION_RESULT_RE.test(resultField)) return null;
@@ -3912,7 +4073,7 @@ export function scheduleVerificationOnDone({ resultNote = null, task = null, att
     taskId,
     attemptKey: str(attemptKey).trim() || null,
     title: `Verify: ${str(isObject(task) ? task.title : "").trim().slice(0, 80) || taskId || "attempt"}`,
-    commands: [str(baseCheck).trim() || "npm run check", ...tests],
+    commands: [...(baseCheck === undefined ? ["npm run check"] : str(baseCheck).trim() ? [str(baseCheck).trim()] : []), ...tests],
     // The run's cwd: the card's own project, not whichever job started the
     // drain. A row without one runs against the active project root.
     projectPath: str(isObject(task) ? task.projectPath : "").trim() || null,
@@ -4012,7 +4173,7 @@ export function isVerificationCommand(value) {
 export function summarizeObservedChecks(checks = []) {
   const latest = new Map();
   for (const check of asArray(checks)) {
-    if (!isObject(check) || check.commandTruncated || (check.runnerIssued !== true && !isVerificationCommand(check.command))) continue;
+    if (!isObject(check) || check.commandTruncated || (check.runnerIssued !== true && check.unavailable !== true && !isVerificationCommand(check.command))) continue;
     const key = str(check.command).trim().replace(/\s+/g, " ");
     const at = Number(check.startedAt);
     if (!Number.isFinite(at) || at <= 0) continue;
@@ -4021,8 +4182,8 @@ export function summarizeObservedChecks(checks = []) {
     latest.set(key, check);
   }
   const rows = [...latest.values()];
-  const passed = rows.filter((row) => row.status === "completed" && row.exitCode === 0 && row.passed === true).length;
-  const failed = rows.filter((row) => row.status === "error" || (Number.isInteger(row.exitCode) && row.exitCode !== 0)).length;
+  const passed = rows.filter((row) => row.unavailable !== true && row.status === "completed" && row.exitCode === 0 && row.passed === true).length;
+  const failed = rows.filter((row) => row.unavailable === true || row.status === "error" || (Number.isInteger(row.exitCode) && row.exitCode !== 0)).length;
   return { total: rows.length, passed, failed, pending: rows.length - passed - failed };
 }
 
@@ -4047,12 +4208,25 @@ export function claimedCommitHash(parts = {}) {
   return null;
 }
 
-export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerChanges = 0, hasSession = false, observedChecks = [], overseerChecks = [], resolvedHandoffs = [], remaining = [], resultNote = null, commit = null, priorAttempts = 0, priorVerified = false, sessionlessRoute = null } = {}) {
+export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerChanges = 0, hasSession = false, observedChecks = [], overseerChecks = [], resolvedHandoffs = [], handedOff = 0, remaining = [], resultNote = null, commit = null, priorAttempts = 0, priorVerified = false, sessionlessRoute = null } = {}) {
   const parts = (resultNote && isObject(resultNote) ? resultNote.parts : null) ?? {};
   const namedChecks = checkReports(parts).some(namesCheck);
   const remainingText = str(parts.remaining);
   const remainingKey = (value) => str(value).toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
-  const handedOffAndFinished = remainingKey(remainingText) && asArray(resolvedHandoffs).some((title) => remainingKey(title) === remainingKey(remainingText));
+  // The attempt handed its leftover scope on as follow-up cards (handedOff:
+  // this run's recorded hand-offs) and every one has settled, finished or
+  // dropped by the owner: the remaining prose then describes that delegated
+  // work, not work this card still owes. The worker's summary rarely repeats
+  // a follow-up's exact title ("toggle, full-suite sweep" for two cards), so
+  // matching titles alone left such a parent failing on work already done.
+  // Guarded so it never over-discharges: nothing tracked may remain, the prose
+  // may name no more items than were handed on, and owner-only work is never
+  // a hand-off.
+  const handedOn = Math.max(0, Math.floor(Number(handedOff) || 0));
+  const proseItems = remainingText.split(/[,;+&]/).map((item) => item.trim()).filter(Boolean).length;
+  const allHandedOnSettled = handedOn > 0 && asArray(remaining).length === 0 && asArray(resolvedHandoffs).length >= handedOn
+    && proseItems <= handedOn && !/\bowner\b/i.test(remainingText);
+  const handedOffAndFinished = remainingKey(remainingText) && (allHandedOnSettled || asArray(resolvedHandoffs).some((title) => remainingKey(title) === remainingKey(remainingText)));
   const outstanding = (remainingText.length > 0 && !noRemainingWork(remainingText) && !handedOffAndFinished) || asArray(remaining).length > 0;
   // A done+verified retry re-checks work that already verified once: a
   // faithful scoped-check rerun changes 0 files by design, so the attempt's
@@ -4110,6 +4284,7 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerCh
   };
   const pass = (reason) => ({ state: "verified", reason, evidence });
   if (reportedCheckFailure(parts)) return fail("the attempt reported failing checks");
+  if (asArray(overseerChecks).some((check) => check?.unavailable === true)) return fail("no project-local verification check is available");
   if (evidence.observedChecks.failed) {
     return fail(own.failed && theirs.failed ? "recorded checks failed in the attempt's session and the overseer's verification run"
       : own.failed ? "recorded checks failed in the attempt's session"
@@ -4201,18 +4376,23 @@ export function housekeepingSweep({ requests = [], tasks = [], liveRuns = new Se
   const rules = normalizePrefs({ ...DEFAULT_PREFS, ...(isObject(prefs) ? prefs : {}) });
   const report = { requestsRequeued: 0, requestsPruned: 0, tasksReopened: 0, tasksArchived: 0, backlogCapped: 0, duplicateTasks: 0, absorbedRestored: 0, absorbedArchived: 0 };
 
-  // Requests: a running claim whose run died (quit, crash, lost close) is
-  // re-queued — unless a fresh lease says another process still owns it — and
-  // a row mid-verification belongs to its verification pass, not the queue.
+  // Requests: only tasks run now, and main.cjs moves an older build's
+  // "running" and "verifying" rows onto the task path before this sweep
+  // (task-history.mjs migrateLegacyRequests). What still reaches it is a
+  // claim a live owner holds, or one whose lease names no usable pid; the
+  // latter is re-queued here once no fresh lease says another process owns
+  // it. A legacy row still mid-run or mid-verification is never pruned.
   // An unclaimed auto-filed request this old is a snapshot that moved on —
   // but the owner's requests (chat, manual, anything the compactor does not
-  // treat as auto) never expire on a clock.
+  // treat as auto) never expire on a clock. A row put back in the inbox (here,
+  // or by the legacy migration just before this sweep) ages from then
+  // (filedAt): pruned in the same pass, it never reached promotion.
   const requestCutoff = now - 48 * HOUR;
   let outRequests = asArray(requests).filter(isObject).map((request) => {
     if (request.status === "verifying") return request;
     if (request.status !== "running" || liveRuns.has(request.runId) || leaseHeldElsewhere(request, { pid, now, leaseStaleMs })) return request;
     report.requestsRequeued += 1;
-    const next = { ...request };
+    const next = { ...request, requeuedAt: now };
     delete next.status;
     delete next.runId;
     delete next.runningAt;
@@ -4223,7 +4403,8 @@ export function housekeepingSweep({ requests = [], tasks = [], liveRuns = new Se
   outRequests = outRequests.filter((request) => {
     if (request.status === "running" || request.status === "verifying" || hasHandoffLineage(request) || hasDelegation(request) || hasPendingContinuation(request)) return true;
     if (str(request.source) === "chat" || !AUTO_SOURCES.has(request.source)) return true;
-    return !(num(request.at, 0) && num(request.at, 0) < requestCutoff);
+    const at = filedAt(request);
+    return !(at && at < requestCutoff);
   });
   report.requestsPruned = beforePrune - outRequests.length;
 
@@ -4331,7 +4512,11 @@ export function housekeepingSweep({ requests = [], tasks = [], liveRuns = new Se
 // back up. The repair pass turns each one into a resume request the executor
 // can run: oldest first, capped per pass, and never a duplicate of a request
 // in the inbox, a dispatched one still in the dedupe history, or a task on the
-// board (all matched on the shared compactKey of their titles).
+// board. A rescue carries its session as its target (and claims it), the same
+// identity Work on it gives a session, so the two recognise each other: a
+// session Work on it already queued is not rescued again, and Work on it on a
+// rescued session pins the rescue instead of filing a second card. Rows with
+// no target are matched on the shared compactKey of their titles.
 export const RESCUE_LIMITS = { perPass: 2, promptTodos: 4 };
 export function staleRescues({ sessions = null, todos = [], policy = {}, existing = [], tasks = [], now = Date.now(), limit = RESCUE_LIMITS.perPass } = {}) {
   const rules = normalizePolicy({ ...DEFAULT_POLICY, ...(isObject(policy) ? policy : {}) });
@@ -4341,12 +4526,14 @@ export function staleRescues({ sessions = null, todos = [], policy = {}, existin
     if (!bySession.has(todo.sessionId)) bySession.set(todo.sessionId, []);
     bySession.get(todo.sessionId).push(todo);
   }
-  const taken = new Set(
-    asArray(existing)
-      .concat(asArray(tasks))
-      .map((item) => compactKey(str(item?.title)))
-      .filter(Boolean),
-  );
+  const known = asArray(existing).concat(asArray(tasks)).filter(isObject);
+  const taken = new Set(known.map((item) => compactKey(str(item?.title))).filter(Boolean));
+  // A session or one of its todos that unfinished Work on it or rescue work
+  // already targets.
+  const targeted = new Set(known.filter((item) => workAdmission.isOpenWork(item.status)).flatMap((item) => {
+    const kind = str(item.target?.kind), id = str(item.target?.id);
+    return kind === "session" && id ? [id] : kind === "todo" && id.includes(":") ? [id.split(":")[0]] : [];
+  }));
   const rescues = [];
   for (const session of asArray(sessions)) {
     if (!isObject(session) || typeof session.id !== "string" || !session.id || session.parentId) continue;
@@ -4358,7 +4545,7 @@ export function staleRescues({ sessions = null, todos = [], policy = {}, existin
     const title = str(session.title) || session.id;
     const requestTitle = clip(`Resume: ${title}`, 90);
     const key = compactKey(requestTitle);
-    if (!key || taken.has(key)) continue;
+    if (!key || taken.has(key) || targeted.has(session.id)) continue;
     const pending = open.filter((todo) => todo !== running && str(todo.content)).slice(0, RESCUE_LIMITS.promptTodos);
     rescues.push({
       id: session.id,
@@ -4373,9 +4560,13 @@ export function staleRescues({ sessions = null, todos = [], policy = {}, existin
             `Pick the work back up: finish that todo${pending.length ? `, then ${pending.map((todo) => `"${clip(str(todo.content), 50)}"`).join(", ")}` : ""}.`,
           400,
         ),
+        target: { kind: "session", id: session.id },
+        sessions: [session.id],
+        origin: { kind: "rescue", by: "overseer" },
       },
     });
     taken.add(key);
+    targeted.add(session.id);
   }
   return rescues.sort((a, b) => b.quietMinutes - a.quietMinutes).slice(0, Math.max(0, limit));
 }
@@ -4634,19 +4825,23 @@ const loopHoldable = (task) => waitingTask(task) && !task.runId && !task.lease &
 
 // Duplicate families: unresolved cards that are one obligation minted twice —
 // a split's "Follow-up:" chain, a handoff clone renamed " — follow-up xxxxxx",
-// a title clipped with "…", and a "Work on it" card (`Work on "X"`, clipped
-// at 60 characters, so its closing quote may be gone), which is the work X it
-// points at. Reported, never merged: cards titled "Audit: css" are different
-// selectors and files, so audit findings never form a family.
+// a title clipped with "…", and a "Work on it" card (`Work on "X"`; one saved
+// before its label was clipped inside the quotes may have lost its closing
+// quote), which is the work X it points at. Reported, never merged: cards
+// titled "Audit: css" are different selectors and files, so audit findings
+// never form a family.
 function familyKey(task) {
-  let title = str(task?.originalTitle).trim() || str(task?.title).trim();
-  // A clipped "Work on it" title keeps its full label in the prompt it was
-  // queued with ("Work on \"X\". Queued with Work on it — …").
-  const queued = /^work on\s+"/i.test(title) ? /^work on\s+"(.+?)"\.\s/i.exec(str(task?.prompt)) : null;
-  if (queued) title = queued[1].trim();
-  for (let before = ""; before !== title; ) {
+  // A "Work on it" title names the work it points at; a clipped one keeps its
+  // full label in the prompt it was queued with ("Work on \"X\". Queued with
+  // Work on it — …"), which the admission module's workLabel reads. The prompt
+  // is read once, here: its label can itself be a Work on title that unwraps
+  // back into this one (`Work on "Work on "A" b"`), and reading it on every
+  // step cycled forever inside the keeper's board mutation. Without the prompt
+  // each step only shortens the title; the step cap is a backstop.
+  let title = workAdmission.workLabel(str(task?.originalTitle).trim() || str(task?.title).trim(), task?.prompt);
+  for (let before = "", steps = 0; before !== title && steps < 16; steps += 1) {
     before = title;
-    title = title.replace(/^work on\s+"(.*?)"?$/i, "$1").replace(/^(?:follow-up(?:\s+\d+)?:\s*)+/i, "").trim();
+    title = workAdmission.workLabel(title).replace(/^(?:follow-up(?:\s+\d+)?:\s*)+/i, "").trim();
   }
   title = title.replace(/\s+—\s+follow-up\s+\S+$/i, "").replace(/…$/, "");
   return /^audit:/i.test(title) ? "" : compactKey(title);
@@ -5480,8 +5675,14 @@ export function suggestWork({ sessions = null, tasks = null, ideas = null, reque
   }
   for (const request of asArray(requests).filter((entry) => isObject(entry) && entry.status !== "running").slice(0, 2))
     push("request", str(request.title) || clip(str(request.prompt), 60), "waiting in the request inbox", 75);
-  const rankTask = (task) =>
-    SELF_MAINTENANCE_TITLE.test(str(task.title)) ? 10 : str(task.source) === "chat" ? 65 : String(task.id).startsWith("task_plan_") ? 55 : str(task.source) === "a-eyes" ? 45 : 35;
+  // Board work ranks in the dispatcher's own worth bands (scripts/policy.mjs):
+  // the owner's (source chat, or an origin that names the owner), a plan, the
+  // roster's filed sources, plain work, the assistant's upkeep last. Promotion
+  // keeps a request's source now, so the old `source === "a-eyes"` test ranked
+  // promoted fix, audit and agent cards as plain work. Read at call time:
+  // policy.mjs imports this module, so its bindings are not ready at load.
+  const bandRank = { [BAND.CHAT]: 65, [BAND.PLAN]: 55, [BAND.EYES]: 45, [BAND.PLAIN]: 35, [BAND.SELF_MAINTENANCE]: 10 };
+  const rankTask = (task) => bandRank[baselineTaskPriority(task)] ?? 35;
   const open = asArray(tasks)
     .filter((task) => isObject(task) && task.status === "open" && !(num(task.nextRunAt, 0) > now) && !exhaustedAttempts(task))
     .sort((a, b) => rankTask(b) - rankTask(a) || num(a.createdAt, num(a.updatedAt, 0)) - num(b.createdAt, num(b.updatedAt, 0)));
@@ -5540,18 +5741,24 @@ function activityLogLine(log, limit = 4) {
   return rows.length ? `Log: ${rows.map((entry) => clip(str(entry.text), 70)).join("; ")}.` : null;
 }
 
-const ACTIONABLE_PICKS = new Set(["task", "request", "collision", "audit", "session"]);
-
-// What the thinker says in the assistant box, and whether it should start
-// work. Grounded in the activity log and ranked picks; never invents a job.
-export function thinkPlan({ log = [], suggestions = [], executor = null, lastThought = "", overseer = null, organization = null } = {}) {
+// What the thinker says in the assistant box, and whether it should act.
+// Grounded in the activity log and ranked picks; never invents a job, and
+// never announces a start it does not control: the foreman picks by its own
+// ranking, so the only act is `pin` — a ready board task the dispatcher would
+// not take first, moved to the front through Work on it while the owner has
+// Proactive on and the executor is idle. Anything else is only named ("next
+// up"). `backlog` is the dispatcher's view: the ids of ready tasks and its
+// ranked `next` list, whose rows carry pin, source and origin so the owner's
+// lead is visible here.
+export function thinkPlan({ log = [], suggestions = [], executor = null, backlog = null, proactive = true, lastThought = "", overseer = null, organization = null } = {}) {
   const logRows = activityLogRows(log, 8);
   const picks = asArray(suggestions).filter((entry) => isObject(entry) && str(entry.title));
   const top = picks[0] ?? null;
   const running = asArray(executor?.running).filter(isObject);
   const queued = Math.floor(num(executor?.queued, 0));
   const waiting = str(executor?.waiting);
-  const enabled = !executor || executor.enabled !== false;
+  // A launch hold or a paused assistant stops dispatch as surely as the switch.
+  const enabled = !executor || (executor.enabled !== false && executor.held !== true);
   const findings = asArray(isObject(overseer) ? overseer.findings : null).filter(isObject);
   const counts = isObject(organization?.counts) ? organization.counts : {};
   const bits = [];
@@ -5564,19 +5771,33 @@ export function thinkPlan({ log = [], suggestions = [], executor = null, lastTho
   else if (!enabled) bits.push("executor is off");
   else if (waiting) bits.push(`held: ${clip(waiting, 48)}`);
   else bits.push(queued ? `idle · ${plural(queued, "request")} waiting` : "executor idle");
-  if (top) bits.push(`could work on "${clip(top.title, 50)}" (${clip(str(top.reason), 40)})`);
-  const thinking = clip(bits.join(" · "), 280) || "looking at the board";
-  const started = (title) => {
-    const label = clip(title, 50);
-    return Boolean(lastThought && label && String(lastThought).includes(`starting work on "${label}"`));
-  };
   const idle = enabled && !waiting && !running.length;
-  let act = null;
-  if (idle && top && ACTIONABLE_PICKS.has(str(top.kind)) && !started(top.title)) {
-    act = { kind: "dispatch", title: clip(top.title, 70), reason: clip(str(top.reason), 80), pick: str(top.kind) };
-  } else if (idle && queued > 0 && !started("the queue") && !(top && started(top.title))) {
-    act = { kind: "dispatch", title: "the queue", reason: `${plural(queued, "request")} waiting`, pick: "queue" };
-  }
+  // The pick is actionable only as a board task the dispatcher has ready but
+  // would not take first; a task already first needs nothing from the thinker.
+  // It is chosen in the dispatcher's own order (backlog.next, compareWork:
+  // pins, then the worth bands, then age), not suggestWork's, which ignores
+  // pins: its oldest chat card used to be pinned over the card the owner had
+  // just pinned. And the owner's choice is never overtaken: when the
+  // dispatcher's first pick is pinned or in the owner's band, nothing is pinned.
+  const ready = new Set(asArray(backlog?.ready).map((id) => str(id)).filter(Boolean));
+  const next = asArray(backlog?.next).filter(isObject);
+  const rankOf = new Map(next.map((row, index) => [str(row.id), index]));
+  const taskPicks = top && str(top.kind) === "task"
+    ? picks.filter((pick) => str(pick.kind) === "task" && isObject(pick.target) && pick.target.kind === "task" && ready.has(str(pick.target.id)))
+    : [];
+  const candidate = taskPicks
+    .map((pick, index) => ({ pick, rank: rankOf.get(str(pick.target.id)) ?? next.length + index }))
+    .sort((a, b) => a.rank - b.rank)[0]?.pick ?? null;
+  const taskId = candidate ? str(candidate.target.id) : "";
+  const ownerLeads = Boolean(next[0]) && baselineWorkPriority(next[0]) >= BAND.CHAT;
+  const pick = taskId && taskId !== str(next[0]?.id) && !ownerLeads ? candidate : null;
+  const label = clip((pick ?? top)?.title, 50);
+  const pinnedBefore = Boolean(lastThought && label && String(lastThought).includes(`put "${label}" first`));
+  const act = idle && proactive === true && pick && !pinnedBefore
+    ? { kind: "pin", taskId, title: clip(pick.title, 70), reason: clip(str(pick.reason), 80) }
+    : null;
+  if (top) bits.push(`${act ? "putting first" : "next up"}: "${act ? label : clip(top.title, 50)}" (${clip(str((act ? pick : top).reason), 40)})`);
+  const thinking = clip(bits.join(" · "), 280) || "looking at the board";
   return { thinking, act, pick: top };
 }
 
@@ -5606,22 +5827,33 @@ const quoteTitles = (line) => [
   ),
 ];
 
-function lastAssistantText(state) {
-  const message = [...asArray(state?.messages)].reverse().find((entry) => isObject(entry) && entry.role === "assistant" && typeof entry.text === "string");
-  return message ? message.text : "";
+// The newest reply to the owner. Task notices land between a reply and the
+// owner's "yes" all the time; they must not take the offer off the table.
+function lastReply(state) {
+  return [...asArray(state?.messages)].reverse().find((entry) => isReply(entry) && typeof entry.text === "string") ?? null;
 }
 
-// Titles quoted by the latest reply that asked for a decision.
+// The offers on the table, with the card each one names when it is a board
+// task: the latest reply's structured offers, else the titles quoted by a
+// reply that asked for a decision.
+export function pendingOfferTargets(state) {
+  const last = lastReply(state);
+  if (!last) return [];
+  const structured = normalizeOffers(last.offers);
+  if (structured.length) return structured;
+  return OFFER_LINE.test(last.text) ? quoteTitles(last.text).map((title) => ({ title })) : [];
+}
+
+// Titles of the offers on the table (pendingOfferTargets without identity).
 export function pendingOffers(state) {
-  const last = lastAssistantText(state);
-  return last && OFFER_LINE.test(last) ? quoteTitles(last) : [];
+  return pendingOfferTargets(state).map((offer) => offer.title);
 }
 
 // Titles quoted by the newest reply that carried any — "it" lands here when no
 // explicit offer is on the table.
 function lastQuoted(state) {
   for (const entry of [...asArray(state?.messages)].reverse()) {
-    if (!isObject(entry) || entry.role !== "assistant") continue;
+    if (!isReply(entry)) continue;
     const titles = quoteTitles(entry.text);
     if (titles.length) return titles;
   }
@@ -5660,12 +5892,16 @@ function vagueSubject(flat) {
 // whatever the last reply quoted, then the node the user clicked, then the top
 // pick — never an invented title.
 function resolveSubject({ index = null, state, picks, focused, loose = false }) {
-  const offers = pendingOffers(state);
+  const targets = pendingOfferTargets(state);
+  const offers = targets.map((offer) => offer.title);
   const fromPick = (pick) => pick ? { title: pick.fullTitle || pick.title, via: "pick", ...(pick.target ? { existingTarget: pick.target } : {}) } : null;
-  // An offer is the pick's display label, clipped in the reply. When a current
-  // pick carries the same label, reuse its full title and identity so "yes"
-  // does not queue a near-duplicate of long work the clipped title cannot key.
+  // An offer is the pick's display label, clipped in the reply. A structured
+  // offer names its card outright; otherwise, when a current pick carries the
+  // same label, reuse its full title and identity so "yes" does not queue a
+  // near-duplicate of long work the clipped title cannot key.
   const fromOffer = (title) => {
+    const offered = targets.find((entry) => entry.title === title && entry.target);
+    if (offered) return { title, via: "offer", existingTarget: offered.target };
     const pick = asArray(picks).find((entry) => entry?.title === title);
     return { title: pick?.fullTitle || title, via: "offer", ...(pick?.target ? { existingTarget: pick.target } : {}) };
   };
@@ -5942,7 +6178,7 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
       const picks = suggestWork({ ...source, now });
       if (picks.length) {
         lines.push(`Best next work: ${picks.slice(0, 4).map((entry) => `"${entry.title}" (${entry.reason})`).join(", ")}.`);
-        lines.push('Say "work on <title>" and I queue it to the inbox and send the roster out.');
+        lines.push('Say "work on <title>" and I start that card, or name new work and I put it on the task board.');
       } else {
         lines.push("The board is clear: no open tasks, nothing in the request inbox, nothing stale.");
         lines.push("Name what you want built and it goes straight to the executor.");
@@ -5976,7 +6212,7 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
       if (chatter.length) lines.push(`Said to each other: ${chatter.join("; ")}.`);
       const executing = executorLine(executor, source.backlog);
       if (executing) lines.push(executing);
-      lines.push("A work instruction queues it and sends the roster out with it.");
+      lines.push("A work instruction goes on the task board and the foreman starts it when a worker is free; the rest of the roster keeps its own clock.");
       break;
     }
     case "ideas": {
@@ -6101,8 +6337,8 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
       lines.push("Ask me about: status, tasks, open issues and tickets, ideas, collisions, machine, agents, the log.");
       lines.push('Ask "what should I work on" and I pick from the board, the inbox and quiet sessions.');
       lines.push("I can tidy, fix, organize, pause, resume, and resume the work — and clear the queue when the backlog needs collapsing.");
-      lines.push("The overseer sits above me — ask it to review the workflow and it scores my work, tunes prefs and files upgrades.");
-      lines.push("My agents: overseer, watcher, machine, auditor, keeper, thinker, briefer, improver, grower, ideas, reference — an instruction queues it to the request inbox and sends the roster out. They talk to each other — ask about agents to read the mail.");
+      lines.push("The overseer sits above me: ask it to review the workflow.");
+      lines.push("My roster: overseer, watcher, machine, auditor, keeper, compactor, foreman, thinker, briefer, improver, grower, ideas, reference. Work goes on the task board; on a card say try again, stop or mark it done.");
       break;
     }
     case "log": {
@@ -6143,15 +6379,15 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
         if (memoryLine) lines.push(memoryLine);
         break;
       }
-      actions.push("queue-request", "agents");
+      actions.push("queue-request");
       if (resolved) {
         request = { title: clip(resolved.title, 60), resolvedTitle: resolved.title, ...(resolved.existingTarget ? { existingTarget: resolved.existingTarget } : {}), prompt: `Work on "${resolved.title}". Queued from the assistant chat — the user said "${clip(text, 140)}".` };
         const where = { offer: "the pick on the table", quote: "what we were just talking about", focus: "the node you pointed at", pick: "the top pick", named: "the work you named" }[resolved.via] ?? "the pick";
-        lines.push(`On it — "${clip(resolved.title, 60)}" is ${where}, on the task board as the next piece of work and the roster goes out with it.`);
+        lines.push(`On it — "${clip(resolved.title, 60)}" is ${where}, on the task board as the next piece of work.`);
         lines.push(aiNote(current).trim());
       } else {
         const related = relatedFacts(text, { sessions, tasks, collisions, requests });
-        lines.push(`Kept in the thread and put on the task board as the next piece of work: "${clip(text, 80)}". The roster goes out with it: watcher, machine, auditor, keeper, briefer, improver, grower, ideas, reference.`);
+        lines.push(`Kept in the thread and put on the task board as the next piece of work: "${clip(text, 80)}". The foreman starts it when a worker is free.`);
         lines.push(related.length ? `Related right now: ${related.join(" · ")}.` : (focusLine ?? "Nothing in the current sessions matches it yet."));
         if (folderLine) lines.push(folderLine);
         if (memoryLine) lines.push(memoryLine);
@@ -6223,13 +6459,16 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
           const index = ordinalAt(flat) ?? 0;
           const title = pickAt(offers, index);
           if (title) {
-            actions.push("queue-request", "agents");
-            // The offer is the pick's clipped label; a matching current pick
-            // supplies the full title and identity the host dedupes on.
+            actions.push("queue-request");
+            // A structured offer names its card outright; otherwise the offer
+            // is the pick's clipped label and a matching current pick supplies
+            // the full title and identity the host dedupes on.
+            const offered = pendingOfferTargets(current).find((entry) => entry.title === title && entry.target)?.target ?? null;
             const pick = asArray(suggestWork({ ...source, now })).find((entry) => entry.title === title);
-            const resolved = pick?.fullTitle || title;
-            request = { title: clip(resolved, 60), resolvedTitle: resolved, ...(pick?.target ? { existingTarget: pick.target } : {}), prompt: `Work on "${resolved}". Queued from the assistant chat — the user confirmed with "${clip(text, 140)}".` };
-            lines.push(`On it — "${clip(title, 60)}" is on the task board as the next piece of work and the roster is out with it.`);
+            const resolved = offered ? title : pick?.fullTitle || title;
+            const target = offered ?? pick?.target ?? null;
+            request = { title: clip(resolved, 60), resolvedTitle: resolved, ...(target ? { existingTarget: target } : {}), prompt: `Work on "${resolved}". Queued from the assistant chat — the user confirmed with "${clip(text, 140)}".` };
+            lines.push(`On it — "${clip(title, 60)}" is on the task board as the next piece of work.`);
             lines.push(aiNote(current).trim());
           } else {
             lines.push(`I only offered ${plural(offers.length, "pick")} — name one of those and I queue it.`);
@@ -6792,7 +7031,8 @@ function selfTest() {
   expect(loaded.agents.map((row) => row.role).join(",") === AGENT_ROLES.map((entry) => entry.role).join(","), "roster order and completeness");
   expect(loaded.agents[0].status === "idle" && loaded.agents[2].status === "idle" && loaded.agents[0].runs === 3, "stale running/queued rows become idle");
   expect(loaded.prefs.parallel === PARALLEL_MAX && loaded.prefs.aiParallel === 1 && loaded.pool.parallel === PARALLEL_MAX && loaded.pool.running === 0, `pool prefs ${JSON.stringify(loaded.pool)}`);
-  expect(JSON.stringify(result.dueRoles) === JSON.stringify(["machine", "auditor", "keeper", "compactor", "foreman", "thinker", "overseer"]), `dueRoles ${JSON.stringify(result.dueRoles)}`);
+  // Keyless: the "always" AI roles wait; the ideas scan ("when-usable") runs its local pass.
+  expect(JSON.stringify(result.dueRoles) === JSON.stringify(["machine", "auditor", "keeper", "compactor", "foreman", "thinker", "overseer", "ideas"]), `dueRoles ${JSON.stringify(result.dueRoles)}`);
   const collisionDue = dueRoles({ ...loaded, problems: [{ kind: "collision", since: result.now, text: "crafting.lua" }] }, result.now);
   expect(collisionDue[0] === "watcher" && collisionDue.includes("machine"), `open problems pull their owner due ${JSON.stringify(collisionDue)}`);
   const alreadyTried = dueRoles({ ...loaded, problems: [{ kind: "collision", since: result.now - HOUR, text: "crafting.lua" }] }, result.now);
@@ -6801,6 +7041,9 @@ function selfTest() {
   expect(dueRoles(keyed, result.now).includes("briefer") && !dueRoles(keyed, result.now, { proactive: false }).includes("briefer") && !dueRoles({ ...keyed, ai: { ...keyed.ai, backoffUntil: result.now + MINUTE } }, result.now).includes("briefer"), "briefer gating");
   expect(dueRoles(keyed, result.now).includes("thinker") && !dueRoles(keyed, result.now, { proactive: false }).includes("thinker"), "thinker waits for proactive, keyless");
   expect(dueRoles(keyed, result.now, { proactive: false }).includes("overseer"), "the overseer runs 24/7 — proactive off never holds it");
+  // Backlog mode holds the roles whose gates name it, and only those.
+  const draining = dueRoles(keyed, result.now, { backlogMode: true });
+  expect(!["briefer", "improver", "ideas", "grower"].some((role) => draining.includes(role)) && draining.includes("overseer") && draining.includes("thinker"), `backlog mode holds new planning ${JSON.stringify(draining)}`);
   const after = result.state;
   const row = (role) => after.agents.find((entry) => entry.role === role);
   expect(after.pool.running === 2 && after.pool.queued === 0 && after.action.text === "auditing · tidying" && after.action.since === result.now + 2000, `pool after events ${JSON.stringify(after.pool)} ${JSON.stringify(after.action)}`);
@@ -6812,7 +7055,7 @@ function selfTest() {
   const none = applyAgentEvent(one, { role: "auditor", status: "done", at: result.now + 6000, text: "1 error" });
   expect(none.pool.running === 0 && none.action.kind === "idle" && summarizeForTree(none, result.now).sublabel === "AI offline · no key", `idle again ${JSON.stringify(none.action)}`);
   expect(applyAgentEvent(none, { role: "ghost", status: "running", at: 1 }) === none && applyAgentEvent(none, { role: "watcher", status: "weird", at: 1 }) === none, "unknown role or status is ignored");
-  expect(JSON.stringify(result.dueRolesAfter) === JSON.stringify(["machine", "compactor", "foreman", "thinker", "overseer"]), `dueRolesAfter (watcher just started, auditor/keeper live) ${JSON.stringify(result.dueRolesAfter)}`);
+  expect(JSON.stringify(result.dueRolesAfter) === JSON.stringify(["machine", "compactor", "foreman", "thinker", "overseer", "ideas"]), `dueRolesAfter (watcher just started, auditor/keeper live) ${JSON.stringify(result.dueRolesAfter)}`);
   // the compactor: duplicates collapse, requests already on the board are
   // absorbed, expired backoffs are unparked, live claims survive untouched
   {
@@ -7177,13 +7420,14 @@ function selfTest() {
     now: result.now,
   });
   expect(logReply.text.includes("audit: 1 error") && logReply.text.includes("AI offline") && logReply.text.includes("2 queued"), `log reply ${logReply.text}`);
+  // An audit pick is not a board task: the thinker names it and acts on nothing.
   const planIdle = thinkPlan({
     log: [{ kind: "audit", text: "audit: 1 error(s)" }],
     suggestions: [{ kind: "audit", title: "1 audit error to fix", reason: "the auditor found real errors" }],
     executor: { enabled: true, running: [], queued: 0 },
     lastThought: "",
   });
-  expect(planIdle.thinking.includes("audit") && planIdle.act?.kind === "dispatch" && planIdle.act.title.includes("audit"), `thinkPlan idle ${JSON.stringify(planIdle)}`);
+  expect(planIdle.thinking.includes('next up: "1 audit error to fix"') && !planIdle.act, `thinkPlan idle ${JSON.stringify(planIdle)}`);
   const planBusy = thinkPlan({
     log: [{ kind: "audit", text: "audit: 1 error(s)" }],
     suggestions: [{ kind: "audit", title: "1 audit error to fix", reason: "the auditor found real errors" }],
@@ -7191,13 +7435,16 @@ function selfTest() {
     lastThought: "",
   });
   expect(!planBusy.act && planBusy.thinking.includes("building"), `thinkPlan busy ${JSON.stringify(planBusy)}`);
-  const planRepeat = thinkPlan({
-    log: [{ kind: "audit", text: "audit: 1 error(s)" }],
-    suggestions: [{ kind: "audit", title: "1 audit error to fix", reason: "the auditor found real errors" }],
-    executor: { enabled: true, running: [], queued: 0 },
-    lastThought: `${planIdle.thinking} — starting work on "${planIdle.act.title}".`,
-  });
-  expect(!planRepeat.act, "thinkPlan does not re-dispatch the same pick");
+  // A ready board task the dispatcher would not take first is pinned once.
+  const taskPick = [{ kind: "task", title: "Fix the ipc handler", reason: "you asked for this", target: { kind: "task", id: "task_ipc" } }];
+  const planPin = thinkPlan({ suggestions: taskPick, executor: { enabled: true, running: [], queued: 2 }, backlog: { ready: ["task_ipc", "task_old"], next: [{ id: "task_old" }] } });
+  expect(planPin.act?.kind === "pin" && planPin.act.taskId === "task_ipc" && planPin.thinking.includes('putting first: "Fix the ipc handler"'), `thinkPlan pins a ready pick ${JSON.stringify(planPin)}`);
+  const planRepeat = thinkPlan({ suggestions: taskPick, executor: { enabled: true, running: [], queued: 2 }, backlog: { ready: ["task_ipc", "task_old"], next: [{ id: "task_old" }] }, lastThought: `${planPin.thinking} — put "Fix the ipc handler" first.` });
+  expect(!planRepeat.act, "thinkPlan does not pin the same pick twice");
+  expect(!thinkPlan({ suggestions: taskPick, executor: { enabled: true, running: [] }, backlog: { ready: ["task_ipc"], next: [{ id: "task_ipc" }] } }).act, "a pick already first needs no pin");
+  expect(!thinkPlan({ suggestions: taskPick, executor: { enabled: true, running: [] }, backlog: { ready: [], next: [] } }).act, "a pick that is not ready is only named");
+  expect(!thinkPlan({ suggestions: taskPick, proactive: false, executor: { enabled: true, running: [] }, backlog: { ready: ["task_ipc"], next: [{ id: "task_old" }] } }).act, "Proactive off never pins");
+  expect(!thinkPlan({ suggestions: taskPick, executor: { enabled: true, held: true, running: [] }, backlog: { ready: ["task_ipc"], next: [{ id: "task_old" }] } }).act, "a held executor never pins");
   const thought = applyThought(emptyState(result.now), { text: "looking at the log: audit: 1 error", role: "thinker" }, result.now);
   expect(thought.thinking?.text.includes("audit") && thought.messages[0]?.role === "thinking" && thought.unread === 0, "applyThought lands in the thread without unread");
   expect(normalizeState({ thinking: "nope" }, 10).thinking === null && normalizeState({ thinking: { text: "hi", at: 5, role: "thinker" } }, 10).thinking.text === "hi", "thinking normalises");

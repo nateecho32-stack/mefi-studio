@@ -134,6 +134,67 @@ function environment(bridge = {}, { readyState = "complete" } = {}) {
   };
 }
 
+test("Explorer tabs preserve their selection, support arrow keys and expose assistant deep links", async () => {
+  const env = environment();
+  await env.open();
+  env.element("explorer-tab-diagnostics").click();
+  assert.equal(env.element("explorer-panel-diagnostics").hidden, false);
+  assert.equal(env.element("explorer-panel-assistant").hidden, true);
+  env.explorer.close();
+  await env.open();
+  assert.equal(env.element("explorer-panel-diagnostics").hidden, false);
+  env.element("explorer-tab-diagnostics").dispatch("keydown", { key: "ArrowLeft" });
+  assert.equal(env.element("explorer-tab-activity").attributes["aria-selected"], "true");
+  assert.equal(env.document.activeElement, env.element("explorer-tab-activity"));
+  await env.explorer.open({ assistant: true });
+  assert.equal(env.element("explorer-panel-assistant").hidden, false);
+  assert.equal(env.document.activeElement, env.element("assistant-input"));
+});
+
+test("selecting a session on a narrow screen moves focus into detail and Back returns to the row", async () => {
+  const env = environment();
+  env.window.matchMedia = () => ({ matches: true });
+  await env.open();
+  env.rows()[0].click();
+  assert.equal(env.element("explorer-overlay").dataset.detail, "true");
+  assert.equal(env.document.activeElement, env.element("explorer-back"));
+  env.element("explorer-back").click();
+  assert.equal(env.element("explorer-overlay").dataset.detail, "false");
+  assert.equal(env.document.activeElement, env.tree().querySelector("li.selected"));
+});
+
+test("Session tools are optional, preserve drafts and reveal explicit diagnostics links", async () => {
+  const env = environment();
+  env.window.matchMedia = () => ({ matches: true });
+  await env.open();
+  assert.equal(env.element("explorer-tools").hidden, true);
+  env.rows()[0].click();
+  env.element("assistant-input").value = "Keep this draft";
+  env.element("explorer-tools-toggle").click();
+  assert.equal(env.element("explorer-overlay").dataset.tools, "true");
+  assert.equal(env.element("explorer-tools").hidden, false);
+  assert.equal(env.document.activeElement, env.element("explorer-tab-assistant"));
+  assert.equal(env.element("explorer-tools-back").textContent, "Back to session");
+  env.element("explorer-tools-back").click();
+  assert.equal(env.element("explorer-tools").hidden, true);
+  assert.equal(env.element("explorer-overlay").dataset.detail, "true", "return retains the session detail");
+  assert.equal(env.document.activeElement, env.element("explorer-tools-toggle"));
+  await env.explorer.open({ panel: "diagnostics" });
+  assert.equal(env.element("explorer-tools").hidden, false);
+  assert.equal(env.document.activeElement, env.element("explorer-tab-diagnostics"));
+  assert.equal(env.element("assistant-input").value, "Keep this draft");
+  env.element("explorer-tools-back").click();
+  const saved = env.explorer.saveState();
+  assert.equal(saved.panel, "diagnostics");
+  assert.equal(saved.toolsOpen, false);
+  env.explorer.close();
+  await env.explorer.open(saved);
+  assert.equal(env.element("explorer-tools").hidden, true, "resuming a saved tab does not reopen intentionally closed tools");
+  await env.explorer.open({ panel: "assistant" });
+  env.rows()[0].click();
+  assert.equal(env.element("explorer-tools").hidden, true, "selecting a session returns a compact layout to its detail");
+});
+
 test("session rows pin their visible label text and row-label title on the row", async () => {
   const env = environment();
   await env.open();
@@ -399,6 +460,26 @@ test("a late Open task lookup repaints without losing a half-typed checkpoint", 
   assert.equal(detail.querySelector("input.grow").value, "half a note", "the repaint keeps the draft");
 });
 
+test("checkpoint feedback remains visible when Session tools are closed", async () => {
+  const env = environment({
+    eyesCheckpointsRead: async () => ({ checkpoints: { "ses-root": [{ at: 1, note: "Verified the export", source: "manual" }] } }),
+    shellCopy: async () => true,
+  });
+  await env.open(); env.rows()[0].click();
+  const buttons = [];
+  const walk = (node) => { for (const child of node.children || []) { if (child.tagName === "button") buttons.push(child); walk(child); } };
+  walk(env.element("explorer-detail"));
+  buttons.find((button) => button.textContent === "Reference").click(); await flush();
+  assert.equal(env.element("explorer-tools").hidden, true);
+  assert.equal(env.element("explorer-status").hidden, false);
+  assert.match(env.element("explorer-status").textContent, /checkpoint #1 copied/);
+  env.element("explorer-tools-toggle").click();
+  assert.equal(env.element("explorer-status").hidden, true, "only the visible tools status announces while tools are open");
+  assert.match(env.element("assistant-status").textContent, /checkpoint #1 copied/);
+  env.element("explorer-tools-back").click();
+  assert.equal(env.element("explorer-status").hidden, false);
+});
+
 test("opening Explorer paints the inbox it read, and expand and audit requests carry their own tags instead of REQ", async () => {
   const env = environment({
     eyesRequestsRead: async () => ({ ok: true, requests: ["expand", "audit", "fix", "manual"].map((source, at) => ({ at, prompt: `${source} work`, source })) }),
@@ -406,6 +487,22 @@ test("opening Explorer paints the inbox it read, and expand and audit requests c
   await env.open(); await flush();
   const tags = env.element("request-list").children.map((li) => li.children[0].children[0].textContent);
   assert.deepEqual(tags, ["EXPAND", "AUDIT", "FIX", "REQ"]);
+});
+
+test("an inbox ask titled from its own first line shows that line once", async () => {
+  const env = environment({
+    eyesRequestsRead: async () => ({ ok: true, requests: [
+      { at: 1, title: "Keep the torches lit", prompt: "Keep the torches lit\nThey go dark after a reload", source: "manual" },
+      { at: 2, title: "Make the save button bigger", prompt: "Make the save button bigger", source: "manual" },
+      { at: 3, title: "Fix: stale lock", prompt: "A-Eyes warn alert: stale lock", source: "fix" },
+    ] }),
+  });
+  await env.open(); await flush();
+  const text = env.element("request-list").textContent;
+  assert.equal(text.split("Keep the torches lit").length - 1, 1);
+  assert.match(text, /Keep the torches lit — They go dark after a reload/);
+  assert.equal(text.split("Make the save button bigger").length - 1, 1);
+  assert.match(text, /Fix: stale lock — A-Eyes warn alert: stale lock/, "a title of its own keeps the whole brief beside it");
 });
 
 test("the request inbox adds and removes through targeted actions and reports a refusal", async () => {

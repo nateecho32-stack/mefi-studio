@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFile } from "node:fs/promises";
 import boardGrowth from "../scripts/board-growth.cjs";
+import workAdmission from "../scripts/work-admission.cjs";
 import * as assistant from "../scripts/assistant.mjs";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
@@ -49,7 +50,7 @@ function intakeHost(board) {
   let tail = Promise.resolve();
   const accepted = [];
   const env = vm.createContext({
-    boardGrowth, projects: { stamp: (row) => row },
+    boardGrowth, workAdmission, projects: { stamp: (row) => row },
     workTitleKey: (title) => String(title ?? "").toLowerCase().trim(),
     mutateBoard(mutate) { const next = tail.then(() => mutate(board)); tail = next.catch(() => {}); return next; },
     jevShadowIntake(rows) { accepted.push(...(rows ?? [])); },
@@ -105,6 +106,8 @@ test("demand priority from an automatic agent never grants explicit growth autho
   const env = vm.createContext({
     assistantState: { prefs: {} }, ASSISTANT_PRIORITY: { cadence: 1, demand: 2 },
     ASSISTANT_ROLE_JOBS: { improver: (_now, entry) => { calls.push(entry.automaticGrowth); } },
+    // The spend and backlog answers come from AGENT_ROLES.
+    assistantModule: assistant, assistantAiUsable: () => false,
     enqueue: (_role, job) => job({}),
   });
   vm.runInContext(section("function assistantEnqueueRole(", "// On-demand roles"), env);
@@ -150,32 +153,37 @@ test("timer asks the foreman to settle and dispatch but does not run duplicate e
     assistantState: { status: "running", prefs: {} }, autopilot: { enabled: true, execute: true }, TASKS_PATH: "tasks",
     projects: { open: () => ({ id: "fixture" }) },
     getEyes: async () => ({ readJson: async () => [] }),
-    autopilotProactivePass: async () => ({ added: 0 }), growthBoardFacts: async () => ({ growthHeld: true }),
+    growthBoardFacts: async () => ({ growthHeld: true }),
     runAssistant: () => assert.fail("automatic discovery must wait for existing work"),
     autopilotHousekeeping: async () => effects.push("settle"), classifyPendingWork: async () => ({ ok: true }), promoteRequestsToTasks: async () => effects.push("promote"),
     refreshAutopilotQueue: async () => {}, pushAutopilotHistory() {}, emitAutopilot() {},
     assistantAskForWork: () => effects.push("dispatch"), logLine: (line) => assert.fail(line),
   });
-  vm.runInContext(`let autopilotTicks = 11;\n${section("let autopilotPassInFlight = null;", "async function setAutopilot(")}`, env);
+  vm.runInContext(section("let autopilotPassInFlight = null;", "async function setAutopilot("), env);
   await env.autopilotPass();
   assert.deepEqual(effects, ["dispatch"], "the foreman it asks settles and promotes; the timer does not repeat it");
 });
 
-test("with a key the timer leaves briefing and growth to the roster", async () => {
+// Every AI pass runs through the roster. The timer used to brief, grow and
+// improve off-roster whenever keyPresent was not true, with no pool accounting
+// or backoff; keyPresent now reads the route predicate runAssistant uses, so a
+// false one means no route could answer, and a missing one (before the first
+// tick) could fire a paid brief behind the roster's back.
+for (const ai of [{ keyPresent: true }, { keyPresent: false }, undefined]) test(`the timer spends no AI call and files nothing on its own (keyPresent ${ai?.keyPresent ?? "unknown"})`, async () => {
   const effects = [];
   const env = vm.createContext({
     Date, projectSwitching: false, SMOKE: false, CAPTURE: false, CLI_MODE: false,
-    assistantState: { status: "running", prefs: {}, ai: { keyPresent: true } }, autopilot: { enabled: true, execute: true }, TASKS_PATH: "tasks",
+    assistantState: { status: "running", prefs: {}, ...(ai ? { ai } : {}) }, autopilot: { enabled: true, execute: true }, TASKS_PATH: "tasks",
     projects: { open: () => ({ id: "fixture" }) },
     getEyes: async () => ({ readJson: async () => [] }),
-    autopilotProactivePass: () => assert.fail("the briefer owns the brief when a key is saved"),
-    growthBoardFacts: () => assert.fail("the grower and improver own expansion when a key is saved"),
-    runAssistant: () => assert.fail("no paid call from the timer when a key is saved"),
+    growthBoardFacts: () => assert.fail("the grower and improver own expansion"),
+    runAssistant: () => assert.fail("no AI call from the timer"),
+    queueRequests: () => assert.fail("the timer files no requests of its own"),
     classifyPendingWork: async () => ({ ok: true }),
     refreshAutopilotQueue: async () => {}, pushAutopilotHistory: () => assert.fail("nothing queued, no history row"), emitAutopilot() {},
     assistantAskForWork: () => effects.push("dispatch"), logLine: (line) => assert.fail(line),
   });
-  vm.runInContext(`let autopilotTicks = 11;\n${section("let autopilotPassInFlight = null;", "async function setAutopilot(")}`, env);
-  await env.autopilotPass();
-  assert.deepEqual(effects, ["dispatch"]);
+  vm.runInContext(section("let autopilotPassInFlight = null;", "async function setAutopilot("), env);
+  for (let tick = 0; tick < 12; tick += 1) await env.autopilotPass();
+  assert.deepEqual(effects, Array(12).fill("dispatch"), "twelve ticks (the old grow and improve beats included) only ask the foreman");
 });

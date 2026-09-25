@@ -129,9 +129,24 @@ function killTree(pid, kill) {
   return code;
 }
 
+// node's spawn also takes (command, options): an object in the args slot is
+// the options, and a third argument is then ignored. This module hands node
+// its filtered options in the third slot, so that shape used to give the
+// child Studio's whole environment; it is read the way node reads it instead.
+function callShape(args, options) {
+  if (args !== null && typeof args === "object" && !Array.isArray(args)) return [[], args];
+  return [args, options];
+}
+
 function createSpawn({ platform = process.platform, spawnImpl = child_process.spawn, kill = process.kill.bind(process), env = process.env } = {}) {
-  if (platform === "win32") return (command, args, options) => spawnImpl(command, args, withholdCredentials(options, env));
+  if (platform === "win32") {
+    return (command, args, options) => {
+      [args, options] = callShape(args, options);
+      return spawnImpl(command, args, withholdCredentials(options, env));
+    };
+  }
   return function spawn(command, args, options) {
+    [args, options] = callShape(args, options);
     options = withholdCredentials(options, env);
     if (isShellCall(command, args)) {
       // `start "title" cmd /k <cli>` opens a console window; there is no host

@@ -304,6 +304,25 @@ test("palette finds everyday words and descriptions, ranks titles first, and kee
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
+test("opening Search again preserves the query, selection and original focus return", () => {
+  const env = environment({ destinations: [
+    { id: "tasks", label: "Task board", group: "tools" },
+    { id: "plans", label: "Task plans", group: "tools" },
+  ] });
+  const opener = env.make("search-button");
+  opener.focus();
+  env.palette.open();
+  env.type("task");
+  env.key("ArrowDown");
+  env.close.focus();
+  env.palette.open();
+  assert.equal(env.input.value, "task");
+  assert.equal(env.document.activeElement, env.input);
+  assert.equal(env.input.attrs["aria-activedescendant"], "palette-option-1");
+  env.key("Escape");
+  assert.equal(env.document.activeElement, opener);
+});
+
 test("palette searches saved tasks before the board is visited and discards previous-project responses", async () => {
   const pending = [];
   const env = environment({ api: { tasksList: () => new Promise((resolve) => pending.push(resolve)) } });

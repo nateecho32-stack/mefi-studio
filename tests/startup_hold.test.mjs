@@ -61,18 +61,20 @@ test("releasing the hold never overrides a pause the operator saved", async () =
   assert.equal(events.includes("scheduled:0"), false, "no tick runs against a saved pause");
 });
 
-test("the proactive pass, the foreman ask and the executor fill all wait on the hold", async () => {
+test("the autopilot pass, the foreman ask and the executor fill all wait on the hold", async () => {
   let passes = 0, asks = 0;
   const autopilot = { enabled: true, held: true, jobs: [] };
-  const pass = host(`let autopilotTicks = 0;\n${section("let autopilotPassInFlight = null;", "async function setAutopilot(")}`, {
+  // The pass's own work is shaping the queue; it spends no AI call (the
+  // briefer and the build roles own that, through the roster).
+  const pass = host(section("let autopilotPassInFlight = null;", "async function setAutopilot("), {
     autopilot, TASKS_PATH: "tasks", assistantState: null,
     getEyes: async () => ({ readJson: async () => [] }),
-    autopilotProactivePass: async () => { passes += 1; return { added: 0 }; },
-    autopilotHousekeeping: async () => {}, classifyPendingWork: async () => ({ ok: true }), promoteRequestsToTasks: async () => {}, refreshAutopilotQueue: async () => {},
+    runAssistant: () => assert.fail("the timer spends no AI call"),
+    autopilotHousekeeping: async () => {}, classifyPendingWork: async () => { passes += 1; return { ok: true }; }, promoteRequestsToTasks: async () => {}, refreshAutopilotQueue: async () => {},
     pushAutopilotHistory() {}, emitAutopilot() {}, assistantAskForWork() { asks += 1; },
   });
   assert.deepEqual(plain(await pass.autopilotPass()), { ok: true, skipped: "held" });
-  assert.equal(passes, 0, "a held launch spends nothing on a proactive pass");
+  assert.equal(passes, 0, "a held launch does no pass at all");
   autopilot.held = false;
   await pass.autopilotPass();
   assert.equal(passes, 1); assert.equal(asks, 1);
@@ -80,6 +82,8 @@ test("the proactive pass, the foreman ask and the executor fill all wait on the 
   let enqueued = 0;
   const foreman = host(section("function assistantAskForWork(reason)", "// What the assistant is doing about the build queue"), {
     autopilot: { held: true }, assistantState: { status: "running" }, ASSISTANT_PRIORITY: { demand: 5 },
+    // The ask looks for a foreman already in the pool before it enqueues one.
+    pool: { queue: [], running: new Map() },
     assistantEnqueueRole() { enqueued += 1; },
   });
   assert.equal(foreman.assistantAskForWork("you added a task"), false, "a task added while held waits for Start agents");

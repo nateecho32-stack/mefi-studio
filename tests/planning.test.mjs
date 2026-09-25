@@ -218,6 +218,8 @@ test("implementation handoff includes complete scope, decisions, evidence, crite
     assert.equal(task.planningId, f.current().id);
     assert.equal(task.projectId, project.id);
     assert.equal(task.status, "open");
+    // The owner approved the plan, so its tasks rank with the owner's work.
+    assert.deepEqual(task.origin, { kind: "planning", by: "owner" });
     assert.ok(task.prompt.indexOf(`YOUR TASK: ${task.title}`) < task.prompt.indexOf("Approved specification"));
     assert.ok(task.prompt.indexOf("Acceptance criteria for this task") < task.prompt.indexOf("Destination"));
   }

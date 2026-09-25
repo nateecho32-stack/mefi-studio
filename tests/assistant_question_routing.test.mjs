@@ -66,7 +66,7 @@ test("explicit work remains actionable including polite questions and mixed look
     "Why is export slow? Add a cache.", "Is export cached? Please add a cache.",
   ]) {
     assert.equal(classifyIntent(text), "request", text);
-    assert.deepEqual(localReply({ text, facts, state }).actions, ["queue-request", "agents"], text);
+    assert.deepEqual(localReply({ text, facts, state }).actions, ["queue-request"], text);
   }
 });
 
@@ -94,7 +94,7 @@ test("focused followups carry quoted task titles and identities without parsing 
   const title = 'Add "Export" button';
   const reply = localReply({ text: "work on it", facts: { tasks: [{ id: "export", title, status: "open" }] },
     state: { focus: { kind: "task", id: "task:export", label: title } } });
-  assert.deepEqual(reply.actions, ["queue-request", "agents"]);
+  assert.deepEqual(reply.actions, ["queue-request"]);
   assert.equal(reply.request.resolvedTitle, title);
   assert.deepEqual(reply.request.existingTarget, { kind: "task", id: "task:export" });
 });
@@ -140,7 +140,7 @@ test("standalone quoted work references retain their full title but added requir
   for (const text of ['Work on "Search the task board" and add CSV export', 'Work on "Search the task board". Add keyboard shortcuts.']) {
     assert.equal(classifyIntent(text), "request");
     const reply = localReply({ text, state });
-    assert.deepEqual(reply.actions, ["queue-request", "agents"]);
+    assert.deepEqual(reply.actions, ["queue-request"]);
     assert.equal(reply.request, null, "the host must retain the complete user instruction");
   }
 });
@@ -165,4 +165,22 @@ test("open issues, tickets and bugs read as the tasks lookup and answer from the
   const bare = localReply({ text: "What are the open issues currently in the project?", facts, state });
   assert.match(bare.text, /no issue tracker Studio can read/);
   assert.match(bare.text, /the board's open issues/);
+});
+
+test("suggestions rank board cards in the dispatcher's worth bands, not the old rewritten source", () => {
+  // Promotion keeps a request's source (fix, audit, agent…) and its origin, so
+  // a promoted filer's card ranks with the roster's work, and one the owner
+  // promoted by hand ranks as the owner's (scripts/policy.mjs baselineTaskPriority).
+  const tasks = [
+    { id: "t_plain", title: "Plain card", status: "open", createdAt: 1 },
+    { id: "t_fix", title: "Promoted fix", status: "open", source: "fix", origin: { kind: "request", by: "fix" }, createdAt: 2 },
+    { id: "t_idea", title: "Idea promoted by hand", status: "open", source: "a-eyes", origin: { kind: "idea", by: "owner" }, createdAt: 3 },
+  ];
+  const picks = suggestWork({ tasks });
+  assert.deepEqual(picks.map((pick) => pick.target.id), ["t_idea", "t_fix", "t_plain"]);
+  assert.equal(picks[0].reason, "you asked for this");
+  for (const source of ["fix", "audit", "agent", "grow", "improver", "overseer", "machine"]) {
+    const [first] = suggestWork({ tasks: [{ id: "t_plain", title: "Plain card", status: "open", createdAt: 0 }, { id: "t_filed", title: "Filed card", status: "open", source, createdAt: 5 }] });
+    assert.equal(first.target.id, "t_filed", `${source} outranks plain work`);
+  }
 });

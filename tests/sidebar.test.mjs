@@ -129,7 +129,7 @@ test("moving off the menu closes it even after focusing a menu control", () => {
   assert.equal(env.sidebar.isOpen(), false, "restoring focus must not reopen the menu");
 });
 
-test("Escape closes the sidebar before the underlying sheet, including from a preference field", () => {
+test("Escape closes the sidebar first and keeps the Work root in its section", () => {
   const env = environment(); let sheetClosed = false;
   env.nav.state.sheet = "tasks";
   env.window.MefiTasks = { close: () => { sheetClosed = true; } };
@@ -139,7 +139,7 @@ test("Escape closes the sidebar before the underlying sheet, including from a pr
   assert.equal(env.document.activeElement, env.toggle);
   assert.equal(sheetClosed, false);
   env.nav.handleKey({ key: "Escape", target: env.toggle, preventDefault() {} });
-  assert.equal(sheetClosed, true);
+  assert.equal(sheetClosed, false, "Escape at the Work root does not jump out of Work");
 });
 
 test("transient navigation closes the menu without stealing focus and blocks hover until dismissal", () => {

@@ -4,6 +4,7 @@ import vm from "node:vm";
 import { readFile } from "node:fs/promises";
 import { localReply, buildFacts } from "../scripts/assistant.mjs";
 import backlog from "../scripts/backlog.cjs";
+import taskOversight from "../scripts/task-oversight.cjs";
 
 test("host facts count the whole stored board before limiting prompt context", async () => {
   const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
@@ -11,7 +12,8 @@ test("host facts count the whole stored board before limiting prompt context", a
   const data = { tasks: Array.from({ length: 66 }, (_, i) => ({ id: String(i), title: `Task ${i}`, status: "open" })),
     requests: [{ title: "Task 0" }, { title: "New request" }], ideas: [], briefing: null };
   const env = vm.createContext({
-    backlog, assistantState: { status: "running", prefs: {} }, autopilot: { execute: true, parallel: 3, jobs: [{ title: "Already finished", finished: true }] },
+    backlog, taskOversight, taskEventTails: new Map(), logError: (text) => { throw new Error(`unexpected host error: ${text}`); },
+    assistantState: { status: "running", prefs: {} }, autopilot: { execute: true, parallel: 3, jobs: [{ title: "Already finished", finished: true }] },
     assistantReadStore: async () => ({ sessions: [], todos: [], collisions: [], presence: [], uncommitted: [] }),
     getEyes: async () => ({ readJson: async (key) => data[key] }),
     TASKS_PATH: "tasks", REQUESTS_PATH: "requests", IDEAS_PATH: "ideas", BRIEFING_PATH: "briefing",
@@ -37,6 +39,13 @@ test("host facts count the whole stored board before limiting prompt context", a
   assert.equal(facts.project.name, "2d Trippy Hell", "the open folder rides the facts");
   assert.equal(facts.projectScan.plans[0].source, "newwork-plan.md", "the folder scan's plans ride the facts");
   assert.equal(facts.projectScan.partial, true, "a truncated scan is disclosed as partial");
+  // The overseer's digest sees the whole board, grouped and clipped, with the
+  // stage the scheduler would give each card (all 66 are ready here).
+  assert.equal(facts.board.counts.total, 66);
+  assert.equal(facts.board.counts.ready, 66);
+  assert.ok(facts.board.ready.length > 0 && facts.board.ready.length <= taskOversight.DIGEST_LIMITS.ready);
+  assert.equal(facts.board.omitted.ready, 66 - facts.board.ready.length, "what was clipped is counted, not hidden");
+  assert.ok(Array.isArray(facts.asks) && Array.isArray(facts.events));
 });
 
 test("builder replies use full readiness counts and distinguish assistant activity from build workers", () => {
@@ -150,7 +159,10 @@ test("dispatch holds and unavailable readiness remain explicit", () => {
   assert.doesNotMatch(unknown.text, /7 requests/);
 });
 
-test("compaction counts scheduler eligibility and confirms only the dispatch request", async () => {
+// The compactor no longer asks for a foreman pass of its own ("compacted"):
+// the foreman runs every minute and after every finish, and the compactor's
+// note tells it how much is ready. So the line claims no dispatch request.
+test("compaction counts scheduler eligibility and leaves the dispatch to the foreman", async () => {
   const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
   const start = source.indexOf("async function assistantCompactorJob("), end = source.indexOf("async function assistantKeeperJob(", start);
   const tasks = [{ id: "first", title: "First", status: "open" }, { id: "second", title: "Dependent", status: "open", dependsOn: ["first"] }, { id: "failed", title: "Needs review", status: "open", runFailures: 5 }];
@@ -167,10 +179,10 @@ test("compaction counts scheduler eligibility and confirms only the dispatch req
   const result = await env.assistantCompactorJob(Date.now(), {});
   assert.equal(result.intel.runnable, 1);
   assert.match(result.text, /1 work item ready/);
-  assert.match(result.text, /dispatch requested; worker start is not yet confirmed/);
+  assert.doesNotMatch(result.text, /dispatch requested/, "no dispatch request is claimed");
   assert.doesNotMatch(result.text, /3 jobs runnable|handed to the foreman/);
-  assert.equal(asked, 1);
+  assert.equal(asked, 0, "the compactor asks for no foreman pass of its own");
+  assert.equal(result.messages.map((note) => note.to).join(","), "foreman", "the ready count is the foreman's note");
   env.assistantState.status = "paused";
-  env.assistantAskForWork = () => false;
   assert.match((await env.assistantCompactorJob(Date.now(), {})).text, /new workers paused/);
 });

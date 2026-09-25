@@ -21,88 +21,65 @@ const deferred = () => {
 const flush = async () => { for (let i = 0; i < 40; i += 1) await Promise.resolve(); };
 const clip = (value, length) => String(value ?? "").slice(0, length);
 
-test("overseer reads live runs inside the board transaction before recovering orphaned claims", async () => {
-  const lock = deferred();
-  const board = { tasks: [{ id: "new-task", status: "open" }, { id: "orphan", status: "active", runId: "old-run" }], requests: [] };
-  const autopilot = { jobs: [], execute: true, enabled: true };
+// The repair pass used to repeat two things other passes already do: lost
+// claims are recovered by housekeeping on every foreman pass (the same
+// executorResume.recover and lease rule, under the board lock), and
+// interrupted journal work by the tick and the boot resume. It keeps what
+// nothing else does: the stale-session rescue (reading the board, never
+// writing it), the manual re-enable and the ask for work when it changed
+// something — and on the cadence it no longer queues the compactor, the
+// auditor and the foreman whatever it found.
+function repairHost({ manual = false, execute = true, rescues = [] } = {}) {
+  const board = { tasks: [{ id: "orphan", status: "active", runId: "dead-run" }, { id: "carried", status: "open", sessionId: "ses_b" }], requests: [{ title: "stranded", status: "running", runId: "dead-run" }] };
+  const effects = { writes: 0, restarts: 0, roles: [], asks: [], queued: [], rescueTasks: null };
+  const autopilot = { jobs: [], execute, enabled: true };
   const env = vm.createContext({
-    // The mail channel has its own suite (assistant_mail.test.mjs); this host neither takes nor sends notes.
     assistantTakeMail: () => [], assistantDeliverMail: () => 0, assistantSendMail: () => true,
     process, executorResume, executorProcessAlive: () => false,
-    assistantState: { status: "running", prefs: {} }, autopilot,
-    getEyes: async () => ({}),
-    mutateBoard: async (mutator) => { await lock.promise; const patch = mutator(board); Object.assign(board, patch); return patch; },
-    getAssistant: async () => ({ pendingWork: () => ({}) }), assistantRestartWork: () => [],
+    assistantState: { status: "running", prefs: {}, focus: { kind: "task", id: "task:carried" } }, autopilot,
+    getEyes: async () => ({ readJson: async (file, fallback) => (file === "tasks" ? JSON.parse(JSON.stringify(board.tasks)) : fallback) }), TASKS_PATH: "tasks",
+    mutateBoard: async () => { effects.writes += 1; return {}; },
+    getAssistant: async () => ({ pendingWork: () => ({ jobs: [{ id: "old" }] }) }), assistantRestartWork: () => { effects.restarts += 1; return ["old"]; },
     assistantReadStore: async () => ({ sessions: [], todos: [] }),
-    assistantModule: { staleRescues: () => [], policyFromPrefs: () => ({}) }, requestBaseline: async () => [],
-    ASSISTANT_PRIORITY: { demand: 2 }, assistantEnqueueRole() {}, assistantAskForWork() {},
+    assistantModule: { ...assistant, staleRescues: ({ tasks }) => { effects.rescueTasks = tasks; return rescues; }, policyFromPrefs: () => ({}) }, requestBaseline: async () => [],
+    queueRequests: async (rows) => { effects.queued.push(...rows); return rows.length; }, assistantNodeContext() {}, assistantFocus: async () => {},
+    assistantClip: clip, pushAutopilotHistory() {},
+    ASSISTANT_PRIORITY: { demand: 2 }, assistantEnqueueRole: (role) => effects.roles.push(role), assistantAskForWork: (reason) => effects.asks.push(reason),
     assistantLog() {}, emitAutopilot() {}, saveAssistant: async () => {},
   });
   vm.runInContext(section("async function assistantOverseerRepair(", "// overseer: the R&D layer"), env);
-  const review = env.assistantOverseerRepair(1000);
-  await flush();
-  // The executor's earlier transaction claims work while repair is waiting.
-  autopilot.jobs.push({ id: "new-run" });
-  board.tasks[0] = { ...board.tasks[0], status: "active", runId: "new-run" };
-  board.requests.push({ title: "new request", status: "running", runId: "new-run" });
-  lock.resolve();
-  await review;
-  assert.equal(board.tasks[0].status, "active", "a live worker's task must not be reopened for duplicate dispatch");
-  assert.equal(board.tasks[0].runId, "new-run");
-  assert.equal(board.requests[0].status, "running");
-  assert.equal(board.tasks[1].status, "open", "an actual orphan still recovers");
+  return { env, board, effects, autopilot, run: () => env.assistantOverseerRepair(4000000, { manual }) };
+}
+
+test("the overseer's repair leaves claim recovery to housekeeping and interrupted jobs to the tick", async () => {
+  const h = repairHost();
+  const repair = await h.run();
+  assert.equal(h.effects.writes, 0, "no board write: housekeeping recovers the orphaned claim on the next foreman pass");
+  assert.equal(h.board.tasks[0].status, "active");
+  assert.equal(h.board.requests[0].status, "running");
+  assert.equal(h.effects.restarts, 0, "interrupted journal work is the tick's and the boot resume's");
+  assert.deepEqual(h.effects.rescueTasks.map((task) => task.id), ["orphan", "carried"], "the stale rescue still reads the board's tasks");
+  assert.equal(repair.fixed.length, 0);
+  assert.deepEqual(h.effects.roles, [], "a cadence repair that fixed nothing queues no compactor or auditor");
+  assert.deepEqual(h.effects.asks, [], "and asks the foreman for nothing");
 });
 
-test("overseer recovery preserves live owner or worker processes and restores dead claims with their saved progress", async () => {
-  const now = 4000000;
-  const specs = [
-    { id: "foreign-fresh", lease: { pid: process.pid + 1, at: now - 1000 }, held: true },
-    { id: "foreign-stale", lease: { pid: process.pid + 2, at: now - 30 * 60000 }, held: false },
-    { id: "foreign-live-stale", lease: { pid: process.pid + 1, at: 1 }, held: true },
-    { id: "foreign-dead-fresh", lease: { pid: process.pid + 2, at: now - 1000 }, held: false },
-    { id: "worker-still-alive", lease: { pid: process.pid + 2, at: 1 }, workerPid: process.pid + 4, held: true },
-    { id: "owned-dead", lease: { pid: process.pid, at: now - 1000 }, held: false },
-    { id: "legacy", held: false },
-    { id: "live-local", lease: { pid: process.pid, at: 1 }, held: true },
-  ];
-  for (const manual of [false, true]) {
-    const board = {
-      tasks: specs.map((row) => ({ id: row.id, status: "active", runId: row.id, lease: row.lease, runProgress: { runId: row.id, workerPid: row.workerPid, outputTail: ["saved changes"] } })),
-      requests: specs.map((row) => ({ title: row.id, status: "running", runId: row.id, lease: row.lease, runProgress: { runId: row.id, workerPid: row.workerPid, outputTail: ["saved changes"] } })),
-    };
-    const env = vm.createContext({
-    // The mail channel has its own suite (assistant_mail.test.mjs); this host neither takes nor sends notes.
-    assistantTakeMail: () => [], assistantDeliverMail: () => 0, assistantSendMail: () => true,
-      process, executorResume, executorProcessAlive: (pid) => [process.pid + 1, process.pid + 4].includes(pid),
-      assistantState: { status: "running", prefs: {} }, autopilot: { jobs: [{ id: "live-local" }], execute: true, enabled: true },
-      getEyes: async () => ({}),
-      mutateBoard: async (mutator) => { const patch = mutator(board); Object.assign(board, patch); return patch; },
-      getAssistant: async () => ({ pendingWork: () => ({}) }), assistantRestartWork: () => [],
-      assistantReadStore: async () => ({ sessions: [], todos: [] }),
-      assistantModule: { ...assistant, staleRescues: () => [], policyFromPrefs: () => ({}) }, requestBaseline: async () => [],
-      ASSISTANT_PRIORITY: { demand: 2 }, assistantEnqueueRole() {}, assistantAskForWork() {},
-      assistantLog() {}, emitAutopilot() {}, saveAssistant: async () => {},
-    });
-    vm.runInContext(section("async function assistantOverseerRepair(", "// overseer: the R&D layer"), env);
-    await env.assistantOverseerRepair(now, { manual });
-    for (const [index, spec] of specs.entries()) {
-      assert.equal(board.tasks[index].status, spec.held ? "active" : "open", `${spec.id}: manual=${manual}`);
-      assert.equal(board.requests[index].status, spec.held ? "running" : undefined, `${spec.id}: manual=${manual}`);
-      if (!spec.held) {
-        assert.equal(board.tasks[index].runProgress.pending, true);
-        assert.deepEqual(board.requests[index].runProgress.outputTail, ["saved changes"]);
-      }
-      if (spec.held) {
-        assert.deepEqual(board.tasks[index].lease, spec.lease);
-        assert.deepEqual(board.requests[index].lease, spec.lease);
-      } else {
-        assert.equal(board.tasks[index].runId, undefined);
-        assert.equal(board.tasks[index].lease, undefined);
-        assert.equal(board.requests[index].runId, undefined);
-        assert.equal(board.requests[index].lease, undefined);
-      }
-    }
-  }
+test("the overseer's repair still rescues stale sessions, re-enables on the button, and then asks for work", async () => {
+  const rescued = repairHost({ rescues: [{ id: "ses_a", title: "Stale work", todo: "wire it", quietMinutes: 1800, request: { title: "Resume: Stale work", prompt: "resume" } }] });
+  const report = await rescued.run();
+  assert.equal(report.rescued, 1);
+  assert.deepEqual(rescued.effects.queued.map((row) => [row.title, row.source]), [["Resume: Stale work", "overseer"]]);
+  assert.deepEqual(rescued.effects.asks, ["overseer repair"], "what the rescue filed is handed out");
+  assert.deepEqual(rescued.effects.roles, []);
+  const button = repairHost({ manual: true, execute: false });
+  await button.run();
+  assert.equal(button.autopilot.execute, true, "the Oversee click re-enables the executor the owner switched off");
+  assert.deepEqual(button.effects.roles, ["compactor"], "the button reshapes the queue first");
+  assert.deepEqual(button.effects.asks, ["overseer repair"]);
+  const cadence = repairHost({ execute: false });
+  const held = await cadence.run();
+  assert.equal(cadence.autopilot.execute, false, "the cadence never overrides the owner's switch");
+  assert.ok(held.directives.some((row) => /executor off by operator choice/.test(row.text)));
 });
 
 for (const pause of [false, true]) test(`overseer findings ${pause ? "wait after Pause during AI review" : "wake the responsible roles"}`, async () => {
@@ -140,22 +117,97 @@ for (const pause of [false, true]) test(`overseer findings ${pause ? "wait after
   if (pause) assert.ok(thoughts.every((text) => !text.startsWith("On it — sending")), "the assistant must not claim it sent paused agents");
 });
 
-test("reference handoffs retain distinct instructions while coalescing an identical in-flight request", async () => {
-  const calls = new Map(), gathered = [];
+// The heavy review used to run on every 15-minute pass and every builder
+// failure whenever a key was usable. The role still runs 24/7 (its local
+// review never waits); only the paid call is gated on change or on a request.
+test("the overseer pays for an AI review only when the board changed or the owner asked, and says which review it ran", async () => {
+  const state = assistant.emptyState(1000);
+  state.status = "running";
+  state.ai.keyPresent = true;
+  let calls = 0, usable = true;
   const env = vm.createContext({
-    // The mail channel has its own suite (assistant_mail.test.mjs); this host neither takes nor sends notes.
     assistantTakeMail: () => [], assistantDeliverMail: () => 0, assistantSendMail: () => true,
-    assistantState: { prefs: { proactive: false }, agents: [] }, assistantAiUsable: () => false,
-    assistantBrieferAllowed: () => false, assistantEnqueueRole() {}, ASSISTANT_PRIORITY: { demand: 2 },
-    assistantClip: clip, gatherReferences: async ({ text }) => { gathered.push(text); return { ok: true }; },
-    enqueue(role, job, { key = role } = {}) { if (!calls.has(key)) calls.set(key, { role, job }); },
+    assistantState: state, getAssistant: async () => assistant, overseerManualUntil: 0,
+    assistantOverseerRepair: async () => ({ fixed: [], directives: [], rescued: 0, staleCount: 0 }),
+    growthBoardFacts: async () => ({ outstanding: 0, growthHeld: false, existingWork: [] }),
+    SMOKE: false, assistantAiUsable: () => usable,
+    assistantFetch: async () => { calls += 1; return { ok: true, text: JSON.stringify({ summary: "ai read", findings: [] }) }; },
+    ASSISTANT_OVERSEER_SYSTEM: "fixture", overseerFacts: () => ({}),
+    assistantAiOk() {}, assistantAiFailed() {}, assistantSetProblems() {}, assistantSetPrefs: async () => {},
+    getEyes: async () => ({}), isStudioProject: () => false,
+    requestsFromExpand: () => [], requestBaseline: async () => [], queueRequests: async () => 0,
+    assistantLog() {}, assistantClip: clip, assistantCommitThought() {}, assistantAppendReply() {},
+    assistantEnqueueRole() {}, ASSISTANT_PRIORITY: { demand: 2 }, assistantAskForWork() {}, saveAssistant: async () => {},
   });
-  vm.runInContext(section("async function assistantDispatchAgents(", "function assistantBrieferAllowed()"), env);
-  await env.assistantDispatchAgents("Fix renderer accessibility");
-  await env.assistantDispatchAgents("Verify file locking");
-  await env.assistantDispatchAgents("Fix renderer accessibility");
-  for (const call of calls.values()) if (call.role === "reference") await call.job();
-  assert.deepEqual(gathered, ["Fix renderer accessibility", "Verify file locking"]);
+  vm.runInContext(section("async function assistantOverseerJob(", "// An assistant call that hovers"), env);
+  const first = await env.assistantOverseerJob(1000);
+  assert.equal(calls, 1, "the first review has nothing to compare with");
+  assert.match(first.text, /^AI review · no AI review yet/);
+  assert.equal(state.overseer.ai.lastAt, 1000);
+  assert.equal(state.overseer.ai.signature, assistant.overseerSignature(assistant.overseerDigest(state, 1000)));
+  const same = await env.assistantOverseerJob(2000);
+  assert.equal(calls, 1, "an unchanged board is not paid for again");
+  assert.match(same.text, /^local review · nothing changed since the last AI review/);
+  assert.equal(same.intel.ai, false);
+  assert.deepEqual([state.overseer.reviews, state.overseer.ai.lastAt, state.overseer.ai.skippedAt, state.overseer.ai.skipped], [2, 1000, 2000, "nothing changed since the last AI review"], "the local review still ran and the skip is on record");
+  state.problems = [{ kind: "audit", text: "1 audit error", since: 2500 }];
+  const changed = await env.assistantOverseerJob(3000);
+  assert.equal(calls, 2, "a new problem kind is a material change");
+  assert.match(changed.text, /^AI review · the board changed/);
+  await env.assistantOverseerJob(4000);
+  assert.equal(calls, 2);
+  env.overseerManualUntil = Date.now() + 60000;
+  await env.assistantOverseerJob(5000);
+  assert.equal(calls, 3, "the Oversee button always gets the AI review");
+  assert.equal(env.overseerManualUntil, 0);
+  usable = false;
+  state.problems = [];
+  const offline = await env.assistantOverseerJob(6000);
+  assert.equal(calls, 3);
+  assert.match(offline.text, /^local review · AI not usable/);
+});
+
+test("a builder failure wakes the overseer at most once per ten minutes", () => {
+  let clock = 1_000_000;
+  const env = vm.createContext({
+    assistantTakeMail: () => [], assistantDeliverMail: () => 0, assistantSendMail: () => true,
+    assistantState: assistant.emptyState(clock), assistantModule: assistant,
+    Date: class extends Date { static now() { return clock; } },
+    autopilot: { lastError: null }, EXECUTOR_DONE_MARK: "DONE",
+    assistantClip: clip, logLine() {}, logError() {}, assistantEmit() {}, assistantLog() {}, assistantAppendReply() {},
+    saveAssistant: async () => {}, assistantReportIntel() {},
+  });
+  vm.runInContext(section("function assistantHearBuilder(", "// A context entry lands"), env);
+  const fail = (title) => env.assistantHearBuilder({ outputTail: ["broke"], handoffs: [] }, { title, source: "auto" }, false, `${title} failed`);
+  assert.equal(fail("task A").wakeOverseer, true, "the first failure wakes it");
+  clock += 5 * 60000;
+  assert.equal(fail("task B").wakeOverseer, false, "a second failure inside ten minutes waits for the next review");
+  assert.ok(assistant.overseerDigest(env.assistantState, clock).builders.fails >= 2, "both failures are still on the digest");
+  clock += 5 * 60000 + 1;
+  assert.equal(fail("task C").wakeOverseer, true, "ten minutes on, a failure wakes it again");
+  assert.equal(env.assistantHearBuilder({ outputTail: [], handoffs: [] }, { title: "task D", source: "auto" }, true).wakeOverseer, false, "a finish never wakes it");
+});
+
+test("chat work gathers references once per card and saves them on it, with no roster fan-out", async () => {
+  const calls = new Map(), gathered = [], attached = [], roles = [];
+  const env = vm.createContext({
+    ASSISTANT_PRIORITY: { demand: 2 }, assistantClip: clip,
+    assistantEnqueueRole: (role) => roles.push(role),
+    gatherReferences: async ({ text }) => { gathered.push(text); return { ok: true, references: { files: [text] } }; },
+    attachTaskRefs: async (taskId, references) => { attached.push({ taskId, files: references.files }); return true; },
+    lunaContextPointer: async () => null,
+    enqueue(role, job, { key = role, work = null } = {}) { if (!calls.has(key)) calls.set(key, { role, job, work }); },
+  });
+  vm.runInContext(section("function assistantGatherTaskReferences(", "function assistantBrieferAllowed()"), env);
+  env.assistantGatherTaskReferences("task_a", "Fix renderer accessibility");
+  env.assistantGatherTaskReferences("task_b", "Verify file locking");
+  env.assistantGatherTaskReferences("task_a", "Fix renderer accessibility");
+  env.assistantGatherTaskReferences("task_c", "   ");
+  for (const call of calls.values()) await call.job();
+  assert.deepEqual(gathered, ["Fix renderer accessibility", "Verify file locking"], "one gather per card; an empty brief gathers nothing");
+  assert.deepEqual(JSON.parse(JSON.stringify(attached)), [{ taskId: "task_a", files: ["Fix renderer accessibility"] }, { taskId: "task_b", files: ["Verify file locking"] }], "the result lands on the card that asked");
+  assert.deepEqual([...calls.values()].map((call) => call.work.taskId), ["task_a", "task_b"], "the journal keeps the card, so a resumed gather still lands on it");
+  assert.deepEqual(roles, [], "chat work no longer sends the roster out");
 });
 
 test("builder failure reports use the reporting run's error and wake recovery through shared intel", () => {

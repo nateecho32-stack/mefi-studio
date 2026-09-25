@@ -10,6 +10,11 @@ const api = {
   projectsSelect: (id, options) => ipcRenderer.invoke("projects:select", options ? { id, saveProgress: options.saveProgress === true } : id),
   projectsRemove: (id) => ipcRenderer.invoke("projects:remove", id),
   onProjects: (callback) => ipcRenderer.on("projects:changed", (_event, data) => callback(data)),
+  projectPreviewStatus: (payload) => ipcRenderer.invoke("project-preview:status", payload ?? {}),
+  projectPreviewStart: (payload) => ipcRenderer.invoke("project-preview:start", payload ?? {}),
+  projectPreviewOpen: (payload) => ipcRenderer.invoke("project-preview:open", payload ?? {}),
+  projectPreviewStop: (payload) => ipcRenderer.invoke("project-preview:stop", payload ?? {}),
+  onProjectPreview: (callback) => ipcRenderer.on("project-preview:changed", (_event, data) => callback(data)),
   // Launch screen: the project to open, and whether the agents may start.
   startupState: () => ipcRenderer.invoke("startup:state"),
   startupChoose: (id) => ipcRenderer.invoke("startup:choose", { id: typeof id === "string" ? id : null }),
@@ -29,6 +34,11 @@ const api = {
   setApiKey: (key, which) => ipcRenderer.invoke("settings:set-key", key, which),
   getAiRouting: () => ipcRenderer.invoke("settings:get-ai-routing"),
   setAiRouting: (patch) => ipcRenderer.invoke("settings:set-ai-routing", patch),
+  agentsState: (payload = {}) => ipcRenderer.invoke("agents:state", { projectId: payload.projectId, scope: payload.scope }),
+  agentModels: (provider) => ipcRenderer.invoke("agents:models", { provider }),
+  agentsSave: (payload) => ipcRenderer.invoke("agents:save", payload),
+  agentsPreset: (payload) => ipcRenderer.invoke("agents:preset", payload),
+  openrouterModels: (options = {}) => ipcRenderer.invoke("openrouter:models", { refresh: options?.refresh === true }),
   autoSetup: () => ipcRenderer.invoke("settings:auto-setup"),
   // The first launch of a fresh install runs auto setup by itself (main.cjs
   // firstLaunchAutoSetup) and announces the saved record here.
@@ -76,7 +86,6 @@ const api = {
   eyesPinsWrite: (pins) => ipcRenderer.invoke("eyes:pins-write", pins),
   eyesWatch: (running) => ipcRenderer.invoke("eyes:watch", { running }),
   eyesRequestsRead: () => ipcRenderer.invoke("eyes:requests-read"),
-  eyesRequestsWrite: (requests) => ipcRenderer.invoke("eyes:requests-write", requests),
   eyesRequestsAction: (payload) => ipcRenderer.invoke("eyes:requests-action", payload ?? {}),
   eyesCheckpointsRead: () => ipcRenderer.invoke("eyes:checkpoints-read"),
   eyesBriefingRead: () => ipcRenderer.invoke("eyes:briefing-read"),
@@ -87,7 +96,7 @@ const api = {
   backlogStatus: () => ipcRenderer.invoke("assistant:backlog"),
   backlogControl: (payload) => ipcRenderer.invoke("assistant:backlog-control", payload ?? {}),
   assistantState: () => ipcRenderer.invoke("assistant:state"),
-  assistantMessage: (text, projectId) => ipcRenderer.invoke("assistant:message", { text, projectId }),
+  assistantMessage: (text, projectId, context) => ipcRenderer.invoke("assistant:message", { text, projectId, context }),
   musicRecommend: (payload) => ipcRenderer.invoke("music:recommend", payload ?? {}),
   assistantWorkOn: (target) => ipcRenderer.invoke("assistant:work-on", target ?? {}),
   assistantFocus: (target) => ipcRenderer.invoke("assistant:focus", target ?? null),
@@ -120,6 +129,7 @@ const api = {
   planningList: (payload) => ipcRenderer.invoke("planning:list", payload ?? {}),
   planningAction: (payload) => ipcRenderer.invoke("planning:action", payload ?? {}),
   planningAssist: (payload) => ipcRenderer.invoke("planning:assist", payload ?? {}),
+  planningExplore: (payload) => ipcRenderer.invoke("planning:explore", payload ?? {}),
   tasksCreate: (task) => ipcRenderer.invoke("tasks:create", task),
   tasksDependencies: (payload) => ipcRenderer.invoke("tasks:dependencies", payload ?? {}),
   tasksHistory: (payload) => ipcRenderer.invoke("tasks:history", payload ?? {}),
@@ -153,6 +163,21 @@ const api = {
   communityPrompt: (action) => ipcRenderer.invoke("community:prompt", { action: typeof action === "string" ? action : null }),
   communityOpen: (target) => ipcRenderer.invoke("community:open", { target: typeof target === "string" ? target : null }),
   onCommunityEvent: (callback) => ipcRenderer.on("community:event", (_event, status) => callback(status)),
+  // The Void Engine rooms hub (main.cjs "Rooms hub"): Listen together and the
+  // now-playing share behind the bot's /nowplaying. Nothing connects until
+  // hubConnect; tokens never cross this bridge.
+  hubStatus: () => ipcRenderer.invoke("hub:status"),
+  hubConnect: () => ipcRenderer.invoke("hub:connect"),
+  hubDisconnect: () => ipcRenderer.invoke("hub:disconnect"),
+  hubRooms: () => ipcRenderer.invoke("hub:rooms"),
+  hubSubscribe: (roomId, on = true) => ipcRenderer.invoke("hub:subscribe", { roomId: typeof roomId === "string" ? roomId : null, on: on !== false }),
+  hubListen: (payload) => ipcRenderer.invoke("hub:listen", payload && typeof payload === "object" ? {
+    roomId: typeof payload.roomId === "string" ? payload.roomId : null, action: typeof payload.action === "string" ? payload.action : null,
+    url: typeof payload.url === "string" ? payload.url : undefined, label: typeof payload.label === "string" ? payload.label : undefined,
+    provider: typeof payload.provider === "string" ? payload.provider : undefined, positionMs: Number.isFinite(payload.positionMs) ? payload.positionMs : undefined,
+  } : null),
+  hubNowPlaying: (track) => ipcRenderer.invoke("hub:now-playing", { track: track && typeof track === "object" ? { label: String(track.label ?? ""), provider: String(track.provider ?? ""), ...(typeof track.url === "string" ? { url: track.url } : {}) } : null }),
+  onHubEvent: (callback) => ipcRenderer.on("hub:event", (_event, payload) => callback(payload)),
   machineStatus: (kill) => ipcRenderer.invoke("machine:status", { kill: Boolean(kill) }),
   machineGet: () => ipcRenderer.invoke("machine:get"),
   machineSet: (prefs) => ipcRenderer.invoke("machine:set", prefs),
@@ -173,6 +198,40 @@ const api = {
   onUpdateEvent: (callback) => ipcRenderer.on("update:event", (_event, payload) => callback(payload)),
   onReleaseEvent: (callback) => ipcRenderer.on("release:event", (_event, payload) => callback(payload)),
   onAssistant: (callback) => ipcRenderer.on("eyes:assistant", (_event, payload) => callback(payload)),
+  // The Agent Brain and the companion (scripts/agent-brain-host.cjs).
+  brainState: (payload) => ipcRenderer.invoke("brain:state", payload && typeof payload === "object" ? { taskIds: Array.isArray(payload.taskIds) ? payload.taskIds.slice(0, 200).map(String) : null } : {}),
+  brainEvents: (query) => ipcRenderer.invoke("brain:events", query && typeof query === "object" ? {
+    day: typeof query.day === "string" ? query.day : undefined, since: Number.isFinite(query.since) ? query.since : undefined,
+    until: Number.isFinite(query.until) ? query.until : undefined, taskId: typeof query.taskId === "string" ? query.taskId : undefined,
+    kinds: Array.isArray(query.kinds) ? query.kinds.map(String) : undefined, limit: Number.isFinite(query.limit) ? query.limit : undefined,
+  } : {}),
+  brainPlaybook: () => ipcRenderer.invoke("brain:playbook"),
+  brainPlaybookAction: (payload) => ipcRenderer.invoke("brain:playbook-action", payload && typeof payload === "object" ? {
+    action: String(payload.action ?? ""), id: String(payload.id ?? ""), ...(typeof payload.name === "string" ? { name: payload.name } : {}),
+    ...(Array.isArray(payload.steps) ? { steps: payload.steps } : {}),
+  } : {}),
+  brainMap: (rebuild) => ipcRenderer.invoke("brain:map", { rebuild: rebuild === true }),
+  brainMapName: () => ipcRenderer.invoke("brain:map-name"),
+  brainMapPlace: (payload) => ipcRenderer.invoke("brain:map-place", payload && typeof payload === "object" ? { kind: String(payload.kind ?? ""), id: String(payload.id ?? ""), systemId: typeof payload.systemId === "string" ? payload.systemId : null } : {}),
+  brainSettings: () => ipcRenderer.invoke("brain:settings"),
+  brainSettingsSave: (payload) => ipcRenderer.invoke("brain:settings-save", payload && typeof payload === "object" ? {
+    ...(typeof payload.deskTool === "boolean" ? { deskTool: payload.deskTool } : {}),
+    ...(typeof payload.nestedDelegation === "boolean" ? { nestedDelegation: payload.nestedDelegation } : {}),
+    ...(typeof payload.headDrafts === "boolean" ? { headDrafts: payload.headDrafts } : {}),
+    ...(payload.seats && typeof payload.seats === "object" ? { seats: Object.fromEntries(["lead", "desk", "companion", "scout", "overseer"].filter((seat) => payload.seats[seat]).map((seat) => [seat, {
+      ...(typeof payload.seats[seat].model === "string" ? { model: payload.seats[seat].model } : {}),
+      ...(typeof payload.seats[seat].effort === "string" ? { effort: payload.seats[seat].effort } : {}),
+      ...(typeof payload.seats[seat].fast === "boolean" ? { fast: payload.seats[seat].fast } : {}),
+      ...(typeof payload.seats[seat].provider === "string" ? { provider: payload.seats[seat].provider } : {}),
+    }])) } : {}),
+  } : {}),
+  companionState: () => ipcRenderer.invoke("companion:state"),
+  companionWelcome: () => ipcRenderer.invoke("companion:welcome"),
+  companionSeen: (reason) => ipcRenderer.invoke("companion:seen", { reason: String(reason ?? "active").slice(0, 40) }),
+  companionPrefs: (prefs) => ipcRenderer.invoke("companion:prefs", prefs && typeof prefs === "object" ? { ...(typeof prefs.look === "string" ? { look: prefs.look } : {}), ...(typeof prefs.scope === "string" ? { scope: prefs.scope } : {}), ...Object.fromEntries(["roaming", "pinned", "bubbles", "growth"].filter((key) => typeof prefs[key] === "boolean").map((key) => [key, prefs[key]])), ...(prefs.anchor && typeof prefs.anchor === "object" ? { anchor: { x: prefs.anchor.x, y: prefs.anchor.y } } : {}) } : {}),
+  onBrainEvent: (callback) => ipcRenderer.on("brain:event", (_event, payload) => callback(payload)),
+  onBrainUpdate: (callback) => ipcRenderer.on("brain:update", (_event, payload) => callback(payload)),
+  onCompanionWelcome: (callback) => ipcRenderer.on("companion:welcome", (_event, payload) => callback(payload)),
 };
 
 // The context bridge deep-copies every value that crosses into the page, so

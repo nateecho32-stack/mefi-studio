@@ -58,7 +58,7 @@ installed copies are offered it under **App updates**. The full list is in the
 ## What it does
 
 - **One folder at a time.** Pick a project folder and Studio scans it locally. Tasks, conversations, plans and references stay with that project.
-- **Talk, then hand over.** *Talk together* to think an idea through, or *Give a task* to put real work on the board with acceptance checks.
+- **Chat or create work.** Use *Chat* to think an idea through, or *Create task* to put work on the board with acceptance checks.
 - **Agents do the work, visibly.** Coding workers (OpenCode, Claude Code, Codex, Grok or Antigravity CLIs) build tasks while an always-on service loop organises, audits and briefs. The **Command view** shows every session, task and agent as a live node tree.
 - **"Done" means verified.** A finished attempt waits in *Review* with its evidence until checks pass or you confirm it.
 - **Everything stays on your machine.** Keys are encrypted with the OS keystore, there is no telemetry and no hosted account. Linking a Discord account for the [community perks](#community--perks) is optional and talks only to discord.com.
@@ -72,7 +72,7 @@ installed copies are offered it under **App updates**. The full list is in the
 | **Git** | Cloning | |
 | **Python 3** | `npm test` only | Must be on PATH as `python`. |
 | **A builder CLI** (optional) | Building tasks | `opencode` is preferred; `claude`, `codex`, `grok` and `agy` are detected. Without one Studio still plans, chats and browses the catalog, but no build can start. |
-| **An API key or local model** (optional) | The companion | z.ai, OpenCode Go or Zen, a CLI login, LM Studio or any OpenAI-compatible endpoint. |
+| **An API key or local model** (optional) | The companion | z.ai, OpenCode Go or Zen, OpenRouter, a CLI login, LM Studio or any OpenAI-compatible endpoint. |
 
 ## Install and run
 
@@ -93,18 +93,18 @@ npm start
 
 1. **Choose a project** on the launch screen, then **Open studio** (agents stay off) or **Open and start agents**. Nothing runs before you choose. If a crash or a restart interrupted work in the last ten minutes, Studio skips the question, reopens that folder and restarts the agents that were running; closing the studio yourself always brings the question back.
 2. **Follow the walkthrough.** *Start here* opens on the first launch with seven short stops: scan, workspace, first map, connections, create, monitor, review. Each stop's **Walk with me** opens the real menu and highlights the control. It remembers your place.
-3. **Check the connection.** A fresh install runs **auto setup** by itself on the first launch, from the keys, CLIs and local servers already on the machine, and **Settings › Auto setup** says what it chose. Press **Run auto setup** again after adding a key or CLI, or pick a route yourself under **Providers**. No key yet? The catalog, manual planning and saved work all work without one.
+3. **Check the connection.** A fresh install runs **auto setup** by itself on the first launch, from the keys, CLIs and local servers already on the machine, and **Settings › Connections** says what it chose. Press **Run auto setup** again after adding a key or CLI, or configure a provider there. No key yet? The catalog, manual planning and saved work all work without one.
 4. **Give one clear task** and watch it move from *Ready* to *Working* to *Review*.
 
 [GETTING_STARTED.md](GETTING_STARTED.md) covers the same path in detail, including what every task state means and what to do next.
 
 ## A short tour
 
-Everything below is one click away in the **menu** down the left edge: **Home**; **Work** (Task board, Plans, Ideas, Brain maps, Analyzer); **Live** (Command view, Activity, Explorer, Overhead); **Models** (Model catalog, Model Lab); and **Settings** (Settings, Style & sound, Profiler). It opens over the page to list every destination with its key, and **Keep menu open** pins it. Its foot holds **Search** (`Ctrl K`), **Start here**, **Shortcuts** (`?`) and **Community**. **M+** at its top switches projects, and `Ctrl ,` opens Settings from anywhere.
+The **menu** down the left edge opens **Home**, **Work** and **Agents**, with section-local Back/Forward navigation. Agents contains Overview, Setup, Live, Workflows, Models and Usage. It stays open by default in wide windows; **Keep menu open** saves your preference. **Settings**, **Search** (`Ctrl K`) and **Help** stay at its foot. Help contains Start here, Shortcuts (`?`) and Community. The project selector at the top switches projects, and `Ctrl ,` opens Settings from anywhere.
 
 ### Your workspace (`H`)
 
-The home screen. **Studio at a glance** shows the service state with a single Pause / Resume, running workers, what needs you, what is up next, the machine gauge and today's usage. Below it: the conversation with your companion and **Your work** (Queue, Ideas, Review, Done).
+The home screen. **Studio at a glance** shows the service state with a single Pause / Resume, running workers, what needs you, what is up next, the machine gauge and today's usage. Below it: the conversation with **Chat** and **Create task**, and **Your work** (Queue, Ideas, Review, Done). Expand **Queue settings** to change Auto build or Agent mode.
 
 ### Command view (`D`)
 
@@ -112,7 +112,7 @@ The home screen. **Studio at a glance** shows the service state with a single Pa
   <img src="docs/images/command.png" width="900" alt="Command view: sessions, tasks and agents as a 3D node tree, with the Live work panel on the right">
 </p>
 
-Every session, task and agent is a node. Agents orbit the assistant, fly to the task they work on, and say what they are doing in speech bubbles. The panel on the right holds **Work**, **Agents** (Autopilot, parallel builds, build mode, Swarm / Cluster), **Assistant**, **Done** and **Ask**, where agents wait for your decision with a recommended option.
+Every session, task and agent is a node. Agents orbit the assistant, fly to the task they work on, and say what they are doing in speech bubbles. The panel on the right holds **Work**, **Assistant**, **Runs** (recent builds grouped by task) and **Ask**, where agents wait for your decision with a recommended option. **Agents** in the top toolbar opens queue settings and links to full team setup.
 
 ### Start here walkthrough
 
@@ -126,17 +126,22 @@ Every session, task and agent is a node. Agents orbit the assistant, fly to the 
   <img src="docs/images/settings.png" width="900" alt="Settings: auto setup and Providers (API keys, local servers, CLI logins), with model routing and coding workers in the side list">
 </p>
 
-**Find a setting** narrows the list beside the cards, which sit in three groups: **Connections** (Auto setup, Providers, Model routing, Coding workers, Jev, Agents & queue ↗), **Personal** (Your Studio, Community, Style & sound ↗) and **System** (Updates, Diagnostics, Integrations, Connection log). A row marked ↗ opens another view. **Your Studio** holds your name, your companion's name, the theme, motion and where a launch lands.
+Settings keeps **General**, **Appearance**, **Audio** and **System**. Connections, model routing, team roles and workflow behavior now live in **Agents › Setup**. **Find a setting** searches individual controls and opens the matching category and disclosure. Connection forms and advanced options expand in place. Appearance includes Focus, Studio and Atmosphere presets and the live canvas preview. Agents and the companion share confirmed operational controls.
+
+The main menu groups the app into **Home**, **Work** and **Agents**. See [Unified Studio](docs/unified-studio.md) for team presets, configuration scope, scrollbar-free navigation and the adaptive companion.
+A local navigation row exposes each group's tools, while **Settings**, **Search**
+and **Help** stay available. See the [interface inventory](docs/interface-remaster.md)
+for the full set of screens and interior menus.
 
 ### Also in the box
 
-**Task board** (`T`) with briefs, prerequisites, attempts and evidence · **Plans** (`P`) that turn an unclear idea into a specification and tasks · **Ideas** (`I`) inbox · **Model catalog** (`1`) and **Model Lab** (`2`) with measured latency, cost and usage · **Activity & evidence** (`3`), a read-only view of the coding sessions · **Session explorer** (`E`), **Analyzer** (`A`), **Overhead** (`O`), **Style & sound** (`U`), the **Performance profiler** · **Search Studio** (`Ctrl K`) finds any page, tool, task, setting or model, grouped by menu section · `?` lists every shortcut.
+**Tasks** (`T`) with briefs, prerequisites, attempts and evidence · **Plans** (`P`) that turn an unclear idea into a specification and tasks · **Ideas** (`I`) inbox · **Model catalog** (`1`) and **Performance** (`2`), plus Usage and Context · **Activity & evidence** (`3`), a read-only view of the coding sessions · **Sessions** (`E`), **Analyzer** (`A`), **Overhead** (`O`), **Appearance** (`U`), and the **Performance profiler** · **Search Studio** (`Ctrl K`) finds any page, tool, task, setting or model · `?` lists every shortcut.
 
 The full feature walkthrough, in Studio's own vocabulary with a glossary, is in [docs/architecture.md](docs/architecture.md).
 
 ## Keys and privacy
 
-- Keys are entered once in Settings › Providers and stored encrypted in the OS keystore; only "saved / not saved" reaches the UI. Headless setup: `MEFI_STUDIO_KEY=... electron . --set-key` and friends (see [.env.example](.env.example)).
+- Keys are entered once in Settings › Connections and stored encrypted in the OS keystore; only "saved / not saved" reaches the UI. Headless setup: `MEFI_STUDIO_KEY=... electron . --set-key` and friends (see [.env.example](.env.example)).
 - Git tracks only `data/curated.json` and `data/models.json`. Tasks, conversations, settings, databases and captures stay local and are never packaged.
 - Agents run real commands in the project folder you chose. Turn **Auto build** off (*Verify first*) to approve each task before it runs.
 - Nothing contacts Discord unless you link an account (below). The link reads your Discord id, username and roles in the Void Engine server, and nothing about your projects.
@@ -146,7 +151,7 @@ The full feature walkthrough, in Studio's own vocabulary with a glossary, is in 
 
 The **Void Engine Discord** (<https://discord.gg/xgfKc5pVxG>) is where people share what they build with Studio, swap model setups and hang out. Joining is free and optional. **Community** at the foot of the menu opens Settings › Community, which holds the link, your perks and a preview of the Void collection.
 
-- **The Void collection.** Members unlock four extra themes (**Void**, **Eclipse**, **Abyss**, **Neon Dusk**) and three node styles (**Singularity**, **Prism**, **Sigil**) in **Style & sound**. The seven original themes, custom colours and the five original node styles stay free.
+- **The Void collection.** Try four extra themes (**Void**, **Eclipse**, **Abyss**, **Neon Dusk**) and three node styles (**Singularity**, **Prism**, **Sigil**) in **Settings › Appearance**. Without a linked Discord membership, a choice is only a preview and resets when you close the canvas preview or leave Settings. Link a member account to keep it; a linked account outside the server can still preview but cannot save. The seven original themes, custom colours and the five original node styles stay free.
 - **Linking.** Settings › Community › **Link my Discord** signs you in with Discord in your browser (OAuth2 with PKCE, redirected back to `127.0.0.1`, no client secret). Studio reads your Discord id, username and roles in the Void Engine server when you link, then about once a week. If Discord can't be reached, the perks stay on for 14 days after the last good check. Leaving the server locks them again at the next check.
 - **The weekly card.** Non-members see a small invitation no sooner than three days after the first launch, then at most weekly, and monthly after four ignored showings. **Not now** snoozes it for a week and **Don't show again** stops it.
 - **Unlinking.** Settings › Community › **Unlink** revokes Studio's grant at Discord and deletes the stored sign-in. You can also remove "Mefi Studio Link" under Discord › User Settings › Authorized Apps.

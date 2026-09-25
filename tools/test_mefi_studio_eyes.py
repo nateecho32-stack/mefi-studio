@@ -569,7 +569,10 @@ class MefiStudioEyesTests(unittest.TestCase):
         # executor must re-anchor stale entries itself at settlement — Studio
         # heals its own store, a worker run may not rewrite saved scope.
         self.assertIn("resolveStaleFileScope", self.main, "settlement consults the scope resolver")
-        self.assertIn("file scope healed", self.main, "the heal is visible on the card's work log")
+        # The settle row is built in the dispatcher core; main passes the heal in.
+        core = (STUDIO / "scripts" / "executor-core.cjs").read_text(encoding="utf-8")
+        self.assertIn("file scope healed", core, "the heal is visible on the card's work log")
+        self.assertIn("scopeHeal, queuedJob }", self.main, "settlement hands the resolved heal to the settle row")
         self.assertIn("function findBasenameUnderRoot(root, base", self.main, "the locator is a bounded basename search under the project root")
         self.assertIn('const SCOPE_WALK_SKIP = new Set(["node_modules", ".git", "dist"', self.main, "the walk never descends into dependency and build trees")
         self.assertIn("maxEntries = 20000, maxDepth = 6", self.main, "the walk is bounded so it can never hold the board lock long")
@@ -626,7 +629,8 @@ class MefiStudioEyesTests(unittest.TestCase):
                 self.assertIn(marker, self.booklet, "the built booklet.html carries the shared poll guard")
         self.assertIn("POLL_INTERVAL_MS", self.overhead, "the overhead poll resets to its base cadence while hidden")
         self.assertIn('if (document.visibilityState !== "visible") {', self.overhead, "the overhead poll reads the visibility state before each fetch")
-        self.assertIn("if (document.hidden || !initialized || el.overlay.hidden) return;", self.overhead, "the overhead poll snaps back on show")
+        self.assertIn("if (!initialized || el.overlay.hidden) return;", self.overhead, "the overhead poll snaps back on show")
+        self.assertIn("if (document.hidden) { cancelAnimationFrame(raf); raf = null; return; }", self.overhead, "the overhead frame pauses while hidden")
         self.assertIn("if (document.hidden) return; // hidden app: make no fetch", self.idle, "the 4s refresh tick makes no fetch while hidden")
         self.assertIn("if (document.hidden) return; // a hidden window never idles into Command", self.idle, "the idle auto-enter waits for a visible window")
         self.assertIn("if (state.active) tick();", self.idle, "the refresh pass runs the moment Command is shown again")
@@ -976,10 +980,12 @@ console.log(JSON.stringify({
             "AI facts carry the group's overlap window",
         )
         self.assertEqual(
-            ["ses_a", "ses_b"],
+            ["ses_b"],
             sorted(facts_collision["activeSessions"]),
-            "AI facts carry the active session ids",
+            "the finished ses_a remains edit history, not a live editor",
         )
+        self.assertTrue(facts_by_session["ses_a"]["finished"])
+        self.assertFalse(facts_by_session["ses_a"]["active"])
         self.assertEqual(
             [
                 {"file": "C:/fixture/main.lua", "owner": "ses_b"},
@@ -990,10 +996,9 @@ console.log(JSON.stringify({
         )
         presence_by_file = {row["file"]: row for row in payload["facts"]["presence"]}
         self.assertEqual("ses_b", presence_by_file["C:/fixture/main.lua"]["owner"], "facts presence names the live owner")
-        self.assertTrue(presence_by_file["C:/fixture/main.lua"]["colliding"])
-        self.assertEqual("ses_a", presence_by_file["C:/fixture/shared.lua"]["owner"])
-        self.assertEqual("ses_a", presence_by_file["C:/fixture/new.lua"]["owner"], "a single live editor is still an owner")
-        self.assertFalse(presence_by_file["C:/fixture/new.lua"]["colliding"])
+        self.assertFalse(presence_by_file["C:/fixture/main.lua"]["colliding"])
+        self.assertEqual("ses_b", presence_by_file["C:/fixture/shared.lua"]["owner"])
+        self.assertNotIn("C:/fixture/new.lua", presence_by_file, "a finished session no longer holds live presence")
         self.assertNotIn("C:/outside/outside.lua", presence_by_file, "facts presence honours --root")
         self.assertNotIn(
             "C:/fixture/idleonly.lua",
@@ -1009,8 +1014,8 @@ console.log(JSON.stringify({
             facts_collision["files"],
             "AI facts collisions are root-scoped",
         )
-        self.assertFalse(facts_collision.get("handoff"), "a live owner is not a handoff")
-        facts_handoff = next(row for row in payload["facts"]["collisions"] if row.get("handoff"))
+        self.assertTrue(facts_collision.get("handoff"), "the finished owner's edits remain available for adoption")
+        facts_handoff = next(row for row in payload["facts"]["collisions"] if row.get("owner") == "ses_c")
         self.assertEqual("ses_c", facts_handoff["owner"])
         self.assertEqual(["ses_d"], facts_handoff["activeSessions"])
         self.assertEqual("ses_d", presence_by_file["C:/fixture/handoff.lua"]["owner"], "presence names the live peer, not the idle owner")
@@ -1342,13 +1347,24 @@ console.log(JSON.stringify({
         self.assertIn("presence:", collisions_ipc)
 
     def test_dispatched_fix_claims_feed_the_dedup_baseline(self):
-        # The queue forgets a request as soon as it is dispatched, so main.cjs
-        # must fold the assistant history's claimed sessions back into the
-        # baseline the briefing dedups against, or the same stall is diagnosed
-        # again and spawns an overlapping fix session.
+        # A dispatched fix's claimed sessions must keep the next briefing from
+        # diagnosing the same stall again and spawning an overlapping fix.
+        # Direct request runs left an assistant-history record for that; only
+        # tasks run now, and a fix reaches a worker as its promoted card, which
+        # carries the claim (sessions, alertTitle, problemFamily) and makes
+        # promotion refuse a second card for the same fix problem. The
+        # baseline still folds in the history records older builds wrote.
         self.assertIn("await eyes.readJson(ASSISTANT_HISTORY_PATH, [])", self.main)
-        self.assertIn("const known = [...existing, ...dispatched]", self.main)
-        self.assertIn("sessions: [...new Set(claimed)]", self.main)
+        # Board cards join the baseline too: a promoted request's inbox copy is
+        # absorbed by compaction, and a filer that saw only the inbox filed the
+        # same work again while its card was live. Deliberately changed: done
+        # cards count until archived (workAdmission.standsOnBoard), the rule
+        # promotion and compaction apply, or the finding churned every pass.
+        self.assertIn("const known = [...existing, ...dispatched, ...standing]", self.main)
+        baseline = self.main[self.main.index("async function requestBaseline(eyes)") : self.main.index("// briefing.expand[] items become real queue entries here")]
+        self.assertIn("workAdmission.standsOnBoard(task)", baseline)
+        self.assertNotIn("sessions: [...new Set(claimed)]", self.main, "no run writes the retired direct-request history record")
+        self.assertIn("eyes.sameFixProblem(request, task)", self.main, "promotion refuses a second card for a fix problem already on the board")
         self.assertIn("problemFamily", self.main)
         self.assertIn("export function sameFixProblem", self.eyes)
         self.assertIn("export function alertProblem", self.eyes)

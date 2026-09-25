@@ -171,8 +171,8 @@ function tickHost() {
     ensureAssistant: async () => state,
     assistantKeyPresent() { reads += 1; return key.promise; },
     assistantFirstTickResolve: Object.assign(() => {}, { done: true }),
-    getAssistant: async () => ({ dueRoles: () => ["watcher"] }),
-    ASSISTANT_CADENCE_ROLES: ["watcher"], ASSISTANT_AI_ROLES: new Set(),
+    // The cadence list and the AI roles come from the module's AGENT_ROLES table.
+    getAssistant: async () => ({ dueRoles: () => ["watcher"], CADENCE_ROLES: ["watcher"], AI_ROLES: [] }),
     ASSISTANT_PRIORITY: { cadence: 1, demand: 2 },
     assistantEnqueueRole: (role) => queued.push(role), assistantStaleWork() {},
     assistantSuperviseJobs() { supervised += 1; },
@@ -221,7 +221,7 @@ test("pausing during a tick's settings read prevents late cadence work", async (
 
 test("a manual tick arriving during a timer pass runs once afterward", async () => {
   const { env, key, queued, reads } = tickHost();
-  env.getAssistant = async () => ({ dueRoles: () => [] });
+  env.getAssistant = async () => ({ dueRoles: () => [], CADENCE_ROLES: ["watcher"], AI_ROLES: [] });
   const timer = env.assistantTick();
   const click = env.assistantTick("control");
   const repeated = env.assistantTick("control");
@@ -231,6 +231,32 @@ test("a manual tick arriving during a timer pass runs once afterward", async () 
   await Promise.all([timer, click, repeated]);
   assert.equal(reads(), 2, "repeated clicks coalesce into one follow-up");
   assert.deepEqual(queued, ["watcher"], "the forced request is not lost to an empty cadence pass");
+});
+
+test("a forced tick runs the table's cadence roles and holds its AI roles until the key and Proactive allow them", async () => {
+  const { env, key, queued, state } = tickHost();
+  const assistant = await import("../scripts/assistant.mjs");
+  let allowed = false;
+  env.getAssistant = async () => assistant;
+  env.assistantBrieferAllowed = () => allowed;
+  key.resolve(false);
+  await env.assistantTick("control");
+  assert.deepEqual(queued, assistant.CADENCE_ROLES.filter((role) => !assistant.AI_ROLES.includes(role)));
+  assert.deepEqual(assistant.AI_ROLES, ["briefer", "improver", "grower"], "the roles that are a model call, from AGENT_ROLES");
+  queued.length = 0;
+  // The forced tick reads the table's hold (roleHold, as dueRoles does), not
+  // only AI_ROLES: with a usable key, Proactive off still holds every role
+  // gated on it. The AI_ROLES filter let the thinker and the ideas scan run.
+  env.assistantKeyPresent = async () => true;
+  allowed = true;
+  state.prefs.proactive = false;
+  await env.assistantTick("control");
+  assert.deepEqual(queued, assistant.CADENCE_ROLES.filter((role) => !assistant.roleGatedBy(role, "proactive")));
+  assert.ok(!queued.includes("thinker") && !queued.includes("ideas"), queued.join(","));
+  queued.length = 0;
+  state.prefs.proactive = true;
+  await env.assistantTick("control");
+  assert.deepEqual(queued, assistant.CADENCE_ROLES);
 });
 
 function executorHost(parallel) {
@@ -271,25 +297,28 @@ test("executor startup staggering still separates successive slots", async () =>
   assert.equal(clock.pending.size, 0, "the final slot has no trailing stagger");
 });
 
-test("autopilot intervals cannot overlap an unfinished paid pass or run while disabled", async () => {
+// The pass spends no AI call of its own any more (the keyless brief/grow/
+// improve branch went: see autopilotPass), so the slow step it must not run
+// twice is its work shaping.
+test("autopilot intervals cannot overlap an unfinished pass or run while disabled", async () => {
   const pass = deferred();
   let calls = 0, asks = 0, housekeeping = 0;
   const autopilot = { enabled: true };
-  const env = host(`let autopilotTicks = 0;\n${section("let autopilotPassInFlight = null;", "async function setAutopilot(")}`, {
+  const env = host(section("let autopilotPassInFlight = null;", "async function setAutopilot("), {
     SMOKE: false, CAPTURE: false, CLI_MODE: false, autopilot, TASKS_PATH: "tasks",
     getEyes: async () => ({ readJson: async () => [] }),
-    autopilotProactivePass() { calls += 1; return pass.promise; },
+    runAssistant: () => assert.fail("the timer spends no AI call"),
     async autopilotHousekeeping() { housekeeping += 1; },
-    classifyPendingWork: async () => ({ ok: true }), promoteRequestsToTasks: async () => {}, refreshAutopilotQueue: async () => {},
+    classifyPendingWork() { calls += 1; return pass.promise; }, promoteRequestsToTasks: async () => {}, refreshAutopilotQueue: async () => {},
     pushAutopilotHistory() {}, emitAutopilot() {}, logLine() {},
     assistantAskForWork() { asks += 1; },
   });
   const first = env.autopilotPass();
   const second = env.autopilotPass();
   await flush();
-  assert.equal(calls, 1, "one interval cannot duplicate an in-flight model call");
+  assert.equal(calls, 1, "one interval cannot duplicate an in-flight pass");
   assert.equal(housekeeping, 0);
-  pass.resolve({ added: 2 });
+  pass.resolve({ ok: true });
   await Promise.all([first, second]);
   assert.equal(asks, 1);
   assert.equal(housekeeping, 0, "the foreman the pass asks settles; the pass does not repeat it");
@@ -321,4 +350,58 @@ test("idle foreman does not spin the compactor on a recently reviewed unrunnable
   autopilot.execute = false;
   await env.assistantForemanJob(now, {});
   assert.deepEqual(queued, [], "executor-off must not churn background queue reviews");
+});
+
+// The ideas scan is gated on Proactive in AGENT_ROLES, and once any route is
+// configured it is a paid call. The idle foreman enqueued it whatever the
+// switch said: only dueRoles read the gate. The real assistantEnqueueRole
+// applies the table's switch holds to every enqueue but the owner's own run.
+test("the idle foreman's ideas scan waits for Proactive, and only the owner's own run passes the switch", async () => {
+  const assistant = await import("../scripts/assistant.mjs");
+  const now = Date.now();
+  const enqueued = [];
+  const state = { status: "running", prefs: { ...assistant.DEFAULT_PREFS, proactive: false }, agents: [{ role: "compactor", lastRunAt: now - 120000 }, { role: "ideas", lastRunAt: now - 40 * 60000 }] };
+  const job = async () => ({ ok: true });
+  const env = host([
+    section("async function assistantForemanJob(", "// The thinker: the assistant itself."),
+    section("function assistantEnqueueRole(", "// On-demand roles"),
+    section("function assistantRunRole(", "// UI-driven work"),
+  ].join("\n"), {
+    autopilot: { execute: true, jobs: [], parallel: 1 }, executeNextRequest: async () => "empty", assistantState: state,
+    assistantCache: { ingest: { newMaterial: true, at: now } }, assistantModule: assistant, assistantAiUsable: () => true,
+    autopilotHousekeeping: async () => {}, promoteRequestsToTasks: async () => 0,
+    MINUTE_MS: 60000, ASSISTANT_PRIORITY: { cadence: 1, demand: 2 },
+    ASSISTANT_ROLE_JOBS: { compactor: job, ideas: job, thinker: job, overseer: job },
+    enqueue: (role, _run, options) => { enqueued.push([role, options.ai]); return Promise.resolve({ ok: true }); },
+    setTimeout, clearTimeout,
+  });
+  await env.assistantForemanJob(now, {});
+  assert.deepEqual(enqueued, [["compactor", false]], "Proactive off: the idle review runs, the ideas scan does not");
+  enqueued.length = 0;
+  assert.equal((await env.assistantEnqueueRole("thinker", 2, { automatic: true })).text, "Proactive is off");
+  env.assistantEnqueueRole("overseer", 2, { automatic: true });
+  assert.deepEqual(enqueued, [["overseer", true]], "the overseer is not gated on Proactive");
+  enqueued.length = 0;
+  await env.assistantRunRole("ideas", 10);
+  assert.deepEqual(enqueued, [["ideas", true]], "the owner's own run is not held");
+  enqueued.length = 0;
+  state.prefs.proactive = true;
+  state.agents[0].lastRunAt = now - 120000;
+  await env.assistantForemanJob(now, {});
+  assert.deepEqual(enqueued, [["compactor", false], ["ideas", true]], "Proactive on: the cold scan runs");
+});
+
+test("a tick that changed only its heartbeat does not rewrite the assistant store", async () => {
+  const { env, key, state } = tickHost();
+  key.resolve(false);
+  let saves = 0;
+  env.saveAssistant = async () => { saves += 1; };
+  await env.assistantTick();
+  assert.equal(saves, 1, "the first tick saves");
+  await env.assistantTick();
+  await env.assistantTick();
+  assert.equal(saves, 1, "heartbeat-only ticks leave the file alone");
+  state.problems = [{ kind: "executor", text: "3 queued, nothing running" }];
+  await env.assistantTick();
+  assert.equal(saves, 2, "a tick that changed the state saves it");
 });

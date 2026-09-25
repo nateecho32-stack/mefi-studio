@@ -1,7 +1,9 @@
 // One eligibility vocabulary for dispatch and the project workbench. Pure:
 // reading a backlog never changes work, retries it, or starts a model call.
 const { createHash } = require("node:crypto");
-const key = (value) => String(value ?? "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+// The admission module's title key and ladder (scripts/work-admission.cjs), so
+// the counts and promotion agree on which inbox rows a card represents.
+const { titleKey: key, represented: representedOnBoard } = require("./work-admission.cjs");
 const rows = (value) => Array.isArray(value) ? value.filter((row) => row && typeof row === "object") : [];
 
 // Approval names the saved work, not an editable status flag. Include nested
@@ -30,6 +32,13 @@ function dependencyIds(item) {
 
 function completedTask(task) {
   return task?.status === "done" || (task?.status === "archived" && Boolean(task.doneAt || task.verification?.state === "verified" || task.completionFromTaskId));
+}
+
+// The owner's "won't do" (main.cjs dropTask): unfinished work closed without a
+// completion claim. It is never completedTask, so nothing counts it as
+// finished, but a parent that handed it on stops waiting for it.
+function droppedTask(task) {
+  return task?.status === "archived" && !completedTask(task) && Boolean(task.dropped && typeof task.dropped === "object");
 }
 
 function dependencyState(item, tasks = []) {
@@ -107,9 +116,14 @@ function duplicateState(item, tasks, now, autoBuild) {
 
 function workState(item, now = Date.now(), { tasks = null, autoBuild = true } = {}) {
   if (item.absorbedInto) return { stage: "grouped", reason: "Included in a task group", groupId: item.absorbedInto };
-  if (item.status === "done" || item.status === "archived") return { stage: "done", reason: item.status === "archived" ? "Archived completion" : "Completed" };
+  if (item.status === "done" || item.status === "archived") return { stage: "done", reason: droppedTask(item) ? "Dropped by you before it finished" : item.status === "archived" ? "Archived completion" : "Completed" };
   if (item.status === "awaiting_verification" || item.status === "verifying") {
-    if (item.handoffState?.pending > 0) return { stage: item.handoffState.state === "blocked" ? "blocked" : "waiting", reason: item.handoffState.reason || "Waiting for delegated work to finish", blockedBy: "handoffs", canRetry: false, childTaskIds: item.handoffState.childTaskIds ?? [] };
+    // A parent waiting on its handed-off follow-ups only waits: the verifier
+    // skips it until they settle, and a stuck follow-up is flagged on its own
+    // card. Its reason still says when that follow-up needs review. (It used
+    // to be "blocked" too, so one parked leaf put its whole chain of
+    // ancestors under Needs attention.)
+    if (item.handoffState?.pending > 0) return { stage: "waiting", reason: item.handoffState.reason || "Waiting for delegated work to finish", blockedBy: "handoffs", canRetry: false, childTaskIds: item.handoffState.childTaskIds ?? [] };
     if (item.delegation && Array.isArray(tasks)) {
       const delegated = dependencyState(item, tasks);
       if (delegated.stage) return delegated;
@@ -124,6 +138,18 @@ function workState(item, now = Date.now(), { tasks = null, autoBuild = true } = 
     return { stage: "blocked", reason: `Completion could not be verified${attempts ? ` after ${attempts} attempt${attempts === 1 ? "" : "s"}` : ""}. Review the result, then retry.` };
   }
   if (Number(item.runFailures) >= 5) return { stage: "blocked", reason: `${Number(item.runFailures)} attempts failed. Review the error, then retry.` };
+  // The owner's stop (the host stamps ownerHold when the owner stops a card):
+  // the card stays put until they say to go on. It ranks with the loop hold —
+  // the parks above name a more specific cause and win — and the owner's own
+  // word comes before the keeper's hold, a cooldown and a free worker. Only a
+  // card back in the queue is held; a running, verifying or finished card is
+  // what it is. canRetry stays unset: Work on it and Try again (retryTask) are
+  // the release.
+  const queued = !item.status || item.status === "open" || item.status === "pending" || item.status === "queued";
+  if (queued && item.ownerHold && typeof item.ownerHold === "object" && !Array.isArray(item.ownerHold)) {
+    const why = String(item.ownerHold.reason ?? "").replace(/\s+/g, " ").trim().slice(0, 80).trim();
+    return { stage: "blocked", blockedBy: "owner", reason: `Stopped by you${why ? ` (${why})` : ""} — say "work on it" or "try again" to resume it` };
+  }
   // The keeper's loop hold (assistant.mjs auditPass). The parks above name a
   // more specific cause, so they win. canRetry stays unset: Try again is the
   // release (retryTask).
@@ -154,10 +180,30 @@ function summarizeBacklog({ tasks = [], requests = [], ideas = [], jobs = [], co
     if (titleKey) represented.add(titleKey);
     return true;
   });
-  const requestStates = uniqueRequests.map((request, index) => ({ id: request.id ?? `request_${index}`, kind: "request", title: String(request.title || request.prompt || "Queued request").slice(0, 120), ...workState(request, now, { tasks: board, autoBuild }) }));
+  // A row promotion would take but will never turn into a task, because the
+  // board already represents it by identity, brief or title key: the same
+  // ladder call promotion makes (main.cjs promoteRequestsToTasks). It used to
+  // count as ready, so the chat and Command view said "N ready" for inbox work
+  // nothing would ever start.
+  const promotable = (request) => !request.runId && request.runProgress?.pending !== true && !request.absorbedInto
+    && (!request.status || ["open", "pending", "queued"].includes(request.status));
+  const onBoard = (request) => {
+    // A promoted row's own card stands for it, open or closed, until
+    // compaction drops the row: promotion never takes it again.
+    if (request.promotedTo) return board.find((task) => task?.id === request.promotedTo) ?? { id: request.promotedTo };
+    if (!promotable(request)) return null;
+    const hit = representedOnBoard({ tasks: board }, { ...request, title: String(request.title ?? "").slice(0, 90) }, { titles: (task) => task?.status !== "archived" });
+    return hit ? hit.item ?? hit.items?.[0]?.item ?? {} : null;
+  };
+  const requestStates = uniqueRequests.map((request, index) => {
+    const row = { id: request.id ?? `request_${index}`, kind: "request", title: String(request.title || request.prompt || "Queued request").slice(0, 120) };
+    const card = onBoard(request);
+    if (card) return { ...row, stage: "represented", reason: `Already on the board as "${String(card.title ?? card.id ?? "another card").slice(0, 120)}"`, ...(card.id ? { taskId: card.id } : {}) };
+    return { ...row, ...workState(request, now, { tasks: board, autoBuild }) };
+  });
   const all = [...taskStates, ...requestStates];
-  const counts = Object.fromEntries(["ready", "running", "review", "blocked", "cooling", "done", "grouped", "waiting", "approval"].map((stage) => [stage, all.filter((row) => row.stage === stage).length]));
-  counts.requests = requestStates.filter((item) => item.stage !== "done").length;
+  const counts = Object.fromEntries(["ready", "running", "review", "blocked", "cooling", "done", "grouped", "waiting", "approval", "represented"].map((stage) => [stage, all.filter((row) => row.stage === stage).length]));
+  counts.requests = requestStates.filter((item) => item.stage !== "done" && item.stage !== "represented").length;
   const pendingIdeas = rows(ideas).filter((idea) => !idea.taskId && (!idea.status || ["new", "keep"].includes(idea.status)));
   counts.ideas = pendingIdeas.length;
   counts.eligibleIdeas = pendingIdeas.filter((idea) => typeof ideaEligible === "function" ? ideaEligible(idea) : Boolean(idea.id && idea.title && (idea.source !== "chat" || idea.status === "keep"))).length;
@@ -177,7 +223,9 @@ function retryTask(task, now = Date.now()) {
   const next = { ...task, status: "open", updatedAt: now, pin: true, pinAt: now };
   // duplicateOf goes too: Run anyway on a card waiting for its duplicate. Its
   // familyDecision stays, so the keeper does not ask about the family again.
-  for (const name of ["runFailures", "startFailures", "providerFailures", "nextRunAt", "lastRunError", "verifyAttempts", "verification", "verificationReceiptId", "doneAt", "runId", "lease", "buildApproval", "loopGuard", "duplicateOf"]) delete next[name];
+  // ownerHold goes as well: Try again is the owner saying to go on after
+  // their own stop.
+  for (const name of ["runFailures", "startFailures", "providerFailures", "nextRunAt", "lastRunError", "verifyAttempts", "verification", "verificationReceiptId", "doneAt", "runId", "lease", "buildApproval", "loopGuard", "ownerHold", "duplicateOf", "dropped"]) delete next[name];
   // The owner's acknowledgement for the loop guard: the ledger restarts from
   // now, so outcomes logged before this retry are never counted again.
   next.loopLedger = { v: 1, at: now, n: 0, reasons: {} };
@@ -193,4 +241,4 @@ const LOOP_HOLD = 1;
 // whose workState waits a linked card (duplicateState): hostCaps.duplicateWait.
 const DUPLICATE_WAIT = 1;
 
-module.exports = { workState, summarizeBacklog, retryTask, dependencyState, dependencyIds, completedTask, validateDependencies, buildScope, hasBuildApproval, buildAllowed, LOOP_HOLD, DUPLICATE_WAIT };
+module.exports = { workState, summarizeBacklog, retryTask, dependencyState, dependencyIds, completedTask, droppedTask, validateDependencies, buildScope, hasBuildApproval, buildAllowed, LOOP_HOLD, DUPLICATE_WAIT };

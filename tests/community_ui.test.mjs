@@ -22,8 +22,9 @@ const booklet = await readFile(new URL("../renderer/booklet.js", import.meta.url
 const FORK = "Members of the Void Engine Discord unlock these. Studio is MIT-licensed: fork the project and unlock it yourself, or ask an agent to do it for you.";
 const AGENT = "In my fork of Mefi's Studio AI+, set SELF_UNLOCKED to true in scripts/community.cjs so the Void collection themes and node styles unlock without Discord, then run npm run check and npm test.";
 const HINT_KEY = "mefiStudio.community.v1";
-// The second sentence of a locked item's note, for a configured, unlinked build.
-const LINK_HINT = "Link your Discord membership to use it, or build it yourself (see below).";
+// The preview and save hint for a configured, unlinked build.
+const PREVIEW_HINT = "Preview it now; it resets when you close the canvas preview or leave Settings.";
+const LINK_HINT = `${PREVIEW_HINT} Link your Discord membership to keep it, or build it yourself (see below).`;
 const PRIVACY = "Linking reads your Discord id and name, and your roles and join date in the Void Engine server: when you link, about once a week (sooner after a failed check, then daily), and when you press Check now. Studio keeps them in its settings on this computer, with the sign-in encrypted in community-auth.json. Nothing about your projects is sent. Unlink revokes the sign-in and deletes both.";
 // What music.js's MefiMusic.premiumCatalog() hands the Community card.
 const CATALOG = {
@@ -244,7 +245,8 @@ test("every id the module looks up exists in the template", () => {
   const settings = template.match(/<details[^>]*id="settings-community"[^>]*>/)[0];
   assert.doesNotMatch(settings, /\sopen/, "Settings › Community is closed by default");
   assert.ok(template.indexOf('id="settings-community"') > template.indexOf('id="settings-studio"'), "the card sits after #settings-studio");
-  assert.ok(template.includes('data-settings-jump="settings-community"'), "the settings nav can jump to it");
+  assert.ok(template.includes('id="settings-category-general"'), "the Community card has a Settings category");
+  assert.ok(template.indexOf('id="settings-community"') > template.indexOf('id="settings-category-general"'), "Community follows the General category heading");
   assert.ok(template.indexOf('id="community-invitation"') > template.indexOf('id="walkthrough-invitation"'), "the weekly card follows the walkthrough invitation");
   assert.match(template, /<optgroup label="Void collection · Discord members"><option value="void">Void<\/option><option value="eclipse">Eclipse<\/option><option value="abyss">Abyss<\/option><option value="dusk">Neon Dusk<\/option><\/optgroup>/);
 });
@@ -254,9 +256,9 @@ test("registration: bundled after music and onboarding, before booklet, and star
   const joined = buildSource.match(/const codeParts = \[([^\]]+)\]/)[1].split(",").map((name) => name.trim());
   assert.ok(joined.indexOf("music") < joined.indexOf("community"));
   assert.ok(joined.indexOf("onboarding") < joined.indexOf("community"));
-  assert.equal(joined.indexOf("community"), joined.indexOf("booklet") - 1);
+  assert.ok(joined.indexOf("community") < joined.indexOf("booklet"), "community bundles before booklet");
   const sources = [...buildSource.match(/const CODE_SOURCES = \[([^\]]+)\]/)[1].matchAll(/"([\w.-]+)\.js"/g)].map((match) => match[1]);
-  assert.equal(sources.indexOf("community"), sources.indexOf("booklet") - 1, "the source map lists it in the same place");
+  assert.ok(sources.indexOf("community") < sources.indexOf("booklet"), "the source map lists it before booklet");
   assert.match(onboardingSource, /status: \(\) => state\.status/, "MefiOnboarding exposes the walkthrough status the card waits on");
   assert.ok(booklet.indexOf("window.MefiCommunity?.startup?.()") > booklet.indexOf("window.MefiOnboarding?.startup?.({ automatic: true })"));
 });
@@ -436,7 +438,7 @@ test("card buttons: join, link, not now, don't show again and Escape reach the r
   assert.deepEqual((await run((env) => env.el("community-invite-later").click())).calls, [["prompt", "snooze"]]);
   const never = await run((env) => env.el("community-invite-never").click());
   assert.deepEqual(never.calls, [["prompt", "never"]]);
-  assert.equal(never.env.toasts.at(-1).message, "Settings › Community has the link any time.");
+  assert.equal(never.env.toasts.at(-1).message, "Settings › General › Community has the link any time.");
   const escape = await run((env) => { const event = card(env).emit("keydown", { key: "Escape" }); assert.equal(event.prevented, true); });
   assert.deepEqual(escape.calls, [["prompt", "snooze"]]);
 
@@ -487,7 +489,7 @@ test("the palette action is a palette-only action that opens Settings › Commun
   assert.deepEqual(env.visits.at(-1).params, { section: "settings-community" });
 });
 
-test("offer() opens Settings › Community with a note naming the locked item, or the inline card", async () => {
+test("offer() opens Settings › Community with a note naming the preview item, or the inline card", async () => {
   const env = environment({ bridge: fakeBridge() });
   await env.boot();
   assert.equal(env.api.offer({ kind: "nodeStyle", key: "prism", name: "Prism" }), true);
@@ -518,8 +520,8 @@ test("offer() opens Settings › Community with a note naming the locked item, o
 });
 
 test("offer({ navigate: false }) explains in place: the inline card or a toast, never a route change", async () => {
-  // The Workspace theme select fires on every arrow key; it must not leave the workspace (WCAG 3.2.2).
-  assert.match(workspaceSource, /MefiMusic\?\.applyTheme\?\.\([^\n]*, true, \{ navigate: false \}\)/, "workspace.js asks for the in-place explanation");
+  // The Preferences theme select fires on every arrow key; it must not navigate (WCAG 3.2.2).
+  assert.match(workspaceSource, /MefiMusic(?:\?\.|\.)applyTheme(?:\?\.)?\([^\n]*, true, \{ navigate: false \}\)/, "workspace.js asks for the in-place explanation");
 
   const env = environment({ bridge: fakeBridge() });
   await env.boot();
@@ -538,7 +540,7 @@ test("offer({ navigate: false }) explains in place: the inline card or a toast, 
   away.api.offer({ kind: "theme", key: "abyss", name: "Abyss", navigate: false });
   assert.deepEqual(away.routes, []);
   const shown = away.toasts.at(-1);
-  assert.equal(shown.message, `Abyss is part of the Void collection. ${FORK}`);
+  assert.equal(shown.message, `Abyss is part of the Void collection. ${PREVIEW_HINT} ${FORK}`);
   assert.equal(shown.options.action.label, "See the perks");
   shown.options.action.run();
   assert.deepEqual(away.routes, ["studio"], "only the toast's own action opens Settings");
@@ -683,7 +685,7 @@ test("link() waits out any running call; busy, storage and a dropped check read 
   assert.equal(failing.el("community-settings-status").textContent, "Studio couldn't finish deleting its saved sign-in. Try Unlink again.");
 });
 
-test("a locked item's note follows the account: the hint changes with the link state and goes once the collection unlocks", async () => {
+test("a preview item's note follows the account: the keep hint changes with the link state and goes once the collection unlocks", async () => {
   const bridge = fakeBridge(status());
   const env = environment({ bridge });
   await env.boot();
@@ -691,33 +693,33 @@ test("a locked item's note follows the account: the hint changes with the link s
   const note = env.el("community-settings-note");
   assert.equal(note.textContent, `Eclipse is part of the Void collection. ${LINK_HINT}`);
   bridge.push(member({ state: "not-member", roles: [], entitlement: { premium: false, perks: [], validUntil: null, reason: "not-member" } }));
-  assert.equal(note.textContent, "Eclipse is part of the Void collection. Join the Void Engine Discord to use it, or build it yourself (see below).");
+  assert.equal(note.textContent, `Eclipse is part of the Void collection. ${PREVIEW_HINT} Join the Void Engine Discord to keep it, or build it yourself (see below).`);
   bridge.push(member());
   assert.equal(note.hidden, true, "a member needs no unlock note");
 });
 
-test("the Workspace theme select marks locked Void collection options, keeps them enabled and restores them on unlock", async () => {
+test("the Preferences theme select marks temporary Void collection options, keeps them enabled and restores them on unlock", async () => {
   const LABELS = [["aurora", "Aurora"], ["gold", "Studio gold"], ["sage", "Forest"], ["custom", "Custom colors"], ["void", "Void"], ["eclipse", "Eclipse"], ["abyss", "Abyss"], ["dusk", "Neon Dusk"]];
   const withOptions = (elements) => { elements.get("workspace-accent").options = LABELS.map(([value, textContent]) => ({ value, textContent, disabled: false })); };
   const labels = (env) => env.el("workspace-accent").options.map((option) => option.textContent);
   const env = environment({ bridge: fakeBridge(status()), music: { premiumCatalog: () => CATALOG }, prepare: withOptions });
-  assert.deepEqual(labels(env), ["Aurora", "Studio gold", "Forest", "Custom colors", "Void · members", "Eclipse · members", "Abyss · members", "Neon Dusk · members"]);
-  assert.ok(env.el("workspace-accent").options.every((option) => option.disabled === false), "locked options stay choosable: choosing one explains the lock");
+  assert.deepEqual(labels(env), ["Aurora", "Studio gold", "Forest", "Custom colors", "Void · preview", "Eclipse · preview", "Abyss · preview", "Neon Dusk · preview"]);
+  assert.ok(env.el("workspace-accent").options.every((option) => option.disabled === false), "preview options stay choosable");
   env.fireWindow("mefi-community-change", { detail: { premium: true, perks: ["premium"], validUntil: null, reason: "member" } });
   assert.deepEqual(labels(env).slice(4), ["Void", "Eclipse", "Abyss", "Neon Dusk"], "unlocking restores the template's names");
   env.fireWindow("mefi-community-change", { detail: { premium: false, perks: [], validUntil: null, reason: "not-member" } });
-  assert.deepEqual(labels(env).slice(4), ["Void · members", "Eclipse · members", "Abyss · members", "Neon Dusk · members"]);
-  assert.doesNotMatch(workspaceSource, /· members/, "workspace.js is not touched for this");
+  assert.deepEqual(labels(env).slice(4), ["Void · preview", "Eclipse · preview", "Abyss · preview", "Neon Dusk · preview"]);
+  assert.doesNotMatch(workspaceSource, /· preview/, "workspace.js is not touched for this");
 
   const hinted = environment({ bridge: fakeBridge(member()), music: { premiumCatalog: () => CATALOG }, prepare: withOptions, storage: new Map([[HINT_KEY, JSON.stringify({ premium: true, validUntil: null })]]) });
   assert.deepEqual(labels(hinted).slice(4), ["Void", "Eclipse", "Abyss", "Neon Dusk"], "a member's boot hint shows the plain names at launch");
   assert.doesNotThrow(() => environment({ bridge: fakeBridge(), prepare: withOptions }), "no catalog, no relabel");
 });
 
-test("Community has its own glyph: the sprite symbol, the sidebar button, the settings nav, the card and the palette entry", () => {
+test("Community has its own glyph: the sprite symbol, the sidebar button, the settings card and the palette entry", () => {
   assert.match(template, /<symbol id="g-community" viewBox="0 0 16 16">/);
   assert.match(template, /id="workspace-community"[^>]*><svg class="glyph" aria-hidden="true"><use href="#g-community"\/>/);
-  assert.match(template, /data-settings-jump="settings-community"[^>]*><svg class="glyph"[^>]*><use href="#g-community"\/>/);
+  assert.match(template, /id="settings-category-general"[\s\S]*id="settings-community"><summary><span class="settings-card-glyph"[^>]*><svg class="glyph"><use href="#g-community"\/>/);
   assert.match(template, /id="settings-community"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-community"\/>/);
   const env = environment({ bridge: fakeBridge() });
   assert.equal(env.registered.find((dest) => dest.id === "community").glyph, "g-community");

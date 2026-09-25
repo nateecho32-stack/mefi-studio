@@ -1,7 +1,7 @@
-// Mefi's Studio AI+ — navigation registry: one list of destinations behind the
-// tabs-row tools cluster, the Command dock, the sheet-header links, the palette,
-// the help sheet, the footer line and every global key. Nothing else in the
-// renderer may hard-code a destination, so the six surfaces cannot drift apart.
+// Mefi's Studio AI+ — navigation registry for Home, Work, Live and Models,
+// project-scoped recent tasks, the local view row, Search, Help and shortcuts.
+// Classic tabs, dock and sheet links resolve through this same registry.
+// New task opens Home's composer; task identity persists across destinations.
 (function () {
   "use strict";
 
@@ -22,6 +22,53 @@
   // as a dot on the Explorer's dock item and tool button.
   const badges = { sessions: 0, progress: 0, tasks: 0, ideas: 0, machine: null, assistant: null, questions: 0 };
   let lastBadgeRefresh = 0;
+  // One selected task per project follows the user through Home, Work and
+  // Live. Only selection is stored here; the board remains authoritative.
+  const taskContexts = new Map();
+  let taskProjectId = null;
+  function taskContext(projectId = taskProjectId || window.MefiTasks?.state?.projectId || (window.MefiWorkspace?.activeProjectId?.() || window.MefiWorkspace?.state?.activeId)) {
+    if (!projectId) return null;
+    if (!taskContexts.has(projectId)) {
+      try {
+        const saved = JSON.parse(localStorage.getItem(`mefiStudio.taskContext.${projectId}`) || "null");
+        if (saved?.projectId === projectId && typeof saved.taskId === "string") taskContexts.set(projectId, saved);
+      } catch { /* Selection can work without a browser store. */ }
+    }
+    const selected = taskContexts.get(projectId);
+    return selected ? { ...selected } : null;
+  }
+  function selectTask({ taskId, projectId, title } = {}) {
+    projectId ||= taskProjectId || window.MefiTasks?.state?.projectId || (window.MefiWorkspace?.activeProjectId?.() || window.MefiWorkspace?.state?.activeId);
+    if (!projectId || typeof taskId !== "string" || !taskId) return null;
+    const previous = taskContext(projectId);
+    const selected = { taskId, projectId, title: String(title || previous?.taskId === taskId && previous?.title || "Selected task").slice(0, 90) };
+    taskProjectId = projectId;
+    taskContexts.set(projectId, selected);
+    try { localStorage.setItem(`mefiStudio.taskContext.${projectId}`, JSON.stringify(selected)); } catch { /* Optional persistence. */ }
+    if (previous?.taskId !== taskId || previous?.title !== selected.title) {
+      window.dispatchEvent(new CustomEvent("mefi:task-context", { detail: { ...selected } }));
+      paintTaskContext();
+    }
+    return { ...selected };
+  }
+  function paintTaskContext() {
+    const nav = document.getElementById("app-local-nav");
+    if (!nav || nav.hidden) return;
+    let row = document.getElementById("app-task-context");
+    if (!row) { row = document.createElement("div"); row.id = "app-task-context"; row.className = "app-task-context"; nav.insertBefore(row, nav.firstChild); }
+    const context = taskContext();
+    row.hidden = !["work", "agents"].includes(nav.dataset.section);
+    const signature = JSON.stringify([context, current()]);
+    if (row.dataset.signature === signature) return;
+    row.dataset.signature = signature; row.textContent = "";
+    const home = document.createElement("button"); home.type = "button"; home.className = "ghost mini"; home.textContent = "Home";
+    home.addEventListener("click", () => go("workspace")); row.append(home);
+    if (context) {
+      const task = document.createElement("button"); task.type = "button"; task.className = "ghost mini";
+      task.textContent = current() === "tasks" ? "Current task" : "Open current task";
+      task.title = context.title; task.addEventListener("click", () => go("tasks", { taskId: context.taskId, projectId: context.projectId })); row.append(task);
+    }
+  }
 
   // A record with no key, or a multi-character display key such as "Ctrl K",
   // needs its own keyMatch or it never matches (spec 2.2).
@@ -58,15 +105,29 @@
   // and one toast per new question, whichever view is up. The first payload
   // seeds what is already known so a restart never re-announces old asks.
   let knownQuestions = null;
+  // A question closed while its toast is still up (answered elsewhere, or
+  // cleared because its card left the board) takes the toast with it, so an
+  // Answer button never leads to a decision that is already gone.
+  const questionToasts = new Map();
   function noticeQuestions(state) {
     if (!state || !Array.isArray(state.questions)) return;
     const open = openQuestions(state);
     setBadge("questions", open.length);
+    const openIds = new Set(open.map((question) => question.id));
+    for (const [id, toast] of questionToasts) {
+      if (openIds.has(id)) continue;
+      questionToasts.delete(id);
+      toast?.dismiss?.();
+    }
     if (knownQuestions === null) { knownQuestions = new Set(state.questions.map((question) => question.id)); return; }
     for (const question of open) {
       if (knownQuestions.has(question.id)) continue;
       knownQuestions.add(question.id);
-      window.MefiToast?.(`Decision needed: ${question.title}`, "warn", { action: { label: "Answer", run: () => go("command", { rail: "ask" }) } });
+      const toast = window.MefiToast?.(`Decision needed: ${question.title}`, "warn", {
+        action: { label: "Answer", run: () => go("command", { rail: "ask" }) },
+        onDismiss: () => questionToasts.delete(question.id),
+      });
+      if (toast) questionToasts.set(question.id, toast);
     }
   }
 
@@ -77,8 +138,7 @@
   const SECTIONS = new Map([
     ["home", "Home"],
     ["work", "Work"],
-    ["live", "Live"],
-    ["models", "Models"],
+    ["agents", "Agents"],
     ["settings", "Settings"],
     ["help", "Help"],
     ["community", "Community"],
@@ -118,10 +178,16 @@
 
   const registry = [
     {
-      id: "workspace", label: "Your workspace", short: "Workspace", kind: "view", layer: null,
+      id: "agents", label: "Agents", short: "Agents", kind: "overlay", layer: "sheet", section: "agents", group: "tools",
+      glyph: "g-agents", badge: "questions", desc: "Your team, setup, live work, workflows, models and usage",
+      showIn: showIn({ palette: true, help: true, tools: true }), element: "agents-overlay", focus: "#agents-title",
+      open: (params) => window.MefiAgents?.open?.(params), close: () => window.MefiAgents?.close?.(), isOpen: () => overlayOpen("agents-overlay"),
+    },
+    {
+      id: "workspace", label: "Home", short: "Home", kind: "view", layer: null,
       commandPrimary: true, section: "home",
       group: "surfaces", key: "H", glyph: "g-home", badge: null,
-      desc: "Projects, your companion, and work from idea to done",
+      desc: "Project overview, conversation and work queue",
       searchTerms: "home project folder conversation chat give task review done",
       showIn: showIn({ dock: true, palette: true, help: true, footer: true }),
       open: () => window.MefiWorkspace?.enter?.(), close: () => window.MefiWorkspace?.exit?.(),
@@ -133,7 +199,7 @@
       short: "Command",
       kind: "view",
       layer: null,
-      section: "live",
+      section: "agents",
       group: "surfaces",
       key: "D",
       glyph: "g-orbit",
@@ -149,15 +215,15 @@
     {
       id: "booklet",
       label: "Model catalog",
-      short: "Model catalog",
+      short: "Catalog",
       kind: "tab",
       layer: null,
-      section: "models",
+      section: "agents",
       group: "surfaces",
       key: "1",
       glyph: "g-booklet",
       badge: null,
-      desc: "Every model with its prices and limits, filters and search",
+      desc: "Compare models, prices and context limits",
       searchTerms: "models catalog booklet prices limits compare",
       showIn: showIn({ dock: true, palette: true, help: true }),
       open: () => window.MefiBooklet?.showTab?.("booklet"),
@@ -165,19 +231,32 @@
     },
     {
       id: "graph",
-      label: "Model Lab",
-      short: "Model Lab",
+      label: "Performance",
+      short: "Performance",
       kind: "tab",
       layer: null,
-      section: "models",
+      section: "agents",
       group: "surfaces",
       key: "2",
       glyph: "g-graph",
       badge: null,
-      desc: "Measured model performance, usage and context; published catalog tools",
+      desc: "Measured model performance and task comparisons",
+      searchTerms: "model lab rankings performance benchmarks",
       showIn: showIn({ dock: true, palette: true, help: true }),
-      open: () => window.MefiBooklet?.showTab?.("graph"),
-      isOpen: () => tabOpen("graph"),
+      open: () => openModelView("rankings"),
+      isOpen: () => tabOpen("graph") && !["usage", "context"].includes(modelRoute),
+    },
+    {
+      id: "usage", label: "Usage", short: "Usage", kind: "tab", layer: null, section: "agents", group: "surfaces",
+      key: null, glyph: "g-gauge", badge: null, desc: "Recorded calls, costs and account readings",
+      searchTerms: "usage costs budget spend account limits tracker", showIn: showIn({ palette: true, help: true }),
+      open: (params) => openModelView(params?.view === "tracker" ? "tracker" : "usage"), isOpen: () => tabOpen("graph") && modelRoute === "usage",
+    },
+    {
+      id: "context", label: "Context", short: "Context", kind: "tab", layer: null, section: "agents", group: "surfaces",
+      key: null, glyph: "g-booklet", badge: null, desc: "Inspect a task's saved context and token budget",
+      searchTerms: "context tokens sources budget task handoff", showIn: showIn({ palette: true, help: true }),
+      open: () => openModelView("context"), isOpen: () => tabOpen("graph") && modelRoute === "context",
     },
     {
       id: "eyes",
@@ -185,7 +264,7 @@
       short: "Activity",
       kind: "tab",
       layer: null,
-      section: "live",
+      section: "agents",
       group: "surfaces",
       key: "3",
       glyph: "g-eyes",
@@ -221,10 +300,10 @@
       id: "explorer",
       commandPrimary: true,
       label: "Session explorer",
-      short: "Explorer",
+      short: "Sessions",
       kind: "overlay",
       layer: "sheet",
-      section: "live",
+      section: "agents",
       group: "tools",
       key: "E",
       glyph: "g-explorer",
@@ -242,7 +321,7 @@
       id: "tasks",
       commandPrimary: true,
       label: "Task board",
-      short: "Task board",
+      short: "Tasks",
       kind: "overlay",
       layer: "sheet",
       section: "work",
@@ -303,15 +382,15 @@
       id: "brains",
       commandPrimary: true,
       label: "Brain maps",
-      short: "Brains",
+      short: "Brain maps",
       kind: "overlay",
       layer: "sheet",
-      section: "work",
+      section: "agents",
       group: "tools",
       key: "B",
       glyph: "g-route",
       badge: null,
-      desc: "The pipeline as a graph: wire the stages, set what each part may do, and make a map live",
+      desc: "Edit the stages, models and permissions in a workflow",
       searchTerms: "pipeline brain map graph nodes wiring editor engine stages triage decisions permissions model choice jev",
       showIn: showIn({ tools: true, dock: true, palette: true, help: true }),
       element: "brains-overlay",
@@ -321,12 +400,32 @@
       isOpen: () => overlayOpen("brains-overlay"),
     },
     {
+      id: "agent-brain",
+      label: "Agent brain",
+      short: "Agent brain",
+      kind: "overlay",
+      layer: "sheet",
+      section: "agents",
+      group: "tools",
+      key: "J",
+      glyph: "g-agents",
+      badge: null,
+      desc: "Explore project systems, their parts and files, then inspect live work, Playbook recipes and agent seats",
+      searchTerms: "agent brain explore project map systems parts files pipeline pipelines sub-agents subagents lead desk playbook recipes seats",
+      showIn: showIn({ tools: true, dock: true, palette: true, help: true }),
+      element: "agent-brain-overlay",
+      focus: "#agent-brain-heading",
+      open: (params) => window.MefiAgentBrain?.open?.(params),
+      close: () => window.MefiAgentBrain?.close?.(),
+      isOpen: () => overlayOpen("agent-brain-overlay"),
+    },
+    {
       id: "overhead",
       label: "Overhead",
       short: "Overhead",
       kind: "overlay",
       layer: "sheet",
-      section: "live",
+      section: "agents",
       group: "tools",
       key: "O",
       glyph: "g-overhead",
@@ -369,7 +468,7 @@
       group: "system",
       key: "Ctrl K",
       keyMatch: (event) => (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k",
-      glyph: "g-palette",
+      glyph: "g-search",
       badge: null,
       desc: "Find any page, tool, setting, action, task, node or model",
       searchTerms: "search find jump go to key commands palette",
@@ -381,18 +480,31 @@
       isOpen: () => overlayOpen("palette-overlay"),
     },
     {
-      id: "music", label: "Style & sound", short: "Style", kind: "overlay", layer: "sheet", section: "settings",
+      id: "music", label: "Appearance", short: "Appearance", kind: "action", layer: null, section: "settings",
       group: "tools", key: "U", glyph: "g-style", badge: null, commandPrimary: true,
-      desc: "Studio themes and colours, the node tree's look, plus local music, radio, Spotify links and AI suggestions",
-      searchTerms: "style theme themes colour color appearance accent skin look node styles music sound audio radio spotify",
+      desc: "Themes, colours, node styles and canvas effects",
+      searchTerms: "style theme themes colour color appearance accent skin look node styles",
       showIn: showIn({ dock: true, palette: true, help: true }),
+      run: (params) => params === "sound" || params?.group === "sound" ? go("audio") : go("studio", { section: "appearance" }),
+    },
+    {
+      id: "audio", label: "Music & video", short: "Audio", kind: "action", layer: null, section: "settings",
+      group: "tools", key: null, glyph: "g-audio", badge: null,
+      desc: "Open the audio dropdown for music, videos, radio and audio reactions",
+      searchTerms: "music sound audio radio spotify links youtube video soundcloud vimeo jam media player connect",
+      showIn: showIn({ palette: true, help: true }),
+      run: () => window.MefiMusic?.openAudio?.(),
+    },
+    {
+      id: "appearancePreview", label: "Appearance preview", short: "Preview", kind: "overlay", layer: "transient", section: "settings",
+      group: "tools", key: null, glyph: "g-style", badge: null, showIn: showIn({}),
       element: "music-overlay", focus: "#music-close",
-      open: (params) => window.MefiMusic?.open?.(params), close: () => window.MefiMusic?.close?.(),
+      open: () => window.MefiMusic?.openPreview?.(), close: () => window.MefiMusic?.close?.(),
       isOpen: () => overlayOpen("music-overlay"),
     },
     {
       // Settings' diagnostics: listed after Style & sound in the Settings section.
-      id: "profiler", label: "Performance profiler", short: "Profiler", kind: "overlay", layer: "sheet", section: "settings", group: "tools",
+      id: "profiler", label: "Performance profiler", short: "Profiler", kind: "overlay", layer: "transient", section: "settings", group: "tools",
       key: null, glyph: "g-gauge", badge: null,
       desc: "Diagnostics: record frame timings, rendering hotspots, host requests, CPU and memory",
       searchTerms: "debug diagnostics lag slow fps hitch performance profiler cpu memory",
@@ -423,7 +535,7 @@
       keyMatch: (event) => event.key === "?",
       glyph: "g-help",
       badge: null,
-      desc: "Every key, generated from this registry",
+      desc: "Keyboard shortcuts for pages, tools and Command view",
       showIn: showIn({ dock: true, palette: true, help: true, footer: true }),
       element: "help-overlay",
       focus: "#help-overlay .sheet",
@@ -437,7 +549,7 @@
       short: "Find model",
       kind: "action",
       layer: null,
-      section: "models",
+      section: "agents",
       group: "system",
       key: "/",
       glyph: "g-search",
@@ -455,12 +567,12 @@
       short: "Refresh",
       kind: "action",
       layer: null,
-      section: "models",
+      section: "agents",
       group: "system",
       key: "R",
       glyph: "g-refresh",
       badge: null,
-      desc: "Re-read data/models.json",
+      desc: "Reload the model catalog",
       showIn: showIn({ palette: true, help: true }),
       run: () => window.MefiBooklet?.refresh?.("keyboard"),
     },
@@ -470,7 +582,7 @@
       short: "Pin preview",
       kind: "action",
       layer: null,
-      section: "live",
+      section: "agents",
       group: "system",
       key: "G",
       glyph: "g-pin",
@@ -485,7 +597,7 @@
       short: "Print",
       kind: "action",
       layer: null,
-      section: "models",
+      section: "agents",
       group: "system",
       key: null,
       glyph: "g-print",
@@ -500,15 +612,15 @@
       short: "Auditor",
       kind: "action",
       layer: null,
-      section: "live",
+      section: "agents",
       group: "system",
       key: null,
       glyph: null,
       badge: null,
-      desc: "Wiring and gap checks for this app",
+      desc: "Check the app for configuration and integration problems",
       showIn: showIn({ palette: true }),
       run: () => {
-        go("explorer");
+        go("explorer", { panel: "diagnostics" });
         setTimeout(() => document.getElementById("audit-run")?.click(), 400);
       },
     },
@@ -518,14 +630,14 @@
       short: "Machine",
       kind: "action",
       layer: null,
-      section: "live",
+      section: "agents",
       group: "system",
       key: null,
       glyph: null,
       badge: null,
       desc: "Test leases, LOVE runs and auto-kill",
       showIn: showIn({ palette: true }),
-      run: () => go("explorer"),
+      run: () => go("explorer", { panel: "diagnostics" }),
     },
     {
       id: "scanIdeas",
@@ -564,6 +676,25 @@
     return registry.find((dest) => dest.id === id) ?? null;
   }
 
+  let modelRoute = "graph";
+  let usageView = "usage";
+  function openModelView(view) {
+    if (view === "usage") view = usageView;
+    modelRoute = view === "rankings" || view === "compare" ? "graph" : view === "tracker" ? "usage" : view;
+    window.MefiBooklet?.showTab?.("graph");
+    window.MefiModelLab?.show?.(view);
+  }
+
+  const WORKSPACE_PAGES = new Set(["tasks", "plans", "ideas", "brains", "analyzer", "explorer", "overhead", "agent-brain", "agents"]);
+  const isWorkspacePage = (dest) => document.documentElement?.dataset?.shell === "rail" && WORKSPACE_PAGES.has(dest?.id);
+  function syncPageInert() {
+    const page = isWorkspacePage(get(state.sheet));
+    for (const node of document.querySelectorAll?.("body > header, #tab-booklet, #tab-graph, #tab-eyes, #tab-studio, #workspace-layer, #idle-layer, #idle-hud, #tree-rail") ?? []) {
+      if (page && !node.inert) { node.inert = true; node.dataset.pageInert = ""; }
+      else if (!page && "pageInert" in node.dataset) { node.inert = false; delete node.dataset.pageInert; }
+    }
+  }
+
   function register(dest) {
     if (!dest?.id) return null;
     const index = registry.findIndex((item) => item.id === dest.id);
@@ -585,14 +716,15 @@
       railRenderQueued = false;
       const rail = document.getElementById("app-rail");
       const active = document.activeElement;
-      const held = rail?.contains?.(active) && active?.dataset?.nav
-        ? { nav: active.dataset.nav, head: Boolean(active.classList?.contains?.("app-rail-head")) }
+      const held = rail?.contains?.(active) && (active?.dataset?.nav || active?.id || active?.dataset?.taskId)
+        ? { id: active.id, nav: active.dataset.nav, taskId: active.dataset.taskId, head: Boolean(active.classList?.contains?.("app-rail-head")) }
         : null;
       renderRail();
       if (!held || (active.isConnected && document.activeElement === active)) return;
       const again = active.isConnected
         ? active
-        : Array.from(rail.querySelectorAll(held.head ? ".app-rail-head" : ".app-rail-item")).find((button) => button.dataset?.nav === held.nav);
+        : held.id ? document.getElementById(held.id)
+        : Array.from(rail.querySelectorAll(held.head ? ".app-rail-head" : ".app-rail-item")).find((button) => held.taskId ? button.dataset?.taskId === held.taskId : button.dataset?.nav === held.nav);
       if (again) focusRailButton(again);
     });
   }
@@ -607,17 +739,96 @@
     window.dispatchEvent(new CustomEvent("mefi:nav", { detail: { id, action, params: params ?? {} } }));
   }
 
+  // Each project and major section has its own history. Temporary dialogs
+  // remain layers, not pages, and never enter the history.
+  const histories = new Map();
+  let historyActive = null, historyRestoring = false;
+  const historyKey = (section) => `${taskProjectId || (window.MefiWorkspace?.activeProjectId?.() || window.MefiWorkspace?.state?.activeId) || "none"}:${section}`;
+  function capturePage(entry) {
+    if (!entry) return;
+    entry.scroll = Array.from(document.querySelectorAll?.("[id]") || []).filter((el) => !el.hidden && (el.scrollTop || el.scrollLeft)).map((el) => [el.id, el.scrollTop, el.scrollLeft]);
+    entry.focus = document.activeElement?.id || null;
+  }
+  function rememberRoute(id, params = {}) {
+    if (historyRestoring) return;
+    const dest = get(id), section = sectionOf(dest);
+    if (!dest || dest.kind === "action" || dest.layer === "transient") return;
+    if (historyActive) { const previous = histories.get(historyActive); capturePage(previous?.entries[previous.index]); }
+    const key = historyKey(section);
+    let history = histories.get(key);
+    if (!history) {
+      history = { entries: [], index: -1 }; histories.set(key, history);
+      const root = section === "agents" ? "agents" : section === "work" ? "tasks" : null;
+      if (root && (root !== id || Object.keys(params).length)) { history.entries.push({ id: root, params: root === "agents" ? { section: "overview" } : { filter: "all" } }); history.index = 0; }
+    }
+    const normalized = JSON.parse(JSON.stringify(params || {}));
+    const prior = history.entries[history.index];
+    if (!prior || prior.id !== id || JSON.stringify(prior.params) !== JSON.stringify(normalized)) {
+      history.entries.splice(history.index + 1); history.entries.push({ id, params: normalized });
+      if (history.entries.length > 60) history.entries.shift();
+      history.index = history.entries.length - 1;
+    }
+    historyActive = key;
+  }
+  function historyState() {
+    const history = histories.get(historyKey(sectionOf(get(current()))));
+    return { canBack: Boolean(history && history.index > 0), canForward: Boolean(history && history.index < history.entries.length - 1) };
+  }
+  function lastSectionRoute(section, fallback) {
+    const history = histories.get(historyKey(section));
+    const entry = history?.entries[history.index];
+    return entry && get(entry.id) ? entry : { id: fallback, params: {} };
+  }
+  async function travelHistory(delta) {
+    const key = historyKey(sectionOf(get(current()))), history = histories.get(key);
+    const next = history?.index + delta;
+    if (historyRestoring || !history || next < 0 || next >= history.entries.length) return false;
+    capturePage(history.entries[history.index]); history.index = next; historyActive = key;
+    const target = history.entries[next]; historyRestoring = true;
+    try {
+      await go(target.id, target.params, { history: false });
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        for (const [id, top, left] of target.scroll || []) { const el = document.getElementById(id); if (el && !el.closest?.("[hidden]")) { el.scrollTop = top; el.scrollLeft = left; } }
+        const focus = target.focus && document.getElementById(target.focus);
+        if (focus && !focus.closest?.("[hidden], [inert]")) focus.focus?.({ preventScroll: true });
+        window.MefiScroll?.refresh?.();
+      }));
+    } finally { historyRestoring = false; paintCurrent(); }
+    return true;
+  }
+  const back = () => travelHistory(-1);
+  const forward = () => travelHistory(1);
+  function paintHistory(nav) {
+    let controls = nav.querySelector?.(".studio-history");
+    if (!controls) {
+      controls = document.createElement("div"); controls.className = "studio-history"; controls.setAttribute("role", "group"); controls.setAttribute("aria-label", "Section history");
+      for (const [name, glyph, run] of [["Back", "←", back], ["Forward", "→", forward]]) {
+        const button = document.createElement("button"); button.type = "button"; button.className = "ghost mini";
+        button.textContent = glyph; button.dataset.history = name.toLowerCase(); button.setAttribute("aria-label", `${name} within this section`); button.title = `${name} within this section (Alt ${name === "Back" ? "←" : "→"})`; button.addEventListener("click", run); controls.append(button);
+      }
+      nav.insertBefore(controls, nav.firstChild);
+    }
+    const status = historyState();
+    controls.querySelector('[data-history="back"]').disabled = !status.canBack;
+    controls.querySelector('[data-history="forward"]').disabled = !status.canForward;
+  }
+  document.addEventListener("keydown", (event) => {
+    if (!event.altKey || event.ctrlKey || event.metaKey || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+    event.preventDefault(); event.stopPropagation(); if (event.key === "ArrowLeft") back(); else forward();
+  });
+
   // ---- layers ------------------------------------------------------------
 
   // The focusable dialog root inside a destination's overlay, if it has one.
   function dialogRoot(dest) {
     const root = dest?.element ? document.getElementById(dest.element) : null;
-    return root?.querySelector(".explorer-sheet, .sheet, .palette-sheet, .brains-sheet") ?? null;
+    return root?.querySelector(".explorer-sheet, .sheet, .palette-sheet, .brains-sheet, .agent-brain-sheet") ?? null;
   }
 
   function layerRoot(dest) {
     return dest?.element ? document.getElementById(dest.element) : null;
   }
+  const visibleNavTarget = (element) => Boolean(element && !element.hidden && !element.closest?.("[hidden], [inert]") && (element.getClientRects?.().length ?? 1) > 0);
 
   // A sheet replacing a sheet keeps one continuous scrim (styles.css,
   // "presence"): both roots skip their fade for this one swap, so two
@@ -661,12 +872,27 @@
       if (copy) copy.textContent = label;
     }
     const sheet = dialogRoot(dest);
+    const page = isWorkspacePage(dest);
+    root?.classList.toggle("workspace-page", page);
+    if (WORKSPACE_PAGES.has(id)) {
+      const exit = document.getElementById(`${id}-close`);
+      const label = exit?.querySelector(".label");
+      const origin = get(state.returnTo ?? underlyingView());
+      const name = page ? `Back within ${SECTIONS.get(sectionOf(dest)) || "this section"}` : "Close";
+      if (label) label.textContent = page ? "Back" : "Close";
+      if (exit) { exit.title = `${name} (Esc)`; exit.setAttribute("aria-label", name); }
+      exit?.querySelector("use")?.setAttribute("href", page ? "#g-back" : "#g-close");
+    }
+    syncPageInert();
     if (sheet) {
-      sheet.setAttribute("role", "dialog");
-      sheet.setAttribute("aria-modal", "true");
+      sheet.setAttribute("role", page ? "region" : "dialog");
+      if (page) sheet.removeAttribute("aria-modal");
+      else sheet.setAttribute("aria-modal", "true");
     }
     requestAnimationFrame(() => {
-      const target = (dest.focus ? document.querySelector(dest.focus) : null) ?? sheet;
+      const requested = dest.focus ? Array.from(document.querySelectorAll?.(dest.focus) ?? []).find(visibleNavTarget) : null;
+      const selected = Array.from(root?.querySelectorAll?.('[aria-selected="true"]') ?? []).find(visibleNavTarget);
+      const target = requested ?? selected ?? sheet;
       target?.focus?.();
       // focus() reports nothing when the match is not focusable (a still-loading
       // list's muted <li>), and an aria-modal dialog may not open without focus.
@@ -684,6 +910,7 @@
       if (dest?.element) document.getElementById(dest.element)?.classList.remove("from-command");
     }
     if (state.transient === id) state.transient = null;
+    syncPageInert();
     let saved = layer ? state.focusReturn[layer] : null;
     const sidebarReturn = Boolean(saved?.closest?.("#workspace-sidebar-panel[inert]"));
     const closedMenu = saved?.closest?.("details:not([open])");
@@ -697,7 +924,8 @@
       focusIdle();
       window.MefiIdle?.bumpHud?.();
     } else if (usable) {
-      saved.focus?.();
+      if (saved.closest?.("#app-rail")) focusRailButton(saved);
+      else saved.focus?.();
     } else if (state.sheet) {
       // A transient closed over a sheet that stays open: stay inside that dialog.
       dialogRoot(get(state.sheet))?.focus?.();
@@ -715,12 +943,18 @@
   }
 
   function close(id) {
+    if (WORKSPACE_PAGES.has(id) && current() === id) {
+      if (historyState().canBack) return back();
+      const home = sectionOf(get(id)) === "agents" ? "agents" : "tasks";
+      if (id !== home) return go(home);
+      return;
+    }
     get(id)?.close?.();
   }
 
   function closeAll() {
-    if (state.transient) close(state.transient);
-    if (state.sheet) close(state.sheet);
+    if (state.transient) get(state.transient)?.close?.();
+    if (state.sheet) get(state.sheet)?.close?.();
   }
 
   function closeTop() {
@@ -737,8 +971,20 @@
   }
 
   function go(id, params = {}, options = {}) {
+    const redirected = window.MefiAgents?.redirect?.(id, params);
+    if (redirected) return go(redirected.id, redirected.params, options);
+    closeHelpMenu();
+    delete document.documentElement.dataset.railDrawer;
     const dest = get(id);
     if (!dest) return;
+    if (dest.kind !== "action" && dest.layer !== "transient") window.MefiMusic?.leaveSettingsAppearance?.({ keepTree: id === "command" });
+    const projectId = params.projectId || taskProjectId || window.MefiTasks?.state?.projectId || (window.MefiWorkspace?.activeProjectId?.() || window.MefiWorkspace?.state?.activeId);
+    const context = taskContext(projectId);
+    const activeProject = (window.MefiWorkspace?.activeProjectId?.() || window.MefiWorkspace?.state?.activeId) || window.MefiTasks?.state?.projectId || taskProjectId;
+    if (params.taskId && projectId && (!activeProject || activeProject === projectId)) selectTask({ ...params, projectId });
+    if (id === "tasks" && !params.taskId && !params.filter && !params.readiness && context) params = { ...params, taskId: context.taskId, projectId: context.projectId };
+    if (id === "command" && !params.preserveSelection && !params.selected && !params.sessionId && !params.rail && (params.taskId || context?.taskId)) params = { ...params, selected: `task:${params.taskId || context.taskId}` };
+    if (dest.kind !== "action" && dest.layer !== "transient" && options.history !== false) rememberRoute(id, params);
     const navCommand = document.getElementById("nav-command");
     if (dest.kind === "action") {
       dest.run?.(params, options);
@@ -753,9 +999,9 @@
       if (id !== "command" && idleActive()) window.MefiIdle?.exit?.();
       state.returnTo = null;
       navCommand?.classList.remove("return");
-      dest.open?.(params);
+      const opened = dest.open?.(params);
       dispatchNav(id, "open", params);
-      return;
+      return opened;
     }
     if (dest.kind === "tab") {
       closeAll();
@@ -787,7 +1033,8 @@
   // The surface under any sheet: the workspace, or the active tab.
   function underlyingView() {
     if (window.MefiWorkspace?.isActive?.()) return "workspace";
-    return document.querySelector?.(".tab.active")?.dataset?.tab ?? null;
+    const tab = document.querySelector?.(".tab.active")?.dataset?.tab ?? null;
+    return tab === "graph" ? modelRoute : tab;
   }
 
   // Leaving Command (Esc, the exit button, D) returns to where it was entered
@@ -795,10 +1042,11 @@
   // canvas, and go("command") had already left the workspace, so whatever tab
   // sat underneath (the Model catalog) used to show through.
   function leaveCommand() {
-    const back = state.commandFrom && state.commandFrom !== "command" ? state.commandFrom : "workspace";
+    if (sectionOf(get(current())) === "agents") { if (historyState().canBack) return back(); return go("agents"); }
+    const destination = state.commandFrom && state.commandFrom !== "command" ? state.commandFrom : "workspace";
     state.commandFrom = null;
     window.MefiIdle?.exit?.();
-    if (get(back)) go(back);
+    if (get(destination)) go(destination);
   }
 
   function toggle(id) {
@@ -985,7 +1233,7 @@
   // The More tools menus group by the same sections as the rail. Home rides
   // with Work, the foot's Community with Help, and anything else unfiled
   // lands in Settings.
-  const MENU_GROUPS = ["Work", "Live", "Models", "Settings", "Help"];
+  const MENU_GROUPS = ["Work", "Agents", "Settings", "Help"];
   function menuGroup(dest) {
     const section = sectionOf(dest);
     if (section === "home") return "Work";
@@ -1020,7 +1268,7 @@
     // repeat here.
     appendGrouped(element, list().filter((dest) =>
       !["workspace", "command", "tasks", "plans", "brains", "studio", "music"].includes(dest.id) &&
-      dest.kind !== "action" && dest.layer !== "transient"), "ghost");
+      dest.kind !== "action" && (dest.layer !== "transient" || dest.id === "profiler")), "ghost");
     paintBadges(element);
   }
 
@@ -1064,105 +1312,222 @@
   const RAIL_SECTIONS = [
     { id: "home", label: "Home", target: "workspace" },
     { id: "work", label: "Work", target: "tasks" },
-    { id: "live", label: "Live", target: "command" },
-    { id: "models", label: "Models", target: "booklet" },
-    { id: "settings", label: "Settings", target: "studio" },
+    { id: "agents", label: "Agents", target: "agents" },
   ];
+  const LOCAL_ROUTES = Object.freeze({
+    home: ["workspace"],
+    work: ["tasks", "plans", "ideas", "analyzer"],
+    agents: ["agents", "command", "eyes", "explorer", "overhead", "agent-brain", "brains", "context", "booklet", "graph", "usage"],
+    settings: ["studio"],
+  });
 
-  // Which rail section a destination lives in: its own section, with Home the
-  // workspace alone; the foot for Help (Search, Start here, Shortcuts) and for
-  // whatever RAIL_SLOTS sends there; and nowhere for the other actions, which
-  // stay in the palette where they have always been.
+  // Home supplies its existing board snapshot. The sidebar never fetches a
+  // second copy or mixes the task history of two projects.
+  const recentTasks = new Map();
+  let recentProjectId = null;
+  function setRecentTasks({ projectId, tasks } = {}) {
+    if (!projectId || !Array.isArray(tasks)) return;
+    const stamp = (task) => Number(task.updatedAt || task.createdAt) || Date.parse(task.updatedAt || task.createdAt || "") || 0;
+    const seen = new Set();
+    const rows = tasks.filter((task) => {
+      if (!task?.id || task.archived || task.status === "archived" || task.projectId && task.projectId !== projectId || seen.has(task.id)) return false;
+      seen.add(task.id); return true;
+    }).sort((left, right) => stamp(right) - stamp(left)).slice(0, 6).map((task) => ({
+      id: String(task.id), projectId, title: String(task.title || task.prompt || "Untitled task"),
+      label: window.MefiTasks?.shortTitle?.(task) || String(task.title || task.prompt || "Untitled task").replace(/\s+/g, " ").slice(0, 72),
+    }));
+    recentTasks.set(projectId, rows);
+    recentProjectId = projectId;
+    // Workspace supplies the current project's snapshot, including an empty
+    // board. Initial project reads need not emit onProjects, and an empty
+    // board has no selected task that could otherwise update this context.
+    if (!(window.MefiWorkspace?.activeProjectId?.() || window.MefiWorkspace?.state?.activeId) && taskProjectId !== projectId) {
+      taskProjectId = projectId;
+      paintTaskContext();
+    }
+    paintRecentTasks();
+  }
+
+  function paintRecentTasks() {
+    const list = document.getElementById("app-rail-recent-list");
+    if (!list) return;
+    const projectId = (window.MefiWorkspace?.activeProjectId?.() || window.MefiWorkspace?.state?.activeId) || taskProjectId || recentProjectId;
+    const rows = recentTasks.get(projectId) || [];
+    const selected = taskContext(projectId);
+    const held = list.contains(document.activeElement) ? document.activeElement : null;
+    const existing = new Map(Array.from(list.querySelectorAll("button")).map((button) => [`${button.dataset.projectId}:${button.dataset.taskId}`, button]));
+    const wanted = new Set(rows.map((task) => `${projectId}:${task.id}`));
+    for (const [key, button] of existing) if (!wanted.has(key)) button.remove();
+    rows.forEach((task, index) => {
+      let button = existing.get(`${projectId}:${task.id}`);
+      if (!button) {
+        button = document.createElement("button"); button.type = "button";
+        button.className = "app-rail-item app-rail-recent-task"; button.tabIndex = -1;
+        button.dataset.taskId = task.id; button.dataset.projectId = projectId;
+        const label = document.createElement("span"); label.className = "label"; button.append(label);
+        button.addEventListener("click", () => go("tasks", { taskId: task.id, projectId, title: button.title }));
+      }
+      button.querySelector(".label").textContent = task.label;
+      button.title = task.title;
+      button.setAttribute("aria-pressed", String(selected?.taskId === task.id));
+      if (list.children[index] !== button) { button.remove(); list.insertBefore(button, list.children[index] || null); }
+    });
+    const empty = document.getElementById("app-rail-recent-empty");
+    if (empty) empty.hidden = rows.length > 0;
+    if (held && document.activeElement !== held) {
+      if (list.contains(held)) focusRailButton(held);
+      else document.querySelector('#app-rail .app-rail-head[data-section="work"]')?.focus?.();
+    }
+  }
+
   function railSection(dest) {
     if (!dest) return null;
     if (ownKey(RAIL_SLOTS, dest.id)) return RAIL_SLOTS[dest.id];
+    if (["studio", "palette", "help", "onboarding"].includes(dest.id)) return "foot";
     if (dest.kind === "action") return null;
-    const section = sectionOf(dest);
-    if (section === "help") return "foot";
-    return RAIL_SECTIONS.some((item) => item.id === section) ? section : null;
+    return RAIL_SECTIONS.some((item) => item.id === sectionOf(dest)) ? sectionOf(dest) : null;
   }
 
   function renderRail() {
     const sections = document.getElementById("app-rail-sections");
     const foot = document.getElementById("app-rail-foot");
     if (!sections || !foot) return;
-    // Markup the template keeps in the foot (the update pill's badge) is not
-    // the registry's to redraw: it survives, after the foot's own buttons.
-    const kept = Array.from(foot.children ?? []).filter((child) => !child.classList?.contains?.("app-rail-foot-item"));
+    const helpWasOpen = document.getElementById("app-help-menu")?.hidden === false;
+    const kept = Array.from(foot.children ?? []).filter((child) => !child.classList?.contains?.("app-rail-foot-item") && child.id !== "app-help-menu");
     sections.textContent = "";
     foot.textContent = "";
-    const members = new Map(RAIL_SECTIONS.map((section) => [section.id, []]));
-    for (const dest of registry) {
-      const home = railSection(dest);
-      if (home === "foot") foot.append(navButton(dest, "app-rail-item app-rail-foot-item"));
-      else if (home) members.get(home)?.push(dest);
-    }
-    if (kept.length) foot.append(...kept);
+    const compose = document.createElement("button"); compose.type = "button";
+    compose.id = "app-rail-compose"; compose.className = "app-rail-item app-rail-compose";
+    compose.title = "New task"; compose.setAttribute("aria-label", "New task");
+    compose.append(glyphNode("g-add"));
+    const composeLabel = document.createElement("span"); composeLabel.className = "label"; composeLabel.textContent = "New task"; compose.append(composeLabel);
+    compose.addEventListener("click", () => window.MefiWorkspace?.composeTask?.());
+    const search = navButton(get("palette"), "app-rail-item app-rail-search");
+    sections.append(compose, search);
     for (const section of RAIL_SECTIONS) {
       const target = get(section.target);
-      if (!target) continue;
       const group = document.createElement("div");
       group.className = "app-rail-section";
       group.dataset.section = section.id;
-      group.setAttribute("role", "group");
-      group.setAttribute("aria-label", section.label);
-      // The section button goes straight to its main destination, so even the
-      // collapsed rail is five working buttons rather than five labels.
-      const head = document.createElement("button");
-      head.type = "button";
-      head.className = "app-rail-head";
-      head.dataset.nav = target.id;
+      const head = navButton(target, "app-rail-head", { key: false });
       head.dataset.section = section.id;
-      const name = section.label === target.label ? target.label : `${section.label} · ${target.label}`;
-      head.title = target.key ? `${name} (${target.key})` : name;
-      if (target.glyph) head.append(glyphNode(target.glyph));
-      const label = document.createElement("span");
+      head.setAttribute("aria-label", section.label);
+      head.title = section.label;
+      const label = head.querySelector(".label");
       label.className = "app-rail-text";
       label.textContent = section.label;
-      head.append(label);
-      for (const badge of badgeNodes(target)) head.append(badge);
       group.append(head);
-      const items = members.get(section.id) ?? [];
-      // A section whose only member is its own head (Home) lists nothing twice.
-      if (!(items.length === 1 && items[0].id === target.id)) {
-        const children = document.createElement("div");
-        children.className = "app-rail-children";
-        for (const dest of items) children.append(navButton(dest, "app-rail-item"));
-        group.append(children);
-      }
       sections.append(group);
     }
+    const recent = document.createElement("div"); recent.className = "app-rail-recent app-rail-children";
+    recent.setAttribute("role", "group"); recent.setAttribute("aria-label", "Recent tasks");
+    const recentHeading = document.createElement("span"); recentHeading.className = "app-rail-heading"; recentHeading.textContent = "Recent tasks";
+    const recentList = document.createElement("div"); recentList.id = "app-rail-recent-list";
+    const recentEmpty = document.createElement("span"); recentEmpty.id = "app-rail-recent-empty"; recentEmpty.textContent = "Your tasks will appear here";
+    recent.append(recentHeading, recentList, recentEmpty); sections.append(recent);
+    foot.append(navButton(get("studio"), "app-rail-item app-rail-foot-item"));
+    const help = document.createElement("button");
+    help.id = "app-help-toggle";
+    help.className = "app-rail-item app-rail-foot-item";
+    help.type = "button";
+    help.title = "Help";
+    help.setAttribute("aria-label", "Help");
+    help.setAttribute("aria-expanded", String(helpWasOpen));
+    help.setAttribute("aria-controls", "app-help-menu");
+    help.append(glyphNode("g-help"));
+    const label = document.createElement("span");
+    label.className = "label";
+    label.textContent = "Help";
+    help.append(label);
+    const menu = document.createElement("div");
+    menu.id = "app-help-menu";
+    menu.hidden = !helpWasOpen;
+    menu.setAttribute("role", "group");
+    menu.setAttribute("aria-label", "Help");
+    for (const id of ["onboarding", "help", "community"]) {
+      const dest = get(id);
+      if (dest) menu.append(navButton(dest, "app-rail-item", { key: false }));
+    }
+    help.addEventListener("click", () => {
+      menu.hidden = !menu.hidden;
+      help.setAttribute("aria-expanded", String(!menu.hidden));
+      if (!menu.hidden) menu.querySelector("button")?.focus?.();
+    });
+    foot.append(help, menu, ...kept);
     paintBadges(document.getElementById("app-rail"));
     paintRail();
   }
 
-  // One aria-current in the rail: on the destination you are in, or on its
-  // section head when that section lists nothing beneath it.
+  function closeHelpMenu(restoreFocus = false) {
+    const menu = document.getElementById("app-help-menu");
+    if (!menu || menu.hidden) return false;
+    const focusHeld = menu.contains?.(document.activeElement);
+    menu.hidden = true;
+    const toggle = document.getElementById("app-help-toggle");
+    toggle?.setAttribute("aria-expanded", "false");
+    if (restoreFocus || focusHeld) toggle?.focus?.();
+    return true;
+  }
+
+  function paintLocalNav(section, id) {
+    let nav = document.getElementById("app-local-nav");
+    if (!nav) {
+      nav = document.createElement("nav");
+      nav.id = "app-local-nav";
+      document.body.append(nav);
+      nav.addEventListener("keydown", (event) => {
+        if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key) || event.altKey || event.ctrlKey || event.metaKey) return;
+        const parentRow = event.target?.closest?.(".agents-nav-sections");
+        const buttons = Array.from(parentRow ? parentRow.querySelectorAll("[data-agent-section]") : nav.querySelectorAll("button")).filter((button) => !button.closest?.("[hidden]"));
+        const at = buttons.indexOf(event.target?.closest?.("button"));
+        const index = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (at + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
+        event.preventDefault(); event.stopPropagation();
+        buttons[index]?.focus?.();
+      });
+    }
+    const routes = LOCAL_ROUTES[section];
+    nav.hidden = !routes || document.documentElement.dataset.shell !== "rail";
+    document.body.dataset.navSection = section || "home";
+    if (!routes) return;
+    nav.setAttribute("aria-label", `${SECTIONS.get(section)} views`);
+    if (nav.dataset.section !== section) {
+      nav.dataset.section = section;
+      nav.textContent = "";
+      if (section !== "agents" || !window.MefiAgents?.paintNav) for (const route of routes) nav.append(navButton(get(route), "app-local-link", { key: false }));
+    }
+    if (section === "agents") window.MefiAgents?.paintNav?.(nav, id);
+    paintHistory(nav);
+    for (const button of nav.querySelectorAll("button[data-nav]")) {
+      if (button.dataset.nav === id) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
+    }
+    paintBadges(nav);
+    paintTaskContext();
+  }
+
   function paintRail() {
     const rail = document.getElementById("app-rail");
     if (!rail || rail.hidden) return;
     const id = current();
-    const section = railSection(get(id));
+    const section = sectionOf(get(id));
     for (const group of rail.querySelectorAll(".app-rail-section")) group.classList.toggle("current", group.dataset.section === section);
-    let marked = false;
-    for (const button of rail.querySelectorAll(".app-rail-item[data-nav]")) {
-      if (button.dataset.nav === id && !marked) { button.setAttribute("aria-current", "page"); marked = true; }
+    for (const button of rail.querySelectorAll(".app-rail-head, .app-rail-foot-item[data-nav]")) {
+      const selected = button.classList.contains("app-rail-head") ? button.dataset.section === section : button.dataset.nav === id;
+      if (selected) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
     }
-    for (const head of rail.querySelectorAll(".app-rail-head")) {
-      if (!marked && head.dataset.nav === id) { head.setAttribute("aria-current", "page"); marked = true; }
-      else head.removeAttribute("aria-current");
-    }
+    paintLocalNav(section, id);
+    paintRecentTasks();
     if (!rail.contains?.(document.activeElement)) setRailStop(rail, restingStop(rail));
   }
 
   // The rail is one tab stop, like the old tabs row: the roving tabindex rests
   // where you are while focus is elsewhere, and follows the arrows once inside.
-  // At rest it must sit on a button the collapsed rail still shows, so an
+  // A pinned rail rests on the current destination. When it collapses, an
   // item folded under its section hands the stop to that section's head.
   function restingStop(rail) {
     const here = rail.querySelector('[aria-current="page"]');
-    if (here && !here.closest?.(".app-rail-children")) return here;
+    if (here && ("railPinned" in document.documentElement.dataset || !here.closest?.(".app-rail-children"))) return here;
     return rail.querySelector(".app-rail-section.current .app-rail-head") ?? rail.querySelector(".app-rail-head") ?? rail.querySelector("button");
   }
 
@@ -1228,6 +1593,7 @@
     const changed = pinned !== ("railPinned" in root.dataset);
     if (pinned) root.dataset.railPinned = "";
     else delete root.dataset.railPinned;
+    if (changed) paintRail();
     if (changed || force) window.dispatchEvent(new Event("resize"));
   }
 
@@ -1238,8 +1604,10 @@
     if (on) root.dataset.shell = "rail";
     else delete root.dataset.shell;
     rail.hidden = !on;
-    let pinned = false;
-    try { pinned = localStorage.getItem(RAIL_PIN_KEY) === "1"; } catch { /* unpinned */ }
+    const local = document.getElementById("app-local-nav");
+    if (local) local.hidden = !on;
+    let pinned = true;
+    try { pinned = localStorage.getItem(RAIL_PIN_KEY) !== "0"; } catch { /* use the wide-window default */ }
     setRailPinned(on && pinned, { save: false });
     if (on) renderRail();
     window.dispatchEvent(new CustomEvent("mefi:shell", { detail: { rail: on } }));
@@ -1266,6 +1634,10 @@
     });
     document.getElementById("app-rail-pin")?.addEventListener("click", () => {
       setRailPinned(!railPinWanted);
+      if (!railPinFits()) {
+        if (railPinWanted) document.documentElement.dataset.railDrawer = "";
+        else delete document.documentElement.dataset.railDrawer;
+      }
       if (railPinWanted && !railPinFits()) {
         window.MefiToast?.(`The menu stays open in windows ${RAIL_PIN_MIN_WIDTH}px wide or more; narrower, it opens over the page.`, "info");
       }
@@ -1401,8 +1773,7 @@
   // under Help.
   const HELP_SECTIONS = [
     ["Home & Work", ["home", "work"]],
-    ["Live", ["live"]],
-    ["Models", ["models"]],
+    ["Agents", ["agents"]],
     ["Settings", ["settings"]],
     ["Help", ["help", "community"]],
     ["Command view", ["command"]],
@@ -1544,6 +1915,7 @@
   // ---- input -------------------------------------------------------------
 
   document.addEventListener("click", (event) => {
+    if (!event.target?.closest?.("#app-help-menu, #app-help-toggle")) closeHelpMenu();
     for (const menu of document.querySelectorAll(".studio-more[open], .cmd-more-tools[open]")) {
       if (!menu.contains(event.target)) menu.open = false;
     }
@@ -1563,7 +1935,14 @@
         params = {};
       }
     }
-    go(button.dataset.nav, params);
+    if (button.classList.contains("app-rail-head")) {
+      const section = button.dataset.section;
+      const fallback = section === "agents" ? "command" : button.dataset.nav;
+      const target = sectionOf(get(current())) === section
+        ? { id: fallback, params: {} }
+        : lastSectionRoute(section, fallback);
+      go(target.id, target.params);
+    } else go(button.dataset.nav, params);
     const menu = button.closest("details");
     if (menu && menu.id !== "workspace-tools") menu.removeAttribute("open");
   });
@@ -1599,6 +1978,13 @@
   }
 
   function handleKey(event) {
+    if (event.defaultPrevented || window.MefiCompanionHub?.isOpen()) return;
+    if (event.key === "Escape" && closeHelpMenu(true)) { event.preventDefault(); return; }
+    if (event.key === "Escape" && "railDrawer" in (document.documentElement?.dataset ?? {}) && !state.transient) {
+      delete document.documentElement.dataset.railDrawer;
+      document.getElementById("app-rail-pin")?.focus?.();
+      event.preventDefault(); return;
+    }
     if (event.key === "Escape" && !state.transient && window.MefiSidebar?.isOpen?.()) {
       event.preventDefault();
       window.MefiSidebar.close({ restoreFocus: true });
@@ -1606,7 +1992,7 @@
     }
     // Command's own More tools menu is the fallback only while Command is on
     // top; a sheet above it must not have Esc (and focus) pulled out from under it.
-    const more = document.activeElement?.closest?.(".studio-more[open], .cmd-more-tools[open]") ?? (top() === "command" ? document.getElementById("cmd-more-tools") : null);
+    const more = document.activeElement?.closest?.(".studio-more[open], .cmd-more-tools[open], .surface-tools[open]") ?? Array.from(document.querySelectorAll?.(".surface-tools[open]") ?? []).find(visibleNavTarget) ?? (top() === "command" ? document.getElementById("cmd-more-tools") : null);
     if (event.key === "Escape" && more?.open) {
       event.preventDefault();
       more.open = false;
@@ -1645,6 +2031,7 @@
     }
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     if (event.key === "Escape") {
+      if (!state.transient && window.MefiCompanionHub?.open()) { event.preventDefault(); return; }
       closeTop();
       return;
     }
@@ -1674,9 +2061,11 @@
   // or the active tab. The sidebar paints it as aria-current on its own entry.
   function current() {
     if (state.sheet) return state.sheet;
+    if (window.MefiMusic?.settingsAppearanceActive?.()) return "studio";
     if (idleActive()) return "command";
     if (window.MefiWorkspace?.isActive?.()) return "workspace";
-    return document.querySelector?.(".tab.active")?.dataset?.tab ?? null;
+    const tab = document.querySelector?.(".tab.active")?.dataset?.tab ?? null;
+    return tab === "graph" ? modelRoute : tab;
   }
 
   function paintCurrent() {
@@ -1689,6 +2078,12 @@
   }
 
   window.addEventListener("mefi:nav", paintCurrent);
+  window.addEventListener("mefi:model-view", (event) => {
+    const view = event.detail?.view;
+    if (["usage", "tracker"].includes(view)) usageView = view;
+    modelRoute = view === "context" ? "context" : ["usage", "tracker"].includes(view) ? "usage" : "graph";
+    if (tabOpen("graph")) { paintRail(); paintPage({ id: modelRoute, action: "open" }); }
+  });
 
   // ---- page header -------------------------------------------------------
   // The tab pages share one header. It names the page you are on and, when
@@ -1903,8 +2298,19 @@
     }
   }
 
+  const updateToastSignatures = new Map();
+
   function updateToast(payload) {
     const phase = payload?.phase;
+    // A deferred restart retries every few seconds and replays the same
+    // detected/waiting/pending events. Keep the status live, but announce
+    // each unchanged phase only once until the update is applied or cleared.
+    if (["watching", "reloaded", "restarted", "styled", "swapped", "stopped"].includes(phase)) updateToastSignatures.clear();
+    if (["detected", "pending", "waiting", "held", "error"].includes(phase)) {
+      const signature = JSON.stringify([payload.kind, [...(payload.files ?? [])].sort(), payload.reason, payload.error]);
+      if (updateToastSignatures.get(phase) === signature) return;
+      updateToastSignatures.set(phase, signature);
+    }
     const count = Array.isArray(payload?.files) ? payload.files.length : 0;
     if (phase === "detected") {
       const kind = payload.kind;
@@ -2360,6 +2766,14 @@
     paintBadges();
     refreshBadges();
     window.mefiStudio?.onTasks?.((tasks) => setBadge("tasks", openTasks(tasks)));
+    window.mefiStudio?.onProjects?.((payload) => {
+      if (!payload?.activeId || payload.activeId === taskProjectId) return;
+      taskProjectId = payload.activeId;
+      window.dispatchEvent(new CustomEvent("mefi:task-context", { detail: taskContext() || { projectId: taskProjectId, taskId: null } }));
+      paintTaskContext();
+      paintRecentTasks();
+    });
+    window.addEventListener("mefi:task-context", paintRecentTasks);
     window.mefiStudio?.onIdeas?.((ideas) => setBadge("ideas", unreadIdeas(ideas)));
     window.mefiStudio?.onMachineStatus?.((status) => setBadge("machine", machineLevel(status)));
     window.mefiStudio?.onAssistant?.((payload) => {
@@ -2430,6 +2844,10 @@
     get,
     list,
     go,
+    back, forward, historyState, note: rememberRoute,
+    taskContext,
+    selectTask,
+    setRecentTasks,
     toggle,
     close,
     leaveCommand,
@@ -2446,6 +2864,8 @@
     renderTools,
     renderWorkspaceTools,
     renderRail,
+    paintLocalNav,
+    LOCAL_ROUTES,
     paintRail,
     railSection,
     sectionLabel,

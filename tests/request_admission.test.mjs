@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import { baselineCompareWork } from "../scripts/policy.mjs";
 import boardGrowth from "../scripts/board-growth.cjs";
 import chatWork from "../scripts/chat-work.cjs";
+import workAdmission from "../scripts/work-admission.cjs";
 import * as assistant from "../scripts/assistant.mjs";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
@@ -20,7 +21,7 @@ function host({ requests = [], tasks = [] } = {}) {
   const accepted = [];
   let serial = 0;
   const context = vm.createContext({
-    boardGrowth, chatWork,
+    boardGrowth, chatWork, workAdmission,
     Date, crypto: { randomBytes: () => ({ toString: () => String(++serial) }) },
     projects: { current: () => ({ id: "fixture" }), stamp: (row) => row }, projectRoot: () => "/fixture",
     workTitleKey: assistant.compactKey,
@@ -106,8 +107,9 @@ test("promotion does not reopen completed, held, grouped or reviewing inbox work
   const { context, board } = host({ requests });
   assert.equal(await context.promoteRequestsToTasks(), 1);
   assert.deepEqual(copy(board.tasks.map((task) => task.title)), ["Ready"]);
-  // Only the promoted row changes, and only by naming the card it became.
-  assert.deepEqual(copy(board.requests), requests.map((request) => request.title === "Ready" ? { ...request, promotedTo: board.tasks[0].id } : request));
+  // Deliberately changed: the promoted row is stamped with its card (and
+  // never promoted again); every held row is untouched.
+  assert.deepEqual(copy(board.requests), requests.map((row) => row.title === "Ready" ? { ...row, promotedTo: board.tasks[0].id } : row));
 });
 
 test("a promoted request is linked to its card, whatever its title key", async () => {
@@ -154,8 +156,9 @@ test("chat request routing preserves the complete user instruction before task a
     assistantMessageFacts: async () => ({}), assistantThink: () => {}, assistantClip: (value, max) => String(value).slice(0, max),
     assistantFocusSubject: () => null, assistantAskForWork: () => {}, assistantAiUsable: () => false,
     assistantAppendReply: (text) => ({ role: "assistant", text }), saveAssistant: async () => {},
+    assistantGatherTaskReferences: () => null, setTimeout, clearTimeout, logError: (text) => { throw new Error(text); },
   });
-  vm.runInContext(section("async function assistantRespond(", "// A message is appended and pushed"), context);
+  vm.runInContext(section("// ---- the overseer's hands", "// A message is appended and pushed"), context);
   const reply = await context.assistantRespond({ text, id: "fixture-message" });
   assert.equal(board.tasks.length, 1, reply.text);
   assert.equal(board.tasks[0].prompt, text);

@@ -9,6 +9,7 @@ import * as eyes from "../scripts/eyes.mjs";
 import * as assistant from "../scripts/assistant.mjs";
 import backlog from "../scripts/backlog.cjs";
 import executorResume from "../scripts/executor-resume.cjs";
+import executorCore from "../scripts/executor-core.cjs";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
 const section = (start, end) => {
@@ -40,11 +41,12 @@ test("worker-only config disables snapshots while preserving provider, permissio
 test("every OpenCode route, including Grok fallback, receives snapshot-free worker config", async () => {
   let settings = { aiProvider: "opencode" };
   const env = vm.createContext({
-    process: { env: {} }, AI_PROVIDERS: ["auto", "opencode", "zai"], AI_AUTO_PROVIDERS: ["zai", "opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"], ZAI_MODEL_ROUTINE: "fixture", ZAI_MODEL_HEAVY: "fixture-heavy",
+    process: { env: {} }, AI_PROVIDERS: ["auto", "opencode", "zai"], AI_AUTO_PROVIDERS: ["zai", "opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"], ZAI_MODEL_ROUTINE: "fixture", ZAI_MODEL_HEAVY: "fixture-heavy", ASSISTANT_MODEL: "fixture-go",
     readSettings: async () => settings, zaiOpencodeEnv: async () => ({ OPENCODE_CONFIG_CONTENT: '{"provider":{"fixture":{}}}', FIXTURE_KEY: "value" }),
+    opencodeGoLogin: async () => true,
     grokCliAvailable: async () => true, claudeCliAvailable: async () => true, codexCliAvailable: async () => true, antigravityCliAvailable: async () => true, logLine() {}, pushAutopilotHistory() {},
   });
-  vm.runInContext(section("function executorModelOverride(", "// Auto setup:") + section("function executorOpencodeEnv(", "// Which route an autopilot") + section("async function executorRunEnv()", "async function assistantFetch("), env);
+  vm.runInContext(section("function executorModelOverride(", "// Auto setup:") + section("function executorOpencodeEnv(", "// Which route an autopilot") + section("async function executorRunEnv(", "async function assistantFetch("), env);
   for (const value of [{ aiProvider: "opencode" }, { aiProvider: "zai" }, { aiProvider: "auto", executorCli: "grok" }, { aiProvider: "auto", executorCli: "claude" }, { aiProvider: "auto", executorCli: "codex" }, { aiProvider: "auto", executorCli: "antigravity" }]) {
     settings = value;
     const route = await env.executorRunEnv();
@@ -54,19 +56,31 @@ test("every OpenCode route, including Grok fallback, receives snapshot-free work
 
 test("the auto order decides which account the opencode builder runner uses", async () => {
   let settings = { aiProvider: "auto", aiAutoProviders: ["zai", "opencode"] };
+  let goLogin = true;
   const env = vm.createContext({
-    process: { env: {} }, AI_PROVIDERS: ["auto", "opencode", "zai"], AI_AUTO_PROVIDERS: ["zai", "opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"], ZAI_MODEL_ROUTINE: "fixture", ZAI_MODEL_HEAVY: "fixture-heavy",
+    process: { env: {} }, AI_PROVIDERS: ["auto", "opencode", "zai"], AI_AUTO_PROVIDERS: ["zai", "opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"], ZAI_MODEL_ROUTINE: "fixture", ZAI_MODEL_HEAVY: "fixture-heavy", ASSISTANT_MODEL: "fixture-go",
     readSettings: async () => settings, zaiOpencodeEnv: async () => ({ OPENCODE_CONFIG_CONTENT: '{"provider":{"fixture":{}}}', FIXTURE_KEY: "value" }),
+    opencodeGoLogin: async () => goLogin,
     grokCliAvailable: async () => true, claudeCliAvailable: async () => true, codexCliAvailable: async () => true, antigravityCliAvailable: async () => true, logLine() {}, pushAutopilotHistory() {},
   });
-  vm.runInContext(section("function executorModelOverride(", "// Auto setup:") + section("function executorOpencodeEnv(", "// Which route an autopilot") + section("async function executorRunEnv()", "async function assistantFetch("), env);
+  vm.runInContext(section("function executorModelOverride(", "// Auto setup:") + section("function executorOpencodeEnv(", "// Which route an autopilot") + section("async function executorRunEnv(", "async function assistantFetch("), env);
   let route = await env.executorRunEnv();
   assert.equal(route.modelProvider, "zai");
   assert.match(route.modelArgs, /--model mefi-zai\/fixture/, "z.ai listed first rides the coding plan");
   settings = { aiProvider: "auto", aiAutoProviders: ["opencode", "zai"] };
   route = await env.executorRunEnv();
+  // OpenCode Go listed first keeps builders on OpenCode's account, where the
+  // Go default is routed per task like the z.ai pair.
+  assert.equal(route.modelProvider, "opencode");
+  assert.equal(route.modelArgs, " --model opencode-go/fixture-go", "OpenCode listed first keeps builders on OpenCode's account");
+  assert.equal(JSON.parse(route.env.OPENCODE_CONFIG_CONTENT).provider?.fixture, undefined, "and never on the z.ai provider");
+  // Go only once OpenCode is known to hold a Go login: an unknown login with
+  // no first scan is not linked, and the OpenCode default runs.
+  goLogin = null;
+  route = await env.executorRunEnv();
   assert.equal(route.modelProvider, undefined);
-  assert.equal(route.modelArgs, "", "OpenCode listed first keeps builders on OpenCode's account");
+  assert.equal(route.modelArgs, "", "an unconfirmed Go login keeps the OpenCode default");
+  goLogin = true;
   settings = { aiProvider: "auto", aiAutoProviders: ["grok"] };
   route = await env.executorRunEnv();
   assert.equal(route.modelArgs, "", "an order without a keyed runner keeps the OpenCode default");
@@ -107,7 +121,7 @@ test("real selection, file claims and fill loop run independent tasks together b
   const launched = [];
   const autopilot = { execute: true, parallel: 2, jobs: [] };
   const env = vm.createContext({
-    Date, console, path, process: { pid: 321 }, backlog, executorResume, assistantModule: assistant, getAssistant: async () => assistant, assistantCache: { store: {} }, autopilot, autopilotJobSeq: 0,
+    Date, console, path, process: { pid: 321 }, backlog, executorResume, executorCore, assistantModule: assistant, getAssistant: async () => assistant, assistantCache: { store: {} }, autopilot, autopilotJobSeq: 0,
     projectSwitching: false, assistantState: { status: "running" }, SMOKE: false, CAPTURE: false, CLI_MODE: false, executorUpdateHold: () => null,
     projects: { current: () => ({ id: "fixture", path: "C:/fixture" }), open: () => ({ id: "fixture", path: "C:/fixture" }) }, projectRoot: () => "C:/fixture",
     measureWorkerLag: async () => 0, getAssistant: async () => assistant, machineLagGate: null,
@@ -120,10 +134,12 @@ test("real selection, file claims and fill loop run independent tasks together b
     logLine() {}, setAutopilotWaiting: (reason) => { autopilot.waiting = reason; }, pushAutopilotHistory() {}, readSettings: async () => ({}), machineMemoryWarnOverride: () => false,
     EXECUTOR_STAGGER_MS: 3000, setTimeout: (fn) => { queueMicrotask(fn); return { unref() {} }; },
     fakeSpawn: (entry) => { launched.push(entry.taskId); return "spawned"; },
+    // Per-task model routing has its own suite (jev_model_routing_host); this route names no routed provider.
+    routeBuilderModel: async () => null,
   });
   // Keep the real pre-spawn selection and atomic claim boundary. Replace only
   // the process-launch/output half: the held jobs are deliberately unfinished.
-  const pick = section("async function spawnNextJob()", "  // Policy Lab PR1 — the attempt's identity:") + "return fakeSpawn(entry);\n}";
+  const pick = section("async function spawnNextJob(", "  // Policy Lab PR1 — the attempt's identity:") + "return fakeSpawn(entry);\n}";
   vm.runInContext(pick + section("let executorFillInFlight = null;", "// Work the assistant does on its own plumbing"), env);
   await env.executeNextRequest();
   assert.deepEqual(launched, ["a", "b"]);

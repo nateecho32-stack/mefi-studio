@@ -315,7 +315,11 @@ test("every classified log literal still exists in the code that writes it", asy
   // pin makes the rewording and the classifier change land together.
   const source = async (file) => (await readFile(new URL(`../${file}`, import.meta.url), "utf8")).replace(/\r\n/g, "\n");
   const main = await source("main.cjs");
-  for (const literal of ["unverified — ${", "reopened — overseer check failed — ${", "autopilot run failed (exit ${", "run finished"]) assert.ok(main.includes(literal), `main.cjs no longer writes ${literal}`);
+  // A finished attempt's lines are written by its settle, which lives in the
+  // pure executor core since spawnNextJob was split (settleAttemptRow).
+  const core = await source("scripts/executor-core.cjs");
+  for (const literal of ["unverified — ${", "reopened — overseer check failed — ${"]) assert.ok(main.includes(literal), `main.cjs no longer writes ${literal}`);
+  for (const literal of ["autopilot run failed (exit ${", "run finished"]) assert.ok(core.includes(literal), `executor-core.cjs no longer writes ${literal}`);
   // The overseer's failing command rides on both verify notes; the reason key
   // strips it by this shape: " (<command> failed[ — timed out][: <tail>])".
   for (const literal of ["${overseerMiss(doneRun)}${outcome(verdict)}", "${overseerMiss(overseerRunFor(task, attempt))}${outcome(verdict)}", '` (${bad.command} failed${bad.timedOut ? " — timed out" : ""}${bad.tail ? `: ${']) {
@@ -324,5 +328,6 @@ test("every classified log literal still exists in the code that writes it", asy
   assert.ok((await source("scripts/executor-resume.cjs")).includes("Studio resumed interrupted work"), "executor-resume.cjs no longer writes its resume line");
   assert.ok((await source("scripts/assistant.mjs")).includes('"autopilot run lost — reopened"'), "housekeepingSweep no longer writes its lost-run line");
   // The lines the classifier ignores must be the ones the host writes too.
-  for (const literal of ["worker never started — ${", "stopped on request (${", "verified — ${"]) assert.ok(main.includes(literal), `main.cjs no longer writes ${literal}`);
+  assert.ok(main.includes("verified — ${"), "main.cjs no longer writes verified — ${");
+  for (const literal of ["worker never started — ${", "stopped on request (${"]) assert.ok(core.includes(literal), `executor-core.cjs no longer writes ${literal}`);
 });

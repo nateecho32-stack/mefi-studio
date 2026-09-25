@@ -320,3 +320,92 @@ test("custom candidates, weights and quality source do not reuse incompatible ca
   assert.equal(selected.models[0].evidence, "unobserved");
   assert.deepEqual(await store.snapshot(), normal);
 });
+
+test("runner verdicts settle worker attempts into wins, losses and a win probability", async (t) => {
+  const { filePath, store } = await fixture(t);
+  const attempt = (id, extra = {}) => observation(id, { source: "worker", taskType: "implement-compound", ...extra });
+  for (const id of ["a1", "a2", "a3", "a4", "a5"]) await store.record(attempt(id));
+  await store.record(attempt("docs", { taskType: "docs" }));
+  await store.record(observation("chat", { taskType: "conversation" }));
+  const first = await store.settle({ observationId: "a1", outcome: "verified", at: 500 });
+  assert.deepEqual([first.ok, first.changed, first.previous, first.observation.outcome, first.observation.settledAt], [true, true, null, "verified", 500]);
+  await store.settle({ observationId: "a2", outcome: "verified" });
+  await store.settle({ observationId: "a3", outcome: "failed" });
+  await store.settle({ observationId: "a4", outcome: "reported" });
+  await store.settle({ observationId: "docs", outcome: "verified" });
+  const pick = (row) => ({ wins: row.wins, losses: row.losses, unsettled: row.unsettled, winRate: row.winRate, winProbability: row.winProbability });
+  const model = (await store.snapshot()).models[0];
+  // A worker's own "reported done" (a4) and an unjudged attempt (a5) stay unsettled; the chat call is no attempt at all.
+  assert.deepEqual(pick(model), { wins: 3, losses: 1, unsettled: 2, winRate: 0.75, winProbability: 4 / 6 });
+  assert.deepEqual(pick(model.taskStrengths.find((row) => row.taskType === "implement-compound")), { wins: 2, losses: 1, unsettled: 2, winRate: 2 / 3, winProbability: 3 / 5 });
+  assert.deepEqual(pick(model.taskStrengths.find((row) => row.taskType === "conversation")), { wins: 0, losses: 0, unsettled: 0, winRate: null, winProbability: 0.5 });
+  assert.equal(model.samples, 7, "settling never changes the measured call counts");
+  const reopened = await createModelPerformanceStore({ filePath }).snapshot();
+  assert.equal(reopened.models[0].wins, 3);
+  assert.equal(reopened.lifetime.calls, 7);
+  const saved = JSON.parse(await readFile(filePath, "utf8")).observations;
+  assert.equal(saved.find((row) => row.id === "a4").outcome, "unverified");
+  assert.equal("outcome" in saved.find((row) => row.id === "chat"), false, "unsettled rows carry no verdict fields");
+});
+
+test("settling is idempotent, replaceable by a later verdict, and closed for unknown ids", async (t) => {
+  const { filePath, store } = await fixture(t, { now: () => 700 });
+  await store.record(observation("attempt", { source: "worker" }));
+  const first = await store.settle({ observationId: "attempt", outcome: "failed" });
+  assert.deepEqual([first.ok, first.changed, first.observation.settledAt], [true, true, 700]);
+  const bytes = await readFile(filePath, "utf8");
+  const again = await store.settle({ observationId: "attempt", outcome: "failed", at: 900 });
+  assert.deepEqual([again.ok, again.changed], [true, false]);
+  assert.equal(await readFile(filePath, "utf8"), bytes, "an unchanged verdict never rewrites the ledger");
+  const later = await store.settle({ observationId: "attempt", outcome: "verified", at: 900 });
+  assert.deepEqual([later.changed, later.previous, later.observation.settledAt], [true, "failed", 900]);
+  assert.equal((await store.record(observation("attempt", { source: "worker" }))).duplicate, true, "the same measurement after its verdict is still a duplicate");
+  assert.equal((await store.read()).observations[0].outcome, "verified");
+  await assert.rejects(store.record(observation("attempt", { source: "worker", elapsedMs: 5 })), /cannot be reused/);
+  assert.deepEqual(await store.settle({ observationId: "missing", outcome: "verified" }), { ok: false, reason: "unknown-observation" });
+  for (const outcome of ["won", null, undefined]) assert.deepEqual(await store.settle({ observationId: "attempt", outcome }), { ok: false, reason: "invalid-outcome" });
+  assert.deepEqual(await store.settle({ outcome: "verified" }), { ok: false, reason: "invalid-observation-id" });
+  const model = (await store.snapshot()).models[0];
+  assert.deepEqual([model.wins, model.losses, model.winRate], [1, 0, 1]);
+});
+
+test("transport rows are evicted first, so a flood of chat traffic never pushes a win/loss record out", async (t) => {
+  const { store } = await fixture(t, { maxRecords: 10, maxAttempts: 4 });
+  const attempt = (id) => observation(id, { source: "worker", taskType: "implement-compound" });
+  for (const id of ["w1", "w2", "w3"]) await store.record(attempt(id));
+  await store.settle({ observationId: "w1", outcome: "verified" });
+  await store.settle({ observationId: "w2", outcome: "failed" });
+  // A call the runner settled is an attempt too, whatever its source.
+  await store.record(observation("judged", { taskType: "implement-compound" }));
+  await store.settle({ observationId: "judged", outcome: "verified" });
+  for (let index = 0; index < 40; index++) await store.record(observation(`chat-${index}`, { taskType: "conversation" }));
+  const ids = async (attempts) => (await store.read()).observations.filter((row) => (row.source === "worker" || Boolean(row.outcome)) === attempts).map((row) => row.id);
+  assert.deepEqual(await ids(true), ["w1", "w2", "w3", "judged"]);
+  assert.deepEqual(await ids(false), Array.from({ length: 6 }, (_, index) => `chat-${34 + index}`), "the file cap still holds, paid by transport rows");
+  const view = await store.snapshot({ taskType: "implement-compound" });
+  assert.deepEqual([view.models[0].wins, view.models[0].losses, view.models[0].unsettled], [2, 1, 1]);
+  assert.equal(view.retention.dropped, 34);
+  assert.equal(view.lifetime.calls, 44);
+  assert.equal((await store.settle({ observationId: "w3", outcome: "verified" })).ok, true, "a pending attempt can still settle after the flood");
+  // Attempts only give way to newer attempts, past their own cap.
+  for (const id of ["w4", "w5"]) await store.record(attempt(id));
+  assert.deepEqual(await ids(true), ["w3", "judged", "w4", "w5"]);
+  assert.equal((await ids(false)).length, 6);
+});
+
+test("a verdict for an attempt retention already dropped is refused, not invented", async (t) => {
+  const { store } = await fixture(t, { maxRecords: 1 });
+  await store.record(observation("old", { source: "worker" }));
+  await store.record(observation("new", { source: "worker" }));
+  assert.deepEqual(await store.settle({ observationId: "old", outcome: "verified" }), { ok: false, reason: "unknown-observation" });
+  assert.equal((await store.snapshot()).lifetime.calls, 2);
+});
+
+test("observations keep a recorded verdict and the brains and analyzer sources", () => {
+  for (const source of ["brains", "analyzer", "worker", "probe"]) assert.equal(normalizeObservation(observation("x", { source })).source, source);
+  assert.equal(normalizeObservation(observation("x", { source: "invented" })).source, "request");
+  const settled = normalizeObservation(observation("y", { source: "worker", outcome: "verified" }));
+  assert.deepEqual([settled.outcome, settled.settledAt], ["verified", 100]);
+  assert.equal(normalizeObservation(observation("z", { outcome: "reported" })).outcome, "unverified", "self-reported done is never a win");
+  assert.equal("outcome" in normalizeObservation(observation("w", { outcome: "won" })), false);
+});

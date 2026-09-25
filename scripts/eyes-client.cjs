@@ -41,6 +41,7 @@ const EYES_WORKER_METHODS = Object.freeze([
   "listChanges",
   "listReads",
   "listSessionChecks",
+  "listSessionActiveTools",
   "listTodos",
   "activitySince",
   "collisions",

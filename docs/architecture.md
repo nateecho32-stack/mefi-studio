@@ -5,37 +5,77 @@ written in Studio's own vocabulary, so start with the glossary. For first
 steps read [GETTING_STARTED.md](../GETTING_STARTED.md); for the code-level
 walk through the agent loop read [agent-loop.md](agent-loop.md).
 
+The current navigation, configuration scope and companion behavior are described in [Unified Studio](unified-studio.md). Home, Work and Agents own the main workflow; agent setup is no longer spread across Settings, Command and Seats.
+
+Short dropdowns arrange their choices in two or three columns, with a check
+on the saved value and headings for option groups. Long labels and large
+lists use bounded rows with search. Arrow keys follow the tile layout;
+Home/End jump to the first/last enabled option, Enter selects, and Escape
+returns focus. Appearance uses small preset previews, theme swatches and
+compact node/effect grids, with a shorter header in narrow windows.
+Command's View and Ambience menus, Brain map actions and Tools menus group
+related actions side by side while keeping their labels and shortcuts.
+
+Studio's pages share a continuous, theme-coloured backdrop with translucent
+reading panels, two-colour gradients and distinct heading fonts. Home keeps
+its writing desk, Agents uses compact technical rows, and Settings uses grouped
+preference cards. Floating menus and sticky headers have a stronger glass tint
+to keep overlapping content readable. Focus, Studio and Atmosphere adjust the
+surface depth and corners; Glass and Glow remain independent controls.
+Panel edges catch a soft highlight above a diffuse shadow. Command's toolbar
+and side panel each use one frosted outer surface, with lighter inset work
+cards, a recessed tab strip and compact status tiles. Search and task entry
+share the toolbar glass; sticky section headings keep a denser reading surface.
+Turning blur off strengthens the tint, and the OS reduced-transparency preference
+uses solid surfaces. Custom palettes preserve their saved colours and exact canvas
+background while protecting contrast in reading areas and action buttons.
+
+Agents › Setup › Team & models uses short, theme-tinted rows with the role,
+model, grouped settings and provider icon alongside each other on desktop.
+The setup controls stay together in a bounded-width list. On narrow windows
+the controls wrap beneath the model. The model is on the
+left, effort and fast mode are on the right, and the corner provider icon
+opens all supported connections. Model menus include saved IDs and can fetch
+the provider's current roster; an explicit model ID remains available when a
+roster cannot be loaded. Coding workers have their own CLI and build tier.
+The left **+** adds installed local skills to that agent and exposes the Studio
+desk MCP tool for OpenCode and Claude Code workers. Text-only assistant seats
+do not execute MCP tools. Other MCP servers remain in the coding CLI's own
+configuration. Changes use the existing project/default scope and Apply flow.
+
 ## Glossary
 
 | Term | Meaning |
 | --- | --- |
-| **Menu** (the rail) | The navigation down the left edge: **Home**, **Work**, **Live**, **Models** and **Settings**, with **Search**, **Start here**, **Shortcuts** and **Community** at its foot. The code calls it the rail (`#app-rail`, `renderRail` in `renderer/nav.js`). **M+** at its top opens the project panel. |
-| **Workspace** | The home screen (`H`): project header, the "Studio at a glance" strip, the conversation with your companion, and **Your work**, as frosted glass over the live node tree. |
-| **Command view** | The 3D node tree (`D`): sessions, tasks and agents as orbs, with a panel on the right for Work, Agents, Assistant, Done and Ask. |
+| **Menu** (the rail) | New task and Search sit above four main destinations: **Home**, **Work**, **Live** and **Models**, with one local row for the current group's views. Recent tasks belong to the current project; Settings and Help stay at the foot. Help contains Start here, Shortcuts and Community. The project selector at the top opens the project panel. The registry in `renderer/nav.js` preserves existing shortcuts and destination IDs. |
+| **Workspace** | The home screen (`H`): current task, app preview and conversation. Project queue, Studio status and setup information expand when needed. |
+| **Command view** | The 3D node tree (`D`): sessions, tasks and agents as orbs, with a right panel for Work, Assistant, Runs and Ask, and agent settings in the top toolbar. |
 | **Booklet** | Historically the single-file model catalog; today `renderer/booklet.html` is the whole app bundled into one file by `npm run build-booklet`. The **Model catalog** tab (`1`) is the part that kept the name. |
-| **Model Lab** | Tab `2`: measured latency, throughput, cost and the usage tracker per project. |
+| **Model Lab** | The previous name for Models' **Performance**, **Usage** and **Context** views. Shortcut `2` opens Performance. Usage keeps recorded calls separate from provider account readings. Catalog insights contains published benchmark charts. |
 | **Activity & evidence** (A-Eyes) | Tab `3`: a read-only view of the OpenCode session store: change feed, diffs, screenshots with pins, log tail. The "eyes worker" is the thread that reads that store. |
-| **Settings** | Tab `4`, or `Ctrl ,` from anywhere: a **Find a setting** field over three groups of cards. **Connections**: Auto setup, Providers, Model routing, Coding workers and Jev. **Personal**: Your Studio and Community. **System**: Updates, Diagnostics, Integrations, Discord Server Styler and the Connection log. Two rows marked ↗ open another view: **Agents & queue** (Command's Agents panel) and **Style & sound**. `MefiNav.go("studio", { section: "settings-updates" })` opens one card. |
-| **Your Studio** | Settings › Your Studio: your name, the companion's name, a theme quick select, **Motion** (Full · Calm · Off), whether the companion moves, **Blur behind panels** and **Open Workspace on launch**. It took over the project panel's *Make yourself at home*, the page header's Motion switch and the Task board's blur switch. |
-| **Diagnostics** | Settings › Diagnostics: the speed probe, **Open profiler**, **Run auditor** and **Machine**. The auditor's findings and the machine readout open in the Explorer. |
+| **Settings** | `4` or `Ctrl ,`: seven single-pane categories, **General**, **Appearance**, **Connections**, **Models**, **Automation**, **Audio**, **System**. Search finds individual controls and opens their category and containing disclosures. `MefiNav.go("studio", { category: "automation" })` opens a category; legacy section links such as `settings-updates` still work. |
+| **Preferences** | General holds names and startup. Appearance holds themes, motion, blur, node styles and canvas effects; Audio links to the music dropdown and holds sound effects. Older Preferences and Your Studio links resolve to General. |
+| **Diagnostics** | Settings › System: speed probe, profiler, auditor, machine tools and connection log. Auditor and machine links reveal Sessions' Diagnostics panel. |
 | **Search Studio** | The palette (`Ctrl K`), once called Key commands. It finds any page, tool, Settings card, action, task, node or model by familiar terms, and groups its results by menu section. |
-| **`RAIL_SLOTS`** | The map in `renderer/nav.js` that gives the menu a place for a destination whose kind would keep it out; other actions stay in Search only. Its one entry, `community: "foot"`, puts **Community**, which `renderer/community.js` registers late, at the menu foot. |
-| **Task** | One unit of work on the project board, with a brief, acceptance checks, prerequisites, attempts and evidence. |
+| **Help** | The menu-foot popover containing onboarding, shortcuts and Community. These destinations are also available through Search; late-registered Community remains supported by the navigation registry. |
+| **Task** | One unit of work on the project board, with a brief, acceptance checks, prerequisites, attempts and evidence. New cards gather local references automatically when Automatic references is on; the configurable scout can use GPT-6 Luna on the fast tier to choose one verified starting file. |
 | **Idea** | A note in the feature-idea inbox; it becomes a task only when you or **Work through backlog** promote it. |
 | **Plan** | A structured route from an unclear idea to tasks: unknowns, decisions, a specification you approve, then tasks. |
 | **Session** | One coding-worker run recorded in the OpenCode store. Tasks map to sessions in **Overhead**. |
 | **Builder / coding worker** | The CLI that edits your files: `opencode` (preferred), `claude`, `codex`, `grok` or `agy`. |
-| **Agent roles** | The service loop's satellites: **watcher** (stale sessions), **machine** (CPU, memory, leases), **auditor** (findings), **keeper** (pruning), **thinker** (what next), **briefer** (summaries), **responder** (chat), **foreman** (hands out work), **compactor** (context), **overseer** (reviews the loop), **scout** (notices things for other roles). |
+| **Agent roles** | The service loop's satellites: **watcher** (stale sessions), **machine** (CPU, memory, leases), **auditor** (findings), **keeper** (pruning), **thinker** (what next), **briefer** (summaries), **responder** (chat), **foreman** (hands out work), **compactor** (context), **overseer** (reviews the loop), **scout** (finds task context). Agents share work state and messages in the Agents work hub. |
 | **Agent mail** | Notes the roles write to each other; shown on the assistant card under **Said to each other** and as packets on the tree. |
-| **Jev** | A third-party classifier model (TypeSafe's `jev-1.13`) Studio uses to pick a model per task and to classify intake. Optional; fixed defaults apply without it. |
+| **Decision model / Jev** | Agents › Setup › Connections configures Jev, a third-party classifier model (TypeSafe's `jev-1.13`). Routing and intake behavior live together in Agents › Setup. Optional; fixed defaults apply without it. |
 | **Autopilot / New work** | Autopilot lets the assistant start work on its own; **New work** is the master switch that holds every kind of new start while current workers finish. |
 | **Auto build / Verify first** | Auto build starts a task as soon as it is ready. Verify first holds it in **Review** until you press **Approve build**. |
 | **Swarm / Cluster** | Agent mode: Swarm spreads workers across the queue, Cluster keeps them on one goal at a time. |
 | **Awaiting verification** | A finished attempt whose completion is not yet established; housekeeping checks the evidence before it becomes **Done**. |
+| **Agent brain** | The Live view (`J`) that draws a task's **pipeline** from recorded **work events**: the head (the companion), the lead, the steps and the sub-agents; plus the **Playbook** of recipes and **project map** under Agents › Workflows. The seats live under Agents › Setup. See [roadmap-0.4.0.md](roadmap-0.4.0.md) and [agent-loop.md §13](agent-loop.md#13-the-agent-brain). |
+| **Companion** | The roaming character (named under General): click it to ask questions, create tasks, navigate, see the team and its messages, change settings, or handle its needs-you queue. It also gives a welcome-back digest and covers this project or all of them. Its default model is GPT-6 Luna on Zen at medium reasoning and fast service when Zen is connected. |
 | **Orb, callout, absorb** | Command-view vocabulary: an orb is a node, a callout is its floating card, and absorb is a finished node collapsing into its host. |
 | **Ruins Runner** | The author's LÖVE game, an optional external project Studio can launch. A fresh clone works without it. |
 | **Discord Server Styler** | An optional separate bot and local dashboard. Settings can start it, open its dashboard or folder, show its status and stop a process Studio started. |
-| **Void collection** | The members' perk: four themes (Void, Eclipse, Abyss, Neon Dusk) and three node styles (Singularity, Prism, Sigil) that unlock for members of the Void Engine Discord. They are picked in Style & sound, the themes also in Your Studio's theme select, and Settings › Community shows them all. A locked one explains itself where you clicked it. Everything else stays free. |
+| **Void collection** | Four themes (Void, Eclipse, Abyss, Neon Dusk) and three node styles (Singularity, Prism, Sigil). Anyone can preview them in Settings › Appearance. A preview resets when the canvas preview closes or you leave Settings; members of the Void Engine Discord can save their choices. Settings › Community shows the collection and its link. Everything else stays free. |
 | **Community link** | An optional Discord login (Settings › Community, which **Community** at the menu foot opens) that lets Studio read your membership and roles in the Void Engine server: when you link, then every seven days (after a failed check, in an hour, six hours, then daily) and whenever you press **Check now**. The data is kept in `settings.community`, and the refresh token is encrypted in `community-auth.json`. |
 | **`SELF_UNLOCKED`** | The documented fork switch in `scripts/community.cjs`. Setting it to `true` unlocks every perk without Discord. |
 
@@ -54,25 +94,48 @@ walk through the agent loop read [agent-loop.md](agent-loop.md).
 
 ### Getting around
 
-- One **menu** down the left edge (the rail, in the code) is the whole app's
-  navigation: **Home** (the workspace), **Work** (Task board, Plans, Ideas,
-  Brain maps, Analyzer), **Live** (Command view, Activity, Explorer,
-  Overhead), **Models** (Model catalog, Model Lab) and **Settings** (Settings,
-  Style & sound, Profiler). Its foot holds **Search** (`Ctrl K`), **Start
-  here**, **Shortcuts** (`?`), **Community** and the update badge. At rest it
-  is five icons with their names; hover it or Tab into it and it opens over the
-  page to list every destination with its key, without moving anything
-  underneath. Opened, each section's name becomes a small capitals heading
-  over its destinations (it still goes to the section's main page), and the
-  whole menu fits a 900px window. Below 820px tall the foot folds into one
-  row of icons, each named by its tooltip, and a list that still has to
-  scroll fades out at its hidden edge. The section you are in lights up and
-  the destination you are on is marked. Toasts step aside while the menu is
-  open.
-- **Keep menu open** pins it and the page makes room. In a window narrower
-  than 1100px a pinned menu behaves as if unpinned and opens over the page;
-  the pin comes back when the window widens. The window never shrinks below
-  600×560, the size every layout is built and checked for.
+- Click the companion or press **Escape** on a workspace page to open its
+  compact bubble menu over the current view. The center returns to Studio;
+  the surrounding bubbles open conversation, friends and listening rooms,
+  requests, notifications, settings and quick actions. Escape first closes a
+  nested picker or returns from a bubble, then closes the menu. Opening the
+  menu keeps agents on their current run settings; Quick actions exposes the
+  existing run/pause controls. The bubbles follow an already connected audio
+  link, respect motion and transparency preferences, and never start capture.
+- The same glowing wisp wakes in the launch box, responds to pointer play with
+  floating ASCII expressions and a few sparks, and accompanies the first-run
+  guide. During setup, a pending chat reply or reported agent work, little lights
+  circle its core and `...` pulses above it. A completed reply gets a happy
+  reaction; failed replies settle without celebrating. Reduced motion keeps
+  expressions still and omits particles. Its internal panels resize as the guide
+  changes stops; the application window stays the same size. The scan remains
+  read-only until **Use this setup** authorizes saving the shown choices,
+  mapping the selected project, and asking the linked assistant for advice.
+  Task submission, approvals and friend connections still need their own action.
+
+- Agents' top-level tabs reveal floating child menus on hover. Hovering keeps
+  the current page in place; choosing a child opens that view. Click or
+  Enter also opens a menu, arrow keys move through its children, and Escape
+  closes it. Narrow windows retain the section and view pickers. The menu,
+  navigation rail and Command controls use clear glass with faint outlines:
+  the canvas remains visible through the lightly tinted surfaces. Disabling
+  blur keeps them transparent; reduced transparency uses solid surfaces.
+  Floating menus and the shell share one frosted material
+  (`--studio-float-*` in `studio-ui.css`); headers over scrolling text keep
+  the denser `--studio-menu-fill`. Menus open on the spring curve with their
+  rows cascading in, and one highlight glides between rows (the menu's
+  `::after`, placed by `studio-ui.js` `glideTo`).
+- One **menu** down the left edge has four destinations: **Home**, **Work**,
+  **Live** and **Models**. A single local row lists the current destination's
+  views: Tasks, Plans, Ideas, Brain maps and Analyzer under Work; Command,
+  Activity, Sessions and Overhead under Live; Catalog, Performance, Usage and
+  Context under Models. **New task** and **Search** (`Ctrl K`) sit above the
+  destinations; **Settings** and **Help** stay at the foot. Help contains
+  Start here, Shortcuts (`?`) and Community.
+- The menu stays open by default at widths of 1100px or more, with the page
+  beside it. **Keep menu open** saves your choice across launches. When unpinned
+  or narrower than 1100px, it opens over the page on hover or keyboard focus;
+  the saved pin returns when the window widens. The minimum window is 600×560.
 - The menu is one tab stop. Inside it, the up and down arrows walk the buttons
   it shows and wrap around, and Home and End jump to the ends; the keys stop
   there, so Command's canvas never sees them. `Ctrl ,` opens Settings from
@@ -80,15 +143,19 @@ walk through the agent loop read [agent-loop.md](agent-loop.md).
 - **M+** at the top of the menu opens the project panel beside it, which holds
   projects only. It replaces the grip on the left edge that used to open the
   same panel.
-- The tab pages share one header: the title of the page you are on and, when
-  Command view sent you there, a **← Command view** chip that takes you back.
+- Workspace pages share a compact title and action header. List/detail pages
+  show one pane at narrow widths, with a visible Back control. Focus follows
+  the visible pane; returning to a view retains its selection and drafts.
 - The menu is built from the same registry as **Search Studio** (`Ctrl K`), the
   Shortcuts sheet and the single-letter keys, so a destination cannot appear
   in one and be missing from another. Each record names its section, which
   files it in the menu, in Search's results and on the Shortcuts sheet alike.
-  Actions stay in Search unless `RAIL_SLOTS` gives one a place in the menu, as
-  it does Community. Search also finds every Settings card by name, such as
-  "Settings › Providers". The menu replaced three older menus: the tabs row,
+  Actions stay in Search unless the registry gives one a place in the menu.
+  Search also finds individual settings by name or control label,
+  such as "Connections" or "Blur behind panels". Settings' own search
+  uses the same labels; Enter opens the first match and Escape clears it.
+  A result opens its category, reveals its disclosure and focuses the control. The menu
+  replaced three older menus: the tabs row,
   the Command dock and the hover sidebar's own rows. **Switch navigation: rail
   or classic** in `Ctrl K` (or `?shell=classic` on the URL) brings those back
   for anyone who needs them, under the same section names.
@@ -106,34 +173,129 @@ walk through the agent loop read [agent-loop.md](agent-loop.md).
   while Home is still underneath. **Blur behind panels** off makes the panels
   solid. The glass is mixed from the theme's own colours, so every theme
   keeps its hue.
+- Home keeps its composer at the bottom of the window, with conversation and
+  a compact progress summary scrolling above it. **Activity**
+  opens a separate panel with task details and app preview controls; a running
+  worker opens it automatically until you choose to close it. On narrow windows
+  the panel opens over the conversation. The navigation menu includes **New task**, a distinct
+  project selector, recent tasks and a soft selection marker; pinning and
+  shortcuts remain. New task restores the saved draft without submitting it.
+  A compact project header has one global **Start agents /
+  Pause / Resume** control. A **Needs you** shortcut appears when a decision
+  is waiting. The task, preview and composer stay ahead of secondary panels:
+  **Project queue**, **Studio status**, and **Getting started & community**
+  start collapsed. **More** holds folder actions, Stop all and Restart.
+- **Current task** on Home combines the selected task's state, worker, current
+  action, last activity age, recorded checks, blocker and next step. The task
+  selector chooses what to follow without leaving Home. Work and Live retain
+  that selection per project and offer **Home** and **Back to task** links.
+  Compact task labels keep the full task title and brief in its details.
+- **Start this task** (or **Resume this task**) requests a worker for that
+  task only, including when the general queue is paused. It does not drain
+  unrelated work or promote ideas. Required build approval, dependencies and
+  machine capacity can still hold a start, and the result names the hold
+  rather than claiming a worker has begun. A later Pause or Stop cancels a
+  pending request to start.
+- **App preview** on Home is separate from coding workers and completion
+  checks. Studio detects a root `index.html` or a package preview/dev/start
+  script, starts a managed local server, waits for readiness and exposes
+  **Open app** and **Stop preview**. A preview can be ready while an agent is
+  still working, or stay available after the agent finishes. A failed start
+  shows its error and bounded output with a retry action.
+- Existing loopback preview links recorded by the project's workers can be
+  reused. Studio does not claim ownership of, or stop, a server it did not
+  start. Managed previews stop when switching projects or quitting Studio;
+  preview readiness never substitutes for task verification.
+- Completed work offers **View checks** and **Request a change** beside its
+  preview action. A change opens a new task draft linked by the original task
+  identity; it waits for your description and submission, preserves an
+  existing draft and keeps the completed task's evidence intact.
 - **Projects** keeps each folder's tasks, conversations, drafts, references and
   work logs together. **M+** at the top of the menu opens the project panel
-  beside it: the project list and **+** to add a folder. Running work must
-  finish before a project change.
+  beside it: the project list and **+** to add a folder. With a worker running,
+  **Save & switch** stops it, saves its progress and waits for the task state
+  and history writes before opening the other project. If saving cannot
+  finish within the wait, Studio keeps the current project open.
 - **Your work** separates open work, attempts needing **Review**, and verified
   or manually confirmed **Done** tasks; archived completions stay visible.
-- **Auto build** stays on by default. Turn it off for **Verify first** so each
+- The conversation offers **Chat** for questions and discussion, and **Create
+  task** for work to add to the board with acceptance checks.
+- **Queue settings** groups **Auto build** and **Agent mode** in an expandable
+  section above the queue. Auto build stays on by default. Turn it off for
+  **Verify first** so each
   task waits in Review until you choose **Approve build**. Approval covers the
   saved task scope and is saved across restarts for all projects.
-- **Studio at a glance** sits above the conversation: the service state with
-  the single **Pause / Resume** control, running workers, what needs you (open
-  questions and work to review), what is up next, the machine gauge and
-  today's usage. Each tile opens the view that owns it, and a new agent
-  question raises a toast with an **Answer** button from any view.
+- Default **Swarm** assigns one builder per ready task without mandatory
+  advisory calls; independent tasks can run concurrently. **Cluster** adds
+  planning, review and scoped delegation for one shared task. Switching to
+  Swarm preserves existing delegated children, dependencies and verification.
+- **Studio status** expands the worker count, waiting decisions, next work,
+  machine gauge and usage. Each tile opens its owning view. A new agent
+  question also raises a toast with an **Answer** button from any view.
+  **Preview controls** expands its URL, Stop, Check again and output, keeping
+  one **Open app** button in the normal Home view.
+- Running task cards show whether the worker is preparing, building, finishing
+  or stopping, its current checklist step (or latest output), the selected
+  worker route and the age of the last update. **No update yet** stays explicit
+  until the worker reports activity; an output line never proves completion.
+  For OpenCode workers, a pending or running tool takes priority over an old
+  checklist step: its safe description, status and elapsed time refresh every
+  ten seconds, even while a shell command has produced no output. The chat
+  assistant receives the same current-tool summary.
+- Fresh project folders do not need Git unless the requested work or project
+  instructions require a commit. A missing repository alone does not create
+  an owner question or an unfinished-work obligation.
 - **Work through backlog** works the project's existing tasks and ideas first,
   keeping a small runnable buffer; **Pause** holds every kind of new work (the
   same hold as Command's **New work** switch) while current workers finish.
 - The **task board** opens as plan cards with progress and a current step, and
   holds prerequisites, handoff context and task history. Missing prerequisites
-  and dependency cycles are surfaced for correction.
+  and dependency cycles are surfaced for correction. History notes and ideas
+  retain their draft, focus and text selection while live task details refresh.
 - **Search Studio** (`Ctrl K`) finds pages, tools, tasks and settings by
-  familiar terms; **Settings › Your Studio** sets your name, the companion's
-  name, the theme, motion, panel blur and where a launch lands.
+  familiar terms. **Settings › General** holds names and startup behavior;
+  **Appearance** holds themes, motion, panel blur and canvas presentation.
 
 ### Planning
 
-**Plan an idea** opens **Plans** for work whose route is unclear. Describe the
-outcome in your own words, then Mefi interviews you: it asks the one question
+**Plan an idea** opens **Plans** for work whose route is unclear. **Write with
+Mefi** explores relevant project files after you pause typing. Its side tree
+shows matching file excerpts with line numbers, the outcome, and decisions to
+shape. Switch between **Explore files** and **Suggestions** in the side panel.
+It uses your configured assistant connection to suggest wording, open
+questions, and useful additions; **Help me write** focuses on the field you
+last selected. **Refine** beside a destination field opens writing help for
+that field. Suggestions are readable cards with an **Edit** action; replace or
+add wording to a field, or dismiss the card. **Undo** restores the previous
+wording until you make another edit. Suggestions stay in the local draft until
+you save them. **Write manually**
+turns live requests off and remembers that choice with the draft. A connection
+failure keeps your text and any file evidence available. The local scan is
+bounded, skips private directories and links, redacts excerpts, and caches
+the inventory for 30 seconds while typing. It does not run project commands.
+
+**Enter** moves to the next field, then focuses the save control; it never
+submits a field automatically. **Shift+Enter** adds a new line. A slight glow
+marks the selected field and the previous field briefly fades as you move on;
+motion preferences disable the animation. The compact stage menu and writing
+partner fit beside the editor on wide windows and stack on narrower ones.
+The editor and suggestion list scroll independently on desktop, keeping the
+partner controls visible. Expanded file branches and unfinished suggestion
+edits survive switching between the partner's tabs.
+
+Each stage has its own symbol, soft accent, and compact label. The stage cards
+arrive in a short stagger; choosing a stage brings its section into view with
+a directional slide. Matching section headers keep the current part easy to
+recognize. Browsing preserves entered text and the saved workflow status, and
+motion preferences suppress the slides.
+
+Theme-tinted glass keeps the background visible through the stage menu,
+editor, and partner panel. Softer borders separate the surfaces, while writing
+fields keep a little more tint for readability. Appearance's glass and blur
+settings apply; reduced transparency uses solid surfaces. The background graph
+quiets while you write, and its controls return when you close Plans.
+
+Describe the outcome in your own words, then Mefi interviews you: it asks the one question
 that would most change what gets built, waits for your answer, reads that
 answer back as an unconfirmed interpretation, raises a conflict when you
 contradict yourself, and follows what you actually said into the next question.
@@ -159,26 +321,54 @@ revision history stay in the project's ignored local `planning.json`.
   ticks every 30 seconds (every two minutes while hidden), organising the node
   tree, scanning the machine, running the Auditor every five minutes, fixing and
   tidying on cadence, and (with Proactive on) briefing every five minutes.
-- Messaging is a real chatbot: multiline composer, quick-ask chips, follow-ups
-  resolved against the last reply, replies grounded in the current board,
-  inbox, open folder and the folder's own scanned plan documents, and plain
-  keywords that work without AI. Asking for work queues it; vague chatter gets
-  a yes/no offer instead of an accidental job.
+- The assistant you chat with **oversees the work**. Every reply sees the
+  whole board by stage — what is running and how far along, what is being
+  verified, what is parked, held or waiting on you, and why — plus the open
+  Ask cards and what just happened to your tasks, the open folder and its own
+  scanned plan documents. It acts on tasks when you plainly ask (start,
+  retry, stop one worker, mark done, add a note for the next worker, file new
+  work) and turns anything you did not plainly ask for into an Ask card you
+  confirm; approvals and permission decisions are always yours to click. What
+  your tasks do arrives in the thread as one line per task that updates in
+  place (started, verifying, verified, retrying, parked), and cards only you
+  can move are rolled into one "needs you" line. Without an AI key, plain
+  keywords still work, and "try again", "stop the auth build" or "close the
+  search task" act on the card they name. See
+  [agent-loop.md §11](agent-loop.md#11-the-assistant-as-overseer).
+- **Talking to the companion.** Every chat box (the companion's Ask tab,
+  Home's composer, Command's chat log, the Explorer) sends the screen you are
+  on and the companion's name with each message
+  (`MefiCompanionUI.context()`), and the reply speaks as that name.
+  "Requests", "what needs me" and the badge are one list: the chat's
+  `needsYou` is built by the same `companion.queue()` that counts "N need
+  you". The model also reads the latest notices and what each reply offered.
+  After a reply that offered several cards, "all of them" or "both" starts
+  every offered card and only those. The Ask tab shows the last reply's
+  offers as one-tap buttons (plus All of them) and refreshes when a reply or
+  notice lands.
 - **Work on it** makes a node the assistant's next piece of work — pinned to
   the front of the board and started at demand priority. Every session, todo and
   task acts as a **node folder** of typed context cells that compile into chat
   replies and executor prompts.
 - The **overseer** reviews how the assistant works, keeps a playbook and lesson
   counts, files bounded upgrade requests, and repairs the loop (resume stale
-  sessions, re-arm interrupted work) every fifteen minutes.
+  sessions, re-arm a parked executor) every fifteen minutes. Its local review
+  runs every pass; the paid AI review runs only when the board changed since
+  the last one (`overseerSignature`) or when you ask for it.
+- Collision history keeps sequential edits inspectable. When one session
+  finished before the next started, the handoff does not queue a collision
+  repair. Finished sessions no longer count as active editors; overlapping
+  work by concurrent sessions still receives conflict checks.
 - The agents **talk to each other**: a scout that sees something another role
   owns writes it a note — the watcher tells the keeper about stale sessions and
   the auditor about colliding files, the machine tells the foreman when it is
   holding new starts, the auditor and the compactor tell the foreman what is
   ready to hand out, the keeper tells the compactor what it pruned, a finished
   builder tells the agent it called what for, and the overseer says why it woke
-  a role. Unread mail pulls its reader onto the next tick, and the reader takes
-  its notes as it starts. On the tree a note rides a packet between the two
+  a role. A note pulls its reader onto the next tick only when that seat acts
+  on its notes (`readsMail` in `AGENT_ROLES`: the foreman); every other seat
+  takes its notes when its own cadence starts it. Notes are not activity-log
+  rows. On the tree a note rides a packet between the two
   agents' orbs; the assistant card lists the exchange under **Said to each
   other**, the AI passes see it as `chatter` and may answer with notes of their
   own, and asking about **agents** in chat reads the latest lines.
@@ -201,30 +391,86 @@ revision history stay in the project's ignored local `planning.json`.
 
 ### Command center and the node tree
 
+- **Automatic 3D Overview** borrows the demo flight's damped motion for a
+  gentle pan and changing scale. It frames all stable tree anchors together
+  using their current perspective bounds, leaving room for node rims inside
+  the measured panel-free rectangle. Hard bounds override easing when a panel
+  opens or work arrives. This renderer-only lens never rewrites layout anchors
+  or saved zoom: projection and inverse projection share its offset, so clicks,
+  connections and new nodes stay aligned. The existing Spin control enables
+  motion; paused spin, selection, search, manual navigation, reduced motion and
+  hidden-view suspension retain their existing behavior. Fit resets the lens.
+- **Zen / demo flight** starts with a wide view, then glides between visible
+  branches with their neighbouring nodes in frame. It follows the actual
+  layout positions, adapts zoom to the window and perspective, and pulls back
+  during travel and every fourth stop. The scene eases toward the
+  screen centre while the panels fade. Pan, zoom and tilt accelerate gently;
+  waking carries that motion into the return to your previous camera mode.
+  Retired or hidden nodes are skipped, and reduced motion keeps the camera still.
+- Graph views share theme-aware node finishes, clear selection brackets and
+  readable opaque labels. Command's five arrangements reserve parent-label room
+  on a fresh layout or Fit; live additions keep their established branch.
+  Command, the rail, Appearance preview, Agent brain and Overhead use the same
+  eight finishes. Brain maps retains its card nodes and exact port geometry,
+  with matching surfaces and typography. The project map keeps its isometric
+  blocks, with measured titles and full names available on hover.
+- Agent brain wraps wide parallel stages into readable rows and scrolls long
+  pipelines. Hover still exposes the full step title and details. Reduced
+  motion freezes the scene; hidden canvases suspend their animation loops.
+
 - The toolbar is four labelled groups and **Leave**. **Agents** chooses how
   the roster shares work between **Swarm** (across the queue) and **Cluster**
   (one goal at a time). **Camera** holds **Fit**, the **Overview** / **Follow**
   camera modes (`C` cycles Overview, Follow and free) and **Spin**. **View ▾**
   folds Map 2D / 3D (`V`), Labels (`L`) and Zoom into one menu. **Sound** holds
-  **Music** and **Ambience**. **Spin** is the only control that turns the tree
+  the **audio dropdown** and **Ambience**. **Spin** is the only control that turns the tree
   (`Space` pauses it); **Overview** keeps the whole tree framed. The two used
   to share the name Orbit. In 3D the Overview turns the tree about its own
   centre (the middle of the smallest circle around it seen from above,
   halfway up its height) and sizes the frame once for the whole turn, so the
   tree spins in place at a steady size with every node in view.
-- The **Ambience** popover reads **Look** (Backdrop, Speech bubbles, Card
-  style), **Sound** (what the nodes listen to, the Zen bells' profile and
-  switch) and **Calm** (Zen mode), then links on to **Style & sound** for the
-  theme, the node style and music. The whole **Audio link** (connect, response
-  and reactions) is in Style & sound; the toolbar's **Music** button turns it
-  on and off.
+  With the spin running, the camera also drifts inside that frame: a slow
+  pan and a gentle zoom that keep the whole tree in view.
+- The **Ambience** popover keeps the quick audio-source control beside the
+  canvas and links to canonical **Appearance** and **Audio** settings.
+  Appearance opens beside the live tree in a compact sidebar. **Theme**,
+  **Nodes**, **Layout** and **Interface** switch its controls; the arrow in
+  the heading moves the sidebar left or right and remembers that choice.
+  The preview keeps **2D**, **3D** and **Fit** in reach. Click outside the
+  sidebar or press **Esc** to return to Command: that first click only closes
+  Appearance, and a second click selects a node or another menu. Narrow
+  windows place the tree above the scrollable controls. Settings search still
+  reveals the matching section and focuses its control.
+  The toolbar's audio status button opens
+  **Music & video** directly underneath it: local music, ad-free radio and
+  YouTube / links, with source selection and Connect / Disconnect at the top.
+  Audio reactions and recommendations expand in place. The dropdown changes
+  size with its visible content and scrolls within the window when needed;
+  closing it keeps playback running. Settings › Audio opens the same dropdown
+  and keeps the separate sound-effect preferences.
 - **Live work** shows the current worker and step, readiness counts, the
-  readable agent roster (each role's status, name, elapsed time and current
-  task) and a ranked queue.
-- The panel's **Agents** tab gathers the queue controls (Autopilot, Parallel
+  active agent roster and a ranked queue. Readiness uses a single-line strip;
+  compact task cards put the title beside elapsed time, with current activity,
+  route and update age below. Preparation, finishing and stopping keep explicit
+  state labels. Long commands expand in place, and finished, idle or deliberately
+  stopped agents sit under **Recent agents** below the queue. Real agent
+  failures remain visible in full. The panel tabs use one row of labels and
+  counts with an underline on the selected view; the vertical inspection strip
+  retains its icons. Arrow keys navigate the group.
+  Workers without an OpenCode session still show
+  their latest output, route and update age. Live output is bounded, stripped
+  of terminal controls and credential patterns, and updates at most twice a
+  second. Checklist percentages remain worker-reported; verification follows.
+- The top toolbar's **Agents** dropdown gathers the queue controls (Autopilot, Parallel
   builds, Build mode, Agent mode) under an at-a-glance strip that shows the
   switch, the running builds and their cap, and the coordination mode.
-  **Agents & queue ↗** in Settings opens it.
+  It keeps the selected node and right-hand panel in place, and links to team,
+  model, provider and advanced run settings. **Esc** or an outside click closes
+  the dropdown; the sidebar no longer has a duplicate Agents tab. Accepting
+  new work and running queued work remain separate controls; Stop all and
+  Restart stay operational actions beside the work.
+  An intentional worker stop saves its continuation; its task and session
+  history both report that progress was saved, without calling the stop a failure.
 - **Parallel builds** defaults to **Machine managed**: admission follows
   measured app responsiveness, with optional manual limits of one to three
   workers. High CPU alone never limits builds.
@@ -242,6 +488,9 @@ revision history stay in the project's ignored local `planning.json`.
 - Every agent wears its role glyph (an eye for the watcher, a hammer for a
   builder, a crown for the overseer…), spins a ring while it works, dashes one
   while it waits its turn, and leaves a coloured wake when it flies to a node.
+- **View › Labels** (or **L**) cycles Auto, Updates, All and None. Updates
+  shows current task progress and reported code/task updates, hiding routine
+  agent chatter and idle names. The choice is saved across launches.
 - Sessions, tasks, the assistant and working agents carry a **callout**: a
   leader rising from the orb into a horizontal top bar, the title above it
   with its number (S1, T4…), a check or status mark and the done/left counts,
@@ -251,13 +500,16 @@ revision history stay in the project's ignored local `planning.json`.
   it (or its orb) **focuses** the node: the camera glides in (scale and pan
   together, less on a parent so its children stay in frame), the tree slides
   over instead of jumping, and the rest of the tree keeps turning slowly
-  behind a blur until Esc or an empty click. **Card style** in the Ambience
-  pop picks outlined, filled, or auto (filled when hovered, selected or
+  behind a blur until Esc or an empty click. **Card style** in Appearance
+  picks outlined, filled, or auto (filled when hovered, selected or
   running). Whether a launch lands on the workspace or straight in Command
-  view is set under **Settings › Your Studio**.
+  view is set under **Settings › General**.
 - **Inspect mode.** Selecting a node also hands its detail the whole right
   panel — a **Node** tab appears at the head of the strip and takes the panel
   at full window height, with one scroller instead of a card inside a card.
+  The panel sits flush against the window's right edge, with a translucent,
+  frosted glass surface that lets the canvas show through. It follows the
+  Blur menu preference and the system's reduced-transparency preference.
   Everything else steps back to its edge at the same moment: the panel's tabs
   become a 56px icon column pinned over the detail, the dock folds to its
   **More tools** pill, **Legend** and **Usage** keep their glyphs and drop
@@ -270,21 +522,96 @@ revision history stay in the project's ignored local `planning.json`.
 - Lines say what they mean: the hub link is doubled, a task's anchor is
   dotted and marches while its worker runs, an agent's tether is dashed, a
   finished cluster is stippled, and a done todo's link fades green.
-- The Done tab lists the builds that finished off, from the executor ledger;
-  **Clear** wipes it. The absorb is the tree's: a finished node collapses
+- The Runs tab summarizes recent builds by task, including retry counts and
+  the task's current verification or retry state. **Clear** removes the run
+  records from the executor ledger. The absorb is the tree's: a finished node collapses
   into its host and its brief stays readable on that card under
   **Absorbed work**.
-- **Style & sound** (`U`) opens on **Look**: the colour theme, with the Void
-  collection under the free themes, then the node tree's style, layout and
-  effects. **Sound** follows: the player (local files, ad-free radio or a
-  Spotify link), the **Audio link**, which wires bass, mids and treble to the
-  live tree (including desktop audio and microphone sources) only when you
-  enable it (its **Tree motion** reaction lets the music quicken the
-  Overview's spin, step it on each kick, sway it round a small figure of
-  eight and swell it on the bass, inside room the frame keeps for it), and
-  **Find your next sound**. A **Look · Sound** strip in its
-  header jumps between the two. A locked Void item explains itself in the
-  sheet instead of leaving it.
+- **Appearance** (`U`) groups colour themes, the Void collection, node style,
+  layout and effects. **Preview canvas** opens the live view and returns to
+  the same category. Music and video are managed from the **audio dropdown**,
+  outside Appearance. It groups local files, radio, Links, the audio
+  link and recommendations. Links plays a pasted or dropped YouTube, Spotify,
+  SoundCloud or Vimeo link in that service's embed, and a plain audio or
+  video file (a Discord attachment, say) in its own `<video>`. The player lives
+  in a borderless floating window across Studio, keeping the same playing frame
+  while you navigate. Hover for **Pin**, **Move aside**, minimize and close;
+  drag its grip or any edge to move or resize it. The grip and bottom-right
+  resize control also accept arrow keys, with Shift for fine steps. In deeper
+  menus, Move aside glides out of the pointer's way once; following it, hovering
+  or focusing it keeps it still. Pin and reduced motion also prevent dodging.
+  Geometry and toggles are remembered locally; automatic moves are temporary.
+  **Show player** restores a minimized window, and closing it stops playback.
+  Links nothing
+  can embed, such as a Spotify Jam or Twitch, open in their own app. The
+  booklet's CSP `frame-src` lists exactly the players `music.js` builds.
+  Because a `file://` page sends no Referer, main names Studio to YouTube's
+  player (`nameStudioToEmbeds`). Under the player, **Listen together**
+  (`renderer/together.js`) follows a room's shared player on the Void Engine
+  rooms hub through `scripts/hub-client.cjs`, and **Share what I'm playing**
+  feeds the bot's `/nowplaying` (see [community.md](community.md)). Audio input and reactions activate only when
+  enabled. A Void item previews live and explains how linked members keep it.
+  With the Audio link on, its **Tree motion** reaction lets the music
+  smoothly quicken the Overview's spin, sway it round a small figure of eight
+  and swell it on the bass, inside room the frame keeps for it.
+
+### The Agent Brain
+
+- Every project keeps a **work event** stream (`work-events.jsonl`): runs going
+  out and coming home, steps starting, finishing, growing and folding,
+  reports up the tree, desk questions and answers, stage changes, agent mail,
+  and the files a verified run read and changed. Every Agent Brain surface is
+  drawn from it, so nothing moves without an event behind it.
+- A task's **pipeline** is laid out before its worker starts, from the
+  Playbook's best recipe for that kind of work or a template, and the worker
+  is told its steps. It grows from the worker's todo list and `MEFI_STEP` lines
+  (at most 12 steps, 3 new ones per run) and folds finished steps.
+- **Agent brain** (`J`) draws it: the companion as the head, the lead, the
+  steps, the sub-agents circling the steps they work. A finished sub-agent
+  pops, flies home, circles the lead and is absorbed in the chosen node style;
+  a report climbs to the head; a desk answer is carried over. **Replay today**
+  plays the day back. Its other tabs are the **Playbook** shelf (recipes as
+  spines: thickness is runs, colour is how often they verified), the
+  **project map**, and the **Seats**.
+- The **desk worker** answers `MEFI_HELP` questions on the desk seat's model
+  and writes the answer into the worker's next brief; what only the owner
+  could answer becomes one ordinary ask. With **Give workers the ask_desk
+  tool** on, OpenCode and Claude Code runs get a local MCP tool that waits for
+  the answer mid-run.
+- **Project map**, under Agents › Workflows, explores systems, parts and files
+  as isometric chunks. Click to inspect a chunk; double-click, press Enter or
+  use **Explore** to enter it. **Back/Forward** restores the selected item and
+  camera, while breadcrumbs and **Up** change the level. **Browse** opens a
+  keyboard-accessible contents panel: search spans the whole project, including
+  files deep in large folders, and the All / Working / Changed filters apply
+  to the current level. Large lists have **Show more** rather than dropping
+  the remaining files. The map combines the files present in the project now
+  (including uncommitted files) with the last 90 days of git history (at most
+  400 commits, read every ten minutes) and verified runs' file sets. Past files
+  that are gone are marked as no longer present. Systems are the first map's
+  areas, else folders; a large
+  flat folder splits into the groups of files that change together, named by
+  the word they share (Executor, Eyes, Model Lab). Links join systems by how
+  alike their change histories are (a notebook changed in every commit links
+  weakly to everything), and only each system's strongest three are drawn.
+  Every system carries its files, its tasks (done, working, open) and a warmth
+  that halves each week. The inspector shows related systems as navigable
+  links, tasks, ideas and plans; ideas and plans can be placed on a system.
+  **Work here** prepares a task draft with the selected system, part or file;
+  selected files also have **Copy path**. A pipeline names the systems it touches.
+  Drag or wheel to pan, Control/Command-wheel to zoom at the pointer, or click
+  the minimap to move. Arrow keys select spatial neighbours; Shift+arrows pan,
+  Home fits, +/− zoom, Backspace goes up, / opens search, and Alt+Left/Right
+  travels through map history when the canvas has focus. Camera easing, drag
+  momentum, hover lifts and level transitions stop when settled or hidden;
+  Off and OS reduced motion snap to the destination. Calm shortens transitions.
+  Refresh preserves valid locations and project switches clear map history.
+  Narrow windows have an explicit **Inspect / Back to map** pair, and very
+  short windows hide the minimap to leave room for the map and its controls.
+- The **companion** in the menu foot keeps the needs-you queue with its
+  actions in place, greets you after ten minutes or more away (or when the
+  machine wakes) with what finished, what stopped and what needs you, and
+  rests when nothing runs. The tray tooltip carries the needs-you count.
 
 ### Model Lab and routing
 
@@ -312,7 +639,7 @@ revision history stay in the project's ignored local `planning.json`.
     input, so its process tree is ended once it has answered. Antigravity
     answers `/usage` in print mode. These probes start 150–240 MB binaries,
     so they run only while someone is looking (the Usage popover or the
-    Model Lab tracker asks with `probe: true`), two at a time and one per
+    Provider accounts view asks with `probe: true`), two at a time and one per
     CLI. A reading is kept five minutes and a failure one minute. Callers get
     the last reading at once while a stale one refreshes in the background,
     and the panel asks again every few seconds until it lands.
@@ -330,19 +657,20 @@ revision history stay in the project's ignored local `planning.json`.
   provider; the Go local estimate appears only while the live Go read is
   down. The pill shows the lead plan's first window and its fullest other
   window, and its dot lights for a failed read, a spent window or an empty
-  balance. The full view is the Model Lab **Tracker** tab. Account reads
+  balance. The full view is **Models › Usage › Provider accounts**. Account reads
   happen when either view opens and every five minutes while Command is
   visible (without CLI probes); the account channels bypass the
   project-switch gate.
 - **AI routing** picks who pays — Auto walks an ordered provider list you edit
   in Settings (the first usable provider answers, and the opt-in fallback
-  walks down the list), plus z.ai only, OpenCode Go only, the Grok, Claude
+  walks down the list), plus z.ai only, OpenCode Go only, OpenRouter, the Grok, Claude
   Code or Antigravity CLIs on their own logins, a local LM Studio server, or a
   custom OpenAI-compatible endpoint with your own key. **Model selection** uses
-  Jev or fixed defaults.
+  Jev or fixed defaults; for builders it is a win-probability evaluator
+  (below).
 - **Models are saved per provider and per builder CLI**, so switching routes
   never carries one provider's model id into another; a provider with nothing
-  saved uses its own default, and the keyed HTTP routes keep the role-wide
+  saved uses its own default, and z.ai, OpenCode Go and Zen keep the role-wide
   Routine/Heavy overrides. Missing a subscription or key for one option never
   blocks the others — the readiness line names what the selected option has.
 - **Each role can answer through its own provider.** *Heavy answers via*
@@ -352,9 +680,13 @@ revision history stay in the project's ignored local `planning.json`.
   providers, with its own tile under Providers, billed to the Zen balance
   with the Zen key or opencode's `OPENCODE_API_KEY`; OpenAI's models there
   go to its Responses endpoint.
+  **OpenRouter** has a separate key tile and uses `openrouter/free` by default.
+  The Models settings load OpenRouter's live text-response roster, with free
+  choices first; select a model for routine or heavy passes, or enter its slug.
+  The OpenRouter key also serves its Jev route and account usage reading.
   Plan specs, brain drafts and the analyzer read stay data-only, so the only
   CLI they may use is Claude Code, which runs with `--tools=` (no tools).
-- **Jev routing** chooses where classifier calls go — the Vercel AI Gateway
+- **Settings › Decision model** chooses where Jev classifier calls go — the Vercel AI Gateway
   (`typesafe-ai/jev`), TypeSafe's Jev API directly (`jev-1.13.0`), OpenCode
   Zen (`jev-1.13`, including its free tier), or OpenRouter
   (`typesafe/jev-1.13`) — each route keeping its own encrypted key. Headless
@@ -377,15 +709,24 @@ revision history stay in the project's ignored local `planning.json`.
   (`codex exec` on your ChatGPT login), or Antigravity (`agy` on your Google
   account), with automatic one-time fallback decided by the failure kind.
 - A **coding tier** in Settings › Coding workers decides what each build may
-  cost. **Auto** keeps per-task selection (Jev or the stand-in judge within
-  your provider, otherwise the CLI default); **Free** runs a free model one
+  cost. **Auto** selects per task on the z.ai route (between the GLM pair) and
+  on the OpenCode Go route with no builder model pinned (among up to six Go
+  roster models, run as `opencode run --model opencode-go/<id>`; the default
+  is `deepseek-v4.1-flash`): every builder attempt is recorded against its
+  model and kind of work and settled as a win or loss by the verifier, each
+  candidate gets a win probability from that record plus its cost, speed,
+  headroom and catalog strengths, and the likeliest winner builds (Jev or the
+  stand-in judge answers one probability per model;
+  with neither, a model's own record decides once it has enough verified
+  outcomes; see [agent-loop.md §12](agent-loop.md#12-choosing-a-builders-model-the-win-probability-evaluator)).
+  Other routes use the CLI default. **Free** runs a free model one
   worker at a time and never falls back to a billed default; **Fast** runs the
   quick economical model (GLM 5.3 Flash on the z.ai plan, `sonnet` on Claude
   Code); **Heavy** runs the high-end one (GLM 5.3, `opus`). Tier models are
   saved per builder CLI, and the Settings line shows what each tier resolves
   to before anything runs. Under Auto, any provider/model you pin for
-  OpenCode runs on every route; only the first scan's free suggestion yields
-  to the z.ai plan.
+  OpenCode runs on every route and is never re-routed; only the first scan's
+  free suggestion yields to the z.ai plan.
 - Keys live in the OS keystore (`safeStorage`; DPAPI on Windows); their
   ciphertext persists in `auth.json` beside `settings.json`, so preferences
   stay copyable and credentials stay machine-bound. Headless
@@ -394,6 +735,14 @@ revision history stay in the project's ignored local `planning.json`.
   `MEFI_STUDIO_CUSTOM_KEY=... electron . --set-custom-key`.
 
 ### Verification, storage and experiments
+
+- Overseer checks run in the folder captured when the worker was dispatched;
+  each result records that working directory. A folder without `package.json`
+  never uses Studio's checks as its evidence. Studio selects the project's
+  declared `check` or `test` npm script, its check wrapper or LÖVE harness, or
+  a root `tests.js`, `tests.cjs`, `tests.mjs` (also singular `test`) file. If no
+  supported check exists, verification reports that limitation and cannot
+  automatically complete the task from edits alone.
 
 - A finished attempt settles to `awaiting_verification` with its evidence
   (sentinel, exit code, spawned session); failed or pending checks block
@@ -435,12 +784,20 @@ revision history stay in the project's ignored local `planning.json`.
 
 ### Live update
 
+Concurrent `build-booklet` runs write separate temporary files, then replace
+the generated booklet with bounded retries for Windows file locks.
+
 Studio watches its own source tree: CSS restyles in place, `scripts/*.mjs`
 modules hot-swap, renderer files reload with tab, selection, scroll and focus
 restored, and `main.cjs` restarts the app. Edits are batched, changed scripts
 are syntax-checked first, and a broken file or three restarts a minute **hold**
 the update instead of crashing. The `data/` directory is never written by the
 updater or packaging.
+
+A live restart waits for current workers to finish saving and for any project
+change to complete. New workers stay held while the update drains. Deferred
+retries keep the update status current without repeating identical toast
+notices; a changed reason or a new update can announce itself again.
 
 ### Release updates
 
@@ -504,16 +861,20 @@ that holds the link. The full flow is in [community.md](community.md).
   you type.
 - **Not now** snoozes it for a week and **Don't show again** stops it.
 
-**Locked items**
-- They stay clickable, and a click explains the lock where you are instead of
-  changing the view: on the workspace an inline card, anywhere else a toast
-  whose **See the perks** opens Settings › Community with the item named.
+**Void previews**
+- The themes and node styles stay clickable before a Discord link. Choosing one
+  paints it live without saving it. The preview resets when Style & sound
+  closes or you leave Settings. A member who links while previewing keeps the
+  active choice; a linked account outside the server still cannot save it.
+- A click explains how to keep the choice without changing the view: on the
+  workspace an inline card, anywhere else a toast whose **See the perks**
+  opens Settings › General › Community with the item named.
 - Every locked group carries the same fine print: *"Members of the Void Engine
   Discord unlock these. Studio is MIT-licensed: fork the project and unlock it
   yourself, or ask an agent to do it for you."*
 - Alongside are **Join the Discord**, **Link my Discord** and **Copy agent
   prompt**.
-- A premium choice is saved on its own
+- An entitled member's choice is saved on its own
   (`localStorage["mefiStudio.music.premium.v1"]`), so losing access falls back
   to your free choice without forgetting it.
 

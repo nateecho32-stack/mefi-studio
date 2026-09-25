@@ -410,8 +410,14 @@ function resumableHost(saved = null, { paused = false } = {}) {
   return { ...h, calls, pending, snapshot: () => snapshot };
 }
 
+// A cadence pass is re-derived by dueRoles at boot, so it is not journaled as
+// it moves: queueing, starting and every hop used to rewrite the whole
+// eyes-assistant.json. The quit flush still saves where it stood.
 test("normal exit saves the last roster jobs and their current progress before abandoning callbacks", async () => {
   const h = resumableHost();
+  const journal = h.env.assistantJournal;
+  let journaled = 0;
+  h.env.assistantJournal = (entry) => { journaled += 1; journal(entry); };
   h.env.assistantEnqueueRole("watcher");
   h.env.assistantEnqueueRole("auditor");
   await flush();
@@ -419,10 +425,8 @@ test("normal exit saves the last roster jobs and their current progress before a
   const target = { kind: "session", id: "last-session" };
   entry.targets = [{ kind: "session", id: "first-session" }, target];
   await h.env.assistantHop(entry, target, { progress: 0.5, label: "examining last session" });
-  const checkpoint = h.env.assistantState.work.find((work) => work.role === "watcher");
-  assert.equal(checkpoint.target.id, "last-session", "progress is saved during work, before shutdown");
-  assert.equal(checkpoint.progress, 0.5);
-  assert.equal(checkpoint.status, "running");
+  assert.equal(journaled, 0, "no journal write for a cadence pass while it queues, starts or hops");
+  assert.deepEqual(h.env.assistantState.work, [], "nothing on disk to resume for a pass the cadence re-derives");
   h.env.stopAssistant();
   const saved = h.snapshot();
   assert.deepEqual(saved.work.map((work) => work.role), ["watcher", "auditor"]);
@@ -533,4 +537,90 @@ test("helper completions during a quit flush retain follow-ups without starting 
   assert.equal(h.env.assistantState.status, "running", "shutdown does not save an operator Pause");
   h.env.stopAssistant();
   assert.ok(h.snapshot().work.some((work) => work.role === "auditor" && work.status === "queued"));
+});
+
+test("work that needs resuming is still journaled as it moves, and a follow-up joining a cadence pass makes it durable", async () => {
+  const h = resumableHost();
+  const journal = h.env.assistantJournal;
+  const writes = [];
+  h.env.assistantJournal = (entry) => { writes.push(entry.done ? `done:${entry.role ?? entry.id}` : `${entry.role}:${entry.status}`); journal(entry); };
+  h.env.assistantEnqueueRole("auditor", 2, { automatic: true });
+  await flush();
+  assert.deepEqual(writes, ["auditor:queued", "auditor:running"], "a worker's follow-up is written as it queues and starts");
+  const entry = h.calls[0].entry;
+  await h.env.assistantHop(entry, { kind: "session", id: "checked" }, { progress: 0.5 });
+  assert.equal(h.env.assistantState.work[0].target.id, "checked", "and as it hops");
+  h.pending.get("auditor").resolve({ ok: true });
+  await flush();
+  assert.deepEqual(h.env.assistantState.work, [], "its settle clears the journal");
+  // A cadence watcher waits behind a running cadence auditor (one slot); a
+  // follow-up for the watcher joins it and the joined pass is now saved.
+  h.env.assistantEnqueueRole("auditor");
+  h.env.assistantEnqueueRole("watcher");
+  await flush();
+  assert.deepEqual(h.env.assistantState.work, []);
+  h.env.assistantEnqueueRole("watcher", 2, { automatic: true });
+  assert.deepEqual(h.env.assistantState.work.map((work) => work.role), ["watcher"]);
+  assert.equal(h.pool.queue.length, 1, "joined, not duplicated");
+});
+
+test("asks for work coalesce into the one foreman: a running pass is marked dirty once and no second foreman is queued", async () => {
+  const h = poolHost({ parallel: 1 });
+  const passes = [];
+  let enqueued = 0;
+  Object.assign(h.env, {
+    SMOKE: false, CAPTURE: false, CLI_MODE: false, autopilot: { held: false }, logLine() {},
+    assistantEnqueueRole(role, priority) {
+      enqueued += 1;
+      return h.env.enqueue(role, () => { const pass = deferred(); passes.push(pass); return pass.promise; }, { priority });
+    },
+  });
+  vm.runInContext(section("function assistantAskForWork(", "// What the assistant is doing about the build queue"), h.env);
+  assert.equal(h.env.assistantAskForWork("a slot came free"), true);
+  await flush();
+  assert.equal(enqueued, 1);
+  assert.equal(passes.length, 1);
+  for (const reason of ["chat instruction", "work on it", "a slot came free", "upgrade requests queued"]) assert.equal(h.env.assistantAskForWork(reason), true);
+  assert.equal(enqueued, 1, "an ask while the foreman runs enqueues nothing");
+  assert.equal(h.pool.queue.length, 0, "no second foreman waits behind the running one");
+  assert.equal([...h.pool.running.values()][0].rerunRequested, true, "the running pass is marked dirty");
+  assert.equal(h.env.autopilot.lastAsk.reason, "upgrade requests queued", "the card still says why the assistant last asked");
+  passes[0].resolve({ ok: true });
+  await flush();
+  assert.equal(passes.length, 2, "the dirty mark replays one more pass");
+  passes[1].resolve({ ok: true });
+  await flush();
+  assert.equal(passes.length, 2, "and only one");
+  assert.equal(h.pool.running.size + h.pool.queue.length, 0);
+});
+
+// A named Start is a foreman entry too, keyed start:<project>:<task> and bound
+// to that one task (assistantStartNamedTask). An ask for work while it claims
+// marked it dirty, so its settle replayed the Start and the general fill the
+// ask was for never ran until the next cadence.
+test("an ask for work during a named Start queues a general foreman behind it instead of replaying the Start", async () => {
+  const h = poolHost({ parallel: 1 });
+  const ran = [];
+  const named = deferred(), general = deferred();
+  Object.assign(h.env, {
+    SMOKE: false, CAPTURE: false, CLI_MODE: false, autopilot: { held: false }, logLine() {},
+    assistantEnqueueRole(role, priority) {
+      return h.env.enqueue(role, () => { ran.push("general fill"); return general.promise; }, { priority });
+    },
+  });
+  vm.runInContext(section("function assistantAskForWork(", "// What the assistant is doing about the build queue"), h.env);
+  h.env.enqueue("foreman", () => { ran.push("named start of task_x"); return named.promise; }, { priority: 2, key: "start:fixture:task_x" });
+  await flush();
+  assert.deepEqual(ran, ["named start of task_x"]);
+  assert.equal(h.env.assistantAskForWork("a slot came free"), true);
+  const start = [...h.pool.running.values()][0];
+  assert.equal(start.key, "start:fixture:task_x");
+  assert.notEqual(start.rerunRequested, true, "the named Start is not marked dirty");
+  assert.deepEqual(h.pool.queue.map((entry) => entry.key), ["foreman"], "a general pass waits behind it");
+  named.resolve({ ok: true });
+  await flush();
+  assert.deepEqual(ran, ["named start of task_x", "general fill"], "the Start runs once, then the fill");
+  general.resolve({ ok: true });
+  await flush();
+  assert.equal(h.pool.running.size + h.pool.queue.length, 0);
 });

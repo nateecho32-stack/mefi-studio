@@ -33,7 +33,7 @@ function host(settings, { clis = ["opencode", "grok", "claude", "codex", "antigr
   vm.runInContext(
     section("function executorModelOverride(", "// Auto setup:") +
     section("function executorOpencodeEnv(", "// Which route an autopilot") +
-    section("async function executorRunEnv()", "async function assistantFetch("),
+    section("async function executorRunEnv(", "async function assistantFetch("),
     env,
   );
   // Objects born inside the vm have their own prototypes; compare by shape.

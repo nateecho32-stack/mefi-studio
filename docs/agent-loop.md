@@ -9,7 +9,11 @@ re-derived. Several names are closures, not top-level functions: `finish`,
 `settle`, `wire`, `attach`, `cancelClaim`, `spawnAttempt` and
 `fallbackToOpencode` live inside `spawnNextJob`, and `overseerRunFor`,
 `overseerRunPending` and `refreshLease` inside `autopilotHousekeeping`. Grep
-`const finish = async`, not `function finish`. Companion reading:
+`const finish = async`, not `function finish`. The executor's decisions are
+pure functions in `scripts/executor-core.cjs` (which card runs, the prompt,
+the command line, what an output line says, how a run ended, what settling it
+writes on the card, the start budget), tested apart in
+`tests/executor_core.test.mjs`; `spawnNextJob` orchestrates them. Companion reading:
 [`agent-loop-verification.md`](agent-loop-verification.md)
 (what has been verified about planning/integration) and the [README](../README.md).
 
@@ -18,8 +22,19 @@ re-derived. Several names are closures, not top-level functions: `finish`,
 The assistant thread, the Command composer and the board box all land in
 `assistantCreateTask` in `main.cjs`. It writes a task with
 `status: "open"`, `source: "chat"` and a log line `task created by the
-assistant`, and dedupes on a compact title key so a retried send cannot
-double the work. Tasks live in the project's `data/eyes-tasks.json`; requests
+assistant`. Every one of those admissions compares the whole brief against
+the board, the inbox and live workers (`chatWork.findExistingChatWork`,
+through the `conversation` option), so a sentence sent in chat and pasted into
+the board box is one card, not two keyed on differently clipped titles. When
+the composer's brief matches a request still waiting in the inbox, that
+request becomes the card at once (`adoptRequest`), with the owner's pin and
+origin, instead of the ask being refused in its favour: refused, the request
+kept its filed band and no pin, and was lost whenever promotion would refuse
+it. A match on a row an older build's run still holds is reported as queued in
+the inbox, never as "on the board". The
+Command view's "Add a task" input goes to `tasks:create` like the Workspace
+composer, never through the chat classifier. What the chat itself does with a
+message is §11. Tasks live in the project's `data/eyes-tasks.json`; requests
 (a lighter inbox) live in `data/eyes-requests.json`.
 
 Promotion (`promoteRequestsToTasks`) turns inbox requests into cards and
@@ -27,54 +42,153 @@ stamps each source request with `promotedTo`, the card's id. The request stays
 in the inbox until the compactor absorbs it, and dispatch, the queue count and
 the compactor all skip it by that id. They used to match the pair by title key
 only, and a title cut to 90 characters, or one with no ASCII letters (an empty
-key), left the request running beside its own card. A request typed into the
-Explorer's inbox has no title and is not promoted; dispatch names it by its
-prompt's first line.
+key), left the request running beside its own card.
 
-## 2. The tick: autopilotPass
+Every other way work enters runs the same admission ladder,
+`scripts/work-admission.cjs` (`represented`, `admitTask`), inside the board
+gateway: a stable identity first (a Work on it or stale-session rescue target,
+a split's parent plus its note, a handoff, delegation or plan id), then the
+whole brief (chat-work's rules; the model's reading is never compared), then
+the title key against unfinished work. Whether a card still stands for a
+roster finding is one rule, `standsOnBoard` (any card not archived), for the
+filers' intake (`queueRequests`, and `requestBaseline`, which holds those
+cards), promotion and compaction alike: intake used to count only unfinished
+cards, so a finding filed again against its done card was admitted, refused
+by promotion, absorbed by compaction and filed again on every pass until the
+card was archived. The owner's explicit asks (Work on it) count only
+unfinished work. So the filers do not re-file a request that was promoted and
+absorbed from the inbox, two todos named alike
+in different sessions are two Work on it requests, and a second split of one
+card with a different note is a second follow-up, admitted in the same write as
+the decision (a refused follow-up records no decision). Every card is built
+from one skeleton (`taskRow`) and carries an `origin` (`{ kind, by }`); the
+worth band (`baselineTaskPriority`, scripts/policy.mjs) ranks `by: "owner"`
+work — chat, the composer, Work on it, splits, approved plans and ideas
+promoted by hand — in the owner band, and promotion keeps a request's own
+`source`, so its band on the board is the one it had in the inbox. The
+Explorer's own inbox adds (`applyRequestAction`, scripts/idea-actions.cjs): an
+ask typed into its inbox (`manual`) or an expanded checkpoint (`expand`) carries
+`origin: { kind: "request", by: "owner" }`, and a row an older build saved
+without one reads the same (`workAdmission.requestOrigin`), so those cards no
+longer rank below every roster-filed request. A typed ask is titled from its
+brief's first line (`requestTitle`, clipped to 90). New cards
+come only through these paths: `tasks:save` edits existing cards and no longer
+creates one, the whole-inbox `eyes:requests-write` is gone (`eyes:requests-action`
+is targeted), and `ideas:save` and the first-run map merge ideas by id inside the
+gateway.
 
-The loop's heartbeat is `autopilotPass`, scheduled by `setAutopilot` every
-`autopilot.minutes` (default 5) via `setInterval`. One tick, in order:
+## 2. The tick: the roster, and autopilotPass
 
-1. A brief, only when the roster's key gate sees no key (keyless CLI route,
-   custom key; the `expand` flag in `autopilotPass`) and the backlog is not
-   draining: `autopilotProactivePass` briefs at most once per 4.5 minutes
-   (0.9 of the default tick) and logs only news. With a key the briefer
-   briefs on its own cadence; the watcher and auditor file collision,
-   duplicate and audit requests keylessly either way (`ai: false` in
-   `AGENT_ROLES`, scripts/assistant.mjs; `assistantWatcherJob` and
-   `assistantAuditorJob` in main.cjs). The proactive switch
-   (`#proactive-mode`, wired in `init()` in renderer/explorer.js) turns this
-   timer on and off through the `assistant:prefs` handler and gates the AI
-   roles; the foreman dispatches regardless.
-2. Every 6th/12th tick: `grow`/`improve` expansion, on the same keyless path
-   only, and not while `growthBoardFacts(eyes).growthHeld` holds growth back;
-   with a key the grower and improver own it.
-3. `classifyPendingWork` shapes pending work and `refreshAutopilotQueue`
-   refreshes the queue depth. A history/feed row
-   (`pushAutopilotHistory("pass", …)`) is written only when the pass queued
-   something.
-4. `assistantAskForWork("auto builder pass")` wakes the **foreman**, whose
+The loop's heartbeat is the roster: `assistantTick` runs every 30 s (120 s
+while the window is hidden) and queues the roles `dueRoles` finds due. Who
+runs when and who spends AI is one table, `AGENT_ROLES` in
+scripts/assistant.mjs: each seat's `cadenceMs`, `spendsAi` (`"always"`: the
+run is a model call and waits for a usable key; `"when-usable"`: the
+overseer and the ideas scan call when they can and run a local pass
+otherwise; `"never"`) and `gates` (the owner switches that hold it: Proactive
+off, backlog mode, the board's growth hold). The host derives its cadence
+list, the forced tick's filter (`roleHold`, the same hold `dueRoles`
+applies), the pool's AI accounting (`assistantRoleSpendsCall`) and the switch
+holds (`assistantRoleSwitchHold`, over `assistantRoleGated`) from it. The
+switch holds apply to every enqueue, not only the cadence: the foreman's
+idle ideas scan, an overseer summons, a worker's follow-up and a resumed
+journal entry all wait while Proactive is off or backlog mode holds the
+role. Only the owner's own run passes (`assistantRunRole`, and an explicit
+growth request also past the backlog hold); the idle foreman used to run a
+paid ideas scan with Proactive off. A role is due when its cadence has
+elapsed, when it owns a new problem (`PROBLEM_ROLES`), or when it holds
+unread mail and reads it (`readsMail`:
+only the foreman acts on its notes; the others take theirs on their own
+cadence). A cadence pass is not journaled while it runs (`journal: false` on
+`enqueue`): `dueRoles` re-derives it at boot, and only the quit flush saves
+where it stood. Replies, reference gathers, a worker's follow-ups and
+explicit growth are journaled at every step.
+
+The watcher and auditor file collision, duplicate and audit requests
+keylessly (`assistantWatcherJob`, `assistantAuditorJob`); the briefer,
+improver and grower own the briefs and expansion, through the pool. The
+proactive switch (`#proactive-mode`, wired in `init()` in
+renderer/explorer.js) flips `prefs.proactive` through the `assistant:prefs`
+handler and holds the roles gated on it; the foreman dispatches regardless.
+
+`autopilotPass`, scheduled by `setAutopilot` every `autopilot.minutes`
+(default 5), is an auxiliary pass that spends no AI call:
+
+1. `classifyPendingWork` shapes pending work and `refreshAutopilotQueue`
+   refreshes the queue depth.
+2. `assistantAskForWork("auto builder pass")` wakes the **foreman**, whose
    pass (`assistantForemanJob`) settles (`autopilotHousekeeping`, §6),
    promotes requests, admits backlog ideas while draining and fills free
-   worker slots; the tick no longer runs those steps a second time. Dispatch
-   also happens when a job ends (`assistantAskForWork("a slot came free")` in
-   `finish`) or the pool is widened (`"the pool was widened"`, in
-   `setAutopilot`).
+   worker slots; the tick no longer runs those steps a second time.
+
+It used to brief, grow and improve outside the roster whenever `keyPresent`
+was not true. `keyPresent` now reads the same predicate `runAssistant` gates on
+(`aiRouteConfigured`), so a false one means no route can answer: those calls
+only ever failed, and before the first tick refreshed `keyPresent` they could
+run a paid brief with no pool accounting or backoff.
+
+`assistantAskForWork` is the one dispatch trigger, and it coalesces: a general
+foreman pass (key `"foreman"`) already running is marked dirty for exactly one
+more pass (`rerunRequested`, replayed by `assistantSettle`), and only an idle
+foreman is enqueued. A named Start is a foreman entry too (key
+`start:<project>:<task>`, its job bound to that task), so an ask during one
+queues a general pass behind it; marking it dirty replayed the Start and lost
+the fill. Dispatch is asked for when a job ends (`"a slot came free"` in
+`finish`), when the pool is widened (`"the pool was widened"`, in
+`setAutopilot`), for chat work and Work on it; the foreman's one-minute
+cadence covers the rest. The compactor and job supervision no longer ask: the
+compactor's ready count is a note to the foreman and supervision reports an
+idle queue as a problem. The thinker (§11) only asks when it pins a ready
+pick (its own form of Work on it); otherwise it only names the pick.
 
 ## 3. Selection and claim: spawnNextJob
 
 `spawnNextJob` is the dispatcher; `executeNextRequest` calls it once per
-free slot:
+free slot. It dispatches board tasks only:
 
+- An inbox request reaches a worker by promotion (`promoteRequestsToTasks`),
+  which the foreman runs before every fill and which admits the inbox in the
+  dispatcher's own order (pins first), at most three rows a pass. When a fill
+  runs out of ready cards while that pass promoted some, the foreman promotes
+  again and fills the free slots at once (the bounded loop around
+  `executeNextRequest` in `assistantForemanJob`, which now resolves to the
+  fill's stop reason), at most three more rounds. Only a board with nothing
+  ready counts (`autopilot.fillRanDry`): no cards, or only cards that are
+  cooling, waiting on prerequisites or parked for review. A fill stopped by a
+  free route's one-at-a-time cap, a full pool or a hold also reads "empty",
+  and promoting again then would move the whole inbox onto the board
+  unstarted; approval, a Cluster focus and a named Start never re-promote. Work on it
+  on a session or todo files a pinned request
+  that the same foreman pass promotes and starts; handoff, collision and audit
+  requests take the same path. A promoted row stays in the inbox until
+  compaction drops it, stamped with its card (`promotedTo`): promotion never
+  takes it again and admission compares the card instead. A Work on it or
+  rescue row matches only unfinished cards by its target, so without the stamp
+  it came back as a second pinned card once its first was closed; a new Work on
+  it click after that is new work. A row with no title (an ask an older build
+  saved from the Explorer inbox) is titled from its brief's first line instead
+  of being skipped for good. A `Fix:` request's fix themes are compared
+  against fix work only, as compaction compares them: a chat or collision card
+  that merely shares a loose theme no longer blocks it, since nothing else
+  would run it. Until 2026-09-23 a request could also run as
+  itself: claimed `"running"`, settled to `"verifying"` and verified into a
+  done history card. That was a second copy of the claim, settlement and
+  verification state machines, the copies had drifted, and it is gone; rows
+  an older build left mid-run are migrated by housekeeping (§6).
 - Candidates are `open` tasks not live anywhere, sorted oldest-first, filtered
   by backlog readiness (`backlog.workState`), failure backoff (`nextRunAt`,
-  max 5 `runFailures`) and title-key collisions with live work (the `open`
-  and `runnable` lists in `spawnNextJob`). Requests and tasks are then ranked
-  together, not inbox-first (`ranked`): `executorResume.compare` puts
-  resumable work ahead, then `compareWork` orders by pin, then the operator's
-  worth band (chat work first; scripts/policy.mjs), then age. The queue used
-  to shadow the whole board, so a chat task waited behind every filed request.
+  max 5 `runFailures`) and title-key collisions with live work, then ranked:
+  `executorResume.compare` puts resumable work ahead, then `compareWork`
+  orders by pin, then the operator's worth band (chat work first;
+  scripts/policy.mjs), then age. All of that is `executorCore.selectCandidates`,
+  which returns the `open` and `ranked` lists; `spawnNextJob` hands it the
+  live jobs, the title key, the live-fix check and `compareWork`. The owner's
+  explicit Start (`taskStart`) ranks only its own card, and only with the
+  brief it was started with; a focused Cluster ranks only its focus. With
+  nothing ranked, `executorCore.idleStopReason` names why ("cluster",
+  "approval", "cooldown", "prerequisites", "review" or "empty"). The queue
+  used to shadow the whole board, so a chat task waited behind every filed
+  request.
 - Each candidate passes a collaboration gate (`assistantModule.claimWork`,
   then `shouldHoldWork`): a file claimed by a sibling job, a finished-but-
   uncommitted session, or a live editor defers the pick. The "skip" line for
@@ -102,10 +216,19 @@ free slot:
 - File-level write locks (`claimRegistry.claimWrite`) keep a second
   dispatch off the same paths; a machine-lease and capacity recheck (the
   comment "Race recheck of the machine lease") can still cancel the claim
-  before any child exists. Every release names its gate
+  before any child exists. Each step after an await re-checks one gate,
+  `launchAllowed(entry)`: dispatch still allowed (`dispatchAllowed()`: the
+  owner's Start, or the executor on and not paused), no update hold, and room
+  in the pool. Every release names its gate
   (`cancelClaim(reason)`): an executor-log
   `{ event: "release", reason, heldMs }` row, and the advisory roster the
   claim left on the Command view is cleared (`autopilot.clusterAgents = []`).
+  A release the card itself caused (its prompt could not be built, its
+  delegation could not be saved) is charged to it: `claimFailures` with a 1-2
+  minute cooldown, parked after three in a row (`loopGuard` kind `claim`, which
+  Try again releases), and the rest of the same fill skips it
+  (`autopilot.fillReleased`), so one malformed card no longer holds the head of
+  the queue. Capacity, lease, pause and update-hold releases are never charged.
 - The release rows answered why claims were dropped: on 2026-09-22, 31 of
   113 claims were released, every one at a capacity gate (responsiveness
   16, memory 13, update hold 2), 15-25 s into the planner/reviewer advisory.
@@ -130,10 +253,12 @@ free slot:
 
 ## 4. The worker: a headless CLI agent
 
-The prompt is assembled piecewise against `EXECUTOR_PROMPT_MAX` (24000):
-title, resume checkpoint, the task brief, prior-failure note, compiled memory
-primer, collaboration advice and smaller hints such as the hot and cold
-paths, then the fixed tail (`const tail` in `spawnNextJob`) — run identity,
+The prompt is assembled piecewise against `EXECUTOR_PROMPT_MAX` (24000) by
+`executorCore.workerPrompt`: title, resume checkpoint, the task brief,
+prior-failure note, compiled memory primer, collaboration advice and smaller
+hints such as the hot and cold paths (`spawnNextJob` gathers those, since
+they read the assistant's state and the git index), then the fixed tail
+(`executorCore.promptTail`) — run identity,
 handoff protocol (`MEFI_NEXT:`, at most `EXECUTOR_MAX_HANDOFFS` = 3 per run;
 `MEFI_CALL:`, which wakes a role from `EXECUTOR_CALLABLE` at most once per
 role), the owner-question line (`agentIssues.issuePromptLine`), the ~15-minute
@@ -146,8 +271,9 @@ exactly the handoff this walkthrough was dispatched with.
 The run is a child process (`spawnAttempt`): `cmd.exe /c opencode run
 --auto` with the prompt on **stdin** (never the command line), tools
 auto-approved because nobody is at the keyboard. `grok`, `claude`, `codex` and
-`antigravity` are alternative routes with the same contract (`isCliRun` and
-the CLI branches of `spawnAttempt`) — except `grok`, which takes the prompt as
+`antigravity` are alternative routes with the same contract (`isCliRun`, and
+`executorCore.cliInvocation`, which gives each route its command, arguments,
+stdin and environment; `spawnAttempt` spawns them) — except `grok`, which takes the prompt as
 a positional argument rather than on stdin, so a run's brief is visible in
 that process's command line. `claude` and `antigravity` run in print mode,
 which says nothing until the answer and registers no OpenCode session, so they
@@ -165,7 +291,9 @@ A resumed run's brief carries the previous run's saved output and result line
 quoted (`> `, `executorResume.brief`), so a CLI that echoes its prompt (codex
 does, on stderr) cannot replay them as its own verdict, result and hand-offs.
 
-Output is line-buffered by `wire()`: every line marks `spoke` (and, on
+Output is line-buffered by `wire()`, and each line is read by
+`executorCore.readWorkerLine` (what the line says, without changing the run)
+and applied by `applyWorkerLine`: every line marks `spoke` (and, on
 stdout, `spokeOut`), except a line of terminal escape codes alone, which is
 no line at all; the strict line-match `isDoneMarkerLine`
 (scripts/assistant.mjs) sets `sawDone` — quoting the sentinel in prose never
@@ -186,8 +314,8 @@ anchored to the start of the line and read through the same escape strip
 being done nor talk the board into new work by quoting the protocol, and a CLI
 that wraps its last line in colour, or clears the line before it, still has
 its verdict counted. The last 8/40 non-empty lines, colour codes
-stripped, feed `outputTail`/`outputLog` (the comment "The kept tails must
-never…" in `wire`), so a bare colour reset can no longer become the run's
+stripped, feed `outputTail`/`outputLog` (`applyWorkerLine`), so a bare
+colour reset can no longer become the run's
 recorded last line; the live
 studio-log echo is stripped the same way and skips colour-only lines. The
 overseer's "builder finished" note quotes the worker's own `done:` summary,
@@ -199,7 +327,7 @@ it is paced by what changed (`queueExecutorCheckpoint`): a session binding, a
 todo or fraction change, the sentinel or the result line is saved within 1 s;
 a plain output line within 30 s (the `delay: 30000` call in `wire`). Two
 watchdogs, both armed in `attach`, back the budget: a wedged-start kill
-(`startWatchdog`, against `startBudgetMs`) and the hard 25-minute kill
+(`startWatchdog`, against `executorCore.startBudgetMs`) and the hard 25-minute kill
 (`EXECUTOR_KILL_MS`).
 
 The wedged-start kill fires when a run has neither printed a line nor
@@ -248,21 +376,25 @@ When the child closes, `finish()` (`const finish = async` in
   evidence has an owner.
 - The verdict: `ok = no spawn error && (sawDone || exit 0)` (`const ok`).
   `opencode run` exits 1 even on a clean run, so the exit code is not the
-  success signal (the comment saying so sits above `const handoff` in
-  `spawnNextJob`), and `ok` only means the run reported success (the comment
-  above `const ok`).
+  success signal (the comment saying so sits above `executorCore.promptTail`,
+  which asks for the sentinel), and `ok` only means the run reported success
+  (the comment above `const ok`).
 - A durable `finish` event is appended to `data/executor-log.jsonl`
-  (`executorLog({ event: "finish", … })`) — its tail leaves out the sentinel
+  (`executorCore.finishLogRecord`) — its tail leaves out the sentinel
   and result lines, which it records as `sawDone`/`result` — and a Policy Lab
-  `attempt-finish` record. Ledger appends ride one chain, and the first
-  append in each process trims a ledger past 4 MB to its last 5000 lines
-  (`executorLog`).
+  `attempt-finish` record (`executorCore.attemptFinishRecord`). Ledger appends
+  ride one chain, and the first append in each process trims a ledger past
+  4 MB to its last 5000 lines (`executorLog`).
 - The attempt's `lastAttempt.tail` is the worker's last real line, not the
   sentinel, and `lastAttempt.support` keeps one marker per advisory (role, ok,
   size or error); the raw advisory text reached the worker in its brief
-  (`const attempt` in `finish`).
+  (`executorCore.attemptRecord`).
 - One ownership-fenced `settle()` mutation (`const settle`, inside `finish`)
-  then:
+  then applies one state machine, the task's (every run is a task's since
+  direct request execution was retired, §3). `settle` keeps the fence, the
+  verification scheduling and the write; the state machine is
+  `executorCore.settleAttemptRow`, which returns the card's new row, and its
+  branch is `executorCore.classifyRunEnd`'s:
   - **ok** → `status: "awaiting_verification"` with the attempt's evidence;
     handoffs become visible `remaining` obligations and `runExecutorHandoffs`
     (called from `finish`) queues them as requests; a done report also
@@ -272,24 +404,47 @@ When the child closes, `finish()` (`const finish = async` in
     `run finished (…) — awaiting verification · verifying: <commands>` plus
     any hand-off counts, where a separate "verification scheduled" line used
     to follow; the worker's own `MEFI_RESULT` goes on a `result` line after
-    it.
+    it. The inbox copy the card was promoted from (same title key) is
+    released, unless a run of an older build still holds it (`runId`). No
+    assistant-history record is written: that was the direct-request run's
+    record, and `requestBaseline` now only reads the ones older builds left.
+    A parent with outstanding hand-offs only waits (`backlog.workState` stage
+    `waiting`, `blockedBy: "handoffs"`; the Work view's "Waiting on
+    follow-ups", never a review). Its `handoffState` still says when a
+    follow-up needs review, but a stuck follow-up is flagged on its own card,
+    not up the chain. A follow-up the owner drops (`tasks:action` `drop`:
+    archived with a `dropped` stamp, never `doneAt`) or deletes settles that
+    obligation. Deleting it is recorded on the parent as `droppedHandoffs`,
+    so recovery never re-admits it. Once every recorded hand-off has settled,
+    `verifyCompletion`'s `handedOff` lets the run's `remaining:` prose count
+    as that delegated work. That only applies when the prose names no more
+    items than were handed on and no owner-only work.
   - **user stop** → checkpoint saved, task returns to `open` with no failure
-    charged (the `userStop` branch).
-  - **failure** → `runFailures += 1`, backoff 1 min, then 20m/40m/80m;
-    after 5 tries parked for manual reopen ("gave up after 5 tries"). Infra
-    failures trip an executor breaker that parks all dispatch (`infraFail`,
-    `AUTOPILOT_PARK_MS`, in `finish`), and only a run that never spoke is
-    one: a spawn error, a start kill, or a silent death <15 s. A stop reason
-    is an error message too, and a run that worked until the 25-minute kill
-    used to count, so three long tasks parked every worker. The park is
-    saved as the executor still on (`setAutopilot`): saved as off, it never
-    came back after a restart. A run that started (it spoke or bound a
-    session) and then failed ends the card's streak of start kills.
+    charged (branch `"stopped"`); a card its owner stopped is held for them
+    (`ownerHold`), or pinned if they asked for it again before the worker
+    exited (`resumeRequested`).
+  - **provider outage** → back to `open` on the outage backoff (5m doubling
+    to 2h, `providerCooldownMs`) with no attempt charged (branch `"outage"`,
+    within the grace `executorCore.providerOutage` bounds; §10).
+  - **failure** → `runFailures += 1`, backoff 1 min, then 20m/40m/80m
+    (`failureBackoffMs`); after 5 tries parked for manual reopen ("gave up
+    after 5 tries"). The next worker receives the prior error and repairs the
+    task without an Ask card while retries remain. The fifth charged failure
+    reaches Ask with its run evidence. Infra failures trip an executor breaker that parks all
+    dispatch after three in a row (`classifyRunEnd(…).infra` read into
+    `infraFail`, and `AUTOPILOT_PARK_MS`, in `finish`). An attempt records
+    how it ended (`entry.endKind`, set by `stop()`, the watchdogs and the spawn
+    error paths), and only a spawn error, a start kill or a run that never
+    spoke and died within 15 s counts; a 25-minute budget kill or a supervised
+    stop of a run that talked never parks the executor.
+    The park is saved as the executor still on (`setAutopilot`): saved as
+    off, it never came back after a restart. A run that started (it spoke or
+    bound a session) and then failed ends the card's streak of start kills.
   - **start kill** → the wedged-start watchdog killed a run that never
     registered a session and never printed a line. The runner failed, not the
     work, so the card goes back to `open` on its own cooldown (1m, 2m, 4m…
-    capped at 30m) with `startFailures += 1` and **no attempt charged**
-    (the `startKilled(task)` branch). Past `EXECUTOR_START_FAILURE_GRACE`
+    capped at 30m, `startKillCooldownMs`) with `startFailures += 1` and **no
+    attempt charged** (branch `"start-kill"`). Past `EXECUTOR_START_FAILURE_GRACE`
     (5) consecutive start kills the card is charged as an ordinary failure after all, so a task that
     really does wedge its runner still reaches review; any run that does start
     clears the streak, and so does Try again. Before this, a stretch of slow CLI starts spent every
@@ -301,10 +456,11 @@ When the child closes, `finish()` (`const finish = async` in
   (`raiseRunIssues`). A stale run whose card a newer run owns raises
   nothing, and the failure question is named by this run's error or last
   words, never the previous run's `lastRunError`.
-- Chat-sourced work gets a thread reply ("Finished (verifying)", "Stopped
-  (progress saved)", "Waiting to retry (not charged)" for a start kill in
-  grace or a provider outage, or "Failed"), and the freed slot is refilled
-  (`assistantAskForWork("a slot came free")`).
+- The freed slot is refilled (`assistantAskForWork("a slot came free")`).
+  `finish()` posts nothing to the thread itself: settle's write is what the
+  task notice feed reads (§11), so the owner hears "verifying", then the
+  verdict, retry, stop or park, and a stop or an uncharged requeue is never
+  reported as a failure.
 
 ## 6. Verification: autopilotHousekeeping
 
@@ -337,6 +493,35 @@ Edits without an attributable session, or zero changed files with no executed
 named checks, are exactly the "no attributable edits and no named checks"
 reopen this task experienced on its first attempt.
 
+Only tasks are verified. Inbox rows an older build left mid-run (from before
+direct request execution was retired, §3) are moved onto the task path once,
+inside the same mutation and before the lost-claim sweep
+(`migrateLegacyRequests`, scripts/task-history.mjs), with one
+`[autopilot] legacy request …` log line per row:
+
+- a `"verifying"` row becomes an `awaiting_verification` task carrying its
+  `lastAttempt`, `runId`, `runProgress`, `verificationRun`, `remaining`,
+  target and sessions, source, origin, pin and brief. Its evidence is
+  prefetched with the tasks', so it settles through the ordinary task
+  verification in that same pass. The row leaves the inbox on a later pass,
+  once that task is on the board: the file store writes the inbox before the
+  tasks, and moving both in one mutation lost the finished attempt whenever
+  the tasks write failed after the inbox write (or the app quit between them);
+- a `"running"` row whose run no live owner holds goes back to the inbox
+  without `status`, `runId`, `lease` and `runningAt`. Its checkpoint stays as
+  `runProgress` (no longer pending, since promotion skips a pending row) and
+  as `interruptedAttempt`, which promotion carries and the task's brief
+  quotes, so the promoted task continues from what the lost run left. A
+  claim whose lease names no usable pid is left to the sweep's lease timeout;
+- an unclaimed row still holding a pending checkpoint (a stopped or
+  recovered direct run) keeps it the same way, so promotion can take it.
+
+A row put back in the inbox (by the migration, or by the sweep's own lease
+timeout) is stamped `requeuedAt`, and the age prunes (the sweep's 48 hours,
+the compactor's 12) count from it: the sweep runs in the migration's own
+mutation, and an auto-filed row filed more than 48 hours earlier was deleted
+there, checkpoint and all, before promotion could take it.
+
 An overseer run counts only for the attempt it was queued for — its key
 carries the attempt's run id; a legacy row without one needs a run that landed
 after the attempt started (`overseerRunFor`) — because the
@@ -346,9 +531,10 @@ contradicts, never over the user's manual Done (`doneRun`), with the line
 `reopened — overseer check failed — …`. Session and overseer checks are
 judged together (latest wins) but summarized apart, so the reason names who
 ran the check (`verifyCompletion`). A task keeps the overseer's result on the
-stamp only (`runVerificationJob`); its detail view shows it as an "Overseer
-check" line (`renderDetail` in renderer/tasks.js) in place of the old
-"verification run passed/failed" log line, which request rows keep. A task's
+stamp only (`runVerificationJob`, which stamps task rows alone); its detail
+view shows it as an "Overseer check" line (`renderDetail` in
+renderer/tasks.js) in place of the old "verification run passed/failed" log
+line. A task's
 verification job carries its card's `projectPath` (`scheduleVerificationOnDone`)
 and `runVerificationJob` runs it there; a job without one runs in the active
 project root. A job whose commands use `npm` in a folder with no
@@ -539,6 +725,13 @@ instead of running `autopilotPass`, so the tick's savings are not in these
 numbers. At 40 minutes the handoff trees are still growing, hence so few
 settled cards in either run.
 
+Retiring direct request execution (2026-09-23, §3) moved none of these
+numbers: re-run on the task-only dispatcher, `steady` still costs 99 board
+transactions, 179 store reads and 87 log lines, and `handoffs` still settles 8
+of 56 cards in 36 runs and 278 transactions. The monitor's cards are tasks,
+and its handed-off children were always promoted before they ran (a request
+with a handoff lineage was never run as itself).
+
 `--first-output` sweeps are how the start budget in §4 was chosen and
 checked.
 
@@ -634,7 +827,9 @@ a copy, and cards from different parents are asked about apart. The card kept
 is the oldest that can run; a family whose cards are all held or parked is not
 asked about until one is retried. A typed reply leaves the ask open. A
 `Work on "X"` card belongs to X's family, even when its title was clipped (the
-full label is read from its prompt). The overseer warns "cards looping" while
+full label is read from its prompt, once: a label that is itself a Work on
+title unwrapping back into the card's own made the unwrap loop cycle forever
+inside the keeper's board mutation). The overseer warns "cards looping" while
 the loop guard holds cards, and notes "duplicate work waiting for a decision";
 it repeats a standing hold on the owner's thread only when the count grows.
 
@@ -743,3 +938,324 @@ card families and duplicate lessons, and ends with what compaction could
 still drop ("history: 38 completed cards could drop 501 revisions (2310
 KB)"). It reads copies in memory and never writes to the data folder
 (`--json` output goes under `tools/logs/` only).
+
+## 11. The assistant as overseer
+
+The assistant the owner talks to oversees the board instead of only filing
+work for others. Its reply path is `assistantRespond` in `main.cjs`, built on
+the pure `scripts/task-oversight.cjs`:
+
+- **What it sees.** Every chat turn carries a board digest
+  (`taskOversight.boardDigest`, added to the facts by `assistantBoardFacts`):
+  each live task in one ranked, clipped list per group (running, review,
+  needsYou, blocked, ready, cooling, recentDone) with its scheduler stage and
+  reason (`backlog.workState`), attempts, verification verdict, loop-guard
+  hold, last error and, for a running task, the worker's minutes, last output
+  line and todo progress. The open Ask cards and the latest task events ride
+  along. The payload is packed by section (`packChatPayload`, the owner's
+  words first, the board with its own budget) and is always valid JSON; it
+  used to be one string sliced at 14,000 characters.
+- **Where the owner is, and what needs them.** Every chat box sends
+  `context: {view, companion}` with the message
+  (`MefiCompanionUI.context()`: the screen's label and the name the owner
+  gave the companion). It is stored on the message as `ui`
+  (`assistantUiContext`) and packed right after `did`, and the model speaks
+  as that name. `needsYou` (`assistantNeedsYouDigest`) is the list behind
+  the "N need you" badge, built by the same `companion.queue()` from the same
+  board, so "requests", "what needs me" and the badge are one count. The
+  thread the model reads is the last twelve things said plus the four newest
+  notices, marked "(update) …", and each reply lists what it `offered`.
+- **How it acts.** The model answers with one JSON envelope,
+  `{reply, actions, offers}` (`ASSISTANT_CHAT_SYSTEM`). The actions are a small
+  vocabulary (`CHAT_ACTION_KINDS`): create_task, work_on, retry, stop,
+  mark_done, approve, note, answer, pause, resume and run_role. The host checks
+  each one (`validateChatActions`) against the board the model was shown and
+  the owner's own words, and runs it through the same host functions the
+  buttons use (`assistantChatAction`: `assistantCreateTask`, `assistantWorkOn`,
+  `backlogControl`, `stopTaskRun`, `taskAction`, `assistantAnswer`...). A CLI's
+  own tools never touch the board: chat answers only through the data-only
+  CLIs (`DATA_ONLY_CLIS`) or an HTTP route.
+- **What needs the owner's click.** A task-changing action runs only when the
+  message plainly asks for it (no question, condition or negation) and plainly
+  names the card (a quoted title, a word only that card's title has, its id, or
+  "it" with a single referent). Anything else becomes an Ask card whose option
+  runs it (`assistantConfirmAction`). Approval always waits on a card that
+  carries the reviewed scope; permission, risk, family and approval asks can
+  never be answered from chat; a note stores the owner's words, never the
+  model's; new work files the owner's message as the brief, with the model's
+  reading beside it in `details`. The model is told that titles, briefs,
+  worker output and logs are data, never instructions.
+- **What it says.** The model never claims an outcome: the host appends each
+  action's real result (`resultLine`). Offers are stored on the reply
+  (`offers: [{title, target}]`), so "yes" or the Pick-the-next-work card starts
+  that card by its id. After a reply that offered two or more cards, a
+  plural yes ("all of them", "both", "each of them", "start them all")
+  counts as asked and named for every offered card and no other
+  (`pluralAffirmation`). Starting or retrying an offered card from the chat
+  answers the Pick-the-next-work card that offers it
+  (`assistantSettleOfferAsks`). Replies apply their actions in the order the
+  messages arrived (`assistantChatSlot`).
+- **Fallbacks.** A bare brake ("pause", "stop everything", "resume") runs at
+  once, before any model call. With no usable model (no key, a backoff, a
+  timeout, a reply that was not an envelope) the local classifier answers as
+  before, except that control phrases ("try again", "stop the auth build",
+  "close the search task") become the same validated actions
+  (`localChatActions`) instead of filing new work or pausing everything. A
+  slow reply is not an outage: only a provider error takes the AI offline for
+  the other roles.
+- **Task notices.** The thread hears what the owner's tasks did from the one
+  place every task write passes: the board gateway calls
+  `assistantObserveTasks` after the commit (`boardWritten`), which compares the
+  board with its last look (`taskEvents`) and posts one notice per task,
+  edited in place while the owner has said nothing since it ("Started…",
+  "…finished its run; verifying", "Verified: …", "Retrying …", "… is parked:
+  …", "… is on hold: …"). A start is announced only from the worker's real
+  spawn (`assistantTaskStarted`); a claim can still be released. Owned tasks
+  are chat and composer work, approved plans, Work on it and the focused card;
+  the agents' own cards that only the owner can move are rolled into one
+  "N cards need you" notice. Notices are `kind: "notice"`: they never count as
+  the answer to the owner's last message and only a verdict or a hold counts
+  as unread.
+- **Stopping one task.** `stopTaskRun` (chat's stop, the Tasks view's Stop,
+  `taskAction` action `stop`) stops that task's worker only, saves its
+  progress and holds the card for the owner (`ownerHold`, a needsYou row) so
+  the freed slot does not claim it again seconds later; Work on it or Try
+  again releases it.
+- **Automatic task context.** Every new card from the board gateway gathers
+  local references in the background (`assistantGatherTaskReferences`), including
+  promoted requests and composer work. Independent reads run together; the
+  references are saved before an optional Scout seat (GPT-6 Luna, low effort,
+  fast tier by default) selects one verified starting file. The Tasks automatic
+  reference switch and Agents' Scout switch control
+  this pass. A chat instruction asks the foreman to dispatch.
+  It used to send twelve roles out, two of them paid improve/grow passes whose
+  output nothing read.
+- **The thinker.** Every minute with Proactive on, `assistantThinkerJob` reads a
+  light slice of the board (`assistantThinkerFacts`: the executor, the backlog
+  counts and the dispatcher's next picks, the overseer's findings, the tree
+  the watcher last organised) and thinks in the assistant box (`thinkPlan`).
+  It never announces a start it does not control: when the executor is idle
+  and its top pick is a ready board task the dispatcher would not take first,
+  it pins that card through its own form of Work on it (`assistantWorkOn`
+  origin `"thinker"`) and says so; anything else it only names ("next up").
+  Among its ready task picks it chooses in the dispatcher's order (the
+  `next` rows carry pin, source and origin), never pins while the
+  dispatcher's first pick is pinned or in the owner's band, and its pin gets
+  a `pinAt` older than every pin on the board and in the inbox, so the
+  owner's clicks always go first. Its pin is not the owner's pointing: it
+  leaves the owner's focus and the node's notes alone, logs "put first by
+  the thinker", only pins a card still ready, and stamps `thinkerPin` (its
+  `pinAt`), which `assistantOwnsTask` does not count, so the card's notices
+  stay in the agents' roll-up. It used to pick with suggestWork's order
+  (which ignores pins) and pin through the owner's Work on it, jumping
+  ahead of the card the owner had just pinned, moving the owner's focus and
+  marking the card owned for good. Before that it rebuilt the chat's full
+  facts and the tree every minute and said "starting work on X" while the
+  foreman ran whatever ranked first.
+- **The overseer's AI review.** The overseer runs every 15 minutes around the
+  clock; its local review (`overseerReview`) runs every pass. The heavy AI
+  review runs only when the owner asked (the Oversee button, chat's
+  `run_role overseer`) or the digest's signature moved since the last AI
+  review (`overseerSignature`: the local finding set, the open problem kinds,
+  the roles in error and the score band; `overseerAiPlan` decides). The
+  playbook records when the last AI review ran and why a pass skipped it
+  (`overseer.ai`), and the roster line opens with which review ran. A builder
+  failure wakes the overseer at most once per ten minutes
+  (`assistantHearBuilder`). Its repair keeps the stale-session rescue, the
+  manual re-enable and the problem-driven role wakes; lost claims are
+  housekeeping's (§6) and interrupted journal work the tick's.
+
+Tests: `tests/task_oversight.test.mjs` (the module),
+`tests/assistant_overseer_chat.test.mjs` (the host path),
+`tests/assistant_chat_admission.test.mjs` and
+`tests/assistant_readiness_reply.test.mjs`; the role table, the thinker and
+the overseer's gate in `tests/assistant_role_policy.test.mjs` and
+`tests/assistant_coordination.test.mjs`.
+
+## 12. Choosing a builder's model: the win-probability evaluator
+
+When the coding tier is Auto and the builder is OpenCode on the z.ai route, or
+on the OpenCode Go route with no builder model pinned, each dispatch asks the
+router (`routeBuilderModel` → `applyModelRouting` →
+`scripts/model-routing.mjs`) which model should build this card.
+`executorRunEnv` marks those two routes with a `modelProvider` (`zai` with
+`glm-5.3-flash`, or `opencode` with the Go default `deepseek-v4.1-flash`); a
+pinned OpenCode model, the Free, Fast and Heavy tiers, and the Claude Code,
+Codex, Grok and Antigravity CLIs carry none and never route. The Go route is
+taken only when Go is both chosen and reachable. Chosen means the assistant
+route is OpenCode, or Auto with OpenCode in its order; Claude Code, LM Studio,
+a custom endpoint, Zen and the other CLIs never put builders on Go. Reachable
+means OpenCode itself holds a Go login: `opencodeGoLogin` runs
+`opencode auth list` (provider names only, never a secret, cached ten
+minutes) and counts a saved credential, not the `OPENCODE_API_KEY` variable
+Zen shares. When the CLI cannot answer, the applied first scan decides, and
+no scan counts as no login. Otherwise the builder keeps the CLI default and
+its `via` says `no OpenCode Go login confirmed`, because a `--model` naming a
+provider OpenCode cannot reach fails every run and each failure is charged to
+the card. A Studio OpenCode Go key alone is not enough: it pays for the
+assistant and never reaches the CLI. The pick reaches the command line only
+if it is one of the candidates the router was offered (or the default) and
+reads as a bare model id, as `--model mefi-zai/<id>` on z.ai (Studio's
+managed provider) or `--model opencode-go/<id>` on Go (the prefix
+`opencode models` lists the Go roster under). The router works like a race
+card:
+
+1. **The record.** Every builder attempt is a row in the model ledger
+   (`recordWorkerAttempt` at attempt-finish: provider, model, the kind of work
+   and how long it ran), and the verifier's verdict settles it later
+   (`settleModelOutcome` from the verification receipts): a verification the
+   runner observed is a win, a failed one a loss, and a worker's own report is
+   neither. `scripts/model-performance.cjs` keeps wins, losses and a win rate
+   per model, overall and per kind of work. A z.ai run is filed under `zai`
+   and a Go run under `opencode`, both by the bare roster id (a pinned
+   `opencode-go/<id>` included), which is the row the router joins to that
+   model's candidate. The row names the model that did the work: a CLI
+   builder that fell back to OpenCode is filed under that OpenCode route
+   (`entry.ranRoute`), not the CLI. A route with no model id is filed as
+   `<provider>-default`; only the `via` label's leading `provider/model` token
+   can name one, so notes such as `opencode default · z.ai key missing` never
+   split a model's record. A run that fails before any verdict is a loss
+   only when the failure was the model's own work
+   (`executorCore.attemptLedgerOutcome`). A stop, a spawn error, a runner
+   that never started or died silent in its first 15 s, a provider that said
+   it was down (even after the card's outage grace ran out, which charges the
+   card, not the model) and a model or provider the CLI could not reach
+   (`ProviderModelNotFoundError`, `model not found`) keep their row but count
+   as neither.
+2. **The kind of work.** The key is the classified intent
+   (`coding-implement`, `coding-explore`, `coding-analyze`,
+   `coding-document`), or `coding` when unclassified; the complexity travels
+   separately as the work weight. Routing asks with the same key the attempt
+   is recorded under.
+3. **The odds.** Each candidate gets a win probability
+   (`estimateWinProbability`): a Beta posterior over its record on this kind of
+   work (falling back to its overall record), with a weak prior from the
+   catalog quality index. Its cost, 5-hour request headroom, speed and what it
+   is good at (`useFor`, `avoidFor`, `verdict` from `data/models.json`) ride
+   along as evidence. A builder's candidates are a shortlist of at most
+   `MAX_WORKER_ROUTING_CANDIDATES` (6): the default first, then the models
+   with the most settled outcomes on this kind of work, then catalog quality,
+   then the lowest typical cost. The z.ai pair fits whole; the Go roster (16
+   chat-completions models) is cut to six before the judge is asked.
+4. **The pick.** With Jev or the stand-in judge, one call asks one
+   yes-probability question per candidate and the highest probability wins
+   (ties go to the default); a reply that breaks that contract falls back to a
+   single choice question. The answer is cached per task for five minutes.
+   With no judge at all, the candidate with the best record is routed once it
+   has at least three settled outcomes (`LOCAL_MIN_OUTCOMES`) and beats the
+   default by five points (`LOCAL_MIN_MARGIN`); a model with no settled
+   record never outranks one that has it on its catalog prior alone.
+   Otherwise the default runs, except for bounded exploration, since a
+   challenger can only earn a record by being routed to:
+   - It starts only when the default's own record on this kind of work (at
+     least three settled outcomes) falls short of its catalog prior by five
+     points. One win in three is what a 0.40 prior expects, so that alone is
+     noise, not a case.
+   - The turn goes to the cheapest challenger (`typicalCostUSD`, unknown
+     last) whose estimate beats the default's by the margin, not to the
+     highest prior, so a bad streak on the Go default tries `glm-5.3-flash`
+     before the 33x `glm-5.3` or the 66x `kimi-k3`.
+   - Each challenger gets at most three turns on this kind of work; a turn is
+     any ledger row, settled or not. After that only its record counts.
+   - The default keeps every other task beyond its first three, so its own
+     record keeps moving and the route comes back to it when the gap closes.
+     Several workers dispatched before the first attempt finishes can
+     overshoot these bounds by the pool size, because a turn is counted when
+     its attempt ends.
+
+   The same rule serves both routes. The ledger cannot yet tell an
+   infrastructure loss (a provider or model the CLI cannot reach) from a
+   model's own failure: `finish()` files any failed run that was not a stop,
+   an outage, a start kill or a spawn error as a loss.
+5. **The receipt.** The decision (method, probabilities, the pick's win
+   probability) is kept on the attempt's `attempt-start.route`, beside its
+   `workKind` and `workShape`, so the Policy Lab can compare the evaluator's
+   picks with the default's. Model Lab shows each model's wins, losses and win
+   chance.
+
+Chat and the assistant's own passes are routed per kind of call, not per
+message, so a chat turn no longer pays its own routing call. Tests:
+`tests/model_win_evaluator.test.mjs` (end to end on a scratch ledger),
+`tests/model_routing.test.mjs`, `tests/model_performance.test.mjs` and
+`tests/jev_model_routing_host.test.mjs`.
+
+## 13. The Agent Brain
+
+`scripts/agent-brain-host.cjs` (`createAgentBrain`, created once in main.cjs
+as `agentBrain`) is called from one-line hooks, each guarded with
+`typeof agentBrain !== "undefined"` so a vm-sliced host runs without it:
+
+- **before the prompt** (`prepareRun`, in `spawnNextJob` above the tail): the
+  task's pipeline is laid out or resumed (`pipelines.createPipeline`, from
+  `playbook.pick` for the cached work shape), and the worker gets two things:
+  the step, help and (for a delegated child) report protocol, which rides
+  `executorCore.promptTail`'s `protocol`; and a brief (the pipeline, the last
+  desk answers, `projectMap.briefLine`), which is `workerPrompt`'s capped
+  `brain` section.
+- **start** (`runStarted`, beside the ledger's `start` row): `agent.out` and
+  the pipeline's `run-start`.
+- **every output line** (`workerLine`, after `applyWorkerLine`): the first line
+  is `spoke`; `MEFI_STEP: add|done :: <step>` grows or closes a step;
+  `MEFI_HELP: <question> :: <detail>` goes to the desk (three per run);
+  `MEFI_REPORT: <text>` is kept for the parent.
+- **todos** (`todos`, in `watchJobProgress` when the list changes): the
+  worker's own todo list grows and closes build steps.
+- **finish** (`runFinished`, beside the ledger's `finish` row): `run-end`,
+  `agent.home`, and for a delegated child that finished well a `report` event
+  for its parent carrying its `MEFI_REPORT` or result line.
+- **every board write** (`observeTasks`, from `boardWritten`): a status that
+  moved is a `stage` event; `awaiting_verification` opens the verify step; a
+  verdict settles the pipeline and files it in the Playbook (the archivist);
+  a delegated child's change moves its parent's step, and a child that
+  finished calls `assistantAskForWork("a delegated child reported")`.
+- **agent mail** (`mail`, in `assistantSendMail`) and **verified files**
+  (`filesTouched`, in housekeeping's path-memory loop, with the same read and
+  changed sets `mergePaths` learns from) feed the event stream and the
+  per-task file index behind the project map.
+
+The project map (`projectMap.buildMap`) is rebuilt a few seconds after new
+files land, from that index plus the project's git history
+(`readProjectHistory`: `git log --since=90.days --no-merges --max-count=400
+--name-only`, no shell, a 10 s limit, cached ten minutes, parsed by
+`projectMap.parseGitLog`). With `cluster`, a folder of more than 24 files
+(never an owner's area) splits by label propagation over the cosine of its
+files' change histories; a commit touching more than 20 files counts for
+warmth but never for co-change. Links carry `weight` (shared attempts or
+commits) and `strength` (the cosine of the two systems' change histories); the
+renderer draws the strongest three per system.
+
+Replay: `node tools/replay-events.mjs --day YYYY-MM-DD --data <project data
+folder>` prints a day's events and compares `agent.out`/`agent.home` with the
+ledger's `start`/`finish` rows (exit 1 when they differ).
+
+**The seats.** `seatFetch("lead" | "desk", …)` calls the seat's model on Zen
+with its own reasoning effort (`SEAT_DEFAULTS`: GPT 6 Sol at medium;
+`settings.agentSeats` overrides, from the Agent brain's Seats tab), through
+`httpAssistantCall`'s `effort` and `pinned` options; without a Zen key it falls
+back to the heavy route (or, for the Cluster planner, to its own route). The
+Cluster planner is the lead seat.
+
+**The desk.** Help is queued per project, folded per task and question for a
+day, and answered on the desk seat (`desk.deskPrompt`/`parseDeskAnswer`) at
+most 30 times an hour. An answer is written into the task's next brief; an
+escalation (the model says only the owner can answer, or no model is set up)
+is one `assistantRaiseIssue` of kind `blocked`, so it folds like any other
+repeat ask. With `settings.agentBrain.deskTool` on, `prepareDeskTool` starts a
+127.0.0.1 endpoint (`desk-server.cjs`, a random token per process) and writes
+two per-run MCP config files into the OS temp folder: OpenCode reads one
+through `OPENCODE_CONFIG`, Claude Code the other through `--mcp-config`
+(`executorCore.cliInvocation`'s `desk`). The worker's `ask_desk` call
+(`desk-mcp.mjs`) waits for `askDesk`, which shares the queue, the fold and the
+per-run limit with `MEFI_HELP`. The files are removed when the run finishes.
+
+**The head's drafts.** With `settings.agentBrain.headDrafts` on, `prepareRun`
+asks the head (the heavy role, data only: `DATA_ONLY_CLIS`) to draft a
+pipeline (`pipelines.draftPrompt`/`parseDraft`) for a compound or systemic
+task no Playbook recipe fits, in the background, at most ten an hour. The draft
+replaces the template while the run has not moved past its first steps;
+otherwise it is kept as `proposal` and becomes the layout the next time the
+task is prepared.
+
+**Nested delegation.** `taskDelegation.canPlan(ref, { nest, maxDepth })`: with
+`settings.agentBrain.nestedDelegation` on, a delegated slice (never a hand-off
+or a follow-up) below `EXECUTOR_MAX_DEPTH` may split its own part.

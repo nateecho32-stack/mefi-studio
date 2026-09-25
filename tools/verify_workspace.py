@@ -6,10 +6,9 @@ Copies application sources and catalog data only. All projects, credentials,
 board files, Electron profile, and HOME are disposable. No paid/model/network
 requests or executor processes are allowed. PNGs and a JSON report are retained.
 
-The regrouped menus are checked by id, data attribute and role: the rail's five
-sections and its foot (Search, Start here, Shortcuts, Community), Settings'
-Connections, Personal and System groups with Find a setting, deep links and
-Your Studio, the page header's way back to Command view, Ctrl+, and Search's
+The regrouped menus are checked by id, data attribute and role: the rail's four
+sections and local view rows, its Settings/Search/Help foot, seven Settings
+categories with Find a setting and legacy deep links, the page header's way back to Command view, Ctrl+, and Search's
 section kinds. A layout sweep captures Workspace, Settings, Style & sound and
 Command view at 1440x900, 1280x720 with the rail pinned through Keep menu open
 (saved as mefiStudio.railPinned), 1024x640 where that pin must yield, 900x700
@@ -76,9 +75,10 @@ const PAGE_PROBE = `window.__harnessProbe ||= (() => {
   const name = (el) => (el ? (el.getAttribute('aria-label') || el.title || el.innerText || '').trim() : '');
   const unfold = (el) => {
     if (!el || shown(el) || el.closest('#workspace-sidebar-panel')) return null;
-    const details = el.closest('details:not([open])');
-    const summary = details ? [...details.children].find((child) => child.tagName === 'SUMMARY') : null;
-    if (summary && shown(summary)) return { button: summary, container: details };
+    for (let details = el.closest('details:not([open])'); details; details = details.parentElement?.closest('details:not([open])')) {
+      const summary = [...details.children].find((child) => child.tagName === 'SUMMARY');
+      if (summary && shown(summary)) return { button: summary, container: details };
+    }
     for (let node = el.parentElement; node && node !== document.body; node = node.parentElement) {
       if (!node.id) continue;
       const button = [...document.querySelectorAll('[aria-controls]')].find((candidate) =>
@@ -199,24 +199,30 @@ class VerifiedWindow extends NativeWindow {
   // PAGE_PROBE's unfold). Returns what closeMenu needs, or null when the
   // control is already on screen or no menu holds it.
   async openMenuFor(selector) {
+    const menus = [];
+    for (let depth = 0; depth < 12; depth += 1) {
     const menu = await this.run(`${PAGE_PROBE}
       const found = window.__harnessProbe.unfold(document.querySelector(${JSON.stringify(selector)}));
       if (!found) return null;
-      found.button.dataset.harnessOpener = '';
-      found.container.dataset.harnessMenu = '';
-      return { opener: found.button.id ? '#' + CSS.escape(found.button.id) : '[data-harness-opener]', container: '[data-harness-menu]' };`);
-    if (!menu) return null;
+      found.button.dataset.harnessOpener = '${depth}';
+      found.container.dataset.harnessMenu = '${depth}';
+      return { opener: '[data-harness-opener="${depth}"]', container: '[data-harness-menu="${depth}"]' };`);
+    if (!menu) return menus.length ? menus : null;
     await this.clickVisible(menu.opener);
-    await this.until(`window.__harnessProbe?.shown(document.querySelector(${JSON.stringify(selector)}))`, `its menu shows ${selector}`, 3000);
-    return menu;
+    await this.until(`(() => { const container = document.querySelector(${JSON.stringify(menu.container)}); return container?.tagName === 'DETAILS' ? container.open : window.__harnessProbe?.shown(container); })()`, `ancestor menu opens for ${selector}`, 3000);
+    menus.push(menu);
+    }
+    throw new Error(`Too many nested menus for ${selector}`);
   }
   async closeMenu(menu) {
     try {
+      for (const entry of (Array.isArray(menu) ? [...menu].reverse() : [menu])) {
       const open = await this.run(`${PAGE_PROBE}
-        const probe = window.__harnessProbe, container = document.querySelector(${JSON.stringify(menu.container)}), opener = document.querySelector(${JSON.stringify(menu.opener)});
+        const probe = window.__harnessProbe, container = document.querySelector(${JSON.stringify(entry.container)}), opener = document.querySelector(${JSON.stringify(entry.opener)});
         if (!container || !probe.shown(opener)) return false;
         return container.tagName === 'DETAILS' ? container.open : probe.shown(container);`);
-      if (open) await this.clickVisible(menu.opener);
+      if (open) await this.clickVisible(entry.opener);
+      }
     } finally {
       await this.run("for (const node of document.querySelectorAll('[data-harness-opener], [data-harness-menu]')) { delete node.dataset.harnessOpener; delete node.dataset.harnessMenu; }");
     }
@@ -227,7 +233,11 @@ class VerifiedWindow extends NativeWindow {
   async openFromNav(id, classic = `#cmd-dock [data-nav="${id}"]`) {
     const railShell = await this.run("return document.documentElement.dataset.shell === 'rail';");
     if (!railShell) return this.click(classic);
-    const target = `#app-rail [data-nav="${id}"]`;
+    const group = await this.run(`return window.MefiNav.railSection(window.MefiNav.get(${JSON.stringify(id)}));`);
+    const groups = {work:"tasks", live:"command", models:"booklet"};
+    if (groups[group] && id !== groups[group]) await this.click(`#app-rail [data-nav="${groups[group]}"]`);
+    if (["onboarding", "help", "community"].includes(id)) await this.click("#app-help-toggle");
+    const target = groups[group] && id !== groups[group] ? `#app-local-nav [data-nav="${id}"]` : `#app-rail [data-nav="${id}"]`;
     const visible = `(() => { const box = document.querySelector(${JSON.stringify(target)})?.getBoundingClientRect(); return Boolean(box && box.width && box.height); })()`;
     // Pin and unpin without the width transition: the next step clicks at once,
     // and an offscreen window can leave a transition stuck at its start value,
@@ -291,8 +301,11 @@ class VerifiedWindow extends NativeWindow {
   }
   async openSurface(surface) {
     if (surface === "music") {
-      if (await this.run("return document.getElementById('music-overlay')?.hidden !== false;")) await this.run("window.MefiNav.go('music');");
-      await this.until("document.getElementById('music-overlay')?.hidden === false && document.body.dataset.sheet === 'music'", "Style & sound opens for the layout sweep");
+      if (await this.run("return document.getElementById('music-overlay')?.hidden !== false;")) {
+        await this.run("window.MefiNav.go('music');");
+        await this.click("#settings-canvas-preview");
+      }
+      await this.until("document.getElementById('music-overlay')?.hidden === false && window.MefiNav.state.transient === 'appearancePreview'", "Appearance preview opens for the layout sweep");
       await sleep(350);
       return;
     }
@@ -339,7 +352,7 @@ class VerifiedWindow extends NativeWindow {
         layout.find = entry(document.getElementById('settings-find'));
         layout.nav = rect(document.getElementById('settings-nav'));
         layout.sections = rect(document.getElementById('settings-sections'));
-        layout.groups = [...document.querySelectorAll('#settings-nav [role="group"]')].map((group) => (group.getAttribute('aria-label') || (group.getAttribute('aria-labelledby') || '').split(' ').map((id) => document.getElementById(id)?.textContent || '').join(' ')).trim());
+        layout.groups = [...document.querySelectorAll('#settings-nav [data-settings-category]')].map((button) => button.dataset.settingsCategory);
       } else if (surface === 'command') {
         const tools = document.querySelector('.cmd-tools');
         layout.surface = rect(document.getElementById('idle-hud'));
@@ -373,7 +386,7 @@ class VerifiedWindow extends NativeWindow {
     const edge = layout.shell && layout.rail ? layout.rail.right : 0;
     assert(layout.scroll <= layout.width + 2, `${name}: no horizontal page overflow`);
     if (layout.shell) {
-      assert.deepEqual(layout.heads.map((head) => head.section).sort(), ["home", "live", "models", "settings", "work"], `${name}: the menu keeps its five heads`);
+      assert.deepEqual(layout.heads.map((head) => head.section).sort(), ["home", "live", "models", "work"], `${name}: the menu keeps its four heads`);
       if (size.pin && layout.width >= 1100) {
         assert(layout.pinned && layout.rail.width >= 180, `${name}: Keep menu open holds the menu open at ${layout.width}px`);
       } else {
@@ -381,7 +394,7 @@ class VerifiedWindow extends NativeWindow {
         for (const head of layout.heads) assert(inside(head.box) && head.hit, `${name}: the ${head.section} head is on screen and clickable`);
       }
       if (size.pin) assert.equal(layout.saved, "1", `${name}: the saved pin survives the window size`);
-      for (const nav of ["palette", "onboarding", "help", "community"]) {
+      for (const nav of ["studio", "palette"]) {
         const item = layout.foot.find((entry) => entry.nav === nav);
         assert(item, `${name}: the menu foot offers ${nav}`);
         assert(inside(item.box) && item.hit, `${name}: the foot's ${nav} item stays on screen and clickable`);
@@ -398,7 +411,7 @@ class VerifiedWindow extends NativeWindow {
     } else if (surface === "studio") {
       assert(layout.title && layout.title.text === "Settings" && layout.title.shown && layout.title.box.right <= layout.width + 2, `${name}: the page header names Settings`);
       assert(layout.find && layout.find.box && layout.find.box.left >= edge - 1 && layout.find.box.right <= layout.width + 2 && layout.find.hit, `${name}: Find a setting stays on screen and usable`);
-      assert.deepEqual(layout.groups.map((group) => group.toLowerCase()).sort(), ["connections", "personal", "system"], `${name}: Settings groups its list as Connections, Personal and System`);
+      assert.deepEqual(layout.groups, ["general", "appearance", "connections", "models", "automation", "audio", "system"], `${name}: Settings shows its seven categories in the same order`);
       assert(layout.nav && layout.nav.right <= layout.width + 2 && layout.sections && layout.sections.right <= layout.width + 2, `${name}: the Settings list and cards fit`);
     } else if (surface === "command") {
       assert(inside(layout.tools), `${name}: the Command toolbar fits the window`);
@@ -685,7 +698,7 @@ class VerifiedWindow extends NativeWindow {
     assert.equal(await this.run("return document.getElementById('workspace-sidebar-toggle').hidden;"), true, "transient dialogs keep the edge trigger out of their focus scope");
     await this.until("!document.getElementById('palette-status').textContent.includes('Loading project tasks')", "palette loads tasks without opening the board");
     // Settings registers each card with Search, so a key question lands on its card.
-    for (const [query, expected] of [["node tree", "Command view"], ["api key", "Settings › Providers"], ["color", "Style & sound"], ["season archive", "Improve season archive"]]) {
+    for (const [query, expected] of [["node tree", "Command view"], ["api key", "Settings › Connections"], ["color", "Appearance & audio"], ["season archive", "Improve season archive"]]) {
       await this.run(`const input = document.getElementById('palette-input'); input.value = ${JSON.stringify(query)}; input.dispatchEvent(new Event('input', {bubbles:true}));`);
       assert((await this.run("return document.getElementById('palette-list').textContent;")).includes(expected), `palette finds ${query}`);
     }
@@ -1005,7 +1018,7 @@ class VerifiedWindow extends NativeWindow {
     // Navigation lives in the rail on the rail shell and in the drawer's rows on
     // the classic one; either way it has to be on screen. (A row's own computed
     // display ignores a hidden parent, so ask for a real box.)
-    const mobileMenu = await this.run("const panel=document.getElementById('workspace-sidebar-panel'),rail=document.getElementById('app-rail'),railOn=document.documentElement.dataset.shell==='rail';const r=panel.getBoundingClientRect();const shown=el=>{const b=el.getBoundingClientRect();return b.width>0&&b.height>0;};return {left:r.left,right:r.right,edge:railOn?rail.getBoundingClientRect().right:0,width:panel.clientWidth,scroll:panel.scrollWidth,screen:innerWidth,links:railOn?[...rail.querySelectorAll('.app-rail-head')].length===5&&[...rail.querySelectorAll('.app-rail-head')].every(shown):[...panel.querySelectorAll('.ws-home')].every(shown),addVisible:getComputedStyle(document.getElementById('workspace-add-project')).visibility!=='hidden',personal:Boolean(panel.querySelector('#workspace-person-name,#workspace-agent-name,#workspace-accent,#workspace-motion'))};");
+    const mobileMenu = await this.run("const panel=document.getElementById('workspace-sidebar-panel'),rail=document.getElementById('app-rail'),railOn=document.documentElement.dataset.shell==='rail';const r=panel.getBoundingClientRect();const shown=el=>{const b=el.getBoundingClientRect();return b.width>0&&b.height>0;};return {left:r.left,right:r.right,edge:railOn?rail.getBoundingClientRect().right:0,width:panel.clientWidth,scroll:panel.scrollWidth,screen:innerWidth,links:railOn?[...rail.querySelectorAll('.app-rail-head')].length===4&&[...rail.querySelectorAll('.app-rail-head')].every(shown):[...panel.querySelectorAll('.ws-home')].every(shown),addVisible:getComputedStyle(document.getElementById('workspace-add-project')).visibility!=='hidden',personal:Boolean(panel.querySelector('#workspace-person-name,#workspace-agent-name,#workspace-accent,#workspace-motion'))};");
     assert.equal(mobileMenu.personal, false, "the project panel holds projects only: name, theme and motion live in Settings › Your Studio");
     assert(Math.abs(mobileMenu.left - mobileMenu.edge) <= 1, "small-window drawer stays anchored to its edge: the rail's, or the window's");
     assert(mobileMenu.left >= 0 && mobileMenu.right <= mobileMenu.screen + 1 && mobileMenu.scroll <= mobileMenu.width + 1, "small-window drawer fits without horizontal scrolling");
@@ -1081,26 +1094,27 @@ class VerifiedWindow extends NativeWindow {
       return { shell: document.documentElement.dataset.shell === 'rail', sections, foot };`);
     report.menu = menu;
     if (menu.shell) {
-      assert.deepEqual(Object.keys(menu.sections).sort(), ["home", "live", "models", "settings", "work"], "the menu has five heads: Home, Work, Live, Models and Settings");
+      assert.deepEqual(Object.keys(menu.sections).sort(), ["home", "live", "models", "work"], "the menu keeps Home, Work, Live and Models groups");
       const members = {
         home: ["workspace", []],
-        work: ["tasks", ["analyzer", "brains", "ideas", "plans", "tasks"]],
-        live: ["command", ["command", "explorer", "eyes", "overhead"]],
-        models: ["booklet", ["booklet", "graph"]],
-        settings: ["studio", ["music", "profiler", "studio"]],
+        work: ["tasks", []],
+        live: ["command", []],
+        models: ["booklet", []],
       };
       for (const [section, [head, items]] of Object.entries(members)) {
         assert.equal(menu.sections[section].head, head, `the ${section} head opens ${head}`);
         assert.deepEqual(menu.sections[section].items, items, `the ${section} section lists ${items.join(", ") || "nothing under its head"}`);
+        assert(!items.includes(head), `the ${section} primary destination is listed only once`);
       }
-      const foot = { palette: "#g-palette", onboarding: "#g-flag", help: "#g-help", community: "#g-community" };
+      const foot = { studio: "#g-sliders", palette: "#g-palette" };
       for (const [nav, glyph] of Object.entries(foot)) {
         const item = menu.foot.find((entry) => entry.nav === nav);
         assert(item, `the menu foot offers ${nav}`);
         assert.equal(item.glyph, glyph, `the foot's ${nav} item draws ${glyph}`);
         assert(item.drawn, `${glyph} is in the icon sprite`);
       }
-      // Community lives in the foot, always visible: one click opens its card.
+      // Help groups onboarding, shortcuts and Community in one menu.
+      await this.click("#app-help-toggle");
       await this.click('#app-rail-foot [data-nav="community"]');
       await this.until("document.getElementById('tab-studio')?.hidden === false && !window.MefiWorkspace.isActive() && document.getElementById('settings-community')?.open === true", "the menu's Community opens Settings › Community");
       await this.capture("00e-community-from-menu");
@@ -1112,84 +1126,38 @@ class VerifiedWindow extends NativeWindow {
     await this.run("window.scrollTo(0, 0);");
     const settings = await this.run(`${PAGE_PROBE}
       const { shown } = window.__harnessProbe;
-      const find = document.getElementById('settings-find');
-      const groups = [...document.querySelectorAll('#settings-nav [role="group"]')].map((group) => ({
-        name: (group.getAttribute('aria-label') || (group.getAttribute('aria-labelledby') || '').split(' ').map((id) => document.getElementById(id)?.textContent || '').join(' ')).trim().toLowerCase(),
-        jumps: [...group.querySelectorAll('[data-settings-jump]')].map((button) => button.dataset.settingsJump),
-      }));
-      const blocks = {};
-      for (const id of ['settings-setup', 'settings-assistant', 'settings-routing', 'settings-workers', 'settings-jev', 'settings-studio', 'settings-community', 'settings-updates', 'settings-diagnostics', 'settings-integrations', 'settings-log']) {
-        blocks[id] = document.getElementById(id)?.closest('[data-settings-group]')?.dataset.settingsGroup ?? null;
-      }
-      const studio = document.getElementById('settings-studio');
-      const holds = (id) => Boolean(studio && document.getElementById(id) && studio.contains(document.getElementById(id)));
-      // Full, Calm and Off: a select's options, or the choices of the radio group #motion-toggle names.
-      const motion = document.getElementById('motion-toggle');
-      const choices = !motion ? '' : motion.tagName === 'SELECT' ? [...motion.options].map((option) => option.textContent).join(' ') : (motion.closest('[role="radiogroup"], fieldset') || motion).textContent;
-      const diagnostics = document.getElementById('settings-diagnostics');
-      const title = document.getElementById('page-title');
-      return {
-        find: find ? { type: find.type, placeholder: find.placeholder, shown: shown(find), status: Boolean(document.getElementById('settings-find-status')) } : null,
-        groups, blocks,
-        studio: {
-          holds: Object.fromEntries(['workspace-person-name', 'workspace-agent-name', 'workspace-accent', 'motion-toggle', 'idle-home'].map((id) => [id, holds(id)])),
-          companionMotion: !document.getElementById('workspace-motion') || holds('workspace-motion'),
-          voidThemes: Boolean(studio?.querySelector('#workspace-accent optgroup[label="Void collection · Discord members"]')),
-          choices,
-        },
-        probe: Boolean(diagnostics && ['speed-model', 'speed-go'].every((id) => diagnostics.contains(document.getElementById(id)))),
-        title: title ? title.textContent.trim() : null,
-      };`);
+      const categories = [...document.querySelectorAll('#settings-nav [data-settings-category]')].map((button) => button.dataset.settingsCategory);
+      const panes = [...document.querySelectorAll('[data-settings-category-pane]')].filter(shown).map((pane) => pane.dataset.settingsCategoryPane);
+      const categoryOf = (id) => document.getElementById(id)?.closest('[data-settings-category-pane]')?.dataset.settingsCategoryPane ?? null;
+      return { categories, panes, find: shown(document.getElementById('settings-find')), title: document.getElementById('page-title')?.textContent.trim(),
+        locations: Object.fromEntries(['workspace-person-name','motion-toggle','settings-assistant','settings-routing','jev-enabled','settings-audio','settings-log'].map((id) => [id,categoryOf(id)])),
+        providersFolded: [...document.querySelectorAll('.provider-tile')].every((node) => node.tagName === 'DETAILS' && !node.open) };`);
     report.settingsMenu = settings;
-    assert(settings.find && settings.find.type === "search" && settings.find.placeholder.startsWith("Find a setting") && settings.find.shown && settings.find.status, "Settings opens with a Find a setting… field");
-    assert.deepEqual(settings.groups.map((group) => group.name).sort(), ["connections", "personal", "system"], "Settings groups its list as Connections, Personal and System");
-    const cards = {
-      connections: ["settings-setup", "settings-assistant", "settings-routing", "settings-workers", "settings-jev"],
-      personal: ["settings-studio", "settings-community"],
-      system: ["settings-updates", "settings-diagnostics", "settings-integrations", "settings-log"],
-    };
-    for (const [group, ids] of Object.entries(cards)) {
-      const jumps = settings.groups.find((entry) => entry.name === group)?.jumps ?? [];
-      for (const id of ids) {
-        assert(jumps.includes(id), `Settings' ${group} list jumps to #${id}`);
-        assert.equal(settings.blocks[id], group, `#${id} sits in the ${group} block`);
-      }
-    }
-    for (const [id, held] of Object.entries(settings.studio.holds)) assert(held, `Your Studio holds #${id}`);
-    assert(settings.studio.companionMotion, "companion motion left the project panel with the rest of Make yourself at home");
-    assert(settings.studio.voidThemes, "Your Studio's theme picker keeps its Void collection group");
-    assert(["Full", "Calm", "Off"].every((choice) => settings.studio.choices.includes(choice)), "Your Studio's motion control offers Full, Calm and Off");
-    assert(settings.probe, "the speed probe lives in Diagnostics under its old ids");
-    assert.equal(settings.title, "Settings", "the page header names Settings");
+    assert.deepEqual(settings.categories, ['general', 'appearance', 'connections', 'models', 'automation', 'audio', 'system'], 'Settings exposes seven stable categories');
+    assert.equal(settings.panes.length, 1, 'one category is shown at a time');
+    assert(settings.find, 'Settings search is visible');
+    assert.equal(settings.title, 'Settings');
+    assert(settings.providersFolded, 'provider forms begin folded');
+    for (const [id, category] of Object.entries({ 'workspace-person-name':'general', 'motion-toggle':'appearance', 'settings-assistant':'connections', 'settings-routing':'models', 'jev-enabled':'automation', 'settings-audio':'audio', 'settings-log':'system' })) assert.equal(settings.locations[id], category, `${id} is grouped under ${category}`);
 
-    // A deep link opens one card, in view.
-    await this.run("window.MefiNav.go('workspace');");
-    await this.until("window.MefiWorkspace?.isActive?.()", "the workspace opens before the deep link");
     await this.run("window.MefiNav.go('studio', { section: 'settings-updates' });");
-    await this.until("(() => { const card = document.getElementById('settings-updates'); if (!card || document.getElementById('tab-studio').hidden || window.MefiWorkspace.isActive()) return false; const box = card.getBoundingClientRect(); return (card.tagName !== 'DETAILS' || card.open) && box.top >= -2 && box.top <= innerHeight - 40; })()", "MefiNav.go('studio', {section: 'settings-updates'}) opens Settings › Updates in view");
-    await this.capture("00f-settings-updates-deep-link");
-    await this.run("for (const card of document.querySelectorAll('#tab-studio details.settings-optional')) card.open = false; window.scrollTo(0, 0);");
-
-    // Find a setting narrows the list, Enter opens the first match, Esc clears it.
-    const jumps = "[...document.querySelectorAll('#settings-nav [data-settings-jump]')].filter((button) => { const box = button.getBoundingClientRect(); return box.width > 0 && box.height > 0; }).map((button) => button.dataset.settingsJump)";
-    const every = await this.run(`return ${jumps};`);
-    await this.run("const input = document.getElementById('settings-find'); input.focus(); input.value = 'updates'; input.dispatchEvent(new Event('input', { bubbles: true }));");
-    await this.until(`(() => { const found = ${jumps}; return found.includes('settings-updates') && found.length < ${every.length} && document.getElementById('settings-find-status').textContent.trim() !== ''; })()`, "Find a setting narrows the list and says what it found");
-    const matches = await this.run(`return ${jumps};`);
-    await this.capture("00g-settings-find");
-    this.webContents.sendInputEvent({ type: "keyDown", keyCode: "Enter" });
-    this.webContents.sendInputEvent({ type: "keyUp", keyCode: "Enter" });
-    await this.until(`(() => { const card = document.getElementById(${JSON.stringify(matches[0])}); return Boolean(card) && (card.tagName !== 'DETAILS' || card.open); })()`, "Enter in Find a setting opens the first match");
-    await this.run("document.getElementById('settings-find').focus();");
-    this.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
-    this.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
-    await this.until(`document.getElementById('settings-find').value === '' && ${jumps}.length === ${every.length}`, "Escape clears Find a setting and brings every section back");
-    await this.run("for (const card of document.querySelectorAll('#tab-studio details.settings-optional')) card.open = false; window.scrollTo(0, 0);");
+    await this.until("document.getElementById('settings-updates').open && !document.getElementById('settings-category-system').hidden", 'legacy Updates deep link reveals System');
+    await this.capture('00f-settings-updates-deep-link');
+    await this.run("const input = document.getElementById('settings-find'); input.focus(); input.value = 'custom provider api key'; input.dispatchEvent(new Event('input', { bubbles: true }));");
+    await this.until("Boolean(document.querySelector('[data-settings-result=\"custom-key\"]'))", 'search finds a specific control');
+    await this.capture('00g-settings-find');
+    this.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
+    this.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+    await this.until("document.activeElement?.id === 'custom-key' && document.getElementById('custom-key').closest('details').open && !document.getElementById('settings-category-connections').hidden", 'Enter reveals and focuses the field inside a collapsed provider');
+    await this.run("const input = document.getElementById('settings-find'); input.focus(); input.value = 'no-setting-matches'; input.dispatchEvent(new Event('input', { bubbles: true }));");
+    this.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+    this.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+    await this.until("document.getElementById('settings-find').value === '' && !document.getElementById('settings-category-connections').hidden", 'Escape returns to the selected category');
 
     // The page header's way back: shown only when Settings came from Command.
     await this.run("window.MefiNav.go('command');");
     await this.until("window.MefiIdle?.isActive?.()", "Command opens before the way-back check");
-    if (menu.shell) await this.click("#app-rail .app-rail-head[data-section='settings']");
+    if (menu.shell) await this.click("#app-rail-foot [data-nav='studio']");
     else await this.openFromNav("studio");
     await this.until("document.getElementById('tab-studio')?.hidden === false && !window.MefiIdle.isActive()", "the menu's Settings opens Settings from Command");
     await this.run("window.scrollTo(0, 0);");
@@ -1224,10 +1192,10 @@ class VerifiedWindow extends NativeWindow {
     await this.until("document.getElementById('palette-overlay')?.hidden === false", "Search opens");
     await this.until("!document.getElementById('palette-status').textContent.includes('Loading project tasks')", "Search finishes loading project tasks");
     assert.equal(await this.run("return document.querySelector('#palette-overlay [role=dialog]')?.getAttribute('aria-label') ?? null;"), "Search Studio", "the palette is called Search Studio");
-    for (const [query, label, kind] of [["node tree", "Command view", "Live"], ["api key", "Settings › Providers", "Settings"], ["color", "Style & sound", "Settings"]]) {
+    for (const [query, label, kind] of [["node tree", "Command view", "Live"], ["api key", "Settings › Connections ›", "Settings"], ["color", "Appearance & audio", "Settings"]]) {
       await this.run(`const input = document.getElementById('palette-input'); input.value = ${JSON.stringify(query)}; input.dispatchEvent(new Event('input', { bubbles: true }));`);
       const rows = await this.run("return [...document.querySelectorAll('#palette-list [role=option]')].map((row) => ({ label: row.querySelector('.label')?.textContent.trim() ?? '', kind: row.querySelector('.kind')?.textContent.trim() ?? '' }));");
-      const row = rows.find((entry) => entry.label === label);
+      const row = rows.find((entry) => entry.label === label || entry.label.startsWith(label));
       assert(row, `Search finds ${label} for "${query}"`);
       assert.equal(row.kind.toLowerCase(), kind.toLowerCase(), `Search names ${label}'s section, ${kind}, as its kind`);
     }

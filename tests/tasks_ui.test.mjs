@@ -8,13 +8,17 @@ const groupsSource = await readFile(new URL("../renderer/task-groups.js", import
 const stageSource = await readFile(new URL("../renderer/stage-labels.js", import.meta.url), "utf8");
 
 class Element {
-  constructor(tag = "div") {
+  constructor(tag = "div", ownerDocument = null) {
     this.tagName = tag; this.children = []; this.dataset = {}; this.listeners = {}; this.attrs = {};
+    this.ownerDocument = ownerDocument;
     this.hidden = false; this.value = ""; this.style = { setProperty() {} };
     const classes = new Set();
     this.classList = { add: (...names) => names.forEach((n) => classes.add(n)), contains: (n) => classes.has(n), toggle: (n, on) => on ? classes.add(n) : classes.delete(n) };
   }
-  set textContent(text) { this.ownText = String(text); this.children = []; }
+  set textContent(text) {
+    if (this.ownerDocument?.activeElement !== this && this.contains(this.ownerDocument?.activeElement)) this.ownerDocument.activeElement = null;
+    this.ownText = String(text); this.children = [];
+  }
   get textContent() { return (this.ownText ?? "") + this.children.map((child) => child.textContent).join(""); }
   append(...children) { this.children.push(...children); }
   insertBefore(child, next) { const index = this.children.indexOf(next); this.children.splice(index < 0 ? this.children.length : index, 0, child); }
@@ -29,17 +33,21 @@ class Element {
   }
   querySelector(selector) { return this.querySelectorAll(selector)[0] ?? null; }
   closest() { return this; }
+  contains(element) { return Boolean(element) && (element === this || this.children.some((child) => child.contains(element))); }
+  focus() { if (this.ownerDocument) this.ownerDocument.activeElement = this; }
+  setSelectionRange(start, end, direction) { this.selectionStart = start; this.selectionEnd = end; this.selectionDirection = direction; }
   scrollIntoView() { this.scrolled = true; }
   click() { for (const fn of this.listeners.click ?? []) fn({ target: this, stopPropagation() {}, preventDefault() {} }); }
 }
 
 function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = null, bridge = {}, overview = false, timers = null, clock = null } = {}) {
   const els = new Map();
-  const get = (id) => { if (!els.has(id)) els.set(id, new Element()); return els.get(id); };
+  const document = { readyState: "loading", activeElement: null, getElementById: (id) => get(id), createElement: (tag) => new Element(tag, document), querySelectorAll: () => [], addEventListener() {} };
+  const get = (id) => { if (!els.has(id)) els.set(id, new Element("div", document)); return els.get(id); };
   for (const filter of ["all", "open", "done"]) {
     const button = new Element("button"); button.dataset.filter = filter; get("task-filters").append(button);
   }
-  const saved = []; const notifications = []; const events = []; let onTasks, onProjects;
+  const saved = []; const notifications = []; const events = []; const polls = new Map(); let onTasks, onProjects, onAssistantStatus;
   const prefs = { taskFilter: filter, autoReference: false };
   const context = vm.createContext({
     window: {
@@ -50,14 +58,15 @@ function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = nu
         prefsSet: async (patch) => { Object.assign(prefs, patch); return { ok: true, prefs }; },
         onTasks: (fn) => { onTasks = fn; },
         onProjects: (fn) => { onProjects = fn; },
+        onAssistantStatus: (fn) => { onAssistantStatus = fn; },
         ...bridge,
       },
       MefiNav: { setBadge() {}, claim() {}, release() {} },
-      MefiBoot: { pollStart() {} }, MefiToast: (text) => notifications.push(text),
+      MefiBoot: { pollStart: (name, callback) => polls.set(name, callback) }, MefiToast: (text) => notifications.push(text),
       dispatchEvent: (event) => { events.push(event); return true; },
     },
     CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options?.detail; } },
-    document: { readyState: "loading", getElementById: get, createElement: (tag) => new Element(tag), querySelectorAll: () => [], addEventListener() {} },
+    document,
     // Timers stay inert unless a test collects them to fire by hand.
     setTimeout: (fn, delay) => { timers?.push({ fn, delay }); return timers ? timers.length : undefined; }, setInterval() {}, console,
     // A test clock moves Date.now() by hand; new Date(value) stays real.
@@ -67,8 +76,154 @@ function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = nu
   if (overview) vm.runInContext(groupsSource, context);
   vm.runInContext(source, context);
   const api = context.window.MefiTasks; api.init();
-  return { api, get, window: context.window, saved, notifications, events, broadcast: (rows) => onTasks(rows), project: (activeId) => onProjects({ activeId }) };
+  return { api, get, document, window: context.window, saved, notifications, events, broadcast: (rows) => onTasks(rows), project: (activeId) => onProjects({ activeId }), live: (value) => onAssistantStatus(value), poll: () => polls.get("tasks.board")?.() };
 }
+
+test("workflow summary uses the current project's exact worker and recorded checks without promoting worker claims", async () => {
+  const env = environment();
+  const task = { id: "snake", projectId: "p", runId: "run-2", status: "active", lastAttempt: { result: { tests: "99 tests passed" } }, verificationRun: { state: "running", results: [{ ok: true }, { ok: false }] } };
+  const status = { projectId: "p", running: [{ taskId: "snake", projectId: "q", currentStep: "Private foreign work" }, { taskId: "snake", runId: "run-1", currentStep: "Stale attempt" }, { taskId: "snake", runId: "run-2", route: "Builder A", currentStep: "Bash running · checking server", lastOutputAt: 58000 }] };
+  const summary = env.api.workflowSummary(task, { status, now: 100000 });
+  assert.equal(summary.worker, "Builder A");
+  assert.equal(summary.action, "Bash running · checking server");
+  assert.equal(summary.activityAge, "Updated 42s ago");
+  assert.equal(summary.checks, "1/2 recorded checks passed · running");
+  assert.equal(summary.stage, "running");
+  assert.doesNotMatch(JSON.stringify(summary), /99 tests|Private foreign|Stale attempt/);
+  const ready = env.api.workflowSummary({ id: "ready", projectId: "p", status: "open" }, { status: { projectId: "p", held: true, running: [] } });
+  assert.match(ready.nextAction, /Task ready; agents paused/);
+  assert.equal(ready.checks, "No completion checks recorded");
+});
+
+test("a saved worker assignment without current status is uncertain, and failed checks never look ready", () => {
+  const env = environment();
+  const task = { id: "work", projectId: "p", status: "active", runId: "current" };
+  const summary = env.api.workflowSummary(task, { status: { projectId: "p", running: [{ taskId: "work", runId: "old", route: "Stale builder", currentStep: "Old output", lastOutputAt: 123 }] } });
+  assert.equal(summary.stage, "waiting");
+  assert.equal(summary.label, "Waiting for worker status");
+  assert.match(summary.action, /saved worker assignment/);
+  assert.equal(summary.worker, "Current worker status unavailable");
+  assert.equal(summary.activityAge, "");
+  assert.doesNotMatch(JSON.stringify(summary), /Ready for a worker|No worker running|Stale builder|Old output/);
+  const failed = env.api.workflowSummary({ id: "failed", projectId: "p", status: "open", verification: { state: "failed", reason: "Rule checks failed" } });
+  assert.equal(failed.stage, "blocked");
+  assert.equal(failed.label, "Needs attention");
+  assert.match(failed.action, /last completion check failed/);
+  assert.match(failed.nextAction, /View checks/);
+  assert.equal(failed.blocker, "Rule checks failed");
+  // Green checks beside a rejected verdict: the action names the rejection
+  // instead of calling the checks failed, and "passed" is said once.
+  const rejected = env.api.workflowSummary({ id: "rejected", projectId: "p", status: "open", lastAttempt: { runId: "run_7" },
+    verification: { state: "failed", reason: "No change in the attempt's session" }, verificationRun: { key: "rejected:run_7", state: "passed", results: [{ ok: true }] } });
+  assert.equal(rejected.checks, "1/1 recorded checks passed");
+  assert.match(rejected.action, /checks passed, but the result was not accepted/);
+  assert.equal(rejected.blocker, "No change in the attempt's session");
+  assert.doesNotMatch(`${rejected.action} ${rejected.checks}`, /check failed|passed · passed/);
+  // An earlier attempt's run is labelled as such, and does not excuse this one.
+  const stale = env.api.workflowSummary({ id: "stale", projectId: "p", status: "open", lastAttempt: { runId: "run_8" },
+    verification: { state: "failed", reason: "Rule checks failed" }, verificationRun: { key: "stale:run_7", state: "passed", results: [{ ok: true }] } });
+  assert.equal(stale.checks, "1/1 recorded checks passed · from an earlier attempt");
+  assert.match(stale.action, /last completion check failed/);
+  const checking = env.api.workflowSummary({ ...task, status: "awaiting_verification" }, { status: { projectId: "p", running: [] } });
+  assert.equal(checking.stage, "review");
+  assert.equal(checking.action, "Worker finished; checking the result", "a verification run can retain the completed worker's run id");
+});
+
+test("Work offers scoped start or saved resume once and keeps blocked or approval tasks held", async () => {
+  for (const stage of ["ready", "owner", "blocked", "approval"]) {
+    const task = { id: "start", projectId: "p", title: "Build Snake", status: "open" };
+    const env = environment({ tasks: [task], bridge: { backlogStatus: async () => ({ ok: true, projectId: "p", paused: true, taskStates: [{ id: "start", stage: stage === "owner" ? "blocked" : stage, blockedBy: stage === "owner" ? "owner" : stage === "blocked" ? "dependencies" : undefined, reason: "Waiting" }] }) } });
+    let finish; const pending = new Promise((resolve) => { finish = resolve; }); const calls = [];
+    env.window.MefiWorkspace = { startTask: async (value) => { calls.push(value.id); await pending; } };
+    await env.api.open({ taskId: "start" });
+    const start = () => descendants(env.get("task-detail")).find((element) => element.dataset.taskAction === "start-task");
+    if (["blocked", "approval"].includes(stage)) { assert.equal(start(), undefined); continue; }
+    assert.equal(start().textContent, stage === "owner" ? "Resume this task" : "Start this task");
+    start().click(); env.broadcast([task]); start().click();
+    assert.equal(start().disabled, true);
+    assert.deepEqual(calls, ["start"]);
+    finish(); await settle();
+    assert.equal(start().disabled, false);
+  }
+});
+
+test("short task titles retain the complete brief and completed results expose useful next actions", async () => {
+  const full = "Validate Snake and launch a local preview. Work only in Studio Snake Trial and preserve all existing controls and tests.";
+  const task = { id: "done", projectId: "p", title: full, prompt: `${full}\nFinal acceptance check: keyboard input works.`, status: "done", verification: { state: "verified" } };
+  const env = environment({ tasks: [task], bridge: { tasksList: async () => ({ ok: true, projectId: "p", tasks: [task] }) } });
+  const actions = [];
+  env.window.MefiWorkspace = { requestChange: (value) => actions.push(["change", value.id]), previewStatus: () => ({ projectId: "p", phase: "ready", message: "Ready" }), previewAction: (kind, value) => actions.push([kind, value.taskId]) };
+  await env.api.open({ taskId: "done" });
+  assert.equal(env.get("task-title").textContent, "Validate Snake and launch a local preview.");
+  assert.ok(env.get("task-detail").textContent.includes(task.prompt));
+  const controls = () => descendants(env.get("task-detail"));
+  controls().find((element) => element.dataset.taskAction === "view-checks").click();
+  assert.equal(env.get("task-tab-evidence").attrs["aria-selected"], "true");
+  controls().find((element) => element.dataset.taskAction === "request-change").click();
+  controls().find((element) => element.dataset.taskAction === "open-app").click();
+  assert.deepEqual(actions, [["change", "done"], ["open", "done"]]);
+  env.window.MefiWorkspace.previewStatus = () => ({ projectId: "q", phase: "ready" });
+  env.broadcast([task]);
+  assert.equal(controls().some((element) => element.dataset.taskAction === "open-app"), false);
+});
+
+test("a one-line task does not repeat its title as the brief, and Delete reads as destructive before it is armed", async () => {
+  const task = { id: "one", projectId: "p", title: "Export notes as Markdown", status: "open" };
+  const env = environment({ tasks: [task], bridge: { tasksList: async () => ({ ok: true, projectId: "p", tasks: [task] }) } });
+  await env.api.open({ taskId: "one" });
+  assert.equal(env.get("task-title").textContent, task.title);
+  const repeats = descendants(env.get("task-detail")).filter((element) => element.tagName === "p" && element.textContent === task.title);
+  assert.equal(repeats.length, 0, "the heading already shows the title");
+  const remove = env.get("task-status-row").children.find((button) => button.textContent === "Delete");
+  assert.match(remove.className, /\bdanger\b/);
+});
+
+test("Work keeps each project's selection and panel through project switches", async () => {
+  let projectId = "p";
+  const tasks = { p: [{ id: "first", projectId: "p", title: "First project", status: "open" }], q: [{ id: "second", projectId: "q", title: "Second project", status: "open" }] };
+  const env = environment({ bridge: { tasksList: async () => ({ ok: true, projectId, tasks: tasks[projectId] }) } });
+  await env.api.open({ taskId: "first" });
+  env.get("task-tab-evidence").click();
+  env.api.close();
+  projectId = "q"; env.project("q"); await env.api.open({ taskId: "second" });
+  projectId = "p"; env.project("p"); await settle();
+  assert.equal(env.api.state.selected, "first");
+  assert.equal(env.api.saveState().projectId, "p");
+  assert.equal(env.get("task-tab-evidence").attrs["aria-selected"], "true");
+  assert.doesNotMatch(env.get("task-detail").textContent, /Second project/);
+});
+
+test("returning to the board overview survives background refresh until Work is deliberately reopened", async () => {
+  const task = { id: "one", projectId: "p", title: "Build Snake", status: "open" };
+  const env = environment({ bridge: { tasksList: async () => ({ ok: true, projectId: "p", tasks: [task] }) } });
+  await env.api.open({ taskId: "one" });
+  env.get("task-overview-back").click();
+  env.poll(); await settle();
+  assert.equal(env.api.state.selected, null, "the background poll never undoes the user's Back action");
+  env.api.close(); await env.api.open();
+  assert.equal(env.api.state.selected, "one", "returning from another surface deliberately restores the task context");
+});
+
+test("live activity refresh preserves a History draft and stale reads cannot replace newer activity", async () => {
+  let finish;
+  const pending = new Promise((resolve) => { finish = resolve; });
+  const task = { id: "working", projectId: "p", status: "active", runId: "run-1", title: "Build Snake" };
+  const env = environment({ tasks: [task], bridge: { tasksList: async () => ({ ok: true, projectId: "p", tasks: [task] }), assistantStatus: () => pending } });
+  const opening = env.api.open({ taskId: "working" });
+  env.api.state.projectId = "p";
+  env.live({ projectId: "p", running: [{ taskId: task.id, runId: task.runId, currentStep: "Current tool running" }] });
+  finish({ ok: true, status: { projectId: "p", running: [{ taskId: task.id, currentStep: "Old output" }] } });
+  await opening;
+  env.get("task-tab-history").click();
+  const input = () => descendants(env.get("task-detail")).find((element) => element.placeholder === "Log a note…");
+  input().focus(); input().value = "Keep this note";
+  for (const listener of input().listeners.input) listener({ target: input() });
+  env.live({ projectId: "p", running: [{ taskId: task.id, runId: task.runId, currentStep: "Next tool running" }] });
+  assert.equal(input().value, "Keep this note");
+  assert.equal(env.document.activeElement, input());
+  assert.match(env.get("task-detail").textContent, /Next tool running/);
+  assert.doesNotMatch(env.get("task-detail").textContent, /Old output/);
+});
 
 const rows = [
   { id: "open", title: "Upcoming task", status: "open", updatedAt: 100 },
@@ -77,6 +232,86 @@ const rows = [
   { id: "verify", title: "Finished worker", status: "awaiting_verification", updatedAt: 300 },
   { id: "review", title: "Needs a check", status: "open", verification: { state: "failed", reason: "No completion evidence" } },
 ];
+
+test("task detail tabs retain selection across live refresh and keep note drafts in History", async () => {
+  const env = environment({ tasks: rows });
+  await env.api.open({ taskId: "done" });
+  env.get("task-tab-history").click();
+  const panels = () => env.get("task-detail").children.filter((child) => child.id?.startsWith("task-panel-"));
+  assert.equal(panels().find((panel) => panel.id === "task-panel-history").hidden, false);
+  assert.equal(panels().find((panel) => panel.id === "task-panel-evidence").hidden, true);
+  const note = descendants(env.get("task-detail")).find((element) => element.placeholder === "Log a note…");
+  note.value = "Review this result";
+  for (const listener of note.listeners.input) listener({ target: note });
+  env.broadcast(rows);
+  assert.equal(panels().find((panel) => panel.id === "task-panel-history").hidden, false);
+  assert.equal(descendants(env.get("task-detail")).find((element) => element.placeholder === "Log a note…").value, "Review this result");
+  env.get("task-tab-references").click();
+  assert.equal(env.get("task-reference-controls").hidden, false);
+  env.get("task-tab-details").click();
+  assert.equal(env.get("task-reference-controls").hidden, true);
+});
+
+test("History entry focus survives refresh before typing and preserves an edited selection", async () => {
+  for (const [placeholder, field, buttonText] of [["Log a note…", "logs", "Log"], ["Capture an idea for this task…", "ideas", "Add idea"]]) {
+    const timers = [];
+    const env = environment({ tasks: rows, timers });
+    await env.api.open({ taskId: "done" });
+    env.get("task-tab-history").click();
+    const input = () => descendants(env.get("task-detail")).find((element) => element.placeholder === placeholder);
+    input().focus();
+    input().setSelectionRange(0, 0, "none");
+    env.broadcast(rows);
+    assert.equal(env.document.activeElement, input(), "a refresh between click and typing keeps the empty field focused");
+    env.document.activeElement.value = "Review this result";
+    for (const listener of input().listeners.input) listener({ target: input() });
+    input().setSelectionRange(7, 11, "backward");
+    env.broadcast(rows.map((task) => task.id === "done" ? { ...task, updatedAt: 999, logs: [{ text: "Fresh worker status", at: 999 }] } : task));
+    // A second push inside the 250 ms window paints on its trailing timer.
+    for (const timer of timers.splice(0).filter((row) => row.delay <= 250)) timer.fn();
+    assert.equal(env.document.activeElement, input());
+    assert.equal(input().value, "Review this result");
+    assert.deepEqual([input().selectionStart, input().selectionEnd, input().selectionDirection], [7, 11, "backward"]);
+    assert.match(env.get("task-detail").textContent, /Fresh worker status/, "keeping focus does not block live task updates");
+    descendants(env.get("task-detail")).find((element) => element.tagName === "button" && element.textContent === buttonText).click();
+    await settle();
+    assert.equal(env.saved.at(-1).find((task) => task.id === "done")[field].at(-1).text, "Review this result");
+    assert.equal(input().value, "", "a successful save clears the submitted draft");
+    assert.equal(env.document.activeElement, input(), "the field remains ready for another entry");
+    env.api.selectTask("open");
+    assert.notEqual(env.document.activeElement, input(), "opening another task never transfers editor focus to its empty entry");
+  }
+});
+
+test("a gather deep link opens References, and a resumed detail restores its selected panel", async () => {
+  let reads = 0;
+  const env = environment({ tasks: rows, bridge: {
+    referenceGather: async () => { reads += 1; return { ok: true, references: { verdict: "Useful", coverage: 0, files: [], code: [], sessions: [], chats: [], pngs: [], web: [], ideas: [] } }; },
+  } });
+  await env.api.open({ taskId: "open", gather: true }); await settle();
+  assert.equal(reads, 1);
+  assert.equal(env.get("task-reference-controls").hidden, false);
+  assert.equal(env.get("task-tab-references").attrs["aria-selected"], "true");
+  env.get("task-tab-evidence").click();
+  const saved = env.api.saveState();
+  assert.equal(saved.panel, "evidence");
+  env.api.close();
+  await env.api.open(saved);
+  assert.equal(env.get("task-tab-evidence").attrs["aria-selected"], "true");
+});
+
+test("narrow task details focus Back and return focus to task creation when leaving detail", async () => {
+  const env = environment({ tasks: rows });
+  env.window.matchMedia = () => ({ matches: true });
+  let focused = "";
+  env.get("task-overview-back").focus = () => { focused = "back"; };
+  env.get("task-new").focus = () => { focused = "new"; };
+  await env.api.open({ taskId: "open" });
+  assert.equal(focused, "back");
+  env.get("task-overview-back").click();
+  assert.equal(env.api.state.selected, null);
+  assert.equal(focused, "new");
+});
 
 test("Done visibly retains archived tasks and offers pending completion checks without declaring them done", async () => {
   const env = environment({ tasks: rows });
@@ -107,6 +342,22 @@ test("deep linking a done task overrides a saved Open filter and exposes the res
   assert.match(env.get("task-detail").textContent, /Worker reported — done: Saved project settings/);
 });
 
+test("verification evidence pairs each recorded command with its actual working location", async () => {
+  const task = { id: "checked", title: "Check the game", status: "done", verificationRun: {
+    state: "passed", commands: ["node test.mjs", "npm run check"], results: [
+      { ok: true, command: "node test.mjs", cwd: "C:\\projects\\snake" },
+      { ok: true, command: "npm run check", cwd: "C:\\projects\\snake\\tools" },
+      { ok: true, command: "legacy check" },
+    ],
+  } };
+  const env = environment({ tasks: [task] });
+  await env.api.open({ taskId: task.id });
+  const text = env.get("task-detail").textContent;
+  assert.ok(text.includes("node test.mjs — Location: C:\\projects\\snake"));
+  assert.ok(text.includes("npm run check — Location: C:\\projects\\snake\\tools"));
+  assert.equal((text.match(/Location:/g) ?? []).length, 2, "older results do not invent a location");
+});
+
 test("Review has its own list and keeps worker success distinct from confirmed completion", async () => {
   const env = environment({ tasks: rows });
   await env.api.open({ filter: "review" });
@@ -125,21 +376,29 @@ test("opening an empty Done view explains pending work and never implies a compl
   assert.match(env.get("task-list").textContent, /No confirmed completions/);
 });
 
-test("failed task saves do not leave a fake task in the board", async () => {
-  const env = environment({ tasks: [], saveOk: false });
+// New work enters through tasks:create, the host's one admission path; the
+// whole-board save (tasks:save) no longer creates cards, so a bridge without
+// tasks:create refuses instead of saving a card the host never admitted.
+test("failed task creation does not leave a fake task in the board, and a bridge without tasks:create adds none", async () => {
+  const env = environment({ tasks: [], bridge: { tasksCreate: async () => ({ ok: false, error: "The task store could not be written." }) } });
   const created = await env.api.addTask("This must be saved");
   assert.equal(created, null);
   assert.equal(env.api.state.tasks.length, 0);
   assert.match(env.notifications.at(-1), /could not be written/);
+  const legacy = environment({ tasks: [] });
+  assert.equal(await legacy.api.addTask("No admission path"), null);
+  assert.equal(legacy.api.state.tasks.length, 0);
+  assert.equal(legacy.saved.length, 0, "the whole-board save is never used to create a card");
+  assert.match(legacy.notifications.at(-1), /cannot add tasks/);
 });
 
 test("creating a task announces the walkthrough event, and a failed save never does", async () => {
-  const ok = environment({ tasks: [] });
+  const ok = environment({ tasks: [], bridge: { tasksCreate: async (payload) => ({ ok: true, projectId: "p", task: { id: "created", projectId: "p", title: payload.title, status: "open" } }) } });
   const created = await ok.api.addTask("Announce me");
   assert.ok(created);
   assert.deepEqual(ok.events.map((event) => event.type), ["mefi:task-created"]);
   assert.equal(ok.events[0].detail.taskId, created.id);
-  const failed = environment({ tasks: [], saveOk: false });
+  const failed = environment({ tasks: [], bridge: { tasksCreate: async () => ({ ok: false, error: "The task store could not be written." }) } });
   await failed.api.addTask("Never announced");
   assert.deepEqual(failed.events, []);
 });
@@ -380,6 +639,43 @@ test("a late handoff read never replaces the newly selected task's context", asy
   resolveOld({ ok: true, text: "Old context should stay out" }); await settle();
   assert.match(env.get("task-detail").textContent, /Context for the new task/);
   assert.doesNotMatch(env.get("task-detail").textContent, /Old context should stay out/);
+});
+
+test("Stop stays available for active builders while unsafe task edits remain locked", async () => {
+  for (const source of ["manual", "a-eyes"]) {
+    const task = { id: `working-${source}`, projectId: "p", title: source === "a-eyes" ? "Repair generated collision" : "Build the feature", status: "active", runId: `run-${source}`, source };
+    const other = { id: "other", projectId: "p", title: "Independent worker", status: "active", runId: "other-run" };
+    const calls = []; let finish;
+    const env = environment({ tasks: [task, other], bridge: { tasksAction: (payload) => { calls.push(payload); return new Promise((resolve) => { finish = resolve; }); } } });
+    await env.api.open({ taskId: task.id });
+    const buttons = () => env.get("task-status-row").children;
+    const stop = buttons().find((button) => button.dataset.taskAction === "stop");
+    assert.ok(stop);
+    assert.equal(stop.disabled, false, `${source} worker can be stopped`);
+    assert.equal(buttons().find((button) => button.textContent === "Rename").disabled, false);
+    assert.equal(buttons().find((button) => button.textContent === "Mark done").disabled, true);
+    assert.equal(buttons().find((button) => button.textContent === "Delete").disabled, true);
+    stop.click();
+    assert.equal(buttons().find((button) => button.dataset.taskAction === "stop").disabled, true, "pending stop cannot be resubmitted");
+    assert.equal(env.api.state.tasks[0].runId, task.runId, "running evidence stays until the host confirms");
+    finish({ ok: true, task: { ...task, status: "open", runId: null }, backlog: { ok: true, projectId: "p", taskStates: [{ id: task.id, stage: "blocked", blockedBy: "owner", reason: "Stopped by you" }] } });
+    await settle();
+    assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ taskId: task.id, projectId: "p", action: "stop" }]);
+    assert.equal(buttons().find((button) => button.textContent === "Resume").disabled, false);
+    assert.equal(env.api.state.tasks[1].runId, "other-run", "other workers are unchanged");
+    assert.equal(env.saved.length, 0, "stop never overwrites the task store");
+  }
+});
+
+test("a refused targeted stop restores Stop without inventing a stopped worker", async () => {
+  const task = { id: "working", projectId: "p", title: "Active worker", status: "active", runId: "running-worker" };
+  const env = environment({ tasks: [task], bridge: { tasksAction: async () => ({ ok: false, error: "Worker could not be reached" }) } });
+  await env.api.open({ taskId: task.id });
+  env.get("task-status-row").children.find((button) => button.dataset.taskAction === "stop").click();
+  await settle();
+  assert.equal(env.api.state.tasks[0].runId, "running-worker");
+  assert.equal(env.get("task-status-row").children.find((button) => button.dataset.taskAction === "stop").disabled, false);
+  assert.match(env.get("task-detail").textContent, /Worker could not be reached/);
 });
 
 test("Retry and Confirm done use targeted actions and never change evidence before the server saves", async () => {
@@ -842,4 +1138,49 @@ test("the selected running task's detail follows its live progress while the lis
   assert.equal(list.children[0], row, "the list does not show progress, so it keeps its rows");
   assert.match(detail.textContent, /Working now 40%/, "the live attempt repaints with the checkpoint");
   assert.match(detail.textContent, /second line/);
+});
+
+test("a promoted card keeps its from line: the filer's source, or the owner's origin", async () => {
+  // Promotion keeps a request's own source now (it used to rewrite it to
+  // "a-eyes"), so every roster filer needs a label, and an origin naming the
+  // owner says how the owner's own work arrived.
+  const cases = [
+    [{ source: "fix" }, "from an A-Eyes alert"], [{ source: "audit" }, "from the auditor"], [{ source: "agent" }, "from a builder's hand-off"],
+    [{ source: "grow" }, "from the grower"], [{ source: "improver" }, "from the improver"], [{ source: "overseer" }, "from overseer"],
+    [{ source: "machine" }, "from the machine monitor"], [{ source: "a-eyes", origin: { kind: "split", by: "owner" } }, "from a split"],
+    [{ source: "chat", origin: { kind: "composer", by: "owner" } }, "from the composer"], [{ origin: { kind: "request", by: "audit" } }, "from the auditor"],
+  ];
+  for (const [fields, expected] of cases) {
+    const task = { id: "t", projectId: "p", title: "Promoted card", status: "open", createdAt: Date.now(), ...fields };
+    const env = environment({ tasks: [task], bridge: { tasksList: async () => ({ ok: true, projectId: "p", tasks: [task] }) } });
+    await env.api.open({ taskId: "t" });
+    const meta = descendants(env.get("task-detail")).find((element) => element.className === "muted who task-meta");
+    assert.ok(meta?.textContent.endsWith(` · ${expected}`), `${JSON.stringify(fields)} → ${meta?.textContent}`);
+  }
+});
+
+test("a parent waiting on its follow-ups is not a review, and Drop closes a parked card through the host", async () => {
+  const parent = { id: "parent", projectId: "p", title: "Ship the warn tier", status: "awaiting_verification", runId: "run_p", handoffState: { state: "blocked", pending: 1, blocked: 1, childTaskIds: ["child"], reason: "1 delegated task needs review before this parent can finish" } };
+  const child = { id: "child", projectId: "p", title: "Wire the toggle", status: "open", parentTaskId: "parent", verifyAttempts: 3, verification: { state: "failed", reason: "outstanding obligations remain" } };
+  const checking = { id: "checking", projectId: "p", title: "Checked now", status: "awaiting_verification", runId: "run_c" };
+  const calls = [];
+  const env = environment({ tasks: [parent, child, checking], bridge: { tasksAction: async (payload) => { calls.push(payload); return { ok: true, task: { ...child, status: "archived", dropped: { at: Date.now(), by: "owner" } } }; } } });
+  await env.api.open({ taskId: "parent" });
+  assert.equal(env.api.summary().review, 2, "the parked follow-up and the card being checked, not the parent waiting on them");
+  assert.equal(env.api.describe(parent).label, "Waiting on follow-ups");
+  assert.match(env.get("task-detail").textContent, /waiting on its follow-ups/);
+  assert.ok(!env.get("task-status-row").children.some((button) => button.textContent === "Drop"), "a card with a saved run is not dropped");
+  const summary = env.api.workflowSummary(parent, { status: { projectId: "p", running: [] } });
+  assert.deepEqual([summary.stage, summary.label], ["waiting", "Waiting on follow-ups"]);
+  assert.match(summary.blocker, /needs review before this parent can finish/, "Home names the follow-up that holds it");
+  env.api.selectTask("child"); await settle();
+  env.get("task-status-row").children.find((button) => button.textContent === "Drop").click();
+  await settle();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ taskId: "child", projectId: "p", action: "drop" }]);
+  const closed = env.api.state.tasks.find((task) => task.id === "child");
+  assert.equal(closed.status, "archived");
+  assert.equal(env.api.describe(closed).label, "Dropped");
+  assert.equal(env.api.state.selected, null, "triage stays on the list instead of following the card to Done");
+  assert.equal(env.api.summary().review, 1);
+  assert.ok(env.notifications.some((text) => /^Dropped · Wire the toggle/.test(text)));
 });

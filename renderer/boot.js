@@ -9,7 +9,7 @@
   // at all (a dead call) trips the backstop gate, well past any such lag.
   const STEP_SLOW_MS = 15000;
   const STEP_DEAD_MS = 60000;
-  const FADE_MS = 180;
+  const FADE_MS = 420;
   const boot = { active: false, phase: "idle", epoch: 0, steps: [], promise: Promise.resolve(true), resolve: null, onReady: null, choose: null, choice: null, resumed: null };
   const el = {};
   const locked = new Map();
@@ -24,6 +24,7 @@
   }
 
   function paint() {
+    window.MefiCompanionHub?.boot(boot.phase);
     const snapshot = state();
     if (el.progress) el.progress.value = snapshot.progress;
     if (el.count) el.count.textContent = snapshot.progress + "%";
@@ -61,9 +62,14 @@
     // buttons still works. Escape/click never claim pending work is ready.
     if (event.key === "F5" || (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "r") return;
     event.stopImmediatePropagation();
+    if (boot.phase === "choose" && event.target?.getAttribute?.("role") === "radio" && window.MefiStartup?.navigateProjects?.(event.key)) {
+      event.preventDefault();
+      return;
+    }
     if (event.key === "Tab") {
       event.preventDefault();
-      const buttons = boot.phase === "error" ? [el.retry, el.continue].filter(Boolean) : boot.phase === "choose" ? chooserControls() : [];
+      const agent = window.MefiCompanionHub ? document.getElementById("boot-agent") : null;
+      const buttons = [agent, ...(boot.phase === "error" ? [el.retry, el.continue].filter(Boolean) : boot.phase === "choose" ? chooserControls() : [])].filter(Boolean);
       if (!buttons.length) el.layer?.focus({ preventScroll: true });
       else {
         const index = buttons.indexOf(document.activeElement);
@@ -75,7 +81,7 @@
   // Tab stays inside the launch choice: its project rows and buttons.
   function chooserControls() {
     const nodes = el.choose?.querySelectorAll?.("button:not([disabled]), input:not([disabled])") ?? [];
-    return Array.from(nodes).filter((node) => !node.hidden && !node.closest?.("[hidden]"));
+    return Array.from(nodes).filter((node) => node.tabIndex !== -1 && !node.hidden && !node.closest?.("[hidden]"));
   }
 
   function blockOutside(event) {
@@ -99,6 +105,7 @@
 
   function release(complete) {
     if (!boot.active) return;
+    const agentRect = document.getElementById("boot-agent")?.getBoundingClientRect?.();
     boot.active = false;
     boot.epoch++;
     clearTimeout(fadeTimer);
@@ -111,6 +118,7 @@
     document.documentElement?.removeAttribute("data-starting");
     boot.phase = complete ? "complete" : "partial";
     try { boot.onReady?.(complete, boot.choice); } catch (error) { console.error("Startup handoff failed", error); }
+    window.MefiCompanionHub?.handoff(agentRect);
     boot.resolve?.(complete);
     boot.resolve = null;
   }

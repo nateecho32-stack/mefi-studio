@@ -25,15 +25,18 @@ function environment() {
     append(...nodes) { this.children.push(...nodes); }
     remove() { this.removed = true; }
     addEventListener(name, fn) { (this.listeners[name] ||= []).push(fn); }
-    fire(name) { for (const fn of this.listeners[name] || []) fn({ target: this }); }
+    fire(name, event = {}) { for (const fn of this.listeners[name] || []) fn({ target: this, ...event }); }
     button() { return this.children.find((child) => child.tag === "button"); }
+    contains(node) { return node === this || this.children.some((child) => child.contains(node)); }
+    querySelector(selector) { return selector === ".toast-action" ? this.button() : null; }
+    focus() { document.activeElement = this; }
   }
   const host = new Element("div");
   const document = { getElementById: (id) => (id === "toast-host" ? host : null), createElement: (tag) => new Element(tag), body: new Element("body") };
   const window = {};
   const context = vm.createContext({ window, document, setTimeout, clearTimeout, requestAnimationFrame: (fn) => fn(), Number, String, Promise, Math });
   vm.runInContext(section, context);
-  return { window, host };
+  return { window, host, document };
 }
 
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -92,4 +95,27 @@ test("error toasts live longer and accept the pointer; plain ones stay brief", a
   window.MefiToast("x", "info", { duration: 5, onDismiss: () => dismissed++ });
   await settle(20);
   assert.equal(dismissed, 1, "onDismiss fires once");
+});
+
+test("dismissing a confirmation returns keyboard focus without stealing it after leaving", async () => {
+  const { window, host, document } = environment();
+  const opener = document.createElement("button");
+  opener.focus();
+  const escaped = window.MefiConfirm("Remove?", { duration: 500 });
+  const toast = host.children.at(-1);
+  assert.equal(document.activeElement, toast.button());
+  toast.fire("keydown", { key: "Escape" });
+  assert.equal(await escaped, false);
+  assert.equal(document.activeElement, opener, "Escape returns focus to the opening control");
+
+  const dismissed = window.MefiConfirm("Remove?", { duration: 500 });
+  host.children.at(-1).children.at(-1).fire("click");
+  assert.equal(await dismissed, false);
+  assert.equal(document.activeElement, opener, "the dismiss button also restores focus");
+
+  const expired = window.MefiConfirm("Remove?", { duration: 20 });
+  const elsewhere = document.createElement("button");
+  elsewhere.focus();
+  assert.equal(await expired, false);
+  assert.equal(document.activeElement, elsewhere, "expiry respects a focus move away from the toast");
 });

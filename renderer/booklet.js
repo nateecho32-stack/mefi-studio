@@ -96,11 +96,15 @@
     const restore = () => {
       if (opener && opener !== document.body && opener.isConnected !== false) opener.focus?.({ preventScroll: true });
     };
-    const handle = window.MefiToast(message, options.kind || "info", {
+    let handle = null;
+    handle = window.MefiToast(message, options.kind || "info", {
       duration: Number(options.duration) || 12000,
       action: { label: options.label || "Confirm", run: () => { settle(true); restore(); } },
       secondary: { label: options.cancelLabel || "Cancel", run: () => { settle(false); restore(); } },
-      onDismiss: () => settle(false),
+      onDismiss: () => {
+        settle(false);
+        if (handle?.element?.contains?.(document.activeElement)) restore();
+      },
     });
     requestAnimationFrame(() => handle?.element?.querySelector?.(".toast-action")?.focus?.({ preventScroll: true }));
   });
@@ -199,11 +203,15 @@
       .join("");
     const benchmarks = (model.quality?.benchmarks ?? []).map((b) => `<li>${b}</li>`).join("");
     const modalities = model.capabilities?.modalities?.input?.join(" + ") ?? "—";
-    return `<article class="card" data-id="${model.id}">
+    return `<article class="card catalog-row" data-id="${model.id}">
+      <details class="catalog-model"><summary class="catalog-summary">
       <div class="card-head">
         <div><h3>${model.name}</h3><div class="vendor">${model.vendor} · opencode-go/${model.id}</div></div>
         <div class="badges">${badgeHtml(model)}</div>
       </div>
+      <div class="catalog-metrics"><span><small>Cost / request</small><b>${fmt.money(model.typicalCostUSD)}</b></span><span><small>Quality</small><b>${model.quality?.index ?? "—"}</b></span><span><small>Context</small><b>${fmt.ctx(model.limits?.context)}</b></span></div>
+      <span class="catalog-expand" aria-hidden="true">⌄</span></summary>
+      <div class="catalog-body">
       <p class="verdict">${model.verdict ?? "No curated verdict yet."}</p>
       <div class="stat-grid">
         ${statHtml("$ / request", fmt.money(model.typicalCostUSD), "typical mix")}
@@ -218,7 +226,7 @@
         ${(model.avoidFor ?? []).map((a) => `<span class="avoid">${a}</span>`).join("")}
       </div>
       <details>
-        <summary>details</summary>
+        <summary>All specifications</summary>
         <table class="detail">
           <tr><th>standard price</th><td class="num">${price ? fmt.money(price.input) + " in / " + fmt.money(price.output) + " out / " + fmt.money(price.cacheRead) + " cached" : "—"}</td></tr>
           ${variantRows ? `<tr><th>variants</th><td class="num"><table class="detail"><tr><th>condition</th><th class="num">in</th><th class="num">out</th><th class="num">cached</th></tr>${variantRows}</table></td></tr>` : ""}
@@ -232,6 +240,7 @@
           ${state.speeds[model.id] ? `<tr><th>measured</th><td>${state.speeds[model.id].tokensPerSecond ?? "—"} t/s · ${new Date(state.speeds[model.id].measuredAt).toLocaleString()} · measured on your machine</td></tr>` : ""}
         </table>
       </details>
+      </div></details>
     </article>`;
   }
 
@@ -287,7 +296,9 @@
     }).join("");
     // Keep expanded details and focus when a refresh returns identical data.
     if (renderedCardMarkup !== markup) {
+      const expanded = new Set(Array.from(els.cards.querySelectorAll?.(".catalog-model[open]") ?? []).map((fold) => fold.closest("[data-id]").dataset.id));
       els.cards.innerHTML = markup;
+      for (const fold of els.cards.querySelectorAll?.(".catalog-model") ?? []) fold.open = expanded.has(fold.closest("[data-id]").dataset.id);
       renderedCardMarkup = markup;
     }
     els.count.textContent = `${models.length} of ${state.doc.models.length} models shown`;
@@ -396,6 +407,17 @@
   // this covers the launch, which restores a tab without announcing it.
   const PAGE_TITLES = { booklet: "Model catalog", graph: "Model Lab", eyes: "Activity & evidence", studio: "Settings" };
   function showTab(name, params = {}) {
+    if (name !== "studio") window.MefiMusic?.activateSettings?.(null);
+    const insights = document.getElementById("model-lab-catalog");
+    const catalog = document.getElementById("tab-booklet");
+    if (insights && catalog && insights.parentElement !== catalog) {
+      catalog.append(insights);
+      insights.addEventListener("toggle", () => {
+        if (!insights.open) return;
+        if (!state.graph) state.graph = window.MefiGraph.mount(state.doc, { speeds: state.speeds });
+        requestAnimationFrame(() => state.graph?.redraw());
+      });
+    }
     document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.tab === name));
     document.getElementById("tab-booklet").hidden = name !== "booklet";
     document.getElementById("tab-graph").hidden = name !== "graph";
@@ -422,304 +444,244 @@
       syncBlurBox();
       if (studioLogStale) paintStudioLog();
       // go("studio", { section: "settings-updates" }) lands on that card.
-      if (params?.section) jumpToSettings(params.section);
+      if (params?.section || params?.category) jumpToSettings(params.section ?? params.category);
     }
     writeStore("mefiStudio.tab", name);
   }
 
-  // ---- settings section nav ----
-  // The Settings tab is one page of cards in three blocks (Connections,
-  // Personal, System). The sticky list beside it finds a setting, jumps to a
-  // card (opening it when it is folded) and follows the scroll position.
-  // Desktop-only cards — the #studio-desktop wrapper, and anything marked
-  // data-desktop-only — drop out of the list in the browser build.
-  function settingsSections() {
-    return Array.from(document.querySelectorAll("#settings-nav [data-settings-jump]")).map((button) => ({ button, section: document.getElementById(button.dataset.settingsJump) }));
-  }
-
-  // initStudio hides #studio-desktop when there is no desktop bridge.
-  const settingsBrowserBuild = () => Boolean(document.getElementById("studio-desktop")?.hidden);
-  function settingsAvailable(node) {
-    if (!node) return false;
-    if (node.closest?.("#studio-desktop[hidden]")) return false;
-    return !(settingsBrowserBuild() && node.closest?.("[data-desktop-only]"));
-  }
-
-  // Writes only what changed, so a keystroke in Find touches only the rows it moves.
-  const setShown = (node, shown) => { if (node && node.hidden === shown) node.hidden = !shown; };
-
-  // A deep link may name a card by its old id or by what it is called now.
-  const SETTINGS_ALIASES = { providers: "settings-assistant", appearance: "settings-studio", you: "settings-studio" };
+  // ---- Settings: one category at a time, with direct control search ----
+  const SETTINGS_CATEGORIES = {
+    general: "General", appearance: "Appearance", connections: "Connections",
+    models: "Models", automation: "Automation", audio: "Audio", system: "System",
+  };
+  const SETTINGS_ALIASES = {
+    providers: "settings-assistant", preferences: "settings-studio", you: "settings-studio",
+    "your-studio": "settings-studio", studio: "settings-studio", "decision-model": "settings-jev",
+    "auto-setup": "settings-setup", "model-routing": "settings-routing", "coding-workers": "settings-workers",
+    "connection-log": "settings-log", "server-styler": "settings-styler", music: "settings-category-audio",
+    "agents-queue": "settings-automation",
+  };
+  let settingsCategory = SETTINGS_CATEGORIES[readStore("mefiStudio.settingsCategory")] ? readStore("mefiStudio.settingsCategory") : "general";
+  let settingsMatches = [];
+  let settingsSearchRegistered = new Set();
+  let settingsControlSerial = 0;
+  const settingsQuery = () => String(document.getElementById("settings-find")?.value ?? "").trim().toLowerCase();
+  const settingsAvailable = (node) => Boolean(node) && (Boolean(window.mefiStudio?.launchStudio) || !node.closest?.("#studio-desktop, [data-desktop-only]"));
+  const coachShowing = () => { const coach = document.getElementById("walkthrough-coach"); return Boolean(coach && !coach.hidden); };
   function settingsTarget(section) {
-    const key = String(section ?? "").trim();
-    if (!key) return null;
-    const bare = key.replace(/^settings-/, "");
-    const id = SETTINGS_ALIASES[key] ?? SETTINGS_ALIASES[bare] ?? `settings-${bare}`;
+    const raw = String(section ?? "").trim();
+    if (document.getElementById(raw)?.closest?.("#settings-sections")) return raw;
+    const key = raw.toLowerCase().replace(/[\s_]+/g, "-").replace(/^settings-/, "");
+    const id = SETTINGS_CATEGORIES[key] ? `settings-category-${key}` : SETTINGS_ALIASES[key] ?? `settings-${key}`;
     return document.getElementById(id) ? id : null;
   }
-
-  function syncSettingsNav(currentId) {
-    const items = settingsSections();
-    if (!items.length) return;
-    let current = currentId ?? items.find(({ button }) => button.getAttribute("aria-current") === "true")?.button.dataset.settingsJump ?? null;
-    if (current && items.find(({ button }) => button.dataset.settingsJump === current)?.button.hidden !== false) current = null;
-    if (!current) current = items.find(({ button }) => !button.hidden)?.button.dataset.settingsJump ?? null;
-    const was = items.find(({ button }) => button.getAttribute("aria-current") === "true")?.button.dataset.settingsJump ?? null;
-    if (current === was) return;
-    // The scroll-spy calls this every frame of a scroll; only a change writes.
-    for (const { button } of items) button.setAttribute("aria-current", String(button.dataset.settingsJump === current));
-    revealSettingsChip(items.find(({ button }) => button.dataset.settingsJump === current)?.button);
+  function settingsControlLabel(control) {
+    const label = control.closest?.("label") ?? document.querySelector?.(`label[for="${control.id}"]`);
+    const named = label?.querySelector?.(".field-label, b, strong, .grow");
+    const parts = label ? Array.from(label.children ?? []).filter((node) => !["INPUT", "SELECT", "TEXTAREA", "SMALL"].includes(node.tagName)).map((node) => node.textContent ?? "").join(" ") : "";
+    return String(control.getAttribute?.("aria-label") || named?.textContent || parts || (control.tagName === "BUTTON" ? control.textContent : "") || control.getAttribute?.("title") || "").replace(/\s+/g, " ").trim();
   }
-
-  // A narrow panel lays the list out as one row of chips that scrolls sideways
-  // (styles.css): keep the current chip inside that row, moving only the row.
-  function revealSettingsChip(button) {
-    const list = document.getElementById("settings-nav-list");
-    if (!button || !list || !(list.scrollWidth > list.clientWidth + 1)) return;
-    const box = button.getBoundingClientRect?.();
-    const view = list.getBoundingClientRect?.();
-    if (!box || !view) return;
-    if (box.left < view.left) list.scrollLeft -= view.left - box.left + 12;
-    else if (box.right > view.right) list.scrollLeft += box.right - view.right + 12;
+  function settingsEntries() {
+    const entries = [];
+    for (const pane of document.querySelectorAll("[data-settings-category-pane]")) {
+      const category = pane.dataset.settingsCategoryPane;
+      for (const card of pane.querySelectorAll(".settings-card")) {
+        if (!card.id || !settingsAvailable(card)) continue;
+        const heading = card.querySelector(card.tagName === "DETAILS" ? "summary" : "h3");
+        // A card summary holds a title and a one-line subtitle: name the card
+        // by its title (Search read "Profile & startupNames and…"), search both.
+        const words = String(heading?.textContent ?? "").replace(/\s+/g, " ").trim();
+        const label = String((heading?.querySelector?.(".settings-summary-text b") ?? heading)?.textContent ?? "").replace(/\s+/g, " ").trim();
+        if (label) entries.push({ id: card.id, label, category, terms: `${words} ${card.id.replace(/-/g, " ")}` });
+      }
+      for (const control of pane.querySelectorAll("input, select, textarea, button")) {
+        if (!settingsAvailable(control) || control.type === "hidden" || control.getAttribute?.("aria-hidden") === "true" || control.hidden || control.closest?.(".settings-you-theme[hidden], .music-queue, .music-recent, .music-suggestion")) continue;
+        const label = settingsControlLabel(control);
+        if (!label) continue;
+        if (!control.id) control.id = `settings-control-${category}-${++settingsControlSerial}`;
+        const card = control.closest?.(".settings-card");
+        const heading = card?.querySelector?.(card.tagName === "DETAILS" ? "summary" : "h3");
+        entries.push({ id: control.id, label, category, terms: `${label} ${heading?.textContent ?? ""} ${control.id.replace(/-/g, " ")}` });
+      }
+    }
+    return entries;
   }
-
-  // ---- Find a setting ----
-  // Each row matches on its label, its data-settings-terms and its card's title
-  // and summary. Rows and cards that do not match step aside, a group or block
-  // left empty goes with them, and the count is announced.
-  const settingsQuery = () => String(document.getElementById("settings-find")?.value ?? "").trim().toLowerCase();
-  function settingsHaystack(row, card) {
-    // A <section> card can hold a <details> of its own (How Jev chooses), so
-    // only a folding card reads its summary.
-    const head = card?.querySelector?.(card.tagName === "DETAILS" ? "summary" : ".settings-card-head") ?? null;
-    return `${row.textContent ?? ""} ${row.dataset?.settingsTerms ?? ""} ${head?.textContent ?? ""}`.toLowerCase();
+  function syncSettingsNav() {
+    for (const row of document.querySelectorAll("#settings-nav [data-settings-category]")) row.setAttribute("aria-current", String(row.dataset.settingsCategory === settingsCategory));
+  }
+  function syncSettingsAutomation() {
+    const current = window.MefiIdle?.queueSettings?.();
+    if (!current) return;
+    for (const control of document.querySelectorAll("[data-queue-setting]")) {
+      const key = control.dataset.queueSetting;
+      control.disabled = key === "newWork" ? !current.newWorkKnown : !current.known;
+      if (control.type === "checkbox") control.checked = Boolean(current[key]);
+      else control.value = key === "autoBuild" ? current.autoBuild ? "auto" : "verify" : key === "parallel" ? current.adaptiveParallel ? "machine" : String(current.parallel) : current[key];
+    }
+  }
+  let settingsAutomationLoad = null;
+  function loadSettingsAutomation() {
+    if (settingsAutomationLoad) return settingsAutomationLoad;
+    const current = window.MefiIdle?.queueSettings?.();
+    if (!window.mefiStudio?.launchStudio || !window.MefiIdle?.refreshQueueSettings || (current?.known && current?.newWorkKnown)) return Promise.resolve();
+    const status = document.getElementById("settings-automation-status");
+    if (status) status.textContent = "Loading queue settings…";
+    settingsAutomationLoad = Promise.resolve().then(() => window.MefiIdle.refreshQueueSettings()).catch(() => null).then(() => {
+      syncSettingsAutomation();
+      const confirmed = window.MefiIdle?.queueSettings?.();
+      if (status?.textContent === "Loading queue settings…") status.textContent = confirmed?.known && confirmed?.newWorkKnown ? "" : "Queue settings are unavailable. Reopen Automation to try again.";
+    }).finally(() => { settingsAutomationLoad = null; });
+    return settingsAutomationLoad;
+  }
+  function mountSettingsControls() {
+    // Catalog-only embeds expose the facade without mounting Settings markup.
+    if (typeof document.querySelector !== "function") return;
+    const move = (node, host) => { if (node && host && (node.parentElement ?? node.parentNode) !== host) { node.remove?.(); host.appendChild(node); } };
+    const appearance = document.getElementById("settings-appearance-controls");
+    for (const selector of [".settings-you-theme", ".settings-you-motion", "#settings-companion-motion"]) move(document.querySelector(selector), appearance);
+    move(document.getElementById("pref-blur")?.closest?.("label"), appearance);
+    // The full palette below is canonical. Keep the old select as its bound alias.
+    const theme = document.querySelector(".settings-you-theme");
+    if (theme) theme.hidden = true;
+    move(document.getElementById("jev-enabled")?.closest?.("label"), document.getElementById("settings-behavior-controls"));
+    for (const id of ["proactive-mode", "memory-align", "loop-guard", "loop-guard-apply"]) move(document.getElementById(id)?.closest?.("label"), document.getElementById("settings-behavior-controls"));
+    for (const id of ["idle-backdrop", "idle-bubbles", "idle-card-style", "idle-ambient-zen"]) move(document.getElementById(id)?.closest?.("label"), document.getElementById("settings-tree-controls"));
+    for (const id of ["idle-profile", "idle-zen"]) move(document.getElementById(id)?.closest?.("label"), document.getElementById("settings-audio-controls"));
+    const ambience = document.getElementById("idle-ambience-pop");
+    if (ambience && !ambience.dataset.settingsTrimmed) {
+      ambience.dataset.settingsTrimmed = "true";
+      for (const group of ambience.querySelectorAll(".pop-group")) if (!group.querySelector("select, input, button")) group.remove();
+      for (const divider of ambience.querySelectorAll("hr")) divider.remove();
+      const appearanceLink = ambience.querySelector(".pop-link");
+      if (appearanceLink) {
+        appearanceLink.textContent = "Appearance settings";
+        appearanceLink.dataset.nav = "studio";
+        appearanceLink.dataset.navParams = JSON.stringify({ section: "appearance" });
+        appearanceLink.title = "Open Settings › Appearance";
+      }
+      const audioLink = ambience.querySelectorAll(".pop-link")[1] ?? document.createElement("button");
+      audioLink.type = "button"; audioLink.className = "ghost mini pop-link"; audioLink.textContent = "Audio settings";
+      audioLink.dataset.nav = "studio"; audioLink.dataset.navParams = JSON.stringify({ section: "audio" });
+      if (!(audioLink.parentElement ?? audioLink.parentNode)) ambience.appendChild(audioLink);
+    }
+    window.MefiMusic?.mountSettings?.({ look: document.getElementById("settings-appearance-media") });
+    const browser = document.getElementById("studio-browser");
+    if (browser) browser.hidden = Boolean(window.mefiStudio?.launchStudio);
+    for (const note of document.querySelectorAll("[data-desktop-message]")) note.hidden = Boolean(window.mefiStudio?.launchStudio);
   }
   function paintSettingsRows() {
-    const nav = document.getElementById("settings-nav");
-    if (!nav?.querySelectorAll) return 0;
+    mountSettingsControls();
+    if (document.querySelector && !document.querySelector(`[data-settings-category-pane="${settingsCategory}"]`)) settingsCategory = "general";
     const query = settingsQuery();
     const words = query.split(/\s+/).filter(Boolean);
-    let shown = 0;
-    for (const row of nav.querySelectorAll(".settings-nav-item")) {
-      const jump = row.dataset?.settingsJump;
-      const card = jump ? document.getElementById(jump) : null;
-      const available = jump ? settingsAvailable(card) : settingsAvailable(row);
-      const match = available && words.every((word) => settingsHaystack(row, card).includes(word));
-      setShown(row, match);
-      if (card) setShown(card, match);
-      if (match) shown += 1;
+    settingsMatches = words.length ? settingsEntries().filter((item) => words.every((word) => `${SETTINGS_CATEGORIES[item.category]} ${item.terms}`.toLowerCase().includes(word))) : [];
+    const results = document.getElementById("settings-search-results");
+    if (results) {
+      results.replaceChildren();
+      results.hidden = !query;
+      for (const item of settingsMatches) {
+        const row = document.createElement("button"); row.type = "button"; row.className = "settings-search-result";
+        row.dataset.settingsResult = item.id;
+        const path = document.createElement("span"); path.className = "settings-result-path"; path.textContent = `Settings / ${SETTINGS_CATEGORIES[item.category]}`;
+        const name = document.createElement("strong"); name.textContent = item.label;
+        row.append(path, name); results.appendChild(row);
+      }
     }
-    for (const group of nav.querySelectorAll(".settings-nav-group")) {
-      setShown(group, Array.from(group.querySelectorAll?.(".settings-nav-item") ?? []).some((row) => !row.hidden));
+    for (const pane of document.querySelectorAll("[data-settings-category-pane]")) pane.hidden = Boolean(query) || pane.dataset.settingsCategoryPane !== settingsCategory;
+    if (document.getElementById("tab-studio")?.hidden === false) {
+      window.MefiMusic?.activateSettings?.(query ? null : settingsCategory);
+      if (settingsCategory === "automation") void loadSettingsAutomation();
     }
-    // An unfiltered block always shows: the browser build's Connections block
-    // carries only its desktop note.
-    for (const block of document.querySelectorAll("#settings-sections .settings-block")) {
-      setShown(block, !words.length || Array.from(block.querySelectorAll?.(".settings-card") ?? []).some((card) => !card.hidden && settingsAvailable(card)));
-    }
-    const empty = document.getElementById("settings-find-empty");
-    if (empty) empty.hidden = !words.length || shown > 0;
-    const status = document.getElementById("settings-find-status");
-    if (status) status.textContent = !words.length ? "" : shown ? `${shown} setting${shown === 1 ? "" : "s"}` : "No settings match";
-    return shown;
+    const empty = document.getElementById("settings-find-empty"); if (empty) empty.hidden = !query || settingsMatches.length > 0;
+    const status = document.getElementById("settings-find-status"); if (status) status.textContent = !query ? "" : settingsMatches.length ? `${settingsMatches.length} setting${settingsMatches.length === 1 ? "" : "s"}` : "No settings match";
+    syncSettingsNav(); syncSettingsAutomation();
+    return settingsMatches.length;
   }
   function clearSettingsFind() {
-    const find = document.getElementById("settings-find");
-    if (find) find.value = "";
-    settingsPinned = null;
+    const find = document.getElementById("settings-find"); if (find) find.value = "";
     paintSettingsRows();
-    syncSettingsNav();
-  }
-
-  // The walkthrough coach keeps keyboard focus on its own Next while it points
-  // into Settings, so a jump under it scrolls without moving focus.
-  const coachShowing = () => { const coach = document.getElementById("walkthrough-coach"); return Boolean(coach && !coach.hidden); };
-  function focusSettingsCard(card) {
-    const target = card.tagName === "DETAILS" ? card.querySelector?.("summary") : card.querySelector?.("h3");
-    if (!target) return;
-    if (card.tagName !== "DETAILS" && !target.hasAttribute?.("tabindex")) target.setAttribute?.("tabindex", "-1");
-    target.focus?.({ preventScroll: true });
-  }
-
-  // One jump for the list, Find's Enter and deep links: open the card, bring it
-  // in (smoothly unless motion is off), mark it current, and hold the
-  // scroll-spy while the scroll runs so the cards it passes do not flicker.
-  // The card a jump lands on then stays current until the reader scrolls on.
-  let settingsSpyHold = 0;
-  let settingsPinned = null;
-  function holdSettingsSpy() {
-    settingsSpyHold = Date.now() + 700;
-    // A long smooth scroll outlasts 700 ms, and its last frames would light
-    // whatever card they pass (the last one, at the page's end). Where
-    // scrollend exists, hold until the scroll settles and one frame more.
-    if (typeof window.onscrollend === "undefined" || typeof window.addEventListener !== "function") return;
-    settingsSpyHold = Date.now() + 1200;
-    window.addEventListener("scrollend", () => { settingsSpyHold = Math.min(settingsSpyHold, Date.now() + 120); }, { once: true });
   }
   function jumpToSettings(section, { focus = true } = {}) {
+    const redirected = window.MefiAgents?.redirect?.("studio", { section });
+    if (redirected) { window.MefiNav?.go(redirected.id, redirected.params); return true; }
+    mountSettingsControls();
     const id = settingsTarget(section);
-    let card = id ? document.getElementById(id) : null;
-    if (!card) return false;
-    if (card.hidden && settingsQuery() && settingsAvailable(card)) clearSettingsFind();
-    // A desktop-only card in the browser build: its block says why it is missing.
-    const available = settingsAvailable(card);
-    if (!available) card = card.closest?.(".settings-block") ?? card;
-    // A folded card opens at its full height at once (styles.css stills its
-    // open animation for this), so the scroll measures the card it lands on;
-    // near the page's end a card still growing would land low.
-    const unfold = available && card.tagName === "DETAILS" && !card.open;
-    if (unfold) {
-      card.setAttribute?.("data-settings-opening", "");
-      card.open = true;
+    const target = id ? document.getElementById(id) : null;
+    if (!target) return false;
+    const pane = target.closest?.("[data-settings-category-pane]");
+    if (!pane) return false;
+    settingsCategory = pane.dataset.settingsCategoryPane;
+    writeStore("mefiStudio.settingsCategory", settingsCategory);
+    clearSettingsFind();
+    if (!settingsAvailable(target)) return false;
+    window.MefiMusic?.revealSettingsTarget?.(target);
+    let parent = target;
+    while (parent && parent !== pane) { if (parent.tagName === "DETAILS") parent.open = true; parent = parent.parentElement ?? parent.parentNode; }
+    let landing = ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(target.tagName) ? target : target.querySelector?.(target.tagName === "DETAILS" ? "summary" : "h2, h3") ?? target;
+    if (landing.disabled) landing = target.closest?.("label") ?? pane.querySelector?.("h2") ?? pane;
+    // A category opens at the top of Settings (see .settings-category's
+    // scroll-margin); a card or a field scrolls only as far as it must.
+    target.scrollIntoView?.({ behavior: "auto", block: target === pane ? "start" : "nearest" });
+    if (focus && !coachShowing()) {
+      if (!landing.hasAttribute?.("tabindex") && !["INPUT", "SELECT", "TEXTAREA", "BUTTON", "SUMMARY"].includes(landing.tagName)) landing.setAttribute?.("tabindex", "-1");
+      landing.focus?.({ preventScroll: true });
+      if (target.disabled && settingsCategory === "automation") void loadSettingsAutomation().then(() => {
+        if (!target.disabled && !pane.hidden && !coachShowing() && document.activeElement === landing) target.focus?.({ preventScroll: true });
+      });
     }
-    holdSettingsSpy();
-    try {
-      card.scrollIntoView?.({ behavior: window.MefiNav?.noMotion?.() ? "auto" : "smooth", block: "start" });
-    } catch {
-      card.scrollIntoView?.();
-    }
-    if (unfold) card.removeAttribute?.("data-settings-opening");
-    if (!available) return false;
-    settingsPinned = id;
-    syncSettingsNav(id);
-    if (focus && !coachShowing()) focusSettingsCard(card);
     return true;
   }
-
-  // ---- scroll-spy ----
-  // The current card is the last one whose top has passed a line 30% down the
-  // window, and at the very end of the page the last card (the page cannot
-  // scroll far enough to bring the final cards to any line). It is read from
-  // every card's position, never from the observer's entries, which name only
-  // the cards that just crossed an edge: a sliver of the card above a deep
-  // link's target could win that way.
-  function atSettingsEnd() {
-    const root = document.scrollingElement ?? document.documentElement;
-    const top = Number(window.scrollY ?? root?.scrollTop ?? 0);
-    const height = Number(window.innerHeight ?? 0);
-    return Boolean(root?.scrollHeight) && height > 0 && top > 0 && top + height >= root.scrollHeight - 2;
-  }
-  function spySettings() {
-    if (Date.now() < settingsSpyHold || document.getElementById("tab-studio")?.hidden !== false) return;
-    const items = settingsSections().filter(({ button, section }) => !button.hidden && section && !section.hidden);
-    if (!items.length) return;
-    const height = Number(window.innerHeight ?? 0);
-    if (settingsPinned) {
-      const box = items.find(({ section }) => section.id === settingsPinned)?.section.getBoundingClientRect?.();
-      if (box && box.bottom > 0 && box.top < height) {
-        syncSettingsNav(settingsPinned);
-        return;
-      }
-      settingsPinned = null;
-    }
-    if (atSettingsEnd()) {
-      syncSettingsNav(items.at(-1).button.dataset.settingsJump);
-      return;
-    }
-    let current = items[0];
-    for (const item of items) {
-      if ((item.section.getBoundingClientRect?.().top ?? 0) > height * 0.3) break;
-      current = item;
-    }
-    syncSettingsNav(current.button.dataset.settingsJump);
-  }
-  let settingsScrollFrame = 0;
-  function onSettingsScroll() {
-    if (document.getElementById("tab-studio")?.hidden !== false) return;
-    // A scroll that is not a jump's own is the reader moving on.
-    if (Date.now() >= settingsSpyHold) settingsPinned = null;
-    if (settingsScrollFrame || typeof requestAnimationFrame !== "function") return;
-    settingsScrollFrame = requestAnimationFrame(() => {
-      settingsScrollFrame = 0;
-      spySettings();
-    });
-  }
-
-  function openFirstSetting() {
-    const first = Array.from(document.querySelectorAll("#settings-nav .settings-nav-item")).find((row) => !row.hidden);
-    if (!first) return;
-    if (first.dataset.settingsJump) jumpToSettings(first.dataset.settingsJump);
-    else first.click?.();
-  }
-
   function wireSettingsNav() {
-    const nav = document.getElementById("settings-nav");
-    if (!nav) return;
-    nav.addEventListener("click", (event) => {
-      const button = event.target?.closest?.("[data-settings-jump]");
-      if (button) jumpToSettings(button.dataset.settingsJump, { focus: false });
+    mountSettingsControls();
+    document.getElementById("settings-nav")?.addEventListener("click", (event) => {
+      const button = event.target?.closest?.("[data-settings-category]");
+      if (button) jumpToSettings(button.dataset.settingsCategory, { focus: event.detail === 0 });
     });
     const find = document.getElementById("settings-find");
-    find?.addEventListener?.("input", () => {
-      paintSettingsRows();
-      // The first match leads, and is what Enter opens, until the reader scrolls.
-      const first = settingsSections().find(({ button }) => !button.hidden)?.button.dataset.settingsJump;
-      settingsPinned = settingsQuery() ? first ?? null : null;
-      syncSettingsNav(first);
+    find?.addEventListener("input", paintSettingsRows);
+    find?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && settingsMatches[0]) { event.preventDefault?.(); jumpToSettings(settingsMatches[0].id); }
+      else if (event.key === "Escape" && find.value) { event.preventDefault?.(); event.stopPropagation?.(); clearSettingsFind(); }
+      else if (event.key === "ArrowDown" && settingsMatches.length) { event.preventDefault?.(); document.querySelector(".settings-search-result")?.focus?.(); }
     });
-    find?.addEventListener?.("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault?.();
-        openFirstSetting();
-      } else if (event.key === "Escape" && find.value) {
-        // The first Esc clears the search and keeps focus; an empty field lets
-        // Esc through to nav, which leaves the field as usual.
-        event.preventDefault?.();
-        event.stopPropagation?.();
-        clearSettingsFind();
-      }
-    });
-    // Buttons in a card that open another view. nav.js's [data-nav] delegate
-    // folds the <details> around the button (it is written for menus), and a
-    // card has to stay open, so these name their destination here instead.
-    document.getElementById("settings-sections")?.addEventListener?.("click", (event) => {
+    document.getElementById("settings-sections")?.addEventListener("click", (event) => {
+      const result = event.target?.closest?.("[data-settings-result]");
+      if (result) { jumpToSettings(result.dataset.settingsResult); return; }
       const button = event.target?.closest?.("[data-settings-nav]");
-      if (!button || button.disabled) return;
-      event.preventDefault?.();
-      window.MefiNav?.go?.(button.dataset.settingsNav);
+      if (button && !button.disabled) { event.preventDefault?.(); window.MefiNav?.go?.(button.dataset.settingsNav); }
     });
-    window.addEventListener?.("scroll", onSettingsScroll, { passive: true });
-    // The observer only says when to look again: a card crossed the band
-    // without a scroll (one opened or closed, Find filtered the page).
-    if (typeof IntersectionObserver !== "function") return;
-    const observer = new IntersectionObserver(() => spySettings(), { rootMargin: "-15% 0px -65% 0px" });
-    for (const { section } of settingsSections()) if (section) observer.observe(section);
-  }
-
-  // Search Studio finds every Settings card: "Settings › Providers" opens it.
-  function registerSettingsSearch() {
-    if (typeof window.MefiNav?.register !== "function") return;
-    const desktop = Boolean(window.mefiStudio?.launchStudio);
-    for (const button of document.querySelectorAll("#settings-nav [data-settings-jump]")) {
-      const jump = button.dataset.settingsJump;
-      const card = document.getElementById(jump);
-      if (!card || (!desktop && (card.closest?.("#studio-desktop") || card.closest?.("[data-desktop-only]")))) continue;
-      const label = String(button.querySelector?.(".label")?.textContent ?? button.textContent ?? "").trim();
-      const summary = card.querySelector?.(".settings-summary-text span, .settings-card-head p");
+    for (const control of document.querySelectorAll("[data-queue-setting]")) control.addEventListener("change", async () => {
+      const key = control.dataset.queueSetting;
+      const value = control.type === "checkbox" ? control.checked : key === "autoBuild" ? control.value === "auto" : control.value;
+      control.disabled = true;
+      const status = document.getElementById("settings-automation-status");
       try {
-        window.MefiNav.register({
-          id: `settings:${jump}`,
-          label: `Settings › ${label}`,
-          short: label,
-          kind: "action",
-          layer: null,
-          section: "settings",
-          group: "system",
-          key: null,
-          glyph: button.querySelector?.("use")?.getAttribute?.("href")?.replace(/^#/, "") ?? null,
-          badge: null,
-          desc: String(summary?.textContent ?? "").trim(),
-          searchTerms: button.dataset.settingsTerms ?? "",
-          showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
-          run: () => window.MefiNav?.go?.("studio", { section: jump }),
-        });
-      } catch {
-        /* a registry that refuses one entry leaves Search as it was */
+        if (!window.MefiIdle?.setQueueSetting) throw new Error("Queue settings are unavailable.");
+        const result = await window.MefiIdle.setQueueSetting(key, value);
+        if (result === false || result?.ok === false) throw new Error("The setting was not saved. Check the connection and try again.");
+        if (status) status.textContent = "Saved.";
       }
+      catch (error) { if (status) status.textContent = error?.message ?? "This setting could not be saved."; }
+      finally { syncSettingsAutomation(); }
+    });
+    window.addEventListener?.("mefi:queue-settings", syncSettingsAutomation);
+    paintSettingsRows();
+  }
+  function registerSettingsSearch() {
+    for (const item of settingsEntries()) {
+      if (settingsSearchRegistered.has(item.id)) continue;
+      settingsSearchRegistered.add(item.id);
+      try { window.MefiNav?.register?.({
+        id: `settings:${item.id}`, label: `Settings › ${SETTINGS_CATEGORIES[item.category]} › ${item.label}`,
+        short: item.label, kind: "action", layer: null, section: "settings", group: "system", key: null,
+        glyph: "g-sliders", badge: null, desc: SETTINGS_CATEGORIES[item.category], searchTerms: item.terms,
+        showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
+        run: () => window.MefiNav?.go?.("studio", { section: item.id }),
+      }); } catch { /* Search remains usable if a host declines a registration. */ }
     }
   }
 
-  // #pref-blur sits in Settings › Your Studio. tasks.js owns the preference:
+  // #pref-blur sits in Settings › Preferences. tasks.js owns the preference:
   // it binds the box by id and paints html[data-no-blur] from boot, but ticks
   // the box only when the Task board opens, so the box mirrors the attribute.
   function syncBlurBox() {
@@ -852,7 +814,7 @@
     // The setup overview mirrors what the host already reported — saved-key
     // flags, routing, installed CLIs — so the auto setup card never issues its
     // own probes. Every row keeps "unknown" honest until a real read lands.
-    const setup = { keys: { opencode: null, zai: null, custom: null }, routing: null, clis: null, routingError: false, cliError: false };
+    const setup = { keys: { opencode: null, zai: null, openrouter: null, custom: null }, routing: null, clis: null, routingError: false, cliError: false };
     const setupAssistant = document.getElementById("setup-assistant");
     const setupSelection = document.getElementById("setup-selection");
     const setupBuilders = document.getElementById("setup-builders");
@@ -860,8 +822,8 @@
     // builder pickers are rebuilt from it plus the live flags below, so what
     // is ready on this machine reads first and anything else stays selectable
     // with its missing piece named beside it.
-    const providerNames = { auto: "Auto (your order)", zai: "z.ai GLM", opencode: "OpenCode Go", zen: "OpenCode Zen", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio (local)", custom: "Custom endpoint" };
-    const providerKinds = { auto: "auto", zai: "key", opencode: "key", zen: "key", grok: "cli", claude: "cli", codex: "cli", antigravity: "cli", lmstudio: "local", custom: "custom" };
+    const providerNames = { auto: "Auto (your order)", zai: "z.ai GLM", opencode: "OpenCode Go", zen: "OpenCode Zen", openrouter: "OpenRouter", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio (local)", custom: "Custom endpoint" };
+    const providerKinds = { auto: "auto", zai: "key", opencode: "key", zen: "key", openrouter: "key", grok: "cli", claude: "cli", codex: "cli", antigravity: "cli", lmstudio: "local", custom: "custom" };
     const providerRegistry = Object.keys(providerNames).map((id) => ({ id, name: providerNames[id], kind: providerKinds[id] }));
     const builderIds = ["opencode", "grok", "claude", "codex", "antigravity"];
     const builderNames = { opencode: "OpenCode", grok: "Grok", claude: "Claude Code", codex: "Codex", antigravity: "Antigravity" };
@@ -884,7 +846,7 @@
     function keyState(which) {
       const known = setup.keys[which] ?? null;
       if (known !== null) return known ? "key saved" : "no key saved";
-      const flag = which === "zai" ? setup.routing?.hasZai : which === "zen" ? setup.routing?.hasZen : setup.routing?.hasOpenCode;
+      const flag = which === "zai" ? setup.routing?.hasZai : which === "zen" ? setup.routing?.hasZen : which === "openrouter" ? setup.routing?.hasOpenRouter : setup.routing?.hasOpenCode;
       return flag === true ? "key saved" : flag === false ? "no key saved" : "key unknown";
     }
     // The auto order is tried top to bottom; usability here comes from the same
@@ -895,6 +857,7 @@
       if (id === "zai") return setup.keys.zai === true || setup.routing?.hasZai === true;
       if (id === "opencode") return setup.keys.opencode === true || setup.routing?.hasOpenCode === true;
       if (id === "zen") return setup.routing?.hasZen === true;
+      if (id === "openrouter") return setup.keys.openrouter === true || setup.routing?.hasOpenRouter === true;
       if (id === "custom") return Boolean(setup.routing?.customEndpoint) && (setup.keys.custom === true || setup.routing?.hasCustom === true);
       if (id === "lmstudio") return true;
       return cliInstalled(id);
@@ -964,7 +927,7 @@
       // and says which one that is.
       const mainId = providerNames[setup.routing?.provider] ? setup.routing.provider : "";
       const same = { id: "", state: mainId ? stateOf(providerAvailability(mainId)) : "unknown", label: mainId ? `Same as above — ${providerNames[mainId]}` : "Same as above" };
-      for (const select of [roleRoutine, roleHeavy]) renderPicker(select, [same, ...providers]);
+      for (const select of [roleRoutine, roleHeavy]) renderPicker(select, [same, auto, ...providers]);
       renderPicker(executorCli, builderIds.map((id) => entryFor(id, builderNames[id], cliAvailability(id))).sort(byReadiness));
       renderAutoOrder();
       renderAutoOrderAdd();
@@ -972,7 +935,7 @@
     // Segmented controls mirror a <select> that stays the saved value: a
     // click sets the select and fires its change, and every routing read
     // re-syncs the pressed state. Without the markup (tests) they are no-ops.
-    const segmentedGroups = Array.from(document.querySelectorAll("#studio-desktop [data-segmented-for]"));
+    const segmentedGroups = Array.from(document.querySelectorAll("#tab-studio [data-segmented-for]"));
     function syncSegmented() {
       for (const group of segmentedGroups) {
         const select = document.getElementById(group.dataset.segmentedFor);
@@ -1017,6 +980,7 @@
         }
         // The Zen key lives in its own tile; opencode's OPENCODE_API_KEY counts.
         setPill(document.getElementById("zen-key-status"), routing.hasZen ? "ready" : "missing", routing.hasZen ? (routing.zenKeySource === "env" ? "key from environment" : "key saved (encrypted)") : "no key saved");
+        setPill(document.getElementById("openrouter-key-status"), routing.hasOpenRouter ? "ready" : "missing", routing.hasOpenRouter ? (routing.openrouterKeySource === "env" ? "key from environment" : "key saved (encrypted)") : "no key saved");
       }
       if (setup.routingError) setPill(setupSelection, "unknown", "status unavailable");
       else if (!routing) setPill(setupSelection, "unknown", "checking…");
@@ -1035,7 +999,7 @@
         const order = autoOrderOf(routing).map((id) => `${providerNames[id] ?? id}${autoProviderUsable(id) ? "" : " (unavailable)"}`);
         readiness.textContent = `auto order: ${order.join(" → ")}`;
       }
-      else if (selected === "zai" || selected === "opencode" || selected === "zen") readiness.textContent = `${keyState(selected)} — this provider's saved model applies`;
+      else if (selected === "zai" || selected === "opencode" || selected === "zen" || selected === "openrouter") readiness.textContent = `${keyState(selected)} — this provider's saved model applies`;
       else if (selected === "custom") readiness.textContent = `${routing.customEndpoint ? "endpoint saved" : "no endpoint saved"}, ${setup.keys.custom ? "key saved" : "no key saved"}`;
       else if (selected === "lmstudio") readiness.textContent = "local server — no key needed; its loaded model is detected automatically";
       else if (setup.cliError) readiness.textContent = "CLI status unavailable";
@@ -1054,7 +1018,8 @@
     const keyStatus = document.getElementById("key-status");
     const zaiKeyStatus = document.getElementById("zai-key-status");
     const customKeyStatus = document.getElementById("custom-key-status");
-    const keyPills = { opencode: keyStatus, zai: zaiKeyStatus, custom: customKeyStatus };
+    const openrouterKeyStatus = document.getElementById("openrouter-key-status");
+    const keyPills = { opencode: keyStatus, zai: zaiKeyStatus, openrouter: openrouterKeyStatus, custom: customKeyStatus };
     const showKeyState = (which, saved) => setPill(keyPills[which], saved ? "ready" : "missing", saved ? "key saved (encrypted)" : "no key saved");
     window.mefiStudio
       .getApiKey("opencode")
@@ -1068,6 +1033,10 @@
       .getApiKey("custom")
       .then((key) => { setup.keys.custom = Boolean(key?.saved); showKeyState("custom", setup.keys.custom); renderSetupState(); })
       .catch(() => setPill(customKeyStatus, "unknown", "key status unavailable"));
+    window.mefiStudio
+      .getApiKey("openrouter")
+      .then((key) => { setup.keys.openrouter = Boolean(key?.saved); showKeyState("openrouter", setup.keys.openrouter); renderSetupState(); })
+      .catch(() => setPill(openrouterKeyStatus, "unknown", "key status unavailable"));
 
     // A Save on an empty field used to clear the saved key without a word. Save
     // now waits for a value (Enter in the field saves too), and removing a key
@@ -1124,6 +1093,7 @@
     guardKeySave("api-key", "save-key", keyStatus, "Remove the saved OpenCode Go key");
     guardKeySave("zai-key", "save-zai-key", zaiKeyStatus, "Remove the saved z.ai key");
     guardKeySave("zen-key", "save-zen-key", document.getElementById("zen-key-status"), "Remove the saved Zen key (Jev's Zen route uses it too; OPENCODE_API_KEY still applies when set)");
+    guardKeySave("openrouter-key", "save-openrouter-key", openrouterKeyStatus, "Remove the saved OpenRouter key (assistant, Jev and account usage share it; OPENROUTER_API_KEY still applies when set)");
     guardKeySave("custom-key", "save-custom-key", customKeyStatus, "Remove the saved custom-endpoint key");
     guardKeySave("jev-key", "save-jev-key", null, "");
 
@@ -1152,6 +1122,20 @@
       resyncKeySaves();
       if (!result?.ok) setPill(document.getElementById("zen-key-status"), "unknown", `save failed: ${result?.error ?? "unknown"}`);
       else noteConnectionSaved("zen");
+      await refreshJev();
+      await loadAiRouting();
+    });
+
+    document.getElementById("save-openrouter-key").addEventListener("click", async () => {
+      const input = document.getElementById("openrouter-key");
+      const value = input.value.trim();
+      if (!value && !clearingKey(input)) return;
+      delete input.dataset.clearing;
+      const result = await window.mefiStudio.setApiKey(value, "openrouter");
+      input.value = "";
+      resyncKeySaves();
+      if (!result?.ok) setPill(openrouterKeyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
+      else { setup.keys.openrouter = Boolean(value); noteConnectionSaved("openrouter"); }
       await refreshJev();
       await loadAiRouting();
     });
@@ -1260,6 +1244,53 @@
     const autoOrderAddButton = document.getElementById("auto-order-add-button");
     const modelRoutine = document.getElementById("ai-model-routine");
     const modelHeavy = document.getElementById("ai-model-heavy");
+    const openrouterBrowser = document.getElementById("openrouter-model-browser");
+    const openrouterSearch = document.getElementById("openrouter-model-search");
+    const openrouterFreeOnly = document.getElementById("openrouter-free-only");
+    const openrouterList = document.getElementById("openrouter-model-list");
+    const openrouterModelStatus = document.getElementById("openrouter-model-status");
+    let openrouterModels = [];
+    function renderOpenrouterModels() {
+      if (!openrouterList) return;
+      const query = String(openrouterSearch?.value ?? "").trim().toLowerCase();
+      const chosen = openrouterList.value;
+      const matches = openrouterModels.filter((model) => (!openrouterFreeOnly?.checked || model.free)
+        && (!query || `${model.name} ${model.id}`.toLowerCase().includes(query)));
+      openrouterList.replaceChildren(...matches.slice(0, 150).map((model) => {
+        const option = document.createElement("option");
+        option.value = model.id;
+        option.textContent = `${model.name} · ${model.id}${model.free ? " · free" : ""}`;
+        return option;
+      }));
+      if (matches.some((model) => model.id === chosen)) openrouterList.value = chosen;
+      openrouterModelStatus.textContent = `${matches.length} chat models${matches.length > 150 ? " · showing first 150; search to narrow" : ""}`;
+    }
+    async function loadOpenrouterModels(refresh = false) {
+      if (!openrouterBrowser || typeof window.mefiStudio.openrouterModels !== "function") return;
+      openrouterModelStatus.textContent = "Loading OpenRouter models…";
+      const result = await window.mefiStudio.openrouterModels({ refresh }).catch((error) => ({ ok: false, error: error.message }));
+      if (Array.isArray(result?.models)) openrouterModels = result.models;
+      renderOpenrouterModels();
+      if (!result?.ok) openrouterModelStatus.textContent = result?.error ?? "OpenRouter model list unavailable";
+    }
+    function showOpenrouterBrowser() {
+      if (!openrouterBrowser) return;
+      const visible = ["routine", "heavy"].some((role) => roleProviderOf(role) === "openrouter");
+      openrouterBrowser.hidden = !visible;
+      if (visible && !openrouterModels.length) void loadOpenrouterModels();
+    }
+    openrouterSearch?.addEventListener("input", renderOpenrouterModels);
+    openrouterFreeOnly?.addEventListener("change", renderOpenrouterModels);
+    document.getElementById("openrouter-model-refresh")?.addEventListener("click", () => void loadOpenrouterModels(true));
+    for (const [id, role] of [["openrouter-use-routine", "routine"], ["openrouter-use-heavy", "heavy"]]) {
+      document.getElementById(id)?.addEventListener("click", () => {
+        const model = openrouterList?.value;
+        if (!model) return;
+        const patch = { providerModels: { openrouter: { [role]: model } } };
+        if (roleProviderOf(role) !== "openrouter") patch.roleProviders = { [role]: "openrouter" };
+        void saveRouting(patch, `${role} model on OpenRouter: ${model}`, { syncControls: true });
+      });
+    }
     const executorModel = document.getElementById("executor-model");
     const executorTier = document.getElementById("executor-tier");
     const executorModelLabel = document.getElementById("executor-model-label");
@@ -1272,13 +1303,31 @@
     const tierNames = { auto: "Auto", free: "Free", fast: "Fast", heavy: "Heavy" };
     const tierSources = { saved: "saved", "first-scan": "from the first scan", zai: "on your z.ai plan", alias: "Claude Code alias", "cli-default": "CLI default", none: "no free model saved" };
     const tierEntry = (routing, cli, tier) => routing?.executorTierDefaults?.[cli]?.[tier] ?? { model: "", source: tier === "free" ? "none" : "cli-default" };
+    // The route an unpinned OpenCode builder rides on Auto, read the way the
+    // host's executorRunEnv picks it: the routing pick, else the Auto order
+    // with z.ai ahead only while its key is saved. Both routes pick each
+    // task's model by its verified record; anything else runs the CLI default.
+    // Go needs the OpenCode pick or Auto, and a Go login OpenCode itself holds
+    // (the host checks that; Settings cannot), so its placeholder says both.
+    const autoBuilderDefaults = { zai: "glm-5.3-flash on your z.ai plan", go: "deepseek-v4.1-flash on OpenCode Go" };
+    const autoBuilderNotes = { go: " · CLI default without an OpenCode Go login" };
+    function autoBuilderRoute(routing) {
+      const provider = routing?.provider ?? "auto";
+      if (provider === "opencode") return "go";
+      if (provider === "zai") return "zai";
+      const order = autoOrderOf(routing);
+      const zaiAt = order.indexOf("zai"), openAt = order.indexOf("opencode");
+      if (zaiAt >= 0 && (openAt < 0 || zaiAt < openAt) && routing?.hasZai !== false) return "zai";
+      return openAt >= 0 && provider === "auto" ? "go" : "";
+    }
     function syncExecutorModel(routing) {
       const cli = executorCli.value || "opencode";
       const tier = tierNames[executorTier.value] ? executorTier.value : "auto";
       if (tier === "auto") {
         executorModelLabel.textContent = "Pinned model";
         executorModel.value = routing?.executorModel ?? "";
-        executorModel.placeholder = "CLI default";
+        const route = cli === "opencode" ? autoBuilderRoute(routing) : "";
+        executorModel.placeholder = route ? `routed per task · ${autoBuilderDefaults[route]} by default${autoBuilderNotes[route] ?? ""}` : "CLI default";
         return;
       }
       const entry = tierEntry(routing, cli, tier);
@@ -1326,7 +1375,7 @@
       };
       const active = tierEntry(routing, cli, tier);
       const lead = tier === "auto"
-        ? `Auto: ${cli === "opencode" ? "Jev or the stand-in judge picks per task within your provider; a pinned model wins" : `${cliName} runs the pinned model or its CLI default`}.`
+        ? `Auto: ${cli === "opencode" ? "picks each task's model by its verified record, on the z.ai plan and on OpenCode Go; a pinned model wins" : `${cliName} runs the pinned model or its CLI default`}.`
         : tier === "free" && !active.model
           ? `Free tier: no free model is saved for ${cliName}, so builds wait until one is${cli === "opencode" ? " (run the first scan, or save a free provider/model id)" : ""}.`
           : `${tierNames[tier]} tier: ${cliName} runs ${active.model || "its CLI default"}${tier === "free" ? ", one worker at a time" : ""}.`;
@@ -1386,7 +1435,8 @@
       const read = ++routingRead;
       routingRefresh.disabled = true;
       try {
-        const routing = await window.mefiStudio.getAiRouting();
+        const savedRouting = await window.mefiStudio.getAiRouting();
+        const routing = window.MefiAgents?.routingView?.(savedRouting) ?? savedRouting;
         if (read !== routingRead) return;
         setup.routing = routing;
         setup.routingError = false;
@@ -1418,6 +1468,7 @@
           lmStudioEndpoint.value = routing.lmStudioEndpoint ?? "";
           customEndpoint.value = routing.customEndpoint ?? "";
         }
+        showOpenrouterBrowser();
         renderExecutorTiers(routing);
         renderRoleModels(routing);
         syncSegmented();
@@ -1459,7 +1510,7 @@
     // Auto order editor: the host stores the same ordered array. The editor
     // only reorders, adds and removes, then saves the whole list; every save
     // re-reads routing so the controls stay authoritative.
-    const autoProviderIds = ["zai", "opencode", "zen", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"];
+    const autoProviderIds = ["zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"];
     let autoOrder = ["zai", "opencode"];
     function renderAutoOrder() {
       autoOrderList.replaceChildren(...autoOrder.map((id, index) => {
@@ -1530,9 +1581,11 @@
       syncSegmented();
     });
     routingRefresh.addEventListener("click", () => loadAiRouting());
+    window.addEventListener("mefi:agent-draft", () => loadAiRouting({ syncControls: true }));
     async function saveRouting(payload, confirmation, { syncControls = false } = {}) {
       try {
-        const result = await window.mefiStudio.setAiRouting(payload);
+        const staged = window.MefiAgents?.stageRouting?.(payload);
+        const result = staged ? { ok: true } : await window.mefiStudio.setAiRouting(payload);
         if (!result?.ok) throw new Error(result?.error ?? "save failed");
         studioLog(`> ${confirmation}`);
         await loadAiRouting({ syncControls });
@@ -1825,7 +1878,7 @@
 
   // The one facade nav.js drives: tabs (with a Settings card to land on),
   // catalog refresh, the shortcut sheet, and the Settings jump itself.
-  window.MefiBooklet = { showTab, refresh, toggleHelp, jumpToSettings };
+  window.MefiBooklet = { showTab, refresh, toggleHelp, jumpToSettings, initStudio };
 
   const headless = new URLSearchParams(window.location.search);
   const capture = headless.get("capture") === "1";

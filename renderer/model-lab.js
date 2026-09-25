@@ -28,6 +28,11 @@
   function quality(value) {
     return value?.count > 0 && finite(value.mean) ? `${number(value.mean, 1)} / 5 · ${number(value.count)} rated` : "Not rated";
   }
+  // Wins and losses come only from the verification runner, never from transport.
+  function verdicts(value) {
+    if (!((value?.wins || 0) + (value?.losses || 0))) return value?.unsettled > 0 ? `${number(value.unsettled)} awaiting verification` : "No verified tasks";
+    return `${number(value.wins)} won / ${number(value.losses)} lost${finite(value.winProbability) ? ` · ${number(value.winProbability * 100)}% win chance` : ""}`;
+  }
   function table(headers, entries, rowOf) {
     const node = element("table", "lab-table");
     const head = element("thead");
@@ -49,7 +54,7 @@
     if (model.samples > 0) {
       const evidence = element("details", "lab-model-evidence");
       evidence.append(element("summary", "", model.evidence === "limited" ? "Limited evidence" : "Inspect task evidence"));
-      for (const task of rows(model.taskStrengths)) evidence.append(element("p", "", `${task.taskType} · ${number(task.samples)} calls · ${duration(task.latencyMs?.p50)} median · human ${quality(task.quality?.human)} · model ${quality(task.quality?.model)}`));
+      for (const task of rows(model.taskStrengths)) evidence.append(element("p", "", `${task.taskType} · ${number(task.samples)} calls · ${duration(task.latencyMs?.p50)} median · human ${quality(task.quality?.human)} · model ${quality(task.quality?.model)} · ${verdicts(task)}`));
       for (const effort of rows(model.efforts)) evidence.append(element("p", "", `Effort: ${effort.requestedEffort || "default"} requested · ${effort.appliedEffort ? `${effort.appliedEffort} confirmed` : "provider confirmation unavailable"} · ${number(effort.samples)} calls`));
       cell.append(evidence);
     }
@@ -65,19 +70,21 @@
     const models = rows(snapshot.models);
     const target = $("ranking-list");
     if (!models.some((model) => model.samples > 0)) empty(target, "Your results will build the ranking", "Studio has no measured calls for this selection yet. Unmeasured models are not treated as fast, free, or reliable.");
-    else target.replaceChildren(table(["Model", "Rank / score", "Response time", "Output speed", "Cost / call", "Errors", "Your quality", "Model judged"], models, (model) => [
+    else target.replaceChildren(table(["Model", "Rank / score", "Response time", "Output speed", "Cost / call", "Errors", "Task wins", "Your quality", "Model judged"], models, (model) => [
       modelName(model), model.rank != null && finite(model.score) ? `#${model.rank} · ${number(model.score, 1)} / 100` : "Not ranked",
       `${duration(model.latencyMs?.p50)}${model.latencyMs?.count ? " median" : ""}`,
       finite(model.throughput?.p50) ? `${number(model.throughput.p50, 1)} tokens/s` : "Unmeasured",
-      model.costUsd?.count > 0 ? money(model.costUsd.mean) : "Unknown",
+      model.costUsd?.count > 0 ? money(model.costUsd.mean) : model.samples > 0 ? "Unknown" : "Unmeasured",
       model.samples > 0 ? `${number(model.errors)} / ${number(model.samples)}${finite(model.errorRate) ? ` · ${number(model.errorRate * 100, 1)}%` : ""}` : "Unmeasured",
-      quality(model.quality?.human), quality(model.quality?.model),
+      verdicts(model), quality(model.quality?.human), quality(model.quality?.model),
     ]));
     const notes = rows(snapshot.ranking?.notes).filter((note) => typeof note === "string");
     const metrics = rows(snapshot.ranking?.metrics).map((key) => key === "speed" ? "response time" : key === "quality" ? `${snapshot.ranking.qualitySource || "human"} ratings` : key);
     $("ranking-notes").textContent = `${metrics.length ? `Rank uses ${metrics.join(", ")}. ` : ""}${notes.join(" ") || "Rank reflects available evidence. Human and model ratings stay separate; missing measurements remain unknown."}`;
     renderRecent(snapshot);
   }
+  // Once calls exist, a value they did not report reads "Unknown". Before the
+  // first call there is nothing to total, so renderUsage shows one empty state.
   function usageMetric(label, record, format = number) {
     const card = element("div", "lab-usage-card");
     const unknown = Math.max(0, Number(record?.unknownRecords) || 0);
@@ -88,10 +95,13 @@
     const usage = snapshot.usage || {};
     $("usage-coverage").textContent = snapshot.coverage || "Only calls recorded by Studio are included. External coding tools and provider account balances are not synchronized.";
     $("usage-range").textContent = `${snapshot.range?.from ? `${when(snapshot.range.from)} – ${when(snapshot.range.to)}` : "No recorded period yet"}${snapshot.retention?.dropped ? ` · ${number(snapshot.retention.dropped)} older details retired; lifetime totals retained` : ""}`;
-    $("usage-totals").replaceChildren(usageMetric("Input tokens", usage.inputTokens), usageMetric("Output tokens", usage.outputTokens), usageMetric("Total tokens", usage.totalTokens), usageMetric("Recorded cost", usage.costUsd, money));
     const recent = rows(snapshot.recent);
+    const none = !recent.length && !(Number(snapshot.calls) > 0);
+    $("usage-range").hidden = none;
+    $("usage-totals").hidden = none;
+    $("usage-totals").replaceChildren(...(none ? [] : [usageMetric("Input tokens", usage.inputTokens), usageMetric("Output tokens", usage.outputTokens), usageMetric("Total tokens", usage.totalTokens), usageMetric("Recorded cost", usage.costUsd, money)]));
     const target = $("usage-list");
-    if (!recent.length) { empty(target, "No recorded calls", "Usage will appear as Studio receives measurements from providers. Unknown usage will be shown explicitly."); return; }
+    if (!recent.length) { empty(target, none ? "No calls recorded yet" : "No recent calls", "Token and cost totals appear after Studio's first model call. Values a provider does not report stay marked Unknown."); return; }
     target.replaceChildren(table(["When", "Model / purpose", "Result", "Effort", "Duration", "Input / output"], recent.slice(0, 30), (call) => {
       const name = element("div", "lab-model-name");
       name.append(element("strong", "", call.model || "Unknown model"), element("span", "muted", [call.provider, call.role || call.taskType].filter(Boolean).join(" · ")));
@@ -210,12 +220,21 @@
     finally { if (token === state.contextRead) $("context-refresh").disabled = false; }
   }
   function show(view) {
+    if (!["rankings", "usage", "context", "tracker", "compare"].includes(view)) view = "rankings";
     state.view = view;
     for (const name of ["rankings", "usage", "context", "tracker", "compare"]) {
       $(name).hidden = name !== view;
       $(`tab-${name}`).setAttribute("aria-selected", String(name === view));
       $(`tab-${name}`).tabIndex = name === view ? 0 : -1;
     }
+    const usageSwitch = $("usage-switch");
+    if (usageSwitch) usageSwitch.hidden = !["usage", "tracker"].includes(view);
+    for (const [id, target] of [["recorded", "usage"], ["accounts", "tracker"]]) {
+      $(id)?.setAttribute("aria-selected", String(view === target));
+      if ($(id)) $(id).tabIndex = view === target ? 0 : -1;
+    }
+    if ($("summary")) $("summary").hidden = view !== "rankings";
+    window.dispatchEvent(new CustomEvent("mefi:model-view", { detail: { view } }));
     if (view === "tracker") window.MefiUsageTracker?.refresh?.();
     if (view === "context") loadTasks().then((fresh) => { if (fresh) return previewContext(); }).catch((error) => { $("context-status").textContent = error.message || "Tasks could not be read."; });
   }
@@ -236,6 +255,16 @@
       });
     }
     $("refresh").addEventListener("click", refresh);
+    for (const [id, view] of [["recorded", "usage"], ["accounts", "tracker"]]) {
+      $(id)?.addEventListener("click", () => show(view));
+      $(id)?.addEventListener("keydown", (event) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        event.preventDefault();
+        const accounts = event.key === "End" || (event.key !== "Home" && view === "usage");
+        show(accounts ? "tracker" : "usage");
+        $(accounts ? "accounts" : "recorded")?.focus();
+      });
+    }
     $("task-type").addEventListener("change", refresh);
     $("context-refresh").addEventListener("click", previewContext);
     $("context-task").addEventListener("change", previewContext);
@@ -248,5 +277,5 @@
     });
   }
   function open() { init(); if (state.initialized && Date.now() - state.at > 5000) refresh(); }
-  window.MefiModelLab = { open, refresh, show };
+  window.MefiModelLab = { open, refresh, show, view: () => state.view };
 })();

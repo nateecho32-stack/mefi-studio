@@ -5,6 +5,127 @@ import { captureTaskHandoffs } from "../scripts/task-handoffs.cjs";
 
 const task = (id, extra = {}) => ({ id, title: `Implement fixture ${id}`, prompt: `Implement ${id} and retain its full acceptance brief.`, status: "open", createdAt: 1, files: [`src/${id}.js`], ...extra });
 
+// Only tasks run, and promotion admits at most three inbox rows a pass. When
+// the fill runs out of cards while that pass promoted some, the foreman
+// promotes again and fills the free slots at once, as the retired direct
+// request path used to.
+test("an inbox deeper than one promotion pass fills every free slot with tasks in the same foreman pass", async () => {
+  const requests = ["alpha", "bravo", "charlie", "delta", "echo"].map((name, index) => ({
+    title: `Implement inbox ${name}`, prompt: `Implement the ${name} module and test it.`, files: [`src/${name}.js`], at: index + 1, source: "manual",
+  }));
+  const h = executorHost({ requests, adaptiveParallel: true });
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 5, "all five start in one pass");
+  assert.ok(h.starts.every((start) => start.taskId), "every worker runs a board task, never an inbox row");
+  assert.equal(h.board().tasks.length, 5);
+  assert.deepEqual(new Set(h.starts.map((start) => start.taskId)), new Set(h.board().tasks.map((row) => row.id)));
+  assert.ok(h.board().tasks.every((row) => row.status === "active"));
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 5, "a later pass promotes nothing twice");
+});
+
+// Each extra round re-arms the flag, so a dry fill from an earlier pass
+// cannot license promotion for a fill that stopped on the free route's cap.
+test("a stale ran-dry flag from an earlier pass does not re-promote a capped fill", async () => {
+  const requests = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf"].map((name, index) => ({
+    title: `Implement inbox ${name}`, prompt: `Implement the ${name} module and test it.`, files: [`src/${name}.js`], at: index + 1, source: "manual",
+  }));
+  const h = executorHost({ requests, adaptiveParallel: true });
+  h.env.executorRunEnv = async () => ({ cli: "opencode", env: {}, modelArgs: " --model opencode/free-fixture", model: "opencode/free-fixture", free: true, parallelCap: 1, tier: "free", via: "free-fixture · free tier, one at a time" });
+  h.autopilot.fillRanDry = true; // left over from an earlier pass that ran dry
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 1);
+  assert.equal(h.board().tasks.length, 3, "one promotion batch");
+});
+
+// The extra rounds are bounded: the first promotion plus three more, three
+// rows each, however deep the inbox.
+test("one foreman pass promotes at most four batches of a very deep inbox", async () => {
+  const requests = Array.from({ length: 20 }, (_, index) => ({
+    title: `Implement inbox module ${index + 1}`, prompt: `Implement module ${index + 1} and test it.`, files: [`src/module${index + 1}.js`], at: index + 1, source: "manual",
+  }));
+  const h = executorHost({ requests, adaptiveParallel: true });
+  h.wake(); await h.pump();
+  assert.equal(h.board().tasks.length, 12, "1 + 3 rounds of 3");
+  assert.equal(h.starts.length, 12);
+});
+
+// A retry leads with what went wrong last time, from the card's saved error.
+test("a retried card's worker is told how its previous run failed", async () => {
+  const h = executorHost({ tasks: [task("retry", { runFailures: 1, lastRunError: "FAIL tests/board.test.mjs" })] });
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 1);
+  assert.match(h.starts[0].child.prompt, /Previous run failed \(FAIL tests\/board\.test\.mjs\)\. Diagnose and resolve that failure/);
+});
+
+// Settlement re-anchors a saved file that moved while the worker ran
+// (Studio heals its own store; housekeeping's own sweep ran before dispatch).
+test("settlement re-anchors a saved file scope whose file moved during the run", async () => {
+  const h = executorHost({ tasks: [task("moved", { files: ["old/place/widget.js"] })] });
+  h.wake(); await h.pump();
+  const entry = h.autopilot.jobs[0];
+  assert.deepEqual(h.board().tasks.find((item) => item.id === "moved").files, ["old/place/widget.js"], "fixture: nothing healed before the run");
+  h.env.statSync = (file) => ({ isFile: () => !String(file).replace(/\\/g, "/").includes("old/place/") });
+  h.env.findBasenameUnderRoot = (root, base) => `src/${base}`;
+  entry.child.stdout.emit("data", "MEFI_JOB_DONE\n");
+  await entry.reap(0);
+  const row = h.board().tasks.find((item) => item.id === "moved");
+  assert.deepEqual(row.files, ["src/widget.js"]);
+  assert.ok(row.logs.some((log) => /file scope healed/.test(log.text)), "the heal is on the card's log");
+});
+
+// A card parked for review (or cooling, or held) is not work the fill can
+// start, so it does not stop the foreman promoting more of a deep inbox.
+test("a parked card on the board does not keep a deep inbox off free slots", async () => {
+  const requests = ["alpha", "bravo", "charlie", "delta", "echo"].map((name, index) => ({
+    title: `Implement inbox ${name}`, prompt: `Implement the ${name} module and test it.`, files: [`src/${name}.js`], at: index + 1, source: "manual",
+  }));
+  const parked = task("parked", { runFailures: 5, lastRunError: "exit 1" });
+  const cooling = task("cooling", { nextRunAt: Date.now() + 3_600_000, runFailures: 1 });
+  const h = executorHost({ tasks: [parked, cooling], requests, adaptiveParallel: true });
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 5, "all five inbox rows start in one pass beside the parked and cooling cards");
+  assert.ok(!h.starts.some((start) => ["parked", "cooling"].includes(start.taskId)));
+});
+
+// A fill that stopped "empty" because of a cap, not because the board ran
+// out of ready cards, earns no further promotion: the free route runs one
+// worker at a time, so promoting more of the inbox only churned it.
+test("a capped fill does not re-promote the inbox round after round", async () => {
+  const requests = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf"].map((name, index) => ({
+    title: `Implement inbox ${name}`, prompt: `Implement the ${name} module and test it.`, files: [`src/${name}.js`], at: index + 1, source: "manual",
+  }));
+  const h = executorHost({ requests, adaptiveParallel: true });
+  h.env.executorRunEnv = async () => ({ cli: "opencode", env: {}, modelArgs: " --model opencode/free-fixture", model: "opencode/free-fixture", free: true, parallelCap: 1, tier: "free", via: "free-fixture · free tier, one at a time" });
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 1, "the free route runs one worker");
+  assert.equal(h.board().tasks.length, 3, "one promotion batch, not a batch per extra round while the cap holds");
+});
+
+for (const scenario of [
+  { name: "passing", options: {}, status: "done", checkState: "passed", spawned: 1 },
+  { name: "missing", options: { projectFiles: {} }, status: "open", checkState: "failed", spawned: 0 },
+  { name: "failing", options: { verificationExitCode: 1 }, status: "open", checkState: "failed", spawned: 1 },
+]) test(`completion uses the project's ${scenario.name} local verification result`, async () => {
+  const h = executorHost({ tasks: [task("local-check")], ...scenario.options });
+  h.wake(); await h.pump();
+  await h.finish("local-check", { files: [], lines: ["MEFI_RESULT: done: scoped work finished; remaining: none", "MEFI_JOB_DONE"] });
+  h.advance(31000); await h.pump();
+  const saved = h.board().tasks[0];
+  assert.equal(saved.status, scenario.status);
+  assert.equal(saved.verificationRun.state, scenario.checkState);
+  assert.equal(h.verificationStarts.length, scenario.spawned);
+  assert.equal(saved.verificationRun.results[0].cwd, h.env.projectRoot());
+  if (scenario.spawned) {
+    assert.equal(h.verificationStarts[0].command, "npm run check");
+    assert.equal(h.verificationStarts[0].cwd, h.env.projectRoot());
+    assert.equal(saved.verificationRun.results[0].exitCode, scenario.options.verificationExitCode ?? 0);
+  } else {
+    assert.equal(saved.verificationRun.results[0].unavailable, true);
+    assert.equal(saved.verification.reason, "no project-local verification check is available");
+  }
+});
+
 test("real host loop dispatches, records streamed completion, verifies and starts the dependent task", async () => {
   const h = executorHost({ tasks: [task("first"), task("second", { dependsOn: ["first"], createdAt: 2 })] });
   h.wake(); await h.pump();

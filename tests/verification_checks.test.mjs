@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import vm from "node:vm";
+import path from "node:path";
+import { readFile } from "node:fs/promises";
 import { isVerificationCommand, summarizeObservedChecks, verifyCompletion, scheduleVerificationOnDone, projectBaseCheck, loveHarnessCheckCommand, repoCheckCommand, claimedCommitHash } from "../scripts/assistant.mjs";
 
 const check = (command = "npm test", extra = {}) => ({ command, status: "completed", exitCode: 0, startedAt: 1000, finishedAt: 2000, passed: true, ...extra });
@@ -220,7 +223,7 @@ test("LÖVE projects schedule the harness runner as their base check", () => {
   assert.ok(love.includes("PASS*"), love);
   assert.equal(projectBaseCheck({ hasPackageJson: false, hasLoveHarness: true }), love);
   assert.equal(projectBaseCheck({ hasPackageJson: true, hasLoveHarness: true }), "npm run check");
-  assert.equal(projectBaseCheck({ hasPackageJson: false, hasLoveHarness: false }), "npm run check");
+  assert.equal(projectBaseCheck({ hasPackageJson: false, hasLoveHarness: false }), null);
   assert.equal(projectBaseCheck(), "npm run check");
   const task = { id: "t1", title: "lua work", projectPath: "C:/demo" };
   const done = "MEFI_RESULT: done: suite green; remaining: none";
@@ -234,6 +237,47 @@ test("LÖVE projects schedule the harness runner as their base check", () => {
   const npmJob = scheduleVerificationOnDone({ resultNote: done, task, attemptKey: "run_2_a", queue: [] });
   assert.equal(npmJob.commands[0], "npm run check", "the default base check stays npm run check");
   assert.equal(scheduleVerificationOnDone({ resultNote: done, task: { id: "t3", title: "pathless" }, attemptKey: "run_4_a", queue: [] }).projectPath, null, "a pathless row leaves the cwd to the runner's active root");
+});
+
+test("new projects choose only observed local checks and never invent npm scripts", () => {
+  assert.equal(projectBaseCheck({ hasPackageJson: false, nodeTestFile: "tests.js" }), 'node --test "tests.js"');
+  assert.equal(projectBaseCheck({ hasPackageJson: true, packageScripts: { test: "node --test" } }), "npm test");
+  assert.equal(projectBaseCheck({ hasPackageJson: true, packageScripts: { check: "node scripts/check.js", test: "node --test" } }), "npm run check");
+  assert.equal(projectBaseCheck({ hasPackageJson: true, packageScripts: {} }), null);
+  assert.equal(projectBaseCheck({ hasPackageJson: false }), null);
+  assert.equal(projectBaseCheck({ hasPackageJson: false, nodeTestFile: 'tests.js" && echo success' }), null);
+  const task = { id: "new-project", projectPath: "C:/new-project" };
+  const resultNote = "MEFI_RESULT: done: built game; remaining: none";
+  const unavailable = scheduleVerificationOnDone({ task, resultNote, queue: [], baseCheck: null });
+  assert.deepEqual(unavailable.commands, [], "known absent checks never restore the legacy npm default");
+  const local = scheduleVerificationOnDone({ task, resultNote, queue: [], baseCheck: projectBaseCheck({ hasPackageJson: false, nodeTestFile: "tests.js" }) });
+  assert.deepEqual(local.commands, ['node --test "tests.js"']);
+  assert.equal(isVerificationCommand(local.commands[0]), true);
+  const blocked = { command: "Project verification", unavailable: true, startedAt: 1000, status: "error", exitCode: null, passed: false };
+  const verdict = verifyCompletion({ verdictOk: true, hasSession: true, changedFiles: 4, overseerChecks: [blocked] });
+  assert.equal(verdict.state, "unverified");
+  assert.equal(verdict.evidence.overseerChecks.failed, 1, "missing project checks cannot be silently ignored in favor of edited files");
+  assert.equal(summarizeObservedChecks([{ ...blocked, status: "completed", exitCode: 0, passed: true }]).passed, 0);
+});
+
+test("the host observes package scripts and root tests in the selected project's folder", async () => {
+  const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
+  const start = source.indexOf("function baseCheckForProject(");
+  const end = source.indexOf("const VERIFICATION_COMMAND_BUDGET_MS", start);
+  const root = path.resolve("fixture-fresh-project");
+  const present = new Set([path.join(root, "tests.js")]);
+  let packageValue = {};
+  const env = vm.createContext({ path, projectRoot: () => root, assistantModule: { projectBaseCheck },
+    existsSync: (file) => present.has(file), readFileSync: (file) => { assert.equal(file, path.join(root, "package.json")); return JSON.stringify(packageValue); },
+  });
+  vm.runInContext(source.slice(start, end), env);
+  assert.equal(env.baseCheckForProject(null), 'node --test "tests.js"');
+  present.delete(path.join(root, "tests.js"));
+  assert.equal(env.baseCheckForProject(root), null);
+  present.add(path.join(root, "package.json"));
+  assert.equal(env.baseCheckForProject(root), null, "a package without scripts is not a check");
+  packageValue = { scripts: { test: "node tests.js" } };
+  assert.equal(env.baseCheckForProject(root), "npm test");
 });
 
 test("a repo-named check script counts as check evidence when invoked wholesale", () => {
@@ -306,4 +350,22 @@ test("the overseer's own harness run counts, and only the overseer's run can car
   const smuggled = verifyCompletion({ verdictOk: true, hasSession: true, observedChecks: [check(harness, { runnerIssued: true })] });
   assert.equal(smuggled.state, "unverified", "a session row cannot mark itself runner-issued");
   assert.equal(summarizeObservedChecks([check(harness)]).total, 0);
+});
+
+// A parent that handed its leftovers on: once every hand-off settles, its
+// remaining prose names delegated work. A worker's summary rarely repeats a
+// follow-up's exact title, so title equality alone left such a parent failing
+// on work its follow-ups had already finished.
+test("settled hand-offs discharge the remaining prose they describe, and nothing more", () => {
+  const base = { verdictOk: true, hasSession: true, changedFiles: 3, observedChecks: [check()] };
+  const two = ["Renderer toggle for the memory warn override", "Full `npm test` + `npm run audit` sweep"];
+  const note = (remaining) => ({ parts: { done: "adopted the memory-admission rework", remaining } });
+  assert.equal(verifyCompletion({ ...base, handedOff: 2, resolvedHandoffs: two, remaining: [], resultNote: note("renderer override toggle, full-suite sweep") }).state, "verified");
+  assert.equal(verifyCompletion({ ...base, handedOff: 1, resolvedHandoffs: two.slice(0, 1), remaining: [], resultNote: note("the one npm test once the tree is committed and quiet.") }).state, "verified");
+  const reason = (args) => verifyCompletion({ ...base, ...args }).reason;
+  assert.equal(reason({ resolvedHandoffs: two, remaining: [], resultNote: note("renderer override toggle, full-suite sweep") }), "outstanding obligations remain", "without recorded hand-offs the prose still binds");
+  assert.equal(reason({ handedOff: 2, resolvedHandoffs: two.slice(0, 1), remaining: [two[1]], resultNote: note("toggle, sweep") }), "outstanding obligations remain", "an unsettled hand-off still binds");
+  assert.equal(reason({ handedOff: 2, resolvedHandoffs: two.slice(0, 1), remaining: [], resultNote: note("toggle, sweep") }), "outstanding obligations remain", "every hand-off must have settled");
+  assert.equal(reason({ handedOff: 1, resolvedHandoffs: two.slice(0, 1), remaining: [], resultNote: note("literal first-tick capture + restart decision") }), "outstanding obligations remain", "prose naming more items than were handed on");
+  assert.equal(reason({ handedOff: 1, resolvedHandoffs: two.slice(0, 1), remaining: [], resultNote: note("owner-only store row relocation") }), "outstanding obligations remain", "owner-only work is never a hand-off");
 });

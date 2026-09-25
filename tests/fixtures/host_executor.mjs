@@ -17,7 +17,10 @@ import taskHandoffs from "../../scripts/task-handoffs.cjs";
 import agentModes from "../../scripts/agent-modes.cjs";
 import agentIssues from "../../scripts/agent-issues.cjs";
 import taskDelegation from "../../scripts/task-delegation.cjs";
+import workAdmission from "../../scripts/work-admission.cjs";
 import executorResume from "../../scripts/executor-resume.cjs";
+import executorActivity from "../../scripts/executor-activity.cjs";
+import executorCore from "../../scripts/executor-core.cjs";
 
 const source = (await readFile(new URL("../../main.cjs", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const section = (start, end) => {
@@ -27,12 +30,16 @@ const section = (start, end) => {
 };
 const copy = (value) => structuredClone(value);
 
-export function executorHost({ tasks = [], requests = [], parallel = 1, adaptiveParallel = false, workerCapacity = null, paused = false, execute = true, autoBuild = true, mode = "swarm", savedSettings = null, realPool = false, poolParallel = 2, aiParallel = 2, pid = 101, livePids = [999], unknownPids = [], realWatches = false, gitStage = null } = {}) {
+export function executorHost({ tasks = [], requests = [], parallel = 1, adaptiveParallel = false, workerCapacity = null, paused = false, execute = true, autoBuild = true, mode = "swarm", savedSettings = null, realPool = false, poolParallel = 2, aiParallel = 2, pid = 101, livePids = [999], unknownPids = [], realWatches = false, gitStage = null, projectFiles = { "package.json": JSON.stringify({ scripts: { check: "node --test" } }) }, verificationExitCode = 0 } = {}) {
   let now = 1_000_000, pendingForeman = false, pendingWriteFailures = 0;
   let board = { tasks: copy(tasks), requests: copy(requests), ideas: [] };
   const logs = [], starts = [], roleRequests = [], records = [], timers = [], terminations = [], capacityCalls = [], supportCalls = [], supportJobs = [], contextCalls = [], routeCalls = [];
   const sessions = new Map(), todos = new Map(), changes = new Map(), checks = new Map(), extras = new Map(), registry = new Map();
   const root = path.resolve("fixture-only-project");
+  // The real chooser observes a project-local check. Keep its filesystem and
+  // process boundaries in memory, with explicit missing/failing overrides.
+  const filesOnDisk = new Map(Object.entries(projectFiles).map(([file, body]) => [path.resolve(root, file), String(body)]));
+  const verificationStarts = [];
   const state = { ...(realPool ? assistant.emptyState(now) : {}), status: paused ? "paused" : "running", prefs: { backlogMode: true, parallel: poolParallel, aiParallel }, agents: [] };
   const pool = { queue: [], running: new Map(), seq: 0, waiters: [] };
   const autopilot = { enabled: true, execute, autoBuild, mode, modeRevision: 0, clusterFocus: null, clusterAgents: [], parallel, adaptiveParallel, jobs: [], infraFailures: 0, parkedUntil: 0, minutes: 5, history: [] };
@@ -72,10 +79,17 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
     assistantModule: { ...assistant,
       claimWrite: (files, id) => { if (files.some((file) => registry.has(file) && registry.get(file) !== id)) return { action: "refuse" }; for (const file of files) registry.set(file, id); return { action: "proceed" }; },
       releaseWrite: (files, id) => { for (const file of files) if (registry.get(file) === id) registry.delete(file); },
-    }, backlog, taskContext, taskHandoffs, agentModes, agentIssues, taskDelegation, executorResume,
+    }, backlog, taskContext, taskHandoffs, agentModes, agentIssues, taskDelegation, workAdmission, executorResume, executorActivity, executorCore,
     projectSwitching: false, executorUpdateHold: () => null, assistantStopping: false,
     projects: { current: () => ({ id: "fixture", path: root }), active: () => ({ id: "fixture", path: root }), open: () => ({ id: "fixture", path: root }), run: (_project, fn) => fn() },
     projectRoot: () => root, projectDataPath: (key) => path.join(root, key),
+    existsSync: (file) => filesOnDisk.has(path.resolve(file)),
+    readFileSync: (file) => {
+      const body = filesOnDisk.get(path.resolve(file));
+      if (body === undefined) throw Object.assign(new Error("fixture file missing"), { code: "ENOENT" });
+      return body;
+    },
+    hasPackageJson: (dir) => filesOnDisk.has(path.join(dir, "package.json")),
     getMachine: async () => machine,
     measureWorkerLag: async () => 0, machineLagGate: null,
     getEyes: async () => eyes, getAssistant: async () => env.assistantModule,
@@ -134,6 +148,15 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
     settingsDisk: { queue: Promise.resolve() },
     autopilotStatus: () => autopilot,
     spawn: (command, args, options) => {
+      const checkOptions = Array.isArray(args) ? options : args;
+      if (checkOptions?.shell === true) {
+        assert.equal(command, "npm run check", "configure a process fixture before adding another verification command");
+        assert.equal(checkOptions.cwd, root); assert.equal(checkOptions.windowsHide, true);
+        const child = Object.assign(new EventEmitter(), { pid: 9000 + verificationStarts.length, stdout: stream(), stderr: stream() });
+        verificationStarts.push({ command: String(command), cwd: checkOptions.cwd, child });
+        queueMicrotask(() => child.emit("close", verificationExitCode));
+        return child;
+      }
       if (command === "taskkill") {
         assert.equal(options.windowsHide, true); assert.equal(options.stdio, "ignore");
         const child = Object.assign(new EventEmitter(), { kill() { this.killed = true; } });
@@ -180,7 +203,7 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
     env.enqueue = (role, run, options = {}) => { supportJobs.push({ role, ...options }); return pooledEnqueue(role, run, options); };
   }
   return {
-    env, get state() { return env.assistantState; }, pool, autopilot, starts, logs, roleRequests, records, registry, timers, terminations, machine, capacityCalls, supportCalls, supportJobs, contextCalls, routeCalls,
+    env, get state() { return env.assistantState; }, pool, autopilot, starts, verificationStarts, logs, roleRequests, records, registry, timers, terminations, machine, capacityCalls, supportCalls, supportJobs, contextCalls, routeCalls,
     board: () => copy(board), edit: (fn) => fn(board), now: () => now, settings: () => copy(settings),
     advance: (ms) => { now += ms; }, failNextWrite: () => { pendingWriteFailures += 1; },
     evidence: (id, value) => changes.set(id, value),

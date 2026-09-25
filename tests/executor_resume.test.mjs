@@ -50,6 +50,51 @@ test("a resume brief never starts a line with the previous run's protocol marks"
   for (const line of brief.split("\n")) assert.doesNotMatch(line.trim(), /^MEFI_/, `a quoted line cannot be read as protocol: ${line}`);
 });
 
+test("a long-lived tool is settled only after its own bounded wait, never as success", () => {
+  const running = { id: "launch", sessionId: "s", tool: "bash", status: "running", startedAt: 1000, updatedAt: 2000 };
+  const before = JSON.stringify(running);
+  const cap = executorResume.ACTIVE_TOOL_SETTLE_MS;
+  assert.equal(executorResume.settleActiveTool(running, 1000 + cap - 1), running, "a tool inside the wait keeps its exact running record");
+  const settled = executorResume.settleActiveTool(running, 1000 + cap);
+  assert.equal(settled.status, "timed_out"); assert.equal(settled.timedOut, true);
+  assert.equal(settled.id, "launch"); assert.equal(settled.tool, "bash");
+  assert.notEqual(settled.status, "completed", "a timed-out launch is never reported as a success");
+  assert.equal(JSON.stringify(running), before, "settlement never mutates the observed tool");
+  const replacement = { ...running, id: "launch-2", startedAt: 1000 + cap + 5 };
+  assert.equal(executorResume.settleActiveTool(replacement, 1000 + cap + 10), replacement, "a newer tool starts its own wait instead of inheriting a stale timeout");
+  assert.equal(executorResume.settleActiveTool(null, 10 ** 12), null);
+  assert.equal(executorResume.settleActiveTool(undefined, 10 ** 12), null);
+  assert.equal(executorResume.settleActiveTool({ status: "completed", startedAt: 1 }, 10 ** 12), null, "an already settled tool is not re-settled");
+  const unclocked = { status: "running" };
+  assert.equal(executorResume.settleActiveTool(unclocked, 10 ** 12), unclocked, "a tool without a start time cannot be judged timed out");
+});
+
+test("a timed-out long-lived tool retires the run's process tree exactly once", () => {
+  const cap = executorResume.ACTIVE_TOOL_SETTLE_MS;
+  const running = { id: "launch", sessionId: "s", tool: "bash", status: "running", startedAt: 1000, updatedAt: 2000 };
+  const stops = [];
+  const entry = { stop: (reason, fallback, kind) => stops.push({ reason, fallback, kind }) };
+  // Inside the wait the observed tool is returned untouched and nothing is stopped.
+  assert.equal(executorResume.retireTimedOutTool(entry, running, 1000 + cap - 1), running);
+  assert.equal(stops.length, 0, "a live launch is not retired before its bounded wait");
+  // Crossing the wait settles the tool AND stops the run (its tree) once.
+  const settled = executorResume.retireTimedOutTool(entry, running, 1000 + cap);
+  assert.equal(settled.status, "timed_out"); assert.equal(settled.timedOut, true);
+  assert.equal(stops.length, 1); assert.match(stops[0].reason, /process tree/); assert.equal(stops[0].kind, "tool-timeout");
+  // The same tool polled again is latched: no second stop, same settled record.
+  assert.deepEqual(executorResume.retireTimedOutTool(entry, running, 1000 + cap + 5), settled);
+  assert.equal(stops.length, 1, "repeated polls never re-stop the same timed-out tool");
+  // A replacement tool starts its own wait and, if it too times out, its own stop.
+  const replacement = { ...running, id: "launch-2", startedAt: 1000 + cap + 10 };
+  assert.equal(executorResume.retireTimedOutTool(entry, replacement, 1000 + cap + 20), replacement, "a fresh tool is still within its wait");
+  assert.equal(stops.length, 1);
+  executorResume.retireTimedOutTool(entry, replacement, 1000 + cap + 10 + cap);
+  assert.equal(stops.length, 2, "a replacement that times out is retired on its own latch");
+  // A completed/dropped tool is never retired, and a missing handle is tolerated.
+  assert.equal(executorResume.retireTimedOutTool(entry, null, 10 ** 12), null);
+  assert.equal(executorResume.retireTimedOutTool(null, running, 10 ** 12).timedOut, true, "an entry without a stop handle still settles");
+});
+
 test("only confirmed interrupted ownership reopens; live, inaccessible and unidentifiable owners stay held", () => {
   const original = savedTask();
   const base = { liveRuns: new Set(), pid: 101, now: 1000000, isAlive: () => false };
@@ -115,45 +160,67 @@ test("reload in the same host keeps its current worker and existing durable prog
   assert.equal(h.terminations.length, 0);
 });
 
-test("Cluster recovers a direct request without copying it into a task and advances after verification", async () => {
-  const request = { title: "Continue direct serializer request", prompt: "Complete the serializer and verify empty input", at: 1, source: "manual", pin: true };
-  const first = executorHost({ mode: "cluster", adaptiveParallel: true, requests: [request], tasks: [task("next")] });
-  assert.equal(await first.env.spawnNextJob(), "spawned");
-  const original = first.autopilot.jobs[0];
-  assert.equal(original.kind, "request");
-  first.session(original.id, "direct-request-session");
-  assert.equal(await first.env.attributeRunSession(await first.env.getEyes(), original), true);
-  original.child.stdout.emit("data", "Serializer implemented; empty input verification remains.\n");
-  await first.env.queueExecutorCheckpoint(original, { force: true });
-
-  const snapshot = first.board();
-  assert.equal(snapshot.requests[0].runProgress.sessionId, "direct-request-session");
-  assert.match(snapshot.requests[0].runProgress.outputTail.join("\n"), /empty input verification remains/);
-  const h = executorHost({ pid: 102, mode: "cluster", adaptiveParallel: true, requests: snapshot.requests, tasks: snapshot.tasks });
+// Direct request execution is retired. An older build's request that was
+// running when the app went down is migrated by the first housekeeping pass
+// (back to the inbox, its checkpoint kept as the interrupted attempt), promoted
+// and resumed as a task in that same foreman pass.
+test("Cluster resumes an older build's interrupted direct request as a task and advances after verification", async () => {
+  const request = { title: "Continue direct serializer request", prompt: "Complete the serializer and verify empty input", at: 1, source: "manual", pin: true,
+    status: "running", runId: "run_legacy_1", runningAt: 999000, lease: { pid: 101, at: 999000 },
+    runProgress: { version: 1, runId: "run_legacy_1", pid: 101, startedAt: 999000, at: 999500, sessionId: "direct-request-session", progress: 0.5, pending: false,
+      todos: [{ content: "Implement serializer", status: "completed" }], outputTail: ["Serializer implemented; empty input verification remains."] } };
+  const h = executorHost({ pid: 102, mode: "cluster", adaptiveParallel: true, requests: [request], tasks: [task("next")] });
   h.advance(5000); h.wake("restart with a saved direct request"); await h.pump();
-  assert.deepEqual(h.starts.map((row) => row.taskId), [null]);
-  assert.equal(h.autopilot.clusterFocus.source, "request");
-  assert.match(h.starts[0].child.prompt, /direct-request-session/);
+  const resumed = h.board().tasks.find((row) => row.title === request.title);
+  assert.ok(resumed, "promotion put the migrated request on the board");
+  assert.deepEqual(h.starts.map((row) => row.taskId), [resumed.id], "and its task was dispatched in the same pass");
+  assert.equal(h.autopilot.clusterFocus.source, "task");
+  assert.equal(h.autopilot.clusterFocus.id, resumed.id);
+  assert.equal(resumed.interruptedAttempt.runId, "run_legacy_1");
+  assert.match(h.starts[0].child.prompt, /direct-request-session/, "the task's brief quotes the lost run's progress");
   assert.match(h.starts[0].child.prompt, /empty input verification remains/);
-  assert.equal(h.board().tasks.filter((row) => row.title === request.title).length, 0, "the real promotion pass leaves the recovered request's identity intact");
-  assert.equal(h.board().requests.length, 1);
+  assert.ok(h.logs.some((line) => /legacy request "Continue direct serializer request" was running \(run_legacy_1\) with no live worker/.test(line)));
+  const inbox = h.board().requests;
+  assert.equal(inbox.length, 1);
+  assert.equal(inbox[0].status, undefined, "no request is ever claimed again");
+  assert.equal(inbox[0].runId, undefined);
 
-  await h.finish(null); await h.pump();
+  await h.finish(resumed.id); await h.pump();
   assert.equal(h.starts.length, 1, "Cluster still waits for the resumed attempt's verification");
-  assert.equal(h.board().requests[0].status, "verifying");
+  assert.equal(h.board().requests.length, 0, "the inbox copy is released once its task's run succeeds");
   h.advance(31000); h.wake(); await h.pump();
   const completion = h.board().tasks.filter((row) => row.title === request.title);
   assert.equal(completion.length, 1); assert.equal(completion[0].status, "done");
   assert.equal(completion[0].verification.state, "verified");
-  assert.equal(h.board().requests.length, 0, "the original request cannot remain as a stranded pending copy");
-  assert.deepEqual(h.starts.map((row) => row.taskId), [null, "next"]);
+  assert.deepEqual(h.starts.map((row) => row.taskId), [resumed.id, "next"]);
   assert.equal(h.autopilot.clusterFocus.source, "task"); assert.equal(h.autopilot.clusterFocus.id, "next");
   h.wake(); await h.pump();
   assert.equal(h.starts.length, 2); assert.equal(h.board().tasks.filter((row) => row.title === request.title).length, 1);
 });
 
+// The same migration for an auto-filed request filed more than 48 hours before
+// the upgrade: the housekeeping sweep runs in the migration's own mutation and
+// its age prune deleted the row, checkpoint and all, before promotion saw it.
+test("an older build's auto-filed request lost mid-run days ago is promoted and resumed, not pruned by the same pass", async () => {
+  const request = { title: "Repair the serializer's empty input", prompt: "Find the root cause of the serializer dropping empty input and fix it", at: 1_000_000, source: "fix",
+    status: "running", runId: "run_legacy_2", runningAt: 1_000_000, lease: { pid: 101, at: 1_000_000 },
+    runProgress: { version: 1, runId: "run_legacy_2", pid: 101, startedAt: 1_000_000, at: 1_000_500, sessionId: "fix-session", progress: 0.4, pending: false,
+      outputTail: ["Half the serializer fix is in; empty input remains."] } };
+  const h = executorHost({ pid: 102, requests: [request] });
+  h.advance(49 * 3600 * 1000); h.wake("restart two days later"); await h.pump();
+  assert.ok(!h.logs.some((line) => /stale request\(s\) pruned/.test(line)), "the migrated row is not pruned");
+  const resumed = h.board().tasks.find((row) => row.title === request.title);
+  assert.ok(resumed, "promotion put the migrated request on the board");
+  assert.equal(resumed.source, "fix");
+  assert.equal(resumed.interruptedAttempt.runId, "run_legacy_2");
+  assert.deepEqual(h.starts.map((row) => row.taskId), [resumed.id], "and its task was dispatched");
+  assert.match(h.starts[0].child.prompt, /fix-session/, "the task's brief quotes the lost run's progress");
+});
+
 test("todo wording updates are saved even when the percentage stays the same", async () => {
   const h = executorHost({ tasks: [task("renamed-step")], realWatches: true });
+  let updates = 0;
+  h.env.emitAutopilot = () => { updates += 1; };
   h.wake(); await h.pump();
   const entry = h.autopilot.jobs[0];
   h.session(entry.id, "todo-session", [{ content: "Implementation", status: "completed" }, { content: "Initial verification plan", status: "in_progress" }]);
@@ -161,12 +228,105 @@ test("todo wording updates are saved even when the percentage stays the same", a
   await h.timers.find((timer) => timer.delay === h.env.EXECUTOR_PROGRESS_POLL_MS).fn();
   await h.env.queueExecutorCheckpoint(entry, { force: true });
   assert.equal(h.board().tasks[0].runProgress.progress, 0.5);
+  const previousUpdates = updates;
+  h.advance(1000);
   h.session(entry.id, "todo-session", [{ content: "Implementation", status: "completed" }, { content: "Verify the newly found empty-input case", status: "in_progress" }]);
   await h.timers.findLast((timer) => timer.delay === h.env.EXECUTOR_PROGRESS_POLL_MS).fn();
   const save = h.timers.findLast((timer) => timer.delay === 1000 && !timer.cancelled);
   assert.ok(save); await save.fn();
   assert.equal(h.board().tasks[0].runProgress.progress, 0.5);
   assert.equal(h.board().tasks[0].runProgress.todos[1].content, "Verify the newly found empty-input case");
+  assert.ok(updates > previousUpdates, "a renamed step reaches the UI even when its fraction is unchanged");
+  assert.equal(entry.todosUpdatedAt, h.now());
+});
+
+test("worker output pushes a bounded fresh update without delaying durable checkpoints", async () => {
+  const h = executorHost({ tasks: [task("live-output")] });
+  h.wake(); await h.pump();
+  let updates = 0;
+  h.env.emitAutopilot = () => { updates += 1; };
+  const entry = h.autopilot.jobs[0];
+  entry.child.stdout.emit("data", "Inspecting input\nRunning collision tests\n");
+  assert.equal(entry.activity.text, "Running collision tests");
+  assert.equal(entry.lastOutputAt, h.now());
+  const pushes = h.timers.filter((timer) => timer.delay === 500 && !timer.cancelled);
+  assert.equal(pushes.length, 1, "a burst shares one trailing update");
+  assert.equal(updates, 0);
+  await pushes[0].fn();
+  assert.equal(updates, 1);
+  entry.child.stdout.emit("data", "Final check\n");
+  const next = h.timers.findLast((timer) => timer.delay === 500 && !timer.cancelled);
+  entry.finished = true;
+  await next.fn();
+  assert.equal(updates, 1, "a late timer cannot resurrect a finished worker");
+});
+
+test("quiet worker polling publishes its running tool before output and clears completed tools", async () => {
+  const h = executorHost({ tasks: [task("quiet-tool")], realWatches: true });
+  h.wake(); await h.pump();
+  const entry = h.autopilot.jobs[0];
+  h.session(entry.id, "quiet-session", [{ content: "Review game rules", status: "in_progress" }]);
+  const eyes = await h.env.getEyes();
+  await h.env.attributeRunSession(eyes, entry);
+  const running = { id: "active-shell", sessionId: "quiet-session", tool: "bash", status: "running", description: "Start preview server", command: "", startedAt: h.now(), updatedAt: h.now() };
+  let tools = [running], updates = 0;
+  eyes.listSessionActiveTools = async (options) => {
+    assert.equal(options.sessionId, "quiet-session");
+    assert.equal(options.since, entry.startedAt);
+    return { available: true, tools };
+  };
+  h.env.emitAutopilot = () => { updates += 1; };
+  const poll = () => h.timers.findLast((timer) => timer.delay === h.env.EXECUTOR_PROGRESS_POLL_MS).fn();
+  await poll();
+  assert.equal(entry.activeTool.id, "active-shell");
+  assert.equal(entry.lastOutputAt, null, "polling a tool must not invent stdout");
+  const previous = updates;
+  h.advance(60000);
+  await poll();
+  assert.ok(updates > previous, "a quiet active tool refreshes its elapsed label");
+  tools = [];
+  await poll();
+  assert.equal(entry.activeTool, null, "completed tools cannot stay on the current step");
+  eyes.listTodos = async () => { throw new Error("temporary todo read failure"); };
+  tools = [running];
+  await poll();
+  assert.equal(entry.activeTool.id, "active-shell", "tool visibility does not depend on todo availability");
+  entry.finished = true;
+  const stoppedUpdates = updates;
+  await poll();
+  assert.equal(updates, stoppedUpdates, "stopped workers cannot publish stale session tools");
+});
+
+test("a long-lived launch's Bash tool settles in the watcher instead of running forever", async () => {
+  const h = executorHost({ tasks: [task("stuck-launch")], realWatches: true });
+  h.wake(); await h.pump();
+  const entry = h.autopilot.jobs[0];
+  h.session(entry.id, "launch-session", [{ content: "Launch the preview server", status: "in_progress" }]);
+  const eyes = await h.env.getEyes();
+  await h.env.attributeRunSession(eyes, entry);
+  let tools = [{ id: "launch", sessionId: "launch-session", tool: "bash", status: "running", description: "Start the preview server", command: "", startedAt: h.now(), updatedAt: h.now() }];
+  eyes.listSessionActiveTools = async () => ({ available: true, tools });
+  const poll = () => h.timers.findLast((timer) => timer.delay === h.env.EXECUTOR_PROGRESS_POLL_MS).fn();
+  await poll();
+  assert.equal(entry.activeTool.id, "launch");
+  assert.equal(entry.activeTool.status, "running", "a fresh launch keeps its normal running label");
+  assert.equal(h.terminations.length, 0, "a live launch is not retired before its bounded wait");
+  h.advance(executorResume.ACTIVE_TOOL_SETTLE_MS + 1);
+  await poll();
+  assert.equal(entry.activeTool.status, "timed_out", "a long-lived launch cannot stay running forever");
+  assert.equal(entry.activeTool.timedOut, true);
+  assert.equal(h.terminations.length, 1, "the timed-out launch's process tree is terminated, not just relabelled");
+  assert.equal(h.terminations[0].pid, entry.pid, "the worker's whole tree goes, taking the spawned server with it");
+  assert.match(entry.stopping.reason, /process tree/);
+  tools = [{ ...tools[0], id: "launch-2", startedAt: h.now(), updatedAt: h.now() }];
+  await poll();
+  assert.equal(entry.activeTool.id, "launch-2");
+  assert.equal(entry.activeTool.status, "running", "a replacement tool starts its own bounded wait");
+  assert.equal(h.terminations.length, 1, "repeated polls never re-stop the timed-out launch");
+  tools = [];
+  await poll();
+  assert.equal(entry.activeTool, null, "a tool that finishes normally still clears on the next read");
+  entry.finished = true;
 });
 
 test("plain output asks for a lazy checkpoint while a session bind still saves within a second", async () => {

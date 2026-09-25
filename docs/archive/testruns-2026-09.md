@@ -6,6 +6,810 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-24 midday - Agent settings in the Command top toolbar
+
+Moved the immediate agent queue controls out of the right rail into an Agents
+dropdown anchored to the top toolbar. The existing quick coordination selector
+remains synchronized. The dropdown retains confirmed host updates, keeps the
+selected node visible, links to Team & models, Providers and full run settings,
+and supports Escape, outside dismissal, owned select/scroll portals, resizing
+and toolbar-menu handoff. Removed the duplicate side-panel tab and route
+interception; old settings rail links open the toolbar dropdown.
+
+Validation: renderer build, npm run check and npm run audit passed. The focused
+Command toolbar, queue settings, director and startup suites passed 40/40.
+An isolated Electron sample-data fixture passed desktop (1440x900, 1100x760),
+narrow (600x560) and 150% zoom checks, including viewport bounds, scrolling,
+confirmed mode changes, owned select interaction, Escape focus restoration,
+selection preservation, outside dismissal and View-menu handoff. Reviewed the
+rendered screenshots. The initial capture fixture lacked a confirmed mode;
+seeding its synthetic host status fixed that fixture-only failure. No renderer
+errors, external requests or worker launches occurred.
+
+Full npm test passed, exit 0: 3360 Node tests / 3354 pass / 0 fail / 6 skipped
+(parallel 3319 pass, Electron lane 33 pass, exclusive stages 2 pass), all 248
+Python contracts and all six normalized-path lock checks. The occlusion skip
+was capability-gated. No source-change warning occurred. The real Command
+renderer and agent configuration persistence checks passed in the full run.
+Logs and screenshots stay in the OS temp directory: mefi-toolbar-agents-gates.log,
+mefi-toolbar-agents-focused.log and mefi-toolbar-agents-review. Existing user
+work and live/portable application state were preserved.
+
+## 2026-09-24 Clear see-through glass correction
+
+User clarified that the glass must be visibly see-through. Reduced default
+shell fill to 6.6%, panel/control fill to 14.1% and menu fill to 23.2%, with
+1.9px blur, fainter outlines and lighter shadows. Command's right panel now
+uses the same clear surface. Turning Blur off preserves transparency instead
+of restoring an opaque fill; reduced transparency still requests solid fills.
+Hover navigation behavior is unchanged. Rebuilt renderer/booklet.html.
+
+Validation: npm run check and npm run audit pass with zero audit findings.
+An isolated Electron preview measured the actual rendered background alpha on
+six surfaces, with blur enabled and disabled. All stayed below 25% opacity;
+Blur-off produced no backdrop filter. A blue/amber backdrop probe changed the
+pixels through the left navigation, top navigation and right panel by 168,
+168 and 156 summed RGB levels respectively, proving actual transparency.
+The normal canvas screenshot was visually inspected. No renderer errors,
+external requests, workers or live app stores were used by that fixture.
+
+Full npm test completed: parallel Node 3318 pass / 1 fail / 4 skip; Electron
+31 pass / 1 fail / 1 skip; serialized eyes-toggle and both occlusion checks
+pass. The full Unified Studio navigation and 36-case layout fixture passes.
+Python contracts and normalized-path locking pass. The remaining failures
+are the Overhead polling source-shape assertion and the Agent setup fixture's
+companion add-button reachability check. The repository gate is not fully green.
+
+Logs remain in the OS temp directory as mefi-clear-glass-full-test.log and
+mefi-clear-glass-preview.log. Synthetic screenshots and the transparency report
+are in mefi-clear-glass-preview-twJgEs, outside Git.
+
+## 2026-09-24 midday - Zen camera follows visible layout anchors and keeps branches in frame
+
+Fixed the tour targeting raw graph coordinates instead of painted layout
+anchors, and visiting hidden assistant/music or retired nodes. It now frames
+stable branches with nearby connected nodes, fits zoom using the real canvas
+projection, pulls back in transit and at regular wide stops, and uses bounded
+cubic movement with damped pan, zoom and tilt. Zen eases the projection centre
+across without reseeding the layout; wake carries tilt velocity too. Reduced
+motion keeps the original framing.
+
+Validation: renderer build, npm run check and npm run audit passed (zero audit
+findings). The focused camera_tour, command_director, command_visuals and
+command_graph suites passed 147/147. Coverage includes two-minute flights in
+2D/3D at 600x560, 1440x900 and 1920x700, real perspective, removed targets,
+painted anchors, hidden nodes, no-jump takeover, smooth zoom and screen-centre
+entry/return. An isolated Electron sample-data capture passed 24 stops across
+two-minute flights at 1440x900 and 600x560, with no renderer errors or network/
+process attempts. At least 8 of 21 stable nodes remained inside the safe frame
+on desktop and 18 on narrow; wide stops showed all 21. Captures/report are at
+%TEMP%/mefi-zen-tour-f8EB9c; the local replay helper is tools/logs/zen-tour-proof.mjs.
+
+Full npm test completed, exit 1: Node parallel 3322 tests / 3312 pass / 6 fail /
+4 skipped; Electron lane 33 tests / 30 pass / 2 fail / 1 skipped; exclusive
+eyes-toggle 1/1 and occlusion 2/2 passed. Python 248/248 and all six normalized
+path-lock checks passed. The standard Command renderer and all-node-views
+render matrix both passed, including reduced motion. Unrelated failures:
+boot_poll_visibility (Overhead wake poll); executor_parallel (two obsolete
+executorRunEnv slices); jev_model_routing_host (three host slice boundaries);
+agent_setup_render and media_window_render (Electron UI assertions). Several sibling
+full-gate runs remained active after a three-minute wait. The full runner
+reported source changes during both parallel and Electron stages, so this is
+not a quiet-tree green full gate. Other sessions' sources were left intact.
+Full output: %TEMP%/mefi-zen-tour-npm-test.log.
+
+## 2026-09-24 evening - Automatic task context and companion agent routing
+
+Added automatic task references, a configurable fast scout, agent seats and subscription-first routing, companion Ask/Team panels, hidden assistant/music graph nodes, and stable pointer-adjacent menu sizing. Built booklet; check and audit pass. Focused routing/context tests (45), Command renderer, unified Agents renderer, and workflow renderer pass. Full npm test: Python contracts and lock pass; Node fails under concurrent source edits and two loaded renderer timing assertions, both renderer files pass solo. No live provider calls were used.
+
+## 2026-09-24 promotional video kit and release readiness
+
+Created three silent 30-second H.264 films using isolated Three.js scenes and
+synthetic app captures. Each has 900 frames at 30 fps, correct landscape,
+square or portrait dimensions, no audio stream, and a clean full ffmpeg decode.
+Reviewed story beats and actual MP4 playback in Edge. Capture profiles never
+load the application's live main process or state.
+
+Latest npm run check and npm run audit pass (audit: zero errors/warnings).
+The first full npm test run failed both Node and Python legs; normalized-path
+locking passed. A second full run also detected source files changing during
+the parallel stage and reported host-boundary assertions and a floating-media
+render failure. Its output is tools/logs/promo-final-test.log. This is not a
+clean release gate, so no app version bump, release tag or portable release
+was published. The promo renderer and Pages source are independent of these
+application edits; no application source was changed for the videos.
+Final rerun: Node suites failed (325 s); Python contracts passed (70 s);
+normalized-path locking passed. Video render reports contain no renderer errors.
+
+## 2026-09-24 midday - Plans polish and reversible suggestion editing
+
+Condensed the stage header, added numbered field labels and contextual Refine
+actions, and made the header follow the local plan name without moving focus.
+Suggestions now read as cards with optional editing, clear replace/append
+actions and dismiss controls. Undo restores the prior local wording and dirty
+state, rejects intervening edits, and returns focus to the affected field.
+File expansion and suggestion edits survive partner tab changes. The editor
+and partner body scroll independently on desktop, keeping the AI controls
+visible; saved revision history now belongs inside the editor. Narrow layouts
+stack, and Enter focus glow and reduced-motion behavior remain intact.
+
+Focused validation: 91 planning behavioral tests passed (30 renderer VM tests
+and 61 host/store/routing/exploration tests). The isolated real Electron
+planning_render fixture also passed, both solo and within the full run. It
+checks native keyboard focus/glow, edited suggestions and Undo, preserved file
+branches, reachable controls at 1440/1100/600px, and expanded saved history and
+decision maps without squeezing away the writing pane. The new-plan stage
+header measures about 152px and the initial save control fits at 1440x1000.
+The fixture uses synthetic responses and a temporary profile, without live
+providers, coding workers or user data. Screenshots (including 1920x1200) and
+report.json are under %TEMP%/mefi-planning-polish-captures.
+
+Build-booklet, npm run check and npm run audit passed. Full npm test completed:
+Node stages total 3356 tests, 3340 pass, 10 fail, 6 skip; Python 248 tests pass;
+normalized-path lock 6/6 pass. The non-planning failures were the overhead
+visibility contract, obsolete host-section boundaries in executor_parallel
+and jev_model_routing_host, and agent_setup_render, command_render,
+media_window_render and workflow_render. Both parallel and Electron stages
+reported source changes during this shared-tree run. No unrelated tests or
+live/portable data were changed by this polish pass. Complete output is at
+%TEMP%/mefi-planning-polish-full-test.log.
+
+## 2026-09-24 - Agent setup provider rows, models and per-agent skills
+
+Agents Setup now has one model row per agent, a corner provider icon picker,
+model selection on the left, supported effort and fast controls on the right,
+and a left-side + for local skills and the coding worker's Studio desk MCP
+connection. HTTP seats and Claude's text-only CLI use the selected route;
+coding-only CLIs remain on the worker. Provider rosters can refresh without
+inference, custom model IDs remain available, and provider changes preserve
+saved models. Skills are scoped to the selected agent and retained in team
+snapshots; inherited seat routes do not add another role's skill selection.
+The advanced worker settings stay under Routing & fallback.
+
+Final focused batches pass 65/65 and 57/57, including provider routing, skill
+isolation, snapshot retention, model metadata, catalog integration and worker
+prompts. The isolated agent_setup_render test passes with native pointer
+selection, searchable models, same-provider no-op, Apply/reload, per-agent
+skills, MCP enablement, stale-save retention and twelve width/zoom layouts.
+Screenshots were inspected. Its first responsive run found a narrow field
+clipping issue, now fixed. An added search test initially seeded too few
+models to show the search box; the fixture now seeds a realistic longer list
+and its final solo run passes. No live data, paid calls or workers were used.
+
+The booklet was rebuilt. Final npm run check passes (137 targets, 295 specs)
+and npm run audit reports zero errors and warnings. Full npm test was run:
+parallel Node 3310 pass / 6 fail / 4 skip; Electron lane 29 pass / 3 fail /
+1 skip; eyes toggle passes; occlusion has one contract pass and one capability
+skip. Python: 248 tests pass. Normalized-path lock: all six pass. The runner
+reported source changes in both Node stages. The other failures concern
+Overhead visibility, executor/OpenCode routing fixture boundaries, Command
+rendering and the existing workflow fixture. The third Electron failure was
+this task's short search fixture, corrected and verified solo as noted above.
+This records a passing focused change, not a clean full-project gate.
+
+Complete logs are in the OS temp directory as mefi-agent-setup-*.log and
+synthetic captures/report in mefi-agent-setup-captures. Local data and the
+portable application's data were not edited.
+
+## 2026-09-24 Node view visual refresh - rendering and geometry validation
+
+Built on the existing working tree. Added renderer-only shared node finishes,
+theme colors and bounded paint/text caches across Command, the tree rail and
+Appearance previews, Agent brain, project maps and Overhead. Refined Brain-map
+cards without changing port geometry. Pipeline rows wrap and scroll; tooltip
+placement follows scrolling. Overhead fits its bitmap to the displayed canvas,
+keeps cards apart, and suspends hidden frames.
+
+Validation used isolated OS-temp Electron fixtures, synthetic tasks/sessions,
+an in-memory bridge, and blocked network/process requests. No live user data,
+providers, game files or portable state were used.
+
+- Focused graph/editor/build suites: 232/232 passed. Final helper/Overhead
+  rerun: 10/10 passed, including crowded placement, hidden-view suspension,
+  reduced motion, scroll-aware hover titles and cached paints.
+- Real Chromium visual matrix passed across Command, Brain maps, pipelines,
+  project maps and Overhead at 1440x900, 1024x768 and 600x560, plus 125% zoom;
+  all eight styles and all five layouts in both 2D and 3D. Captures include
+  long titles, active/failed/completed work, crowded and empty scenes, theme
+  switching, selection and replay. Final fixture also exercises Brain-map
+  wiring and undo/redo and asserts the Overhead aspect ratio. Existing focused
+  interaction tests cover keyboard navigation, hit targets and live refresh.
+- Build booklet, npm run check and npm run audit passed. The two Python
+  updater/build contracts pass on an isolated rerun.
+- Full npm test was run: Node stages recorded 3300 passes, 33 failures and
+  5 skips; Python recorded 248 tests with 10 failures; normalized-path lock
+  passed. Both Node stages warned that sources changed during the run.
+  Failures include routing/seat/context fixtures, navigation/sidebar
+  expectations, provider contract slices, a workflow composer position,
+  and the Command fixture expecting the assistant canvas node that concurrent
+  companion changes now exclude. A solo Command rerun confirms that specific
+  stale assertion. The updater source-order assertion and concurrent booklet
+  write failures pass on rerun. This is not a green full-suite result.
+- Repeated the existing 30/150-node 2D/3D profiling workloads. Shared node
+  paint self time was 0.62-2.13 ms versus 4.06-8.21 ms in the repeated saved
+  baseline. Frame p95 was 100 ms after versus 66.7-150 ms before under heavy
+  shared-machine load. Source changes and timing variability prevent an FPS
+  improvement claim. Real Chromium confirms warm shared paints allocate no
+  new gradients; bounded-cache and existing renderer performance tests pass.
+
+Before/after PNGs, reports and detailed logs are local artifacts under the
+OS-temp mefi-node-refresh directory, outside Git. Architecture, code map,
+changelog and the generated booklet were updated.
+
+## 2026-09-24 Glass navigation and hover child menus
+
+Replaced permanent Agents child rows with floating hover menus. Parent hover
+keeps the current route; child selection navigates, Escape/outside click/leaving
+close the menu, and click/keyboard plus compact pickers remain available.
+Navigation, Command controls and shared panels use theme-tinted translucent
+fills and faint outlines, with solid reduced-transparency/no-blur fallbacks.
+Preserved other working-tree changes and all live/portable data.
+
+Validation: rebuilt renderer/booklet.html. Final npm run check passes (137
+syntax targets, 295 unique specs); npm run audit passes with zero findings.
+The focused app_rail/nav_startup run passes 42/42. The isolated unified Studio
+Electron fixture passes all 36 size/zoom/style cases, hover corridor, child
+selection, no hover navigation or layout shift, dismissal, keyboard access,
+returning to Agents, and compact navigation bounds. Its report has no renderer
+errors, network attempts or process attempts. Captures were visually inspected.
+Earlier focused runs exposed a scroll-boundary assertion that sampled before
+smooth scrolling settled and a pointer-leave assertion that sampled before
+input delivery under load; those checks now wait for the actual state.
+
+Full npm test completed but is not green on the shared checkout: parallel Node
+3297 pass / 12 fail / 4 skip; Electron 26 pass / 5 fail / 1 skip; eyes-toggle
+passes, and occlusion is capability-skipped with its contract passing. Python
+runs 248 tests with one Overhead polling source-shape failure; all six path-lock
+checks pass. Node failures cover Overhead polling, camera-director fixture
+bindings, OpenCode routing bindings, Command's queue-summary visibility, media
+hover, the profiler timeout, Home composer layout and the unified fixture's
+scroll-arrow hold. Hover navigation passed before that last failure; the same
+complete unified fixture passed in its dedicated run. Both Node stages flagged
+concurrent source changes. This row does not claim a clean repository gate.
+
+Full and focused logs remain outside Git under the OS temp directory as
+mefi-glass-navigation-full-test.log, mefi-glass-navigation-focused.log,
+mefi-glass-navigation-render.log and mefi-glass-navigation-unit.log. Synthetic
+screenshots and the successful UI report are in mefi-glass-navigation-captures.
+
+## 2026-09-24 midday - Command glass panel and right-edge docking
+
+Command's shared right panel now sits flush against the viewport edge with
+64% theme-tinted glass, an 18px backdrop blur, a subtle highlight and square
+outer corners. Inspection keeps its vertical tabs. Blur-off and the system's
+reduced-transparency preference use an opaque fallback. Existing worktree
+changes and both live data stores were preserved.
+
+Validation: renderer build, npm run check and npm run audit passed. An isolated
+Electron visual fixture passed at 1440x900, 1100x760, 1920x1080, 1440x900 at
+125% zoom, and 800x720. Desktop measurements confirm the flush right edge,
+vertical tabs, translucent fill, blur and no horizontal overflow. Blur-off
+and reduced transparency both disable blur and restore an opaque surface.
+Reviewed the desktop, zoomed and narrow screenshots; no renderer errors,
+external requests or worker launches. Preview files live only in the OS temp
+folder mefi-glass-panel-review.
+
+Full npm test ran after existing test processes drained and exited 1:
+Node stages totaled 3346 tests, 3321 pass, 19 fail and 6 skips. The runner
+flagged concurrent source changes during both the parallel and Electron
+stages. The 14 parallel failures concern other runtime/route/preview behavior;
+the five Electron failures concern the companion queue summary being hidden,
+media hover, profiler download timeout, held scroll arrows and workspace
+composer stability. Python ran 248 contracts with one Overhead polling
+source assertion failure; the six normalized-path lock checks passed.
+The isolated panel checks pass, but this run is not a clean repository-wide
+gate. Full output: OS temp mefi-glass-panel-gates.log. No unrelated failing
+code or tests were changed for this styling request.
+
+## 2026-09-24 Unified Studio implementation - focused checks
+
+Implemented Agents ownership, scoped credential-free team drafts and presets,
+shared overflow/dropdowns, appearance presets and an adaptive companion menu.
+Preserved the existing working-tree edits and live/portable data.
+
+Validation: renderer build passed. npm run check passed after correcting one
+unused companion selector. Six profile tests pass, including real resumed
+worker dispatch; 16 Agent Brain host tests pass, including companion preference
+persistence and project learning; 46 navigation/startup/build tests pass.
+The earlier focused combined run reported obsolete four-section expectations
+and missing new fixture inputs; those were corrected and pass on rerun.
+
+The isolated Electron fixture passed its first full 36-case size/zoom/style
+matrix (1920x1200, 1440x900, 1100x720, 600x560; 100/125/150%; all three styles),
+with no visible native Studio scrollbar. Added real hover/corridor/dismissal,
+long searchable dropdown, overflow arrow, draft and stale-save checks also
+pass. Desktop fixture stubs initially lacked getApiKey and were corrected;
+no live providers or workers were used. Further final gates follow below.
+Screenshots and focused logs are in the OS temp directory under
+mefi-unified-studio-captures and mefi-unified-*.log, outside the repository.
+
+## 2026-09-24 midday - Plans live drafting partner, file tree and keyboard flow
+
+Plans now has optional debounced AI help for unsaved text, an independent
+Explore files / Suggestions side panel, editable proposals, and a manual
+mode saved with the draft. The host uses the Analyzer's bounded inventory,
+redacted matching excerpts and the data-only assistant route; live exploration
+cannot save decisions, approve specifications, or create board work. Late
+replies are discarded after edits, project switches, hiding, or closing.
+The planning menu is more compact, fields have a slight focus glow, Enter
+moves to the next field/save control, and Shift+Enter preserves multiline
+input. Reduced motion disables the departure animation.
+
+Final focused validation: 88 behavioral tests passed across planning,
+planning_execution, planning_exploration, planning_routing, planning_service
+and planning_ui. The real isolated planning_render fixture also passes,
+covering native keyboard events, focus glow, reduced motion, adopted wording,
+and reachable controls without horizontal overflow at 1440, 1100 and 600px.
+An additional 1920px sample capture shows the suggestions menu. No live data,
+providers or coding workers were used. Fixture development first exposed
+missing OS focus in an offscreen window (fixed with Chromium focus emulation,
+without stealing desktop focus); a resize capture also hit UnknownVizError,
+so that capture retries only this transient compositor error, with a bound.
+The final solo renderer run passes in 13.5 seconds.
+
+npm run build-booklet and npm run check pass (135 targets; final check 293
+specs). Final npm run audit passes with zero findings. The earlier audit
+reported the shared studio-ui/agents/companion-ui array-based build inputs;
+another session restored literal input reads during this validation and the
+final audit is clean. No build-script fix was made by this planning change.
+
+Full npm test was run and is not green: parallel Node stage 3256 pass / 38
+fail / 4 skip; Electron stage 28 pass / 2 fail / 1 skip; serialized eyes toggle
+passes, occlusion's live capability probe skips and its contract passes.
+Python runs 248 tests with two failures; normalized-path checks pass (6/6).
+Every planning test passed in that full run, including planning_render.
+Other sources changed during both Node stages, which the runner flagged.
+Failures concern booklet_build fixture inputs, catalog/Settings and Jev fake
+DOMs, Command layout/visual assertions, onboarding/sidebar navigation,
+outbound_privacy, command_render and workflow_render. Python failures are
+auto-setup's updateSettings source-shape assertion and the updater build
+literal assertion. These concurrent shared changes were preserved; this row
+does not claim a clean full-project gate.
+
+Full output is retained locally at %TEMP%/mefi-planning-upgrade-full-test.log;
+synthetic screenshots and the renderer report are under
+%TEMP%/mefi-planning-upgrade-captures. The final booklet was regenerated.
+
+## 2026-09-24 late morning - Appearance live tree sidebar and deliberate dismissal
+
+Appearance now keeps the actual Command tree visible beside a compact Settings
+drawer. Theme, Nodes, Layout and Interface switch the mounted controls; the
+drawer can move left or right and remembers its side. Small windows put the
+tree above the drawer. Outside pointer gestures close Appearance before any
+canvas or rail handler can run; the next gesture selects normally. Escape
+returns focus to the tree, and Settings search reveals the correct subsection.
+Owned select popups and scroll affordances remain interactive.
+
+Validation: renderer/booklet.html rebuilt. npm run check passes (135 syntax
+targets; 292 unique specs at the final check). npm run audit passes with zero
+findings after expressing the existing shared UI build reads in the auditor's
+recognized literal form. The final focused Music, Settings, navigation and
+catalog run passes 114/114. An earlier 101-test run found the intentionally
+split Layout markup assertion and two stale navigation fixture dependencies;
+those were updated, and the next 104-test run passed. The added drawer test
+also passes in the final 114-test run.
+
+An isolated offscreen Electron fixture checked all four sections at 1840x1000,
+1440x900, 1000x720, 800x640 and 600x560, with no horizontal clipping. It also
+checked 125% zoom, both docking sides, reduced motion, native mouse dismissal,
+second-click node selection, first/second rail clicks, deep-link focus, Escape,
+and an owned custom select. No renderer errors, external requests or worker
+processes were recorded. The fixture uses synthetic projects and an isolated
+profile. Screenshots were visually inspected. Its initial harness needed its
+copied brains helper path corrected; input targets now use DOM hit testing so
+a node covered by the drawer is not mistaken for an outside click.
+
+The complete npm test gate was run but is not green on this shared checkout:
+Node parallel stage 3256 pass / 38 fail / 4 skip; Electron lane 27 pass / 3 fail
+/ 1 skip; eyes toggle 1 pass; occlusion lane 1 pass / 1 environment skip.
+Python contracts: 248 tests, 2 failures; normalized-path checks: all six pass.
+The runner detected concurrent source changes. Most parallel failures came
+from a shared Settings category fallback calling querySelector in bare-DOM
+fixtures; the capability guard is now restored and all nine catalog tests
+pass in the focused rerun. Other failures included existing/shared booklet
+filename, graph layout, relationship style, model routing and sidebar
+contracts, plus Command, Plans and workflow Electron checks. The Python
+failures were auto-setup provider expectations and a stale literal build-order
+assertion. These broader failures were not claimed resolved by this UI task.
+
+Complete logs and the smoke runner remain in the OS temp directory under
+mefi-appearance-*.log / mefi-appearance-smoke.mjs; the fixture report and
+screenshots are in mefi-appearance-preview. No live user state was changed or
+added to Git.
+
+## 2026-09-24 morning - Compact live Work panel and tab strip
+
+Follow-up density pass using the real Electron renderer with two sample workers,
+three running/error agent rows, four queued tasks and recent agents. Tabs and
+readiness counts use single rows. Worker titles share their line with elapsed
+time; preparation, finishing and stopping retain explicit labels. Agent and
+queue rows use less space, while long activity still expands in place and real
+errors remain fully readable. The vertical inspection strip retains all icons.
+
+Validation: rebuilt renderer/booklet.html. The 73 Command activity, visual and
+queue-settings tests pass. The isolated Electron capture passes at logical widths
+1025, 1441 and 1841 and 125% zoom, including live updates, expanded details,
+keyboard navigation, the Agents setup route, 99+ counts, six horizontal tabs and
+visible inspection icons. Desktop worker cards measured 131/166.5 px before and
+74.94/99.94 px after; total feed content fell from 875 to 637 px. Captures,
+geometry reports, the fixture and complete logs are in the OS temp directory
+mefi-work-compact. No live user data or coding workers were used.
+
+The full npm test ran every leg: parallel Node 3294 tests, 3244 pass, 46 fail,
+4 skip; Electron stage 30 tests, 26 pass, 3 fail, 1 skip; eyes toggle passes;
+occlusion 1 pass and 1 capability skip; Python 248 tests with 3 failures;
+normalized-path lock 6/6 pass. The runner detected concurrent source changes.
+Failures concern shell navigation contracts, routing/catalog window mocks,
+booklet fixture inputs, outbound-privacy source inspection, Home queue controls,
+the Live return path, a profiler download timeout, and Python routing/build
+contracts. npm run audit reports three literal inlining checks for agents.js,
+companion-ui.js and studio-ui.js; those modules are loaded by the build's array
+map. These broader failures are outside this Work density change. The final
+npm run check result is recorded in mefi-work-compact/check-final.log.
+
+## 2026-09-24 morning - Command Work panel and tab group cleanup
+
+Work now uses a compact readiness strip, a task card with separate elapsed and
+update metadata, and a native disclosure for long activity/commands. Disclosure
+state and keyboard focus survive activity updates for the same run. Running,
+queued and failed agents stay visible; finished/idle agents move below the queue
+under Recent agents. The exact intentional preparation cancellation "Mode changed
+or work paused" reads Stopped instead of an actionable error. The shared tab bar
+keeps badges beside icons, caps large counts visually while retaining full
+accessible names, and marks the selected view with an underline. Integrated the
+concurrent Agents-page relocation without replacing its tab markup; keyboard
+navigation follows the same setup shortcut as clicking it.
+
+Validation: rebuilt renderer/booklet.html; npm run check passes (134 syntax
+targets, 286 unique specs, all selectors used). The 73 focused Command activity,
+visual and queue-settings tests pass after updating the renamed counter label
+assertions. An isolated, offscreen Electron fixture passed at logical widths
+1025, 1441 and 1841, plus 125% zoom: no clipped tab labels, icon/badge collisions
+or horizontal rail overflow; checked tab switching, the Agents keyboard route,
+expanded activity across live updates, real failures, empty work and 99+ badges.
+Screenshots, fixture code, reports and full logs are under the OS temp directory
+mefi-work-tab-cleanup; no live data, providers or coding workers were used.
+
+Full npm test was run: Node parallel stage 3270 pass / 4 fail / 4 skip; two
+failures were this change's stale counter-label assertions, now corrected and
+passing in the focused rerun. The other parallel failures were shared studio-ui
+unused selectors and outbound_privacy's assistantFetch source-slice assertion.
+Electron stage 26 pass / 2 fail / 1 skip: command_render reached the previously
+recorded 600x560 local-navigation failure; workflow_render reached the previously
+recorded Home composer stationary assertion. eyes_toggle_electron failed its
+initial live-poll assertion; occlusion capability was skipped on this desktop.
+Python: 248 tests, one auditor failure; normalized-path checks pass.
+
+Other application work continued during validation: shared Agents/studio-ui
+sources and build integration changed, and companion-ui appeared afterwards.
+Final audit reports those three modules as not inlined; a subsequent booklet
+fixture check has three ENOENT failures for its missing studio-ui.js fixture
+input (74 of 77 tests in the combined focused/build run pass). These shared
+integration failures remain outside this panel change; no broader green gate
+is claimed. The final panel preview includes the new Agents route and shared
+scroll affordances.
+
+## 2026-09-24 - Audio status dropdown owns music, video and connection setup
+
+The Command audio status button now opens Music & video underneath it. Local
+music, radio, YouTube / links, connection setup, reaction controls and music
+recommendations stay in this dropdown; Appearance and its canvas preview hold
+only visual controls. The dropdown fits its visible content and the viewport,
+returns focus on Escape, closes on outside clicks or navigation, and preserves
+playback. Settings and the music node open the same controls.
+
+Validation: `npm run build-booklet`, `npm run check` and `npm run audit` pass
+(audit: zero findings). The focused Music, toolbar, audio-source, Settings and
+navigation run passed 119/119. An isolated Electron smoke checked 11 layouts
+across desktop and 1100, 760 and 480 px widths, natural growth and shrinkage,
+viewport bounds, no horizontal overflow, unchanged connection state on open,
+and preserving the mounted player across close/reopen; no renderer errors.
+Provider responses were local fixtures, not live streaming verification.
+
+The full `npm test` completed with 3,298 Node passes, two failures and six skips;
+all 248 Python contracts and all six normalized-path checks passed. The failures
+were `command_render` (local navigation hit testing at 600 x 560) and
+`workflow_render` (opening Home's drawer changes the composer's top by 16.5 px).
+Both failures repeated in a sequential two-file rerun and with pre-change
+copies of all six renderer files modified for this dropdown, in a separate
+temporary source tree. They are independent of this change. The first baseline
+Command launch lacked `scripts/brains.cjs`; after copying the existing scripts,
+that fixture reached and reproduced the same navigation assertion.
+
+Evidence stays local in `%TEMP%/mefi-audio-dropdown-*.log`; the standalone UI
+report and captures are under `%TEMP%/mefi-audio-dropdown-preview/`. No user
+state or screenshots were added to the repository.
+
+## 2026-09-24 afternoon - Runs rail follow-up gate on settled checkout
+
+After the music stylesheet settled, npm run check passed (130 syntax targets, 286 unique specs, all selectors used, TESTRUNS valid) and npm run audit passed with 0 errors and 0 warnings. Rebuilt booklet. Focused host, provider and booklet suites: 62 pass; Command visual suite earlier: 85 pass with the host suites. Final npm test: Python 248 pass and path lock pass; Node stage fails only command_render at the known 600x560 local navigation click and workflow_render at the Home composer stationary assertion. Both also fail solo; the Runs rail checks in command_render complete before its later navigation failure. No provider cooldown or run-history failures remain.
+
+## 2026-09-24 morning - Borderless floating media with hover controls and menu avoidance
+
+Implemented renderer/media-window.js and wired the existing Links player into one persistent floating surface. Pointer and keyboard movement, eight resize edges, viewport bounds, saved geometry, Pin/Move aside, minimize/restore, and close preserve the player through navigation. Menu avoidance yields once, lets the pointer follow, and respects focus, touch and reduced motion. The real Electron fixture uses an isolated profile and locally answered embed URL; its provider-load counter stays at one throughout movement, resizing, minimization and navigation. Screenshots at 1440x900 and 600x560 were inspected under ignored tools/logs/media-window.
+
+- Initial music/together/booklet run: 68/87 passed, with 19 failures while concurrent dropdown edits had removed scheduleJump and old group markup. After those edits settled, the follow-up run below passed all music, together and booklet checks.
+- Interaction tests: 6/6 pass. Initial Electron capture exposed fixture DPI rounding (1442/601 CSS pixels); forcing fixture device scale to 1 fixed the harness. Combined media tests: 7/7 pass, including the final rerun against the settled sources.
+- npm run build-booklet, npm run check and npm run audit pass; audit has zero findings. Focused ESLint for the media controller, music integration and new tests passes. git diff --check on changed sources passes.
+- npm test completed: Python 248/248 and all six normalized-path checks pass. The Node stages failed the stale legacy-audio navigation assertion and the existing Command/Home layout checks. Updated the navigation contract to the concurrent audio dropdown behavior. The runner also reported shared source changes during the run.
+- Serial follow-up of app_rail, music, together_ui, booklet_build, command_render and workflow_render: 120/122 pass. Remaining failures reproduce outside the floating-player flow: Command's agent-brain local navigation is not clickable at 600x560, and opening Home's activity drawer shifts the composer top by 16.5px. Both are also recorded by other sessions in this notebook; the full suite is not claimed green.
+
+Complete logs remain in the OS temp directory: mefi-media-existing-tests.log, mefi-media-render-tests.log, mefi-media-tests.log, mefi-media-full-tests.log, mefi-media-followup-tests.log and mefi-media-final-tests.log. No live media service, user profile or project state was used by the media fixture.
+
+## 2026-09-24 morning - Runs rail grouped by task and automatic failure recovery
+
+Changed Command's Done attempt log into a Runs summary grouped by task with current verification and retry state. The host now lets the executor's five charged repair attempts finish before opening a run-failure Ask card; the next worker still receives the previous error. Focused assistant and Command visual suites: 85 pass; provider cooldown: 7 pass. Rebuilt renderer/booklet.html. npm run audit: 0 errors, 6 warnings from unused renderer/music.css jump selectors. npm run check: failed on those same six selectors. npm test: Python 248 pass and normalized-path lock pass; Node failed with pre-update provider expectations (updated and passed solo), music tests in shared work, and Electron fixture failures. command_render solo still fails at the known 600x560 agent-brain local-nav click after the Runs rail assertions. git diff --check on touched sources: clean.
+
+## 2026-09-24 afternoon - OpenRouter full-suite retry on settled tree
+
+After a fresh booklet build and green npm run check plus npm run audit, reran npm test. Python contracts (248) and normalized-path lock passed. Node parallel stage failed in unrelated appearance navigation, music, provider cooldown and verification-drain tests; Electron fixture stage failed in Command and workflow layout tests. OpenRouter catalog, routing, key and Settings tests passed in the run and their focused suites. No OpenRouter key was supplied, so no live completion request was made.
+
+## 2026-09-24 morning - Agent Brain system explorer and present-file map
+
+Replaced the flat project-map boxes with isometric system, part and file navigation in Agent brain. The host now inventories present tracked and untracked files, retains missing historical files as marked past work, and rebuilds the task overlay on board status changes. Added a present-inventory contract in tests/project_map.test.mjs. Focused project-map and agent-brain-host tests: 36/36 pass. Isolated Electron render with synthetic game systems showed overview, five parts, four files and no console errors. npm run build-booklet, npm run check and npm run audit pass; git diff --check passes for tracked touched files. npm test ran but is red on the shared working tree: provider_cooldown fails three assertions even solo, workflow_render's Home composer moves 16.5px when its activity drawer opens even solo, command_render failed in the Electron lane, and Python routing contracts expect a provider list without the existing openrouter entry. No result from that run is claimed as a full-suite pass.
+
+## 2026-09-24 afternoon - OpenRouter final gate rerun after renderer settled
+
+Concurrent music edits settled, then npm run check passed all stages (130 syntax targets, 285 unique specs, CSS selectors used, TESTRUNS valid) and npm run audit passed with zero findings, errors and warnings. The OpenRouter route/catalog/Settings targeted suites and Python routing contracts remain green. The full npm test run earlier was red in unrelated issue-host, provider-cooldown and Electron layout tests; no live OpenRouter completion was sent because no user key was configured for this task.
+
+## 2026-09-24 afternoon - OpenRouter validation follow-up under concurrent renderer edits
+
+After the OpenRouter assertions and request usage field were finalized, targeted route/catalog/Settings tests and Python routing contracts passed; node --check main.cjs and git diff --check passed. The final npm run build-booklet completed. A later npm run check stopped at six unused renderer/music.css selectors introduced by concurrent music work; npm run audit reported the same six CSS warnings and zero errors. npm run test:fast was red in the existing issue-host and provider-cooldown suites; catalog_renderer and OpenRouter-focused suites passed alone.
+
+## 2026-09-24 afternoon - OpenRouter companion and live model picker
+
+Added a dedicated OpenRouter assistant route with the free router default, encrypted key tile, live text-response picker, auto setup and provider fallback. Validation: npm run build-booklet, npm run check, npm run audit, targeted OpenRouter/routing/UI Node suites, and Python routing contracts passed. npm test ran all stages but failed in unrelated existing provider cooldown, issue host, Command render and workflow render cases in this shared dirty checkout; the first pass also found stale provider-list/count assertions, which were updated. npm run test:fast after the updates still failed only in provider cooldown and issue host; catalog_renderer passed solo after its expected key-read count was updated.
+
+## 2026-09-23 afternoon - Post-commit quiet-tree gate rerun follow-up 2: the Work on it wrapper now keys to its label through the one admission key, so a pinned session request cannot stack a duplicate (task_15d472a5a1a5141b, run_1790187624926_2)
+
+Scoped this split-of-split follow-up from the parent card's decision log and result, not from prior reports: task_816fd9b20bf2725a decided scope-split and its result recorded the compactKey unwrap for a Work on it title. Verified first-hand that the unwrap now lives in the one admission title key (scripts/work-admission.cjs workLabel/titleKey) and that chat admission reads it (scripts/chat-work.cjs imports titleKey and isOpenWork from work-admission.cjs), so a pinned Work on it wrapper keys to its label and cannot stack a duplicate beside the live card it names; the implementation landed in 1f17a6b and abfe417. Checks this pass: node --test tests/chat_work.test.mjs tests/work_admission.test.mjs 22/22; node --test tests/request_admission.test.mjs tests/board.test.mjs 42/42 including the Work on it promotion case; npm run check exit 0 (114 targets, 265 specs, 5 stylesheets, check-syntax 114 files, 20 live rows). Remaining: none in repo scope.
+
+## 2026-09-23 late evening - Follow-up 2: owner/bookkeeping remaining-work denial lane re-verified first-hand; append helper intact, no repository implementation remains (task_32e354a8ca05dc00, run_1790187616075_1)
+
+Scoped this split follow-up from the parent card's decision log (task_20adaf6b2a814278: decisions scope->split) and the store, not from prior reports. The parent split out exactly the stale delegated acceptance on task_delegate_b4f73d934d18f69906d57de9, whose prompt still words the append as inserting "below the Read Before Any Tests anchor" - inverted against the shipped layout, where the live newest-first rows sit ABOVE the anchor and the archive below it is frozen. That string lives only in Studio's untracked task store (dist/Mefi Studio AI+/resources/app/data/eyes-tasks.json); workers are barred from rewriting it, so it is owner-side bookkeeping, not repository work. Re-verified the lane first-hand rather than trusting the reports: a direct import probe of verifyCompletion returned 'outstanding obligations remain' for the two negatives ('none in repo scope (bookkeeping in the other module)' and 'none in repo scope (owner rejected the bookkeeping lane)') and discharged the positive owner-qualified shapes 'owner/bookkeeping', 'owner / bookkeeping' and 'owner-only'. Evidence: node --test tests/verification_checks.test.mjs -> 17/17 pass; node --test tests/append_testruns_row.test.mjs tests/check_testruns.test.mjs -> 30/30; node scripts/check-testruns.mjs -> ok (20 live rows, headings unique, newest-first, no conflict copies); npm run check exit 0 (check-targets 114, spec-collisions 265, ALL-SELECTORS-USED, check-syntax 114, check-testruns ok). No tracked artifact asserts the inverted direction and no helper/gate/lane change is owed. Sibling uncommitted TESTRUNS/archive rows were left in place; this row was inserted through the helper itself and is not committed to avoid sweeping other sessions' unstaged notebook edits.
+
+## 2026-09-23 - Home redesign, bottom composer and task workflow final gates
+
+Home now uses restrained dark surfaces, New task and Search shortcuts, project-scoped recent tasks, a compact task summary and an expandable Activity panel. Following the owner's reference images and placement correction, the composer stays 20 pixels above the window bottom in Chat and Create task; messages, progress and secondary panels scroll above it. Task context and drafts survive navigation, refresh and project changes. Scoped Start/Resume and confirmed chat starts preserve a paused global queue; default Swarm uses one builder per task, while Cluster retains explicit planning and delegation. Project preview lifecycle is independent of builder completion and only owned processes may be stopped.
+
+The real Chromium workflow fixture passed at 1440x900, 1100x720 and 600x560. It injected 24 conversation messages and verified stationary bottom input/Send controls, reachable old/new messages, progress and Activity, retained drafts without submission, exact scoped-start payloads, Home/Work/Live task context, evidence navigation, needs-you navigation, completion actions and independent preview readiness. No unexpected bridge network/process calls or renderer errors occurred. Captures and the geometry report are in tools/logs/workflow-render-captures/. An initial template nesting error during the composer move was caught by this fixture and corrected before the successful run. Native desktop control remained stopped after the owner's Escape; these final layout checks used an isolated renderer and synthetic bridge.
+
+Focused validation included 343 executor/oversight Node cases and 66 Python contracts, 103 navigation/task/palette UI cases, 75 Home/Command cases, and the final 23 preview service/host cases. Preview shutdown triage and its failures are recorded in separate entries. Earlier full-gate attempts exposed an outdated confirmed-start expectation, a static function-extraction mismatch and preview fixture timing/cleanup problems; all were corrected. Full run 3 passed Node and path-lock legs but caught the Search input focus-ring contract. Restoring the visible themed keyboard ring and rebuilding the booklet passed the targeted eight Python palette checks.
+
+Final npm test exited 0: 2,966 Node tests passed across all lanes, four skipped, zero failures/cancellations; all 248 Python contracts and six normalized-path lock checks passed. Both visibility/occlusion probes passed. Node took 117 seconds and Python 62 seconds. Full output: tools/logs/workflow-final-npm-test-4.log. npm run build-booklet rebuilt renderer/booklet.html; npm run check passed 113 targets, 264 specs, CSS, syntax and ledger checks; npm run audit returned zero errors and warnings; git diff --check passed. The existing shared dirty tree and user/project state were preserved; no commit or push was made.
+
+## 2026-09-23 - Preview survivor ownership and cancellation settlement regressions
+
+Final review found that natural launcher close could discard a surviving URL, including close during initial readiness, and that a 2xx-only shutdown probe missed live HTTP error or redirect responses. The service now retains last-known URLs as unowned after natural close, distinguishes app readiness from any HTTP response, preserves nonready responsive URLs during status and cleanup, and refuses duplicate starts while a known unowned listener still responds. Regressions cover ready-to-natural-exit-to-stream-close, startup close before readiness, HTTP 200/500/302 survivors, continued Stop refusal, duplicate Start refusal, and accurate state after the external listener actually disappears.
+
+Two intermediate 21-case runtime/host runs passed 20 and exposed the same early cancellation failure after real npm fixtures: Windows taskkill returned nonzero before launcher handle settlement. Eleven isolated cancellation runs passed. The stop path now waits at most 500ms for a confirmed child exit after a nonzero kill result; a still-live child retains ownership, streams and an explicit stop error. Deterministic regressions assert both outcomes. Final `node --test tests/project_preview.test.mjs tests/project_preview_host.test.mjs` passed 23/23 in 19.7 seconds and exited normally. Earlier survivor coverage passed 20/20 before the startup and kill-settlement cases were added. Service/test syntax and scoped diff whitespace checks passed. Independent review confirmed the natural-close, nonready response and startup-catch fixes. No full gate, UI action, user project edit, or unrelated process termination was performed.
+
+## 2026-09-23 - Preview fixture hang and owned process cleanup hardening
+
+The full parallel Node run completed all ten preview cases but two negative-case npm launch budgets expired under load; its preview test process then remained live without descendant processes or network sockets. After verifying its command line and parent runner, only that test process (PID 38840) was terminated. Other unverified server processes and the user preview on port 4173 were left untouched. The inherited-pipe explanation is a plausible handle leak, not a captured stack diagnosis.
+
+Preview cleanup now stops HTTP admission before draining connections, bounds HTTP close, retires stdio handles after confirmed launcher exit or successful owned-tree stop, and probes the assigned URL after stop. A surviving listener is retained as an unowned URL with an explicit failed-stop result; no arbitrary listener is killed. Tests include deterministic inherited-pipe retirement and surviving-listener ownership regressions. Real npm startup receives a separate 20-second budget; intentional short failure/timeout cases launch real Node fixtures directly. Fixture servers self-expire, teardown and polling are bounded, and each test has a 45-second timeout.
+
+Final `node --test tests/project_preview.test.mjs tests/project_preview_host.test.mjs` passed 17/17 in 17.4 seconds and exited normally. An earlier run passed the same 17/17 in 16.4 seconds before the final URL-retention edge correction. Service/test syntax and scoped diff whitespace checks passed. No full gate, Electron/native inputs, builder work, user project edits, or unrelated process cleanup was performed by this task.
+
+## 2026-09-23 - Independent project preview backend lifecycle
+
+Added project-scoped app preview status/start/open/stop controls separate from builder jobs. Disposable runtime fixtures cover static HTML and real npm servers, duplicate-start coalescing, readiness, continued serving after readiness, owned process-tree stop/restart, failure/timeout/retry, cancellation, project isolation, external observed URL reuse without ownership or termination, fixed loopback resolution, redirect refusal and bounded probes. Static serving rejects traversal, hidden/private/state/config paths, symlink escapes and hostile Host headers while retaining public JSON assets. Generic npm scripts must honor assigned HOST/PORT; supported framework scripts receive host/port flags, and desktop Electron launchers are not offered as browser previews. IPC tests cover current-project evidence, foreign/stale sender refusal, awaited switch cleanup, quit/app.exit cleanup and actual preload methods.
+
+Final `node --test tests/project_preview.test.mjs` passed 10/10. `node --test tests/project_preview_host.test.mjs tests/project_switch_settlement.test.mjs tests/projects.test.mjs tests/executor_resume.test.mjs` passed 44/44. A final stopped-message assertion passed 1/1 using the closing-during-startup test filter. Initial runtime runs exposed Windows fixture teardown ordering (attempting to remove a running child's cwd); fixtures now stop their services before removal, and only the failed fixture process trees were terminated. Earlier smaller runs passed 7/7 and 14/14 while coverage was expanded. Main, preload and service syntax plus focused diff whitespace checks passed. `node scripts/auditor.mjs` passed with zero findings after replacing dynamic registration with explicit literal IPC registrations. No game/live state edits, native inputs, Electron fixtures, generated booklet build or full suite was run by this backend task. The root task owns integration, documentation and final application gates.
+
+## 2026-09-23 - Studio Snake end-to-end trial completed and History fix verified live
+
+The Snake project was created, built, extended with tests and a restricted localhost preview, resumed and verified entirely through Studio's UI and its workers. No game files were edited outside Studio. The resumed worker reported 21/21 game tests and clean syntax; the overseer independently passed npm run check with the Evidence Location set to C:/Users/echor/OneDrive/Desktop/Coding Projects/Studio Snake Trial. The task reached Done / Verified, the board retained all four completed trial tasks, and no new collision work appeared during the resumed run.
+
+Browser UI checks confirmed Start, Pause/Resume, Restart, arrow-key and touch movement, wall collision/game over, and the 390px mobile layout. The preview at http://127.0.0.1:4173/ reloaded successfully after the final Studio update. Food growth and self-collision were covered by the worker-reported rule tests rather than claimed as manual checks. After deploying the final History focus repair through Studio's update UI, a blank note field retained focus across a 17-second wait and scheduled refresh, accepted text in a later input action, and saved successfully: Log increased from 6 to 7 and the complete trial note appeared. Automatic updates were restored to On. Agents remain stopped with zero workers, an empty queue and nothing requiring the owner.
+
+Final settled-tree npm test exited 0 after the History repair: 2,856 Node tests passed across all lanes with five skips and zero failures; 248 Python contracts and six normalized-path lock checks passed. The occlusion probe skipped after its window was externally destroyed; it is not claimed as a pass. No source-movement warning occurred. Full output: tools/logs/studio-snake-final-history-focus-npm-test.log. The immediately preceding build-booklet, check and audit gates also passed, as recorded in the History focus fix booklet and static gates entry (39 models, hash f98dd2322a01; audit zero errors/warnings). The final persisted trial note and quiet project overview were inspected through native computer use.
+
+## 2026-09-23 - The assistant as overseer, task notices, per-task stop and the win-probability model evaluator
+
+Chat now acts through scripts/task-oversight.cjs (board digest, same-clause ask-and-card gate, Ask-card confirmations, task notices from the board gateway, per-task stop with an owner hold), builder attempts settle into per-model win/loss records that the router turns into a win probability per candidate, and seven executor bugs were fixed (infra breaker vs budget kills, verification check tree kill and credential stripping, housekeeping single-flight, charged pre-launch releases, legacy statuses, the sync-spawn fallback epilogue, dead branches). An adversarial review confirmed 22 findings against the first cut; all were fixed with regression tests. Rebuilt renderer/booklet.html. npm run check exited 0 (111 targets, 259 specs), npm run audit 0 errors 0 warnings, eslint 0 errors. npm test: parallel Node 2832 tests (2829 pass, 3 skipped), Electron lane 27 (26 pass, 1 opt-in skip), Python 248 OK, normalized-path lock passed, occlusion capability skip on this desktop; eyes_toggle_electron failed in the chain and once solo, then passed solo, and passed twice in a clean detached worktree of 018fa34 with and without the shared tree's uncommitted boot.js/eyes.js (the documented load flake, with the Studio app running beside the gate). New suites: tests/task_oversight.test.mjs, tests/assistant_overseer_chat.test.mjs, tests/model_win_evaluator.test.mjs.
+
+## 2026-09-23 - History focus fix booklet and static gates
+
+After the History input fix and its 49 passing focused UI contracts, the coordinating task authorized the real renderer rebuild and static gates. `npm run build-booklet` rebuilt renderer/booklet.html (39 models, hash f98dd2322a01). `npm run check` passed all target, spec, CSS, syntax and test-ledger checks; `npm run audit` passed with zero errors and zero warnings. No full npm test, Electron fixture or native UI action ran in this pass. Live input-retention verification waits for the Studio-authored Snake continuation to finish; the coordinating task owns foreground control and final integration gates.
+
+## 2026-09-23 - Task History entry focus survives live refreshes
+
+The live paused-Studio trial showed Log a note losing focus between clicking its empty field and typing. Task-detail refresh rebuilt the field on broadcasts, context reads and polling; existing draft storage preserved text only after an input event. History note and idea fields now restore focus and selection when the same project/task detail refreshes. A different task never inherits editor focus; live task details still refresh and successful saves clear the submitted draft.
+
+The new focus regression failed against the old source as expected (1 targeted test), then `node --test tests/tasks_ui.test.mjs` passed 49/49. Its DOM fixture now models focus loss when a focused descendant is removed and checks empty-field focus before typing, draft/selection after a later refresh, fresh task evidence, successful save and task-switch focus isolation for both notes and ideas. Renderer syntax and focused diff whitespace checks passed. No native UI, live task store, game files, packaging or full gates were touched; the coordinating task owns the generated booklet rebuild and live UI verification.
+
+## 2026-09-23 - Void style preview follow-up and settled validation
+
+Follow-up to the earlier Void preview entry. Kept previews active through auxiliary overlays and the Settings canvas, preserved the visible accent when profile or motion settings change, and kept explicitly unsaved previews temporary after a membership event. Added focused regression cases for these paths. The final renderer/booklet.html build passed (39 models, hash f98dd2322a01); npm run check and npm run audit passed. Focused node --test tests/music.test.mjs tests/workspace_ui.test.mjs tests/community_ui.test.mjs passed 127/127, and node --test tests/settings_nav.test.mjs tests/booklet_build.test.mjs tests/nav_startup.test.mjs passed 29/29. The separately coordinated clean full npm test passed on the settled shared tree: 2,849 Node tests, 248 Python contracts and six path-lock checks, with five expected skips and no source-movement warning. The full-gate log is %TEMP%/mefi-remaster-npm-test-settled.log.
+
+## 2026-09-23 - Full interface remaster settled-tree verification
+
+- Reworked all inventoried renderer surfaces around Home, Work, Live and Models, a local view row and seven Settings categories. Reviewed dynamic menus and corrected hidden search targets, cold Automation hydration, narrow Brain inspector focus, Session feedback, and keyboard operation of Activity rows, Ideas filters, Overhead tasks and Catalog insights sorting. Existing control IDs, route aliases and host behavior remain compatible; unrelated shared changes were preserved.
+- Final `npm run build-booklet` passed (39 models, hash f98dd2322a01); `npm run check` passed (111 source targets, 259 specs, five stylesheets); `npm run audit` reported zero errors/warnings; `git diff --check` passed.
+- Full settled `npm test` passed: 2,849 Node tests passed and five skipped across all stages (156 s); 248 Python contracts passed (62 s); six normalized-path lock checks passed. Skips were opt-in VM modules, live gateway, POSIX process groups, seeded resume, and desktop occlusion capability. No source-movement warning or failed stage. Log: %TEMP%/mefi-remaster-npm-test-settled.log.
+- Fresh isolated Electron matrix verified 60 routes, 28 Settings categories and 12 Session tools tabs/Back paths: 100 records across exact 1440x900, 1100x720, 600x560, plus 1100x720 at 125% zoom (880x576 CSS pixels). Captures and menu-report.json remain in %TEMP%/mefi-remaster-menu-captures. Startup/recovery also passed in dark and custom light themes.
+- The attended computer-use pass inspected Home, all Settings categories, representative provider forms, search, Appearance preview/return, Audio source panels, profiler capture/return, and Models views. Physical Escape stopped desktop control before the Work/Live/Help/startup/project-switching walkthrough and final-fix retest. Those attended paths remain unexecuted; source reviews and fixture coverage are separately recorded per inventory in docs/interface-remaster.md. Live authentication, paid calls, radio/Spotify playback, audio permissions, OS pickers and destructive real-data actions were not executed. Review fixtures did not use or alter real user data/credentials.
+- The initial exploratory full run found stale UI label/gradient expectations and backend verification/updater fixture assumptions amid shared edits. Focused corrections and the subsequent complete settled run passed; the production project-local verification requirement remains strict.
+
+## 2026-09-23 - Studio Snake trial executor verification fixture integration
+
+The combined application run exposed 23 backend completion failures after project-local verification became strict. The shared executor host fixture had no filesystem shape or verification-process boundary, so it no longer represented a project with runnable checks. Updated the fixture to model a local package/check, record actual check starts separately from workers, reject unknown commands, and support explicit missing/failing checks. Added three end-to-end cases requiring the recorded result and project cwd; worker success prose cannot override a missing or failed local check. Updated the stale Python scheduling contract that expected the removed cross-project npm fallback. Application verification behavior was not weakened or changed by this triage.
+
+Focused validation passed 357/357 Node tests across the 14 fixture consumers plus verification checks, drain and continuation, and 2/2 Python verification-scheduling tests. Full logs are in %TEMP%/mefi-verification-fixture-focused.log and %TEMP%/mefi-verification-scheduling-focused.log. Final combined application gates are coordinated with the navigation task on the settled shared tree. The saved Snake preview task still needs its final in-app verification; desktop control remains stopped after the physical Escape interruption.
+
+## 2026-09-23 - Intentional stops keep truthful session history and updater contract state
+
+The targeted Stop audit found that the task correctly preserved its continuation and owner hold while the same run's session checkpoint and context said failed. The session records now share a verdict that names an intentional stop as stopped on request with progress saved. Genuine failures still say failed and successful reports still await verification. The lifecycle fixture now captures context text and checks all three outcomes, including both stopped tasks and requests.
+
+The new stopped-checkpoint assertion failed against the old source as expected (1 targeted test), then `node --test tests/executor_lifecycle.test.mjs tests/executor_resume.test.mjs tests/memory_align.test.mjs` passed 89/89. Main syntax and focused diff whitespace checks passed. The Python updater fixture now supplies the existing projectSwitching and updateDrainRequested host state required by the live-restart interlock; `python -m unittest discover -s tools -p test_mefi_studio_updater.py` passed 24/24. Full Python output is retained at %TEMP%/mefi-updater-stop-focused-python.txt. No live state, game files, native UI, renderer build, packaging or full gate was touched by this validation.
+
+## 2026-09-23 - Studio Snake trial running-tool visibility
+
+- The live preview worker stopped producing output after its game tests passed. Read-only diagnosis found its background-launch Bash tool still reported running, although the loopback-only preview server had started successfully. The precise reason the launch wrapper failed to return remains unconfirmed.
+- Active workers now expose the exact session's current tool, sanitized description, state and elapsed time before completed output arrives. This takes precedence over an older checklist item and is included in the assistant's status context.
+- Validation: `node --test tests/active_tool_visibility.test.mjs tests/executor_activity.test.mjs tests/executor_resume.test.mjs tests/eyes_worker.test.mjs tests/task_oversight.test.mjs tests/module_purity.test.mjs` passed **116/116** after fixing two minute-format expectations. No live game commands or game-file edits were performed by the repair agent.
+- Browser UI testing against the Studio-authored localhost preview confirmed Start, Pause/Resume, Restart, arrow-key movement, touch-direction controls, wall collision/game over, and the 390px mobile layout. Browser error/warning log was empty. The Studio builder separately reported **21/21** game-rule tests passing. Final application gates and updated Studio handoff remain pending.
+
+## 2026-09-23 night - Guard plan: check-targets now guards the check chain's own node targets; booklet guard and boot guard test verified already shipped (task_plan_mueqauaj_0, run_1790206746456_1)
+
+Triaged the three guard ideas against the current tree instead of re-trusting the 2026-09-20 extraction. Idea 1 (stale-path guard in every package.json script) was already shipped for non-check scripts, but the `check` chain's own `node scripts/<gate>.mjs` refs were unguarded: extractCheckTargets only matches `node --check` (the chain dropped it for the in-process syntax pass) and the old loop skipped name === "check" outright, so a renamed/removed gate was not caught until the chain ran. Fixed scripts/check-targets.mjs to validate every script including `check`, deduped against the `node --check` targets the coverage pass already owns so a missing file is named once. Added a regression test in tests/check_targets.test.mjs (makeFixturePackage now takes extra.check; a fixture check chain with a stale scripts/gone.mjs must surface scriptMissing [{script: check, path: scripts/gone.mjs}] and main() exit 1). Idea 2 (carry the guard into the booklet bundle) is already shipped: renderer/booklet.html carries all six boot.js shared-poll-guard markers and tools/test_mefi_studio_eyes.py::test_poll_timers_pause_while_the_window_is_hidden passes, so no rebuild was owed (no source guard change was made). Idea 3 (register the boot.js guard acceptance test) is already shipped: tests/boot_poll_visibility.test.mjs is the 28-case acceptance suite, auto-discovered by npm test (scripts/run-node-tests.mjs walks tests/**/*.test.mjs) and documented in TESTRUNS.md. Evidence: node --test tests/check_targets.test.mjs tests/check_syntax.test.mjs -> 20 pass / 0 fail / 1 skipped; node --test tests/boot_poll_visibility.test.mjs -> 28/28; python -m unittest tools.test_mefi_studio_eyes.MefiStudioEyesTests.test_poll_timers_pause_while_the_window_is_hidden -> ok; npm run check exit 0 (check-targets 128 targets, spec-collisions 283, ALL-SELECTORS-USED, check-syntax 128 files, check-testruns 20 live rows). Committed 1be89fb with only scripts/check-targets.mjs and tests/check_targets.test.mjs; the shared tree's staged/untracked sibling edits were left untouched.
+
+## 2026-09-23 night - Agent Brain polish: a project map from git history, co-change groups, hover cards, recipe graphs
+
+**Project map.** It is now built from git history as well as verified runs, so it is useful before any agent has run.
+- `projectMap.buildMap` works in three phases: file statistics, each file's system, then totals. It takes `history`, which `parseGitLog` builds from main.cjs's `readProjectHistory`: `git log --since=90.days --no-merges --max-count=400 --name-only`, no shell, a 10 s limit, cached for ten minutes by agent-brain-host.
+- Systems gain a `warmth` that halves each week, and a `fileCount`.
+- With `cluster`, a flat folder of more than 24 files splits by label propagation over the cosine of its files' change histories, and each group is named by the word at least half its files share (Executor, Eyes, Model Lab…). A commit that touches more than 20 files counts toward warmth but never toward co-change.
+- Links gain `strength`, the cosine of the two systems' change histories.
+- On this repo: 319 commits gave 28 systems. Before cosine, a notebook edited in every commit linked "Root files" to everything.
+
+**Renderer (renderer/agent-brain.js).** One `mountMap` widget serves the sheet and Home.
+- The canvas grows with the map inside a scrolling stage.
+- The layout orders each row by barycenter, and only each system's strongest three links are drawn.
+- Hovering a system shows its card and dims whatever it doesn't link to.
+- A "Jump to a system" picker, a legend, and a line saying what the map was built from.
+- The map opens on the system with the most live work.
+
+**Pipelines view.**
+- Curved wires, and a hover card per step (owner, model, times, report); clicking a sub-agent's step opens its task.
+- A trail legend, and "Systems it touches" chips that open the map on that system.
+- Progress bars and recipe names in the list.
+
+**Other.**
+- Playbook recipes are drawn as small SVG graphs.
+- The companion shows a drifting "z" while it rests.
+- act() shows a card that has left the board as a notice, as the "Tasks disappearing after selection" session asked.
+
+Checks:
+- node --test on the brain, registration and purity suites: 255 pass, 0 fail. New project_map cases cover parseGitLog, history plus runs, weekly warmth, the sweep rule, co-change groups and cosine strength.
+- npm run check: ok. npm run audit: 0 errors, 0 warnings.
+- A real-app probe (scratchpad realapp/probe.cjs) required main.cjs with a throwaway userData and MEFI_STUDIO_REPO set to this repo, clicked Open studio (agents stayed off) and called the real IPC:
+  - brainMap: 28 systems from 319 commits;
+  - companionState: needs-you, 2 to review;
+  - brainSettings: gpt-6-sol medium on both seats, with a Zen key.
+- The probe captured Home (map plus real ideas in the region), the map, Pipelines and Seats with no renderer errors. The empty-feed layout it caught is fixed.
+
+Rebuilt renderer/booklet.html. Nothing committed.
+
+## 2026-09-23 night - Agent Brain review fixes: desk token, stale live view, failed children, brief budget, deferred escalations
+
+An independent review of the Agent Brain found 14 defects; all are fixed.
+- scripts/desk-server.cjs compares SHA-256 digests of the token, so a header of the right length in non-ASCII bytes can no longer throw out of the request handler. It also writes each run's MCP configs into a private mkdtemp folder (0600, wx), removed as a whole.
+- renderer/agent-brain.js keeps one timer per refresh, so a companion refresh no longer cancels the pipeline reload.
+- scripts/agent-brain-host.cjs:
+  - childStatus reads the board's real failed or parked states: an open card out of verification tries, five failures, or parkedAt. A child back in the queue returns its step to queued (a new pipelines.cjs branch).
+  - The worker brief puts the newest desk answer first, caps every part to fit executor-core's 700 characters, and starts with a space.
+  - Desk escalations for a project that is not open wait until it is (flushEscalations in observeTasks).
+  - A head draft never re-shapes a task with a live run.
+  - The file index is size-checked every 200 appends.
+  - recordDecision loads the saved companion before saving.
+  - Per-task reports, answers and desk folds are pruned with the board.
+  - nameSystems runs in the background and applies names to the map as it then is.
+- main.cjs:
+  - Only OpenCode and Claude Code routes get the desk tool.
+  - cancelClaim releases a run's desk-tool files.
+- pipelines.cjs: `MEFI_STEP: add` starts the step.
+
+Checks:
+- node --test agent_brain_host, desk_tool, pipelines, playbook, project_map, desk, companion, work_events, replay_events, agent_seats, executor_core, task_delegation, module_purity: 216 pass, 0 fail. New regressions: a failed or requeued child, a started step, the newest answer within 700 characters, a deferred escalation, an early decision keeping the look, and an odd-byte token refused with the server still up.
+- npm run check: ok. npm run audit: 0 errors, 0 warnings.
+- electron . --smoke with a throwaway --user-data-dir: exit 0.
+
+Rebuilt renderer/booklet.html. Nothing committed.
+
+## 2026-09-23 night - The Agent Brain (0.4.0): work events, pipelines, report-up, the desk, the Playbook, the project map, the Home hub and the companion
+
+docs/roadmap-0.4.0.md M1-M4 and M6-M9. New pure modules: scripts/work-events.cjs, pipelines.cjs, playbook.cjs, project-map.cjs, desk.cjs, companion.cjs. The host half is scripts/agent-brain-host.cjs (createAgentBrain, `agentBrain` in main.cjs), called from one-line guarded hooks. They run before the prompt (prepareRun: the pipeline, the protocol in promptTail's new `protocol`, the brief in workerPrompt's new capped `brain` section), at start, on every output line, at todo changes, at finish, on every board write (boardWritten), on agent mail and for verified file sets. The desk as a live tool: scripts/desk-server.cjs (a 127.0.0.1 endpoint with a per-process token) and scripts/desk-mcp.mjs (a stdio MCP server), wired through executorCore.cliInvocation's `desk` option behind settings.agentBrain.deskTool (off by default). Seats: seatFetch("lead"|"desk") runs GPT 6 Sol on Zen at medium effort (httpAssistantCall gained `effort` and `pinned`); the Cluster planner is the lead seat when a Zen key is saved. taskDelegation.canPlan gained `{ nest, maxDepth }` behind settings.agentBrain.nestedDelegation (off by default). The renderer is renderer/agent-brain.js and agent-brain.css: the Agent brain sheet (J, under Live, with Pipelines, Playbook, Project map and Seats tabs), the map hub on Home in `#ws-hub`, and the companion orb in the menu foot. There are new IPC channels brain:* and companion:*, and the tray tooltip carries the needs-you count. tools/replay-events.mjs compares a day's events with the executor ledger.
+
+Checks:
+- node --test on the new suites (work_events, replay_events, pipelines, playbook, project_map, desk, companion, agent_brain_host, desk_tool, agent_seats): 159 pass, 0 fail. The host's lifecycle suite ran 5 times in a row green after its flush learned to drain the event store.
+- node --test task_delegation (22, including 2 for nested delegation), executor_core (39), app_rail, booklet_build, onboarding, workspace_ui, catalog_renderer and palette_keyboard (129), module_purity (20, now covering the five new pure modules), and the main.cjs slice suites (assistant_mail, jev_model_routing_host, planning_routing, provider_breaker_host, startup_hold: 68): all pass.
+- npm run test:fast: 3,230 tests, 1 failure before module_purity listed the new modules; 0 after.
+- python -m unittest discover -s tools -p "test_mefi_studio_*.py": 248 OK.
+- npm run check: ok (128 targets, 283 specs, all selectors used, check-syntax 128, 20 live rows). npm run audit: 0 errors, 0 warnings, after main.cjs names brain:event and brain:update in its send filter.
+- A real `opencode mcp list` with the per-run OPENCODE_CONFIG showed "mefi_desk connected" against scripts/desk-mcp.mjs.
+- electron . --smoke with a throwaway --user-data-dir: exit 0, the assistant ticked, no [brain] errors.
+- The renderer was checked in a fake-bridge copy of the booklet, in headless Edge at 1440x900. It covered the Agent brain Pipelines, Playbook and Project map tabs, the map hub on Home, and the companion panel with a welcome-back digest and three queue items.
+
+Not done here: M0 (landing node-styles.js) belongs to the "Node tree and styles polish" session. The per-style done/absorb hooks and the tree3d child-session drawing wait for that landing; agent-brain.js already calls MefiNodeStyles.done/absorb when they exist. Rebuilt renderer/booklet.html. Nothing committed: the tree is shared with other writers.
+
+## 2026-09-23 night - Zen flies the camera round the tree, and waking glides home instead of snapping
+
+The owner asked for the demo tour's flight to be Zen's default, and for waking to go back to the tree cleanly instead of snapping. The flight moves into `renderer/camera-tour.js` (`MefiCameraTour.create()` → `{ step, velocity }`, bundled after idle.js). `setAmbientZen` in idle.js hands a tour to `setDirector`; under reduced motion Zen only fades. `zenRestore` and Zen's forced Orbit are gone. Old Zen snapped for two reasons, both fixed. (1) `usableArea` swapped in a full-screen frame, which re-seeds the screen layout (keyed on the frame) at entry and again at wake; the frame now stays, and the clip covers the whole canvas while Zen or a flight runs. (2) Orbit recomputes `overviewScale` every frame from the live zoom, so returning to Orbit while still zoomed in shrank the tree in one frame (measured spike 30,516 px/s). A hand-back now glides in Free under `state.returning` and becomes Orbit in `stepReturn` once camera, zoom and tilt are home. It lands the spring's last hair exactly, and a wheel, drag or mode click on the way keeps the user's view. The glide home uses `CAMERA_RETURN_SMOOTH` 0.8, starts at the flight's own velocity, and brings the tilt back with it (`stepPitchHome`). A rebuild's Orbit `setZoom(1)` retargets a glide in progress instead of snapping it. The demo panel drops its own tour; Ctrl Alt Shift F is now `MefiIdle.enterZen()`. The Zen switch's tooltip says it flies. Offscreen Electron, sampled every frame around a real mouse move: the fastest node peaks at 15 px/frame (56 on the camera's usual spring), with no single-frame jump. Orbit takes over at under 10 px/s, landing at zoom 1, tilt 0, same graph area.
+
+Checks:
+- node --test camera_tour, command_director, command_graph, command_visuals, command_audio_response, booklet_build, demo_panel_ui, boot_poll_visibility, command_toolbar: 219 pass, 0 fail. New: camera_tour (4); command_director grows to 13 (Zen flight, velocity hand-off, tilt return, landing in Free, user takeover). The Zen tests in command_graph and the command_visuals glide pin were updated to the new design.
+- command_render (Electron) solo: the Zen section passes (flies, wakes, glides home, clear graph, same area). The fixture now switches Zen off after its section. The run still fails later at "command local navigation remains clickable at 600×560": the failing button is another session's new `agent-brain` local-nav entry at x=625, beyond the 600px window (seen by instrumenting the hit test, then reverted). Not this change.
+- npm run check: ok (126 targets, 281 specs). npm run audit: 0 errors, 0 warnings.
+- npm test: exit 1, while another session added agent-brain files mid-run (the runner flagged sources changing). Failures: module_purity (that session's new scripts/companion.cjs, desk.cjs, pipelines.cjs, playbook.cjs, project-map.cjs declare purity with no test; still failing on the settled tree), the Python auditor (its agent-brain.js not yet inlined; clean now), and command_render (an exact label-position check tripped by this change's return spring never quite settling, fixed above; afterwards the agent-brain nav overflow).
+
+Rebuilt renderer/booklet.html. Nothing committed: the tree is shared with other writers.
+
+## 2026-09-23 night - Owner-only demo mode: a promo card under Command's Work tab every three minutes, and a camera tour that flies the tree
+
+`renderer/demo-panel.js` (`window.MefiDemoPanel`, bundled between community.js and booklet.js) does nothing unless that machine's `settings.ui.demoPanel` is `true`. `prefsGet()` reads it, and no Settings control writes it, so other installs pay one prefs read and a key listener. With the switch on, a card drops out from under the Command rail's Work tab every three minutes: what Studio is, how it works, how to get it (GitHub releases/latest) and the Void Engine Discord. It stays 9 s per card, holds while hovered, and keeps its cadence across relaunches. It lives in its own fixed layer under `<body>`, and `usableArea`/`hudRects` never measure it. In a stub-bridge preview, `graphViewport()` and the rail box were identical with the card up and down. The camera tour starts after 20 s of quiet on Command, or on Ctrl Alt Shift F (`ui.demoTour`). It fades the HUD and the menu like Zen does, and flies a Catmull-Rom path through nodes. Pace dips at each stop and never reaches zero. Zoom runs in log space, up to 3.6 for a flight, then 0.9 wide every fifth stop, all under a final spring. A moved mouse peeks the HUD. A click, the wheel or a key hands the camera back: a grab keeps the view, anything else glides home to the owner's mode. `renderer/idle.js` gains `setDirector`/`stepDirector` before `updateFollowCamera`; the flight parks camMode in Free, because Orbit's rebuild `setZoom(1)` would jolt a close-up. It also gains the directed spin in `orbitTarget`, a guard in `canAmbientZen` and `hudRects`, `if (directed) state.motionHot = true;`, and a full-canvas clip while directed. The graph frame is left alone: changing it re-seeds the layout. An offscreen Electron capture flew 42 s: zoom 1.40 → 3.25 → 0.9, camera speed 2–77 units/s with no stall, the same graph area before and during, HUD peek and Esc landing both seen.
+
+Checks:
+- node --test tests/demo_panel_ui.test.mjs tests/command_director.test.mjs: 27 pass, 0 fail (20 panel and tour, 7 idle.js hook).
+- node --test command_graph, command_visuals, command_audio_response, booklet_build, community_ui, usage_tracker_host plus the two above: 225 pass, 0 fail.
+- npm run check: ok (117 targets, 272 specs, all selectors used, check-syntax 117, 20 live rows). npm run audit: 0 errors, 0 warnings.
+- npm test: exit 1. Node 3100 pass / 0 fail / 4 skipped; Python 248 OK; path lock ok. Electron 24 pass / 3 fail / 1 skip: node_paint_cache, performance_render ("desktop performance capture"), renderer_recovery, with peer sessions' Electron probes running. Solo, node_paint_cache 1/1 and renderer_recovery 10/10 passed. performance_render failed solo once ("Profiler JSON download timed out after 5420ms", the known row), passed 2/2 on a clean HEAD worktree (89890e1), then passed 2/2 twice in this tree once the other probes had finished.
+
+Rebuilt renderer/booklet.html. Nothing committed: the tree is shared with other writers.
+
+## 2026-09-23 night - Brain maps drafted with AI arrive wired: port kinds in the prompt, a repair pass, and one validator-worded retry
+
+The owner's "Project Brain Rebuild" draft (`map_54e9845f`) opened with 4 type-mismatch errors and 3 feedback warnings: "Needs work" (rejected) into an approval, a brief into the brief writer, plan questions into the approval, review issues into the brief writer. The old prompt listed port ids only. `scripts/brains.cjs` gains `draftPrompt` (kinds per port, a kind → inputs table, the shipped map as a JSON example), `repairDraft` (loose part/port names matched; unknown parts, extra one-per-map parts and calls to unsaved brains left out; a misfit wire moves to a sibling port, past the part that makes what it carries, or to the nearest part that takes its kind, else is removed; empty required inputs spliced into an adjacent path or fed from upstream; closing wires marked feedback; grants set to what the parts need) and `draftFixPrompt`. `main.cjs` `brainsDraft` repairs every reply and sends leftover errors back to the model once, keeping the redraw only when it has fewer errors. The editor lists the repairs under *Repaired in the draft* until the map is saved. Replayed through the repair, the owner's draft goes from 4 errors and 3 warnings to 0 and 0; seen in a fake-bridge preview (banner, inspector list, "No problems").
+
+Checks:
+- node --test tests/brains_map.test.mjs tests/brains_store.test.mjs tests/brains_ui.test.mjs: 95 pass, 0 fail (5 new map tests, 2 new host tests, 1 new UI test).
+- npm run check: ok (116 targets, 269 specs, all selectors used, check-syntax 116, 20 live rows).
+- npm run audit: 0 errors, 0 warnings. eslint on the touched files: clean.
+- npm test: exit 0 (Node 3066 pass / 3 skipped; Electron 27 pass / 1 opt-in skip; serialized suites pass; Python OK; path lock ok).
+
+Rebuilt renderer/booklet.html. Nothing committed: the tree is shared with other writers.
+
+## 2026-09-23 evening - UI critique follow-ups: one grey surface system, Command search and tab strip, Tasks, Plans, Ideas, Usage, walkthrough and rail foot
+
+Follow-up to the afternoon's Home/menu design critique, verified with seeded offscreen Electron captures, before and after, from the same fake bridge (1440x900 and 1100x900). Surfaces: the navy/grey split is gone. Section 1 gains work-surface tokens (Home's greys, tinted 8-12% by the theme); body points --bg, --panel*, --glass* and --hairline* at them, #idle-hud points them back at the theme, so every page, sheet and menu is grey and the Command view keeps its themed canvas and HUD. Primaries are Home's ivory button outside Command. A light custom palette keeps its own surfaces: music.js paintTheme sets html[data-studio-theme-tone] from the background's luminance (startup_render's light-theme fixture caught the first cut; a peer session reported it). Command: in inspect mode the top bar's composer and search end 16px short of the widened rail instead of running under it (1440: 910 vs 926; 1100: 644 vs 708), and the rail's tab strip peeks on :has(:focus-visible), so a clicked tab no longer leaves it spread over the detail (real mouse input: 172px before, 56px after). Tasks: Delete is styled destructive before it is armed, Back to tasks shows only where the list is hidden (760px and below), and a one-line task no longer repeats its title as the brief. Plans: stepper cards share one height; the new-plan form's section is "1. The destination" instead of a second "New plan". Ideas: sparse rows drop the missing source and time instead of printing "undefined · Invalid Date"; row colours follow the theme. Usage: with no calls recorded, the cards say so instead of four "Unknown"s; unmeasured Performance rows read "Unmeasured". The walkthrough line names finished lessons beside the step, matching its bar. The collapsed rail foot labels Settings, Help and the update dot. Off switches have a visible track on grey; the composer's hint and project label are 11px in --muted.
+
+Checks:
+- npm run build-booklet: 39 models, hash f98dd2322a01.
+- npm run check: exit 0 (116 targets, 269 specs, all selectors used, check-syntax 116, 20 live rows).
+- npm run audit: 0 errors, 0 warnings.
+- New regression tests (ideas_ui sparse rows, tasks_ui brief and Delete, onboarding done count, model_lab empty and unreported usage) each fail against the pre-change renderer and pass after.
+- npm test: Node 3062 tests, 3059 pass, 0 fail, 3 skipped; Python 248 OK; path lock ok. Electron lane 28: 25 pass, 1 skip, 2 fail - command_render (125% zoom step measured 1100x720, zoom not yet applied under load) and performance_render (Profiler JSON download timed out, a known environmental row). Both passed solo right after: node --test tests/command_render.test.mjs (1/1, full route and Settings matrix at four layouts) and tests/performance_render.test.mjs (2/2).
+- git diff --check on the touched files: clean.
+
+Nothing committed: the tree is shared with other writers.
+
+## 2026-09-23 night - Attended occlusion live-probe stamp follow-up: fresh strict native pass on a clean retry (task_2e84c61e74790e1d, run_1790193990975_7)
+
+Ran this follow-up card's exact command, `node --test tests/occlusion_probe.test.mjs`, from the Studio checkout root (HEAD 34f3c9b, `main`). First attempt (~68 s) skipped at the environment gate: the probe window received an external `closed` event during the cover-wait phase (`windowLost`, cover visible, foreground-probe PowerShell call failed in this sandbox), so it was not a pass. A clean retry (~23.7 s) produced the strict native-occlusion pass: detection signal `document.hidden` (native tracker engaged, `MEFI_OCCLUSION_PROXY` unset), occluded rAF growth 0, every probe sample answered via the unthrottled worker channel (worker drift 391 ms; probe lag 65 ms of 1 sample), MessageChannel 1 ms, rAF resumed after the cover was removed, 0 console errors. Harness outcome tests 1 / pass 1 / fail 0 / skipped 0, exit 0. The static contract stayed green: `node --test tests/worker_responsiveness.test.mjs` -> tests 17 / pass 17 / fail 0 / skipped 0. No code changes; this row is the stamp. The card's game-repo half remains the owner-only task-store move of the 19-card occlusion closure onto `project_065c3c1159dfd50d` (recorded in `docs/handoffs/mefi-studio-occlusion-probe-pointer.md`).
+
+## 2026-09-23 evening - Agent layer phase 2: task-only dispatch, one admission path, the dispatcher core, gated wake-ups and a ledger that charges a model only for its own failures
+
+The deferred agent-layer follow-ups landed, and two adversarial reviews checked them. Inbox requests reach workers only by promotion to board tasks. Promotion stamps promotedTo, titles untitled rows from their first line, and re-promotes only when the board had nothing ready (fillRanDry), at most three extra rounds. Legacy running and verifying rows migrate in two phases. The pure dispatcher decisions live in scripts/executor-core.cjs, and scripts/work-admission.cjs is the one admission rule. Proactive and backlog switches hold roles at every enqueue, and the thinker's pin never outranks the owner's. OpenCode Go builders run only when Go is chosen and `opencode auth list` confirms a login. Keyless exploration is bounded (cheapest challenger, three turns, the default keeps every other task). The model ledger files a fallback run under the route that ran and judges its outage by that route. A stop is recorded as cancelled. Outages, silent early deaths and model-not-found errors are not losses. Other fixes: the briefing's closing sentence no longer gives every fix card the same theme; the Home card no longer contradicts green checks with "check failed"; the Explorer inbox shows a typed ask's first line once.
+
+The round-1 review confirmed 18 findings, and the round-2 review 14 (4 evaluator, 4 dispatch, 6 test gaps). All are fixed or were already fixed by the merged work. Each new regression test was run against a scratch copy with its fix reverted and failed there. New suite: tests/executor_fallback_ledger.test.mjs. Rebuilt renderer/booklet.html; a peer session rebuilt it again afterwards.
+
+Checks:
+- npm run check: exit 0 (114 targets, 266 specs, all selectors used, check-syntax 114, 20 live rows).
+- npm run audit: 0 errors, 0 warnings.
+- eslint: 0 errors, 12 warnings, all pre-existing unused-variable warnings.
+- npm test before the round-2 review fixes: exit 0 (Node 3021 pass / 3 skipped; Electron 27 pass / 1 opt-in skip; Python 248 OK; path lock ok).
+- npm test final run: Python 248 OK, path lock ok. Node 3036 tests, 3032 pass, 1 fail, 3 skipped. The failure was verification_drain, a vm-section read taken while another session was editing; the runner flagged that sources changed mid-stage, and the test passed 2/2 solo. Electron lane: 28 tests, 26 pass, 1 fail, 1 skip. The failure was startup_render, caused by another session's in-flight `body` surface-token block in renderer/styles.css: a scratch copy of the tree without that block passes. That session has been told.
+
+The model_win_evaluator ENOTEMPTY cleanup flake is fixed with rm retries. Nothing committed: the tree is shared with other writers.
+
+## 2026-09-23 afternoon - Menu and Home cleanup: scrollbars, conversation layout, Settings jumps and Search names
+
+A design review of the menus and Home from seeded offscreen Electron captures, 1440x900, before and after, with the same fake bridge. Home: the conversation now fills the space above the composer instead of a 250 px box, the folded rows (Recent activity, Project queue, Studio status, Getting started) sit under the task card with one inset, and the thread opens on its newest message (it used to open on the oldest of the last 80 because it rendered while hidden). The card says View task, not Start this task, and will not call startTask while a worker holds the task. See activity is renamed Watch live, Details loses its external-link arrow, and the Activity panel no longer repeats the card's facts. Toasts stack above the composer. Globally, html no longer sets scrollbar-color, which had switched every scroller to Windows' arrowed standard scrollbar and disabled the ::-webkit-scrollbar rules. Settings: a category click keeps the page title in view (scrollY 63 -> 0, title top -41 -> 22 px), Automation's role=switch rows draw as switches, Audio has its own glyph, and Search names cards by title ("Profile & startupNames and launch destination" -> "Profile & startup"). Walkthrough lesson 5 and GETTING_STARTED.md use the current Chat / Create task labels.
+
+Checks: npm run check ok (114 targets, 265 specs, all selectors used, check-syntax 114, 20 live rows); node --test for workspace_ui, settings_nav, palette_keyboard, booklet_build and app_rail 107/107; workflow_render, onboarding, settings_queue and nav_startup 48/48; npm test exit 0 (3,040 Node pass, 0 fail, 5 skipped; 248 Python contracts; path lock ok); npm run audit 0 errors, 0 warnings; git diff --check clean on the touched files. booklet.html rebuilt. Nothing committed: the tree is shared with other writers.
+
 ## 2026-09-23 - Completed sequential sessions no longer spawn collision repair work
 
 The live Studio trial queued two collision-repair sessions after a completed game build and its later preview task. Read-only session evidence showed the first edits around 09:24, terminal completion before the next session began at 09:29, and follow-up edits around 09:31. The collision reader's ten-minute proximity window retained this handoff, marked both sessions active from edit recency alone, and the watcher converted it into work despite its own prompt saying the sessions never co-edited.

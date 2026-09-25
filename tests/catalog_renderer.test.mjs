@@ -55,11 +55,11 @@ test("startup defers connection and CLI checks until Settings opens, then initia
   const settingsCalls = () => env.calls.filter((name) => ["getApiKey", "jevStatus", "getAiRouting", "cliStatus"].includes(name));
   assert.deepEqual(settingsCalls(), []);
   env.window.MefiBooklet.showTab("studio"); await flush();
-  assert.equal(settingsCalls().length, 6);
+  assert.equal(settingsCalls().length, 7);
   assert.equal(env.get("ai-provider").value, "auto");
   assert.equal(env.get("cli-status").textContent, "");
   env.window.MefiBooklet.showTab("booklet"); env.window.MefiBooklet.showTab("studio"); await flush();
-  assert.equal(settingsCalls().length, 6, "reopening must not rescan or attach duplicate save handlers");
+  assert.equal(settingsCalls().length, 7, "reopening must not rescan or attach duplicate save handlers");
   assert.equal(env.get("save-key").listeners.click.length, 1);
 });
 

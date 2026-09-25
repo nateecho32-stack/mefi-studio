@@ -16,6 +16,7 @@ import backlog from "../scripts/backlog.cjs";
 import taskHandoffs from "../scripts/task-handoffs.cjs";
 import taskDelegation from "../scripts/task-delegation.cjs";
 import executorResume from "../scripts/executor-resume.cjs";
+import executorCore from "../scripts/executor-core.cjs";
 import { buildTaskHandoff } from "../scripts/task-context.cjs";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
@@ -43,7 +44,7 @@ test("an approved plan joins the paused queue and its dependent dispatches only 
   let checkEvidenceAvailable = false;
   const checkWindows = [];
   const env = vm.createContext({
-    Date, console, path, crypto, taskHandoffs, taskDelegation, executorResume, executorProcessAlive: () => false, process: { pid: 321 }, backlog, assistantModule: assistant, assistantCache: { store: {} }, autopilot, autopilotJobSeq: 0,
+    Date, console, path, crypto, taskHandoffs, taskDelegation, executorResume, executorCore, executorProcessAlive: () => false, process: { pid: 321 }, backlog, assistantModule: assistant, assistantCache: { store: {} }, autopilot, autopilotJobSeq: 0,
     projectSwitching: false, assistantState: { status: "paused", prefs: {} }, SMOKE: false, CAPTURE: false, CLI_MODE: false, executorUpdateHold: () => null,
     projects: { current: () => project, open: () => project }, projectRoot: () => root,
     measureWorkerLag: async () => 0, getMachine: async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => ({ exclusive: false }) }), executorRunEnv: async () => ({ cli: "fixture" }),
@@ -69,11 +70,13 @@ test("an approved plan joins the paused queue and its dependent dispatches only 
     compareWork: (a, b) => a.createdAt - b.createdAt, mutateBoard, withBoardLock: async (fn) => fn(),
     logLine() {}, setAutopilotWaiting: (reason) => { autopilot.waiting = reason; }, pushAutopilotHistory() {}, readSettings: async () => ({}), machineMemoryWarnOverride: () => false,
     refreshAutopilotQueue: async () => {}, assistantClip: (value, limit) => String(value ?? "").slice(0, limit),
+    // Per-task model routing has its own suite (jev_model_routing_host); this route names no routed provider.
+    routeBuilderModel: async () => null,
     EXECUTOR_STAGGER_MS: 3000, setTimeout: (fn) => { queueMicrotask(fn); return { unref() {} }; },
     fakeSpawn: (entry) => { launched.push(entry.taskId); return "spawned"; },
   });
   t.after(() => { for (const job of autopilot.jobs) assistant.releaseWrite?.([], job.id); });
-  vm.runInContext(section("async function spawnNextJob()", "  // Policy Lab PR1 — the attempt's identity:") + "return fakeSpawn(entry);\n}" +
+  vm.runInContext(section("async function spawnNextJob(", "  // Policy Lab PR1 — the attempt's identity:") + "return fakeSpawn(entry);\n}" +
     section("let executorFillInFlight = null;", "// Work the assistant does on its own plumbing") +
     section("const VERIFY_DWELL_MS =", "// One autopilot tick:"), env);
   const service = createPlanningService({ project, store, mutateBoard,

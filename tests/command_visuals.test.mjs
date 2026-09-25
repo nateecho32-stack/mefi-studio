@@ -9,6 +9,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
+import { Element } from "./fixtures/renderer-dom.mjs";
 
 const idle = await readFile(new URL("../renderer/idle.js", import.meta.url), "utf8");
 const tree = await readFile(new URL("../renderer/tree3d.js", import.meta.url), "utf8");
@@ -357,6 +358,34 @@ function calloutFixture({ nodes = [], area = { x: 0, y: 0, w: 1200, h: 800 } } =
   return { env, state, calls, stores, tick: (ms) => { now += ms; return now; }, now: () => now };
 }
 
+test("Updates keeps task progress and work reports but hides chatter, including on inspected cards", () => {
+  const task = { id: "task:update", kind: "task", label: "Fix save", _workLabel: "Running", progress: 0.5, task: { prompt: "Private task brief" } };
+  const builder = { id: "builder:update", kind: "agent", builder: true, status: "running", targetId: task.id, text: "heading home" };
+  const hub = { id: "hub", kind: "assistant" };
+  const { env, state, tick } = calloutFixture({ nodes: [task, builder, hub] });
+  state.labels = "updates";
+  state.bubbles = true;
+  state.deferred = [];
+  env.say(builder, "heading home");
+  env.say(hub, "Thinking about the project");
+  assert.equal(env.nodeHasUpdate(task), true);
+  assert.equal(env.nodeHasUpdate(hub), false);
+  const progress = env.calloutContent(task, { rich: true });
+  assert.equal(progress.counts, "50%");
+  assert.deepEqual(plain(progress.lines), [], "neither chatter nor the task brief leaks into Updates");
+  env.say(builder, "Saved renderer/tasks.js", { update: true, ttl: 1000 });
+  assert.equal(env.calloutContent(task).lines[0].text, "Saved renderer/tasks.js", "hosted workers report through the task card");
+  env.say(hub, "Build finished", { kind: "receive", update: true, delay: 100, ttl: 1000 });
+  env.stepDeferred(tick(100));
+  assert.equal(env.nodeHasUpdate(hub), true, "delayed reports retain their classification");
+  tick(1100);
+  assert.equal(env.nodeHasUpdate(hub), false, "expired updates stop qualifying");
+  task._workLabel = null;
+  assert.equal(env.nodeHasUpdate(task), false, "an old percentage alone does not keep an idle task visible");
+  state.labels = "all";
+  assert.ok(env.calloutContent(task, { rich: true }).lines.length, "other modes retain their existing detail");
+});
+
 test("a callout's leader climbs at seventy degrees into a horizontal top bar on the chosen side", () => {
   const { env } = calloutFixture();
   const node = { id: "task:a", kind: "task", _pr: 10 };
@@ -439,6 +468,22 @@ test("callout content carries the number, the mark and the done/left counts, and
   assert.deepEqual(plain(env.calloutContent(running).lines[0]), { text: "on it: wiring", kind: "receive" }, "a bubble the node is showing becomes the card's thought");
 });
 
+test("a task group's callout counts its members' task statuses, not the wrappers'", () => {
+  // task-groups.js members are wrappers: { id, task, snapshot, canonical, readOnly }.
+  const member = (id, status) => ({ id, task: { id, title: id, status }, snapshot: null, canonical: true, readOnly: true });
+  const members = [member("shipped", "done"), member("old", "archived"), member("next", "open"), member("folded", "absorbed"), member("verify", "awaiting_verification")];
+  const plan = { id: "task:planning:p", kind: "task-group", label: "Release plan", ordinal: "T3", task: { id: "planning:p", status: "open" }, taskGroup: { id: "planning:p", kind: "approved-plan", members } };
+  const parent = { id: "task:plan", kind: "task", label: "Grouped work", ordinal: "T4", task: { id: "plan", status: "open" }, taskGroup: { id: "plan", kind: "task-plan", members: members.slice(0, 3) } };
+  const { env } = calloutFixture({ nodes: [plan, parent] });
+  assert.equal(env.calloutContent(plan).counts, "2 done · 3 left", "done and archived members count; absorbed is not a finish");
+  assert.equal(env.calloutContent(parent).counts, "2 done · 1 left", "an executable group parent counts the same way");
+  members[2].task.status = "done";
+  assert.equal(env.calloutContent(parent).counts, "3 done · 0 left", "the count follows the canonical task as it settles");
+  members.forEach((entry) => { entry.status = "done"; });
+  members[0].task.status = "open"; members[1].task.status = "open"; members[2].task.status = "open";
+  assert.equal(env.calloutContent(parent).counts, "0 done · 3 left", "a status on the wrapper itself is not the member's status");
+});
+
 test("every relationship gets its own line style and the active path marches", () => {
   const env = vm.createContext({ Boolean });
   vm.runInContext(section(idle, "  // One look per relationship", "  function drawGraphConnectionsImpl("), env);
@@ -450,7 +495,7 @@ test("every relationship gets its own line style and the active path marches", (
   assert.equal(task.march, true);
   assert.equal(env.edgeStyleFor({}, a("session"), a("task")).march, false);
   const done = env.edgeStyleFor({}, a("session"), { node: { kind: "todo", state: "done" } });
-  assert.equal(done.kind, "todo"); assert.equal(done.alpha, 0.3);
+  assert.equal(done.kind, "todo"); assert.equal(done.alpha, 0.26);
   assert.deepEqual(plain(env.edgeStyleFor({}, a("root"), a("folded")).dash), [1, 5]);
   assert.equal(env.edgeStyleFor({}, a("root"), a("session")).kind, "session");
 });
@@ -613,7 +658,11 @@ test("a click glides the zoom with the camera instead of snapping it", () => {
   for (const marker of [
     "glideZoom(FOCUS_ZOOM[node.kind] ?? 1.9)",
     "if (zoom) glideZoom(Math.max(state.zoomTarget ?? state.zoom, zoom))",
-    "state.zoom = Math.exp(smoothDamp(Math.log(state.zoom), Math.log(state.zoomTarget), camVel, \"zoom\", CAMERA_SMOOTH, dt));",
+    // Zoom and pan share one spring: the camera's, or the slower return
+    // glide while Zen hands the camera home.
+    "const glide = state.returning ? CAMERA_RETURN_SMOOTH : CAMERA_SMOOTH;",
+    "state.zoom = Math.exp(smoothDamp(Math.log(state.zoom), Math.log(state.zoomTarget), camVel, \"zoom\", glide, dt));",
+    "state.camera.x = smoothDamp(state.camera.x, state.camera.tx, camVel, \"x\", glide, dt);",
     "const cameraEase = perSec(CAMERA_EASE, dt);",
     "state.cameraMoving = !still && (flightPx > 8 || centerFlight > 8 || (state.zoomTarget != null",
     "const frame = state.graphFrame ?? area;",
@@ -647,7 +696,7 @@ test("cards hold their spots while the camera is in flight, then settle with the
 
 test("the frame gate tolerates vsync jitter so a two-tick frame is never skipped", () => {
   const drawn = [];
-  const env = vm.createContext({ state: { active: true }, document: { hidden: false, body: { dataset: {} } }, pickerHeld: () => false, drawFrame: (time) => drawn.push(time), requestAnimationFrame: () => 1, console });
+  const env = vm.createContext({ state: { active: true }, document: { hidden: false, body: { dataset: {} } }, pickerHeld: () => false, drawFrame: (time) => drawn.push(time), requestAnimationFrame: () => 1, cancelAnimationFrame: () => {}, setTimeout: () => 1, clearTimeout: () => {}, console });
   vm.runInContext(section(idle, "  // Animation state belongs", "  function drawFrame("), env);
   env.frame(100); env.frame(116.7); env.frame(132.9); env.frame(149.6); env.frame(166.3);
   assert.deepEqual(drawn, [100, 132.9, 166.3], "a 32.9 ms tick (33.3 with jitter) draws instead of costing a 50 ms hitch");
@@ -656,7 +705,7 @@ test("the frame gate tolerates vsync jitter so a two-tick frame is never skipped
 test("the gate draws at the display's rate while the camera moves, and only while frames stay cheap", () => {
   const drawn = [];
   const state = { active: true, motionHot: true, frameCost: 4 };
-  const env = vm.createContext({ state, document: { hidden: false, body: { dataset: {} } }, pickerHeld: () => false, drawFrame: (time) => drawn.push(time), requestAnimationFrame: () => 1, console });
+  const env = vm.createContext({ state, document: { hidden: false, body: { dataset: {} } }, pickerHeld: () => false, drawFrame: (time) => drawn.push(time), requestAnimationFrame: () => 1, cancelAnimationFrame: () => {}, setTimeout: () => 1, clearTimeout: () => {}, console });
   vm.runInContext(section(idle, "  // Animation state belongs", "  function drawFrame("), env);
   for (const time of [100, 116.7, 133.4, 150.1]) env.frame(time);
   assert.deepEqual(drawn, [100, 116.7, 133.4, 150.1], "a glide draws every 60 Hz tick");
@@ -669,6 +718,20 @@ test("the gate draws at the display's rate while the camera moves, and only whil
   state.motionHot = false;
   for (const time of [216.9, 233.6, 250.3]) env.frame(time);
   assert.deepEqual(drawn, [216.9, 250.3], "at rest the tree draws at 30 fps");
+});
+
+test("with the window unfocused and no input for a minute, Command draws at the backdrop's cadence", () => {
+  const drawn = [];
+  let clock = 0, focused = false;
+  const document = { hidden: false, hasFocus: () => focused, body: { dataset: {} } };
+  const env = vm.createContext({ state: { active: true }, document, Date: { now: () => clock }, pickerHeld: () => false, drawFrame: (time) => drawn.push(time), requestAnimationFrame: () => 1, cancelAnimationFrame: () => {}, setTimeout: () => 1, clearTimeout: () => {}, console });
+  vm.runInContext(section(idle, "  // Animation state belongs", "  function drawFrame("), env);
+  const run = (from) => { drawn.length = 0; for (let time = from; time < from + 1000; time += 16.7) env.frame(time); return drawn.length; };
+  assert.equal(run(100), 30, "a window that just lost focus keeps 30 fps");
+  clock = 61000;
+  assert.equal(run(2000), 12, "nobody at the window for a minute: scenery cadence");
+  focused = true;
+  assert.equal(run(4000), 30, "focus brings the full rate back at once");
 });
 
 test("a floating panel carves the clear rectangle without re-seeding the tree, and the projection centre glides after it", () => {
@@ -769,4 +832,257 @@ test("the Orbit switch and the camera mode the owner picks survive a restart; fo
   env.setCamMode("free");
   assert.equal(stores.get("mefiStudio.cmdCam"), "free", "an explicit free camera is saved like any other pick");
   assert.ok(!source.includes('setCamMode("free", { quiet: true })'), "every incidental step into free is marked transient");
+});
+
+// Lifecycle notices: the host stores autonomous status posts in the thread as
+// { role: "assistant", kind: "notice", taskId, text, at, id } and may rewrite
+// one in place. The thread section (threadMessages, the notice helpers and
+// fillThread) runs with the same stand-ins the chat log uses.
+function threadFixture() {
+  let label = "1m ago";
+  const env = vm.createContext({
+    window: { mefiStudio: { assistantMessage() {} } },
+    document: { createElement: (tag) => new Element(tag) },
+    agoLabel: () => label,
+    replyPending: () => false,
+    thinkingBubble: () => new Element("div"),
+  });
+  vm.runInContext(`${section(idle, "  // Drop a just-repeated user/assistant pair.", "  function commandChatActivity(")}\nthis.latestReply = latestReply; this.threadMessages = threadMessages; this.fillThread = fillThread;`, env);
+  return { env, relabel: (next) => { label = next; } };
+}
+
+test("a notice draws as one quiet row, repaints when the host rewrites it in place, and keeps its own row", () => {
+  const { env, relabel } = threadFixture();
+  const thread = new Element("div");
+  const question = { id: "m1", role: "user", text: "status?", at: 1 };
+  const answer = { id: "m2", role: "assistant", text: "Two builds running.", at: 2, via: "local" };
+  const notice = { id: "m3", role: "assistant", kind: "notice", taskId: "t1", text: "Started:  Wire the\nexport", at: 3 };
+  env.fillThread(thread, { messages: [question, answer, notice] });
+  assert.equal(thread.children.length, 3);
+  const row = thread.children[2];
+  assert.equal(row.className, "assistant-msg notice muted", "a notice row, not an assistant bubble");
+  assert.equal(row.textContent, "Started: Wire the export · 1m ago", "one line: whitespace folded, its age inline");
+  assert.equal(row.children.length, 0, "no .when caption line under it");
+  assert.equal(thread.children[1].className, "assistant-msg assistant", "the real reply keeps its bubble");
+  const rewritten = { ...notice, text: "Finished (verifying): Wire the export", at: 4 };
+  env.fillThread(thread, { messages: [question, answer, rewritten] });
+  assert.notEqual(thread.children[2], row, "the same id with new text repaints");
+  assert.match(thread.children[2].textContent, /^Finished \(verifying\): Wire the export · /);
+  const kept = thread.children[2];
+  env.fillThread(thread, { messages: [question, answer, { ...rewritten }] });
+  assert.equal(thread.children[2], kept, "an unchanged notice leaves the thread alone");
+  relabel("2m ago");
+  env.fillThread(thread, { messages: [question, answer, rewritten] });
+  assert.match(thread.children[2].textContent, / · 2m ago$/, "an in-place time update repaints too");
+  const long = { ...notice, text: `Failed: ${"x".repeat(200)}` };
+  env.fillThread(thread, { messages: [long] });
+  assert.ok(thread.children[0].textContent.length < 160, "a long notice is clipped to one line");
+  assert.equal(thread.children[0].title, long.text, "with the whole text on hover");
+  // Only true repeats fold: another task's notice with the same words, or a
+  // notice echoing a reply, is still its own row.
+  const twin = { ...notice, id: "m4", taskId: "t2" };
+  assert.equal(env.threadMessages({ messages: [question, notice, twin] }).length, 3);
+  assert.equal(env.threadMessages({ messages: [answer, { ...answer, id: "m5", kind: "notice", taskId: "t1" }] }).length, 2);
+  assert.equal(env.threadMessages({ messages: [notice, { ...notice }] }).length, 1, "a repeated notice for the same task still folds");
+  // The repeated Work-on pair fold never reads a notice as the reply.
+  const ask = { role: "user", text: "Work on \"export\"" };
+  assert.equal(env.threadMessages({ messages: [ask, notice, { ...ask }, { ...notice }] }).length, 4);
+});
+
+test("a notice never counts as the assistant's reply to the owner's last message", () => {
+  const question = { id: "m1", role: "user", text: "how is the export going?", at: 1 };
+  const answer = { id: "m2", role: "assistant", text: "It is verifying now.", at: 2 };
+  const notice = { id: "m3", role: "assistant", kind: "notice", taskId: "t1", text: "Started: Wire the export", at: 3 };
+  const { env: thread } = threadFixture();
+  assert.equal(thread.latestReply({ messages: [question, notice] }), null, "a notice after the question is not its answer");
+  assert.equal(thread.latestReply({ messages: [question, answer, notice] }), answer, "a notice after the answer does not hide it");
+  // The hub's speech and the reply toast (onAssistantEvent) follow the same rule.
+  const said = [], toasts = [];
+  const hub = { id: "__assistant__", kind: "assistant" }, root = { id: "root", kind: "root" };
+  let full = { messages: [] };
+  const env = vm.createContext({
+    window: { MefiTree: { applyAssistant: () => Promise.resolve() }, MefiToast: (text) => toasts.push(text) },
+    document: { body: { dataset: {} } },
+    state: { active: true, selected: null, railTab: "node", pulses: [], nodes: [hub, root] },
+    Date, Promise, String,
+    refreshAssistantCache() {}, updateAssistantPill() {}, paintChatLog() {}, renderInfo() {},
+    assistantFull: () => full, rootNode: () => root, assistantNode: () => hub,
+    say: (node, text, options = {}) => { said.push([node.id, text, options.kind ?? "say"]); },
+    SPEECH_TTL_LONG: 9000,
+  });
+  vm.runInContext(section(idle, "  // Drop a just-repeated user/assistant pair.", "  function commandChatActivity("), env);
+  vm.runInContext(section(idle, "  function onAssistantEvent(payload) {", "  function focusNextInProgress("), env);
+  full = { messages: [question, answer] };
+  env.onAssistantEvent({ event: { kind: "reply", text: "ai: It is verifying now." } });
+  assert.deepEqual(said.at(-1), ["__assistant__", "It is verifying now.", "say"]);
+  assert.deepEqual(toasts, ["assistant · It is verifying now."]);
+  full = { messages: [question, answer, { ...question, id: "m4", text: "and the docs?" }, notice] };
+  env.onAssistantEvent({ event: { kind: "reply", text: "local: Started: Wire the export" } });
+  assert.deepEqual(said.at(-1), ["__assistant__", "Started: Wire the export", "say"], "the hub says the status line");
+  assert.equal(toasts.length, 1, "a notice is never toasted as the assistant's answer");
+});
+
+// The hub's side of the thread (onAssistantEvent) with recording stand-ins;
+// show() sets the thread the next push reads, push() delivers a host event.
+function hubFixture() {
+  const said = [], toasts = [];
+  const hub = { id: "__assistant__", kind: "assistant" }, root = { id: "root", kind: "root" };
+  let full = { messages: [] };
+  const env = vm.createContext({
+    window: { MefiTree: { applyAssistant: () => Promise.resolve() }, MefiToast: (text) => toasts.push(text) },
+    document: { body: { dataset: {} } },
+    state: { active: true, selected: null, railTab: "node", pulses: [], nodes: [hub, root] },
+    Date, Promise, String,
+    refreshAssistantCache() {}, updateAssistantPill() {}, paintChatLog() {}, renderInfo() {},
+    assistantFull: () => full, rootNode: () => root, assistantNode: () => hub,
+    say: (node, text, options = {}) => { said.push([node.id, text, options.kind ?? "say"]); },
+    SPEECH_TTL_LONG: 9000,
+  });
+  vm.runInContext(section(idle, "  // Drop a just-repeated user/assistant pair.", "  function commandChatActivity("), env);
+  vm.runInContext(section(idle, "  function onAssistantEvent(payload) {", "  function focusNextInProgress("), env);
+  return {
+    said, toasts,
+    show: (messages, extra = {}) => { full = { ...extra, messages }; },
+    push: (event) => env.onAssistantEvent({ event }),
+  };
+}
+
+// The host edits a task's notice in place while the owner has said nothing
+// since it, and a reply can land below that notice meanwhile. Reading the
+// thread's last row made every later edit say and toast that reply again,
+// and the new status was never said.
+test("a notice edited in place above a newer reply says the new status and never re-toasts the reply", () => {
+  const hub = hubFixture();
+  const question = { id: "u1", role: "user", text: "how is it going?", at: 1 };
+  const started = { id: "n1", role: "assistant", kind: "notice", taskId: "t1", event: "started", text: "Started: Wire the export", at: 2 };
+  const answer = { id: "r1", role: "assistant", text: "All quiet; the export is building.", at: 3 };
+  hub.show([question, started]);
+  hub.push({ kind: "notice", taskId: "t1", id: "n1" });
+  assert.deepEqual(hub.said.at(-1), ["__assistant__", "Started: Wire the export", "say"], "the hub says a notice quietly");
+  assert.deepEqual(hub.toasts, [], "a start is said, not toasted");
+  hub.show([question, started, answer]);
+  hub.push({ kind: "reply", text: "ai: All quiet; the export is building." });
+  assert.deepEqual(hub.toasts, ["assistant · All quiet; the export is building."]);
+  const before = hub.said.length;
+
+  const verifying = { ...started, event: "verifying", text: "Finished (verifying): Wire the export", at: 4 };
+  hub.show([question, verifying, answer]);
+  hub.push({ kind: "notice", taskId: "t1", id: "n1" });
+  const verified = { ...started, event: "verified", text: "Verified: Wire the export", at: 5 };
+  hub.show([question, verified, answer]);
+  hub.push({ kind: "notice", taskId: "t1", id: "n1" });
+  assert.deepEqual(hub.said.slice(before).map(([, text]) => text), ["Finished (verifying): Wire the export", "Verified: Wire the export"], "each edit says the new status, never the reply below it");
+  assert.deepEqual(hub.toasts, ["assistant · All quiet; the export is building.", "assistant · Verified: Wire the export"], "the reply is toasted once; the verdict gets its own toast");
+
+  // The rolling needs-you line is toasted too: only the owner can move it.
+  const needsYou = { id: "n2", role: "assistant", kind: "notice", taskId: "__needs_you__", event: "needs-you", text: "1 card needs you: \"Docs\" parked.", at: 6 };
+  hub.show([question, verified, answer, needsYou]);
+  hub.push({ kind: "notice", taskId: "__needs_you__", id: "n2" });
+  assert.equal(hub.toasts.at(-1), "assistant · 1 card needs you: \"Docs\" parked.");
+
+  // The same words pushed again, or a bare reply push (a coalesced window),
+  // bring nothing new.
+  const settled = [hub.said.length, hub.toasts.length];
+  hub.push({ kind: "notice", taskId: "t1", id: "n1" });
+  hub.push({ kind: "reply" });
+  assert.deepEqual([hub.said.length, hub.toasts.length], settled);
+});
+
+test("a new reply is said and toasted once, and an answer already in the thread is never replayed as news", () => {
+  const hub = hubFixture();
+  const opener = { id: "u0", role: "user", text: "status?", at: 0 };
+  const old = { id: "r0", role: "assistant", text: "Two builds running.", at: 1 };
+  const resumed = { id: "n0", role: "assistant", kind: "notice", text: "Restored 2 saved job(s).", at: 2 };
+  // The app opens on a thread that already holds an answer, and the host
+  // appends a status line as a reply (the resume notice): the first push.
+  hub.show([opener, old, resumed]);
+  hub.push({ kind: "reply", text: "local: Restored 2 saved job(s)." });
+  assert.deepEqual(hub.said.map(([, text]) => text), ["Restored 2 saved job(s)."], "the status line is said");
+  assert.deepEqual(hub.toasts, [], "the old answer is not news");
+
+  const question = { id: "u1", role: "user", text: "and the docs?", at: 3 };
+  const answer = { id: "r1", role: "assistant", text: "The docs build is next.", at: 4 };
+  hub.show([opener, old, resumed, question]);
+  hub.push({ kind: "message", text: "and the docs?" });
+  hub.show([opener, old, resumed, question, answer]);
+  hub.push({ kind: "reply", text: "ai: The docs build is next." });
+  hub.push({ kind: "reply", text: "ai: The docs build is next." });
+  assert.deepEqual(hub.toasts, ["assistant · The docs build is next."], "one toast for one answer");
+  assert.equal(hub.said.filter(([, text]) => text === answer.text).length, 1, "and one bubble");
+
+  // A project switch shows another thread whose answer is just as old.
+  hub.show([
+    { id: "u9", role: "user", text: "hi", at: 5 },
+    { id: "r9", role: "assistant", text: "The other project's answer.", at: 6 },
+    { id: "n9", role: "assistant", kind: "notice", text: "Restored 1 saved job(s).", at: 7 },
+  ], { projectId: "p2" });
+  hub.push({ kind: "reply", text: "local: Restored 1 saved job(s)." });
+  assert.equal(hub.said.at(-1)[1], "Restored 1 saved job(s).");
+  assert.equal(hub.toasts.length, 1, "another project's old answer is not news either");
+});
+
+// The Command "Add a task… (Enter)" field writes a board task through
+// tasks:create (the path Work mode uses), never through the chat classifier.
+function composerFixture({ tasksCreate, addTask = null, projectId = "p1" } = {}) {
+  const toasts = [], navs = [], created = [], handlers = {};
+  let reads = 0;
+  const el = { taskInput: { value: "", addEventListener: (type, fn) => { handlers[type] = fn; } }, taskAdd: null };
+  const env = vm.createContext({
+    el, String, Promise,
+    state: { projectId, active: false, nodes: [] },
+    window: {
+      mefiStudio: { ...(tasksCreate ? { tasksCreate: async (payload) => { created.push(payload); return tasksCreate(payload); } } : {}), assistantMessage: () => { throw new Error("Add a task must not message the assistant"); } },
+      MefiToast: (text, tone) => toasts.push([text, tone]),
+      MefiTasks: addTask ? { addTask } : undefined,
+    },
+    sendAssistant: () => { throw new Error("Add a task must not go through the chat classifier"); },
+    refreshTasks: async () => { reads += 1; }, refreshGraph() {}, updateTelemetry() {}, selectNode() {}, focusNode() {},
+    nav: (...args) => navs.push(args),
+  });
+  vm.runInContext(`${section(idle, "    const addTaskFromComposer = async () => {", "    el.search?.addEventListener(")}\nthis.addTaskFromComposer = addTaskFromComposer;`, env);
+  return { env, el, toasts, navs, created, handlers, reads: () => reads };
+}
+
+test("Add a task creates a board task through tasks:create and toasts 'on the board' only when one comes back", async () => {
+  const task = { id: "task_1", title: "Pause button in the music player", status: "open", pin: true };
+  const ok = composerFixture({ tasksCreate: async () => ({ ok: true, task, tasks: [task], projectId: "p1" }) });
+  ok.el.taskInput.value = "  Pause button in the music player ";
+  const result = await ok.env.addTaskFromComposer();
+  assert.equal(result.id, "task_1");
+  assert.deepEqual(JSON.parse(JSON.stringify(ok.created)), [{ title: "Pause button in the music player", prompt: "Pause button in the music player", projectId: "p1" }], "a statement with a service word is still a task, not a pause");
+  assert.deepEqual(ok.toasts, [["on the board · Pause button in the music player", "good"]]);
+  assert.equal(ok.el.taskInput.value, "");
+  assert.equal(ok.reads(), 1, "the board is re-read after the write");
+  ok.el.taskInput.value = "Dark mode for settings";
+  await ok.handlers.keydown({ key: "Enter", ctrlKey: true });
+  assert.deepEqual(JSON.parse(JSON.stringify(ok.navs)), [["tasks", { taskId: "task_1" }]], "Ctrl+Enter opens the task the host returned");
+
+  const refused = composerFixture({ tasksCreate: async () => ({ ok: false, error: "An unfinished task with this title already exists." }) });
+  refused.el.taskInput.value = "Export button broken on Safari";
+  assert.equal(await refused.env.addTaskFromComposer(), null);
+  assert.deepEqual(refused.toasts, [["task not added · An unfinished task with this title already exists.", "bad"]], "the host's reason, never 'on the board'");
+  assert.equal(refused.el.taskInput.value, "Export button broken on Safari", "the text is handed back");
+  await refused.handlers.keydown({ key: "Enter", ctrlKey: true });
+  assert.equal(refused.navs.length, 0, "nothing to open when no task came back");
+
+  const empty = composerFixture({ tasksCreate: async () => ({ ok: true }) });
+  empty.el.taskInput.value = "Start the export feature";
+  assert.equal(await empty.env.addTaskFromComposer(), null, "an ok without a task is not a task");
+  assert.equal(empty.toasts[0][1], "bad");
+
+  const thrown = composerFixture({ tasksCreate: async () => { throw new Error("IPC closed"); } });
+  thrown.el.taskInput.value = "Retune the mixer";
+  assert.equal(await thrown.env.addTaskFromComposer(), null);
+  assert.deepEqual(thrown.toasts, [["task not added · IPC closed", "bad"]]);
+  assert.equal(thrown.el.taskInput.value, "Retune the mixer");
+
+  const unscoped = composerFixture({ projectId: null, tasksCreate: async () => ({ ok: true, task: { id: "t2", title: "Retune" } }) });
+  unscoped.el.taskInput.value = "Retune";
+  await unscoped.env.addTaskFromComposer();
+  assert.equal("projectId" in unscoped.created[0], false, "before a project event the host's current project applies");
+
+  const browser = composerFixture({ addTask: async (text) => ({ id: "local_1", title: text }) });
+  browser.el.taskInput.value = "Offline task";
+  assert.equal((await browser.env.addTaskFromComposer()).id, "local_1", "browser mode still writes through tasks.js");
+  assert.deepEqual(browser.toasts, [["on the board · Offline task", "good"]]);
 });

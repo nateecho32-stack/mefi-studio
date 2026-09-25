@@ -24,7 +24,7 @@ const errorText = (error) => clip(error?.message ?? error, 300);
 export function createFirstRunService(deps = {}) {
   const {
     scanner, mapper, judge, readSettings, writeSettings, decryptKey = () => null, assistantRoute = async () => ({ ok: false }),
-    projects, analyzeProject = async () => null, runEnv = () => ({}), readIdeas = async () => [], writeIdeas = async () => {},
+    projects, analyzeProject = async () => null, runEnv = () => ({}), readIdeas = async () => [], writeIdeas = async () => {}, admitIdeas = null,
     writeMapFile = async () => {}, readMapFile = async () => null, assistModule = null, assistantChat = null, autoSetup = null, send = () => {}, progress = () => {}, log = () => {},
     exec = scanner?.spawnExec, env = process.env, platform = process.platform, now = Date.now, smoke = false, mapTimeoutMs = MAP_TIMEOUT_MS,
   } = deps;
@@ -249,9 +249,18 @@ export function createFirstRunService(deps = {}) {
     const ideas = mapper.ideasFrom(parsed.map, { projectId: project.id, projectPath: project.path, sessionId: events.sessionId, model, now: now() });
     let merged = { ideas: [], added: 0, updated: 0 };
     try {
-      merged = mapper.mergeIdeas(await readIdeas(), ideas);
-      await writeIdeas(merged.ideas);
-      send("eyes:ideas", merged.ideas);
+      if (typeof admitIdeas === "function") {
+        // The host merges by id inside its board gateway, against the ideas
+        // as they are at that moment: a read here and a write after the map
+        // could revert a promotion's planned/taskId stamps landed between them.
+        // The gateway broadcasts the result itself.
+        const admitted = await admitIdeas(ideas);
+        merged = { ideas: Array.isArray(admitted?.ideas) ? admitted.ideas : [], added: Number(admitted?.added) || 0, updated: Number(admitted?.updated) || 0 };
+      } else {
+        merged = mapper.mergeIdeas(await readIdeas(), ideas);
+        await writeIdeas(merged.ideas);
+        send("eyes:ideas", merged.ideas);
+      }
     } catch (error) {
       return finish({ ok: false, reason: "ideas-write-failed", error: `The map was read but its ideas could not be saved: ${errorText(error)}`, map: parsed.map });
     }

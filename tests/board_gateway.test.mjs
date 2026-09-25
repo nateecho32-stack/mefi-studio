@@ -15,6 +15,7 @@ import path from "node:path";
 import os from "node:os";
 import { createRequire } from "node:module";
 import * as eyes from "../scripts/eyes.mjs";
+import { migrateLegacyRequests } from "../scripts/task-history.mjs";
 
 const require = createRequire(import.meta.url);
 const backlog = require("../scripts/backlog.cjs");
@@ -182,6 +183,43 @@ test("sameRows answers as JSON.stringify equality did, without serializing share
     assert.equal(sameRows([undefined], [null]), true, "an array slot serializes undefined as null");
     assert.equal(sameRows([{ id: "a" }], null), false);
     assert.equal(sameRows([], []), true);
+  } finally {
+    await h.close();
+  }
+});
+
+// The legacy migration moves an older build's "verifying" inbox row onto the
+// board (autopilotHousekeepingPass, scripts/task-history.mjs). The file store
+// writes the inbox before the tasks, so a one-step move lost the finished
+// attempt when the tasks write failed after the inbox write had landed.
+test("a failed tasks write while a verifying row moves to the board loses nothing", async () => {
+  const h = await harness();
+  try {
+    const { mutateBoard, TASKS_PATH } = h.context;
+    const row = { title: "Finished before the upgrade", prompt: "Keep the picker visible", at: 5, source: "manual", status: "verifying",
+      lastAttempt: { runId: "run-v", sessionId: "session-v", startedAt: 1, at: 2, code: 0 } };
+    await mutateBoard((board) => { board.requests.push(row); return {}; });
+    // The same step the housekeeping mutation takes.
+    const migrate = (board) => {
+      const legacy = migrateLegacyRequests(board.requests, { tasks: board.tasks, now: 1000 });
+      if (legacy.changed) { board.requests = legacy.requests; board.tasks = [...legacy.tasks, ...board.tasks]; }
+      return {};
+    };
+    const write = h.scoped.writeJson;
+    let fail = true;
+    h.scoped.writeJson = async (file, value) => {
+      if (fail && file === TASKS_PATH) { fail = false; throw Object.assign(new Error("ENOSPC: no space left on device, write"), { code: "ENOSPC" }); }
+      return write(file, value);
+    };
+    await assert.rejects(mutateBoard(migrate), /ENOSPC/);
+    const inbox = async () => JSON.parse(await readFile(path.join(path.dirname(TASKS_PATH), "eyes-requests.json"), "utf8"));
+    assert.deepEqual((await inbox()).map((saved) => saved.status), ["verifying"], "the row is still in the inbox");
+    await mutateBoard(migrate);
+    assert.deepEqual((await rowsOnDisk(h)).map((task) => task.status), ["awaiting_verification"], "the retry saves the task");
+    assert.equal((await inbox()).length, 1, "and keeps the row until a pass sees that task");
+    await mutateBoard(migrate);
+    assert.deepEqual(await inbox(), [], "then the row goes");
+    assert.equal((await rowsOnDisk(h)).length, 1, "with one task, not two");
   } finally {
     await h.close();
   }

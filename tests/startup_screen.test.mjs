@@ -114,6 +114,26 @@ test("picking another project and Open and start agents chooses it and asks for 
   assert.deepEqual(calls.at(-1), ["begin"]);
 });
 
+test("project radios keep one Tab stop and retain focus when selection changes", async () => {
+  const { api, calls } = bridge();
+  const env = environment(api);
+  env.startup.choose();
+  await flush();
+  assert.deepEqual(env.rows().map((row) => row.tabIndex), [-1, 0]);
+  assert.equal(env.startup.navigateProjects("ArrowDown"), true);
+  assert.equal(env.selected(), projectA.id, "arrow navigation wraps through the projects");
+  assert.deepEqual(env.rows().map((row) => row.tabIndex), [0, -1]);
+  assert.equal(env.rows()[0].focused, true, "the new selected row receives focus after rendering");
+  env.startup.navigateProjects("End");
+  assert.equal(env.selected(), projectB.id);
+  env.startup.navigateProjects("Home");
+  assert.equal(env.selected(), projectA.id);
+  await env.rows()[1].click();
+  assert.equal(env.rows()[1].focused, true, "clicking also retains focus after rendering");
+  assert.equal(env.startup.navigateProjects("Tab"), false);
+  assert.deepEqual(calls, [], "browsing projects never opens one or starts work");
+});
+
 test("a project the host cannot open keeps the screen up with its reason until a choice succeeds", async () => {
   let attempts = 0;
   const { api, calls } = bridge({ startupChoose: async (id) => { calls.push(["choose", id]); attempts += 1; return attempts === 1 ? { ok: false, error: "That project folder is unavailable. Reconnect it before switching.", projects: [projectA, projectB], activeId: projectB.id } : { ok: true, projects: [projectA, projectB], activeId: id }; } });

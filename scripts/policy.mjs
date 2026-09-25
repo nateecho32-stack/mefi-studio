@@ -28,13 +28,19 @@ export const POLICY_SCHEMA = 1;
 // every policy — baseline or candidate — receives it as an immutable input.
 export const SELF_MAINTENANCE = /^(?:overseer|assistant|a-eyes)\s*:/i;
 export const BAND = Object.freeze({ PIN: 5, CHAT: 4, PLAN: 3, EYES: 2, PLAIN: 1, SELF_MAINTENANCE: 0 });
+// Who filed a card, not how it reached the board: promotion keeps a request's
+// own source (it used to rewrite every one to "a-eyes"), so the band a card
+// has in the inbox is the band it keeps on the board.
+export const FILED_SOURCES = new Set(["a-eyes", "collision", "fix", "audit", "duplicate", "uncommitted", "grow", "grower", "improver", "overseer", "machine", "agent"]);
 
 export function baselineTaskPriority(task) {
   const title = String(task?.title ?? "");
   if (SELF_MAINTENANCE.test(title)) return BAND.SELF_MAINTENANCE; // the assistant's own upkeep, last
-  if (task?.source === "chat") return BAND.CHAT; // the user asked for this by hand
+  // The owner's own work: asked for by hand, or an approved plan, an idea
+  // promoted by hand, a split or Work on it (origin, scripts/work-admission.cjs).
+  if (task?.source === "chat" || task?.origin?.by === "owner") return BAND.CHAT;
   if (String(task?.id ?? "").startsWith("task_plan_")) return BAND.PLAN; // a folded plan is real, scoped work
-  if (task?.source === "a-eyes" || task?.source === "collision") return BAND.EYES; // briefed/audited/collision work
+  if (FILED_SOURCES.has(task?.source)) return BAND.EYES; // briefed/audited/collision work the roster filed
   return BAND.PLAIN;
 }
 

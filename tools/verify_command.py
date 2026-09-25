@@ -570,12 +570,12 @@ VERIFY_METHOD = r'''
     assert.equal(await this.run("return getComputedStyle(document.getElementById('workspace-layer')).getPropertyValue('--ws-accent').trim();"), '#dcc4ff', "theme also reaches Workspace");
     await this.run("await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));");
     await this.capture('11-music-room');
-    await this.click('#music-spotify-tab');
-    await this.run("document.getElementById('music-spotify-url').value = 'https://evil.test/playlist/not-spotify';");
-    await this.click('#music-spotify-load');
+    await this.click('#music-link-tab');
+    await this.run("document.getElementById('music-link-url').value = 'https://evil.test/playlist/not-spotify';");
+    await this.click('#music-link-load');
     assert.equal(await this.run("return document.querySelectorAll('#music-overlay iframe').length;"), 0);
     assert.equal(await this.run("return document.querySelector('.music-notice').dataset.error;"), 'true');
-    this.check("Music opens inside Studio, applies themes across surfaces and rejects non-Spotify embeds");
+    this.check("Music opens inside Studio, applies themes across surfaces and refuses to embed pages it has no player for");
     await this.click('#music-local-tab');
     await this.run(`
       const sampleRate = 22050, seconds = 30, samples = sampleRate * seconds;
@@ -619,10 +619,10 @@ VERIFY_METHOD = r'''
     await this.click('#idle-music-toggle');
     await this.until("window.MefiIdle.audioStatus().energy > .01", "local reactivity reconnects from its existing audio source");
     await this.openFromNav('music');
-    await this.click('#music-spotify-tab');
+    await this.click('#music-link-tab');
     assert.equal(await this.run("const status=window.MefiIdle.audioStatus();return !status.listening&&!status.pending&&status.energy===0&&window.__musicCaptureAttempts===0;"), true, "source switching releases local reactivity without arming desktop capture");
-    await this.run("document.getElementById('music-spotify-url').value='https://open.spotify.com/playlist/37i9dQZF1DX7zqr9q1MPG7';");
-    await this.click('#music-spotify-load');
+    await this.run("document.getElementById('music-link-url').value='https://open.spotify.com/playlist/37i9dQZF1DX7zqr9q1MPG7';");
+    await this.click('#music-link-load');
     await this.until("Boolean(document.querySelector('#music-overlay iframe'))", "Spotify iframe is mounted");
     let spotifyFrame = null;
     let spotifyFrameText = '';

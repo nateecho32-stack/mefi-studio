@@ -3,15 +3,21 @@
 // ordinary executor, approval, file-claim and verification paths.
 const { createHash } = require("node:crypto");
 const { buildScope } = require("./backlog.cjs");
+const { taskRow } = require("./work-admission.cjs");
 const object = (value) => value && typeof value === "object" && !Array.isArray(value);
 const digest = (value) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const ownKeys = (value, allowed) => object(value) && Object.keys(value).every((key) => allowed.includes(key));
 const boundedText = (value, limit) => typeof value === "string" && value.trim() && value.length <= limit && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(value) ? value.trim() : null;
 const requestKey = (ref) => ref.id ? `id:${String(ref.id)}` : `request:${digest([ref.at ?? null, ref.prompt ?? null, ref.fromRun ?? null, ref.handoffId ?? null])}`;
 
-function canPlan(ref) {
-  return Boolean(object(ref) && !ref.delegation && !ref.delegatedFrom && !ref.handoffId && !ref.fromRun && !ref.parentTaskId
-    && !(Number(ref.depth) > 0) && !ref.runProgress?.pending && !ref.interruptedAttempt && !ref.resumeCheckpoint);
+function canPlan(ref, { nest = false, maxDepth = 3 } = {}) {
+  if (!object(ref) || ref.delegation || ref.handoffId || ref.runProgress?.pending || ref.interruptedAttempt || ref.resumeCheckpoint) return false;
+  const lineage = Boolean(ref.delegatedFrom || ref.fromRun || ref.parentTaskId || Number(ref.depth) > 0);
+  if (!lineage) return true;
+  // Nested delegation (roadmap 0.4.0 M2, the owner's agentBrain.nestedDelegation
+  // switch): a delegated slice may split its own part — never a hand-off or a
+  // follow-up — and never at the depth cap, so a family stays maxDepth deep.
+  return Boolean(nest === true && object(ref.delegatedFrom) && ref.parentTaskId && (Number(ref.depth) || 0) + 1 < maxDepth);
 }
 
 function relativeFile(value) {
@@ -57,7 +63,24 @@ function sameProject(parent, ref, entry) {
   return new Set(paths).size <= 1;
 }
 
-function admit(board, { kind, ref, entry, plan, scope, now = Date.now() } = {}) {
+// One delegated slice as a card, the same for a fresh admission and for the
+// recovery of a saved one: the admission module's skeleton plus the lineage
+// the prerequisite gate and the parent's integration read.
+function childRow({ id, subtask, parent, parentTaskId, parentRequestKey = null, scope, fromRun, depth, projectId, projectPath, pin = false, pinAt = null, thinkerPin = null, createdAt, now, log }) {
+  return taskRow({
+    id, title: subtask.title, prompt: subtask.prompt, files: subtask.files, acceptance: subtask.acceptance,
+    source: "agent", parent: String(parent.title ?? "").slice(0, 90), parentTaskId, fromRun, depth,
+    ...(projectId != null ? { projectId } : {}), ...(projectPath ? { projectPath } : {}),
+    // A pin the thinker set stays the thinker's on its slices (thinkerPin
+    // equal to pinAt), so they are not counted as the owner's work.
+    ...(pin === true ? { pin: true, ...(pinAt != null ? { pinAt } : {}), ...(pinAt != null && thinkerPin === pinAt ? { thinkerPin } : {}) } : {}),
+    delegatedFrom: { parentTaskId, ...(parentRequestKey ? { parentRequestKey } : {}), scope,
+      parentTitle: String(parent.title ?? "").slice(0, 160), parentPrompt: String(parent.prompt ?? parent.description ?? "").slice(0, 24000) },
+    createdAt,
+  }, { now, log, origin: { kind: "delegation", by: "agent" } });
+}
+
+function admit(board, { kind, ref, entry, plan, scope, now = Date.now(), nest = false, maxDepth = 3 } = {}) {
   const rejected = (reason) => ({ admitted: false, added: 0, childTaskIds: [], reason });
   if (!object(board) || !["task", "request"].includes(kind) || !object(ref) || !entry?.id || typeof scope !== "string") return rejected("Invalid task delegation");
   const normalized = normalizePlan(plan);
@@ -73,7 +96,7 @@ function admit(board, { kind, ref, entry, plan, scope, now = Date.now() } = {}) 
   }
   // The host has just checkpointed this claim. Only the saved continuation
   // from before the claim can identify an interrupted implementation run.
-  if (parent.runId !== entry.id || !canPlan({ ...parent, runProgress: entry.resumeCheckpoint ?? null })) return rejected("The parent claim or scope changed");
+  if (parent.runId !== entry.id || !canPlan({ ...parent, runProgress: entry.resumeCheckpoint ?? null }, { nest, maxDepth })) return rejected("The parent claim or scope changed");
   if (kind === "task" && !parent.id) return rejected("The parent task has no stable identity");
   const tasks = Array.isArray(board.tasks) ? board.tasks : [];
   const parentTaskId = kind === "task" ? parent.id : null;
@@ -81,17 +104,10 @@ function admit(board, { kind, ref, entry, plan, scope, now = Date.now() } = {}) 
   const identity = [entry.projectId ?? parent.projectId ?? null, parentTaskId ?? parentRequestKey, scope];
   const projectId = parent.projectId ?? entry.projectId;
   const projectPath = parent.projectPath ?? entry.projectPath;
-  const children = normalized.subtasks.map((subtask, index) => ({
-    id: `task_delegate_${digest([...identity, index]).slice(0, 24)}`,
-    title: subtask.title, prompt: subtask.prompt, files: subtask.files, acceptance: subtask.acceptance,
-    status: "open", source: "agent", parent: String(parent.title ?? "").slice(0, 90), parentTaskId,
-    fromRun: entry.id, depth: (Number(parent.depth) || 0) + 1,
-    ...(projectId != null ? { projectId } : {}), ...(projectPath ? { projectPath } : {}),
-    ...(parent.pin === true ? { pin: true, ...(parent.pinAt != null ? { pinAt: parent.pinAt } : {}) } : {}),
-    delegatedFrom: { parentTaskId, ...(parentRequestKey ? { parentRequestKey } : {}), scope,
-      parentTitle: String(parent.title ?? "").slice(0, 160), parentPrompt: String(parent.prompt ?? parent.description ?? "").slice(0, 24000) },
-    createdAt: now, updatedAt: now,
-    logs: [{ at: now, kind: "status", text: `Subtask delegated from ${String(parent.title || "the shared task").slice(0, 90)}` }],
+  const children = normalized.subtasks.map((subtask, index) => childRow({
+    id: `task_delegate_${digest([...identity, index]).slice(0, 24)}`, subtask, parent, parentTaskId, parentRequestKey, scope,
+    fromRun: entry.id, depth: (Number(parent.depth) || 0) + 1, projectId, projectPath, pin: parent.pin, pinAt: parent.pinAt, thinkerPin: parent.thinkerPin,
+    createdAt: now, now, log: `Subtask delegated from ${String(parent.title || "the shared task").slice(0, 90)}`,
   }));
   // A partially written or unrelated row must never be replaced. The board
   // transaction writes the complete family together, so ordinary replay is
@@ -148,20 +164,13 @@ function reconcile(board, { now = Date.now() } = {}) {
       // Even a foreign or malformed row with this ID must not be overwritten.
       // The ordinary prerequisite gate exposes it as missing or unfinished.
       if (present.has(snapshot.id)) continue;
-      const part = plan.subtasks[index];
-      const child = {
-        id: snapshot.id, title: part.title, prompt: part.prompt, files: part.files, acceptance: part.acceptance,
-        status: "open", source: "agent", parent: String(parent.title ?? snapshot.parent ?? "").slice(0, 90),
-        parentTaskId: kind === "task" ? parent.id : null, fromRun: saved.fromRun,
-        depth: Math.min(3, Math.max(1, Number(snapshot.depth) || 1)),
-        ...(snapshot.projectId != null ? { projectId: snapshot.projectId } : {}), ...(snapshot.projectPath ? { projectPath: snapshot.projectPath } : {}),
-        ...(snapshot.pin === true ? { pin: true, ...(snapshot.pinAt != null ? { pinAt: snapshot.pinAt } : {}) } : {}),
-        delegatedFrom: { parentTaskId: kind === "task" ? parent.id : null,
-          ...(snapshot.delegatedFrom.parentRequestKey ? { parentRequestKey: snapshot.delegatedFrom.parentRequestKey } : {}),
-          scope: saved.scope, parentTitle: String(parent.title ?? "").slice(0, 160), parentPrompt: String(parent.prompt ?? parent.description ?? "").slice(0, 24000) },
-        createdAt: Number(snapshot.createdAt) || now, updatedAt: now,
-        logs: [{ at: now, kind: "status", text: "Recovered the saved subtask admission after an interrupted board save" }],
-      };
+      const child = childRow({
+        id: snapshot.id, subtask: plan.subtasks[index], parent: { ...parent, title: parent.title ?? snapshot.parent },
+        parentTaskId: kind === "task" ? parent.id : null, parentRequestKey: snapshot.delegatedFrom.parentRequestKey, scope: saved.scope,
+        fromRun: saved.fromRun, depth: Math.min(3, Math.max(1, Number(snapshot.depth) || 1)),
+        projectId: snapshot.projectId, projectPath: snapshot.projectPath, pin: snapshot.pin, pinAt: snapshot.pinAt, thinkerPin: snapshot.thinkerPin,
+        createdAt: Number(snapshot.createdAt) || now, now, log: "Recovered the saved subtask admission after an interrupted board save",
+      });
       additions.push(child); present.add(child.id);
     }
   }

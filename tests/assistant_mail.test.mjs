@@ -69,23 +69,31 @@ test("readMail hands the unread notes over once, oldest first, and marks them re
   assert.equal(assistant.inbox(first.state, "keeper", { unreadOnly: false }).length, 2);
 });
 
-test("unread mail pulls its recipient due; a running seat waits; AI seats still need a key", () => {
+// Mail used to pull every recipient due, and most of them never read it: the
+// watcher's stale-session note ran the keeper every 2 minutes instead of every
+// 10. Only a seat whose job consumes its inbox (readsMail) is pulled now; the
+// rest take their notes when their own cadence starts them.
+test("unread mail pulls due only a seat that reads it; a running seat waits; the rest keep their cadence", () => {
   const ranNow = (state) => ({ ...state, agents: state.agents.map((row) => ({ ...row, lastRunAt: NOW, runs: 1 })) });
   const quiet = ranNow(assistant.emptyState(NOW));
   // Twenty seconds on: inside every cadence, so only mail can make a seat due.
   const SOON = NOW + 20000;
   assert.deepEqual(assistant.dueRoles(quiet, SOON), [], "nothing is due twenty seconds after every seat ran");
-  const mailed = assistant.sendMail(quiet, { from: "watcher", to: "keeper", text: "2 stale sessions" }, SOON);
-  assert.deepEqual(assistant.rolesWithMail(mailed), ["keeper"]);
-  assert.deepEqual(assistant.dueRoles(mailed, SOON), ["keeper"], "the keeper runs now, not in ten minutes");
-  const running = assistant.applyAgentEvent(mailed, { role: "keeper", status: "running", at: SOON });
+  assert.deepEqual(assistant.AGENT_ROLES.filter((row) => row.readsMail).map((row) => row.role), ["foreman"], "the foreman is the one seat that acts on its notes");
+  const mailed = assistant.sendMail(quiet, { from: "machine", to: "foreman", text: "holding new starts" }, SOON);
+  assert.deepEqual(assistant.rolesWithMail(mailed), ["foreman"]);
+  assert.deepEqual(assistant.dueRoles(mailed, SOON), ["foreman"], "the foreman runs now, not at its next minute");
+  const running = assistant.applyAgentEvent(mailed, { role: "foreman", status: "running", at: SOON });
   assert.deepEqual(assistant.rolesWithMail(running), [], "a running seat takes its mail when it starts");
-  assert.ok(!assistant.dueRoles(running, SOON).includes("keeper"));
-  const read = assistant.readMail(mailed, "keeper", SOON).state;
+  assert.ok(!assistant.dueRoles(running, SOON).includes("foreman"));
+  const read = assistant.readMail(mailed, "foreman", SOON).state;
   assert.deepEqual(assistant.dueRoles(read, SOON), [], "read mail no longer pulls");
+  const toKeeper = assistant.sendMail(quiet, { from: "watcher", to: "keeper", text: "2 stale sessions" }, SOON);
+  assert.deepEqual(assistant.rolesWithMail(toKeeper), ["keeper"], "the note waits in the keeper's inbox");
+  assert.deepEqual(assistant.dueRoles(toKeeper, SOON), [], "the keeper ignores its inbox, so the note does not jump its ten-minute cadence");
+  assert.ok(assistant.dueRoles(toKeeper, NOW + 10 * MINUTE).includes("keeper"), "on its own cadence the keeper runs and takes the note");
   const toBriefer = assistant.sendMail(quiet, { from: "auditor", to: "briefer", text: "3 errors" }, SOON);
-  assert.ok(!assistant.dueRoles(toBriefer, SOON).includes("briefer"), "mail cannot mint a key");
-  assert.ok(assistant.dueRoles({ ...toBriefer, ai: { ...toBriefer.ai, keyPresent: true } }, SOON).includes("briefer"));
+  assert.ok(!assistant.dueRoles({ ...toBriefer, ai: { ...toBriefer.ai, keyPresent: true } }, SOON).includes("briefer"), "a note to a seat that ignores it pulls nothing, key or not");
 });
 
 test("mail survives a save/load round trip; junk is dropped; read notes age out", () => {
@@ -120,8 +128,11 @@ test("the conversation reads as lines: chat, digest and facts", () => {
 });
 
 // ---- the host half: send, deliver and take, from the real main.cjs ----
+// The mail rows are the record and the push draws the packet; the activity
+// log is the chat's window on outcomes, so mail no longer writes to it (it
+// crowded the chat's facts.log window out).
 function mailHost() {
-  const log = [];
+  const log = [], pushed = [];
   const env = vm.createContext({
     console, SMOKE: false,
     assistantModule: assistant,
@@ -129,21 +140,24 @@ function mailHost() {
     Date: class extends Date { static now() { return NOW; } },
     logLine: (text) => log.push({ kind: "line", text }),
     assistantLog(kind, text, extra = null, role = null) { log.push({ kind, text, extra, role }); },
+    assistantEmit(event) { pushed.push(JSON.parse(JSON.stringify(event))); },
   });
   vm.runInContext(section("function assistantSendMail(", "// An executor run reports home while it is still on the board"), env);
-  return { env, log };
+  return { env, log, pushed };
 }
 
-test("host: assistantSendMail records the note, logs it with sender and recipient, and refuses junk", () => {
-  const { env, log } = mailHost();
+test("host: assistantSendMail records the note, pushes the packet with sender and recipient, keeps it out of the log, and refuses junk", () => {
+  const { env, log, pushed } = mailHost();
   assert.equal(vm.runInContext('assistantSendMail("watcher", "keeper", "  2 stale  sessions ", { stale: 2 })', env), true);
   assert.equal(env.assistantState.mail.length, 1);
   assert.equal(env.assistantState.mail[0].text, "2 stale sessions");
-  assert.deepEqual(JSON.parse(JSON.stringify(log[0])), { kind: "mail", text: "watcher → keeper: 2 stale sessions", extra: { from: "watcher", to: "keeper", note: "2 stale sessions" }, role: "watcher" });
+  assert.deepEqual(pushed[0], { at: NOW, kind: "mail", text: "watcher → keeper: 2 stale sessions", role: "watcher", from: "watcher", to: "keeper", note: "2 stale sessions" });
+  assert.deepEqual(log, [], "a sent note is not an activity-log row");
+  assert.deepEqual(env.assistantState.log, [], "nor a row in the state's log the chat reads");
   assert.equal(vm.runInContext('assistantSendMail("watcher", "ghost", "nobody home")', env), false);
   assert.equal(vm.runInContext('assistantSendMail("watcher", "keeper", "")', env), false);
   assert.equal(env.assistantState.mail.length, 1);
-  assert.equal(log.length, 1, "nothing logged for a note that did not go");
+  assert.equal(pushed.length, 1, "nothing pushed for a note that did not go");
 });
 
 test("host: assistantDeliverMail sends at most three of a job's notes under its own role", () => {
@@ -154,19 +168,22 @@ test("host: assistantDeliverMail sends at most three of a job's notes under its 
   assert.equal(vm.runInContext('assistantDeliverMail("auditor", "not a list")', env), 0);
 });
 
-test("host: assistantTakeMail hands a starting job its unread notes once and logs the read", () => {
-  const { env, log } = mailHost();
+test("host: assistantTakeMail hands a starting job its unread notes once and pushes the read, not a log row", () => {
+  const { env, log, pushed } = mailHost();
   vm.runInContext('assistantSendMail("watcher", "keeper", "2 stale sessions"); assistantSendMail("machine", "keeper", "3 killed")', env);
   const taken = vm.runInContext('assistantTakeMail("keeper")', env);
   assert.deepEqual(taken.map((row) => row.text), ["2 stale sessions", "3 killed"]);
   assert.ok(env.assistantState.mail.every((row) => row.readAt === NOW));
-  const read = log.at(-1);
+  const read = pushed.at(-1);
   assert.equal(read.kind, "mail");
   assert.equal(read.role, "keeper");
-  assert.deepEqual(JSON.parse(JSON.stringify(read.extra)), { to: "keeper", read: 2 });
+  assert.equal(read.from, undefined, "a read carries no sender, so the trees draw no second packet");
+  assert.equal(read.to, "keeper");
+  assert.equal(read.read, 2);
   assert.match(read.text, /^keeper read 2 note\(s\): watcher: 2 stale sessions · machine: 3 killed/);
   assert.deepEqual(vm.runInContext('assistantTakeMail("keeper")', env), [], "a second start finds nothing");
-  assert.equal(log.length, 3, "an empty read is not logged");
+  assert.equal(pushed.length, 3, "an empty read is not pushed");
+  assert.deepEqual(log, [], "neither sends nor reads write the activity log");
 });
 
 test("host wiring: jobs take mail as they start, notes go out as they settle, the roster writes to itself, and the trees draw it", async () => {

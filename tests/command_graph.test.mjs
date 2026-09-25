@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 
 const source = await readFile(new URL("../renderer/idle.js", import.meta.url), "utf8");
+const cameraTourSource = await readFile(new URL("../renderer/camera-tour.js", import.meta.url), "utf8");
 const section = (start, end) => {
   const a = source.indexOf(start);
   const b = source.indexOf(end, a);
@@ -15,10 +16,10 @@ vm.runInContext(section("function analyzeMusicSpectrum(", "function audioEnergy(
 const analyze = musicContext.analyzeMusicSpectrum;
 
 test("the graph frame scheduler draws and reschedules without undeclared runtime state", () => {
-  const drawn = [], scheduled = [], errors = [];
+  const drawn = [], scheduled = [], timers = [], errors = [];
   const state = { active: true };
   const document = { hidden: false, body: { dataset: {} } };
-  const env = vm.createContext({ state, document, pickerHeld: () => false, drawFrame: (time) => drawn.push(time), requestAnimationFrame: (callback) => { scheduled.push(callback); return scheduled.length; }, console: { error: (...args) => errors.push(args) } });
+  const env = vm.createContext({ state, document, pickerHeld: () => false, drawFrame: (time) => drawn.push(time), requestAnimationFrame: (callback) => { scheduled.push(callback); return scheduled.length; }, cancelAnimationFrame: () => {}, setTimeout: (callback, ms) => { timers.push(ms); return timers.length; }, clearTimeout: () => {}, console: { error: (...args) => errors.push(args) } });
   vm.runInContext(section("// Animation state belongs", "function drawFrame("), env);
   env.frame(100); env.frame(110); env.frame(150);
   assert.deepEqual(drawn, [100, 150]);
@@ -27,7 +28,8 @@ test("the graph frame scheduler draws and reschedules without undeclared runtime
   document.body.dataset.sheet = "tasks";
   env.frame(200);
   assert.deepEqual(drawn, [100, 150]);
-  assert.equal(scheduled.length, 4, "closing a sheet must still have a next graph frame waiting");
+  assert.equal(scheduled.length, 3, "a sheet over the canvas does not wake it on every display refresh");
+  assert.equal(timers.length, 1, "closing a sheet must still have a next graph frame waiting");
   document.body.dataset.sheet = "music"; state.settingsPreview = { x: 600, y: 0, w: 600, h: 800 };
   env.frame(250);
   assert.deepEqual(drawn, [100, 150, 250], "the actual canvas continues drawing inside Music settings");
@@ -66,7 +68,7 @@ test("the complete Command module can enter and draw while preserving the defaul
     bell = ensureReactiveInput = () => { window.__audioRequests += 1; };
   }};`;
   const saved = new Map();
-  const env = vm.createContext({ window, document, Promise, Date, Math, Map, Set, WeakMap, localStorage: { getItem: (key) => saved.get(key) ?? null, setItem: (key, value) => saved.set(key, value) }, CustomEvent: class { constructor(type, details) { this.type = type; this.detail = details.detail; } }, requestAnimationFrame: (callback) => { callbacks.push(callback); return callbacks.length; }, setInterval: () => 1, console: { error: (...args) => errors.push(args) } });
+  const env = vm.createContext({ window, document, Promise, Date, Math, Map, Set, WeakMap, localStorage: { getItem: (key) => saved.get(key) ?? null, setItem: (key, value) => saved.set(key, value) }, CustomEvent: class { constructor(type, details) { this.type = type; this.detail = details.detail; } }, requestAnimationFrame: (callback) => { callbacks.push(callback); return callbacks.length; }, cancelAnimationFrame() {}, setTimeout: () => 1, clearTimeout() {}, setInterval: () => 1, console: { error: (...args) => errors.push(args) } });
   const load = () => vm.runInContext(source.replace("  window.MefiIdle = {", `${hook}\n  window.MefiIdle = {`), env);
   load();
   const { state, el, prepare } = window.__graphTest;
@@ -101,7 +103,7 @@ test("behind Home the tree draws as slow scenery, and holds still with motion of
   let still = false;
   const state = { active: false, homeBackdrop: true, motionHot: true, frameCost: 1 };
   const document = { hidden: false, body: { dataset: {} } };
-  const env = vm.createContext({ state, document, pickerHeld: () => false, noMotion: () => still, drawFrame: (time) => drawn.push(time), requestAnimationFrame: () => 1, console });
+  const env = vm.createContext({ state, document, pickerHeld: () => false, noMotion: () => still, drawFrame: (time) => drawn.push(time), requestAnimationFrame: () => 1, cancelAnimationFrame: () => {}, setTimeout: () => 1, clearTimeout: () => {}, console });
   vm.runInContext(section("// Animation state belongs", "function drawFrame("), env);
   for (let time = 100; time <= 500; time += 16.7) env.frame(time);
   assert.equal(drawn.length, 5, "about 12 fps at rest or mid-glide: " + drawn.join(", "));
@@ -203,15 +205,18 @@ function zenContext(enabled = true) {
   const classList = { toggle: (name, on) => on ? classes.add(name) : classes.delete(name), remove: (name) => classes.delete(name) };
   const el = { ambientZen: { checked: enabled }, hud: { classList, inert: false }, feed: { classList }, feedContent: { hidden: false }, feedToggle: { attrs: {}, setAttribute(name, value) { this.attrs[name] = value; } } };
   const document = { hidden: false, body: { dataset: {}, classList }, activeElement: null, querySelectorAll: () => [] };
-  const window = { MefiNav: { top: () => "command" } };
-  const env = vm.createContext({ state, el, document, window, Date: class extends Date { static now() { return 31000; } }, Math, Object, Array, Boolean, String, AMBIENT_ZEN_MS: 30000, ORBIT_BASE: 0.003, ORBIT_ENERGY: 0.001, noMotion: () => false, hideTip() {}, bumpHud() {}, syncViewControls() {}, writeStore: (...args) => writes.push(args) });
+  // Zen flies renderer/camera-tour.js through idle.js's director hook.
+  const tour = { step: () => null, velocity: () => ({ x: 0, y: 0, z: 0, zoom: 0 }) };
+  const window = { MefiNav: { top: () => "command" }, MefiCameraTour: { create: () => tour } };
+  const env = vm.createContext({ state, el, document, window, Date: class extends Date { static now() { return 31000; } }, Math, Object, Array, Boolean, String, Number, AMBIENT_ZEN_MS: 30000, ORBIT_BASE: 0.003, ORBIT_ENERGY: 0.001, PITCH_MAX: 0.55, CAMERA_SMOOTH: 0.38, noMotion: () => false, hideTip() {}, bumpHud() {}, syncViewControls() {}, renderHint() {}, renderFollowStatus() {}, updateFollowCamera() {}, glideZoom(zoom) { state.zoomTarget = zoom; }, writeStore: (...args) => writes.push(args) });
   vm.runInContext(section("function canAmbientZen()", "function canDim()"), env);
   vm.runInContext(section("function orbitTarget(", "function computeBranch("), env);
-  return { state, el, document, window, env, classes, writes };
+  vm.runInContext(section("// An outside camera director", "function updateFollowCamera("), env);
+  return { state, el, document, window, env, classes, writes, tour };
 }
 
-test("ambient Zen requires opt-in, waits thirty idle seconds, and restores the view on wake or disable", () => {
-  const { state, el, env, classes, writes } = zenContext(false);
+test("ambient Zen requires opt-in, waits thirty idle seconds, flies the tree, and hands the view back on wake or disable", () => {
+  const { state, el, env, classes, writes, tour } = zenContext(false);
   const anchors = state.screenLayout;
   assert.equal(env.checkAmbientZen(31000), false, "thirty seconds cannot activate disabled Zen");
   assert.equal(env.checkAmbientZen(90000), false, "remaining idle does not override the disabled preference");
@@ -220,15 +225,16 @@ test("ambient Zen requires opt-in, waits thirty idle seconds, and restores the v
   assert.equal(el.ambientZen.checked, true); assert.equal(state.lastInput, 31000, "enabling starts a fresh idle clock");
   assert.equal(env.checkAmbientZen(60999), false);
   assert.equal(env.checkAmbientZen(61000), true);
-  assert.equal(state.camMode, "orbit"); assert.equal(state.orbit, "auto");
+  assert.equal(state.director, tour, "Zen flies its camera tour");
+  assert.equal(state.camMode, "free", "parked in Free for the flight"); assert.equal(state.orbit, "paused", "the owner's spin choice is left alone");
   assert.ok(classes.has("command-zen")); assert.equal(el.hud.inert, true);
   assert.equal(state.screenLayout, anchors);
-  assert.ok(env.orbitTarget(0) > 0);
   state.angle = 0.75;
   assert.equal(env.wakeAmbientZen(62000), true);
+  assert.equal(state.director, null);
   assert.equal(state.camMode, "follow"); assert.equal(state.orbit, "paused");
   assert.equal(state.angle, 0.75, "waking preserves the visible angle instead of snapping backwards");
-  assert.equal(state.orbitVel, 0); assert.equal(state.lastInput, 62000);
+  assert.equal(state.lastInput, 62000);
   assert.equal(el.hud.inert, false); assert.equal(classes.has("command-zen"), false);
   assert.equal(state.screenLayout, anchors);
   assert.equal(env.checkAmbientZen(92000), true);
@@ -387,6 +393,48 @@ function graphContext({ width = 1440, height = 900, chat = false } = {}) {
   return { env, state, el };
 }
 
+test("automatic Overview keeps stable anchors and accurate projection through dynamic framing", () => {
+  for (const nodeLayout of ["constellation", "tree", "radial", "helix", "layers"]) {
+    const { env, state } = graphContext();
+    env.window = {};
+    vm.runInContext(cameraTourSource, env);
+    vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+    Object.assign(state, { view: "3d", fit: 1, nodeLayout, orbit: "auto", tasks: [], edges: [] });
+    const nodes = Array.from({ length: 18 }, (_, i) => ({ id: `task:${i}`, kind: i ? "task" : "root", x: i * 9, y: i * 2, z: i * 6 }));
+    const area = env.usableArea();
+    let saved;
+    for (let frame = 0; frame < 600; frame += 1) {
+      state.angle += 0.002;
+      const projected = nodes.map(node => ({ node, p: env.project(node._layoutAnchor ?? node) }));
+      env.layoutProjectedGraph(projected, area, "orbit", frame * 1000 / 60);
+      const anchors = nodes.map(node => ({ ...node._layoutAnchor }));
+      if (saved) assert.deepEqual(anchors, saved, `${nodeLayout}: lens motion never moves anchors`);
+      else saved = anchors;
+      for (const { node, p } of projected) {
+        assert.ok(p.x >= area.x + 31 && p.x <= area.x + area.w - 31);
+        assert.ok(p.y >= area.y + 31 && p.y <= area.y + area.h - 31);
+        const roundTrip = env.unprojectForLayout(p, node._layoutAnchor);
+        assert.ok(Math.hypot(...["x", "y", "z"].map(axis => roundTrip[axis] - node._layoutAnchor[axis])) < 1e-6, "projection and input coordinates use the same offset");
+      }
+    }
+    nodes.push({ id: "task:arriving", kind: "task", x: 700, y: 160, z: -500 });
+    const added = nodes.map(node => ({ node, p: env.project(node._layoutAnchor ?? node) }));
+    env.layoutProjectedGraph(added, area, "orbit", 10000);
+    assert.deepEqual(nodes.slice(0, -1).map(node => ({ ...node._layoutAnchor })), saved, "live additions preserve the main tree");
+    for (const { p } of added) {
+      assert.ok(p.x >= area.x + 31 && p.x <= area.x + area.w - 31);
+      assert.ok(p.y >= area.y + 31 && p.y <= area.y + area.h - 31);
+    }
+    const held = { ...state.overviewOffset }, scale = state.overviewScale;
+    for (let frame = 600; frame < 720; frame += 1) {
+      const projected = nodes.map(node => ({ node, p: env.project(node._layoutAnchor) }));
+      env.layoutProjectedGraph(projected, area, "free", frame * 1000 / 60);
+    }
+    assert.equal(state.overviewScale, scale, "manual camera owns its zoom");
+    assert.deepEqual({ ...state.overviewOffset }, held, "manual camera cannot acquire automatic drift");
+  }
+});
+
 test("graph uses measured header, activity rail, chat and dock space", () => {
   const { env, state } = graphContext({ chat: true });
   const area = env.usableArea();
@@ -445,14 +493,15 @@ test("inspect mode's wider rail carves the clear area but keeps the layout frame
   assert.deepEqual({ ...env.usableArea() }, resting, "leaving inspect mode gives the space back");
 });
 
-test("Zen releases invisible panel bounds and wake immediately restores them", () => {
-  const { env, state, el } = graphContext({ chat: true });
+test("Zen keeps the graph frame, so waking cannot re-seed the tree, and releases invisible panel bounds", () => {
+  const { env, state } = graphContext({ chat: true });
   Object.assign(state, { hudRects: [], hudRectsAt: 0 });
   vm.runInContext(section("function hudRects()", "function drawLabels("), env);
   const normal = { ...env.usableArea() };
   assert.ok(env.hudRects().length > 0);
   state.ambientZen = true;
-  assert.deepEqual({ ...env.usableArea() }, { x: 28, y: 28, w: el.width - 56, h: el.height - 56 });
+  state.graphAreaAt = 0;
+  assert.deepEqual({ ...env.usableArea() }, normal, "a full-screen frame would re-seed the layout, and waking would snap it back");
   assert.equal(env.hudRects().length, 0, "faded panels cannot hide labels either");
   state.ambientZen = false;
   assert.deepEqual({ ...env.usableArea() }, normal);
@@ -1036,9 +1085,10 @@ test("the rail retains finishing roles without making queued roles look active",
   assert.equal(env.syncAssistantNode(), true, "the newly started role needs a visible satellite");
 });
 
-test("the music node opens the player and does not claim Spotify playback is known", () => {
+test("the music node opens the audio dropdown and does not claim Spotify playback is known", () => {
   let opened = 0;
-  const env = vm.createContext({ String, window: { MefiMusic: { status: () => ({ source: "spotify", title: "Spotify playlist", playing: false, externalPlayback: true }), open: () => { opened += 1; } } }, bumpHud() {} });
+  const anchor = {};
+  const env = vm.createContext({ String, el: { musicToggle: anchor }, window: { MefiMusic: { status: () => ({ source: "spotify", title: "Spotify playlist", playing: false, externalPlayback: true }), openAudio: (opener) => { assert.equal(opener, anchor); opened += 1; } } }, bumpHud() {} });
   vm.runInContext(section("function musicNodeDetails()", "function appendMusicNode()"), env);
   vm.runInContext(section("function selectNode(", "function select(id)"), env);
   const details = env.musicNodeDetails();
@@ -1201,6 +1251,31 @@ test("a quiet board holds position and Follow prioritizes an explicitly selected
   assert.equal(env.followCandidates(nodes, [], new Map(), 10000).length, 0);
   const candidates = env.followCandidates(nodes, jobs, new Map(), 10000);
   assert.equal(env.chooseFollowTarget(candidates, null, 10000, { preferredId: "task:b" }).key, "task:b");
+});
+
+test("Follow prefers the task the host pinned (pin/pinAt), keeps it past the calm-dwell rotation, and still reads the legacy spellings", () => {
+  const { env, state, nodes, jobs, touches, taskB } = followContext();
+  // assistantWorkOn / Do next / tasks:create write pin and pinAt.
+  taskB.task.pin = true; taskB.task.pinAt = 5;
+  const candidates = env.followCandidates(nodes, jobs, touches, 10000);
+  assert.equal(candidates[0].key, "task:b", "the pinned task leads although task:a reported more recently");
+  assert.equal(candidates[0].pinned, true);
+  assert.equal(candidates[1].pinned, false);
+  const first = env.chooseFollowTarget(candidates, null, 10000);
+  assert.equal(first.reason, "Prioritized task");
+  assert.equal(env.chooseFollowTarget(candidates, first, 40000).key, "task:b", "a pinned target is not rotated off after 18 s");
+  delete taskB.task.pin; delete taskB.task.pinAt;
+  assert.equal(env.followCandidates(nodes, jobs, touches, 10000)[0].key, "task:a", "without a pin the most recent worker leads again");
+  taskB.task.workPin = true; taskB.task.pinnedAt = 3;
+  assert.equal(env.followCandidates(nodes, jobs, touches, 10000)[0].key, "task:b", "a legacy grouped-parent pin still counts");
+  delete taskB.task.workPin; delete taskB.task.pinnedAt;
+  // Work on it draws a pinned task on the node it names: the pin is read off
+  // the board row, since that task has no node of its own.
+  state.allTasks = [{ id: "w", title: "Work on \"Worker B\"", status: "active", pin: true, pinAt: 9, target: { kind: "session", id: "sb" } }];
+  const hosted = env.followCandidates(nodes, [...jobs, { taskId: "w", sessionId: "builder-w", startedAt: 300 }], touches, 10000);
+  const onHost = hosted.find((candidate) => candidate.taskId === "w");
+  assert.equal(onHost.key, "sb");
+  assert.equal(onHost.pinned, true);
 });
 
 test("Follow can refit its task and session after a narrower viewport and expanded chat", () => {
@@ -1500,33 +1575,38 @@ test("music moves the overview only inside the frame it keeps in reserve", () =>
   }
 });
 
-test("Tree motion turns, steps, sways and swells with the music, and settles without it", () => {
+test("Tree motion turns, sways and swells smoothly with the music, and settles without it", () => {
   const state = { audioResponse: 0.35 };
   let now = 10000;
-  const env = vm.createContext({ state, Math, Number, Date: class extends Date { static now() { return now; } }, GROOVE_SPIN: 1.8, GROOVE_KICK: 0.0045, GROOVE_SWELL: 0.07, GROOVE_SWAY: 0.035, GROOVE_NOD: 0.06 });
+  const env = vm.createContext({ state, Math, Number, Date: class extends Date { static now() { return now; } }, GROOVE_SPIN: 1.8, GROOVE_SWELL: 0.07, GROOVE_SWAY: 0.035, GROOVE_NOD: 0.06 });
   vm.runInContext(section("function stepGroove(", "function computeBranch("), env);
   const area = { x: 0, y: 0, w: 1056, h: 656 };
   const music = (onset, loud = 0.8) => ({ energy: loud, kick: loud, bassline: loud, mid: loud, snare: loud, bandState: { bass: { lastOnset: onset } } });
   const frame = (sample, live = true, still = false) => { now += 33; return env.stepGroove(sample, 0.033, live, still, area); };
-  // Linking mid-track only sets the kick clock.
-  assert.equal(frame(music(500)).kick, 0, "the first reading does not jolt the tree");
-  for (let i = 0; i < 180; i += 1) frame(music(500));
+  const steady = { ...music(500), kick: 0, snare: 0 };
+  frame(steady);
+  for (let i = 0; i < 180; i += 1) frame(steady);
   const groove = state.groove;
   assert.ok(Math.abs(groove.room - 0.7) < 0.01, `room eases to the Response share (35% of a full 50%): ${groove.room}`);
-  const step = frame(music(900));
-  assert.ok(step.kick > 0.002, "a new kick steps the spin on");
+  const before = { phase: groove.phase, frame: groove.frame, nod: groove.nod, spin: 1 + 1.8 * groove.energy * groove.room };
+  const step = frame(music(900, 1));
   assert.ok(step.spin > 1.9, "the spin quickens with the music's energy");
-  assert.equal(frame(music(900)).kick, 0, "one kick, one step");
+  assert.ok(groove.phase - before.phase < 0.15, "a new onset does not jump the tree around its sway path");
+  assert.ok(Math.abs(groove.frame - before.frame) < 0.006, "the bass cannot resize the whole tree in one frame");
+  assert.ok(Math.abs(groove.nod - before.nod) < 0.01, "the snare cannot tilt the whole tree in one frame");
+  assert.ok(Math.abs(step.spin - before.spin) < 0.08, "the spin target changes gradually");
   assert.ok(groove.frame < 1 && Math.abs(groove.frame - (1 - groove.room * (0.07 * (1 - groove.swell) + 0.035))) < 1e-12, "the frame reserve covers the swell and the sway");
   assert.ok(Math.abs(groove.px) <= 0.035 * groove.room * (area.w / 2 - 28) + 1e-9 && Math.abs(groove.py) <= 0.5 * 0.035 * groove.room * (area.h / 2 - 28) + 1e-9, "the sway stays inside the reserve");
   assert.ok(groove.nod > 0 && groove.nod <= 0.06 && groove.tiltRoom === 0.06, "the snare nods within the tilt the frame allows");
   const swayBefore = groove.phase;
-  for (let kick = 0; kick < 4; kick += 1) for (let i = 0; i < 15; i += 1) frame(music(1200 + kick * 500));
-  assert.ok(groove.phase > swayBefore + Math.PI * 1.9, `four kicks walk the tree once round its figure of eight: ${groove.phase - swayBefore}`);
+  for (let i = 0; i < 60; i += 1) frame(music(900));
+  assert.ok((groove.phase - swayBefore + Math.PI * 4) % (Math.PI * 4) > 3, "the figure of eight continues moving with the music");
   // The spin pauses, or the music stops: every voice settles back out.
   for (let i = 0; i < 200; i += 1) frame(music(1200 + 3 * 500), false);
-  assert.ok(groove.room < 0.01 && groove.swell < 0.01 && groove.sway < 0.01 && groove.nod < 0.001, "without the spin the tree settles into its steady frame");
-  assert.equal(frame(music(99999), false).kick, 0, "a paused spin takes no kicks");
+  assert.ok(groove.room < 0.01 && groove.energy < 0.01 && groove.swell < 0.01 && groove.sway < 0.01 && groove.nod < 0.001, "without the spin the tree settles into its steady frame");
+  const pausedPhase = groove.phase;
+  frame(music(99999), false);
+  assert.equal(groove.phase, pausedPhase, "a paused spin does not advance the sway");
   for (let i = 0; i < 90; i += 1) frame(music(99999));
   for (let i = 0; i < 80; i += 1) frame({ energy: 0, bandState: { bass: { lastOnset: 99999 } } });
   assert.ok(groove.room > 0.6, "a pause between tracks keeps the room");
@@ -1534,7 +1614,7 @@ test("Tree motion turns, steps, sways and swells with the music, and settles wit
   assert.ok(groove.room < 0.01, "after three quiet seconds the frame is given back");
   for (let i = 0; i < 90; i += 1) frame(music(99999));
   const reduced = frame(music(123456), true, true);
-  assert.deepEqual([reduced.kick, reduced.spin, groove.room, groove.px, groove.py, groove.nod, groove.frame], [0, 1, 0, 0, 0, 0, 1], "reduced motion stills every voice at once");
+  assert.deepEqual([reduced.spin, groove.room, groove.px, groove.py, groove.nod, groove.frame], [1, 0, 0, 0, 0, 1], "reduced motion stills every voice at once");
   state.audioResponse = 0;
   for (let i = 0; i < 200; i += 1) frame(music(200000 + i * 500));
   assert.ok(groove.room < 0.01, "a zero Response keeps the tree still");
@@ -2191,4 +2271,75 @@ test("only the newest verifying cards keep a name at rest; the rest are tinted o
   labels.state.hoverNode = null;
   labels.state.labels = "all";
   assert.equal(labels.env.labelCandidates(projected).length, 4, "All shows every name");
+});
+
+// The scheduler's stage (backlog.taskStates, the snapshot Command already
+// polls) decides what open work reads as: held work never lights "Next",
+// badges with its stage, and tints held instead of ready.
+const stageSource = await readFile(new URL("../renderer/stage-labels.js", import.meta.url), "utf8");
+function stageContext({ backlog = null, nodes = [], allTasks = [], requests = [] } = {}) {
+  const state = { backlog, nodes, allTasks, requests };
+  const env = vm.createContext({ state, window: {}, Date, Map, Set, String, Array, Boolean, Number, Object });
+  vm.runInContext(stageSource, env);
+  vm.runInContext(section("  const workPinned =", "  const agentFiledTask ="), env);
+  vm.runInContext(section("  // The scheduler's row for an open board task", "  // Follow resolves the actual worker's task"), env);
+  vm.runInContext(section("  function statusBadge(node) {", "  function appendTaskGroupInfo("), env);
+  return { env, state };
+}
+
+test("pinned open work lights Next only when the scheduler's stage is ready, and its badge says the stage", () => {
+  const task = (id, extra = {}) => ({ id, title: id, status: "open", pin: true, pinAt: 5, ...extra });
+  const ready = task("ready"), blocked = task("blocked"), approval = task("approval"), cooling = task("cooling"), waiting = task("waiting");
+  const hosted = task("hosted", { target: { kind: "session", id: "s1" } });
+  const loose = task("loose", { pin: undefined, pinAt: undefined });
+  const board = [ready, blocked, approval, cooling, waiting, hosted, loose];
+  const nodes = [ready, blocked, approval, cooling, waiting, loose].map((entry) => ({ id: `task:${entry.id}`, kind: "task", label: entry.title, task: entry }));
+  const backlog = { ok: true, taskStates: [
+    { id: "ready", kind: "task", stage: "ready", reason: "You chose this to go next" },
+    { id: "blocked", kind: "task", stage: "blocked", blockedBy: "loop", reason: "Loop guard: 3 attempts since your last retry ended without verified progress." },
+    { id: "approval", kind: "task", stage: "approval", reason: "Verify first: review this task and approve its build" },
+    { id: "cooling", kind: "task", stage: "cooling", reason: "Waiting before another attempt" },
+    { id: "waiting", kind: "task", stage: "waiting", reason: "Waiting for ready to finish successfully" },
+    { id: "hosted", kind: "task", stage: "blocked", reason: "Held (parked)" },
+    { id: "loose", kind: "task", stage: "ready", reason: "Ready for an available worker" },
+  ] };
+  const { env, state } = stageContext({ nodes, allTasks: board });
+  assert.deepEqual([...env.workPinIds()].sort(), ["approval", "blocked", "cooling", "ready", "s1", "waiting"], "without a snapshot the pin alone decides, as before");
+  state.backlog = backlog;
+  assert.deepEqual([...env.workPinIds()], ["ready"], "held pinned work is not up next, on its own node or on the node it was pinned to");
+  const badge = (node) => JSON.parse(JSON.stringify(env.statusBadge(node)));
+  assert.deepEqual(badge(nodes[0]), { text: "Ready", className: "badge" });
+  assert.deepEqual(badge(nodes[1]), { text: "Needs attention", className: "badge trains" }, "a loop-held task does not read as Open");
+  assert.deepEqual(badge(nodes[2]), { text: "Awaiting approval", className: "badge trains" });
+  assert.equal(badge(nodes[3]).text, "Retry scheduled");
+  assert.equal(badge(nodes[4]).text, "Waiting");
+  // A status newer than the snapshot keeps its own word.
+  assert.equal(badge({ kind: "task", task: { ...ready, status: "done" } }).text, "Done");
+  assert.deepEqual(badge({ kind: "task", task: { ...blocked, status: "active" } }), { text: "Working", className: "badge premium" });
+  // The index is built once per snapshot, not per read.
+  const index = state.taskStages;
+  for (const entry of board) env.taskStageOf(entry);
+  assert.equal(state.taskStages, index, "reads reuse the snapshot's index");
+  assert.equal(env.taskStageOf(blocked).reason.startsWith("Loop guard"), true, "the row carries the scheduler's reason");
+  state.backlog = { ...backlog, taskStates: [{ id: "blocked", kind: "task", stage: "ready" }, { id: "ready", kind: "request", stage: "blocked" }] };
+  assert.deepEqual([...env.workPinIds()].sort(), ["approval", "blocked", "cooling", "ready", "s1", "waiting"], "a new snapshot rebuilds the index; unknown ids fall back to the pin, and request rows never shadow a task");
+  assert.notEqual(state.taskStages, index);
+  assert.match(section("  function drawFrame(", "    layoutProjectedGraph("), /node\._stage = [^\n]*taskStageOf\(node\.task\)/, "every frame reads the node's stage from the index");
+});
+
+test("held work tints amber or dim instead of ready, and a cancelled todo dims instead of lighting done-green", () => {
+  const NODE_RGB = { warm: [230, 201, 141], verify: [151, 179, 244], task: [140, 155, 180], dust: [157, 183, 255], amber: [255, 212, 121], stale: [96, 88, 74], done: [104, 236, 164], pending: [138, 128, 108], session: [236, 229, 216] };
+  const env = vm.createContext({ state: { selected: null, hoverNode: null }, NODE_RGB });
+  vm.runInContext(section("function colorOf(", "function setSettingsPreview("), env);
+  const open = { status: "open" };
+  assert.equal(env.colorOf({ kind: "task", task: open, _stage: "blocked" }), NODE_RGB.amber);
+  assert.equal(env.colorOf({ kind: "task", task: open, _stage: "approval" }), NODE_RGB.amber);
+  assert.equal(env.colorOf({ kind: "task", task: open, _stage: "waiting" }), NODE_RGB.stale);
+  assert.equal(env.colorOf({ kind: "task", task: open, _stage: "cooling" }), NODE_RGB.stale);
+  assert.equal(env.colorOf({ kind: "task", task: open, _stage: "ready" }), NODE_RGB.task, "ready work keeps the task tint");
+  assert.equal(env.colorOf({ kind: "task", task: open, _stage: "ready", _workLabel: "Next" }), NODE_RGB.dust);
+  assert.equal(env.colorOf({ kind: "task", task: open, _stage: "blocked", _workLabel: "Running" }), NODE_RGB.warm, "a live worker outranks a stale snapshot");
+  assert.equal(env.colorOf({ kind: "todo", status: "cancelled", state: "done" }), NODE_RGB.stale, "cancelled is closed, not finished");
+  assert.equal(env.colorOf({ kind: "todo", status: "completed", state: "done" }), NODE_RGB.done);
+  assert.equal(env.colorOf({ kind: "todo", status: "pending", state: "pending" }), NODE_RGB.pending);
 });

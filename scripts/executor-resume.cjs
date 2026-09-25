@@ -16,6 +16,7 @@ function checkpoint(entry, now = Date.now()) {
   const prior = entry.resumeCheckpoint;
   return {
     version: 1, runId: entry.id, projectId: entry.projectId, projectPath: entry.projectPath,
+    ...(entry.agentConfiguration ? { agentConfiguration: structuredClone(entry.agentConfiguration) } : {}),
     pid: entry.ownerPid, workerPid: entry.pid || null, startedAt: entry.startedAt, at: now,
     scope: backlog.buildScope(entry.ref), pending: false,
     sessionId: entry.sessionId || null,
@@ -33,6 +34,48 @@ function held(row, { pid, isAlive }) {
   if (Number.isInteger(owner) && owner > 0 && owner !== pid && isAlive(owner) !== false) return true;
   const worker = row?.runProgress?.workerPid;
   return Number.isInteger(worker) && worker > 0 && isAlive(worker) !== false;
+}
+
+// A long-lived launch (a preview server, a watch loop) never reports completion
+// in the session store, so its Bash tool would otherwise stay "running" forever
+// and the live card would report a worker hanging on it. Cap the observation:
+// past the bounded wait the tool is reported settled — not running and not a
+// success — so the card shows a clear timeout instead of an endless timer. The
+// cap reads the tool's own identity and start time, so a tool that finishes
+// normally is dropped by the store first and a replacement tool starts its own
+// wait; a stale timeout can never settle a newer run. settleActiveTool is the
+// pure display half; retireTimedOutTool is the half that ends the process.
+const ACTIVE_TOOL_SETTLE_MS = 15 * 60 * 1000;
+
+function settleActiveTool(tool, now = Date.now(), { maxMs = ACTIVE_TOOL_SETTLE_MS } = {}) {
+  if (!tool || typeof tool !== "object") return null;
+  if (!["running", "pending"].includes(tool.status)) return null;
+  const startedAt = Number(tool.startedAt);
+  if (!Number.isFinite(startedAt) || startedAt <= 0) return tool;
+  if (now - startedAt < Math.max(1, Number(maxMs) || ACTIVE_TOOL_SETTLE_MS)) return tool;
+  return { ...tool, status: "timed_out", timedOut: true };
+}
+
+// The display cap alone leaves the long-lived launch alive: the preview server
+// the timed-out Bash tool spawned is still in the worker's process tree and
+// would outlive its session (holding its port and memory) after the card has
+// already reported the tool stopped. The first time a tool crosses its own
+// bounded wait, stop the run: entry.stop removes the worker's whole process
+// tree (taskkill /t /f on Windows, kill -pgid elsewhere), which takes the
+// server with it. The transition is latched per tool id, so repeated polls
+// never re-stop a replacement tool or a run already ending; a tool that
+// finishes normally is dropped by the store before it can be retired, and a
+// newer tool starts its own wait.
+function retireTimedOutTool(entry, tool, now = Date.now(), { maxMs = ACTIVE_TOOL_SETTLE_MS } = {}) {
+  const settled = settleActiveTool(tool, now, { maxMs });
+  if (!settled || settled.timedOut !== true || !entry || typeof entry !== "object") return settled;
+  if ((entry.toolTimeout?.id ?? null) === (settled.id ?? null)) return settled;
+  entry.toolTimeout = { id: settled.id ?? null, at: now };
+  if (typeof entry.stop === "function") {
+    try { entry.stop("long-lived tool did not finish; terminated its process tree", false, "tool-timeout"); }
+    catch {}
+  }
+  return settled;
 }
 
 function recover(row, { liveRuns, pid, now = Date.now(), isAlive }) {
@@ -82,4 +125,4 @@ function brief(row, maxChars = 2200) {
   return details.join("\n").slice(0, maxChars);
 }
 
-module.exports = { checkpoint, held, recover, compare, brief, appendLog };
+module.exports = { checkpoint, held, recover, compare, brief, appendLog, settleActiveTool, retireTimedOutTool, ACTIVE_TOOL_SETTLE_MS };

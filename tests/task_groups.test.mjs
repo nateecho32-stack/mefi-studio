@@ -153,3 +153,16 @@ test("chores the assistant filed fold into the hub instead of a node of their ow
   scope.appendTaskNodes();
   assert.equal(state.nodes.some((node) => node.task?.id === "chore"), true, "without a hub on the board the chore keeps its node");
 });
+
+test("work the host pinned (pin/pinAt) outranks newer open work in the graph; the legacy workPin/pinnedAt still count", () => {
+  const newer = Array.from({ length: 4 }, (_, index) => ({ id: `newer-${index}`, status: "open", title: `Newer ${index}`, updatedAt: 100 + index }));
+  // assistantWorkOn, Do next and tasks:create write pin and pinAt.
+  const chosen = { id: "chosen", status: "open", title: "Chosen", updatedAt: 1, pin: true, pinAt: 50 };
+  const legacy = { id: "legacy", status: "open", title: "Legacy", updatedAt: 2, workPin: true, pinnedAt: 40 };
+  assert.deepEqual(Array.from(graphTasks([...newer, chosen, legacy], { limit: 2 }), (entry) => entry.task.id), ["legacy", "chosen"]);
+  // A group whose member was pinned takes that rank for its one slot.
+  const plan = { id: "plan", status: "open", title: "Plan", updatedAt: 0, members: [{ id: "member", title: "Member" }] };
+  const member = { id: "member", status: "open", title: "Member", absorbedInto: "plan", pin: true, pinAt: 7 };
+  assert.equal(graphTasks([...newer, plan, member], { limit: 1 })[0].task.id, "plan");
+  assert.equal(graphTasks([...newer, plan, { ...member, pin: undefined, pinAt: undefined }], { limit: 1 })[0].task.id, "newer-3", "without the pin the group is ordinary work");
+});

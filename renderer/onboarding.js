@@ -26,7 +26,7 @@
     {
       title: "Link an AI and scan this computer", short: "Scan", glyph: "g-ambience", panel: "scan",
       copy: "Before anything is read or built, find out what this computer already has: the OpenCode command line, the providers linked in it, the free models it can reach, and the keys saved in Studio. The AI chosen here helps with the rest of this setup.",
-      points: ["The scan asks OpenCode for its version, its linked provider names, its model list and its agents. It never opens the credential store, never sends a prompt and never changes OpenCode's own configuration.", "Free models cost nothing and are used first for exploring; paid plans you have linked are kept for building. Free-tier models may use prompts to improve the model, so keep confidential work on a paid model.", "Nothing is saved until you choose Use this setup and continue. From there the guide maps your selected folder and asks the linked AI to plan the remaining stops. You can run this scan again from Start here, or Auto setup from Settings, after linking a provider."],
+      points: ["The scan asks OpenCode for its version, its linked provider names, its model list and its agents. It never opens the credential store, never sends a prompt and never changes OpenCode's own configuration.", "Free models cost nothing and are used first for exploring; paid plans you have linked are kept for building. Free-tier models may use prompts to improve the model, so keep confidential work on a paid model.", "Nothing is saved until you choose Use this setup and continue. From there the guide maps your selected folder and asks the linked AI to plan the remaining stops. You can run this scan again from Start here, or Auto setup from Agents setup, after linking a provider."],
       action: null, note: "Run the first scan reads OpenCode's own answers. Use this setup and continue saves the choices shown (no key), maps the selected folder, and asks the linked AI what to do next.",
       done: "Setup saved",
     },
@@ -48,17 +48,17 @@
     },
     {
       title: "Connect the assistant and coding workers", short: "Connections", glyph: "g-ambience",
-      copy: "The assistant helps you think and organize. Coding workers carry out tasks in your project. Their provider settings are separate, and the scan's choices are shown at the top of Settings.",
-      points: ["In Settings › Providers, save the key for the assistant provider you want, choose Grok, Claude Code, Codex or Antigravity with their own CLI logins, or point the custom route at your own OpenAI-compatible endpoint.", "LM Studio needs no key: keep its local server running and pick it as the provider.", "Models are saved per provider: set the model you have for each option and switching never mixes them.", "Coding workers run through OpenCode by default: on your linked plan, or on the free model the scan found. The coding tier decides what each build may cost — Free, Fast or Heavy — while Auto lets Studio pick per task. Saving an assistant key alone does not prove a worker is ready.", "Manual planning works without an AI key. Jev is optional; without it the assistant's own model, or a free model, stands in for the small routing decisions."],
+      copy: "The assistant helps you think and organize. Coding workers carry out tasks in your project. Their provider settings are separate, and the scan's choices are shown at the top of Agents setup.",
+      points: ["In Agents › Setup › Connections › Providers, save the key for the assistant provider you want, choose Grok, Claude Code, Codex or Antigravity with their own CLI logins, or point the custom route at your own OpenAI-compatible endpoint.", "LM Studio needs no key: keep its local server running and pick it as the provider.", "Models are saved per provider: set the model you have for each option and switching never mixes them.", "Coding workers run through OpenCode by default: on your linked plan, or on the free model the scan found. The coding tier decides what each build may cost — Free, Fast or Heavy — while Auto lets Studio pick per task. Saving an assistant key alone does not prove a worker is ready.", "Manual planning works without an AI key. Jev is optional; without it the assistant's own model, or a free model, stands in for the small routing decisions."],
       action: "Walk me to connections", route: "studio", params: { section: "settings-assistant" },
-      station: "We are in Settings together, at Providers. Save the key you want, then go on to Coding workers, confirm its CLI is signed in and pick a coding tier. Nothing is sent until you choose to test it.",
+      station: "We are in Agents › Setup › Connections, at Providers. Save the key you want, then open Agents › Setup › Team to confirm the CLI and pick a coding tier. Nothing is sent until you choose to test it.",
       note: "Connection tests and AI requests may use your provider allowance when you explicitly run them.",
       target: "#settings-assistant-heading", done: "Connections checked",
     },
     {
       title: "Give a clear task, or explore a plan", short: "Create", glyph: "g-tasks",
-      copy: "Use Give a task when the outcome is clear. Use Plan an idea when you need to settle questions before anything is built. The map's ideas, and the assistant's suggested first task, are good places to start.",
-      points: ["Talk together is for questions and discussion. Give a task saves work in the selected project; Use a task outline helps you describe the result and checks.", "Start small: for example, ‘Add a Create note button to the empty notes list; check that it opens a new note.’ Say what should stay unchanged, too.", "Plan an idea collects questions and decisions. Review and approve the specification, then explicitly create its tasks.", "With Verify first, View task lets you inspect the brief and Approve build, or leave it waiting. New work also follows your Pause and worker settings."],
+      copy: "Use Create task when the outcome is clear. Use Plan an idea when you need to settle questions before anything is built. The map's ideas, and the assistant's suggested first task, are good places to start.",
+      points: ["Chat is for questions and discussion. Create task saves work in the selected project, and Use a task outline helps you describe the result and its checks.", "Start small: for example, ‘Add a Create note button to the empty notes list; check that it opens a new note.’ Say what should stay unchanged, too.", "Plan an idea collects questions and decisions. Review and approve the specification, then explicitly create its tasks.", "With Verify first, View task lets you inspect the brief and Approve build, or leave it waiting. New work also follows your Pause and worker settings."],
       action: "Walk me to the task box", route: "task", secondary: "Explore a plan", secondaryRoute: "plans",
       station: "This is the task box for the selected project. Describe the result and how you will check it, or open Use a task outline for a guided shape. I do not send anything from here.",
       note: "These buttons open the editor and the plan sheet. They do not submit a task or start a planning request.",
@@ -178,6 +178,7 @@
     }
   }
   function setActivity(active, { label = "", fraction = null } = {}) {
+    window.MefiCompanionHub?.guide({ step: state.step, coach: state.mode === "coach", done: isDone(state.step), busy: active });
     const box = $("activity");
     if (!box) return;
     box.hidden = !active;
@@ -205,8 +206,11 @@
     renderBars();
   }
   function render() {
+    window.MefiCompanionHub?.guide({ step: state.step, done: isDone(state.step), busy: scanBusy || mapBusy || assistBusy });
     const lesson = lessons[state.step];
-    $("progress").textContent = `Step ${state.step + 1} of ${lessons.length}`;
+    // The bar under this line counts finished lessons, so the line names both.
+    const finished = doneCount();
+    $("progress").textContent = `Step ${state.step + 1} of ${lessons.length}${finished ? ` · ${finished} done` : ""}`;
     $("title").textContent = lesson.title;
     $("copy").textContent = lesson.copy;
     $("points").replaceChildren(...lesson.points.map((text) => node("li", "", text)));
@@ -241,7 +245,7 @@
     $("build-mode-label").textContent = mode?.saving ? "Saving…" : !mode?.loaded ? "Available in the desktop workspace" : mode.autoBuild ? "Automatic" : "Verify first";
     $("build-mode-note").textContent = mode?.autoBuild === false
       ? "Unapproved work waits in Review. Open a task to review its scope and approve its build. This choice is saved for all projects."
-      : "Queued work can start automatically. Turn off to choose which tasks get built. You can change this above Your work at any time.";
+      : "Queued work can start automatically. Turn off to choose which tasks get built. You can change this in Agents › Setup › Run behavior at any time.";
   }
   // ---- the scan stop ----------------------------------------------------------------
   function setPanelStatus(id, text, error = false) {
@@ -475,6 +479,7 @@
   // ---- coach --------------------------------------------------------------------------
   function renderCoach() {
     if (!$("coach")) return;
+    window.MefiCompanionHub?.guide({ step: state.step, coach: true, done: isDone(state.step) });
     const lesson = lessons[state.step];
     const done = isDone(state.step);
     $("coach-progress").textContent = `Step ${state.step + 1} of ${lessons.length} · ${lesson.short}`;

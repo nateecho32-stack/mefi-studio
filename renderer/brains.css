@@ -11,7 +11,7 @@
   --g-routing: #d8c08a; --g-build: #ffab76; --g-decide: #f59bd0; --g-control: #a9bcc4;
   position: relative; width: min(1600px, 100%); height: min(980px, 100%); display: flex; flex-direction: column;
   container: brains-sheet / inline-size;
-  border: 1px solid var(--hairline-strong); border-radius: 24px; background: var(--panel-solid); box-shadow: var(--shadow-3); overflow: hidden; outline: none;
+  border: 1px solid var(--hairline-strong); border-radius: var(--r-lg); background: var(--panel-solid); box-shadow: none; overflow: hidden; outline: none;
 }
 .brains-sheet [data-group] { --accent: var(--g-control); }
 .brains-sheet [data-group="intake"] { --accent: var(--g-intake); }
@@ -26,11 +26,11 @@
 .brains-count[data-tone="error"] { color: var(--bad); font-weight: 600; }
 .brains-divider { flex: none; width: 1px; align-self: stretch; margin: 5px 2px; background: var(--hairline); }
 .brains-sheet button.danger { color: var(--bad); }
-.brains-sheet button.primary.danger { background: linear-gradient(170deg, #ffc1c1, #e07b7b); border-color: #ffc1c1; color: #1a0707; }
+.brains-sheet button.primary.danger { background: var(--bad); border-color: var(--bad); color: var(--bg); }
 
 /* ---- header ---------------------------------------------------------------- */
 .brains-head { display: flex; align-items: center; gap: 12px; flex: none; padding: 14px 18px; border-bottom: 1px solid var(--hairline); flex-wrap: wrap; }
-.brains-head h2 { margin: 3px 0 0; font-size: 23px; }
+.brains-head h2 { margin: 0; font-size: 21px; }
 .brains-head .sheet-title { min-width: 150px; }
 /* The map picker takes the free space, so the tools strip (when nav shows
    one) and the toolbar sit together on the right on one row. */
@@ -46,11 +46,15 @@
 .brains-dirty::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); }
 .brains-toolbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .brains-history { display: flex; gap: 2px; }
+.brains-mobile-tabs { display: none; gap: 4px; padding: 8px 14px; border-bottom: 1px solid var(--hairline); }
+.brains-mobile-tabs button[aria-pressed="true"] { color: var(--ivory); background: var(--tint-gold-2); border-color: var(--hairline-strong); }
 .brains-more { position: relative; }
 .brains-more > button .chev { width: 12px; height: 12px; opacity: .7; transition: transform var(--dur-2) var(--ease); }
 .brains-more > button[aria-expanded="true"] .chev { transform: rotate(180deg); }
-.brains-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 12; min-width: 250px; padding: 6px; display: grid; gap: 2px; border: 1px solid var(--hairline-strong); border-radius: 12px; background: var(--panel-solid); box-shadow: var(--shadow-2); animation: brains-pop var(--dur-2) var(--ease); }
-.brains-menu button { justify-content: flex-start; min-height: 34px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; font-size: var(--fs-sm); }
+.brains-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 12; width: 310px; max-width: calc(100vw - 32px); padding: 7px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; border: 1px solid var(--hairline-strong); border-radius: var(--r-sm); background: var(--panel-solid); box-shadow: var(--shadow-2); animation: brains-pop var(--dur-2) var(--ease); }
+.brains-menu button { justify-content: flex-start; min-width: 0; min-height: 44px; padding: 7px 9px; border: 1px solid var(--hairline); border-radius: 8px; background: var(--tint-gold-1); font-size: var(--fs-sm); text-align: left; white-space: normal; }
+.brains-menu button .label { min-width: 0; }
+.brains-menu button.danger { color: var(--bad); background: color-mix(in srgb, var(--bad) 5%, transparent); }
 .brains-menu button:hover, .brains-menu button:focus-visible { background: var(--tint-gold-3); transform: none; box-shadow: none; }
 .brains-menu button.danger:hover { background: rgba(255,156,156,.1); }
 .brains-menu button .glyph { width: 14px; height: 14px; opacity: .8; }
@@ -60,7 +64,7 @@
 
 /* ---- layout ---------------------------------------------------------------- */
 .brains-body {
-  --parts-w: 256px; --inspect-w: 340px;
+  --parts-w: 224px; --inspect-w: 312px;
   --parts-col: var(--parts-w); --inspect-col: var(--inspect-w);
   display: grid; grid-template-columns: var(--parts-col) minmax(0, 1fr) var(--inspect-col); min-height: 0; flex: 1;
   transition: grid-template-columns var(--dur-3) var(--ease);
@@ -101,7 +105,7 @@
 .brains-part-summary { font-size: 11px; line-height: 1.45; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
 /* ---- canvas ---------------------------------------------------------------- */
-.brains-canvas-wrap { container: brains-canvas / inline-size; position: relative; overflow: clip; outline: none; touch-action: none; background-color: var(--bg); background-image: radial-gradient(circle, color-mix(in srgb, var(--gold) 20%, transparent) 1px, transparent 1.5px); background-size: 20px 20px; }
+.brains-canvas-wrap { container: brains-canvas / inline-size; position: relative; overflow: clip; outline: none; touch-action: none; background-color: var(--bg); background-image: radial-gradient(circle, color-mix(in srgb, var(--gold) 13%, transparent) 1px, transparent 1.5px); background-size: 20px 20px; }
 .brains-canvas-wrap:focus-visible { box-shadow: inset 0 0 0 1px var(--gold-dim); }
 .brains-canvas-wrap[data-gesture="pan"], .brains-canvas-wrap[data-gesture="node"] { cursor: grabbing; }
 .brains-canvas-wrap[data-gesture="wire"], .brains-canvas-wrap[data-gesture="marquee"] { cursor: crosshair; }
@@ -117,7 +121,7 @@
 
 /* wires: every width is on-screen pixels divided by the zoom, because the
    stage is scaled by a CSS transform that vector-effect does not undo */
-.brains-wire { --accent: var(--hairline-strong); fill: none; stroke: var(--accent); stroke-opacity: .6; stroke-width: calc(2px / var(--zoom, 1)); transition: stroke-opacity var(--dur-2) var(--ease); }
+.brains-wire { --accent: var(--hairline-strong); fill: none; stroke: var(--accent); stroke-opacity: .48; stroke-linecap: round; stroke-linejoin: round; stroke-width: calc(1.6px / var(--zoom, 1)); transition: stroke-opacity var(--dur-2) var(--ease); }
 .brains-wire[data-hover="true"] { stroke-opacity: 1; stroke-width: calc(3.5px / var(--zoom, 1)); }
 /* A lit wire flows for four beats after the selection (every render redraws
    the wires, so each new selection flows again), then rests dashed and bright
@@ -137,14 +141,14 @@
 .brains-node {
   --accent: var(--g-control);
   position: absolute; width: 236px; display: flex; flex-direction: column;
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--hairline-strong)); border-radius: 12px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 12%, var(--panel-solid)) 0, var(--panel-solid) 48px);
-  box-shadow: 0 10px 26px rgba(0,0,0,.45), var(--inset-hi);
+  border: 1px solid color-mix(in srgb, var(--accent) 44%, var(--hairline-strong)); border-radius: var(--graph-card-radius);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 13%, var(--graph-surface)) 0, var(--graph-surface) 72%);
+  box-shadow: var(--graph-card-shadow), inset 0 1px 0 color-mix(in srgb, var(--ivory) 9%, transparent);
   overflow: hidden; pointer-events: auto;
   transition: border-color var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease);
   animation: brains-node-in var(--dur-2) var(--ease);
 }
-.brains-node::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); opacity: .8; pointer-events: none; }
+.brains-node::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--accent); opacity: .85; pointer-events: none; }
 .brains-node:hover { border-color: color-mix(in srgb, var(--accent) 60%, var(--hairline-strong)); }
 .brains-node[data-lit="true"] { border-color: color-mix(in srgb, var(--accent) 70%, var(--hairline-strong)); }
 .brains-node[data-problem="error"] { border-color: var(--bad); }
@@ -154,7 +158,7 @@
 .brains-node[data-runs="draft"] { border-style: dashed; }
 .brains-node:focus-visible { outline: calc(2px / var(--zoom, 1)) solid var(--gold-bright); outline-offset: calc(3px / var(--zoom, 1)); }
 .brains-port:focus-visible { outline: calc(2px / var(--zoom, 1)) solid var(--gold-bright); outline-offset: calc(-2px / var(--zoom, 1)); }
-.brains-node-head { flex: none; height: 48px; display: grid; gap: 2px; align-content: center; padding: 0 9px 0 12px; cursor: grab; border-bottom: 1px solid var(--hairline); }
+.brains-node-head { flex: none; height: 48px; display: grid; gap: 2px; align-content: center; padding: 0 9px 0 12px; cursor: grab; border-bottom: 1px solid var(--hairline); background: color-mix(in srgb, var(--accent) 7%, transparent); }
 .brains-node-head:active { cursor: grabbing; }
 .brains-node-top { display: flex; align-items: center; gap: 5px; min-width: 0; height: 15px; }
 .brains-node-glyph { width: 12px; height: 12px; color: var(--accent); }
@@ -168,15 +172,15 @@
 .brains-node-switch .glyph { width: 11px; height: 11px; }
 .brains-node-alert { flex: none; width: 14px; height: 14px; display: grid; place-items: center; border-radius: 50%; font-size: 9px; font-weight: 800; color: #120606; background: var(--bad); cursor: help; }
 .brains-node-alert[data-level="warn"] { background: var(--warn); }
-.brains-node-head b { font-size: 12.5px; font-weight: 600; color: var(--ivory); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brains-node-head b { font-size: var(--graph-title-size); font-weight: 600; color: var(--ivory); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .brains-node-flag { font-size: 9px; color: var(--bad); }
 .brains-node-ports { display: grid; grid-template-columns: 1fr 1fr; align-items: start; }
 .brains-port-col { display: grid; min-width: 0; }
-.brains-port { height: 36px; min-height: 36px; display: flex; align-items: center; justify-content: flex-start; gap: 7px; padding: 0 5px; border: 0; border-radius: 0; background: transparent; color: var(--muted); font-size: 10.5px; white-space: nowrap; overflow: hidden; cursor: crosshair; }
+.brains-port { height: 36px; min-height: 36px; display: flex; align-items: center; justify-content: flex-start; gap: 7px; padding: 0 5px; border: 0; border-radius: 0; background: transparent; color: var(--muted); font-size: var(--graph-meta-size); white-space: nowrap; overflow: hidden; cursor: crosshair; }
 .brains-port span { overflow: hidden; text-overflow: ellipsis; }
 .brains-port-col.out .brains-port { justify-content: flex-end; }
 .brains-port i { flex: none; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--hairline-strong); background: var(--bg); transition: transform var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease); }
-.brains-port[data-wired="true"] i { background: var(--accent); border-color: var(--accent); }
+.brains-port[data-wired="true"] i { background: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, var(--ivory)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent); }
 .brains-port[data-required="true"][data-wired="false"] i { border-color: var(--bad); }
 .brains-port:hover { color: var(--ivory); background: color-mix(in srgb, var(--accent) 10%, transparent); transform: none; box-shadow: none; }
 .brains-port:hover i { transform: scale(1.3); }
@@ -418,7 +422,7 @@ textarea.brains-dialog-input { min-height: 104px; resize: vertical; }
   .brains-body { --parts-w: 208px; --inspect-w: 280px; }
   .brains-head .sheet-title { min-width: 0; }
   .brains-toolbar .label { display: none; }
-  .brains-toolbar #brains-draft .label, .brains-toolbar .brains-menu .label { display: inline; }
+  .brains-toolbar #brains-add-part .label, .brains-toolbar #brains-draft .label, .brains-toolbar .brains-menu .label { display: inline; }
   .brains-minimap { width: 168px; height: 96px; }
 }
 @container brains-sheet (max-width: 900px) {
@@ -427,6 +431,14 @@ textarea.brains-dialog-input { min-height: 104px; resize: vertical; }
   #brains-toggle-parts { display: none; }
   .brains-shortcut-cols, .brains-legend { grid-template-columns: 1fr; gap: 9px; }
   .brains-status { display: none; }
+}
+@container brains-sheet (max-width: 650px) {
+  .brains-mobile-tabs { display: flex; }
+  .brains-body { grid-template-columns: minmax(0, 1fr); }
+  .brains-body .brains-parts, .brains-body .brains-inspector, #brains-toggle-inspector { display: none; }
+  .brains-body[data-mobile-view="inspector"] .brains-canvas-wrap { display: none; }
+  .brains-body[data-mobile-view="inspector"] .brains-inspector { display: block; visibility: visible; grid-column: 1; border: 0; }
+  .brains-map-pick select { max-width: 180px; }
 }
 /* A narrow canvas lifts the overview above the view controls. */
 @container brains-canvas (max-width: 560px) {

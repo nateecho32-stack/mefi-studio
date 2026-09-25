@@ -8,6 +8,8 @@ import { readFile } from "node:fs/promises";
 import * as assistant from "../scripts/assistant.mjs";
 import agentIssues from "../scripts/agent-issues.cjs";
 import brains from "../scripts/brains.cjs";
+import workAdmission from "../scripts/work-admission.cjs";
+import executorCore from "../scripts/executor-core.cjs";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
 const section = (start, end) => {
@@ -24,6 +26,7 @@ function issueHost({ policy = brains.issuePolicyFor(brains.defaultMap()), tasks 
     console,
     assistantState: state,
     agentIssues,
+    executorCore,
     assistantCaps: () => assistant.CAPS,
     assistantTrim(list, cap) { if (list.length > cap) list.splice(0, list.length - cap); },
     assistantClip: (value, max) => String(value ?? "").slice(0, max),
@@ -33,10 +36,17 @@ function issueHost({ policy = brains.issuePolicyFor(brains.defaultMap()), tasks 
     ensureAssistant: async () => state,
     logError(text) { logs.push({ kind: "error", text }); },
     activeIssuePolicy: async () => policy,
+    // The board as the lane reads it before asking and before applying.
+    TASKS_PATH: "tasks",
+    getEyes: async () => ({ readJson: async () => structuredClone(board.tasks) }),
     mutateBoard: async (fn) => fn(board),
     backlogControl: async (payload) => { backlog.push(payload); return { ok: true }; },
     rememberWorkShape: (taskId, shape) => shapes.push({ taskId, shape }),
-    assistantCreateTask: async (payload) => { created.push(payload); return { id: `task_${created.length + 1}`, ...payload }; },
+    // A split admits its follow-up through the real admission module inside
+    // the decision's own board write; `created` records each card admitted.
+    workAdmission, projects: { current: () => ({ id: "fixture" }) }, projectRoot: () => "/fixture",
+    crypto: { randomBytes: () => ({ toString: () => `split_${created.length + 1}` }) },
+    assistantTaskAdmitted: async (task) => { created.push(task); },
     assistantAskForWork: (reason) => wakes.push(reason),
     assistantMessage: async (text) => { messages.push(text); return { ok: true }; },
     // The thread's local status line (answer.apply's announce).
@@ -61,6 +71,8 @@ function issueHost({ policy = brains.issuePolicyFor(brains.defaultMap()), tasks 
 // Values that crossed out of the vm carry that realm's prototypes, so they
 // are compared by shape rather than by strict identity.
 const plain = (value) => JSON.parse(JSON.stringify(value));
+// A split adds its follow-up to the board, so the card is found by id.
+const card = (h, id = "task_1") => h.board.tasks.find((task) => task.id === id);
 
 const workerIssue = (kind, title, extra = {}) => ({
   kind, title, source: "worker", taskId: "task_1", taskTitle: "Add the retry banner", ...extra,
@@ -183,10 +195,10 @@ test("splitting the extra work out makes a card for it and keeps this brief", as
   assert.equal(h.created[0].prompt, "the store belongs in its own task");
   assert.equal(h.created[0].splitFrom, "task_1");
   assert.equal(h.created[0].splitDepth, 1);
-  assert.equal(h.board.tasks[0].decisions.at(-1).choice, "split");
+  assert.equal(card(h).decisions.at(-1).choice, "split");
   // The parent is still open, and a split never re-arms it: re-running it
   // wiped its verification budget and its worker only re-verified its work.
-  assert.equal(h.board.tasks[0].status, "open");
+  assert.equal(card(h).status, "open");
   assert.deepEqual(plain(h.backlog), []);
   assert.deepEqual(plain(h.wakes), []);
 });
@@ -205,7 +217,7 @@ test("a split with no note briefs the new card with the ask itself", async () =>
     + "Split out of \"Add the retry banner\" (task_1) by the owner: build only this. If it turns out to be something only the owner can do "
     + "(the board, Studio's task store, another session's files), put it under owner: in MEFI_RESULT and finish; do not ask to split it again.");
   // The decision says what it was about, and the log line keeps its wording.
-  const task = h.board.tasks[0];
+  const task = h.board.tasks.find((row) => row.id === "task_1");
   assert.equal(task.decisions.at(-1).choice, "split");
   assert.equal(task.decisions.at(-1).ask, "the retry store has to be written too");
   assert.equal(task.decisions.at(-1).text, null);
@@ -215,7 +227,7 @@ test("a split with no note briefs the new card with the ask itself", async () =>
   const old = issueHost();
   await old.env.assistantIssueAction({ action: "split", payload: { taskId: "task_1", issueKind: "scope" } });
   assert.match(old.created[0].prompt, /^Work the agent found while building "Add the retry banner" that its brief did not cover\./);
-  assert.equal(old.board.tasks[0].decisions.at(-1).ask, undefined);
+  assert.equal(old.board.tasks.find((row) => row.id === "task_1").decisions.at(-1).ask, undefined);
 });
 
 test("how deep Split may go is the live map's, and a map can turn it off", async () => {
@@ -317,8 +329,8 @@ test("the same ask from another card waits on the open card, or takes its answer
   assert.equal(s.created.length, 1);
   assert.equal(await s.env.assistantRaiseIssue(ask(2, "task_shared_store01 still has no reader")), null);
   assert.equal(s.created.length, 1, "the earlier split is not made again");
-  assert.equal(s.board.tasks[1].decisions.at(-1).choice, "split");
-  assert.match(s.board.tasks[1].decisions.at(-1).text, /^already answered on another card \(q_[0-9_]+\): the reader is its own card$/);
+  assert.equal(card(s, "task_2").decisions.at(-1).choice, "split");
+  assert.match(card(s, "task_2").decisions.at(-1).text, /^already answered on another card \(q_[0-9_]+\): the reader is its own card$/);
   assert.deepEqual(plain(s.backlog), []);
 });
 
@@ -437,7 +449,7 @@ test("splitting the extra work out of a card that has since finished still files
     assert.equal(h.created[0].title, "Follow-up: Add the retry banner");
     assert.equal(h.created[0].prompt, "the store belongs in its own task");
     assert.equal(h.created[0].splitFrom, "task_1");
-    const task = h.board.tasks[0];
+    const task = card(h);
     assert.equal(task.status, status, "the finished card is not reopened");
     assert.equal(task.decisions.at(-1).choice, "split");
     assert.deepEqual(plain(h.backlog), [], "and nothing is re-armed");
@@ -468,11 +480,54 @@ test("a decision about a task that has left the board is refused, not applied", 
   assert.deepEqual(plain(h.backlog), []);
 });
 
+test("an issue from a run whose card has left the board is logged, never asked or settled", async () => {
+  // A worker moved the card to another project's store while its run went on.
+  const h = issueHost({ tasks: [] });
+  assert.equal(await h.env.assistantRaiseIssue(workerIssue("owner", "ratify the relocation of the five rows")), null);
+  assert.equal(await h.env.assistantRaiseIssue(workerIssue("run-failed", "exit 1", { attempts: 0 })), null);
+  assert.equal(h.state.questions.length, 0, "no card the owner could only fail to answer");
+  assert.deepEqual(plain(h.backlog), []);
+  assert.ok(h.logs.some((row) => row.kind === "issue" && row.text === "its card is no longer on the board · not asked"));
+  assert.ok(!h.logs.some((row) => row.kind === "decision"), "nothing is settled on a card that is gone");
+});
+
+test("a board that cannot be read never keeps an issue from being asked", async () => {
+  const h = issueHost();
+  h.env.getEyes = async () => { throw new Error("board locked"); };
+  const question = await h.env.assistantRaiseIssue(workerIssue("scope", "the store has to be written too"));
+  assert.ok(question, "an unknown board is not a gone card");
+  assert.equal(h.state.questions.length, 1);
+});
+
+test("answering an ask whose card has since left the board clears it instead of failing", async () => {
+  const h = issueHost();
+  const question = await h.env.assistantRaiseIssue(workerIssue("owner", "ratify the relocation of the five rows"));
+  assert.ok(question);
+  h.board.tasks.splice(0);
+  const result = await h.env.assistantAnswer({ id: question.id, optionId: "acknowledge" });
+  assert.equal(result.ok, false);
+  assert.equal(result.gone, true, "the click is told the card is gone, not that the answer broke");
+  assert.equal(result.error, "\"Add the retry banner\" is no longer on this board, so this question was cleared.");
+  assert.equal(h.state.questions[0].status, "superseded");
+  assert.equal(h.state.questions[0].answer, null, "no failed answer is recorded");
+  assert.deepEqual(plain(h.backlog), []);
+  assert.ok(h.events.some((event) => event.kind === "question" && event.id === question.id && event.status === "superseded"), "the rail hears it closed");
+  const again = await h.env.assistantAnswer({ id: question.id, optionId: "acknowledge" });
+  assert.equal(again.error, "That question is no longer waiting.");
+
+  // Leaving it for review needs no card: it closes as a dismiss, as before.
+  const held = issueHost();
+  const ask = await held.env.assistantRaiseIssue(workerIssue("owner", "ratify the relocation of the five rows"));
+  held.board.tasks.splice(0);
+  assert.equal((await held.env.assistantAnswer({ id: ask.id, optionId: "hold" })).ok, true);
+  assert.equal(held.state.questions[0].status, "dismissed");
+});
+
 test("a run that stopped is raised with its own evidence rather than a bare retry", async () => {
   const h = issueHost();
   const question = await h.env.assistantBuildFailureQuestion(
-    { title: "Commit the memory-cap telemetry", ref: { id: "task_1", runFailures: 3 } },
-    4,
+    { title: "Commit the memory-cap telemetry", ref: { id: "task_1", runFailures: 4 } },
+    5,
     { outputTail: ["npm test", "FAIL tests/board.test.mjs"], runId: "run_9" },
   );
   assert.ok(question);
@@ -480,6 +535,18 @@ test("a run that stopped is raised with its own evidence rather than a bare retr
   assert.equal(question.context.runId, "run_9");
   assert.deepEqual(plain(question.context.evidence), ["npm test", "FAIL tests/board.test.mjs"]);
   assert.ok(question.options.some((option) => option.id === "replan"));
+});
+
+test("charged run failures repair automatically until the executor exhausts its retry budget", async () => {
+  const job = { title: "Repair the rail", ref: { id: "task_1", runFailures: 0 } };
+  for (let attempt = 1; attempt < executorCore.MAX_RUN_FAILURES; attempt += 1) {
+    const h = issueHost();
+    assert.equal(await h.env.assistantBuildFailureQuestion(job, attempt, { outputTail: ["FAIL rail check"] }), null);
+    assert.equal(h.state.questions.length, 0, `attempt ${attempt} stays with the worker`);
+  }
+  const spent = issueHost();
+  assert.ok(await spent.env.assistantBuildFailureQuestion(job, executorCore.MAX_RUN_FAILURES, { outputTail: ["FAIL rail check"] }));
+  assert.equal(spent.state.questions.length, 1, "the exhausted task reaches Ask");
 });
 
 test("a provider outage is not the card's fault: nothing is raised, settled or re-armed", async () => {
@@ -522,8 +589,9 @@ test("a provider outage is not the card's fault: nothing is raised, settled or r
   assert.ok(question, "an ordinary failure is still raised");
   assert.match(question.title, /FAIL tests\/board\.test\.mjs/, "and it is named by this run's words");
   assert.doesNotMatch(question.title, /Usage limit/, "not by the error the previous run ended on");
-  // This run's own error, when it has one, names it.
-  const killed = await issueHost().env.assistantBuildFailureQuestion(job, 2, { runError: "killed after budget", outputTail: ["still editing"] });
+  // This run's own error, when it has one, names it (asked on the fifth
+  // charged failure, once the repair retries are spent).
+  const killed = await issueHost().env.assistantBuildFailureQuestion(job, 5, { runError: "killed after budget", outputTail: ["still editing"] });
   assert.match(killed.title, /killed after budget/);
 });
 

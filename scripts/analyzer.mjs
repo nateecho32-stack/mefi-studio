@@ -358,6 +358,40 @@ async function projectInventory(root, limitations) {
   return { files, textFiles };
 }
 
+// Planning uses the bounded, private-file-aware inventory. Cache the local
+// read briefly while someone types; only matching, redacted excerpts leave it.
+const planningInventories = new Map();
+export async function explorePlanningFiles(query, { root = DEFAULT_ROOT, fresh = false } = {}) {
+  root = await realpath(root);
+  let entry = planningInventories.get(root);
+  if (fresh || !entry || Date.now() - entry.at > 30000) {
+    const limitations = new Set();
+    entry = { at: Date.now(), promise: projectInventory(root, limitations).then((inventory) => ({ ...inventory, limitations: [...limitations] })) };
+    planningInventories.set(root, entry);
+    if (planningInventories.size > 3) planningInventories.delete(planningInventories.keys().next().value);
+  }
+  let inventory;
+  try { inventory = await entry.promise; }
+  catch (error) { if (planningInventories.get(root) === entry) planningInventories.delete(root); throw error; }
+  const words = projectKeywords(String(query).slice(0, 24000));
+  const ranked = inventory.textFiles.map((file) => {
+    const name = file.file.toLowerCase();
+    let score = words.reduce((sum, word) => sum + (name.includes(word) ? 5 : 0), 0), line = 0, best = 0;
+    for (let index = 0; index < file.lines.length; index++) {
+      const text = file.lines[index].toLowerCase();
+      const hits = words.reduce((sum, word) => sum + Number(text.includes(word)), 0);
+      if (hits > best) { best = hits; line = index; }
+    }
+    score += best * 2;
+    return { file, score, line };
+  }).filter((hit) => hit.score > 0).sort((a, b) => b.score - a.score || a.file.file.localeCompare(b.file.file));
+  const code = ranked.slice(0, 8).map(({ file, line }) => {
+    const start = Math.max(0, line - 3), end = Math.min(file.lines.length, line + 5);
+    return { file: file.file, line: start + 1, endLine: end, snippet: safeExcerpt(file.lines.slice(start, end).join("\n"), 1800) };
+  });
+  return { code, scanned: inventory.files.length, limitations: inventory.limitations, note: "Matching file excerpts, not proof of completed behavior. No commands, prototypes, or tests were run." };
+}
+
 function planItems(text, limitations) {
   const items = [];
   const prose = [];

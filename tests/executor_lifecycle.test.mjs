@@ -15,6 +15,9 @@ import agentModes from "../scripts/agent-modes.cjs";
 import agentIssues from "../scripts/agent-issues.cjs";
 import taskHandoffs from "../scripts/task-handoffs.cjs";
 import executorResume from "../scripts/executor-resume.cjs";
+import executorActivity from "../scripts/executor-activity.cjs";
+import executorCore from "../scripts/executor-core.cjs";
+import { executorHost } from "./fixtures/host_executor.mjs";
 import { createRequire } from "node:module";
 const { createProjects } = createRequire(import.meta.url)("../scripts/projects.cjs");
 
@@ -135,20 +138,21 @@ test("an explicit executor pause clears an expired infrastructure timer and cann
   assert.equal(saved().ui.autopilot.execute, false);
 });
 
-function finishHost({ kind = "task", owner = "run_100_1", missing = false, failWrites = 0, commitBeforeError = false, duplicate = false } = {}) {
-  // Task rows key verification by id; request rows must look like the real
-  // store's direct requests — no id, so agentModes.requestKey digests
-  // at/prompt identity instead of taking the id shortcut.
-  const ref = { ...(kind === "task" ? { id: "task" } : {}), title: "Fixture work", prompt: "Full fixture obligation", at: 5, status: kind === "task" ? "active" : "running", runId: owner, runFailures: 4, verifyAttempts: 2 };
-  let board = { tasks: kind === "task" && !missing ? [structuredClone(ref)] : [], requests: kind === "request" && !missing ? [structuredClone(ref)] : [] };
-  if (duplicate) board.requests.push({ ...ref, runId: undefined, status: undefined });
-  const entry = { id: "run_100_1", taskId: kind === "task" ? "task" : null, title: ref.title, startedAt: 1, finished: false, spoke: true, sawDone: false, outputTail: ["new failure context"], handoffs: [{ title: "Follow up", prompt: "More work" }], resultNote: { raw: "done: changed; remaining: a follow-up", parts: { done: "changed", remaining: "a follow-up" } } };
-  const autopilot = { execute: true, jobs: [entry], parallel: 1, infraFailures: 0 };
-  const effects = [], timers = [], logs = [], records = [], roles = [];
+// `breaker` lets several finished runs share one autopilot, so the executor's
+// infrastructure breaker can be driven across runs.
+// Only tasks run (an inbox request is promoted first), so the finished job is
+// always a board task. `duplicate` leaves the inbox copy promotion came from.
+function finishHost({ owner = "run_100_1", missing = false, failWrites = 0, commitBeforeError = false, duplicate = false, breaker = null } = {}) {
+  const ref = { id: "task", title: "Fixture work", prompt: "Full fixture obligation", at: 5, status: "active", runId: owner, runFailures: 4, verifyAttempts: 2 };
+  let board = { tasks: !missing ? [structuredClone(ref)] : [], requests: [] };
+  if (duplicate) board.requests.push({ title: ref.title, prompt: ref.prompt, at: ref.at, source: "chat" });
+  const entry = { id: "run_100_1", taskId: "task", title: ref.title, startedAt: 1, finished: false, spoke: true, sawDone: false, outputTail: ["new failure context"], handoffs: [{ title: "Follow up", prompt: "More work" }], resultNote: { raw: "done: changed; remaining: a follow-up", parts: { done: "changed", remaining: "a follow-up" } } };
+  const autopilot = breaker ? Object.assign(breaker, { jobs: [entry] }) : { execute: true, jobs: [entry], parallel: 1, infraFailures: 0 };
+  const effects = [], timers = [], logs = [], records = [], roles = [], contexts = [];
   const verificationJobs = [];
   let mutations = 0;
   const env = vm.createContext({
-    Date, console, entry, autopilot, executorResume, job: { kind, title: ref.title, prompt: ref.prompt, source: "chat", ref: structuredClone(ref) }, assistantModule: assistant, taskHandoffs, queueExecutorCheckpoint() {},
+    Date, console, entry, autopilot, executorResume, executorCore, job: { kind: "task", title: ref.title, prompt: ref.prompt, source: "chat", ref: structuredClone(ref) }, assistantModule: assistant, taskHandoffs, queueExecutorCheckpoint() {},
     agentModes, verificationJobs, runVerificationJobs: async () => effects.push("verify"),
     eyes: { findRunSession: () => ({ id: "own-session" }), readJson: async (key) => key === "history" ? [] : {}, writeJson: async (key, value) => records.push([key, structuredClone(value)]) },
     releaseFiles: () => effects.push("release"), discardEntry: () => { autopilot.jobs = autopilot.jobs.filter((item) => item !== entry); effects.push("release"); },
@@ -168,7 +172,7 @@ function finishHost({ kind = "task", owner = "run_100_1", missing = false, failW
     },
     withBoardLock: async (fn) => fn(), logLine: (text) => logs.push(text), assistantClip: (text, limit) => String(text).slice(0, limit),
     assistantHearBuilder: () => { effects.push("heard"); return { wakeOverseer: true }; },
-    assistantNodeContext: () => effects.push("node"), taskTarget: (id) => id, sessionTarget: (id) => id,
+    assistantNodeContext: (...args) => { contexts.push(args); effects.push("node"); }, taskTarget: (id) => id, sessionTarget: (id) => id,
     emitAutopilot() {}, send() {}, pushAutopilotHistory: (kind) => effects.push(`history:${kind}`),
     runExecutorHandoffs: async () => effects.push("handoff"), assistantAppendReply: () => effects.push("reply"), saveAssistant: async () => {},
     assistantEnqueueRole: (role, priority, options) => { roles.push({ role, priority, options }); effects.push(`role:${role}`); }, assistantAskForWork: () => effects.push("ask"), refreshAutopilotQueue: async () => {},
@@ -180,7 +184,7 @@ function finishHost({ kind = "task", owner = "run_100_1", missing = false, failW
   vm.runInContext(section("async function attributeRunSession(", "function watchRunSession(") +
     `function fixtureFinish() {\n${section("  let timeout = null;", "  entry.reap = finish;")}\nreturn finish; }` +
     section("let executorFillInFlight = null;", "// Work the assistant does on its own plumbing"), env);
-  return { env, entry, autopilot, finish: env.fixtureFinish(), effects, timers, logs, records, roles, verificationJobs, board: () => board, mutations: () => mutations };
+  return { env, entry, autopilot, finish: env.fixtureFinish(), effects, timers, logs, records, roles, contexts, verificationJobs, board: () => board, setRequests: (rows) => { board.requests = rows; }, mutations: () => mutations };
 }
 
 test("worker completion marks cleanup and failure-review role calls as automatic after Pause", async () => {
@@ -190,6 +194,20 @@ test("worker completion marks cleanup and failure-review role calls as automatic
   assert.deepEqual(h.roles.map((entry) => entry.role), ["compactor", "overseer"]);
   assert.ok(h.roles.every((entry) => entry.options?.automatic === true), "automatic completion roles must enter the durable held queue");
   assert.equal(h.board().tasks[0].status, "open", "Pause does not prevent saving the completed attempt");
+});
+
+// The model evaluator's evidence goes to the model that did the work: a CLI
+// builder that fell back to OpenCode ran nothing itself.
+test("a CLI builder that fell back to OpenCode files its attempt under the fallback's model", async () => {
+  for (const [ranRoute, expected] of [[{ cli: "opencode", model: "mefi-zai/glm-5.3", via: "mefi-zai/glm-5.3" }, "opencode"], [undefined, "grok"]]) {
+    const h = finishHost();
+    const recorded = [];
+    h.env.runRoute = { cli: "grok", grok: true, model: "grok-5", via: "grok cli", opencode: { cli: "opencode" } };
+    h.env.recordWorkerAttempt = (entry, route) => recorded.push(route.cli);
+    if (ranRoute) h.entry.ranRoute = ranRoute;
+    await h.finish(0);
+    assert.deepEqual(recorded, [expected]);
+  }
 });
 
 test("a stale task finish cannot report success, spawn follow-ups or modify a new owner's evidence", async () => {
@@ -203,9 +221,9 @@ test("a stale task finish cannot report success, spawn follow-ups or modify a ne
   assert.ok(host.logs.some((line) => line.includes("stale result ignored")));
 });
 
-test("stale request failures never resurrect removed work or reset its retry budget", async () => {
+test("stale task failures never resurrect removed work or reset its retry budget", async () => {
   for (const options of [{ missing: true }, { owner: "next-run" }, { owner: null }]) {
-    const host = finishHost({ kind: "request", ...options });
+    const host = finishHost(options);
     const before = structuredClone(host.board());
     await host.finish(1);
     assert.deepEqual(host.board(), before);
@@ -214,84 +232,133 @@ test("stale request failures never resurrect removed work or reset its retry bud
   }
 });
 
-test("owned request success keeps unclaimed obligations and records only a pending verification verdict", async () => {
-  const host = finishHost({ kind: "request", duplicate: true });
+// Only tasks run; the run records no assistant-history row (that was the
+// retired direct-request record), and the inbox copy of the work is done with,
+// except one an older build's live run still holds.
+test("owned task success keeps its obligations, records a pending verification verdict and releases the inbox copy", async () => {
+  const host = finishHost({ duplicate: true });
+  host.entry.projectPath = "C:/dispatched-task-project";
+  assert.equal(host.board().requests.length, 1);
   await host.finish(0);
-  assert.equal(host.board().requests.length, 2);
-  assert.equal(host.board().requests[0].status, "verifying");
-  assert.deepEqual(Array.from(host.board().requests[0].remaining ?? []), ["Follow up"], "request handoffs remain obligations until verified");
-  assert.equal(host.board().requests[1].status, undefined);
-  // A done report schedules the overseer's verification, keyed by request
-  // identity: exactly one queued job, stamped on the owner's row only.
+  const task = host.board().tasks[0];
+  assert.equal(task.status, "awaiting_verification");
+  assert.deepEqual(Array.from(task.remaining ?? []), ["Follow up"], "handoffs remain obligations until verified");
+  assert.equal(host.board().requests.length, 0, "the inbox copy promotion came from is released");
   assert.equal(host.verificationJobs.length, 1, "the done report queues exactly one verification job");
-  assert.equal(host.verificationJobs[0].taskId, agentModes.requestKey(host.board().requests[0]), "the job is keyed by request identity");
-  assert.equal(host.board().requests[0].verificationRun?.state, "queued", "the owner's row records the pending verification");
-  assert.equal(host.board().requests[1].verificationRun, undefined, "an unclaimed duplicate never gets a verification verdict");
+  assert.equal(host.verificationJobs[0].taskId, "task", "the job is keyed by the task id");
+  assert.equal(host.verificationJobs[0].projectPath, "C:/dispatched-task-project");
+  assert.equal(task.verificationRun?.state, "queued");
   assert.equal(host.entry.sessionId, "own-session", "fast workers are attributed before the first poll");
   assert.ok(host.effects.includes("history:review"));
   assert.ok(!host.effects.includes("history:done"));
+  assert.deepEqual(host.records.map(([key]) => key), ["checkpoints"], "no assistant-history record is written");
   const checkpoints = host.records.find(([key]) => key === "checkpoints")[1];
   assert.match(checkpoints["own-session"][0].note, /awaiting verification/);
+  assert.match(host.contexts.find(([target]) => target === "own-session")[2], /finished, awaiting verification/);
   await host.finish(0);
   assert.equal(host.effects.filter((effect) => effect === "handoff").length, 1);
   assert.equal(host.verificationJobs.length, 1, "a re-settled stale attempt queues no second job");
 });
 
+test("task success never releases an inbox row an older build's live run still holds", async () => {
+  const host = finishHost();
+  host.setRequests([{ title: "Fixture work", prompt: "Full fixture obligation", at: 5, status: "running", runId: "legacy-run", lease: { pid: 9, at: 1 } }]);
+  await host.finish(0);
+  assert.equal(host.board().requests.length, 1, "a claimed row is its owner's to settle");
+  assert.equal(host.board().requests[0].runId, "legacy-run");
+});
+
+test("task verification keeps the dispatched project even if its saved row names another folder", async () => {
+  const host = finishHost();
+  host.entry.projectPath = "C:/dispatched-task-project";
+  host.env.job.ref.projectPath = "C:/stale-saved-project";
+  let observedRoot;
+  host.env.baseCheckForProject = (root) => { observedRoot = root; return 'node --test "tests.js"'; };
+  await host.finish(0);
+  assert.equal(observedRoot, "C:/dispatched-task-project");
+  assert.equal(host.verificationJobs[0].projectPath, observedRoot);
+  assert.deepEqual(Array.from(host.verificationJobs[0].commands), ['node --test "tests.js"']);
+});
+
 test("failed attempts retain their latest evidence and stop at the existing fifth-failure budget", async () => {
-  for (const kind of ["task", "request"]) {
-    const host = finishHost({ kind });
-    await host.finish(1, "fixture error");
-    const row = host.board()[kind === "task" ? "tasks" : "requests"][0];
-    assert.equal(row.runFailures, 5);
-    assert.equal(row.nextRunAt, undefined);
-    assert.equal(row.lastAttempt.runId, host.entry.id);
-    assert.equal(row.lastAttempt.error, "fixture error");
-    assert.equal(row.lastAttempt.tail, "new failure context");
-    assert.equal(row.verifyAttempts, 2);
-    assert.ok(!host.effects.includes("handoff"));
-  }
+  const host = finishHost();
+  await host.finish(1, "fixture error");
+  const row = host.board().tasks[0];
+  assert.equal(row.runFailures, 5);
+  assert.equal(row.nextRunAt, undefined);
+  assert.equal(row.lastAttempt.runId, host.entry.id);
+  assert.equal(row.lastAttempt.error, "fixture error");
+  assert.equal(row.lastAttempt.tail, "new failure context");
+  assert.equal(row.verifyAttempts, 2);
+  assert.ok(!host.effects.includes("handoff"));
+  const checkpoints = host.records.find(([key]) => key === "checkpoints")[1];
+  assert.match(checkpoints["own-session"][0].note, / — failed \(code 1\)$/);
+  assert.match(host.contexts.find(([target]) => target === "own-session")[2], / — failed \(exit 1\)$/);
+});
+
+test("one task stopped by its owner is held for them in the stop's own settlement, and a resume asked for meanwhile puts it first", async () => {
+  const held = finishHost();
+  held.entry.stopUser = true;
+  held.entry.ownerHold = { at: 5, reason: "stopped by you" };
+  await held.finish(1, "stopped by you");
+  const row = held.board().tasks[0];
+  assert.equal(row.status, "open");
+  assert.deepEqual(row.ownerHold, { at: 5, reason: "stopped by you" }, "the hold lands with the stop, so the freed slot cannot claim the card again");
+  assert.equal(row.pin, undefined);
+  assert.equal(backlog.workState(row, Date.now()).blockedBy, "owner");
+  assert.match(row.logs.at(-1).text, /^stopped on request .* held for you$/, "the card says why it waits");
+  const resumed = finishHost();
+  resumed.entry.stopUser = true;
+  resumed.entry.ownerHold = { at: 5, reason: "stopped by you" };
+  resumed.entry.resumeRequested = true;
+  await resumed.finish(1, "stopped by you");
+  const again = resumed.board().tasks[0];
+  assert.equal(again.ownerHold, undefined, "Work on it while the stop was landing cancels the hold");
+  assert.equal(again.pin, true, "and puts the card first");
 });
 
 test("an operator stop saves progress and returns the card to the queue without spending an attempt", async () => {
-  for (const kind of ["task", "request"]) {
-    const host = finishHost({ kind });
-    host.entry.stopUser = true;
-    host.entry.outputTail = ["edits landed; tests still running"];
-    await host.finish(1, "stopped by user");
-    const row = host.board()[kind === "task" ? "tasks" : "requests"][0];
-    assert.equal(row.status, kind === "task" ? "open" : undefined, "an intentional stop returns the work to its queue");
-    assert.equal(row.runId, undefined);
-    assert.equal(row.lease, undefined);
-    assert.equal(row.runFailures, 4, "the operator's choice charges no failure");
-    assert.equal(row.nextRunAt, undefined);
-    assert.equal(row.lastAttempt, undefined, "a stopped run is not filed as failure evidence");
-    assert.equal(row.runProgress.pending, true);
-    assert.deepEqual(row.runProgress.outputTail, ["edits landed; tests still running"]);
-    assert.equal(row.interruptedAttempt.pending, true);
-    assert.equal(host.autopilot.infraFailures, 0);
-    assert.ok(!host.effects.includes("heard"), "a stop is not announced as a failure");
-    assert.ok(!host.effects.includes("handoff"));
-    assert.ok(host.effects.includes("history:stopped"));
-    assert.equal(host.logs.filter((line) => /stopped on request/.test(line)).length, 1);
-    assert.equal(host.mutations(), 1);
-  }
+  const host = finishHost();
+  host.entry.stopUser = true;
+  host.entry.outputTail = ["edits landed; tests still running"];
+  await host.finish(1, "stopped by user");
+  const row = host.board().tasks[0];
+  assert.equal(row.status, "open", "an intentional stop returns the work to its queue");
+  assert.equal(row.runId, undefined);
+  assert.equal(row.lease, undefined);
+  assert.equal(row.runFailures, 4, "the operator's choice charges no failure");
+  assert.equal(row.nextRunAt, undefined);
+  assert.equal(row.lastAttempt, undefined, "a stopped run is not filed as failure evidence");
+  assert.equal(row.runProgress.pending, true);
+  assert.deepEqual(row.runProgress.outputTail, ["edits landed; tests still running"]);
+  assert.equal(row.interruptedAttempt.pending, true);
+  assert.equal(host.autopilot.infraFailures, 0);
+  assert.ok(!host.effects.includes("heard"), "a stop is not announced as a failure");
+  assert.ok(!host.effects.includes("handoff"));
+  assert.ok(host.effects.includes("history:stopped"));
+  assert.equal(host.logs.filter((line) => /stopped on request/.test(line)).length, 1);
+  assert.equal(host.mutations(), 1);
+  const checkpoints = host.records.find(([key]) => key === "checkpoints")[1];
+  assert.match(checkpoints["own-session"][0].note, / — stopped on request — progress saved \(code 1\)$/);
+  assert.match(host.contexts.find(([target]) => target === "own-session")[2], / — stopped on request — progress saved \(exit 1\)$/);
 });
 
 test("a start kill returns the card to the queue on a cooldown without spending one of its five tries", async () => {
-  for (const kind of ["task", "request"]) {
-    const host = finishHost({ kind });
-    host.entry.startKilled = true;
-    host.entry.spoke = false;
-    await host.finish(1, "no session and no output for 3m after spawn — killed as a wedged start");
-    const row = host.board()[kind === "task" ? "tasks" : "requests"][0];
-    assert.equal(row.runFailures, 4, "the runner never started, so the work is not charged for it");
-    assert.equal(row.startFailures, 1, "start kills are counted on their own budget");
-    assert.equal(row.nextRunAt - Date.now() > 30000, true, "the card comes back on a cooldown rather than immediately");
-    assert.equal(row.runId, undefined);
-    assert.equal(row.lease, undefined);
-    assert.equal(host.autopilot.infraFailures, 1, "the executor breaker still sees the infrastructure failure");
-    if (kind === "task") assert.match(row.logs.at(-1).text, /worker never started .* no attempt charged \(start 1\/5\)/);
-  }
+  const host = finishHost();
+  // What the start watchdog records: the start kill and, for the breaker,
+  // the kind of end it was.
+  host.entry.startKilled = true;
+  host.entry.endKind = "start";
+  host.entry.spoke = false;
+  await host.finish(1, "no session and no output for 3m after spawn — killed as a wedged start");
+  const row = host.board().tasks[0];
+  assert.equal(row.runFailures, 4, "the runner never started, so the work is not charged for it");
+  assert.equal(row.startFailures, 1, "start kills are counted on their own budget");
+  assert.equal(row.nextRunAt - Date.now() > 30000, true, "the card comes back on a cooldown rather than immediately");
+  assert.equal(row.runId, undefined);
+  assert.equal(row.lease, undefined);
+  assert.equal(host.autopilot.infraFailures, 1, "the executor breaker still sees the infrastructure failure");
+  assert.match(row.logs.at(-1).text, /worker never started .* no attempt charged \(start 1\/5\)/);
 });
 
 test("start kills past the grace are charged as ordinary failures so a card that wedges its runner still reaches review", async () => {
@@ -304,6 +371,37 @@ test("start kills past the grace are charged as ordinary failures so a card that
   assert.equal(row.startFailures, 5, "the start budget is spent, not extended");
   assert.equal(row.runFailures, 5, "the card is the suspect once its runner has failed to start five times");
   assert.equal(row.nextRunAt, undefined, "a fifth charged failure parks the card for a manual reopen");
+});
+
+// The breaker parks the whole executor after three infrastructure failures in
+// a row. A budget kill (stop("killed after budget")) and a supervised stop
+// both reach finish() with an error message, and used to count: three
+// 25-minute runs that talked the whole time parked every worker.
+test("budget kills and supervised stops never trip the infrastructure breaker; silent early deaths and spawn errors do", async () => {
+  const runs = async (breaker, count, setup) => {
+    for (let run = 0; run < count; run += 1) {
+      const host = finishHost({ breaker });
+      const error = setup(host.entry);
+      await host.finish(1, error);
+    }
+  };
+  const talked = { execute: true, jobs: [], parallel: 1, infraFailures: 0, parkedUntil: 0 };
+  await runs(talked, 3, (entry) => { entry.endKind = "budget"; entry.startedAt = Date.now() - 25 * 60000; return "killed after budget"; });
+  await runs(talked, 3, (entry) => { entry.endKind = "stopped"; entry.startedAt = Date.now() - 30 * 60000; return "wedged — kill timed out"; });
+  assert.equal(talked.infraFailures, 0, "a run that talked is not an infrastructure failure however it was ended");
+  assert.equal(talked.execute, true, "six such runs in a row leave the executor running");
+  assert.equal(talked.parkedUntil, 0);
+
+  const silent = { execute: true, jobs: [], parallel: 1, infraFailures: 0, parkedUntil: 0 };
+  await runs(silent, 3, (entry) => { entry.spoke = false; entry.outputTail = []; entry.startedAt = Date.now() - 2000; return null; });
+  assert.equal(silent.infraFailures, 3, "a run that died inside 15 s without a word is the runner failing");
+  assert.equal(silent.execute, false, "three of them park the executor");
+  assert.ok(silent.parkedUntil > Date.now(), "on the park cooldown, not forever");
+
+  const unspawnable = { execute: true, jobs: [], parallel: 1, infraFailures: 0, parkedUntil: 0 };
+  await runs(unspawnable, 3, (entry) => { entry.endKind = "spawn"; entry.spoke = false; entry.startedAt = Date.now() - 60000; return "spawn opencode ENOENT"; });
+  assert.equal(unspawnable.infraFailures, 3, "a process that could not be created counts however long the claim was held");
+  assert.equal(unspawnable.execute, false);
 });
 
 test("a run that does start clears the card's start-failure streak", async () => {
@@ -337,28 +435,14 @@ test("a failed outcome write holds its slot and retries storage without rerunnin
   assert.equal(host.effects.filter((effect) => effect === "exit-fact").length, 1);
 });
 
-test("a rolled-back request write recovers the row's verification stamp on retry", async () => {
-  const host = finishHost({ kind: "request", failWrites: 1 });
-  await host.finish(0);
-  assert.equal(host.board().requests[0].verificationRun, undefined, "the failed write left no stamp behind");
-  assert.equal(host.verificationJobs.length, 1, "the queue push survived the rolled-back write");
-  await host.timers.shift().fn();
-  assert.equal(host.board().requests[0].status, "verifying");
-  assert.equal(host.verificationJobs.length, 1, "the retried report queues nothing new");
-  assert.equal(host.board().requests[0].verificationRun?.state, "queued", "the retried settlement recovers the stamp via the queued job");
-  assert.equal(host.board().requests[0].verificationRun?.key, assistant.verificationJobKey(agentModes.requestKey(host.board().requests[0]), host.entry.id), "the recovered stamp is keyed by request identity");
-});
-
 test("retrying a partially committed failure does not spend a second retry or duplicate outcome effects", async () => {
-  for (const kind of ["task", "request"]) {
-    const host = finishHost({ kind, failWrites: 1, commitBeforeError: true });
-    await host.finish(1);
-    await host.timers.shift().fn();
-    const row = host.board()[kind === "task" ? "tasks" : "requests"][0];
-    assert.equal(row.runFailures, 5);
-    assert.equal(host.mutations(), 2);
-    assert.equal(host.effects.filter((effect) => effect === "heard").length, 1);
-  }
+  const host = finishHost({ failWrites: 1, commitBeforeError: true });
+  await host.finish(1);
+  await host.timers.shift().fn();
+  const row = host.board().tasks[0];
+  assert.equal(row.runFailures, 5);
+  assert.equal(host.mutations(), 2);
+  assert.equal(host.effects.filter((effect) => effect === "heard").length, 1);
 });
 
 function dispatchHost({ interrupt = null, refuse = false, throwClaim = false, editBeforeClaim = null } = {}) {
@@ -380,7 +464,7 @@ function dispatchHost({ interrupt = null, refuse = false, throwClaim = false, ed
     releaseWrite: (files, owner) => { releases.push(owner); for (const file of files) if (registered.get(file) === owner) registered.delete(file); },
   };
   const env = vm.createContext({
-    Date, path, process: { pid: 999 }, backlog, executorResume, autopilot, autopilotJobSeq: 0, assistantCache: { store: {} },
+    Date, path, process: { pid: 999 }, backlog, executorResume, executorCore, autopilot, autopilotJobSeq: 0, assistantCache: { store: {} },
     assistantModule, getAssistant: async () => assistantModule,
     projectSwitching: false, assistantState: { status: "running" }, executorUpdateHold: () => hold,
     projects: { current: () => ({ id: "external", path: root }), open: () => ({ id: "external", path: root }) }, projectRoot: () => root,
@@ -405,8 +489,8 @@ function dispatchHost({ interrupt = null, refuse = false, throwClaim = false, ed
     },
     fakeSpawn: (entry) => { env.started = entry; return "spawned"; },
   });
-  const pick = section("async function spawnNextJob()", "  // Policy Lab PR1 — the attempt's identity:") + "return fakeSpawn(entry);\n}";
-  vm.runInContext(section("async function releaseExecutorClaim(", "async function spawnNextJob()") + pick, env);
+  const pick = section("async function spawnNextJob(", "  // Policy Lab PR1 — the attempt's identity:") + "return fakeSpawn(entry);\n}";
+  vm.runInContext(section("async function releaseExecutorClaim(", "async function spawnNextJob(") + pick, env);
   return { env, board, root, autopilot, registered, releases, askedPaths, mutations: () => mutations, setHold: (value) => { hold = value; } };
 }
 
@@ -570,9 +654,9 @@ function childHost({ throwFallback = false, throwKill = false, pool = {}, label 
   const entry = { id: "run_100_1", finished: false, spoke: false, handoffs: [], calls: new Set(), issues: [], outputTail: [], outputLog: [], child: null };
   const env = vm.createContext({
     Date: Clock, entry, runRoute: { grok: true, cli: "grok", opencode: { env: {}, modelArgs: "" } }, runRoot: "C:/fixture", prompt: "fixture brief", startedAt: 1,
-    process: { env: {} }, assistantModule: assistant, autopilot: { parallel: 1, jobs: [entry], ...pool }, eyes: {}, queueExecutorCheckpoint() {},
+    process: { env: {} }, assistantModule: assistant, executorActivity, executorCore, autopilot: { parallel: 1, jobs: [entry], ...pool }, eyes: {}, queueExecutorCheckpoint() {},
     job: { kind: "task", ref: { id: "task" }, title: "Fixture work" },
-    EXECUTOR_DONE_MARK: "DONE", EXECUTOR_MAX_HANDOFFS: 3, EXECUTOR_KILL_MS: 600000, EXECUTOR_START_BUDGET_MS: 120000,
+    EXECUTOR_DONE_MARK: "DONE", EXECUTOR_MAX_DEPTH: 3, EXECUTOR_MAX_HANDOFFS: 3, EXECUTOR_KILL_MS: 600000, EXECUTOR_START_BUDGET_MS: 120000,
     parseExecutorHandoff: () => null, agentIssues, logLine() {}, pushAutopilotHistory() {}, executorLog: async () => {}, emitAutopilot() {},
     assistantClip: (text) => text, watchRunSession: () => watches.push("fallback"), sweepSnapshotLocks: async () => {},
     setTimeout: (fn, delay) => { Object.assign(fn, { delay, unref() {} }); timers.push(fn); return fn; }, clearTimeout: (timer) => { timer.cancelled = true; },
@@ -601,6 +685,8 @@ test("late output, close, errors and timers from Grok cannot settle or kill its 
   const oldTimers = host.timers.slice();
   host.first.emit("error", new Error("fixture Grok unavailable"));
   assert.equal(host.entry.child, host.fallback);
+  assert.equal(host.entry.ranRoute?.grok, undefined, "the attempt is recorded against the OpenCode route that replaced Grok");
+  assert.equal(host.entry.ranRoute?.modelArgs, "");
   assert.equal(host.watches.length, 1, "session attribution starts again even if the original poll window elapsed");
   host.first.stdout.emit("data", "DONE\nMEFI_RESULT: done: old result; remaining: none\n");
   host.first.emit("close", 0);
@@ -797,6 +883,47 @@ test("a hung termination helper has its own deadline and cannot hold the recover
   assert.equal(h.finishes.length, 1);
 });
 
+// The breaker reads entry.endKind, so each ender must record what it was;
+// the error text a finish carries is never parsed for it.
+test("each attempt's end is recorded by what ended it, and a fallback attempt starts clean", () => {
+  const budget = childHost();
+  budget.first.stdout.emit("data", "working\n");
+  budget.timers.find((timer) => timer.delay === 600000)();
+  budget.killers[0].emit("close", 0);
+  assert.deepEqual(budget.finishes, [{ code: 1, error: "killed after budget" }]);
+  assert.equal(budget.entry.endKind, "budget");
+
+  const supervised = childHost();
+  supervised.first.stdout.emit("data", "working\n");
+  supervised.entry.stop("wedged — kill timed out");
+  supervised.killers[0].emit("close", 0);
+  assert.equal(supervised.finishes.length, 1);
+  assert.equal(supervised.entry.endKind, "stopped", "supervision and the operator stop with the default kind");
+
+  const wedged = childHost();
+  wedged.advance(120001);
+  wedged.timers.find((timer) => timer.delay === 120000)();
+  assert.equal(wedged.entry.endKind, "start");
+  wedged.killers[0].emit("close", 0);
+  assert.equal(wedged.entry.child, wedged.fallback, "the wedged CLI start fell back to opencode");
+  assert.equal(wedged.entry.endKind, undefined, "the fallback attempt carries no end of its own yet");
+  wedged.fallback.stdout.emit("data", "working on the replacement\n");
+  wedged.fallback.emit("close", 1);
+  assert.deepEqual(wedged.finishes, [{ code: 1, error: null }]);
+  assert.equal(wedged.entry.endKind, undefined, "a replacement that talked and failed is the job, not a start kill");
+
+  const unspawnable = childHost({ throwFallback: true });
+  unspawnable.first.emit("error", new Error("spawn grok ENOENT"));
+  assert.equal(unspawnable.entry.endKind, "spawn");
+  assert.match(unspawnable.finishes[0].error, /fallback could not start/);
+
+  const broken = childHost();
+  broken.first.emit("error", new Error("spawn grok ENOENT"));
+  broken.fallback.emit("error", new Error("spawn cmd.exe EACCES"));
+  assert.deepEqual(broken.finishes, [{ code: 1, error: "spawn cmd.exe EACCES" }]);
+  assert.equal(broken.entry.endKind, "spawn");
+});
+
 test("assistant supervision requests a safe stop instead of settling a still-live worker", () => {
   const stopped = [], reaped = [], problems = [];
   const live = { startedAt: 1, pid: 11, child: { pid: 11 }, title: "Overdue worker", stop: (reason) => stopped.push(reason), reap: () => assert.fail("a live worker must keep its claim") };
@@ -864,7 +991,7 @@ test("a run that worked until its budget ran out does not trip the infrastructur
   assert.equal(worked.autopilot.execute, true);
   const silent = finishHost();
   silent.autopilot.infraFailures = 2;
-  Object.assign(silent.entry, { spoke: false, startKilled: true });
+  Object.assign(silent.entry, { spoke: false, startKilled: true, endKind: "start" });
   await silent.finish(1, "no session and no output for 3m after spawn — killed as a wedged start");
   assert.equal(silent.autopilot.execute, false, "a third silent start still parks the executor");
 });
@@ -914,10 +1041,12 @@ test("an operator stop and an uncharged requeue are not announced as failures", 
     await h.finish(1, h.entry.stopUser ? "stopped by user" : "no session and no output for 3m after spawn — killed as a wedged start");
     return { reply: replies[0], history: h.effects.filter((effect) => effect.startsWith("history:")) };
   };
+  // finish() posts nothing to the thread itself: the task notice feed reads
+  // settle's write, so a stop or an uncharged requeue never reads "Failed".
   const stopped = await said((h) => { h.entry.stopUser = true; });
-  assert.equal(stopped.reply, "Stopped (progress saved): Fixture work.");
-  const requeued = await said((h) => Object.assign(h.entry, { spoke: false, startKilled: true }));
-  assert.equal(requeued.reply, "Waiting to retry (not charged): Fixture work.");
+  assert.equal(stopped.reply, undefined);
+  const requeued = await said((h) => Object.assign(h.entry, { spoke: false, startKilled: true, endKind: "start" }));
+  assert.equal(requeued.reply, undefined);
   assert.deepEqual(requeued.history, ["history:requeued"]);
 });
 
@@ -989,4 +1118,170 @@ test("supervision measures an opencode fallback from its own start, not from the
   assert.deepEqual(stopped, [], "the replacement is inside its own kill budget");
   env.assistantSuperviseJobs(1100001);
   assert.deepEqual(stopped, ["wedged — kill timed out"]);
+});
+
+// ---- the real fill, claim and launch (tests/fixtures/host_executor.mjs) ----
+
+const boardTask = (id, extra = {}) => ({ id, title: `Fixture card ${id}`, prompt: `Build ${id} as its brief says.`, status: "open", createdAt: 1, files: [`src/${id}.js`], ...extra });
+// A card whose saved record cannot be turned into a worker prompt: the
+// claim lands, then assembly throws, exactly as a malformed record does.
+const breakPrompt = (h, ids) => {
+  const real = h.env.taskContext;
+  h.env.taskContext = { ...real, buildTaskHandoff: (ref, options) => {
+    if (ids.has(ref?.id)) throw new Error("fixture record is malformed");
+    return real.buildTaskHandoff(ref, options);
+  } };
+};
+const releases = (h) => h.records.filter((row) => row?.event === "release");
+
+test("a card whose prompt cannot be built is charged, cooled down and skipped, and the card behind it starts in the same fill", async () => {
+  const h = executorHost({ tasks: [boardTask("broken", { createdAt: 1 }), boardTask("healthy", { createdAt: 2 })] });
+  breakPrompt(h, new Set(["broken"]));
+  h.wake();
+  await h.pump();
+  assert.deepEqual(h.starts.map((row) => row.taskId), ["healthy"], "the head of the queue no longer blocks the card behind it");
+  const broken = h.board().tasks.find((row) => row.id === "broken");
+  assert.equal(broken.status, "open");
+  assert.equal(broken.runId, undefined);
+  assert.equal(broken.lease, undefined);
+  assert.equal(broken.claimFailures, 1);
+  assert.equal(broken.nextRunAt, h.now() + 60000, "a short cooldown, then it may try again");
+  assert.equal(broken.runFailures, undefined, "no worker ran, so no attempt is charged");
+  assert.equal(broken.lastRunError, undefined, "a Studio-side launch failure is not handed to the next worker to diagnose");
+  assert.match(broken.logs.at(-1).text, /^not launched — prompt build failed · requeued in 1m \(1\/3\)/);
+  assert.equal(backlog.workState(broken, h.now(), { tasks: h.board().tasks }).stage, "cooling");
+  assert.deepEqual(releases(h).map((row) => [row.reason, row.charged]), [["prompt build failed", true]]);
+  assert.equal(h.autopilot.fillReleased, null, "the per-fill skip list ends with its fill");
+});
+
+test("a card released earlier in the same fill is not picked again even before its cooldown is saved", async () => {
+  const h = executorHost({ tasks: [boardTask("released", { createdAt: 1 }), boardTask("next", { createdAt: 2 })] });
+  h.autopilot.fillReleased = new Set(["released"]);
+  assert.equal(await h.env.spawnNextJob(), "spawned");
+  assert.deepEqual(h.starts.map((row) => row.taskId), ["next"]);
+  h.autopilot.fillReleased = null;
+});
+
+test("three failed launches in a row park the card under a hold that Try again releases", async () => {
+  const h = executorHost({ tasks: [boardTask("broken")] });
+  breakPrompt(h, new Set(["broken"]));
+  for (const [tries, cooldown] of [[1, 60000], [2, 120000]]) {
+    h.wake();
+    await h.pump();
+    const row = h.board().tasks[0];
+    assert.equal(row.claimFailures, tries);
+    assert.equal(row.nextRunAt, h.now() + cooldown);
+    h.advance(cooldown + 1);
+  }
+  h.wake();
+  await h.pump();
+  const parked = h.board().tasks[0];
+  assert.equal(parked.status, "open");
+  assert.equal(parked.claimFailures, undefined, "the count restarts under the hold, so a retry gets three more claims");
+  assert.equal(parked.nextRunAt, undefined);
+  assert.equal(parked.loopGuard.by, "executor");
+  assert.equal(parked.loopGuard.kind, "claim");
+  assert.equal(parked.loopGuard.count, 3);
+  const state = backlog.workState(parked, h.now(), { tasks: h.board().tasks });
+  assert.equal(state.stage, "blocked");
+  assert.match(state.reason, /could not be launched 3 times in a row: prompt build failed/);
+  assert.match(parked.logs.at(-1).text, /parked after 3 tries/);
+  h.advance(60 * 60000);
+  h.wake();
+  await h.pump();
+  assert.equal(releases(h).length, 3, "a parked card is never claimed again on its own");
+  assert.equal(h.starts.length, 0);
+  assert.equal(backlog.workState(backlog.retryTask(parked, h.now()), h.now()).stage, "ready", "Try again releases the hold");
+});
+
+test("machine pressure after the claim releases it without charging the card", async () => {
+  let capacityReads = 0, leaseReads = 0;
+  const h = executorHost({ tasks: [boardTask("pressed")], workerCapacity: async () => (++capacityReads === 2
+    ? { canStart: false, reason: "fixture memory pressure", resources: null }
+    : { canStart: true, reason: null, resources: { cpuPercent: 15, availableMemoryMB: 8192, totalMemoryMB: 32768 } }) });
+  assert.equal(await h.env.spawnNextJob(), "resources", "capacity fell between the claim and the launch");
+  h.machine.leaseStatus = async () => ({ exclusive: ++leaseReads === 2 });
+  assert.equal(await h.env.spawnNextJob(), "busy", "an exclusive lease arrived between the claim and the launch");
+  const row = h.board().tasks[0];
+  assert.equal(row.status, "open");
+  assert.equal(row.claimFailures, undefined);
+  assert.equal(row.nextRunAt, undefined);
+  assert.equal(row.loopGuard, undefined);
+  assert.ok(releases(h).every((release) => release.charged === undefined), "pressure releases are never charged");
+  assert.equal(await h.env.spawnNextJob(), "spawned", "the same card is picked straight away once the machine allows");
+  assert.deepEqual(h.starts.map((start) => start.taskId), ["pressed"]);
+});
+
+test("a worker that does launch ends the card's failed-launch streak", async () => {
+  const h = executorHost({ tasks: [boardTask("flaky")] });
+  const failing = new Set(["flaky"]);
+  breakPrompt(h, failing);
+  h.wake();
+  await h.pump();
+  assert.equal(h.board().tasks[0].claimFailures, 1);
+  failing.clear();
+  h.advance(60001);
+  h.wake();
+  await h.pump();
+  assert.deepEqual(h.starts.map((row) => row.taskId), ["flaky"]);
+  await h.finish("flaky");
+  assert.equal(h.board().tasks[0].status, "awaiting_verification");
+  assert.equal(h.board().tasks[0].claimFailures, undefined);
+});
+
+// backlog.workState calls a card with no status, "pending" or "queued" Ready;
+// the dispatcher used to take "open" only, so such a card sat Ready forever.
+test("legacy queued statuses dispatch exactly as the board reports them ready", async () => {
+  for (const status of [undefined, "pending", "queued"]) {
+    const legacy = boardTask("legacy");
+    if (status === undefined) delete legacy.status;
+    else legacy.status = status;
+    const h = executorHost({ tasks: [legacy] });
+    assert.equal(backlog.workState(h.board().tasks[0], h.now(), { tasks: h.board().tasks }).stage, "ready", `${status ?? "no status"} reads as Ready`);
+    h.wake();
+    await h.pump();
+    assert.deepEqual(h.starts.map((row) => row.taskId), ["legacy"], `${status ?? "no status"} is dispatched`);
+    const claimed = h.board().tasks[0];
+    assert.equal(claimed.status, "active", "the claim normalises it");
+    assert.equal(claimed.runId, h.starts[0].runId);
+  }
+});
+
+// A CLI whose process cannot even be created falls back to opencode. That
+// path used to return "spawned" before the launch epilogue, so the run had no
+// start ledger row, no "run" history entry and no progress polling.
+test("a CLI spawn that throws falls back to opencode through the common launch epilogue", async () => {
+  const h = executorHost({ tasks: [boardTask("cli")] });
+  h.env.executorRunEnv = async () => ({ via: "grok cli", cli: "grok", grok: true, modelArgs: "", env: {}, opencode: { cli: "opencode", via: "opencode default", modelArgs: "", env: {} } });
+  const spawn = h.env.spawn;
+  h.env.spawn = (command, args, options) => {
+    if (command === "grok") throw new Error("spawn grok ENOENT");
+    return spawn(command, args, options);
+  };
+  const polled = [];
+  h.env.watchJobProgress = (_eyes, entry) => polled.push(entry.id);
+  assert.equal(await h.env.spawnNextJob(), "spawned");
+  assert.equal(h.starts.length, 1, "the opencode replacement is the one live child");
+  const entry = h.autopilot.jobs[0];
+  assert.equal(entry.child, h.starts[0].child);
+  assert.ok(h.records.some((row) => row?.event === "fallback"), "the fallback is on the ledger");
+  const start = h.records.find((row) => row?.event === "start");
+  assert.ok(start, "the fallback's launch writes the start row");
+  assert.equal(start.via, "opencode default", "naming the route that actually runs");
+  assert.equal(start.pid, h.starts[0].child.pid);
+  assert.ok(h.autopilot.history.some((row) => row.kind === "run" && row.text === "started: Fixture card cli"));
+  assert.deepEqual(polled, [entry.id], "progress polling starts for the replacement");
+  assert.ok(h.logs.some((line) => line === "[autopilot] opencode run via opencode default (task): Fixture card cli"));
+});
+
+test("when neither the CLI nor its fallback can be created the run settles as a spawn failure, with no start recorded", async () => {
+  const h = executorHost({ tasks: [boardTask("dead")] });
+  h.env.executorRunEnv = async () => ({ via: "grok cli", cli: "grok", grok: true, modelArgs: "", env: {}, opencode: { cli: "opencode", via: "opencode default", modelArgs: "", env: {} } });
+  h.env.spawn = () => { throw new Error("spawn ENOENT"); };
+  assert.equal(await h.env.spawnNextJob(), "empty");
+  for (let turn = 0; turn < 10 && h.autopilot.jobs.length; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(h.autopilot.jobs.length, 0, "the claim is settled and its slot freed");
+  assert.equal(h.records.some((row) => row?.event === "start"), false, "a run that never started is never recorded as started");
+  assert.equal(h.autopilot.infraFailures, 1, "a process that cannot be created is an infrastructure failure");
+  assert.equal(h.board().tasks[0].status, "open");
 });

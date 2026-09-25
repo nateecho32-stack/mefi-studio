@@ -228,6 +228,13 @@ function createProjects({ defaultRoot, studioRoot, saved = {}, preferredRoot = n
           return unavailableChecks();
         }
       };
+      if (eyes.listSessionActiveTools) scoped.listSessionActiveTools = async (options = {}) => {
+        try {
+          const directory = await eyes.sessionDirectory?.({ dbPath: options.dbPath, sessionId: options.sessionId });
+          if (!directory || !inProject(directory)) return { available: false, tools: [], truncated: false };
+          return await eyes.listSessionActiveTools(options);
+        } catch { return { available: false, tools: [], truncated: false }; }
+      };
       for (const method of ["listTodos", "listChanges", "listChatTexts", "activitySince"]) {
         if (typeof eyes[method] !== "function") continue;
         scoped[method] = async (options = {}) => {

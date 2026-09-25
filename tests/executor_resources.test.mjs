@@ -122,10 +122,12 @@ test("a throw after the durable claim releases it instead of stranding the slot"
 test("a request typed into the inbox with no title starts under a title taken from its prompt", async () => {
   // Exactly what the Explorer's request box files: { prompt, source: "manual" }.
   const h = executorHost({ parallel: 2, requests: [{ prompt: "Make the header sticky\nIt scrolls away on long pages.", at: 5, source: "manual" }] });
+  // Inbox rows run as cards: promotion titles a typed ask from its brief's
+  // first line (workAdmission.requestTitle), then the fill starts it.
+  assert.equal(await h.env.promoteRequestsToTasks(), 1);
   await h.env.executeNextRequest();
   assert.equal(h.starts.length, 1, "the manual request starts instead of throwing after its claim");
   assert.equal(h.autopilot.jobs[0].title, "Make the header sticky");
-  assert.equal(h.board().requests[0].status, "running");
   assert.equal(h.board().requests[0].title, undefined, "the inbox row itself is not rewritten");
 });
 
@@ -303,20 +305,21 @@ test("switching a full manual pool to machine-managed mode dispatches existing r
   assert.equal(h.autopilot.execute, true);
 });
 
-test("supervision retries a resource-held adaptive queue without waiting for an existing worker to finish", async () => {
+// Supervision reports; it no longer asks for a foreman pass every 30 s. The
+// foreman skips the pool cap and runs every minute, so its own next pass
+// retries a resource-held queue without waiting for a worker to finish.
+test("the foreman's next pass retries a resource-held adaptive queue; supervision asks for no extra pass", async () => {
   let underPressure = true;
   const h = executorHost({ adaptiveParallel: true, parallel: 1, tasks: [task("running"), task("waiting")], workerCapacity: async ({ running }) => underPressure && running >= 1 ? pressure("lag") : healthy() });
   h.wake(); await h.pump();
   assert.equal(h.starts.length, 1);
   const before = h.roleRequests.length;
-  h.advance(29000);
+  h.advance(31000);
   h.env.assistantSuperviseJobs(h.now());
-  assert.equal(h.roleRequests.length, before, "supervision respects the retry interval");
+  assert.equal(h.roleRequests.length, before, "supervision wakes no foreman of its own");
   underPressure = false;
-  h.advance(2000);
-  h.env.assistantSuperviseJobs(h.now());
-  assert.equal(h.roleRequests.length, before + 1);
-  await h.pump();
+  h.advance(29000);
+  h.wake("foreman cadence"); await h.pump();
   assert.equal(h.starts.length, 2);
   assert.equal(h.autopilot.jobs.length, 2);
   assert.equal(h.autopilot.waiting, null);

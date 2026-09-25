@@ -153,6 +153,7 @@ export class Element {
     return children;
   }
   append(...children) { this.children.push(...this.adopt(children)); }
+  prepend(...children) { this.children.unshift(...this.adopt(children)); }
   appendChild(child) { this.append(child); return child; }
   replaceChildren(...children) { this.ownText = ""; this.children = this.adopt(children); }
   insertBefore(child, before) {

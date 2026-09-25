@@ -58,6 +58,15 @@ test("every Jev route's key enables task-aware selection", () => {
   assert.match(none.notes.join(" "), /No Jev key/);
 });
 
+test("an OpenRouter key alone sets up the free router as the assistant default", () => {
+  const plan = planAutoSetup({ settings: {}, keys: { openrouter: true }, clis: [] });
+  assert.equal(plan.ok, true);
+  assert.equal(plan.active.provider, "openrouter");
+  assert.equal(plan.active.modelSelection, "jev");
+  assert.equal(plan.changes.jevRoute, "openrouter");
+  assert.match(plan.notes.join(" "), /free models router by default/);
+});
+
 test("a Grok-only machine configures the CLI login route without inventing a key", () => {
   const plan = planAutoSetup({ settings: {}, keys: {}, clis: [cli("grok", true)] });
   assert.equal(plan.ok, true);

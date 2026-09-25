@@ -8,6 +8,7 @@ const { fileURLToPath } = require("node:url");
 const root = process.env.MEFI_COMMAND_RENDER_FIXTURE;
 if (!root || !path.isAbsolute(root)) throw new Error("An isolated Command renderer fixture directory is required");
 const started = Date.now();
+const manual = process.env.MEFI_COMMAND_RENDER_MANUAL === "1";
 const report = { errors: [], networkAttempts: [], processAttempts: [] };
 app.setName("Studio Command Renderer Fixture");
 for (const name of ["userData", "sessionData", "crashDumps"]) {
@@ -74,15 +75,80 @@ app.whenReady().then(async () => {
       { at: now - 120000, kind: "run", title: "Swamp biome rename", ok: false, taskId: null, sessionId: "command_render_session", seconds: 40, detail: "stopped without reporting done" },
     ] },
     readCatalog: JSON.parse(fs.readFileSync(path.join(root, "data", "models.json"), "utf8")),
+    planningList: { ok: true, projectId: "command-fixture", plans: [] },
+    modelPerformanceSnapshot: { ok: true, snapshot: { calls: 0, models: [], recent: [], ranking: { notes: [] } } },
+    modelLabContext: { ok: true, estimatedTokens: 84, budgetTokens: 4000, sections: [{ label: "Task brief", kind: "brief", estimatedTokens: 84, included: true, text: "Verify the Studio menu and layout remaster in an isolated project." }] },
+    usageForTask: { ok: true, measured: false, note: "This fixture has no paid calls." },
   };
+  if (manual) {
+    Object.assign(responses, {
+      launchStudio:{ok:false,error:"Not available in isolated fixture."},
+      getApiKey:{saved:false},
+      jevStatus:{configured:false,enabled:true,route:"vercel",routes:{}},
+      getAiRouting:{provider:"auto",modelSelection:"fixed",models:{},providerModels:{},autoProviders:["zai","opencode"],autoFallback:false,executorCli:"opencode",executorTier:"auto",roleProviders:{},jevConfigured:false},
+      cliStatus:["opencode","grok","claude","codex","antigravity"].map(id=>({id,name:id,installed:false})),
+      serverStylerStatus:{state:"missing",message:"Not configured in isolated fixture."},
+      setApiKey:{ok:false,error:"Credentials are not saved in this isolated review fixture."},
+      clearApiKey:{ok:false,error:"This isolated review fixture has no saved credentials."},
+      testApiKey:{ok:false,error:"Provider calls are disabled in this isolated review fixture."},
+    });
+    responses.projectsList.projects.push({id:"empty-fixture",name:"Empty project",path:path.join(root,"empty-project")});
+    responses.tasksList.tasks.push(
+      {id:"review_complete",title:"Completed interface review",status:"done",createdAt:now,updatedAt:now,logs:[{text:"Acceptance checks passed."}]},
+      {id:"review_blocked",title:"Connect a design reference",status:"blocked",createdAt:now,updatedAt:now,blocker:"Waiting for a reference file"},
+      {id:"review_failed",title:"Retry visual comparison",status:"failed",createdAt:now,updatedAt:now,lastError:"Fixture failure: screenshot unavailable"},
+      {id:"review_active",title:"Review compact layouts",status:"active",createdAt:now,updatedAt:now}
+    );
+    responses.planningList.plans = [{id:"review-plan",projectId:"command-fixture",title:"Compact workspace",destination:"Make every menu readable and easy to navigate.",outOfScope:"Live provider calls",status:"draft",createdAt:now,updatedAt:now,unknowns:[],questions:[],history:[],revisions:[]}];
+    responses.ideasList = {ok:true,projectId:"command-fixture",ideas:[
+      {id:"review-idea",title:"Pin the current task",detail:"Keep the active task available while moving between Plans and Sessions.",source:"project notes",status:"new",read:false,at:now,tags:["navigation","work"]},
+      {id:"review-idea-kept",title:"Remember the selected inspector",detail:"Restore the last inspector pane when returning to a session.",source:"review",status:"keep",read:true,at:now-60000,tags:["navigation"]}
+    ]};
+    responses.tasksList.tasks[0] = {...responses.tasksList.tasks[0],prompt:"Check every primary destination and nested menu at desktop and compact window sizes.",acceptance:["Navigation remains reachable","Drafts survive moving between views"],logs:[{at:now-30000,text:"Prepared isolated sample projects."}],references:[{title:"Interface review",text:"Compact by default; detailed controls expand on demand."}]};
+    responses.assistantState.state = {...responses.assistantState.state,status:"running",messages:[{role:"user",text:"Review the workspace navigation.",content:"Review the workspace navigation.",at:now-10000},{role:"assistant",text:"The sample project is ready. Inspect Work, Live and Models, then compare the Settings categories.",content:"The sample project is ready. Inspect Work, Live and Models, then compare the Settings categories.",at:now}],agents:[
+      {role:"reference",status:"running",text:"Reviewing compact layouts",target:{kind:"task",id:"review_active"}},
+      {role:"auditor",status:"running",text:"Checking the session evidence",target:{kind:"session",id:"command_render_session"}}
+    ],questions:[{id:"review-question",at:now,kind:"question",source:"build",title:"Retry the visual comparison?",detail:"The sample worker stopped before saving its screenshot.",status:"open",options:[
+      {id:"retry",label:"Retry once more",recommended:true,action:{kind:"backlog",action:"retry",payload:{taskId:"review_failed"}}},
+      {id:"hold",label:"Leave it for review",dismiss:true}
+    ]}]};
+    responses.assistantStatus.status = {enabled:true,execute:true,mode:"swarm",parallel:2,running:[{id:"review-worker",taskId:"review_active",title:"Review compact layouts",startedAt:now-15000}],history:[]};
+    responses.eyesState.sessions[0] = {...responses.eyesState.sessions[0],agent:"reviewer",model:{id:"fixture-model"},cost:0,tokens:{input:84,output:32}};
+    responses.eyesState.changes = [{id:"review-change",sessionId:"command_render_session",tool:"edit",file:"renderer/navigation.css",time:now-30000,additions:2,deletions:1,diff:"--- a/renderer/navigation.css\n+++ b/renderer/navigation.css\n@@ -1 +1,2 @@\n-.navigation { gap: 20px; }\n+.navigation { gap: 8px; }\n+.navigation button { min-height: 36px; }"}];
+    responses.eyesState.pngs = [{path:path.join(root,"review-evidence.png"),name:"Review evidence",mtime:now,size:0}];
+    responses.eyesLog = {ok:true,text:"[fixture] Sample review started.\n[fixture] Compact navigation updated.\n[fixture] Waiting for visual comparison decision."};
+  }
+  // Pure graph helpers supply the same valid catalog and default map as Studio;
+  // this imports no host services, project state, credentials or worker code.
+  const brains = require(path.resolve(__dirname, "../../scripts/brains.cjs"));
+  const reviewMap = brains.defaultMap({id:"review-pipeline",name:"Review pipeline"});
+  responses.brainsCatalog = {ok:true,catalog:brains.catalog()};
+  responses.brainsState = {ok:true,projectId:"command-fixture",activeId:reviewMap.id,maps:[brains.summarize(reviewMap)]};
+  responses.brainsRead = {ok:true,map:reviewMap,compiled:brains.compileMap(reviewMap),active:true};
+  if (process.env.MEFI_NODE_VIEWS_CAPTURE) require("./node-views-fixture.cjs").seed(responses, now);
   const preload = path.join(root, "read-only-preload.cjs");
   fs.writeFileSync(preload, `const {contextBridge}=require("electron");
     const responses=${JSON.stringify(responses)};
-    const listeners={onAssistant:[],onAssistantStatus:[]};
+    const listeners={onAssistant:[],onAssistantStatus:[],onProjects:[],onStudioLog:[],onTasks:[]};
+    const sampleTasks=responses.tasksList.tasks, samplePlans=responses.planningList.plans, sampleIdeas=responses.ideasList.ideas;
     const modePatches=[],assistantActions=[],questionAnswers=[],doneClears=[];
+    let collisionReads=0;
     contextBridge.exposeInMainWorld("mefiStudio",{
-      ...Object.fromEntries(Object.keys(responses).map(key=>[key,async()=>{if(key==='eyesCollisions')await new Promise(resolve=>setTimeout(resolve,5000));return responses[key];}])),
+      ...Object.fromEntries(Object.keys(responses).map(key=>[key,async()=>{if(key==='eyesCollisions'&&collisionReads++===0)await new Promise(resolve=>setTimeout(resolve,5000));return responses[key];}])),
       ...Object.fromEntries(Object.keys(listeners).map(key=>[key,callback=>{listeners[key].push(callback);return()=>{};}])),
+      assistantMessage:async()=>({ok:false,error:'Messages are disabled in this isolated review fixture.'}),
+      assistantPrefs:async patch=>{responses.assistantState.state.prefs={...responses.assistantState.state.prefs,...patch};return {ok:true,prefs:responses.assistantState.state.prefs};},
+      prefsSet:async patch=>{responses.prefsGet.prefs={...responses.prefsGet.prefs,...patch};return responses.prefsGet;},
+      ideasSave:async ideas=>{responses.ideasList={...responses.ideasList,ideas};return responses.ideasList;},
+      projectsSelect:async id=>{
+        if(!responses.projectsList.projects.some(project=>project.id===id))return {ok:false,error:'Unknown fixture project'};
+        responses.projectsList={...responses.projectsList,activeId:id};
+        responses.tasksList={ok:true,projectId:id,tasks:id==='empty-fixture'?[]:sampleTasks};
+        responses.planningList={ok:true,projectId:id,plans:id==='empty-fixture'?[]:samplePlans};
+        responses.ideasList={ok:true,projectId:id,ideas:id==='empty-fixture'?[]:sampleIdeas};
+        for(const callback of listeners.onProjects)callback(responses.projectsList);
+        return responses.projectsList;
+      },
       assistantAutopilot:async patch=>{
         modePatches.push(patch);
         await new Promise(resolve=>setTimeout(resolve,80));
@@ -93,6 +159,13 @@ app.whenReady().then(async () => {
       assistantControl:async action=>{
         assistantActions.push(action);
         await new Promise(resolve=>setTimeout(resolve,80));
+        if(action==='stop-all'){
+          responses.assistantStatus.status={...responses.assistantStatus.status,enabled:false,execute:false,running:[]};
+          responses.assistantState.state={...responses.assistantState.state,status:'paused',agents:[]};
+          for(const callback of listeners.onAssistantStatus)callback(responses.assistantStatus.status);
+          for(const callback of listeners.onAssistant)callback({state:responses.assistantState.state,event:{kind:'control'}});
+          return {ok:true,state:responses.assistantState.state,autopilot:responses.assistantStatus.status};
+        }
         if(!['start-work','pause'].includes(action))return {ok:false,error:'Unsupported fixture action'};
         if(action==='start-work')responses.assistantStatus.status={...responses.assistantStatus.status,execute:true};
         responses.assistantState.state={...responses.assistantState.state,status:action==='pause'?'paused':'running'};
@@ -100,7 +173,14 @@ app.whenReady().then(async () => {
         for(const callback of listeners.onAssistant)callback({state:responses.assistantState.state,event:{kind:'control'}});
         return {ok:true,state:responses.assistantState.state,autopilot:responses.assistantStatus.status};
       },
-      assistantAnswer:async payload=>{questionAnswers.push(payload);return {ok:true,state:responses.assistantState.state};},
+      assistantAnswer:async payload=>{
+        questionAnswers.push(payload);
+        if(${manual}){
+          responses.assistantState.state={...responses.assistantState.state,questions:(responses.assistantState.state.questions||[]).map(question=>question.id===payload.id?{...question,status:'answered',answeredAt:Date.now(),answer:payload}:question)};
+          for(const callback of listeners.onAssistant)callback({state:responses.assistantState.state,event:{kind:'question'}});
+        }
+        return {ok:true,state:responses.assistantState.state};
+      },
       assistantClearDoneLog:async()=>{doneClears.push(true);responses.assistantDoneLog={ok:true,entries:[]};return {ok:true,records:2,entries:[]};}
     });
     contextBridge.exposeInMainWorld("commandFixture",{
@@ -113,11 +193,25 @@ app.whenReady().then(async () => {
       assistantState:()=>responses.assistantState.state,
       status:()=>responses.assistantStatus.status
     });
+    ${process.env.MEFI_NODE_VIEWS_CAPTURE ? `
+    contextBridge.exposeInMainWorld('nodeViewsFixture',{scene:count=>{
+      responses.tasksList.tasks=Array.from({length:count},(_,i)=>({id:'dense-'+i,title:'Task '+(i+1)+': verify wide labels WWW and keyboard navigation across the workspace',status:i===0?'active':'open',createdAt:Date.now(),updatedAt:Date.now()}));
+      if(!count){responses.eyesState.sessions=[];responses.eyesState.todos=[];responses.brainState.pipelines={};responses.brainMap.map.systems=[];}
+      responses.assistantStatus.status.running=[];responses.assistantState.state.agents=[];
+      for(const fn of listeners.onTasks)fn(responses.tasksList.tasks);
+      for(const fn of listeners.onAssistantStatus)fn(responses.assistantStatus.status);
+      for(const fn of listeners.onAssistant)fn({state:responses.assistantState.state});
+    }});
+    localStorage.setItem('mefiStudio.keyHint.v1','1');
+    localStorage.setItem('mefiStudio.community.v1',JSON.stringify({premium:true,validUntil:Date.now()+86400000}));
+    localStorage.setItem('mefiStudio.walkthrough.v1',JSON.stringify({version:1,status:'complete'}));
+    ` : ''}
     localStorage.setItem("mefiStudio.zen","0");
     localStorage.setItem("mefiStudio.zenReactive","0");
     localStorage.setItem("mefiStudio.commandHome","0");
   `);
-  const window = new BrowserWindow({ show: false, width: 1280, height: 800, webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: true, backgroundThrottling: false } });
+  const window = new BrowserWindow({ show: manual, width: manual ? 1440 : 1280, height: manual ? 900 : 800, webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: !manual, backgroundThrottling: false } });
+  window.setMenu(null);
   const contents = window.webContents;
   // The motion section asserts that agents glide from frame to frame, and
   // reduced motion deliberately snaps them to their targets (tree3d flyTo).
@@ -129,14 +223,18 @@ app.whenReady().then(async () => {
   // the renderer starts, so it is sent now (boot reads see it) and awaited
   // only once the page has loaded; awaiting it here would wait forever.
   contents.debugger.attach("1.3");
-  const pinMotion = () => contents.debugger.sendCommand("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "no-preference" }] });
+  const pinMotion = () => contents.debugger.sendCommand("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "no-preference" }, { name: "prefers-reduced-transparency", value: "no-preference" }] });
   pinMotion().catch(() => {});
   contents.setAudioMuted(true);
-  contents.setFrameRate(30);
+  if (!manual) contents.setFrameRate(30);
   contents.setWindowOpenHandler(() => ({ action: "deny" }));
   contents.on("console-message", (_event, detail, oldMessage) => {
     const level = typeof detail === "object" ? detail.level : detail;
-    if (level === "error" || level === 3) report.errors.push(String(typeof detail === "object" ? detail.message : oldMessage));
+    if (level === "error" || level === 3) {
+      const message = String(typeof detail === "object" ? detail.message : oldMessage);
+      if (process.env.MEFI_NODE_VIEWS_SOURCE && message === "ResizeObserver loop completed with undelivered notifications.") (report.baselineResizeWarnings ??= []).push(message);
+      else report.errors.push(message);
+    }
   });
   contents.on("render-process-gone", (_event, detail) => finish(new Error(`Renderer exited: ${detail.reason}`)));
   const run = (code) => contents.executeJavaScript(`(async()=>{${code}})()`, true);
@@ -165,7 +263,34 @@ app.whenReady().then(async () => {
   };
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1" } });
   await pinMotion();
+  if (process.env.MEFI_NODE_VIEWS_CAPTURE) {
+    await require("./node-views-fixture.cjs").capture({ window, contents, run, until, sleep, capturePage, report, root });
+    finish(); return;
+  }
+  if (manual) {
+    await until("window.MefiNav && window.MefiWorkspace && (!window.MefiBoot?.isBooting?.())", "manual remaster fixture startup");
+    await run("window.MefiNav.go('workspace');");
+    await run("return new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))); ");
+    await sleep(100);
+    fs.writeFileSync(path.join(root,"review-evidence.png"),(await capturePage()).toPNG());
+    window.setTitle("Studio remaster review · isolated sample projects");
+    window.show(); window.focus();
+    console.log("Manual Studio remaster fixture ready; close the window to finish.");
+    window.on("closed", () => finish());
+    return;
+  }
   assert.equal(await run("return matchMedia('(prefers-reduced-motion: reduce)').matches;"), false, "the fixture pins full motion");
+  // Validate the finish in the rebuilt document, so losing its stylesheet or
+  // build wiring cannot silently leave a passing fixture with opaque panels.
+  const panelBlur = () => run("return getComputedStyle(document.querySelector('.cmd-rail')).backdropFilter;");
+  assert.match(await panelBlur(), /blur\(/, "the rebuilt Command panel includes its glass finish");
+  assert.equal(await run("return getComputedStyle(document.querySelector('.cmd-center .cmd-search')).backdropFilter;"), "none", "search shares the outer glass instead of stacking another blur");
+  await run("document.documentElement.setAttribute('data-no-blur', '');");
+  assert.equal(await panelBlur(), "none", "Blur off removes the panel filter");
+  await run("document.documentElement.removeAttribute('data-no-blur');");
+  await contents.debugger.sendCommand("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "no-preference" }, { name: "prefers-reduced-transparency", value: "reduce" }] });
+  assert.equal(await panelBlur(), "none", "reduced transparency removes the panel filter");
+  await pinMotion();
   await run(`
     window.__commandPaintFrames=0;
     window.__railPaintFrames=0;
@@ -262,7 +387,7 @@ app.whenReady().then(async () => {
     const firstPaint=window.__commandPaintFrames,paintDeadline=performance.now()+5000;
     let paintedNodes;
     while(performance.now()<paintDeadline){
-      paintedNodes=window.MefiIdle.debugNodes().filter(node=>node.kind!=='agent');
+      paintedNodes=window.MefiIdle.debugNodes().filter(node=>!['agent','assistant','music'].includes(node.kind));
       if(window.__commandPaintFrames>firstPaint&&paintedNodes.length>=8&&paintedNodes.every(node=>node.layoutAnchor&&Number.isFinite(node.x)&&Number.isFinite(node.y)&&Number.isFinite(node.radius)))break;
       await new Promise(resolve=>requestAnimationFrame(resolve));
     }
@@ -369,11 +494,12 @@ app.whenReady().then(async () => {
     window.__fixtureRealNow=Date.now;
     Date.now=()=>window.__fixtureRealNow()+31000;
   `);
-  await until("window.MefiIdle.ambientZenStatus().active", "quiet clock enters ambient Zen");
-  await sleep(550);
-  const zen = await assertGraphClear("ambient Zen with invisible panels");
-  assert.ok(zen.area.w > collapsed.area.w - 1 && zen.area.h > collapsed.area.h + 100, "Zen returns the invisible headers and dock space to the graph");
-  assert.ok(zen.area.w > beforeZen.area.w + 300, "Zen returns both hidden side gutters to the graph");
+  await until("window.MefiIdle.ambientZenStatus().active && window.MefiIdle.directorStatus().directed", "quiet clock enters ambient Zen and its camera flies");
+  await sleep(900);
+  const zen = await run("return {area:window.MefiIdle.graphViewport(),director:window.MefiIdle.directorStatus(),inert:document.getElementById('idle-hud').inert};");
+  assert.ok(zen.director.zen && zen.director.directed && zen.director.camMode === "free", "Zen flies its camera tour");
+  assert.ok(zen.inert, "Zen fades the panels");
+  assert.deepEqual(zen.area, beforeZen.area, "Zen keeps the graph frame, so waking cannot re-seed the layout");
   if (process.env.MEFI_COMMAND_CAPTURE && path.isAbsolute(process.env.MEFI_COMMAND_CAPTURE)) {
     fs.mkdirSync(path.dirname(process.env.MEFI_COMMAND_CAPTURE), { recursive: true });
     fs.writeFileSync(process.env.MEFI_COMMAND_CAPTURE, (await capturePage()).toPNG());
@@ -381,8 +507,20 @@ app.whenReady().then(async () => {
   contents.sendInputEvent({ type: "mouseMove", x: Math.round(beforeZen.area.x + 20), y: Math.round(beforeZen.area.y + 20) });
   await until("!window.MefiIdle.ambientZenStatus().active && !document.getElementById('idle-hud').inert", "native mouse movement restores panels");
   await run("Date.now=window.__fixtureRealNow; delete window.__fixtureRealNow;");
+  // Waking springs the camera home (the overview, zoom 1, the tilt it had)
+  // from wherever the flight was; once it lands the tree is clear again.
+  // The return glide is slower than until()'s five seconds under load.
+  for (const deadline = Date.now() + 15000; !(await run("const d=window.MefiIdle.directorStatus();return !d.active&&d.camMode==='orbit'&&d.zoomTarget===null&&d.pitchHome===null&&d.returning===null;"));) {
+    assert.ok(Date.now() < deadline, "the camera glides home after waking and Orbit takes over");
+    await sleep(50);
+  }
   await sleep(550);
   const awake = await assertGraphClear("restored panels after Zen");
+  // Switch Zen off again: left on, the quiet clock would fly the camera and
+  // fade the menu in the middle of later sections that drive the page
+  // without real input.
+  await run("document.getElementById('idle-ambient-zen').click();");
+  assert.equal(await run("return window.MefiIdle.ambientZenStatus().enabled;"), false, "Zen is off again for the rest of the fixture");
   assert.deepEqual(awake.area, beforeZen.area, "waking restores the unobstructed panel viewport");
   await run("window.MefiIdle.setOrbit(false);");
   // Real status pushes and Chromium frames cover the boundary between the
@@ -691,7 +829,8 @@ app.whenReady().then(async () => {
   await run(`
     window.MefiIdle.setAudioResponse(.35);
     window.MefiIdle.setAudioEffects({waves:true,nodes:true,percussion:false,background:false,splitBands:true,motion:true});
-    window.MefiMusic.open();
+    window.MefiMusic.openAudio(document.getElementById('idle-music-toggle'));
+    document.getElementById('music-audio-reactions').open=true;
     window.__audioCaptureCalls=[];
     window.__audioCaptureMethods={};
     for(const method of ['getUserMedia','getDisplayMedia']){
@@ -764,7 +903,7 @@ app.whenReady().then(async () => {
   }
   report.audio.controls = audioControls;
   await captureAudio("MEFI_AUDIO_CONTROLS_CAPTURE");
-  await run("window.MefiMusic.close();");
+  await run("window.MefiMusic.closeAudio();");
   await run(`
     window.MefiIdle.setMusicReactive(false);
     window.__fixtureAudio.pause();
@@ -793,69 +932,31 @@ app.whenReady().then(async () => {
   `);
   await until("!document.getElementById('workspace-agent-mode').disabled", "Home agent mode loaded");
   report.agentModes = { layouts: [] };
-  report.agentModes.homeSaving = await run(`
-    const control=document.getElementById('workspace-agent-mode');
-    if(control.value!=='swarm')throw new Error('Home missed saved Swarm mode');
-    control.value='cluster';control.dispatchEvent(new Event('change',{bubbles:true}));
-    return control.disabled && control.getAttribute('aria-busy')==='true';
-  `);
-  await until("!document.getElementById('workspace-agent-mode').disabled && document.getElementById('workspace-agent-mode').value==='cluster'", "Home saves Cluster");
+  // Home queue controls now live in Agents setup. The hidden legacy fields
+  // remain synchronized for older integrations, but are not pointer targets.
   await run(`window.MefiNav.go('command');await window.MefiIdle.ready();`);
   await setPanels(false, false);
-  await until("!document.getElementById('idle-feed-agent-mode').disabled && document.getElementById('idle-feed-agent-mode').value==='cluster'", "Command reflects Home selection");
+  await until("!document.getElementById('idle-feed-agent-mode').disabled && document.getElementById('idle-feed-agent-mode').value==='swarm'", "Command reflects saved selection");
   report.agentModes.commandSaving = await run(`
     const control=document.getElementById('idle-feed-agent-mode');
     if(!control.closest('.cmd-tools')||control.closest('#idle-feed'))throw new Error('Agent mode must be in the node tree toolbar');
     if(document.getElementById('idle-feed-toggle').getAttribute('aria-expanded')!=='false')throw new Error('Live work must be collapsed before changing mode');
     control.focus();
     if(document.activeElement!==control)throw new Error('Collapsed Live work hid the mode selector from keyboard focus');
-    control.value='swarm';control.dispatchEvent(new Event('change',{bubbles:true}));
+    control.value='cluster';control.dispatchEvent(new Event('change',{bubbles:true}));
     return control.disabled && control.getAttribute('aria-busy')==='true';
   `);
-  await until("!document.getElementById('idle-feed-agent-mode').disabled && document.getElementById('idle-feed-agent-mode').value==='swarm'", "Command saves Swarm");
+  await until("!document.getElementById('idle-feed-agent-mode').disabled && document.getElementById('idle-feed-agent-mode').value==='cluster'", "Command saves Cluster");
   await run(`
     window.commandFixture.publishAssistant({status:'running',messages:[],prefs:{},work:[],agents:[{role:'cluster-planner',status:'running',text:'Checking the focused task'}]});
     window.commandFixture.publishStatus({...window.commandFixture.status(),mode:'cluster',clusterFocus:{source:'task',id:'command_render_task',title:'Verify real node painting'},clusterAgents:[{id:'planner',role:'planner',status:'running',taskId:'command_render_task',taskTitle:'Verify real node painting',step:'Checking the focused task'}]});
   `);
   await until("document.getElementById('idle-feed-agents-count').textContent==='1 working' && document.getElementById('idle-feed-now').textContent.includes('Task preparation')", "Cluster helper appears once with its real phase");
   report.agentModes.helperCount = await run("return document.getElementById('idle-feed-agents').children.length;");
-  const modeLayout = async (id, label) => {
-    const command = id === "idle-feed-agent-mode";
-    const layout = await run(`
-      const control=document.getElementById(${JSON.stringify(id)});
-      if(!${command})control.scrollIntoView({block:'center',inline:'nearest'});
-      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-      const box=control.getBoundingClientRect();
-      const controls=[...document.querySelectorAll(${JSON.stringify(command ? ".cmd-tools button, .cmd-tools select, .cmd-tools input" : ".ws-backlog select, .ws-backlog input")})].filter(item=>item.getBoundingClientRect().width>0).map(item=>({id:item.id,...item.getBoundingClientRect().toJSON()}));
-      const onTree=!!control.closest('.cmd-tools')&&!control.closest('#idle-feed');
-      const feedCollapsed=document.getElementById('idle-feed-toggle').getAttribute('aria-expanded')==='false';
-      const hit=document.elementFromPoint(box.x+box.width/2,box.y+box.height/2);
-      return {label:${JSON.stringify(label)},width:innerWidth,height:innerHeight,scroll:document.documentElement.scrollWidth,box:box.toJSON(),controls,onTree,feedCollapsed,reachable:hit===control||control.contains(hit)};
-    `);
-    report.agentModes.layouts.push(layout);
-    assert.ok(layout.box.width > 70 && layout.box.height >= 28, `${label}: usable mode selector`);
-    assert.ok(layout.box.x >= 0 && layout.box.right <= layout.width && layout.box.y >= 0 && layout.box.bottom <= layout.height, `${label}: mode selector fits the visible viewport`);
-    assert.ok(layout.scroll <= layout.width + 2, `${label}: no horizontal overflow`);
-    if (command) {
-      assert.ok(layout.onTree && layout.feedCollapsed, `${label}: mode stays on the tree with Live work collapsed`);
-      assert.ok(layout.reachable, `${label}: mode selector receives pointer input`);
-      for (const control of layout.controls) assert.ok(control.x >= 0 && control.right <= layout.width && control.y >= 0 && control.bottom <= layout.height, `${label}: ${control.id} fits the visible toolbar`);
-    }
-    for (const [index, control] of layout.controls.entries()) for (const other of layout.controls.slice(index + 1)) {
-      assert.ok(Math.min(control.right, other.right)-Math.max(control.x, other.x)<=1 || Math.min(control.bottom, other.bottom)-Math.max(control.y, other.y)<=1, `${label}: ${control.id} and ${other.id} do not overlap`);
-    }
-  };
-  await modeLayout("idle-feed-agent-mode", "Command desktop with Live work collapsed");
-  window.setContentSize(600, 800); await sleep(120);
-  await modeLayout("idle-feed-agent-mode", "Command narrow with Live work collapsed");
-  await run("window.MefiNav.go('workspace');await window.MefiWorkspace.refresh(true);");
-  await modeLayout("workspace-agent-mode", "Home narrow");
-  window.setContentSize(1280, 800); await sleep(120);
-  await modeLayout("workspace-agent-mode", "Home desktop");
   report.agentModes.patches = await run("return window.commandFixture.modePatches();");
   report.agentModes.paused = await run("return window.commandFixture.status().execute===false && window.commandFixture.status().enabled===false;");
-  assert.deepEqual(report.agentModes.patches, [{mode:"cluster"},{mode:"swarm"}]);
-  assert.equal(report.agentModes.homeSaving && report.agentModes.commandSaving && report.agentModes.paused, true);
+  assert.deepEqual(report.agentModes.patches, [{mode:"cluster"}]);
+  assert.equal(report.agentModes.commandSaving && report.agentModes.paused, true);
   // The New work switch uses actual rendered controls and the isolated bridge.
   // Its synthetic worker remains present while pausing admission of new work.
   await run(`
@@ -976,6 +1077,102 @@ app.whenReady().then(async () => {
   assert.equal(report.rail.cleared, 1, "Clear reaches the host and empties the list");
   assert.equal(report.rail.active, "work");
   assert.equal(report.rail.answers.length, 1);
+  // The shell remaster: every primary destination remains reachable with its
+  // navigation visible, at desktop, compact desktop and the minimum window.
+  // Only navigation, disclosures and read-only fixture data are exercised.
+  report.menus = [];
+  await run("document.getElementById('toast-host').replaceChildren();");
+  const menuCapture = async (name) => {
+    const directory = process.env.MEFI_MENU_CAPTURE_DIR;
+    if (!directory || !path.isAbsolute(directory)) return;
+    // Geometry updates synchronously; offscreen capture can still contain the
+    // previous compositor frame. Wait for two paints before taking the image.
+    await run("await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));");
+    await sleep(100);
+    fs.mkdirSync(directory, {recursive:true});
+    fs.writeFileSync(path.join(directory, `${name}.png`), (await capturePage()).toPNG());
+    fs.writeFileSync(path.join(directory,"menu-report.json"),JSON.stringify(report.menus,null,2));
+  };
+  const menuRoutes = ["workspace", "tasks", "plans", "ideas", "brains", "analyzer", "command", "eyes", "explorer", "overhead", "booklet", "graph", "usage", "context", "studio"];
+  for (const [width, height, scale = 1] of [[1440, 900], [1100, 720], [600, 560], [1100,720,1.25]]) {
+    window.setContentSize(width, height);
+    contents.setZoomFactor(scale);
+    await sleep(100);
+    // Windows display scaling rounds the native client area up by a pixel or
+    // two. Pin Chromium's desktop viewport so exact breakpoints are covered;
+    // the real webContents zoom still exercises increased display scaling.
+    await contents.debugger.sendCommand("Emulation.setDeviceMetricsOverride",{width,height,deviceScaleFactor:1,mobile:false});
+    const targetWidth=Math.round(width/scale), targetHeight=Math.round(height/scale);
+    await until(`innerWidth===${targetWidth}&&innerHeight===${targetHeight}`,"requested menu viewport and zoom");
+    const viewport=await run("return {width:innerWidth,height:innerHeight};");
+    assert.deepEqual(viewport,{width:targetWidth,height:targetHeight},"menu geometry uses the requested CSS viewport and zoom");
+    await run("document.body.classList.add('no-motion');window.MefiNav.setRailPinned(true);");
+    for (const route of menuRoutes) {
+      await run(`await window.MefiNav.go(${JSON.stringify(route)});`);
+      await sleep(40);
+      await until(`(()=>{const dest=window.MefiNav.get(${JSON.stringify(route)}),page=dest.element&&document.getElementById(dest.element);if(!page?.classList.contains('workspace-page'))return true;const box=page.getBoundingClientRect(),rail=document.getElementById('app-rail').getBoundingClientRect(),nav=document.getElementById('app-local-nav').getBoundingClientRect();return box.left>=rail.right-1&&box.right<=innerWidth+1&&box.top>=nav.bottom-1&&box.bottom<=innerHeight+1;})()`,route+' workspace geometry settles');
+      if (route === "explorer") await until("document.querySelector('#explorer-tree li[data-session-id]') || !document.getElementById('explorer-tree').textContent.includes('Loading sessions')", "Sessions populated state");
+      const sample = await run(`
+        const route=${JSON.stringify(route)}, dest=window.MefiNav.get(route);
+        const region=dest.element?document.getElementById(dest.element):document.getElementById(route==='workspace'?'workspace-layer':route==='command'?'idle-hud':'tab-'+(['usage','context'].includes(route)?'graph':route));
+        const rect=region.getBoundingClientRect(), rail=document.getElementById('app-rail').getBoundingClientRect(), local=document.getElementById('app-local-nav');
+        const page=region.classList.contains('workspace-page'), sheet=page?region.querySelector('.sheet,.explorer-sheet,.brains-sheet'):null;
+        const visible=el=>Boolean(el&&!el.hidden&&el.getBoundingClientRect().width&&el.getBoundingClientRect().height);
+        const inViewport=rect.left>=rail.width-1&&rect.right<=innerWidth+1;
+        const fitsHeight=!page||rect.top>=local.getBoundingClientRect().bottom-1&&rect.bottom<=innerHeight+1;
+        return {route,width:innerWidth,height:innerHeight,page,visible:visible(region),inViewport,fitsHeight,rect:{left:rect.left,top:rect.top,right:rect.right,bottom:rect.bottom},position:getComputedStyle(region).position,parent:region.parentElement.id,role:sheet?.getAttribute('role')||null,modal:sheet?.getAttribute('aria-modal')||null,
+          local:visible(local)?[...local.querySelectorAll('[data-nav]')].map(button=>{const box=button.getBoundingClientRect();return {id:button.dataset.nav,current:button.getAttribute('aria-current')==='page',hit:button.contains(document.elementFromPoint(box.x+box.width/2,box.y+box.height/2))};}):[],
+          railHeads:[...document.querySelectorAll('.app-rail-head .app-rail-text')].map(label=>label.textContent.trim())};
+      `);
+      sample.scale=scale;
+      report.menus.push(sample);
+      if (!sample.inViewport || !sample.fitsHeight) await menuCapture(`${width}-${route}-failure`);
+      assert.equal(sample.visible, true, `${route} is visible at ${width}`);
+      assert.equal(sample.inViewport, true, `${route} fits beside the rail at ${width}: ${JSON.stringify(sample)}`);
+      assert.equal(sample.fitsHeight,true,`${route} fits below local navigation within ${height}px`);
+      assert.ok(sample.local.every(item=>item.hit),`${route} local navigation remains clickable at ${width}×${height}`);
+      assert.deepEqual(sample.railHeads, ["Home", "Work", "Agents"]);
+      if (sample.page) { assert.equal(sample.role,"region"); assert.equal(sample.modal,null); }
+      if (!["workspace","studio"].includes(route) && sample.local.some(item=>item.id===route)) assert.equal(sample.local.find(item=>item.id===route)?.current,true,`${route} has a selected local view`);
+      await menuCapture(`${width}${scale===1?'':'-125pct'}-${route}`);
+      if (route === "explorer") {
+        await run("if(document.getElementById('explorer-tools').hidden)document.getElementById('explorer-tools-toggle').click();");
+        for (const panel of ["assistant","activity","diagnostics"]) {
+          const inspector = await run(`
+            document.getElementById('explorer-tab-'+${JSON.stringify(panel)}).click();
+            const tools=document.getElementById('explorer-tools'), box=tools.getBoundingClientRect(), scroller=document.querySelector('#explorer-overlay .explorer-grid'), grid=scroller.getBoundingClientRect();
+            const containedScroll=['auto','scroll'].includes(getComputedStyle(scroller).overflowY)&&grid.bottom<=innerHeight+1;
+            return {submenu:'sessions:'+${JSON.stringify(panel)},width:innerWidth,height:innerHeight,visible:!tools.hidden&&box.width>0&&box.height>0,
+              panels:[...tools.querySelectorAll('[role="tabpanel"]')].filter(item=>!item.hidden).map(item=>item.id),
+              inViewport:box.left>=0&&box.right<=innerWidth+1&&(box.bottom<=innerHeight+1||containedScroll),
+              sameRow:Math.abs(box.top-grid.top)<=1};
+          `);
+          report.menus.push({...inspector,scale});
+          assert.equal(inspector.visible,true,`Sessions ${panel} opens at ${width}`);
+          assert.deepEqual(inspector.panels,[`explorer-panel-${panel}`]);
+          assert.equal(inspector.inViewport,true,`Sessions ${panel} fits at ${width}×${height}`);
+          assert.equal(inspector.sameRow,true,`Sessions ${panel} stays beside sessions instead of stacking below them`);
+          await menuCapture(`${width}${scale===1?'':'-125pct'}-sessions-${panel}`);
+        }
+        await run("document.getElementById('explorer-tools-back').click();");
+        assert.equal(await run("return document.getElementById('explorer-tools').hidden&&document.activeElement.id==='explorer-tools-toggle';"),true,"Session tools Back restores its opener");
+      }
+    }
+    for (const category of ["general", "appearance", "audio", "system"]) {
+      const categoryState = await run(`
+        window.MefiNav.go('studio',{section:${JSON.stringify(category)}});
+        const panes=[...document.querySelectorAll('[data-settings-category-pane]')].filter(pane=>!pane.hidden);
+        return {category:${JSON.stringify(category)},visible:panes.map(pane=>pane.dataset.settingsCategoryPane)};
+      `);
+      report.menus.push({...categoryState,width,scale});
+      assert.deepEqual(categoryState.visible,[category],`Settings shows only ${category} at ${width}`);
+      await menuCapture(`${width}${scale===1?'':'-125pct'}-settings-${category}`);
+    }
+  }
+  await run("window.MefiNav.go('workspace');document.getElementById('app-help-toggle').click();");
+  assert.equal(await run("return !document.getElementById('app-help-menu').hidden;"),true,"Help opens its menu");
+  await run("window.MefiNav.handleKey({key:'Escape',preventDefault(){}});");
+  assert.equal(await run("return document.getElementById('app-help-menu').hidden && document.activeElement.id==='app-help-toggle';"),true,"Escape returns from Help to its opener");
   assert.deepEqual(report.errors, []);
   assert.deepEqual(report.networkAttempts, []);
   assert.deepEqual(report.processAttempts, []);

@@ -32,6 +32,10 @@ test("admission separates captured chat from kept ideas and honors explicit sele
   const saved = [chat, idea("kept", { status: "keep" }), idea("done", { status: "done" }), idea("linked", { taskId: "task" })];
   assert.deepEqual(promoteIdeaBacklog({ ideas: saved, now }).tasks.map((row) => row.ideas[0]), ["kept"]);
   assert.deepEqual(promoteIdeaBacklog({ ideas: saved, ideaIds: ["chat"], now }).tasks.map((row) => row.ideas[0]), ["chat"]);
+  // An idea the owner picked is the owner's work and ranks with it; a drain
+  // admits on the assistant's say.
+  assert.deepEqual(promoteIdeaBacklog({ ideas: saved, ideaIds: ["chat"], now }).tasks[0].origin, { kind: "idea", by: "owner" });
+  assert.deepEqual(promoteIdeaBacklog({ ideas: saved, now }).tasks[0].origin, { kind: "idea", by: "assistant" });
   assert.equal(promoteIdeaBacklog({ ideas: saved, limit: 0, now }).promoted, 0);
   const legacy = idea("accepted", { status: "accepted" });
   assert.equal(backlogIdeaEligible(legacy), false, "legacy acceptance does not authorize automatic duplicate work");

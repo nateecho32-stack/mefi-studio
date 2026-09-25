@@ -61,6 +61,9 @@ class MefiStudioRoutingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.main = (STUDIO / "main.cjs").read_text(encoding="utf-8")
+        # The builder command lines live in the pure executor core since
+        # spawnNextJob was split (cliInvocation); spawnNextJob spawns them.
+        cls.core = (STUDIO / "scripts" / "executor-core.cjs").read_text(encoding="utf-8")
         cls.client = (STUDIO / "scripts" / "decision-client.mjs").read_text(encoding="utf-8")
         cls.preload = (STUDIO / "preload.cjs").read_text(encoding="utf-8")
         cls.template = (STUDIO / "renderer" / "booklet.template.html").read_text(encoding="utf-8")
@@ -180,7 +183,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         # the first usable one answers, and the failure walk is opt-in.
         auto = _function_body(self.main, "resolveAutoRoute")
         self.assertTrue(auto, "resolveAutoRoute must exist")
-        self.assertIn("normalizeAutoProviders(settings.aiAutoProviders)", auto)
+        self.assertIn("autoProviderOrder(settings)", auto)
         self.assertIn("autoFallbackEnabled(settings)", auto)
         self.assertIn("AUTO_PROVIDER_NAMES[id]", auto, "an unusable order names itself in the error")
         candidate = _function_body(self.main, "resolveAiCandidate")
@@ -206,7 +209,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertIn("AI_AUTO_PROVIDERS.includes(id)", normalize)
         self.assertIn("!order.includes(id)", normalize)
         self.assertIn('["zai", "opencode"]', normalize)
-        self.assertIn('AI_AUTO_PROVIDERS = ["zai", "opencode", "zen", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"]', self.main)
+        self.assertIn('AI_AUTO_PROVIDERS = ["zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"]', self.main)
         # The opt-in fallback switch generalized: aiAutoFallback first, the
         # older aiFallbackOpenCode field honored for settings already written.
         fallback = _function_body(self.main, "autoFallbackEnabled")
@@ -248,16 +251,18 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertIn("glm-5.3-flash", route, "queue-draining builders ride flash, not the heavy glm-5.3 route")
         self.assertNotIn("ZAI_MODEL_HEAVY", route, "the heavy model is overseer/improve, not a 24/7 worker")
         spawn = _function_body(self.main, "spawnNextJob")
-        self.assertIn("executorRunEnv()", spawn)
-        self.assertIn("opencode run --auto${route.modelArgs}", spawn)
-        self.assertIn("env: { ...process.env, ...route.env }", spawn)
+        self.assertIn("executorRunEnv({ cliOverride: subtaskCli })", spawn)
+        self.assertIn("opencode run --auto${route.modelArgs}", self.core)
+        self.assertIn("env: route.env", self.core, "a route adds its own environment")
+        self.assertIn("env: { ...process.env, ...invocation.env }", spawn)
+        self.assertIn("executorCore.cliInvocation(route, cli, prompt", spawn)
         self.assertIn("fallbackToOpencode", spawn, "a grok attempt that dies silently retries on the opencode route")
         self.assertIn("via ${runRoute.via}", spawn, "the log line names which account pays")
         # The route is resolved BEFORE the claim. A missing assignment used to
         # throw `runRoute is not defined` after the task flipped to active,
         # which stranded the board with no child process.
         claim = spawn.find("autopilot.jobs.push(entry)")
-        route_call = spawn.find("executorRunEnv()")
+        route_call = spawn.find("executorRunEnv({ cliOverride: subtaskCli })")
         self.assertGreaterEqual(route_call, 0)
         self.assertGreater(claim, route_call, "claiming work before the route is known strands the board on a throw")
 
@@ -266,13 +271,14 @@ class MefiStudioRoutingTests(unittest.TestCase):
         # have to be a headless grok session that can actually edit the repo.
         spawn = _function_body(self.main, "spawnNextJob")
         self.assertIn('runRoute.cli === "grok"', spawn)
-        self.assertIn("--always-approve", spawn)
-        self.assertIn("--output-format", spawn)
-        self.assertIn("--max-turns", spawn)
+        self.assertIn("--always-approve", self.core)
+        self.assertIn("--output-format", self.core)
+        self.assertIn("--max-turns", self.core)
         self.assertNotIn('"--prompt-file"', spawn, "prompt-file is the chat completion path; builders need tools")
+        self.assertNotIn('"--prompt-file"', self.core, "prompt-file is the chat completion path; builders need tools")
         complete = _function_body(self.main, "grokCompletion")
         self.assertIn("--prompt-file", complete, "assistant replies stay single-turn")
-        self.assertIn('settings.executorCli === "grok"', _function_body(self.main, "executorRunEnv"))
+        self.assertIn('chosenCli === "grok"', _function_body(self.main, "executorRunEnv"))
         self.assertIn('id="executor-cli"', self.template)
         self.assertIn('id="executor-model"', self.template)
 
@@ -288,7 +294,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertIn("child.stdin?.write", complete, "the prompt rides stdin, never the command line")
         body = _function_body(self.main, "resolveAiRoute")
         self.assertIn('provider === "claude"', body, "the router returns the CLI route without a key")
-        self.assertRegex(self.main, r'AI_PROVIDERS = \["auto", "zai", "opencode", "zen", "grok", "claude", "codex", "antigravity",.*"lmstudio", "custom"\]')
+        self.assertRegex(self.main, r'AI_PROVIDERS = \["auto", "zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "antigravity",.*"lmstudio", "custom"\]')
         fetch = _function_body(self.main, "assistantFetch")
         self.assertIn('route.provider === "grok" || route.provider === "claude"', fetch)
         # The CLI half is shared with the data-only callers (planning, brain
@@ -299,13 +305,15 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertIn('const DATA_ONLY_CLIS = new Set(["claude"])', self.main, "only the CLI spawned with --tools= may answer data-only calls")
         # Builders: same subscription login, agentic print mode, prompt on stdin.
         spawn = _function_body(self.main, "spawnNextJob")
-        self.assertIn('cli === "claude"', spawn)
-        self.assertIn("--dangerously-skip-permissions", spawn, "nobody is at the keyboard to approve an edit")
-        self.assertIn('settings.executorCli === "claude"', _function_body(self.main, "executorRunEnv"))
+        self.assertIn('cli === "claude"', self.core)
+        self.assertIn("claude -p --output-format text --dangerously-skip-permissions", self.core, "nobody is at the keyboard to approve an edit")
+        self.assertIn('chosenCli === "claude"', _function_body(self.main, "executorRunEnv"))
         self.assertIn("claudeCliAvailable", _function_body(self.main, "executorRunEnv"))
         self.assertIn("claude: true", _function_body(self.main, "executorRunEnv"))
         self.assertIn('<option value="claude">', self.template)
-        self.assertIn('<option value="claude">Claude Code — claude builds', self.template)
+        builder_choices = re.search(r'<select id="executor-cli"[^>]*>(.*?)</select>', self.template, re.S)
+        self.assertIsNotNone(builder_choices)
+        self.assertIn('<option value="claude">Claude Code</option>', builder_choices.group(1))
 
     def test_codex_route_rides_the_chatgpt_login(self):
         # Codex CLI as a keyless route: `codex exec` through the npm .cmd shim
@@ -324,15 +332,17 @@ class MefiStudioRoutingTests(unittest.TestCase):
         # Builders: approvals and the sandbox bypassed because nobody is at the
         # keyboard, plain stdout so the sentinel protocol stays readable.
         spawn = _function_body(self.main, "spawnNextJob")
-        self.assertIn('cli === "codex"', spawn)
-        self.assertIn("codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check --color never", spawn)
+        self.assertIn('cli === "codex"', self.core)
+        self.assertIn("codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check --color never", self.core)
         route = _function_body(self.main, "executorRunEnv")
-        self.assertIn('settings.executorCli === "codex"', route)
+        self.assertIn('chosenCli === "codex"', route)
         self.assertIn("codexCliAvailable", route)
         self.assertIn("codex: true", route)
         self.assertIn('{ id: "codex", name: "Codex", cmd: "codex" }', self.main)
         self.assertIn('<option value="codex">', self.template)
-        self.assertIn('<option value="codex">Codex — codex builds', self.template)
+        builder_choices = re.search(r'<select id="executor-cli"[^>]*>(.*?)</select>', self.template, re.S)
+        self.assertIsNotNone(builder_choices)
+        self.assertIn('<option value="codex">Codex</option>', builder_choices.group(1))
         self.assertIn('codex: "Codex CLI"', self.booklet_js)
 
     def test_coding_tiers_pin_the_builder_model_per_cli(self):
@@ -381,11 +391,10 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertIn("antigravityCompletion(system, user, route.model)", cli)
         # Builders: agentic print mode, permissions skipped, model before -p.
         spawn = _function_body(self.main, "spawnNextJob")
-        self.assertIn('cli === "antigravity"', spawn)
-        self.assertIn('spawn("agy", args', spawn)
-        self.assertIn("--dangerously-skip-permissions", spawn, "nobody is at the keyboard to approve an edit")
-        self.assertIn('"--print-timeout", "60m"', spawn, "the CLI never ends a live build early")
-        self.assertIn('settings.executorCli === "antigravity"', _function_body(self.main, "executorRunEnv"))
+        self.assertIn('cli === "antigravity"', self.core)
+        self.assertIn('command: "agy", args', self.core, "agy spawns directly, never through cmd.exe")
+        self.assertIn('"--dangerously-skip-permissions", "--print-timeout", "60m"', self.core, "nobody is at the keyboard, and the CLI never ends a live build early")
+        self.assertIn('chosenCli === "antigravity"', _function_body(self.main, "executorRunEnv"))
         self.assertIn("antigravityCliAvailable", _function_body(self.main, "executorRunEnv"))
         self.assertIn("antigravity: true", _function_body(self.main, "executorRunEnv"))
         self.assertIn('{ id: "antigravity", name: "Antigravity", cmd: "agy" }', self.main)
@@ -397,7 +406,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertTrue(override, "assistantModelOverride must exist")
         self.assertIn("settings.aiModelsByProvider", override)
         self.assertIn("SINGLE_MODEL_PROVIDERS.has(providerKey)", override)
-        self.assertIn('const SINGLE_MODEL_PROVIDERS = new Set(["grok", "claude", "codex", "antigravity", "lmstudio", "custom"])', self.main)
+        self.assertIn('const SINGLE_MODEL_PROVIDERS = new Set(["openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"])', self.main)
         builder = _function_body(self.main, "executorModelOverride")
         self.assertTrue(builder, "executorModelOverride must exist")
         self.assertIn("settings.executorModels", builder)
@@ -441,7 +450,12 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertIn('getApiKey("custom")', self.booklet_js)
 
     def test_keyless_cli_and_local_routes_skip_the_encrypted_key_gate(self):
-        assistant = _function_body(self.main, "runAssistant")
+        # One predicate for the passes (runAssistant) and the chat's gate
+        # (assistantKeyPresent), so a Zen-only or keyless-CLI setup is never
+        # answered by the regex fallback while the passes call the model.
+        self.assertIn("aiRouteConfigured(settings)", _function_body(self.main, "runAssistant"))
+        self.assertIn("aiRouteConfigured(", _function_body(self.main, "assistantKeyPresent"))
+        assistant = _function_body(self.main, "aiRouteConfigured")
         self.assertRegex(assistant, r'keyless = provider === "grok".*provider === "claude".*provider === "lmstudio"')
         self.assertIn('keyAvailable(settings, field)', assistant, "the gate reads keys through one source-aware check")
         self.assertIn('"customApiKeyEncrypted"', assistant, "a custom key counts as a saved key")
@@ -494,7 +508,8 @@ class MefiStudioRoutingTests(unittest.TestCase):
         handler = _function_body(self.main, "autoSetup")
         self.assertTrue(handler, "autoSetup callable missing")
         self.assertRegex(handler, r'planAutoSetup\(\{ settings, keys, clis(?:, local)? \}\)')
-        self.assertIn("await updateSettings((next) =>", handler, "only detected, planned changes are written, through the settings queue")
+        self.assertIn("await updateSettings((raw) =>", handler, "planned changes are written through the settings queue")
+        self.assertIn("agentProfiles.update(raw, projects.current().id, applyPlan)", handler, "automatic setup uses the same project configuration resolver")
         self.assertIn("applied: false", handler, "an already-configured machine reports a no-op")
         self.assertIn("if (!apply) return", handler, "the walkthrough's scan can plan without writing")
         self.assertIn("autoSetup: (options) => autoSetup(options)", self.main, "the first-run service receives the same callable")

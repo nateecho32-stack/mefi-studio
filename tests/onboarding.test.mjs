@@ -351,6 +351,8 @@ test("a v1 guide keeps its ticks under the new numbering and a finished one is i
   assert.equal(saved.step, SCAN);
   assert.deepEqual(saved.done, allDone(WORKSPACE, CONNECT, CREATE, MONITOR, REVIEW));
   assert.match(finished.el("invite-open").textContent, /5 of 7 done/);
+  // The sheet's bar counts finished lessons, so its line names them beside the step.
+  assert.equal(finished.el("progress").textContent, "Step 1 of 7 · 5 done");
   const midway = environment(new Map([[LEGACY_KEY, JSON.stringify({ version: 1, step: 2, status: "reading", done: [true, false, false, false, false] })]]));
   midway.guide.open();
   assert.match(midway.el("progress").textContent, /Step 5 of 7/);
@@ -666,7 +668,7 @@ test("workspace tool menu groups destinations and excludes duplicated sidebar li
   env.context.window.MefiNav.renderWorkspaceTools(target);
   // The same sections as the rail: Analyzer sits with the Work tools and the
   // Profiler with Settings, its diagnostics.
-  assert.deepEqual(target.children.map((group) => group.attrs["aria-label"]), ["Work", "Live", "Models", "Settings"]);
+  assert.deepEqual(target.children.map((group) => group.attrs["aria-label"]), ["Work", "Agents", "Settings"]);
   const buttons = target.querySelectorAll("button");
   const destinations = buttons.map((button) => button.dataset.nav);
   for (const id of ["ideas", "explorer", "eyes", "overhead", "analyzer", "profiler", "booklet", "graph"]) assert.ok(destinations.includes(id));

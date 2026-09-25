@@ -149,6 +149,8 @@ const scope = {
   // defers while any is in flight. No jobs here: these cases are about the
   // manual-vs-queued restart paths, not the executor.
   autopilot: { jobs: [] },
+  projectSwitching: false,
+  updateDrainRequested: false,
   window: null,
   UPDATE_GRACE_MS: 0,
   readSettings: async () => JSON.parse(JSON.stringify(stored)),
@@ -244,7 +246,7 @@ console.log(JSON.stringify({ queued, exitsWhileQueued, reloads: calls.reload.map
         for name in ("task-groups.js", "nav.js", "sidebar.js", "styles.css", "model-lab.js", "idle.js", "booklet.js"):
             with self.subTest(name=name):
                 self.assertIn(f'readFile(path.join(RENDERER, "{name}")', self.build)
-        self.assertIn("[stageLabels, performanceCore, profiler, taskGroups, nav, sidebar, graph, modelLab, tracker, tree, idle,", self.build)
+        self.assertIn("[stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, nav, sidebar, graph, modelLab, tracker, tree, idle,", self.build)
         self.assertNotIn('from "electron"', self.updater)
         self.assertNotIn('require("electron")', self.updater)
         check = self.package.get("scripts", {}).get("check", "")

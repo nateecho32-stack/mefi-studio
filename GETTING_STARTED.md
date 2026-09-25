@@ -1,11 +1,13 @@
 # Your first project in Mefi's Studio AI+
 
+For the new workspace, team presets and companion controls, see [Unified Studio](docs/unified-studio.md).
+
 The in-app walkthrough opens automatically on your first launch. It has seven
 stops: **Scan**, **Your workspace**, **First map**, **Connections**,
 **Create**, **Monitor** and **Review**. The numbered sections below cover the
 five stops you work through by hand. You can close the guide whenever you
 want; it remembers your place and stays closed on later launches. Choose
-**Start here** at the foot of the menu on the left, or open the guide from
+**Help › Start here** at the foot of the menu on the left, or open the guide from
 Settings or Shortcuts (`?`), to continue.
 
 The other two stops only read. **Scan** starts by itself on the first launch
@@ -18,7 +20,7 @@ folder starts the map; **Map this project** starts it by hand.
 
 Five stops have a **Walk me…** button. It keeps a small coach in the corner
 while it opens the matching menu with you and highlights the exact control: the
-project **+**, Settings › Providers, the task box, Live work, and Review. Scan
+project **+**, Agents › Setup › Connections, the task box, Live work, and Review. Scan
 and First map have no menu to walk to, so they have no Walk button: their
 buttons (**Run the first scan**, **Map this project**) sit on the guide's own
 sheet, and the coach hands you back to it at those stops. Press **Done — next
@@ -95,9 +97,9 @@ it locally — no AI request — showing old plans and starting points in
 
 A fresh install runs **auto setup** by itself on its first launch, from the
 keys, CLIs and local servers already on the machine, and Settings says what it
-chose. Open **Settings › Auto setup** (`4`, or `Ctrl ,` from anywhere) to
+chose. Open **Agents › Setup › Connections** (`4`, or `Ctrl ,` from anywhere) to
 review that choice, press **Run auto setup** again after adding a key or CLI,
-or pick a route yourself under **Providers**. The
+or configure a provider there and choose its route under **Agents › Setup › Routing**. The
 assistant (conversation) and the builder (coding work) are separate
 capabilities: a saved key alone never proves a build can start.
 
@@ -105,6 +107,7 @@ capabilities: a saved key alone never proves a build can start.
 | --- | --- | --- |
 | z.ai coding plan | **z.ai GLM** | a saved z.ai key |
 | OpenCode Go subscription | **OpenCode Go** | its saved key |
+| OpenRouter API key | **OpenRouter** | its saved key; the free models router is the default |
 | Grok, Claude Code, Codex or Antigravity login | that CLI | the CLI on PATH, no key |
 | A local model server | **LM Studio (local)** | LM Studio running with a loaded model |
 | Another OpenAI-compatible server | **Custom endpoint** | endpoint URL and key |
@@ -138,20 +141,20 @@ one stays editable in **Settings** or the workspace.
 - **Proactive** briefings, **useWeb**, **auto reference** and the machine
   guards (auto-kill strays, 240 idle seconds, 20-minute age, 1.5 GB) are on.
   Relax the guards on a small or busy machine rather than switching them off.
-- **Your name**, the **companion name**, the **Studio theme**, **Motion**
-  (Full, Calm or Off), **Blur behind panels** and **Open Workspace on launch**
-  live in **Settings › Your Studio** and stay per machine.
+- **Your name**, the **companion name** and **Open Workspace on launch** live
+  in **Settings › General**. Themes, Motion and Blur behind panels live in
+  **Appearance**. These preferences stay per machine.
 
 ### Optional integrations
 
-- **Ruins Runner (LÖVE)** — Settings › Integrations launches the game checkout
+- **Ruins Runner (LÖVE)** — Settings › System › Integrations launches the game checkout
   when one is found. Set `MEFI_STUDIO_GAME_ROOT` when it is not a sibling `2d Trippy
   Hell` folder, and run the game's `tools/build-windows.ps1` once if its LÖVE
   runtime is missing.
 - **A different working repository** — set `MEFI_STUDIO_REPO`; otherwise Studio
   opens with no project until a folder is chosen.
 - **Private release updates** — save a read-only GitHub token in **Settings ›
-  Updates**, set `MEFI_STUDIO_GITHUB_TOKEN`, or let Studio reuse the `gh`
+  System › Updates**, set `MEFI_STUDIO_GITHUB_TOKEN`, or let Studio reuse the `gh`
   token.
 
 ### What not to copy between machines
@@ -182,8 +185,8 @@ preference is saved for all projects and can be changed at any time.
 
 Open **Settings** (`4`, or `Ctrl ,` from anywhere). A fresh install already ran
 auto setup once on its first launch; configure your assistant connection and
-coding provider in the **Connections** group there (**Providers**, **Model
-routing**, **Coding workers**), or choose **Run auto setup** to apply a
+coding provider in **Connections**, then choose assistant and builder routes
+in **Models**, or choose **Run auto setup** to apply a
 configuration from the keys, CLIs and local servers already on this machine. The setup overview above the controls shows what was detected; auto
 setup explains each choice and never sends a request or changes a saved key.
 You do not need every option: save the model for the provider you actually
@@ -195,8 +198,8 @@ catalog, manual planning and browsing saved work remain available without AI.
 
 ## 3. Give one clear task
 
-Choose **Give a task**, describe the intended change and what would count as
-done, then choose **Create task**. **Use a task outline** adds space for the
+In the Home composer choose **Create task**, describe the intended change and
+what would count as done, then send it with **Create task**. **Use a task outline** adds space for the
 goal, acceptance checks and boundaries. For example:
 
 ```text
@@ -220,7 +223,7 @@ files and prerequisites, then choose **Approve build**. Leave it waiting if
 you do not want to build it. Editing the scope or explicitly retrying requires
 approval again. Approval does not override Pause or unfinished prerequisites.
 
-Use **Talk together** for discussion. Use **Plan an idea** when the approach is
+Use **Chat** for discussion. Use **Plan an idea** when the approach is
 unclear or the work has several dependent steps. In Plans, settle the questions,
 review the specification, approve it, then explicitly create its tasks.
 
@@ -230,10 +233,8 @@ The strip at the top of the workspace shows the service state, running
 workers, what needs you, what is next, the machine and today's usage; its
 **Pause** button holds all new work until you press **Resume**.
 
-**Your work** gives you All, Queue, Ideas, Review and Done views. **Live** in
-the menu opens Command view, where **Live work** shows running workers, reported steps and queue
-readiness, and the **Agents** tab holds Autopilot, Parallel builds, Build mode
-and Agent mode with an at-a-glance strip above them (**Agents & queue ↗** in
+**Your work** gives you All, Queue, Ideas, Review and Done views. **Agents › Live** opens Command view, where **Live work** shows running workers, reported steps and queue
+readiness, and **Agents › Setup** holds team configuration, queue execution, parallel builds and build approval with an at-a-glance strip above them (**Agents & queue ↗** in
 Settings opens it too). Open a task to inspect its brief, dependencies, attempts and evidence.
 
 | What you see | What it means | Next step |

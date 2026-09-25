@@ -137,7 +137,7 @@ function restartHost() {
   let exits = 0, asks = 0, assistantStops = 0;
   let settings = { ui: { autopilot: { enabled: false, execute: false, parallel: 3 } } };
   const env = vm.createContext({
-    Date, activeChild: null, autopilot: { jobs: [{ id: "real", finished: false }] }, window: null,
+    Date, activeChild: null, autopilot: { jobs: [{ id: "real", finished: false }] }, window: null, projectSwitching: false,
     UPDATE_GRACE_MS: 0, updater: { status: () => ({ auto: true }) },
     readSettings: async () => structuredClone(settings), writeSettings: async (next) => { settings = next; },
     settingsDisk: { queue: Promise.resolve() },
@@ -164,10 +164,31 @@ test("updates drain live workers without forcing a timed restart or changing a s
   host.env.autopilot.jobs[0].settlementPending = true;
   assert.equal((await host.env.applyRestart(["main.cjs"])).deferred, true, "an ended process still needs to save its result");
   host.env.autopilot.jobs[0].settlementPending = false;
+  assert.equal((await host.env.applyRestart(["main.cjs"])).deferred, true, "normal settlement also retains the job while saving; only a failed write sets settlementPending");
+  host.env.autopilot.jobs = [];
   assert.equal((await host.env.applyRestart(["main.cjs"])).ok, true);
-  assert.equal(host.exits(), 1, "settled entries do not pin a restart");
+  assert.equal(host.exits(), 1, "removing the saved entry releases the restart");
   assert.equal(host.assistantStops(), 1, "explicit app.exit receives the normal saved-work shutdown");
   assert.deepEqual(host.settings().ui.autopilot, { enabled: false, execute: false, parallel: 3 });
+});
+
+test("an update waits for a project switch even when the last worker has already saved", async () => {
+  const host = restartHost();
+  host.env.autopilot.jobs = [];
+  host.env.projectSwitching = true;
+  assert.equal((await host.env.applyRestart(["main.cjs"])).deferred, true);
+  assert.equal(host.exits(), 0);
+  host.env.projectSwitching = false;
+  host.env.saveResume = async () => {
+    assert.ok(host.env.executorUpdateHold(), "new dispatch stays held during asynchronous restart preparation");
+    host.env.projectSwitching = true;
+  };
+  assert.equal((await host.env.applyRestart(["main.cjs"])).deferred, true, "a switch that starts during restart preparation is also protected");
+  assert.equal(host.exits(), 0);
+  host.env.projectSwitching = false;
+  host.env.saveResume = async () => {};
+  assert.equal((await host.env.applyRestart(["main.cjs"])).ok, true);
+  assert.equal(host.exits(), 1);
 });
 
 test("a missing renderer cannot hang view probes or the updater pause gate", async () => {

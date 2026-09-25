@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { captureTaskHandoffs, admitTaskHandoffs, reconcileTaskHandoffs } from "../scripts/task-handoffs.cjs";
+import { migrateLegacyRequests } from "../scripts/task-history.mjs";
+import { workState } from "../scripts/backlog.cjs";
 
 function fixture() {
   const entry = { id: "run-parent", depth: 0, handoffs: [{ title: "Finish keyboard access", prompt: "Implement arrow navigation and test focus return." }] };
@@ -63,13 +65,25 @@ test("grouped delegated members follow their plan without duplicating or forgett
   assert.equal(result.waitingTaskIds.size, 0); assert.deepEqual(result.tasks[0].remaining, ["Unrelated manual obligation"]);
 });
 
-test("direct-request parents use run identity and legacy children remain resolvable", () => {
+// Deliberately changed when direct request execution was retired: an inbox
+// row is never a handoff parent. A legacy "verifying" row is migrated into an
+// awaiting_verification task first (housekeeping, scripts/task-history.mjs),
+// and that task follows the same children by run identity.
+test("a legacy direct-request parent is followed as its migrated task, by run identity", () => {
   const { parent, obligations } = fixture();
-  const legacy = { ...parent, status: "verifying", lastAttempt: { runId: "run-parent" } };
+  const { id: _id, ...fields } = parent;
+  const legacy = { ...fields, status: "verifying", lastAttempt: { runId: "run-parent" } };
   const child = { ...obligations[0], id: "child", status: "active" };
-  const result = reconcileTaskHandoffs({ tasks: [child], requests: [legacy] });
-  assert.ok(result.waitingRequestRuns.has("run-parent")); assert.equal(result.waitingTaskIds.size, 0);
-  assert.equal(result.recovered, 0); assert.equal(result.requests[0].handoffState.pending, 1);
+  const unmigrated = reconcileTaskHandoffs({ tasks: [child], requests: [legacy] });
+  assert.equal(unmigrated.requests[0], legacy, "an inbox row is not a parent");
+  assert.equal(unmigrated.waitingRequestRuns, undefined); assert.equal(unmigrated.waitingTaskIds.size, 0);
+  const moved = migrateLegacyRequests([legacy], { tasks: [child], now: 500 });
+  assert.equal(moved.tasks.length, 1);
+  const result = reconcileTaskHandoffs({ tasks: [...moved.tasks, child], requests: moved.requests });
+  const task = result.tasks[0];
+  assert.ok(result.waitingTaskIds.has(task.id));
+  assert.equal(result.recovered, 0); assert.equal(task.handoffState.pending, 1);
+  assert.deepEqual(task.handoffState.childTaskIds, ["child"]);
 });
 
 test("a plan's saved member lineage represents a missing child row until the plan finishes", () => {
@@ -103,4 +117,43 @@ test("same-title admission uses a stable display suffix while preserving the ori
   assert.equal(admitTaskHandoffs({ tasks: [unrelated], requests: first.requests }, obligations).added, 0);
   assert.equal(admitTaskHandoffs({ tasks: [unrelated], requests: [] }, [child]).requests[0].title, child.title, "recovery never stacks display suffixes");
   assert.equal(admitTaskHandoffs({ tasks: [], requests: [] }, obligations).requests[0].title, obligations[0].title, "unique titles remain unchanged");
+});
+
+// One parked follow-up used to flag every ancestor: a parent's scheduler stage
+// was "blocked" whenever its child was, so a chain of four cards showed four
+// times under Needs attention. The parent now only waits; its own reason still
+// names the follow-up that needs review, and the chain above it waits too.
+test("a parked follow-up flags only itself: its parent and the chain above wait", () => {
+  const { parent, obligations } = fixture();
+  const child = { ...obligations[0], id: "child", status: "open", verifyAttempts: 3, verification: { state: "failed" } };
+  const settled = reconcileTaskHandoffs({ tasks: [parent, child], requests: [] }).tasks[0];
+  assert.equal(settled.handoffState.state, "blocked");
+  const state = workState(settled, 1, { tasks: [settled, child] });
+  assert.deepEqual([state.stage, state.blockedBy], ["waiting", "handoffs"]);
+  assert.match(state.reason, /needs review before this parent can finish/);
+  const upper = captureTaskHandoffs({ id: "run-grand", depth: 0, handoffs: [{ title: "Original feature", prompt: "Build the feature." }] }, { ref: { id: "grand" }, title: "Epic" }, { now: 50 });
+  const grand = { id: "grand", status: "awaiting_verification", remaining: ["Original feature"], lastAttempt: { runId: "run-grand", handoffs: upper } };
+  const middle = { ...upper[0], ...settled, handoffId: upper[0].handoffId, fromRun: upper[0].fromRun };
+  const chain = reconcileTaskHandoffs({ tasks: [grand, middle, child], requests: [] });
+  assert.equal(chain.tasks[0].handoffState.state, "waiting", "the grandparent waits; it is not flagged for review");
+  assert.equal(chain.tasks[1].handoffState.state, "blocked", "the direct parent still names the follow-up that needs review");
+});
+
+test("a follow-up you drop settles its obligation, a deleted one is never re-admitted, and a reopened one is waited on again", () => {
+  const { parent, obligations } = fixture();
+  const dropped = { ...obligations[0], id: "child", status: "archived", dropped: { at: 5, by: "owner" }, verification: { state: "failed" } };
+  const result = reconcileTaskHandoffs({ tasks: [parent, dropped], requests: [] });
+  assert.equal(result.waitingTaskIds.size, 0);
+  assert.deepEqual(result.tasks[0].remaining, ["Unrelated manual obligation"], "only the dropped hand-off is settled");
+  assert.deepEqual(result.tasks[0].handoffState.droppedTitles, [obligations[0].title]);
+  assert.equal(result.tasks[0].handoffState.state, "complete");
+  assert.match(result.tasks[0].handoffState.reason, /dropped by you/);
+  const archived = reconcileTaskHandoffs({ tasks: [parent, { ...dropped, dropped: undefined }], requests: [] });
+  assert.ok(archived.waitingTaskIds.has(parent.id), "an unfinished archive without your drop settles nothing");
+  const record = { ...parent, droppedHandoffs: [obligations[0].handoffId] };
+  const deleted = reconcileTaskHandoffs({ tasks: [record], requests: [] });
+  assert.equal(deleted.recovered, 0); assert.equal(deleted.requests.length, 0);
+  assert.equal(deleted.waitingTaskIds.size, 0, "the parent's record stands in for the deleted card");
+  const reopened = reconcileTaskHandoffs({ tasks: [record, { ...dropped, status: "open", dropped: undefined }], requests: [] });
+  assert.ok(reopened.waitingTaskIds.has(parent.id), "a dropped card you reopen is waited on again");
 });

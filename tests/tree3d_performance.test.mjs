@@ -2,11 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
+import { organize } from "../scripts/assistant.mjs";
 
 const source = await readFile(new URL("../renderer/tree3d.js", import.meta.url), "utf8");
 const flush = async () => { for (let i = 0; i < 20; i += 1) await Promise.resolve(); };
+const MINUTE = 60000, HOUR = 60 * MINUTE;
 
-async function environment({ classes = [], sessions, todos = [], profiler } = {}) {
+async function environment({ classes = [], sessions, todos = [], profiler, assistant } = {}) {
   const bodyClasses = new Set(classes), frames = new Map(), documentEvents = new Map(), windowEvents = new Map(), bridgeEvents = {};
   let nextFrame = 0, now = 0, paints = 0, bitmapWrites = 0, bodyObserver, resizeObserver, paintError;
   const element = () => ({
@@ -24,8 +26,9 @@ async function environment({ classes = [], sessions, todos = [], profiler } = {}
   canvas.getContext = () => ctx;
   for (const dimension of ["width", "height"]) Object.defineProperty(canvas, dimension, { set() { bitmapWrites += 1; } });
   const elements = { "tree-canvas": canvas, "tree-rail": rail, "tree-stats": element() };
+  const bodyData = {};
   const document = {
-    hidden: false, body: { classList: { contains: (name) => bodyClasses.has(name) } },
+    hidden: false, body: { dataset: bodyData, classList: { contains: (name) => bodyClasses.has(name) } },
     getElementById: (id) => elements[id] ?? null, createElement: element,
     addEventListener: (name, callback) => documentEvents.set(name, callback),
   };
@@ -35,7 +38,7 @@ async function environment({ classes = [], sessions, todos = [], profiler } = {}
     addEventListener: (name, callback) => windowEvents.set(name, callback),
     mefiStudio: {
       eyesState: async () => ({ ok: true, sessions: sessions ?? [{ id: "s1", title: "Current session", timeUpdated: Date.now() }], todos }),
-      assistantState: async () => ({ ok: true, state: { status: "idle", agents: [] } }),
+      assistantState: async () => ({ ok: true, state: assistant ?? { status: "idle", agents: [] } }),
       eyesCheckpointsRead: async () => ({ checkpoints: {} }),
       onEyesActivity: (callback) => { bridgeEvents.activity = callback; },
       onAssistant() {}, onCheckpoints() {},
@@ -61,6 +64,7 @@ async function environment({ classes = [], sessions, todos = [], profiler } = {}
     async activity(data) { bridgeEvents.activity(data); await flush(); },
     hide(hidden) { document.hidden = hidden; documentEvents.get("visibilitychange")(); },
     cover(name, enabled) { if (enabled) bodyClasses.add(name); else bodyClasses.delete(name); bodyObserver(); },
+    sheet(id) { if (id) bodyData.sheet = id; else delete bodyData.sheet; bodyObserver(); },
     frame(time) { now = time; const pending = [...frames.values()]; frames.clear(); for (const callback of pending) callback(time); },
   };
 }
@@ -111,6 +115,10 @@ test("the real tree rail suspends covered canvases and resumes a single fresh fr
   env.frame(1000);
   assert.equal(env.paints(), 2);
   env.cover("command-active", false);
+  env.sheet("tasks");
+  assert.equal(env.frames.size, 0, "a page over the rail (hidden by CSS, still sized) stops its loop");
+  env.sheet(null);
+  assert.equal(env.frames.size, 1, "closing the page resumes it");
   env.hide(true);
   assert.equal(env.frames.size, 0, "minimized windows retain no rail callback");
   env.hide(false);
@@ -268,4 +276,64 @@ test("unresolved targets lift off smoothly and repeated status updates preserve 
   assert.equal(settled.phase, "running");
   assert.ok(settled.y < -116, "repeated reports do not restart the lift timer before it reaches working height");
   assert.equal(slot.retiring, false);
+});
+
+// The host's organize() classifies sessions; the rail must draw its verdict,
+// not re-derive a different one from the todo rows.
+test("a stale session draws in the stale tone, never as live work", async () => {
+  const now = Date.now();
+  const sessions = [
+    { id: "live", title: "Live session", timeUpdated: now },
+    { id: "rot", title: "Abandoned session", timeUpdated: now - 30 * HOUR },
+  ];
+  const todos = [
+    { sessionId: "live", position: 0, content: "ship it", status: "in_progress" },
+    { sessionId: "rot", position: 0, content: "half done", status: "in_progress" },
+    { sessionId: "rot", position: 1, content: "never started", status: "pending" },
+  ];
+  const organization = organize({ sessions, todos, now });
+  assert.deepEqual(organization.stale, ["rot"], "fixture: the host calls the quiet in-progress session stale");
+  const env = await environment({ sessions, todos, assistant: { status: "idle", agents: [], organization } });
+  const nodes = env.tree.snapshot().nodes;
+  const rot = nodes.find((node) => node.id === "rot");
+  assert.equal(rot.state, "stale", "stale wins over the in_progress todo it still holds");
+  assert.equal(rot.stale, true);
+  assert.equal(nodes.some((node) => node.kind === "todo" && node.sessionId === "rot"), false, "a stale session draws none of its todos");
+  assert.equal(nodes.find((node) => node.id === "live").state, "active", "live work keeps the active tone");
+});
+
+test("cancelled todos are closed: they count toward done and dim instead of reading pending", async () => {
+  const now = Date.now();
+  const sessions = [
+    { id: "closed", title: "Wrapped up", timeUpdated: now },
+    { id: "mixed", title: "Half left", timeUpdated: now - 1000 },
+  ];
+  const todos = [
+    { sessionId: "closed", position: 0, content: "build it", status: "completed" },
+    { sessionId: "closed", position: 1, content: "dropped idea", status: "cancelled" },
+    { sessionId: "closed", position: 2, content: "another dropped idea", status: "cancelled" },
+    { sessionId: "mixed", position: 0, content: "dropped", status: "cancelled" },
+    { sessionId: "mixed", position: 1, content: "still to do", status: "pending" },
+  ];
+  const env = await environment({ sessions, todos, assistant: { status: "idle", agents: [], organization: organize({ sessions, todos, now }) } });
+  const nodes = env.tree.snapshot().nodes;
+  const closed = nodes.find((node) => node.id === "closed");
+  assert.equal(closed.state, "done", "completed plus cancelled is a finished session");
+  assert.equal(closed.progress, 1);
+  const cancelled = nodes.filter((node) => node.kind === "todo" && node.status === "cancelled");
+  assert.equal(cancelled.length, 3);
+  for (const node of cancelled) assert.equal(node.state, "done", "cancelled is closed, not pending");
+  const mixed = nodes.find((node) => node.id === "mixed");
+  assert.equal(mixed.state, "session", "a pending todo still keeps its session open");
+  assert.equal(mixed.progress, 0.5);
+  assert.equal(nodes.find((node) => node.kind === "assistant").progress, 4 / 5, "the hub meter counts cancelled rows as closed");
+  // The host agrees: once quiet past foldAfterMinutes the finished one folds.
+  assert.deepEqual(organize({ sessions: [{ ...sessions[0], timeUpdated: now - 2 * HOUR }], todos, now }).folded, ["closed"]);
+  // Closed, but never finished: the rail paints it dim rather than done-green.
+  const paint = vm.createContext({ window: {}, agentColor: () => "#ffffff" });
+  vm.runInContext(source.slice(source.indexOf("  const COLORS = {"), source.indexOf("  const ASSISTANT_PULSE_KINDS")), paint);
+  vm.runInContext(source.slice(source.indexOf("  function colorOf(node) {"), source.indexOf("  const hexRgb =")), paint);
+  const colors = vm.runInContext("COLORS", paint);
+  assert.equal(paint.colorOf(cancelled[0]), colors.stale);
+  assert.equal(paint.colorOf(nodes.find((node) => node.kind === "todo" && node.status === "completed")), colors.done);
 });

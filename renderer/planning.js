@@ -1,6 +1,6 @@
 // Project-local decisions and reviewed task handoffs. Mefi interviews you here
-// and organizes what you say; model calls happen only after explicit buttons,
-// and nothing it writes becomes your answer, your decision, or your approval.
+// and organizes what you say. Live drafting is optional, and nothing it writes
+// becomes your answer, your decision, or your approval without your action.
 (() => {
   "use strict";
   const $ = (name) => document.getElementById(`plans-${name}`);
@@ -17,6 +17,20 @@
   let priorFocus = null;
   let drafts = {};
   let sliceCounter = 0;
+  let exploreTimer = null;
+  let exploreFlight = null;
+  let exploreGeneration = 0;
+  let focusedField = "destination";
+  let composeKey = null;
+  let copilot = { status: "idle", result: null, signature: null, error: "" };
+  let suggestionUndo = null;
+  let viewedStep = null;
+  let viewedStepKey = null;
+  let lastWorkflowStep = null;
+  const stepAnimations = new WeakMap();
+  const fieldTargets = { title: "title", destination: "destination", "out-of-scope": "outOfScope", "question-text": "question", "draft-question": "question", "unknown-text": "unknown", "draft-unknown": "unknown", "spec-text": "specText" };
+  const targetLabels = { title: "Plan name", destination: "Outcome", outOfScope: "Outside this plan", question: "Open question", unknown: "Uncertainty", specText: "Specification" };
+  const draftFieldId = (target) => ({ title: "title", destination: "destination", outOfScope: "out-of-scope", question: plan() ? "question-text" : "draft-question", unknown: plan() ? "unknown-text" : "draft-unknown", specText: "spec-text" })[target];
   try { const saved = JSON.parse(localStorage.getItem("mefiStudio.planning.drafts.v1") || "{}"); if (saved && typeof saved === "object" && !Array.isArray(saved)) drafts = saved; } catch {}
   const persist = () => { try { localStorage.setItem("mefiStudio.planning.drafts.v1", JSON.stringify(drafts)); } catch { /* Form state stays in memory when storage is unavailable. */ } };
   const draftKey = () => JSON.stringify([state.projectId, state.selected]);
@@ -73,7 +87,18 @@
     result.addEventListener("click", run); return result;
   }
   function field(parent, label, id, value, change, options = {}) {
-    const wrap = node("label", "planning-field", label, parent);
+    const wrap = node("div", "planning-field", undefined, parent);
+    const head = node("div", "planning-field-head", undefined, wrap);
+    const caption = node("label", "planning-field-title", undefined, head); caption.setAttribute("for", `plans-${id}`);
+    if (options.step) node("span", "planning-field-number", options.step, caption).setAttribute("aria-hidden", "true");
+    node("span", "", label, caption);
+    if (options.optional) node("small", "planning-field-optional", "Optional", caption);
+    if (options.step && !options.locked && api()?.planningExplore) {
+      const refine = button("✦ Refine", head, () => {
+        draft().assisted = true; draft().copilotTab = "suggestions"; focusedField = fieldTargets[id]; persist(); void exploreDraft("write");
+      }, `refine-${id}`);
+      refine.className = "planning-refine"; refine.setAttribute("aria-label", `Help me write: ${label}`);
+    }
     const control = node(options.select ? "select" : options.rows ? "textarea" : "input", "", undefined, wrap);
     if (options.select) for (const [key, copy] of options.select) { const option = node("option", "", copy, control); option.value = key; }
     else if (options.rows) control.rows = options.rows;
@@ -82,7 +107,10 @@
     control.required = Boolean(options.required); control.maxLength = options.maxLength || 20000;
     control.dataset.locked = String(Boolean(options.locked)); control.disabled = state.busy || Boolean(options.locked);
     if (options.placeholder) control.placeholder = options.placeholder;
-    control.addEventListener(options.select ? "change" : "input", () => { change(control.value); persist(); });
+    control.dataset.planField = "true";
+    control.addEventListener(options.select ? "change" : "input", () => { change(control.value); persist(); renderDraftFeedback(); if (fieldTargets[id]) scheduleExploration(); });
+    control.addEventListener("focus", () => { if (fieldTargets[id]) { focusedField = fieldTargets[id]; if ($("help-target")) $("help-target").textContent = `Helping with ${targetLabels[focusedField].toLowerCase()}`; } });
+    control.addEventListener("keydown", (event) => advanceField(event, control));
     return control;
   }
   function form(parent, id, run, label, locked = false) {
@@ -94,8 +122,25 @@
     const result = button(label, parent, () => {}, id, true, locked); result.type = "submit"; return result;
   }
   function section(title, description) {
-    const result = node("section", "planning-section", undefined, $("detail"));
-    node("h3", "", title, result); if (description) node("p", "", description, result); return result;
+    const item = plan(), local = draft();
+    const stage = workflowState(item).current;
+    const order = Number.parseInt(title, 10);
+    const relevant = !item || (order === 1 && stage === "idea") || (order === 2 && stage === "explore") || (order === 3 && workflowState(item).unknowns > 0) || (order === 4 && stage === "decisions") || (order === 5 && stage === "review") || (order === 6 && ["spec", "approval", "build", "verify"].includes(stage));
+    const result = node("details", "planning-section", undefined, $("editor") || $("detail"));
+    const step = ({ 1: "idea", 2: "explore", 3: "explore", 4: "decisions", 5: "review", 6: "spec" })[order] || "idea";
+    result.dataset.step = step; result.dataset.sectionTitle = title;
+    result.open = local.sections?.[title] ?? relevant;
+    const heading = node("summary", "planning-section-heading", undefined, result);
+    stepIcon(step, heading);
+    const copy = node("span", "planning-section-title", undefined, heading);
+    node("small", "", order === 3 ? "Explore · Find the gaps" : `${String(flowStages.findIndex(([id]) => id === step) + 1).padStart(2, "0")} · ${stepLooks[step].verb}`, copy);
+    node("strong", "", title.replace(/^\d+\.\s*/, ""), copy);
+    node("span", "planning-section-chevron", "⌄", heading).setAttribute("aria-hidden", "true");
+    heading.addEventListener("click", () => {
+      (local.sections ||= {})[title] = !result.open; persist();
+      if (!result.open) { selectStep(step); slideStep(result); }
+    });
+    if (description) node("p", "", description, result); return result;
   }
   function dependencies(parent, choices, selected, change, label = "Wait for these decisions", locked = false) {
     if (!choices.length) return;
@@ -111,11 +156,246 @@
   const typeChoices = [["discussion", "Discussion — make a choice"], ["research", "Research — gather evidence"], ["prototype", "Prototype — try it out"], ["prerequisite", "Prerequisite — establish a fact"]];
   const countLabel = (count, noun) => `${count} ${noun}${count === 1 ? "" : "s"}`;
   const flowStages = [["idea", "The idea"], ["explore", "Mefi asks"], ["decisions", "Your decisions"], ["review", "Your review"], ["spec", "Specification"], ["approval", "Your approval"], ["build", "Build"], ["verify", "Verify"]];
+  const stepLooks = {
+    idea: { icon: "g-ideas", label: "Idea", verb: "Imagine" },
+    explore: { icon: "g-help", label: "Interview", verb: "Discover" },
+    decisions: { icon: "g-route", label: "Decisions", verb: "Choose" },
+    review: { icon: "g-eyes", label: "Review", verb: "Reflect" },
+    spec: { icon: "g-plans", label: "Spec", verb: "Define" },
+    approval: { icon: "g-key", label: "Approval", verb: "Approve" },
+    build: { icon: "g-wrench", label: "Build", verb: "Create" },
+    verify: { icon: "g-tasks", label: "Verify", verb: "Check" },
+  };
+  function stepIcon(step, parent) {
+    const mark = node("span", "planning-step-icon", undefined, parent); mark.setAttribute("aria-hidden", "true");
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "glyph"); svg.setAttribute("focusable", "false");
+    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", `#${stepLooks[step].icon}`); svg.append(use); mark.append(svg);
+    return mark;
+  }
+  function slideStep(element, direction = 1, delay = 0) {
+    stepAnimations.get(element)?.cancel();
+    if (!element?.animate || document.documentElement?.dataset?.motion === "off" || document.body?.classList?.contains?.("no-motion") || document.body?.classList?.contains?.("ws-still") || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const animation = element.animate([{ opacity: .45, transform: `translateX(${direction * 12}px)` }, { opacity: 1, transform: "translateX(0)" }], { duration: 260, delay, easing: "cubic-bezier(.2,.75,.25,1)" });
+    stepAnimations.set(element, animation);
+  }
+  function selectStep(id) {
+    viewedStep = id;
+    if ($("workflow")) $("workflow").dataset.viewedStep = id;
+    for (const [key] of flowStages) {
+      const stage = $(`stage-${key}`); if (!stage) continue;
+      stage.dataset.selected = String(key === id); stage.setAttribute("aria-pressed", String(key === id));
+    }
+  }
+  function advanceField(event, control) {
+    if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey || event.isComposing || event.repeat || control.disabled) return;
+    if (!["input", "textarea"].includes(control.tagName.toLowerCase())) return;
+    let scope = control.parentElement;
+    while (scope && scope.tagName.toLowerCase() !== "form") scope = scope.parentElement;
+    if (!scope) return;
+    const visible = (element) => {
+      for (let parent = element; parent && parent !== scope; parent = parent.parentElement) if (parent.hidden || (parent.tagName.toLowerCase() === "details" && !parent.open)) return false;
+      return !element.disabled && (element.dataset.planField === "true" || element.type === "submit");
+    };
+    const fields = [...scope.querySelectorAll("input, textarea, select, button")].filter(visible);
+    const next = fields[fields.indexOf(control) + 1];
+    event.preventDefault(); event.stopPropagation();
+    if (!next) return;
+    const wrap = control.parentElement;
+    wrap.dataset.departing = "true";
+    if (typeof setTimeout === "function") setTimeout(() => { delete wrap.dataset.departing; }, 460);
+    next.focus?.({ preventScroll: true }); next.scrollIntoView?.({ block: "nearest", behavior: "auto" });
+  }
+  function stopExploration() {
+    if (exploreTimer !== null) { clearTimeout(exploreTimer); exploreTimer = null; }
+    exploreGeneration += 1;
+  }
+  function composeSnapshot() {
+    const local = draft(), item = plan();
+    return { title: local.details?.title ?? item?.title ?? "", destination: local.details?.destination ?? item?.destination ?? "", outOfScope: local.details?.outOfScope ?? item?.outOfScope ?? "", question: local.question?.question || "", unknown: local.unknown || "", specText: local.spec?.text ?? item?.spec?.text ?? "" };
+  }
+  const composeSignature = () => JSON.stringify([draftKey(), plan()?.version, composeSnapshot()]);
+  function scheduleExploration() {
+    stopExploration();
+    copilot.status = "idle"; copilot.error = "";
+    if (draft().assisted === false || !api()?.planningExplore || frozen(plan())) { renderCopilot(); return; }
+    const snapshot = composeSnapshot();
+    if (`${snapshot.title} ${snapshot.destination}`.trim().length < 12) { renderCopilot(); return; }
+    copilot.status = "waiting"; renderCopilot();
+    if (typeof setTimeout === "function") exploreTimer = setTimeout(() => { exploreTimer = null; void exploreDraft(); }, 1500);
+  }
+  async function exploreDraft(intent = "suggest") {
+    if (!state.opened || document.hidden || !state.projectId || state.busy || frozen(plan()) || draft().assisted === false || !api()?.planningExplore) return;
+    if (exploreFlight) { copilot.status = "waiting"; renderCopilot(); return; }
+    const snapshot = composeSnapshot();
+    if (`${snapshot.title} ${snapshot.destination}`.trim().length < 12) { copilot.error = "Describe a little more of your idea first."; renderCopilot(); return; }
+    stopExploration();
+    const generation = exploreGeneration, key = draftKey(), signature = composeSignature(), epoch = state.epoch, item = plan();
+    const current = () => state.opened && !document.hidden && generation === exploreGeneration && key === draftKey() && epoch === state.epoch && signature === composeSignature() && draft().assisted !== false;
+    const flight = {}; exploreFlight = flight;
+    copilot.status = "exploring"; copilot.error = ""; renderCopilot();
+    try {
+      const result = await api().planningExplore({ projectId: state.projectId, ...(item ? { planId: item.id, version: item.version } : {}), draft: snapshot, focus: focusedField, intent });
+      if (!current()) return;
+      if (result?.projectId !== state.projectId) throw new Error("The project changed. Explore this plan again.");
+      copilot = { status: result.ok ? "ready" : "error", result, signature, error: result.ok ? "" : result.error || "AI help is unavailable. Keep writing or try again." };
+    } catch (error) { if (current()) { copilot.status = "error"; copilot.error = error.message; } }
+    finally {
+      if (exploreFlight === flight) exploreFlight = null;
+      if (state.opened) {
+        renderCopilot();
+        // One in-flight request; edits during it coalesce into the latest draft.
+        if (copilot.status === "waiting" && draft().assisted !== false && !document.hidden && !state.busy) scheduleExploration();
+      }
+    }
+  }
+  function setDraftText(target, text) {
+    const local = draft(), values = composeSnapshot();
+    if (["title", "destination", "outOfScope"].includes(target)) { local.details ||= { title: values.title, destination: values.destination, outOfScope: values.outOfScope }; local.details[target] = text; local.detailsDirty = true; }
+    else if (target === "question") { local.question ||= { question: "", type: "discussion", dependsOn: [] }; local.question.question = text; }
+    else if (target === "unknown") local.unknown = text;
+    else { local.spec ||= { text: "", tasks: [] }; local.spec.text = text; local.specDirty = true; }
+  }
+  const draftFeedbackSignature = () => JSON.stringify([composeSignature(), draft().spec?.tasks]);
+  function renderDraftFeedback() {
+    const area = $("draft-feedback"); if (!area) return;
+    area.replaceChildren();
+    const available = suggestionUndo && !frozen(plan()) && suggestionUndo.signature === draftFeedbackSignature();
+    area.hidden = !available; if (!available) return;
+    node("span", "", `${targetLabels[suggestionUndo.target]} updated with your chosen wording.`, area);
+    button("Undo", area, () => {
+      if (!suggestionUndo || suggestionUndo.signature !== draftFeedbackSignature() || state.busy) return;
+      const prior = suggestionUndo; suggestionUndo = null;
+      setDraftText(prior.target, prior.before);
+      if (["title", "destination", "outOfScope"].includes(prior.target)) draft().detailsDirty = prior.detailsDirty;
+      else if (prior.target === "specText") draft().specDirty = prior.specDirty;
+      persist(); render(); navigateTo(draftFieldId(prior.target)); holdHandoff(); scheduleExploration();
+    }, "undo-wording");
+  }
+  function useSuggestion(suggestion, append = false) {
+    if (state.busy || frozen(plan()) || copilot.signature !== composeSignature()) return;
+    const local = draft(), values = composeSnapshot();
+    if (!suggestion.text.trim()) return;
+    const text = append && values[suggestion.target] ? `${values[suggestion.target]}\n\n${suggestion.text}` : suggestion.text;
+    const max = { title: 180, destination: 16000, outOfScope: 12000, question: 4000, unknown: 4000, specText: 60000 }[suggestion.target];
+    if (text.length > max) { copilot.error = "This addition exceeds the field's length limit. Shorten the suggestion first."; renderCopilot(); return; }
+    suggestionUndo = { target: suggestion.target, before: values[suggestion.target], detailsDirty: local.detailsDirty, specDirty: local.specDirty };
+    setDraftText(suggestion.target, text); suggestionUndo.signature = draftFeedbackSignature();
+    persist(); render();
+    navigateTo(draftFieldId(suggestion.target)); holdHandoff(); scheduleExploration();
+    note();
+  }
+  function renderCopilot() {
+    const area = $("copilot"); if (!area || !state.projectId) return;
+    const oldScroll = $("copilot-body")?.scrollTop || 0;
+    const oldFocus = area.contains?.(document.activeElement) ? document.activeElement?.id : null;
+    area.replaceChildren();
+    const chrome = node("div", "planning-copilot-chrome", undefined, area);
+    const finish = () => {
+      if ($("copilot-body")) $("copilot-body").scrollTop = oldScroll;
+      const control = oldFocus && document.getElementById(oldFocus);
+      if (control && !control.hidden && !control.disabled) control.focus?.({ preventScroll: true });
+    };
+    const assisted = draft().assisted !== false, locked = frozen(plan());
+    for (const id of ["title", "destination", "out-of-scope"]) if ($(`refine-${id}`)) {
+      $(`refine-${id}`).dataset.locked = String(locked || Boolean(exploreFlight));
+      $(`refine-${id}`).disabled = state.busy || locked || Boolean(exploreFlight);
+    }
+    const head = node("div", "planning-copilot-head", undefined, chrome);
+    node("span", "planning-copilot-mark", "✦", head).setAttribute("aria-hidden", "true");
+    const title = node("div", "", undefined, head); node("h3", "", "Your planning partner", title); node("p", "planning-subtle", "A little help from Mefi", title);
+    const modes = node("div", "planning-compose-modes", undefined, chrome); modes.setAttribute("aria-label", "Writing mode");
+    for (const [value, label] of [[true, "Write with Mefi"], [false, "Write manually"]]) {
+      const control = button(label, modes, () => { draft().assisted = value; persist(); stopExploration(); copilot.status = "idle"; copilot.error = ""; renderCopilot(); if (value) scheduleExploration(); }, value ? "mode-assisted" : "mode-manual", false, locked);
+      control.setAttribute("aria-pressed", String(assisted === value));
+    }
+    const status = node("p", "planning-copilot-status", undefined, chrome); status.id = "plans-copilot-status"; status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
+    status.dataset.active = String(assisted && copilot.status === "exploring");
+    status.dataset.error = String(Boolean(copilot.error));
+    status.textContent = locked ? "This plan is on the task board." : !assisted ? "Your words, your pace. Mefi is paused." : !api()?.planningExplore ? "AI help is available in the desktop app." : copilot.error || ({ idle: "Write a little. Mefi will follow along.", waiting: "Following your draft…", exploring: "Reading files and connecting the details…", ready: `${copilot.result?.suggestions?.length || 0} suggestions ready to explore.` }[copilot.status] || "Keep writing, or try exploring again.");
+    const result = copilot.result;
+    const showSuggestions = assisted && !locked && draft().copilotTab === "suggestions";
+    if (assisted && !locked) {
+      const actions = node("div", "planning-actions planning-copilot-actions", undefined, chrome);
+      const unavailable = !api()?.planningExplore || copilot.status === "exploring" || copilot.status === "waiting" && Boolean(exploreFlight);
+      button("Help me write", actions, () => { draft().copilotTab = "suggestions"; persist(); void exploreDraft("write"); }, "help-write", true, unavailable);
+      button("↻ Explore", actions, () => exploreDraft(), "explore-now", false, unavailable).title = "Refresh the file exploration and suggestions";
+      node("p", "planning-copilot-foot", `Helping with ${(targetLabels[focusedField] || "Outcome").toLowerCase()}`, chrome).id = "plans-help-target";
+      const tabs = node("div", "planning-copilot-tabs", undefined, chrome); tabs.setAttribute("aria-label", "Planning partner views");
+      for (const [tab, label] of [["explore", "Explore files"], ["suggestions", `Suggestions${result?.suggestions?.length ? ` · ${result.suggestions.length}` : ""}`]]) {
+        const control = navigation(label, tabs, () => { draft().copilotTab = tab; persist(); renderCopilot(); $(`copilot-tab-${tab}`)?.focus(); }, `copilot-tab-${tab}`);
+        control.setAttribute("aria-pressed", String(tab === (showSuggestions ? "suggestions" : "explore")));
+      }
+    }
+    const body = node("div", "planning-copilot-body", undefined, area); body.id = "plans-copilot-body";
+    const tree = node("div", "planning-explore-tree", undefined, body); tree.id = "plans-explore-tree"; tree.setAttribute("aria-label", "Plan exploration tree");
+    tree.hidden = showSuggestions;
+    const root = node("div", "planning-tree-root", undefined, tree); node("span", "planning-tree-dot", "", root); node("strong", "", composeSnapshot().title || "Your idea", root);
+    const branches = node("ul", "planning-tree-branches", undefined, tree);
+    const branch = (label, detail) => { const row = node("li", "planning-tree-branch", undefined, branches); node("strong", "", label, row); if (detail) node("p", "planning-subtle", detail, row); return row; };
+    branch("The outcome", composeSnapshot().destination || "Describe what you want to make possible.");
+    const references = copilot.result?.references;
+    const stale = copilot.signature !== composeSignature();
+    const files = branch("Project files", references ? `${references.code?.length || 0} matching excerpts · ${references.scanned || 0} files scanned${stale ? " · earlier draft" : ""}` : "Relevant file excerpts will appear here.");
+    for (const hit of references?.code || []) {
+      const entry = node("details", "planning-file-node", undefined, files);
+      const local = draft(); entry.open = local.fileOpen?.[hit.file] === true;
+      entry.addEventListener("toggle", () => { (local.fileOpen ||= {})[hit.file] = entry.open; persist(); });
+      node("summary", "", `${hit.file}:${hit.line}`, entry);
+      node("pre", "", hit.snippet, entry);
+    }
+    if (references?.limitations?.length) { const limits = node("details", "planning-scan-limits", undefined, files); node("summary", "", "Scan coverage", limits); for (const line of references.limitations) node("p", "planning-subtle", line, limits); }
+    const item = plan();
+    const decisions = branch("Decisions to shape", item ? `${item.questions.length} questions · ${item.questions.filter((question) => question.status === "resolved").length} decided` : "Questions appear here as the idea takes shape.");
+    for (const question of (item?.questions || []).slice(0, 6)) {
+      const jump = navigation(`${question.status === "resolved" ? "✓" : "○"} ${question.question}`, decisions, () => navigateTo(`resolution-${question.id}`, `question-card-${question.id}`), null, "planning-decision-node");
+      jump.dataset.resolved = String(question.status === "resolved");
+    }
+    if (!assisted || locked) { finish(); return; }
+    const proposals = node("div", "", undefined, body); proposals.id = "plans-suggestions-view"; proposals.hidden = !showSuggestions;
+    if (result?.summary) node("p", "planning-explore-summary", result.summary, proposals);
+    if (result?.suggestions?.length) {
+      const suggestions = node("section", "planning-suggestions", undefined, proposals); node("h4", "", "Ideas to build on", suggestions);
+      if (stale) node("p", "planning-subtle", "Your draft changed. Refresh the suggestions before using them.", suggestions);
+      for (const suggestion of result.suggestions) {
+        if (suggestion.target === "specText" && !item) continue;
+        const card = node("article", "planning-suggestion", undefined, suggestions);
+        const heading = node("div", "planning-suggestion-head", undefined, card);
+        node("span", "planning-suggestion-target", targetLabels[suggestion.target], heading);
+        const dismiss = button("×", heading, () => { result.suggestions = result.suggestions.filter((entry) => entry !== suggestion); renderCopilot(); }, `dismiss-${suggestion.id}`);
+        dismiss.className = "planning-suggestion-dismiss"; dismiss.setAttribute("aria-label", `Dismiss suggestion: ${suggestion.label}`); dismiss.title = "Dismiss suggestion";
+        node("h4", "", suggestion.label, card);
+        const preview = node("p", "planning-suggestion-copy", suggestion.text, card); preview.hidden = Boolean(suggestion.editing);
+        const text = node("textarea", "", undefined, card); text.id = `plans-suggestion-editor-${suggestion.id}`; text.value = suggestion.text; text.rows = 4; text.hidden = !suggestion.editing; text.disabled = state.busy || stale; text.dataset.locked = String(stale); text.setAttribute("aria-label", `Edit suggestion: ${suggestion.label}`);
+        text.addEventListener("input", () => { suggestion.text = text.value; preview.textContent = text.value; for (const id of [`use-${suggestion.id}`, `append-${suggestion.id}`]) if ($(id)) { $(id).disabled = !text.value.trim() || state.busy || stale; $(id).dataset.locked = String(!text.value.trim() || stale); } });
+        if (suggestion.reason) node("p", "planning-subtle", suggestion.reason, card);
+        for (const file of suggestion.files || []) node("code", "planning-suggestion-source", file, card);
+        const actions = node("div", "planning-actions", undefined, card);
+        const hasText = Boolean(composeSnapshot()[suggestion.target]);
+        button(hasText ? "Replace field" : "Use wording", actions, () => useSuggestion(suggestion), `use-${suggestion.id}`, true, stale || !suggestion.text.trim());
+        if (hasText && suggestion.target !== "title") button("Add to field", actions, () => useSuggestion(suggestion, true), `append-${suggestion.id}`, false, stale || !suggestion.text.trim());
+        const edit = button(suggestion.editing ? "Done editing" : "Edit", actions, () => { suggestion.editing = !suggestion.editing; renderCopilot(); (suggestion.editing ? $(`suggestion-editor-${suggestion.id}`) : $(`edit-${suggestion.id}`))?.focus(); }, `edit-${suggestion.id}`, false, stale);
+        edit.setAttribute("aria-expanded", String(Boolean(suggestion.editing))); edit.setAttribute("aria-controls", text.id);
+      }
+    } else node("p", "planning-subtle", result?.ok ? "No additions suggested for now. Keep shaping the idea." : "Mefi's suggestions will appear here after you describe the idea. You can keep writing while it explores.", proposals);
+    finish();
+  }
   function navigateTo(...ids) {
     const target = ids.map($).find((element) => element && !element.disabled);
     if (!target) return;
-    for (let ancestor = target.parentElement; ancestor; ancestor = ancestor.parentElement) if (ancestor.tagName?.toLowerCase() === "details") ancestor.open = true;
+    let section;
+    for (let ancestor = target; ancestor; ancestor = ancestor.parentElement) {
+      if (ancestor.tagName?.toLowerCase() === "details") ancestor.open = true;
+      if (ancestor.dataset?.sectionTitle) { section = ancestor; (draft().sections ||= {})[ancestor.dataset.sectionTitle] = true; }
+    }
+    if (section) {
+      const previous = flowStages.findIndex(([id]) => id === viewedStep), next = flowStages.findIndex(([id]) => id === section.dataset.step);
+      selectStep(section.dataset.step); persist(); slideStep(section, next < previous ? -1 : 1);
+    } else slideStep(target);
+    section?.scrollIntoView?.({ block: "start", behavior: "auto" });
     target.scrollIntoView?.({ block: "nearest", behavior: "auto" }); target.focus?.({ preventScroll: true });
+    return target;
   }
   function navigation(label, parent, run, id, className = "") {
     const result = node("button", className, label, parent); result.type = "button";
@@ -168,20 +448,23 @@
   }
   function renderWorkflow(item) {
     let area = $("workflow");
+    const entering = !area;
     if (!area) { area = node("section", "planning-workflow", undefined, $("detail")); area.id = "plans-workflow"; area.setAttribute("aria-label", "From idea to verified work"); }
     area.replaceChildren();
     const flow = workflowState(item); area.dataset.stage = flow.current;
+    if (viewedStepKey !== draftKey() || lastWorkflowStep !== flow.current) viewedStep = flow.current;
+    viewedStepKey = draftKey(); lastWorkflowStep = flow.current; area.dataset.viewedStep = viewedStep;
     const head = node("div", "planning-flow-head", undefined, area);
-    const heading = node("div", "", undefined, head); node("span", "eyebrow", "IDEA → UNDERSTANDING → WORK", heading);
-    node("h3", "", "See the next step.", heading);
-    node("p", "planning-subtle", "Explore together. You make the decisions and approve what reaches the builders.", heading);
-    const badge = node("span", "planning-flow-badge", flow.complete ? "Work confirmed" : item?.status === "converting" ? "Finish task creation" : item?.status === "converted" ? "On the task board" : "Planning space", head);
+    const heading = node("div", "", undefined, head);
+    node("span", "planning-flow-kicker", `Step ${flowStages.findIndex(([key]) => key === flow.current) + 1} of ${flowStages.length} · ${flowStages.find(([key]) => key === flow.current)?.[1] || "Planning"}`, heading);
+    node("h3", "", composeSnapshot().title || "New plan", heading).id = "plans-draft-title";
+    const badge = node("span", "planning-flow-badge", flow.complete ? "Work confirmed" : item?.status === "converting" ? "Finish task creation" : item?.status === "converted" ? "On the task board" : item ? "Planning" : "Draft", head);
     badge.dataset.state = flow.complete ? "complete" : "waiting";
     const rail = node("ol", "planning-flow-rail", undefined, area); rail.setAttribute("aria-label", "Planning and work stages");
     const decided = `${flow.resolved.length}/${flow.questions.length} recorded`;
-    const subtitles = { idea: item ? "Destination saved" : "Set a destination", explore: flow.ask?.awaiting ? "Waiting for your answer" : `${flow.frontier.length} ready · ${flow.blocked.length} blocked`, decisions: decided, review: confirmed(item) ? "Confirmed by you" : "Read it back", spec: item?.spec?.stale ? "Needs revision" : item?.spec ? "Draft saved" : "Shape the build", approval: item?.spec?.approvedAt ? "Approved by you" : "Review together", build: frozen(item) ? `${flow.work.filter((task) => task.stage === "running").length} working · ${countLabel(item.taskIds?.length || 0, "task")}` : "Create tasks", verify: frozen(item) ? `${flow.work.filter((task) => task.stage === "done").length}/${flow.work.length} confirmed` : "Check the result" };
+    const subtitles = { idea: item ? "Destination saved" : "Set a destination", explore: flow.ask?.awaiting ? "Waiting for your answer" : `${flow.frontier.length} ready · ${flow.blocked.length} blocked`, decisions: decided, review: confirmed(item) ? "Confirmed by you" : "Review decisions", spec: item?.spec?.stale ? "Needs revision" : item?.spec ? "Draft saved" : "Draft specification", approval: item?.spec?.approvedAt ? "Approved by you" : "Review specification", build: frozen(item) ? `${flow.work.filter((task) => task.stage === "running").length} working · ${countLabel(item.taskIds?.length || 0, "task")}` : "Create tasks", verify: frozen(item) ? `${flow.work.filter((task) => task.stage === "done").length}/${flow.work.length} confirmed` : "Check the result" };
     for (const [index, [id, label]] of flowStages.entries()) {
-      const row = node("li", "", undefined, rail);
+      const row = node("li", "", undefined, rail); row.dataset.step = id;
       const jump = () => {
         if (id === "idea") navigateTo("title", "destination-section");
         else if (id === "explore") navigateTo("interview-answer", "interview-start", "interview-section", "destination-section");
@@ -190,27 +473,35 @@
         else if (id === "spec") navigateTo("spec-text", "specification-section", "destination-section");
         else if (id === "approval") navigateTo("approval-section", "destination-section");
         else navigateTo("execution", "approval-section", "destination-section");
+        selectStep(item ? id : "idea");
       };
       const stage = navigation("", row, jump, `stage-${id}`, "planning-flow-stage");
       stage.dataset.state = flow.completed.has(id) && id !== flow.current ? "complete" : id === flow.current ? "current" : "waiting";
+      stage.dataset.step = id; stage.dataset.selected = String(id === viewedStep);
+      stage.setAttribute("aria-pressed", String(id === viewedStep)); stage.title = `${label} · ${subtitles[id]}`;
       stage.setAttribute("aria-label", `${label}: ${subtitles[id]}`);
       if (id === flow.current) stage.setAttribute("aria-current", "step");
-      node("span", "planning-stage-number", stage.dataset.state === "complete" ? "✓" : index + 1, stage);
-      node("strong", "", label, stage); node("small", "", subtitles[id], stage);
+      stepIcon(id, stage);
+      const copy = node("span", "planning-stage-copy", undefined, stage);
+      node("span", "planning-stage-number", stage.dataset.state === "complete" ? "✓ Complete" : `${String(index + 1).padStart(2, "0")} · ${stepLooks[id].verb}`, copy);
+      node("strong", "", stepLooks[id].label, copy); node("small", "planning-stage-detail", subtitles[id], stage);
+      if (entering) slideStep(stage, 1, index * 22);
     }
     const status = node("div", "planning-flow-status", undefined, area); status.id = "plans-flow-status"; status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
     status.dataset.active = String(Boolean(state.pending?.assist));
     status.setAttribute("aria-busy", String(Boolean(state.pending?.assist)));
     node("span", "planning-flow-dot", "", status).setAttribute("aria-hidden", "true");
-    const next = { idea: "Start with the outcome you want. Nothing runs until you choose the next action.", explore: flow.ask?.awaiting ? "Mefi is waiting for your answer. Reply in your own words; it reads your answer back before moving on." : flow.unknowns ? `${flow.unknowns} unknown${flow.unknowns === 1 ? " needs" : "s need"} a question or a reason to set aside.` : "Let Mefi ask you the next question, or add one yourself.", decisions: "Read the interview back, then record your own decisions.", review: "Read what this plan now says the feature is. Nothing is drafted until you confirm it.", spec: "The decisions are settled. Draft the specification and its small implementation tasks.", approval: "Review the saved specification, task briefs, and acceptance checks before approving.", build: item?.status === "converted" ? "Tasks follow the current queue and Pause settings. Their board status is shown below." : item?.status === "converting" ? "Finish creating the approved tasks. Existing tasks will be reused." : "Your specification is approved. Create its tasks when you are ready.", verify: flow.complete ? "Every linked task has verified evidence or your recorded confirmation." : "A worker result is ready for verification. Open the task to inspect its evidence." };
+    const next = { idea: "Start with the outcome. Build work begins after your approval.", explore: flow.ask?.awaiting ? "Mefi is waiting for your answer. Reply in your own words; it reads your answer back before moving on." : flow.unknowns ? `${flow.unknowns} unknown${flow.unknowns === 1 ? " needs" : "s need"} a question or a reason to set aside.` : "Let Mefi ask you the next question, or add one yourself.", decisions: "Read the interview back, then record your own decisions.", review: "Read what this plan now says the feature is. Nothing is drafted until you confirm it.", spec: "The decisions are settled. Draft the specification and its small implementation tasks.", approval: "Review the saved specification, task briefs, and acceptance checks before approving.", build: item?.status === "converted" ? "Tasks follow the current queue and Pause settings. Their board status is shown below." : item?.status === "converting" ? "Finish creating the approved tasks. Existing tasks will be reused." : "Your specification is approved. Create its tasks when you are ready.", verify: flow.complete ? "Every linked task has verified evidence or your recorded confirmation." : "A worker result is ready for verification. Open the task to inspect its evidence." };
     const pendingQuestion = flow.questions.find((question) => question.id === state.pending?.questionId);
     node("span", "", state.pending?.assist ? state.pending.kind === "spec" ? "Mefi is drafting the specification from your saved decisions…" : state.pending.kind === "interview" ? "Mefi is reading your answer and working out what to ask next…" : state.pending.kind === "question" ? `Mefi is exploring: ${pendingQuestion?.question || "the selected question"}` : "Mefi is looking for questions in your saved destination…" : next[flow.current], status);
     if (item && !frozen(item)) renderQuestionMap(area, item, flow);
     if (frozen(item)) renderExecution(area, item, flow.work);
   }
   function renderQuestionMap(area, item, flow) {
-    const map = node("div", "planning-question-map", undefined, area); map.id = "plans-question-map";
-    const title = node("div", "planning-map-head", undefined, map); node("h4", "", "The questions that shape this idea", title);
+    const map = node("details", "planning-question-map", undefined, area); map.id = "plans-question-map";
+    map.open = draft().mapOpen === true;
+    map.addEventListener("toggle", () => { draft().mapOpen = map.open; persist(); });
+    const title = node("summary", "planning-map-head", undefined, map); node("h4", "", "Questions and dependencies", title);
     node("span", "planning-subtle", `${flow.frontier.length} ready · ${flow.blocked.length} blocked · ${flow.resolved.length} decided`, title);
     if (!flow.questions.length) { node("p", "planning-subtle", "Questions will connect here as you discover what depends on what.", map); return; }
     const byId = new Map(flow.questions.map((question) => [question.id, question]));
@@ -276,11 +567,12 @@
     const epoch = state.epoch; const projectId = state.projectId; const selected = state.selected;
     const current = plan(); const savedDraft = draft(); const key = draftKey();
     const request = { projectId, ...(current ? { planId: current.id, version: current.version } : {}), ...payload, ...(assist ? {} : { action }) };
-    state.busy = true; state.pending = { assist, kind: payload.kind || action, questionId: payload.questionId }; persist(); renderWorkflow(current); controls(); note(assist ? "Mefi is thinking through the saved plan…" : "Saving your plan…");
+    stopExploration(); copilot.status = "idle";
+    state.busy = true; state.pending = { assist, kind: payload.kind || action, questionId: payload.questionId }; persist(); renderWorkflow(current); renderCopilot(); controls(); note(assist ? "Mefi is thinking through the saved plan…" : "Saving your plan…");
     try {
       const result = guard(await (assist ? api().planningAssist(request) : api().planningAction(request)));
       if (epoch !== state.epoch || projectId !== state.projectId || selected !== state.selected) return false;
-      accept(result); if (clean) clean(savedDraft); if (action === "create") delete drafts[key]; persist();
+      accept(result); if (clean) clean(savedDraft); if (action === "create") { drafts[draftKey()] = savedDraft; delete drafts[key]; } persist();
       render(); note(result.note || success);
       if (action === "create") announce("mefi:plan-created", { planId: result.plan?.id || current?.id || null, projectId });
       if (action === "convert") announce("mefi:task-created", { planId: current?.id || null, projectId });
@@ -294,36 +586,48 @@
         if (epoch === state.epoch) note(`${error.message} Your entered text is kept.`, true);
       }
       return false;
-    } finally { if (epoch === state.epoch) { state.busy = false; state.pending = null; renderWorkflow(plan()); controls(); if (frozen(plan())) void refreshWork(); } }
+    } finally { if (epoch === state.epoch) { state.busy = false; state.pending = null; renderWorkflow(plan()); renderCopilot(); controls(); if (frozen(plan())) void refreshWork(); } }
   }
   function renderList() {
     $("project").textContent = state.projectName; $("list").replaceChildren();
     for (const item of state.plans) {
-      const row = button("", $("list"), () => { if (state.busy) return; state.selected = item.id; state.workReadId += 1; render(); note(); void refreshWork(); }, null);
+      const row = button("", $("list"), () => { if (state.busy) return; window.MefiNav?.note?.("plans", { planId: item.id }); state.selected = item.id; state.workReadId += 1; render(); note(); void refreshWork(); }, null);
       row.dataset.planId = item.id; row.setAttribute("aria-pressed", String(item.id === state.selected));
       node("strong", "", item.title, row);
       const open = (item.questions || []).filter((question) => question.status !== "resolved").length;
       const taskCount = item.taskIds?.length || 0;
       node("small", "", item.status === "converted" ? `${countLabel(taskCount, "task")} created` : item.status === "converting" ? "Task creation needs finishing" : item.spec?.approvedAt ? "Approved · ready for tasks" : `${countLabel(open, "open question")} · ${countLabel(item.unknowns?.length || 0, "unknown")}`, row);
     }
-    if (!state.plans.length) node("p", "planning-subtle", "A plan is a place to think before work reaches the board.", $("list"));
+    if (!state.plans.length) {
+      const empty = node("div", "planning-library-empty", undefined, $("list"));
+      node("span", "", "◇", empty).setAttribute("aria-hidden", "true");
+      node("strong", "", "Room for your ideas", empty);
+      node("p", "planning-subtle", state.projectId ? "Your saved plans will live here, with this project." : "Choose a project to start a plan.", empty);
+    }
   }
   function details(item) {
-    const area = section(item ? "1. The destination" : "What would you like to make?", "Describe the outcome you want and what belongs outside this idea. You can refine it as you learn.");
+    // "New plan" already heads the workflow card above; the section names its part.
+    const area = section("1. The destination", "Describe the intended outcome and what is outside the scope.");
     area.id = "plans-destination-section"; area.tabIndex = -1;
     const local = draft();
     if (item && (!local.detailsDirty || frozen(item))) { local.details = { title: item.title, destination: item.destination, outOfScope: item.outOfScope }; delete local.detailsDirty; }
     const values = local.details ||= { title: item?.title || "", destination: item?.destination || "", outOfScope: item?.outOfScope || "" };
     const locked = frozen(item);
-    const edit = form(area, "details-form", () => act(item ? "update" : "create", { ...values }, (saved) => { delete saved.details; delete saved.detailsDirty; }, item ? "Destination saved. Changed scope reopens earlier decisions for review." : "Your plan is ready to explore."), "Plan destination", locked);
-    const changed = (key, value) => { values[key] = value; local.detailsDirty = true; if (item) holdHandoff(); };
-    field(edit, "Name this idea", "title", values.title, (value) => changed("title", value), { required: true, maxLength: 180, locked, placeholder: "A calmer first five minutes" });
-    field(edit, "What should be true when this is finished?", "destination", values.destination, (value) => changed("destination", value), { required: true, rows: 3, locked, maxLength: 16000, placeholder: "Who is this for? What can they do or understand afterward?" });
-    field(edit, "Outside this plan", "out-of-scope", values.outOfScope, (value) => changed("outOfScope", value), { rows: 2, locked, maxLength: 12000, placeholder: "Things we are choosing to leave for later" });
-    if (!locked) submit(edit, item ? "Save destination" : "Create plan", "save-details");
+    const edit = form(area, "details-form", () => act(item ? "update" : "create", { ...values }, (saved) => { delete saved.details; delete saved.detailsDirty; }, item ? "Destination saved. Changed scope reopens earlier decisions for review." : "Plan created. Add questions or start the interview."), "Plan destination", locked);
+    const changed = (key, value) => { values[key] = value; local.detailsDirty = true; if (key === "title" && $("draft-title")) $("draft-title").textContent = value || "New plan"; if (item) holdHandoff(); };
+    field(edit, "Plan name", "title", values.title, (value) => changed("title", value), { step: "01", required: true, maxLength: 180, locked, placeholder: "Improve first-time setup" });
+    field(edit, "What should be true when this is finished?", "destination", values.destination, (value) => changed("destination", value), { step: "02", required: true, rows: 3, locked, maxLength: 16000, placeholder: "Who is this for? What can they do or understand afterward?" });
+    field(edit, "Outside this plan", "out-of-scope", values.outOfScope, (value) => changed("outOfScope", value), { step: "03", optional: true, rows: 2, locked, maxLength: 12000, placeholder: "Things we are choosing to leave for later" });
+    if (!item && local.question?.question) field(edit, "A question to carry forward", "draft-question", local.question.question, (value) => { local.question.question = value; }, { rows: 2, maxLength: 4000 });
+    if (!item && local.unknown) field(edit, "An uncertainty to carry forward", "draft-unknown", local.unknown, (value) => { local.unknown = value; }, { rows: 2, maxLength: 4000 });
+    if (!locked) {
+      const actions = node("div", "planning-destination-actions", undefined, edit);
+      node("span", "planning-key-hint", "Enter → next field · Shift+Enter → new line", actions);
+      submit(actions, item ? "Save destination" : "Create plan", "save-details");
+    }
   }
   function unknowns(item) {
-    const area = section("3. Loose ends we noticed", "Uncertainties too vague to decide yet. Turn one into a question, or explain why it no longer needs an answer.");
+    const area = section("3. Unknowns", "Turn each uncertainty into a question, or explain why it no longer needs an answer.");
     const local = draft(); const locked = frozen(item);
     for (const unknown of item.unknowns || []) {
       const card = node("article", "planning-card", undefined, area); node("p", "", unknown.text, card);
@@ -502,7 +806,7 @@
     if (!local.specDirty || locked) { delete local.spec; delete local.specDirty; }
     const values = local.spec ||= { text: item.spec?.text || "", tasks: (item.spec?.tasks || []).map((task) => ({ ...task, acceptance: Array.isArray(task.acceptance) ? task.acceptance.join("\n") : task.acceptance || "", dependsOn: [...(task.dependsOn || [])] })) };
     const markDirty = () => { local.specDirty = true; reviewGates(); };
-    if (!locked && (!settled(item) || !confirmed(item))) node("p", "planning-subtle", settled(item) ? "Draft here as you think. Confirm what you understand in section 5 before asking Mefi for a specification or approving tasks." : "Draft here as you think. Settle all unknowns and questions, then confirm what you understand, before drafting or approving.", area);
+    if (!locked && (!settled(item) || !confirmed(item))) node("p", "planning-subtle", settled(item) ? "Draft here as you think. Confirm what we understand before asking Mefi for a specification or approving tasks." : "Draft here as you think. Settle all unknowns and questions, then confirm what you understand, before drafting or approving.", area);
     if (!locked) {
       const actions = node("div", "planning-actions", undefined, area);
       button("Draft specification with Mefi", actions, () => act("spec", { kind: "spec" }, (saved) => { delete saved.spec; delete saved.specDirty; }, "Specification drafted. Review the text, task briefs and acceptance checks.", true), "draft-spec", false, !settled(item) || !confirmed(item) || Boolean(local.specDirty) || unsavedPlan(item));
@@ -526,6 +830,9 @@
     }
     const approve = node("div", "planning-confirm", undefined, area);
     approve.id = "plans-approval-section"; approve.tabIndex = -1;
+    approve.dataset.step = item.spec?.approvedAt ? "build" : "approval";
+    const heading = node("div", "planning-handoff-heading", undefined, approve);
+    stepIcon(approve.dataset.step, heading); node("strong", "", item.spec?.approvedAt ? "Ready to build" : "Your approval", heading);
     if (item.status === "converted") {
       const count = item.taskIds?.length || 0;
       node("p", "", `${count} ${count === 1 ? "task was" : "tasks were"} added to this project's queue. Open one to follow its progress.`, approve);
@@ -535,7 +842,7 @@
       node("p", "", "Task creation started. Finish adding the approved tasks to the queue. Existing tasks will be reused.", approve);
       button("Finish creating tasks", approve, () => act("convert", {}, null, "Approved tasks are in your project's queue."), "convert", true);
     } else {
-      node("p", "", unsavedPlan(item) ? "Save your destination, unknown, or question changes before drafting or approving the specification." : !confirmed(item) ? "Confirm what you understand in section 5 first. Approval builds on the reading you confirmed, not on Mefi's suggestions." : item.spec?.stale ? "Earlier decisions changed. Review and save a fresh specification before approving it." : item.spec?.approvedAt && !local.specDirty ? "You've approved this specification. Creating tasks adds them to the current queue; they can begin when scheduling is on and their prerequisites are complete." : "Your approval confirms the saved specification and every task brief. Approval alone keeps the work here until you choose to create the tasks.", approve);
+      node("p", "", unsavedPlan(item) ? "Save your destination, unknown, or question changes before drafting or approving the specification." : !confirmed(item) ? "Confirm what we understand in Your review first. Approval builds on the reading you confirmed, not on Mefi's suggestions." : item.spec?.stale ? "Earlier decisions changed. Review and save a fresh specification before approving it." : item.spec?.approvedAt && !local.specDirty ? "You've approved this specification. Creating tasks adds them to the current queue; they can begin when scheduling is on and their prerequisites are complete." : "Your approval confirms the saved specification and every task brief. Approval alone keeps the work here until you choose to create the tasks.", approve);
       const actions = node("div", "planning-actions", undefined, approve);
       button(item.spec?.approvedAt ? "Specification approved" : "Approve specification", actions, () => act("approve-spec", {}, null, "Specification approved. You can now create the tasks."), "approve", false, !item.spec || !settled(item) || !confirmed(item) || Boolean(local.specDirty) || Boolean(item.spec?.approvedAt) || item.spec?.stale || unsavedPlan(item));
       const count = item.spec?.tasks?.length || 0;
@@ -544,7 +851,7 @@
   }
   function history(item) {
     if (!item.history?.length) return;
-    const local = draft(); const area = node("details", "planning-card", undefined, $("detail")); area.id = "plans-history";
+    const local = draft(); const area = node("details", "planning-card", undefined, $("editor") || $("detail")); area.id = "plans-history";
     node("summary", "", `Plan history · ${countLabel(item.history.length, "saved revision")}`, area);
     node("p", "planning-subtle", "Earlier decisions and specifications remain available here after you change the plan. Copy any text you want to use in a new revision.", area);
     const labels = { create: "Plan created", update: "Destination saved", "add-unknown": "Unknown added", "remove-unknown": "Unknown set aside", "add-question": "Question added", "edit-question": "Question edited", resolve: "Decision recorded", reopen: "Decision reopened", "add-note": "Interview line saved", "confirm-understanding": "Understanding confirmed", "draft-spec": "Specification drafted", "approve-spec": "Specification approved", "begin-conversion": "Task creation started", "mark-converted": "Tasks created" };
@@ -571,7 +878,7 @@
         }
       });
     }
-    if (item.history.length > limit) button("Show older revisions", area, () => { local.historyLimit = limit + 12; render(); const last = $("detail").lastElementChild; if (last) last.open = true; });
+    if (item.history.length > limit) button("Show older revisions", area, () => { local.historyLimit = limit + 12; render(); if ($("history")) { $("history").open = true; $("history").scrollIntoView?.({ block: "nearest" }); } });
   }
   // What the folder already holds, read by the desktop app when the plans
   // list is fetched: wayfinder maps and tickets on the repo's issue tracker
@@ -665,12 +972,23 @@
     }
   }
   function render() {
+    if (composeKey !== draftKey()) { stopExploration(); composeKey = draftKey(); focusedField = "destination"; copilot = { status: "idle", result: null, signature: null, error: "" }; suggestionUndo = null; }
     renderList(); $("detail").replaceChildren();
-    if (!state.projectId) { node("p", "planning-empty", "Open the desktop app and choose a project to start planning.", $("detail")); controls(); return; }
+    if (!state.projectId) {
+      const empty = node("div", "planning-empty", undefined, $("detail"));
+      node("p", "", api()?.projectsList ? "Choose a project to start planning." : "Open the desktop app and choose a project to start planning.", empty);
+      if (api()?.projectsList && window.MefiSidebar?.open) button("Choose project", empty, () => { close(); window.MefiSidebar.open({ focus: true }); }, "choose-project", true);
+      controls(); return;
+    }
     const item = plan();
     renderWorkflow(item);
+    const canvas = node("div", "planning-canvas", undefined, $("detail"));
+    const editor = node("div", "planning-editor", undefined, canvas); editor.id = "plans-editor";
+    const feedback = node("div", "planning-draft-feedback", undefined, editor); feedback.id = "plans-draft-feedback"; feedback.setAttribute("role", "status"); feedback.hidden = true;
+    const assistant = node("aside", "planning-copilot", undefined, canvas); assistant.id = "plans-copilot"; assistant.setAttribute("aria-label", "AI planning partner");
     details(item); if (item) { interviewPanel(item); unknowns(item); questions(item); review(item); specification(item); history(item); }
     existingWork(item);
+    renderDraftFeedback(); renderCopilot();
     controls();
   }
   async function refreshWork() {
@@ -716,8 +1034,9 @@
       if (!api()?.projectsList || !api()?.planningList) { render(); note("Planning is available in the desktop app."); return; }
       const projects = guard(await api().projectsList());
       if (epoch !== state.epoch || readId !== state.readId) return;
-      if (state.projectId !== projects.activeId) { state.projectId = projects.activeId; state.plans = []; state.selected = "new"; state.tasks = null; state.workError = null; state.workReadId += 1; }
-      const projectId = state.projectId; state.projectName = projects.projects.find((item) => item.id === projectId)?.name || "Your project";
+      if (state.projectId !== projects.activeId) { state.projectId = projects.activeId; state.plans = []; state.selected = "new"; state.tasks = null; state.workError = null; state.existing = null; state.workReadId += 1; }
+      const projectId = state.projectId; state.projectName = projects.projects.find((item) => item.id === projectId)?.name || "No project selected";
+      if (!projectId) { render(); note(); return; }
       const result = guard(await api().planningList({ projectId }));
       if (epoch !== state.epoch || readId !== state.readId || projectId !== state.projectId || (result.projectId && result.projectId !== projectId)) return;
       state.plans = result.plans || []; state.existing = result.existing ?? null; render(); if (refreshTasks) void refreshWork();
@@ -731,19 +1050,19 @@
     if (options.create) { state.selected = "new"; if (options.destination && !draft().details?.destination) { draft().details = { title: "", destination: String(options.destination), outOfScope: "" }; persist(); } }
     else if (options.planId) state.selected = options.planId;
     else if (state.selected === "new" && state.plans.length) state.selected = state.plans[0].id;
-    render(); if (state.projectId && api()?.planningList && $("notice").dataset.error !== "true") note("Your drafts stay with this project. Planning does not start build work.");
+    render(); if (state.projectId && api()?.planningList && $("notice").dataset.error !== "true") note();
     startWorkPoll();
     (options.create ? $("title") : $("new"))?.focus();
   }
-  function close() { if (!$("overlay") || $("overlay").hidden) return; persist(); state.opened = false; stopWorkPoll(); $("overlay").hidden = true; window.MefiNav?.release?.("plans"); if (!window.MefiNav?.release) priorFocus?.focus?.(); }
+  function close() { if (!$("overlay") || $("overlay").hidden) return; persist(); state.opened = false; stopExploration(); copilot.status = "idle"; stopWorkPoll(); $("overlay").hidden = true; window.MefiNav?.release?.("plans"); if (!window.MefiNav?.release) priorFocus?.focus?.(); }
   function init() {
     if (initialized || !$("overlay")) return; initialized = true;
     $("new").addEventListener("click", () => { if (state.busy) return; state.selected = "new"; render(); note(); $("title")?.focus(); });
-    $("refresh").addEventListener("click", () => refresh()); $("close").addEventListener("click", close);
+    $("refresh").addEventListener("click", () => refresh()); $("close").addEventListener("click", () => window.MefiNav?.close ? window.MefiNav.close("plans") : close());
     // A pushed board change repaints an open plan's workflow at once; the poll
     // below is only a backstop for a missed push.
     api()?.onTasks?.((tasks) => {
-      if (!state.opened || !Array.isArray(tasks)) return;
+      if (!state.opened || !state.projectId || !Array.isArray(tasks)) return;
       const next = tasks.filter((task) => !task.projectId || task.projectId === state.projectId);
       if (JSON.stringify(next) === JSON.stringify(state.tasks) && !state.workError) return;
       state.tasks = next; state.workError = null; renderWorkflow(plan()); controls();
@@ -759,10 +1078,11 @@
     });
     window.addEventListener("mefi:project-changed", (event) => {
       const projectId = event.detail?.projectId; if (projectId === state.projectId) return;
-      persist(); state.epoch += 1; state.readId += 1; state.workReadId += 1; state.projectId = projectId; state.selected = "new"; state.plans = []; state.tasks = null; state.workError = null; state.busy = false; state.pending = null;
+      stopExploration();
+      persist(); state.epoch += 1; state.readId += 1; state.workReadId += 1; state.projectId = projectId; state.selected = "new"; state.plans = []; state.tasks = null; state.workError = null; state.existing = null; state.busy = false; state.pending = null;
       if (state.opened) { render(); note("Opening this project's plans…"); void refresh(); }
     });
-    document.addEventListener("visibilitychange", () => { if (!document.hidden && state.opened) void refreshWork(); });
+    document.addEventListener("visibilitychange", () => { if (document.hidden) { stopExploration(); copilot.status = "idle"; } else if (state.opened) void refreshWork(); });
     window.addEventListener("beforeunload", persist);
   }
   window.MefiPlanning = { open, close, refresh, init };

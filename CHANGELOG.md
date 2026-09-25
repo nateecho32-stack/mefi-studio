@@ -8,6 +8,116 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- Command's node labels now include Updates, showing code/task reports and task progress while hiding idle names and routine agent chatter.
+- Refined glass panels with softer edge highlights and layered shadows.
+  Command gains rounded inset work cards, clearer selected tabs, compact status
+  tiles and a cleaner task/search bar, with spacing that adapts to smaller windows.
+- Project map exploration now has Back/Forward with restored camera positions,
+  breadcrumbs, a searchable contents panel, working/changed filters, and a
+  clickable minimap. Click to inspect; double-click or Enter to explore.
+  Smooth pan, zoom, drag momentum and level transitions settle when idle and
+  respect reduced motion. Related systems, every indexed file, and task drafts
+  scoped to the selected part or file are reachable from the map.
+- Compact choice tiles for short dropdowns, swatch grids for themes, miniature Appearance preset previews, and grouped View, Ambience, Brain map and Tools menus reduce scrolling and oversized rows. Long option lists retain search, and dropdowns support keyboard movement through tiles and option groups.
+- A glowing wisp now wakes in the launch box and stays with the setup guide. Playing with it releases little ASCII smiles and sparks; thinking circles lights around its core and pulses `...` during setup, chat and agent work. Click it or press Escape to open a compact, transparent bubble menu for chat, friends, requests, notifications, settings and quick actions, with the return button in the center and motion that follows the existing audio link. Setup keeps its permission steps and resizes only its panels inside Studio.
+- Command's automatic 3D Overview now gently pans and resizes like the demo flight while keeping the whole tree inside the space between panels. Manual navigation keeps control; paused spin and reduced motion stop the roaming, and saved camera choices remain unchanged.
+- Agent setup now uses short desktop rows with role, model, settings and provider icons alongside each other, a bounded list width, and a compact header and toolbar. Theme-tinted cards highlight selected providers and skills; controls wrap on narrow windows.
+- Command's agent settings now open from the top toolbar's Agents dropdown, with queue controls and links to full team setup; the duplicate side-panel tab is removed.
+- A full glass finish across Home, Work, Agents, Settings and floating menus:
+  theme-coloured translucent surfaces, two-colour gradients, distinctive heading
+  fonts and clearer selection states. Reading panels and sticky headers protect
+  text contrast; inactive pages no longer show through. Blur off uses a stronger
+  translucent tint, reduced transparency uses solid surfaces, and custom palettes
+  protect the contrast of reading areas and gradient buttons.
+- Agent setup now uses compact model rows with corner provider icons, searchable provider model lists, effort and fast controls, and a left-side + for per-agent local skills and the coding worker's Studio desk MCP tool. Assistant seats can also select HTTP providers and Claude's text-only CLI.
+- Transparent, theme-tinted glass navigation and controls with subtle outlines. Agents' child tabs now appear in hover menus, with click, keyboard and compact-window access.
+- Command's right panel now docks flush to the window edge with a translucent frosted glass surface, preserving its inspection tabs and readable controls.
+- New tasks gather local code, session and chat context automatically. When OpenCode Zen is connected, the configurable scout uses GPT-6 Luna at low reasoning on the fast tier to choose a verified starting file after local references are saved.
+- Agents setup now includes companion, scout, overseer and subtask routing, plus a subscription-first switch. The companion opens an Ask panel for chat, task creation and navigation, and shows team work and messages. Command hides its redundant assistant and music nodes; music controls remain in the toolbar. The companion menu tracks the pointer as it resizes and waits for its transition before hover-closing.
+- Appearance now showcases the live tree beside a compact, movable sidebar with Theme, Nodes, Layout and Interface sections. Clicking outside dismisses the sidebar without selecting anything underneath; the next click selects normally.
+- Plans gains a live AI writing partner that explores project files as you type,
+  shows an evidence tree, and offers editable wording and additions. Switch to
+  manual writing at any time. A redesigned planning menu, Enter-to-next-field
+  navigation, subtle focus glow, and reduced-motion-aware transitions make the
+  draft easier to work through. A further polish pass adds field-level Refine
+  actions, readable suggestion cards with optional editing, Undo for accepted
+  wording, and independent scrolling that keeps the partner controls visible.
+  Theme-tinted glass panels and translucent controls now blend with the backdrop,
+  with softer borders, quieter background labels, and support for the existing
+  glass, blur, and reduced-transparency preferences.
+  Each step now has a distinct symbol and accent, compact labels, and matching
+  section headers. Staggered card entrances and directional section slides
+  preserve draft text and honor reduced motion.
+- The audio status box opens an adaptive Music & video dropdown for local music, radio, YouTube and other links, connection setup, reactions and recommendations. Media controls are separate from Appearance; closing the dropdown keeps playback running.
+- Media links play in a borderless floating window that stays visible across
+  Studio. Drag and resize it, hover for Pin and Move aside toggles, or minimize
+  it without interrupting playback. In menus it glides away from the pointer
+  once, then stays accessible when followed; position and size are remembered.
+- OpenRouter as a companion provider, with the free router default, a live searchable chat-model list, and the existing encrypted key shared with Jev and usage readings.
+- **The Agent Brain** (0.4.0, see docs/roadmap-0.4.0.md). Studio now records
+  what its agents do as one stream of work events per project, and draws it:
+  - **Agent brain** (`J`, under Live) shows a task's pipeline top down: your
+    companion as the head, the lead, the steps, and the sub-agents working
+    them. Sub-agents go out, pop when they finish, fly home, circle the lead
+    and are absorbed, in your node style; reports climb the tree. **Replay
+    today** plays back the day's recorded events.
+  - Every task gets a **pipeline** before its worker starts: from the
+    Playbook's best recipe for that kind of work, or a template. It grows
+    from the worker's own todo list and `MEFI_STEP` lines, within caps, and
+    folds finished steps away.
+  - Sub-agents **report up the tree**: a delegated child's `MEFI_REPORT` (or
+    its result line) reaches its parent, and a finished child wakes the
+    foreman so the parent's integration pass starts at once.
+  - The **desk worker** answers stuck workers (`MEFI_HELP` lines) on the lead's
+    model, folds repeats, and sends only what it cannot answer to you. With
+    **Give workers the ask_desk tool** on (Agent brain › Seats), OpenCode and
+    Claude Code runs can ask it mid-run through a local MCP tool and wait.
+  - The **Playbook**: an archivist files every verified or failed pipeline as
+    a recipe; the next task of the same kind starts from the recipe that
+    verifies most. Pin, rename, retire or delete recipes on its shelf.
+  - The **project map**: the project's recent git history and the files each
+    verified run read and changed build a map of its systems. Large folders
+    split into the groups of files that change together, and systems are
+    linked by how alike their change histories are. Hover a system for its
+    card, or jump to one by name. Workers are told the related systems and
+    hot files.
+  - **Home shows the project map** beside the conversation: pick a system to
+    see its tasks, ideas and plans, then **Work on this region**.
+  - Your **companion** lives in the menu foot: it greets you with what
+    happened while you were away, keeps one queue of everything that needs
+    you (with the actions right there, and the count in the tray), rests when
+    nothing runs, and shows what it has noticed about how you answer. Pick
+    its look and whether it covers this project or all of them.
+  - **Seats**: the lead and the desk run GPT 6 Sol through OpenCode Zen at
+    medium reasoning effort (Agent brain › Seats changes either). The Cluster
+    planner is the lead seat when a Zen key is saved.
+  - **Nested delegation** (off by default): a delegated slice may split its
+    own part once more, never past three levels.
+  - **Head drafts** (off by default): for a compound or systemic task no
+    Playbook recipe fits, your heavy model drafts the pipeline once.
+  - `node tools/replay-events.mjs --day YYYY-MM-DD --data <project data>`
+    compares a day's events with the executor ledger.
+- **Links** replaces the Spotify tab in Settings › Audio. It plays a pasted
+  or dropped link: YouTube (privacy-enhanced player), Spotify, SoundCloud and
+  Vimeo in their official embeds, and a plain audio or video file,
+  Discord attachments included, in Studio's own player. A Spotify Jam,
+  a Twitch stream or any other page opens in its own app or the browser,
+  and whatever was playing keeps playing. **Copy link** makes the loaded
+  link easy to share in Discord. The last link returns after a restart
+  without autoplaying, and the old saved Spotify link carries over. Other
+  modules can use `MefiMusic.playLink` / `linkInfo`.
+- **Listen together** in the Links tab. Pick one of your Void Engine rooms
+  and play the loaded link for it. Everyone who chooses **Listen along** in
+  Studio joins at the same point, and the room's Discord thread gets a note.
+  Whoever put it on, or the room's owner, can pause, restart or stop it.
+  Sync is exact for audio and video files, and uses the players' own APIs
+  for YouTube, Vimeo and SoundCloud. Spotify's player can only be loaded,
+  not steered.
+- **Share what I'm playing**, off by default, lets the Void Engine bot's
+  `/nowplaying` show your current link, station or "Local music". It never
+  shows a file's name.
+- Both need the rooms hub's address, which this build does not have yet. Set
+  it in `scripts/hub-client.cjs` or with `MEFI_STUDIO_HUB_URL`.
 - **Home is glass over the live node tree.** The workspace used to sit on a
   flat, opaque background. Now the Command constellation draws behind it,
   and the glance tiles, the conversation, Your work, the menu and the
@@ -17,15 +127,17 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   about a third of Command's frame time. Every theme tints the glass with
   its own colours, and **Blur behind panels** off makes the panels solid.
 - **Tree motion.** With the Audio link on and the Overview spinning in 3D,
-  the music moves the tree: the spin quickens with the music's energy, each
-  kick drum steps it on, the bass swells it, the mids sway it round a small
+  the music moves the tree: the spin quickens with the music's energy, the
+  bass swells it, the mids sway it round a small
   figure of eight and the snare nods it toward you. It all happens inside
   room the frame keeps for it, so no node leaves the view, and it settles
   back when the music stops, the spin pauses or a node is focused. Response
-  sets how much (full from 50%); **Tree motion** under Style & sound ›
-  Reactions turns it off.
+  sets how much (full from 50%); **Tree motion** under the audio dropdown's
+  Audio reactions turns it off.
 
 ### Fixed
+- Audio-linked Tree motion now eases bass, snare and spin changes and keeps its
+  sway path continuous when a kick is detected, so the whole tree moves smoothly.
 - **Claude Code and Antigravity builders are no longer killed for working
   quietly.** Their print mode says nothing until the answer, so every run
   longer than the start budget was killed as a wedged start. The 25-minute
@@ -58,21 +170,12 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   when its CLI echoes the prompt. Escape codes alone are not a worker
   speaking, and cursor codes no longer hide the done line.
 - The opencode fallback is judged on its own start and verdict.
-- The thread says "Stopped (progress saved)" or "Waiting to retry (not
-  charged)" instead of "Failed" when nothing was charged. A failure question
-  names this run's error, and a stale run asks nothing about a card another
-  run owns.
+- A stopped run or an uncharged requeue is no longer reported as "Failed". A
+  failure question names this run's error, and a stale run asks nothing about
+  a card another run owns.
 - A run that started ends the card's streak of failed starts, and Try again
   resets it. A reopened done card gets its own receipt. "Let it run" and "Keep
   them all" no longer erase each other.
-- **The menu shows every destination again.** Opened, it needed about 990px,
-  so a 900px window hid Style & sound and Profiler behind the foot and a
-  720px window hid all of Settings, with no sign the list scrolled. Opened,
-  Work, Live, Models and Settings are now short capitals headings over their
-  destinations, lined up in one column of icons, and the whole menu fits
-  900px. Below 820px tall the foot folds into one row of icons. When the
-  list still has to scroll, its hidden edge fades out. At rest, "Settings" is
-  no longer cut to "Setti…".
 - **Toasts no longer cover the opened menu.** A tip in the bottom-left corner
   sat over Shortcuts, Community and Keep menu open; it now steps aside while
   the menu is open.
@@ -90,6 +193,129 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   Branches and Terraces on a wide window). It now turns about the tree's
   centre, sizes the frame once for the whole turn, and keeps the camera far
   enough back that the near end of a wide tree no longer balloons.
+- Zen and demo camera flights now follow visible layout positions, keep connected
+  branches in view, and adapt zoom to the window. Gentler turns, coordinated
+  tilt and zoom, and wider transitions prevent long flights through empty space.
+- **The Review list shows only work that needs you.** A task whose worker
+  finished and handed the rest on used to count as a review, and so did
+  every task above it in the chain, so one stuck follow-up could appear on
+  the list four times. Those tasks now read "Waiting on follow-ups" and
+  finish by themselves; only the stuck follow-up is flagged. On the
+  2d Trippy Hell board this took Review from 90 to 40 before any triage.
+- **Drop closes a task you won't do** without marking it done. The task
+  that handed it on stops waiting for it, and Reopen brings it back. Before
+  this, Confirm done (a false completion) was the only way to clear a stuck
+  card, and deleting a follow-up brought it back as a new card.
+- A task that handed two pieces of work on no longer fails "outstanding
+  obligations remain" after both follow-ups finish just because the
+  worker's summary worded them differently from the follow-up titles.
+- YouTube embeds no longer stop with "Error 153": main now sends
+  YouTube's player an app Referer, which a `file://` page cannot send.
+- **Brain maps drafted with AI arrive wired correctly.** The model used to see
+  only port names, so it wired ends that could never carry what it sent, for
+  example "Needs work" into an approval that only takes work. Those drafts
+  opened with errors on them. The model is now told what every end carries
+  and takes. What it still gets wrong is repaired before you see it:
+  mismatched wires are moved or removed, empty required inputs are fed, and
+  loops are marked as feedback. Anything left goes back to the model once.
+  Each repair is listed in the inspector until you save.
+- **Decisions about a task that has left the board no longer ask you.** A
+  worker's run can outlive its card, for example when the card was moved to
+  another project's store mid-run. Its questions then reached Ask and a
+  "Decision needed" toast, and every option failed with "That task is no
+  longer on the board." Those questions are now logged instead of asked.
+  Open ones close as soon as the card leaves, and their toasts close too.
+  A click that gets there first clears the question and tells you why.
+
+### Changed
+- **Board and assistant updates reach the window once.** Every panel that
+  listens to an update used to get its own copy, so the whole board was
+  copied seven or more times per update, and the assistant's state as often,
+  up to four times a second. An update is now copied once and shared, and
+  assistant updates leave out what the window already has. On the live
+  80-card board the window's work per board update fell from about 44 to
+  17 ms in Command and from 54 to 13 ms on Home, and per assistant update
+  from 105 to 58 ms and 87 to 67 ms (docs/performance.md). A panel that
+  fails on an update no longer keeps the panels after it from getting it.
+- **Menus are frosted glass and move.** Floating menus, the menu down the
+  left and the top row let the page behind show through a lighter tint over
+  a stronger blur, with a softer shadow. Every menu grows open on a soft
+  spring from the edge it belongs to, its rows follow one after another, and
+  it leaves quickly. One highlight glides between rows under the pointer or
+  keyboard focus instead of each row lighting up on its own. Motion Off,
+  reduced motion, Blur off and reduced transparency keep their plain
+  versions.
+- **Your companion knows where you are and what is waiting.** Replies use
+  the name you gave your companion and know which screen you are on, from
+  every chat box. "Requests", "what needs me" and the badge now mean one
+  list, so the companion's count matches "N need you" instead of saying
+  nothing is waiting. It remembers the updates it posted and what it just
+  offered: "all of them", "both" or "each of them" starts every card it
+  offered and nothing else. The Ask tab shows those offers as one-tap
+  buttons, with All of them when there are several. Replies carry the
+  companion's name, and the tab updates as soon as a reply or update
+  lands. Starting an offered card from the chat also closes its "Pick the
+  next piece of work" card.
+- Refined all graph views with shared theme-aware node finishes, clearer callouts and connections, quieter editor cards, and readable, scrollable pipeline branches.
+- Command's Work panel has single-line readiness counts, shorter worker cards, compact agent rows, expandable activity details and folded recent agents. Its tab bar keeps labels and counts on one line with a clearer selected state; intentional preparation stops no longer appear as errors needing attention.
+- Redesigned Home around a bottom composer, neutral dark surfaces, recent
+  tasks in the navigation menu and an expandable Activity panel. A compact
+  task summary keeps progress, blockers and completion actions visible.
+  Queue, system status and setup panels start collapsed.
+- Default Swarm dispatch uses one builder per task without mandatory planner
+  and reviewer calls. Cluster retains coordinated planning and delegation;
+  existing delegated tasks keep their dependencies and verification gates.
+- Home now keeps the selected task's worker, current action, activity age,
+  recorded checks and next step together. Task selection follows Home, Work
+  and Live; compact titles retain the complete brief in task details.
+- Project previews have their own Start, Open and Stop controls and readiness
+  state, separate from whether a coding worker is running or a task is verified.
+  Completed tasks expose Open app, View checks and Request a change.
+- Start this task and confirmed chat starts request only that task while
+  keeping the rest of a paused queue held. Prerequisites, build approval,
+  worker capacity and project boundaries still apply.
+- Quiet OpenCode workers now expose their pending or running tool, its safe
+  description and elapsed time in current activity and assistant context.
+- Verification checks stay in the dispatched task's project and record their
+  working directory. New projects use their own check/test script or root
+  JavaScript tests; missing checks cannot borrow a passing Studio check.
+- Fresh folders can be built without Git when the task does not require a
+  commit. Concurrent booklet builds use separate temporary files and bounded
+  retries for Windows file locks.
+- Remastered the full interface around Home, Work, Live and Models, with a
+  local navigation row for related tools. Main tools are workspace pages;
+  temporary dialogs keep keyboard focus and return behavior.
+- Settings now has seven focused categories with individual-setting search,
+  expandable connection forms, integrated Appearance/Audio controls and
+  synchronized Automation settings. Existing links and shortcuts still work.
+- Reorganized task details, session tools, plan stages and Analyzer inputs;
+  added compact model rows, separate usage sources, optional evidence
+  inspection and narrow-screen detail navigation.
+- Home and Command now show a worker's current step or latest output, route
+  and last-update age, including workers without an OpenCode session. Home
+  distinguishes preparation and finishing from building; assistant replies
+  receive the current project's recent task events.
+- Simplified the navigation menu so each destination appears once, with the
+  menu open by default on wide windows and the user's saved choice respected.
+- Unified workspace colors and typography, reduced decorative surfaces, and
+  grouped build preferences under Queue settings. Chat and task actions now
+  use direct labels and concise status messages.
+- Settings now names Preferences and Decision model explicitly. Search finds
+  individual control labels, and keyboard navigation focuses the chosen card.
+
+### Fixed
+- History note and idea fields keep keyboard focus and text selection through
+  task refreshes, including a refresh between clicking the empty field and typing.
+- Intentionally stopped workers now show "stopped on request — progress saved"
+  in their session checkpoint and context, matching the task's saved state.
+- **Sequential project work no longer creates false collision repairs.** When
+  one session finishes before the next starts, its edits remain inspectable
+  history without queuing repair work. Finished sessions no longer appear as
+  active editors; genuine concurrent conflicts remain detectable.
+- **Save & switch waits for saved progress.** Stopping a worker now waits for
+  its checkpoints, task state and history to finish saving before changing
+  projects. A pending live update also waits for those saves and the project
+  change; repeated update retries no longer repeat the same toast notices.
 - **A machine that settles just under busy no longer holds new workers
   forever.** After a lag spike, new worker starts waited for two readings at
   40 ms or less, and a laptop that settled at 41–99 ms never got there. Once
@@ -129,15 +355,6 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   settled checkout was kept as if it held unsaved edits.
 
 ### Changed
-- **Board and assistant updates reach the window once.** Every panel that
-  listens to an update used to get its own copy, so the whole board was
-  copied seven or more times per update, and the assistant's state as often,
-  up to four times a second. An update is now copied once and shared, and
-  assistant updates leave out what the window already has. On the live
-  80-card board the window's work per board update fell from about 44 to
-  17 ms in Command and from 54 to 13 ms on Home, and per assistant update
-  from 105 to 58 ms and 87 to 67 ms (docs/performance.md). A panel that
-  fails on an update no longer keeps the panels after it from getting it.
 - **`npm test` runs every leg and every stage**, even after one fails, and
   ends with a pass/FAIL line per leg; one red suite used to hide whether the
   Electron lane, the Python contracts and the path lock passed.

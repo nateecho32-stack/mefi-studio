@@ -1,0 +1,542 @@
+/* Studio's shared surfaces own overflow affordances; native scrolling remains. */
+html, body, body * { scrollbar-width: none !important; scrollbar-gutter: auto !important; }
+::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+.studio-floats { position: fixed; inset: 0; pointer-events: none; z-index: 180; }
+.studio-scroll-hint { position: fixed; pointer-events: none; overflow: visible; border-radius: 8px; }
+.studio-scroll-hint[hidden], .studio-scroll-arrow[hidden] { display: none; }
+.studio-scroll-hint::before, .studio-scroll-hint::after { content: ""; position: absolute; left: 0; right: 0; height: 20px; opacity: 0; transition: opacity var(--motion-fast); }
+.studio-scroll-hint::before { top: 0; background: linear-gradient(var(--panel-solid), transparent); }
+.studio-scroll-hint::after { bottom: 0; background: linear-gradient(transparent, var(--panel-solid)); }
+.studio-scroll-hint.can-up::before, .studio-scroll-hint.can-down::after { opacity: .55; }
+.studio-scroll-arrow { position: absolute; z-index: 1; pointer-events: none; opacity: 0; width: 30px; height: 26px; padding: 0; border: 1px solid var(--hairline-strong); border-radius: var(--r-pill); background: var(--panel-solid); color: var(--gold-bright); box-shadow: var(--shadow-1); transition: opacity var(--motion-fast), translate var(--motion-fast); }
+.studio-scroll-hint.active .studio-scroll-arrow, .studio-scroll-hint.engaged .studio-scroll-arrow, .studio-scroll-hint:focus-within .studio-scroll-arrow { opacity: 1; pointer-events: auto; }
+.scroll-up { top: 3px; left: calc(50% - 15px); }
+.scroll-down { bottom: 3px; left: calc(50% - 15px); }
+.scroll-left { left: 3px; top: calc(50% - 13px); }
+.scroll-right { right: 3px; top: calc(50% - 13px); }
+.studio-select-source { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; border: 0 !important; opacity: 0 !important; pointer-events: none !important; clip-path: inset(50%); }
+.studio-select { display: inline-flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; max-width: 100%; min-height: var(--ctl-h-sm); padding: 7px 10px; text-align: left; border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--surface-field, var(--bg)); color: var(--ivory); font: inherit; cursor: pointer; }
+.studio-select-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-select-chevron { color: var(--muted); flex-shrink: 0; }
+/* Text carets (U+2304) sit below the UI font's midline, so every text-built chevron draws the #g-chev path instead. */
+span.studio-select-chevron, span.agents-nav-chevron, span.planning-section-chevron, span.catalog-expand, .surface-tools > summary::after { content: ""; display: inline-block; flex: none; width: 12px; height: 12px; font-size: 0; line-height: 0; vertical-align: middle; background: currentColor; -webkit-mask: var(--chev-mask) center / contain no-repeat; mask: var(--chev-mask) center / contain no-repeat; }
+:root { --chev-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+span.catalog-expand { width: 16px; height: 16px; }
+.studio-select[aria-expanded=true] { border-color: var(--gold); }
+.studio-select:disabled { opacity: .5; cursor: default; }
+.studio-choice-popup { position: fixed; pointer-events: auto; display: flex; flex-direction: column; padding: 6px; gap: 6px; border: 1px solid var(--hairline-strong); border-radius: var(--r-lg); background: var(--panel-solid); color: var(--ivory); box-shadow: var(--shadow-3); animation: studio-menu-in var(--motion-menu) var(--ease-out); }
+.studio-choice-header { display: flex; align-items: baseline; gap: 12px; padding: 3px 4px 7px; border-bottom: 1px solid var(--hairline); }
+.studio-choice-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 12px/1.4 var(--font-ui); }
+.studio-choice-count { flex: none; color: var(--muted); font: 10px var(--font-mono); }
+.studio-choice-list, .studio-choice-group { display: grid; grid-template-columns: repeat(var(--choice-columns, 1), minmax(0, 1fr)); gap: 4px; align-content: start; }
+.studio-choice-list { min-height: 0; overflow: auto; padding: 2px; overscroll-behavior: contain; }
+.studio-choice-group { grid-column: 1 / -1; }
+.studio-choice-heading { grid-column: 1 / -1; padding: 8px 4px 3px; color: var(--muted); font: 10px/1.4 var(--font-mono); }
+.studio-choice-option { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; min-height: 32px; text-align: left; border: 1px solid transparent; border-radius: var(--r-sm); padding: 6px 9px; background: transparent; color: var(--ivory); font: 12px/1.4 var(--font-ui); white-space: normal; }
+.studio-choice-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.studio-choice-option::after { content: ""; flex: none; width: 12px; height: 12px; }
+.studio-choice-option[aria-selected=true]::after { background: currentColor; mask: var(--glyph-check) center / contain no-repeat; }
+.studio-choice-popup[data-layout=tiles] .studio-choice-option { min-height: 40px; padding: 8px; border-color: var(--studio-glass-edge); background: var(--studio-inset-bg); }
+.studio-choice-popup[data-layout=tiles] .studio-choice-option[aria-selected=true] { border-color: var(--studio-edge-active); background: var(--studio-selection); box-shadow: none; }
+.studio-choice-empty { grid-column: 1 / -1; padding: 10px 8px; }
+.studio-choice-option.highlighted, .studio-choice-option:hover { background: var(--tint-gold-2); }
+.studio-choice-option[aria-selected=true] { color: var(--gold-bright); background: var(--tint-gold-3); }
+.studio-choice-search { width: 100%; flex-shrink: 0; }
+.studio-field { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(120px, 1fr); align-items: center; gap: 16px; padding: 8px 0; }
+.studio-history { display: flex; align-items: center; gap: 4px; padding-right: 10px; border-right: 1px solid var(--hairline); flex-shrink: 0; }
+.studio-history button { min-width: 32px; font-size: 18px; }
+/* Keep the three primary destinations in view at increased display scaling. */
+@media (max-height: 520px) {
+  #app-rail { padding-block: 6px; gap: 2px; }
+  #app-rail .app-rail-brand { min-height: 34px; margin-bottom: 0; padding-block: 3px; }
+  #app-rail .app-rail-brand .app-rail-text::after { display: none; }
+  #app-rail .app-rail-sections { gap: 0; }
+  #app-rail .app-rail-section { flex-shrink: 0; }
+  #app-rail .app-rail-head { min-height: 38px; padding-block: 2px; gap: 1px; }
+  #app-rail :is(.app-rail-compose, .app-rail-search) { min-height: 28px; height: 28px; }
+  #app-rail .app-rail-search { margin-bottom: 2px; }
+  #app-rail .app-rail-foot { padding-top: 4px; gap: 2px; }
+  #app-rail .app-rail-pin { min-height: 26px; margin-top: 2px; }
+  html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-foot-item, #app-rail-foot .update-pill) { flex-direction: row; min-height: 30px; padding: 2px; }
+  html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-foot-item, #app-rail-foot .update-pill) .label { display: none; }
+}
+.studio-style-controls { width: 100%; }
+.studio-style-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 10px 0; }
+.studio-style-choice { text-align: left; display: flex; flex-direction: column; align-items: stretch; gap: 5px; min-width: 0; padding: 10px; border: 1px solid var(--hairline); background: var(--panel-solid); border-radius: var(--r-md); color: var(--ivory); white-space: normal; }
+.studio-style-choice strong { font-size: 12px; }
+.studio-style-choice small { color: var(--muted); font: 10px/1.4 var(--font-ui); }
+.studio-style-preview { display: flex; align-items: end; gap: 3px; height: 26px; padding: 4px; border: 1px solid var(--hairline); border-radius: 5px; background: var(--studio-field-bg); }
+.studio-style-preview i { flex: 1; height: 70%; border: 1px solid var(--studio-edge-active); border-radius: 2px; background: var(--tint-gold-2); }
+.studio-style-preview i:nth-child(2) { height: 100%; }
+.studio-style-preview i:last-child { height: 45%; }
+.studio-style-choice[data-studio-style=focus] .studio-style-preview i { background: transparent; border-radius: 0; }
+.studio-style-choice[data-studio-style=studio] .studio-style-preview { background: var(--studio-selection); }
+.studio-style-choice[data-studio-style=atmosphere] .studio-style-preview { background: linear-gradient(120deg, var(--tint-gold-3), color-mix(in srgb, var(--studio-secondary) 30%, transparent)); box-shadow: inset 0 0 12px var(--tint-gold-3); }
+.studio-style-choice[data-studio-style=atmosphere] .studio-style-preview i { border-radius: 4px; background: var(--tint-gold-3); }
+.studio-style-choice[aria-pressed=true] { border-color: var(--gold); background: var(--tint-gold-2); }
+/* Shared visual finish. Bundled after the page styles so page-specific geometry
+   stays with its owner while every surface uses the same glass materials.
+   Palette colours (--theme-*) stay opaque for canvas and contrast calculations.
+   Transparency is applied to fills, never to a panel and its text together. */
+:root {
+  --studio-glass: .45; --studio-glow: .35;
+  --studio-secondary: #8faee8;
+  --studio-gradient-angle: 135deg;
+  --studio-title-tracking: -.035em;
+  --studio-reading-bg: var(--theme-bg);
+  --studio-action-end: var(--gold-bright);
+  --font-display: "Bahnschrift", "Segoe UI", system-ui, sans-serif;
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "Consolas", ui-monospace, monospace;
+  --r-xl: 20px; --r-lg: 14px; --r-md: 9px;
+  --studio-panel-bg: color-mix(in srgb, var(--theme-panel-solid) calc(90% - var(--studio-glass) * 26%), transparent);
+  --studio-menu-fill: color-mix(in srgb, var(--theme-panel-solid) calc(99% - var(--studio-glass) * 3%), transparent);
+  --studio-shell-fill: color-mix(in srgb, var(--studio-reading-bg) calc(80% - var(--studio-glass) * 28%), transparent);
+  --studio-field-bg: color-mix(in srgb, var(--studio-reading-bg) calc(65% - var(--studio-glass) * 20%), transparent);
+  --studio-inset-bg: color-mix(in srgb, var(--theme-panel-solid) calc(42% - var(--studio-glass) * 15%), transparent);
+  --studio-page-fill: color-mix(in srgb, var(--studio-reading-bg) calc(30% - var(--studio-glass) * 20%), transparent);
+  --studio-glass-edge: color-mix(in srgb, var(--ivory) 12%, transparent);
+  --studio-glass-rim: color-mix(in srgb, var(--ivory) 22%, transparent);
+  --studio-glass-highlight: color-mix(in srgb, var(--ivory) 10%, transparent);
+  --studio-inset-shadow: inset 0 1px color-mix(in srgb, var(--ivory) 4%, transparent), 0 2px 6px rgb(0 0 0 / .05);
+  --studio-edge-active: color-mix(in srgb, var(--gold-bright) 52%, transparent);
+  --line: var(--studio-glass-edge);
+  --line-strong: color-mix(in srgb, var(--ivory) 28%, transparent);
+  --studio-glass-blur: blur(calc(14px + var(--studio-glass) * 18px)) saturate(1.2);
+  --studio-menu-blur: blur(24px) saturate(1.12);
+  /* Floating menus and the navigation shell are frosted glass you can see
+     through: a lighter tint over a strong, dimmed blur keeps their text
+     readable while the page behind still shows. Headers that sit over
+     scrolling text keep the denser --studio-menu-fill above. */
+  --studio-float-fill: color-mix(in srgb, var(--theme-panel-solid) calc(80% - var(--studio-glass) * 28%), transparent);
+  --studio-float-blur: blur(calc(16px + var(--studio-glass) * 16px)) saturate(1.45) brightness(.88);
+  --studio-float-shadow: inset 0 1px var(--studio-glass-highlight), inset 0 -1px rgb(0 0 0 / .08), 0 12px 32px -10px rgb(0 0 0 / .36), 0 2px 8px rgb(0 0 0 / .1);
+  --studio-glide: color-mix(in srgb, var(--ivory) 8%, transparent);
+  --studio-sheen: linear-gradient(var(--studio-gradient-angle), color-mix(in srgb, var(--ivory) 7%, transparent), transparent 42%, color-mix(in srgb, var(--studio-secondary) 3%, transparent));
+  --studio-wash: radial-gradient(ellipse at 0% 0%, color-mix(in srgb, var(--gold) 8%, transparent), transparent 55%), radial-gradient(ellipse at 100% 100%, color-mix(in srgb, var(--studio-secondary) 5%, transparent), transparent 55%);
+  --studio-selection: linear-gradient(110deg, color-mix(in srgb, var(--gold) 17%, transparent), color-mix(in srgb, var(--studio-secondary) 7%, transparent));
+  --studio-glass-shadow: inset 0 1px var(--studio-glass-highlight), inset 0 -1px rgb(0 0 0 / .1), 0 4px 8px rgb(0 0 0 / .06), 0 18px 48px rgb(0 0 0 / .18), 0 0 calc(var(--studio-glow) * 42px) color-mix(in srgb, var(--gold) calc(var(--studio-glow) * 8%), transparent);
+  --studio-scene: radial-gradient(ellipse at 8% 8%, color-mix(in srgb, var(--gold) calc(10% + var(--studio-glow) * 12%), transparent), transparent 50%), radial-gradient(ellipse at 92% 30%, color-mix(in srgb, var(--studio-secondary) calc(8% + var(--studio-glow) * 12%), transparent), transparent 55%), radial-gradient(ellipse at 48% 110%, color-mix(in srgb, var(--gold) 8%, transparent), transparent 60%), var(--studio-reading-bg);
+  background: var(--studio-scene);
+  background-attachment: fixed;
+}
+/* A family resemblance, with a different typographic and colour signature. */
+:root[data-studio-theme=gold] { --studio-secondary: #bc876d; --font-display: "Georgia", "Times New Roman", serif; --studio-title-tracking: -.025em; --studio-gradient-angle: 120deg; }
+:root[data-studio-theme=midnight] { --studio-secondary: #938cdd; --studio-gradient-angle: 155deg; }
+:root[data-studio-theme=forest] { --studio-secondary: #c3b480; --font-display: "Palatino Linotype", "Georgia", serif; --studio-title-tracking: -.02em; }
+:root[data-studio-theme=violet] { --studio-secondary: #de9cb7; --font-display: "Trebuchet MS", "Segoe UI", sans-serif; --studio-gradient-angle: 145deg; }
+:root[data-studio-theme=ember] { --studio-secondary: #d2ba7b; --font-display: "Georgia", serif; --studio-title-tracking: -.025em; --studio-gradient-angle: 115deg; }
+:root[data-studio-theme=rose] { --studio-secondary: #bba2de; --font-display: "Georgia", serif; --studio-title-tracking: -.025em; }
+:root[data-studio-theme-tier=premium] { --studio-secondary: var(--accent-2); }
+:root[data-studio-theme=eclipse] { --font-display: "Georgia", serif; --studio-gradient-angle: 110deg; }
+:root[data-studio-theme=dusk] { --font-display: "Trebuchet MS", "Segoe UI", sans-serif; --studio-gradient-angle: 160deg; }
+:root[data-studio-theme=custom] { --studio-secondary: var(--gold-bright); }
+body { background: transparent; font-family: var(--font-ui); }
+::selection { background: color-mix(in srgb, var(--gold) 35%, var(--theme-panel-solid)); color: var(--ivory); }
+:is(h1, h2, .sheet-title h2, .planning-head h2, .agents-head h1) { letter-spacing: var(--studio-title-tracking); }
+:is(.eyebrow, .agents-eyebrow, .ws-kicker, .planning-library-label, .music-group-label) { font-family: var(--font-mono); }
+:is(.sheet-title, .agents-head, .settings-category-head) p { line-height: 1.6; }
+
+/* Pages share the backdrop. Only bounded reading surfaces blur it; blurring
+   the full viewport and every card would flatten the scene and cost frames. */
+html[data-shell=rail][data-studio-style] :is(.workspace-page, .agents-overlay),
+#plans-overlay,
+#workspace-layer, #workspace-layer .ws-main {
+  background: var(--studio-wash), var(--studio-page-fill);
+  backdrop-filter: none;
+}
+/* A transparent destination must reveal the scene, not an inactive tab's text. */
+html[data-shell=rail] body:has(.workspace-page:not([hidden])) > :is(header, main, #tabs, #tree-rail) { visibility: hidden; pointer-events: none; }
+html[data-shell=rail] body:has(.workspace-page:not([hidden])) :is(#workspace-layer, #idle-hud) { visibility: hidden; pointer-events: none; }
+html[data-shell=rail] body:has(.workspace-page:not([hidden])) #idle-layer { opacity: .04; }
+html[data-shell=rail] .workspace-page > :is(.sheet, .explorer-sheet, .brains-sheet),
+html[data-studio-style] :is(.agents-sheet, #plans-sheet) {
+  background: transparent; backdrop-filter: none; box-shadow: none;
+}
+html[data-studio-style] :is(.overlay, .brains-overlay, .agent-brain-overlay, .profiler-overlay):not(.workspace-page) { background: color-mix(in srgb, var(--theme-bg) 40%, transparent); backdrop-filter: blur(6px); }
+html[data-studio-style] :is(.sheet, .explorer-sheet, .brains-sheet, .agent-brain-sheet, .profiler-sheet, .music-sheet, .boot-card, .ws-sidebar) {
+  background: var(--studio-wash), var(--studio-sheen), var(--studio-panel-bg);
+  border-color: var(--studio-glass-edge); box-shadow: var(--studio-glass-shadow); backdrop-filter: var(--studio-glass-blur);
+}
+html[data-studio-style] :is(.panel, .card, .plan-strip, .settings-card, .agents-card, .agents-model-row, .task-overview-card, .lab-usage-card, .tracker-section, .ws-workflow, .ws-work-card, .ws-idea-card, .ws-backlog, .ws-dash-tile) {
+  background: var(--studio-sheen), var(--studio-panel-bg);
+  border-color: var(--studio-glass-edge); box-shadow: var(--studio-glass-shadow);
+  border-radius: var(--r-lg);
+}
+/* Settings' .panel is only a layout wrapper: its nav and cards carry their own glass, and it starts clear of the page header. */
+html[data-studio-style] .settings-panel { background: transparent; border: 0; box-shadow: none; }
+body:not(.appearance-settings-active) .settings-panel { padding-top: 20px; }
+#task-list .task-overview-card, #task-list .task-overview-card:hover { background: var(--studio-sheen), var(--studio-panel-bg); border-radius: var(--r-lg); }
+/* Secondary panes and rows are lightweight glass, with dividers for grouping. */
+html[data-studio-style] :is(.task-context-section, .task-handoff-text, .checkpoint, .lab-stat, .lab-note, .lab-table-wrap, .lab-context-source, .lab-catalog, .provider-tile, .tier-row, .auto-order-item, .music-node-choice, .music-station, .music-effect, .companion-item, .companion-message, .stat) {
+  background: var(--studio-inset-bg); border-color: var(--studio-glass-edge);
+}
+html[data-studio-style] :is(.log, .diff-view, .lab-context-source pre, .community-prompt-code, .brains-map-pick, .brains-search, .brains-field input[type=number], .ask-evidence) { background: var(--studio-field-bg); border-color: var(--studio-glass-edge); }
+
+/* Headers can overlap scrolling text, so they use the denser menu material. */
+html[data-studio-style] :is(.sheet-head, .explorer-head, .agents-head, .agents-save-bar, .music-header, .music-dropdown-header, #task-detail-tabs, .explorer-inspector .surface-tabs) {
+  background: var(--studio-wash), var(--studio-menu-fill); border-color: var(--studio-glass-edge); backdrop-filter: var(--studio-menu-blur);
+}
+html[data-studio-style] .sheet-head.plain { background: transparent; backdrop-filter: none; }
+html[data-studio-style] table#table th { background: var(--studio-menu-fill); backdrop-filter: var(--studio-menu-blur); }
+
+/* Floating menus are readable over both the scene and another page of text. */
+html[data-studio-style] :is(.pop, .palette-sheet, .studio-choice-popup, .surface-tools-menu, .studio-more-links, .studio-more > .tools-cluster, .brains-menu, .brains-search-panel, .brains-dialog-panel, .brains-shortcuts-panel, .music-dropdown, .companion-panel, .companion-bubble, .tree-tip, .tip, .profiler-hud, .toast, .legend-list, .feed-drop),
+#app-help-menu, .agents-nav-subsections, .workspace .ws-project-actions > div {
+  background: var(--studio-wash), var(--studio-sheen), var(--studio-float-fill);
+  border-color: var(--studio-glass-edge); backdrop-filter: var(--studio-float-blur);
+  box-shadow: var(--studio-float-shadow);
+  border-radius: var(--r-lg);
+}
+.studio-choice-option[aria-selected=true] { background: var(--studio-selection); color: var(--gold-bright); box-shadow: inset 2px 0 var(--gold-bright); }
+.studio-choice-option.highlighted { outline: 1px solid var(--studio-edge-active); outline-offset: -1px; }
+.studio-choice-option:disabled { opacity: .5; }
+.studio-choice-popup { padding: 8px; }
+.studio-choice-search { background: var(--studio-field-bg); }
+
+/* The shell is continuous with the page; selection supplies its colour. */
+#app-rail, #app-local-nav {
+  background: var(--studio-wash), var(--studio-shell-fill);
+  border-color: var(--studio-glass-edge); backdrop-filter: var(--studio-float-blur);
+}
+#app-rail [aria-current=page], #app-rail .app-rail-compose {
+  background: var(--studio-selection); color: var(--ivory);
+  box-shadow: inset 2px 0 var(--gold); border-color: var(--studio-glass-edge);
+}
+#app-rail .app-rail-brand .monogram { background: var(--studio-selection); border-color: var(--studio-edge-active); color: var(--gold-bright); border-radius: 10px; }
+#app-local-nav .app-local-link[aria-current=page] { background: linear-gradient(0deg, var(--tint-gold-3), transparent); color: var(--gold-bright); }
+#app-local-nav .agents-nav-subsections .app-local-link { border-radius: var(--r-sm); padding: 10px 12px; }
+#app-local-nav .agents-nav-subsections .app-local-link[aria-current=page] { background: var(--studio-selection); box-shadow: inset 2px 0 var(--gold); }
+
+/* Fields keep their own boundary. Transparent colour controls and range tracks
+   retain the specialised previews defined by the Appearance sheet. */
+html[data-studio-style] :is(input[type=text], input[type=search], input[type=password], input[type=number], input:not([type]), textarea, select, .studio-select) {
+  background: var(--studio-field-bg); color: var(--ivory); border-color: var(--studio-glass-edge);
+}
+html[data-studio-style] :is(input, textarea)::placeholder { color: var(--muted); opacity: 1; }
+html[data-studio-style] :is(input, textarea, select, .studio-select):focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+/* Native fallback options cannot blur their system-owned popup. */
+select option, select optgroup { background: var(--theme-panel-solid); color: var(--ivory); }
+button, .button { font-family: var(--font-ui); }
+.primary:not(#idle-hud *, .danger), #workspace-layer .primary {
+  background: linear-gradient(120deg, var(--studio-action-end), var(--gold)); color: var(--ink);
+  border-color: transparent; box-shadow: inset 0 1px rgb(255 255 255 / .2); filter: none;
+}
+.primary:not(#idle-hud *, .danger):not(:disabled, [aria-disabled=true]):is(:hover, :focus-visible),
+#workspace-layer .primary:not(:disabled, [aria-disabled=true]):is(:hover, :focus-visible) {
+  background: linear-gradient(120deg, var(--studio-action-end), var(--gold));
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--gold) 18%, transparent);
+}
+
+/* Home is a writing desk: a generous title, quiet conversation, one glass
+   composer, and a distinct activity pane. Long conversations keep the layout. */
+.workspace .ws-home-intro h1 { font-family: var(--font-display); font-weight: 500; font-size: clamp(28px, 3vw, 42px); letter-spacing: var(--studio-title-tracking); }
+.workspace .ws-home-intro .ws-kicker { color: var(--gold-bright); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; }
+#workspace-layer .ws-composer { background: var(--studio-wash), var(--studio-sheen), var(--studio-panel-bg); border-color: var(--studio-glass-edge); box-shadow: var(--studio-glass-shadow); backdrop-filter: var(--studio-glass-blur); border-radius: var(--r-xl); }
+#workspace-layer .ws-composer:focus-within { border-color: var(--studio-edge-active); box-shadow: var(--studio-glass-shadow), 0 0 0 2px var(--tint-gold-1); }
+#workspace-layer .ws-composer textarea { background: transparent; border-color: transparent; }
+#workspace-layer .ws-modes { background: var(--studio-inset-bg); }
+#workspace-layer .ws-modes button { color: var(--muted); }
+#workspace-layer .ws-modes button[aria-pressed=true] { background: var(--studio-selection); color: var(--gold-bright); }
+#workspace-layer .ws-message.user { background: var(--studio-selection); border-color: var(--studio-glass-edge); }
+.workspace .ws-project.selected { color: var(--ivory); }
+.workspace :is(.ws-section-label, .ws-empty-project, .ws-sidebar-note) { color: var(--muted); }
+.workspace .ws-message { font-size: 13px; line-height: 1.7; }
+.workspace .ws-workflow { backdrop-filter: var(--studio-glass-blur); }
+.workspace :is(.ws-activity-heading, .ws-preview-panel, .ws-activity, .ws-progress, .ws-home-disclosure) { border-color: var(--studio-glass-edge); }
+.workspace .ghost, .workspace .ws-project-actions > summary { border-color: var(--studio-glass-edge); }
+
+/* Settings reads as a preferences notebook. Agent cards keep technical labels,
+   while their section heading shares the theme's display face. */
+html[data-shell=rail] .settings-nav { background: var(--studio-inset-bg); border-color: var(--studio-glass-edge); }
+html[data-studio-style] :is(.settings-find, .segmented, .eyes-mode-tabs, .lab-usage-switch, .music-tabs) { background: var(--studio-field-bg); border-color: var(--studio-glass-edge); }
+.settings-category-head h2 { font-family: var(--font-display); font-size: 28px; }
+html[data-studio-style] .settings-card { border-radius: var(--r-xl); }
+.settings-card-glyph { color: var(--gold-bright); }
+.agents-model-row { border-left: 2px solid var(--studio-edge-active); }
+html[data-studio-style] .studio-style-choice { background: var(--studio-sheen), var(--studio-inset-bg); border-color: var(--studio-glass-edge); }
+html[data-studio-style] .studio-style-choice[aria-pressed=true] { background: var(--studio-selection); border-color: var(--studio-edge-active); }
+.studio-style-choice strong { font-family: var(--font-display); font-size: 17px; }
+body.appearance-settings-active #tab-studio { background: var(--studio-wash), var(--studio-panel-bg); backdrop-filter: var(--studio-glass-blur); border-color: var(--studio-glass-edge); }
+body.appearance-settings-active :is(.settings-category-head, .appearance-sections) { background: var(--studio-menu-fill); backdrop-filter: var(--studio-menu-blur); }
+body.appearance-settings-active .settings-media .music-theme { background: var(--studio-inset-bg); }
+body.appearance-settings-active .settings-media .music-theme[aria-pressed=true] { background: var(--studio-selection); border-color: var(--studio-edge-active); }
+
+/* Plans retains its lighter document / partner materials in planning.css. */
+/* Graph canvases retain their port geometry and semantic node colours. */
+html[data-studio-style] :is(.brains-canvas-wrap, .agent-brain-stage, .agent-brain-map-stage) { background-color: var(--studio-field-bg); }
+html[data-studio-style] :is(.brains-viewbar, .brains-minimap, .brains-rail-toggle) { background: var(--studio-menu-fill); backdrop-filter: var(--studio-menu-blur); }
+
+/* Command uses one frosted shell per floating surface. Interior controls and
+   cards catch the same light without stacking backdrop filters on the canvas. */
+#idle-hud {
+  --cmd-edge: var(--studio-glass-edge);
+  --cmd-surface: var(--studio-inset-bg);
+  --cmd-raised: color-mix(in srgb, var(--ivory) 4%, var(--studio-inset-bg));
+  --cmd-hover: color-mix(in srgb, var(--gold) 9%, var(--studio-inset-bg));
+}
+#idle-hud :is(.cmd-tools, .cmd-center, .cmd-dock, .cmd-rail, .cmd-card, .cmd-empty),
+#idle-hud > .cmd-chat {
+  background: var(--studio-wash), var(--studio-sheen), var(--studio-panel-bg);
+  border-color: var(--studio-glass-edge); border-top-color: var(--studio-glass-rim);
+  backdrop-filter: var(--studio-glass-blur); box-shadow: var(--studio-glass-shadow);
+}
+#idle-hud :is(.cmd-tools, .cmd-center) { border-radius: var(--r-lg); }
+#idle-hud .cmd-tools { padding: 6px; gap: 3px; }
+#idle-hud .cmd-tools button { border-radius: var(--r-md); }
+#idle-hud .cmd-tools [aria-pressed=true], #idle-hud #idle-view[data-view="2d"] {
+  background: var(--studio-selection); border-color: var(--studio-edge-active);
+  box-shadow: inset 0 1px var(--studio-glass-highlight); color: var(--gold-bright);
+}
+#idle-hud .cmd-center { padding: 5px; }
+#idle-hud .cmd-center :is(.cmd-composer, .cmd-search) { background: transparent; backdrop-filter: none; box-shadow: none; }
+#idle-hud .cmd-center input { background: transparent; border-color: transparent; border-radius: 0; }
+#idle-hud .cmd-center :is(.cmd-composer, .cmd-search):focus-within {
+  background: var(--studio-field-bg); border-color: var(--studio-edge-active); border-radius: var(--r-md);
+  box-shadow: inset 0 1px var(--studio-glass-highlight);
+}
+#idle-hud .cmd-composer .primary.mini {
+  background: linear-gradient(135deg, var(--studio-action-end), var(--gold));
+  border-radius: var(--r-md); box-shadow: inset 0 1px rgb(255 255 255 / .25), 0 3px 10px color-mix(in srgb, var(--gold) 12%, transparent);
+}
+#idle-hud .cmd-rail {
+  padding: 14px 14px 12px; border-radius: var(--r-xl) 0 0 var(--r-xl);
+  border-left-color: var(--studio-glass-rim);
+  box-shadow: var(--studio-glass-shadow), -12px 0 40px rgb(0 0 0 / .08);
+}
+#idle-hud .rail-tabs {
+  gap: 3px; padding: 4px; margin-bottom: 14px;
+  border: 1px solid var(--studio-glass-edge); border-radius: var(--r-lg);
+  background: var(--studio-field-bg); box-shadow: inset 0 1px 3px rgb(0 0 0 / .06);
+}
+#idle-hud .rail-tab { min-height: 34px; border-radius: var(--r-md); }
+#idle-hud .rail-tab[aria-selected=true] {
+  background: var(--studio-selection); border-color: var(--studio-edge-active);
+  box-shadow: inset 0 1px var(--studio-glass-highlight), 0 2px 5px rgb(0 0 0 / .08);
+  color: var(--gold-bright);
+}
+#idle-hud .rail-tab[aria-selected=true] .count { background: var(--tint-gold-3); color: var(--gold-bright); }
+#idle-hud .cmd-rail .rail-view-head { padding-inline: 3px; }
+#idle-hud .cmd-rail .feed-head { margin-bottom: 8px; }
+#idle-hud .feed-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px;
+  padding: 0; margin-bottom: 12px; border: 0;
+}
+#idle-hud .feed-metric {
+  flex-direction: column; align-items: flex-start; gap: 4px; min-height: 50px; padding: 8px;
+  background: var(--studio-inset-bg); border-color: var(--studio-glass-edge); border-radius: var(--r-md);
+  box-shadow: var(--studio-inset-shadow);
+}
+#idle-hud .feed-metric strong { font-size: 17px; font-weight: 600; }
+#idle-hud .feed-metric span { font-size: 10px; }
+#idle-hud .feed-now { gap: 8px; }
+#idle-hud :is(.feed-current-card, .done-row, .ask-card) {
+  padding: 12px; gap: 6px; border-radius: var(--r-lg);
+  background: var(--studio-sheen), var(--cmd-raised); box-shadow: var(--studio-inset-shadow);
+}
+#idle-hud .feed-current-card.quiet { background: var(--studio-inset-bg); }
+#idle-hud .feed-current-card:not(.quiet):hover {
+  background: var(--studio-sheen), var(--cmd-hover); border-top-color: var(--studio-glass-rim);
+  box-shadow: var(--studio-inset-shadow);
+}
+#idle-hud .feed-current-title { line-height: 1.45; }
+#idle-hud .feed-current-meta { font-size: 10px; }
+/* Sticky headings need their own dense fill when rows scroll underneath. */
+#idle-hud .feed-scroll :is(.feed-section-head, .feed-technical > summary),
+#idle-hud .cmd-rail .cmd-node .card-sub {
+  background: var(--studio-menu-fill); backdrop-filter: var(--studio-menu-blur);
+  border-radius: var(--r-md); padding: 7px 8px;
+}
+#idle-hud .feed-upnext { margin-top: 4px; }
+#idle-hud .feed-queue li { min-height: 36px; padding-inline: 6px; }
+#idle-hud .feed-queue-rank { font-size: 10px; color: var(--muted); }
+#idle-hud .feed-section { margin-top: 4px; padding-top: 10px; }
+#idle-hud .feed-meta { margin-top: 10px; padding: 10px 3px 0; border-top: 1px solid var(--studio-glass-edge); }
+#idle-hud :is(.cmd-view-pop, .cmd-agents-pop, .cmd-more-links, .pop) { background: var(--studio-wash), var(--studio-float-fill); border-color: var(--studio-glass-edge); backdrop-filter: var(--studio-float-blur); box-shadow: var(--studio-float-shadow); }
+#idle-hud .studio-select { background: var(--studio-field-bg); border-color: var(--studio-glass-edge); }
+@media (max-width: 1100px), (max-height: 740px) {
+  #idle-hud .cmd-rail { padding: 10px; }
+  #idle-hud .rail-tabs { margin-bottom: 10px; padding: 3px; gap: 2px; }
+  #idle-hud .rail-tab { min-height: 30px; }
+  #idle-hud .feed-metric { min-height: 44px; padding: 6px 4px; }
+  #idle-hud .feed-metric strong { font-size: 15px; }
+  #idle-hud :is(.feed-current-card, .done-row, .ask-card) { padding: 9px; gap: 4px; }
+}
+html[data-density=compact] #idle-hud .rail-tabs { margin-bottom: 8px; }
+html[data-density=compact] #idle-hud .feed-metric { min-height: 42px; padding-block: 5px; }
+html[data-density=compact] #idle-hud :is(.feed-current-card, .done-row, .ask-card) { padding: 9px; gap: 4px; }
+.companion-shell-head strong { font-family: var(--font-display); font-size: 21px; }
+.companion-tabs { background: var(--studio-inset-bg); }
+.companion-tabs button[aria-selected=true] { background: var(--studio-selection); color: var(--gold-bright); box-shadow: inset 0 -2px var(--gold); }
+#boot-layer { background: var(--studio-scene); }
+
+html[data-studio-style=focus] { --r-xl: 12px; --r-lg: 9px; --r-md: 6px; --studio-sheen: linear-gradient(transparent, transparent); }
+html[data-studio-style=atmosphere] { --r-xl: 24px; --r-lg: 18px; --r-md: 11px; }
+html[data-density=compact] { --ctl-h-sm: 30px; --ctl-h: 34px; }
+html[data-density=compact] :is(.settings-control, .studio-field) { padding-block: 5px; }
+html[data-density=compact] :is(.settings-card, .agents-card) { padding: 14px; }
+.studio-select:focus-visible, .studio-scroll-arrow:focus-visible, .studio-choice-option:focus-visible, .studio-style-choice:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+@keyframes studio-menu-in { from { opacity: 0; translate: 0 4px; scale: .97; } to { opacity: 1; translate: 0 0; scale: 1; } }
+@media (max-width: 760px) { .studio-field { gap: 8px; } }
+@media (prefers-reduced-motion: reduce) { .studio-choice-popup { animation: none; } .studio-scroll-arrow { transition: none; } }
+html[data-motion=off] .studio-choice-popup { animation: none; }
+
+/* Without blur, a stronger translucent tint protects reading contrast. */
+html[data-no-blur] {
+  --studio-glass-blur: none; --studio-menu-blur: none;
+  --studio-panel-bg: color-mix(in srgb, var(--theme-panel-solid) 92%, transparent);
+  --studio-menu-fill: color-mix(in srgb, var(--theme-panel-solid) 98%, transparent);
+  --studio-shell-fill: color-mix(in srgb, var(--studio-reading-bg) 94%, transparent);
+  --studio-float-fill: color-mix(in srgb, var(--theme-panel-solid) 90%, transparent); --studio-float-blur: none;
+}
+html[data-studio-style][data-no-blur] :is(.overlay, .brains-overlay, .agent-brain-overlay, .profiler-overlay):not(.workspace-page) { backdrop-filter: none; }
+html[data-studio-theme-tone=light] {
+  --studio-glass-edge: color-mix(in srgb, var(--ivory) 16%, transparent);
+  --studio-glass-rim: color-mix(in srgb, var(--ivory) 22%, transparent);
+  --studio-glass-highlight: rgb(255 255 255 / .65);
+  --studio-inset-shadow: inset 0 1px rgb(255 255 255 / .45), 0 2px 6px rgb(0 0 0 / .03);
+  --studio-glass-shadow: inset 0 1px var(--studio-glass-highlight), 0 4px 8px rgb(0 0 0 / .03), 0 18px 48px rgb(0 0 0 / .08);
+  --studio-float-shadow: inset 0 1px var(--studio-glass-highlight), 0 12px 32px -10px rgb(0 0 0 / .14), 0 2px 8px rgb(0 0 0 / .05);
+  --studio-glide: color-mix(in srgb, var(--ivory) 10%, transparent);
+}
+/* A light theme brightens what the glass shows instead of dimming it. */
+@media not (prefers-reduced-transparency: reduce) {
+  html[data-studio-theme-tone=light]:not([data-no-blur]) { --studio-float-blur: blur(calc(16px + var(--studio-glass) * 16px)) saturate(1.3) brightness(1.06); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root, html[data-no-blur] {
+    --studio-panel-bg: var(--theme-panel-solid); --studio-menu-fill: var(--theme-panel-solid); --studio-shell-fill: var(--studio-reading-bg);
+    --studio-field-bg: var(--studio-reading-bg); --studio-inset-bg: var(--theme-panel-solid); --studio-page-fill: var(--studio-reading-bg);
+    --studio-glass-blur: none; --studio-menu-blur: none; --studio-sheen: linear-gradient(transparent, transparent);
+    --studio-float-fill: var(--theme-panel-solid); --studio-float-blur: none;
+  }
+  html[data-studio-style] :is(.overlay, .brains-overlay, .agent-brain-overlay, .profiler-overlay):not(.workspace-page) { background: var(--theme-bg); backdrop-filter: none; }
+}
+/* ---- menus in motion ---------------------------------------------------------
+   Every floating menu opens the same way: it grows from the edge it belongs to
+   on the spring curve while it fades in, its rows follow one after another,
+   and it leaves quickly. `hidden` still flips synchronously (tests and
+   harnesses read it); CSS plays the way in and out, as the sheets do (the
+   "presence" section of styles.css). A hover child menu keeps its top edge
+   still while it grows, so the gap the pointer crosses from its tab never
+   moves. */
+:is(#app-help-menu, .agents-nav-subsections, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu) {
+  animation: none;
+  transform-origin: var(--menu-from, top left);
+  transition: opacity var(--motion-base) var(--ease-out), scale var(--motion-spring) var(--ease-spring),
+    translate var(--motion-spring) var(--ease-spring), display var(--motion-base) allow-discrete;
+}
+:is(#app-help-menu, .agents-nav-subsections, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu)[hidden] {
+  opacity: 0; scale: .96; translate: var(--menu-shift, 0 0); pointer-events: none;
+  transition: opacity var(--motion-exit) var(--ease-in), scale var(--motion-exit) var(--ease-in),
+    translate var(--motion-exit) var(--ease-in), display var(--motion-exit) allow-discrete;
+}
+@starting-style {
+  :is(#app-help-menu, .agents-nav-subsections, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu):not([hidden]) { opacity: 0; scale: .96; translate: var(--menu-shift, 0 0); }
+}
+#app-help-menu { --menu-from: bottom left; --menu-shift: -6px 0; }
+.agents-nav-group:last-child .agents-nav-subsections { --menu-from: top right; }
+.studio-choice-popup { transform-origin: top center; animation-duration: var(--motion-slow); animation-timing-function: var(--ease-spring); }
+/* The rows arrive one after another (an animation, so each row's own hover
+   transitions stay its own). */
+@keyframes studio-item-in { from { opacity: 0; translate: 0 3px; } }
+:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > * { animation: studio-item-in var(--motion-slow) var(--ease-out) backwards; animation-delay: calc(var(--item-i, 0) * 16ms + 24ms); }
+:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(2) { --item-i: 1; }
+:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(3) { --item-i: 2; }
+:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(4) { --item-i: 3; }
+:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(5) { --item-i: 4; }
+:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(6) { --item-i: 5; }
+:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > :nth-child(n+7) { --item-i: 6; }
+/* One highlight glides to the row under the pointer (or the keyboard's focus)
+   instead of each row lighting up on its own. It is the host's ::after, placed
+   by studio-ui.js (glideTo) through --glide-*; rows that carry their own state
+   (current page, selected option, pressed toggle, an open tab) keep it. */
+:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide] { isolation: isolate; }
+:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide]::after {
+  content: ""; position: absolute; top: 0; left: 0; z-index: -1; pointer-events: none;
+  width: var(--glide-w, 0px); height: var(--glide-h, 0px);
+  transform: translate(var(--glide-x, 0px), var(--glide-y, 0px));
+  border-radius: var(--glide-r, var(--r-md));
+  background: var(--studio-glide);
+  box-shadow: inset 0 1px color-mix(in srgb, var(--ivory) 6%, transparent), 0 1px 3px rgb(0 0 0 / .08);
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-out), transform calc(var(--motion-base) * 1.5) var(--ease-spring),
+    width calc(var(--motion-base) * 1.5) var(--ease-spring), height calc(var(--motion-base) * 1.5) var(--ease-spring),
+    border-radius var(--motion-fast) var(--ease-out);
+}
+:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail):is([data-glide=on], [data-glide=jump])::after { opacity: 1; }
+:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide=jump]::after { transition: opacity var(--motion-fast) var(--ease-out); }
+:is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail):is([data-glide=on], [data-glide=jump]) :is(button, a[href], [role=menuitem], [role=option], .studio-choice-option):hover:not([aria-current=page], [aria-selected=true], [aria-pressed=true], [aria-expanded=true], .primary, .app-rail-compose, :disabled) { background-color: transparent !important; }
+/* The rail's words ease in as it opens instead of appearing at full width. */
+#app-rail :is(.label, .key, .app-rail-text, .app-rail-recent, .app-rail-heading) {
+  transition: opacity var(--motion-base) var(--ease-out) 40ms, translate var(--motion-base) var(--ease-out) 40ms;
+}
+@starting-style { #app-rail :is(.label, .key, .app-rail-text, .app-rail-recent, .app-rail-heading) { opacity: 0; translate: -3px 0; } }
+@media (prefers-reduced-motion: reduce) {
+  :is(#app-help-menu, .agents-nav-subsections, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div, .brains-menu), #app-rail :is(.label, .key, .app-rail-text, .app-rail-recent, .app-rail-heading) { transition: none; }
+  :is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > * { animation: none; }
+  :is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail)[data-glide]::after { transition: opacity var(--motion-fast) linear; }
+}
+html[data-motion=off] :is(#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .workspace .ws-project-actions > div) > * { animation: none; }
+@media print { :root, body { background: #fff; } }
+/* ---- Refinement pass ---------------------------------------------------------
+   One calm system across the pages. The Command nebula stays on Command, every
+   page shares one header band and one title size, edges are quieter, and
+   grouped controls keep even gaps. Every rule reads theme tokens, so all
+   palettes, styles (Studio / Focus / Atmosphere) and densities follow. */
+
+/* Reading pages keep the faint living tree behind them, but the far layer's
+   nebula band would cross their headers and text, so it softens into a glow. */
+html[data-shell=rail] body:has(.workspace-page:not([hidden])) #idle-layer-far { opacity: .18; filter: blur(8px); }
+
+/* The project map is a page like the others: no frame of its own. */
+html[data-shell=rail] .workspace-page > .agent-brain-sheet { background: transparent; border: 0; border-radius: 0; box-shadow: none; backdrop-filter: none; }
+
+/* One header band: same height, padding and title on every page. */
+html[data-shell=rail] :is(.workspace-page, #plans-overlay) :is(.sheet-head, .explorer-head, .planning-head, .brains-head, .agent-brain-head),
+html[data-shell=rail] .agents-head {
+  min-height: 64px; padding: 12px 16px; gap: 12px; align-items: center;
+  border-bottom: 1px solid var(--studio-glass-edge);
+}
+html[data-shell=rail] :is(.sheet-head .sheet-title h2, .planning-head h2, .brains-head h2, .agent-brain-head h2, .agents-head h1, .settings-category-head h2, #page-title) {
+  margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 600; line-height: 1.2;
+}
+html[data-shell=rail] .planning-head p { margin-top: 2px; }
+
+/* The task shortcuts (Home, Current task) sit at the far end of the page bar,
+   so the arrows and tabs start in the same place on every page. */
+#app-local-nav .app-task-context { order: 99; margin-left: auto; margin-right: 0; padding: 0 0 0 12px; border-right: 0; border-left: 1px solid var(--studio-glass-edge); }
+
+/* Quieter edges: panels, fields and cards keep a boundary without outlining
+   every box on the page. Light palettes keep their stronger edge. */
+html[data-studio-theme-tone=dark] { --studio-glass-edge: color-mix(in srgb, var(--ivory) 9.5%, transparent); }
+
+/* Cards share one radius and breathe a little more. */
+html[data-studio-style] :is(.lab-usage-card, .lab-stat, .ws-dash-tile, .agents-card, .task-overview-card) { border-radius: var(--r-lg); }
+html[data-studio-style] .catalog-model { border-radius: var(--r-lg); }
+
+/* Home: the task picker in the Activity pane spans the pane, and its fact
+   labels are readable rather than 10px. */
+.ws-focus-panel .studio-select, .ws-focus-heading .studio-select { width: 100%; max-width: none; }
+.ws-focus-facts { font-size: 12px; }
+/* A scrolled conversation fades out under the folds instead of cutting a line in half. */
+.workspace .ws-thread { -webkit-mask-image: linear-gradient(to bottom, transparent, #000 18px); mask-image: linear-gradient(to bottom, transparent, #000 18px); }
+
+/* Walkthrough: the seven step chips share one row at the sheet's width and
+   share the width evenly when a narrow window makes them wrap. */
+.walkthrough-steps { gap: 4px; }
+.walkthrough-steps .walkthrough-step { flex: 1 1 auto; padding: 5px 8px; font-size: 11.5px; }
+
+/* Agents overview: status lines read as UI text, and the decision and
+   running-work chips keep a gap instead of touching. */
+#agents-overview-live, #agents-work-hub { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+:is(#agents-overview-live, #agents-work-hub) > :not(button) { flex: 1 0 100%; margin: 0; }
+:is(#agents-overview-live, #agents-work-hub) > button { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.agents-hub-line { padding: 7px 0; border-bottom: 1px solid var(--studio-glass-edge); color: var(--muted); font-size: 13px; }
+.agents-hub-line:last-of-type { border-bottom: 0; }
+
+/* Activity & evidence: the feed's filters sit on two even rows in its column. */
+.eyes-col > .panel > .row:first-of-type { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.eyes-col > .panel > .row:first-of-type > .studio-select { grid-column: 1 / -1; }
+.eyes-col > .panel > .row:nth-of-type(2) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.eyes-col > .panel > .row .studio-select { width: 100%; }

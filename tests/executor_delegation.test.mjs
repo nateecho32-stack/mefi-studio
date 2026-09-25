@@ -3,6 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import backlog from "../scripts/backlog.cjs";
+import taskDelegation from "../scripts/task-delegation.cjs";
 import { executorHost } from "./fixtures/host_executor.mjs";
 
 const objective = "Implement the shared export feature across its encoder and preview, then integrate both parts.";
@@ -48,12 +49,34 @@ async function flushUntil(predicate) {
 }
 
 async function delegate(h) {
+  // Decomposition is an explicit Cluster action. Keep exercising the durable
+  // plan under both execution modes after that action, including a real switch.
+  const executionMode = h.autopilot.mode;
+  if (executionMode !== "cluster") await h.env.setAutopilot({ mode: "cluster" });
   assert.equal(await h.env.spawnNextJob(), "delegated");
   const children = childTasks(h);
   assert.equal(children.length, 2);
   assert.equal(h.starts.length, 0, "planning releases the parent before any builder starts");
   assert.equal(h.autopilot.jobs.length, 0);
   assert.equal(h.registry.size, 0, "parent file reservations are released for the child builders");
+  if (executionMode !== "cluster") await h.env.setAutopilot({ mode: executionMode });
+  return children;
+}
+
+// Only tasks run now, so no request is ever planned into subtasks. An older
+// build could split a direct request run; its inbox coordinator is legacy
+// data, saved here the way that build's claim-time admission saved it.
+function legacyRequestDelegation(h) {
+  const entry = { id: "run_legacy_request", projectId: "fixture", projectPath: h.env.projectRoot() };
+  let result = null;
+  h.edit((board) => {
+    const ref = board.requests[0];
+    Object.assign(ref, { status: "running", runId: entry.id, lease: { pid: 1, at: h.now() } });
+    result = taskDelegation.admit(board, { kind: "request", ref, entry, plan: plan(), scope: backlog.buildScope(ref), now: h.now() });
+  });
+  assert.equal(result?.admitted, true);
+  const children = childTasks(h);
+  assert.equal(children.length, 2);
   return children;
 }
 
@@ -65,7 +88,7 @@ async function finishChildren(h, children) {
 }
 
 for (const mode of ["cluster", "swarm"]) {
-  test(`${mode} delegates one objective to parallel builders with durable lineage and normal file claims`, async () => {
+  test(`${mode} executes a Cluster-delegated objective with durable lineage and normal file claims`, async () => {
     const h = executorHost({ mode, parallel: 3, tasks: [parentTask(), unrelatedTask()] });
     const planned = providePlan(h);
     const children = await delegate(h);
@@ -169,7 +192,7 @@ for (const mode of ["cluster", "swarm"]) {
   });
 
   for (const change of ["retry", "delete"]) {
-    test(`${mode} rechecks child dependencies after ${change} during parent integration assistance`, async () => {
+    test(`${mode} rechecks child dependencies after ${change} during parent integration admission`, async () => {
       const h = executorHost({ mode, parallel: 2, tasks: [parentTask()] });
       providePlan(h);
       const children = await delegate(h);
@@ -177,15 +200,21 @@ for (const mode of ["cluster", "swarm"]) {
       await finishChildren(h, children);
       h.advance(31000);
       await h.env.autopilotHousekeeping();
-      const held = holdSupport(h);
+      const machine = await h.env.getMachine(), readCapacity = machine.workerCapacity;
+      let release, waiting = false;
+      const pending = new Promise((resolve) => { release = resolve; });
+      machine.workerCapacity = async (options) => {
+        if (options.force) { waiting = true; await pending; }
+        return readCapacity(options);
+      };
       const dispatch = h.env.spawnNextJob();
-      await flushUntil(() => held.pending.length === 2);
+      await flushUntil(() => waiting);
       assert.equal(savedTask(h).status, "active");
       h.edit((board) => {
         if (change === "delete") board.tasks = board.tasks.filter((row) => row.id !== children[0].id);
         else board.tasks = board.tasks.map((row) => row.id === children[0].id ? backlog.retryTask(row, h.now()) : row);
       });
-      held.release();
+      release();
       await dispatch;
       assert.equal(h.starts.length, 2, "invalidated prerequisites prevent the parent integration process from starting");
       assert.equal(savedTask(h).status, "open");
@@ -235,7 +264,7 @@ for (const mode of ["cluster", "swarm"]) {
     assert.equal(stage(h, savedTask(h, children[1].id)), "approval");
   });
 
-  for (const change of ["pause", "mode", "mode-roundtrip", "scope", "approval"]) {
+  for (const change of mode === "cluster" ? ["pause", "mode", "mode-roundtrip", "scope", "approval"] : []) {
     test(`${mode} discards a delegation proposal after ${change} changes during assistance`, async () => {
       const h = executorHost({ mode, tasks: [parentTask()] });
       providePlan(h);
@@ -264,7 +293,7 @@ for (const mode of ["cluster", "swarm"]) {
     });
   }
 
-  test(`${mode} releases the parent if durable subtask admission fails`, async () => {
+  if (mode === "cluster") test(`${mode} releases the parent if durable subtask admission fails`, async () => {
     const h = executorHost({ mode, tasks: [parentTask()] });
     providePlan(h);
     const held = holdSupport(h);
@@ -284,20 +313,20 @@ for (const mode of ["cluster", "swarm"]) {
     assert.ok(h.logs.some((line) => /delegation save failed/.test(line)));
   });
 
-  test(`${mode} ignores malformed or unavailable delegation advice and runs the saved objective`, async () => {
+  test(mode === "cluster" ? "Cluster ignores malformed delegation advice and runs the saved objective" : "Swarm does not request decomposition even when a planner is available", async () => {
     const h = executorHost({ mode, tasks: [parentTask()] });
-    providePlan(h, '{"summary":"Bad provider output", "subtasks": [');
+    const planned = providePlan(h, mode === "cluster" ? '{"summary":"Bad provider output", "subtasks": [' : plan());
     await h.env.executeNextRequest();
     assert.equal(childTasks(h).length, 0);
     assert.deepEqual(h.starts.map((row) => row.taskId), ["shared-feature"]);
     assert.ok(h.starts[0].child.prompt.includes(objective));
+    if (mode === "swarm") { assert.equal(planned.length, 0); assert.equal(h.supportCalls.length, 0); }
   });
 
-  test(`${mode} promotes a delegated direct request by identity despite an unrelated task with the same title`, async () => {
+  test(`${mode} promotes a legacy delegated inbox request by identity despite an unrelated task with the same title`, async () => {
     const request = { title: parentTask().title, prompt: objective, files: parentTask().files, at: 1, source: "manual", pin: true };
     const h = executorHost({ mode, parallel: 2, requests: [request] });
-    providePlan(h);
-    const children = await delegate(h);
+    const children = legacyRequestDelegation(h);
     const savedRequest = h.board().requests[0];
     assert.equal(savedRequest.runId, undefined);
     assert.deepEqual(savedRequest.delegation.childTaskIds, children.map((child) => child.id));
@@ -333,11 +362,10 @@ for (const mode of ["cluster", "swarm"]) {
     assert.equal(h.board().tasks.filter((row) => row.delegation).length, 1);
   });
 
-  test(`${mode} recovers exact delegated children from an interrupted direct-request board save`, async () => {
+  test(`${mode} recovers exact delegated children from an interrupted legacy request coordinator save`, async () => {
     const request = { title: parentTask().title, prompt: objective, files: parentTask().files, at: 1, source: "manual", pin: true };
     const h = executorHost({ mode, parallel: 2, requests: [request] });
-    providePlan(h);
-    const children = await delegate(h);
+    const children = legacyRequestDelegation(h);
     const delegation = h.board().requests[0].delegation;
     assert.equal(delegation.admissions.length, 2, "the saved coordinator retains exact admissions for recovery");
     h.edit((board) => { board.tasks = []; });

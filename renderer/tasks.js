@@ -47,13 +47,39 @@
   let hydrated = false;
   let hydrating = null;
   let taskRevision = 0;
+  let liveRevision = 0;
+  let assistantRevision = 0;
   const dependencyDrafts = new Map();
   const contextReads = new Map();
   const attemptReads = new Map();
   const detailExpanded = new Map();
+  const detailViews = new Map();
+  const projectSelections = new Map();
+  const detailViewNames = ["details", "evidence", "history", "references"];
+  let detailPanels = {};
+  function showDetailView(name, focus = false) {
+    const task = selectedTask();
+    const active = detailViewNames.includes(name) ? name : "details";
+    if (task) detailViews.set(taskKey(task), active);
+    const tabs = document.getElementById("task-detail-tabs");
+    if (tabs) tabs.hidden = !task;
+    const controls = document.getElementById("task-reference-controls");
+    if (controls) controls.hidden = !task || active !== "references";
+    for (const key of detailViewNames) {
+      const tab = document.getElementById(`task-tab-${key}`);
+      const panel = detailPanels[key];
+      if (tab) { tab.setAttribute("aria-selected", String(key === active)); tab.tabIndex = key === active ? 0 : -1; }
+      if (panel) panel.hidden = !task || key !== active;
+      if (focus && key === active) tab?.focus?.();
+    }
+  }
+  function focusNarrowDetail() {
+    if (window.matchMedia?.("(max-width: 760px)")?.matches) els.overviewBack?.focus?.({ preventScroll: true });
+  }
   const detailMessages = new Map();
   const entryDrafts = new Map();
   const entryPending = new Set();
+  const startPending = new Set();
   let detailBusy = null;
   let backlogRead = 0;
   let projectEpoch = 0;
@@ -91,8 +117,14 @@
   const syncBadge = () => window.MefiNav?.setBadge?.("tasks", openTaskCount());
   const revealSelected = () => els.list?.querySelector("li.selected")?.scrollIntoView({ block: "nearest" });
   const isDone = (task) => ["done", "archived", "completed", "resolved"].includes(task?.status);
+  // A parent whose finished run handed work on only waits for those
+  // follow-ups: the verifier skips it until they settle (main.cjs
+  // waitingTaskIds), and a stuck follow-up is flagged on its own card. Counting
+  // every ancestor as review put one parked follow-up on the list up to four
+  // times over.
+  const waitingOnFollowUps = (task) => task?.status === "awaiting_verification" && Number(task?.handoffState?.pending) > 0;
   // A loop-guard hold waits for the owner's Try again, so it counts as review.
-  const needsReview = (task) => !isDone(task) && task?.status !== "active" && (
+  const needsReview = (task) => !isDone(task) && task?.status !== "active" && !waitingOnFollowUps(task) && (
     task?.status === "awaiting_verification" || task?.status === "verifying" ||
     ["unverified", "failed"].includes(task?.verification?.state) || (task?.runFailures ?? 0) >= 5 ||
     scheduledTask(task)?.blockedBy === "loop"
@@ -105,7 +137,7 @@
   // the loop count); neither is offered while a worker or checker holds it.
   const ownerHold = (task) => {
     const scheduled = scheduledTask(task);
-    if (!["loop", "duplicate"].includes(scheduled?.blockedBy)) return null;
+    if (!["loop", "duplicate", "owner"].includes(scheduled?.blockedBy)) return null;
     return task?.runId || ["active", "running", "verifying", "awaiting_verification"].includes(task?.status) ? null : scheduled;
   };
   const matchesReadiness = (task) => state.readiness === "all" || (state.readiness === "waiting" ? ["waiting", "cooling"].includes(scheduledTask(task)?.stage) : state.readiness === "blocked" ? ["blocked", "approval"].includes(scheduledTask(task)?.stage) : scheduledTask(task)?.stage === state.readiness);
@@ -129,6 +161,54 @@
     const flat = String(text ?? "").replace(/\s+/g, " ").trim();
     return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
   };
+  function shortTitle(task) {
+    const full = String(task?.title || task?.prompt || "Untitled task").replace(/\s+/g, " ").trim();
+    const first = full.match(/^(.{8,70}?[.!?])(?:\s|$)/)?.[1] || full;
+    if (first.length <= 72) return first;
+    const cut = first.slice(0, 71).replace(/\s+\S*$/, "");
+    return `${cut || first.slice(0, 71)}…`;
+  }
+  // This is shared by Home and Work. It describes recorded state; an agent's
+  // success prose and a live preview never stand in for completion checks.
+  function workflowSummary(task, { status: live = {}, backlog = null, assistant = {}, now = Date.now() } = {}) {
+    const projectId = task?.projectId || backlog?.projectId || live?.projectId;
+    const belongs = (value) => !value?.projectId || !projectId || value.projectId === projectId;
+    if (!belongs(live)) live = {};
+    if (!belongs(backlog)) backlog = null;
+    if (!belongs(assistant)) assistant = {};
+    const scheduled = backlog?.taskStates?.find((item) => item.id === task?.id);
+    const job = (live.running || []).find((item) => item.taskId === task?.id && belongs(item) && (!task.runId || !item.runId || item.runId === task.runId));
+    const question = (assistant.questions || []).find((item) => item.status === "open" && (item.context?.taskId || item.taskId) === task?.id && belongs(item));
+    const finished = isDone(task);
+    const handedOn = !finished && waitingOnFollowUps(task);
+    const checking = !handedOn && ["awaiting_verification", "verifying"].includes(task?.status);
+    const missingWorker = !finished && !checking && !handedOn && !job && (Boolean(task?.runId) || ["active", "running"].includes(task?.status));
+    const failedCheck = !finished && !checking && task?.verification?.state === "failed";
+    const stage = finished ? "done" : job ? "running" : missingWorker ? "waiting" : checking ? "review" : handedOn ? "waiting" : failedCheck ? "blocked" : scheduled?.stage || "ready";
+    const paused = backlog?.paused === true || live.held === true || live.execute === false || assistant.status === "paused" || assistant.prefs?.paused === true;
+    const label = missingWorker ? "Waiting for worker status" : handedOn && !job ? "Waiting on follow-ups" : job?.stopping ? "Stopping safely" : job?.phase === "preparing" ? "Preparing" : job?.phase === "finishing" ? "Finishing" : stage === "ready" && paused ? "Task ready · agents paused" : stageLabel(stage, task);
+    const phase = job?.phase;
+    // The overseer's check run. Its stamp is never cleared, so a run keyed to
+    // another attempt is that attempt's evidence and says so; and a run whose
+    // checks all passed can sit beside a rejected verdict (the verifier wants
+    // more than green checks), which the action then names instead of
+    // contradicting it.
+    const run = task?.verificationRun;
+    const results = Array.isArray(run?.results) ? run.results : [];
+    const passing = results.filter((result) => result.ok === true).length;
+    const earlier = Boolean(run?.key && task?.lastAttempt?.runId) && !String(run.key).split(":").includes(String(task.lastAttempt.runId));
+    const allPassed = run?.state === "passed" && results.length > 0 && passing === results.length;
+    const action = job ? job.stopping?.reason || (phase === "preparing" ? (live.clusterAgents || []).find((agent) => agent.taskId === task.id && agent.status === "running")?.step || "Preparing task context" : phase === "finishing" ? "Worker reported completion; waiting for its process to finish" : job.currentStep || job.activity || "Waiting for the first worker update") : missingWorker ? "Task has a saved worker assignment; waiting for current worker status" : checking ? "Worker finished; checking the result" : handedOn ? "Worker finished and handed work on; waiting for those follow-ups" : finished ? task.verification?.state === "verified" ? "Completion verified" : task.verification?.state === "manual" ? "Completion confirmed by you" : "Finished task; inspect the recorded evidence" : failedCheck ? allPassed && !earlier ? "Its checks passed, but the result was not accepted; review why" : "The last completion check failed; review its evidence" : ["blocked", "approval", "waiting", "cooling"].includes(scheduled?.stage) ? "Waiting before work can start" : "Ready for a worker";
+    const stamp = job && Math.max(Number(job.lastOutputAt) || 0, Number(job.stepUpdatedAt) || 0);
+    const since = stamp || Number(job?.startedAt);
+    const seconds = Number.isFinite(since) && since > 0 ? Math.max(0, Math.floor((now - since) / 1000)) : null;
+    const age = seconds === null ? "" : seconds < 60 ? `${seconds}s` : seconds < 3600 ? `${Math.floor(seconds / 60)}m` : `${Math.floor(seconds / 3600)}h`;
+    const activityAge = job ? seconds === null ? "No activity time recorded" : stamp ? `Updated ${age} ago` : `No output yet · ${age} elapsed` : "";
+    const checks = run?.state ? `${results.length ? `${passing}/${results.length} recorded checks passed${allPassed ? "" : ` · ${run.state}`}` : `Checks: ${run.state}`}${earlier ? " · from an earlier attempt" : ""}` : task?.verification?.state === "verified" ? `Verified: ${task.verification.reason || "completion accepted"}` : task?.verification?.state === "manual" ? "Confirmed by you; no automatic check recorded" : "No completion checks recorded";
+    const blocker = question?.question || question?.title || (!finished && ["blocked", "approval", "waiting", "cooling"].includes(scheduled?.stage) ? scheduled.reason : "") || (handedOn && task.handoffState?.state === "blocked" ? task.handoffState.reason : "") || (!finished && task?.verification?.state === "failed" ? task.verification.reason : "") || "";
+    const nextAction = finished ? "Open the app, view checks, or request a change." : missingWorker ? "Inspect Live or refresh task status before starting another attempt." : checking ? "Wait for completion checks, or view their evidence." : handedOn ? "Review its follow-up cards; this one settles by itself when they do." : job ? "Watch this worker in Live; stop it to save progress." : failedCheck ? "View checks, then resolve the failure before retrying." : scheduled?.stage === "cooling" ? "Wait for the scheduled retry, or choose Retry now." : scheduled?.blockedBy === "owner" ? "Resume this task from its saved progress." : blocker ? scheduled?.stage === "approval" ? "Review the brief and approve this build." : "Resolve the blocker before starting this task." : paused ? "Task ready; agents paused. Start this task to continue." : "Start this task when you are ready.";
+    return { stage, label, worker: job?.route || job?.cli || (job ? "Coding worker" : missingWorker ? "Current worker status unavailable" : "No worker running"), action, activityAge, checks, blocker, nextAction };
+  }
   const relTime = (ts) => {
     const ms = Date.now() - ts;
     if (ms < 60000) return "just now";
@@ -181,7 +261,9 @@
 
   function describe(task) {
     const stage = taskStage(task);
+    if (stage === "done" && task?.dropped) return { stage, label: "Dropped", summary: `Dropped by you ${relTime(Number(task.dropped.at) || doneStamp(task))} — closed without finishing. Reopen puts it back on the board.` };
     if (stage === "done") return { stage, label: stageLabel("done", task), summary: doneSummary(task) };
+    if (waitingOnFollowUps(task)) return { stage, label: "Waiting on follow-ups", summary: `${task.handoffState.reason || "Waiting for its handed-off work"}. The worker finished and handed the rest on; this card settles by itself once its follow-ups finish or you drop them.` };
     if (task?.status === "awaiting_verification" || task?.status === "verifying") {
       return { stage, label: stageLabel("review"), summary: "The worker finished. Completion checks are pending; this work is not marked done yet." };
     }
@@ -233,10 +315,24 @@
       paintedList = { view: listView(), rows };
     }
     const detail = detailView();
-    if (detail !== paintedDetail.view || !sameRows(rows, paintedDetail.rows)) {
+    const inputs = detailInputs();
+    if (detail !== paintedDetail.view || inputs !== paintedDetail.inputs || !sameRows(rows, paintedDetail.rows)) {
       renderDetail();
-      paintedDetail = { view: detail, rows };
+      paintedDetail = { view: detail, rows, inputs };
     }
+  }
+  // What the detail shows besides the board rows: the owner's pending
+  // start, a busy action or message on this card, its place in the
+  // scheduler, and the project preview the completed-work actions offer.
+  // A change in any of them repaints it too.
+  function detailInputs() {
+    const task = selectedTask();
+    if (!task) return "";
+    const key = taskKey(task);
+    const scheduled = scheduledTask(task);
+    const preview = window.MefiWorkspace?.previewStatus?.();
+    return JSON.stringify([startPending.has(key), detailBusy, detailMessages.get(key)?.text ?? null, scheduled?.stage ?? null, scheduled?.blockedBy ?? null,
+      preview ? [preview.projectId ?? null, preview.phase ?? null, Boolean(preview.available)] : null]);
   }
   function schedulePushPaint() {
     if (pushPaintTimer) return;
@@ -342,7 +438,8 @@
     if (scheduled) { dot.dataset.readiness = scheduled.stage; dot.title = scheduled.reason || ""; li.dataset.readiness = scheduled.stage; }
     const text = document.createElement("span");
     text.className = "task-name";
-    text.textContent = ` ${task.title}`;
+    text.textContent = ` ${shortTitle(task)}`;
+    text.title = task.title || task.prompt || "";
     text.append(Object.assign(document.createElement("span"), { className: "who", textContent: ` ${task.refs?.length ? `· ${task.refs.length} refs` : ""}${task.logs?.length ? ` · ${task.logs.length} logs` : ""}${isDone(task) && state.filter !== "done" ? ` · done ${relTime(doneStamp(task))}` : ""}` }));
     // One-click finish (or reopen) without leaving the board.
     const actions = document.createElement("span");
@@ -362,9 +459,11 @@
     // Focusable because nav's claim() may focus a row in this list.
     li.tabIndex = 0;
     li.addEventListener("click", () => {
+      window.MefiNav?.note?.("tasks", { taskId: task.id, projectId: state.projectId });
       state.selected = task.id;
       renderList();
       renderDetail();
+      focusNarrowDetail();
     });
     li.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
@@ -474,7 +573,9 @@
   // Only verified evidence or the user's confirmation fills the done segment.
   function overviewProgress(task) {
     if (!task || task.unavailable) return "waiting";
-    if (isDone(task)) return ["verified", "manual"].includes(task.verification?.state) ? "done" : "review";
+    // A card you dropped is settled by your word, like one you confirmed.
+    if (isDone(task)) return task.dropped || ["verified", "manual"].includes(task.verification?.state) ? "done" : "review";
+    if (waitingOnFollowUps(task)) return "waiting";
     const scheduled = scheduledTask(task);
     if (["active", "running"].includes(task.status) || scheduled?.stage === "running") return "running";
     if (task.verification?.state === "failed" || (task.runFailures || 0) >= 5 || (task.verifyAttempts || 0) >= 3 || scheduled?.stage === "blocked") return "blocked";
@@ -522,7 +623,9 @@
     const badge = node("span", "task-overview-status", stageLabel(stage));
     badge.dataset.stage = stage;
     head.append(badge);
-    card.append(head, node("h3", "task-overview-title", group.title || group.task?.title || "Untitled plan"));
+    const heading = node("h3", "task-overview-title", shortTitle({ title: group.title || group.task?.title || "Untitled plan" }));
+    heading.title = group.title || group.task?.title || "Untitled plan";
+    card.append(head, heading);
     const destination = group.plan?.destination || group.task?.prompt;
     if (destination) card.append(node("p", "task-overview-destination", clipText(destination, 180)));
     const progress = node("div", "task-overview-progress");
@@ -642,22 +745,31 @@
 
   async function load(options = {}) {
     const revision = taskRevision;
+    const liveRead = liveRevision, assistantRead = assistantRevision;
     const epoch = projectEpoch;
     // The poll and open() read the scheduler snapshot too; a push right
     // after one waits out the same 3.5 s instead of reading it again.
     backlogReadAt = Date.now();
-    const [tasks, prefs, backlog] = await Promise.all([window.mefiStudio?.tasksList?.(), window.mefiStudio?.prefsGet?.(), Promise.resolve(window.mefiStudio?.backlogStatus?.()).catch(() => null)]);
+    const [tasks, prefs, backlog, live, assistant] = await Promise.all([window.mefiStudio?.tasksList?.(), window.mefiStudio?.prefsGet?.(), Promise.resolve(window.mefiStudio?.backlogStatus?.()).catch(() => null), Promise.resolve(window.mefiStudio?.assistantStatus?.()).catch(() => null), Promise.resolve(window.mefiStudio?.assistantState?.()).catch(() => null)]);
     if (epoch !== projectEpoch) return;
     if (tasks?.ok === false || !Array.isArray(tasks?.tasks)) throw new Error(tasks?.error || "Task store unavailable");
     if (state.projectId && tasks.projectId && state.projectId !== tasks.projectId) return;
     state.projectId = tasks.projectId || backlog?.projectId || state.projectId;
+    if (liveRead === liveRevision && live?.status && (!live.status.projectId || live.status.projectId === state.projectId)) state.live = live.status;
+    if (assistantRead === assistantRevision && assistant?.state && (!assistant.state.projectId || assistant.state.projectId === state.projectId)) state.assistant = assistant.state;
+    if (!state.selected && options.restoreSelection && !options.taskId) state.selected = window.MefiNav?.taskContext?.(state.projectId)?.taskId || projectSelections.get(state.projectId) || null;
     // A completion broadcast may arrive while preferences are still loading.
     // Never replace that newer board with the earlier read's snapshot.
     if (revision === taskRevision) state.tasks = tasks.tasks;
+    if (state.selected && !state.tasks.some((task) => task.id === state.selected)) state.selected = null;
     if (revision === taskRevision) state.backlog = backlog?.ok && (!backlog.projectId || !state.projectId || backlog.projectId === state.projectId) ? backlog : null;
     hydrated = true;
     if (prefs?.ok) state.prefs = { ...state.prefs, ...prefs.prefs };
     state.filter = FILTERS.includes(options.filter) ? options.filter : revision === taskRevision && FILTERS.includes(prefs?.prefs?.taskFilter) ? prefs.prefs.taskFilter : state.filter;
+    if (state.selected && !options.taskId && state.filter !== "all" && taskStage(selectedTask()) !== state.filter) {
+      if (FILTERS.includes(options.filter)) state.selected = null;
+      else state.filter = taskStage(selectedTask());
+    }
     if (Object.hasOwn(READINESS_FILTERS, options.readiness)) { state.readiness = options.readiness; state.filter = "all"; if (!options.taskId) state.selected = null; }
     if (options.taskId) {
       state.readiness = "all";
@@ -803,12 +915,30 @@
     });
   }
 
-  const SOURCE_LABELS = { "a-eyes": "A-Eyes", chat: "chat", overseer: "overseer", manual: "added by hand" };
+  // Who filed a card. Promotion keeps a request's own source (it used to
+  // rewrite every one to "a-eyes"), so the roster's filers need their names.
+  const SOURCE_LABELS = {
+    "a-eyes": "A-Eyes", chat: "chat", overseer: "overseer", manual: "added by hand",
+    fix: "an A-Eyes alert", audit: "the auditor", agent: "a builder's hand-off", grow: "the grower", grower: "the grower",
+    improver: "the improver", machine: "the machine monitor",
+  };
+  // A card's origin (workAdmission.taskRow's { kind, by } stamp) says how the
+  // owner's own work arrived, whatever its source says.
+  const OWNER_ORIGIN_LABELS = { chat: "chat", composer: "the composer", "work-on": "Work on it", split: "a split", planning: "an approved plan" };
+  function sourceLabel(task) {
+    const origin = task.origin && typeof task.origin === "object" ? task.origin : null;
+    if (origin?.by === "owner") return OWNER_ORIGIN_LABELS[origin.kind] || "you";
+    return SOURCE_LABELS[task.source] || (origin ? SOURCE_LABELS[origin.by] : "") || "";
+  }
 
   function metaLine(task) {
     const parts = [];
-    if (task.status === "awaiting_verification") {
+    if (waitingOnFollowUps(task)) {
+      parts.push("run finished — waiting on its follow-ups");
+    } else if (task.status === "awaiting_verification") {
       parts.push("run finished — awaiting verification");
+    } else if (task.dropped && isDone(task)) {
+      parts.push(`dropped by you ${relTime(Number(task.dropped.at) || doneStamp(task))} — not finished`);
     } else if (task.status === "absorbed") {
       parts.push(`absorbed into a grouped plan${task.absorbedInto ? ` (${task.absorbedInto})` : ""} — restored if the grouping dissolves`);
     } else if (isDone(task)) {
@@ -819,7 +949,8 @@
     } else {
       parts.push(`added ${relTime(task.createdAt ?? task.updatedAt ?? Date.now())}`);
     }
-    if (SOURCE_LABELS[task.source]) parts.push(`from ${SOURCE_LABELS[task.source]}`);
+    const from = sourceLabel(task);
+    if (from) parts.push(`from ${from}`);
     return parts.join(" · ");
   }
 
@@ -829,13 +960,16 @@
     const hold = ownerHold(task);
     if (!hold) return null;
     const loop = hold.blockedBy === "loop";
+    const stopped = hold.blockedBy === "owner";
     return {
-      label: loop ? "Try again" : "Run anyway",
-      action: loop ? "try-again" : "run-anyway",
+      label: loop ? "Try again" : stopped ? "Resume" : "Run anyway",
+      action: loop ? "try-again" : stopped ? "resume" : "run-anyway",
       className: "primary",
       title: loop
         ? "Release the loop guard's hold and restart its count from now. Read the last attempts first, and edit or split the brief if the same failure would repeat."
-        : "Clear the duplicate link and run this card on its own instead of waiting for the card it repeats",
+        : stopped
+          ? "You stopped this task's worker. Put it back in the queue; it continues from its saved progress."
+          : "Clear the duplicate link and run this card on its own instead of waiting for the card it repeats",
       disabled: !window.mefiStudio?.tasksAction,
       run: () => runTaskAction(task, "retry"),
     };
@@ -849,7 +983,7 @@
     const awaitingApproval = scheduled?.stage === "approval";
     const release = holdAction(task);
     if (awaitingApproval) actions.push({ label: "Approve build", action: "approve", className: "primary", title: "Approve the brief shown here so this task can build when scheduling and prerequisites allow", disabled: !window.mefiStudio?.backlogControl || scheduled.canApprove !== true || !task.buildScope, run: () => runTaskAction(task, "approve", { expectedScope: task.buildScope }) });
-    if (release) actions.push(release);
+    if (release && !(release.action === "resume" && window.MefiWorkspace?.startTask)) actions.push(release);
     if (isDone(task)) {
       actions.push({ label: "Reopen", className: "primary", title: "Put this task back on the open board", run: () => setTaskStatus(task, "open") });
     } else {
@@ -861,13 +995,21 @@
       delete task.verifyAttempts;
       setTaskStatus(task, "open");
     } });
+    // Won't do: closes unfinished work without claiming it finished (the host
+    // stamps it dropped, never done), and a task that handed it on stops
+    // waiting for it. Confirm done used to be the only way off the Review list.
+    if (!isDone(task) && window.mefiStudio?.tasksAction && !task.runId && !["active", "running", "awaiting_verification", "verifying", "absorbed"].includes(task.status)) actions.push({ label: "Drop", action: "drop", className: "ghost", title: "Close this task without finishing it. It is not marked done, and a task that handed it on stops waiting for it. Reopen brings it back.", run: () => runTaskAction(task, "drop") });
     if (task.status === "open" && window.mefiStudio?.backlogControl && (!scheduled || scheduled.stage === "ready")) actions.push({ label: "Do next", className: "ghost", title: "Prioritize this task when its prerequisites and a worker are ready", run: () => runTaskAction(task, "prioritize") });
-    if (task.status === "active") actions.push({ label: "Back to open", className: "ghost", title: "Release the active claim", run: () => setTaskStatus(task, "open") });
+    // A running worker is stopped, not released: its progress is saved and the
+    // card waits for you instead of being picked up again at once.
+    if (task.status === "active" && task.runId && window.mefiStudio?.tasksAction) actions.push({ label: "Stop", action: "stop", allowDuringRun: true, className: "ghost", title: "Stop this task's worker. Its progress is saved and the card waits for you; other workers keep running.", run: () => runTaskAction(task, "stop") });
+    else if (task.status === "active") actions.push({ label: "Back to open", className: "ghost", title: "Release the active claim", run: () => setTaskStatus(task, "open") });
     if (task.status === "absorbed") actions.push({ label: "Restore", className: "ghost", title: "Pull this task out of the grouped plan and back onto the open board", run: () => setTaskStatus(task, "open") });
     if (task.status === "done") actions.push({ label: "Archive", className: "ghost", title: "Shelve the finished task", run: () => setTaskStatus(task, "archived") });
     if (task.status === "archived") actions.push({ label: "Mark done", className: "ghost", title: "Back to done, still under the Done mark", run: () => setTaskStatus(task, "done") });
     actions.push({
       label: "Rename",
+      allowDuringRun: true,
       className: "ghost mini",
       title: "Edit the title",
       run: () => {
@@ -878,7 +1020,7 @@
     const armed = deleteArmed === task.id;
     actions.push({
       label: armed ? "Really delete?" : "Delete",
-      className: armed ? "ghost mini danger-armed" : "ghost mini",
+      className: armed ? "ghost mini danger danger-armed" : "ghost mini danger",
       title: "Remove this task for good",
       run: () => deleteTask(task),
     });
@@ -893,7 +1035,8 @@
     // Leave a half-typed rename alone if a broadcast re-renders mid-edit.
     if (state.renaming && els.title.querySelector("input")) return;
     if (!state.renaming) {
-      els.title.textContent = task.title;
+      els.title.textContent = shortTitle(task);
+      els.title.title = task.title || task.prompt || "";
       return;
     }
     els.title.textContent = "";
@@ -944,6 +1087,12 @@
       contextReads.delete(key);
       detailMessages.delete(key);
       if (action === "approve") detailMessages.set(key, { text: "Build approved for this brief. It can start when scheduling and prerequisites allow." });
+      // A drop is triage: stay on the list being worked through instead of
+      // following the closed card to Done.
+      if (action === "drop") {
+        if (state.selected === task.id) state.selected = null;
+        window.MefiToast?.(`Dropped · ${shortTitle(task)}`, "good");
+      }
       const selected = selectedTask();
       if (selected && state.filter !== "all" && taskStage(selected) !== state.filter) state.filter = taskStage(selected);
       syncBadge(); renderList();
@@ -1031,7 +1180,7 @@
       const link = node("button", "ghost mini", parent ? `Shared task: ${parent.title || parent.id}` : "Shared task unavailable");
       link.type = "button"; link.dataset.taskAction = "view-parent"; link.disabled = !parent;
       link.addEventListener("click", () => window.MefiTasks.selectTask(parentId));
-      els.detail.append(link);
+      (detailPanels.details || els.detail).append(link);
     }
     const childIds = new Set(Array.isArray(task.delegation?.childTaskIds) ? task.delegation.childTaskIds : []);
     for (const item of state.tasks) if (item.delegatedFrom?.parentTaskId === task.id && sameProject(item)) childIds.add(item.id);
@@ -1056,7 +1205,7 @@
       if (scheduled?.reason) row.append(node("p", "task-context-hint", scheduled.reason));
       list.append(row);
     }
-    section.append(list); els.detail.append(section);
+    section.append(list); (detailPanels.details || els.detail).append(section);
   }
 
   function renderTaskContext(task) {
@@ -1064,11 +1213,11 @@
     const scheduled = state.backlog?.taskStates?.find((item) => item.id === task.id);
     const readiness = node("p", "task-readiness", scheduled?.stage === "cooling" ? `${scheduled.reason}. ${retryDescription(scheduled.retryAt)}` : scheduled?.reason || (isDone(task) ? "This task is complete." : "Readiness will refresh with the project queue."));
     readiness.dataset.taskReadiness = scheduled?.stage || "unknown";
-    els.detail.append(readiness);
+    if (scheduled?.reason !== workflowSummary(task, { status: state.live, backlog: state.backlog, assistant: state.assistant }).blocker) (detailPanels.details || els.detail).append(readiness);
     const message = detailMessages.get(key);
     if (message) {
       const feedback = node("p", `task-context-feedback${message.error ? " error" : ""}`, message.text);
-      feedback.setAttribute("role", "status"); els.detail.append(feedback);
+      feedback.setAttribute("role", "status"); els.detail.insertBefore(feedback, detailPanels.details || null);
     }
 
     const dependencies = detailFold(task, "dependencies", `Prerequisites · ${(task.dependsOn || []).length}`);
@@ -1096,7 +1245,7 @@
     saveDependencies.disabled = Boolean(detailBusy) || dependencyLocked || !api?.tasksDependencies;
     saveDependencies.addEventListener("click", () => taskDetailAction(task, "dependencies", { dependsOn: [...(dependencyDrafts.get(key) || new Set(task.dependsOn || []))] }));
     dependencies.append(choices, saveDependencies);
-    els.detail.append(dependencies);
+    (detailPanels.details || els.detail).append(dependencies);
 
     const context = requestTaskContext(task);
     const handoff = detailFold(task, "handoff", "Handoff for the next worker");
@@ -1108,7 +1257,7 @@
       copy.addEventListener("click", async () => { try { await api.shellCopy(context.text); copy.textContent = "Copied"; } catch { copy.textContent = "Could not copy"; } });
       handoff.append(copy);
     } else handoff.append(node("p", "task-context-hint", context?.loading ? "Loading saved context…" : context?.error || "No handoff is available yet."));
-    els.detail.append(handoff);
+    (detailPanels.history || els.detail).append(handoff);
 
     const history = detailFold(task, "history", `Brief history${context?.entries.length ? ` · ${context.entries.length}${context.hasMore ? "+" : ""}` : ""}`);
     history.append(node("p", "task-context-hint", "Restore an earlier brief, references, and prerequisites. This does not change files, task status, or completion evidence."));
@@ -1139,7 +1288,7 @@
       });
       history.append(more);
     }
-    els.detail.append(history);
+    (detailPanels.history || els.detail).append(history);
   }
 
   // Attempt history: every run of this task from the executor ledger, so a
@@ -1220,7 +1369,7 @@
     }
     if (!read.attempts.length) fold.append(node("p", "task-context-hint", read.loading ? "Loading run history…" : read.error || "No runs of this task are recorded yet."));
     else if (read.error) fold.append(node("p", "task-context-hint", read.error));
-    els.detail.append(fold);
+    (detailPanels.evidence || els.detail).append(fold);
   }
 
   async function appendTaskEntry(task, field, input) {
@@ -1250,11 +1399,71 @@
     if (taskKey(selectedTask()) === key) renderDetail();
   }
 
+  function renderWorkflowSummary(task) {
+    const model = workflowSummary(task, { status: state.live, backlog: state.backlog, assistant: state.assistant });
+    const box = node("section", "task-workflow-summary");
+    box.setAttribute("aria-label", "Current task status");
+    box.dataset.stage = model.stage;
+    box.append(node("strong", "", model.label), node("p", "", model.action));
+    const facts = node("div", "task-workflow-facts");
+    for (const value of [model.worker, model.activityAge, model.checks]) if (value) facts.append(node("span", "", value));
+    box.append(facts);
+    if (model.blocker) {
+      const scheduled = scheduledTask(task);
+      const blocker = node("p", "finding", scheduled?.stage === "cooling" ? `${model.blocker}. ${retryDescription(scheduled.retryAt)}` : model.blocker);
+      blocker.dataset.taskReadiness = scheduledTask(task)?.stage || "blocked";
+      box.append(blocker);
+    }
+    box.append(node("p", "muted", model.nextAction));
+    const actions = node("div", "task-workflow-actions");
+    const button = (label, action, run, primary = false) => {
+      const control = node("button", primary ? "primary" : "ghost mini", label);
+      control.type = "button"; control.dataset.taskAction = action;
+      control.addEventListener("click", run); actions.append(control); return control;
+    };
+    button("Home", "home", () => window.MefiNav?.go?.("workspace"));
+    button("View in Live", "live", () => window.MefiNav?.go?.("command", { taskId: task.id, projectId: task.projectId || state.projectId, selected: `task:${task.id}` }));
+    button("View checks", "view-checks", () => showDetailView("evidence", true), isDone(task));
+    const scheduled = scheduledTask(task);
+    const mayStart = !task.runId && task.status === "open" && (scheduled?.stage === "ready" || scheduled?.blockedBy === "owner");
+    if (mayStart && window.MefiWorkspace?.startTask) {
+      const key = taskKey(task), resume = scheduled?.blockedBy === "owner";
+      const start = button(startPending.has(key) ? "Starting…" : resume ? "Resume this task" : "Start this task", "start-task", async () => {
+        if (startPending.has(key)) return;
+        startPending.add(key); renderDetail();
+        try { await window.MefiWorkspace.startTask(task); }
+        catch (error) { detailMessages.set(key, { text: error.message || "The task could not start. Try again.", error: true }); }
+        finally { startPending.delete(key); if (taskKey(selectedTask()) === key) await load({ taskId: task.id }).catch(() => status("Task status could not be refreshed.", true)); }
+      }, true);
+      start.disabled = startPending.has(key);
+    }
+    if (isDone(task)) {
+      const change = button("Request a change", "request-change", () => window.MefiWorkspace?.requestChange?.(task));
+      change.disabled = !window.MefiWorkspace?.requestChange;
+      const preview = window.MefiWorkspace?.previewStatus?.();
+      if (preview && preview.projectId === (task.projectId || state.projectId)) {
+        if (preview.phase === "ready") button("Open app", "open-app", () => window.MefiWorkspace?.previewAction?.("open", { projectId: preview.projectId, taskId: task.id }), true);
+        else if (preview.available) {
+          const start = button(preview.phase === "starting" ? "Starting preview…" : "Start preview", "start-preview", () => window.MefiWorkspace?.previewAction?.("start", { projectId: preview.projectId, taskId: task.id }));
+          start.disabled = ["starting", "stopping"].includes(preview.phase);
+        }
+        box.append(node("p", "task-context-hint", `Project preview: ${preview.message || preview.phase}. Task checks remain separate.`));
+      }
+    }
+    box.append(actions); els.detail.append(box);
+  }
+
   function renderDetail() {
     paintedDetail = UNPAINTED;
     const task = selectedTask();
+    // Broadcasts and async context reads rebuild this pane even while paused.
+    // Draft values alone cannot preserve a click that happened before typing.
+    const focused = document.activeElement;
+    const focusedEntry = ["logs", "ideas"].find((field) => focused?.dataset?.taskEntryKey === `${taskKey(task)}/${field}`);
+    const selection = focusedEntry ? { start: focused.selectionStart, end: focused.selectionEnd, direction: focused.selectionDirection } : null;
     if (els.overviewBack) els.overviewBack.hidden = !task;
     els.detail.textContent = "";
+    detailPanels = {};
     els.statusRow.textContent = "";
     renderTitle(task);
     if (!task) {
@@ -1262,18 +1471,29 @@
       hint.className = "muted";
       hint.textContent = "Pick a task on the left, or add one — reference gathering can attach exact context automatically.";
       els.detail.append(hint);
+      showDetailView("details");
       return;
     }
+    projectSelections.set(state.projectId, task.id);
+    window.MefiNav?.selectTask?.({ taskId: task.id, projectId: task.projectId || state.projectId, title: shortTitle(task) });
+    renderWorkflowSummary(task);
+    for (const name of detailViewNames) {
+      const panel = node("section", "surface-tab-panel task-detail-panel");
+      panel.id = `task-panel-${name}`;
+      panel.setAttribute("role", "tabpanel"); panel.setAttribute("aria-labelledby", `task-tab-${name}`);
+      detailPanels[name] = panel; els.detail.append(panel);
+    }
+    let body = detailPanels.details;
     const meta = document.createElement("p");
     meta.className = "muted who task-meta";
     meta.textContent = metaLine(task);
-    els.detail.append(meta);
+    body.append(meta);
     if (task.planningId) {
       const origin = node("button", "ghost mini", "View approved plan");
       origin.type = "button";
       origin.dataset.taskAction = "view-plan";
       origin.addEventListener("click", () => window.MefiNav?.go?.("plans", { planId: task.planningId }));
-      els.detail.append(origin);
+      body.append(origin);
     }
     // An owner hold's reason (and its remedy) is the readiness line below, so
     // it is not repeated up here.
@@ -1281,7 +1501,7 @@
       const review = document.createElement("p");
       review.className = "finding";
       review.textContent = `${describe(task).label}: ${describe(task).summary}`;
-      els.detail.append(review);
+      body.append(review);
     }
     for (const action of statusActions(task)) {
       const button = document.createElement("button");
@@ -1289,7 +1509,7 @@
       button.textContent = action.label;
       button.title = action.title ?? "";
       if (action.action) button.dataset.taskAction = action.action;
-      button.disabled = Boolean(detailBusy) || Boolean(action.disabled) || Boolean(task.runId && !["Rename"].includes(action.label));
+      button.disabled = Boolean(detailBusy) || Boolean(action.disabled) || Boolean(task.runId && !action.allowDuringRun);
       button.addEventListener("click", action.run);
       els.statusRow.append(button);
     }
@@ -1301,7 +1521,7 @@
       const retryIn = task.nextRunAt && task.nextRunAt > Date.now() ? ` · retries in ${Math.ceil((task.nextRunAt - Date.now()) / 60000)}m` : "";
       const gaveUp = (task.runFailures ?? 0) >= 5 ? " · automatic attempts paused; review the error and choose Retry" : "";
       note.textContent = `autopilot: last run failed (${task.lastRunError ?? "?"})${retryIn}${gaveUp}`;
-      els.detail.append(note);
+      body.append(note);
     }
     if (isDone(task)) {
       const block = document.createElement("div");
@@ -1320,27 +1540,31 @@
         }, 1200);
       });
       block.append(copy);
-      els.detail.append(block);
+      body.append(block);
     }
     if (scheduledTask(task)?.stage === "approval") {
-      els.detail.append(node("p", "finding", "Verify first is on. Review this brief and its prerequisites, then choose Approve build. Leave this task here to decide later, or Delete to discard it. Approval keeps any scheduling pause in place."));
-      els.detail.append(node("h4", "", "Build brief to review"));
+      body.append(node("p", "finding", "Verify first is on. Review this brief and its prerequisites, then choose Approve build. Leave this task here to decide later, or Delete to discard it. Approval keeps any scheduling pause in place."));
+      body.append(node("h4", "", "Build brief to review"));
       const files = [...new Set([task.file, ...(Array.isArray(task.files) ? task.files : [])].filter(Boolean))];
-      if (files.length) els.detail.append(node("p", "task-context-hint", `Files in scope: ${files.join(", ")}`));
-      if (task.dependsOn?.length) els.detail.append(node("p", "task-context-hint", `Prerequisites: ${task.dependsOn.map((id) => state.tasks.find((item) => item.id === id)?.title || id).join(", ")}`));
+      if (files.length) body.append(node("p", "task-context-hint", `Files in scope: ${files.join(", ")}`));
+      if (task.dependsOn?.length) body.append(node("p", "task-context-hint", `Prerequisites: ${task.dependsOn.map((id) => state.tasks.find((item) => item.id === id)?.title || id).join(", ")}`));
     }
-    const prompt = document.createElement("p");
-    prompt.className = "muted";
-    prompt.style.whiteSpace = "pre-wrap";
-    prompt.textContent = task.prompt ?? "";
-    els.detail.append(prompt);
+    // The brief, unless it only repeats the heading above it.
+    const brief = String(task.prompt || task.title || "");
+    if (brief.trim() && brief.trim() !== shortTitle(task).trim()) {
+      const prompt = document.createElement("p");
+      prompt.className = "muted";
+      prompt.style.whiteSpace = "pre-wrap";
+      prompt.textContent = brief;
+      body.append(prompt);
+    }
     renderTaskDelegation(task);
     renderTaskContext(task);
 
     const section = (heading) => {
       const h = document.createElement("h4");
       h.textContent = heading;
-      els.detail.append(h);
+      body.append(h);
     };
     const entryList = (items, render) => {
       const ul = document.createElement("ul");
@@ -1351,8 +1575,9 @@
         ul.append(li);
       }
       for (const item of items) ul.append(render(item));
-      els.detail.append(ul);
+      body.append(ul);
     };
+    body = detailPanels.evidence;
     if (task.lastAttempt || task.verification || task.verificationRun) {
       section("Result & completion checks");
       const attempt = task.lastAttempt ?? {};
@@ -1360,7 +1585,7 @@
       const outcome = document.createElement("p");
       outcome.className = "muted";
       outcome.textContent = evidence?.state === "manual" ? "You marked this task done." : evidence?.state === "verified" ? `Completion accepted: ${evidence.reason || "checks passed"}` : describe(task).summary;
-      els.detail.append(outcome);
+      body.append(outcome);
       const parts = attempt.result?.parts ?? attempt.result;
       const resultLines = parts && typeof parts === "object" ? Object.entries(parts).filter(([key]) => key !== "raw").map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join("; ") : String(value)}`) : [];
       if (resultLines.length) entryList(resultLines, (line) => Object.assign(document.createElement("li"), { textContent: `Worker reported — ${line}` }));
@@ -1368,7 +1593,7 @@
         const files = document.createElement("p");
         files.className = "who";
         files.textContent = `${evidence.changedFiles} changed file${evidence.changedFiles === 1 ? "" : "s"} observed${attempt.sessionId ? " in the worker's session" : ""}.`;
-        els.detail.append(files);
+        body.append(files);
       }
       // The overseer's own check run: the card's only record of it (the log
       // no longer carries "verification scheduled/passed/failed" lines).
@@ -1379,7 +1604,11 @@
         const check = document.createElement("p");
         check.className = "who";
         check.textContent = `Overseer check${commands.length ? ` (${commands.join(" && ")})` : ""}: ${run.state}${Number.isFinite(run.at) ? ` ${relTime(run.at)}` : ""}${failed?.tail ? ` — ${clipText(failed.tail, 200)}` : ""}`;
-        els.detail.append(check);
+        body.append(check);
+        const locations = Array.isArray(run.results) ? run.results.filter((row) => typeof row?.cwd === "string" && row.cwd.trim()) : [];
+        if (locations.length) entryList(locations, (row) => Object.assign(document.createElement("li"), {
+          textContent: `${row.command ? `${String(row.command)} — ` : ""}Location: ${row.cwd}`,
+        }));
       }
       if (Array.isArray(task.remaining) && task.remaining.length) {
         section("Follow-up work");
@@ -1387,11 +1616,14 @@
       }
     }
     renderTaskAttempts(task);
+    if (!body.children.length) body.append(node("p", "muted", "Evidence appears here after a worker runs and completion checks finish."));
+    body = detailPanels.history;
     section(`Log (${(task.logs ?? []).length})`);
     entryList(task.logs ?? [], (log) => Object.assign(document.createElement("li"), { textContent: `[${new Date(log.at).toLocaleTimeString()}] ${log.text}` }));
     const logRow = document.createElement("div");
     logRow.className = "row tight";
     const logInput = document.createElement("input");
+    logInput.dataset.taskEntryKey = `${taskKey(task)}/logs`;
     logInput.placeholder = "Log a note…";
     logInput.className = "grow";
     logInput.value = entryDrafts.get(`${taskKey(task)}/logs`) || "";
@@ -1402,13 +1634,14 @@
     logAdd.disabled = entryPending.has(taskKey(task));
     logAdd.addEventListener("click", () => appendTaskEntry(task, "logs", logInput));
     logRow.append(logInput, logAdd);
-    els.detail.append(logRow);
+    body.append(logRow);
 
     section(`Thoughts / ideas (${(task.ideas ?? []).length})`);
     entryList(task.ideas ?? [], (idea) => Object.assign(document.createElement("li"), { textContent: typeof idea === "string" ? `Linked idea: ${idea}` : `[${new Date(idea.at).toLocaleTimeString()}] ${idea.text}` }));
     const ideaRow = document.createElement("div");
     ideaRow.className = "row tight";
     const ideaInput = document.createElement("input");
+    ideaInput.dataset.taskEntryKey = `${taskKey(task)}/ideas`;
     ideaInput.placeholder = "Capture an idea for this task…";
     ideaInput.className = "grow";
     ideaInput.value = entryDrafts.get(`${taskKey(task)}/ideas`) || "";
@@ -1419,8 +1652,9 @@
     ideaAdd.disabled = entryPending.has(taskKey(task));
     ideaAdd.addEventListener("click", () => appendTaskEntry(task, "ideas", ideaInput));
     ideaRow.append(ideaInput, ideaAdd);
-    els.detail.append(ideaRow);
+    body.append(ideaRow);
 
+    body = detailPanels.references;
     section(`References (${(task.refs ?? []).length})`);
     entryList(task.refs ?? [], (ref) => {
       const li = document.createElement("li");
@@ -1428,6 +1662,12 @@
       li.title = ref.detail ?? "";
       return li;
     });
+    showDetailView(detailViews.get(taskKey(task)) || "details");
+    if (focusedEntry) {
+      const input = focusedEntry === "logs" ? logInput : ideaInput;
+      input.focus({ preventScroll: true });
+      if (Number.isInteger(selection.start) && Number.isInteger(selection.end)) input.setSelectionRange(selection.start, selection.end, selection.direction);
+    }
   }
 
   // ---------- reference menu ----------
@@ -1599,38 +1839,12 @@
         return null;
       }
     }
-    const task = {
-      id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      title: text.trim().slice(0, 90),
-      prompt: text.trim(),
-      status: "open",
-      color: COLORS[state.tasks.length % COLORS.length],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      logs: [{ at: Date.now(), kind: "status", text: "task created" }],
-      ideas: [],
-      refs: [],
-    };
-    state.tasks.unshift(task);
-    state.selected = task.id;
-    syncBadge();
-    // Await the write so a caller that re-reads the list sees this task.
-    if (!(await save())) {
-      // Drop it again: a retry must not leave a second, unsaved copy behind.
-      state.tasks = state.tasks.filter((entry) => entry.id !== task.id);
-      if (state.selected === task.id) state.selected = null;
-      syncBadge();
-      renderList();
-      renderDetail();
-      window.MefiToast?.("Task not saved · the task store could not be written", "bad");
-      return null;
-    }
-    renderList();
-    renderDetail();
-    window.MefiToast?.(`Task created · ${task.title}`, "good");
-    announce("mefi:task-created", { taskId: task.id, projectId: task.projectId || state.projectId || null });
-    if (state.prefs.autoReference !== false && state.prefs.useReference !== false) gather();
-    return task;
+    // New work enters through tasks:create, the host's one admission path (it
+    // dedupes the brief and owns the card's fields); tasks:save no longer
+    // creates cards, so a bridge without tasks:create cannot add one.
+    status("Task not saved · this view cannot add tasks", true);
+    window.MefiToast?.("Task not saved · this view cannot add tasks", "bad");
+    return null;
   }
 
   function open(options) {
@@ -1641,7 +1855,7 @@
     // A link that names another project never selects a same-id task here.
     const elsewhere = typeof params.projectId === "string" && params.projectId && state.projectId && params.projectId !== state.projectId;
     if (typeof params.taskId === "string" && params.taskId && !elsewhere) state.selected = params.taskId;
-    return load(params)
+    return load({ ...params, restoreSelection: !params.filter && !params.readiness })
       .then(() => {
         if (typeof params.projectId === "string" && params.projectId && state.projectId && params.projectId !== state.projectId) {
           if (!elsewhere && state.selected === params.taskId) { state.selected = null; renderList(); renderDetail(); }
@@ -1651,7 +1865,9 @@
         const task = params.taskId ? selectedTask() : null;
         if (task) announce("mefi:task-opened", { taskId: task.id, projectId: task.projectId || state.projectId || null, status: task.status || null });
         revealSelected();
-        if (params.gather) gather();
+        if (detailViewNames.includes(params.panel)) showDetailView(params.panel);
+        if (params.gather) { showDetailView("references"); gather(); }
+        if (task) focusNarrowDetail();
       })
       .catch(() => status("tasks unavailable · the store could not be read", true));
   }
@@ -1665,6 +1881,16 @@
   function init() {
     if (initialized) return;
     initialized = true;
+    for (const [index, name] of detailViewNames.entries()) {
+      const tab = document.getElementById(`task-tab-${name}`);
+      tab?.addEventListener("click", () => showDetailView(name));
+      tab?.addEventListener("keydown", (event) => {
+        const next = event.key === "ArrowRight" ? (index + 1) % detailViewNames.length : event.key === "ArrowLeft" ? (index + detailViewNames.length - 1) % detailViewNames.length : event.key === "Home" ? 0 : event.key === "End" ? detailViewNames.length - 1 : -1;
+        if (next < 0) return;
+        event.preventDefault(); showDetailView(detailViewNames[next], true);
+      });
+    }
+
     Promise.resolve(window.mefiStudio?.prefsGet?.()).then((result) => {
       if (result?.ok && typeof result.prefs?.blurMenu === "boolean") applyBlur(result.prefs.blurMenu);
     }).catch(() => {});
@@ -1719,8 +1945,8 @@
       els.filters.append(select); els.readinessFilter = select;
     }
     els.openButton?.addEventListener("click", open);
-    els.overviewBack?.addEventListener("click", () => { state.selected = null; renderList(); renderDetail(); });
-    els.close?.addEventListener("click", close);
+    els.overviewBack?.addEventListener("click", () => { state.selected = null; renderList(); renderDetail(); els.newInput?.focus?.({ preventScroll: true }); });
+    els.close?.addEventListener("click", () => window.MefiNav?.close ? window.MefiNav.close("tasks") : close());
     els.overlay?.addEventListener("click", (event) => {
       if (event.target === els.overlay) close();
     });
@@ -1782,8 +2008,9 @@
     window.mefiStudio?.onProjects?.((result) => {
       if (!result?.activeId || result.activeId === state.projectId) return;
       createDrafts.set(state.projectId || "", els.newInput?.value || "");
-      projectEpoch += 1; taskRevision += 1; backlogRead += 1; plansRead += 1;
-      state.projectId = result.activeId; state.tasks = []; state.plans = []; state.plansError = null; state.selected = null; state.backlog = null;
+      projectEpoch += 1; taskRevision += 1; backlogRead += 1; plansRead += 1; liveRevision += 1; assistantRevision += 1;
+      if (state.selected) projectSelections.set(state.projectId, state.selected);
+      state.projectId = result.activeId; state.tasks = []; state.plans = []; state.plansError = null; state.selected = projectSelections.get(result.activeId) || null; state.backlog = null; state.live = {}; state.assistant = {};
       overviewExpanded.clear();
       state.readiness = "all"; state.query = ""; hydrated = false; hydrating = null;
       status("", false);
@@ -1792,6 +2019,20 @@
       syncBadge(); renderList(); renderDetail();
       if (!els.overlay.hidden) load().catch(() => status("Task status could not be refreshed.", true));
     });
+    window.mefiStudio?.onAssistantStatus?.((live) => {
+      if (live?.projectId && live.projectId !== state.projectId) return;
+      liveRevision += 1;
+      state.live = live || {};
+      if (!els.overlay.hidden) renderDetail();
+    });
+    window.mefiStudio?.onAssistant?.((payload) => {
+      const assistant = payload?.state;
+      if (!assistant || assistant.projectId && assistant.projectId !== state.projectId) return;
+      assistantRevision += 1;
+      state.assistant = assistant;
+      if (!els.overlay.hidden) renderDetail();
+    });
+    window.addEventListener?.("mefi:project-preview", () => { if (!els.overlay.hidden) renderDetail(); });
     // A quiet backstop poll: the onTasks push above carries live updates in
     // the desktop app, and the browser fallback has none. boot.js's shared
     // guard clears the interval the moment the window hides and restarts it
@@ -1816,9 +2057,11 @@
     addTask,
     state,
     describe,
+    shortTitle,
+    workflowSummary,
     summary,
     // What a live-update reload hands back to open(): the task on screen.
-    saveState: () => ({ taskId: state.selected ?? null, filter: state.filter, readiness: state.readiness }),
+    saveState: () => ({ taskId: state.selected ?? null, projectId: state.projectId, filter: state.filter, readiness: state.readiness, panel: detailViews.get(taskKey(selectedTask())) || "details" }),
     selectTask: (id) => {
       state.selected = id;
       state.readiness = "all";
@@ -1830,6 +2073,7 @@
       renderList();
       renderDetail();
       revealSelected();
+      focusNarrowDetail();
     },
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

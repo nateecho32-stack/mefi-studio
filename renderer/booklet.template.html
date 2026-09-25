@@ -2,7 +2,8 @@
 <html lang="en" data-starting>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; script-src 'self' 'unsafe-inline'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' file: data: blob:; connect-src 'self' file:; media-src 'self' file: data: blob: https://ice1.somafm.com https://ice2.somafm.com https://ice4.somafm.com https://stream.radioparadise.com; frame-src https://open.spotify.com;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; script-src 'self' 'unsafe-inline'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' file: data: blob:; connect-src 'self' file:; media-src 'self' file: data: blob: https:; frame-src https://open.spotify.com https://www.youtube-nocookie.com https://player.vimeo.com https://w.soundcloud.com;">
+<!-- media-src takes any https file for the Links tab (the radio hosts and Discord attachments among them); frame-src lists only the players music.js builds URLs for. -->
 <!-- SomaFM refuses stream requests that carry a Referer, and <audio> has no referrerpolicy attribute. -->
 <meta name="referrer" content="no-referrer">
 <title>Mefi's Studio AI+ · Your workspace</title>
@@ -60,7 +61,7 @@
   <symbol id="g-zoom-in" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.4 10.4 14 14M5 7h4M7 5v4"/></symbol>
   <symbol id="g-zoom-out" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.4 10.4 14 14M5 7h4"/></symbol>
   <symbol id="g-labels" viewBox="0 0 16 16"><path d="M2.5 3.5a1 1 0 0 1 1-1h4.1a1 1 0 0 1 .7.3l5 5a1 1 0 0 1 0 1.4l-4.1 4.1a1 1 0 0 1-1.4 0l-5-5a1 1 0 0 1-.3-.7z"/><circle cx="5.5" cy="5.5" r="0.9" fill="currentColor" stroke="none"/></symbol>
-  <symbol id="g-ambience" viewBox="0 0 16 16"><path d="M3 4.5h5M11 4.5h2M3 11.5h2M8 11.5h5"/><circle cx="9.5" cy="4.5" r="1.5"/><circle cx="6.5" cy="11.5" r="1.5"/></symbol>
+  <symbol id="g-ambience" viewBox="0 0 16 16"><path d="M3 4.5h5M11 4.5h2M3 11.5h2M8 11.5h5"/><circle cx="9.5" cy="4.5" r="1.5"/><circle cx="6.5" cy="11.5" r="1.5"/></symbol><symbol id="g-audio" viewBox="0 0 16 16"><path d="M2.8 6.2h2.1L8 3.6v8.8L4.9 9.8H2.8Z"/><path d="M10.4 6.1a2.7 2.7 0 0 1 0 3.8M12.2 4.3a5.2 5.2 0 0 1 0 7.4"/></symbol>
   <symbol id="g-legend" viewBox="0 0 16 16"><circle cx="3.5" cy="4" r="1" fill="currentColor" stroke="none"/><circle cx="3.5" cy="8" r="1" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1" fill="currentColor" stroke="none"/><path d="M7 4h6.5M7 8h6.5M7 12h6.5"/></symbol>
   <symbol id="g-add" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
   <symbol id="g-external" viewBox="0 0 16 16"><path d="M6.5 3.5h-3v9h9v-3"/><path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5"/></symbol>
@@ -91,13 +92,13 @@
   <div id="app-rail-sections" class="app-rail-sections"></div>
   <!-- nav.js draws Search, Start here, Shortcuts and Community here and keeps
        this markup after them: the update pill is the foot's badge. -->
-  <div id="app-rail-foot" class="app-rail-foot" role="group" aria-label="Help and community"><button id="update-pill" class="pill update-pill" type="button" data-nav="studio" data-nav-params='{"section":"settings-updates"}' data-state="watching" title="Live update: watching the source tree" hidden><i class="dot" aria-hidden="true"></i><span class="label">Live update</span></button></div>
+  <div id="app-rail-foot" class="app-rail-foot" role="group" aria-label="Studio tools"><button id="update-pill" class="pill update-pill" type="button" data-nav="studio" data-nav-params='{"section":"settings-updates"}' data-state="watching" title="Live update: watching the source tree" hidden><i class="dot" aria-hidden="true"></i><span class="label">Live update</span></button></div>
   <button id="app-rail-pin" class="app-rail-pin" type="button" aria-pressed="false" title="Keep the menu open"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-pin"/></svg><span class="app-rail-text">Keep menu open</span></button>
 </nav>
 <div id="workspace-sidebar" class="workspace studio-sidebar" data-open="false">
   <button id="workspace-sidebar-toggle" class="sidebar-edge" type="button" aria-label="Open the project menu" aria-controls="workspace-sidebar-panel" aria-expanded="false" title="Project menu"><span class="sidebar-grip" aria-hidden="true"><i></i><i></i><i></i></span></button>
   <aside id="workspace-sidebar-panel" class="ws-sidebar" aria-label="Projects" aria-hidden="true" inert>
-    <div class="sidebar-heading"><a class="ws-brand" href="#" data-nav="workspace"><span class="ws-brand-mark">m<span>+</span></span><span>Mefi's Studio<small>MAKE SOMETHING YOURS</small></span></a><button id="workspace-sidebar-close" class="ghost mini" type="button" aria-label="Close the project menu" title="Close menu (Esc)">×</button></div>
+    <div class="sidebar-heading"><a class="ws-brand" href="#" data-nav="workspace"><span class="ws-brand-mark">m<span>+</span></span><span>Mefi's Studio<small>PROJECTS & WORKSPACE</small></span></a><button id="workspace-sidebar-close" class="ghost mini" type="button" aria-label="Close the project menu" title="Close menu (Esc)">×</button></div>
     <nav class="ws-nav" aria-label="Go to">
       <button class="ws-home" data-nav="workspace" title="Your workspace (H)"><svg class="glyph" aria-hidden="true"><use href="#g-home"/></svg><span class="label">Your workspace</span><kbd>H</kbd></button>
       <button id="workspace-node-tree" class="ws-home ws-node-tree" data-nav="command" title="Open Command view: the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span class="label">Command view</span><kbd>D</kbd><span class="count warn" data-badge="questions" hidden></span></button>
@@ -112,7 +113,7 @@
     <div class="ws-sidebar-bottom">
       <div class="ws-quick" role="group" aria-label="Studio">
         <button class="ghost ws-settings" data-nav="studio" title="Settings (4): connections, your Studio, updates"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg><span class="label">Settings</span></button>
-        <button class="ghost ws-settings" data-nav="music" title="Style &amp; sound (U)"><svg class="glyph" aria-hidden="true"><use href="#g-style"/></svg><span class="label">Style</span></button>
+        <button class="ghost ws-settings" data-nav="music" title="Appearance (U)"><svg class="glyph" aria-hidden="true"><use href="#g-style"/></svg><span class="label">Style</span></button>
         <button class="ghost ws-settings" data-nav="onboarding" title="Start here: the walkthrough"><svg class="glyph" aria-hidden="true"><use href="#g-flag"/></svg><span class="label">Start here</span></button>
         <button class="ghost ws-settings" id="workspace-community" type="button" title="Void Engine Discord: community and member perks"><svg class="glyph" aria-hidden="true"><use href="#g-community"/></svg><span class="label">Community</span></button>
       </div>
@@ -122,34 +123,32 @@
 </div>
 <section id="workspace-layer" class="workspace" aria-label="Your project workspace" hidden tabindex="-1">
   <div class="ws-main">
-    <div class="ws-topbar"><div class="ws-project-heading"><span class="ws-kicker">WORKSPACE /</span><strong id="workspace-project-name">Opening your project…</strong></div><div class="ws-top-actions"><button id="workspace-reveal" class="ghost mini" title="Show the project folder">Open folder ↗</button><button id="workspace-remove-project" class="ghost mini" title="Remove this folder from Studio's project list. Files and local work stay on disk.">Remove project</button><button class="ghost mini" data-nav="palette" aria-label="Find a tool or command">Search <kbd>Ctrl K</kbd></button></div></div>
-    <div class="ws-heading"><div><p class="ws-kicker" id="workspace-greeting">YOUR SPACE TO CREATE</p><h1>What are we making?</h1><p id="workspace-project-path" class="ws-project-path"></p></div><span id="workspace-connection" class="ws-connection">Connecting…</span></div>
-    <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">Set up your first project together.</strong><p>Scan this computer, choose a project, let an explorer map it, connect your tools, create work and follow it through review.</p><div id="walkthrough-invite-steps" class="walkthrough-setup" role="status" aria-label="Setup progress"></div><div class="walkthrough-bar mini" id="walkthrough-invite-bar" role="progressbar" aria-label="Setup progress" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="walkthrough-invite-bar-fill"></span></div></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start here</button><button id="walkthrough-invite-walk" class="ghost" type="button" title="Keep the guide in the corner while it walks the menus with you">Walk me through it</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this invitation; Start here stays at the foot of the menu">Not now</button></div></section>
-    <section class="walkthrough-invitation community-invitation" id="community-invitation" aria-labelledby="community-invite-title" hidden><span class="community-emblem" id="community-invite-swatches" aria-hidden="true" hidden></span><div class="community-invite-copy"><strong id="community-invite-title">Build with others in the Void Engine Discord</strong><p class="community-pitch">Share what you're making, swap model setups, and hang out with other builders. Members unlock the Void collection: four themes and three node styles.</p><p class="community-note" id="community-invite-note" hidden></p><p class="community-fine" id="community-invite-fine">Members of the Void Engine Discord unlock these. Studio is MIT-licensed: fork the project and unlock it yourself, or ask an agent to do it for you.</p></div><div class="walkthrough-invite-actions community-invite-actions"><button id="community-invite-join" class="primary" type="button" title="Open the Void Engine invite in your browser">Join the Discord</button><button id="community-invite-link" class="ghost" type="button" title="Sign in with Discord in your browser to unlock member perks">Link my Discord</button><button id="community-invite-copy" class="ghost mini" type="button" title="Copy a prompt that unlocks the collection in your own fork" hidden>Copy agent prompt</button><span class="community-invite-dismiss"><button id="community-invite-later" class="ghost mini community-quiet" type="button" title="Hide this for a week">Not now</button><button id="community-invite-never" class="ghost mini community-quiet" type="button" title="Settings › Community keeps the link">Don't show again</button></span></div></section>
-    <section id="workspace-dashboard" class="ws-dashboard" aria-label="Studio at a glance">
-      <div class="ws-dash-tile ws-dash-service" id="workspace-dash-service" data-tone="idle"><span class="ws-dash-kicker">SERVICE</span><strong class="ws-dash-value" id="workspace-dash-service-value">Connecting…</strong><span class="ws-dash-note" id="workspace-dash-service-note"></span><div class="ws-dash-actions"><button id="workspace-pause" class="ghost mini" title="Hold all new work: queued tasks, builds and the assistant's own suggestions. Running jobs finish normally.">Pause</button></div></div>
-      <button class="ws-dash-tile" id="workspace-dash-workers" data-nav="command" data-tone="idle" type="button" title="Open Command view · live work (D)"><span class="ws-dash-kicker">WORKERS</span><strong class="ws-dash-value" id="workspace-dash-workers-value">0 running</strong><span class="ws-dash-note" id="workspace-dash-workers-note"></span></button>
-      <button class="ws-dash-tile" id="workspace-dash-attention" data-tone="idle" data-target="review" type="button" title="Questions waiting for you and work to review"><span class="ws-dash-kicker">NEEDS YOU</span><strong class="ws-dash-value" id="workspace-dash-attention-value">Nothing waiting</strong><span class="ws-dash-note" id="workspace-dash-attention-note"></span></button>
-      <button class="ws-dash-tile" id="workspace-dash-next" data-tone="idle" type="button" title="Show the queue"><span class="ws-dash-kicker">UP NEXT</span><strong class="ws-dash-value" id="workspace-dash-next-value">Queue is empty</strong><span class="ws-dash-note" id="workspace-dash-next-note"></span></button>
-      <button class="ws-dash-tile" id="workspace-dash-machine" data-nav="explorer" data-tone="idle" type="button" title="Machine status (opens the Explorer)"><span class="ws-dash-kicker">MACHINE</span><strong class="ws-dash-value" id="workspace-dash-machine-value">Checking…</strong><span class="ws-dash-note" id="workspace-dash-machine-note"></span></button>
-      <button class="ws-dash-tile" id="workspace-dash-usage" data-tone="idle" type="button" title="Open the usage tracker in Model Lab"><span class="ws-dash-kicker">USAGE</span><strong class="ws-dash-value" id="workspace-dash-usage-value">No reading yet</strong><span class="ws-dash-note" id="workspace-dash-usage-note"></span></button>
-    </section>
+    <div class="ws-topbar">
+      <div class="ws-project-heading"><span class="ws-kicker">HOME</span><strong id="workspace-project-name">Opening your project…</strong><p id="workspace-project-path" class="ws-project-path" hidden></p></div>
+      <div class="ws-top-actions"><div class="ws-service-line" id="workspace-dash-service" data-tone="idle"><strong class="ws-dash-value" id="workspace-dash-service-value">Connecting…</strong><span class="ws-dash-note" id="workspace-dash-service-note"></span><div class="ws-dash-actions"><button id="workspace-pause" class="ghost mini" title="Hold all new work: queued tasks, builds and the assistant's own suggestions. Running jobs finish normally.">Pause</button></div></div><button id="workspace-activity-toggle" class="ghost mini" type="button" aria-controls="workspace-activity-drawer" aria-expanded="false">Activity</button><button id="workspace-attention-shortcut" class="ghost mini" type="button" hidden>Needs you</button><details class="ws-project-actions"><summary>More <svg class="glyph" aria-hidden="true"><use href="#g-chev"/></svg></summary><div><button id="workspace-reveal" class="ghost mini" title="Show the project folder">Open folder ↗</button><button id="workspace-stop-all" class="ghost mini" title="Stop every running agent now. Each run's progress is saved and its work stays queued.">Stop all</button><button id="workspace-restart" class="ghost mini" title="Stop every agent, save progress, and restart Studio.">Restart</button><button id="workspace-remove-project" class="ghost mini" title="Remove this folder from Studio's project list. Files and local work stay on disk.">Remove project</button></div></details></div>
+      <span id="workspace-connection" class="ws-connection" hidden>Connecting…</span>
+    </div>
+    <div class="ws-home-layout">
     <div class="ws-columns">
+      <section id="ws-hub" class="ws-hub" aria-label="Project map" hidden></section>
       <section class="ws-conversation" aria-label="Conversation with your companion">
-        <div class="ws-companion-bar"><div class="ws-companion-track" id="workspace-companion-track" data-station="listen" aria-hidden="true"><div class="ws-track-line"></div><span class="ws-track-dot first"></span><span class="ws-track-dot middle"></span><span class="ws-track-dot last"></span><div class="ws-buddy"><div class="ws-buddy-orbit"></div><div class="ws-buddy-face"><i></i><i></i></div><span class="ws-buddy-spark">✦</span></div><div class="ws-track-labels"><span>Listen</span><span>Make</span><span>Review</span></div></div><div class="ws-companion-copy"><strong id="workspace-companion-name">Mefi is here</strong><p id="workspace-narration" role="status">Tell me what you have in mind.</p></div><button id="workspace-stop-all" class="ghost mini" title="Stop every running agent now. Each run's progress is saved and its work stays queued.">Stop all</button><button id="workspace-restart" class="ghost mini" title="Stop every agent, save progress, and restart Studio.">Restart</button></div>
-        <details class="ws-activity"><summary>Behind the scenes <span id="workspace-activity-count"></span></summary><ol id="workspace-activity-list"></ol></details>
+        <div id="workspace-conversation-content" class="ws-conversation-content">
+    <header class="ws-home-intro"><p class="ws-kicker" id="workspace-greeting">YOUR WORKSPACE</p><h1>What should we build?</h1><p>Give your agent a task. Follow the work as it happens.</p></header>
+        <section id="workspace-progress" class="ws-progress" aria-label="Current task progress" hidden>
+          <div class="ws-progress-heading"><div><strong id="workspace-progress-title"></strong><span id="workspace-progress-state" role="status"></span></div><button id="workspace-progress-open" class="ghost mini" type="button" title="Show this task's details in the Activity panel">Details</button></div>
+          <p id="workspace-progress-facts"></p><p id="workspace-progress-reason"></p>
+        <div class="ws-focus-actions"><button id="workspace-result-open" class="primary mini" type="button" hidden>Open app</button><button id="workspace-focus-primary" class="primary mini" type="button">View task</button><button id="workspace-focus-check" class="ghost mini" type="button">View checks</button><button id="workspace-focus-live" class="ghost mini" type="button" title="Follow this task in Live (Command view)">Watch live</button><button id="workspace-focus-change" class="ghost mini" type="button">Request a change</button></div>
+        </section>
+        <div class="ws-companion-bar"><div class="ws-companion-track" id="workspace-companion-track" data-station="listen" aria-hidden="true"><div class="ws-track-line"></div><span class="ws-track-dot first"></span><span class="ws-track-dot middle"></span><span class="ws-track-dot last"></span><div class="ws-buddy"><div class="ws-buddy-orbit"></div><div class="ws-buddy-face"><i></i><i></i></div><span class="ws-buddy-spark">✦</span></div><div class="ws-track-labels"><span>Listen</span><span>Make</span><span>Review</span></div></div><div class="ws-companion-copy"><strong id="workspace-companion-name">Mefi is here</strong><p id="workspace-narration" role="status">Tell me what you have in mind.</p></div></div>
+
         <div id="workspace-thread" class="ws-thread" role="log" aria-label="Project conversation" aria-live="polite" aria-relevant="additions"></div>
-        <form id="workspace-form" class="ws-composer">
-          <div class="ws-compose-top"><div class="ws-modes" role="group" aria-label="Message purpose"><button type="button" id="workspace-mode-chat" aria-pressed="true">Talk together</button><button type="button" id="workspace-mode-work" aria-pressed="false">Give a task</button></div><span id="workspace-composer-context"></span></div>
-          <label class="sr-only" for="workspace-input">Message or task for this project</label><textarea id="workspace-input" rows="2" placeholder="Ask a question, think through an idea, or tell me where you're stuck…"></textarea>
-          <div class="ws-compose-bottom"><span id="workspace-compose-hint">Enter to send · Shift + Enter for a new line</span><button id="workspace-task-outline" class="ghost mini" type="button" hidden>Use a task outline</button><button id="workspace-plan-idea" class="ghost" type="button">Plan an idea</button><button id="workspace-send" class="primary" type="submit">Send message <span aria-hidden="true">↗</span></button></div>
-        </form>
-        <div class="ws-feedback-row"><p id="workspace-feedback" class="ws-feedback" role="status"></p><button id="workspace-created-task" class="ghost mini" type="button" hidden>View task</button><button id="workspace-retry" class="ghost mini" type="button" hidden>Retry loading</button></div>
-      </section>
-      <aside class="ws-work" aria-label="Project work and results">
+        <details class="ws-activity"><summary>Recent activity <span id="workspace-activity-count"></span></summary><ol id="workspace-activity-list"></ol></details>
+    <div class="ws-secondary">
+      <details id="workspace-queue-details" class="ws-home-disclosure"><summary>Project queue <span id="workspace-queue-count"></span></summary>
+        <aside class="ws-work" aria-label="Project work and results">
         <div class="ws-work-heading"><div><p class="ws-kicker">FROM IDEA TO DONE</p><h2>Your work</h2></div><button class="ghost mini" data-nav="tasks" title="Open full task board">View board ↗</button></div>
         <section class="ws-backlog" aria-label="Backlog controls">
-          <div class="ws-backlog-settings">
+          <details class="ws-queue-settings"><summary>Queue settings<svg class="glyph" aria-hidden="true"><use href="#g-chev"/></svg></summary><div class="ws-backlog-settings">
           <div class="build-mode-control">
             <label class="switch" for="workspace-auto-build"><input type="checkbox" id="workspace-auto-build" checked disabled aria-describedby="workspace-build-mode-note"><span class="track"></span><span>Auto build</span></label>
             <strong id="workspace-build-mode-label">Loading preference…</strong>
@@ -158,10 +157,10 @@
           <div class="build-mode-control agent-mode-control">
             <label for="workspace-agent-mode">Agent mode</label>
             <select id="workspace-agent-mode" disabled aria-describedby="workspace-agent-mode-note"><option value="swarm">Swarm</option><option value="cluster">Cluster</option></select>
-            <p id="workspace-agent-mode-note" role="status">Both modes collaborate and delegate subtasks. Swarm works across the queue; Cluster focuses on one shared task.</p>
+            <p id="workspace-agent-mode-note" role="status">Swarm uses one builder per task across the queue. Cluster plans and reviews a shared task with supporting agents.</p>
           </div>
-          </div>
-          <div class="ws-backlog-heading"><span class="ws-backlog-light" aria-hidden="true"></span><strong id="workspace-backlog-title">A little progress, every pass</strong></div>
+          </div></details>
+          <div class="ws-backlog-heading"><span class="ws-backlog-light" aria-hidden="true"></span><strong id="workspace-backlog-title">Queue ready</strong></div>
           <p id="workspace-backlog-summary">Checking your project's backlog…</p>
           <div id="workspace-backlog-metrics" class="ws-backlog-metrics" aria-label="Backlog counts"></div>
           <p id="workspace-backlog-next" class="ws-backlog-next"></p>
@@ -172,9 +171,57 @@
         <p id="workspace-work-summary" class="ws-work-summary-line" role="status" aria-live="polite"></p>
         <div id="workspace-work-list" class="ws-work-list"></div>
         <button id="workspace-show-more" class="ghost mini ws-show-more" type="button" hidden>Show more</button>
-        <div class="ws-jeV" id="workspace-jev" title="Jev is the optional model-selection service: with a key it picks a model per task; without one, fixed defaults apply. Set it up under Settings › Jev.">Jev · checking connection</div>
+        <div class="ws-jeV" id="workspace-jev" title="Jev is the optional model-selection service: with a key it picks a model per task; without one, fixed defaults apply. Set it up under Settings › Decision model.">Jev · checking connection</div>
       </aside>
+      </details>
+      <details id="workspace-studio-details" class="ws-home-disclosure"><summary>Studio status</summary>
+        <section id="workspace-dashboard" class="ws-dashboard" aria-label="Studio at a glance">
+      <button class="ws-dash-tile" id="workspace-dash-workers" data-nav="command" data-tone="idle" type="button" title="Open Command view · live work (D)"><span class="ws-dash-kicker">WORKERS</span><strong class="ws-dash-value" id="workspace-dash-workers-value">0 running</strong><span class="ws-dash-note" id="workspace-dash-workers-note"></span></button>
+      <button class="ws-dash-tile" id="workspace-dash-attention" data-tone="idle" data-target="review" type="button" title="Questions waiting for you and work to review"><span class="ws-dash-kicker">NEEDS YOU</span><strong class="ws-dash-value" id="workspace-dash-attention-value">Nothing waiting</strong><span class="ws-dash-note" id="workspace-dash-attention-note"></span></button>
+      <button class="ws-dash-tile" id="workspace-dash-next" data-tone="idle" type="button" title="Show the queue"><span class="ws-dash-kicker">UP NEXT</span><strong class="ws-dash-value" id="workspace-dash-next-value">Queue is empty</strong><span class="ws-dash-note" id="workspace-dash-next-note"></span></button>
+      <button class="ws-dash-tile" id="workspace-dash-machine" data-nav="explorer" data-tone="idle" type="button" title="Machine status (opens the Explorer)"><span class="ws-dash-kicker">MACHINE</span><strong class="ws-dash-value" id="workspace-dash-machine-value">Checking…</strong><span class="ws-dash-note" id="workspace-dash-machine-note"></span></button>
+      <button class="ws-dash-tile" id="workspace-dash-usage" data-tone="idle" type="button" title="Open the usage tracker in Model Lab"><span class="ws-dash-kicker">USAGE</span><strong class="ws-dash-value" id="workspace-dash-usage-value">No reading yet</strong><span class="ws-dash-note" id="workspace-dash-usage-note"></span></button>
+    </section>
+
+      </details>
+      <details id="workspace-help-details" class="ws-home-disclosure"><summary>Getting started &amp; community</summary>
+        <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">Set up your project</strong><p>Connect your tools, add a project, and create your first task.</p><div id="walkthrough-invite-steps" class="walkthrough-setup" role="status" aria-label="Setup progress"></div><div class="walkthrough-bar mini" id="walkthrough-invite-bar" role="progressbar" aria-label="Setup progress" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="walkthrough-invite-bar-fill"></span></div></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start here</button><button id="walkthrough-invite-walk" class="ghost" type="button" title="Keep the guide in the corner while it walks the menus with you">Walk me through it</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this invitation; Start here stays at the foot of the menu">Not now</button></div></section>
+    <section class="walkthrough-invitation community-invitation" id="community-invitation" aria-labelledby="community-invite-title" hidden><span class="community-emblem" id="community-invite-swatches" aria-hidden="true" hidden></span><div class="community-invite-copy"><strong id="community-invite-title">Build with others in the Void Engine Discord</strong><p class="community-pitch">Share what you're making, swap model setups, and hang out with other builders. Members unlock the Void collection: four themes and three node styles.</p><p class="community-note" id="community-invite-note" hidden></p><p class="community-fine" id="community-invite-fine">Members of the Void Engine Discord unlock these. Studio is MIT-licensed: fork the project and unlock it yourself, or ask an agent to do it for you.</p></div><div class="walkthrough-invite-actions community-invite-actions"><button id="community-invite-join" class="primary" type="button" title="Open the Void Engine invite in your browser">Join the Discord</button><button id="community-invite-link" class="ghost" type="button" title="Sign in with Discord in your browser to unlock member perks">Link my Discord</button><button id="community-invite-copy" class="ghost mini" type="button" title="Copy a prompt that unlocks the collection in your own fork" hidden>Copy agent prompt</button><span class="community-invite-dismiss"><button id="community-invite-later" class="ghost mini community-quiet" type="button" title="Hide this for a week">Not now</button><button id="community-invite-never" class="ghost mini community-quiet" type="button" title="Settings › Community keeps the link">Don't show again</button></span></div></section>
+
+      </details>
     </div>
+        </div>
+        <div class="ws-feedback-row"><p id="workspace-feedback" class="ws-feedback" role="status"></p><button id="workspace-created-task" class="ghost mini" type="button" hidden>View task</button><button id="workspace-retry" class="ghost mini" type="button" hidden>Retry loading</button></div>
+        <form id="workspace-form" class="ws-composer">
+          <div class="ws-compose-top"><div class="ws-modes" role="group" aria-label="Message purpose"><button type="button" id="workspace-mode-chat" aria-pressed="true">Chat</button><button type="button" id="workspace-mode-work" aria-pressed="false">Create task</button></div><span id="workspace-composer-context"></span></div>
+          <label class="sr-only" for="workspace-input">Message or task for this project</label><textarea id="workspace-input" rows="2" placeholder="Ask a question about this project…"></textarea>
+          <div class="ws-compose-bottom"><span id="workspace-compose-hint">Enter to send · Shift + Enter for a new line</span><button id="workspace-task-outline" class="ghost mini" type="button" hidden>Use a task outline</button><button id="workspace-plan-idea" class="ghost" type="button">Plan an idea</button><button id="workspace-send" class="primary" type="submit">Send message </button></div>
+        </form>
+      </section>
+
+    </div>
+    <section id="workspace-activity-drawer" class="ws-workflow" aria-label="Task activity and app preview" hidden>
+      <div class="ws-activity-heading"><h2>Activity</h2><button id="workspace-activity-close" class="ghost mini" type="button" aria-label="Close activity panel">×</button></div>
+      <section id="workspace-focus-panel" class="ws-focus-panel" aria-label="Current task">
+        <div class="ws-focus-heading"><h2>Current task</h2><label class="sr-only" for="workspace-focus-task">Choose a task to follow</label><select id="workspace-focus-task" aria-label="Choose a task to follow"></select></div>
+        <strong id="workspace-focus-title"></strong><p id="workspace-focus-state" role="status"></p>
+        <dl class="ws-focus-facts"><div><dt>Worker</dt><dd id="workspace-focus-worker"></dd></div><div><dt>Current action</dt><dd id="workspace-focus-action"></dd></div><div><dt>Last activity</dt><dd id="workspace-focus-age"></dd></div><div><dt>Checks</dt><dd id="workspace-focus-checks"></dd></div></dl>
+        <p id="workspace-focus-reason" class="ws-focus-reason"></p>
+
+      </section>
+      <section id="workspace-preview-panel" class="ws-preview-panel" aria-label="App preview">
+        <div class="ws-focus-heading"><h2>App preview</h2><strong id="workspace-preview-state" role="status">Checking…</strong></div>
+        <p id="workspace-preview-message"></p><p id="workspace-preview-worker" class="ws-preview-worker"></p>
+        <div class="ws-focus-actions"><button id="workspace-preview-start" class="primary mini" type="button">Start preview</button><button id="workspace-preview-open" class="primary mini" type="button">Open app</button></div>
+        <details id="workspace-preview-controls" class="ws-preview-details"><summary>Preview controls</summary>
+          <p id="workspace-preview-url"></p>
+          <div class="ws-focus-actions"><button id="workspace-preview-stop" class="ghost mini" type="button">Stop preview</button><button id="workspace-preview-check" class="ghost mini" type="button">Check again</button></div>
+          <details id="workspace-preview-details" class="ws-preview-details"><summary>Preview output</summary><pre id="workspace-preview-log"></pre></details>
+        </details>
+      </section>
+    </section>
+    </div>
+
   </div>
 </section>
 <!-- The tab pages' header: the page you are on and, when Command sent you here,
@@ -230,7 +277,7 @@
   </section>
   <section id="tab-graph" hidden>
     <section id="model-lab" class="model-lab" aria-label="Model Lab">
-      <header class="lab-head"><div><p class="eyebrow">Your models, measured</p><h2>Model Lab</h2><p class="muted">See what works for your tasks, what it costs, and the context it receives.</p></div><button id="model-lab-refresh" class="ghost">Refresh measurements</button></header>
+      <header class="lab-head"><div><h2 class="sr-only">Model Lab</h2><p class="muted">Compare performance, usage and context from your project's model calls.</p></div><button id="model-lab-refresh" class="ghost">Refresh measurements</button></header>
       <div id="model-lab-summary" class="lab-summary"></div>
       <div class="lab-tabs" role="tablist" aria-label="Model Lab views">
         <button id="model-lab-tab-rankings" role="tab" aria-selected="true" aria-controls="model-lab-rankings" data-lab-view="rankings">Rankings</button>
@@ -239,16 +286,17 @@
         <button id="model-lab-tab-context" role="tab" aria-selected="false" aria-controls="model-lab-context" tabindex="-1" data-lab-view="context">Context</button>
         <button id="model-lab-tab-compare" role="tab" aria-selected="false" aria-controls="model-lab-compare" tabindex="-1" data-lab-view="compare" hidden>Compare <span class="lab-soon">Planned</span></button>
       </div>
+      <div id="model-lab-usage-switch" class="lab-usage-switch" role="tablist" aria-label="Usage source" hidden><button id="model-lab-recorded" role="tab" aria-controls="model-lab-usage" aria-selected="true" type="button">Recorded calls</button><button id="model-lab-accounts" role="tab" aria-controls="model-lab-tracker" aria-selected="false" tabindex="-1" type="button">Provider accounts</button></div>
       <p id="model-lab-status" class="lab-status" role="status" aria-live="polite"></p>
       <section id="model-lab-rankings" role="tabpanel" aria-labelledby="model-lab-tab-rankings">
-        <div class="lab-toolbar"><div><h3>Performance on your work</h3><p class="muted">Measured calls and your ratings. Published benchmarks stay in the catalog below.</p></div><label>Task type <select id="model-lab-task-type"><option value="">All task types</option></select></label></div>
+        <div class="lab-toolbar"><div><h3>Performance on your work</h3><p class="muted">Measured calls and your ratings. Published benchmarks are under Catalog insights.</p></div><label>Task type <select id="model-lab-task-type"><option value="">All task types</option></select></label></div>
         <div id="model-lab-ranking-notes" class="lab-note"></div>
         <div id="model-lab-ranking-list" class="lab-table-wrap"></div>
         <details id="model-lab-ratings" class="lab-disclosure"><summary>Rate recent work</summary><p class="muted">Rate a result you have reviewed. Your score stays separate from model judging and error counts.</p><div id="model-lab-recent"></div></details>
       </section>
       <section id="model-lab-usage" role="tabpanel" aria-labelledby="model-lab-tab-usage" hidden><h3>Recorded usage</h3><p id="model-lab-usage-coverage" class="muted">Missing provider usage stays unknown. These totals cover calls recorded by Studio; they are not an account balance.</p><p id="model-lab-usage-range" class="lab-status"></p><div id="model-lab-usage-totals" class="lab-usage-grid"></div><div id="model-lab-usage-list" class="lab-table-wrap"></div></section>
       <section id="model-lab-tracker" role="tabpanel" aria-labelledby="model-lab-tab-tracker" hidden>
-        <div class="lab-toolbar"><div><h3>Usage tracker</h3><p class="muted">Recorded usage from both ledgers (the calls Studio made and the coding sessions OpenCode ran for this project) beside every connected provider's own account reading, shown separately. Account reads use the saved keys and send no prompts.</p></div><button id="model-lab-tracker-refresh" class="ghost" type="button">Refresh usage</button></div>
+        <div class="lab-toolbar"><div><h3>Provider accounts</h3><p class="muted">Account readings and project usage are shown separately. Refreshing sends no prompts.</p></div><button id="model-lab-tracker-refresh" class="ghost" type="button">Refresh usage</button></div>
         <p id="model-lab-tracker-status" class="lab-status" role="status" aria-live="polite"></p>
         <div id="model-lab-tracker-body" class="lab-tracker"></div>
       </section>
@@ -258,7 +306,7 @@
       </section>
       <section id="model-lab-compare" role="tabpanel" aria-labelledby="model-lab-tab-compare" hidden><div class="lab-empty"><span class="eyebrow">Planned</span><h3>Compare models on one brief</h3><p>Compare model results with separate human and model ratings. Demo format is being selected; no comparison runs or paid calls start from this view yet.</p></div></section>
     </section>
-    <details id="model-lab-catalog" class="lab-catalog"><summary>Catalog tools <span>Published benchmarks, pricing and plan capacity</span></summary>
+    <details id="model-lab-catalog" class="lab-catalog"><summary>Catalog insights <span>Benchmarks, pricing and plan capacity</span></summary>
     <div class="graph-grid">
       <section class="panel">
         <h2>Value map</h2>
@@ -288,14 +336,14 @@
       <div class="tablewrap">
         <table id="table">
           <thead><tr>
-            <th data-k="name">Model</th><th data-k="vendor">Vendor</th>
-            <th data-k="typicalCostUSD" class="num">$/req</th>
-            <th data-k="quality" class="num">AA</th>
-            <th data-k="requests5h" class="num">req/5h</th>
-            <th data-k="monthlyCapUSD" class="num">pool $</th>
-            <th data-k="context" class="num">ctx</th>
-            <th data-k="priceIn" class="num">$/in</th><th data-k="priceOut" class="num">$/out</th>
-            <th data-k="privacy">privacy</th><th data-k="endpoint">endpoint</th>
+            <th scope="col" data-k="name"><button type="button">Model</button></th><th scope="col" data-k="vendor"><button type="button">Vendor</button></th>
+            <th scope="col" data-k="typicalCostUSD" class="num"><button type="button">$/req</button></th>
+            <th scope="col" data-k="quality" class="num" aria-sort="descending"><button type="button">AA</button></th>
+            <th scope="col" data-k="requests5h" class="num"><button type="button">req/5h</button></th>
+            <th scope="col" data-k="monthlyCapUSD" class="num"><button type="button">pool $</button></th>
+            <th scope="col" data-k="context" class="num"><button type="button">ctx</button></th>
+            <th scope="col" data-k="priceIn" class="num"><button type="button">$/in</button></th><th scope="col" data-k="priceOut" class="num"><button type="button">$/out</button></th>
+            <th scope="col" data-k="privacy"><button type="button">privacy</button></th><th scope="col" data-k="endpoint"><button type="button">endpoint</button></th>
           </tr></thead>
           <tbody id="table-body"></tbody>
         </table>
@@ -309,9 +357,10 @@
         <div class="panel">
           <h2>Change feed</h2>
           <div class="row">
-            <select id="eyes-session" class="grow"></select>
+            <select id="eyes-session" class="grow" aria-label="Session"></select>
             <button id="eyes-refresh" class="ghost" title="Reload from the OpenCode database">Refresh</button>
             <button id="analyzer-open" class="ghost" title="Analyzer: project plans, evidence and starting points (A)">Analyzer</button>
+            <button id="eyes-view-evidence" class="ghost eyes-narrow" type="button">View evidence →</button>
           </div>
           <div class="row">
             <select id="eyes-agent" title="Filter by agent"><option value="">all agents</option></select>
@@ -330,12 +379,14 @@
       <div class="eyes-col">
         <div class="panel">
           <div class="mode-row">
-            <button class="chip on" data-mode="png">PNG</button>
-            <button class="chip" data-mode="diff">Diff</button>
-            <button class="chip" data-mode="log">Log</button>
+            <button id="eyes-back" class="ghost eyes-narrow" type="button">← Feed</button>
+            <div class="eyes-mode-tabs" role="tablist" aria-label="Evidence view"><button class="chip on" data-mode="png" role="tab" aria-selected="true" aria-controls="eyes-mode-png">Image</button>
+            <button class="chip" data-mode="diff" role="tab" aria-selected="false" aria-controls="eyes-mode-diff" tabindex="-1">Diff</button>
+            <button class="chip" data-mode="log" role="tab" aria-selected="false" aria-controls="eyes-mode-log" tabindex="-1">Log</button></div>
             <span class="spacer"></span>
             <select id="eyes-png-select" title="Newest PNGs from tools/logs"></select>
             <button id="eyes-png-open" class="ghost" title="Open any PNG file">Open…</button>
+            <button id="eyes-inspector-toggle" class="ghost" type="button" aria-expanded="false" aria-controls="eyes-inspector-panel">Inspector</button>
           </div>
           <div class="viewer">
             <div id="eyes-mode-png">
@@ -350,9 +401,9 @@
           </div>
         </div>
       </div>
-      <div class="eyes-col">
+      <div class="eyes-col" id="eyes-inspector-panel" hidden>
         <div class="panel">
-          <h2>Inspector</h2>
+          <h2>Inspector &amp; pins</h2>
           <div class="inspector-kv" id="eyes-inspector"></div>
           <div class="row">
             <button id="eyes-reveal" class="ghost" disabled>Reveal file</button>
@@ -367,48 +418,64 @@
   </section>
   <section id="tab-studio" hidden>
     <div class="panel settings-panel">
-      <div class="settings-heading"><div><h2 class="sr-only">Settings</h2><p class="muted">Connect what you have under Providers, then choose who answers and who builds. Make Studio yours, and keep it up to date. Keys are stored encrypted on this machine and never shown again.</p></div><button class="ghost" data-nav="onboarding"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-flag"/></svg>Start here</button></div>
       <div class="settings-layout">
-        <!-- One list for the page: Find narrows it (booklet.js reads each row's
-             label and data-settings-terms, and each card's title and summary),
-             a row jumps to its card, and the ↗ rows leave for another view. -->
-        <nav id="settings-nav" class="settings-nav" aria-label="Settings sections">
-          <label class="settings-find"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-search"/></svg><span class="sr-only">Find a setting</span><input id="settings-find" type="search" placeholder="Find a setting…" autocomplete="off" spellcheck="false" aria-describedby="settings-find-status" aria-controls="settings-nav-list settings-sections"></label>
+        <nav id="settings-nav" class="settings-nav" aria-label="Settings categories">
+          <label class="settings-find"><svg class="glyph" aria-hidden="true"><use href="#g-search"/></svg><span class="sr-only">Find a setting</span><input id="settings-find" type="search" placeholder="Find a setting…" autocomplete="off" spellcheck="false" aria-controls="settings-search-results" aria-describedby="settings-find-status"></label>
           <p id="settings-find-status" class="sr-only" role="status" aria-live="polite"></p>
-          <div id="settings-nav-list" class="settings-nav-list">
-            <div class="settings-nav-group" role="group" aria-labelledby="settings-nav-connections"><span class="settings-nav-heading" id="settings-nav-connections">Connections</span>
-              <button type="button" class="settings-nav-item" data-settings-jump="settings-setup" data-settings-terms="auto setup first run quick start detect scan saved keys installed clis configure" aria-current="true"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-spark"/></svg><span class="label">Auto setup</span></button>
-              <button type="button" class="settings-nav-item" data-settings-jump="settings-assistant" data-settings-terms="providers connections api key keys login sign in accounts cli z.ai zai glm opencode go zen grok claude code codex chatgpt antigravity google lm studio local server custom endpoint openai compatible" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-key"/></svg><span class="label">Providers</span><span class="settings-nav-badge" id="settings-nav-providers-count" hidden></span></button>
-              <button type="button" class="settings-nav-item" data-settings-jump="settings-routing" data-settings-terms="model routing models assistant answers provider auto order fallback routine heavy roles jev fixed selection choose model brain maps" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-route"/></svg><span class="label">Model routing</span></button>
-              <button type="button" class="settings-nav-item" data-settings-jump="settings-workers" data-settings-terms="coding workers builders build executor cli tier cost free fast heavy auto pinned model" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-wrench"/></svg><span class="label">Coding workers</span></button>
-              <button type="button" class="settings-nav-item" data-settings-jump="settings-jev" data-settings-terms="jev connection gateway vercel typesafe openrouter zen key intake classification task suggestions model selection" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-target"/></svg><span class="label">Jev</span></button>
-              <button type="button" class="settings-nav-item settings-nav-link" data-nav="command" data-nav-params='{"rail":"settings"}' data-desktop-only data-settings-terms="agents queue autopilot parallel builds workers build mode verify first agent mode swarm cluster stop all restart" title="Opens Command view at its Agents panel"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-agents"/></svg><span class="label">Agents &amp; queue</span><span class="settings-nav-arrow" aria-hidden="true">↗</span></button>
-            </div>
-            <div class="settings-nav-group" role="group" aria-labelledby="settings-nav-personal"><span class="settings-nav-heading" id="settings-nav-personal">Personal</span>
-              <button type="button" class="settings-nav-item" data-settings-jump="settings-studio" data-settings-terms="your studio you name your name companion theme colours colors accent void motion animations full calm off reduce movement blur panels launch startup open workspace home appearance personal preferences" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-studio"/></svg><span class="label">Your Studio</span></button>
-              <button type="button" class="settings-nav-item" data-settings-jump="settings-community" data-settings-terms="community discord void engine members link membership perks void collection themes node styles fork unlock" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-community"/></svg><span class="label">Community</span></button>
-              <button type="button" class="settings-nav-item settings-nav-link" data-nav="music" data-settings-terms="style sound themes theme colours colors custom palette node tree styles layouts effects music player radio spotify audio link reactions appearance" title="Opens Style &amp; sound (U)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-style"/></svg><span class="label">Style &amp; sound</span><span class="settings-nav-arrow" aria-hidden="true">↗</span></button>
-            </div>
-            <div class="settings-nav-group" role="group" aria-labelledby="settings-nav-system"><span class="settings-nav-heading" id="settings-nav-system">System</span>
-              <button type="button" class="settings-nav-item" data-settings-jump="settings-updates" data-settings-terms="updates update live update apply automatically github release published build version install download token" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-update"/></svg><span class="label">Updates</span></button>
-              <button type="button" class="settings-nav-item" data-settings-jump="settings-diagnostics" data-settings-terms="diagnostics speed probe tokens per second measure performance profiler frames hitches auditor audit wiring machine health processes" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-gauge"/></svg><span class="label">Diagnostics</span></button>
-              <button type="button" class="settings-nav-item" data-settings-jump="settings-integrations" data-settings-terms="integrations ruins runner love2d love game smoke test launch" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-plug"/></svg><span class="label">Integrations</span></button>
-              <button type="button" class="settings-nav-item" data-settings-jump="settings-styler" data-settings-terms="discord server styler bot dashboard start stop folder integration" data-desktop-only aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-plug"/></svg><span class="label">Server Styler</span></button>
-              <button type="button" class="settings-nav-item" data-settings-jump="settings-log" data-settings-terms="connection log tool log history output errors what studio tried" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-legend"/></svg><span class="label">Connection log</span></button>
-            </div>
-          </div>
-          <p id="settings-find-empty" class="settings-find-empty" hidden>Nothing matches. <kbd class="key">Esc</kbd> clears the search.</p>
+          <div id="settings-nav-list" class="settings-nav-list"><button type="button" class="settings-nav-item" data-settings-category="general" aria-current="true"><svg class="glyph" aria-hidden="true"><use href="#g-studio"/></svg><span class="label">General</span></button>
+<button type="button" class="settings-nav-item" data-settings-category="appearance" aria-current="false"><svg class="glyph" aria-hidden="true"><use href="#g-style"/></svg><span class="label">Appearance</span></button>
+<button type="button" class="settings-nav-item" data-settings-category="connections" aria-current="false"><svg class="glyph" aria-hidden="true"><use href="#g-key"/></svg><span class="label">Connections</span><span class="settings-nav-badge" id="settings-nav-providers-count" hidden></span></button>
+<button type="button" class="settings-nav-item" data-settings-category="models" aria-current="false"><svg class="glyph" aria-hidden="true"><use href="#g-route"/></svg><span class="label">Models</span></button>
+<button type="button" class="settings-nav-item" data-settings-category="automation" aria-current="false"><svg class="glyph" aria-hidden="true"><use href="#g-agents"/></svg><span class="label">Automation</span></button>
+<button type="button" class="settings-nav-item" data-settings-category="audio" aria-current="false"><svg class="glyph" aria-hidden="true"><use href="#g-audio"/></svg><span class="label">Audio</span></button>
+<button type="button" class="settings-nav-item" data-settings-category="system" aria-current="false"><svg class="glyph" aria-hidden="true"><use href="#g-gauge"/></svg><span class="label">System</span></button>
+</div>
         </nav>
         <div id="settings-sections" class="settings-sections">
-      <section class="settings-block" data-settings-group="connections" aria-labelledby="settings-block-connections">
-      <h3 class="settings-block-title" id="settings-block-connections">Connections</h3>
-      <div id="studio-desktop">
-        <section class="settings-group settings-card setup-card" id="settings-setup" aria-labelledby="settings-setup-heading">
+          <div id="settings-search-results" class="settings-search-results" aria-label="Setting search results" hidden></div>
+          <p id="settings-find-empty" class="settings-find-empty" hidden>No settings match. Try a different name.</p>
+<section class="settings-category" id="settings-category-general" data-settings-category-pane="general" aria-labelledby="settings-category-general-heading"><header class="settings-category-head"><h2 id="settings-category-general-heading" tabindex="-1">General</h2><p>Names, startup and community</p></header>
+<details class="settings-optional settings-card settings-you" id="settings-studio" open><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-studio"/></svg></span><span class="settings-summary-text"><b>Profile &amp; startup</b><span>Names and launch destination</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
+          <div class="settings-you-fields">
+            <label class="field"><span class="field-label">Your name</span><input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?" autocomplete="off"></label>
+            <label class="field"><span class="field-label">Companion name</span><input id="workspace-agent-name" type="text" maxlength="30" placeholder="Mefi" autocomplete="off"></label>
+            <div class="field settings-you-theme"><label class="field-label" for="workspace-accent">Studio theme</label><div class="settings-you-row"><select id="workspace-accent"><option value="aurora">Aurora</option><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option><option value="rose">Rose</option><option value="custom">Custom colors</option><optgroup label="Void collection · Discord members"><option value="void">Void</option><option value="eclipse">Eclipse</option><option value="abyss">Abyss</option><option value="dusk">Neon Dusk</option></optgroup></select><button type="button" class="ghost mini" data-settings-nav="music" title="Themes, custom colors and node styles in Appearance">Appearance settings <span aria-hidden="true">↗</span></button></div></div>
+          </div>
+          <div class="field settings-you-motion">
+            <span class="field-label" id="settings-motion-label">Motion</span>
+            <div class="segmented" role="group" aria-labelledby="settings-motion-label" aria-describedby="settings-motion-hint" data-segmented-for="motion-toggle">
+              <button type="button" data-value="full" aria-pressed="true">Full<small>every animation</small></button>
+              <button type="button" data-value="calm" aria-pressed="false">Calm<small>no looping motion</small></button>
+              <button type="button" data-value="off" aria-pressed="false">Off<small>no animation</small></button>
+            </div>
+            <select id="motion-toggle" class="segmented-source" aria-hidden="true" tabindex="-1"><option value="full">Full</option><option value="calm">Calm</option><option value="off">Off</option></select>
+            <span class="field-hint" id="settings-motion-hint">Calm stops looping interface animations. Off also stops node motion and transitions.</span>
+          </div>
+          <div class="settings-you-switches">
+            <label class="switch" id="settings-companion-motion" title="Your companion floats and blinks beside the conversation. Calm and Off keep it still."><input id="workspace-motion" type="checkbox" checked><span class="track"></span><span>Let your companion move</span></label>
+            <label class="switch" title="Blur what sits behind every sheet, menu and Home panel. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
+            <label class="switch" title="On: every launch lands on Your workspace. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span>Open Workspace on launch</span></label>
+          </div>
+          <p class="muted">When disabled, Studio opens Command view after the project chooser.</p>
+        </details>
+<details class="settings-optional settings-card" id="settings-community"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-community"/></svg></span><span class="settings-summary-text"><b>Community</b><span>Discord membership and the Void theme collection</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
+          <section class="community-showcase" id="community-showcase" aria-labelledby="community-showcase-title"><div class="community-showcase-copy"><span class="community-showcase-kicker">Void collection</span><strong id="community-showcase-title">Four themes, three node styles</strong><span class="community-showcase-state" id="community-showcase-state" data-unlocked="false">For members of the Void Engine Discord</span><button type="button" class="primary mini community-choose" id="community-choose" title="Open Appearance at the Void collection" hidden>Choose a Void theme</button></div><div class="community-showcase-items" id="community-showcase-items" aria-hidden="true"></div></section>
+          <p class="community-note" id="community-settings-note" role="status" hidden></p>
+          <div id="community-settings-body"><p class="muted">Checking your Discord link…</p></div>
+          <p class="settings-status" id="community-settings-status" role="status"></p>
+          <p class="muted" id="community-privacy">Linking reads your Discord id and name, and your roles and join date in the Void Engine server: when you link, about once a week (sooner after a failed check, then daily), and when you press Check now. Studio keeps them in its settings on this computer, with the sign-in encrypted in community-auth.json. Nothing about your projects is sent. Unlink revokes the sign-in and deletes both.</p>
+        </details>
+</section>
+<section class="settings-category" id="settings-category-appearance" data-settings-category-pane="appearance" aria-labelledby="settings-category-appearance-heading" hidden><header class="settings-category-head"><div class="appearance-heading"><div><h2 id="settings-category-appearance-heading" tabindex="-1">Appearance</h2><p>Make the tree your own.</p></div><div class="appearance-actions"><button id="appearance-dock" class="ghost mini" type="button" title="Move sidebar to the right" aria-label="Move sidebar to the right">⇥</button><button id="appearance-close" class="ghost mini" type="button" title="Close appearance (Esc)" aria-label="Close appearance">×</button></div></div><nav id="appearance-sections" class="appearance-sections" aria-label="Appearance sections"><button type="button" data-appearance-section="themes" aria-pressed="true">Theme</button><button type="button" data-appearance-section="nodes" aria-pressed="false">Nodes</button><button type="button" data-appearance-section="layout" aria-pressed="false">Layout</button><button type="button" data-appearance-section="interface" aria-pressed="false">Interface</button></nav></header>
+<section class="settings-card" id="settings-appearance"><div class="settings-card-head"><div><h3>Interface</h3><p class="muted">Motion and panel effects apply throughout Studio.</p></div></div><div id="settings-appearance-controls" class="settings-you-fields"></div></section><div id="settings-appearance-media" class="settings-media"></div><details class="settings-card settings-advanced" id="settings-tree"><summary>Node tree details</summary><div id="settings-tree-controls"></div></details>
+</section>
+<section class="settings-category" id="settings-category-connections" data-settings-category-pane="connections" aria-labelledby="settings-category-connections-heading" hidden><header class="settings-category-head"><h2 id="settings-category-connections-heading" tabindex="-1">Connections</h2><p>Accounts, keys and local tools</p></header>
+<div id="studio-desktop"><section class="settings-group settings-card setup-card" id="settings-setup" aria-labelledby="settings-setup-heading">
         <div class="setup-head settings-card-head">
           <span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-spark"/></svg></span>
           <div>
             <h3 id="settings-setup-heading">Auto setup</h3>
-            <p class="muted">Reads what this machine already has and applies only the changes needed: keys, servers and CLIs choose the routes, a Jev key turns on task-aware selection. Sends nothing, changes no key, keeps every model override.</p>
+            <p class="muted">Detect saved connections and installed tools. Keeps your keys and model overrides.</p>
           </div>
           <button id="auto-setup" class="primary">Run auto setup</button>
         </div>
@@ -417,119 +484,126 @@
           <div class="setup-state-item"><span class="setup-state-label">Model selection</span><span id="setup-selection" data-state="unknown">checking…</span></div>
           <div class="setup-state-item"><span class="setup-state-label">Builders</span><span id="setup-builders" data-state="unknown">checking…</span></div>
         </div>
-        <p class="settings-status" id="auto-setup-status" role="status">Not run yet. Auto setup applies only the changes that are needed and explains each one.</p>
+        <p class="settings-status" id="auto-setup-status" role="status">Not run yet.</p>
         </section>
-        <section class="settings-group settings-card" id="settings-assistant" aria-labelledby="settings-assistant-heading">
-        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-key"/></svg></span><div><h3 id="settings-assistant-heading">Providers</h3><p class="muted">Every route Studio can answer or build with. Save a key, point at a server, or sign in to a CLI; routing picks from whatever lights up.</p></div></div>
+<section class="settings-group settings-card" id="settings-assistant" aria-labelledby="settings-assistant-heading">
+        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-key"/></svg></span><div><h3 id="settings-assistant-heading">Providers</h3><p class="muted">Open a provider to configure its connection. Keys are encrypted on this machine.</p></div></div>
         <p class="settings-eyebrow">Keys & servers</p>
         <div class="provider-grid">
-          <article class="provider-tile" data-provider="zai">
-            <div class="provider-tile-head">
+          <details class="provider-tile" data-provider="zai"><summary class="provider-tile-head">
               <span class="provider-mark" aria-hidden="true">z</span>
               <div class="provider-title"><span class="provider-name">z.ai GLM</span><span class="provider-kind">API key · Coding Plan</span></div>
               <span class="provider-pill" id="zai-key-status" data-state="unknown">checking…</span>
-            </div>
+            </summary>
             <div class="provider-tile-body">
               <input type="password" id="zai-key" placeholder="Paste API key" autocomplete="off" aria-label="z.ai Coding Plan API key">
               <button id="save-zai-key" class="mini">Save</button>
             </div>
-          </article>
-          <article class="provider-tile" data-provider="opencode">
-            <div class="provider-tile-head">
+          </details>
+          <details class="provider-tile" data-provider="opencode"><summary class="provider-tile-head">
               <span class="provider-mark" aria-hidden="true">Go</span>
               <div class="provider-title"><span class="provider-name">OpenCode Go</span><span class="provider-kind">API key · billed per use</span></div>
               <span class="provider-pill" id="key-status" data-state="unknown">checking…</span>
-            </div>
+            </summary>
             <div class="provider-tile-body">
               <input type="password" id="api-key" placeholder="Paste API key" autocomplete="off" aria-label="OpenCode Go API key">
               <button id="save-key" class="mini">Save</button>
             </div>
-          </article>
-          <article class="provider-tile" data-provider="zen">
-            <div class="provider-tile-head">
+          </details>
+          <details class="provider-tile" data-provider="zen"><summary class="provider-tile-head">
               <span class="provider-mark" aria-hidden="true">Zen</span>
               <div class="provider-title"><span class="provider-name">OpenCode Zen</span><span class="provider-kind">API key · Zen balance</span></div>
               <span class="provider-pill" id="zen-key-status" data-state="unknown">checking…</span>
-            </div>
+            </summary>
             <div class="provider-tile-body">
               <input type="password" id="zen-key" placeholder="Paste API key" autocomplete="off" aria-label="OpenCode Zen API key" title="The same key serves Jev's Zen route. With nothing saved, opencode's own OPENCODE_API_KEY is used.">
               <button id="save-zen-key" class="mini">Save</button>
             </div>
-          </article>
-          <article class="provider-tile" data-provider="lmstudio">
-            <div class="provider-tile-head">
+          </details>
+          <details class="provider-tile" data-provider="openrouter"><summary class="provider-tile-head">
+              <span class="provider-mark" aria-hidden="true">OR</span>
+              <div class="provider-title"><span class="provider-name">OpenRouter</span><span class="provider-kind">API key · free and paid models</span></div>
+              <span class="provider-pill" id="openrouter-key-status" data-state="unknown">checking…</span>
+            </summary>
+            <div class="provider-tile-body">
+              <input type="password" id="openrouter-key" placeholder="Paste API key" autocomplete="off" aria-label="OpenRouter API key" title="The same key serves OpenRouter's Jev route and account usage reading.">
+              <button id="save-openrouter-key" class="mini">Save</button>
+            </div>
+          </details>
+          <details class="provider-tile" data-provider="lmstudio"><summary class="provider-tile-head">
               <span class="provider-mark" aria-hidden="true">LM</span>
               <div class="provider-title"><span class="provider-name">LM Studio</span><span class="provider-kind">Local server · no key</span></div>
               <span class="provider-pill" id="lmstudio-status" data-state="ready">no key needed</span>
-            </div>
+            </summary>
             <div class="provider-tile-body">
               <input type="text" id="lmstudio-endpoint" placeholder="http://127.0.0.1:1234/v1/chat/completions" spellcheck="false" autocomplete="off" aria-label="LM Studio endpoint" title="The local LM Studio server's chat-completions URL; saved when you leave the field. Its loaded model is detected automatically.">
             </div>
-          </article>
-          <article class="provider-tile" data-provider="custom">
-            <div class="provider-tile-head">
+          </details>
+          <details class="provider-tile" data-provider="custom"><summary class="provider-tile-head">
               <span class="provider-mark" aria-hidden="true">API</span>
               <div class="provider-title"><span class="provider-name">Custom endpoint</span><span class="provider-kind">OpenAI-compatible · your key</span></div>
               <span class="provider-pill" id="custom-key-status" data-state="unknown">checking…</span>
-            </div>
+            </summary>
             <div class="provider-tile-body">
               <input type="text" id="custom-endpoint" placeholder="https://host/v1" spellcheck="false" autocomplete="off" aria-label="Custom provider endpoint" title="Your own OpenAI-compatible endpoint. A bare base URL gains the chat-completions path; saved when you leave the field.">
               <input type="password" id="custom-key" placeholder="API key" autocomplete="off" aria-label="Custom provider API key">
               <button id="save-custom-key" class="mini">Save</button>
             </div>
-          </article>
+          </details>
         </div>
         <p class="settings-eyebrow">CLI logins</p>
         <div class="provider-grid">
-          <article class="provider-tile" data-provider="opencode-cli">
-            <div class="provider-tile-head">
+          <details class="provider-tile" data-provider="opencode-cli"><summary class="provider-tile-head">
               <span class="provider-mark" aria-hidden="true">OC</span>
               <div class="provider-title"><span class="provider-name">OpenCode</span><span class="provider-kind">Builder · plan or free models</span></div>
               <span class="provider-pill" data-cli-status="opencode" data-state="unknown">checking…</span>
-            </div>
+            </summary>
             <div class="provider-tile-body"><span class="provider-hint">Carries your z.ai plan as the mefi-zai provider when that key is saved.</span><button class="ghost mini" data-cli="opencode" title="Open the OpenCode TUI in the repo; carries the Studio mefi-zai provider (your z.ai plan) when a key is saved">Open</button></div>
-          </article>
-          <article class="provider-tile" data-provider="grok">
-            <div class="provider-tile-head">
+          </details>
+          <details class="provider-tile" data-provider="grok"><summary class="provider-tile-head">
               <span class="provider-mark" aria-hidden="true">Gk</span>
               <div class="provider-title"><span class="provider-name">Grok</span><span class="provider-kind">CLI login · xAI account</span></div>
               <span class="provider-pill" data-cli-status="grok" data-state="unknown">checking…</span>
-            </div>
+            </summary>
             <div class="provider-tile-body"><span class="provider-hint">Answers and builds on its own login.</span><button class="ghost mini" data-cli="grok" title="Open the Grok CLI in the repo on its own login">Open</button></div>
-          </article>
-          <article class="provider-tile" data-provider="claude">
-            <div class="provider-tile-head">
+          </details>
+          <details class="provider-tile" data-provider="claude"><summary class="provider-tile-head">
               <span class="provider-mark" aria-hidden="true">CC</span>
               <div class="provider-title"><span class="provider-name">Claude Code</span><span class="provider-kind">CLI login · subscription</span></div>
               <span class="provider-pill" data-cli-status="claude" data-state="unknown">checking…</span>
-            </div>
+            </summary>
             <div class="provider-tile-body"><span class="provider-hint">Answers and builds on your Claude subscription.</span><button class="ghost mini" data-cli="claude" title="Open Claude Code in the repo on its own account">Open</button></div>
-          </article>
-          <article class="provider-tile" data-provider="codex">
-            <div class="provider-tile-head">
+          </details>
+          <details class="provider-tile" data-provider="codex"><summary class="provider-tile-head">
               <span class="provider-mark" aria-hidden="true">Cx</span>
               <div class="provider-title"><span class="provider-name">Codex</span><span class="provider-kind">CLI login · ChatGPT</span></div>
               <span class="provider-pill" data-cli-status="codex" data-state="unknown">checking…</span>
-            </div>
+            </summary>
             <div class="provider-tile-body"><span class="provider-hint">Answers and builds on your ChatGPT login.</span><button class="ghost mini" data-cli="codex" title="Open Codex CLI in the repo on its own account">Open</button></div>
-          </article>
-          <article class="provider-tile" data-provider="antigravity">
-            <div class="provider-tile-head">
+          </details>
+          <details class="provider-tile" data-provider="antigravity"><summary class="provider-tile-head">
               <span class="provider-mark" aria-hidden="true">Ag</span>
               <div class="provider-title"><span class="provider-name">Antigravity</span><span class="provider-kind">CLI login · Google account</span></div>
               <span class="provider-pill" data-cli-status="antigravity" data-state="unknown">checking…</span>
-            </div>
+            </summary>
             <div class="provider-tile-body"><span class="provider-hint">Answers and builds on your Google account.</span><button class="ghost mini" data-cli="antigravity" title="Open the Antigravity CLI in the repo on your Google account">Open</button></div>
-          </article>
+          </details>
         </div>
         <div class="settings-foot">
           <button class="ghost mini" id="cli-test-zai" title="Verify OpenCode sees the Studio-managed mefi-zai GLM provider">Test z.ai link in OpenCode</button>
           <span class="settings-status" id="cli-status">checking…</span>
         </div>
         </section>
-        <section class="settings-group settings-card" id="settings-routing" aria-labelledby="settings-routing-heading">
-        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-route"/></svg></span><div><h3 id="settings-routing-heading">Model routing</h3><p class="muted">Who answers the assistant, and how each task's model is chosen. Ready routes list first; the rest stay selectable and can be set up later. Models are saved per provider, so switching never mixes them.</p></div></div>
-        <p class="muted">The stages behind these switches — who checks the ask, who plans it, who briefs it, when Jev is asked and who picks the model — are drawn as a graph in <button class="ghost mini" data-nav="brains" title="Brain maps (B)">Brain maps</button>. Making a map live moves the switches its parts name.</p>
+<details class="settings-optional settings-card" id="settings-jev"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-target"/></svg></span><span class="settings-summary-text"><b>Decision model</b><span>Connection for automatic model selection</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
+          <p class="muted">Connect the optional decision service. Each route keeps its own encrypted key. Configure model selection under Models and intake classification under Automation.</p>
+          <div class="row"><label class="muted">Route <select id="jev-route" title="Where Jev calls are routed: a hosted gateway or TypeSafe's Jev API directly"><option value="vercel">Vercel AI Gateway</option><option value="typesafe">Jev API — TypeSafe</option><option value="zen">OpenCode Zen</option><option value="openrouter">OpenRouter</option></select></label><input type="password" id="jev-key" placeholder="Vercel gateway API key (stored encrypted)" autocomplete="off" aria-label="Jev API key"><button id="save-jev-key">Save Jev key</button><button id="test-jev">Test Jev connection</button><label class="switch"><input type="checkbox" id="jev-enabled" checked><span class="track"></span><span>Intake classification</span></label></div>
+          <p class="muted" id="jev-status" role="status">Checking Jev…</p>
+        </details></div><p id="studio-browser" class="settings-desktop-note" hidden>Connections require the desktop app.</p>
+</section>
+<section class="settings-category" id="settings-category-models" data-settings-category-pane="models" aria-labelledby="settings-category-models-heading" hidden><header class="settings-category-head"><h2 id="settings-category-models-heading" tabindex="-1">Models</h2><p>Assistant and coding models</p></header><p class="settings-desktop-note" data-desktop-message hidden>These controls are available in the desktop app.</p>
+<section class="settings-group settings-card" id="settings-routing" data-desktop-only aria-labelledby="settings-routing-heading">
+        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-route"/></svg></span><div><h3 id="settings-routing-heading">Model routing</h3><p class="muted">Choose the assistant provider and how models are selected. Overrides are saved per provider.</p></div></div>
+        <p class="muted">Inspect or customize the workflow in <button class="ghost mini" data-nav="brains" title="Brain maps (B)">Brain maps</button>. Applying a map updates the settings it controls.</p>
         <div class="settings-columns">
           <div class="settings-column">
             <p class="settings-eyebrow">Who answers</p>
@@ -539,6 +613,7 @@
                 <option value="zai">z.ai GLM</option>
                 <option value="opencode">OpenCode Go</option>
                 <option value="zen">OpenCode Zen</option>
+                <option value="openrouter">OpenRouter</option>
                 <option value="grok">Grok CLI</option>
                 <option value="claude">Claude Code CLI</option>
                 <option value="codex">Codex CLI</option>
@@ -548,7 +623,7 @@
               </select>
               <span class="field-hint" id="provider-readiness" role="status">checking…</span>
             </label>
-            <div class="auto-order">
+            <details class="settings-help settings-advanced"><summary>Provider preference order</summary><div class="auto-order">
               <span class="field-label">Auto order</span>
               <ol class="auto-order-list" id="auto-order-list" aria-label="Auto provider preference order"></ol>
               <div class="auto-order-add">
@@ -556,18 +631,19 @@
                 <button class="ghost mini" id="auto-order-add-button" type="button">Add</button>
               </div>
               <span class="field-hint">The first ready provider answers. With fallback on, a failed or keyless HTTP route retries down the list.</span>
-            </div>
+            </div></details>
             <label class="switch" title="Off by default: when an HTTP route fails or its key is missing, retry on the next ready HTTP provider in the auto order (this can bill that provider)."><input type="checkbox" id="ai-fallback"><span class="track"></span><span>Fall back to the next provider on failure</span></label>
           </div>
           <div class="settings-column">
             <p class="settings-eyebrow">Models & selection</p>
-            <div class="field-grid">
+            <details class="settings-help settings-advanced"><summary>Model overrides by task type</summary><div class="field-grid">
               <label class="field"><span class="field-label">Routine answers via <span class="field-scope">reading, checks, chat</span></span>
                 <select id="ai-role-routine" title="Provider for routine passes: reading the ask, checks, advisory agents and chat. Same as above = whatever Assistant answers via picks.">
                   <option value="">Same as above</option>
                   <option value="zai">z.ai GLM</option>
                   <option value="opencode">OpenCode Go</option>
                   <option value="zen">OpenCode Zen</option>
+                  <option value="openrouter">OpenRouter</option>
                   <option value="grok">Grok CLI</option>
                   <option value="claude">Claude Code CLI</option>
                   <option value="codex">Codex CLI</option>
@@ -582,6 +658,7 @@
                   <option value="zai">z.ai GLM</option>
                   <option value="opencode">OpenCode Go</option>
                   <option value="zen">OpenCode Zen</option>
+                  <option value="openrouter">OpenRouter</option>
                   <option value="grok">Grok CLI</option>
                   <option value="claude">Claude Code CLI</option>
                   <option value="codex">Codex CLI</option>
@@ -597,6 +674,13 @@
                 <input type="text" id="ai-model-heavy" placeholder="same as routine" spellcheck="false" autocomplete="off" title="Model for heavy passes (plans, briefs, reviews, the overseer, the analyzer read), saved for the provider heavy answers through; empty = routine's model where that provider has one, otherwise its default, shown as the placeholder.">
               </label>
             </div>
+            <div class="openrouter-browser" id="openrouter-model-browser" hidden>
+              <span class="field-label">OpenRouter chat models</span>
+              <p class="field-hint">Search the live roster. Free models appear first. Speech, embeddings and reranking models need a different API.</p>
+              <div class="row"><input id="openrouter-model-search" type="search" placeholder="Search model or provider" aria-label="Search OpenRouter models"><label class="muted"><input id="openrouter-free-only" type="checkbox" checked> Free only</label><button id="openrouter-model-refresh" type="button" class="ghost mini">Refresh list</button></div>
+              <select id="openrouter-model-list" size="7" aria-label="OpenRouter chat models"></select>
+              <div class="row"><button id="openrouter-use-routine" type="button" class="ghost mini">Use for routine</button><button id="openrouter-use-heavy" type="button" class="ghost mini">Use for heavy</button><span id="openrouter-model-status" class="field-hint" role="status">Loading models…</span></div>
+            </div></details>
             <div class="field">
               <span class="field-label">Model selection</span>
               <div class="segmented" role="group" aria-label="Model selection" data-segmented-for="ai-model-selection">
@@ -612,22 +696,22 @@
             <p class="settings-status" id="ai-routing-decision" role="status">No selection recorded yet.</p>
             <p class="settings-status" id="ai-routing-evidence" hidden></p>
             <div class="settings-foot"><button class="ghost mini" id="ai-routing-refresh">Refresh selection</button></div>
-            <details class="settings-help"><summary>How Jev chooses</summary><p id="ai-routing-help">Jev ranks the models within your chosen provider for each task by catalog quality, estimated price, and your project's measured timing, errors, ratings and reported costs; missing evidence stays unknown. Each selection is one small billed gateway request and needs a Jev key (below); when Jev is unavailable the usual default runs. Model overrides always win. CLI routes use their saved model or CLI default; LM Studio and custom endpoints answer with the model loaded at their URL unless you save an override.</p></details>
+            <details class="settings-help"><summary>How Jev chooses</summary><p id="ai-routing-help">Jev ranks the models within your chosen provider for each task by catalog quality, estimated price, and your project's measured timing, errors, ratings and reported costs; missing evidence stays unknown. Each selection is one small billed gateway request and needs a Jev key in Connections; when Jev is unavailable the usual default runs. Model overrides always win. CLI routes use their saved model or CLI default; LM Studio and custom endpoints answer with the model loaded at their URL unless you save an override.</p></details>
           </div>
         </div>
         </section>
-        <section class="settings-group settings-card" id="settings-workers" aria-labelledby="settings-workers-heading">
-        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-wrench"/></svg></span><div><h3 id="settings-workers-heading">Coding workers</h3><p class="muted">Workers carry out queued tasks in your selected project. Pick a builder whose CLI is installed and signed in, then what each build may cost.</p></div></div>
+<section class="settings-group settings-card" id="settings-workers" data-desktop-only aria-labelledby="settings-workers-heading">
+        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-wrench"/></svg></span><div><h3 id="settings-workers-heading">Coding workers</h3><p class="muted">Choose a signed-in coding tool and the model tier it uses for queued tasks.</p></div></div>
         <div class="settings-columns">
           <div class="settings-column">
             <p class="settings-eyebrow">Builder</p>
             <label class="field"><span class="field-label">Builders run on</span>
               <select id="executor-cli">
                 <option value="opencode">OpenCode run</option>
-                <option value="grok">Grok CLI — grok builds every queued job on its own login</option>
-                <option value="claude">Claude Code — claude builds every queued job on your subscription login</option>
-                <option value="codex">Codex — codex builds every queued job on your ChatGPT login</option>
-                <option value="antigravity">Antigravity — agy builds every queued job on your Google account</option>
+                <option value="grok">Grok CLI</option>
+                <option value="claude">Claude Code</option>
+                <option value="codex">Codex</option>
+                <option value="antigravity">Antigravity</option>
               </select>
             </label>
             <label class="field"><span class="field-label"><span id="executor-model-label">Pinned model</span> <span class="field-scope" id="builder-scope-note">for this CLI</span></span>
@@ -656,50 +740,21 @@
           </div>
         </div>
         </section>
-        <details class="settings-optional settings-card" id="settings-jev"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-target"/></svg></span><span class="settings-summary-text"><b>Jev</b><span>Task-aware model selection and optional task suggestions</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
-          <p class="muted">Choose where Jev is routed: the Vercel AI Gateway, TypeSafe's Jev API directly, OpenCode Zen (including its free Jev tier), or OpenRouter. Each route keeps its own key, stored encrypted; switching never moves a key between routes. The key connects Jev for model selection above and optional task suggestions. Intake classification compares incoming work with existing tasks and records suggestions; its switch does not change model selection.</p>
-          <div class="row"><label class="muted">Route <select id="jev-route" title="Where Jev calls are routed: a hosted gateway or TypeSafe's Jev API directly"><option value="vercel">Vercel AI Gateway</option><option value="typesafe">Jev API — TypeSafe</option><option value="zen">OpenCode Zen</option><option value="openrouter">OpenRouter</option></select></label><input type="password" id="jev-key" placeholder="Vercel gateway API key (stored encrypted)" autocomplete="off" aria-label="Jev API key"><button id="save-jev-key">Save Jev key</button><button id="test-jev">Test Jev connection</button><label class="switch"><input type="checkbox" id="jev-enabled" checked><span class="track"></span><span>Intake classification</span></label></div>
-          <p class="muted" id="jev-status" role="status">Checking Jev…</p>
-        </details>
-      </div>
-      <p class="settings-desktop-note">Providers, model routing, coding workers and Jev connect through the desktop app. Run <code>npm start</code> in mefi-studio, or open the portable app, to set them up.</p>
-      </section>
-      <section class="settings-block" data-settings-group="personal" aria-labelledby="settings-block-personal">
-      <h3 class="settings-block-title" id="settings-block-personal">Personal</h3>
-        <details class="settings-optional settings-card settings-you" id="settings-studio"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-studio"/></svg></span><span class="settings-summary-text"><b>Your Studio</b><span>Your name, your companion, theme, motion and where a launch lands</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
-          <div class="settings-you-fields">
-            <label class="field"><span class="field-label">Your name</span><input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?" autocomplete="off"></label>
-            <label class="field"><span class="field-label">Companion name</span><input id="workspace-agent-name" type="text" maxlength="30" placeholder="Mefi" autocomplete="off"></label>
-            <div class="field settings-you-theme"><label class="field-label" for="workspace-accent">Studio theme</label><div class="settings-you-row"><select id="workspace-accent"><option value="aurora">Aurora</option><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option><option value="rose">Rose</option><option value="custom">Custom colors</option><optgroup label="Void collection · Discord members"><option value="void">Void</option><option value="eclipse">Eclipse</option><option value="abyss">Abyss</option><option value="dusk">Neon Dusk</option></optgroup></select><button type="button" class="ghost mini" data-settings-nav="music" title="Every theme, custom colours and the node tree's look, in Style &amp; sound (U)">More in Style &amp; sound <span aria-hidden="true">↗</span></button></div></div>
-          </div>
-          <div class="field settings-you-motion">
-            <span class="field-label" id="settings-motion-label">Motion</span>
-            <div class="segmented" role="group" aria-labelledby="settings-motion-label" aria-describedby="settings-motion-hint" data-segmented-for="motion-toggle">
-              <button type="button" data-value="full" aria-pressed="true">Full<small>every animation</small></button>
-              <button type="button" data-value="calm" aria-pressed="false">Calm<small>no looping motion</small></button>
-              <button type="button" data-value="off" aria-pressed="false">Off<small>no animation</small></button>
-            </div>
-            <select id="motion-toggle" class="segmented-source" aria-hidden="true" tabindex="-1"><option value="full">Full</option><option value="calm">Calm</option><option value="off">Off</option></select>
-            <span class="field-hint" id="settings-motion-hint">Calm stops looping animations, your companion's float included; panels still fade and the live node tree keeps moving. Off stops everything, as your system's reduce-motion setting does.</span>
-          </div>
-          <div class="settings-you-switches">
-            <label class="switch" id="settings-companion-motion" title="Your companion floats and blinks beside the conversation. Calm and Off keep it still."><input id="workspace-motion" type="checkbox" checked><span class="track"></span><span>Let your companion move</span></label>
-            <label class="switch" title="Blur what sits behind every sheet, menu and Home panel. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
-            <label class="switch" title="On: every launch lands on Your workspace. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span>Open Workspace on launch</span></label>
-          </div>
-          <p class="muted">Blur behind panels applies to every sheet, menu and Home panel. With Open Workspace on launch off, Studio opens straight into Command view after the project chooser. All of this stays on this computer.</p>
-        </details>
-        <details class="settings-optional settings-card" id="settings-community"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-community"/></svg></span><span class="settings-summary-text"><b>Community</b><span>The Void Engine Discord: builders, model setups and the members' Void collection</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
-          <section class="community-showcase" id="community-showcase" aria-labelledby="community-showcase-title"><div class="community-showcase-copy"><span class="community-showcase-kicker">Void collection</span><strong id="community-showcase-title">Four themes, three node styles</strong><span class="community-showcase-state" id="community-showcase-state" data-unlocked="false">For members of the Void Engine Discord</span><button type="button" class="primary mini community-choose" id="community-choose" title="Open Style &amp; sound at the Void collection" hidden>Choose a Void theme</button></div><div class="community-showcase-items" id="community-showcase-items" aria-hidden="true"></div></section>
-          <p class="community-note" id="community-settings-note" role="status" hidden></p>
-          <div id="community-settings-body"><p class="muted">Checking your Discord link…</p></div>
-          <p class="settings-status" id="community-settings-status" role="status"></p>
-          <p class="muted" id="community-privacy">Linking reads your Discord id and name, and your roles and join date in the Void Engine server: when you link, about once a week (sooner after a failed check, then daily), and when you press Check now. Studio keeps them in its settings on this computer, with the sign-in encrypted in community-auth.json. Nothing about your projects is sent. Unlink revokes the sign-in and deletes both.</p>
-        </details>
-      </section>
-      <section class="settings-block" data-settings-group="system" aria-labelledby="settings-block-system">
-      <h3 class="settings-block-title" id="settings-block-system">System</h3>
-        <details class="settings-optional settings-card" id="settings-updates" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-update"/></svg></span><span class="settings-summary-text"><b>Updates</b><span>Live update and published builds</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
+</section>
+<section class="settings-category" id="settings-category-automation" data-settings-category-pane="automation" aria-labelledby="settings-category-automation-heading" hidden><header class="settings-category-head"><h2 id="settings-category-automation-heading" tabindex="-1">Automation</h2><p>Queue behavior and approvals</p></header><p class="settings-desktop-note" data-desktop-message hidden>These controls are available in the desktop app.</p>
+<section class="settings-card" id="settings-automation" data-desktop-only><div class="settings-card-head"><div><h3>Queue &amp; approvals</h3><p class="muted">Applies to every project. Running jobs finish when new work is paused.</p></div></div><div class="settings-control-list">
+<label class="settings-control"><span><b>Allow new work</b><small>Admit queued tasks, builds and assistant suggestions.</small></span><input id="settings-new-work" type="checkbox" role="switch" disabled data-queue-setting="newWork"></label>
+<label class="settings-control"><span><b>Run the queue</b><small>Start ready tasks automatically when workers are available.</small></span><input id="settings-queue-enabled" type="checkbox" role="switch" disabled data-queue-setting="enabled"></label>
+<label class="settings-control"><span><b>Build approval</b><small>Review briefs before building, or start eligible tasks automatically.</small></span><select id="settings-build-mode" data-queue-setting="autoBuild" disabled><option value="auto">Automatic</option><option value="verify">Review first</option></select></label>
+<label class="settings-control"><span><b>Parallel builds</b><small>Limit concurrent workers or let Studio adapt to machine load.</small></span><select id="settings-parallel" data-queue-setting="parallel" disabled><option value="machine">Machine managed</option><option value="1">1 worker</option><option value="2">2 workers</option><option value="3">3 workers</option></select></label>
+<label class="settings-control"><span><b>Agent coordination</b><small>Work across the queue or focus all agents on one task.</small></span><select id="settings-agent-mode" data-queue-setting="mode" disabled><option value="swarm">Across the queue</option><option value="cluster">One shared task</option></select></label>
+</div><p id="settings-automation-status" class="settings-status" role="status"></p></section><details class="settings-card settings-advanced" id="settings-automation-behavior" data-desktop-only><summary>Assistant behavior</summary><div class="settings-control-list" id="settings-behavior-controls"></div></details>
+</section>
+<section class="settings-category" id="settings-category-audio" data-settings-category-pane="audio" aria-labelledby="settings-category-audio-heading" hidden><header class="settings-category-head"><h2 id="settings-category-audio-heading" tabindex="-1">Audio</h2><p>Music, video and sound effects</p></header>
+<section class="settings-card" id="settings-audio"><div id="settings-audio-media"><h3>Music &amp; video</h3><p class="muted">Manage local music, radio, YouTube and other links from the audio dropdown. It also holds your audio connection and reactions.</p><button type="button" class="ghost" id="settings-audio-open" data-settings-nav="audio" aria-haspopup="dialog" aria-expanded="false" aria-controls="music-dropdown">Open music &amp; video</button></div></section><details class="settings-card settings-advanced" id="settings-audio-effects"><summary>Sound effects</summary><div id="settings-audio-controls"></div></details>
+</section>
+<section class="settings-category" id="settings-category-system" data-settings-category-pane="system" aria-labelledby="settings-category-system-heading" hidden><header class="settings-category-head"><h2 id="settings-category-system-heading" tabindex="-1">System</h2><p>Updates, diagnostics and integrations</p></header>
+<details class="settings-optional settings-card" id="settings-updates" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-update"/></svg></span><span class="settings-summary-text"><b>Updates</b><span>Live update and published builds</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
         <div class="update-block" data-update-block>
           <p class="settings-eyebrow">Live update</p>
           <p class="muted">In development, Studio watches its source files and applies local changes. Reloads wait for active builders and result saves.</p>
@@ -721,7 +776,7 @@
           </div>
         </div>
         </details>
-        <details class="settings-optional settings-card" id="settings-diagnostics"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-gauge"/></svg></span><span class="settings-summary-text"><b>Diagnostics</b><span>Speed probe, performance profiler, auditor and machine status</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
+<details class="settings-optional settings-card" id="settings-diagnostics"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-gauge"/></svg></span><span class="settings-summary-text"><b>Diagnostics</b><span>Performance, checks and machine status</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
           <div class="row settings-probe" data-desktop-only>
             <label class="muted">Speed probe <select id="speed-model"></select></label>
             <button id="speed-go">Measure tokens/s</button>
@@ -734,10 +789,10 @@
           </div>
           <p class="muted">A capture stays in memory until you export it. The auditor's findings and the machine readout open in the Explorer.</p>
         </details>
-        <details class="settings-optional settings-card" id="settings-integrations"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-plug"/></svg></span><span class="settings-summary-text"><b>Integrations</b><span>Optional: Ruins Runner and Love2D</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><p class="muted">Requires a separate game project and its LÖVE runtime. This integration is optional for Studio.</p><div class="row studio-actions" id="studio-actions"><button data-action="launch">Launch Love2D studio</button><button data-action="smoke">Run smoke</button><button data-action="game">Launch Ruins Runner</button><button data-action="stop">Stop game</button></div><p class="muted" id="studio-hint"></p></details>
-        <details class="settings-optional settings-card" id="settings-styler" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-plug"/></svg></span><span class="settings-summary-text"><b>Discord Server Styler</b><span>Bot and local dashboard</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><p class="muted">Run the bot and its local dashboard from this desktop. Bot credentials stay in the separate Server Styler project's <code>.env</code>.</p><div class="row studio-actions" id="server-styler-actions"><button class="primary" data-styler-action="start">Start Server Styler</button><button data-styler-action="open">Open dashboard</button><button data-styler-action="folder">Open bot folder</button><button data-styler-action="stop">Stop</button></div><p class="eyes-status" id="server-styler-status" role="status">Checking Server Styler…</p></details>
-        <details class="settings-optional settings-card" id="settings-log"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-legend"/></svg></span><span class="settings-summary-text"><b>Connection log</b><span>What Studio tried and what answered: connections, tools and probes</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><pre class="log" id="studio-log" aria-label="Connection log">No activity yet.</pre></details>
-      </section>
+<details class="settings-optional settings-card" id="settings-integrations"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-plug"/></svg></span><span class="settings-summary-text"><b>Integrations</b><span>Optional: Ruins Runner and Love2D</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><p class="muted">Requires a separate game project and its LÖVE runtime. This integration is optional for Studio.</p><div class="row studio-actions" id="studio-actions"><button data-action="launch">Launch Love2D studio</button><button data-action="smoke">Run smoke</button><button data-action="game">Launch Ruins Runner</button><button data-action="stop">Stop game</button></div><p class="muted" id="studio-hint"></p></details>
+<details class="settings-optional settings-card" id="settings-styler" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-plug"/></svg></span><span class="settings-summary-text"><b>Discord Server Styler</b><span>Bot and local dashboard</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><p class="muted">Run the bot and its local dashboard from this desktop. Bot credentials stay in the separate Server Styler project's <code>.env</code>.</p><div class="row studio-actions" id="server-styler-actions"><button class="primary" data-styler-action="start">Start Server Styler</button><button data-styler-action="open">Open dashboard</button><button data-styler-action="folder">Open bot folder</button><button data-styler-action="stop">Stop</button></div><p class="eyes-status" id="server-styler-status" role="status">Checking Server Styler…</p></details>
+<details class="settings-optional settings-card" id="settings-log"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-legend"/></svg></span><span class="settings-summary-text"><b>Connection log</b><span>Provider, tool and probe activity</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><pre class="log" id="studio-log" aria-label="Connection log">No activity yet.</pre></details>
+</section>
         </div>
       </div>
     </div>
@@ -790,7 +845,10 @@
     </div>
     <div class="cmd-tools" role="toolbar" aria-label="Command view controls">
       <div class="cmd-tools-group" role="group" aria-label="Agents">
-        <label class="cmd-agent-mode" title="Quick switch: the same selector as the rail's Agents tab">Agents <select id="idle-feed-agent-mode" disabled aria-label="Agent coordination mode" aria-describedby="idle-feed-agent-mode-note"><option value="swarm">Swarm</option><option value="cluster">Cluster</option></select></label>
+        <div class="cmd-agent-mode">
+          <button id="idle-agent-settings" class="ghost" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="cmd-settings" title="Agent settings" aria-label="Agent settings"><svg class="glyph" aria-hidden="true"><use href="#g-agents"/></svg><span class="label">Agents</span><svg class="glyph chev" aria-hidden="true"><use href="#g-chev"/></svg></button>
+          <select id="idle-feed-agent-mode" disabled aria-label="Agent coordination mode" aria-describedby="idle-feed-agent-mode-note"><option value="swarm">Swarm</option><option value="cluster">Cluster</option></select>
+        </div>
       </div>
       <span class="tools-sep" aria-hidden="true"></span>
       <div class="cmd-tools-group" role="group" aria-label="Camera">
@@ -807,7 +865,7 @@
       </div>
       <span class="tools-sep" aria-hidden="true"></span>
       <div class="cmd-tools-group" role="group" aria-label="Sound">
-        <button id="idle-music-toggle" class="ghost cmd-music" aria-pressed="false" title="React to music using the audio source in Ambience" aria-label="React to music"><span id="idle-music-level" class="cmd-music-level" aria-hidden="true"><i></i><i></i><i></i></span><span id="idle-music-status" class="label">Music off</span></button>
+        <button id="idle-music-toggle" class="ghost cmd-music" aria-haspopup="dialog" aria-expanded="false" aria-controls="music-dropdown" title="Music, video and audio setup" aria-label="Connect audio · Music and video"><span id="idle-music-level" class="cmd-music-level" aria-hidden="true"><i></i><i></i><i></i></span><span id="idle-music-status" class="label">Connect audio</span><svg class="glyph music-dropdown-chevron" aria-hidden="true"><use href="#g-chev"/></svg></button>
         <button id="idle-ambience" class="ghost icon" aria-haspopup="dialog" aria-expanded="false" aria-controls="idle-ambience-pop" title="Ambience: look, sound and calm" aria-label="Ambience"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-ambience"/></svg></button>
       </div>
       <span class="tools-sep" aria-hidden="true"></span>
@@ -819,7 +877,7 @@
        while it is open. -->
   <div id="idle-view-pop" class="pop cmd-view-pop" role="menu" aria-labelledby="idle-view-menu" hidden>
     <button id="idle-view" class="ghost" type="button" role="menuitem" tabindex="-1" data-view="3d" title="View: 3D orbit (V toggles 2D)" aria-label="Map: 3D orbit"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-plane"/></svg><span class="cmd-view-name">Map</span><span class="label">3D</span><span class="key" aria-hidden="true">V</span></button>
-    <button id="idle-labels" class="ghost" type="button" role="menuitem" tabindex="-1" data-labels="auto" title="Node labels: auto (L cycles auto / all / none)" aria-label="Node labels: auto"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-labels"/></svg><span class="cmd-view-name">Labels</span><span class="label">auto</span><span class="key" aria-hidden="true">L</span></button>
+    <button id="idle-labels" class="ghost" type="button" role="menuitem" tabindex="-1" data-labels="auto" title="Node labels: auto (L cycles auto / updates / all / none)" aria-label="Node labels: auto"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-labels"/></svg><span class="cmd-view-name">Labels</span><span class="label">auto</span><span class="key" aria-hidden="true">L</span></button>
     <div class="cmd-view-zoom" role="group" aria-label="Zoom">
       <span class="cmd-view-name" aria-hidden="true">Zoom</span>
       <button id="idle-zoom-out" class="ghost icon" type="button" role="menuitem" tabindex="-1" title="Zoom out (−)" aria-label="Zoom out"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-zoom-out"/></svg></button>
@@ -845,119 +903,19 @@
     <hr class="pop-sep">
     <div class="pop-group" role="group" aria-labelledby="idle-ambience-calm">
       <div class="eyebrow" id="idle-ambience-calm">Calm</div>
-      <label class="switch pop-row" title="Fade the panels and gently spin the tree after 30 seconds without input. Move the mouse or press a key to wake."><span class="grow">Zen mode</span><input type="checkbox" id="idle-ambient-zen"><span class="track"></span></label>
+      <label class="switch pop-row" title="Fade the panels and fly the camera around the tree after 30 seconds without input. Move the mouse or press a key to glide back."><span class="grow">Zen mode</span><input type="checkbox" id="idle-ambient-zen"><span class="track"></span></label>
     </div>
     <hr class="pop-sep">
-    <button class="ghost mini pop-link" type="button" data-nav="music" title="Open Style &amp; sound (U)">Theme, node style &amp; music: Style&nbsp;&amp;&nbsp;sound&nbsp;↗</button>
+    <button class="ghost mini pop-link" type="button" data-nav="studio" data-nav-params='{"category":"appearance"}'>All appearance settings ↗</button>
+    <button class="ghost mini pop-link" type="button" data-nav="studio" data-nav-params='{"category":"audio"}'>Audio settings ↗</button>
   </div>
-  <aside id="idle-info" class="cmd-card" role="region" aria-label="Selected node" aria-live="polite" hidden></aside>
-  <div id="idle-follow-status" class="cmd-follow-status" hidden aria-live="polite"></div>
-  <aside id="cmd-rail" class="cmd-rail" role="region" aria-label="Work, agents, assistant, done and questions">
-    <header class="rail-tabs" role="tablist" aria-label="Panel views">
-      <button id="cmd-rail-tab-node" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-node" tabindex="-1" data-rail-view="node" title="The node you selected" hidden><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-target"/></svg><span class="rail-tab-label">Node</span></button>
-      <button id="cmd-rail-tab-work" class="rail-tab" role="tab" aria-selected="true" aria-controls="idle-feed" data-rail-view="work" title="Work · what is running and what is queued"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-tasks"/></svg><span class="rail-tab-label">Work</span><span id="cmd-rail-work-badge" class="count" hidden></span></button>
-      <button id="cmd-rail-tab-settings" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-settings" tabindex="-1" data-rail-view="settings" title="Agents · how the queue runs"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-agents"/></svg><span class="rail-tab-label">Agents</span></button>
-      <button id="cmd-rail-tab-assistant" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-chat" tabindex="-1" data-rail-view="assistant" title="Assistant · the conversation and the New work switch"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-spark"/></svg><span class="rail-tab-label">Assistant</span><span id="cmd-rail-assistant-badge" class="count" hidden></span></button>
-      <button id="cmd-rail-tab-done" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-done" tabindex="-1" data-rail-view="done" title="Done · builds that finished"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-plans"/></svg><span class="rail-tab-label">Done</span></button>
-      <button id="cmd-rail-tab-ask" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-asks" tabindex="-1" data-rail-view="ask" title="Ask · decisions waiting on you"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-help"/></svg><span class="rail-tab-label">Ask</span><span id="cmd-rail-ask-badge" class="count warn" hidden></span></button>
-    </header>
-    <div id="cmd-rail-body" class="rail-body">
-  <!-- The selected node's detail. It owns the whole rail while a node is
-       picked, so the reading surface is full height with one scroller; the
-       floating #idle-info card is only the narrow-layout fallback. -->
-  <aside id="cmd-node" class="cmd-node cmd-card" role="tabpanel" aria-labelledby="cmd-rail-tab-node" aria-live="polite" hidden></aside>
-  <aside id="cmd-chat" class="cmd-chat" role="tabpanel" aria-label="Assistant chat log" hidden>
-    <header class="rail-view-head chat-log-head">
-      <i id="cmd-chat-dot" class="feed-dot" aria-hidden="true"></i>
-      <button id="cmd-chat-jump" class="rail-view-title chat-log-title" type="button" title="Select the assistant on the tree (M)">Assistant</button>
-      <span id="cmd-chat-state" class="feed-state">idle</span>
-      <button id="cmd-chat-toggle" class="ghost mini rail-fold" type="button" aria-expanded="true" title="Collapse the chat log">&ndash;</button>
-    </header>
-    <div id="cmd-chat-body" class="chat-log-body">
-      <div class="new-work-strip" role="group" aria-label="New work">
-        <label class="switch mini new-work-toggle" title="Allow new work to start. Turning this off pauses new work; current jobs can finish."><input type="checkbox" id="cmd-chat-new-work" role="switch" aria-describedby="idle-new-work-help" disabled><span class="track" aria-hidden="true"></span><span>New work</span><span id="cmd-chat-new-work-state" class="new-work-state" aria-hidden="true">Loading…</span></label>
-        <p id="idle-new-work-help" class="control-help">The master switch for anything new: queued tasks, builds and suggested work. Off pauses admission; running jobs, replies and your answers still go through.</p>
-      </div>
-      <div id="cmd-chat-thread" class="assistant-thread chat-log-thread" aria-live="polite"></div>
-      <div class="chat-chips" aria-label="Quick asks">
-        <button class="ghost mini" type="button" data-cmdchat-msg="status">Status</button>
-        <button class="ghost mini" type="button" data-cmdchat-msg="what should I work on">What next?</button>
-        <button class="ghost mini" type="button" data-cmdchat-msg="read the log">Log</button>
-        <button class="ghost mini" type="button" data-cmdchat-msg="what is the auto builder doing">Builder</button>
-      </div>
-      <div class="assistant-composer chat-log-composer">
-        <textarea id="cmd-chat-input" class="grow" rows="1" placeholder="Message the assistant… (Enter)" aria-label="Message the assistant" autocomplete="off" spellcheck="false"></textarea>
-        <button id="cmd-chat-send" class="primary mini" type="button">Send</button>
-      </div>
-    </div>
-  </aside>
-  <aside id="idle-feed" class="cmd-feed" role="tabpanel" aria-label="Live work">
-    <header class="rail-view-head feed-head">
-      <h2 class="rail-view-title feed-title"><button id="idle-feed-toggle" class="feed-toggle" type="button" aria-expanded="true" aria-controls="idle-feed-content" title="Collapse live work">
-        <i id="idle-feed-dot" class="feed-dot" aria-hidden="true"></i>
-        <span>Live work</span><span id="idle-feed-state" class="feed-state">idle</span>
-        <svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg>
-      </button></h2>
-    </header>
-    <div id="idle-feed-content" class="feed-content">
-    <div id="idle-feed-metrics" class="feed-metrics" aria-label="Work readiness"></div>
-    <!-- Readiness stays pinned above; everything below it shares ONE scroller,
-         with each section head sticking as you pass it. The roster used to sit
-         outside this region with a 168px cap of its own, which made the panel
-         three separate wheels. -->
-    <div id="idle-feed-scroll" class="feed-scroll" tabindex="0" role="region" aria-label="Current work and queue">
-    <!-- Current work leads: what is happening now must be on screen without a
-         scroll, however many agents the roster below it lists. -->
-    <section class="feed-current" aria-label="Current work">
-      <div class="feed-section-head"><h3>Current work</h3></div>
-      <div id="idle-feed-now" class="feed-now" aria-live="polite"></div>
-    </section>
-    <section id="idle-feed-agent-section" class="feed-section feed-agents-section" aria-label="Agents">
-      <div class="feed-section-head"><h3>Agents <span id="idle-feed-agents-count" class="feed-agents-count" data-state="idle"></span></h3></div>
-      <ul id="idle-feed-agents" class="pin-list assistant-activity assistant-roster feed-agents" aria-label="Agent roster"></ul>
-    </section>
-    <div id="idle-feed-activity" class="feed-activity">
-      <section id="idle-feed-attention" class="feed-attention" aria-label="Needs attention and retries" hidden></section>
-      <section class="feed-upnext" aria-label="Queued work">
-        <div class="feed-section-head"><h3>Up next <span id="idle-feed-queue-count"></span></h3><button id="idle-feed-menu" class="ghost mini feed-menu" aria-expanded="false" aria-controls="idle-feed-drop" title="Show more queued work"><span class="label">Show more</span><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></button></div>
-        <ul id="idle-feed-queue" class="feed-queue"></ul>
-        <ul id="idle-feed-drop" class="feed-queue feed-drop" aria-label="More queued work" hidden></ul>
-      </section>
-      <details id="idle-feed-log-section" class="feed-section feed-technical"><summary>Technical log</summary><ul id="idle-feed-list" class="feed-list"></ul></details>
-      <p id="idle-feed-meta" class="feed-meta"></p>
-    </div>
-    </div>
-    <div id="idle-feed-chat" class="feed-chat" hidden>
-      <p id="idle-chat-status" class="eyes-status assistant-service" role="status">assistant</p>
-      <div id="idle-chat-thread" class="assistant-thread feed-chat-thread" aria-live="polite" aria-label="Assistant thread"></div>
-      <ul id="idle-chat-work" class="pin-list assistant-activity feed-chat-work"></ul>
-      <details id="idle-chat-absorbed" class="card-cps feed-absorbed" hidden><summary>Absorbed work</summary><div id="idle-chat-absorbed-list"></div></details>
-      <div id="idle-chat-chips" class="chat-chips" aria-label="Quick asks">
-        <button class="ghost mini" type="button" data-msg="status">Status</button>
-        <button class="ghost mini" type="button" data-msg="what should I work on">What next?</button>
-        <button class="ghost mini" type="button" data-msg="read the log">Log</button>
-        <button class="ghost mini" type="button" data-msg="help">Help</button>
-      </div>
-      <div class="assistant-composer feed-chat-composer">
-        <textarea id="idle-chat-input" class="grow" rows="1" placeholder="Message the assistant… (Enter)" aria-label="Message the assistant" autocomplete="off" spellcheck="false"></textarea>
-        <button id="idle-chat-send" class="primary mini" type="button">Send</button>
-      </div>
-      <div class="feed-chat-actions">
-        <button id="idle-chat-overseer" class="ghost mini" type="button" title="The overseer reviews the assistant's own work, tunes prefs and files upgrades">Oversee</button>
-        <button id="idle-chat-tidy" class="ghost mini" type="button" title="Archive done tasks, prune finished ideas, clear resolved requests">Tidy</button>
-        <button id="idle-chat-fix" class="ghost mini" type="button" title="Repair the catalog and data files, check the live update">Fix</button>
-        <label class="switch mini new-work-toggle" title="Allow new work to start. Turning this off pauses new work; current jobs can finish."><input type="checkbox" id="idle-chat-pause" role="switch" aria-describedby="idle-new-work-help" disabled><span class="track" aria-hidden="true"></span><span>New work</span><span id="idle-chat-new-work-state" class="new-work-state" aria-hidden="true">Loading…</span></label>
-        <button id="idle-chat-explorer" class="ghost mini" type="button" title="The full assistant surface in the Session explorer (E)">Explorer</button>
-      </div>
-    </div>
-    </div>
-  </aside>
-  <section id="cmd-settings" class="cmd-settings" role="tabpanel" aria-labelledby="cmd-rail-tab-settings" hidden>
+  <section id="cmd-settings" class="cmd-settings pop cmd-agents-pop" role="dialog" aria-labelledby="cmd-agents-title" tabindex="-1" hidden>
     <div class="rail-view-head">
-      <h2 class="rail-view-title">Agents</h2>
+      <h2 id="cmd-agents-title" class="rail-view-title">Agent settings</h2>
       <span id="cmd-settings-state" class="feed-state setting-state" role="status" aria-live="polite"></span>
+      <button id="idle-agent-settings-close" class="ghost mini" type="button" aria-label="Close agent settings">×</button>
     </div>
-    <p class="rail-view-note">How your agents run the queue. Changes apply to every project and never interrupt work already in progress.</p>
+    <p class="rail-view-note">Queue controls apply across projects. Current work continues.</p>
     <div class="settings-scroll">
       <div id="cmd-agents-glance" class="agents-glance" role="group" aria-label="Agents at a glance">
         <span class="agents-chip" id="cmd-glance-autopilot" data-tone="idle"><span class="agents-chip-k">Autopilot</span><b>…</b></span>
@@ -988,17 +946,22 @@
           <svg class="glyph setting-glyph" aria-hidden="true" focusable="false"><use href="#g-agents"/></svg>
           <label class="setting-label" for="idle-settings-agent-mode">Agent mode</label>
           <select id="idle-settings-agent-mode" disabled aria-describedby="idle-feed-agent-mode-note"><option value="swarm">Swarm</option><option value="cluster">Cluster</option></select>
-          <span id="idle-feed-agent-mode-note" class="setting-hint" role="status">Both modes collaborate and delegate subtasks. Swarm works across the queue; Cluster focuses on one shared task.</span>
+          <span id="idle-feed-agent-mode-note" class="setting-hint" role="status">Swarm uses one builder per task across the queue. Cluster plans and reviews a shared task with supporting agents.</span>
         </div>
       </div>
       <div class="setting-group" role="group" aria-labelledby="cmd-settings-safety-title">
-        <h3 id="cmd-settings-safety-title" class="setting-group-title"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-exit"/></svg>Safety</h3>
+        <h3 id="cmd-settings-safety-title" class="setting-group-title"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-exit"/></svg>Stop or restart</h3>
         <div class="setting-actions">
           <button id="idle-stop-all" class="ghost mini" type="button" title="Stop every running agent now. Each run's progress is saved and its work stays queued.">Stop all</button>
           <button id="idle-restart" class="ghost mini" type="button" title="Stop every agent, save progress, and restart Studio.">Restart Studio</button>
           <span id="idle-stop-state" class="feed-state" role="status" aria-live="polite"></span>
         </div>
         <p class="setting-hint">Stop all halts every agent now; progress is saved and the work stays queued. Restart stops the agents first, then relaunches Studio paused.</p>
+      </div>
+      <div class="setting-actions" aria-label="More agent settings">
+        <button class="ghost mini" type="button" data-nav="agents" data-nav-params='{"section":"setup","pane":"team"}'>Team &amp; models ↗</button>
+        <button class="ghost mini" type="button" data-nav="agents" data-nav-params='{"section":"setup","pane":"connections"}'>Providers ↗</button>
+        <button class="ghost mini" type="button" data-nav="agents" data-nav-params='{"section":"setup","pane":"behavior"}'>All run settings ↗</button>
       </div>
       <details id="idle-controls-help" class="feed-help">
         <summary>About these controls</summary>
@@ -1010,35 +973,136 @@
           <dt>Build mode</dt>
           <dd><b>Auto build</b> starts eligible tasks as soon as a worker is free. <b>Verify first</b> holds every new or changed brief for your approval, so you decide what gets built. Switching never interrupts a running job.</dd>
           <dt>Agent mode</dt>
-          <dd>How agents coordinate. <b>Swarm</b> works across all ready tasks and their subtasks; <b>Cluster</b> focuses every agent on one shared task until it is done. Both plan, delegate and review results; current work finishes when you switch. The same selector sits in the node tree toolbar under <b>Agents</b> for quick changes.</dd>
+          <dd>How agents coordinate. <b>Swarm</b> uses one builder per task across the ready queue; <b>Cluster</b> adds planning, review and scoped delegation for one shared task. Current work finishes when you switch. The same selector sits in the node tree toolbar under <b>Agents</b> for quick changes.</dd>
           <dt>New work</dt>
           <dd>The master switch for starting anything new — queued tasks, builds and work the assistant suggests — lives with the Assistant. Off pauses admission; running jobs, replies and your answers to questions still work.</dd>
         </dl>
       </details>
     </div>
   </section>
+  <aside id="idle-info" class="cmd-card" role="region" aria-label="Selected node" aria-live="polite" hidden></aside>
+  <div id="idle-follow-status" class="cmd-follow-status" hidden aria-live="polite"></div>
+  <aside id="cmd-rail" class="cmd-rail" role="region" aria-label="Work, assistant, runs and questions">
+    <header class="rail-tabs" role="tablist" aria-label="Panel views">
+      <button id="cmd-rail-tab-node" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-node" tabindex="-1" data-rail-view="node" title="The node you selected" hidden><span class="rail-tab-mark"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-target"/></svg></span><span class="rail-tab-label">Node</span></button>
+      <button id="cmd-rail-tab-work" class="rail-tab" role="tab" aria-selected="true" aria-controls="idle-feed" data-rail-view="work" title="Work · what is running and what is queued"><span class="rail-tab-mark"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-tasks"/></svg><span id="cmd-rail-work-badge" class="count" hidden></span></span><span class="rail-tab-label">Work</span></button>
+      <button id="cmd-rail-tab-assistant" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-chat" tabindex="-1" data-rail-view="assistant" title="Assistant · the conversation and the New work switch"><span class="rail-tab-mark"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-spark"/></svg><span id="cmd-rail-assistant-badge" class="count" hidden></span></span><span class="rail-tab-label">Assistant</span></button>
+      <button id="cmd-rail-tab-done" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-done" tabindex="-1" data-rail-view="done" title="Runs · recent build history"><span class="rail-tab-mark"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-plans"/></svg></span><span class="rail-tab-label">Runs</span></button>
+      <button id="cmd-rail-tab-ask" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-asks" tabindex="-1" data-rail-view="ask" title="Ask · decisions waiting on you"><span class="rail-tab-mark"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-help"/></svg><span id="cmd-rail-ask-badge" class="count warn" hidden></span></span><span class="rail-tab-label">Ask</span></button>
+    </header>
+    <div id="cmd-rail-body" class="rail-body">
+  <!-- The selected node's detail. It owns the whole rail while a node is
+       picked, so the reading surface is full height with one scroller; the
+       floating #idle-info card is only the narrow-layout fallback. -->
+  <aside id="cmd-node" class="cmd-node cmd-card" role="tabpanel" aria-labelledby="cmd-rail-tab-node" aria-live="polite" hidden></aside>
+  <aside id="cmd-chat" class="cmd-chat" role="tabpanel" aria-label="Assistant chat log" hidden>
+    <header class="rail-view-head chat-log-head">
+      <i id="cmd-chat-dot" class="feed-dot" aria-hidden="true"></i>
+      <button id="cmd-chat-jump" class="rail-view-title chat-log-title" type="button" title="Select the assistant on the tree (M)">Assistant</button>
+      <span id="cmd-chat-state" class="feed-state">idle</span>
+      <button id="cmd-chat-toggle" class="ghost mini rail-fold" type="button" aria-expanded="true" title="Collapse the chat log">&ndash;</button>
+    </header>
+    <div id="cmd-chat-body" class="chat-log-body">
+      <div class="new-work-strip" role="group" aria-label="New work">
+        <label class="switch mini new-work-toggle" title="Allow new work to start. Turning this off pauses new work; current jobs can finish."><input type="checkbox" id="cmd-chat-new-work" role="switch" aria-describedby="idle-new-work-help" disabled><span class="track" aria-hidden="true"></span><span>New work</span><span id="cmd-chat-new-work-state" class="new-work-state" aria-hidden="true">Loading…</span></label>
+        <p id="idle-new-work-help" class="control-help">Accept new work. Turning this off lets current work finish.</p>
+      </div>
+      <div id="cmd-chat-thread" class="assistant-thread chat-log-thread" aria-live="polite"></div>
+      <div class="chat-chips" aria-label="Quick asks">
+        <button class="ghost mini" type="button" data-cmdchat-msg="status">Status</button>
+        <button class="ghost mini" type="button" data-cmdchat-msg="what should I work on">What next?</button>
+        <button class="ghost mini" type="button" data-cmdchat-msg="read the log">Log</button>
+        <button class="ghost mini" type="button" data-cmdchat-msg="what is the auto builder doing">Builder</button>
+      </div>
+      <div class="assistant-composer chat-log-composer">
+        <textarea id="cmd-chat-input" class="grow" rows="1" placeholder="Message the assistant… (Enter)" aria-label="Message the assistant" autocomplete="off" spellcheck="false"></textarea>
+        <button id="cmd-chat-send" class="primary mini" type="button">Send</button>
+      </div>
+    </div>
+  </aside>
+  <aside id="idle-feed" class="cmd-feed" role="tabpanel" aria-labelledby="cmd-rail-tab-work">
+    <header class="rail-view-head feed-head">
+      <h2 class="rail-view-title feed-title"><button id="idle-feed-toggle" class="feed-toggle" type="button" aria-expanded="true" aria-controls="idle-feed-content" title="Collapse live work">
+        <i id="idle-feed-dot" class="feed-dot" aria-hidden="true"></i>
+        <span>Live work</span><span id="idle-feed-state" class="feed-state">idle</span>
+        <svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg>
+      </button></h2>
+    </header>
+    <div id="idle-feed-content" class="feed-content">
+    <div id="idle-feed-metrics" class="feed-metrics" aria-label="Work readiness"></div>
+    <!-- Readiness stays pinned above; everything below it shares ONE scroller,
+         with each section head sticking as you pass it. The roster used to sit
+         outside this region with a 168px cap of its own, which made the panel
+         three separate wheels. -->
+    <div id="idle-feed-scroll" class="feed-scroll" tabindex="0" role="region" aria-label="Current work and queue">
+    <!-- Current work leads: what is happening now must be on screen without a
+         scroll, however many agents the roster below it lists. -->
+    <section class="feed-current" aria-label="Current work">
+      <div id="idle-feed-now" class="feed-now" aria-live="polite"></div>
+    </section>
+    <section id="idle-feed-agent-section" class="feed-section feed-agents-section" aria-label="Agents">
+      <div class="feed-section-head"><h3>Agents <span id="idle-feed-agents-count" class="feed-agents-count" data-state="idle"></span></h3></div>
+      <ul id="idle-feed-agents" class="pin-list assistant-activity assistant-roster feed-agents" aria-label="Agent roster"></ul>
+    </section>
+    <div id="idle-feed-activity" class="feed-activity">
+      <section id="idle-feed-attention" class="feed-attention" aria-label="Needs attention and retries" hidden></section>
+      <section class="feed-upnext" aria-label="Queued work">
+        <div class="feed-section-head"><h3>Up next <span id="idle-feed-queue-count"></span></h3><button id="idle-feed-menu" class="ghost mini feed-menu" aria-expanded="false" aria-controls="idle-feed-drop" title="Show more queued work"><span class="label">Show more</span><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></button></div>
+        <ul id="idle-feed-queue" class="feed-queue"></ul>
+        <ul id="idle-feed-drop" class="feed-queue feed-drop" aria-label="More queued work" hidden></ul>
+      </section>
+      <details id="idle-feed-recent-agents" class="feed-section feed-recent-agents" hidden><summary>Recent agents <span id="idle-feed-recent-count"></span></summary><ul id="idle-feed-recent-list" class="pin-list assistant-activity assistant-roster feed-agents" aria-label="Finished and idle agents"></ul></details>
+      <details id="idle-feed-log-section" class="feed-section feed-technical"><summary>Technical log</summary><ul id="idle-feed-list" class="feed-list"></ul></details>
+      <p id="idle-feed-meta" class="feed-meta"></p>
+    </div>
+    </div>
+    <div id="idle-feed-chat" class="feed-chat" hidden>
+      <p id="idle-chat-status" class="eyes-status assistant-service" role="status">assistant</p>
+      <div id="idle-chat-thread" class="assistant-thread feed-chat-thread" aria-live="polite" aria-label="Assistant thread"></div>
+      <ul id="idle-chat-work" class="pin-list assistant-activity feed-chat-work"></ul>
+      <details id="idle-chat-absorbed" class="card-cps feed-absorbed" hidden><summary>Absorbed work</summary><div id="idle-chat-absorbed-list"></div></details>
+      <div id="idle-chat-chips" class="chat-chips" aria-label="Quick asks">
+        <button class="ghost mini" type="button" data-msg="status">Status</button>
+        <button class="ghost mini" type="button" data-msg="what should I work on">What next?</button>
+        <button class="ghost mini" type="button" data-msg="read the log">Log</button>
+        <button class="ghost mini" type="button" data-msg="help">Help</button>
+      </div>
+      <div class="assistant-composer feed-chat-composer">
+        <textarea id="idle-chat-input" class="grow" rows="1" placeholder="Message the assistant… (Enter)" aria-label="Message the assistant" autocomplete="off" spellcheck="false"></textarea>
+        <button id="idle-chat-send" class="primary mini" type="button">Send</button>
+      </div>
+      <div class="feed-chat-actions">
+        <button id="idle-chat-overseer" class="ghost mini" type="button" title="The overseer reviews the assistant's own work, tunes prefs and files upgrades">Oversee</button>
+        <button id="idle-chat-tidy" class="ghost mini" type="button" title="Archive done tasks, prune finished ideas, clear resolved requests">Tidy</button>
+        <button id="idle-chat-fix" class="ghost mini" type="button" title="Repair the catalog and data files, check the live update">Fix</button>
+        <label class="switch mini new-work-toggle" title="Allow new work to start. Turning this off pauses new work; current jobs can finish."><input type="checkbox" id="idle-chat-pause" role="switch" aria-describedby="idle-new-work-help" disabled><span class="track" aria-hidden="true"></span><span>New work</span><span id="idle-chat-new-work-state" class="new-work-state" aria-hidden="true">Loading…</span></label>
+        <button id="idle-chat-explorer" class="ghost mini" type="button" title="The full assistant surface in the Session explorer (E)">Explorer</button>
+      </div>
+    </div>
+    </div>
+  </aside>
   <section id="cmd-done" class="cmd-done" role="tabpanel" aria-labelledby="cmd-rail-tab-done" hidden>
     <div class="rail-view-head">
-      <h2 class="rail-view-title">Done</h2>
+      <h2 class="rail-view-title">Recent runs</h2>
       <span id="cmd-done-state" class="feed-state" role="status" aria-live="polite">Loading…</span>
       <button id="cmd-done-refresh" class="ghost mini" type="button" title="Re-read the executor ledger">Refresh</button>
-      <button id="cmd-done-clear" class="ghost mini" type="button" title="Clear every record — the done log clears for good" disabled>Clear</button>
+      <button id="cmd-done-clear" class="ghost mini" type="button" title="Clear all recent run records permanently" disabled>Clear</button>
       <button id="cmd-done-toggle" class="ghost mini rail-fold" type="button" aria-expanded="true" aria-controls="cmd-done-list" title="Collapse the done log">&ndash;</button>
     </div>
-    <p class="rail-view-note">Builds that finished, from the durable executor ledger. <b>Done</b> means the worker reported success; <b>Failed</b> means it stopped early. A finished node collapses into its host on the tree; its brief stays readable on that card.</p>
+    <p class="rail-view-note">One row per task. A worker's report is checked before the task is verified; failed runs retry automatically within their budget.</p>
     <div id="cmd-done-filter" class="rail-filter" role="group" aria-label="Filter the done log">
       <button class="rail-filter-btn" type="button" data-done-filter="all" aria-pressed="true">All<b></b></button>
-      <button class="rail-filter-btn" type="button" data-done-filter="ok" aria-pressed="false">Done<b></b></button>
-      <button class="rail-filter-btn" type="button" data-done-filter="failed" aria-pressed="false">Failed<b></b></button>
+      <button class="rail-filter-btn" type="button" data-done-filter="ok" aria-pressed="false" title="Latest run reported success">Reported<b></b></button>
+      <button class="rail-filter-btn" type="button" data-done-filter="failed" aria-pressed="false" title="Latest run failed">Failed<b></b></button>
     </div>
-    <ul id="cmd-done-list" class="done-list" aria-label="Completed work"></ul>
+    <ul id="cmd-done-list" class="done-list" aria-label="Recent build runs by task"></ul>
   </section>
   <section id="cmd-asks" class="cmd-asks" role="tabpanel" aria-labelledby="cmd-rail-tab-ask" hidden>
     <div class="rail-view-head">
       <h2 class="rail-view-title">Ask</h2>
       <span id="cmd-ask-state" class="feed-state" role="status" aria-live="polite">Nothing waiting</span>
     </div>
-    <p class="rail-view-note">When an agent needs a decision it asks here with a recommended option. Nothing moves until you answer; your choice is recorded and sent to the assistant, which acts on it or explains what changed.</p>
+    <p class="rail-view-note">Decisions waiting for you. Each question includes a recommended option.</p>
     <ul id="cmd-ask-list" class="ask-list" aria-label="Questions and suggestions"></ul>
   </section>
     </div>
@@ -1067,7 +1131,7 @@
       <button class="ghost" data-nav="help" data-variant="desktop-only">Shortcuts</button>
       <button id="cmd-empty-retry" class="primary" data-variant="store">Retry</button>
       <button class="ghost" data-nav="tasks" data-variant="store">Open the Task board</button>
-      <button id="cmd-empty-assistant" class="ghost" title="Select the assistant node and focus its composer (M)" hidden>Message the assistant</button>
+      <button id="cmd-empty-assistant" class="ghost" title="Open your companion to ask or create a task" hidden>Ask your companion</button>
     </div>
   </div>
   <div id="cmd-tip" class="cmd-tip tree-tip" role="tooltip" hidden><b class="tip-title"></b><span class="tip-meta"></span></div>
@@ -1087,12 +1151,12 @@
   <section class="planning-sheet sheet" id="plans-sheet" role="dialog" aria-modal="true" aria-labelledby="plans-heading" tabindex="-1">
     <header class="planning-head sheet-head">
       <button class="sheet-back ghost mini" data-nav-close="plans" title="Back to workspace (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-back"/></svg><span class="label">Workspace</span></button>
-      <div class="sheet-title"><span class="eyebrow" id="plans-project">YOUR PROJECT</span><h2 id="plans-heading">Make room for the idea.</h2><p>Set the destination. Explore the questions. Choose what to build.</p></div>
-      <button id="plans-close" class="ghost" type="button">Close <kbd>Esc</kbd></button>
+      <div class="sheet-title"><span class="eyebrow" id="plans-project">YOUR PROJECT</span><h2 id="plans-heading">Plans</h2><p>Shape an idea, explore with Mefi, and make it yours.</p></div>
+      <button id="plans-close" class="ghost sheet-close" type="button" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
     </header>
     <p id="plans-notice" class="planning-notice" role="status" aria-live="polite"></p>
     <div class="planning-body">
-      <aside class="planning-sidebar" aria-label="Project plans"><button id="plans-new" class="primary" type="button">+ Plan an idea</button><button id="plans-refresh" class="ghost mini" type="button">Refresh plans</button><div id="plans-list" class="planning-list"></div></aside>
+      <aside class="planning-sidebar" aria-label="Project plans"><span class="planning-library-label">YOUR PLANS</span><button id="plans-new" class="primary" type="button">+ Plan an idea</button><button id="plans-refresh" class="ghost mini" type="button">Refresh plans</button><div id="plans-list" class="planning-list"></div></aside>
       <div id="plans-detail" class="planning-detail"></div>
     </div>
   </section>
@@ -1113,7 +1177,7 @@
     </header>
     <div class="explorer-grid">
       <aside class="explorer-col">
-        <div class="task-board-heading"><h3>Plans & progress</h3><button id="task-overview-back" class="ghost mini" type="button" hidden>Back to overview</button></div>
+        <div class="task-board-heading"><h3>Plans & progress</h3></div>
         <p class="task-board-intro">Your plans and discussions, with the current step and confirmed progress. Open a card to see its tasks.</p>
         <div class="row tight">
           <input id="task-new" type="text" class="grow" placeholder="New task — the assistant picks it up…" autocomplete="off">
@@ -1130,10 +1194,18 @@
         <ul id="task-list" class="pin-list"></ul>
       </aside>
       <section class="explorer-col">
+        <button id="task-overview-back" class="ghost mini" type="button" hidden>Back to tasks</button>
         <h3 id="task-title">Select a task</h3>
         <div class="row tight" id="task-status-row"></div>
+        <div class="surface-tabs" id="task-detail-tabs" role="tablist" aria-label="Task information" hidden>
+          <button id="task-tab-details" type="button" role="tab" aria-selected="true" aria-controls="task-panel-details">Details</button>
+          <button id="task-tab-evidence" type="button" role="tab" aria-selected="false" aria-controls="task-panel-evidence" tabindex="-1">Evidence</button>
+          <button id="task-tab-history" type="button" role="tab" aria-selected="false" aria-controls="task-panel-history" tabindex="-1">History</button>
+          <button id="task-tab-references" type="button" role="tab" aria-selected="false" aria-controls="task-panel-references" tabindex="-1">References</button>
+        </div>
         <div id="task-detail"><p class="muted">Pick a task on the left, or add one — reference gathering can attach exact context automatically.</p></div>
-        <details class="task-reference-drawer"><summary>Context & references</summary>
+        <section id="task-reference-controls" class="surface-tab-panel task-reference-drawer" aria-label="Reference gathering" hidden>
+        <h4>Gather context</h4>
         <div class="row tight">
           <label class="switch" title="Gather references for the selected task"><input type="checkbox" id="pref-reference" checked><span class="track"></span><span>Use reference</span></label>
           <label class="switch" title="Include live web results (DuckDuckGo)"><input type="checkbox" id="pref-web"><span class="track"></span><span>Web</span></label>
@@ -1145,7 +1217,7 @@
           <span class="eyes-status" id="reference-status">idle</span>
         </div>
         <div id="reference-out"><p class="muted">References: code hits, node-tree sessions, chats, PNG evidence, web and matching ideas appear here.</p></div>
-        </details>
+        </section>
       </section>
     </div>
   </div>
@@ -1160,10 +1232,12 @@
       </div>
       <div class="sheet-links" data-sheet-links="ideas" role="group" aria-label="Other tools"></div>
       <div class="sheet-actions">
-        <button id="ideas-view" class="ghost" title="Toggle list / feature graph">Feature graph</button>
+        <button id="ideas-view" class="ghost" title="Show the feature graph" aria-pressed="false">Graph</button>
+        <details class="surface-tools" id="ideas-tools"><summary>Tools</summary><div class="surface-tools-menu" role="group" aria-label="Idea tools">
         <button id="ideas-scan" class="ghost" title="Scan recent chats for ideas">Scan chats</button>
         <button id="ideas-ai" class="ghost" title="AI review of scanned ideas (needs a key)">AI review</button>
-        <button id="ideas-clean" class="ghost" title="Remove done/accepted ideas from the list">Clean done</button>
+        <button id="ideas-clean" class="ghost danger" title="Remove finished ideas; accepted work stays available">Clear finished ideas</button>
+        </div></details>
         <button id="ideas-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
       </div>
     </header>
@@ -1171,13 +1245,15 @@
       <aside class="explorer-col">
         <h3>Unread <span class="badge premium" id="ideas-unread">0</span></h3>
         <ul id="ideas-list" class="pin-list"></ul>
+        <p class="muted" id="ideas-hint" role="status">Collect ideas from recent chats using Tools.</p>
       </aside>
-      <section class="explorer-col" id="ideas-graph-col">
+      <section class="explorer-col" id="ideas-graph-col" hidden>
         <h3 id="ideas-title">Feature graph</h3>
-        <canvas id="ideas-canvas" height="420"></canvas>
-        <p class="muted" id="ideas-hint">Similar ideas cluster together; click a cluster node to dive into it.</p>
+        <canvas id="ideas-canvas" height="420" hidden></canvas>
+        <p class="muted">Select a node to inspect an idea.</p>
       </section>
-      <aside class="explorer-col">
+      <aside class="explorer-col" id="ideas-detail-col">
+        <button id="ideas-back" class="ghost mini surface-detail-back" type="button">Back to ideas</button>
         <h3>Selected idea</h3>
         <div id="ideas-detail"><p class="muted">Select an idea to read it, keep it, or mark it done.</p></div>
       </aside>
@@ -1195,6 +1271,7 @@
       <div class="sheet-links" data-sheet-links="overhead" role="group" aria-label="Other tools"></div>
       <div class="sheet-actions">
         <label class="switch" title="Cycle the highlight through active tasks"><input type="checkbox" id="overhead-overview"><span class="track"></span><span>Overview mode</span></label>
+        <button id="overhead-inspector-toggle" class="ghost" type="button" aria-expanded="true" aria-controls="overhead-inspector">Task list</button>
         <button id="overhead-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
       </div>
     </header>
@@ -1202,7 +1279,7 @@
       <section class="explorer-col">
         <canvas id="overhead-canvas" height="560"></canvas>
       </section>
-      <aside class="explorer-col">
+      <aside class="explorer-col" id="overhead-inspector">
         <h3>Active tasks</h3>
         <ul id="overhead-legend" class="pin-list"></ul>
       </aside>
@@ -1230,10 +1307,11 @@
           <button id="brains-undo" class="ghost mini icon" type="button" title="Undo (Ctrl Z)" aria-label="Undo" disabled><svg class="glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M5.5 3.5 2.5 6.5l3 3"/><path d="M2.5 6.5h7a4 4 0 0 1 0 8H7"/></svg></button>
           <button id="brains-redo" class="ghost mini icon" type="button" title="Redo (Ctrl Shift Z)" aria-label="Redo" disabled><svg class="glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="m10.5 3.5 3 3-3 3"/><path d="M13.5 6.5h-7a4 4 0 0 0 0 8H9"/></svg></button>
         </div>
-        <button id="brains-draft" class="ghost mini" type="button" title="Describe what it should do and the assistant drafts it from the same parts. Nothing is saved until you review it."><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-spark"/></svg><span class="label">Build with AI</span></button>
+        <button id="brains-add-part" class="ghost mini" type="button" title="Search parts and add one to this map (Space)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-add"/></svg><span class="label">Add part</span></button>
         <div class="brains-more">
           <button id="brains-more" class="ghost mini" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="brains-more-menu" title="New, duplicate, reset or delete a map"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-more"/></svg><span class="label">Map</span><svg class="glyph chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></button>
           <div class="brains-menu" id="brains-more-menu" role="menu" aria-label="Map actions" hidden>
+            <button id="brains-draft" class="ghost mini" type="button" role="menuitem" title="Describe the pipeline and review a draft before saving it"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-spark"/></svg><span class="label">Draft with AI</span></button>
             <button id="brains-new" type="button" role="menuitem" title="Start an empty brain map"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-add"/></svg><span class="label">New empty map</span></button>
             <button id="brains-duplicate" type="button" role="menuitem" title="Copy this map, wires and all"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-plans"/></svg><span class="label">Duplicate this map</span></button>
             <button id="brains-discard" type="button" role="menuitem" title="Go back to how this map was last saved" disabled><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Discard unsaved changes</span></button>
@@ -1248,7 +1326,11 @@
         <button id="brains-close" class="ghost sheet-close" type="button" title="Close (Esc)" aria-label="Close"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
       </div>
     </header>
-    <div class="brains-body" id="brains-body" data-parts="shown" data-inspector="shown">
+    <div class="brains-mobile-tabs" role="group" aria-label="Editor panel">
+      <button id="brains-mobile-map" class="ghost mini" type="button" aria-pressed="true">Map</button>
+      <button id="brains-mobile-inspector" class="ghost mini" type="button" aria-pressed="false">Inspector</button>
+    </div>
+    <div class="brains-body" id="brains-body" data-parts="shown" data-inspector="shown" data-mobile-view="map">
       <aside class="brains-parts" aria-label="Parts">
         <div class="brains-parts-head">
           <h3>Parts</h3>
@@ -1353,6 +1435,50 @@
     <div class="brains-dialog" id="brains-dialog" hidden></div>
   </div>
 </div>
+<div class="overlay agent-brain-overlay" id="agent-brain-overlay" hidden>
+  <div class="agent-brain-sheet" role="dialog" aria-modal="true" aria-labelledby="agent-brain-heading" tabindex="-1">
+    <header class="agent-brain-head sheet-head">
+      <button class="sheet-back ghost mini" data-nav-close="agent-brain" title="Back (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Back</span></button>
+      <div class="sheet-title">
+        <div class="eyebrow">Live</div>
+        <h2 id="agent-brain-heading" tabindex="-1">Explore the project</h2>
+      </div>
+      <div class="agent-brain-tabs" role="tablist" aria-label="Agent brain views">
+        <button type="button" role="tab" data-brain-tab="map" aria-selected="true" aria-controls="agent-brain-map">Explore</button>
+        <button type="button" role="tab" data-brain-tab="live" aria-selected="false" aria-controls="agent-brain-live">Live work</button>
+        <button type="button" role="tab" data-brain-tab="playbook" aria-selected="false" aria-controls="agent-brain-playbook">Playbook</button>
+        <button type="button" role="tab" data-brain-tab="seats" aria-selected="false" aria-controls="agent-brain-seats">Seats</button>
+      </div>
+    </header>
+    <section id="agent-brain-live" class="agent-brain-pane" role="tabpanel" aria-label="Live work" hidden>
+      <div class="agent-brain-live-grid">
+        <aside id="agent-brain-list" class="agent-brain-list" aria-label="Tasks with a pipeline"></aside>
+        <div class="agent-brain-stage">
+          <canvas id="agent-brain-canvas" role="img" aria-label="The watched task's pipeline: the head agent, the lead, its steps and the sub-agents working them"></canvas>
+          <div class="agent-brain-caption-row"><p id="agent-brain-caption" class="agent-brain-caption" role="status"></p><button id="agent-brain-replay" class="ghost mini" type="button" title="Play back today's recorded events for this task">Replay today</button></div>
+        </div>
+      </div>
+      <ol id="agent-brain-feed" class="agent-brain-feed" aria-label="What happened on this task"></ol>
+    </section>
+    <section id="agent-brain-playbook" class="agent-brain-pane" role="tabpanel" aria-label="Playbook" hidden>
+      <div class="agent-brain-playbook-grid">
+        <div id="agent-brain-shelf" class="agent-brain-shelf" aria-label="Recipes"></div>
+        <div id="agent-brain-recipe" class="agent-brain-recipe"></div>
+      </div>
+    </section>
+    <section id="agent-brain-seats" class="agent-brain-pane" role="tabpanel" aria-label="Seats and switches" hidden>
+      <div id="agent-brain-seats-body" class="agent-brain-seats"></div>
+    </section>
+    <section id="agent-brain-map" class="agent-brain-pane" role="tabpanel" aria-label="Explore the project">
+      <div class="agent-brain-map-intro"><p>A place for every part of your project.</p><span id="agent-brain-map-note" class="ab-quiet" role="status"></span></div>
+      <div class="agent-brain-map-tools" id="agent-brain-map-tools"><details class="pm-actions"><summary>Map actions</summary><div><button id="agent-brain-map-rebuild" class="ghost mini" type="button">Refresh files</button><button id="agent-brain-map-name" class="ghost mini" type="button" title="Ask the lead to name the systems the first map did not">Name systems</button></div></details></div>
+      <div class="agent-brain-map-grid">
+        <div class="agent-brain-map-stage"><canvas id="agent-brain-map-canvas" role="img" aria-label="Project explorer: isometric system, part, and file chunks"></canvas></div>
+        <div id="agent-brain-map-detail" class="agent-brain-map-detail" aria-live="polite"></div>
+      </div>
+    </section>
+  </div>
+</div>
 <button id="profiler-hud" class="profiler-hud" hidden title="Open the running performance capture">Recording performance</button>
 <div class="profiler-overlay" id="profiler-overlay" hidden>
   <div class="profiler-sheet sheet" role="dialog" aria-modal="true" aria-labelledby="profiler-heading" tabindex="-1">
@@ -1393,12 +1519,17 @@
       </div>
       <div class="sheet-links" data-sheet-links="analyzer" role="group" aria-label="Other tools"></div>
       <div class="sheet-actions">
-        <button id="analyzer-file" class="ghost">Open file…</button>
         <button id="analyzer-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
       </div>
     </header>
     <div class="explorer-grid">
-      <aside class="explorer-col">
+      <aside class="explorer-col analyzer-inputs">
+        <div class="surface-tabs" role="tablist" aria-label="Analyze">
+          <button id="analyzer-tab-project" type="button" role="tab" aria-selected="true" aria-controls="analyzer-mode-project">Project</button>
+          <button id="analyzer-tab-file" type="button" role="tab" aria-selected="false" aria-controls="analyzer-mode-file" tabindex="-1">File</button>
+          <button id="analyzer-tab-idea" type="button" role="tab" aria-selected="false" aria-controls="analyzer-mode-idea" tabindex="-1">Idea</button>
+        </div>
+        <section id="analyzer-mode-project" role="tabpanel" aria-labelledby="analyzer-tab-project">
         <h3>Project starting points</h3>
         <p class="muted">Loading a project reads its old plans and checks them against current files. Review the evidence, then choose a next step.</p>
         <div class="row tight">
@@ -1406,13 +1537,20 @@
           <button id="analyzer-project-ai" class="ghost" disabled>AI project read</button>
         </div>
         <p class="eyes-status">Local analysis needs no key. AI project read sends report excerpts to your configured AI connection when requested.</p>
-        <h3>File or idea</h3>
-        <div id="analyzer-drop" class="drop-zone">Drop a file here<span class="muted"> · or paste an idea below</span></div>
-        <textarea id="analyzer-idea" class="fill mt-sm" rows="5" placeholder="Paste an idea… e.g. &quot;fishing rod charge cast with rarity glow and fish-brewed potions&quot;"></textarea>
+        </section>
+        <section id="analyzer-mode-file" role="tabpanel" aria-labelledby="analyzer-tab-file" hidden>
+        <h3>Analyze a file</h3>
+        <div id="analyzer-drop" class="drop-zone">Drop a file here</div>
+        <button id="analyzer-file" class="ghost">Choose file…</button>
+        </section>
+        <section id="analyzer-mode-idea" role="tabpanel" aria-labelledby="analyzer-tab-idea" hidden>
+        <h3>Analyze an idea</h3>
+        <textarea id="analyzer-idea" class="fill mt-sm" rows="5" placeholder="Describe a feature or change to analyze…"></textarea>
         <div class="row tight">
           <button id="analyzer-idea-run" class="primary">Analyze idea</button>
-          <label class="switch" title="Add an AI deep read to file and idea analysis (needs a connection)"><input type="checkbox" id="analyzer-ai"><span class="track"></span><span>AI deep read</span></label>
         </div>
+        </section>
+        <label class="switch analyzer-ai-option" title="Add an AI deep read to file and idea analysis (needs a connection)"><input type="checkbox" id="analyzer-ai"><span class="track"></span><span>AI deep read for files & ideas</span></label>
         <p class="eyes-status" id="analyzer-status" role="status" aria-live="polite">Waiting for a project</p>
       </aside>
       <section class="explorer-col">
@@ -1435,7 +1573,7 @@
         <div class="eyebrow">Live</div>
         <h2 id="explorer-heading">Session explorer</h2>
       </div>
-      <div class="sheet-links" role="group" aria-label="Other tools">
+      <div class="sheet-links" data-sheet-links="explorer" role="group" aria-label="Other tools">
         <button id="tasks-open" class="dock-item small" title="Task board (T)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-tasks"/></svg><span class="label">Task board</span><span class="count" data-badge="tasks" hidden></span></button>
         <button id="ideas-open" class="dock-item small" title="Feature ideas (I)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-ideas"/></svg><span class="label">Ideas</span><span class="count" id="ideas-badge" data-badge="ideas" hidden>0</span></button>
         <button id="overhead-open" class="dock-item small" title="Overhead (O)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-overhead"/></svg><span class="label">Overhead</span></button>
@@ -1446,24 +1584,31 @@
         <label class="switch" title="Keep each card's notes in line with the board: the keeper writes the checker's verdict into the card's notes and quiets notes from finished cards. Your own notes are never changed."><input type="checkbox" id="memory-align" checked><span class="track"></span><span>Memory alignment</span></label>
         <label class="switch" title="Watch for cards that keep failing without progress. Turning this off also releases every card it is holding."><input type="checkbox" id="loop-guard" checked><span class="track"></span><span>Loop guard</span></label>
         <label class="switch" title="Stop a looping card until you choose Try again on it. Off: the cards the loop guard is holding are released and it only reports what it would hold; a hold you asked for stays until Try again. Needs Loop guard on."><input type="checkbox" id="loop-guard-apply" checked><span class="track"></span><span>Hold looping cards</span></label>
-        <button id="brief-run" class="primary">Brief me</button>
-        <button id="improve-run" class="ghost" title="Ask the assistant to propose improvements for this app">Improve</button>
-        <button id="grow-run" class="ghost" title="Explore old sessions and draft follow-up requests">Grow</button>
+        <button id="explorer-tools-toggle" class="ghost mini" type="button" aria-expanded="false" aria-controls="explorer-tools">Session tools</button>
         <button id="explorer-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
       </div>
     </header>
     <div class="explorer-grid">
-      <aside class="explorer-col">
+      <aside class="explorer-col explorer-sessions">
         <h3>Tree</h3>
         <ul id="explorer-tree" class="explorer-tree"></ul>
       </aside>
-      <section class="explorer-col">
+      <section class="explorer-col explorer-session-detail">
+        <button id="explorer-back" class="ghost mini surface-detail-back" type="button">Back to sessions</button>
         <h3 id="explorer-title">Select a session</h3>
+        <p class="eyes-status" id="explorer-status" role="status" aria-live="polite" hidden></p>
         <div id="explorer-detail" class="explorer-detail"><p class="muted">Pick a session on the left, or a node in the rail behind this sheet.</p></div>
       </section>
-      <aside class="explorer-col">
-        <h3>Assistant <span class="badge premium" id="assistant-model">not connected</span></h3>
+      <aside class="explorer-col explorer-inspector" id="explorer-tools" aria-label="Session tools" hidden>
+        <button id="explorer-tools-back" class="ghost mini explorer-tools-back" type="button">Close session tools</button>
+        <div class="surface-tabs" role="tablist" aria-label="Session tools">
+          <button id="explorer-tab-assistant" type="button" role="tab" aria-selected="true" aria-controls="explorer-panel-assistant">Assistant</button>
+          <button id="explorer-tab-activity" type="button" role="tab" aria-selected="false" aria-controls="explorer-panel-activity" tabindex="-1">Activity</button>
+          <button id="explorer-tab-diagnostics" type="button" role="tab" aria-selected="false" aria-controls="explorer-panel-diagnostics" tabindex="-1">Diagnostics</button>
+        </div>
         <p class="eyes-status" id="assistant-status" role="status" aria-live="polite">idle</p>
+        <section id="explorer-panel-assistant" class="surface-tab-panel" role="tabpanel" aria-labelledby="explorer-tab-assistant">
+        <h3>Assistant <span class="badge premium" id="assistant-model">not connected</span></h3>
         <p class="eyes-status assistant-service" id="assistant-service" role="status">service starting…</p>
         <div id="assistant-thread" class="assistant-thread" aria-live="polite" aria-label="Assistant thread"></div>
         <div class="assistant-composer">
@@ -1476,14 +1621,27 @@
           <button class="ghost mini" data-msg="read the log">Log</button>
           <button class="ghost mini" data-msg="help">Help</button>
         </div>
-        <div class="row tight">
+        <details class="surface-tools"><summary>Assistant actions</summary><div class="surface-tools-menu" role="group" aria-label="Assistant actions">
+          <button id="brief-run" class="ghost mini">Brief me</button>
+          <button id="improve-run" class="ghost mini" title="Ask the assistant to propose improvements for this app">Suggest improvements</button>
+          <button id="grow-run" class="ghost mini" title="Explore old sessions and draft follow-up requests">Suggest follow-up work</button>
           <button id="assistant-overseer" class="ghost mini" title="The overseer reviews the assistant's own work, tunes prefs and files upgrades">Oversee</button>
           <button id="assistant-tidy" class="ghost mini" title="Archive done tasks, prune finished ideas, clear resolved requests">Tidy now</button>
           <button id="assistant-fix" class="ghost mini" title="Repair the catalog and data files, check the live update">Fix now</button>
           <button id="assistant-stop-all" class="ghost mini" title="Stop every running agent now. Each run's progress is saved and its work stays queued.">Stop all</button>
           <button id="assistant-restart" class="ghost mini" title="Stop every agent, save progress, and restart Studio.">Restart</button>
           <button id="assistant-pause" class="ghost mini" title="Pause or resume the assistant service">Pause</button>
+        </div></details>
+        <h4 class="mt">Briefing</h4>
+        <div id="assistant-brief" class="assistant-brief"></div>
+        <h4 class="mt">Request inbox</h4>
+        <div class="row tight">
+          <input id="request-input" type="text" class="grow" placeholder="Add a request…" autocomplete="off">
+          <button id="request-add" class="primary">Add</button>
         </div>
+        <ul id="request-list" class="pin-list"></ul>
+        </section>
+        <section id="explorer-panel-activity" class="surface-tab-panel" role="tabpanel" aria-labelledby="explorer-tab-activity" hidden>
         <h4>Working on</h4>
         <ul id="assistant-work" class="pin-list assistant-activity assistant-work"></ul>
         <h4 class="mt">Agents</h4>
@@ -1491,8 +1649,8 @@
         <h4 class="mt">Activity</h4>
         <ul id="assistant-activity" class="pin-list assistant-activity"></ul>
         <p class="eyes-status" id="assistant-housekeeping">no housekeeping yet</p>
-        <h4 class="mt">Briefing</h4>
-        <div id="assistant-brief" class="assistant-brief"></div>
+        </section>
+        <section id="explorer-panel-diagnostics" class="surface-tab-panel" role="tabpanel" aria-labelledby="explorer-tab-diagnostics" hidden>
         <h3 class="mt">Collateral watch</h3>
         <p class="eyes-status">Live editors and file collisions — steer around another session's work.</p>
         <ul id="collision-list" class="pin-list"></ul>
@@ -1508,12 +1666,7 @@
         <label class="switch" title="Demote a small memory shortfall to a warning instead of a hold (severe shortfalls still hold)"><input type="checkbox" id="machine-memory-override"><span class="track"></span><span>Memory warn override</span></label>
         <ul id="machine-list" class="pin-list"></ul>
         <ul id="machine-events" class="pin-list"></ul>
-        <h3 class="mt">Request inbox</h3>
-        <div class="row tight">
-          <input id="request-input" type="text" class="grow" placeholder="Add a request…" autocomplete="off">
-          <button id="request-add" class="primary">Add</button>
-        </div>
-        <ul id="request-list" class="pin-list"></ul>
+        </section>
       </aside>
     </div>
   </div>
@@ -1522,11 +1675,11 @@
   <section class="sheet walkthrough-sheet" id="walkthrough-sheet" role="dialog" aria-modal="true" aria-labelledby="walkthrough-title" aria-describedby="walkthrough-copy" tabindex="-1">
     <header class="sheet-head plain"><div class="sheet-title"><span class="eyebrow">START HERE</span><p id="walkthrough-progress" role="status">Step 1 of 7</p><div class="walkthrough-bar" id="walkthrough-bar" role="progressbar" aria-label="Setup progress" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="walkthrough-bar-fill"></span></div></div><button class="ghost mini" type="button" data-nav-close="onboarding">Save & close <kbd>Esc</kbd></button></header>
     <nav class="walkthrough-steps" id="walkthrough-steps" aria-label="Walkthrough steps"></nav>
-    <div class="walkthrough-content"><h2 id="walkthrough-title" tabindex="-1"></h2><p id="walkthrough-copy"></p><ul id="walkthrough-points"></ul>
+    <div class="walkthrough-content"><h2 id="walkthrough-title" tabindex="-1"></h2><p id="walkthrough-copy"></p><details class="agent-guide-details"><summary>How this step works</summary><ul id="walkthrough-points"></ul></details>
       <div id="walkthrough-build-mode" class="build-mode-control">
         <label class="switch" for="walkthrough-auto-build"><input type="checkbox" id="walkthrough-auto-build" checked disabled aria-describedby="walkthrough-build-mode-note"><span class="track"></span><span>Auto build</span></label>
         <strong id="walkthrough-build-mode-label">Loading preference…</strong>
-        <p id="walkthrough-build-mode-note">Choose how work starts. You can change this above Your work at any time.</p>
+        <p id="walkthrough-build-mode-note">Choose how work starts. You can change this in Settings › Automation at any time.</p>
         <p id="walkthrough-build-mode-feedback" role="status"></p>
       </div>
       <div class="walkthrough-activity" id="walkthrough-activity" hidden><div class="walkthrough-activity-track"><span id="walkthrough-activity-fill"></span></div><span id="walkthrough-activity-label"></span></div>

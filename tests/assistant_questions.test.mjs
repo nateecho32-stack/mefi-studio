@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFile } from "node:fs/promises";
 import * as assistant from "../scripts/assistant.mjs";
+import taskOversight from "../scripts/task-oversight.cjs";
+import executorCore from "../scripts/executor-core.cjs";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
 const section = (start, end) => {
@@ -11,7 +13,7 @@ const section = (start, end) => {
   return source.slice(from, to);
 };
 
-function questionHost({ executorLog = "", offers = [] } = {}) {
+function questionHost({ executorLog = "", offers = [], tasks = [] } = {}) {
   const state = assistant.emptyState(1000);
   const events = [], logs = [], messages = [], backlog = [], controls = [], saves = [], writes = [];
   let ledger = executorLog;
@@ -19,8 +21,13 @@ function questionHost({ executorLog = "", offers = [] } = {}) {
     console,
     assistantState: state,
     assistantModule: assistant,
+    taskOversight,
+    projects: { current: () => ({ id: "fixture" }) },
     ASSISTANT_CAPS: assistant.CAPS,
     EXECUTOR_LOG_PATH: "executor-log.jsonl",
+    TASKS_PATH: "tasks.json",
+    executorCore,
+    getEyes: async () => ({ readJson: async () => tasks }),
     projectDataPath: (file) => file,
     readFile: async () => ledger,
     writeFile: async (file, text) => { writes.push({ file, text }); ledger = text; },
@@ -35,6 +42,7 @@ function questionHost({ executorLog = "", offers = [] } = {}) {
     logError(text) { logs.push({ kind: "error", text }); },
     getAssistant: async () => ({ pendingOffers: () => offers }),
     assistantMessage: async (text) => { messages.push(text); return { ok: true }; },
+    assistantAppendReply: (text) => { messages.push(text); },
     assistantWorkOn: async (target) => { controls.push({ kind: "work-on", target }); return { ok: true }; },
     backlogControl: async (payload) => { backlog.push(payload); return { ok: true }; },
     assistantControl: async (action) => { controls.push({ kind: "control", action }); return { ok: true }; },
@@ -166,6 +174,31 @@ test("answering an option records it and runs the action", async () => {
   assert.equal(h.messages.length, 0);
 });
 
+test("a Yes-start answer forwards scoped start and keeps the actual blocked dispatch result", async () => {
+  const h = questionHost();
+  const dispatch = { taskId: "named", requested: false, held: true, phase: "approval", reason: "approval", message: "Review and approve this task before starting it." };
+  h.env.assistantWorkOn = async (target) => { h.controls.push({ target }); return { ok: true, dispatch }; };
+  const question = h.env.assistantQuestion({ title: "Start the named task?", options: [{ id: "yes", label: "Yes, start", action: { kind: "work-on", target: { kind: "task", id: "named" } } }] });
+  const result = await h.env.assistantAnswer({ id: question.id, optionId: "yes" });
+  assert.equal(h.controls[0].target.start, true, "even a pre-upgrade stored offer uses explicit scoped Start");
+  assert.equal(result.dispatch.message, dispatch.message);
+  assert.equal(question.answer.dispatch.phase, "approval");
+  const restored = assistant.normalizeState(h.state, Date.now()).questions[0].answer.dispatch;
+  assert.equal(restored.message, dispatch.message);
+  assert.equal(restored.held, true);
+  assert.equal(restored.requested, false);
+});
+
+test("a clicked chat confirmation reports its dispatch outcome instead of merely saying answered", async () => {
+  const h = questionHost();
+  const dispatch = { taskId: "named", requested: true, held: false, phase: "preparing", message: "Assigned; waiting for the worker process to start." };
+  h.env.assistantChatAction = async () => ({ ok: true, dispatch });
+  const question = h.env.assistantQuestion({ title: "Confirm: start named?", options: [{ id: "yes", label: "Yes, start", action: { kind: "chat", action: { kind: "work_on", taskId: "named" } } }] });
+  const result = await h.env.assistantAnswer({ id: question.id, optionId: "yes" });
+  assert.equal(result.dispatch.phase, "preparing");
+  assert.deepEqual(h.messages, [dispatch.message]);
+});
+
 test("answering with dismiss marks the question without replying", async () => {
   const h = questionHost();
   const question = h.env.assistantQuestion({
@@ -230,13 +263,17 @@ test("a newer offer supersedes the previous open one", async () => {
   assert.equal(h.state.questions[1].status, "open");
 });
 
-test("the done log merges executor finishes with assistant passes, newest first", async () => {
+test("recent runs group retries by task and show the current board state", async () => {
   const lines = [
     JSON.stringify({ at: 100, event: "start", title: "ignored" }),
-    JSON.stringify({ at: 200, event: "finish", kind: "task", task: "task_1", title: "Build the rail", ok: true, seconds: 42 }),
-    JSON.stringify({ at: 300, event: "finish", kind: "task", title: "Broken build", ok: false, error: "exit 1" }),
+    JSON.stringify({ at: 200, event: "finish", kind: "task", task: "task_1", title: "Build the rail", ok: false, error: "exit 1" }),
+    JSON.stringify({ at: 250, event: "finish", kind: "task", task: "task_1", title: "Build the rail", ok: true, seconds: 42 }),
+    JSON.stringify({ at: 300, event: "finish", kind: "task", task: "task_2", title: "Broken build", ok: false, error: "exit 1" }),
   ].join("\n");
-  const h = questionHost({ executorLog: lines });
+  const h = questionHost({ executorLog: lines, tasks: [
+    { id: "task_1", status: "done", verification: { state: "verified" } },
+    { id: "task_2", status: "open", runFailures: 5 },
+  ] });
   // Assistant passes are not finished nodes: they stay in the activity log
   // and never land in the done log.
   h.state.log = [{ at: 400, kind: "fix", text: "repaired the catalog" }, { at: 50, kind: "tick", text: "noise" }];
@@ -245,7 +282,11 @@ test("the done log merges executor finishes with assistant passes, newest first"
   assert.deepEqual(Array.from(result.entries, (entry) => entry.title), ["Broken build", "Build the rail"]);
   assert.ok(result.entries.every((entry) => entry.kind !== "pass"), "no pass rows in the done log");
   assert.equal(result.entries[0].ok, false);
+  assert.equal(result.entries[0].state, "attention");
   assert.equal(result.entries[1].taskId, "task_1");
+  assert.equal(result.entries[1].state, "verified");
+  assert.equal(result.entries[1].attempts, 2);
+  assert.equal(result.entries[1].failures, 1);
   assert.match(result.entries[1].detail, /42s/);
 });
 

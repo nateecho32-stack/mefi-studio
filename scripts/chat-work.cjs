@@ -1,17 +1,15 @@
 // Chat admission compares the complete obligation before creating a card.
 // This deliberately favors missed paraphrases over discarding distinct work:
-// common wording changes may match, but partial overlap never does.
+// common wording changes may match, but partial overlap never does. It is the
+// brief rung of the one admission ladder (scripts/work-admission.cjs), whose
+// title key and liveness predicate it shares, so a "Work on \"X\"" wrapper,
+// an accented or a non-Latin title key the same here as in promotion, the
+// inbox and the spawn guard.
+const { titleKey, isOpenWork } = require("./work-admission.cjs");
 const rows = (value) => Array.isArray(value) ? value.filter((row) => row && typeof row === "object") : [];
-const closed = new Set(["done", "closed", "complete", "completed", "archived", "absorbed", "dismissed", "rejected", "cancelled", "canceled"]);
-const live = (item) => !closed.has(String(item?.status ?? "").toLowerCase());
+const live = (item) => isOpenWork(item?.status);
 const sameProject = (item, incoming) => !incoming.projectId || !item?.projectId || item.projectId === incoming.projectId;
 const string = (value) => String(value ?? "").trim();
-// "Work on it" titles a card with the label it points at ("Work on \"X\"")
-// while the underlying work may already be titled "X". Unwrap that pure display
-// form here too, so the chat admission key matches the shared compactKey the
-// promotion and spawn guards use instead of stacking a duplicate beside it.
-const unwrapWorkOn = (value) => string(value).replace(/^work on\s+["'\u2018\u2019\u201c\u201d]([\s\S]+?)["'\u2018\u2019\u201c\u201d][.!?]*$/i, "$1");
-const titleKey = (value) => unwrapWorkOn(value).toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
 
 const actionFamilies = new Map([
   ["add", "add"], ["adding", "add"], ["create", "add"], ["creating", "add"], ["implement", "add"], ["implementing", "add"], ["build", "add"], ["building", "add"],
@@ -39,7 +37,22 @@ function briefOf(item) {
   return resolved ? resolved[1] : value;
 }
 
+// A brief's shape never changes, and the one admission ladder asks for every
+// saved brief on every filed request as well as every chat send, so recent
+// shapes are kept (bounded; the cache is dropped whole when it fills).
+const shapes = new Map();
 function shape(value) {
+  const key = string(value);
+  let found = shapes.get(key);
+  if (!found) {
+    if (shapes.size >= 2000) shapes.clear();
+    found = shapeOf(key);
+    shapes.set(key, found);
+  }
+  return found;
+}
+
+function shapeOf(value) {
   let text = string(value).normalize("NFKC").replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"');
   // Paths and numeric scope stay ordered, and paths retain their case. A
   // filename is not ordinary vocabulary to be reordered or stemmed.
@@ -148,7 +161,9 @@ function findExistingChatWork({ tasks = [], requests = [], jobs = [] } = {}, inc
   }
   if (string(incoming.resolvedTitle)) {
     const key = titleKey(incoming.resolvedTitle);
-    return unique(candidates.map((candidate) => ({ ...candidate, members: candidate.members.filter((member) => titleKey(member.title) === key) }))
+    // A title of punctuation alone keys to nothing and names no card.
+    if (!key) return null;
+    return unique(candidates.map((candidate) => ({ ...candidate, members: candidate.members.filter((member) => titleKey(member.title, member.prompt) === key) }))
       .filter((candidate) => candidate.members.length), true);
   }
   for (const candidate of candidates) {

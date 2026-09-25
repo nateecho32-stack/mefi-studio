@@ -3,6 +3,7 @@
 // Local, measured evidence only. This module never calls a provider, selects an
 // account, or persists prompts/results/credentials. The host supplies observed
 // outcomes; a successful transport is not a quality rating or a verified task.
+// Task wins and losses come only from the verification runner, via settle().
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
@@ -11,6 +12,14 @@ const VERSION = 1;
 const EFFORT_LEVELS = Object.freeze(["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]);
 const ERROR_KINDS = new Set(["transport", "timeout", "quota", "auth", "http", "empty", "invalid", "validation", "reasoning", "tool", "verification", "unknown"]);
 const TOKEN_FIELDS = ["inputTokens", "outputTokens", "totalTokens", "cacheReadTokens", "cacheWriteTokens"];
+const SOURCES = ["request", "planning", "demo", "probe", "worker", "brains", "analyzer"];
+// A task attempt's verdict comes from the verification runner, never from the
+// worker: a self-reported "done" is stored as unverified, so it is never a win.
+const OUTCOMES = ["verified", "failed", "unverified"];
+const outcomeOf = (value) => OUTCOMES.includes(value) ? value : value === "reported" ? "unverified" : null;
+// A task attempt: a builder's worker row, or anything the runner settled. The
+// rest are transport rows (chat, planner, reviewer, routing calls).
+const isAttempt = (row) => row.source === "worker" || Boolean(row.outcome);
 const locks = new Map();
 const object = (value) => value && typeof value === "object" && !Array.isArray(value);
 const copy = (value) => JSON.parse(JSON.stringify(value));
@@ -33,14 +42,16 @@ function normalizeObservation(input, now = Date.now()) {
   for (const field of TOKEN_FIELDS) tokenUsage[field] = integer(input.tokenUsage?.[field]);
   const elapsedMs = number(input.elapsedMs, 86400000);
   const reportedFirst = number(input.firstTokenMs, 86400000);
+  const at = number(input.at) ?? now;
+  const outcome = outcomeOf(input.outcome);
   return {
     id: identifier(input.id, "observation id"),
-    at: number(input.at) ?? now,
+    at,
     provider: identifier(input.provider, "provider", 60),
     model: identifier(input.model, "model"),
     taskType: slug(input.taskType),
     role: input.role ? slug(input.role) : null,
-    source: ["request", "planning", "demo", "probe", "worker"].includes(input.source) ? input.source : "request",
+    source: SOURCES.includes(input.source) ? input.source : "request",
     status: input.status,
     errorKind: input.status === "error" ? ERROR_KINDS.has(input.errorKind) ? input.errorKind : "unknown" : null,
     elapsedMs,
@@ -56,6 +67,9 @@ function normalizeObservation(input, now = Date.now()) {
     // joins Studio's own calls to a task: the worker's turns are keyed by
     // session in OpenCode's store, and these are keyed by run.
     runId: input.runId ? identifier(input.runId, "run id") : null,
+    // Stamped by settle() once the runner has judged the attempt. Omitted
+    // while unsettled so ordinary call rows stay as small as before.
+    ...(outcome ? { outcome, settledAt: number(input.settledAt) ?? at } : {}),
   };
 }
 
@@ -75,6 +89,7 @@ function normalizeRating(input, now = Date.now()) {
 }
 
 const ratingKey = (rating) => JSON.stringify([rating.observationId, rating.authority, rating.judgeProvider, rating.judgeModel]);
+const measuredPart = ({ outcome, settledAt, ...row }) => row;
 function selectEffort({ supportedEfforts = [] } = {}) {
   return EFFORT_LEVELS.find((level) => Array.isArray(supportedEfforts) && supportedEfforts.includes(level)) ?? null;
 }
@@ -118,9 +133,18 @@ function measurements(rows, ratings) {
   const complete = rows.filter((row) => row.status !== "cancelled");
   const successes = rows.filter((row) => row.status === "ok");
   const errors = rows.filter((row) => row.status === "error");
+  // Task attempts are worker rows or anything settled. Only a verified verdict
+  // is a win and only a failed one a loss; winProbability is the Beta(1,1)
+  // posterior mean, so an untried model reads 0.5 rather than 0 or 1.
+  const attempts = rows.filter(isAttempt);
+  const wins = attempts.filter((row) => row.outcome === "verified").length;
+  const losses = attempts.filter((row) => row.outcome === "failed").length;
   return {
     samples: rows.length, successes: successes.length, errors: errors.length, cancelled: rows.length - complete.length,
     errorRate: complete.length ? errors.length / complete.length : null,
+    wins, losses, unsettled: attempts.length - wins - losses,
+    winRate: wins + losses ? wins / (wins + losses) : null,
+    winProbability: (wins + 1) / (wins + losses + 2),
     latencyMs: stats(successes.map((row) => row.elapsedMs)),
     firstTokenMs: stats(successes.map((row) => row.firstTokenMs)),
     // Non-streamed throughput includes request latency; it is not generation-only speed.
@@ -241,9 +265,29 @@ function normalizeLifetime(input) {
   return { calls: input.calls, range: { from, to }, usage };
 }
 
-function createModelPerformanceStore({ filePath, now = Date.now, maxRecords = 10000 } = {}) {
+// Which rows survive once the ledger passes its cap. Transport rows go first:
+// the newest `attemptLimit` attempts are never evicted to make room for them,
+// so a busy day of chat and routing calls cannot push a model's win/loss
+// record out. Attempts past their own cap may use room transport leaves free.
+// Oldest first within each kind, and the ledger's order is kept.
+function retainedRows(rows, limit, attemptLimit) {
+  if (rows.length <= limit) return rows;
+  const attempts = rows.filter(isAttempt).length;
+  const transport = rows.length - attempts;
+  const keepAttempts = Math.min(attempts, Math.max(attemptLimit, limit - transport));
+  let dropAttempts = attempts - keepAttempts;
+  let dropTransport = transport - Math.min(transport, limit - keepAttempts);
+  return rows.filter((row) => {
+    if (isAttempt(row)) return dropAttempts-- <= 0;
+    return dropTransport-- <= 0;
+  });
+}
+
+function createModelPerformanceStore({ filePath, now = Date.now, maxRecords = 10000, maxAttempts = 5000 } = {}) {
   const file = path.resolve(identifier(filePath, "performance file", 2000));
   const limit = Math.max(1, Math.min(50000, integer(maxRecords) ?? 10000));
+  // Builder attempts keep their own share of the cap (see retainedRows).
+  const attemptLimit = Math.max(1, Math.min(limit, integer(maxAttempts) ?? 5000));
   const empty = () => ({ version: VERSION, observations: [], ratings: [], retention: { limit, dropped: 0 }, lifetime: { calls: 0, range: { from: null, to: null }, usage: usageOf([]) } });
   let cached = null;
   const snapshots = new Map();
@@ -309,14 +353,17 @@ function createModelPerformanceStore({ filePath, now = Date.now, maxRecords = 10
       const existing = input?.id ? state.observations.find((row) => row.id === input.id) : null;
       const observation = normalizeObservation({ ...input, id: input?.id ?? randomUUID(), at: input?.at ?? existing?.at ?? now() }, now());
       if (existing) {
-        if (JSON.stringify(existing) !== JSON.stringify(observation)) throw new Error("An observation id cannot be reused for different measurements");
+        // The verdict belongs to settle(): re-recording the same measurement
+        // after it settled is still the same measurement.
+        if (JSON.stringify(measuredPart(existing)) !== JSON.stringify(measuredPart(observation))) throw new Error("An observation id cannot be reused for different measurements");
         return { observation: copy(existing), duplicate: true };
       }
       state.observations.push(observation);
       state.lifetime = addLifetime(state.lifetime, observation);
-      if (state.observations.length > limit) {
-        state.retention.dropped += state.observations.length - limit;
-        state.observations = state.observations.slice(-limit);
+      const retained = retainedRows(state.observations, limit, attemptLimit);
+      if (retained.length < state.observations.length) {
+        state.retention.dropped += state.observations.length - retained.length;
+        state.observations = retained;
         const kept = new Set(state.observations.map((row) => row.id));
         state.ratings = state.ratings.filter((row) => kept.has(row.observationId));
       }
@@ -336,7 +383,29 @@ function createModelPerformanceStore({ filePath, now = Date.now, maxRecords = 10
       await save(state);
       return { rating: copy(rating), updated: index >= 0 };
     }),
+    // Stamp the runner's verdict on a recorded attempt. The verification loop
+    // may see the same receipt every tick, so an unchanged verdict never
+    // rewrites the ledger; a later re-verification replaces the earlier one.
+    settle: (input) => serialized(async () => {
+      const observationId = typeof input?.observationId === "string" ? input.observationId.trim() : "";
+      const outcome = outcomeOf(input?.outcome);
+      if (!observationId) return { ok: false, reason: "invalid-observation-id" };
+      if (!outcome) return { ok: false, reason: "invalid-outcome" };
+      // Decide on the cached read; only a real change pays for a mutable copy.
+      const current = (await load()).observations.find((item) => item.id === observationId);
+      if (!current) return { ok: false, reason: "unknown-observation" };
+      if (current.outcome === outcome) return { ok: true, changed: false, observation: copy(current) };
+      const state = await load({ mutable: true });
+      const row = state.observations.find((item) => item.id === observationId);
+      if (!row) return { ok: false, reason: "unknown-observation" };
+      if (row.outcome === outcome) return { ok: true, changed: false, observation: copy(row) };
+      const previous = row.outcome ?? null;
+      row.outcome = outcome;
+      row.settledAt = number(input.at) ?? now();
+      await save(state);
+      return { ok: true, changed: true, previous, observation: copy(row) };
+    }),
   };
 }
 
-module.exports = { VERSION, EFFORT_LEVELS, normalizeObservation, normalizeRating, selectEffort, nextEffort, snapshotPerformance, createModelPerformanceStore };
+module.exports = { VERSION, EFFORT_LEVELS, OUTCOMES, normalizeObservation, normalizeRating, selectEffort, nextEffort, snapshotPerformance, createModelPerformanceStore };

@@ -25,14 +25,15 @@ const code = [
 function routeHost({ settings = {}, keys = {} } = {}) {
   const logs = [], fetches = [];
   let saved = { aiProvider: "auto", ...settings };
-  const store = { zaiApiKeyEncrypted: "zai-fixture-key", apiKeyEncrypted: "go-fixture-key", customApiKeyEncrypted: "custom-fixture-key", ...keys };
+  const store = { zaiApiKeyEncrypted: "zai-fixture-key", apiKeyEncrypted: "go-fixture-key", openrouterApiKeyEncrypted: "or-fixture-key", customApiKeyEncrypted: "custom-fixture-key", ...keys };
   const context = vm.createContext({
-    AI_PROVIDERS: ["auto", "zai", "opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"],
-    AI_AUTO_PROVIDERS: ["zai", "opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"],
-    AUTO_PROVIDER_NAMES: { zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio", custom: "custom endpoint" },
+    AI_PROVIDERS: ["auto", "zai", "opencode", "openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"],
+    AI_AUTO_PROVIDERS: ["zai", "opencode", "openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"],
+    AUTO_PROVIDER_NAMES: { zai: "z.ai GLM", opencode: "OpenCode Go", openrouter: "OpenRouter", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio", custom: "custom endpoint" },
     ZAI_ENDPOINT: "https://api.z.ai/api/coding/paas/v4/chat/completions",
     ZAI_MODEL_ROUTINE: "glm-5.3-flash", ZAI_MODEL_HEAVY: "glm-5.3",
     ASSISTANT_ENDPOINT: "https://opencode.ai/zen/go/v1/chat/completions", ASSISTANT_MODEL: "deepseek-v4.1-flash",
+    OPENROUTER_ENDPOINT: "https://openrouter.ai/api/v1/chat/completions", OPENROUTER_MODEL: "openrouter/free",
     LMSTUDIO_ENDPOINT: "http://127.0.0.1:1234/v1/chat/completions",
     readSettings: async () => structuredClone(saved),
     decryptKey: (_settings, field) => store[field] ?? null,
@@ -77,6 +78,18 @@ test("an OpenCode pick without its key degrades to z.ai with the role's own mode
   assert.equal(heavy.model, "glm-5.3");
   const routine = await routeHost({ settings: { aiProvider: "opencode", aiAutoFallback: true }, keys: { apiKeyEncrypted: null } }).resolve();
   assert.equal(routine.model, "glm-5.3-flash");
+});
+
+test("OpenRouter joins the auto order and its missing key uses only an armed fallback", async () => {
+  const ready = routeHost({ settings: { aiProvider: "auto", aiAutoProviders: ["openrouter", "zai"] } });
+  const route = await ready.resolve();
+  assert.equal(route.provider, "openrouter");
+  assert.equal(route.model, "openrouter/free");
+  assert.equal(route.apiKey, "or-fixture-key");
+  const missing = routeHost({ settings: { aiProvider: "openrouter", aiAutoProviders: ["openrouter", "zai"] }, keys: { openrouterApiKeyEncrypted: null } });
+  assert.match((await missing.resolve()).error, /no OpenRouter key/);
+  const rescued = routeHost({ settings: { aiProvider: "openrouter", aiAutoFallback: true, aiAutoProviders: ["openrouter", "zai"] }, keys: { openrouterApiKeyEncrypted: null } });
+  assert.equal((await rescued.resolve()).provider, "zai");
 });
 
 test("an armed fallback with nothing to walk on still fails honestly", async () => {
@@ -166,7 +179,7 @@ test("an auto route with nothing usable names the saved order and what to do", a
   const host = routeHost({ settings: { aiAutoProviders: ["zai", "opencode"] }, keys: { zaiApiKeyEncrypted: null, apiKeyEncrypted: null } });
   const result = await host.resolve();
   assert.equal(result.ok, false);
-  assert.match(result.error, /no usable provider in the auto order \(z\.ai GLM > OpenCode Go\)/);
+  assert.match(result.error, /no usable provider in the auto order \(Claude Code CLI > Codex CLI > Grok CLI > Antigravity CLI > z\.ai GLM > OpenCode Go\)/);
   assert.match(result.error, /save a key, install a CLI or change the order/);
   assert.deepEqual(host.fetches, []);
 });

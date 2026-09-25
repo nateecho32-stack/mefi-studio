@@ -67,6 +67,46 @@ test("an environment the caller passes is filtered the same way, not mutated, an
   assert.deepEqual(options, { env: { A: "1", MEFI_STUDIO_JEV_KEY: "own", MEFI_ZAI_API_KEY: "handed-over" }, windowsHide: true });
 });
 
+// node also takes spawn(command, options): an object in the args slot is the
+// options and a third argument is ignored. The filtered env used to travel in
+// that ignored slot, so main.cjs's verification checks (runCheckCommand)
+// inherited every Studio credential while running a worker-edited npm script.
+test("a two-argument spawn(command, options) is read the way node reads it, so the credentials are still withheld", () => {
+  for (const host of ["win32", "linux"]) {
+    const { calls, spawnImpl } = recorder();
+    const spawn = createSpawn({ platform: host, spawnImpl, kill: () => {}, env: { PATH: "C:/bin", MEFI_STUDIO_ZAI_KEY: "own-zai" } });
+    const options = { cwd: "C:/repo", shell: true, windowsHide: true };
+    spawn("npm run check", options);
+    assert.deepEqual(calls[0].args, [], `${host}: node is handed an args array, not the options`);
+    assert.deepEqual(calls[0].options, { ...options, env: { PATH: "C:/bin" } }, `${host}: the caller's options reach node, minus the credential`);
+    assert.deepEqual(options, { cwd: "C:/repo", shell: true, windowsHide: true }, "the caller's object is not mutated");
+  }
+});
+
+test("a real shell check never sees a Studio credential, in either call shape", async () => {
+  const name = "MEFI_STUDIO_PROBE_KEY";
+  const before = process.env[name];
+  process.env[name] = "leaked";
+  try {
+    // The module's own default: the live process environment, node's spawn.
+    const spawn = createSpawn({ platform: process.platform, spawnImpl: realSpawn });
+    const command = `"${process.execPath}" -p "String(process.env.${name})"`;
+    const read = (child) => new Promise((resolve, reject) => {
+      let out = "";
+      child.stdout.on("data", (chunk) => { out += chunk; });
+      child.on("error", reject);
+      child.on("close", () => resolve(out.trim()));
+    });
+    const stdio = ["ignore", "pipe", "pipe"];
+    assert.equal(await read(spawn(command, { shell: true, windowsHide: true, stdio })), "undefined", "spawn(command, options)");
+    // runCheckCommand's own shape: an explicit empty args array, detached off Windows.
+    assert.equal(await read(spawn(command, [], { shell: true, windowsHide: true, stdio, detached: process.platform !== "win32" })), "undefined", "spawn(command, [], options)");
+  } finally {
+    if (before === undefined) delete process.env[name];
+    else process.env[name] = before;
+  }
+});
+
 test("with nothing to withhold, the caller's options object reaches spawn as passed", () => {
   const { calls, spawnImpl } = recorder();
   const spawn = createSpawn({ platform: "win32", spawnImpl, env: { PATH: "C:/bin", GH_TOKEN: "x" } });

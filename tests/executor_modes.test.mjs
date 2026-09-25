@@ -54,14 +54,39 @@ test("invalid execution modes are rejected without mutating settings or active w
   }
 });
 
-test("swarm starts independent tasks together with shared planning and review agents", async () => {
+test("swarm starts one builder per independent task without mandatory advisory agents", async () => {
   const h = executorHost({ mode: "swarm", adaptiveParallel: true, tasks: [task("first"), task("second"), task("third")] });
   h.wake(); await h.pump();
   assert.deepEqual(h.starts.map((row) => row.taskId), ["first", "second", "third"]);
   assert.equal(h.autopilot.jobs.length, 3);
-  assert.equal(h.supportJobs.length, 6);
-  assert.equal(h.supportCalls.length, 6);
-  assert.ok(h.supportCalls.every((call) => call.source === "swarm"));
+  assert.equal(h.supportJobs.length, 0);
+  assert.equal(h.supportCalls.length, 0);
+  assert.equal(h.contextCalls.length, 0, "ordinary work needs no separate advisory context search");
+});
+
+test("default Swarm completes one routine task through project verification with no helper or child task", async () => {
+  const h = executorHost({ tasks: [task("routine")] });
+  h.env.httpAssistantCall = async () => assert.fail("a routine task must not need an advisory model call");
+  h.wake(); await h.pump();
+  assert.deepEqual(h.starts.map((row) => row.taskId), ["routine"]);
+  h.starts[0].child.emit("spawn");
+  await h.finish("routine", { lines: ["MEFI_RESULT: done: routine feature saved and tested; remaining: none", "MEFI_JOB_DONE"] });
+  await h.env.runVerificationJobs();
+  assert.equal(h.board().tasks[0].status, "awaiting_verification");
+  assert.equal(h.verificationStarts.length, 1);
+  assert.equal(h.verificationStarts[0].cwd, h.env.projectRoot());
+  h.advance(31000); await h.pump();
+  const saved = h.board().tasks[0];
+  assert.equal(saved.status, "done");
+  assert.equal(saved.verification.state, "verified");
+  assert.equal(saved.verificationRun.state, "passed");
+  assert.equal(saved.verificationRun.results[0].cwd, h.env.projectRoot());
+  assert.equal(h.board().tasks.length, 1);
+  assert.equal(h.board().requests.length, 0);
+  assert.equal(h.starts.length, 1);
+  assert.equal(h.supportJobs.length, 0);
+  assert.equal(h.autopilot.jobs.length, 0);
+  assert.equal(h.registry.size, 0);
 });
 
 test("cluster runs two task-focused advisors in parallel and hands both findings to one builder", async () => {
@@ -101,27 +126,28 @@ test("cluster keeps unrelated work queued through evidence verification, then ad
   assert.equal(h.autopilot.clusterFocus.id, "second");
 });
 
-test("a direct request keeps cluster focus until its durable Done record is verified", async () => {
-  const request = { title: "Implement direct request", prompt: "Complete the direct request and its tests", at: 1, source: "manual", pin: true };
+// Only tasks run: a pinned inbox request is promoted by the foreman and its
+// task is dispatched in the same pass, then holds the focus until verified.
+test("a pinned inbox request is promoted, dispatched as a task in the same pass and keeps cluster focus until verified", async () => {
+  const request = { title: "Implement inbox request", prompt: "Complete the inbox request and its tests", at: 1, source: "manual", pin: true };
   const h = executorHost({ mode: "cluster", adaptiveParallel: true, requests: [request], tasks: [task("queued")] });
-  assert.equal(await h.env.spawnNextJob(), "spawned");
-  assert.equal(h.starts[0].taskId, null);
-  assert.equal(h.autopilot.clusterFocus.source, "request");
-  await h.finish(null);
-  await h.env.executeNextRequest();
-  assert.equal(h.starts.length, 1, "unrelated work waits while direct-request evidence is flushing");
-  assert.equal(h.board().requests[0].status, "verifying");
-  h.advance(31000);
-  await h.env.autopilotHousekeeping();
-  await h.env.executeNextRequest();
-  const completion = h.board().tasks.find((row) => row.title === request.title);
-  assert.ok(completion, "verification produces a durable Done entry for direct requests");
+  h.wake(); await h.pump();
+  const promoted = h.board().tasks.find((row) => row.title === request.title);
+  assert.ok(promoted, "the foreman promoted the request");
+  assert.deepEqual(h.starts.map((row) => row.taskId), [promoted.id], "and its task, pinned, was dispatched in the same pass");
+  assert.equal(h.autopilot.clusterFocus.source, "task");
+  assert.equal(h.autopilot.clusterFocus.id, promoted.id);
+  await h.finish(promoted.id); await h.pump();
+  assert.equal(h.starts.length, 1, "unrelated work waits while the focused card's evidence is flushing");
+  assert.equal(h.board().tasks.find((row) => row.id === promoted.id).status, "awaiting_verification");
+  assert.equal(h.board().requests.length, 0, "the inbox copy is released once its task's run succeeds");
+  h.advance(31000); h.wake(); await h.pump();
+  const completion = h.board().tasks.find((row) => row.id === promoted.id);
   assert.equal(completion.status, "done");
   assert.equal(completion.verification.state, "verified");
-  assert.equal(h.board().requests.length, 0);
-  assert.equal(h.starts.at(-1).taskId, "queued");
-  assert.equal(h.autopilot.clusterFocus.source, "task");
+  assert.deepEqual(h.starts.map((row) => row.taskId), [promoted.id, "queued"]);
   assert.equal(h.autopilot.clusterFocus.id, "queued");
+  assert.ok(h.starts.every((row) => row.taskId), "no worker ever ran an inbox row");
 });
 
 test("a focus from another project cannot pin or mislabel the current project's cluster", async () => {
@@ -159,7 +185,7 @@ test("entering cluster drains existing swarm workers before selecting another ta
   assert.equal(h.terminations.length, 0, "switching modes preserves running work");
   await h.finish("second"); h.advance(31000); await h.pump();
   assert.deepEqual(h.starts.map((row) => row.taskId), ["first", "second", "third"]);
-  assert.equal(h.supportCalls.length, 6);
+  assert.equal(h.supportCalls.length, 2, "only the new Cluster task needs the two advisors");
 });
 
 test("switching cluster to swarm admits independent work without stopping its lead", async () => {
@@ -279,20 +305,17 @@ test("mode cancellation frees the claim immediately and late HTTP results cannot
   assert.equal(held.pending.length, 2, "cancellation does not pretend network transports ended");
   assert.equal(h.pool.running.size, 2);
   const replacementDispatch = h.env.spawnNextJob();
-  held.release();
-  await flushUntil(() => held.pending.length === 2);
-  held.release();
   assert.equal(await replacementDispatch, "spawned");
   const replacement = h.autopilot.jobs[0];
   assert.notEqual(replacement.id, oldRun);
   const status = h.autopilot.clusterAgents;
   held.release(); await flushUntil(() => h.pool.running.size === 0);
   assert.equal(h.autopilot.clusterAgents, status, "late findings cannot reattach old agent state");
-  assert.equal(status.length, 2);
+  assert.equal(status.length, 0, "the Swarm replacement has no mandatory advisors");
   assert.equal(h.autopilot.jobs[0], replacement);
   assert.equal(h.board().tasks[0].runId, replacement.id);
   assert.equal(h.starts.length, 1);
-  assert.ok(status.every((agent) => agent.id.startsWith(replacement.id) && agent.mode === "swarm"));
+  assert.equal(h.supportCalls.length, 2, "only the cancelled Cluster preparation spent advisory calls");
 });
 
 test("unavailable HTTP assistance remains visible and does not block an otherwise configured builder", async () => {
@@ -323,7 +346,7 @@ test("one failed advisor cannot discard the successful peer's findings or hold t
 // claim, then the dispatch resumes and reaches its own paused gate. The
 // release ledger measures why claims are dropped, so it gets one row, not two.
 test("a claim released by a reap and then by its own gate records one release", async () => {
-  const h = executorHost({ tasks: [task("stop-mid-advisory")] });
+  const h = executorHost({ mode: "cluster", tasks: [task("stop-mid-advisory")] });
   let release;
   const gate = new Promise((resolve) => { release = resolve; });
   const http = h.env.httpAssistantCall;

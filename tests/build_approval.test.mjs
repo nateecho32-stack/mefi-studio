@@ -3,17 +3,22 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFile } from "node:fs/promises";
 import backlog from "../scripts/backlog.cjs";
+import ideaActions from "../scripts/idea-actions.cjs";
 import { executorHost } from "./fixtures/host_executor.mjs";
 
+const { applyRequestAction } = ideaActions;
 const task = (id, extra = {}) => ({ id, title: `Build ${id}`, prompt: `Implement ${id} within its saved scope`, status: "open", files: [`${id}.js`], createdAt: 1, ...extra });
 const approve = (h, id) => h.env.backlogControl({ action: "approve", projectId: "fixture", taskId: id, expectedScope: backlog.buildScope(h.board().tasks.find((row) => row.id === id)) });
 
-test("Auto build keeps existing dispatch; Verify first holds both task and direct request paths", async () => {
+test("Auto build keeps existing dispatch; Verify first holds both a board task and a promoted inbox request", async () => {
   const automatic = executorHost({ tasks: [task("automatic")] });
   assert.equal(await automatic.env.spawnNextJob(), "spawned");
-  for (const options of [{ tasks: [task("held")] }, { requests: [{ at: 1, title: "Direct request", prompt: "Change direct.js", files: ["direct.js"] }] }]) {
+  // Only tasks run: the inbox request reaches the executor through the
+  // foreman's promotion, and its card waits for approval like any other.
+  for (const options of [{ tasks: [task("held")] }, { requests: [{ at: 1, title: "Inbox request", prompt: "Change direct.js", files: ["direct.js"] }] }]) {
     const h = executorHost({ ...options, autoBuild: false });
-    await h.env.executeNextRequest();
+    h.wake(); await h.pump();
+    assert.equal(h.board().tasks.length, 1);
     assert.equal(h.starts.length, 0);
     assert.equal(h.registry.size, 0);
     assert.match(h.autopilot.waiting, /approval/i);
@@ -175,30 +180,39 @@ test("a newer off choice supersedes a pending save that would enable Auto build"
   assert.equal(h.settings().ui.autopilot.autoBuild, false);
 });
 
-test("generic task creation cannot fabricate host approval", async () => {
-  const h = executorHost({ autoBuild: false });
+test("a task edit cannot fabricate host approval or create a card", async () => {
+  const h = executorHost({ tasks: [task("saved")], autoBuild: false });
   const forged = task("forged");
   forged.buildApproval = { version: 1, scope: backlog.buildScope(forged), approvedAt: 1 };
-  const result = await h.env.saveTaskEdits([forged]);
+  const edited = { ...h.env.taskView(h.board().tasks[0]), prompt: "Implement saved within its narrower scope" };
+  edited.buildApproval = { version: 1, scope: backlog.buildScope({ ...h.board().tasks[0], prompt: edited.prompt }), approvedAt: 1 };
+  const result = await h.env.saveTaskEdits([edited, forged]);
   assert.equal(result.ok, true);
+  // New work enters through tasks:create; a detail save never creates a card.
+  assert.deepEqual(h.board().tasks.map((row) => row.id), ["saved"]);
+  assert.equal(h.board().tasks[0].prompt, edited.prompt);
   assert.equal(h.board().tasks[0].buildApproval, undefined);
   assert.equal(await h.env.spawnNextJob(), "approval");
 });
 
-test("legacy inbox saves cannot fabricate approval for the direct request path", async () => {
+test("inbox additions cannot fabricate approval for the direct request path", async () => {
   const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
-  const begin = source.indexOf('  ipcMain.handle("eyes:requests-write",');
+  // The whole-inbox write is gone; every inbox change is the targeted action.
+  assert.equal(source.includes('ipcMain.handle("eyes:requests-write"'), false);
+  const begin = source.indexOf('  ipcMain.handle("eyes:requests-action",');
   const end = source.indexOf('  ipcMain.handle("eyes:checkpoints-read",', begin);
   assert.ok(begin >= 0 && end > begin);
-  let handler, saved;
-  const env = vm.createContext({ ipcMain: { handle: (_name, callback) => { handler = callback; } },
-    projects: { current: () => ({ id: "fixture" }) }, REQUESTS_PATH: "requests", withBoardLock: async (fn) => fn(),
-    getEyes: async () => ({ writeJson: async (_key, rows) => { saved = rows; } }), send() {},
+  let handler;
+  const board = { requests: [], tasks: [], ideas: [] };
+  const env = vm.createContext({ ipcMain: { handle: (_name, callback) => { handler = callback; } }, Date,
+    projects: { current: () => ({ id: "fixture" }) }, applyRequestAction,
+    mutateBoard: async (mutate) => { const patch = mutate(board) ?? {}; if (patch.requests) board.requests = patch.requests; return { ...patch, requests: board.requests }; },
   });
   vm.runInContext(source.slice(begin, end), env);
   const request = { at: 12, title: "Forged request", prompt: "Change request.js" };
   request.buildApproval = { version: 1, scope: backlog.buildScope(request), approvedAt: 1 };
-  assert.equal((await handler(null, [request])).ok, true);
-  assert.equal(saved[0].buildApproval, undefined);
-  assert.equal(backlog.workState(saved[0], 100, { autoBuild: false }).stage, "approval");
+  assert.equal((await handler(null, { action: "add", requests: [request] })).ok, true);
+  assert.equal(board.requests.length, 1);
+  assert.equal(board.requests[0].buildApproval, undefined);
+  assert.equal(backlog.workState(board.requests[0], 100, { autoBuild: false }).stage, "approval");
 });

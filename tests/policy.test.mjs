@@ -7,6 +7,8 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import vm from "node:vm";
+import { readFile } from "node:fs/promises";
 import {
   BASELINE_POLICY,
   BAND,
@@ -35,6 +37,39 @@ test("baselineTaskPriority reproduces main.cjs's worth bands", () => {
   assert.equal(baselineTaskPriority(task("t2", "Anything briefed")), 2);
   assert.equal(baselineTaskPriority(task("t3", "Anything", { source: "manual" })), 1);
   assert.equal(baselineWorkPriority(task("t4", "Plain", { pin: true })), 5);
+});
+
+test("the owner's own work ranks in the owner band whatever its source, and a card keeps its request's band", () => {
+  // An approved plan's task, an idea promoted by hand, a split and Work on it
+  // carry origin.by "owner" (scripts/work-admission.cjs); auto-filed audit or
+  // collision work used to outrank the approved plan.
+  const owner = (kind, source) => ({ id: `t_${kind}`, title: `Owner ${kind}`, source, createdAt: 5, origin: { kind, by: "owner" } });
+  for (const row of [owner("planning", "planning"), owner("idea", "idea"), owner("split", "chat"), owner("work-on", "chat")]) assert.equal(baselineTaskPriority(row), BAND.CHAT, row.id);
+  assert.equal(baselineTaskPriority({ id: "d", title: "Drained idea", source: "idea", origin: { kind: "idea", by: "assistant" } }), BAND.PLAIN);
+  assert.equal(baselineTaskPriority({ id: "p", title: "Legacy plan task", source: "planning" }), BAND.PLAIN, "a card without an origin keeps its old band");
+  // Promotion keeps the filer's source, so a request and its card agree.
+  for (const source of ["fix", "audit", "collision", "duplicate", "uncommitted", "grow", "grower", "improver", "overseer", "machine", "agent", "a-eyes"]) {
+    assert.equal(baselineTaskPriority({ title: "Filed work", source, at: 1 }), BAND.EYES, source);
+  }
+  assert.ok(baselineCompareWork(owner("planning", "planning"), { title: "Audit: 3 errors", source: "audit", createdAt: 0 }) < 0);
+});
+
+test("main.cjs's inline fallback ranks exactly like the baseline it stands in for", async () => {
+  const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
+  const from = source.indexOf("const SELF_MAINTENANCE = /"), to = source.indexOf("// The worth of one piece of queued work", from);
+  assert.ok(from >= 0 && to > from);
+  const env = vm.createContext({});
+  vm.runInContext(source.slice(from, to), env);
+  const rows = [
+    { title: "Overseer: tune" }, { title: "Chat ask", source: "chat" }, { id: "task_plan_1", title: "Plan: x" },
+    { title: "Approved", source: "planning", origin: { kind: "planning", by: "owner" } }, { title: "Idea", source: "idea", origin: { kind: "idea", by: "assistant" } },
+    { title: "Pinned", source: "fix", pin: true }, { title: "Manual", source: "manual" }, { title: "No source" },
+    ...["fix", "audit", "collision", "duplicate", "uncommitted", "grow", "grower", "improver", "overseer", "machine", "agent", "a-eyes", "request"].map((source) => ({ title: "Filed", source })),
+  ];
+  for (const row of rows) {
+    assert.equal(env.fallbackTaskPriority(row), baselineTaskPriority(row), JSON.stringify(row));
+    assert.equal(env.fallbackWorkPriority(row), baselineWorkPriority(row), JSON.stringify(row));
+  }
 });
 
 test("baselineCompareWork: worth first, oldest inside a band, pins by recency", () => {

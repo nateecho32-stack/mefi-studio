@@ -12,7 +12,7 @@ const feedSource = source.slice(source.indexOf("  function feedLine("), source.i
 const preferenceSource = source.slice(source.indexOf("  async function autopilotPrefs("), source.indexOf("  // A message must always produce a reply"));
 const chatSource = source.slice(source.indexOf("  function commandChatActivity("), source.indexOf("  // The right-side chat log:"));
 function environment({ assistant = {}, full = {}, backlog = null, requests = [], nodes = [], bridge = {}, timers = {} } = {}) {
-  const el = Object.fromEntries(["feed", "feedDot", "feedState", "feedNow", "feedMetrics", "feedAttention", "feedQueue", "feedQueueCount", "feedAgents", "feedAgentsCount", "feedMenu", "feedDrop", "feedList", "feedMeta", "feedActivity", "feedParallel", "feedBuildMode", "feedAgentMode", "feedAgentModeNote"].map((key) => [key, new Element()]));
+  const el = Object.fromEntries(["feed", "feedDot", "feedState", "feedNow", "feedMetrics", "feedAttention", "feedQueue", "feedQueueCount", "feedAgents", "feedAgentsCount", "feedAgentsSection", "feedRecentAgents", "feedRecentCount", "feedRecentList", "feedMenu", "feedDrop", "feedList", "feedMeta", "feedActivity", "feedParallel", "feedBuildMode", "feedAgentMode", "feedAgentModeNote"].map((key) => [key, new Element()]));
   const state = { active: false, feedDirty: true, assistant, requests, nodes, feed: [], tasks: [], backlog, backlogRevision: 0, backlogReadAt: 0, backlogReadPending: false, feedMenuOpen: false };
   const navigations = [];
   const context = vm.createContext({
@@ -25,7 +25,7 @@ function environment({ assistant = {}, full = {}, backlog = null, requests = [],
     setTimeout: timers.setTimeout || setTimeout, clearTimeout: timers.clearTimeout || clearTimeout,
   });
   vm.runInContext(`${preferenceSource}\n${chatSource}\n${feedSource}\nthis.api = { commandJobDetail, commandQueue, renderFeed, refreshCommandBacklog, commandChatActivity, changeBuildParallel, createBuildParallelControl, changeBuildMode, changeAgentMode };`, context);
-  return { ...context.api, state, el, navigations };
+  return { ...context.api, state, el, document: context.document, navigations };
 }
 const descendants = (element) => [element, ...element.children.flatMap(descendants)];
 const byClass = (element, name) => descendants(element).find((item) => item.className?.split(" ").includes(name));
@@ -37,7 +37,7 @@ test("Agent mode saves only coordination, serializes changes and preserves pause
   const env = environment({ assistant: { mode: "swarm", enabled: false, execute: false }, bridge: { assistantAutopilot: (patch) => { calls.push(patch); return pending; } } });
   env.renderFeed();
   assert.equal(env.el.feedAgentMode.value, "swarm");
-  assert.match(env.el.feedAgentModeNote.textContent, /collaborate on tasks and their subtasks/);
+  assert.match(env.el.feedAgentModeNote.textContent, /one builder per ready task/);
   const saving = env.changeAgentMode("cluster");
   assert.equal(env.el.feedAgentMode.disabled, true);
   assert.equal(env.el.feedAgentMode.attrs["aria-busy"], "true");
@@ -139,7 +139,7 @@ test("a claimed Cluster task remains preparation until the coding process starts
   job.phase = "building"; job.progress = null;
   env.state.assistant.clusterAgents[0].status = "done";
   env.state.feedDirty = true; env.renderFeed();
-  assert.match(env.el.feedNow.textContent, /Working now.*Worker is running/);
+  assert.match(env.el.feedNow.textContent, /Worker is running/);
   assert.equal(env.el.feedState.textContent, "running");
   assert.equal(env.el.feedMeta.textContent, "1 building · cluster focus");
 });
@@ -187,7 +187,8 @@ test("Command shows the actual job once, continues the queue without duplication
   assert.ok(!env.el.feedDrop.textContent.includes("Next task 0"));
   assert.equal(env.el.feedQueueCount.textContent, "12");
   assert.equal(env.el.feedMetrics.children[2].textContent, "4Waiting");
-  assert.equal(env.el.feedMetrics.children[3].textContent, "1Needs attention");
+  assert.equal(env.el.feedMetrics.children[3].textContent, "1Attention");
+  assert.equal(env.el.feedMetrics.children[3].attrs["aria-label"], "1 task needing attention");
   const focusedCurrent = byClass(env.el.feedNow, "feed-current-title");
   const focusedQueue = env.el.feedQueue.children[0].children[1];
   const focusedMetric = env.el.feedMetrics.children[0];
@@ -396,7 +397,7 @@ test("Command exposes held builds under Needs attention and opens the approval b
   const approval = [{ id: "needs-approval", kind: "task", stage: "approval", title: "Review export scope", reason: "Review and approve this brief before building." }];
   const env = environment({ assistant: { autoBuild: false }, backlog: { counts: { ready: 0, blocked: 1, approval: 1 }, approval, blocked: [{ kind: "task", id: "broken", title: "Missing prerequisite", reason: "Prerequisite is missing." }], next: [] } });
   env.renderFeed();
-  assert.equal(env.el.feedMetrics.children[3].textContent, "2Needs attention");
+  assert.equal(env.el.feedMetrics.children[3].textContent, "2Attention");
   assert.match(env.el.feedAttention.textContent, /Review export scope.*Review and approve this brief/);
   assert.doesNotMatch(env.el.feedQueue.textContent, /Review export scope/);
   byClass(env.el.feedAttention, "feed-attention-title").click();
@@ -419,7 +420,7 @@ test("Command separates actionable blockers from automatic waits and opens the m
   const env = environment({ backlog: { counts: { ready: 2, review: 1, waiting: 3, cooling: 1, blocked: 4 }, blocked, nextRetryAt: Date.now() + 120000, next: [] } });
   env.renderFeed();
   assert.equal(env.el.feedMetrics.children[2].textContent, "4Waiting");
-  assert.equal(env.el.feedMetrics.children[3].textContent, "4Needs attention");
+  assert.equal(env.el.feedMetrics.children[3].textContent, "4Attention");
   env.el.feedMetrics.children[3].click();
   assert.deepEqual(JSON.parse(JSON.stringify(env.navigations.at(-1))), ["tasks", { filter: "all", readiness: "blocked" }]);
   assert.match(env.el.feedAttention.textContent, /Missing prerequisite: deleted-task/);
@@ -509,6 +510,65 @@ test("feed rows fold repeats and a worker transcript but keep distinct lines", (
     "log:1:[autopilot] verified \"Fix the settings panel\"",
     "run:1:started: Fix the settings panel",
   ]);
+});
+
+test("Command shows sessionless output, worker route and fresh update age", () => {
+  const job = { taskId: "current", title: "Build Snake", phase: "building", route: "Codex CLI", activity: "Running collision checks", startedAt: Date.now() - 60000, lastOutputAt: Date.now() - 5000 };
+  const env = environment({ assistant: { execute: true, running: [job] } });
+  env.renderFeed();
+  assert.match(env.el.feedNow.textContent, /Worker output: Running collision checks/);
+  assert.match(env.el.feedNow.textContent, /Codex CLI.*Updated 5s ago/);
+  assert.doesNotMatch(env.el.feedNow.textContent, /%/);
+  job.currentStep = "Verify keyboard input";
+  env.state.feedDirty = true; env.renderFeed();
+  assert.match(env.el.feedNow.textContent, /Verify keyboard input/);
+  job.phase = "finishing";
+  env.state.feedDirty = true; env.renderFeed();
+  assert.match(env.el.feedNow.textContent, /Finishing run.*Worker reported completion/);
+});
+
+test("long worker activity expands on demand and stays open through live updates for the same run", () => {
+  const job = { id: "run-one", taskId: "current", title: "Inspect project files", startedAt: Date.now() - 60000,
+    currentStep: `Bash running · 25s · Get-ChildItem -LiteralPath ${"sample-project/".repeat(12)} -Recurse` };
+  const env = environment({ assistant: { execute: true, running: [job] } });
+  env.renderFeed();
+  const details = byClass(env.el.feedNow, "feed-current-details");
+  assert.equal(details.open, false);
+  assert.equal(details.children[0].textContent, "Bash running · 25s");
+  assert.equal(byClass(details, "feed-current-stage").textContent, job.currentStep);
+  details.open = true;
+  env.document.activeElement = details.children[0];
+  env.state.assistant.running = [{ ...job, currentStep: job.currentStep.replace("25s", "35s") }];
+  env.state.feedDirty = true; env.renderFeed();
+  assert.equal(byClass(env.el.feedNow, "feed-current-details").open, true);
+  assert.equal(byClass(env.el.feedNow, "feed-current-details").children[0].focused, true, "the activity disclosure retains keyboard focus across updates");
+  assert.equal(byClass(env.el.feedNow, "feed-current-details").children[0].textContent, "Bash running · 35s");
+  env.state.assistant.running = [{ ...job, id: "run-two", startedAt: Date.now() }];
+  env.state.feedDirty = true; env.renderFeed();
+  assert.equal(byClass(env.el.feedNow, "feed-current-details").open, false, "a new run starts folded");
+});
+
+test("Work keeps running agents and failures visible while folding routine and intentionally stopped roles", () => {
+  const full = { agents: [
+    { role: "watcher", status: "done", text: "36 sessions checked" },
+    { role: "keeper", status: "idle", text: "Waiting for the next pass" },
+    { role: "auditor", status: "running", text: "Checking results" },
+    { role: "cluster-planner", status: "error", error: "Mode changed or work paused" },
+    { role: "cluster-reviewer", status: "error", error: "Provider unavailable" },
+  ] };
+  const env = environment({ full });
+  env.renderFeed();
+  assert.equal(env.el.feedAgentsCount.textContent, "1 need attention");
+  assert.equal(env.el.feedAgents.children.length, 2);
+  assert.match(env.el.feedAgents.textContent, /auditor.*Checking results.*Reviewer.*Provider unavailable/);
+  assert.equal(env.el.feedRecentCount.textContent, "3");
+  assert.match(env.el.feedRecentList.textContent, /STOPPEDPlanner.*Mode changed or work paused/);
+  env.el.feedRecentAgents.open = true;
+  full.agents = full.agents.filter((agent) => ["done", "idle"].includes(agent.status));
+  env.state.feedDirty = true; env.renderFeed();
+  assert.equal(env.el.feedAgentsSection.hidden, true);
+  assert.equal(env.el.feedRecentAgents.hidden, false);
+  assert.equal(env.el.feedRecentAgents.open, true, "live roster refresh keeps the owner's disclosure choice");
 });
 
 // A worker's stdout reaches the feed a line at a time, a dozen a second with

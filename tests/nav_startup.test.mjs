@@ -149,7 +149,64 @@ test("legacy resume retains its synchronous timer contract", () => {
 
 test("navigation carries an overlay open promise back to its startup caller", () => {
   const open = deferred();
-  const env = vm.createContext({ get: () => ({ kind: "overlay", open: () => open.promise }), document: { getElementById: () => null } });
+  const env = vm.createContext({ get: () => ({ kind: "overlay", open: () => open.promise }), rememberRoute() {}, closeHelpMenu() {}, taskProjectId: null, taskContext: () => null, window: {}, document: { documentElement: {dataset:{}}, getElementById: () => null } });
   vm.runInContext(source.slice(source.indexOf("  function go("), source.indexOf("  function toggle(")), env);
   assert.equal(env.go("tasks"), open.promise);
+});
+
+function taskNavigation() {
+  const store = new Map(), calls = [], events = [];
+  const window = { MefiTasks: { state: { projectId: "p" } }, MefiWorkspace: { state: { activeId: "p" }, exit() {} }, MefiIdle: { exit() {} }, dispatchEvent: (event) => events.push(event) };
+  const destinations = new Map(["tasks", "workspace", "command"].map((id) => [id, { kind: id === "tasks" ? "overlay" : "view", open: (params) => calls.push([id, params]) }]));
+  const env = vm.createContext({ window, localStorage: { getItem: (key) => store.get(key), setItem: (key, value) => store.set(key, value) },
+    CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options.detail; } },
+    document: { documentElement: { dataset: {} }, getElementById: () => null },
+    get: (id) => destinations.get(id), rememberRoute() {}, closeHelpMenu() {}, closeAll() {}, idleActive: () => false, underlyingView: () => "workspace", state: {}, dispatchNav() {},
+  });
+  const contextSource = source.slice(source.indexOf("  const taskContexts ="), source.indexOf("  // A record with no key"));
+  const goSource = source.slice(source.indexOf("  function go("), source.indexOf("  // The surface under any sheet"));
+  vm.runInContext(contextSource + goSource, env);
+  return { env, window, store, calls, events };
+}
+
+test("task context follows Home, Work and Live while remaining scoped to its project", () => {
+  const { env, window, calls, events } = taskNavigation();
+  env.selectTask({ taskId: "snake", projectId: "p", title: "Build Snake" });
+  env.go("workspace"); env.go("command"); env.go("tasks");
+  assert.equal(calls[1][1].selected, "task:snake");
+  assert.equal(calls[2][1].taskId, "snake");
+  assert.equal(calls[2][1].projectId, "p");
+  assert.equal(events.filter((event) => event.type === "mefi:task-context").length, 1, "unchanged context does not cause refresh loops");
+  window.MefiWorkspace.state.activeId = "q"; window.MefiTasks.state.projectId = "q";
+  env.selectTask({ taskId: "life", projectId: "q", title: "Build Life" });
+  env.go("tasks");
+  assert.equal(calls.at(-1)[1].taskId, "life");
+  assert.equal(env.taskContext("p").taskId, "snake");
+  env.go("tasks", { taskId: "foreign", projectId: "p" });
+  assert.equal(env.taskContext("p").taskId, "snake", "a rejected cross-project link never rewrites another project's selection");
+  env.go("command", { rail: "ask" });
+  assert.equal(calls.at(-1)[1].selected, undefined, "an explicit diagnostic route is not replaced by the remembered task");
+});
+
+test("dismissing Appearance leaves the live tree without selecting the remembered task", () => {
+  const { env, window, calls } = taskNavigation();
+  env.selectTask({ taskId: "remembered", projectId: "p" });
+  const departures = [];
+  window.MefiMusic = { leaveSettingsAppearance: (options) => departures.push(options.keepTree) };
+  env.go("command", { preserveSelection: true });
+  assert.equal(calls.at(-1)[1].selected, undefined);
+  assert.deepEqual(departures, [true]);
+  env.go("workspace");
+  assert.deepEqual(departures, [true, false], "other destinations stop the settings preview before opening");
+});
+
+test("task context reads persisted selection only for its exact project", () => {
+  const { env, store } = taskNavigation();
+  store.set("mefiStudio.taskContext.p", JSON.stringify({ projectId: "q", taskId: "private" }));
+  assert.equal(env.taskContext("p"), null);
+  store.set("mefiStudio.taskContext.p", JSON.stringify({ projectId: "p", taskId: "saved", title: "Saved task" }));
+  assert.equal(env.taskContext("p").taskId, "saved");
+  assert.equal(env.taskContext("q"), null);
+  const context = env.taskContext("p"); context.taskId = "mutated";
+  assert.equal(env.taskContext("p").taskId, "saved", "callers cannot change the saved navigation state by reference");
 });

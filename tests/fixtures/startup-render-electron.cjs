@@ -173,7 +173,7 @@ app.whenReady().then(async () => {
   report.failed = await failed.run(`
     const card=document.querySelector('.boot-card').getBoundingClientRect();
     return {gated:window.MefiBoot.isActive(),progress:window.MefiBoot.state().progress,
-      reducedMotion:matchMedia('(prefers-reduced-motion: reduce)').matches&&getComputedStyle(document.querySelector('.boot-spinner')).animationName==='none',
+      reducedMotion:matchMedia('(prefers-reduced-motion: reduce)').matches&&getComputedStyle(document.querySelector('.boot-spinner, #boot-agent')).animationName==='none',
       fits:Math.abs(innerWidth-600)<=2&&card.left>=0&&card.right<=innerWidth&&card.top>=0&&card.bottom<=innerHeight,
       bounds:{width:innerWidth,height:innerHeight,left:card.left,right:card.right,top:card.top,bottom:card.bottom},
       result:window.__startupResult,reads:window.startupFixture.projectReads()};
@@ -192,11 +192,16 @@ app.whenReady().then(async () => {
   report.lightTheme = await continued.run(`
     const applied=window.MefiMusic.applyCustomColors({accent:'#775B2B',background:'#F0F2F5',surface:'#FFFFFF',text:'#20242A'},false);
     const card=getComputedStyle(document.querySelector('.boot-card')),layer=getComputedStyle(document.getElementById('boot-layer'));
-    const title=getComputedStyle(document.getElementById('boot-title')),spinner=getComputedStyle(document.querySelector('.boot-spinner'));
-    return {applied,lightSurfaces:card.backgroundImage.includes('rgb(255, 255, 255)')&&card.backgroundImage.includes('rgb(240, 242, 245)')&&layer.backgroundColor==='rgb(240, 242, 245)',
+    const title=getComputedStyle(document.getElementById('boot-title')),spinner=getComputedStyle(document.querySelector('.boot-spinner, #boot-agent'));
+    // Shared glass is returned as CSS Color 4 color(srgb ... / alpha).
+    // Check its actual light pigment and opacity, independent of serialization.
+    const probe=document.createElement('canvas');probe.width=1;probe.height=1;
+    const ctx=probe.getContext('2d');const pigment=value=>{ctx.clearRect(0,0,1,1);ctx.fillStyle=value;ctx.fillRect(0,0,1,1);return [...ctx.getImageData(0,0,1,1).data];};
+    const rgba=pigment(card.backgroundColor),backdrop=pigment(layer.backgroundColor);
+    return {applied,lightSurfaces:rgba[0]>=245&&rgba[1]>=245&&rgba[2]>=245&&rgba[3]>=153&&backdrop.slice(0,3).every(value=>value>=230)&&backdrop[3]===255,
       darkText:title.color==='rgb(32, 36, 42)',spinnerStopped:spinner.animationPlayState==='paused'||spinner.animationName==='none',
       animationName:spinner.animationName,animationPlayState:spinner.animationPlayState,
-      background:card.backgroundImage,color:title.color};
+      background:card.backgroundColor,backdrop:layer.backgroundColor,color:title.color};
   `);
   assert.ok(report.lightTheme.applied && report.lightTheme.lightSurfaces && report.lightTheme.darkText && report.lightTheme.spinnerStopped, JSON.stringify(report.lightTheme));
   await continued.capture("startup-light-600.png");

@@ -2,10 +2,13 @@
 // never removed; manual requests, defect repairs and handoffs keep their path.
 const GROWTH_BUFFER = 3;
 const { buildScope } = require("./backlog.cjs");
+const workAdmission = require("./work-admission.cjs");
 const GROWTH_SOURCES = new Set(["grow", "grower", "improver", "overseer"]);
 const rows = (value) => Array.isArray(value) ? value.filter(Boolean) : [];
 const text = (value) => String(value ?? "").trim().replace(/\s+/g, " ");
-const titleKey = (value) => text(value).toLowerCase().replace(/^overseer\s*:\s*/, "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+// The admission module's title key, less the "Overseer:" label an upgrade
+// request carries and its promoted card may not.
+const titleKey = (value) => workAdmission.titleKey(text(value).replace(/^overseer\s*:\s*/i, ""));
 const obligationKey = (item) => {
   // Identity, source labels and empty containers change on promotion; actual
   // requirements, project, files, acceptance and references must still agree.
@@ -15,7 +18,7 @@ const obligationKey = (item) => {
   }
   return buildScope(scope);
 };
-const unresolved = (item) => !["done", "archived", "absorbed", "dismissed", "rejected"].includes(item?.status);
+const unresolved = (item) => workAdmission.isOpenWork(item?.status);
 const isGrowth = (item) => GROWTH_SOURCES.has(item?.source) && !item?.handoffId && !item?.fromRun;
 
 function represented(board, request) {

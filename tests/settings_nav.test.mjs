@@ -44,6 +44,7 @@ function parse(html) {
       if (key === "open") node.open = true;
       if (key === "checked") node.checked = true;
       if (key === "value") node.value = value;
+      if (key === "type") node.type = value;
     }
     stack.at(-1).append(node);
     if (!selfClose && !VOID.has(tag.toLowerCase())) stack.push(node);
@@ -57,9 +58,10 @@ const CARDS = ["settings-setup", "settings-assistant", "settings-routing", "sett
 
 // desktop: a bridge with launchStudio (the desktop app); false is the browser
 // build. storage seeds localStorage; coach: whether the walkthrough coach shows.
-function environment({ desktop = true, storage = {}, coach = false, noMotion = false } = {}) {
+function environment({ desktop = true, storage = {}, coach = false, noMotion = false, audioMarkup = "" } = {}) {
   const { document, elements, get, body, documentElement } = createDom({ fromTemplate: () => true });
   const page = parse(settingsHtml);
+  if (audioMarkup) page.querySelector("#settings-audio-media").append(parse(audioMarkup));
   body.append(page);
   for (const node of page.descendants()) if (node.id) elements.set(node.id, node);
   get("booklet-data").textContent = JSON.stringify(CATALOG);
@@ -121,7 +123,9 @@ function environment({ desktop = true, storage = {}, coach = false, noMotion = f
     booklet: window.MefiBooklet,
     row: (jump) => rows().find((row) => row.dataset.settingsJump === jump) ?? null,
     link: (nav) => rows().find((row) => row.dataset.nav === nav) ?? null,
-    current: () => rows().filter((row) => row.getAttribute("aria-current") === "true").map((row) => row.dataset.settingsJump),
+    current: () => rows().filter((row) => row.getAttribute("aria-current") === "true").map((row) => row.dataset.settingsCategory),
+    panes: () => document.querySelectorAll("[data-settings-category-pane]").filter((node) => !node.hidden).map((node) => node.dataset.settingsCategoryPane),
+    results: () => el("settings-search-results").children.map((node) => node.dataset.settingsResult),
     shownRows: () => rows().filter((row) => !row.hidden).map((row) => row.dataset.settingsJump ?? `link:${row.dataset.nav}`),
     shownCards: () => CARDS.filter((id) => el(id) && !el(id).hidden),
     fire: (type, event = {}) => { for (const fn of listeners.get(type) ?? []) fn({ type, ...event }); },
@@ -139,242 +143,232 @@ function environment({ desktop = true, storage = {}, coach = false, noMotion = f
   };
 }
 
-test("the parsed page carries every card, row, group and block the list names", () => {
-  const env = environment();
-  for (const id of CARDS) {
-    assert.ok(env.el(id), `#${id} is in the template`);
-    assert.ok(env.row(id), `the list jumps to #${id}`);
-  }
-  const groups = env.el("settings-nav").querySelectorAll(".settings-nav-group").map((group) => env.el(group.getAttribute("aria-labelledby")).textContent.trim());
-  assert.deepEqual(groups, ["Connections", "Personal", "System"]);
-  const block = (id) => env.el(id).closest("[data-settings-group]")?.dataset.settingsGroup;
-  for (const id of CARDS.slice(0, 5)) assert.equal(block(id), "connections", `#${id} sits in Connections`);
-  for (const id of ["settings-studio", "settings-community"]) assert.equal(block(id), "personal", `#${id} sits in Personal`);
-  for (const id of CARDS.slice(7)) assert.equal(block(id), "system", `#${id} sits in System`);
-  for (const id of ["workspace-person-name", "workspace-agent-name", "workspace-accent", "workspace-motion", "motion-toggle", "pref-blur", "idle-home"]) {
-    assert.ok(env.el("settings-studio").contains(env.el(id)), `Your Studio holds #${id}`);
-  }
-  for (const id of ["speed-model", "speed-go"]) assert.ok(env.el("settings-diagnostics").contains(env.el(id)), `Diagnostics holds #${id}`);
-  assert.deepEqual(env.el("motion-toggle").children.map((option) => option.textContent), ["Full", "Calm", "Off"]);
-  assert.equal(env.link("command").dataset.navParams, '{"rail":"settings"}', "Agents & queue opens Command's Agents panel");
-  assert.ok(env.link("music"), "Style & sound is a row that leaves for its sheet");
-  assert.equal(env.el("settings-log").tagName, "DETAILS", "the Connection log stays a folding card");
-});
-
-test("a deep link lands on its card, lights it, and the spy holds until the scroll settles", async () => {
-  const env = environment();
-  env.booklet.showTab("studio", { section: "settings-community" });
-  const card = env.el("settings-community");
-  assert.equal(card.open, true, "the folded card opens");
-  assert.equal(card.scrolledIntoView, true);
-  assert.deepEqual(env.current(), ["settings-community"]);
-  assert.equal(card.querySelector("summary").focused, true, "keyboard focus lands on the card");
-
-  // While the jump scrolls, the cards it passes report in; none of them wins.
-  env.place("settings-studio", 60, 100);
-  env.place("settings-community", 200, 500);
-  env.window.scrollY = 1200;
-  env.fire("scroll");
-  env.frame();
-  env.observe(["settings-studio"]);
-  assert.deepEqual(env.current(), ["settings-community"], "the scroll-spy is held while the jump scrolls");
-
-  // Settled: the report that a sliver of Your Studio, above the target, is in
-  // the band does not take the highlight from the card the link landed on.
-  env.fire("scrollend");
-  env.clock.now += 2000;
-  env.observe(["settings-studio", "settings-community"]);
-  assert.deepEqual(env.current(), ["settings-community"], "the card a jump landed on stays current");
-
-  // The reader scrolls on: the spy follows the page again.
-  env.place("settings-studio", 100, 100);
-  env.place("settings-community", 300, 500);
-  env.fire("scroll");
-  env.frame();
-  assert.deepEqual(env.current(), ["settings-studio"], "once the reader scrolls, the last card past the line is current");
-});
-
-test("deep links accept the cards' present names, and a missing card is ignored", () => {
-  const env = environment();
-  env.booklet.showTab("studio", { section: "providers" });
-  assert.deepEqual(env.current(), ["settings-assistant"]);
-  for (const alias of ["you", "appearance", "studio"]) {
-    env.el("settings-studio").open = false;
-    assert.equal(env.booklet.jumpToSettings(alias), true, `"${alias}" names Your Studio`);
-    assert.equal(env.el("settings-studio").open, true);
-    assert.deepEqual(env.current(), ["settings-studio"]);
-  }
-  assert.equal(env.booklet.jumpToSettings("updates"), true, "a bare name finds settings-<name>");
-  assert.deepEqual(env.current(), ["settings-updates"]);
-  assert.equal(env.booklet.jumpToSettings("nowhere"), false);
-  assert.equal(env.booklet.jumpToSettings(""), false);
-  assert.deepEqual(env.current(), ["settings-updates"], "a jump to nothing changes nothing");
-});
-
-test("under the walkthrough coach a jump scrolls without taking focus", () => {
-  const env = environment({ coach: true });
-  env.booklet.showTab("studio", { section: "settings-assistant" });
-  assert.equal(env.el("settings-assistant").scrolledIntoView, true);
-  assert.deepEqual(env.current(), ["settings-assistant"]);
-  assert.notEqual(env.el("settings-assistant-heading").focused, true, "focus stays with the coach");
-  const quiet = environment();
-  quiet.booklet.showTab("studio", { section: "settings-assistant" });
-  assert.equal(quiet.el("settings-assistant-heading").focused, true, "without the coach the heading takes focus");
-  assert.equal(quiet.el("settings-assistant-heading").getAttribute("tabindex"), "-1", "a section's heading is made focusable for it");
-});
-
-test("the list's own rows jump without moving focus off the list", async () => {
+test("Settings offers seven stable categories and displays one pane", () => {
   const env = environment();
   env.booklet.showTab("studio");
-  await env.el("settings-nav").trigger("click", { target: env.row("settings-log") });
+  assert.deepEqual(env.el("settings-nav").querySelectorAll("[data-settings-category]").map((row) => row.dataset.settingsCategory), ["general", "appearance", "connections", "models", "automation", "audio", "system"]);
+  assert.deepEqual(env.panes(), ["general"]);
+  env.booklet.showTab("studio", { category: "audio" });
+  assert.deepEqual(env.panes(), ["audio"], "category params from quick links are supported");
+  for (const id of CARDS) assert.ok(env.el(id), `legacy anchor ${id} survives`);
+  assert.ok(env.el("settings-category-general").contains(env.el("workspace-person-name")));
+  assert.ok(env.el("settings-category-appearance").contains(env.el("motion-toggle")));
+  assert.ok(env.el("settings-category-models").contains(env.el("executor-cli")));
+  assert.ok(env.el("settings-category-automation").contains(env.el("jev-enabled")));
+});
+
+test("category selection preserves disclosures and remembers the last category", async () => {
+  const env = environment();
+  const category = env.el("settings-nav").querySelector('[data-settings-category="system"]');
+  await env.el("settings-nav").trigger("click", { target: category, detail: 1 });
+  assert.deepEqual(env.panes(), ["system"]);
+  assert.equal(env.store.get("mefiStudio.settingsCategory"), "system");
+  env.booklet.jumpToSettings("settings-log");
   assert.equal(env.el("settings-log").open, true);
-  assert.deepEqual(env.current(), ["settings-log"]);
-  assert.notEqual(env.el("settings-log").querySelector("summary").focused, true);
+  env.booklet.jumpToSettings("general");
+  env.booklet.jumpToSettings("system");
+  assert.equal(env.el("settings-log").open, true);
+  const restored = environment({ storage: { "mefiStudio.settingsCategory": "audio" } });
+  assert.deepEqual(restored.panes(), ["audio"]);
 });
 
-test("Find a setting narrows rows, cards, groups and blocks, and announces the count", async () => {
+test("legacy deep links reveal their new categories and keep their targets", () => {
   const env = environment();
-  env.booklet.showTab("studio");
-  await env.type("updates");
-  assert.deepEqual(env.shownRows(), ["settings-updates"]);
-  assert.deepEqual(env.shownCards(), ["settings-updates"]);
-  assert.equal(env.el("settings-find-status").textContent, "1 setting");
-  assert.deepEqual(env.current(), ["settings-updates"], "the first match leads");
-  const groups = env.el("settings-nav").querySelectorAll(".settings-nav-group");
-  assert.deepEqual(groups.map((group) => group.hidden), [true, true, false], "groups left empty step aside");
-  const blocks = env.document.querySelectorAll("#settings-sections .settings-block");
-  assert.deepEqual(blocks.map((block) => block.hidden), [true, true, false], "blocks left empty step aside");
-
-  // Terms carry synonyms, titles and summaries count, and every word must match.
-  await env.type("api key");
-  assert.deepEqual(env.shownRows(), ["settings-assistant"]);
-  await env.type("theme");
-  assert.deepEqual(env.shownRows(), ["settings-studio", "settings-community", "link:music"]);
-  assert.equal(env.el("settings-find-status").textContent, "3 settings");
-  await env.type("queue");
-  assert.deepEqual(env.shownRows(), ["settings-workers", "link:command"], "Coding workers' summary (queued tasks) and the Agents & queue row");
-  await env.type("status");
-  assert.ok(env.shownRows().includes("settings-diagnostics"), "a card's summary is searched");
-  await env.type("zzz nothing");
-  assert.deepEqual(env.shownRows(), []);
-  assert.equal(env.el("settings-find-status").textContent, "No settings match");
-  assert.equal(env.el("settings-find-empty").hidden, false, "the list says nothing matched");
-
-  // Esc clears the search and keeps focus in the field; an empty field lets Esc through.
-  const esc = await env.key("Escape");
-  assert.equal(esc.stopped, true);
-  assert.equal(env.el("settings-find").value, "");
-  assert.equal(env.shownRows().length, 14, "every row comes back");
-  assert.equal(env.shownCards().length, CARDS.length);
-  assert.equal(env.el("settings-find-status").textContent, "");
-  assert.equal(env.el("settings-find-empty").hidden, true);
-  const through = await env.key("Escape");
-  assert.equal(through.stopped, false, "with nothing to clear, Esc goes on to nav");
-});
-
-test("Enter in Find opens the first match, or follows it when it leaves the page", async () => {
-  const env = environment();
-  env.booklet.showTab("studio");
-  await env.type("intake");
-  assert.deepEqual(env.shownRows(), ["settings-jev"]);
-  const enter = await env.key("Enter");
-  assert.equal(enter.prevented, true);
-  assert.equal(env.el("settings-jev").open, true);
-  assert.equal(env.el("settings-jev").scrolledIntoView, true);
-  let clicked = 0;
-  env.link("music").click = () => { clicked += 1; };
-  await env.type("sound");
-  assert.equal(env.shownRows()[0], "link:music");
-  await env.key("Enter");
-  assert.equal(clicked, 1, "a ↗ row is clicked, and nav's delegate takes it from there");
-});
-
-test("a deep link to a card the search is hiding brings every card back first", async () => {
-  const env = environment();
-  env.booklet.showTab("studio");
-  await env.type("updates");
-  env.booklet.showTab("studio", { section: "settings-studio" });
-  assert.equal(env.el("settings-find").value, "");
-  assert.equal(env.el("settings-studio").hidden, false);
-  assert.deepEqual(env.current(), ["settings-studio"]);
-});
-
-test("Server Styler is searchable and its desktop card opens from a deep link", async () => {
-  const env = environment();
-  env.booklet.showTab("studio");
-  await env.type("server styler");
-  assert.deepEqual(env.shownRows(), ["settings-styler"]);
-  assert.deepEqual(env.shownCards(), ["settings-styler"]);
-  env.booklet.showTab("studio", { section: "settings-styler" });
-  assert.equal(env.el("settings-styler").open, true);
-  assert.deepEqual(env.current(), ["settings-styler"]);
-});
-
-test("scrolled to the very end, the last card lights", () => {
-  const env = environment();
-  env.booklet.showTab("studio");
-  CARDS.forEach((id, index) => env.place(id, -2000 + index * 180));
-  env.window.scrollY = 3200;
-  env.documentElement.scrollHeight = 4000;
-  env.fire("scroll");
-  env.frame();
-  assert.deepEqual(env.current(), ["settings-log"]);
-  env.window.scrollY = 1000;
-  env.place("settings-routing", 150, 600);
-  env.place("settings-workers", 760);
-  env.fire("scroll");
-  env.frame();
-  assert.deepEqual(env.current(), ["settings-routing"], "away from the end, the last card past the line is current");
-});
-
-test("buttons inside a card go through MefiNav and leave the card open", async () => {
-  const env = environment();
-  env.booklet.showTab("studio", { section: "settings-diagnostics" });
-  const card = env.el("settings-diagnostics");
-  const button = (nav) => card.querySelectorAll("[data-settings-nav]").find((node) => node.dataset.settingsNav === nav);
-  for (const nav of ["profiler", "audit", "machine"]) {
-    await env.el("settings-sections").trigger("click", { target: button(nav) });
-    assert.deepEqual(env.routes.at(-1), [nav, null]);
+  for (const [alias, category, target] of [["providers", "connections", "settings-assistant"], ["Your Studio", "general", "settings-studio"], ["preferences", "general", "settings-studio"], ["decision-model", "connections", "settings-jev"], ["coding-workers", "models", "settings-workers"], ["updates", "system", "settings-updates"], ["appearance", "appearance", "settings-category-appearance"], ["audio", "audio", "settings-category-audio"]]) {
+    assert.equal(env.booklet.jumpToSettings(alias), true, alias);
+    assert.deepEqual(env.panes(), [category]);
+    assert.equal(env.el(target).scrolledIntoView, true);
   }
-  assert.equal(card.open, true, "the card stays open behind the view it opened");
-  await env.el("settings-sections").trigger("click", { target: env.el("settings-studio").querySelector("[data-settings-nav]") });
-  assert.deepEqual(env.routes.at(-1), ["music", null], "Your Studio's More in Style & sound opens the sheet");
+  assert.equal(env.booklet.jumpToSettings("missing"), false);
+  assert.deepEqual(env.panes(), ["audio"]);
 });
 
-test("Search Studio gets one entry per card, each opening its card", () => {
+test("search returns individual controls with category paths, never entered secrets or log contents", async () => {
   const env = environment();
-  assert.deepEqual(env.registered.map((dest) => dest.id), CARDS.map((id) => `settings:${id}`));
-  const providers = env.registered.find((dest) => dest.id === "settings:settings-assistant");
-  assert.equal(providers.label, "Settings › Providers");
-  assert.equal(providers.kind, "action");
-  assert.equal(providers.section, "settings");
-  assert.match(providers.searchTerms, /api key/);
-  assert.equal(providers.glyph, "g-key");
-  assert.deepEqual({ ...providers.showIn }, { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false });
-  providers.run();
-  // params come from the module's realm: compare their shape, not their prototype
-  assert.deepEqual(JSON.parse(JSON.stringify(env.routes.at(-1))), ["studio", { section: "settings-assistant" }]);
-  assert.equal(env.registered.find((dest) => dest.id === "settings:settings-log").label, "Settings › Connection log");
+  await env.type("companion name");
+  assert.deepEqual(env.results(), ["workspace-agent-name"]);
+  assert.match(env.el("settings-search-results").textContent, /Settings \/ General/);
+  assert.deepEqual(env.panes(), [], "results replace the category body");
+  env.el("jev-key").value = "private-test-secret";
+  env.el("studio-log").textContent = "private-test-log";
+  await env.type("private-test");
+  assert.deepEqual(env.results(), []);
+  assert.equal(env.el("settings-find-status").textContent, "No settings match");
+  assert.equal(env.el("settings-find-empty").hidden, false);
 });
 
-test("the browser build drops desktop-only rows and cards but keeps the Connections note", () => {
+test("Enter reveals a matching field and opens its containing provider disclosure", async () => {
+  const env = environment();
+  await env.type("custom provider api key");
+  assert.deepEqual(env.results(), ["custom-key"]);
+  assert.equal(env.el("custom-key").closest("details").open, false);
+  await env.key("Enter");
+  assert.deepEqual(env.panes(), ["connections"]);
+  assert.equal(env.el("custom-key").closest("details").open, true);
+  assert.equal(env.el("custom-key").focused, true);
+  assert.equal(env.el("settings-find").value, "");
+});
+
+test("search results can be selected and Escape clears without navigating away", async () => {
+  const env = environment();
+  await env.type("blur behind panels");
+  assert.deepEqual(env.results(), ["pref-blur"]);
+  await env.el("settings-sections").trigger("click", { target: env.el("settings-search-results").children[0] });
+  assert.deepEqual(env.panes(), ["appearance"]);
+  assert.equal(env.el("pref-blur").focused, true);
+  await env.type("nothing matching");
+  const event = await env.key("Escape");
+  assert.equal(event.stopped, true);
+  assert.deepEqual(env.panes(), ["appearance"]);
+  assert.equal(env.el("settings-search-results").hidden, true);
+  assert.equal((await env.key("Escape")).stopped, false);
+});
+
+test("search reveals a conditional music field before focusing the exact result", async () => {
+  for (const [category, id, label] of [["appearance", "music-color-accent-hex", "Accent hex color"], ["audio", "music-link-url", "Media link"]]) {
+    const env = environment();
+    const panel = new Element("section"); panel.hidden = true;
+    const control = new Element("input"); control.id = id; control.setAttribute("aria-label", label);
+    panel.append(control); env.el(`settings-${category}-media`).append(panel);
+    const get = env.document.getElementById;
+    env.document.getElementById = (key) => key === id ? control : get(key);
+    const revealed = [];
+    env.window.MefiMusic = { revealSettingsTarget: (target) => { revealed.push(target.id); if (target === control) panel.hidden = false; } };
+    control.focus = () => { assert.equal(panel.hidden, false, "the configuration panel is visible before focus"); env.document.activeElement = control; };
+    await env.type(label);
+    assert.deepEqual(env.results(), [id]);
+    assert.equal(panel.hidden, true, "searching alone does not change the visible configuration");
+    await env.key("Enter");
+    assert.deepEqual(revealed, [id]);
+    assert.deepEqual(env.panes(), [category]);
+    assert.ok(env.document.activeElement === control);
+  }
+});
+
+test("Settings search excludes transient music content while retaining player and configuration controls", async () => {
+  const env = environment({ audioMarkup: `
+    <ol class="music-queue"><li><button id="transient-track">Transient music track</button></li></ol>
+    <div class="music-recent"><button id="transient-recent">Transient music recent link</button></div>
+    <article class="music-suggestion"><button id="transient-recommendation">Transient music suggestion</button></article>
+    <button id="music-radio-stop">Stop radio</button>
+    <label>Music volume<input id="music-volume" type="range" aria-label="Music volume"></label>
+    <button id="music-recommend">Ask for recommendations</button>
+  ` });
+  await env.type("transient music");
+  assert.deepEqual(env.results(), []);
+  assert.ok(!env.registered.some((item) => item.id.startsWith("settings:transient-")), "global Search also omits changing content actions");
+  for (const [query, id] of [["Stop radio", "music-radio-stop"], ["Music volume", "music-volume"], ["Ask for recommendations", "music-recommend"]]) {
+    await env.type(query);
+    assert.deepEqual(env.results(), [id]);
+    assert.ok(env.registered.some((item) => item.id === `settings:${id}`), "persistent controls remain in global Search");
+  }
+});
+
+test("a direct link clears a pending search and the walkthrough keeps focus", async () => {
+  const env = environment({ coach: true });
+  await env.type("updates");
+  env.booklet.showTab("studio", { section: "settings-community" });
+  assert.equal(env.el("settings-find").value, "");
+  assert.deepEqual(env.panes(), ["general"]);
+  assert.equal(env.el("settings-community").open, true);
+  assert.notEqual(env.el("settings-community").querySelector("summary").focused, true);
+});
+
+test("providers start as compact status rows and preserve every credential control", () => {
+  const env = environment();
+  const providers = env.el("settings-assistant").querySelectorAll(".provider-tile");
+  assert.equal(providers.length, 11);
+  assert.ok(providers.every((node) => node.tagName === "DETAILS" && !node.open));
+  for (const id of ["zai-key", "api-key", "zen-key", "openrouter-key", "lmstudio-endpoint", "custom-key"]) assert.ok(env.el(id).closest(".provider-tile"));
+});
+
+test("global Search registers control paths and preserves legacy card entries", () => {
+  const env = environment();
+  const companion = env.registered.find((item) => item.id === "settings:workspace-agent-name");
+  assert.equal(companion.label, "Settings › General › Companion name");
+  companion.run();
+  assert.deepEqual(JSON.parse(JSON.stringify(env.routes.at(-1))), ["studio", { section: "workspace-agent-name" }]);
+  assert.ok(env.registered.some((item) => item.id === "settings:settings-assistant"));
+  assert.ok(env.registered.some((item) => item.id === "settings:settings-log"));
+});
+
+test("browser Settings keeps categories but excludes unavailable desktop controls from search", async () => {
   const env = environment({ desktop: false });
   env.booklet.showTab("studio");
   assert.equal(env.el("studio-desktop").hidden, true);
-  assert.deepEqual(env.shownRows(), ["settings-studio", "settings-community", "link:music", "settings-diagnostics", "settings-integrations", "settings-log"]);
-  assert.equal(env.el("settings-updates").hidden, true, "Updates needs the host");
-  assert.equal(env.row("settings-styler").hidden, true, "Server Styler needs the host");
-  assert.equal(env.el("settings-styler").hidden, true, "its card also needs the host");
-  assert.equal(env.el("speed-go").closest("[data-desktop-only]").hidden, true, "so does the speed probe");
-  const groups = env.el("settings-nav").querySelectorAll(".settings-nav-group");
-  assert.deepEqual(groups.map((group) => group.hidden), [true, false, false], "Connections has nothing to list");
-  const blocks = env.document.querySelectorAll("#settings-sections .settings-block");
-  assert.equal(blocks[0].hidden, false, "its block stays to say why");
-  assert.deepEqual(env.current(), ["settings-studio"]);
-  assert.equal(env.booklet.jumpToSettings("providers"), false, "a desktop-only card cannot be landed on");
-  assert.equal(blocks[0].scrolledIntoView, true, "the jump shows its block's note instead");
-  assert.ok(!env.registered.some((dest) => ["settings:settings-assistant", "settings:settings-updates", "settings:settings-styler"].includes(dest.id)), "Search skips what the build cannot show");
-  assert.ok(env.registered.some((dest) => dest.id === "settings:settings-studio"));
+  assert.equal(env.booklet.jumpToSettings("providers"), false);
+  assert.deepEqual(env.panes(), ["connections"]);
+  assert.equal(env.el("studio-browser").hidden, false);
+  await env.type("custom provider api key");
+  assert.deepEqual(env.results(), []);
+  assert.ok(!env.registered.some((item) => item.id === "settings:custom-key"));
+});
+
+test("Automation keeps admission and queue execution as separate settings", async () => {
+  const env = environment();
+  let current = { known: true, newWorkKnown: true, newWork: false, enabled: true, parallel: 2, adaptiveParallel: false, autoBuild: false, mode: "swarm" };
+  const changes = [];
+  env.window.MefiIdle = { queueSettings: () => current, setQueueSetting: async (key, value) => { changes.push([key, value]); current = { ...current, [key]: value }; } };
+  env.booklet.jumpToSettings("automation");
+  assert.equal(env.el("settings-new-work").checked, false);
+  assert.equal(env.el("settings-queue-enabled").checked, true);
+  env.el("settings-new-work").checked = true;
+  await env.el("settings-new-work").trigger("change");
+  assert.deepEqual(changes, [["newWork", true]]);
+  assert.equal(current.enabled, true);
+  env.el("settings-build-mode").value = "auto";
+  await env.el("settings-build-mode").trigger("change");
+  assert.deepEqual(changes.at(-1), ["autoBuild", true]);
+  current = { ...current, newWork: false, enabled: false, mode: "cluster" };
+  env.fire("mefi:queue-settings", { detail: current });
+  assert.equal(env.el("settings-new-work").checked, false, "a confirmed service push refreshes admission");
+  assert.equal(env.el("settings-queue-enabled").checked, false, "executor pushes refresh the queue preference");
+  assert.equal(env.el("settings-agent-mode").value, "cluster");
+  assert.equal(changes.length, 2, "synchronization never resubmits the setting");
+});
+
+test("a first Automation search loads confirmed controls and transfers focus from the loading row", async () => {
+  const env = environment();
+  let current = { known: false, newWorkKnown: false }, resolveRead, reads = 0;
+  const pending = new Promise((resolve) => { resolveRead = resolve; });
+  env.window.MefiIdle = { queueSettings: () => current, refreshQueueSettings: () => { reads += 1; return pending; } };
+  const control = env.el("settings-parallel");
+  for (const node of [control, control.closest("label")]) node.focus = () => { env.document.activeElement = node; };
+  env.booklet.showTab("studio", { section: "settings-parallel" });
+  assert.equal(control.disabled, true);
+  assert.ok(env.document.activeElement === control.closest("label"), "a disabled field still has a meaningful focus destination");
+  await Promise.resolve();
+  assert.equal(reads, 1);
+  current = { known: true, newWorkKnown: true, newWork: true, enabled: true, parallel: 2, adaptiveParallel: false, autoBuild: false, mode: "cluster" };
+  resolveRead(current);
+  for (let index = 0; index < 10; index += 1) await Promise.resolve();
+  assert.equal(control.disabled, false);
+  assert.equal(control.value, "2");
+  assert.ok(env.document.activeElement === control);
+  assert.equal(env.el("settings-new-work").disabled, false);
+  assert.equal(env.el("settings-automation-status").textContent, "");
+});
+
+test("unavailable Automation keeps focus on its row and does not pretend the setting loaded", async () => {
+  const env = environment();
+  env.window.MefiIdle = { queueSettings: () => ({ known: false, newWorkKnown: false }), refreshQueueSettings: async () => { throw new Error("Offline"); } };
+  const row = env.el("settings-parallel").closest("label");
+  row.focus = () => { env.document.activeElement = row; };
+  env.booklet.showTab("studio", { section: "settings-parallel" });
+  for (let index = 0; index < 10; index += 1) await Promise.resolve();
+  assert.equal(env.el("settings-parallel").disabled, true);
+  assert.ok(env.document.activeElement === row);
+  assert.match(env.el("settings-automation-status").textContent, /unavailable/);
+});
+
+test("a refused Automation save restores confirmed values and reports the failure", async () => {
+  const env = environment();
+  env.window.MefiIdle = { queueSettings: () => ({ known: true, newWorkKnown: true, newWork: true, enabled: false, parallel: 1, adaptiveParallel: true, autoBuild: true, mode: "swarm" }), setQueueSetting: async () => false };
+  env.booklet.jumpToSettings("automation");
+  env.el("settings-queue-enabled").checked = true;
+  await env.el("settings-queue-enabled").trigger("change");
+  assert.equal(env.el("settings-queue-enabled").checked, false);
+  assert.match(env.el("settings-automation-status").textContent, /not saved/);
 });
 
 test("Motion offers Full, Calm and Off, and the palette's toggle flips Off and back", async () => {

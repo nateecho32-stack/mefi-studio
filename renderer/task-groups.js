@@ -79,7 +79,9 @@
   function graphTasks(tasks, { groups = groupTasks(tasks), runningIds = new Set(), expanded = new Set(), limit = 12, childLimit = 12 } = {}) {
     const live = (task) => ["open", "active", "awaiting_verification"].includes(task?.status);
     const urgent = (task) => runningIds.has(task.id) || ["active", "awaiting_verification"].includes(task.status);
-    const rank = (task) => runningIds.has(task.id) ? 0 : urgent(task) ? 1 : task.workPin || task.pinnedAt ? 2 : 3;
+    // The host pins with pin/pinAt; workPin/pinnedAt are the legacy spellings.
+    const pinned = (task) => Boolean(task?.pin || task?.pinAt || task?.workPin || task?.pinnedAt);
+    const rank = (task) => runningIds.has(task.id) ? 0 : urgent(task) ? 1 : pinned(task) ? 2 : 3;
     const visibleGroups = groups.filter((group) => live(group.task) || group.members.some((member) => live(member.task)));
     const children = new Set(visibleGroups.flatMap((group) => group.members.map((member) => member.id)));
     const grouped = new Set(visibleGroups.map((group) => group.id));

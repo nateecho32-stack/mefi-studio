@@ -5,7 +5,10 @@ import { readFile } from "node:fs/promises";
 import backlog from "../scripts/backlog.cjs";
 import taskContext from "../scripts/task-context.cjs";
 import executorResume from "../scripts/executor-resume.cjs";
+import executorCore from "../scripts/executor-core.cjs";
+import workAdmission from "../scripts/work-admission.cjs";
 import * as assistant from "../scripts/assistant.mjs";
+import taskHandoffs from "../scripts/task-handoffs.cjs";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
 const section = (start, end) => {
@@ -35,10 +38,56 @@ test("backlog counts match actual dispatch states and do not double-count promot
     { id: "promoted", title: "Already queued", taskId: "next", status: "new" },
   ];
   const snapshot = backlog.summarizeBacklog({ tasks, requests, ideas, now, ideaEligible: assistant.backlogIdeaEligible });
-  assert.deepEqual(snapshot.counts, { ready: 3, running: 1, review: 1, blocked: 2, cooling: 1, done: 1, grouped: 0, waiting: 0, approval: 0, requests: 1, ideas: 2, eligibleIdeas: 1, ideaNotes: 1 });
+  // represented: inbox rows the board already carries (deliberately added to the pin).
+  assert.deepEqual(snapshot.counts, { ready: 3, running: 1, review: 1, blocked: 2, cooling: 1, done: 1, grouped: 0, waiting: 0, approval: 0, represented: 0, requests: 1, ideas: 2, eligibleIdeas: 1, ideaNotes: 1 });
   assert.deepEqual(snapshot.next.map((item) => item.title), ["Older", "A task", "Unique request"]);
   assert.equal(snapshot.nextRetryAt, 2000);
   assert.equal(snapshot.blocked.find((item) => item.id === "verify").stage, "blocked");
+});
+
+test("an inbox row the board already represents is not counted ready: promotion would never take it", () => {
+  const now = 1000;
+  const long = `Rework the saved filter panel so every filter keeps its state across project switches ${"and reloads ".repeat(4)}`.trim();
+  const tasks = [
+    { id: "card", title: "Search the board", prompt: "add search to the task board", status: "open", createdAt: 1 },
+    { id: "child", title: "Finish keyboard access — follow-up 3f2a1c", prompt: "Implement arrow navigation.", handoffId: "handoff_1", fromRun: "run-1", status: "open", createdAt: 2 },
+    { id: "clipped", title: long.slice(0, 90), prompt: long, status: "active", runId: "run-2", createdAt: 3 },
+    { id: "gone", title: "Tidy the docs", prompt: "tidy the docs folder", status: "archived", createdAt: 4 },
+  ];
+  const requests = [
+    { title: "Board search", prompt: "add search to the task board", at: 5 }, // the same brief
+    { title: "Finish keyboard access", prompt: "Arrow keys, please.", handoffId: "handoff_1", fromRun: "run-1", at: 6 }, // the same handoff
+    { title: long, prompt: long, at: 7 }, // the card carries its clipped title
+    { title: "Tidy the docs", prompt: "tidy the docs folder", at: 8 }, // archived unfinished: not represented
+    { title: "Legacy claim", prompt: "add search to the task board", runId: "run-legacy", status: "running", at: 9 }, // a claim is not promotable
+    { title: "Brand new work", prompt: "write the changelog", at: 10 },
+  ];
+  const snapshot = backlog.summarizeBacklog({ tasks, requests, now });
+  const readyTasks = snapshot.taskStates.filter((row) => row.stage === "ready").length;
+  assert.equal(snapshot.counts.represented, 3);
+  assert.equal(snapshot.counts.ready - readyTasks, 2, "only the archived card's work and the new request are ready requests");
+  assert.equal(snapshot.counts.requests, 3, "represented rows are the board's work, not the inbox's");
+  assert.deepEqual(snapshot.next.filter((row) => row.kind === "request").map((row) => row.title), ["Tidy the docs", "Brand new work"]);
+  assert.match(snapshot.summary, /^2 building · 4 ready next$/);
+  assert.equal(snapshot.counts.running, 2, "the legacy claim keeps its own stage");
+  // The same inputs through workState alone would call all three ready.
+  for (const request of requests.slice(0, 3)) assert.equal(backlog.workState(request, now, { tasks }).stage, "ready");
+  const other = backlog.summarizeBacklog({ tasks: [], requests: requests.slice(0, 1), now });
+  assert.equal(other.counts.represented, 0, "an empty board represents nothing");
+});
+
+test("a promoted inbox row stays its card's, open, done or gone, until compaction drops it", () => {
+  const now = 1000;
+  const tasks = [{ id: "task_done", title: "Rename the rail", prompt: "Rename the rail", status: "done", doneAt: 900 }];
+  const requests = [
+    // Titled differently from its card, so only the promotedTo stamp ties them.
+    { title: "Tidy the rail labels", prompt: "Work on it", source: "chat", at: 5, promotedTo: "task_done" },
+    { title: "Rescue a stale session", prompt: "Rescue it", source: "chat", at: 6, promotedTo: "task_gone" },
+  ];
+  const snapshot = backlog.summarizeBacklog({ tasks, requests, now });
+  assert.equal(snapshot.counts.represented, 2);
+  assert.equal(snapshot.counts.requests, 0, "neither is inbox work promotion would take again");
+  assert.deepEqual(snapshot.next, [], "nothing is ready: the done card is done and the rows are its");
 });
 
 test("an explicit retry preserves evidence and obligations while clearing both failure budgets", () => {
@@ -96,6 +145,45 @@ test("an owner retry releases a loop hold and restarts its ledger from that mome
   const audited = assistant.auditPass({ tasks: [{ ...next, logs: [...next.logs, earlier] }], nodeFolders: {}, now: 200, armedAt: 10, hostCaps: { loopHold: backlog.LOOP_HOLD === 1 } });
   assert.equal(audited.tasks[0].loopLedger.n, 0);
   assert.equal(audited.tasks[0].loopGuard, undefined);
+});
+
+test("an owner's stop holds a queued card until they say go on, ranked like the loop hold", () => {
+  const stopped = { id: "stop", title: "Stopped", status: "open", ownerHold: { v: 1, at: 60, by: "owner", reason: "  wrong\n approach  " }, logs: [] };
+  assert.deepEqual(backlog.workState(stopped, 100), { stage: "blocked", blockedBy: "owner", reason: "Stopped by you (wrong approach) — say \"work on it\" or \"try again\" to resume it" });
+  assert.equal(backlog.workState({ ...stopped, ownerHold: {} }, 100).reason, "Stopped by you — say \"work on it\" or \"try again\" to resume it");
+  assert.ok(backlog.workState({ ...stopped, ownerHold: { reason: "x".repeat(500) } }, 100).reason.length < 160, "the reason stays short");
+  assert.equal("canRetry" in backlog.workState(stopped, 100), false, "Try again stays offered");
+  // The owner's word outranks a cooldown, a pin, the keeper's loop hold and a missing status...
+  for (const extra of [{ nextRunAt: 500 }, { pin: true, pinAt: 90 }, { loopGuard: loopHold() }, { status: undefined }, { status: "queued" }]) {
+    assert.equal(backlog.workState({ ...stopped, ...extra }, 100).blockedBy, "owner", JSON.stringify(extra));
+  }
+  // ...but never a running, verifying or finished card, nor the parks and prerequisite waits a loop hold yields to.
+  for (const status of ["active", "running", "awaiting_verification", "verifying", "done", "archived"]) {
+    assert.notEqual(backlog.workState({ ...stopped, status }, 100).blockedBy, "owner", status);
+  }
+  for (const parked of [{ verifyAttempts: 3 }, { verification: { state: "failed" } }, { runFailures: 5 }]) {
+    const state = backlog.workState({ ...stopped, ...parked }, 100);
+    assert.equal(state.stage, "blocked", JSON.stringify(parked));
+    assert.equal(state.blockedBy, undefined, JSON.stringify(parked));
+  }
+  assert.equal(backlog.workState({ ...stopped, dependsOn: ["parent"] }, 100, { tasks: [{ id: "parent", title: "Parent", status: "open" }] }).blockedBy, "dependencies");
+  for (const hold of ["yes", [], null, 1]) assert.equal(backlog.workState({ ...stopped, ownerHold: hold }, 100).stage, "ready", `only an object holds: ${JSON.stringify(hold)}`);
+  const summary = backlog.summarizeBacklog({ tasks: [stopped], now: 100 });
+  assert.equal(summary.counts.blocked, 1);
+  assert.equal(summary.blocked[0].blockedBy, "owner");
+  // A card waiting on a stopped duplicate names the stop as its hold.
+  const linked = backlog.workState({ id: "twin", status: "open", duplicateOf: "stop" }, 100, { tasks: [stopped, { id: "twin", status: "open", duplicateOf: "stop" }] });
+  assert.equal(linked.stage, "blocked");
+  assert.match(linked.reason, /Stopped by you/);
+});
+
+test("Try again is the owner's release of their own stop", () => {
+  const stopped = { id: "stop", status: "open", ownerHold: { at: 60, reason: "wait" }, loopGuard: loopHold(), logs: [] };
+  const next = backlog.retryTask(stopped, 100);
+  assert.equal(next.ownerHold, undefined);
+  assert.equal(next.loopGuard, undefined);
+  assert.equal(backlog.workState(next, 100).stage, "ready");
+  assert.deepEqual(stopped.ownerHold, { at: 60, reason: "wait" }, "the stale snapshot is not edited in place");
 });
 
 function controlHost({ tasks = [], requests = [], ideas = [] } = {}) {
@@ -179,7 +267,7 @@ test("pause clears a timed restart and retry refuses to double-run a live or rev
 test("the actual executor will not dispatch exhausted verification tasks or requests", async () => {
   const records = { tasks: [{ id: "task", title: "Task", status: "open", verifyAttempts: 3 }], requests: [{ title: "Request", verifyAttempts: 3 }] };
   const env = vm.createContext({
-    Date, console, backlog, executorResume, process: { pid: 321 }, projectSwitching: false, assistantState: { status: "running" }, assistantModule: assistant, getAssistant: async () => assistant, machineLagGate: null, executorUpdateHold: () => null, readSettings: async () => ({}), machineMemoryWarnOverride: () => false, logLine() {},
+    Date, console, backlog, executorResume, executorCore, process: { pid: 321 }, projectSwitching: false, assistantState: { status: "running" }, assistantModule: assistant, getAssistant: async () => assistant, machineLagGate: null, executorUpdateHold: () => null, readSettings: async () => ({}), machineMemoryWarnOverride: () => false, logLine() {},
     projects: { current: () => ({ id: "fixture", path: "/fixture" }), open: () => ({ id: "fixture", path: "/fixture" }) }, projectRoot: () => "/fixture",
     autopilot: { execute: true, jobs: [] }, measureWorkerLag: async () => 0, getMachine: async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => null }),
     executorRunEnv: async () => ({ via: "fixture" }), getEyes: async () => ({ readJson: async (key) => records[key] }),
@@ -187,7 +275,7 @@ test("the actual executor will not dispatch exhausted verification tasks or requ
     TASKS_PATH: "tasks", REQUESTS_PATH: "requests", workTitleKey: (value) => value,
     conflictsWithLiveFix: () => false, queuedWorkCount: () => 0, compareWork: () => 0,
   });
-  vm.runInContext(section("async function spawnNextJob()", "// A finished run's handoffs"), env);
+  vm.runInContext(section("async function spawnNextJob(", "// A finished run's handoffs"), env);
   assert.equal(await env.spawnNextJob(), "review");
   assert.equal(env.autopilot.jobs.length, 0);
   assert.equal(records.tasks[0].status, "open");
@@ -222,7 +310,7 @@ test("promoting a request preserves its retry budget, pin, evidence and remainin
   const request = { title: "Blocked request", prompt: "Original obligation", at: 10, pin: true, pinAt: 20, runFailures: 2, verifyAttempts: 3, nextRunAt: 100, lastAttempt: { at: 50, result: "Partial" }, remaining: ["Check the result"], refs: [{ kind: "file", detail: "a.js" }] };
   const board = { tasks: [], requests: [request], ideas: [] };
   const env = vm.createContext({
-    Date, backlog, projects: { current: () => ({ id: "fixture" }) }, projectRoot: () => "/fixture",
+    Date, backlog, workAdmission, projects: { current: () => ({ id: "fixture" }) }, projectRoot: () => "/fixture",
     crypto: { randomBytes: () => ({ toString: () => "fake-id" }) },
     mutateBoard: async (fn) => ({ ...fn(board, {}), ...board }),
     compareWork: (a, b) => (a.at ?? 0) - (b.at ?? 0), workTitleKey: (value) => value,
@@ -372,19 +460,25 @@ test("a stale detail form cannot reopen completed work, replace restored context
   await env.saveTaskEdits([{ ...env.taskView(board().tasks[0]), contextHistory: { entries: [] } }]);
   assert.equal(board().tasks[0].contextHistory.entries.length, revisionCount, "client-supplied history never replaces the saved record");
   assert.equal((await env.deleteTask({ taskId: "task" })).ok, true);
-  assert.equal((await env.saveTaskEdits([stale, { id: "fresh", title: "Added by you", status: "open" }])).ok, true);
+  assert.equal((await env.saveTaskEdits([stale, { id: "fresh", title: "Added by you", status: "active", source: "a-eyes", runId: "run_forged" }])).ok, true);
   assert.ok(!board().tasks.some((task) => task.id === "task"), "a deleted legacy card must not be resurrected by a stale form");
-  assert.ok(board().tasks.some((task) => task.id === "fresh"), "fresh tasks still save alongside stale peers");
+  // New work enters through tasks:create, the one admission path: a form row
+  // the board never held is not created here with the status, source and run
+  // it chose, past every dedupe.
+  assert.ok(!board().tasks.some((task) => task.id === "fresh"), "a detail save never creates a card");
+  assert.ok(board().tasks.some((task) => task.id === "new"), "rows the form never listed are kept");
 });
 
 test("dispatch rechecks prerequisites inside the claim lock and loses the claim if a prerequisite reopens", async () => {
   const records = { tasks: [{ id: "pre", title: "Prerequisite", status: "done", doneAt: 1 }, { id: "next", title: "Dependent", status: "open", dependsOn: ["pre"] }], requests: [] };
   let claims = 0;
   const env = vm.createContext({
-    Date, console, backlog, executorResume, process: { pid: 321 }, projectSwitching: false, assistantState: { status: "running" }, assistantModule: assistant, getAssistant: async () => assistant, machineLagGate: null, executorUpdateHold: () => null, readSettings: async () => ({}), machineMemoryWarnOverride: () => false, logLine() {},
+    Date, console, backlog, executorResume, executorCore, process: { pid: 321 }, projectSwitching: false, assistantState: { status: "running" }, assistantModule: assistant, getAssistant: async () => assistant, machineLagGate: null, executorUpdateHold: () => null, readSettings: async () => ({}), machineMemoryWarnOverride: () => false, logLine() {},
     projects: { current: () => ({ id: "fixture", path: "/fixture" }), open: () => ({ id: "fixture", path: "/fixture" }) }, projectRoot: () => "/fixture",
     autopilot: { execute: true, jobs: [] }, autopilotJobSeq: 0,
     measureWorkerLag: async () => 0, getMachine: async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => null }), executorRunEnv: async () => ({ via: "fixture" }),
+    // Per-task model routing has its own suite (jev_model_routing_host); this route names no routed provider.
+    routeBuilderModel: async () => null,
     getEyes: async () => ({ readJson: async (key) => records[key] }),
     getPolicyModule: async () => null, warmPolicyBaseline: () => {}, resolveActivePolicyIdentity: async () => null,
     TASKS_PATH: "tasks", REQUESTS_PATH: "requests", workTitleKey: (value) => value,
@@ -396,10 +490,45 @@ test("dispatch rechecks prerequisites inside the claim lock and loses the claim 
     },
     spawn: () => assert.fail("a dependency changed before the claim; no child may start"),
   });
-  vm.runInContext(section("async function spawnNextJob()", "// A finished run's handoffs"), env);
+  vm.runInContext(section("async function spawnNextJob(", "// A finished run's handoffs"), env);
   assert.equal(await env.spawnNextJob(), "lost");
   assert.equal(claims, 1);
   assert.equal(env.autopilot.jobs.length, 0);
   assert.equal(records.tasks[1].status, "open");
   assert.equal(records.tasks[1].runId, undefined);
+});
+
+test("Drop closes unfinished work without claiming it finished, and the parent that handed it on stops waiting", async () => {
+  const toggle = { handoffId: "handoff_a", fromRun: "run_p", title: "Wire the toggle", originalTitle: "Wire the toggle", prompt: "Add the toggle." };
+  const sweep = { ...toggle, handoffId: "handoff_b", title: "Sweep", originalTitle: "Sweep", prompt: "Run the sweep." };
+  const parent = { id: "parent", title: "Ship the warn tier", status: "awaiting_verification", runId: "run_p", remaining: ["Wire the toggle", "Sweep"], lastAttempt: { runId: "run_p", handoffs: [toggle, sweep] } };
+  const tasks = [parent, { ...toggle, id: "toggle", status: "open", verifyAttempts: 3, verification: { state: "failed", reason: "outstanding obligations remain" } }, { ...sweep, id: "sweep", status: "open" }];
+  const { env, board, autopilot } = controlHost({ tasks });
+  assert.equal((await env.taskAction({ action: "drop", taskId: "parent" })).ok, false, "a card being checked is not dropped");
+  autopilot.jobs.push({ taskId: "sweep" });
+  assert.equal((await env.taskAction({ action: "drop", taskId: "sweep" })).ok, false, "a card with a worker is not dropped");
+  autopilot.jobs.length = 0;
+  assert.equal((await env.taskAction({ action: "drop", taskId: "toggle", projectId: "project-b" })).ok, false, "a stale project action fails");
+  const dropped = await env.taskAction({ action: "drop", taskId: "toggle", projectId: "project-a" });
+  assert.equal(dropped.ok, true);
+  assert.equal(dropped.task.status, "archived");
+  assert.equal(dropped.task.doneAt, undefined, "a drop is not a completion");
+  assert.equal(dropped.task.verification.state, "failed", "no verdict is invented");
+  assert.equal(backlog.completedTask(board().tasks[1]), false);
+  assert.equal(backlog.droppedTask(board().tasks[1]), true);
+  assert.equal(dropped.backlog.taskStates.find((row) => row.id === "toggle").reason, "Dropped by you before it finished");
+  assert.deepEqual(board().tasks[0].droppedHandoffs, ["handoff_a"]);
+  assert.equal((await env.taskAction({ action: "drop", taskId: "toggle" })).ok, false, "a closed card is not dropped twice");
+  assert.equal((await env.deleteTask({ taskId: "sweep" })).ok, true);
+  assert.deepEqual(board().tasks[0].droppedHandoffs, ["handoff_a", "handoff_b"], "a deleted follow-up is recorded on its parent");
+  const settled = taskHandoffs.reconcileTaskHandoffs({ tasks: board().tasks, requests: [] });
+  assert.equal(settled.recovered, 0, "the deleted follow-up is not re-admitted as a fresh card");
+  assert.equal(settled.waitingTaskIds.size, 0);
+  assert.deepEqual(copy(settled.tasks[0].remaining), []);
+  const reopened = await env.taskAction({ action: "status", status: "open", taskId: "toggle" });
+  assert.equal(reopened.ok, true);
+  assert.equal(reopened.task.status, "open");
+  assert.equal(reopened.task.dropped, undefined, "Reopen clears the drop");
+  const dependent = controlHost({ tasks: [{ id: "base", title: "Base", status: "open" }, { id: "after", title: "After", status: "open", dependsOn: ["base"] }] });
+  assert.equal((await dependent.env.taskAction({ action: "drop", taskId: "base" })).ok, false, "a card other work waits on is not dropped");
 });

@@ -6,8 +6,8 @@ built and verified. Until now it only existed as the order of calls inside
 `main.cjs`. A **brain map** is that pipeline as data: typed parts, typed ports,
 wires between them, and per-part permission, model and settings.
 
-Open it with **B**, from the sidebar, the Command dock, the palette, the tools
-menu on any sheet, or the link in Settings → Model routing.
+Open it with **B**, from **Work › Brain maps**, from Search, or from the link
+in **Settings › Models**.
 
 Companion reading: [`agent-loop.md`](agent-loop.md) for what each stage
 actually does today.
@@ -265,7 +265,25 @@ changes what is saved. Each map remembers where you last looked at it.
 - **Nested brains**: `brain.call` hands a branch to another saved map, up to
   four deep. A map cannot call itself, and a ring is refused.
 - **Build with AI** drafts a map from a sentence, using this same catalog. It is
-  validated like any other map and saved only after you look at it.
+  validated like any other map and saved only after you look at it. The model
+  is told what every end carries and takes, which ports each kind can feed,
+  and shown the shipped map as a valid example (`brains.draftPrompt`). Its
+  reply is then repaired before you see it (`brains.repairDraft`):
+  - Parts and ports it named loosely are matched to real ones. A part this
+    build lacks, a second one-per-map part, or a call to a brain that is not
+    saved here is left out.
+  - A wire whose kinds do not fit is moved. It goes to another end of the
+    same part, or past a part that makes what it already carries, or to the
+    part on the map that takes that kind. Otherwise it is removed.
+  - A required input left empty is fed from upstream. If the part sits beside
+    an existing path, that path is run through it.
+  - A loop gets its closing wire marked as feedback.
+  - The grants are exactly what the parts need.
+
+  If errors are still left, they go back to the model once, in the
+  validator's words. The redrawn map is kept only if it has fewer errors.
+  Every repair is listed under *Repaired in the draft* in the inspector until
+  the map is saved. Whatever still cannot be fixed is drawn as a problem.
 - **New map** starts empty and unsaved: the host does not keep a map with no
   parts, so it is saved once it has its first part.
 - **Closing the editor never asks and never discards.** Unsaved edits stay and
@@ -283,7 +301,8 @@ sheet, because `window.prompt` does not exist in Electron.
 ## Where it lives
 
 - `scripts/brains.cjs` — catalog, schema, validation, compile, gates, policy,
-  activity counts. Pure: no Electron, no filesystem, no clock.
+  activity counts, the draft prompt and the draft repair. Pure: no Electron,
+  no filesystem, no clock.
 - `scripts/agent-issues.cjs` — the issue protocol, triage and the cards.
   Also pure.
 - `main.cjs` — the store (`data/brain-maps.json`, per project), the IPC, the

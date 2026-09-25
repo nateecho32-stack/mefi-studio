@@ -5,6 +5,17 @@
 
   const state = { result: null, ai: null, projectResult: null, projectId: null, epoch: 0, request: 0, aiRequest: 0, pending: null, aiPending: false };
   const els = {};
+  const inputModes = ["project", "file", "idea"];
+  function setInputMode(mode, focus = false) {
+    const selected = inputModes.includes(mode) ? mode : "project";
+    for (const name of inputModes) {
+      const tab = document.getElementById(`analyzer-tab-${name}`);
+      const panel = document.getElementById(`analyzer-mode-${name}`);
+      if (tab) { tab.setAttribute?.("aria-selected", String(name === selected)); tab.tabIndex = name === selected ? 0 : -1; }
+      if (panel) panel.hidden = name !== selected;
+      if (focus && name === selected) tab?.focus();
+    }
+  }
   let initialized = false;
 
   const base = (file) => (file ? file.split(/[\\/]/).pop() : "(unknown)");
@@ -455,6 +466,7 @@
     const params = optionsOf(options);
     els.overlay.hidden = false;
     if (typeof params.idea === "string" && params.idea) {
+      setInputMode("idea");
       els.idea.value = params.idea;
       if (params.run) els.ideaRun.click();
     } else if (!state.result && !state.pending) {
@@ -491,6 +503,15 @@
       els[key] = document.getElementById(id);
     }
     els.openButton?.addEventListener("click", open);
+    for (const [index, mode] of inputModes.entries()) {
+      const tab = document.getElementById(`analyzer-tab-${mode}`);
+      tab?.addEventListener("click", () => setInputMode(mode));
+      tab?.addEventListener("keydown", (event) => {
+        const next = event.key === "ArrowRight" ? (index + 1) % inputModes.length : event.key === "ArrowLeft" ? (index + inputModes.length - 1) % inputModes.length : event.key === "Home" ? 0 : event.key === "End" ? inputModes.length - 1 : -1;
+        if (next < 0) return;
+        event.preventDefault(); setInputMode(inputModes[next], true);
+      });
+    }
     els.project?.addEventListener("click", runProject);
     els.projectAi?.addEventListener("click", projectAi);
     els.close?.addEventListener("click", close);

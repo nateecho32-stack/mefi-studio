@@ -23,8 +23,45 @@
     assistant: null,
     foldedOpen: false,
     seenAt: 0,
+    panel: "assistant",
+    toolsOpen: false,
   };
   const els = {};
+  let actionMenus = [];
+  function dismissActionMenus({ restoreFocus = false } = {}) {
+    for (const menu of actionMenus) {
+      if (!menu.open) continue;
+      const heldFocus = menu.contains?.(document.activeElement);
+      menu.open = false;
+      if (restoreFocus && heldFocus) menu.querySelector("summary")?.focus();
+    }
+  }
+  const panelNames = ["assistant", "activity", "diagnostics"];
+  const compact = () => Boolean(window.matchMedia?.("(max-width: 1100px)")?.matches);
+  function showTools(open, focus = false) {
+    state.toolsOpen = Boolean(open);
+    if (els.overlay) els.overlay.dataset.tools = String(state.toolsOpen);
+    const tools = document.getElementById("explorer-tools");
+    if (tools) tools.hidden = !state.toolsOpen;
+    if (els.detailStatus) els.detailStatus.hidden = state.toolsOpen || !els.detailStatus.textContent;
+    const toggle = document.getElementById("explorer-tools-toggle");
+    toggle?.setAttribute("aria-expanded", String(state.toolsOpen));
+    const back = document.getElementById("explorer-tools-back");
+    if (back) back.textContent = compact() ? (els.overlay?.dataset.detail === "true" ? "Back to session" : "Back to sessions") : "Close session tools";
+    if (!state.toolsOpen) dismissActionMenus();
+    if (focus) (state.toolsOpen ? document.getElementById(`explorer-tab-${state.panel}`) : toggle)?.focus();
+  }
+  function showPanel(name, focus = false) {
+    dismissActionMenus();
+    state.panel = panelNames.includes(name) ? name : "assistant";
+    for (const key of panelNames) {
+      const tab = document.getElementById(`explorer-tab-${key}`);
+      const panel = document.getElementById(`explorer-panel-${key}`);
+      if (tab) { tab.setAttribute("aria-selected", String(key === state.panel)); tab.tabIndex = key === state.panel ? 0 : -1; }
+      if (panel) panel.hidden = key !== state.panel;
+      if (focus && key === state.panel) tab?.focus();
+    }
+  }
   let initialized = false;
   // Sequence token for store reads: a slow read that resolves after a newer
   // one (poll tick, re-open, show snap-back) must not overwrite fresh content.
@@ -56,9 +93,12 @@
   };
 
   function status(text, isError) {
-    if (!els.status) return;
-    els.status.textContent = text;
-    els.status.style.color = isError ? "var(--bad)" : "";
+    for (const target of [els.status, els.detailStatus]) {
+      if (!target) continue;
+      target.textContent = text;
+      target.style.color = isError ? "var(--bad)" : "";
+    }
+    if (els.detailStatus) els.detailStatus.hidden = state.toolsOpen || !text;
   }
 
   async function load(options = {}) {
@@ -464,12 +504,16 @@
   }
 
   function select(sessionId) {
+    window.MefiNav?.note?.("explorer", { sessionId });
     state.selected = sessionId;
+    if (els.overlay) els.overlay.dataset.detail = "true";
+    if (compact()) showTools(false);
     window.dispatchEvent(new CustomEvent("mefi:tree-select", { detail: { sessionId } }));
     renderTree();
     renderDetail();
     paintedSignature = treeSignature();
     revealSelected();
+    if (window.matchMedia?.("(max-width: 760px)")?.matches) document.getElementById("explorer-back")?.focus();
   }
 
   // The task a builder session served, from the executor ledger. Misses are
@@ -929,7 +973,7 @@
     els.send.disabled = true;
     status("sending…");
     try {
-      const result = await window.mefiStudio.assistantMessage(text);
+      const result = await window.mefiStudio.assistantMessage(text, undefined, window.MefiCompanionUI?.context?.());
       if (!result?.ok) {
         status(result?.error ?? "not sent", true);
         return;
@@ -1215,7 +1259,10 @@
       // Expand and audit requests read as themselves; they used to show "REQ".
       tag.textContent = { fix: "FIX", collision: "COLLIDE", duplicate: "DUP", improver: "IMPROVE", grow: "GROW", expand: "EXPAND", audit: "AUDIT" }[request.source] ?? "REQ";
       const label = document.createElement("span");
-      label.textContent = request.title ? ` ${request.title} — ${request.prompt ?? ""}` : ` ${request.prompt ?? ""}`;
+      // A typed ask is titled from its own first line: say that line once.
+      const prompt = String(request.prompt ?? "");
+      const rest = request.title && prompt.startsWith(request.title) ? prompt.slice(request.title.length).trim() : prompt;
+      label.textContent = request.title ? ` ${request.title}${rest ? ` — ${rest}` : ""}` : ` ${prompt}`;
       text.append(tag, label);
       text.title = request.prompt ?? "";
       const actions = document.createElement("span");
@@ -1232,7 +1279,7 @@
       remove.textContent = "×";
       remove.addEventListener("click", async (event) => {
         event.stopPropagation();
-        await changeRequests({ action: "remove", key: { at: request.at, title: request.title, prompt: request.prompt } }, () => state.requests.splice(index, 1));
+        await changeRequests({ action: "remove", key: { at: request.at, title: request.title, prompt: request.prompt } });
       });
       actions.append(copy, remove);
       li.append(text, actions);
@@ -1240,21 +1287,15 @@
     });
   }
 
-  async function persistRequests() {
-    await window.mefiStudio?.eyesRequestsWrite?.(state.requests);
-    renderRequests();
-  }
-
   // Inbox changes are targeted: the host applies an add or a remove to its
   // latest rows, so a request a worker claimed or the scheduler promoted in
-  // the meantime is never undone by this view's older copy. The whole-list
-  // write remains only for a bridge without the action.
-  async function changeRequests(payload, fallback) {
+  // the meantime is never undone by this view's older copy. There is no
+  // whole-list write any more; a bridge without the action changes nothing.
+  async function changeRequests(payload) {
     const api = window.mefiStudio;
     if (!api?.eyesRequestsAction) {
-      fallback();
-      await persistRequests();
-      return true;
+      status("The request inbox cannot be changed from this view.", true);
+      return false;
     }
     try {
       const result = await api.eyesRequestsAction(payload);
@@ -1269,14 +1310,15 @@
   }
 
   function addRequests(rows) {
-    const now = Date.now();
-    return changeRequests({ action: "add", requests: rows }, () => state.requests.unshift(...rows.map((row) => ({ ...row, at: now }))));
+    return changeRequests({ action: "add", requests: rows });
   }
 
   // sessionId/payload are optional: the header buttons pass neither, the Command
   // view's checkpoint actions pass both (idle.js) — and used to have them dropped.
   async function runAssistant(mode, sessionId, payload) {
     if (!window.mefiStudio?.assistantRun) return;
+    showPanel("assistant");
+    showTools(true, true);
     const target = typeof sessionId === "string" && sessionId ? sessionId : state.selected;
     status(`${mode} running on deepseek-v4.1-flash…`);
     els.briefRun.disabled = true;
@@ -1331,6 +1373,10 @@
     // older deep link that runs a briefing mode; { folded: true } opens the
     // Finished group (the rail's folded node sends it).
     const assistant = params.assistant;
+    showPanel(params.panel || (assistant ? "assistant" : state.panel));
+    if (params.sessionId) els.overlay.dataset.detail = "true";
+    const toolsRequested = params.panel || assistant ? true : params.sessionId && compact() ? false : state.toolsOpen;
+    showTools(typeof params.toolsOpen === "boolean" ? params.toolsOpen : toolsRequested);
     if (params.folded) state.foldedOpen = true;
     // The first read of the store can take a second or two on a busy machine,
     // so nothing here waits on it: the sheet opens at once into load()'s
@@ -1343,6 +1389,7 @@
       els.input?.focus();
       els.input?.scrollIntoView?.({ block: "nearest" });
     } else if (assistant?.mode) runAssistant(assistant.mode, params.sessionId ?? state.selected, assistant.payload);
+    else if (state.toolsOpen) document.getElementById(`explorer-tab-${state.panel}`)?.focus();
     const settled = load();
     // Back onto the tree rows once they exist — deliberately not gating open():
     // a slow first read must never hold the sheet's startup. claim() focuses
@@ -1356,7 +1403,10 @@
       revealSelected();
       const sheet = els.overlay.querySelector(".explorer-sheet");
       const active = document.activeElement;
-      if (!els.overlay.hidden && (active === sheet || !els.overlay.contains(active))) (els.tree?.querySelector("li.selected") ?? sheet)?.focus();
+      if (!els.overlay.hidden && (active === sheet || !els.overlay.contains(active))) {
+        const narrowDetail = window.matchMedia?.("(max-width: 760px)")?.matches && els.overlay.dataset.detail === "true";
+        (state.toolsOpen ? (active === els.input ? els.input : document.getElementById(`explorer-tab-${state.panel}`)) : narrowDetail ? document.getElementById("explorer-back") : els.tree?.querySelector("li.selected") ?? sheet)?.focus();
+      }
     });
     // load() handles its own errors; the promise stays unobserved on purpose
     // so a slow or failed read can never block whoever opened us.
@@ -1367,18 +1417,25 @@
   function close() {
     if (!els.overlay || els.overlay.hidden) return;
     els.overlay.hidden = true;
+    dismissActionMenus();
     window.MefiNav?.release?.("explorer");
   }
 
   function init() {
     if (initialized) return;
-    initialized = true;
+    // init() reenters itself: the element-map build below cannot touch the DOM
+    // (getElementById returns null before the document parses), so open() — a
+    // restored deep link runs before this module's DOMContentLoaded handler —
+    // reaches init() while readyState is still "loading". Build the map first,
+    // then raise the flag, so that nested init() (and any late open()) sees a
+    // populated map instead of recursing into a half-built one.
     for (const [key, id] of Object.entries({
       overlay: "explorer-overlay",
       tree: "explorer-tree",
       detail: "explorer-detail",
       explorerTitle: "explorer-title",
       status: "assistant-status",
+      detailStatus: "explorer-status",
       brief: "assistant-brief",
       briefRun: "brief-run",
       improveRun: "improve-run",
@@ -1421,7 +1478,35 @@
     })) {
       els[key] = document.getElementById(id);
     }
+    // The map above is the guard open()/close() rely on. Only now is it safe to
+    // latch init() as done and attach the one-time listeners below — a reentrant
+    // open() during the map build must still find every element it guards on.
+    if (initialized) return;
+    initialized = true;
     els.send?.addEventListener("click", () => sendMessage());
+    document.getElementById("explorer-tools-toggle")?.addEventListener("click", () => showTools(!state.toolsOpen, true));
+    document.getElementById("explorer-tools-back")?.addEventListener("click", () => showTools(false, true));
+    window.addEventListener("resize", () => showTools(state.toolsOpen));
+    actionMenus = [...(els.overlay?.querySelectorAll?.(".surface-tools") ?? [])];
+    for (const menu of actionMenus) menu.addEventListener("click", (event) => {
+      if (event.target.closest?.("button")) dismissActionMenus({ restoreFocus: true });
+    });
+    document.addEventListener("pointerdown", (event) => {
+      if (!actionMenus.some((menu) => menu.contains?.(event.target))) dismissActionMenus();
+    });
+    for (const [index, name] of panelNames.entries()) {
+      const tab = document.getElementById(`explorer-tab-${name}`);
+      tab?.addEventListener("click", () => showPanel(name));
+      tab?.addEventListener("keydown", (event) => {
+        const next = event.key === "ArrowRight" ? (index + 1) % panelNames.length : event.key === "ArrowLeft" ? (index + panelNames.length - 1) % panelNames.length : event.key === "Home" ? 0 : event.key === "End" ? panelNames.length - 1 : -1;
+        if (next < 0) return;
+        event.preventDefault(); showPanel(panelNames[next], true);
+      });
+    }
+    document.getElementById("explorer-back")?.addEventListener("click", () => {
+      els.overlay.dataset.detail = "false";
+      (els.tree?.querySelector("li.selected") ?? els.tree)?.focus();
+    });
     els.input?.addEventListener("keydown", (event) => {
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
@@ -1453,6 +1538,8 @@
     });
     window.addEventListener("mefi:assistant-focus", (event) => {
       if (els.overlay?.hidden) return;
+      showPanel("assistant");
+      showTools(true);
       const node = event.detail?.node;
       // A rail click hands the composer a ready instruction for the node —
       // staged only into an empty box, so it never eats a half-typed message.
@@ -1502,7 +1589,7 @@
       status("checkpoint dropped into the request box");
     });
     els.openButton?.addEventListener("click", open);
-    els.close?.addEventListener("click", close);
+    els.close?.addEventListener("click", () => window.MefiNav?.close ? window.MefiNav.close("explorer") : close());
     els.overlay?.addEventListener("click", (event) => {
       if (event.target === els.overlay) close();
     });
@@ -1577,6 +1664,8 @@
     window.addEventListener("mefi:tree-select", (event) => {
       state.selected = event.detail?.sessionId ?? null;
       if (els.overlay && !els.overlay.hidden) {
+        els.overlay.dataset.detail = String(Boolean(state.selected));
+        if (compact()) showTools(false);
         renderTree();
         renderDetail();
       }
@@ -1586,7 +1675,7 @@
   // What a live-update reload hands back to open(): the selected session and
   // whether the Finished group was open.
   function saveState() {
-    return { sessionId: state.selected ?? null, folded: Boolean(state.foldedOpen) };
+    return { sessionId: state.selected ?? null, folded: Boolean(state.foldedOpen), panel: state.panel, toolsOpen: state.toolsOpen };
   }
 
   // refresh() is the explicit re-read, so it also rescans the machine.

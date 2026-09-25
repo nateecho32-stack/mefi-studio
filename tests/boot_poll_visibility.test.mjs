@@ -902,11 +902,8 @@ test("overhead.js task poll: visibilityState gates the fetch, visibilitychange h
   const vis = poll[0].indexOf("document.visibilityState");
   const fetch = poll[0].indexOf("await load();");
   assert.ok(vis !== -1 && fetch !== -1 && vis < fetch, "the poll must read document.visibilityState before its fetch");
-  assert.match(
-    source,
-    /document\.addEventListener\("visibilitychange", \(\) => \{\s*\n\s*if \(document\.hidden \|\| !initialized \|\| el\.overlay\.hidden\) return;\s*\n\s*clearTimeout\(pollTimer\);\s*\n\s*poll\(\);/,
-    "showing the app must snap a fresh poll immediately"
-  );
+  const visibility = source.match(/document\.addEventListener\("visibilitychange", \(\) => \{([\s\S]*?)\n    \}\);/);
+  assert.ok(visibility, "the overhead visibility listener must exist");
   // The shipped chain, not a copy: poll, its scheduler and the
   // visibilitychange listener are lifted verbatim and driven on the same
   // virtual clock, so the zero-fetch-while-hidden contract is proven against
@@ -931,6 +928,10 @@ test("overhead.js task poll: visibilityState gates the fetch, visibilitychange h
     POLL_MAX_MS: 30000,
     pollDelay: 5000,
     pollTimer: null,
+    raf: null,
+    draw() {},
+    cancelAnimationFrame() {},
+    requestAnimationFrame: () => 1,
     clearTimeout: (id) => clock.clearTimeout(id),
     setTimeout: (fn, ms) => clock.setTimeout(fn, ms),
     load: () => {
@@ -939,7 +940,7 @@ test("overhead.js task poll: visibilityState gates the fetch, visibilitychange h
   };
   const schedule = compile(source.match(/function schedulePoll\(\) \{[\s\S]*?\n  \}/)[0], context);
   context.schedulePoll = schedule;
-  const onVisibility = compile(`() => {${source.match(/document\.addEventListener\("visibilitychange", \(\) => \{([\s\S]*?)\n    \}\);/)[1]}}`, context);
+  const onVisibility = compile(`() => {${visibility[1]}}`, context);
   context.poll = compile(poll[0], context);
   schedule();
   await flush();

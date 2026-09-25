@@ -70,7 +70,7 @@ function restartHost({ killMs = 25 * 60 * 1000 } = {}) {
   let exits = 0, asks = 0;
   const job = { id: "run_1", finished: false };
   const env = vm.createContext({
-    Date, Promise, setTimeout, clearTimeout, activeChild: null, window: null,
+    Date, Promise, setTimeout, clearTimeout, activeChild: null, window: null, projectSwitching: false,
     autopilot: { jobs: [job] }, EXECUTOR_KILL_MS: killMs, UPDATE_GRACE_MS: 0, updater: { status: () => ({ auto: true }) },
     updateSettings: async (mutate) => mutate({}), saveResume: async () => {}, send() {}, logLine() {},
     assistantAskForWork: () => { asks += 1; },
@@ -91,6 +91,7 @@ test("a manual restart deferred for a finishing build restarts once the build en
   assert.equal(deferred.deferred, true);
   assert.match(h.env.executorUpdateHold(), /waiting for current builds/);
   h.job.finished = true;
+  h.env.autopilot.jobs.splice(0); // settled: the entry leaves the list
   for (let turn = 0; turn < 40 && !h.exits(); turn += 1) await new Promise((resolve) => setTimeout(resolve, 25));
   assert.equal(h.exits(), 1, "the restart the owner asked for happens");
 });

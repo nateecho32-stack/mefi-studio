@@ -78,7 +78,8 @@ test("every provider-bound POST still sits behind a scrub", async () => {
   assert.equal((main.match(/method: "POST"/g) ?? []).length, 1, "a new provider POST in main.cjs must route through assistantFetch");
   assert.equal((jev.match(/method: "POST"/g) ?? []).length, 1, "a new provider POST in decision-client.mjs must route through scrubDeep");
 
-  const fetchBody = main.slice(main.indexOf("async function assistantFetch("), main.indexOf("async function assistantFetch(") + 900);
+  const fetchStart = main.indexOf("async function assistantFetch(");
+  const fetchBody = main.slice(fetchStart, main.indexOf("function normalizeBriefing(", fetchStart));
   assert.match(fetchBody, /user = scrubOutbound\(user\)/, "assistantFetch is the single gate for the assistant transports");
   assert.match(jev, /body: scrubDeep\(request\.body\)/, "buildClassifyRequest is the single gate for the Jev transport");
 });

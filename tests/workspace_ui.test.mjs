@@ -12,8 +12,206 @@ const stageSource = await readFile(new URL("../renderer/stage-labels.js", import
 const flush = async () => { for (let i = 0; i < 30; i += 1) await Promise.resolve(); };
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 
-async function environment({ timerQueue = null, bridgeOverrides = {}, autoEnter = true, desktop = true, bootActive = () => false, windowOverrides = {} } = {}) {
+test("Home starts the named task while paused without requesting a backlog run", async () => {
+  const requests = [], pending = deferred();
+  const env = await environment({ bridgeOverrides: {
+    assistantStatus: async () => ({ ok: true, status: { projectId: "project-a", held: true, execute: false, running: [] } }),
+    assistantWorkOn: (target) => { requests.push(target); return pending.promise; },
+    backlogControl: () => { throw new Error("must not drain the backlog"); },
+  } });
+  assert.equal(env.el("focus-state").textContent, "Task ready · agents paused");
+  assert.equal(env.el("focus-primary").textContent, "Start this task");
+  await env.el("focus-primary").trigger("click"); await flush();
+  await env.el("focus-primary").trigger("click"); await flush();
+  assert.deepEqual(JSON.parse(JSON.stringify(requests)), [{ kind: "task", id: "original", projectId: "project-a", start: true }]);
+  pending.resolve({ ok: true, dispatch: { requested: true, phase: "queued", message: "Start requested for this task; waiting for machine capacity." } }); await flush();
+  assert.equal(env.el("feedback").textContent, "Start requested for this task; waiting for machine capacity.");
+  assert.equal(env.el("focus-reason").textContent, "Start requested for this task; waiting for machine capacity.");
+  assert.equal(env.el("focus-primary").disabled, false);
+});
+
+test("global Start agents releases the launch hold and saved pause in one request", async () => {
+  const calls = [];
+  const env = await environment({ bridgeOverrides: {
+    assistantState: async () => ({ ok: true, state: { status: "paused", prefs: { paused: true }, messages: [] } }),
+    assistantStatus: async () => ({ ok: true, status: { held: true, execute: false, running: [] } }),
+    assistantControl: async (action) => { calls.push(action); return { ok: true, state: { status: "running", prefs: { paused: false } }, autopilot: { held: false, execute: true, running: [] } }; },
+  } });
+  assert.equal(env.el("pause").textContent, "Start agents");
+  await env.el("pause").trigger("click");
+  assert.deepEqual(calls, ["start-work"]);
+  assert.equal(env.el("pause").textContent, "Pause");
+  assert.doesNotMatch(env.el("feedback").textContent, /press Resume/);
+});
+
+test("Home keeps selected task context and consumes the shared workflow evidence", async () => {
+  const env = await environment();
+  let context = { projectId: "project-a", taskId: "second" };
+  env.nav.taskContext = () => context;
+  env.nav.selectTask = (value) => { context = value; };
+  env.window.MefiTasks.workflowSummary = (task) => ({ label: "Testing", worker: "Builder A", action: `Testing ${task.id}`, activityAge: "Updated 42s ago", checks: "2 recorded checks passed", blocker: "Waiting for dependency test", nextAction: "View checks" });
+  env.events.tasks([{ id: "original", title: "Original task", status: "active" }, { id: "second", title: "Second task", status: "active" }]);
+  assert.equal(env.el("focus-title").textContent, "Second task");
+  assert.equal(env.el("focus-worker").textContent, "Builder A");
+  assert.equal(env.el("focus-action").textContent, "Testing second");
+  assert.equal(env.el("focus-age").textContent, "Updated 42s ago");
+  assert.equal(env.el("focus-checks").textContent, "2 recorded checks passed");
+  assert.equal(env.el("focus-reason").textContent, "Waiting for dependency test");
+  env.el("focus-task").value = "original"; await env.el("focus-task").trigger("change");
+  assert.equal(context.taskId, "original");
+  const navigations = []; env.nav.go = (...args) => navigations.push(args);
+  await env.el("focus-check").trigger("click");
+  assert.equal(navigations[0][0], "tasks");
+  assert.equal(navigations[0][1].taskId, "original");
+  assert.equal(navigations[0][1].panel, "evidence");
+  await env.el("focus-live").trigger("click");
+  assert.equal(navigations[1][1].selected, "task:original");
+});
+
+test("preview readiness stays separate from worker completion and only owned servers can stop", async () => {
+  const calls = [];
+  const env = await environment({ bridgeOverrides: {
+    projectPreviewStatus: async () => ({ ok: true, projectId: "project-a", phase: "stopped", available: true }),
+    projectPreviewStart: async (args) => { calls.push(["start", args]); return { ok: true, projectId: "project-a", phase: "starting", available: true, owned: true, canStop: true }; },
+    projectPreviewOpen: async (args) => { calls.push(["open", args]); return { ok: true, projectId: "project-a", phase: "ready", available: true, owned: true, canStop: true, url: "http://127.0.0.1:4173/" }; },
+    projectPreviewStop: async (args) => { calls.push(["stop", args]); return { ok: true, projectId: "project-a", phase: "stopped", available: true, owned: false, canStop: false }; },
+  } });
+  assert.equal(env.el("preview-start").disabled, false);
+  await env.el("preview-start").trigger("click");
+  assert.equal(env.el("preview-state").textContent, "Starting preview");
+  assert.equal(env.el("preview-open").disabled, true);
+  env.events.status({ projectId: "project-a", running: [{ taskId: "original", currentStep: "Checking collision rules" }] });
+  env.events.preview({ ok: true, projectId: "project-a", phase: "ready", available: true, owned: false, canStop: false, url: "http://127.0.0.1:4173/" });
+  assert.match(env.el("preview-worker").textContent, /agent is still working/);
+  assert.equal(env.el("preview-state").textContent, "Preview ready");
+  assert.equal(env.el("preview-open").disabled, false);
+  assert.equal(env.el("preview-stop").disabled, true);
+  assert.match(env.el("preview-stop").title, /outside Studio/);
+  env.events.status({ projectId: "project-a", running: [] });
+  assert.match(env.el("preview-worker").textContent, /No agent is running/);
+  await env.el("preview-open").trigger("click");
+  assert.equal(env.el("preview-stop").disabled, false);
+  await env.el("preview-stop").trigger("click");
+  assert.equal(env.el("preview-state").textContent, "Stopped");
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [["start", { projectId: "project-a" }], ["open", { projectId: "project-a" }], ["stop", { projectId: "project-a" }]]);
+});
+
+test("a late preview snapshot cannot overwrite a newer event or another project", async () => {
+  const env = await environment({ bridgeOverrides: { projectPreviewStatus: async () => ({ ok: true, projectId: "project-a", phase: "stopped", available: true }) } });
+  const pending = deferred(); env.bridge.projectPreviewStatus = () => pending.promise;
+  const read = env.workspace.refresh(true); await flush();
+  env.events.preview({ ok: true, projectId: "project-a", phase: "ready", url: "http://localhost:4300/", available: true, owned: true, canStop: true });
+  pending.resolve({ ok: true, projectId: "project-a", phase: "stopped" }); await read;
+  assert.equal(env.el("preview-state").textContent, "Preview ready");
+  env.events.preview({ ok: true, projectId: "project-b", phase: "failed", error: "Other project failure" });
+  assert.equal(env.el("preview-state").textContent, "Preview ready");
+  env.bridge.projectPreviewStatus = async () => { throw new Error("Disconnected"); };
+  await env.workspace.refresh(true);
+  assert.equal(env.el("preview-open").disabled, true);
+  assert.match(env.el("preview-message").textContent, /status unavailable/);
+});
+
+test("a preview action acknowledgement cannot replace a newer readiness event", async () => {
+  const pending = deferred();
+  const env = await environment({ bridgeOverrides: {
+    projectPreviewStatus: async () => ({ ok: true, projectId: "project-a", phase: "stopped", available: true }),
+    projectPreviewStart: () => pending.promise,
+  } });
+  const action = env.workspace.previewAction("start"); await flush();
+  env.events.preview({ ok: true, projectId: "project-a", phase: "ready", url: "http://localhost:4300/", available: true, owned: true, canStop: true });
+  pending.resolve({ ok: true, projectId: "project-a", phase: "starting", available: true });
+  await action;
+  assert.equal(env.el("preview-state").textContent, "Preview ready");
+  assert.equal(env.el("preview-start").hidden, true);
+});
+
+test("an owner-stopped task offers a scoped resume while other blockers stay in review", async () => {
+  const env = await environment({ bridgeOverrides: {
+    tasksList: async () => ({ ok: true, tasks: [{ id: "held", title: "Held task", status: "open", ownerHold: { reason: "stopped by you" } }] }),
+    backlogStatus: async () => ({ ok: true, projectId: "project-a", paused: true, counts: { blocked: 1 }, taskStates: [{ id: "held", stage: "blocked", blockedBy: "owner", reason: "Stopped by you" }] }),
+  } });
+  assert.equal(env.el("focus-primary").textContent, "Resume this task");
+  env.bridge.backlogStatus = async () => ({ ok: true, projectId: "project-a", paused: true, counts: { blocked: 1 }, taskStates: [{ id: "held", stage: "blocked", blockedBy: "dependencies", reason: "Missing prerequisite", canRetry: false }] });
+  await env.workspace.refresh(true);
+  assert.equal(env.el("focus-primary").textContent, "View task");
+});
+
+test("completed work offers checks and a change draft without sending or erasing previous input", async () => {
+  const sent = [];
+  const task = { id: "done-task", projectId: "project-a", title: "Build Snake", prompt: "Complete full prompt remains on the original task.", status: "done", doneAt: 42 };
+  const env = await environment({ bridgeOverrides: { tasksList: async () => ({ ok: true, tasks: [task] }), tasksCreate: (value) => { sent.push(value); } } });
+  assert.equal(env.el("focus-change").hidden, false);
+  assert.match(env.el("work-list").textContent, /Queue is empty/);
+  env.storage.set("mefiStudio.workspace.draft.project-a.work", "Keep my existing draft");
+  await env.el("focus-change").trigger("click");
+  assert.match(env.el("input").value, /^Keep my existing draft\n\nFollow-up to task "Build Snake" \(done-task\)/);
+  assert.match(env.el("input").value, /Requested change:/);
+  assert.equal(sent.length, 0);
+  assert.equal(env.el("mode-work").getAttribute("aria-pressed"), "true");
+  assert.equal(env.workspace.requestChange({ ...task, projectId: "project-b" }), false);
+});
+
+test("the Activity panel follows a worker until the owner closes it, while progress stays visible", async () => {
+  const env = await environment();
+  assert.equal(env.el("activity-drawer").hidden, true);
+  assert.equal(env.el("progress").hidden, false);
+  assert.equal(env.el("progress-title").textContent, "Original task");
+  env.events.status({ projectId: "project-a", running: [{ taskId: "original", route: "Builder", phase: "building", step: "Running the checks", startedAt: Date.now() - 1000 }] });
+  assert.equal(env.el("activity-drawer").hidden, false);
+  assert.equal(env.el("activity-toggle").getAttribute("aria-expanded"), "true");
+  assert.match(env.el("progress-facts").textContent, /Builder/);
+  await env.el("activity-close").trigger("click");
+  assert.equal(env.el("activity-drawer").hidden, true);
+  env.events.status({ projectId: "project-a", running: [{ taskId: "original", route: "Builder", phase: "building", startedAt: Date.now() - 2000 }] });
+  assert.equal(env.el("activity-drawer").hidden, true, "a live update preserves the owner's choice");
+  assert.equal(env.el("progress").hidden, false);
+  await env.el("progress-open").trigger("click");
+  assert.equal(env.el("activity-drawer").hidden, false);
+});
+
+test("New task opens the authoring mode with its saved draft and never submits it", async () => {
+  const sent = [], routes = [];
+  const env = await environment({ bridgeOverrides: { tasksCreate: (value) => sent.push(value) } });
+  env.nav.go = (view) => routes.push(view);
+  env.storage.set("mefiStudio.workspace.draft.project-a.work", "Keep my task draft");
+  env.el("input").value = "Keep my chat draft";
+  await env.el("input").trigger("input");
+  env.workspace.composeTask();
+  assert.deepEqual(routes, ["workspace"]);
+  assert.equal(env.el("input").value, "Keep my task draft");
+  assert.equal(env.storage.get("mefiStudio.workspace.draft.project-a.chat"), "Keep my chat draft");
+  assert.equal(env.el("mode-work").getAttribute("aria-pressed"), "true");
+  assert.deepEqual(sent, []);
+});
+
+test("a region header and churn hint alone never create a work task", async () => {
+  const env = await environment(); let calls = 0;
+  env.bridge.tasksCreate = async () => { calls += 1; return { ok: true }; };
+  await env.el("mode-work").trigger("click");
+  env.el("input").value =
+    "In ui (ui/):\n\nFiles agents changed most here: ui/intro/figures.lua, ui/common.lua, ui/text_popup.lua";
+  await env.el("form").trigger("submit");
+  assert.equal(calls, 0);
+  assert.match(env.el("feedback").textContent, /Describe what to change/);
+  assert.equal(env.el("input").value.includes("Files agents changed most here"), true);
+});
+
+test("an empty change scaffold is refused but a described change creates the task", async () => {
+  const calls = [];
+  const env = await environment({ bridgeOverrides: { tasksCreate: (value) => { calls.push(value); return { ok: true }; } } });
+  await env.el("mode-work").trigger("click");
+  env.el("input").value = 'Follow-up to task "Build Snake" (done-task).\n\nRequested change:\n\nDone when:\n- ';
+  await env.el("form").trigger("submit");
+  assert.equal(calls.length, 0);
+  assert.match(env.el("feedback").textContent, /Describe what to change/);
+  env.el("input").value = 'Follow-up to task "Build Snake" (done-task).\n\nRequested change:\n\nRender the guard message inline, and check it with node --test.';
+  await env.el("form").trigger("submit");
+  assert.equal(calls.length, 1);
+});
+
+async function environment({ timerQueue = null, bridgeOverrides = {}, autoEnter = true, desktop = true, bootActive = () => false, windowOverrides = {}, now = null } = {}) {
   const elements = new Map(); const storage = new Map(); const events = {}; const dispatched = [];
+  const windowListeners = new Map();
   const get = (id) => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
   const el = (name) => get(`workspace-${name}`);
   for (const stage of ["all", "open", "review", "done", "ideas"]) {
@@ -38,11 +236,14 @@ async function environment({ timerQueue = null, bridgeOverrides = {}, autoEnter 
     onIdeas: (fn) => { events.ideas = fn; },
     onAssistant: (fn) => { events.assistant = fn; },
     onAssistantStatus: (fn) => { events.status = fn; },
+    onProjectPreview: (fn) => { events.preview = fn; },
     ...bridgeOverrides,
   };
   const context = vm.createContext({
+    Date: now ? class extends Date { static now() { return now(); } } : Date,
     window: {
-      mefiStudio: desktop ? bridge : undefined, dispatchEvent: (event) => { dispatched.push(event); return true; }, addEventListener() {},
+      mefiStudio: desktop ? bridge : undefined, dispatchEvent: (event) => { dispatched.push(event); return true; },
+      addEventListener: (name, fn) => { const list = windowListeners.get(name) || []; list.push(fn); windowListeners.set(name, list); },
       MefiNav: { list: () => [], go() {} }, MefiIdle: { exit() {} }, MefiBoot: { pollStart() {}, isActive: bootActive },
       MefiTasks: { describe: (task) => ({ stage: task.status === "done" ? "done" : task.status === "awaiting_verification" ? "review" : "open", label: task.status, summary: task.prompt || "" }) },
       ...windowOverrides,
@@ -58,8 +259,34 @@ async function environment({ timerQueue = null, bridgeOverrides = {}, autoEnter 
   await flush();
   if (autoEnter) context.window.MefiWorkspace.enter();
   await flush();
-  return { workspace: context.window.MefiWorkspace, el, bridge, events, dispatched, storage, projects, nav: context.window.MefiNav };
+  return { workspace: context.window.MefiWorkspace, el, bridge, events, dispatched, storage, projects, nav: context.window.MefiNav,
+    window: context.window, emit: (name, detail) => { for (const fn of windowListeners.get(name) || []) fn({ detail }); } };
 }
+
+test("Void theme previews color Preferences without saving its accent", async () => {
+  const env = await environment();
+  let currentTheme = "aurora";
+  env.window.MefiMusic = {
+    applyTheme(theme) { currentTheme = theme; env.emit("mefi-theme-change", { theme, preview: true }); return theme; },
+    status: () => ({ theme: currentTheme }),
+  };
+  env.el("accent").value = "void";
+  await env.el("accent").trigger("input");
+  assert.equal(env.el("layer").dataset.accent, "void");
+  assert.equal(env.storage.get("mefiStudio.workspace.accent"), undefined);
+  env.el("person-name").value = "Mefi";
+  await env.el("person-name").trigger("input");
+  assert.equal(env.el("layer").dataset.accent, "void", "another preference redraw keeps the live preview");
+  assert.equal(env.storage.get("mefiStudio.workspace.accent"), undefined);
+  currentTheme = "aurora";
+  env.emit("mefi-theme-change", { theme: "aurora", tier: "free" });
+  assert.equal(env.el("accent").value, "aurora");
+  assert.equal(env.el("layer").dataset.accent, "aurora");
+  assert.equal(env.storage.get("mefiStudio.workspace.accent"), undefined);
+  currentTheme = "void";
+  env.emit("mefi-theme-change", { theme: "void", tier: "premium" });
+  assert.equal(env.storage.get("mefiStudio.workspace.accent"), "void", "an unlocked choice can be saved");
+});
 
 test("startup readiness waits for projects and populated panels without duplicating cold enters", async () => {
   const projects = deferred(), tasks = deferred(); let projectCalls = 0, taskCalls = 0, loading = true;
@@ -180,7 +407,7 @@ test("Home agent mode saves once and reflects focus and lost-acknowledgement rec
   env.bridge.assistantAutopilot = (patch) => { changes.push(patch); return pending.promise; };
   await env.workspace.refresh(true);
   assert.equal(env.el("agent-mode").value, "swarm");
-  assert.match(env.el("agent-mode-note").textContent, /collaborate on tasks and their subtasks/);
+  assert.match(env.el("agent-mode-note").textContent, /One builder per ready task/);
   env.el("agent-mode").value = "cluster";
   const save = env.el("agent-mode").trigger("change");
   assert.equal(env.el("agent-mode").disabled, true);
@@ -616,6 +843,36 @@ test("the dashboard reads the real run state, workers and waiting decisions from
   assert.equal(env.el("dash-service-value").textContent, "Paused");
   assert.equal(env.el("pause").textContent, "Resume");
   assert.equal(env.el("connection").textContent, "Paused");
+});
+
+test("Home distinguishes preparation from building and shows observed worker output and age", async () => {
+  const env = await environment();
+  const job = { taskId: "original", title: "Original task", phase: "preparing", startedAt: Date.now() - 70000 };
+  env.events.status({ projectId: "project-a", running: [job], execute: true });
+  assert.equal(env.el("dash-workers-value").textContent, "1 preparing");
+  assert.match(env.el("narration").textContent, /Preparing: Original task/);
+  assert.match(env.el("work-list").textContent, /No update yet.*1m elapsed/);
+  env.events.status({ projectId: "project-a", running: [{ ...job, phase: "building", route: "Codex CLI", activity: "Checking keyboard controls", lastOutputAt: Date.now() - 10000 }], execute: true });
+  assert.equal(env.el("dash-workers-value").textContent, "1 building");
+  assert.match(env.el("narration").textContent, /Worker output: Checking keyboard controls/);
+  assert.match(env.el("work-list").textContent, /Codex CLI.*Updated 10s ago/);
+  env.events.status({ projectId: "project-a", running: [{ ...job, phase: "finishing" }], execute: true });
+  assert.equal(env.el("dash-workers-value").textContent, "1 finishing");
+  assert.match(env.el("narration").textContent, /Worker reported completion.*waiting for its process/);
+});
+
+test("Home ages a quiet worker's last update without replacing its task card", async () => {
+  let now = 200000;
+  const job = { taskId: "original", title: "Original task", phase: "building", route: "Codex CLI", startedAt: 180000, lastOutputAt: 190000, activity: "Checking controls" };
+  const env = await environment({ now: () => now, bridgeOverrides: {
+    assistantStatus: async () => ({ ok: true, status: { projectId: "project-a", running: [job], execute: true } }),
+  } });
+  const card = env.el("work-list").children[0];
+  assert.match(env.el("work-list").textContent, /Updated 10s ago/);
+  now += 60000;
+  await env.workspace.refresh(true);
+  assert.equal(env.el("work-list").children[0], card);
+  assert.match(env.el("work-list").textContent, /Updated 1m ago/);
 });
 
 test("one pause control holds all new work and resumes through start-work", async () => {

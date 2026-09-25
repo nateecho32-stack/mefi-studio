@@ -1,11 +1,11 @@
-.profiler-overlay { position: fixed; inset: 0; z-index: var(--z-sheet); padding: 24px; display: grid; place-items: center; background: rgba(0,0,0,.72); }
+.profiler-overlay { position: fixed; inset: 0; z-index: var(--z-sheet); padding: 24px; display: grid; place-items: center; background: var(--scrim); }
 .profiler-overlay[hidden], .profiler-overlay [hidden], .profiler-hud[hidden] { display: none !important; }
-.profiler-sheet { width: min(1160px, 100%); height: min(920px, 100%); display: flex; flex-direction: column; background: var(--panel-solid); color: var(--ivory); border: 1px solid var(--hairline-strong); border-radius: 20px; box-shadow: var(--shadow-3); overflow: hidden; }
-.profiler-head { display: flex; align-items: center; gap: 18px; flex: none; padding: 20px 26px; border-bottom: 1px solid var(--hairline); }
+.profiler-sheet { width: min(1160px, 100%); height: min(920px, 100%); display: flex; flex-direction: column; background: var(--panel-solid); color: var(--ivory); border: 1px solid var(--hairline-strong); border-radius: var(--r-lg); box-shadow: var(--shadow-2); overflow: hidden; }
+.profiler-head { display: flex; align-items: center; gap: 16px; flex: none; padding: 16px 24px; border-bottom: 1px solid var(--hairline); }
 .profiler-head .sheet-title { flex: 1; min-width: 0; }
-.profiler-head h2 { margin: 3px 0 5px; font-size: 24px; }
+.profiler-head h2 { margin: 0 0 4px; font-size: 22px; }
 .profiler-head p { margin: 0; font-size: 12px; color: var(--muted); }
-.profiler-body { padding: 20px 26px 32px; overflow: auto; min-height: 0; }
+.profiler-body { padding: 16px 24px 24px; overflow: auto; min-height: 0; }
 .profiler-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .profiler-controls label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; margin-left: auto; }
 .profiler-body p { color: var(--muted); font-size: 12px; line-height: 1.6; }
