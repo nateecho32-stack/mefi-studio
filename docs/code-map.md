@@ -24,7 +24,7 @@ the weight is, not to be exact.
 | File | Lines | Purpose |
 | --- | ---: | --- |
 | `main.cjs` | 14,053 | The Electron main process: the window, every IPC handler, the host's own model calls, the service loop, the executor, the board gateway (`mutateBoard`), verification, settings and the headless CLI flags. Much of it is tested by slicing named sections into `vm` sandboxes (see [Tests](#tests-and-tools)). |
-| `preload.cjs` | 147 | The `contextBridge` surface, `window.mefiStudio`: the only boundary between renderer and main. |
+| `preload.cjs` | 147 | The `contextBridge` surface, `window.mefiStudio`: the only boundary between renderer and main. `installBridge` builds it in the page's own world, so each push crosses the bridge once and every `on*` subscriber shares that copy. |
 | `eslint.config.js` | 67 | Check-only lint: an undefined identifier is an error, an unused one a warning, and there are no style rules. |
 | `package.json` | | `"type": "module"`, which is why [CONTRIBUTING.md](../CONTRIBUTING.md) sets a file-extension rule: `.cjs` for what `main.cjs` or `preload.cjs` requires, `.mjs` for what tests and other scripts import and for CLIs, `.js` only under `renderer/`. |
 
@@ -106,6 +106,7 @@ worker's claim).
 | File | Lines | Purpose |
 | --- | ---: | --- |
 | `renderer-recovery.cjs` | 168 | Recovers a renderer that died while its window and tray stayed alive. |
+| `assistant-push.cjs` | 63 | What one `eyes:assistant` push carries: once the page's bridge listens, state keys it already holds ride as `same` references by content, and `preload.cjs` puts its kept copies back. |
 | `performance-profiler.cjs` | 251 | Opt-in, in-memory host diagnostics. |
 | `music-recommendations.cjs` | 58 | Validates a mood request and parses a model's music suggestions. |
 

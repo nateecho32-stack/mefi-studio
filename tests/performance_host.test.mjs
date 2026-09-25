@@ -303,17 +303,18 @@ test("repeated captures transfer lifecycle ownership without leaked listeners", 
 
 test("preload exposes only explicit profiler control and snapshot IPC methods", async () => {
   const source = await readFile(new URL("../preload.cjs", import.meta.url), "utf8");
-  let bridge;
   const calls = [];
-  vm.runInNewContext(source, {
+  const page = {
     require: (name) => {
       assert.equal(name, "electron");
       return {
-        contextBridge: { exposeInMainWorld: (_name, value) => { bridge = value; } },
+        contextBridge: { executeInMainWorld: ({ func, args }) => func(...args) },
         ipcRenderer: { invoke: (...args) => { calls.push(args); return Promise.resolve({ ok: true }); }, on: () => {} },
       };
     },
-  });
+  };
+  vm.runInNewContext(source, page);
+  const bridge = page.mefiStudio;
   await bridge.performanceControl({ action: "start" });
   await bridge.performanceSnapshot();
   assert.deepEqual(calls, [["performance:control", { action: "start" }], ["performance:snapshot"]]);

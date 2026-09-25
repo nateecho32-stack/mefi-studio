@@ -82,18 +82,18 @@ function storeHost({ file = null, raw = null, settings = { jevShadow: false, mod
 
 // The real preload bridge, so a test sees exactly the payload brains:save gets.
 function preloadBridge() {
-  let bridge = null;
   const calls = [];
-  vm.runInNewContext(preloadSource, {
+  const page = {
     require: (name) => {
       assert.equal(name, "electron");
       return {
-        contextBridge: { exposeInMainWorld: (_name, value) => { bridge = value; } },
+        contextBridge: { executeInMainWorld: ({ func, args }) => func(...args) },
         ipcRenderer: { invoke: async (channel, payload) => { calls.push({ channel, payload }); return { ok: true }; }, on: () => {} },
       };
     },
-  });
-  return { bridge, calls };
+  };
+  vm.runInNewContext(preloadSource, page);
+  return { bridge: page.mefiStudio, calls };
 }
 
 test("a project with no store is seeded with the shipped pipeline, and it is live", async () => {

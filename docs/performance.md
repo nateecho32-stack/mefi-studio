@@ -1,5 +1,81 @@
 # Agent loop and startup measurements
 
+## Pushes cross into the page once, September 25, 2026
+
+With `contextIsolation` on, the context bridge deep-copies every value the
+preload hands to the page, and every `window.mefiStudio.onX(callback)`
+registered its own `ipcRenderer` listener. So each push was copied once per
+listener. In the tree measured here `eyes:tasks` (the whole board) has eight
+listeners and `eyes:assistant` (the whole assistant state, up to four pushes
+a second) has nine; `machine:status` and `assistant:status` have four,
+`eyes:ideas`, `eyes:checkpoints` and `eyes:activity` three.
+
+- `preload.cjs` now builds `window.mefiStudio` in the page's own world with
+  `contextBridge.executeInMainWorld` (`installBridge`). Each `on*` channel
+  gets one preload listener on first use, and every subscriber receives the
+  same copy, in registration order. The object is still frozen and
+  read-only, and no call site changed. A subscriber that throws is passed
+  to `reportError` and the ones after it still run; before, the throw
+  stopped the remaining listeners for that push and never reached the
+  page's error handlers.
+- `eyes:assistant` leaves out the state keys the page already holds
+  (`scripts/assistant-push.cjs`). After the bridge's first `onAssistant` it
+  sends `eyes:assistant-sync`; from then on each object-valued key whose
+  JSON matches the last copy sent rides as `same[key] = <rev>`, and the
+  bridge puts its kept copy back. Keys are compared by content, not by
+  length or last entry, because questions and work rows change status in
+  place mid-list. A gap (a push the page never got, a reload) asks for
+  whole keys again.
+- Subscribers now share one copy, so none may edit a push in place. An
+  audit of every listener found `renderer/tasks.js` editing pushed rows for
+  Log, Add idea and Gather, and splicing the pushed list after a failed
+  delete or a create that raced a push; those now build new rows and lists.
+
+Measured in Electron 44 on the real booklet built from this tree's renderer
+sources (offscreen, software rendering, 1280×900), fed the live Studio
+board (80 cards, 364 KB after `taskView`) and the live assistant state
+(230 KB). "Before" registers the real preload's `on*` entries once per
+listener through `exposeInMainWorld`; "after" installs `preload.cjs`'s own
+`installBridge` and slims assistant pushes with `scripts/assistant-push.cjs`.
+Each window sends 40 pushes 300 ms apart: a board push changes one card, an
+assistant push advances the tick and the thinking line, every second one
+adds a log row and every sixth a chat message. The renderer was profiled
+through `webContents.debugger` (100 µs sampling, allocation sampling that
+keeps objects the GC already collected); a push's cost is the window minus
+an equal window with no pushes, divided by 40. Medians:
+
+| View | Push | Renderer time per push | Bridge copy alone | Allocated per push |
+|---|---|---:|---:|---:|
+| Command | board (`eyes:tasks`) | 44 → 17 ms | 39.5 → 5.3 ms | 5.0 → 1.2 MB |
+| Command | assistant (`eyes:assistant`) | 105 → 58 ms | 30.0 → 0.5 ms | 3.3 → 0.0 MB |
+| Home | board | 54 → 13 ms | 32.8 → 5.2 ms | 5.0 → 1.2 MB |
+| Home | assistant | 87 → 67 ms | 23.9 → 0.4 ms | 3.5 → 0.2 MB |
+
+Renderer time is the median of six runs; the bridge copy (self time in
+the preload's listener frames and the native frames directly under them) and
+allocation are medians of three, allocation from separate runs because
+allocation sampling slows the page. Main-thread GC read under 1 ms per push
+before and after, inside the run-to-run noise; the allocation drop is what
+the collector no longer has to sweep. Per-push renderer time varies by
+±15 ms between runs because Command's own frames share the thread.
+
+On the host, an assistant push now costs about 0.5 ms more: comparing each
+key's JSON takes about 0.95 ms on this state, and serializing the smaller
+push saves about 0.4 ms (V8's serializer: 258 KB whole, 34 KB slim on
+average and 43 KB median, since the log changes every other push). At four
+pushes a second that is 2 ms a second of main-process time against 80 to
+190 ms a second saved in the renderer.
+
+What is left of an assistant push is the listeners' own work, and most of
+it is one chain. The chat thread (`fillThread`, renderer/idle.js) is rebuilt
+whole whenever the thinking line changes, and studio-ui's MutationObserver
+(`track`, `labelOf`) then walks the rebuilt nodes; in one profiled Home run
+the two were 40 and 41 ms of a 97 ms push. Command adds forced layouts
+(`getBoundingClientRect`). Updating the pending bubble in place instead of
+rebuilding the thread is the next lever. The benchmark changes the thinking
+line on every push, so these numbers are an upper bound for a quiet
+assistant.
+
 ## Home's tree backdrop, September 24, 2026
 
 Home now draws the Command tree behind its frosted panels

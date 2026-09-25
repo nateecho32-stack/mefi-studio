@@ -129,6 +129,15 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   settled checkout was kept as if it held unsaved edits.
 
 ### Changed
+- **Board and assistant updates reach the window once.** Every panel that
+  listens to an update used to get its own copy, so the whole board was
+  copied seven or more times per update, and the assistant's state as often,
+  up to four times a second. An update is now copied once and shared, and
+  assistant updates leave out what the window already has. On the live
+  80-card board the window's work per board update fell from about 44 to
+  17 ms in Command and from 54 to 13 ms on Home, and per assistant update
+  from 105 to 58 ms and 87 to 67 ms (docs/performance.md). A panel that
+  fails on an update no longer keeps the panels after it from getting it.
 - **`npm test` runs every leg and every stage**, even after one fails, and
   ends with a pass/FAIL line per leg; one red suite used to hide whether the
   Electron lane, the Python contracts and the path lock passed.

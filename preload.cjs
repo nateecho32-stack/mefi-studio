@@ -1,7 +1,7 @@
 // Mefi's Studio AI+ — preload bridge (CJS; Electron's safe preload format).
 const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
-contextBridge.exposeInMainWorld("mefiStudio", {
+const api = {
   performanceControl: (payload) => ipcRenderer.invoke("performance:control", payload ?? {}),
   performanceSnapshot: () => ipcRenderer.invoke("performance:snapshot"),
   projectsList: () => ipcRenderer.invoke("projects:list"),
@@ -173,4 +173,80 @@ contextBridge.exposeInMainWorld("mefiStudio", {
   onUpdateEvent: (callback) => ipcRenderer.on("update:event", (_event, payload) => callback(payload)),
   onReleaseEvent: (callback) => ipcRenderer.on("release:event", (_event, payload) => callback(payload)),
   onAssistant: (callback) => ipcRenderer.on("eyes:assistant", (_event, payload) => callback(payload)),
+};
+
+// The context bridge deep-copies every value that crosses into the page, so
+// one ipcRenderer listener per on* subscriber copied each push once per
+// subscriber (eyes:tasks, the whole board, has seven or more). installBridge
+// runs in the page's own world: each on* channel gets one preload listener on
+// first use and hands the same copy to every subscriber in order, and a
+// subscriber that throws is reported without starving the ones after it.
+// Subscribers share that copy, so none may edit it in place.
+//
+// eyes:assistant also leaves out the state keys this page already holds
+// (scripts/assistant-push.cjs): `same` names each with the rev it came in,
+// and the kept copy goes back in, so subscribers still see a whole state. A
+// kept copy from another rev (a push the page never got) stands in once
+// while the host is asked for whole keys again; with nothing kept at all the
+// push is dropped, and the next one is whole.
+function installBridge(api, host) {
+  const channels = new Map();
+  const kept = new Map(); // eyes:assistant state key -> { rev, value }
+  const deliver = (subscribers, value) => {
+    for (const subscriber of subscribers.slice()) {
+      try {
+        subscriber(value);
+      } catch (error) {
+        globalThis.reportError(error);
+      }
+    }
+  };
+  const mergeAssistant = (payload) => {
+    if (!payload?.state || typeof payload.state !== "object") return payload;
+    const { rev, same, ...push } = payload;
+    if (!same) kept.clear();
+    const state = { ...payload.state };
+    let resync = false;
+    let complete = true;
+    for (const [key, sentIn] of Object.entries(same ?? {})) {
+      const copy = kept.get(key);
+      if (!copy) {
+        complete = false;
+        continue;
+      }
+      if (copy.rev !== sentIn) resync = true;
+      state[key] = copy.value;
+    }
+    for (const [key, value] of Object.entries(payload.state)) kept.set(key, { rev, value });
+    if (resync || !complete) host.assistantSync();
+    return complete ? { ...push, state } : null;
+  };
+  const bridge = { ...api };
+  for (const name of Object.keys(api)) {
+    if (!/^on[A-Z]/.test(name)) continue;
+    bridge[name] = (callback) => {
+      if (typeof callback !== "function") return;
+      let subscribers = channels.get(name);
+      if (!subscribers) {
+        subscribers = [];
+        channels.set(name, subscribers);
+        if (name === "onAssistant") {
+          api.onAssistant((payload) => {
+            const merged = mergeAssistant(payload);
+            if (merged) deliver(subscribers, merged);
+          });
+          host.assistantSync();
+        } else {
+          api[name]((value) => deliver(subscribers, value));
+        }
+      }
+      subscribers.push(callback);
+    };
+  }
+  Object.defineProperty(globalThis, "mefiStudio", { value: Object.freeze(bridge), enumerable: true });
+}
+
+contextBridge.executeInMainWorld({
+  func: installBridge,
+  args: [api, { assistantSync: () => ipcRenderer.send("eyes:assistant-sync") }],
 });

@@ -50,6 +50,7 @@ const credentials = optionalHelper(
 );
 const authStore = require("./scripts/auth-store.cjs");
 const { createProjects } = require("./scripts/projects.cjs");
+const { createAssistantPush } = require("./scripts/assistant-push.cjs");
 const backlog = require("./scripts/backlog.cjs");
 const boardGrowth = require("./scripts/board-growth.cjs");
 const boardGrouping = require("./scripts/board-grouping.cjs");
@@ -4411,6 +4412,8 @@ const ASSISTANT_ROLE_VERBS = {
 const ASSISTANT_STOP_WORDS = new Set(["what", "with", "that", "this", "please", "about", "from", "have", "into", "your", "there", "then", "than", "they", "them", "will", "would", "could", "should", "check", "make", "tell", "show", "look", "working", "assistant"]);
 
 let assistantState = null;
+// What each eyes:assistant push carries: the keys the page does not hold yet.
+const assistantPush = createAssistantPush();
 let assistantLoading = null;
 let assistantLoop = false;
 let assistantTimer = null;
@@ -4858,12 +4861,13 @@ function assistantFix(kind, text, ok = true) {
 // Coalesced push: the first event goes out at once, the rest of a 250 ms
 // window collapses to its highest-ranked event (the state rides along fresh
 // either way), so the renderer never sees more than ~4 pushes a second.
+// State keys the page already holds ride by reference (assistantPush).
 function assistantEmit(event) {
   if (assistantEmitTimer) {
     if (!assistantEmitPending || (ASSISTANT_EVENT_RANK[event.kind] ?? 1) >= (ASSISTANT_EVENT_RANK[assistantEmitPending.kind] ?? 1)) assistantEmitPending = event;
     return;
   }
-  send("eyes:assistant", { state: assistantState, event });
+  send("eyes:assistant", assistantPush.payload(assistantState, event));
   refreshTray();
   assistantEmitTimer = setTimeout(() => {
     assistantEmitTimer = null;
@@ -16053,6 +16057,9 @@ function createWindow() {
   });
   if (saved?.maximized) window.maximize();
   guardWindowNavigation(window.webContents, page);
+  // The page's bridge (preload.cjs) says it is listening and holds no
+  // assistant state yet, on its first onAssistant: send whole keys again.
+  window.webContents.ipc.on("eyes:assistant-sync", () => assistantPush.resync());
   // Zen mode's "desktop audio" reactive input arrives as a getDisplayMedia
   // request. Answer it with the screen the window sits on plus system
   // loopback, so no source picker ever opens over the constellation.

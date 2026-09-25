@@ -11,23 +11,24 @@ import vm from "node:vm";
 const preloadSource = await readFile(new URL("../preload.cjs", import.meta.url), "utf8");
 
 function bridge() {
-  let exposed = null;
-  let name = null;
   const invoked = [];
   const listeners = [];
-  vm.runInNewContext(preloadSource, {
+  // executeInMainWorld runs the bridge's installer against this context,
+  // which stands in for the page's window.
+  const page = {
     require: (request) => {
       assert.equal(request, "electron");
       return {
-        contextBridge: { exposeInMainWorld: (key, value) => { name = key; exposed = value; } },
+        contextBridge: { executeInMainWorld: ({ func, args }) => func(...args) },
         ipcRenderer: {
           invoke: async (channel, ...args) => { invoked.push({ channel, args }); return { ok: true }; },
           on: (channel, listener) => listeners.push({ channel, listener }),
         },
       };
     },
-  });
-  return { name, api: exposed, invoked, listeners };
+  };
+  vm.runInNewContext(preloadSource, page);
+  return { name: Object.keys(page).find((key) => key === "mefiStudio") ?? null, api: page.mefiStudio, invoked, listeners };
 }
 
 const plain = (value) => JSON.parse(JSON.stringify(value));

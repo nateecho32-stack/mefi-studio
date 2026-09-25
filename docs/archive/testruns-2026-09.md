@@ -6,6 +6,41 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-23 - Completed sequential sessions no longer spawn collision repair work
+
+The live Studio trial queued two collision-repair sessions after a completed game build and its later preview task. Read-only session evidence showed the first edits around 09:24, terminal completion before the next session began at 09:29, and follow-up edits around 09:31. The collision reader's ten-minute proximity window retained this handoff, marked both sessions active from edit recency alone, and the watcher converted it into work despite its own prompt saying the sessions never co-edited.
+
+The eyes reader now uses final step-finish/stop evidence to exclude ended sessions from live presence. It keeps completed sequential handoffs inspectable, marks them history-only when completion precedes the next session's creation and there is no actual pairwise edit overlap, and excludes them from automatic intake and assistant operational facts/cache. Genuine overlap, concurrent session lifetimes with separate edit instants, three-session overlap chains and resumed sessions remain actionable. Known-finished peers are no longer told to stop or confirm handoff in generated collision prompts. No live task store or game files were edited.
+
+`node --test tests/eyes_collision_lifecycle.test.mjs tests/eyes_overlap_boundaries.test.mjs tests/eyes_missing_store.test.mjs tests/assistant_loop.test.mjs` passed 24/24. `python -m unittest discover -s tools -p test_mefi_studio_eyes.py` passed 18/18 after updating the existing fixture expectation that incorrectly marked terminally finished ses_a as active (the initial run was 17 pass, 1 stale-expectation failure). Full Python output was retained at %TEMP%/mefi-collision-python-contract.txt. All checks used isolated fixtures and no Electron, paid worker, live state, renderer build, packaging or full gate.
+
+## 2026-09-23 - Studio Snake trial project-local verification correction
+
+- Live computer-use trial exposed a false verification result: a package-free Snake project received a passing `npm run check` from Studio's own directory. The builder's reported game tests were separate evidence.
+- Removed that cross-project fallback. Verification retains the dispatched project directory for tasks and requests, records `cwd` per check, chooses observed local scripts or root JavaScript tests, and fails explicitly when no supported check exists.
+- Validation: `node --test tests/verification_checks.test.mjs tests/verification_drain.test.mjs tests/executor_lifecycle.test.mjs tests/executor_continuation.test.mjs` passed **112/112** in isolated fixtures, including wrong-directory, missing-check, and cross-project cached-result regressions. Main and assistant syntax checks passed.
+- Full application gates and final interactive game verification remain pending while the live trial and concurrent navigation changes finish. No game files were edited outside Studio.
+
+## 2026-09-23 - Useful live worker activity survives successful process-exit boilerplate
+
+During the live Snake trial, Command's worker detail remained on EXIT=0 instead of its last meaningful step. scripts/executor-activity.cjs now retains a prior meaningful activity when a later line is exactly a zero-exit marker or generic successful process completion. Stream-arrival time still advances; the retained activity keeps its real timestamp. Nonzero exits, failures, substantive results and mixed lines remain visible. If the worker has supplied no meaningful activity, its actual output remains available rather than inventing progress.
+
+`node --test tests/executor_activity.test.mjs tests/executor_resume.test.mjs` passed 34/34, including new zero-exit filtering and failure/result-preservation cases. Syntax and focused diff whitespace checks passed. Only the activity helper and its focused tests changed; no main/renderer, native UI, live state, build, packaging or full gates were touched by this check.
+
+## 2026-09-23 - Concurrent booklet output and fresh-project Git prompt regressions
+
+The live computer-use trial reported EPERM while renaming renderer/booklet.html.tmp. scripts/build-booklet.mjs used shared temporary names for both the page and source manifest. Both outputs now use exclusively created unique sibling files, atomic rename, bounded Windows lock retries and cleanup limited to the owned temp; failed replacement preserves the last complete output and original error. `node --test tests/booklet_atomic_write.test.mjs tests/booklet_build.test.mjs tests/booklet_source_location.test.mjs` passed 11/11, including eight overlapping builds against an isolated fixture root, transient/persistent lock cases, error preservation, no-op rebuilding and source locations. No real repository booklet was built by this run.
+
+The same trial completed and verified its new Snake project, but the worker reported missing Git as an owner action. The generic executor prompt had unconditionally required a Git commit even for a new non-Git folder. It now directs the worker to establish whether a Git working tree exists, preserves explicit task/project commit requirements and the existing shared-index commit safeguards, and treats absent Git as an ordinary informational note when no commit is required, excluding it from MEFI_ASK, remaining and owner fields. No parser or stored task/ask was changed; an existing stale ask still needs the normal UI resolution. `node --test tests/executor_project_prompt.test.mjs tests/executor_resume.test.mjs` passed 23/23 using the actual dispatched prompt and memory-only host fixtures.
+
+Syntax checks for scripts/build-booklet.mjs and main.cjs, plus focused git diff --check, passed. No Electron fixtures, paid workers, live state edits, package build or full gates were launched. The parent trial owns full integration validation and the renderer build.
+
+## 2026-09-23 - Void collection previews remain temporary until Discord membership is confirmed
+
+Changed the Void theme and node-style pickers to paint unentitled choices as previews without writing the free or premium style stores. Closing the canvas preview or leaving Settings restores saved choices; a premium entitlement arriving during a preview saves the active choice. Preferences' theme accent also remains unsaved during a preview. Updated Community copy and rebuilt `renderer/booklet.html`.
+
+`npm run build-booklet` exited 0. Focused `node --test tests/music.test.mjs tests/community_ui.test.mjs tests/workspace_ui.test.mjs` exited 0 (118/118). `npm run check` exited 0; `npm run audit` exited 0 (0 findings) after two literal DOM lookup fixes in the concurrently edited Settings/task UI. A full `npm test` was attempted but stopped in the Node stage while sources changed; `tests/task_oversight.test.mjs`, an untracked concurrent suite unrelated to the style change, still failed 8/33 when rerun solo. The Electron and Python stages did not run under that chain. No game tests were run.
+
 ## 2026-09-23 - Studio Snake computer-use trial integration attempt
 
 Created the separate Studio Snake Trial folder and selected it through Studio's project UI. The trial exposed a Save & switch settlement race, repeated update notifications, and missing live worker activity. Added focused fixes; visibility suites passed 158/158 and project/update suites passed 56/56. Rebuilt renderer/booklet.html; npm run check passed (110 targets, 246 specs), npm run audit passed with zero findings. Full npm test exited 1 while concurrent Studio source edits were in progress; the runner explicitly reported sources changed during the parallel stage, with settings_nav assertions among the failures. This is not a clean full-gate result and must be rerun on a settled tree. Complete output: tools/logs/studio-snake-trial-npm-test.log. UI trial is incomplete: Windows locked before the Snake task could be submitted; no game source was authored outside Studio. No project state was edited directly.

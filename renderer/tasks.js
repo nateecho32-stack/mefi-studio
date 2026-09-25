@@ -786,8 +786,13 @@
       : save().then((ok) => ({ ok }));
     removal.then((result) => {
       if (!result?.ok) {
-        // Put it back rather than pretend the delete landed.
-        state.tasks.splice(Math.min(Math.max(index, 0), state.tasks.length), 0, task);
+        // Put it back rather than pretend the delete landed. A push during the
+        // delete may already have: rows are shared with every onTasks
+        // listener, so this builds a new list instead of splicing that one.
+        if (!state.tasks.some((entry) => entry.id === task.id)) {
+          const at = Math.min(Math.max(index, 0), state.tasks.length);
+          state.tasks = [...state.tasks.slice(0, at), task, ...state.tasks.slice(at)];
+        }
         syncBadge();
         renderList();
         renderDetail();
@@ -1222,9 +1227,11 @@
     const text = input.value.trim(), key = taskKey(task), draftKey = `${key}/${field}`;
     if (!text || entryPending.has(key)) return;
     entryDrafts.set(draftKey, input.value);
-    const draft = input.value, previous = task[field], previousUpdate = task.updatedAt;
+    const draft = input.value;
     const added = [...(task[field] || []), { at: Date.now(), ...(field === "logs" ? { kind: "note" } : {}), text }];
-    task[field] = added; task.updatedAt = Date.now();
+    // Pushed rows are shared with every onTasks listener: edit a copy.
+    const edited = { ...task, [field]: added, updatedAt: Date.now() };
+    state.tasks = state.tasks.map((item) => (item === task ? edited : item));
     entryPending.add(key);
     let error = "The task store could not be written.";
     const ok = await save((message) => { error = message; });
@@ -1234,8 +1241,7 @@
       detailMessages.delete(key);
     } else {
       // A newer broadcast owns its own state. Undo only this still-local edit.
-      const current = state.tasks.find((item) => item.id === task.id);
-      if (current === task && current[field] === added) { current[field] = previous; current.updatedAt = previousUpdate; }
+      if (state.tasks.includes(edited)) state.tasks = state.tasks.map((item) => (item === edited ? task : item));
       const message = `${field === "logs" ? "Note" : "Idea"} not saved · ${error} Your draft is still here.`;
       detailMessages.set(key, { text: message, error: true });
       window.MefiToast?.(message, "bad");
@@ -1523,20 +1529,22 @@
     // the task instead of trusting a reference captured before the awaits.
     const task = taskId ? state.tasks.find((item) => item.id === taskId) : null;
     if (task) {
-      const previous = { refs: task.refs, logs: task.logs, updatedAt: task.updatedAt };
-      task.refs = [
-        ...(task.refs ?? []),
-        ...(result.references.files ?? []).slice(0, 6).map((file) => ({ kind: "file", title: file, detail: "work tree" })),
-        ...(result.references.sessions ?? []).slice(0, 4).map((session) => ({ kind: "session", title: session.title, detail: session.id })),
-        ...(result.references.web ?? []).slice(0, 4).map((hit) => ({ kind: "web", title: hit.title, detail: hit.url })),
-      ].slice(-40);
-      task.logs = [...(task.logs ?? []), { at: Date.now(), kind: "reference", text: `gathered ${result.references.code.length} code hits, ${result.references.sessions.length} sessions, ${result.references.chats.length} chats` }];
-      task.updatedAt = Date.now();
-      const addedRefs = task.refs, addedLogs = task.logs;
+      // Pushed rows are shared with every onTasks listener: edit a copy.
+      const edited = {
+        ...task,
+        refs: [
+          ...(task.refs ?? []),
+          ...(result.references.files ?? []).slice(0, 6).map((file) => ({ kind: "file", title: file, detail: "work tree" })),
+          ...(result.references.sessions ?? []).slice(0, 4).map((session) => ({ kind: "session", title: session.title, detail: session.id })),
+          ...(result.references.web ?? []).slice(0, 4).map((hit) => ({ kind: "web", title: hit.title, detail: hit.url })),
+        ].slice(-40),
+        logs: [...(task.logs ?? []), { at: Date.now(), kind: "reference", text: `gathered ${result.references.code.length} code hits, ${result.references.sessions.length} sessions, ${result.references.chats.length} chats` }],
+        updatedAt: Date.now(),
+      };
+      state.tasks = state.tasks.map((item) => (item === task ? edited : item));
       let error = "The task store could not be written.";
       if (!(await save((message) => { error = message; }))) {
-        const current = state.tasks.find((item) => item.id === taskId);
-        if (current === task && current.refs === addedRefs && current.logs === addedLogs) Object.assign(current, previous);
+        if (state.tasks.includes(edited)) state.tasks = state.tasks.map((item) => (item === edited ? task : item));
         const message = `References found, but not saved to the task · ${error}`;
         status(message, true);
         detailMessages.set(taskKey(task), { text: message, error: true });
@@ -1570,7 +1578,7 @@
         if (!result?.ok || !result.task) throw new Error(result?.error || "The task could not be created.");
         if (epoch !== projectEpoch || (projectId && result.projectId && projectId !== result.projectId)) return result.task;
         if (revision === taskRevision && Array.isArray(result.tasks)) state.tasks = result.tasks;
-        else if (!state.tasks.some((task) => task.id === result.task.id)) state.tasks.unshift(result.task);
+        else if (!state.tasks.some((task) => task.id === result.task.id)) state.tasks = [result.task, ...state.tasks];
         taskRevision += 1;
         state.selected = result.task.id;
         state.readiness = "all";
