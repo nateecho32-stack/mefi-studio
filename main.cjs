@@ -79,6 +79,11 @@ const agentModels = require("./scripts/agent-models.cjs");
 const agentIssues = require("./scripts/agent-issues.cjs");
 const brains = require("./scripts/brains.cjs");
 const taskDelegation = require("./scripts/task-delegation.cjs");
+const trace = require("./scripts/trace.cjs");
+// Trace keeps the studio log and the window's warnings (see traceRows); made
+// here, before anything can log, so logLine never meets them uninitialised.
+const traceStudio = trace.ring(trace.LIMITS.ring);
+const traceRenderer = trace.ring(1000);
 const requestSizing = require("./scripts/request-sizing.cjs");
 const newApp = require("./scripts/new-app.cjs");
 const executorResume = require("./scripts/executor-resume.cjs");
@@ -16014,9 +16019,68 @@ function flushStudioLog() {
   send("studio:log", lines);
 }
 
+// ---- Trace (renderer/trace.js): Studio's logs as channels ------------------------
+// The studio log reaches the window as a stream and was never kept, and the
+// renderer's own warnings were only printed in smoke runs. Both are kept here
+// in bounded rings (scripts/trace.cjs) so Trace can read them back; the other
+// channels read what is already stored: the assistant's log, the run ledger
+// and OpenCode's log.
+const TRACE_CHANNELS = Object.freeze([
+  { id: "studio", label: "Studio log", area: "main", detail: "Everything Studio's host logs: agents, the assistant, tools, workers and updates." },
+  { id: "assistant", label: "Assistant", area: "agents", detail: "The assistant's own log: its roles, decisions, notices and errors." },
+  { id: "executor", label: "Runs", area: "agents", detail: "The run ledger: every builder start, fallback, finish and release." },
+  { id: "opencode", label: "OpenCode", area: "agents", detail: "OpenCode's own log, from its data folder." },
+  { id: "renderer", label: "Window", area: "renderer", detail: "Warnings and errors from Studio's own window." },
+]);
+async function traceRows(id, { tail = 250 } = {}) {
+  if (id === "studio") return { rows: traceStudio.rows(), size: traceStudio.size() };
+  if (id === "renderer") return { rows: traceRenderer.rows(), size: traceRenderer.size() };
+  if (id === "assistant") {
+    const log = Array.isArray(assistantState?.log) ? assistantState.log : [];
+    return { rows: log.map(trace.assistantRow), size: log.reduce((sum, entry) => sum + String(entry?.text ?? "").length, 0) };
+  }
+  if (id === "executor") {
+    const file = projectDataPath(EXECUTOR_LOG_PATH);
+    const rows = (await brainLedgerTail(file, 1024 * 1024)).map(trace.executorRow).filter(Boolean);
+    const size = await stat(file).then((info) => info.size).catch(() => 0);
+    return { rows, size, file };
+  }
+  if (id === "opencode") {
+    const eyes = await getEyes();
+    const text = String(await eyes.tailLog({ lines: Math.min(trace.LIMITS.tail * 2, Math.max(200, Number(tail) * 2 || 500)) }) ?? "");
+    return { rows: text.split(/\r?\n/).map(trace.opencodeRow).filter(Boolean), size: text.length, file: typeof eyes.DEFAULT_LOG === "string" ? eyes.DEFAULT_LOG : null };
+  }
+  return null;
+}
+async function traceChannels() {
+  const channels = [];
+  for (const channel of TRACE_CHANNELS) {
+    try {
+      const read = await traceRows(channel.id, { tail: 250 });
+      const counts = trace.query(read?.rows ?? [], { tail: 1 }).counts;
+      channels.push({ ...channel, size: read?.size ?? 0, lines: read?.rows?.length ?? 0, problems: counts.error + counts.warn, errors: counts.error });
+    } catch (error) {
+      channels.push({ ...channel, size: 0, lines: 0, problems: 0, errors: 0, error: String(error.message ?? error).slice(0, 200) });
+    }
+  }
+  return { ok: true, channels };
+}
+async function traceRead({ channel = "studio", tail = 250, text = "", problems = false, level = null, sources = null } = {}) {
+  if (!TRACE_CHANNELS.some((item) => item.id === channel)) return { ok: false, error: "Choose a log channel." };
+  try {
+    const read = await traceRows(channel, { tail });
+    const result = trace.query(read?.rows ?? [], { tail, text, problems: problems === true, level: ["error", "warn", "info"].includes(level) ? level : null, sources: Array.isArray(sources) ? sources.slice(0, 12).map(String) : null });
+    return { ok: true, channel, ...result, size: read?.size ?? 0, file: read?.file ?? null, dropped: channel === "studio" ? traceStudio.dropped() : 0 };
+  } catch (error) {
+    return { ok: false, channel, error: String(error.message ?? error).slice(0, 300) };
+  }
+}
+
 function logLine(line) {
   let text = String(line).replace(/\r?\n$/, "");
   if (text.length > STUDIO_LOG_LINE_MAX) text = `${text.slice(0, STUDIO_LOG_LINE_MAX)}… (${text.length - STUDIO_LOG_LINE_MAX} more characters)`;
+  // A slice of this code run on its own (the host suites) has no Trace ring.
+  if (typeof traceStudio !== "undefined") traceStudio.push(trace.studioRow(text, Date.now()));
   studioLogPending.push(text);
   if (studioLogPending.length > STUDIO_LOG_BATCH_MAX) {
     studioLogDropped += studioLogPending.length - STUDIO_LOG_BATCH_MAX;
@@ -17802,6 +17866,8 @@ function registerIpc() {
     }
   });
 
+  ipcMain.handle("trace:channels", () => traceChannels());
+  ipcMain.handle("trace:read", (_event, payload = {}) => traceRead(payload ?? {}));
   ipcMain.handle("eyes:log", async (_event, { lines = 220 } = {}) => {
     try {
       const eyes = await getEyes();
@@ -18449,6 +18515,14 @@ function createWindow() {
       .catch(() => callback({}));
   });
   if (CAPTURE) window.webContents.setFrameRate(30);
+  // The window's own warnings and errors, kept for Trace's Window channel.
+  window.webContents.on("console-message", (...args) => {
+    const details = args[1] && typeof args[1] === "object" && "message" in args[1] ? args[1] : { level: args[1], message: args[2], sourceId: args[4], lineNumber: args[3] };
+    const level = details.level === 3 || details.level === "error" ? "error" : details.level === 2 || details.level === "warning" ? "warn" : null;
+    if (!level) return;
+    const where = details.sourceId ? `${String(details.sourceId).split(/[\\/]/).pop()}${details.lineNumber ? `:${details.lineNumber}` : ""}` : "window";
+    traceRenderer.push(trace.rendererRow({ at: Date.now(), level, source: where.slice(0, 40), text: String(details.message ?? "") }));
+  });
   if (SMOKE || CAPTURE) {
     window.webContents.on("console-message", (...args) => {
       const details = args[1] && typeof args[1] === "object" && "message" in args[1] ? args[1] : { level: args[1], message: args[2] };

@@ -87,6 +87,9 @@ const api = {
   eyesPickPng: () => ipcRenderer.invoke("eyes:pick-png"),
   eyesState: (sessionId) => ipcRenderer.invoke("eyes:state", { sessionId }),
   eyesLog: (lines) => ipcRenderer.invoke("eyes:log", { lines }),
+  // Trace: Studio's logs as channels (main.cjs trace:channels / trace:read).
+  traceChannels: () => ipcRenderer.invoke("trace:channels"),
+  traceRead: (payload) => ipcRenderer.invoke("trace:read", payload ?? {}),
   eyesPinsRead: () => ipcRenderer.invoke("eyes:pins-read"),
   eyesPinsWrite: (pins) => ipcRenderer.invoke("eyes:pins-write", pins),
   eyesWatch: (running) => ipcRenderer.invoke("eyes:watch", { running }),

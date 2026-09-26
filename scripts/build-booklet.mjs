@@ -45,6 +45,7 @@ const CODE_SOURCES = [
   "brains.js",
   "palette.js",
   "eyes.js",
+  "trace.js",
   "boot.js",
   "startup.js",
   "workspace.js",
@@ -162,11 +163,12 @@ export async function build({ root = ROOT } = {}) {
   const treeDynamics = await readFile(path.join(RENDERER, "tree-dynamics.js"), "utf8");
   const autonomyUi = await readFile(path.join(RENDERER, "autonomy-ui.js"), "utf8");
   const vibePanels = await readFile(path.join(RENDERER, "vibe-panels.js"), "utf8");
-  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle, cameraTour, explorer, analyzer, tasks, ideas, overhead, brains, palette, eyes, boot, startup, workspace, mediaWindow, music, together, planning, onboarding, community, demoPanel, autonomyUi, companionUi, companionHub, projectMapView, agentBrain, agents, vibePanels, vibe, booklet];
+  const [traceCode, traceStyles] = await Promise.all([readFile(path.join(RENDERER, "trace.js"), "utf8"), readFile(path.join(RENDERER, "trace.css"), "utf8")]);
+  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle, cameraTour, explorer, analyzer, tasks, ideas, overhead, brains, palette, eyes, traceCode, boot, startup, workspace, mediaWindow, music, together, planning, onboarding, community, demoPanel, autonomyUi, companionUi, companionHub, projectMapView, agentBrain, agents, vibePanels, vibe, booklet];
   const code = codeParts.join("\n");
   const html = template
     .replace("__BOOKLET_DATA__", () => catalog.trim())
-    .replace("__BOOKLET_STYLES__", () => `${styles}\n${musicStyles}\n${planningStyles}\n${brainStyles}\n${profilerStyles}\n${agentBrainStyles}\n${agentsStyles}\n${companionStyles}\n${studioUiStyles}\n${companionHubStyles}\n${vibeStyles}`)
+    .replace("__BOOKLET_STYLES__", () => `${styles}\n${musicStyles}\n${planningStyles}\n${brainStyles}\n${profilerStyles}\n${traceStyles}\n${agentBrainStyles}\n${agentsStyles}\n${companionStyles}\n${studioUiStyles}\n${companionHubStyles}\n${vibeStyles}`)
     .replace("__BOOKLET_CODE__", () => code);
 
   const out = path.join(RENDERER, "booklet.html");

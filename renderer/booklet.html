@@ -6685,6 +6685,52 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   .profiler-bottom { grid-template-columns: minmax(0, 1fr); gap: 0; }
 }
 
+/* Trace (renderer/trace.js): Studio's logs as channels. A narrow channel list,
+   then one dense, monospace log with its filters above it. Every colour comes
+   from the theme tokens, so light palettes keep their own. */
+.trace-sheet { display: flex; flex-direction: column; }
+.trace-grid { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 14px; flex: 1; min-height: 0; padding: 0 var(--s5, 16px) var(--s5, 16px); }
+.trace-channels { display: flex; flex-direction: column; gap: 8px; min-height: 0; padding: 12px 10px; border: 1px solid var(--hairline); border-radius: var(--r-lg, 14px); background: var(--surface-raised, var(--glass)); overflow-y: auto; }
+.trace-side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 4px; }
+.trace-side-head h3 { margin: 0; color: var(--muted); font: 650 11px/1.2 var(--font-ui); letter-spacing: .07em; text-transform: uppercase; }
+.trace-channel-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.trace-channel { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 6px 10px; border: 0; border-radius: 10px; background: none; color: var(--ivory); font: 550 13px/1.2 var(--font-ui); text-align: left; cursor: pointer; }
+.trace-channel:hover { background: color-mix(in srgb, var(--ivory) 6%, transparent); }
+.trace-channel[aria-current="true"] { background: color-mix(in srgb, var(--gold) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent); }
+.trace-channel:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 1px; }
+.trace-channel-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trace-channel-size { color: var(--dim); font: 11px/1 var(--font-mono); }
+.trace-channel-badge { min-width: 18px; padding: 2px 6px; border-radius: 999px; background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); font: 700 10.5px/1.2 var(--font-mono); text-align: center; }
+.trace-channel-badge.is-error { background: color-mix(in srgb, var(--bad) 22%, transparent); color: var(--bad); }
+.trace-hint { margin: 0; padding: 0 4px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.trace-hint[data-tone="bad"] { color: var(--bad); }
+.trace-main { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.trace-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.trace-toolbar input[type="search"] { flex: 1 1 260px; min-width: 180px; }
+.trace-tail { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12.5px; }
+.trace-filters { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.trace-filters .chips { gap: 4px; }
+.trace-filters .chip { min-height: 26px; padding: 2px 10px; font-size: 12px; }
+.trace-chip-error.on { border-color: color-mix(in srgb, var(--bad) 45%, transparent); background: color-mix(in srgb, var(--bad) 16%, transparent); }
+.trace-chip-warn.on { border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+.trace-lines { flex: 1; min-height: 0; margin: 0; padding: 6px 0; overflow: auto; border: 1px solid var(--hairline); border-radius: var(--r-lg, 14px); background: color-mix(in srgb, var(--bg-deep) 70%, transparent); font: 12px/1.5 var(--font-mono); list-style: none; }
+.trace-line { display: grid; grid-template-columns: 64px 44px minmax(60px, 120px) minmax(0, 1fr); gap: 10px; padding: 2px 12px; border-left: 2px solid transparent; }
+.trace-line:hover { background: color-mix(in srgb, var(--ivory) 4%, transparent); }
+.trace-line.is-error { border-left-color: var(--bad); background: color-mix(in srgb, var(--bad) 7%, transparent); }
+.trace-line.is-warn { border-left-color: var(--warn); }
+.trace-time { color: var(--dim); }
+.trace-level { color: var(--dim); text-transform: uppercase; font-size: 10.5px; letter-spacing: .04em; }
+.trace-line.is-error .trace-level { color: var(--bad); }
+.trace-line.is-warn .trace-level { color: var(--warn); }
+.trace-source { overflow: hidden; color: var(--gold-bright); text-overflow: ellipsis; white-space: nowrap; }
+.trace-text { color: var(--ivory); white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 900px) {
+  .trace-grid { grid-template-columns: 1fr; }
+  .trace-channels { max-height: 180px; }
+  .trace-line { grid-template-columns: 58px minmax(0, 1fr); }
+  .trace-level, .trace-source { display: none; }
+}
+
 /* The Agent Brain's surfaces (renderer/agent-brain.js): the Agent brain sheet,
    the project map hub on Home and the docked companion. Every colour comes
    from the theme tokens, so each theme and the Void collection carry over. */
@@ -10240,6 +10286,48 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         <section class="profiler-section"><h3>Studio processes</h3><div class="profiler-table-wrap"><table class="profiler-table"><thead><tr><th scope="col">Process</th><th scope="col">CPU</th><th scope="col">Memory</th></tr></thead><tbody id="profiler-processes"></tbody></table></div><p>Memory is each process's working set. Shared pages may be counted in more than one process.</p></section>
       </div>
       <p id="profiler-limits"></p><p>Capture stays in memory until you export. Reports contain operation names and measurements, with no task text, request payloads, paths or credentials. Profiling adds some measurement overhead.</p>
+    </div>
+  </div>
+</div>
+<!-- Trace (renderer/trace.js): Studio's logs as channels (the studio log, the
+     assistant, the run ledger, OpenCode, the window) with search, a tail,
+     levels and sources to filter by, problems only and follow. -->
+<div class="overlay explorer" id="trace-overlay" hidden>
+  <div class="explorer-sheet trace-sheet" role="dialog" aria-modal="true" aria-labelledby="trace-heading" tabindex="-1">
+    <header class="explorer-head sheet-head">
+      <button class="sheet-back ghost mini" data-nav-close="trace" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <div class="sheet-title">
+        <div class="eyebrow">Live</div>
+        <h2 id="trace-heading">Trace</h2>
+      </div>
+      <div class="sheet-links" data-sheet-links="trace" role="group" aria-label="Other tools"></div>
+      <div class="sheet-actions">
+        <button id="trace-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+      </div>
+    </header>
+    <div class="trace-grid">
+      <aside class="trace-channels" aria-labelledby="trace-channels-title">
+        <div class="trace-side-head"><h3 id="trace-channels-title">Channels</h3><button id="trace-refresh" class="ghost mini" type="button" title="Read every channel again">Refresh</button></div>
+        <ul id="trace-channel-list" class="trace-channel-list"></ul>
+        <p id="trace-channel-detail" class="trace-hint"></p>
+      </aside>
+      <section class="trace-main" aria-label="Log lines">
+        <div class="trace-toolbar">
+          <input id="trace-search" type="search" placeholder="Search this channel…" aria-label="Search this channel" autocomplete="off">
+          <label class="trace-tail"><span>Tail</span><select id="trace-tail" aria-label="Lines to show"><option value="100">100</option><option value="250" selected>250</option><option value="1000">1000</option><option value="2000">2000</option></select></label>
+          <label class="switch" title="Only warnings and errors"><input type="checkbox" id="trace-problems"><span class="track"></span><span>Problems</span></label>
+          <label class="switch" title="Read new lines as they arrive"><input type="checkbox" id="trace-follow" checked><span class="track"></span><span>Follow</span></label>
+          <button id="trace-order" class="ghost mini" type="button" title="Show the newest lines first or last">Newest first</button>
+          <button id="trace-copy" class="ghost mini" type="button" title="Copy the lines shown">Copy</button>
+          <button id="trace-file" class="ghost mini" type="button" title="Show the log file in its folder" hidden>Open file</button>
+        </div>
+        <div class="trace-filters">
+          <div id="trace-levels" class="chips" role="group" aria-label="Levels"></div>
+          <div id="trace-sources" class="chips" role="group" aria-label="Sources"></div>
+        </div>
+        <p id="trace-status" class="trace-hint" role="status" aria-live="polite"></p>
+        <ol id="trace-lines" class="trace-lines"></ol>
+      </section>
     </div>
   </div>
 </div>
@@ -15627,6 +15715,25 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       isOpen: () => overlayOpen("agent-brain-overlay"),
     },
     {
+      id: "trace",
+      label: "Trace",
+      short: "Trace",
+      kind: "overlay",
+      layer: "sheet",
+      section: "agents",
+      group: "tools",
+      glyph: "g-legend",
+      badge: null,
+      desc: "Studio's logs as channels: search, filter by level and source, follow",
+      searchTerms: "trace logs log viewer channels errors warnings debug console output runs opencode",
+      showIn: showIn({ tools: true, palette: true, help: true }),
+      element: "trace-overlay",
+      focus: "#trace-search",
+      open: (params) => window.MefiTrace?.open?.(params),
+      close: () => window.MefiTrace?.close?.(),
+      isOpen: () => overlayOpen("trace-overlay"),
+    },
+    {
       id: "overhead",
       label: "Overhead",
       short: "Overhead",
@@ -16542,7 +16649,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   const LOCAL_ROUTES = Object.freeze({
     home: ["workspace"],
     work: ["tasks", "plans", "ideas", "analyzer"],
-    agents: ["agents", "command", "eyes", "explorer", "overhead", "agent-brain", "brains", "context", "booklet", "graph", "usage"],
+    agents: ["agents", "command", "eyes", "trace", "explorer", "overhead", "agent-brain", "brains", "context", "booklet", "graph", "usage"],
     settings: ["studio"],
   });
 
@@ -50698,6 +50805,190 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
 
   window.MefiEyes = { init, state };
+})();
+
+// Trace: Build's log viewer (Live › Trace). Studio's logs as channels — the
+// studio log, the assistant's log, the run ledger, OpenCode's log and the
+// window's own warnings — read through one set of controls: search, a tail,
+// levels and sources to filter by, problems only, follow, newest first or
+// last, copy and open the file. The host keeps and reads the channels
+// (main.cjs trace:channels / trace:read, scripts/trace.cjs); this sheet asks
+// again every two seconds while Follow is on and the sheet is in view.
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(`trace-${id}`);
+  const api = () => window.mefiStudio;
+  const FOLLOW_MS = 2000;
+  const CHANNELS_MS = 10000;
+  const LEVELS = [["all", "All"], ["error", "Errors"], ["warn", "Warnings"], ["info", "Info"]];
+  const state = { channel: "studio", channels: [], tail: 250, text: "", problems: false, level: null, sources: [], newest: true, follow: true, result: null, timer: 0, reading: null, channelsAt: 0, signature: "" };
+  let initialized = false;
+  const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = String(text); return node; };
+  const isOpen = () => Boolean($("overlay")) && !$("overlay").hidden;
+
+  function size(bytes) {
+    const value = Number(bytes) || 0;
+    if (value < 1024) return `${value} B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(value < 10240 ? 1 : 0)} KB`;
+    return `${(value / 1024 / 1024).toFixed(1)} MB`;
+  }
+  function clock(at) {
+    if (!Number.isFinite(Number(at)) || !at) return "";
+    const date = new Date(Number(at));
+    return [date.getHours(), date.getMinutes(), date.getSeconds()].map((part) => String(part).padStart(2, "0")).join(":");
+  }
+
+  // ---- reading ------------------------------------------------------------------------
+  async function loadChannels() {
+    if (!api()?.traceChannels) return;
+    try {
+      const result = await api().traceChannels();
+      if (result?.ok && Array.isArray(result.channels)) { state.channels = result.channels; state.channelsAt = Date.now(); }
+    } catch { /* the list keeps what it had */ }
+    renderChannels();
+  }
+  async function read() {
+    if (!api()?.traceRead) { status("Trace reads Studio's logs in the desktop app."); return; }
+    if (state.reading) return state.reading;
+    state.reading = (async () => {
+      try {
+        const result = await api().traceRead({ channel: state.channel, tail: state.tail, text: state.text, problems: state.problems, level: state.level, sources: state.sources.length ? state.sources : null });
+        if (result?.channel && result.channel !== state.channel) return;
+        state.result = result;
+        render();
+      } catch (error) {
+        status(error?.message || "The log could not be read.", "bad");
+      } finally { state.reading = null; }
+    })();
+    return state.reading;
+  }
+  function schedule() {
+    clearTimeout(state.timer);
+    state.timer = 0;
+    if (!state.follow || !isOpen() || document.hidden) return;
+    state.timer = setTimeout(async () => {
+      state.timer = 0;
+      await read();
+      if (Date.now() - state.channelsAt > CHANNELS_MS) await loadChannels();
+      schedule();
+    }, FOLLOW_MS);
+  }
+  function status(text, tone = "") { $("status").textContent = text; $("status").dataset.tone = tone; }
+
+  // ---- painting -------------------------------------------------------------------------
+  function renderChannels() {
+    const list = $("channel-list");
+    list.replaceChildren();
+    for (const channel of state.channels) {
+      const item = el("li");
+      const button = el("button", "trace-channel");
+      button.type = "button";
+      button.dataset.area = channel.area || "main";
+      if (channel.id === state.channel) button.setAttribute("aria-current", "true");
+      button.title = channel.detail || channel.label;
+      button.append(el("span", "trace-channel-name", channel.label), el("span", "trace-channel-size", channel.error ? "unreadable" : size(channel.size)));
+      if (channel.errors) button.append(el("span", "trace-channel-badge is-error", String(channel.errors)));
+      else if (channel.problems) button.append(el("span", "trace-channel-badge", String(channel.problems)));
+      button.addEventListener("click", () => choose(channel.id));
+      item.append(button);
+      list.append(item);
+    }
+    const current = state.channels.find((channel) => channel.id === state.channel);
+    $("channel-detail").textContent = current?.error ? `${current.detail} It could not be read: ${current.error}` : current?.detail || "";
+  }
+  function chip(label, on, run, tone = "") {
+    const button = el("button", `chip${on ? " on" : ""}${tone ? ` trace-chip-${tone}` : ""}`, label);
+    button.type = "button";
+    button.setAttribute("aria-pressed", String(on));
+    button.addEventListener("click", run);
+    return button;
+  }
+  function render() {
+    const result = state.result;
+    if (!result) return;
+    if (result.ok === false) { status(result.error || "The log could not be read.", "bad"); $("lines").replaceChildren(); return; }
+    const counts = result.counts || { error: 0, warn: 0, info: 0 };
+    const levels = $("levels");
+    levels.replaceChildren(...LEVELS.map(([key, label]) => {
+      const count = key === "all" ? result.total : counts[key] || 0;
+      return chip(`${label} ${count}`, key === "all" ? !state.level : state.level === key, () => { state.level = key === "all" || state.level === key ? null : key; void read(); }, key);
+    }));
+    const sources = $("sources");
+    sources.replaceChildren(...(result.sources || []).map(([name, count]) => chip(`${name} ${count}`, state.sources.includes(name), () => {
+      state.sources = state.sources.includes(name) ? state.sources.filter((item) => item !== name) : [...state.sources, name];
+      void read();
+    })));
+    $("file").hidden = !result.file;
+    const shown = result.rows || [];
+    status(result.total ? `${shown.length} of ${result.matched} matching line${result.matched === 1 ? "" : "s"} (${result.total} in this channel${result.dropped ? `, ${result.dropped} older lines rotated out` : ""})` : "Nothing logged here yet.");
+    const signature = JSON.stringify([state.channel, state.newest, shown.length, shown[0]?.at, shown[0]?.text, shown.at(-1)?.at, shown.at(-1)?.text]);
+    if (signature === state.signature) return;
+    state.signature = signature;
+    const lines = $("lines");
+    const pinned = state.newest ? lines.scrollTop < 40 : lines.scrollTop + lines.clientHeight >= lines.scrollHeight - 40;
+    const rows = state.newest ? [...shown].reverse() : shown;
+    lines.replaceChildren(...rows.map((row) => {
+      const item = el("li", `trace-line is-${row.level}`);
+      item.append(el("time", "trace-time", clock(row.at)), el("span", "trace-level", row.level === "warn" ? "warn" : row.level), el("span", "trace-source", row.source), el("span", "trace-text", row.text));
+      return item;
+    }));
+    if (pinned) lines.scrollTop = state.newest ? 0 : lines.scrollHeight;
+  }
+  function choose(id) {
+    if (id === state.channel) return;
+    state.channel = id;
+    state.sources = [];
+    state.level = null;
+    state.result = null;
+    state.signature = "";
+    $("lines").replaceChildren();
+    status("Reading…");
+    renderChannels();
+    void read();
+  }
+
+  // ---- the sheet ------------------------------------------------------------------------
+  function open(params = {}) {
+    init();
+    if (typeof params?.channel === "string" && params.channel) { state.channel = params.channel; state.sources = []; state.level = null; }
+    window.MefiNav?.claim?.("trace");
+    $("overlay").hidden = false;
+    state.signature = "";
+    void loadChannels();
+    void read().then(schedule);
+    requestAnimationFrame(() => $("search")?.focus?.({ preventScroll: true }));
+  }
+  function close() {
+    clearTimeout(state.timer);
+    state.timer = 0;
+    if (!isOpen()) return;
+    $("overlay").hidden = true;
+    window.MefiNav?.release?.("trace");
+  }
+  function init() {
+    if (initialized || !$("overlay")) return;
+    initialized = true;
+    $("close").addEventListener("click", () => window.MefiNav?.close?.("trace") ?? close());
+    $("refresh").addEventListener("click", () => { void loadChannels(); void read(); });
+    let typing = 0;
+    $("search").addEventListener("input", () => { clearTimeout(typing); typing = setTimeout(() => { state.text = $("search").value; void read(); }, 200); });
+    $("tail").addEventListener("change", () => { state.tail = Number($("tail").value) || 250; void read(); });
+    $("problems").addEventListener("change", () => { state.problems = $("problems").checked; void read(); });
+    $("follow").addEventListener("change", () => { state.follow = $("follow").checked; schedule(); });
+    $("order").addEventListener("click", () => { state.newest = !state.newest; $("order").textContent = state.newest ? "Newest first" : "Oldest first"; state.signature = ""; render(); });
+    $("copy").addEventListener("click", async () => {
+      const text = (state.result?.rows || []).map((row) => `${clock(row.at)} ${row.level.toUpperCase()} [${row.source}] ${row.text}`).join("\n");
+      const done = await api()?.shellCopy?.(text);
+      window.MefiToast?.(done?.ok === false ? "The lines could not be copied." : "Copied the lines shown.", done?.ok === false ? "bad" : "good");
+    });
+    $("file").addEventListener("click", () => { if (state.result?.file) void api()?.shellReveal?.(state.result.file); });
+    document.addEventListener("visibilitychange", () => { if (!document.hidden && isOpen()) { void read(); schedule(); } });
+  }
+
+  window.MefiTrace = { open, close, isOpen, read, state: () => ({ channel: state.channel, tail: state.tail, text: state.text, problems: state.problems, level: state.level, sources: [...state.sources], follow: state.follow, newest: state.newest }) };
+  // nav.js holds Trace's record (Live, beside Activity) and calls open/close.
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
 })();
 
 // Startup waits for actual local data and the initial view before exposing controls.

@@ -7,6 +7,14 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Trace** (Live, beside Activity): Studio's logs as channels in one viewer.
+  The studio log, the assistant's log, the run ledger, OpenCode's log and
+  the window's own warnings, each with its size and problem count; search,
+  a tail of 100 to 2000 lines, level chips (errors, warnings, info) and
+  source chips with counts, problems only, follow, newest first or last,
+  copy and open the file. The studio log and the window's warnings are now
+  kept in bounded rings so they can be read back.
+
 - Mefi's permission chip, elevated switches and learning controls now share
   one saved state across Vibe, companion settings, Agents and the palette.
   Vibe shows automatic decisions with Why/Undo, human to-dos, suggestions,

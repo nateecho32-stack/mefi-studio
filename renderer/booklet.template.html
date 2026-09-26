@@ -1659,6 +1659,48 @@
     </div>
   </div>
 </div>
+<!-- Trace (renderer/trace.js): Studio's logs as channels (the studio log, the
+     assistant, the run ledger, OpenCode, the window) with search, a tail,
+     levels and sources to filter by, problems only and follow. -->
+<div class="overlay explorer" id="trace-overlay" hidden>
+  <div class="explorer-sheet trace-sheet" role="dialog" aria-modal="true" aria-labelledby="trace-heading" tabindex="-1">
+    <header class="explorer-head sheet-head">
+      <button class="sheet-back ghost mini" data-nav-close="trace" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <div class="sheet-title">
+        <div class="eyebrow">Live</div>
+        <h2 id="trace-heading">Trace</h2>
+      </div>
+      <div class="sheet-links" data-sheet-links="trace" role="group" aria-label="Other tools"></div>
+      <div class="sheet-actions">
+        <button id="trace-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+      </div>
+    </header>
+    <div class="trace-grid">
+      <aside class="trace-channels" aria-labelledby="trace-channels-title">
+        <div class="trace-side-head"><h3 id="trace-channels-title">Channels</h3><button id="trace-refresh" class="ghost mini" type="button" title="Read every channel again">Refresh</button></div>
+        <ul id="trace-channel-list" class="trace-channel-list"></ul>
+        <p id="trace-channel-detail" class="trace-hint"></p>
+      </aside>
+      <section class="trace-main" aria-label="Log lines">
+        <div class="trace-toolbar">
+          <input id="trace-search" type="search" placeholder="Search this channel…" aria-label="Search this channel" autocomplete="off">
+          <label class="trace-tail"><span>Tail</span><select id="trace-tail" aria-label="Lines to show"><option value="100">100</option><option value="250" selected>250</option><option value="1000">1000</option><option value="2000">2000</option></select></label>
+          <label class="switch" title="Only warnings and errors"><input type="checkbox" id="trace-problems"><span class="track"></span><span>Problems</span></label>
+          <label class="switch" title="Read new lines as they arrive"><input type="checkbox" id="trace-follow" checked><span class="track"></span><span>Follow</span></label>
+          <button id="trace-order" class="ghost mini" type="button" title="Show the newest lines first or last">Newest first</button>
+          <button id="trace-copy" class="ghost mini" type="button" title="Copy the lines shown">Copy</button>
+          <button id="trace-file" class="ghost mini" type="button" title="Show the log file in its folder" hidden>Open file</button>
+        </div>
+        <div class="trace-filters">
+          <div id="trace-levels" class="chips" role="group" aria-label="Levels"></div>
+          <div id="trace-sources" class="chips" role="group" aria-label="Sources"></div>
+        </div>
+        <p id="trace-status" class="trace-hint" role="status" aria-live="polite"></p>
+        <ol id="trace-lines" class="trace-lines"></ol>
+      </section>
+    </div>
+  </div>
+</div>
 <div class="overlay explorer" id="analyzer-overlay" hidden>
   <div class="explorer-sheet" role="dialog" aria-modal="true" aria-labelledby="analyzer-heading" tabindex="-1">
     <header class="explorer-head sheet-head">

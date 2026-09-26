@@ -425,6 +425,25 @@
       isOpen: () => overlayOpen("agent-brain-overlay"),
     },
     {
+      id: "trace",
+      label: "Trace",
+      short: "Trace",
+      kind: "overlay",
+      layer: "sheet",
+      section: "agents",
+      group: "tools",
+      glyph: "g-legend",
+      badge: null,
+      desc: "Studio's logs as channels: search, filter by level and source, follow",
+      searchTerms: "trace logs log viewer channels errors warnings debug console output runs opencode",
+      showIn: showIn({ tools: true, palette: true, help: true }),
+      element: "trace-overlay",
+      focus: "#trace-search",
+      open: (params) => window.MefiTrace?.open?.(params),
+      close: () => window.MefiTrace?.close?.(),
+      isOpen: () => overlayOpen("trace-overlay"),
+    },
+    {
       id: "overhead",
       label: "Overhead",
       short: "Overhead",
@@ -1340,7 +1359,7 @@
   const LOCAL_ROUTES = Object.freeze({
     home: ["workspace"],
     work: ["tasks", "plans", "ideas", "analyzer"],
-    agents: ["agents", "command", "eyes", "explorer", "overhead", "agent-brain", "brains", "context", "booklet", "graph", "usage"],
+    agents: ["agents", "command", "eyes", "trace", "explorer", "overhead", "agent-brain", "brains", "context", "booklet", "graph", "usage"],
     settings: ["studio"],
   });
 

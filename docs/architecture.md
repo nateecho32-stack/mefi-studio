@@ -347,6 +347,15 @@ settings and per-model work-kind summaries for the shared controls.
   while Home is still underneath. **Blur behind panels** off makes the panels
   solid. The glass is mixed from the theme's own colours, so every theme
   keeps its hue.
+- **Trace** (Live, next to Activity; `renderer/trace.js`) reads Studio's logs
+  as channels: the studio log (every line the host logs, kept in a bounded
+  ring since it was only ever streamed to the window), the assistant's log,
+  the run ledger (`data/executor-log.jsonl`), OpenCode's own log and the
+  window's warnings and errors. Each channel shows its size and problem
+  count; a channel is searched, tailed (100 to 2000 lines), filtered by level
+  and by source tag (`[agents]`, `[assistant]`, `[tools]`…) and followed every
+  two seconds while the sheet is in view. The rules live in
+  `scripts/trace.cjs`, the reads in `main.cjs` `trace:channels` / `trace:read`.
 - Home keeps its composer at the bottom of the window, with conversation and
   a compact progress summary scrolling above it. **Activity**
   opens a separate panel with task details and app preview controls; a running

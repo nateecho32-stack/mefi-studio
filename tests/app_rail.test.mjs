@@ -180,7 +180,7 @@ test("each group has one local navigation row and the foot groups Help", () => {
   const { nav, rail, document } = load({ search: "?shell=rail" });
   nav.applyShell();
   assert.equal(rail().querySelectorAll(".app-rail-children").length, 1, "only recent tasks expand with the rail");
-  for (const [section, routes] of Object.entries({work: ["tasks", "plans", "ideas", "analyzer"], agents: ["agents", "command", "eyes", "explorer", "overhead", "agent-brain", "brains", "context", "booklet", "graph", "usage"]})) {
+  for (const [section, routes] of Object.entries({work: ["tasks", "plans", "ideas", "analyzer"], agents: ["agents", "command", "eyes", "trace", "explorer", "overhead", "agent-brain", "brains", "context", "booklet", "graph", "usage"]})) {
     nav.paintLocalNav(section, routes[1]);
     const local = document.getElementById("app-local-nav");
     assert.deepEqual(local.querySelectorAll("[data-nav]").map(button => button.dataset.nav), routes);
