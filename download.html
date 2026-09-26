@@ -36,16 +36,16 @@
       <div class="container release">
         <div class="release-card" id="release" aria-live="polite">
           <span class="badge live">Published release</span>
-          <div class="version" style="margin-top:10px">v0.4.2</div>
-          <p class="muted">Vibe mode, remastered node styles, and more dependable planning.</p>
+          <div class="version" style="margin-top:10px">v0.4.3</div>
+          <p class="muted">Media queues, dynamic tree controls, file-aware planning and per-agent tools.</p>
           <dl>
             <dt>Platform</dt><dd>Windows 10/11, x64, portable</dd>
-            <dt>File</dt><dd>Mefi-Studio-AI+-v0.4.2-win32-x64.zip</dd>
-            <dt>Checksum</dt><dd><a href="https://github.com/nateecho32-stack/mefi-studio/releases/download/v0.4.2/Mefi-Studio-AI%2B-v0.4.2-win32-x64.zip.sha256" rel="noopener">Download SHA-256</a></dd>
+            <dt>File</dt><dd>Mefi-Studio-AI+-v0.4.3-win32-x64.zip</dd>
+            <dt>Checksum</dt><dd><a href="https://github.com/nateecho32-stack/mefi-studio/releases/download/v0.4.3/Mefi-Studio-AI%2B-v0.4.3-win32-x64.zip.sha256" rel="noopener">Download SHA-256</a></dd>
           </dl>
           <div class="release-actions">
-            <a class="btn btn-primary" href="https://github.com/nateecho32-stack/mefi-studio/releases/download/v0.4.2/Mefi-Studio-AI%2B-v0.4.2-win32-x64.zip" rel="noopener">Download v0.4.2 for Windows</a>
-            <a class="btn" href="https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.2" rel="noopener">Release notes</a>
+            <a class="btn btn-primary" href="https://github.com/nateecho32-stack/mefi-studio/releases/download/v0.4.3/Mefi-Studio-AI%2B-v0.4.3-win32-x64.zip" rel="noopener">Download v0.4.3 for Windows</a>
+            <a class="btn" href="https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.3" rel="noopener">Release notes</a>
           </div>
         </div>
         <div class="release-side">
@@ -89,8 +89,8 @@
           <p class="muted">Every release ships a <code>.sha256</code> file next to the zip. Studio's own updater checks it before installing; you can do the same by hand in PowerShell from the folder you downloaded into. The two hashes must match exactly.</p>
         </div>
         <div>
-<pre><code>Get-FileHash ".\<span data-asset-name>Mefi-Studio-AI+-v0.4.2-win32-x64.zip</span>" -Algorithm SHA256
-Get-Content ".\<span data-asset-name>Mefi-Studio-AI+-v0.4.2-win32-x64.zip</span>.sha256"</code></pre>
+<pre><code>Get-FileHash ".\<span data-asset-name>Mefi-Studio-AI+-v0.4.3-win32-x64.zip</span>" -Algorithm SHA256
+Get-Content ".\<span data-asset-name>Mefi-Studio-AI+-v0.4.3-win32-x64.zip</span>.sha256"</code></pre>
         </div>
       </div>
     </section>
@@ -121,9 +121,9 @@ npm run package          # refresh a portable build in dist/</code></pre>
       <div class="container">
         <div class="section-head">
           <div class="eyebrow">Release or source?</div>
-          <h2>0.4.2 is ready to download</h2>
-          <p>The published build includes Vibe mode, all eight remastered node styles, plan archiving and reliability improvements. It also includes the Agent Brain, project map and floating media features introduced in 0.4.0. Source on <code>main</code> may receive further changes before the next release.</p>
-          <p><a href="wiki/#/whats-new">What's new in 0.4.2 →</a></p>
+          <h2>0.4.3 is ready to download</h2>
+          <p>The published build adds a persistent media queue and YouTube explorer, customizable music and video tree movement, file-aware planning, and per-agent web search, project reads and MCP tools. It also includes the Agent Brain, project map and floating media features introduced in earlier releases.</p>
+          <p><a href="wiki/#/whats-new">What's new in 0.4.3 →</a></p>
         </div>
       </div>
     </section>
@@ -192,9 +192,9 @@ npm run package          # refresh a portable build in dist/</code></pre>
         box.innerHTML = publishedRelease;
         const note = document.createElement("p");
         note.className = "dim";
-        note.textContent = "The latest-release lookup is unavailable. The published 0.4.2 download and release notes above remain available.";
+        note.textContent = "The latest-release lookup is unavailable. The published 0.4.3 download and release notes above remain available.";
         box.append(note);
-        fillAssetNames("Mefi-Studio-AI+-v0.4.2-win32-x64.zip");
+        fillAssetNames("Mefi-Studio-AI+-v0.4.3-win32-x64.zip");
       }
 
       function renderRelease(rel) {

@@ -27,7 +27,7 @@
         {
           "slug": "whats-new",
           "title": "What's new",
-          "summary": "0.4.2: Vibe mode, remastered node styles, planning and reliability improvements"
+          "summary": "0.4.3: media queue, dynamic tree controls, file-aware planning and per-agent tools"
         }
       ]
     },
