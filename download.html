@@ -29,13 +29,24 @@
     <div class="container page-head">
       <div class="eyebrow">Download</div>
       <h1>Get Mefi's Studio AI+</h1>
-      <p>A portable Windows build: download the zip, extract the whole folder, open the app. No installer, no account, no telemetry. Prefer source? Four commands with Node 24.</p>
+      <p>Download the portable Windows build, extract the complete folder, and open the app. No installer or Node.js required. Project records stay local; connected AI providers may receive prompts and project context.</p>
     </div>
 
     <section style="padding-top:0">
       <div class="container release">
         <div class="release-card" id="release" aria-live="polite">
-          <p class="dim"><span class="spinner" aria-hidden="true"></span>Checking GitHub for the latest release…</p>
+          <span class="badge live">Published release</span>
+          <div class="version" style="margin-top:10px">v0.4.2</div>
+          <p class="muted">Vibe mode, remastered node styles, and more dependable planning.</p>
+          <dl>
+            <dt>Platform</dt><dd>Windows 10/11, x64, portable</dd>
+            <dt>File</dt><dd>Mefi-Studio-AI+-v0.4.2-win32-x64.zip</dd>
+            <dt>Checksum</dt><dd><a href="https://github.com/nateecho32-stack/mefi-studio/releases/download/v0.4.2/Mefi-Studio-AI%2B-v0.4.2-win32-x64.zip.sha256" rel="noopener">Download SHA-256</a></dd>
+          </dl>
+          <div class="release-actions">
+            <a class="btn btn-primary" href="https://github.com/nateecho32-stack/mefi-studio/releases/download/v0.4.2/Mefi-Studio-AI%2B-v0.4.2-win32-x64.zip" rel="noopener">Download v0.4.2 for Windows</a>
+            <a class="btn" href="https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.2" rel="noopener">Release notes</a>
+          </div>
         </div>
         <div class="release-side">
           <div class="card">
@@ -78,8 +89,8 @@
           <p class="muted">Every release ships a <code>.sha256</code> file next to the zip. Studio's own updater checks it before installing; you can do the same by hand in PowerShell from the folder you downloaded into. The two hashes must match exactly.</p>
         </div>
         <div>
-<pre><code>Get-FileHash ".\<span data-asset-name>Mefi-Studio-AI+-vX.Y.Z-win32-x64.zip</span>" -Algorithm SHA256
-Get-Content ".\<span data-asset-name>Mefi-Studio-AI+-vX.Y.Z-win32-x64.zip</span>.sha256"</code></pre>
+<pre><code>Get-FileHash ".\<span data-asset-name>Mefi-Studio-AI+-v0.4.2-win32-x64.zip</span>" -Algorithm SHA256
+Get-Content ".\<span data-asset-name>Mefi-Studio-AI+-v0.4.2-win32-x64.zip</span>.sha256"</code></pre>
         </div>
       </div>
     </section>
@@ -110,9 +121,9 @@ npm run package          # refresh a portable build in dist/</code></pre>
       <div class="container">
         <div class="section-head">
           <div class="eyebrow">Release or source?</div>
-          <h2>The release is the tested snapshot; source moves daily</h2>
-          <p>v0.2.0 is the first public release. The source on <code>main</code> has since added a left navigation rail, a separate <code>auth.json</code> for saved keys, a full node editor for Brain maps, ad-free radio and a pause for providers that keep failing. They arrive with the next release, which a portable copy offers to install for you.</p>
-          <p><a href="wiki/#/whats-new">What changed since v0.2.0 →</a></p>
+          <h2>0.4.2 is ready to download</h2>
+          <p>The published build includes Vibe mode, all eight remastered node styles, plan archiving and reliability improvements. It also includes the Agent Brain, project map and floating media features introduced in 0.4.0. Source on <code>main</code> may receive further changes before the next release.</p>
+          <p><a href="wiki/#/whats-new">What's new in 0.4.2 →</a></p>
         </div>
       </div>
     </section>
@@ -132,8 +143,9 @@ npm run package          # refresh a portable build in dist/</code></pre>
           <ul class="checklist no">
             <li>The maintainer's projects, tasks or conversations</li>
             <li>Any credentials, settings or caches</li>
-            <li>Telemetry, a hosted account, or an updater that sends anything but a release check</li>
+            <li>Private project captures or saved provider sessions</li>
           </ul>
+          <p class="muted">Studio has no usage telemetry or required Studio account. AI services may require their own key or login and receive requests you send through them.</p>
         </div>
       </div>
     </section>
@@ -170,31 +182,19 @@ npm run package          # refresh a portable build in dist/</code></pre>
       const box = document.getElementById("release");
       const S = window.SITE;
       const esc = (s) => S.escapeHtml(s);
+      const publishedRelease = box.innerHTML;
 
       function fillAssetNames(name) {
         document.querySelectorAll("[data-asset-name]").forEach((el) => { el.textContent = name; });
       }
 
-      function renderNone() {
-        box.innerHTML = `
-          <span class="badge dim">No public release yet</span>
-          <div class="version" style="margin-top:10px">Coming soon</div>
-          <p class="muted" style="margin-top:10px">No portable build is published on GitHub Releases yet. You can run Studio from source today, or watch the releases page so the first build finds you.</p>
-          <div class="release-actions">
-            <a class="btn btn-primary" href="#source">Run from source</a>
-            <a class="btn" href="${S.urls.releases}" rel="noopener">Releases on GitHub</a>
-          </div>`;
-      }
-
-      function renderError() {
-        box.innerHTML = `
-          <span class="badge dim">Could not reach GitHub</span>
-          <div class="version" style="margin-top:10px">Latest release</div>
-          <p class="muted" style="margin-top:10px">The release list could not be loaded just now (offline, or this network hit GitHub's hourly API limit). The releases page always has the current build.</p>
-          <div class="release-actions">
-            <a class="btn btn-primary" href="${S.urls.latest}" rel="noopener">Open the latest release</a>
-            <a class="btn" href="${S.urls.releases}" rel="noopener">All releases</a>
-          </div>`;
+      function renderFallback() {
+        box.innerHTML = publishedRelease;
+        const note = document.createElement("p");
+        note.className = "dim";
+        note.textContent = "The latest-release lookup is unavailable. The published 0.4.2 download and release notes above remain available.";
+        box.append(note);
+        fillAssetNames("Mefi-Studio-AI+-v0.4.2-win32-x64.zip");
       }
 
       function renderRelease(rel) {
@@ -221,7 +221,7 @@ npm run package          # refresh a portable build in dist/</code></pre>
         if (a) fillAssetNames(a.name);
       }
 
-      S.fetchLatestRelease().then((rel) => { rel.none ? renderNone() : renderRelease(rel); }).catch(renderError);
+      S.fetchLatestRelease().then((rel) => { rel.none ? renderFallback() : renderRelease(rel); }).catch(renderFallback);
     })();
   </script>
 </body>

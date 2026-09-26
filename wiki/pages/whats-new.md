@@ -1,8 +1,18 @@
-# What's new since 0.3.0
+# What's new in 0.4.2
 
-The latest packaged release is shown on the [download page](../../download.html). The videos preview the current development work; the complete record is the [app changelog](https://github.com/nateecho32-stack/mefi-studio/blob/main/CHANGELOG.md).
+[Download 0.4.2](../../download.html) for Windows or read the [release notes](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.2). The showreel illustrates the shipped visual style and workflow using sample tasks.
 
-## The Agent Brain update (development)
+## Released in 0.4.2
+
+- **Vibe mode:** talk through ideas, create tasks, and see what is building, what needs your attention and what finished. Answer agent questions, approve builds, retry blocked work, and start or resume agents from the same workspace. Switch to Build for the full studio.
+- **Remastered node styles:** all eight looks have distinct motion, activity effects and connections that meet each node's edge. Five styles are included; Singularity, Prism and Sigil are in the optional Void collection. Reduced motion remains supported.
+- **More dependable planning:** archive and restore plans, keep saved answers after failed replies, and preserve approvals when renaming a plan or saving an unchanged specification.
+- **Clearer agent decisions:** see the cause of blocked work and fewer repeated offers. Grouped task cards distinguish cards from underlying work items.
+- **Reliability and efficiency:** brief test pauses no longer trigger false hang detection. Builders receive focused task context, while rendering and background checks avoid unnecessary work.
+
+Studio stores project records and settings locally. Connected AI providers and coding tools may receive prompts and project context according to your configuration. Discord linking is optional.
+
+## Released in 0.4.0: the Agent Brain update
 
 - A visible pipeline for each task, with steps, delegated agents and reports returning to the parent.
 - The Playbook records pipeline recipes from prior work.
@@ -25,6 +35,8 @@ Desk tools, nested delegation and head drafts are optional and start off. Shared
 
 ## Watch and share
 
-[Work in Motion — 30-second showcase](../../media/mefi-work-in-motion.mp4)
+[Studio 0.4.2 — 40-second showreel](https://github.com/nateecho32-stack/mefi-studio/releases/download/v0.4.2/mefi-studio-v0.4.2-discord.mp4)
+
+[Ready-to-post Discord announcement](../../media/social-posts.md)
 
 [Read every change](https://github.com/nateecho32-stack/mefi-studio/blob/main/CHANGELOG.md).
