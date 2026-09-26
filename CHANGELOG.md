@@ -658,6 +658,10 @@ keys.
   pid from the latest scan that the panel offers a stop for is killed; a
   malformed pid or a failed scan is refused rather than trusting the page.
 
+### Fixed
+- The Task board labels its grouped overview as cards and explains why its
+  card total differs from task filter counts.
+
 ## [0.3.0] - 2026-09-22
 
 One navigation rail, Brain maps as a real node editor, ad-free radio, model
