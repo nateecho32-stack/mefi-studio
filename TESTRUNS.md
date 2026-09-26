@@ -34,6 +34,37 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-26 - Permission modes final gate and baseline timeout comparison
+
+Validated the fixed source commit 3e06781 in the clean assist-g1 worktree.
+Check passes (161 targets, 338 specs), audit has zero errors or warnings,
+and the committed booklet was rebuilt. Full npm test: 3804 non-Electron
+tests passed, 4 skipped; Electron lane 36 passed, 1 skipped, 1 failed;
+exclusive visibility and occlusion checks all 3 passed. Python ran 248
+tests with 1 skip and no failures; all 6 normalized-path lock checks passed.
+
+The sole final failure is command_render's 80-second process limit: the
+fixture was terminated before writing report.json, without a renderer error.
+It repeated solo on 3e06781 and on clean pre-change main efe812c with the
+same signature. This is a reproduced baseline limitation, not a green
+full gate. The earlier Phase 4 run at 0fd96da passed Command in 59.6 seconds.
+Logs: C:/wt/phase4-final-full.log, phase4-command-solo.log and
+phase4-command-baseline.log.
+
+The initial 0fd96da run exposed two actionable renderer issues, both fixed:
+the companion fixture now explicitly enters Build when testing direct
+answers, while a new Vibe orb test verifies the hub releases its focus lock;
+compact navigation retains 18px icons and 36px buttons while fitting all
+three destinations at 600px / 150% zoom. Both companion and Home/Work tests,
+the full responsive navigation sweep, and the new autonomy renderer pass
+in the final full run. No test assertions or timeout limits were weakened.
+
+Before/after Vibe captures are exactly 1920x1080 / DPR 1, using synthetic
+bridge data: C:/wt/phase4-preview/before and C:/wt/phase4-preview/final.
+The real main-process fake-LM proof and relaunch proof remain successful
+(C:/wt/autonomy-app-EL5Bpt); final follow-ups change only renderer and docs.
+No private state, credentials or generated screenshots were added to Git.
+
 ## 2026-09-26 - Permission modes Phase 4 controls and isolated app proof
 
 Private assist-1, based on 79b39a0 (Phase 3 plus the completed Vibe C/D

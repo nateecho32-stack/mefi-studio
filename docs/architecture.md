@@ -149,7 +149,7 @@ settings and per-model work-kind summaries for the shared controls.
 | **Agent mail** | Notes the roles write to each other; shown on the assistant card under **Said to each other** and as packets on the tree. |
 | **Decision model / Jev** | Agents › Setup › Connections configures Jev, a third-party classifier model (TypeSafe's `jev-1.13`). Routing and intake behavior live together in Agents › Setup. Optional; fixed defaults apply without it. |
 | **Autopilot / New work** | Autopilot lets the assistant start work on its own; **New work** is the master switch that holds every kind of new start while current workers finish. |
-| **Auto build / Verify first** | Auto build starts a task as soon as it is ready. Verify first holds it in **Review** until you press **Approve build**. |
+| **Auto build / Verify first** | Compatibility controls for permission modes: enabling Auto build selects Auto; disabling it selects Always ask. Elevated categories still apply. |
 | **Learned preference** | A recency-weighted pattern in owner answers, scoped to a project, all projects or their blend. It advises the assistant without expanding its permissions. |
 | **Model skill** | A model's runner-verified wins and losses for a kind of work, with project-aware probability estimates. |
 | **Permission mode** | The saved rule for which decisions Mefi can make: Always ask, Accept per task, Auto or Elevated only. Elevated switches reserve particular categories for the owner. |
@@ -213,8 +213,8 @@ settings and per-model work-kind summaries for the shared controls.
   (`task-delegation.cjs` `admitIntake`) as its delegated slices, with the
   owner's origin, so each step gets the slice brief and the prerequisite gate,
   and the card waits for them and runs last as the integration and check.
-  Vibe's **Plan in flight** card and the Plans panel follow the steps; under
-  Verify first the waiting steps are one row under Needs you, started together
+  Vibe's **Plan in flight** card and the Plans panel follow the steps; when
+  permission settings require approval, waiting steps are one Needs you row, started together
   with their reviewed scopes, and **Make it one task** drops the unstarted
   steps so the card runs whole. Anything that cannot be sized keeps it one card.
 - **New app** (the + beside Vibe's project picker, `projects:create`) makes an
@@ -254,8 +254,8 @@ settings and per-model work-kind summaries for the shared controls.
   work is paused, **Connect an AI** when none is connected. **Build it** says
   when its task will wait for that. Needs you lists only what cannot move
   without you, one row each: decisions, builds waiting for your go-ahead under
-  Verify first (the drawer shows the brief, approves it with its reviewed
-  scope, or turns Verify first off), and stuck tasks (the drawer shows why and
+  the permission settings (the drawer shows the brief, approves its reviewed
+  scope, and links to those settings), and stuck tasks (the drawer shows why and
   offers Try again, Resume or Run anyway, It's done and Drop it). Work the
   checker is still verifying sits under Building now as "checking its work".
   Every action uses the host call its Build surface uses, and the drawer moves
@@ -395,10 +395,10 @@ settings and per-model work-kind summaries for the shared controls.
 - The conversation offers **Chat** for questions and discussion, and **Create
   task** for work to add to the board with acceptance checks.
 - **Queue settings** groups **Auto build** and **Agent mode** in an expandable
-  section above the queue. Auto build stays on by default. Turn it off for
-  **Verify first** so each
-  task waits in Review until you choose **Approve build**. Approval covers the
-  saved task scope and is saved across restarts for all projects.
+  section above the queue. Auto build is a compatibility switch: off selects
+  Always ask, on selects Auto. Use the shared permission control for all four
+  modes and elevated categories. Task approval covers the saved scope and
+  persists across restarts; Accept per task labels it **Accept this task**.
 - Default **Swarm** assigns one builder per ready task without mandatory
   advisory calls; independent tasks can run concurrently. **Cluster** adds
   planning, review and scoped delegation for one shared task. Switching to

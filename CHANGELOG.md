@@ -49,7 +49,7 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   leave the project working. The steps are admitted under your card in the
   same save, as its delegated slices, so your card runs last as the final
   integration and check. A **Plan in flight** card shows how far along it
-  is; under Verify first its waiting steps are one row under Needs you and
+  is; when approval is required, its waiting steps are one row under Needs you and
   start together, and **Make it one task** drops the steps that have not
   started. No AI, a slow one or an unusable answer keeps it one card.
 - **New app** beside Vibe's project picker: name it and say what it should
@@ -138,8 +138,8 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 - Vibe can run on its own: everything that stops the agents is shown and
   cleared from Vibe. A banner under the box offers **Start agents** after a
   launch that left them off, **Resume** when new work is paused, and
-  **Connect an AI** when none is. Under Verify first, **Review** shows a
-  build's brief and approves it (or turns Verify first off); a stuck task
+  **Connect an AI** when none is. When approval is required, **Review** shows a
+  build's brief, approves its scope and links to permission settings; a stuck task
   shows why and can be tried again, resumed, marked done or dropped. The
   drawer steps through each in order.
 - Vibe mode's menus match Vibe: Search, Shortcuts, the project panel, the
