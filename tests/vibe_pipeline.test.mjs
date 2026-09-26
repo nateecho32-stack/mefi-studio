@@ -162,3 +162,35 @@ test("Vibe restores unsent file text after restart and keeps drafts separate acr
   assert.equal(reopened.storage.get("mefiStudio.vibe.draft.p2"), "Second project's draft");
   assert.deepEqual(reopened.calls, []);
 });
+
+test("late errors stay on their question, and a suggested one-line option waits for the owner's text", async () => {
+  const h = await load({ approvals: false, stuck: false });
+  const questions = [{ id: "one", projectId: P, status: "open", title: "First question", context: { suggestion: { optionId: "line", reason: "Name the intended scope." } }, options: [{ id: "retry", label: "Retry" }, { id: "line", label: "Answer it in one line", text: true }] }, { id: "two", projectId: P, status: "open", title: "Second question", options: [{ id: "yes", label: "Yes" }] }];
+  h.window.mefiStudio.assistantState = async () => ({ ok: true, state: { projectId: P, status: "running", questions, messages: [], ai: { keyPresent: true } } });
+  let reject;
+  h.window.mefiStudio.assistantAnswer = () => new Promise((_resolve, no) => { reject = no; });
+  await h.vibe.refresh(); h.vibe.openNeed("one");
+  assert.match(h.get("vibe-ask-body").textContent, /Mefi suggests: Answer it in one line — Name the intended scope/);
+  h.get("vibe-ask-body").querySelector(".vibe-ask-option").click();
+  h.vibe.openNeed("two"); reject(new Error("First question failed")); await settle();
+  assert.doesNotMatch(h.get("vibe-ask-note").textContent, /First question failed/);
+  h.vibe.openNeed("one"); assert.match(h.get("vibe-ask-note").textContent, /First question failed/);
+  const answers = [];
+  h.window.mefiStudio.assistantAnswer = async value => { answers.push(plain(value)); return { ok: true }; };
+  h.get("vibe-ask-body").querySelectorAll(".vibe-ask-option")[1].click();
+  assert.equal(answers.length, 0, "selecting the line option sends nothing yet");
+  const form = h.get("vibe-ask-body").querySelector(".vibe-ask-own");
+  form.querySelector("textarea").value = "Only update the palette"; h.fire(form, "submit"); await settle();
+  assert.deepEqual(answers[0], { id: "one", optionId: "line", text: "Only update the palette" });
+});
+
+test("the unread dot follows message ids after the sixty-message window fills", async () => {
+  const h = await load({ questions: false, approvals: false, stuck: false });
+  let messages = Array.from({ length: 61 }, (_, i) => ({ id: `m${i}`, role: "assistant", projectId: P, text: `Reply ${i}` }));
+  h.window.mefiStudio.assistantState = async () => ({ ok: true, state: { projectId: P, status: "running", questions: [], messages, ai: { keyPresent: true } } });
+  await h.vibe.refresh(); assert.equal(h.get("vibe-chat-dot").hidden, false);
+  h.get("vibe-chat-toggle").click(); h.get("vibe-chat-close").click();
+  assert.equal(h.get("vibe-chat-dot").hidden, true);
+  messages = [...messages.slice(1), { id: "m61", role: "assistant", projectId: P, text: "New reply" }];
+  await h.vibe.refresh(); assert.equal(h.get("vibe-chat-dot").hidden, false);
+});

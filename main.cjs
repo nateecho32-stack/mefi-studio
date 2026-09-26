@@ -8269,7 +8269,8 @@ async function assistantNeedsYouDigest(now = Date.now()) {
   try {
     const tasks = (await (await getEyes()).readJson(TASKS_PATH, [])).filter((task) => task && !task.archived);
     const marks = typeof agentBrain !== "undefined" && agentBrain?.clearedMarks ? await agentBrain.clearedMarks().catch(() => ({})) : {};
-    const { items, counts } = companionModule.dropCleared(companionModule.queue({ questions: assistantState?.questions ?? [], tasks, now, project: projects.current().name ?? null }), marks);
+    const withApproval = tasks.map((task) => ({ ...task, needsApproval: backlog.workState(task, now, { tasks, ...autopilot }).stage === "approval" }));
+    const { items, counts } = companionModule.dropCleared(companionModule.queue({ questions: assistantState?.questions ?? [], tasks: withApproval, now, project: projects.current().name ?? null }), marks);
     return {
       total: counts.total,
       counts: Object.fromEntries(Object.entries(counts).filter(([key, value]) => key !== "total" && value > 0)),

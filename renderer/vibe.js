@@ -98,7 +98,7 @@
   }
 
   // ---- data -----------------------------------------------------------------
-  const state = { projects: [], activeId: null, tasks: [], assistant: {}, status: {}, backlog: null, ideas: [], plans: [], pending: false, chatOpen: false, seenMessages: 0, need: null, askSending: false, gateBusy: false };
+  const state = { projects: [], activeId: null, tasks: [], assistant: {}, status: {}, backlog: null, ideas: [], plans: [], pending: false, chatOpen: false, seenMessageId: null, askErrors: {}, need: null, askSending: false, gateBusy: false };
   let initialized = false;
   let refreshFlight = null;
   const projectId = () => window.MefiWorkspace?.activeProjectId?.() || state.activeId;
@@ -433,7 +433,8 @@
   function renderChat() {
     const list = messages();
     const thinking = state.pending ? "pending" : "";
-    if (!changed("chat", [list, thinking, companion(), person()])) return;
+    const confirms = openQuestions().filter((question) => question.source === "chat");
+    if (!changed("chat", [list, thinking, companion(), person(), confirms, state.chatOpen])) return;
     $("chat-title").textContent = companion();
     const thread = $("thread");
     const pinned = thread.scrollTop + thread.clientHeight >= thread.scrollHeight - 40;
@@ -442,14 +443,48 @@
     for (const message of list) {
       const item = el("li", `vibe-msg is-${message.role}${message.kind === "notice" ? " is-notice" : ""}`);
       item.append(el("span", "vibe-msg-who", message.role === "user" ? person() || "You" : companion()), el("p", "vibe-msg-text", message.text));
+      if (message.role === "assistant" && Array.isArray(message.offers)) {
+        const chips = el("div", "vibe-chat-choices");
+        for (const offer of message.offers) {
+          const pick = el("button", "vibe-spark", offer.title); pick.type = "button";
+          pick.addEventListener("click", async () => {
+            pick.disabled = true;
+            try {
+              const result = offer.target?.id ? await api().assistantWorkOn({ ...offer.target, projectId: projectId(), start: true }) : await api().assistantMessage(`Work on "${offer.title}"`, projectId(), { view: "Vibe", companion: companion() });
+              if (result?.ok === false) throw new Error(result.error);
+              feedback(window.MefiAutonomy?.outcome?.(result, "Requested. Watch the task for its next step.") || result?.dispatch?.message || "Requested."); await refresh();
+            } catch (error) { item.append(el("p", "vibe-inline-error", error.message)); }
+            finally { pick.disabled = false; }
+          }); chips.append(pick);
+        } item.append(chips);
+      }
+      if (message.taskId === "__decided_for_you__") { const history = el("button", "vibe-ask-link", "Why / Undo · For you"); history.type = "button"; history.addEventListener("click", () => openPanel("decisions")); item.append(history); }
       thread.append(item);
+    }
+    for (const question of confirms) {
+      const item = el("li", "vibe-msg is-assistant vibe-inline-confirm"); item.append(el("p", "vibe-msg-text", question.title));
+      const controls = el("div", "vibe-chat-choices");
+      for (const option of question.options || []) {
+        const pick = el("button", "vibe-btn quiet", option.id === "yes" ? "Yes" : option.id === "no" ? "No" : option.label); pick.type = "button";
+        pick.addEventListener("click", async () => {
+          for (const control of controls.children) control.disabled = true;
+          try {
+            const result = await api().assistantAnswer({ id: question.id, optionId: option.id, projectId: projectId() });
+            if (result?.ok === false) throw new Error(result.error);
+            if (result?.state && belongs(result.state)) state.assistant = result.state;
+            else state.assistant.questions = (state.assistant.questions || []).map((row) => row.id === question.id ? { ...row, status: "answered" } : row);
+            await refresh(); signatures.delete("chat"); renderChat();
+          } catch (error) { item.append(el("p", "vibe-inline-error", error.message)); for (const control of controls.children) control.disabled = false; }
+        }); controls.append(pick);
+      } item.append(controls); thread.append(item);
     }
     if (state.pending) { const typing = el("li", "vibe-msg is-assistant is-typing"); typing.append(el("span", "vibe-msg-who", companion()), el("span", "vibe-typing")); typing.lastChild.append(el("i"), el("i"), el("i")); thread.append(typing); }
     if (pinned || state.pending) thread.scrollTop = thread.scrollHeight;
     const last = [...list].reverse().find((message) => message.role === "assistant");
     $("last").hidden = !last || state.chatOpen;
     if (last) { $("last-who").textContent = companion(); $("last-text").textContent = last.text; }
-    const unread = list.length > state.seenMessages && !state.chatOpen && list.at(-1)?.role === "assistant";
+    if (state.chatOpen) state.seenMessageId = list.at(-1)?.id ?? state.seenMessageId;
+    const unread = Boolean(list.at(-1)?.id && list.at(-1).id !== state.seenMessageId && !state.chatOpen && list.at(-1)?.role === "assistant");
     $("chat-dot").hidden = !unread;
   }
   function renderHead() {
@@ -457,6 +492,11 @@
     const project = state.projects.find((item) => item.id === projectId());
     $("project-name").textContent = project?.name || "Choose a project";
     $("kicker").textContent = greeting();
+    const permission = window.MefiAutonomy?.state?.();
+    const decisionState = permission?.projectId === projectId() ? permission : state.assistant;
+    const decisions = (decisionState.decisions || []).filter((row) => !row.undone && !row.failed && !row.pending);
+    const todos = (decisionState.todos || []).filter((row) => !row.doneAt);
+    if ($("decisions")) { $("decisions").hidden = !decisions.length && !todos.length; $("decisions").textContent = `Decided for you (${decisions.length}) · For you (${todos.length})`; }
     const hasWork = scoped(state.tasks).some((task) => !done(task));
     $("title").textContent = !project ? "Pick a project to begin" : hasWork ? `What's next for ${project.name}?` : `What should we make in ${project.name}?`;
   }
@@ -472,6 +512,7 @@
   function syncDraft(id = projectId()) {
     if (id === draftProject) return;
     saveDraft(); draftProject = id; draftEpoch++;
+    state.seenMessageId = id ? read(`mefiStudio.vibe.seen.${id}`) : null; state.askErrors = {};
     $("input").value = id ? read(draftKey(id)) || "" : ""; grow();
   }
   const SPARKS = [
@@ -547,14 +588,16 @@
     window.MefiVibePanels?.close?.({ quiet: true });
     state.chatOpen = true; $("chat").hidden = false; layer.dataset.chat = "open";
     $("chat-toggle").setAttribute("aria-expanded", "true");
-    state.seenMessages = messages().length;
+    state.seenMessageId = messages().at(-1)?.id ?? null;
+    if (projectId() && state.seenMessageId) write(`mefiStudio.vibe.seen.${projectId()}`, state.seenMessageId);
     signatures.delete("chat"); renderChat();
     const thread = $("thread"); thread.scrollTop = thread.scrollHeight;
   }
   function closeChat() {
     state.chatOpen = false; $("chat").hidden = true; layer.dataset.chat = "closed";
     $("chat-toggle").setAttribute("aria-expanded", "false");
-    state.seenMessages = messages().length;
+    state.seenMessageId = messages().at(-1)?.id ?? null;
+    if (projectId() && state.seenMessageId) write(`mefiStudio.vibe.seen.${projectId()}`, state.seenMessageId);
     signatures.delete("chat"); renderChat();
   }
 
@@ -583,6 +626,12 @@
     }
     for (const [parentId, items] of grouped) list.push({ kind: "family", id: parentId, tone: "ask", verb: "Review", title: taskById(parentId)?.title || "Your request", meta: `${items.length} step${items.length === 1 ? "" : "s"} waiting for your go-ahead`, rows: items });
     for (const item of rows("blocked")) list.push({ kind: "blocked", id: item.id, tone: "bad", verb: HOLD_VERBS[item.blockedBy] || "See why", title: item.title || taskById(item.id)?.title || "A task", meta: item.blockedBy === "owner" ? "stopped by you" : "stuck", row: item });
+    const shared = state.assistant.needsYou;
+    if (shared?.items && belongs(state.assistant)) return shared.items.map((item) => {
+      if (item.kind === "question") return list.find((row) => row.kind === "question" && row.id === item.id);
+      const grouped = item.memberIds?.length ? list.find((row) => row.kind === "family" && row.id === item.taskId) : null;
+      return grouped || list.find((row) => row.id === item.taskId && row.kind !== "question") || { kind: item.kind === "approval" ? "approval" : "blocked", id: item.taskId, tone: "ask", verb: "Review", title: item.title, meta: item.kind === "review" ? "check the result" : "waiting for your review", row: { canRetry: false, reason: item.title } };
+    }).filter(Boolean);
     return list;
   }
   const needKey = (need) => need ? `${need.kind}:${need.id}` : "";
@@ -608,6 +657,7 @@
     const all = needs();
     const index = all.findIndex((item) => needKey(item) === needKey(state.need));
     const need = all[index];
+    if (need && !state.askSending) { $("ask-note").textContent = state.askErrors[needKey(need)] || ""; $("ask-note").dataset.tone = state.askErrors[needKey(need)] ? "bad" : ""; }
     const task = need && need.kind !== "question" ? taskById(need.id) : null;
     if (!changed("ask", [need ?? null, task, all.length, state.askSending, state.status.autoBuild])) return;
     const body = $("ask-body");
@@ -641,8 +691,8 @@
   // A request split into steps under Verify first: its steps start together.
   function renderFamily(body, need) {
     const family = families().find((item) => item.id === need.id);
-    body.append(chips([chip("Verify first", "decision"), chip(`${need.rows.length} step${need.rows.length === 1 ? "" : "s"}`)]));
-    body.append(el("p", "vibe-ask-detail", "Verify first is on, so these steps wait until you start them. Your request runs last, to put the steps together and check the whole thing."));
+    body.append(chips([chip(window.MefiAutonomy?.label?.() || "Your approval", "decision"), chip(`${need.rows.length} step${need.rows.length === 1 ? "" : "s"}`)]));
+    body.append(el("p", "vibe-ask-detail", "These steps need your approval before they start. Your request runs last, to put the steps together and check the whole thing."));
     if (family) {
       const list = el("ol", "vibe-ask-steps");
       for (const step of family.steps) { const item = el("li", `is-${step.state}`, step.title); item.title = STEP_STATES[step.state] || ""; list.append(item); }
@@ -709,6 +759,9 @@
       question.at ? el("span", "vibe-ask-when", ago(question.at)) : null,
     ]));
     if (question.detail) body.append(el("p", "vibe-ask-detail", question.detail));
+    const suggestion = context.suggestion;
+    const suggested = question.options?.find((option) => option.id === suggestion?.optionId);
+    if (suggestion) body.append(el("p", "vibe-suggestion", `Mefi suggests: ${suggested?.label || "Your review"} — ${suggestion.reason || ""}`));
     if (Array.isArray(context.evidence) && context.evidence.length) {
       const evidence = el("pre", "vibe-ask-evidence", context.evidence.slice(-3).join("\n"));
       evidence.title = "The last lines the agent printed before it asked";
@@ -719,17 +772,21 @@
     options.setAttribute("aria-label", "Your answer");
     const choices = (Array.isArray(question.options) ? question.options : []).slice().sort((a, b) => Number(Boolean(b.recommended)) - Number(Boolean(a.recommended)));
     for (const option of choices) {
-      const button = el("button", `vibe-ask-option${option.recommended ? " is-recommended" : ""}`);
+      const button = el("button", `vibe-ask-option${option.id === suggested?.id || option.recommended ? " is-recommended" : ""}`);
       button.type = "button";
       const label = el("span", "vibe-ask-option-label", option.label);
       if (option.recommended) label.append(el("span", "vibe-ask-rec", "Recommended"));
       button.append(label);
       if (option.description) button.append(el("span", "vibe-ask-option-desc", option.description));
       button.disabled = state.askSending;
-      button.addEventListener("click", () => void answer(question, { optionId: option.id, label: option.label }));
+      button.addEventListener("click", () => {
+        if (option.text || option.action?.action === "instruct") { selectedTextOption = option; input.placeholder = "Your one-line answer…"; input.focus(); }
+        else void answer(question, { optionId: option.id, label: option.label });
+      });
       options.append(button);
     }
     body.append(options);
+    let selectedTextOption = null;
     const own = el("form", "vibe-ask-own");
     const input = el("textarea");
     input.rows = 2; input.placeholder = choices.length ? "Or say it in your own words…" : "Your answer…";
@@ -737,36 +794,28 @@
     const send = el("button", "vibe-btn quiet", "Send");
     send.type = "submit"; send.disabled = state.askSending;
     own.append(input, send);
-    own.addEventListener("submit", (event) => { event.preventDefault(); const text = input.value.trim(); if (text) void answer(question, { text, label: text }); else input.focus(); });
+    own.addEventListener("submit", (event) => { event.preventDefault(); const text = input.value.trim(); if (text) void answer(question, { optionId: selectedTextOption?.id ?? null, text, label: text }); else input.focus(); });
     input.addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); own.requestSubmit(); } });
     body.append(own);
   }
   function renderApproval(body, need, task) {
     const row = need.row || {};
     const waitingOn = Array.isArray(row.dependencies) ? row.dependencies.filter((item) => item && item.done !== true).length : 0;
-    body.append(chips([chip("Verify first", "decision"), waitingOn ? chip(`waits for ${waitingOn} other task${waitingOn === 1 ? "" : "s"}`) : null, task?.createdAt ? el("span", "vibe-ask-when", `added ${ago(task.createdAt)}`) : null]));
-    body.append(el("p", "vibe-ask-detail", "Verify first is on, so this build waits until you approve the brief below. Approving lets it start when a worker is free."));
+    body.append(chips([chip(window.MefiAutonomy?.label?.() || "Your approval", "decision"), waitingOn ? chip(`waits for ${waitingOn} other task${waitingOn === 1 ? "" : "s"}`) : null, task?.createdAt ? el("span", "vibe-ask-when", `added ${ago(task.createdAt)}`) : null]));
+    body.append(el("p", "vibe-ask-detail", "Your permission settings require approval of this brief. Approving lets it start when a worker is free."));
     const text = brief(task);
     if (text) body.append(text);
     const canApprove = row.canApprove === true && typeof row.buildScope === "string" && row.buildScope;
     body.append(actions([
-      { label: "Approve build", primary: true, disabled: !canApprove, title: canApprove ? "Approve this brief so the task can build" : "Open it on the task board to review its current brief", run: () => act(need, () => api().backlogControl({ action: "approve", taskId: need.id, projectId: projectId(), expectedScope: row.buildScope }), "Approved. It builds when a worker is free.") },
+      { label: window.MefiAutonomy?.state?.()?.level === "accept" ? "Accept this task" : "Approve build", primary: true, disabled: !canApprove, title: canApprove ? "Approve this brief so the task can build" : "Open it on the task board to review its current brief", run: () => act(need, () => api().backlogControl({ action: "approve", taskId: need.id, projectId: projectId(), expectedScope: row.buildScope }), "Approved. It builds when a worker is free.") },
       { label: "Drop it", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "drop" }), "Dropped. It's closed without being built.") },
     ]));
-    if (state.status.autoBuild === false && api()?.assistantAutopilot) {
-      const auto = el("button", "vibe-ask-link vibe-ask-auto", "Let builds start without asking from now on");
+    if (window.MefiAutonomy) {
+      const auto = el("button", "vibe-ask-link vibe-ask-auto", "Review permission settings");
       auto.type = "button";
-      auto.title = "Switch Verify first off. You can turn it back on in Command's Agents menu.";
+      auto.title = "Choose which work Mefi may start and which decisions stay with you.";
       auto.disabled = state.askSending;
-      auto.addEventListener("click", () => void act(need, async () => {
-        const result = await api().assistantAutopilot({ autoBuild: true });
-        if (result?.ok !== false) {
-          state.status = { ...state.status, autoBuild: true };
-          // Every build that waited only on Verify first may start now.
-          if (state.backlog) state.backlog = { ...state.backlog, approval: [] };
-        }
-        return result;
-      }, "Builds now start without asking. This one is on its way too."));
+      auto.addEventListener("click", () => window.MefiAutonomy.openSettings());
       body.append(auto);
     }
   }
@@ -792,6 +841,8 @@
   async function act(need, call, success) {
     if (state.askSending) return;
     const note = $("ask-note");
+    const requestProject = projectId(), requestKey = needKey(need);
+    delete state.askErrors[requestKey];
     if (!api()) { note.textContent = "This works in the desktop app."; note.dataset.tone = "warn"; return; }
     // Where it sat in the list, so the drawer moves forward, not back to the top.
     const place = Math.max(0, needs().findIndex((item) => needKey(item) === needKey(need)));
@@ -799,18 +850,23 @@
     note.textContent = "Working on it…"; note.dataset.tone = "";
     try {
       const result = await call();
+      if (requestProject !== projectId()) return;
       if (!result || result.ok === false) throw Object.assign(new Error(result?.error || "That didn't go through."), { gone: result?.gone });
       if (result.backlog && belongs(result.backlog)) state.backlog = { ...result.backlog, ok: true };
       if (result.task) state.tasks = state.tasks.map((item) => item.id === result.task.id ? result.task : item);
       if (result.state && belongs(result.state)) state.assistant = result.state;
       // Until the next read, what was just handled stays out of Needs you.
       if (state.backlog && Array.isArray(state.backlog[need.kind])) state.backlog = { ...state.backlog, [need.kind]: state.backlog[need.kind].filter((item) => item.id !== need.id) };
-      moveOn(need, success, place);
+      if (requestProject !== projectId()) return;
+      const message = window.MefiAutonomy?.outcome?.(result, success) || result.dispatch?.message || success;
+      if (needKey(state.need) === requestKey) moveOn(need, message, place);
+      else { state.askSending = false; feedback(message, result.dispatch?.held || result.dispatch?.paused ? "warn" : "good"); }
       void refresh();
     } catch (error) {
       state.askSending = false;
-      note.textContent = error.gone ? error.message : `${error?.message || "That didn't go through."} You can also open it on the task board.`;
-      note.dataset.tone = error.gone ? "" : "bad";
+      if (requestProject !== projectId()) return;
+      state.askErrors[requestKey] = error.gone ? error.message : `${error?.message || "That didn't go through."} You can also open it on the task board.`;
+      if (needKey(state.need) === requestKey) { note.textContent = state.askErrors[requestKey]; note.dataset.tone = error.gone ? "" : "bad"; }
       signatures.delete("ask"); renderAsk();
     }
   }
@@ -826,10 +882,11 @@
   }
   async function answer(question, { optionId = null, text = null, label = "" }) {
     const need = { kind: "question", id: question.id };
+    const answeringProject = projectId();
     if (!api()?.assistantAnswer) { const note = $("ask-note"); note.textContent = "Answers are available in the desktop app."; note.dataset.tone = "warn"; return; }
     await act(need, async () => {
       const result = await api().assistantAnswer({ id: question.id, optionId, text });
-      if (result?.ok !== false && !(result?.state && belongs(result.state))) state.assistant = { ...state.assistant, questions: (state.assistant.questions || []).map((item) => item.id === question.id ? { ...item, status: "answered" } : item) };
+      if (answeringProject === projectId() && result?.ok !== false && !(result?.state && belongs(result.state))) state.assistant = { ...state.assistant, questions: (state.assistant.questions || []).map((item) => item.id === question.id ? { ...item, status: "answered" } : item) };
       return result ?? { ok: true };
     }, `Answered: ${label.length > 60 ? `${label.slice(0, 57)}…` : label}. ${companion()} carries on.`);
   }
@@ -868,9 +925,12 @@
     if (initialized) return;
     initialized = true;
     renderSparks();
+    window.MefiAutonomy?.mount($("autonomy-control"), { id: "vibe-autonomy" });
+    window.addEventListener("mefi:autonomy-changed", () => { signatures.delete("ask"); renderAsk(); renderHead(); renderLanes(); });
     $("compose").addEventListener("submit", (event) => { event.preventDefault(); void send("build"); });
     window.MefiFileInputs?.bind($("input"), { scope: () => `${draftEpoch}:${projectId()}`, blocked: () => state.pending || !projectId() });
     $("talk").addEventListener("click", () => void send("talk"));
+    $("decisions")?.addEventListener("click", () => openPanel("decisions"));
     $("input").addEventListener("input", () => { grow(); saveDraft(); if ($("feedback").textContent && !state.pending) feedback(""); });
     window.addEventListener("mefi:project-changed", (event) => syncDraft(event.detail?.projectId));
     window.addEventListener("beforeunload", saveDraft);
@@ -1033,6 +1093,7 @@
   // drawer: the question by id, or any need by kind and id.
   function openNeedById(ref = {}) {
     const wanted = typeof ref === "string" ? { kind: "question", id: ref } : ref;
+    if (wanted.projectId && wanted.projectId !== projectId()) { feedback("Open this project before answering its request.", "warn"); return false; }
     if (!active()) go("vibe");
     const need = needs().find((item) => item.kind === (wanted.kind || "question") && item.id === wanted.id);
     if (need) { openNeed(need); return true; }

@@ -158,6 +158,7 @@ function workState(item, now = Date.now(), { tasks = null, autoBuild = true, app
   }
   if (item.status === "active" || item.status === "running") return { stage: "running", reason: "A worker holds this task" };
   if (item.autonomyPending || item.autonomyUndo) return { stage: "blocked", blockedBy: "decision", canRetry: false, reason: item.autonomyUndo ? "Undo is waiting for the current run to finish" : "Saving Mefi's decision before this task can start" };
+  if (item.autonomyBudgetHold) return { stage: "blocked", blockedBy: "decision-budget", canRetry: true, reason: "Mefi held this task after two automatic decisions today. Review it, Undo the hold, or choose Try again." };
   const deferUntil = Number(item.deferUntil);
   if ((!item.status || ["open", "pending", "queued"].includes(item.status)) && Number.isFinite(deferUntil) && deferUntil > now && deferUntil <= 8640000000000000) {
     return { stage: "deferred", reason: `Deferred until ${new Date(deferUntil).toISOString()}`, retryAt: deferUntil };
@@ -258,7 +259,7 @@ function retryTask(task, now = Date.now()) {
   // familyDecision stays, so the keeper does not ask about the family again.
   // ownerHold goes as well: Try again is the owner saying to go on after
   // their own stop.
-  for (const name of ["runFailures", "startFailures", "providerFailures", "nextRunAt", "lastRunError", "verifyAttempts", "verification", "verificationReceiptId", "doneAt", "runId", "lease", "buildApproval", "loopGuard", "ownerHold", "duplicateOf", "dropped"]) delete next[name];
+  for (const name of ["runFailures", "startFailures", "providerFailures", "nextRunAt", "lastRunError", "verifyAttempts", "verification", "verificationReceiptId", "doneAt", "runId", "lease", "buildApproval", "loopGuard", "ownerHold", "autonomyBudgetHold", "duplicateOf", "dropped"]) delete next[name];
   // The owner's acknowledgement for the loop guard: the ledger restarts from
   // now, so outcomes logged before this retry are never counted again.
   next.loopLedger = { v: 1, at: now, n: 0, reasons: {} };
@@ -286,6 +287,7 @@ function delegatedRetries(task, now = Date.now()) {
 
 function delegateRetry(task, now = Date.now(), { by = "desk", kind = null } = {}) {
   if (!task || typeof task !== "object") return { ok: false, error: "That task is no longer on the board." };
+  if (task.autonomyBudgetHold) return { ok: false, held: true, error: "This task is held for your review after its automatic decision budget was spent." };
   if (task.ownerHold && typeof task.ownerHold === "object" && !Array.isArray(task.ownerHold)) return { ok: false, held: true, error: "You stopped this card, so only you can resume it." };
   if (completedTask(task) || task.status === "archived") return { ok: false, error: "This task is finished." };
   if (task.status === "active" || task.status === "running" || task.runId || task.lease) return { ok: false, error: "A worker holds this task." };

@@ -260,11 +260,13 @@
       <textarea id="vibe-input" rows="2" placeholder="Describe an idea, a fix or a question…"></textarea>
       <div class="vibe-compose-foot">
         <span id="vibe-hint" class="vibe-hint">Enter to talk · Ctrl + Enter to build</span>
+        <span id="vibe-autonomy-control"></span>
         <button id="vibe-talk" class="vibe-btn quiet" type="button"><svg class="glyph" aria-hidden="true"><use href="#g-plane"/></svg>Talk it over</button>
         <button id="vibe-build" class="vibe-btn primary" type="submit"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg>Build it</button>
       </div>
     </form>
     <div id="vibe-sparks" class="vibe-sparks" role="group" aria-label="Ways to start"></div>
+    <button id="vibe-decisions" class="vibe-ask-link" type="button" hidden>Decided for you · For you</button>
     <p id="vibe-feedback" class="vibe-feedback" role="status" aria-live="polite"></p>
     <!-- What stops the agents from working on their own, and the one control
          that fixes it: Start agents, Resume, Connect an AI (vibe.js). -->

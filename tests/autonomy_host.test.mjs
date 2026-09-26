@@ -226,3 +226,56 @@ test("strong learned agreement raises confidence while disagreement leaves Auto 
   await different.host.decide();
   assert.equal(different.answers.length, 0); assert.equal(different.question.context.suggestion.optionId, "split");
 });
+
+test("Elevated holds an exhausted card durably with one reversible decision and no third settle", async () => {
+  const f = fixture({ level: "elevated", task: { assistantRetries: [{ at: NOW - 1000, by: "desk" }, { at: NOW - 500, by: "desk" }] } });
+  await f.host.decide();
+  assert.equal(f.calls, 0);
+  assert.equal(f.answers.length, 0);
+  assert.equal(f.state.decisions.length, 1);
+  assert.equal(f.state.decisions[0].choice, "hold-budget");
+  assert.equal(backlog.workState(f.board.tasks[0], NOW).blockedBy, "decision-budget");
+  assert.match(f.state.messages.find((row) => row.taskId === "__decided_for_you__").text, /Held: Fix the parser/);
+  f.restart(); await f.host.decide();
+  assert.equal(f.state.decisions.length, 1, "relaunch does not repeat the hold");
+  assert.equal(f.board.tasks[0].assistantRetries.length, 2);
+  await f.host.undo({ id: f.state.decisions[0].id });
+  assert.equal(f.board.tasks[0].autonomyBudgetHold, undefined);
+  assert.equal(f.board.tasks[0].assistantRetries.length, 2, "Undo never refunds the budget");
+  await f.host.decide(); assert.equal(f.state.decisions.length, 1, "an undone hold stays with its owner");
+});
+
+test("Studio leftovers can reuse a named duplicate family without closing owner work", async () => {
+  for (const protect of [true, false]) {
+    const f = fixture({ kind: "owner", reply: { optionId: "merge-family", classification: "studio", confidence: 0.95, reason: "These cards duplicate the same brief." } });
+    f.settings.autonomy.elevated["drop-owned"] = protect;
+    f.board.tasks.push({ id: "keeper", title: "Keep this parser task", status: "open", origin: { by: "agent" } });
+    f.state.questions.push({ id: "family", status: "open", at: NOW, source: "family", context: {}, options: [{ id: "keep-oldest", label: "Keep the original", action: { kind: "family", choice: "keep-oldest", keepId: "keeper", memberIds: ["keeper", "task"] } }] });
+    f.io.answer = async (payload) => {
+      f.answers.push(payload);
+      const question = f.state.questions.find(row => row.id === payload.id);
+      const option = question.options.find(row => row.id === payload.optionId);
+      assert.deepEqual(option.action.memberIds, ["keeper", "task"]);
+      question.status = "answered";
+      return { ok: true };
+    };
+    await f.host.decide();
+    assert.equal(f.answers.some(row => row.id === "q"), !protect);
+    if (!protect) assert.deepEqual(f.state.decisions[0].before.map(row => row.id).sort(), ["keeper", "task"]);
+  }
+});
+
+test("a mode change while saving the decision cancels the pending answer and releases its reservation", async () => {
+  const f = fixture();
+  const saved = f.io.save;
+  let changed = false;
+  f.io.save = async () => {
+    await saved();
+    if (!changed && f.state.decisions.some((row) => row.pending)) { changed = true; await f.host.set({ level: "ask" }); }
+  };
+  await f.host.decide();
+  assert.equal(f.answers.length, 0);
+  assert.equal(f.question.status, "open");
+  assert.equal(f.state.decisions[0].failed, true);
+  assert.equal(f.board.tasks[0].autonomyPending, undefined);
+});

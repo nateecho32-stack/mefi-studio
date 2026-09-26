@@ -132,6 +132,11 @@ function createAutonomyHost(io) {
     if (!reserved?.ok) return reserved;
     state().decisions = [...rows(state().decisions), decision].slice(-300);
     await save(); // keep the intent even if the process exits during the answer
+    if (JSON.stringify(autonomy.migrate(await io.readSettings())) !== JSON.stringify(config)) {
+      decision.pending = false; decision.failed = true; decision.reason = "The permission mode changed before the answer was applied.";
+      await save(); await release(decision.id);
+      return { ok: false, error: decision.reason };
+    }
     const result = todoText
       ? await io.answer({ id: question.id, optionId: choice.optionId, origin: "delegate", by: "desk", decisionId: decision.id, projectId, reason: choice.reason, recordOnly: true })
       : await io.answer({ id: question.id, optionId: choice.optionId, text: choice.text, origin: "delegate", by: "desk", decisionId: decision.id, projectId, reason: choice.reason });
@@ -164,6 +169,35 @@ function createAutonomyHost(io) {
     await notices();
     await save();
     return { ok: true, decisionId: decision.id };
+  }
+
+  // Reaching the budget does not spend a third settle. Elevated mode records
+  // a reversible hold instead, before any worker may take the card again.
+  async function holdBudget(question, config) {
+    const projectId = project(), tasks = await io.readTasks(), ids = idsFor(question);
+    const targets = tasks.filter((task) => ids.includes(task.id) && !task.autonomyBudgetHold);
+    if (!targets.length || targets.some((task) => task.ownerHold || ledger.held(task))) return;
+    const decision = { id: io.id(), at: now(), level: config.level, by: "desk", source: "budget", questionId: question.id,
+      taskId: question.context?.taskId ?? targets[0].id, kind: "budget", choice: "hold-budget", label: `Held: ${targets[0].title || "task"}`,
+      reason: "Its two automatic decisions for today are spent. Review it, Undo the hold, or choose Try again.", before: ledger.snapshot(tasks, targets.map((task) => task.id)), after: [], question: JSON.parse(JSON.stringify(question)), pending: true };
+    state().decisions = [...rows(state().decisions), decision].slice(-300);
+    await save();
+    const live = autonomy.migrate(await io.readSettings());
+    const result = await io.mutate((board) => {
+      const current = board.tasks.filter((task) => targets.some((target) => target.id === task.id));
+      if (project() !== projectId || live.level !== "elevated" || current.some((task) => task.ownerHold || ledger.held(task) || task.autonomyPending || task.autonomyUndo)) return { ok: false };
+      decision.before = ledger.snapshot(board.tasks, current.map((task) => task.id));
+      for (const task of current) {
+        task.autonomyBudgetHold = { at: now(), decisionId: decision.id, reason: decision.reason };
+        task.autonomyPending = decision.id;
+        task.autonomyApplied = { id: decision.id, after: ledger.snapshot([task], [task.id])[0] };
+      }
+      decision.after = ledger.snapshot(board.tasks, current.map((task) => task.id));
+      return { ok: true };
+    });
+    decision.pending = false;
+    if (!result?.ok) decision.failed = true;
+    await save(); await release(decision.id);
   }
 
   async function release(id) {
@@ -231,6 +265,14 @@ function createAutonomyHost(io) {
         const initial = autonomy.route({ ...config, item: question, task, accepted: isAccepted });
         if (initial === "owner" && !humanClassify) continue;
         if (question.context?.raisedBy === "desk") continue;
+        if (humanClassify) {
+          // Reuse a current, explicit family decision; a model cannot invent
+          // a merge or choose unrelated cards from their titles.
+          const family = questions.find((row) => row !== question && row.status === "open" && row.source === "family" && row.options?.some((option) => option.action?.kind === "family" && option.action.memberIds?.includes(task?.id)));
+          const merge = family?.options.find((option) => option.action?.choice === "keep-oldest");
+          question.options = question.options.filter((option) => option.id !== "merge-family");
+          if (merge) question.options.push({ ...structuredClone(merge), id: "merge-family", label: "Merge this duplicate family" });
+        }
         const ids = idsFor(question);
         const affected = tasks.filter((row) => ids.includes(row.id));
         if (affected.some((row) => row.ownerHold || ledger.held(row))) continue;
@@ -238,7 +280,7 @@ function createAutonomyHost(io) {
         const room = desk.budget(state().decideHistory, key, now());
         if (!room.ok || affected.some((row) => backlog.delegatedRetries(row, now()).length >= 2)) {
           if (room.reason === "hour") break;
-          if (config.level === "elevated") notice("__decided_for_you__", "Decided for you: held a card because its daily decision budget is spent.", "decided");
+          if (config.level === "elevated") await holdBudget(question, config);
           continue;
         }
         if (humanClassify) {
@@ -248,8 +290,8 @@ function createAutonomyHost(io) {
           }
         }
         const options = rows(question.options).filter((option) => {
-          if (humanClassify) return true;
           if (option.action?.choice === "keep-oldest" && config.elevated["drop-owned"] && affected.some((row) => row.origin?.by === "owner" && row.id !== option.action.keepId)) return false;
+          if (humanClassify) return option.action?.action !== "retry-deep" || !config.elevated["pricier-model"];
           const elevated = autonomy.classify({ question, task, option });
           return !elevated || config.elevated[elevated] === false;
         });

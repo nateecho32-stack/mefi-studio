@@ -1272,9 +1272,9 @@ through `OPENCODE_CONFIG`, Claude Code the other through `--mcp-config`
 (`desk-mcp.mjs`) waits for `askDesk`, which shares the queue, the fold and the
 per-run limit with `MEFI_HELP`. The files are removed when the run finishes.
 
-**The desk handles asks.** With `settings.agentBrain.deskResolves` on (the
-Agent brain's Seats tab, Agents › Setup, or the companion's Settings tab),
-every assistant tick runs `assistantDeskResolvePass`: up to three open asks
+**The desk handles asks.** Every assistant tick runs `assistantDecidePass`
+under the global permission mode (`settings.agentBrain.deskResolves` remains
+an Auto/Always ask compatibility alias): up to three open asks
 (issue and family asks) and parked cards go to the desk seat
 (`desk-resolve.cjs`), whose choice is applied through `assistantAnswer`
 (`origin: "desk"`, not recorded as the owner's preference) and posted in the
@@ -1287,8 +1287,9 @@ lifts the owner's stop (`ownerHold`), keeps the loop guard, loop ledger, the dup
 link and the build approval, leaves a parked card two failures from parking
 again, and pins nothing; family and repeating-work answers stamp `by` too, so
 a hold placed for the owner is not the owner's own. Permission, risk and
-owner-only asks never reach the desk, nor does a question the desk itself
-handed on (`context.raisedBy: "desk"`, which triage also never settles). A
+owner-only asks follow their elevated switch; human leftovers can be
+classified into For you to-dos. A question the desk itself
+handed on stays with the owner (`context.raisedBy: "desk"`, which triage also never settles). A
 card is settled at most twice a day, counted on the card (`assistantRetries`)
 and in `assistantState.decideHistory`, so a restart does not reset either
 budget. A card is left for the owner only when the desk's model answered
@@ -1332,3 +1333,25 @@ why in the reply. Chat-started inbox rows promote through the existing locked
 admission path, targeted by a hash of the saved request. A changed brief is
 refused; agent-filed work keeps its normal dispatch approval gate. Companion
 OpenRouter credentials and LM Studio seats count at both availability gates.
+
+### Permission modes and learning — Vibe controls
+
+`renderer/autonomy-ui.js` supplies the saved mode chip and settings to Vibe,
+the companion, Agents Overview and the command palette. Settings include six
+elevated switches, explicit warnings for grants and irreversible changes,
+decision-learning enable/scope/Forget, and model-learning scope/off. Agents'
+routing view shows model outcomes by task type; Vibe Team gives a short line.
+Decided for you opens ledger reasons and Undo beside the For you list.
+
+Vibe uses the host's Needs you queue, including one row per waiting intake
+family. Suggestions highlight an option, offers and Yes/No appear in chat,
+and one-line choices collect text before submission. Errors stay keyed to the
+original item, late replies cannot replace another project's state, and unread
+indicators use message IDs. Orb actions open this same drawer in Vibe and
+retain the originating project. Dispatch success copy uses the host's state.
+
+When an Elevated card exhausts its daily two-settle budget, a ledger-backed
+`autonomyBudgetHold` prevents dispatch across restarts. Undo removes that hold
+without refunding either retry. Studio-classified owner leftovers can reuse
+an existing explicit family decision; dropping owner work still follows its
+elevated switch. The policy is checked again after the pending ledger save.

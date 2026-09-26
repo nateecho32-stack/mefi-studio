@@ -34,6 +34,50 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-26 - Permission modes Phase 4 controls and isolated app proof
+
+Private assist-1, based on 79b39a0 (Phase 3 plus the completed Vibe C/D
+adoption). Added shared permission/learning controls, ledger Why/Undo and
+For you, inline offers/confirmations, one-line answers, suggestions, durable
+budget holds and matching family approval counts. Check and audit pass;
+booklet rebuilt. Fast suite: 3802 passed, 4 skipped, zero failed before the
+last two Vibe regression cases; the final focused cases also pass, including
+late item errors, one-line payloads and unread message IDs beyond sixty.
+
+The new isolated Electron renderer test passes at exactly 1920x1080 / DPR 1,
+with zero renderer errors, network attempts or child launches. It exercises
+mode saving, ledger Undo, Done, suggestion/error/text focus, inline Yes,
+and the grant warning. Screenshots: C:/wt/phase4-preview/verified. The before
+bundle is C:/wt/phase4-before.html; before captures use the same synthetic
+bridge. The earlier unified-render run reproduced the known 600px / 150%
+navigation issue; a compact companion placeholder and rail now address the
+measured overflow. The full final gate is recorded separately below/above.
+
+Real main-process Electron probe: C:/wt/autonomy-app-EL5Bpt. Scratch source,
+temporary userData/home/board database, localhost fake LM Studio and blocked
+external fetches. Only the ordinary startup/watchers were replaced with the
+probe driver; production settings, board gateway, decision pass, answer paths,
+preload and IPC ran unchanged. All four modes matched the expected ordinary
+ask/approval behavior; permission stayed open, Auto/Elevated filed human
+to-dos, and Undo restored run/check counters while retaining spent retries.
+A second Electron process reopened the same scratch stores: Elevated mode,
+two retries and the budget hold survived; Undo released the hold without
+refunding attempts. Logs: C:/wt/phase4-app-result.log and phase4-app-first.log.
+No live data, settings, game files or credentials were copied or changed.
+
+## 2026-09-26 - Shared assistant context Phase 3 isolated full gate
+
+Validated efe812c on fixed sources in assist-g1. Check and audit passed with
+zero findings. Full npm test: Node 3761 passed / 4 skipped / 0 failed;
+Electron 35 passed / 1 skipped / 1 failed; exclusive probes 2 passed and
+occlusion capability-skipped; Python 248 tests with 1 skip; all six path-lock
+checks passed. Command rendering passed. Unified Studio's known narrow
+navigation assertion reproduced at 600px / 100% this run (previously 150%).
+The full command correctly exited 1. Logs: C:/wt/phase3-full.log,
+phase3-gate-check.log and phase3-gate-audit.log. The subsequent C/D adoption
+(79b39a0) preserved permission reservations before deferral; its focused
+sizing, new-app, Vibe, backlog, approval and delegation batch passed 117/117.
+
 ## 2026-09-26 - Vibe Milestone D: task lanes, queue controls and Inspector
 
 C:/wt/vibe-a, branch codex/vibe-c-d, on C commit 8dc02e4. Tasks now switches

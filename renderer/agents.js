@@ -195,6 +195,7 @@
     overlay.append(sheet); document.body.append(overlay);
     move("settings-category-connections", "connections"); move("settings-log", "connections");
     move("settings-routing", "routing"); move("settings-workers", "routing");
+    const skills = node("div"); skills.id = "agents-model-skills"; $("agents-routing").append(skills); window.MefiAutonomy?.skills(skills);
     move("settings-automation", "behavior"); move("settings-automation-behavior", "behavior");
     for (const category of ["connections", "models", "automation"]) { document.querySelector(`[data-settings-category="${category}"]`)?.remove(); if (category !== "connections") $(`settings-category-${category}`)?.remove(); }
     $("settings-category-connections")?.querySelector(".settings-category-head")?.remove();
@@ -244,6 +245,7 @@
     const status = node("p"); status.id = "agents-ready"; ready.append(status, button("Check connections", () => go("agents", { section: "setup", pane: "connections" })));
     const operations = card("Studio controls", "Queue controls apply across projects. Pausing leaves current jobs to finish.");
     for (const [key, title] of [["newWork", "Allow new work"], ["enabled", "Run the queue"]]) operations.append(queueToggle(key, title));
+    const permissions = node("div"); permissions.id = "agents-autonomy"; operations.append(permissions); window.MefiAutonomy?.mount(permissions);
     operations.append(button("Follow live work", () => go("command")));
     cards.append(team, ready, operations); root.append(cards);
     const flow = card("From your idea to verified work", "Work is reported back to the Studio assistant, with its evidence and anything that needs you.");

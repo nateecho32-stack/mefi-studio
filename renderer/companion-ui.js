@@ -194,13 +194,8 @@
     });
     const growth = node("span", "companion-growth"); growth.setAttribute("aria-hidden", "true"); for (let i = 0; i < 3; i++) growth.append(node("i")); orb.append(growth);
     for (const [key, label] of [["newWork", "Allow new work"], ["enabled", "Run the queue"], ["proactive", "Proactive suggestions"]]) addField(key, label, null, (value) => window.MefiAgentControls?.set(key, value));
-    // The desk settles asks for the owner (main.cjs assistantDeskResolvePass).
-    addField("deskResolves", "Let me handle asks for you", null, async (value) => {
-      const result = await window.mefiStudio?.brainSettingsSave?.({ deskResolves: value });
-      if (result?.ok === false) throw new Error(result.error || "That could not be saved.");
-      if (latest?.state) latest.state.deskResolves = value;
-      window.MefiCompanion?.refresh();
-    });
+    const permissions = document.createElement("div"); permissions.id = "companion-autonomy";
+    panes.settings.append(permissions); window.MefiAutonomy?.mount(permissions, { full: true });
     addField("roaming", "Roam around the studio", null, (value) => preference({ roaming: value }));
     addField("pinned", "Pin companion position", null, (value) => preference({ pinned: value, anchor: anchor() }));
     addField("bubbles", "Show speech bubbles", null, (value) => preference({ bubbles: value }));

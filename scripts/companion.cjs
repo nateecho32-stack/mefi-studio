@@ -85,7 +85,7 @@ function taskNeed(task, now) {
   // A hold (the owner's stop, or the keeper's loop hold) is listed before a
   // park: a card both held and parked must read as held, or whoever re-arms
   // parked cards (the desk) would lift the owner's own stop.
-  if (isObject(task.ownerHold) || isObject(task.loopGuard)) return { kind: "held", at: num(task.ownerHold?.at) || num(task.loopGuard?.at) || num(task.updatedAt) };
+  if (isObject(task.ownerHold) || isObject(task.loopGuard) || isObject(task.autonomyBudgetHold)) return { kind: "held", at: num(task.ownerHold?.at) || num(task.loopGuard?.at) || num(task.autonomyBudgetHold?.at) || num(task.updatedAt) };
   if (parked && !cooling) return { kind: "parked", at: num(task.parkedAt) || num(task.lastAttempt?.at) || num(task.updatedAt) };
   if (task.needsApproval || stageName(task) === "approval") return { kind: "approval", at: num(task.updatedAt) || num(task.createdAt) };
   return null;
@@ -217,9 +217,20 @@ function queue({ questions = [], tasks = [], now, project = null } = {}) {
         .map((option) => ({ id: String(option.id), label: clip(option.label, 80) || String(option.id), ...(option.text ? { text: true } : {}), ...(option.recommended ? { recommended: true } : {}) })),
     });
   }
+  const approvalFamilies = new Map();
   for (const task of asArray(tasks)) {
     const need = taskNeed(task, at);
     if (!need || asked.has(String(task.id))) continue;
+    const parentId = need.kind === "approval" && task.delegatedFrom?.intake ? task.parentTaskId || task.delegatedFrom.parentTaskId : null;
+    if (parentId) {
+      if (!approvalFamilies.has(parentId)) {
+        const parent = asArray(tasks).find((row) => row?.id === parentId);
+        const family = { id: `approval:${parentId}`, kind: "approval", taskId: parentId, memberIds: [], title: clip(parent?.title, LIMITS.title) || "Your request", project, at: need.at, actions: [{ id: "approve", label: "Review these steps" }] };
+        approvalFamilies.set(parentId, family); items.push(family);
+      }
+      approvalFamilies.get(parentId).memberIds.push(String(task.id));
+      continue;
+    }
     items.push({
       id: `${need.kind}:${task.id}`,
       kind: need.kind,

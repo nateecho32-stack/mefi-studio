@@ -75,7 +75,7 @@ function canDelegate(question, { elevated = {}, affirmed = false, task = null, o
 
 function route({ level = DEFAULT_LEVEL, elevated = {}, item = {}, task = null, accepted: isAccepted = false, confidence = null, learned = null, option = null, affirmed = false } = {}) {
   if (!LEVELS.includes(level)) level = DEFAULT_LEVEL;
-  if (task?.ownerHold || task?.loopGuard?.by === "owner" || item.context?.undoneFrom) return "owner";
+  if (task?.ownerHold || task?.autonomyBudgetHold || task?.loopGuard?.by === "owner" || item.context?.undoneFrom) return "owner";
   const question = item.question ?? (item.options ? item : null);
   const category = classify({ question, task, option, approval: item.kind === "approval" ? item : null, parked: item.kind === "parked" ? item : null });
   if (category && elevated[category] !== false) return "owner";

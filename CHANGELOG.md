@@ -7,6 +7,15 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- Mefi's permission chip, elevated switches and learning controls now share
+  one saved state across Vibe, companion settings, Agents and the palette.
+  Vibe shows automatic decisions with Why/Undo, human to-dos, suggestions,
+  inline offers and confirmations, and the accepted-task approval label.
+  One-line answers collect text; delayed errors stay on their item; unread
+  dots follow message IDs; dispatch messages report actual holds and pauses.
+  Approval families share one Needs you count. Elevated budget exhaustion
+  records a durable, undoable hold without spending a third settle.
+
 - Chat and the desk now share recent decision reasons, pending to-dos, learned
   preferences, task desk answers and the owner's recent messages. Named chat
   approvals follow the permission mode and saved task scope; immediate chat

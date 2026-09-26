@@ -1901,11 +1901,17 @@
   // approval opens the task so its brief is read before the build is approved.
   async function act(item, action, text = null) {
     const api = bridge();
+    const projectId = item.projectId || companion.state?.projectId || window.MefiWorkspace?.activeProjectId?.();
+    if (window.MefiVibe?.mode?.() === "vibe") {
+      toggleCompanion(false);
+      window.MefiVibe.openNeed({ kind: item.kind === "question" ? "question" : item.kind === "approval" ? item.memberIds?.length ? "family" : "approval" : "blocked", id: item.kind === "question" ? item.id : item.taskId, projectId });
+      return;
+    }
     let result = null;
     try {
-      if (item.kind === "question") result = await api?.assistantAnswer?.({ id: item.id, optionId: action.id, ...(text ? { text } : {}) });
-      else if (action.id === "retry") result = await api?.tasksAction?.({ taskId: item.taskId, action: "retry" });
-      else { toggleCompanion(false); window.MefiTasks?.open?.({ taskId: item.taskId }); return; }
+      if (item.kind === "question") result = await api?.assistantAnswer?.({ id: item.id, optionId: action.id, projectId, ...(text ? { text } : {}) });
+      else if (action.id === "retry") result = await api?.tasksAction?.({ taskId: item.taskId, projectId, action: "retry" });
+      else { toggleCompanion(false); window.MefiTasks?.open?.({ taskId: item.taskId, projectId }); return; }
     } catch (error) {
       result = { ok: false, error: String(error?.message ?? error) };
     }

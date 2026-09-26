@@ -1,5 +1,11 @@
 # Code map
 
+- `renderer/autonomy-ui.js`: shared permission controls, elevated warnings,
+  decision learning, model-strength views and the Why/Undo/For you panel.
+- `tests/autonomy_ui.test.mjs`: saved controls, warnings, learning scopes,
+  scoped history actions and failed saves. `vibe_pipeline` also exercises
+  one-line suggestions, item-bound errors and unread IDs beyond sixty replies.
+
 ## Permission decisions
 
 - `scripts/task-oversight.cjs`: mode-aware chat gates, local answer/Undo intent,

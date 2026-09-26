@@ -70,6 +70,13 @@ configuration. Changes use the existing project/default scope and Apply flow.
 
 ## Permission modes
 
+The composer chip, Vibe Settings, companion Settings, Agents Overview and
+the permission-mode palette action edit the same global policy. Vibe's
+Decided for you panel explains choices and exposes Undo plus the For you
+list. Suggestions highlight an offered answer; one-line options focus a
+text field. Offers and Yes/No confirmations also work inside the conversation.
+Model strengths appear in Agents routing and as one line in Vibe's Team.
+
 The global `settings.autonomy` stores a mode and six elevated switches. Always
 ask computes a suggestion; Accept per task delegates worker questions only
 within an accepted scope; Auto acts at confidence 0.7 or above; Elevated only
@@ -507,7 +514,8 @@ proposal is left out and counted in its note.
   scanned plan documents. It acts on tasks when you plainly ask (start,
   retry, stop one worker, mark done, add a note for the next worker, file new
   work) and turns anything you did not plainly ask for into an Ask card you
-  confirm; approvals and permission decisions are always yours to click. What
+  confirm. Named approvals and answers also follow the selected permission
+  mode in chat; enabled elevated requests remain yours to review. What
   your tasks do arrives in the thread as one line per task that updates in
   place (started, verifying, verified, retrying, parked), and cards only you
   can move are rolled into one "needs you" line. Without an AI key, plain

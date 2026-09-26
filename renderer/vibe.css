@@ -640,3 +640,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 .vibe-notes-link:hover { text-decoration: underline; text-underline-offset: 3px; }
 .vibe-notes-link .glyph { width: 13px; height: 13px; }
 @media (max-width: 560px) { .vibe-notes-modes { grid-template-columns: 1fr; } .vibe-notes-foot { flex-wrap: wrap; } }
+.vibe-chat-choices { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+.vibe-inline-confirm { border: 1px solid #96c4cf44; }
+.vibe-inline-error { color: #f3b2a8; font-size: 12px; }
+.vibe-suggestion { padding: 12px; border-radius: 12px; background: #81b9c516; color: #b7dfe6; font-size: 13px; line-height: 1.5; }
+@media (max-width: 600px) { .vibe-compose-foot { flex-wrap: wrap; } #vibe-autonomy-control { margin-right: auto; } }

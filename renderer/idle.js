@@ -2398,10 +2398,11 @@
           desc.textContent = option.description;
           button.append(desc);
         }
-        button.addEventListener("click", () => void answerQuestion(question.id, option.id, null, button));
+        button.addEventListener("click", () => { if (option.text || option.action?.action === "instruct") { selectedTextOption = option.id; input.placeholder = "Your one-line answer…"; input.focus(); } else void answerQuestion(question.id, option.id, null, button); });
         options.append(button);
       }
       card.append(options);
+      let selectedTextOption = null;
       const custom = document.createElement("form");
       custom.className = "ask-custom";
       const input = document.createElement("input");
@@ -2416,7 +2417,7 @@
       custom.addEventListener("submit", (event) => {
         event.preventDefault();
         const text = input.value.trim();
-        if (text) void answerQuestion(question.id, null, text, send);
+        if (text) void answerQuestion(question.id, selectedTextOption, text, send);
       });
       card.append(custom);
       // Whether a decision reaches you at all is a node in the live brain

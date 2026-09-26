@@ -451,7 +451,7 @@ test("the chat's needsYou counts exactly what the owner's badge counts", async (
   const held = { id: "t_held", title: "Held card", status: "open", ownerHold: { at: 2, reason: "stopped by you" } };
   const tasks = [parked, ready, held];
   const env = vm.createContext({
-    Date, assistantState: { questions }, TASKS_PATH: "tasks", companionModule: companion,
+    Date, assistantState: { questions }, TASKS_PATH: "tasks", companionModule: companion, backlog, autopilot: { autoBuild: true },
     getEyes: async () => ({ readJson: async () => structuredClone(tasks) }),
     projects: { current: () => ({ id: "fixture", name: "Fixture" }) },
     assistantClip: (text, max) => String(text ?? "").slice(0, max),

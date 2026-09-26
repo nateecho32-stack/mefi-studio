@@ -18,7 +18,7 @@
   const read = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
   const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = String(text); return node; };
 
-  const TITLES = { tasks: "Tasks", plans: "Plans", ideas: "Ideas", team: "Team", settings: "Settings", newapp: "New app" };
+  const TITLES = { tasks: "Tasks", plans: "Plans", ideas: "Ideas", team: "Team", settings: "Settings", decisions: "Decided for you", newapp: "New app" };
   const EMPTY = { projectId: null, projectName: "", tasks: [], needs: [], running: [], checking: [], next: [], backlog: null, status: {}, assistant: {}, ideas: [], plans: [], gate: null, companion: "Mefi", person: "" };
   const state = { kind: null, stack: [], data: EMPTY, busy: false, folds: { needs: true, active: true, done: false }, team: null, teamAt: 0, teamFlight: null, signature: "", noteTone: "", draftApp: { name: "", about: "" } };
   state.taskView = read("mefiStudio.vibe.taskView") === "lanes" ? "lanes" : "list";
@@ -40,7 +40,7 @@
     note("");
     state.signature = "";
     render();
-    if (kind === "team") void loadTeam();
+    if (kind === "team") { void loadTeam(); void window.MefiAutonomy?.refresh?.({ learning: true }); }
     vibe()?.paintDock?.();
     requestAnimationFrame(() => (aside.querySelector(".vibe-panel-body button, .vibe-panel-body input") || $("close"))?.focus?.({ preventScroll: true }));
     return true;
@@ -162,7 +162,7 @@
       const result = await call();
       if (!result || result.ok === false) throw new Error(result?.error || "That didn't go through.");
       state.busy = false;
-      note(success, "good");
+      note(window.MefiAutonomy?.outcome?.(result, success) || result.dispatch?.message || success, result.dispatch?.held || result.dispatch?.paused ? "warn" : "good");
       after?.(result);
       await vibe()?.refresh?.();
       state.signature = ""; render();
@@ -487,6 +487,7 @@
     const status = el("div", `vibe-panel-status${gate ? " is-held" : running.length ? " is-live" : ""}`);
     status.append(el("i", "vibe-gate-dot"), el("span", "", gate ? gate.title : running.length ? `${running.length} agent${running.length === 1 ? " is" : "s are"} building.` : "The agents are ready. Nothing is building right now."));
     body.append(status);
+    body.append(el("p", "vibe-panel-hint", window.MefiAutonomy?.best?.() || "Model strengths appear as your team finishes work."));
     const controls = [];
     if (gate?.key === "key") controls.push({ label: "Connect an AI", primary: true, run: () => { close({ quiet: true }); go("agents", { section: "setup", pane: "connections" }); } });
     else if (gate && ["held", "paused"].includes(gate.key)) controls.push({ label: gate.key === "held" ? "Start agents" : "Resume", primary: true, run: () => act(() => api().assistantControl("start-work"), "Agents started. They pick up what's queued.") });
@@ -515,6 +516,7 @@
 
   // ---- settings ---------------------------------------------------------------------
   function settings(body) {
+    const permissions = el("div"); body.append(permissions); window.MefiAutonomy?.mount(permissions, { full: true });
     const data = state.data;
     const mode = el("div", "vibe-set");
     mode.append(el("span", "vibe-set-label", "Studio mode"));
@@ -688,8 +690,10 @@
     if (state.kind === "team") return [data.projectName, running, data.gate, state.teamAt];
     if (state.kind === "settings") return [data.projectName, data.person, data.companion, document.documentElement.dataset.studioTheme];
     if (state.kind === "newapp") return [data.projectName];
+    if (state.kind === "decisions") return [data.projectId, data.assistant.decisions, data.assistant.todos];
     return [];
   }
+  window.addEventListener("mefi:autonomy-changed", () => { state.signature = ""; if (["settings", "decisions", "team"].includes(state.kind)) render(); });
   function render() {
     if (aside.hidden || !state.kind) return;
     const view = top();
@@ -713,7 +717,8 @@
     else if (state.kind === "team") team(body);
     else if (state.kind === "settings") settings(body);
     else if (state.kind === "newapp") newAppForm(body);
-    $("full").hidden = state.kind === "newapp";
+    else if (state.kind === "decisions") window.MefiAutonomy?.history(body, { ...state.data.assistant, ...window.MefiAutonomy?.state?.(), projectId: state.data.projectId });
+    $("full").hidden = ["newapp", "decisions"].includes(state.kind);
     $("full").onclick = () => full();
   }
   // Full view: the Build page for the same thing, inside Vibe's rail.

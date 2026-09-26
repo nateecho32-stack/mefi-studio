@@ -261,3 +261,16 @@ test("a card both stopped and parked reads as held, so nothing re-arms it past t
   assert.deepEqual(items.map((item) => item.id), ["held:t_both", "held:t_loop_parked"]);
   assert.ok(items.every((item) => item.project === "2d Trippy Hell" && !("projectId" in item)), "named by the project, never by its id");
 });
+
+test("intake step approvals share one companion family row and keep other approvals separate", () => {
+  const tasks = [
+    { id: "parent", title: "Build the garden", status: "open" },
+    { id: "one", title: "First step", status: "open", needsApproval: true, parentTaskId: "parent", delegatedFrom: { intake: true } },
+    { id: "two", title: "Second step", status: "open", needsApproval: true, parentTaskId: "parent", delegatedFrom: { intake: true } },
+    { id: "other", title: "Separate task", status: "open", needsApproval: true },
+  ];
+  const result = queue({ tasks, now: NOW });
+  assert.equal(result.counts.total, 2);
+  assert.equal(result.items.find((row) => row.taskId === "parent").title, "Build the garden");
+  assert.deepEqual(result.items.find((row) => row.taskId === "parent").memberIds, ["one", "two"]);
+});
