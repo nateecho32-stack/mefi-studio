@@ -42,6 +42,18 @@ Linux cloud container, Node 24, no node_modules (Electron suites not run), on a1
 
 Validation: npm run check ok; npm run test:fast 3401 pass, 0 fail, 15 skipped; Python contracts 248 ok (3 skipped); npm run audit ok, 0 findings. New tests in agent_issues and assistant_questions cover the cause-named title, the recommendation after retries, the offer title and the 24-hour quiet period.
 
+## 2026-09-25 - Vibe runs on its own
+
+Linux cloud container, Node 22 (the repo asks for 24), no Electron installed, shared tree at 1b4786a plus this uncommitted work. Audit of what stops Vibe's pipeline without a Build surface. Blockers found: a launch left held had no Start agents in Vibe; a pause or a missing AI had no Resume or Connect; Verify-first approvals and stuck tasks needed the Task board; checking work was listed as needing you; and Build it promised a start that could not happen. Fixes: a Vibe gate banner (assistantControl start-work, or Agents › Setup › Connections); the Needs-you drawer now also approves builds (backlogControl approve with the row's buildScope), turns Verify first off (assistantAutopilot), and retries, finishes or drops stuck tasks (tasksAction); checking tasks moved to Building now; honest Build it feedback; a throttled backlog re-read on pushes; MefiVibe.snapshot(). Checked in Chromium against npm run start:web with a stateful stubbed bridge (held launch, Verify first, one approval, one looping task, one checking, one decision). Start agents, Build it while held, approve, retry, answer and the Verify-first switch all made the expected host calls, in order. New tests/vibe_pipeline.test.mjs runs the real vibe.js in the fake DOM: 5 tests, all 5 fail against the previous renderer. All 174 registry destinations stay in Vibe. npm run build-booklet ok. npm run check ok (141 targets, 302 specs). npm run audit 0 errors / 0 warnings. npm run test:fast 3413 pass / 0 fail / 15 skipped. Full npm test (Electron stage and Python contracts) was not run: this container has no Electron.
+
+## 2026-09-25 - Vibe menus, decisions and layout
+
+Linux cloud container, Node 22 (the repo asks for 24), no Electron installed, shared tree at 206b9ca plus this uncommitted work. Changes in Vibe mode: decisions under Needs you are answered in a Vibe drawer through assistantAnswer; every menu takes Vibe's shape; Search and Shortcuts list Home once as Vibe; Settings gains an in-place Studio mode switch and relabels the launch switch; the dock floats over the page; sheets on the Vibe page use the full width. Checked in Chromium against npm run start:web, with a stubbed window.mefiStudio holding a sample project, running work and two decisions. Screenshots covered Search, Shortcuts, the project panel, the Agents hover menus, Settings in both modes, Command's View and Agents pop-overs, Tasks, Plans, the Vibe page and the decision drawer at 1440x900 and 760x720. Both decisions were answered from the drawer; it advanced, then closed, and the lanes and status pill updated. The Settings switch flipped the frame both ways without leaving Settings. All 174 registry destinations opened from Vibe stayed in Vibe mode. tests/vibe_frame.test.mjs now has 10 tests. npm run build-booklet ok. npm run check ok (141 targets, 301 specs). npm run audit 0 errors / 0 warnings. npm run test:fast 3408 pass / 0 fail / 15 skipped. Full npm test (Electron stage and Python contracts) was not run: this container has no Electron.
+
+## 2026-09-25 - Vibe mode keeps every click in Vibe
+
+Linux cloud container, Node 22 (the repo asks for 24), no Electron installed, shared tree at a14df38 plus this uncommitted work. In Vibe mode every other page now opens inside Vibe's own rail (#vibe-rail) instead of Build's menu. Home, leaving Command and Back on a Work page return to Vibe. Build's section bar no longer covers Vibe's top buttons, and pages no longer show Vibe through their glass. A restored session or closing Appearance no longer opens Build's Home. Checked in a browser against npm run start:web with Playwright and Chromium. Every one of the 172 registry destinations opened from Vibe stayed in Vibe mode with neither Build's rail nor its Home showing. Dock, lanes, rail, Command exit, Tasks Back and the Build/Vibe round trip were also clicked by hand. New tests/vibe_frame.test.mjs: 8 tests, 7 of which fail against the old renderer. npm run build-booklet ok. npm run check ok (141 targets, 301 specs). npm run audit 0 errors / 0 warnings. npm run test:fast 3406 pass / 0 fail / 15 skipped. Full npm test (Electron stage and Python contracts) was not run: this container has no Electron.
+
 ## 2026-09-25 - Planning pipeline review fixes
 
 Windows 11, local Electron, Node 24, shared tree at 5f84d28 plus this uncommitted work. This is a review of the Plans pipeline (scripts/planning.cjs, scripts/planning-service.cjs, renderer/planning.js). Fixes:
@@ -412,7 +424,6 @@ created walkthrough companion ID; the final audit is clean.
 Logs: %TEMP%/mefi-agent-compact-{check,audit,render,full-test}.log.
 Captures/report: %TEMP%/mefi-agent-compact/. No live application data or
 portable data was changed.
-
 ## Read Before Any Tests
 
 This is the test guide for the standalone Mefi's Studio AI+ repository. Run all commands from this repository root.

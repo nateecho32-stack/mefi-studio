@@ -260,6 +260,9 @@
     </form>
     <div id="vibe-sparks" class="vibe-sparks" role="group" aria-label="Ways to start"></div>
     <p id="vibe-feedback" class="vibe-feedback" role="status" aria-live="polite"></p>
+    <!-- What stops the agents from working on their own, and the one control
+         that fixes it: Start agents, Resume, Connect an AI (vibe.js). -->
+    <div id="vibe-gate" class="vibe-gate" role="status" aria-live="polite" hidden><i class="vibe-gate-dot" aria-hidden="true"></i><span class="vibe-gate-copy"><b id="vibe-gate-title"></b><span id="vibe-gate-text"></span></span><button id="vibe-gate-action" class="vibe-btn primary" type="button" hidden></button></div>
     <section class="vibe-lanes" aria-label="What is happening">
       <article class="vibe-lane" data-lane="building" aria-labelledby="vibe-lane-building-title">
         <header><span class="vibe-lane-mark" aria-hidden="true"></span><h2 id="vibe-lane-building-title">Building now</h2><span id="vibe-count-building" class="vibe-count"></span></header>
@@ -292,7 +295,33 @@
     <ol id="vibe-thread" class="vibe-thread"></ol>
     <p class="vibe-chat-note">Reply in the box in the middle. Enter talks, Ctrl + Enter builds.</p>
   </aside>
+  <!-- A decision from Needs you, answered without leaving Vibe (vibe.js). -->
+  <aside id="vibe-ask" class="vibe-chat vibe-ask" aria-labelledby="vibe-ask-title" hidden>
+    <header class="vibe-chat-head"><div><small id="vibe-ask-kicker">Needs you</small><h2 id="vibe-ask-title">A decision</h2></div><button id="vibe-ask-close" class="vibe-icon" type="button" aria-label="Close the decision" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
+    <div id="vibe-ask-body" class="vibe-ask-body"></div>
+    <footer class="vibe-ask-foot"><span id="vibe-ask-note" class="vibe-ask-note" role="status" aria-live="polite"></span><button id="vibe-ask-watch" class="vibe-ask-link" type="button">Open in Watch</button></footer>
+  </aside>
 </section>
+<!-- Vibe's frame for every other page (renderer/vibe.js). In Vibe mode this
+     rail stands in for Build's #app-rail on Tasks, Plans, Command, Settings
+     and the rest, so leaving the front door never lands in the Build view; the
+     spark at the top goes back to Vibe and only the switch at the foot leaves
+     the mode. Hidden in Build, and on the Vibe page itself, where the dock is. -->
+<nav id="vibe-rail" class="vibe-rail" aria-label="Vibe" hidden>
+  <button id="vibe-rail-home" class="vibe-rail-home" type="button" data-nav="vibe" title="Back to Vibe (H)"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Vibe</span></button>
+  <div class="vibe-rail-items">
+    <button type="button" data-nav="command" data-vibe-section="agents" title="Watch the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span></button>
+    <button type="button" data-nav="tasks" data-vibe-section="work" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
+    <button type="button" data-nav="plans" title="Plan an idea before building it (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span></button>
+    <button type="button" data-nav="ideas" title="Ideas the agents noticed (I)"><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg><span>Ideas</span><span class="count" data-badge="ideas" hidden></span></button>
+    <button type="button" data-nav="agents" title="Your agents, models and usage"><svg class="glyph" aria-hidden="true"><use href="#g-agents"/></svg><span>Agents</span></button>
+    <button type="button" data-nav="palette" title="Search everything (Ctrl K)"><svg class="glyph" aria-hidden="true"><use href="#g-search"/></svg><span>Search</span></button>
+  </div>
+  <div class="vibe-rail-foot">
+    <button type="button" data-nav="studio" title="Settings (Ctrl ,)"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg><span>Settings</span></button>
+    <button id="vibe-rail-build" type="button" data-ui-mode="build" title="Switch to Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button>
+  </div>
+</nav>
 <!-- The one-time "what's new" card an existing user sees on the first launch
      with Vibe (renderer/vibe.js decides; it never shows on a first run). -->
 <div id="vibe-notes" class="vibe-notes" hidden>
@@ -542,9 +571,14 @@
           <div class="settings-you-switches">
             <label class="switch" id="settings-companion-motion" title="Your companion floats and blinks beside the conversation. Calm and Off keep it still."><input id="workspace-motion" type="checkbox" checked><span class="track"></span><span>Let your companion move</span></label>
             <label class="switch" title="Blur what sits behind every sheet, menu and Home panel. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
-            <label class="switch" title="On: every launch lands on Your workspace. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span>Open Workspace on launch</span></label>
+            <label class="switch" id="idle-home-switch" title="On: every launch lands on Your workspace. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Workspace on launch</span></label>
           </div>
-          <p class="muted">When disabled, Studio opens Command view after the project chooser.</p>
+          <p class="muted" id="idle-home-hint">When disabled, Studio opens Command view after the project chooser.</p>
+          <!-- The Vibe / Build choice, switched in place (vibe.js keeps you on Settings). -->
+          <div class="settings-mode-row" id="settings-mode">
+            <span class="settings-mode-text"><b>Studio mode</b><span id="settings-mode-hint">Vibe is the calm front door. Build is the full studio.</span></span>
+            <div class="mode-switch" role="radiogroup" aria-label="Studio mode" data-mode="vibe" data-mode-stay><i class="mode-thumb" aria-hidden="true"></i><button type="button" role="radio" data-ui-mode="vibe" aria-checked="true" title="Vibe: the calm front door"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Vibe</span></button><button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button></div>
+          </div>
         </details>
 <details class="settings-optional settings-card" id="settings-community"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-community"/></svg></span><span class="settings-summary-text"><b>Community</b><span>Discord membership and the Void theme collection</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
           <section class="community-showcase" id="community-showcase" aria-labelledby="community-showcase-title"><div class="community-showcase-copy"><span class="community-showcase-kicker">Void collection</span><strong id="community-showcase-title">Four themes, three node styles</strong><span class="community-showcase-state" id="community-showcase-state" data-unlocked="false">For members of the Void Engine Discord</span><button type="button" class="primary mini community-choose" id="community-choose" title="Open Appearance at the Void collection" hidden>Choose a Void theme</button></div><div class="community-showcase-items" id="community-showcase-items" aria-hidden="true"></div></section>

@@ -8,11 +8,44 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- Vibe mode stays Vibe: every page opened from it (Tasks, Plans, Ideas,
+  Agents, Command, Settings, the model pages, Search results and links inside
+  them) opens inside Vibe's own rail instead of Build's menu, with the way
+  back to Vibe always at the top and the Build switch as the only exit. Build's
+  section bar no longer covers Vibe's top buttons, pages no longer show Vibe
+  through their glass, leaving Command or pressing Back on a Work page returns
+  to Vibe instead of Build's Agents page or nowhere, and a restored session or
+  closing Appearance never reopens Build's Home.
+- Vibe: answer decisions without leaving it. **Answer** under Needs you opens
+  a drawer with the question, the task it blocks, the agent's last lines and
+  its options (the recommended one first), or takes your own words, then
+  moves on to the next decision.
+- Vibe can run on its own: everything that stops the agents is shown and
+  cleared from Vibe. A banner under the box offers **Start agents** after a
+  launch that left them off, **Resume** when new work is paused, and
+  **Connect an AI** when none is. Under Verify first, **Review** shows a
+  build's brief and approves it (or turns Verify first off); a stuck task
+  shows why and can be tried again, resumed, marked done or dropped. The
+  drawer steps through each in order.
+- Vibe mode's menus match Vibe: Search, Shortcuts, the project panel, the
+  section bar and its hover menus, Command's pop-overs, dropdowns and toasts
+  are rounder, denser glass with pill selection. Search and Shortcuts list
+  Home once, as Vibe on `H`. Settings › General gains a **Studio mode** switch
+  that changes mode without leaving Settings, and its launch switch reads
+  **Open Vibe on launch** in Vibe mode.
 - Plans: **Archive plan** and **Restore plan**. An archived plan is read-only,
   folds under **Show archived** in the list, and leaves the assistant's plan
   summary and the Analyzer. The 300-plan cap now counts only plans in play.
 
 ### Fixed
+- Vibe: **Build it** no longer promises the task will start when the agents
+  are off, paused or have no AI; it says so and points at the control that
+  starts them. Work the checker is still verifying shows under Building now
+  as "checking its work" instead of under Needs you, and stuck tasks and
+  pending approvals are listed one by one instead of as bare counts.
+- Vibe: the dock floats over the page instead of cutting the lanes off at a
+  hard band, sheets opened on the Vibe page no longer leave a strip at the
+  left edge, and the page under Vibe no longer shows its scroll arrow.
 - Plans: one bad reference in Mefi's suggested questions no longer throws away
   the whole batch. Unknown prerequisites are dropped, a stale unknown is left
   alone, and malformed proposals are skipped and counted.

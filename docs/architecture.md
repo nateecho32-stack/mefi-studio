@@ -94,6 +94,45 @@ configuration. Changes use the existing project/default scope and Apply flow.
 
 ### Getting around
 
+- Studio has two modes, switched at the top of Vibe, from the foot of Vibe's
+  rail, or with **Switch to Build** in Search. **Vibe** is the calm front
+  door: one box to talk it over with Mefi or build it as a task, what is
+  building, what needs you and what just finished, and a dock to Watch
+  (Command), Tasks, Plans, Ideas, Agents and Search. **Build** is the full
+  studio described below. The choice is remembered across launches.
+- Nothing you click in Vibe mode leaves it. Every other page, whether opened
+  from the dock, a lane, Search, a key, the companion or a link inside
+  another page, opens inside Vibe's own narrow rail instead of Build's menu:
+  the spark at its top returns to Vibe, and the Build switch at its foot is
+  the only way out of the mode. Home is Vibe, so **H**, every Home button and
+  a restored session land there. Leaving Command goes back to the page it was
+  opened from, and **Back** on a Work page with nothing behind it returns to
+  Vibe. Build's classic-tabs choice is kept for Build; Vibe always uses its rail.
+- **Answer** on a decision under Needs you opens it beside Vibe: what is asked,
+  the task it blocks, the last lines the agent saw, and its options with the
+  recommended one first, or a box for your own words. An answer goes through
+  the same call as Command's Ask tab, then the drawer moves to the next
+  decision or closes. **Open in Watch** shows the decision in Command instead.
+- Vibe can run on its own. When something holds every agent back, a banner
+  under the box names it and carries its fix: **Start agents** after a launch
+  that left them off (the launch screen's plain Open), **Resume** when new
+  work is paused, **Connect an AI** when none is connected. **Build it** says
+  when its task will wait for that. Needs you lists only what cannot move
+  without you, one row each: decisions, builds waiting for your go-ahead under
+  Verify first (the drawer shows the brief, approves it with its reviewed
+  scope, or turns Verify first off), and stuck tasks (the drawer shows why and
+  offers Try again, Resume or Run anyway, It's done and Drop it). Work the
+  checker is still verifying sits under Building now as "checking its work".
+  Every action uses the host call its Build surface uses, and the drawer moves
+  forward to the next thing waiting. `MefiVibe.snapshot()` reads the same state
+  (what holds the agents, what needs you, what is building) for tests and
+  automation.
+- In Vibe mode every menu takes Vibe's look (rounder, denser glass, an accent
+  rim, pill selection): Search, Shortcuts, the project panel, the section bar
+  and its hover menus, Command's pop-overs, dropdowns and toasts. Search and
+  Shortcuts list Home once, as **Vibe** on `H`. Settings › General has a
+  **Studio mode** switch that changes mode in place, and the launch switch
+  there reads **Open Vibe on launch** (off opens Watch).
 - Click the companion or press **Escape** on a workspace page to open its
   compact bubble menu over the current view. The center returns to Studio;
   the surrounding bubbles open conversation, friends and listening rooms,

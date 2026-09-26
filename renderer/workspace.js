@@ -1037,6 +1037,9 @@
     else start();
   }
   function enter() {
+    // In Vibe mode Home is Vibe, whoever asks: a restored session, Appearance
+    // closing or a direct caller lands there, never on Build's Home.
+    if (window.MefiVibe?.mode?.() === "vibe") return window.MefiVibe.enter();
     init(); window.MefiIdle?.exit?.(); $("layer").hidden = false;
     document.body.classList.add("workspace-active");
     showBackdrop();

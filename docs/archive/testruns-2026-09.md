@@ -6,6 +6,49 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-24 afternoon - Dynamic 3D Overview keeps the main tree framed (live tree camera, implementation and motion validation)
+
+Added a bounded pan/scale lens to automatic 3D Overview through camera-tour.js. It uses the current projected bounds of every stable branch, borrows the demo tour's damping, and clamps the whole tree inside the measured panel-free rectangle. Projection and inverse projection share the offset; layout anchors, saved camera settings and existing appearance controls are retained. Paused Spin, selection/search, manual navigation and reduced motion stop roaming. Fit and layout changes reset the lens; the Appearance preview restores it. Updated architecture, code map, changelog and generated booklet.
+
+PASS: npm run build-booklet, npm run check and npm run audit (zero findings on the final audit). The first audit caught a concurrently edited companion-hub DOM lookup; its owner corrected it before the final build/check/audit. PASS: 162 focused camera-tour/Command graph/director/motion/visual tests. Added multi-size framing, gradual pan/zoom, pause/reduced-motion, anchor stability, projection round-trip, live-arrival and manual-camera regressions.
+
+PASS: isolated synthetic Electron capture, 122 sampled states and 100 captured frames. A roughly 49-second automatic recording kept the whole main tree in bounds with unchanged world anchors. All five arrangements were checked at 1024x768, 600x560 and 1024x768 at 125% scaling, plus the 1440x900 recording. Clicking a moved node selected the right task; paused Spin and reduced motion held framing still. No renderer errors, network requests or worker launches. Initial scratch-capture failures were harness issues (calling an unexported Zen setter, then reading between a live rebuild and its next paint), corrected without application changes. Recordings, screenshots, raw report and review page remain outside Git in %TEMP%/mefi-node-refresh/overview/. The earlier compact-label and transient callout-overlap findings are separate from this camera change.
+
+Full npm test was not a clean pass: parallel stage 3315 pass / 1 fail / 4 skipped, Electron lane 32 pass / 1 fail / 1 skipped, eyes-toggle 1/1 and occlusion 1 pass / 1 skip (probe window closed externally). The startup unit-test child stalled without CPU progress for several minutes; only that verified child of this run was stopped so remaining stages could finish. It passed 9/9 on an immediate bounded solo retry. The toolbar CSS contract failed against an in-flight stylesheet and passed 10/10 on solo retry. The runner detected concurrent source changes in both failing stages. Real Command interaction passed in the full run (66.9 s), including navigation and agent movement. Logs: %TEMP%/mefi-overview-{build,check,audit,focused,render,full-test,startup-retry,toolbar-retry}.log.
+
+The full gate completed: Python contracts 248/248 passed (312 s reported by unittest; 339 s including process startup), and all six normalized-path lock checks passed. npm test exited 1 because of the two Node-stage results above (674 s). Both named failures passed their isolated retries; no second full-run pass is claimed.
+
+## 2026-09-24 - Dense agent setup rows and compact controls
+
+Condensed Agents setup into short desktop rows: add button, role, model,
+effort/fast controls and corner provider icon sit alongside each other.
+Reduced row gaps, control heights, header, toolbar and footer spacing; bounded
+the team list to 1120px and grouped toolbar actions together. All eight main
+agents fit at 1440x900, six at 1100x720 and three at 600x600. Narrower/zoomed
+views wrap controls. Provider and skill tiles keep their selected states.
+The render fixture seeds a larger roster and waits for the search menu so it
+exercises catalog search after the shared short-menu tile picker changed.
+
+Validation: build-booklet, npm run check and npm run audit passed (zero final
+audit findings). Agent setup's isolated Electron interaction check passed
+solo and in the full run. All 12 window/zoom combinations pass without
+horizontal overflow, renderer errors, network requests or worker starts.
+Desktop, narrow and expanded-provider captures were visually reviewed.
+
+Full npm test completed with failures outside the changed panels. Parallel
+Node: 3315 pass, 1 fail, 4 skipped. renderer_startup.test.mjs stalled with no
+further output; its verified isolated test subprocess was stopped after more
+than four minutes, and the runner recorded that failure before continuing.
+Electron lane: 32 pass, 1 fail, 1 skipped; the failure is command_toolbar's
+stylesheet contract. The actual rendering workflows passed. Eyes-toggle 1/1
+passed; occlusion 1 passed with 1 capability skip. Python 248/248 and all six
+normalized-path lock checks passed. Sources changed during this shared-tree
+run; no full-suite pass is claimed. An early audit flagged the dynamically
+created walkthrough companion ID; the final audit is clean.
+
+Logs: %TEMP%/mefi-agent-compact-{check,audit,render,full-test}.log.
+Captures/report: %TEMP%/mefi-agent-compact/. No live application data or
+portable data was changed.
 ## 2026-09-24 midday - Plans glass surfaces and background readability
 
 Plans now uses translucent theme-tinted writing panels, fields, stage controls
