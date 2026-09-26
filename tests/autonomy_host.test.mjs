@@ -213,3 +213,16 @@ test("a failed history save prevents the answer and keeps its task reserved unti
   assert.equal(f.state.decisions[0].failed, true);
   assert.equal(f.board.tasks[0].autonomyPending, undefined);
 });
+
+
+test("strong learned agreement raises confidence while disagreement leaves Auto with a suggestion", async () => {
+  const preference = [{ kind: "scope", scope: "project", n: 8, verbs: [{ verb: "narrow", share: 0.875, count: 7 }] }];
+  const match = fixture({ reply: { optionId: "narrow", confidence: 0.6, reason: "Matches the saved preference." } });
+  match.io.learning = async () => preference;
+  await match.host.decide();
+  assert.equal(match.answers.length, 1); assert.equal(match.state.decisions[0].learnedFrom.verb, "narrow");
+  const different = fixture({ reply: { optionId: "split", confidence: 0.99, reason: "Extra scope." } });
+  different.io.learning = async () => preference;
+  await different.host.decide();
+  assert.equal(different.answers.length, 0); assert.equal(different.question.context.suggestion.optionId, "split");
+});

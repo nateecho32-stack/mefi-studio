@@ -8,6 +8,7 @@ const ledger = require("./decision-ledger.cjs");
 const companion = require("./companion.cjs");
 const backlog = require("./backlog.cjs");
 const issues = require("./agent-issues.cjs");
+const memory = require("./decision-memory.cjs");
 const rows = (value) => Array.isArray(value) ? value : [];
 
 function createAutonomyHost(io) {
@@ -253,7 +254,9 @@ function createAutonomyHost(io) {
           return !elevated || config.elevated[elevated] === false;
         });
         if (!options.length) continue;
-        const prompt = desk.resolvePrompt({ question, task, options, context: await io.context?.(task?.id), classifyOwner: humanClassify });
+        const learned = memory.advise(question.context?.issueKind ?? question.source, options, await io.learning?.() ?? []);
+        const context = { ...await io.context?.(task?.id), ...(learned ? { learned, preference: `The owner usually picks ${learned.verb} for this kind of decision (${learned.count} of ${learned.n}; ${learned.scope}).` } : {}) };
+        const prompt = desk.resolvePrompt({ question, task, options, context, classifyOwner: humanClassify });
         const response = await io.callDesk(prompt);
         if (revision !== passRevision || project() !== projectId) break;
         if (!response?.ok) { backoffUntil = now() + 5 * 60000; break; }
@@ -262,14 +265,15 @@ function createAutonomyHost(io) {
         spent += 1;
         state().decideHistory = desk.spend(state().decideHistory, key, now());
         let option = options.find((row) => row.id === choice.optionId);
-        let route = autonomy.route({ ...config, item: question, task, accepted: isAccepted, confidence: choice.confidence ?? 0, option });
+        choice.confidence = memory.confidence(choice.confidence, option, learned);
+        let route = autonomy.route({ ...config, item: question, task, accepted: isAccepted, confidence: choice.confidence, learned, option });
         if (initial === "advise") route = "advise";
         if (humanClassify) {
           if (choice.classification === "human" && choice.confidence >= 0.7) {
             option = options.find((row) => row.id === "acknowledge");
-            if (option) await apply(question, { ...choice, optionId: option.id }, config, { todoText: choice.text || question.detail || question.title });
+            if (option) await apply(question, { ...choice, optionId: option.id }, config, { todoText: choice.text || question.detail || question.title, learned });
           } else if (choice.classification === "studio" && choice.confidence >= 0.7 && option && option.id !== "acknowledge" && !option.dismiss) {
-            await apply(question, choice, config);
+            await apply(question, choice, config, { learned });
           } else {
             question.context = { ...question.context, suggestion: { optionId: null, reason: choice.reason || "This may be work Studio can handle. Please give a direction.", at: now() } };
           }
@@ -280,7 +284,7 @@ function createAutonomyHost(io) {
           if (!option || route === "advise" || route === "owner" || choice.leave && config.level !== "elevated") {
             question.context = { ...question.context, suggestion: { optionId: option?.id ?? null, reason: choice.reason || "I need your direction here.", at: now() } };
           } else {
-            await apply(question, { ...choice, optionId: option.id }, config);
+            await apply(question, { ...choice, optionId: option.id }, config, { learned });
           }
         }
         await save();

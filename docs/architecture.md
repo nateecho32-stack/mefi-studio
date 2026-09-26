@@ -95,6 +95,29 @@ Decided for you, using the companion queue's count. Sessionless CLI completion
 needs named, recorded passing checks tied to the exact attempt, no outstanding
 work, and a successful exit; model claims alone cannot confirm it.
 
+## Learning
+
+`settings.learning.decisions` controls whether owner answers teach Mefi and
+which scope the decision prompt uses: this project, all projects, or blend.
+The shared companion file keeps up to 1000 bounded rows with project, source,
+work kind and correction metadata. Recency has a 90-day half-life; corrections
+weigh twice. Blend gives this project's choices full weight and other choices
+0.3 weight. Strong patterns (share at least 0.7 and four observations) can
+increase matching confidence; disagreement in Auto leaves a suggestion.
+Automatic decisions never become examples of owner preferences. Undo records
+an explicit correction. Forget operates on a kind/verb row or all history,
+within the selected project or globally. Disabling learning preserves history
+but stops both new recording and preference use.
+
+`settings.learning.models` is `blend`, `project`, `global` or `off`. Worker
+attempts and model calls carry a project ID. Routing reads the existing local
+ledgers for saved projects and the legacy ledger; it never moves those files.
+Rows without an ID count only as global evidence. Blended outcome counts use
+`wins = projectWins + 0.3 * otherWins` and the equivalent for losses, with a
+Beta(1,1) prior. Project filters are part of the snapshot cache key. The
+`learning:state`, `learning:set` and `learning:forget` IPCs expose preferences,
+settings and per-model work-kind summaries for the shared controls.
+
 ## Glossary
 
 | Term | Meaning |
@@ -120,6 +143,8 @@ work, and a successful exit; model claims alone cannot confirm it.
 | **Decision model / Jev** | Agents › Setup › Connections configures Jev, a third-party classifier model (TypeSafe's `jev-1.13`). Routing and intake behavior live together in Agents › Setup. Optional; fixed defaults apply without it. |
 | **Autopilot / New work** | Autopilot lets the assistant start work on its own; **New work** is the master switch that holds every kind of new start while current workers finish. |
 | **Auto build / Verify first** | Auto build starts a task as soon as it is ready. Verify first holds it in **Review** until you press **Approve build**. |
+| **Learned preference** | A recency-weighted pattern in owner answers, scoped to a project, all projects or their blend. It advises the assistant without expanding its permissions. |
+| **Model skill** | A model's runner-verified wins and losses for a kind of work, with project-aware probability estimates. |
 | **Permission mode** | The saved rule for which decisions Mefi can make: Always ask, Accept per task, Auto or Elevated only. Elevated switches reserve particular categories for the owner. |
 | **Decision ledger** | The project's saved automatic choices, reasons and Undo evidence. Undo preserves later edits and does not reset budgets. |
 | **For you** | Up to 50 human-only to-dos separated from worker questions. |

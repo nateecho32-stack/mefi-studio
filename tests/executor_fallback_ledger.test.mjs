@@ -48,6 +48,7 @@ function host({ refPatch = {}, runRoute, providerUpAt = null }) {
   const env = vm.createContext({
     Date: FakeDate, console, process, entry, autopilot, executorResume, executorCore, runRoute, spawn, prompt: "the brief", runRoot: "C:/fixture", startedAt: 100,
     job: { kind: "task", title: ref.title, prompt: ref.prompt, source: "chat", ref: structuredClone(ref) }, assistantModule: assistant, taskHandoffs, queueExecutorCheckpoint() {},
+    projects: { current: () => ({ id: "fixture" }) },
     agentModes, agentIssues, verificationJobs: [], runVerificationJobs: async () => {},
     eyes: { findRunSession: () => null, readJson: async () => ({}), writeJson: async () => {} },
     releaseFiles: () => {}, discardEntry: () => { autopilot.jobs = []; },

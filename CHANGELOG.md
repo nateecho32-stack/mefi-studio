@@ -8,6 +8,13 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- Mefi learns from successful owner answers, including family choices, approvals,
+  offers and chat. Recent choices count more, corrections count double, and
+  learning can be disabled or forgotten by project or across projects. Auto
+  leaves choices that disagree with a strong preference for owner review.
+- Model outcomes now retain their project. Learned routing supports this
+  project, all projects, a default 30% cross-project blend, or off. Existing
+  local ledgers are read in place; old unscoped records remain global evidence.
 - Four saved permission modes: Always ask, Accept per task, Auto (default),
   and Elevated only. Six elevated categories keep their decisions with the
   owner unless switched off; grants and irreversible changes require the

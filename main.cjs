@@ -55,6 +55,8 @@ const backlog = require("./scripts/backlog.cjs");
 const autonomy = require("./scripts/autonomy.cjs");
 const { createAutonomyHost } = require("./scripts/autonomy-host.cjs");
 const decisionLedger = require("./scripts/decision-ledger.cjs");
+const decisionMemory = require("./scripts/decision-memory.cjs");
+const modelLearning = require("./scripts/model-learning.cjs");
 let autonomySettings = autonomy.migrate({});
 const boardGrowth = require("./scripts/board-growth.cjs");
 const boardGrouping = require("./scripts/board-grouping.cjs");
@@ -2894,10 +2896,30 @@ async function resolveAiRoute(role = "routine", { allowCli = true } = {}) {
 }
 
 const modelPerformanceStores = new Map();
-function modelPerformanceStore() {
-  const filePath = projectDataPath(path.join(STUDIO_ROOT, "data", "model-performance.json"));
+function modelPerformanceStore(project = null) {
+  const source = path.join(STUDIO_ROOT, "data", "model-performance.json");
+  const filePath = project ? projects.dataPath(source, project) : projectDataPath(source);
   if (!modelPerformanceStores.has(filePath)) modelPerformanceStores.set(filePath, createModelPerformanceStore({ filePath }));
   return modelPerformanceStores.get(filePath);
+}
+
+// Read the existing local ledgers without moving or rewriting user data. Old
+// records with no project id participate only in overall evidence.
+async function modelLearningSnapshot({ scope = null, projectId = projects.current().id } = {}) {
+  const mode = scope ?? decisionMemory.settings((await readSettings()).learning).models;
+  if (mode === "off") return { models: [], scope: mode, projectId };
+  const project = await modelPerformanceStore().snapshot({ projectId });
+  if (mode === "project") return { ...modelLearning.blend({ project, global: project, scope: mode }), scope: mode, projectId };
+  const source = path.join(STUDIO_ROOT, "data", "model-performance.json");
+  const files = new Set([source, projectDataPath(source)]);
+  for (const saved of projects.list().projects) files.add(projects.dataPath(source, saved));
+  const snapshots = await Promise.all([...files].map((filePath) => {
+    if (!modelPerformanceStores.has(filePath)) modelPerformanceStores.set(filePath, createModelPerformanceStore({ filePath }));
+    return modelPerformanceStores.get(filePath).snapshot();
+  }));
+  const global = modelLearning.aggregate(snapshots);
+  const measured = mode === "project" ? project : await modelPerformanceStore().snapshot();
+  return { ...modelLearning.blend({ project, global, scope: mode, measured }), scope: mode, projectId };
 }
 
 // Routing decisions contain only model metadata. Prompts and credentials are
@@ -2913,7 +2935,7 @@ function routingSettingsKey(settings) {
     settings.zenApiKeyEncrypted, settings.openrouterApiKeyEncrypted,
     settings.zaiApiKeyEncrypted, settings.apiKeyEncrypted,
     settings.executorCli, settings.executorModel, settings.executorModels,
-    settings.executorTier, settings.executorTierModels,
+    settings.executorTier, settings.executorTierModels, settings.learning?.models,
   ])).digest("hex");
 }
 
@@ -2986,7 +3008,7 @@ async function applyModelRouting(route, { role = "routine", taskType = role, wei
     if (!standIn && !local) await flushJevCharges();
     const [catalog, performance] = await Promise.all([
       readFile(path.join(STUDIO_ROOT, "data", "models.json"), "utf8").then(JSON.parse),
-      modelPerformanceStore().snapshot(),
+      modelLearningSnapshot(),
     ]);
     // A dispatched job is always the "worker" role — that is what gates the
     // tool-call filter below. How heavy the work looks travels separately, in
@@ -3071,7 +3093,7 @@ function recordWorkerAttempt(entry, route, { ok = false, durationMs = null, outc
   // providers (Zen's opencode/<id>, say) keep their full id.
   const bare = String(named || `${provider}-default`).replace(/^mefi-zai\//, "");
   const model = (provider === "opencode" ? bare.replace(/^opencode-go\//, "") : bare).slice(0, 160);
-  recordModelCall({ id: entry.id, provider, model, taskType: entry.workKind ?? "coding", role: "worker", source: "worker",
+  recordModelCall({ id: entry.id, projectId: entry.projectId ?? projects.current().id, provider, model, taskType: entry.workKind ?? "coding", role: "worker", source: "worker",
     // A run the owner or the host stopped is a cancellation, not the model's
     // error: the ledger's error rate (the judge's reliability evidence and
     // Model Lab's score) leaves it out.
@@ -3103,7 +3125,7 @@ function receiptModelOutcome(receipt, receipts = null) {
 
 async function recordModelCall(observation) {
   if (SMOKE || CAPTURE) return;
-  try { await modelPerformanceStore().record(observation); }
+  try { await modelPerformanceStore().record({ ...observation, projectId: observation.projectId ?? projects.current().id }); }
   catch { logLine("[model-lab] Could not save a model measurement; recorded usage may be incomplete."); }
 }
 
@@ -8270,10 +8292,41 @@ function getAutonomyHost() {
     cleared: async () => agentBrain?.clearedMarks ? agentBrain.clearedMarks() : {},
     save: async () => { const result = await saveAssistant({ force: true }); if (result?.ok === false) throw new Error(`Could not save the decision history: ${result.error}`); }, emit: () => assistantEmit({ kind: "autonomy" }),
     context: async (taskId) => typeof assistantDecisionContext === "function" ? assistantDecisionContext(taskId) : { mode: autonomySettings.level },
-    correction: async (decision) => agentBrain?.recordDecision?.({ kind: decision.kind, verb: "undo", source: decision.source, correction: { was: decision.choice } }),
+    learning: assistantDecisionPreferences,
+    correction: async (decision) => assistantRememberDecision({ kind: decision.kind, verb: "undo", source: decision.source, taskId: decision.taskId, correction: { was: decision.choice } }),
   });
   return autonomyHost;
 }
+async function assistantDecisionPreferences() {
+  const config = decisionMemory.settings((await readSettings()).learning).decisions;
+  if (!config.enabled) return [];
+  return decisionMemory.profile({ rows: await agentBrain.decisionRows(), projectId: projects.current().id, scope: config.scope, now: Date.now() });
+}
+async function learningState() {
+  const config = decisionMemory.settings((await readSettings()).learning);
+  const projectId = projects.current().id;
+  const rows = await agentBrain.decisionRows();
+  const profiles = Object.fromEntries(["project", "global", "blend"].map((scope) => [scope, decisionMemory.profile({ rows, projectId, scope, now: Date.now() })]));
+  const skills = {};
+  for (const scope of ["project", "global"]) skills[scope] = modelLearning.skills(await modelLearningSnapshot({ scope, projectId }));
+  return { ok: true, projectId, ...config, profiles, skills };
+}
+async function learningSet(payload = {}) {
+  if (payload.decisions?.enabled !== undefined && typeof payload.decisions.enabled !== "boolean"
+    || payload.decisions?.scope !== undefined && !decisionMemory.SCOPES.includes(payload.decisions.scope)
+    || payload.models !== undefined && ![...decisionMemory.SCOPES, "off"].includes(payload.models)) return { ok: false, error: "Choose a valid learning setting." };
+  await updateSettings((settings) => {
+    const previous = decisionMemory.settings(settings.learning);
+    settings.learning = { decisions: { ...previous.decisions, ...payload.decisions }, models: payload.models ?? previous.models };
+  });
+  modelRoutingCache.clear();
+  return learningState();
+}
+async function learningForget(payload = {}) {
+  const result = await agentBrain.forgetDecisions(payload);
+  return result.ok ? learningState() : result;
+}
+
 function deskResolvesOn(settings) { return ["auto", "elevated"].includes(autonomy.migrate(settings ?? {}).level); }
 function autonomyState() { return getAutonomyHost().state(); }
 function autonomySet(payload) { return getAutonomyHost().set(payload); }
@@ -8606,6 +8659,7 @@ function assistantSettleOfferAsks(taskId, title = "") {
     if (!option) continue;
     question.status = "answered";
     question.answer = { at: Date.now(), optionId: option.id, label: option.label, via: "chat" };
+    if (typeof assistantRememberDecision === "function") assistantRememberDecision({ kind: "offer", verb: "accept", source: "chat", taskId }).catch(() => {});
     settled += 1;
     assistantEmit({ kind: "question", ...question });
   }
@@ -9924,6 +9978,17 @@ async function assistantRaiseIssue(raw, { openAsks = null, fromFailure = false }
 // permission mode, `by` naming which) re-arms with backlog.delegateRetry,
 // which keeps the owner's stop, the loop ledger and the failure budget. An
 // answer about work that has since finished is kept without reopening it.
+async function assistantRememberDecision(row) {
+  if (typeof agentBrain === "undefined" || !agentBrain?.recordDecision) return;
+  const settings = typeof readSettings === "function" ? await readSettings() : {};
+  if (settings.learning?.decisions?.enabled === false) return;
+  let taskKind = row.taskKind ?? null;
+  if (!taskKind && row.taskId) {
+    try { const tasks = await (await getEyes()).readJson(TASKS_PATH, []); const task = tasks.find((item) => item.id === row.taskId); taskKind = task?.workKind ?? task?.kind ?? task?.origin?.kind ?? null; } catch {}
+  }
+  await agentBrain.recordDecision({ ...row, taskKind });
+}
+
 async function assistantIssueAction(action = {}, note = null, { origin = "owner", by = null, reason = null, decisionId = null } = {}) {
   const verb = String(action.action ?? "").trim();
   const payload = action.payload ?? {};
@@ -10399,17 +10464,19 @@ async function assistantAnswer(payload = {}) {
     : payload.origin === "delegate" ? (["desk", "auto", "chat"].includes(payload.by) ? payload.by : "desk") : null;
   if (delegatedBy && typeof createAutonomyHost === "function" && !assistantState.decisions?.some((row) => row.id === payload.decisionId && row.questionId === question.id && row.pending)) return { ok: false, error: "Automatic answers must first be saved in the decision history." };
   const delegatedReason = delegatedBy ? String(payload.reason ?? "").replace(/\s+/g, " ").trim().slice(0, 200) : "";
-  // The companion learns how the owner answers (shown as editable preferences,
-  // never applied on its own): the ask's kind and the verb chosen.
-  if (typeof agentBrain !== "undefined" && agentBrain && question.source === "issue" && !delegatedBy) {
-    agentBrain.recordDecision({ kind: question.context?.issueKind ?? "issue", verb: option?.dismiss ? "hold" : option?.action?.kind === "issue" ? option.action.action : text ? "instruct" : option?.id });
-  }
+  const rememberAnswer = async () => {
+    if (delegatedBy || option?.action?.kind === "backlog" && option.action.action === "approve") return;
+    const prior = assistantState.decisions?.find((row) => row.id === question.context?.undoneFrom);
+    await assistantRememberDecision({ kind: question.context?.issueKind ?? question.source, verb: question.source === "offer" ? option?.dismiss ? "decline" : "accept" : option?.dismiss ? "hold" : option?.action?.action ?? option?.action?.choice ?? (text ? "instruct" : option?.id), source: payload.origin === "chat" ? "chat" : question.source,
+      taskId: question.context?.taskId, ...(prior ? { correction: { was: prior.choice } } : {}) });
+  };
   if (option?.dismiss) {
     question.status = "dismissed";
     question.answer = { at: Date.now(), optionId: option.id, label: option.label, text: null, via: "option" };
     assistantLog("question", `dismissed: ${question.title}`);
     assistantEmit({ kind: "question", ...question });
     await saveAssistant({ force: true });
+    await rememberAnswer();
     return { ok: true, state: assistantState };
   }
   question.status = "answered";
@@ -10455,6 +10522,7 @@ async function assistantAnswer(payload = {}) {
         assistantEmit({ kind: "question", ...question });
         if (option.action.kind === "chat" && payload.origin !== "chat") assistantAppendReply(applied.dispatch.message, "local", "request");
         await saveAssistant({ force: true });
+        await rememberAnswer();
         return { ok: true, dispatch: applied.dispatch, state: assistantState };
       }
     } else if (!delegatedBy) {
@@ -10469,6 +10537,7 @@ async function assistantAnswer(payload = {}) {
     logError(`answer failed: ${error.message}`);
     return { ok: false, error: String(error.message ?? error), state: assistantState };
   }
+  await rememberAnswer();
   return { ok: true, state: assistantState };
 }
 
@@ -11275,6 +11344,7 @@ async function backlogControl({ action, taskId, ideaId, projectId, expectedScope
     });
     if (!changed.ok) return { ok: false, error: changed.error };
     result = { ok: true, taskId };
+    if (action === "approve" && typeof assistantRememberDecision === "function") await assistantRememberDecision({ kind: "approval", verb: "approve", source: "board", taskId });
     assistantAskForWork(action === "approve" ? "a task build was approved" : action === "retry" ? "a task was explicitly retried" : "a task was moved next");
   }
   await refreshAutopilotQueue();
@@ -11465,6 +11535,7 @@ async function dropTask({ taskId, projectId } = {}) {
     return { ok: true, revisionKind: "status", revisionNote: "Task dropped" };
   });
   if (!result.ok) return { ok: false, error: result.error };
+  if (typeof assistantRememberDecision === "function") await assistantRememberDecision({ kind: "approval", verb: "drop", source: "board", taskId });
   await refreshAutopilotQueue();
   return { ok: true, task: taskView(result.tasks.find((task) => task.id === taskId)), backlog: await backlogStatus() };
 }
@@ -17779,6 +17850,9 @@ function registerIpc() {
     const deskResolves = deskResolvesOn(await readSettings().catch(() => null));
     return view?.ok ? { ...view, deskResolves } : view;
   };
+  ipcMain.handle("learning:state", async () => learningState());
+  ipcMain.handle("learning:set", async (_event, payload) => learningSet(payload ?? {}));
+  ipcMain.handle("learning:forget", async (_event, payload) => learningForget(payload ?? {}));
   ipcMain.handle("autonomy:state", async () => autonomyState());
   ipcMain.handle("autonomy:set", async (_event, payload) => autonomySet(payload ?? {}));
   ipcMain.handle("autonomy:undo", async (_event, payload) => autonomyUndo(payload ?? {}));

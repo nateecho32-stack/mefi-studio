@@ -14,6 +14,7 @@
 
 const path = require("node:path");
 const fsp = require("node:fs/promises");
+const decisionMemory = require("./decision-memory.cjs");
 
 const LIMITS = Object.freeze({
   recentEvents: 400,
@@ -24,7 +25,7 @@ const LIMITS = Object.freeze({
   draftsPerHour: 10,
   indexMaxBytes: 2 * 1024 * 1024,
   indexKeepLines: 4000,
-  decisionsKept: 200,
+  decisionsKept: 1000,
   mapDelayMs: 5000,
   saveDelayMs: 800,
   seenSaveMs: 30 * 1000,
@@ -243,7 +244,7 @@ function createAgentBrain(options = {}) {
       scope: saw.scope === "all" ? "all" : "project",
       roaming: saw.roaming !== false, pinned: saw.pinned === true, bubbles: saw.bubbles !== false, growth: saw.growth !== false,
       anchor: validAnchor(saw.anchor) ? saw.anchor : null,
-      decisions: Array.isArray(saw.decisions) ? saw.decisions.slice(-LIMITS.decisionsKept) : [],
+      decisions: decisionMemory.normalize(saw.decisions),
       cleared: mods.companion.markCleared(saw.cleared, []),
     });
   }
@@ -915,11 +916,11 @@ function createAgentBrain(options = {}) {
     return s.companion.cleared ?? {};
   }
 
-  function recordDecision({ kind, verb } = {}) {
+  function recordDecision({ kind, verb, source = null, taskKind = null, correction = null } = {}) {
     if (!kind || !verb) return Promise.resolve();
     try {
       const s = scope();
-      const row = { projectId: s.id, kind: String(kind).slice(0, 40), verb: String(verb).slice(0, 40), at: now() };
+      const row = decisionMemory.normalize([{ projectId: s.id, kind, verb, source, taskKind, correction, at: now() }])[0];
       // Loaded first: saving before the file is read would overwrite the
       // owner's look, reach and earlier decisions with defaults.
       return ready(s).then(() => {
@@ -930,6 +931,19 @@ function createAgentBrain(options = {}) {
       warn("record decision", error);
       return Promise.resolve();
     }
+  }
+
+  async function decisionRows() {
+    const s = scope(); await ready(s);
+    return decisionMemory.normalize(s.companion.decisions);
+  }
+  async function forgetDecisions(request = {}) {
+    const s = scope(); await ready(s);
+    if (!["project", "global"].includes(request.scope ?? "project")) return { ok: false, error: "Choose this project or all projects." };
+    if (request.projectId && request.projectId !== s.id) return { ok: false, error: "The selected project changed." };
+    s.companion.decisions = decisionMemory.forget(s.companion.decisions, { ...request, projectId: s.id });
+    await saveCompanion(s);
+    return { ok: true };
   }
 
   // ---- reads for the renderer ------------------------------------------------------
@@ -1054,6 +1068,8 @@ function createAgentBrain(options = {}) {
     clearQueue,
     clearedMarks,
     recordDecision,
+    decisionRows,
+    forgetDecisions,
     state,
     events,
     playbookState,

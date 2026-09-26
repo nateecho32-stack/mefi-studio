@@ -35,6 +35,7 @@ async function ledger() {
   const logs = [];
   const env = vm.createContext({
     SMOKE: false, CAPTURE: false, logLine: (text) => logs.push(text),
+    projects: { current: () => ({ id: "fixture" }) },
     modelPerformanceStore: () => store,
     recordModelCall: (observation) => store.record(observation),
   });

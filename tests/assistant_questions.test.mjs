@@ -22,6 +22,7 @@ function questionHost({ executorLog = "", offers = [], tasks = [] } = {}) {
     assistantState: state,
     assistantModule: assistant,
     taskOversight,
+    assistantRememberDecision: async () => {},
     projects: { current: () => ({ id: "fixture" }) },
     ASSISTANT_CAPS: assistant.CAPS,
     EXECUTOR_LOG_PATH: "executor-log.jsonl",

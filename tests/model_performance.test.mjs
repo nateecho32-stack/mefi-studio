@@ -409,3 +409,15 @@ test("observations keep a recorded verdict and the brains and analyzer sources",
   assert.equal(normalizeObservation(observation("z", { outcome: "reported" })).outcome, "unverified", "self-reported done is never a win");
   assert.equal("outcome" in normalizeObservation(observation("w", { outcome: "won" })), false);
 });
+
+
+test("project filtering and taskSkills keep old unscoped observations global only across cached reads", async (t) => {
+  const { store } = await fixture(t);
+  for (const [id, projectId, outcome] of [["a", "p", "verified"], ["b", "q", "failed"], ["legacy", null, "verified"]]) await store.record(observation(id, { projectId, source: "worker", outcome }));
+  assert.equal((await store.snapshot()).models[0].wins, 2);
+  assert.equal((await store.snapshot({ projectId: "p" })).models[0].wins, 1);
+  assert.equal((await store.snapshot({ projectId: "q" })).models[0].wins, 0);
+  assert.equal((await store.snapshot({ projectId: "p" })).models[0].losses, 0, "cache keys include project id");
+  assert.equal((await store.taskSkills({ projectId: "p" }))[0].n, 1);
+  assert.equal((await store.taskSkills())[0].n, 3);
+});

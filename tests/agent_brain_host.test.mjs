@@ -483,3 +483,27 @@ test("the owner's clear keeps listed items off the companion queue across restar
     await h.cleanup();
   }
 });
+
+
+test("decision memory keeps correction metadata and forgets only the requested shared project", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "mefi-memory-shared-"));
+  let current = "one";
+  const brain = host.createAgentBrain({ dataFile: (name) => path.join(root, current, name), appDataFile: (name) => path.join(root, name), projectId: () => current, now: () => 1000000 });
+  try {
+    await brain.recordDecision({ kind: "scope", verb: "narrow", source: "issue", taskKind: "fix" });
+    await brain.recordDecision({ kind: "scope", verb: "split", source: "chat", taskKind: "fix", correction: { was: "narrow" } });
+    current = "two";
+    await brain.recordDecision({ kind: "scope", verb: "narrow", source: "chat" });
+    assert.equal((await brain.decisionRows()).length, 3);
+    const correction = (await brain.decisionRows()).find((row) => row.correction);
+    assert.deepEqual(correction.correction, { was: "narrow" }); assert.equal(correction.taskKind, "fix");
+    await brain.forgetDecisions({ all: true, scope: "project" });
+    assert.equal((await brain.decisionRows()).length, 2);
+    assert.ok((await brain.decisionRows()).every((row) => row.projectId === "one"));
+    const fresh = host.createAgentBrain({ dataFile: (name) => path.join(root, current, name), appDataFile: (name) => path.join(root, name), projectId: () => current });
+    assert.equal((await fresh.decisionRows()).length, 2);
+    await fresh.forgetDecisions({ all: true, scope: "global" });
+    assert.equal((await fresh.decisionRows()).length, 0);
+    await fresh.flush();
+  } finally { await brain.flush(); await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 }); }
+});

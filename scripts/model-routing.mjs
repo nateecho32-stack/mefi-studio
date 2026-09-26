@@ -58,9 +58,9 @@ function measurements(row) {
 }
 
 // Runner-settled task outcomes only; null until an attempt has been judged.
-function recordOf(row) {
-  const wins = count(row?.wins), losses = count(row?.losses);
-  return wins + losses ? { wins, losses, winProbability: round((wins + 1) / (wins + losses + 2)) } : null;
+export function recordOf(row) {
+  const wins = number(row?.wins) ?? 0, losses = number(row?.losses) ?? 0;
+  return wins + losses ? { wins, losses, winProbability: round((wins + 1) / (wins + losses + 2)), ...(row.learningScope ? { learningScope: row.learningScope } : {}) } : null;
 }
 
 function catalogEvidence(row, provider) {
@@ -118,7 +118,7 @@ export function buildRoutingCandidates({ catalog, performance, provider, default
   if (worker) {
     // Settled outcomes are runner verdicts on this kind of work, not transport
     // samples. A missing typical cost sorts last, never as free.
-    const settled = (item) => count(item.record.task?.wins) + count(item.record.task?.losses);
+    const settled = (item) => (number(item.record.task?.wins) ?? 0) + (number(item.record.task?.losses) ?? 0);
     const cost = (item) => item.catalog.typicalCostUSD ?? Number.POSITIVE_INFINITY;
     candidates.sort((a, b) => Number(b.default) - Number(a.default) || settled(b) - settled(a) || quality(a, b) || cost(a) - cost(b) || a.model.localeCompare(b.model));
   } else {
@@ -136,10 +136,11 @@ export function estimateWinProbability(candidate, { weight = null } = {}) {
   const index = number(candidate?.catalog?.quality?.index);
   const centre = index === null ? 0.5 : clamp(index / 100, 0.2, 0.9);
   const mean = clamp(0.5 + (centre - 0.5) * (WEIGHT_SPREAD[weight] ?? 1), 0.2, 0.9);
-  const settled = (record) => count(record?.wins) + count(record?.losses) > 0;
+  const settled = (record) => (number(record?.wins) ?? 0) + (number(record?.losses) ?? 0) > 0;
   const [basis, record] = settled(candidate?.record?.task) ? ["task", candidate.record.task] : settled(candidate?.record?.overall) ? ["overall", candidate.record.overall] : ["prior", null];
-  const wins = count(record?.wins), losses = count(record?.losses);
-  return { p: round((wins + mean * PRIOR_STRENGTH) / (wins + losses + PRIOR_STRENGTH)), samples: wins + losses, basis };
+  const wins = number(record?.wins) ?? 0, losses = number(record?.losses) ?? 0;
+  const prior = record?.learningScope ? 1 : mean * PRIOR_STRENGTH;
+  return { p: round((wins + prior) / (wins + losses + PRIOR_STRENGTH)), samples: wins + losses, basis };
 }
 
 const ROUTING_PROMPT = [

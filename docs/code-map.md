@@ -2,6 +2,12 @@
 
 ## Permission decisions
 
+- `scripts/decision-memory.cjs`: pure recency weighting, doubled corrections,
+  scoped preference advice, confidence adjustment and selective forgetting.
+- `scripts/model-learning.cjs`: pure aggregation of existing local model ledgers,
+  weighted Beta records and per-task model skill summaries.
+- `scripts/model-performance.cjs`: observations retain project identity; cached
+  snapshots and `taskSkills` support a project filter.
 - `scripts/autonomy.cjs`: pure mode table, elevated categories, approval inheritance,
   settings migration and exact-attempt sessionless check eligibility.
 - `scripts/autonomy-host.cjs`: one desk decision pass, persisted suggestions and

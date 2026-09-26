@@ -50,6 +50,7 @@ function normalizeObservation(input, now = Date.now()) {
     provider: identifier(input.provider, "provider", 60),
     model: identifier(input.model, "model"),
     taskType: slug(input.taskType),
+    projectId: input.projectId ? identifier(input.projectId, "project id", 100) : null,
     role: input.role ? slug(input.role) : null,
     source: SOURCES.includes(input.source) ? input.source : "request",
     status: input.status,
@@ -155,9 +156,9 @@ function measurements(rows, ratings) {
   };
 }
 
-function snapshotPerformance(state, { taskType = null, candidates = null, qualitySource = "human", weights = {}, now = Date.now() } = {}) {
+function snapshotPerformance(state, { taskType = null, projectId = null, candidates = null, qualitySource = "human", weights = {}, now = Date.now() } = {}) {
   const filter = taskType ? slug(taskType) : null;
-  const observations = (state?.observations ?? []).filter((row) => !filter || row.taskType === filter);
+  const observations = (state?.observations ?? []).filter((row) => (!filter || row.taskType === filter) && (!projectId || row.projectId === projectId));
   const ratings = new Map();
   for (const row of state?.ratings ?? []) {
     if (!ratings.has(row.observationId)) ratings.set(row.observationId, []);
@@ -228,7 +229,7 @@ function snapshotPerformance(state, { taskType = null, candidates = null, qualit
   let rank = 0, previous = null;
   models.forEach((row, index) => { if (row.score !== null) { if (row.score !== previous) rank = index + 1; row.rank = rank; previous = row.score; } });
   return {
-    version: VERSION, generatedAt: now, taskType: filter, calls: observations.length, range: rangeOf(observations), usage: usageOf(observations),
+    version: VERSION, generatedAt: now, taskType: filter, projectId, calls: observations.length, range: rangeOf(observations), usage: usageOf(observations),
     lifetime: state?.lifetime ?? { calls: observations.length, range: rangeOf(observations), usage: usageOf(observations) },
     retention: { limit: state?.retention?.limit ?? null, dropped: state?.retention?.dropped ?? 0 },
     ranking: { qualitySource: authority, metrics, weights: metricWeights, notes: ["Measured local runs; task mix may differ.", "Unknown dimensions are excluded from every model's score.", "Throughput includes request latency; quality is explicitly rated."] },
@@ -338,7 +339,7 @@ function createModelPerformanceStore({ filePath, now = Date.now, maxRecords = 10
       const generatedAt = now();
       // The UI uses these two filters. Keep at most eight summaries; callers
       // requesting custom candidate sets or weights still get a fresh result.
-      const key = options.candidates == null && options.weights == null ? JSON.stringify([options.taskType ? slug(options.taskType) : null, options.qualitySource === "model" ? "model" : "human"]) : null;
+      const key = options.candidates == null && options.weights == null ? JSON.stringify([options.projectId ?? null, options.taskType ? slug(options.taskType) : null, options.qualitySource === "model" ? "model" : "human"]) : null;
       let result = key === null ? null : snapshots.get(key);
       if (!result) result = snapshotPerformance(state, { ...options, now: generatedAt });
       if (key !== null && cached?.state === state) {
@@ -348,6 +349,8 @@ function createModelPerformanceStore({ filePath, now = Date.now, maxRecords = 10
       }
       return { ...copy(result), generatedAt };
     }),
+    taskSkills: ({ projectId = null } = {}) => serialized(async () => require("./model-learning.cjs").skills(snapshotPerformance(await load(), { projectId, now: now() }))),
+
     record: (input) => serialized(async () => {
       const state = await load({ mutable: true });
       const existing = input?.id ? state.observations.find((row) => row.id === input.id) : null;

@@ -34,6 +34,29 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-26 - Permission learning Phase 2 isolated full gate
+
+Validated snapshot 763ea51 in assist-g1. Check and audit passed with zero
+findings. Full npm test: Node 3745 passed / 4 skipped / 0 failed; Electron
+35 passed / 1 skipped / 1 failed; exclusive probes 2 passed with occlusion
+capability-skipped; Python 248 tests with 1 skip; six path-lock checks passed.
+The sole failure is the previously reproduced Unified Studio navigation
+visibility assertion at 600px / 150% zoom. Command rendering passed. The
+full command correctly exited 1. Sources were unchanged during the run.
+Logs: C:/wt/phase2-full.log, phase2-gate-check.log, phase2-gate-audit.log.
+
+## 2026-09-26 - Permission learning Phase 2 focused validation
+
+Added recency-weighted owner decision memory, doubled corrections, scoped
+forgetting, project-aware model observations and weighted model routing.
+70 pure/memory/store/policy tests, 81 model/routing tests and 2 learning-host
+tests passed. The initial fast run exposed 12 missing collaborators in VM
+fixtures and one loaded project-switch timing failure. After updating the
+fixtures, all 39 affected questions, ledger and project tests passed; the
+project switch settled in 549ms solo. Check and audit passed with no findings.
+The full gate follows on an isolated snapshot. UI controls and skill displays
+are integrated together in the later Vibe control phase.
+
 ## 2026-09-26 - Permission modes Phase 1 isolated full gate
 
 Validated snapshot bdd08f1 in the isolated assist-g1 worktree. Check and audit

@@ -70,6 +70,7 @@ function routingHost({ initialSettings = {}, credential = "fixture-jev-key", can
       return JSON.stringify({ models: [], source: "fixture catalog" });
     },
     modelPerformanceStore: () => ({ snapshot: async () => ({ models: [], project: currentProject }) }),
+    modelLearningSnapshot: async () => ({ models: [], project: currentProject }),
     flushJevCharges: async () => { if (flush) await flush(); },
     chargeJevCall: async (result, kind) => charges.push({ result: copy(result), kind }),
     logLine: (message) => logs.push(message),
