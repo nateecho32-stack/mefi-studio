@@ -10,8 +10,9 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
 async function fixture(fn) {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "mefi-tool-test-"));
-  try { await fn(root); } finally { assert.equal(path.dirname(root), await fs.realpath(os.tmpdir())); await fs.rm(root, { recursive: true, force: true }); }
+  const temp = await fs.realpath(os.tmpdir());
+  const root = await fs.mkdtemp(path.join(temp, "mefi-tool-test-"));
+  try { await fn(root); } finally { assert.equal(path.dirname(root), temp); await fs.rm(root, { recursive: true, force: true }); }
 }
 const rss = '<rss><channel><item><title>Current docs</title><link>https://example.com/docs?a=1&amp;b=2</link><description>Source excerpt</description></item></channel></rss>';
 test("tools are scoped, validated and captured with each agent configuration", async () => {

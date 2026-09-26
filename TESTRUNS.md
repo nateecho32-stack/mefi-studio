@@ -34,6 +34,21 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-26 - Windows CI agent-tools fixtures normalize the canonical temp root
+
+GitHub Actions run 36224195487 on commit 30e7492 completed the Windows setup,
+bundle, check and lint gates, then `npm test` failed in the new
+`tests/agent_tools.test.mjs` fixtures. The Node stage had 3666 passes, 7 failures
+and 4 skips; every failure was the same cleanup assertion comparing the short
+`os.tmpdir()` path (`C:\Users\RUNNER~1\...`) with `fs.realpath(os.tmpdir())`
+(`C:\Users\runneradmin\...`). The fixture now resolves the temp root before
+creating its directory and checks cleanup stays under that canonical path.
+
+The Linux workflow on the same commit passed its checks, full tests, audit and
+headless Electron smoke. Python contracts (248) and normalized-path checks also
+passed in the Windows run. No release tag has been pushed while the Windows gate
+is red; rerun the branch workflow after this fixture-only correction.
+
 ## 2026-09-26 - Independent node and line brightness with optional outlines
 
 Added Tree brightness & outlines in the media controls and shared Appearance /
