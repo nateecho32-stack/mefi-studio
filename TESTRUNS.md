@@ -34,6 +34,45 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-25 - Release validation for v0.4.2
+
+Release commit ea892266f06b85fbcc352141958127cc00a2560f updates version metadata,
+README, changelog, release/Discord copy and the illustrative showreel. Application
+runtime sources are unchanged from 8852177. A fresh build-booklet reproduced the
+committed renderer. npm run check passed (142 targets, 316 specs); npm run audit
+reported zero findings; lint had zero errors and 61 existing warnings. The two
+modified promo files also passed targeted lint and syntax checks.
+
+The full GitHub Windows gate passed, including npm test, renderer freshness,
+lint, check and audit: https://github.com/nateecho32-stack/mefi-studio/actions/runs/36212912879.
+The Linux pipeline also passed: https://github.com/nateecho32-stack/mefi-studio/actions/runs/36212912847.
+Both ran on the exact published release commit. The duplicate tag-triggered
+packaging run was cancelled before publishing assets because the independently
+verified portable ZIP, checksum and showreel were already uploaded.
+
+Local Windows 11 / Node 24.15.0 / Python 3.13.14 full npm test exited 1: parallel
+Node 3,608 pass, 4 skipped; Electron 33 pass, 2 fail, 1 skipped; eyes toggle 1/1;
+occlusion 1 pass, 1 capability skip after its window was closed externally;
+Python 248/248 and normalized-path lock checks passed. Media controls did not
+reach full hover opacity, and unified_studio_render failed its primary-rail
+visibility assertion for the requested 600x560 / zoom 1 case. A sequential
+captured rerun passed media_window_render (25 s) but reproduced the unified
+failure (94 s). Its report measured innerWidth 401 / innerHeight 374 despite
+requesting 600x560 / zoom 1, following a zoom 1.5 case. The exact cause remains
+unresolved; this is not recorded as a green local full gate. The relevant runtime
+and fixture files are unchanged by this release. Full logs and synthetic captures
+remain ignored under tools/logs/release-0.4.2-*.
+
+The clean portable archive has 237 files, only curated.json and models.json under
+app/data, the original package/app names and embedded version 0.4.2. All 157
+tracked application source/assets and all 74 Electron runtime files match the
+local build; ZIP CRC and published SHA-256 match. SHA-256:
+992fcee5825a1312d96b15d44efaa9331706c5894e49fa5dcec8c7d2378f460d.
+The refreshed showreel is 40 seconds, 1920x1080 at 60 fps, H.264/AAC, 9,988,729
+bytes; full decoding and visual checks of the workflow, statistics, privacy and
+v0.4.2 end card passed. The original Desktop videos were preserved. No private
+state, live screenshots or credentials were committed or packaged.
+
 ## 2026-09-25 - Ask rail question review fixes
 
 Linux cloud container, Node 24, no node_modules (Electron suites not run), on a14df38 plus this change. A review of what files cards in the Command rail's Ask tab (scripts/agent-issues.cjs, main.cjs assistantOfferQuestion). Fixes:
