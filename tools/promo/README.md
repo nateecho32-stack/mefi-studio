@@ -24,3 +24,20 @@ from the final sharing copy before running site.cjs.
 worktree-stage.html and worktree-stage.mjs contain the current direction; ascii-glyphs.mjs contains the shared glyph renderer and original animation frames. Thoughts react at 2.52 beats per second while the agent works; main bodies and rings rotate slowly. Thought sculptures use three spatial glyph layers, pale highlights, teal surfaces, darker sides, blue water and warm tool details. Sphere glyphs have directional shading. The exporter verifies every composed frame with a pixel marker, then removes it before encoding. Posters and render reports accompany the output.
 
 node tools/promo/site.cjs assembles GitHub Pages source in dist/promo/pages/ with the current videos and docs/promo-posts.md. It publishes nothing by itself.
+
+## Showreel (20 s, 1080p60, with score)
+
+`showreel-stage.js` is a 20-second motion piece in the style of a designer's
+reel: kinetic type, hard cuts on a 150 BPM beat, a HUD frame. Every node, wire,
+pulse and agent ring in it is painted by `renderer/node-styles.js` with the
+agent glyphs from `tree3d.js` and a theme palette resolved by `music.js`, so it
+shows the engine as it looks. `showreel-score.cjs` synthesises the score (no
+samples) with an impact on each scene cut.
+
+- `node node_modules/electron/cli.js tools/promo/showreel.cjs` writes
+  `dist/promo/mefi-showreel.mp4` (about 8 MB, under Discord's upload limit).
+- `--stills 1.5,5.5,11.6` writes PNG stills to `dist/promo/showreel-stills/`.
+- `--theme abyss` (any music.js theme) and `--fps 30` are optional.
+
+Unset `ELECTRON_RUN_AS_NODE` first. It needs ffmpeg with libx264 on `PATH`
+and makes no network requests.
