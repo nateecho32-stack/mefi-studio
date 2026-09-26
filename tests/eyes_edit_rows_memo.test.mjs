@@ -25,6 +25,10 @@ function store() {
   const dbPath = path.join(dir, "opencode.db");
   const db = new DatabaseSync(dbPath);
   db.exec("create table part (id text primary key, message_id text, session_id text, time_created integer, time_updated integer, data text)");
+  // collisions() reads each session's start (sequential lifetimes retire an alert).
+  db.exec("create table message (id text primary key, session_id text, data text)");
+  db.exec("create table session (id text primary key, parent_id text, directory text, title text, time_created integer, time_updated integer)");
+  for (const id of ["s_a", "s_b", "s_c", "s_d"]) db.prepare("insert into session (id, time_created, time_updated) values (?,?,?)").run(id, NOW - 90 * 60000, NOW);
   const insert = db.prepare("insert into part values (?,?,?,?,?,?)");
   const rows = [
     ["p1", "s_a", "shared.lua", NOW - 50 * 60000], ["p2", "s_b", "shared.lua", NOW - 45 * 60000],

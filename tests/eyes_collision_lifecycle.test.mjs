@@ -28,7 +28,7 @@ function fixture(t) {
   };
 }
 
-test("a completed sequential handoff stays inspectable but cannot mint a collision repair", (t) => {
+test("a completed sequential handoff stays inspectable but cannot mint a collision repair", async (t) => {
   const f = fixture(t);
   f.start("first", NOW - 10 * MINUTE);
   f.edit("first", "game.js", NOW - 9 * MINUTE);
@@ -46,7 +46,7 @@ test("a completed sequential handoff stays inspectable but cannot mint a collisi
   assert.equal(rows[0].sessions.find((row) => row.sessionId === "first").finished, true);
   assert.deepEqual(requestsFromCollisions(rows), [], "the history must not create a speculative repair task");
   assert.ok(filePresence(options).every((row) => row.editors.every((editor) => editor.sessionId === "followup")), "an ended worker is no longer a live editor");
-  assert.deepEqual(assistantFacts({ ...options, sessions: [], changes: [], todos: [], porcelain: "" }).collisions, [], "history is not an actionable assistant finding");
+  assert.deepEqual((await assistantFacts({ ...options, sessions: [], changes: [], todos: [], porcelain: "" })).collisions, [], "history is not an actionable assistant finding");
 });
 
 test("finished peers do not hide genuine overlapping edits or get instructions to stop", (t) => {

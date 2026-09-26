@@ -137,7 +137,7 @@ test("two different titles with no compact key are not each other's duplicate", 
 });
 
 test("an inbox with nothing promotable skips the board transaction; the gateway still decides the rest", async () => {
-  const held = [{ title: "Done", status: "done" }, { title: "Claimed", runId: "live" }, { title: "Absorbed", absorbedInto: "t" }, { title: "Mid-run", runProgress: { pending: true } }, { prompt: "untitled" }];
+  const held = [{ title: "Done", status: "done" }, { title: "Claimed", runId: "live" }, { title: "Absorbed", absorbedInto: "t" }, { title: "Mid-run", runProgress: { pending: true } }, { title: "Promoted", promotedTo: "t1" }];
   const { context, board } = host({ requests: held });
   let transactions = 0, reads = 0;
   const gateway = context.mutateBoard;
@@ -150,13 +150,13 @@ test("an inbox with nothing promotable skips the board transaction; the gateway 
   board.requests.push({ title: "Ready now", status: "open", at: 5 });
   assert.equal(await context.promoteRequestsToTasks(), 1);
   assert.equal(transactions, 1);
-  // A promotable request that is already on the board reaches the gateway, which refuses it.
+  // The promoted row now names its card (promotedTo), so it is not promotable either.
   assert.equal(await context.promoteRequestsToTasks(), 0);
-  assert.equal(transactions, 2);
+  assert.equal(transactions, 1);
   // A reader that fails leaves the decision to the gateway.
   context.getEyes = async () => { throw new Error("store closed"); };
   assert.equal(await context.promoteRequestsToTasks(), 0);
-  assert.equal(transactions, 3);
+  assert.equal(transactions, 2);
 });
 
 test("explicit task admission retains a full brief and focused handoff beyond the old character cap", async () => {
