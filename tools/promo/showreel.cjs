@@ -1,9 +1,9 @@
 // Renders tools/promo/showreel-stage.js to an MP4: an offscreen Electron page
-// gets the Studio's own node painters, agent glyphs and Void palette, is sought
+// gets the Studio's own node painters, agent glyphs and theme palettes, is sought
 // frame by frame, and each frame is piped to ffmpeg with the score from
 // showreel-score.cjs. No live app, settings, stores, workers or network.
 //
-//   node node_modules/electron/cli.js tools/promo/showreel.cjs              # dist/promo/mefi-showreel.mp4
+//   node node_modules/electron/cli.js tools/promo/showreel.cjs              # dist/promo/mefi-showreel.mp4 (+ -discord.mp4 under 10 MB)
 //   node node_modules/electron/cli.js tools/promo/showreel.cjs --stills 1,3,5.5,9,12,14.5,16,19
 //   node node_modules/electron/cli.js tools/promo/showreel.cjs --fps 30 --theme abyss
 const { app, BrowserWindow, session } = require("electron");
@@ -35,9 +35,9 @@ vm.createContext(box);
 vm.runInContext([section(music, "  const THEMES = {", "  const NODE_STYLES = {"), section(music, "  const CUSTOM_DEFAULTS", "  function spotifyLink("), "globalThis.__p = { THEMES, resolvePalette };"].join("\n"), box);
 const { THEMES, resolvePalette } = box.__p;
 if (!THEMES[THEME]) throw new Error(`unknown theme ${THEME}`);
-const palette = JSON.parse(JSON.stringify(resolvePalette(THEME).canvas));
-const themeInfo = { name: THEMES[THEME].name, ...THEMES[THEME] };
-themeInfo.accent2 ??= themeInfo.bright;
+// Every theme's colours and canvas palette: the film is in THEME, and its
+// themes scene runs through several others.
+const themes = Object.fromEntries(Object.keys(THEMES).map((key) => [key, { info: { ...THEMES[key] }, palette: JSON.parse(JSON.stringify(resolvePalette(key).canvas)) }]));
 const tree = read("renderer/tree3d.js");
 const sources = {
   nodeStyles: read("renderer/node-styles.js"),
@@ -61,7 +61,7 @@ app.whenReady().then(async () => {
   wc.on("console-message", (_e, d) => { if (d.level === "error" || d.level === 3) errors.push(d.message); });
   await win.loadFile(path.join(__dirname, "showreel.html"));
   const run = (code) => wc.executeJavaScript(code);
-  await run(`window.__palette = ${JSON.stringify(palette)}; window.__themeInfo = ${JSON.stringify(themeInfo)};
+  await run(`window.__themes = ${JSON.stringify(themes)}; window.__themeKey = ${JSON.stringify(THEME)};
 ${sources.nodeStyles}
 ;(function () {
 ${sources.agentColors}
@@ -101,8 +101,8 @@ true`);
   const file = path.join(OUT, `mefi-showreel${THEME === "void" ? "" : "-" + THEME}.mp4`);
   const ff = spawn(FFMPEG, ["-y", "-hide_banner", "-loglevel", "error",
     "-f", "image2pipe", "-framerate", String(FPS), "-c:v", "png", "-i", "-", "-i", wav,
-    "-c:v", "libx264", "-preset", "slow", "-crf", "17", "-pix_fmt", "yuv420p",
-    "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", file], { stdio: ["pipe", "inherit", "inherit"] });
+    "-c:v", "libx264", "-preset", "slow", "-crf", "16", "-pix_fmt", "yuv420p",
+    "-c:a", "aac", "-b:a", "256k", "-shortest", "-movflags", "+faststart", file], { stdio: ["pipe", "inherit", "inherit"] });
   const done = new Promise((ok, fail) => ff.on("close", (code) => (code === 0 ? ok() : fail(new Error(`ffmpeg exited ${code}`)))));
   const frames = Math.round(duration * FPS);
   const started = Date.now();
@@ -113,7 +113,17 @@ true`);
   }
   ff.stdin.end();
   await done;
-  if (errors.length) console.error(errors.join("\n"));
   console.log(file);
+  // The share copy: two-pass H.264 sized to stay under Discord's 10 MB upload.
+  const share = file.replace(/\.mp4$/, "-discord.mp4");
+  const audioKbps = 160, targetBytes = 9.4 * 1024 * 1024;
+  const videoKbps = Math.floor((targetBytes * 8 / duration) / 1000 - audioKbps);
+  const pass = (n, extra) => new Promise((ok, fail) => spawn(FFMPEG, ["-y", "-hide_banner", "-loglevel", "error", "-i", file,
+    "-c:v", "libx264", "-preset", "slow", "-b:v", `${videoKbps}k`, "-pass", String(n), "-passlogfile", path.join(OUT, "work", "share"), "-pix_fmt", "yuv420p", ...extra],
+    { stdio: "inherit" }).on("close", (code) => (code === 0 ? ok() : fail(new Error(`share pass ${n} exited ${code}`)))));
+  await pass(1, ["-an", "-f", "null", "-"]);
+  await pass(2, ["-c:a", "aac", "-b:a", `${audioKbps}k`, "-movflags", "+faststart", share]);
+  console.log(share);
+  if (errors.length) console.error(errors.join("\n"));
   app.exit(0);
 }).catch((error) => { console.error(error); app.exit(1); });

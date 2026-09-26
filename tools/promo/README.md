@@ -25,19 +25,26 @@ worktree-stage.html and worktree-stage.mjs contain the current direction; ascii-
 
 node tools/promo/site.cjs assembles GitHub Pages source in dist/promo/pages/ with the current videos and docs/promo-posts.md. It publishes nothing by itself.
 
-## Showreel (20 s, 1080p60, with score)
+## Showreel (40 s, 1080p60, with score)
 
-`showreel-stage.js` is a 20-second motion piece in the style of a designer's
-reel: kinetic type, hard cuts on a 150 BPM beat, a HUD frame. Every node, wire,
-pulse and agent ring in it is painted by `renderer/node-styles.js` with the
-agent glyphs from `tree3d.js` and a theme palette resolved by `music.js`, so it
-shows the engine as it looks. `showreel-score.cjs` synthesises the score (no
-samples) with an impact on each scene cut.
+`showreel-stage.js` is a 40-second motion piece built from the app's own
+motifs: the icon drawing itself, a typed prompt collapsing into the hub and
+branching into the Command view's tree (with its callout plates and reports
+travelling back), a carousel of the eight node styles flying into a grid, one
+tree easing through four themes, the agent crew, a task from Ready to Done,
+status tiles and the privacy settings. Scenes open out of a node through an
+iris; nothing flashes. Every node, wire, pulse and agent ring is painted by
+`renderer/node-styles.js` with the agent glyphs from `tree3d.js` and palettes
+resolved by `music.js`. `showreel-score.cjs` synthesises the score (150 BPM,
+D minor, no samples): a filtered intro, a build under the prompt, the drop as
+the tree grows, a break for the principles and a ringing close.
 
 - `node node_modules/electron/cli.js tools/promo/showreel.cjs` writes
-  `dist/promo/mefi-showreel.mp4` (about 8 MB, under Discord's upload limit).
-- `--stills 1.5,5.5,11.6` writes PNG stills to `dist/promo/showreel-stills/`.
+  `dist/promo/mefi-showreel.mp4` (the master) and `mefi-showreel-discord.mp4`
+  (two-pass, under Discord's 10 MB upload limit).
+- `--stills 3.1,9,15.75` writes PNG stills to `dist/promo/showreel-stills/`.
 - `--theme abyss` (any music.js theme) and `--fps 30` are optional.
+- `node tools/promo/showreel-score.cjs score.wav` writes the score alone.
 
 Unset `ELECTRON_RUN_AS_NODE` first. It needs ffmpeg with libx264 on `PATH`
 and makes no network requests.
