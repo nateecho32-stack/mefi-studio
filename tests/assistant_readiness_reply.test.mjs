@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFile } from "node:fs/promises";
 import { localReply, buildFacts } from "../scripts/assistant.mjs";
+import workAdmission from "../scripts/work-admission.cjs";
 import backlog from "../scripts/backlog.cjs";
 import taskOversight from "../scripts/task-oversight.cjs";
 
@@ -12,7 +13,7 @@ test("host facts count the whole stored board before limiting prompt context", a
   const data = { tasks: Array.from({ length: 66 }, (_, i) => ({ id: String(i), title: `Task ${i}`, status: "open" })),
     requests: [{ title: "Task 0" }, { title: "New request" }], ideas: [], briefing: null };
   const env = vm.createContext({
-    backlog, taskOversight, taskEventTails: new Map(), logError: (text) => { throw new Error(`unexpected host error: ${text}`); },
+    backlog, taskOversight, workAdmission, taskEventTails: new Map(), logError: (text) => { throw new Error(`unexpected host error: ${text}`); },
     assistantState: { status: "running", prefs: {} }, autopilot: { execute: true, parallel: 3, jobs: [{ title: "Already finished", finished: true }] },
     assistantReadStore: async () => ({ sessions: [], todos: [], collisions: [], presence: [], uncommitted: [] }),
     getEyes: async () => ({ readJson: async (key) => data[key] }),

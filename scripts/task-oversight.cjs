@@ -30,6 +30,8 @@
 "use strict";
 
 const backlog = require("./backlog.cjs");
+const autonomy = require("./autonomy.cjs");
+const { createHash } = require("node:crypto");
 const { workerActivity } = require("./executor-activity.cjs");
 
 // ---- shared helpers -----------------------------------------------------------
@@ -230,6 +232,10 @@ function digestLimits(limits) {
 // compact: true clips every row harder (title 60, reason 100, verdict, hold
 // and error 90) and keeps a worker's last line only on running rows. Every
 // row carries its stage, so the host can hand the gate `stages` by id.
+function requestId(request) {
+  return "inbox:" + createHash("sha256").update(JSON.stringify([request?.id ?? null, request?.title ?? null, request?.prompt ?? null, request?.source ?? null, request?.at ?? request?.createdAt ?? null])).digest("hex").slice(0, 24);
+}
+
 function boardDigest(input = {}) {
   const source = plainObject(input) ?? {};
   const now = timeOf(source.now);
@@ -279,8 +285,7 @@ function boardDigest(input = {}) {
     if (id === focusId) row.focus = true;
     groups[group].push({ row, task, order, stage: state.stage, retryAt: timeOf(state.retryAt) });
   });
-  // Inbox requests are not chat-actionable and no worker runs one (only
-  // tasks run; a request is promoted first), so the inbox is only counted.
+  // Inbox work is promoted by identity before it can start.
   for (const request of rows(source.requests)) {
     const status = String(request.status ?? "");
     if (status !== "done" && status !== "archived") counts.inbox += 1;
@@ -338,6 +343,8 @@ function boardDigest(input = {}) {
   if (asks.length > digest.asks.length) digest.omitted.asks = asks.length - digest.asks.length;
   Object.assign(digest.counts, counts, { total: seen.size });
   if (focus) digest.focus = focus;
+  digest.inbox = rows(source.requests).filter((request) => !request.promotedTo && !request.runId && !request.absorbedInto && !["done", "archived"].includes(request.status)).slice(0, 8)
+    .map((request) => ({ id: requestId(request), kind: "request", stage: "inbox", title: clip(request.title || request.prompt, 90), reason: "Move onto the board before starting" }));
   return digest;
 }
 
@@ -626,9 +633,10 @@ const CHAT_ACTION_KINDS = Object.freeze({
   retry: Object.freeze({ explicit: true, gate: "asked+named", args: Object.freeze(["taskId"]), does: "re-arm a parked, held, stopped or cooling task without putting it first" }),
   stop: Object.freeze({ explicit: true, gate: "asked+named", args: Object.freeze(["taskId"]), does: "stop that task's running worker; its progress is saved" }),
   mark_done: Object.freeze({ explicit: true, gate: "asked+named", args: Object.freeze(["taskId"]), does: "mark a task done because the owner says it is" }),
-  approve: Object.freeze({ explicit: true, gate: "confirm", args: Object.freeze(["taskId"]), does: "approve a Verify-first task so it can build (the owner always confirms it on a card)" }),
+  approve: Object.freeze({ explicit: true, gate: "mode", args: Object.freeze(["taskId"]), does: "approve a task the owner asks to accept by name; Always ask keeps a confirmation card" }),
   note: Object.freeze({ explicit: true, gate: "asked+named", args: Object.freeze(["taskId", "text"]), does: "pass the owner's message to the next worker as a note (their words are stored, not yours)" }),
-  answer: Object.freeze({ explicit: true, gate: "label", args: Object.freeze(["questionId", "optionId"]), does: "pick the option of an open offer the owner named; every other Ask is answered on its card" }),
+  answer: Object.freeze({ explicit: true, gate: "label", args: Object.freeze(["questionId", "optionId"]), does: "answer an open question using the option the owner names, or their affirmation of a shown suggestion" }),
+  undo: Object.freeze({ explicit: true, gate: "asked", args: Object.freeze(["decisionId"]), does: "undo a saved automatic decision the owner asks to undo; omit decisionId for the latest" }),
   pause: Object.freeze({ explicit: true, gate: "asked", args: Object.freeze([]), does: "stop starting new work; running workers finish" }),
   resume: Object.freeze({ explicit: true, gate: "asked", args: Object.freeze([]), does: "start new work again" }),
   run_role: Object.freeze({ explicit: false, gate: "role", args: Object.freeze(["role"]), does: "run keeper (tidy), auditor (fix), watcher (organize), compactor (compact) or overseer (review) now" }),
@@ -657,7 +665,7 @@ function taskIdIn(value, ids) {
   return ids.has(bare) ? { id: bare } : { error: `unknown task id "${clip(id, 60)}"` };
 }
 
-function checkAction(raw, ids, questions) {
+function checkAction(raw, ids, questions, context = {}) {
   const action = plainObject(raw);
   if (!action) return { error: "not an action object" };
   const kind = clip(action.kind ?? action.type ?? action.action, 40).toLowerCase().replace(/[\s-]+/g, "_");
@@ -698,6 +706,11 @@ function checkAction(raw, ids, questions) {
       if (!option) return { error: wanted ? `no option "${clip(wanted, 60)}" on that question` : "missing optionId" };
       return { action: { kind, questionId, optionId: clip(option.id, 40) }, label: clip(option.label, 120), question };
     }
+    case "undo": {
+      const decisions = rows(context.decisions).filter((row) => !row.undone && !row.failed && !row.pending);
+      const decision = args.decisionId ? decisions.find((row) => row.id === args.decisionId) : decisions.at(-1);
+      return decision ? { action: { kind, decisionId: decision.id }, decision } : { error: "that automatic decision is not available to undo" };
+    }
     case "pause":
     case "resume":
       return { action: { kind } };
@@ -717,7 +730,8 @@ function checkAction(raw, ids, questions) {
 // ownerText beside the model's brief.
 function gateOf(checked, words) {
   const action = checked.action;
-  const { text, names, intent, ownerNote, ownerText } = words;
+  const { text, names, intent, ownerNote, ownerText, context } = words;
+  const level = context.level ?? "ask";
   switch (action.kind) {
     case "work_on":
     case "retry":
@@ -734,11 +748,34 @@ function gateOf(checked, words) {
       return { to: asked ? "run" : "confirm", action: final };
     }
     case "approve":
-      return { to: "confirm" };
+      return level !== "ask" && kindAsked(names, "approve", action.taskId) ? { to: "run", action: { ...action, expectedScope: context.scopes?.[action.taskId] ?? null } } : { to: "confirm" };
+    case "undo": {
+      if (!messageAsks(names.message, EXPLICIT_WORDS.undo)) return { reason: "you did not ask me to undo that decision" };
+      const available = rows(context.decisions).filter((row) => !row.undone && !row.failed && !row.pending);
+      const named = available.filter((row) => text.includes(row.id));
+      const intended = named.length === 1 ? named[0] : named.length ? null : available.at(-1);
+      return intended?.id === action.decisionId ? { to: "run" } : { reason: "name that decision, or say undo that for the latest one" };
+    }
     case "answer": {
       const question = plainObject(checked.question) ?? {};
-      if (question.source !== "offer" && question.kind !== "suggestion") return { reason: "click-only: answer it on its card" };
-      return labelNamed(names.message, checked.label) ? { to: "run" } : { reason: "the owner did not name that option: answer it on its card" };
+      if (question.source === "offer" || question.kind === "suggestion") return labelNamed(names.message, checked.label) ? { to: "run" } : { reason: "the owner did not name that option: answer it on its card" };
+      const option = rows(question.options).find((row) => row.id === action.optionId);
+      const immediate = question.id === context.immediateQuestionId;
+      const affirmed = immediate && (bareAffirmation(askText(text)) || /^(?:do what you suggested|go with your pick|use your suggestion|do that)[.!\s]*$/i.test(text.trim()));
+      if (question.source === "chat" && option?.action?.kind === "backlog" && option.action.action === "approve" && level === "ask") return { reason: "Always ask is on; approve this task on its card" };
+      if (question.source === "chat" && immediate && /^(?:no|no thanks|leave it)[.!\s]*$/i.test(text.trim()) && option?.dismiss) return { to: "run" };
+      const task = context.tasks?.find((row) => row.id === question.context?.taskId);
+      const chosen = option?.action?.kind === "chat" ? option.action.action : option?.action;
+      const elevated = autonomy.classify({ question, action: chosen, task });
+      if (elevated && context.elevated?.[elevated] !== false) return { reason: "this elevated request needs your choice on its card" };
+      if (question.source === "chat" && immediate && affirmed && action.optionId === "yes") return { to: "run" };
+      if (level === "ask") return { reason: "Always ask is on; answer this question on its card" };
+      const sameLabel = rows(context.questions).filter((row) => row.status === "open" && rows(row.options).some((entry) => entry.label === checked.label));
+      const named = labelNamed(names.message, checked.label) && (sameLabel.length <= 1 || question.context?.taskId && namedIn(names, question.context.taskId));
+      const suggestion = question.context?.suggestion?.optionId === action.optionId;
+      const answerText = option?.text === true && text.includes(":") ? text.slice(text.indexOf(":") + 1).trim().slice(0, 400) : null;
+      if (option?.text === true && !answerText) return { reason: "this choice needs your one-line answer; add it after a colon or use its card" };
+      return named || affirmed && suggestion ? { to: "run", action: answerText ? { ...action, text: answerText } : action } : { reason: "name an option, or affirm the suggestion on the question we just discussed" };
     }
     case "pause":
     case "resume":
@@ -785,10 +822,10 @@ function validateChatActions(actions, context = {}) {
   const limit = Number.isFinite(wanted) ? Math.max(1, Math.min(12, wanted)) : 4;
   const list = Array.isArray(actions) ? actions : plainObject(actions) ? [actions] : [];
   const names = nameContext(text, ctx);
-  const words = { text, names, intent: clip(ctx.intent, 40).toLowerCase(), ownerNote: clip(text, 400), ownerText: clipBlock(text, 2000) };
+  const words = { text, names, intent: clip(ctx.intent, 40).toLowerCase(), ownerNote: clip(text, 400), ownerText: clipBlock(text, 2000), context: ctx };
   const stopsAllowed = /\b(?:all|every\w*|both|each)\b/.test(names.said) ? limit : 1;
   const entries = list.slice(0, ACTIONS_SCANNED).map((raw) => {
-    const checked = checkAction(raw, ids, questions);
+    const checked = checkAction(raw, ids, questions, ctx);
     return checked.error ? { raw, checked, gate: null } : { raw, checked, gate: gateOf(checked, words) };
   });
   // How many stops the owner named are still to come after each entry.
@@ -808,6 +845,7 @@ function validateChatActions(actions, context = {}) {
   entries.forEach(({ raw, checked, gate }, index) => {
     if (checked.error) { rejected.push({ action: sketch(raw), reason: checked.error }); return; }
     const action = checked.action;
+    if (action.taskId?.startsWith("inbox:") && action.kind !== "work_on") { rejected.push({ action, reason: "inbox work must move onto the board first" }); return; }
     const key = JSON.stringify(action);
     if (seen.has(key)) { rejected.push({ action, reason: "duplicate" }); return; }
     seen.add(key);
@@ -860,6 +898,7 @@ const HANDS_OFF = /\bleave\b(?:\s+\S+){0,6}?\s+(?:alone|be|running|going|as\s+is
 // Said not to be done: a veto on marking the card the clause names done.
 const NOT_DONE = /\b(?:not|never|isn't|aren't|wasn't|weren't|ain't)\s+(?:yet\s+|really\s+|quite\s+|fully\s+|actually\s+)?(?:done|finished|complete|completed)\b/g;
 const EXPLICIT_WORDS = Object.freeze({
+  undo: /\b(?:undo|reverse|take\s+back)\b/g,
   stop: /\b(?:stop|cancel|kill|halt|abort|interrupt)\b(?!\s+(?:new\b|taking|starting|picking|queu|asking|telling|saying|suggesting|offering|talking|replying|posting|notifying))/g,
   mark_done: /\bmark\b(?:\s+[^\s.!;]+){0,8}?\s+(?:as\s+)?(?:done|complete|completed|finished|closed)\b|\bclose\b(?!\s+(?:to|enough|call|by)\b)|\b(?:is|it's|that's|this is|they're|are|was)\s+(?:already\s+|now\s+|all\s+)?(?:done|finished|complete|completed)\b|^(?:done|finished|complete|completed)\b/g,
   approve: /\b(?:approve|approved|go ahead|build it|ship it|green\s?light|lgtm)\b/g,
@@ -1505,10 +1544,10 @@ function localChatActions(text, options = {}) {
     const digest = plainObject(opts.digest) ?? {};
     const titles = new Map();
     const stages = new Map();
-    for (const group of DIGEST_GROUPS) {
+    for (const group of [...DIGEST_GROUPS, "inbox"]) {
       for (const row of rows(own(digest, group)).slice(0, 100)) {
         const id = idOf(row.id);
-        if (!id || row.kind === "request" || titles.has(id)) continue;
+        if (!id || titles.has(id)) continue;
         titles.set(id, clip(row.title, 200) || id);
         stages.set(id, clip(row.stage, 24));
       }
@@ -1518,11 +1557,37 @@ function localChatActions(text, options = {}) {
     if (!message.plain || !LOCAL_KINDS.some((kind) => hitsOf(message, kind).some((hit) => hit.asked))) return [];
     const named = [...titles.keys()].filter((id) => namedIn(names, id));
     if (named.length !== 1 || [...directIds(names, true)].some((id) => id !== named[0])) return [];
-    const kind = LOCAL_KINDS.find((entry) => LOCAL_FITS[entry](stages.get(named[0]) ?? "") && kindAsked(names, entry, named[0]));
+    const kind = LOCAL_KINDS.find((entry) => (!named[0].startsWith("inbox:") || entry === "work_on") && LOCAL_FITS[entry](stages.get(named[0]) ?? "") && kindAsked(names, entry, named[0]));
     return kind ? [{ kind, taskId: named[0] }] : [];
   } catch {
     return [];
   }
+}
+
+// Owner words can identify one saved answer without a model. Candidates still
+// pass through validateChatActions, including permission and ambiguity gates.
+function localDecisionActions(text, context = {}) {
+  const names = nameContext(text, context);
+  if (messageAsks(names.message, EXPLICIT_WORDS.undo)) {
+    const named = rows(context.decisions).filter((row) => row?.id && String(text).includes(row.id));
+    return named.length > 1 ? [] : [{ kind: "undo", ...(named[0] ? { decisionId: named[0].id } : {}) }];
+  }
+  const affirmation = bareAffirmation(askText(text)) || /^(?:do what you suggested|go with your pick|use your suggestion|do that)[.!\s]*$/i.test(text.trim());
+  const negative = /^(?:no|no thanks|leave it)[.!\s]*$/i.test(text.trim());
+  const candidates = [];
+  for (const question of rows(context.questions).filter((row) => row.status === "open" && row.source !== "offer" && row.kind !== "suggestion")) {
+    for (const option of rows(question.options)) {
+      const immediate = question.id === context.immediateQuestionId;
+      const affirmed = immediate && affirmation && (question.source === "chat" ? option.id === "yes" : question.context?.suggestion?.optionId === option.id);
+      const declined = immediate && negative && question.source === "chat" && option.dismiss;
+      if (affirmed || declined || labelNamed(names.message, option.label)) candidates.push({ kind: "answer", questionId: question.id, optionId: option.id });
+    }
+  }
+  if (candidates.length <= 1) return candidates;
+  return candidates.filter((candidate) => {
+    const question = rows(context.questions).find((row) => row.id === candidate.questionId);
+    return question?.context?.taskId && namedIn(names, question.context.taskId);
+  });
 }
 
 // ---- 4. the chat envelope --------------------------------------------------------------
@@ -1648,7 +1713,7 @@ function parseChatEnvelope(raw) {
 // ui (what the owner is looking at) and needsYou (the list behind the
 // "N need you" badge) ride right after did: they are small, and they are
 // what the owner's own words refer to.
-const PACK_ORDER = Object.freeze(["message", "did", "ui", "needsYou", "asks", "events", "board", "thread", "focus", "suggestions"]);
+const PACK_ORDER = Object.freeze(["message", "did", "ui", "needsYou", "decisionContext", "asks", "events", "board", "thread", "focus", "suggestions"]);
 // What the owner just said and what the host just did are never dropped.
 const PACK_KEEP = new Set(["message", "did"]);
 // Oldest first: these give way from the head so the newest entries stay.
@@ -1853,6 +1918,7 @@ function resultLine(action, outcome) {
     approve: `approve ${target}`,
     note: `add a note to ${target}`,
     answer: `answer ${target}`,
+    undo: "undo that decision",
     pause: "pause new work",
     resume: "resume new work",
     run_role: role ? `run the ${role} (${ROLE_PURPOSE[role]})` : "run that role",
@@ -1884,6 +1950,9 @@ function resultLine(action, outcome) {
       break;
     case "mark_done":
       line = `Marked ${target} done`;
+      break;
+    case "undo":
+      line = out.message || (out.pending ? "Undo is queued until the worker finishes" : "Mefi's decision was undone");
       break;
     case "approve":
       line = `Approved ${target}; it can build now`;
@@ -1921,11 +1990,13 @@ module.exports = {
   EVENT_KINDS,
   taskEvents,
   CHAT_ACTION_KINDS,
+  requestId,
   RUN_ROLES,
   validateChatActions,
   explicitlyAsked,
   targetNamed,
   localChatActions,
+  localDecisionActions,
   parseChatEnvelope,
   packChatPayload,
   resultLine,

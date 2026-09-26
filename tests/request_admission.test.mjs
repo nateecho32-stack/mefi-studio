@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import { baselineCompareWork } from "../scripts/policy.mjs";
 import boardGrowth from "../scripts/board-growth.cjs";
 import chatWork from "../scripts/chat-work.cjs";
+import taskOversight from "../scripts/task-oversight.cjs";
 import workAdmission from "../scripts/work-admission.cjs";
 import * as assistant from "../scripts/assistant.mjs";
 
@@ -21,7 +22,7 @@ function host({ requests = [], tasks = [] } = {}) {
   const accepted = [];
   let serial = 0;
   const context = vm.createContext({
-    boardGrowth, chatWork, workAdmission,
+    boardGrowth, chatWork, workAdmission, taskOversight,
     Date, crypto: { randomBytes: () => ({ toString: () => String(++serial) }) },
     projects: { current: () => ({ id: "fixture" }), stamp: (row) => row }, projectRoot: () => "/fixture",
     workTitleKey: assistant.compactKey,
@@ -31,7 +32,7 @@ function host({ requests = [], tasks = [] } = {}) {
     refreshAutopilotQueue: async () => {}, assistantLog: () => {}, assistantNodeContext: () => null,
   });
   vm.runInContext(section("async function queueRequests(", "// Jev classifies admitted observations"), context);
-  vm.runInContext(section("async function promoteRequestsToTasks()", "// The `opencode run` child"), context);
+  vm.runInContext(section("async function promoteRequestsToTasks(", "// The `opencode run` child"), context);
   return { context, board, accepted };
 }
 
@@ -185,4 +186,17 @@ test("chat request routing preserves the complete user instruction before task a
   const reply = await context.assistantRespond({ text, id: "fixture-message" });
   assert.equal(board.tasks.length, 1, reply.text);
   assert.equal(board.tasks[0].prompt, text);
+});
+
+test("targeted chat promotion moves only the exact inbox scope and preserves agent origin", async () => {
+  const first = { id: "r1", title: "Export", prompt: "Export JSON", source: "audit", at: 1 };
+  const second = { id: "r2", title: "Search", prompt: "Search tasks", source: "audit", at: 2 };
+  const h = host({ requests: [first, second] });
+  assert.equal(await h.context.promoteRequestsToTasks({ requestId: taskOversight.requestId(second) }), 1);
+  assert.equal(h.board.tasks[0].title, "Search");
+  assert.notEqual(h.board.tasks[0].origin.by, "owner");
+  assert.equal(h.board.requests[0].promotedTo, undefined);
+  const stale = taskOversight.requestId(first);
+  h.board.requests[0].prompt += " and publish it";
+  assert.equal(await h.context.promoteRequestsToTasks({ requestId: stale }), 0);
 });

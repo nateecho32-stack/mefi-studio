@@ -34,6 +34,17 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-26 - Shared assistant context Phase 3 focused validation
+
+Chat and desk now share decision context. Mode-aware approvals carry the
+shown scope; local confirmations, suggested answers, Undo and targeted inbox
+promotion have explicit ambiguity and stale-scope coverage. OpenRouter and
+companion-only LM Studio clear both model gates. Seventy-eight focused host,
+purity and admission tests passed. The fast run passed 3760, skipped 4 and
+found one missing workAdmission fixture collaborator; the fixture was updated
+and its focused suite passed. Check, audit (zero findings) and booklet build
+passed. The full gate follows in a fixed-source worktree.
+
 ## 2026-09-26 - Permission learning Phase 2 isolated full gate
 
 Validated snapshot 763ea51 in assist-g1. Check and audit passed with zero

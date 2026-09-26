@@ -1097,3 +1097,18 @@ that holds the link. The full flow is in [community.md](community.md).
 switch. There is no obfuscation to defeat. The rules live in
 `scripts/community.cjs`, the network calls in `scripts/discord-oauth.cjs`, and
 the renderer side in `renderer/community.js` (`window.MefiCommunity`).
+
+### Shared decision context
+
+Both Mefi seats receive `assistantDecisionContext`: the current mode and
+switches, the last eight decision reasons, open For you items, top learned
+preferences, the focused task's desk answers and the last four owner lines.
+The chat payload keeps this after Needs you and before the larger board.
+Only the current owner message authorizes an action; saved context is data.
+
+An **immediate confirmation** belongs to the previous owner turn, with exactly
+one open chat confirmation or newly shown suggestion. A bare yes cannot select
+among several cards or revive a question from an unrelated earlier turn.
+Chat Undo selects the named saved decision or the latest active decision.
+An **inbox identity** hashes the saved request's scope; promotion refuses an
+outdated identity and preserves the request's agent/owner origin.

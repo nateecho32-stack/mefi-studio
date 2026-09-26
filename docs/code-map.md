@@ -2,6 +2,13 @@
 
 ## Permission decisions
 
+- `scripts/task-oversight.cjs`: mode-aware chat gates, local answer/Undo intent,
+  scope-sensitive inbox identities and decision context packing.
+- `main.cjs`: `assistantDecisionContext` is shared by the desk and chat;
+  chat approvals carry the shown scope and inbox starts use targeted promotion.
+- `tests/chat_decisions.test.mjs`: permission gates, scoped inbox identity,
+  bounded shared context and outer companion provider readiness.
+
 - `scripts/decision-memory.cjs`: pure recency weighting, doubled corrections,
   scoped preference advice, confidence adjustment and selective forgetting.
 - `scripts/model-learning.cjs`: pure aggregation of existing local model ledgers,

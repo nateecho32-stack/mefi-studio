@@ -213,7 +213,7 @@ test("promotion keeps the request's source and origin, so its band is the one it
     projects: { current: () => ({ id: "fixture" }) }, projectRoot: () => "/fixture", workTitleKey: assistant.compactKey,
     compareWork: baselineCompareWork, workPlanTheme: () => null, workFixTheme: () => null, isFixWork: () => false, mutateBoard: gateway(board),
   });
-  vm.runInContext(section("async function promoteRequestsToTasks()", "// Chat work lands straight on the task board."), env);
+  vm.runInContext(section("async function promoteRequestsToTasks(", "// Chat work lands straight on the task board."), env);
   assert.equal(await env.promoteRequestsToTasks(), 3);
   for (const request of requests) {
     const card = board.tasks.find((task) => task.title === request.title);
@@ -271,7 +271,7 @@ function promotion(board, { themes = false } = {}) {
   });
   if (themes) vm.runInContext(section("function workPlanTheme(", "function liveFixShape("), env);
   else Object.assign(env, { workPlanTheme: () => null, workFixTheme: () => null, isFixWork: () => false });
-  vm.runInContext(section("async function promoteRequestsToTasks()", "// Chat work lands straight on the task board."), env);
+  vm.runInContext(section("async function promoteRequestsToTasks(", "// Chat work lands straight on the task board."), env);
   return env;
 }
 

@@ -183,7 +183,7 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
     section("async function backlogControl(", "function taskProjectError("),
     section("function taskView(", "async function setTaskDependencies("),
     section("async function saveTaskEdits(", "function workTitleKey("),
-    section("async function promoteRequestsToTasks()", "// Chat work lands straight"),
+    section("async function promoteRequestsToTasks(", "// Chat work lands straight"),
     section("function executorProcessAlive(", "// The `opencode run` child"),
     section("async function attributeRunSession(", "function watchRunSession("),
     section("let executorFillInFlight = null;", "// Work the assistant does on its own plumbing"),

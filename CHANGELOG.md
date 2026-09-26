@@ -7,6 +7,14 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- Chat and the desk now share recent decision reasons, pending to-dos, learned
+  preferences, task desk answers and the owner's recent messages. Named chat
+  approvals follow the permission mode and saved task scope; immediate chat
+  confirmations, suggested answers, Undo and exact inbox promotion use the
+  existing host actions. Refusals appear in the reply. OpenRouter and local
+  companion seats also clear the outer model availability gate.
+
+
 ### Added
 - Mefi learns from successful owner answers, including family choices, approvals,
   offers and chat. Recent choices count more, corrections count double, and

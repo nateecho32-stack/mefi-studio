@@ -445,11 +445,11 @@ test("taskEvents reports every owned change past the cap on the next call instea
 
 test("CHAT_ACTION_KINDS names the vocabulary and which kinds need the owner's own words", () => {
   assert.ok(Object.isFrozen(CHAT_ACTION_KINDS));
-  assert.deepEqual(Object.keys(CHAT_ACTION_KINDS), ["create_task", "work_on", "retry", "stop", "mark_done", "approve", "note", "answer", "pause", "resume", "run_role"]);
-  assert.deepEqual(Object.keys(CHAT_ACTION_KINDS).filter((kind) => CHAT_ACTION_KINDS[kind].explicit), ["work_on", "retry", "stop", "mark_done", "approve", "note", "answer", "pause", "resume"]);
+  assert.deepEqual(Object.keys(CHAT_ACTION_KINDS), ["create_task", "work_on", "retry", "stop", "mark_done", "approve", "note", "answer", "undo", "pause", "resume", "run_role"]);
+  assert.deepEqual(Object.keys(CHAT_ACTION_KINDS).filter((kind) => CHAT_ACTION_KINDS[kind].explicit), ["work_on", "retry", "stop", "mark_done", "approve", "note", "answer", "undo", "pause", "resume"]);
   assert.deepEqual(Object.fromEntries(Object.entries(CHAT_ACTION_KINDS).map(([kind, spec]) => [kind, spec.gate])), {
     create_task: "request", work_on: "asked+named", retry: "asked+named", stop: "asked+named", mark_done: "asked+named",
-    approve: "confirm", note: "asked+named", answer: "label", pause: "asked", resume: "asked", run_role: "role",
+    approve: "mode", note: "asked+named", answer: "label", undo: "asked", pause: "asked", resume: "asked", run_role: "role",
   });
   for (const spec of Object.values(CHAT_ACTION_KINDS)) assert.ok(Array.isArray(spec.args) && typeof spec.does === "string");
 });
@@ -524,8 +524,8 @@ test("validateChatActions checks answers against open questions and their option
     assert.deepEqual([result.run, result.confirm], [[], []], text);
     assert.equal(result.rejected[0].reason, "the owner did not name that option: answer it on its card", text);
   }
-  // Any Ask that is not an offer is click-only, even with its label said.
-  assert.equal(answer({ questionId: "q1", optionId: "o1" }, "keep them all").rejected[0].reason, "click-only: answer it on its card");
+  // Always ask keeps ordinary questions on their cards, even when named.
+  assert.match(answer({ questionId: "q1", optionId: "o1" }, "keep them all").rejected[0].reason, /Always ask.*card/);
   assert.match(answer({ questionId: "q2", optionId: "o1" }, "yes").rejected[0].reason, /no open question/);
   assert.match(answer({ questionId: "q1", optionId: "o9" }, "yes").rejected[0].reason, /no option/);
   assert.match(validateChatActions([{ kind: "run_role", role: "janitor" }], context("")).rejected[0].reason, /unknown role/);
@@ -770,7 +770,7 @@ test("validateChatActions reads a bare yes as the answer to the one offer or the
   assert.deepEqual(yes({ kind: "mark_done", taskId: "flaky" }, "yes", { notice: "flaky" }), { run: [], confirm: ["mark_done"] }, "yes never closes");
 });
 
-test("validateChatActions leaves every Ask but an offer to its card", () => {
+test("Always ask leaves non-offer answers on their cards without an immediate confirmation", () => {
   const permission = {
     id: "q_perm", status: "open", kind: "question", source: "issue", title: "Needs a permission: network",
     context: { issueKind: "permission", taskId: "auth" },
@@ -790,7 +790,7 @@ test("validateChatActions leaves every Ask but an offer to its card", () => {
   for (const [action, text] of answers) {
     const result = gate([{ kind: "answer", ...action }], text, { questions: asks });
     assert.deepEqual([result.run, result.confirm], [[], []], text);
-    assert.equal(result.rejected[0].reason, "click-only: answer it on its card", text);
+    assert.match(result.rejected[0].reason, /(?:Always ask|elevated request).*card/, text);
   }
 });
 

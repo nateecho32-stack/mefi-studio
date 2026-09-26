@@ -479,6 +479,7 @@ function normalizeQuestionOption(entry, index) {
     reply: str(entry.reply).trim().slice(0, 400) || null,
     ...(action ? { action } : {}),
     ...(entry.dismiss === true ? { dismiss: true } : {}),
+    ...(entry.text === true ? { text: true } : {}),
     recommended: entry.recommended === true,
   };
 }

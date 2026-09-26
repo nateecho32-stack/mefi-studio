@@ -1314,3 +1314,21 @@ task is prepared.
 **Nested delegation.** `taskDelegation.canPlan(ref, { nest, maxDepth })`: with
 `settings.agentBrain.nestedDelegation` on, a delegated slice (never a hand-off
 or a follow-up) below `EXECUTOR_MAX_DEPTH` may split its own part.
+
+### Permission modes and learning — one assistant in chat
+
+The chat and desk read the same bounded decision context. Mefi can explain
+its last eight choices and queue Undo by decision identity, including when a
+worker must finish before restoration. Mode switches apply again after the
+chat's ordering wait. Named approvals in Accept per task, Auto and Elevated
+carry the exact shown scope into `backlogControl`; Always ask raises a scoped
+approval card. Non-elevated options can be named in chat, or an immediate
+suggestion affirmed. Grant/risk and other enabled elevated asks remain cards.
+One-line instructions need the owner's text after a colon or on the card.
+
+Immediate Yes/No and Undo also have a local path, so an omitted model action
+or unavailable model cannot strand a confirmation. Refused actions explain
+why in the reply. Chat-started inbox rows promote through the existing locked
+admission path, targeted by a hash of the saved request. A changed brief is
+refused; agent-filed work keeps its normal dispatch approval gate. Companion
+OpenRouter credentials and LM Studio seats count at both availability gates.

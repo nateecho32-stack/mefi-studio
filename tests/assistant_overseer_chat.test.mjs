@@ -25,17 +25,17 @@ const section = (start, end) => {
 };
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
-function host({ tasks = [], messages = [], questions = [], jobs = [], model = null, aiUsable = true } = {}) {
-  let board = structuredClone({ tasks, requests: [], ideas: [] });
+function host({ tasks = [], messages = [], questions = [], jobs = [], model = null, aiUsable = true, level = "ask", elevated = {}, decisions = [], requests = [] } = {}) {
+  let board = structuredClone({ tasks, requests, ideas: [] });
   const effects = { workOn: [], backlog: [], stops: [], taskActions: [], notes: [], questions: [], answers: [], pauses: 0, resumes: 0, roles: [], fetches: [], created: [], aiFailed: [], references: [] };
-  const state = { status: "running", prefs: {}, messages: structuredClone(messages), questions: structuredClone(questions), agents: [], fixes: [], unread: 0, focus: null, log: [] };
+  const state = { status: "running", prefs: {}, messages: structuredClone(messages), questions: structuredClone(questions), agents: [], fixes: [], unread: 0, focus: null, log: [], decisions: structuredClone(decisions) };
   const env = vm.createContext({
     Date, crypto, setTimeout, clearTimeout, queueMicrotask, chatWork, workAdmission, taskOversight, backlog,
     autopilot: { execute: true, jobs: structuredClone(jobs), autoBuild: true }, assistantState: state, CLI_MODE: false, SMOKE: false, CAPTURE: false,
     projects: { current: () => ({ id: "fixture" }), run: (_project, fn) => fn() }, projectRoot: () => "/fixture",
     workTitleKey: assistant.compactKey, compareWork: () => 0, overseerManualUntil: 0,
-    DATA_ONLY_CLIS: new Set(["claude"]), TASKS_PATH: "tasks",
-    getEyes: async () => ({ readJson: async () => structuredClone(board.tasks) }),
+    DATA_ONLY_CLIS: new Set(["claude"]), TASKS_PATH: "tasks", REQUESTS_PATH: "requests", autonomySettings: { level, elevated },
+    getEyes: async () => ({ readJson: async (file) => structuredClone(file === "requests" ? board.requests : board.tasks) }),
     mutateBoard: async (mutate) => {
       const next = structuredClone(board), result = mutate(next) ?? {};
       if (result.ok !== false) board = next;
@@ -44,7 +44,9 @@ function host({ tasks = [], messages = [], questions = [], jobs = [], model = nu
     getAssistant: async () => assistant,
     assistantMessageFacts: async (now) => {
       const facts = { tasks: [], requests: [], sessions: [], ideas: [], executor: { enabled: true, running: [] }, log: [] };
-      facts.board = taskOversight.boardDigest({ tasks: board.tasks, requests: [], jobs: env.autopilot.jobs, questions: state.questions, focus: state.focus, now });
+      facts.board = taskOversight.boardDigest({ tasks: board.tasks, requests: board.requests, jobs: env.autopilot.jobs, questions: state.questions, focus: state.focus, autoBuild: env.autopilot.autoBuild, now });
+      Object.defineProperties(facts.board, { hostTasks: { value: structuredClone(board.tasks) }, scopes: { value: Object.fromEntries(board.tasks.map((task) => [task.id, backlog.buildScope(task)])) } });
+      facts.decisionContext = { mode: level, decisions: state.decisions };
       facts.asks = facts.board.asks;
       facts.events = [];
       return facts;
@@ -59,6 +61,11 @@ function host({ tasks = [], messages = [], questions = [], jobs = [], model = nu
       return typeof model === "function" ? model(JSON.parse(body), system) : { ok: false, error: "no model" };
     },
     assistantWorkOn: async (target, options) => { effects.workOn.push(plain({ target, options })); return { ok: true, where: `pinned "${target.label}"`, dispatch: { held: false, message: "" }, status: "open" }; },
+    promoteRequestsToTasks: async ({ requestId }) => {
+      const request = board.requests.find((row) => taskOversight.requestId(row) === requestId);
+      if (request) { request.promotedTo = "promoted"; board.tasks.push({ ...request, id: "promoted", status: "open" }); }
+    },
+    autonomyUndo: async (payload) => { effects.undos = [...(effects.undos ?? []), plain(payload)]; return { ok: true, pending: true, message: "Undo is queued until the worker finishes." }; },
     backlogControl: async (payload) => { effects.backlog.push(plain(payload)); return { ok: true }; },
     stopTaskRun: async (payload) => { effects.stops.push(plain(payload)); return { ok: true, stopped: 1 }; },
     taskAction: async (payload) => { effects.taskActions.push(plain(payload)); return { ok: true }; },
@@ -128,7 +135,7 @@ test("text in the board cannot make the model act: a question never re-arms a pa
   assert.match(reply.text, /Waiting for your OK to retry "Export report"/);
 });
 
-test("asking whether a card is done never marks it done, and approval always waits on a card with its scope", async () => {
+test("asking whether a card is done never marks it done, and Always ask approval waits on a card with its scope", async () => {
   const h = host({ tasks: [ready], model: envelope("Not yet.", [{ kind: "mark_done", taskId: "t_ready" }]) });
   await h.send('is "Search the board" done?');
   assert.deepEqual(h.effects.taskActions, []);
@@ -477,4 +484,87 @@ test("starting offered cards from the chat answers the offer's Ask card; other t
   assert.deepEqual(h.effects.workOn.map((row) => row.target.id), ["t_ready", "t_second"]);
   assert.equal(h.state.questions[0].status, "answered");
   assert.deepEqual({ optionId: h.state.questions[0].answer.optionId, via: h.state.questions[0].answer.via }, { optionId: "offer_1", via: "chat" });
+});
+
+test("chat approval follows the mode and binds the shown scope", async () => {
+  for (const level of ["accept", "auto", "elevated"]) {
+    const h = host({ tasks: [ready], level, model: envelope("I will check it.", [{ kind: "approve", taskId: ready.id }]) });
+    await h.send('approve "Search the board"');
+    assert.deepEqual(h.effects.backlog, [{ action: "approve", taskId: ready.id, projectId: "fixture", expectedScope: backlog.buildScope(ready) }]);
+    assert.equal(h.effects.questions.length, 0);
+  }
+  const h = host({ tasks: [ready], level: "auto", model: async () => {
+    h.env.autonomySettings.level = "ask";
+    return envelope("I will check it.", [{ kind: "approve", taskId: ready.id }])();
+  } });
+  await h.send('approve "Search the board"');
+  assert.equal(h.effects.backlog.length, 0, "a mode change before the reply takes effect immediately");
+});
+
+test("a model-less approval uses the same scope gate and Always ask raises a usable card", async () => {
+  for (const level of ["ask", "auto"]) {
+    const h = host({ tasks: [{ ...ready, origin: { by: "agent" } }], level, aiUsable: false });
+    // The production digest uses the mode callback; put this card in approval.
+    h.env.autopilot.autoBuild = false;
+    await h.send('approve "Search the board"');
+    if (level === "ask") assert.equal(h.effects.questions[0].options[0].action.payload.expectedScope, backlog.buildScope({ ...ready, origin: { by: "agent" } }));
+    else assert.equal(h.effects.backlog[0].expectedScope, backlog.buildScope({ ...ready, origin: { by: "agent" } }));
+  }
+});
+
+test("the next yes confirms one chat card even when the model supplies no action", async () => {
+  const q = { id: "confirm", source: "chat", status: "open", at: 11, context: { taskId: ready.id }, options: [
+    { id: "yes", label: "Yes, start", action: { kind: "chat", action: { kind: "work_on", taskId: ready.id } } }, { id: "no", label: "No, leave it", dismiss: true },
+  ] };
+  for (const aiUsable of [false, true]) {
+    const h = host({ tasks: [ready], questions: [q], aiUsable, messages: [{ role: "user", at: 10, text: "Maybe start" }, { role: "assistant", at: 12, text: "Confirm?" }], model: envelope("I will check.") });
+    await h.send("yes");
+    assert.equal(h.effects.answers[0].id, "confirm");
+    assert.equal(h.effects.answers[0].optionId, "yes");
+    assert.equal(h.effects.created.length, 0);
+  }
+  const ambiguous = host({ tasks: [ready], questions: [q, { ...q, id: "other" }], level: "auto", messages: [{ role: "user", at: 10 }], model: envelope("I will check.", [{ kind: "answer", questionId: "confirm", optionId: "yes" }]) });
+  const reply = await ambiguous.send("yes");
+  assert.equal(ambiguous.effects.answers.length, 0);
+  assert.match(reply.text, /I left the answer for you/);
+});
+
+test("the next yes accepts a shown non-elevated suggestion but an unrelated newer turn does not", async () => {
+  const q = { id: "scope", source: "issue", status: "open", at: 2, context: { taskId: ready.id, issueKind: "scope", suggestion: { optionId: "narrow", reason: "Keep it small", at: 12 } }, options: [{ id: "narrow", label: "Keep it narrow", action: { kind: "issue", action: "narrow" } }] };
+  const h = host({ tasks: [ready], level: "auto", questions: [q], messages: [{ role: "user", at: 10 }], model: envelope("I will check.") });
+  await h.send("go with your pick");
+  assert.equal(h.effects.answers[0].optionId, "narrow");
+  const stale = host({ tasks: [ready], level: "auto", questions: [q], messages: [{ role: "user", at: 14 }], model: envelope("I will check.", [{ kind: "answer", questionId: "scope", optionId: "narrow" }]) });
+  await stale.send("yes");
+  assert.equal(stale.effects.answers.length, 0);
+});
+
+test("Undo works without a model and reports the pending worker result", async () => {
+  const h = host({ decisions: [{ id: "decision_one", label: "Retry" }], aiUsable: false });
+  const reply = await h.send("undo that");
+  assert.deepEqual(h.effects.undos, [{ id: "decision_one", projectId: "fixture" }]);
+  assert.match(reply.text, /Undo is queued until the worker finishes/);
+});
+
+test("an inbox start promotes that row then dispatches its linked task", async () => {
+  const request = { title: "Add export", prompt: "Export JSON", source: "agent", at: 2 };
+  const h = host({ requests: [request], level: "auto", model: envelope("I will check.", [{ kind: "work_on", taskId: taskOversight.requestId(request) }]) });
+  await h.send('work on "Add export"');
+  assert.equal(h.effects.workOn[0].target.id, "promoted");
+  assert.equal(h.effects.workOn[0].target.start, true);
+  assert.equal(h.effects.created.length, 0);
+});
+
+test("OpenRouter and LM Studio companion seats are usable without a default route", async () => {
+  for (const provider of ["openrouter", "lmstudio"]) {
+    const h = host({ model: envelope("Hello.") });
+    h.env.readAgentSettings = async () => ({});
+    h.env.seatChoice = () => ({ provider });
+    h.env.decryptKey = (_settings, key) => key === "openrouterApiKeyEncrypted" ? "fixture-key" : null;
+    h.env.resolveAiRoute = async () => ({ ok: false });
+    h.env.seatFetch = async () => ({ ok: true, text: JSON.stringify({ reply: "Hello from the companion seat.", actions: [] }) });
+    const reply = await h.send("hello");
+    assert.match(reply.text, /Hello from the companion seat/);
+    assert.equal(reply.via, "ai");
+  }
 });

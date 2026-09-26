@@ -316,7 +316,7 @@ test("promoting a request preserves its retry budget, pin, evidence and remainin
     compareWork: (a, b) => (a.at ?? 0) - (b.at ?? 0), workTitleKey: (value) => value,
     workPlanTheme: () => null, isFixWork: () => false,
   });
-  vm.runInContext(section("async function promoteRequestsToTasks()", "// Chat work lands straight on the task board."), env);
+  vm.runInContext(section("async function promoteRequestsToTasks(", "// Chat work lands straight on the task board."), env);
   assert.equal(await env.promoteRequestsToTasks(), 1);
   const promoted = board.tasks[0];
   assert.equal(backlog.workState(promoted, 200).stage, "blocked");
