@@ -34,6 +34,20 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-26 - Trace log viewer (Build): gates on a private worktree of 6e03f15
+
+Detached worktree C:\wt\build-g at 6e03f15 plus the Trace change only
+(scripts/trace.cjs, renderer/trace.js and trace.css, the trace:channels /
+trace:read host reads and the logLine and window-console rings in main.cjs,
+preload, nav.js's record and Live route, the build and fixture lists,
+tests/trace.test.mjs, docs). `npm run check` and `npm run audit` passed.
+The first `npm test` failed three host_push_batching tests: they run
+logLine's slice alone, where the new Trace ring does not exist; logLine's
+push is now guarded, and all three pass. The rerun on the commit: Node
+parallel stage 3798 tests with one file-level failure, project_preview,
+which passes solo (18/18); the Electron fixture stage passed; Python
+contracts and the normalized-path lock passed.
+
 ## 2026-09-26 - Permission modes follow-up: owner-card slices build in Auto, dismissed parked asks stay dismissed
 
 Detached worktree C:\wt\assist-v at 6e03f15 plus the two fixes only
