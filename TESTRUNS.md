@@ -34,6 +34,18 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-26 - Permission modes shared integration
+
+Landed 31bc533 on main by merging each touched file against efe812c, with
+byte-checked backups and an empty index. Preserved the existing music/media,
+Command audio/performance, documentation and plan.md edits; kept both Added
+changelog entries. Rebuilt booklet.html from the combined renderer sources.
+The combined tree passes check and audit (zero findings), plus all 229
+focused permission, Vibe, companion, Command activity/audio/graph, media and
+booklet tests. Logs: C:/wt/phase4-shared-check.log,
+phase4-shared-audit.log and phase4-shared-integration.log. The preceding
+full-gate row documents the independently reproduced Command timeout.
+
 ## 2026-09-26 - Permission modes final gate and baseline timeout comparison
 
 Validated the fixed source commit 3e06781 in the clean assist-g1 worktree.
