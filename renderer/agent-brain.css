@@ -284,6 +284,8 @@ html[data-motion="off"] .companion-orb, html[data-motion="off"] .companion-orb .
 .companion-digest { border: 1px solid rgba(87, 255, 154, .3); border-radius: var(--r-lg); padding: 10px 12px; background: var(--live-dim); }
 .companion-digest ul, .companion-prefs ul { margin: 6px 0 8px; padding-left: 18px; font-size: var(--fs-sm); display: grid; gap: 3px; }
 .companion-queue h3, .companion-prefs h3 { margin: 0 0 6px; font-size: var(--fs-xs); letter-spacing: var(--track-eyebrow); text-transform: uppercase; color: var(--dim); }
+.companion-clear { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px; }
+.companion-clear button.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
 .companion-item { border: 1px solid var(--hairline); border-radius: var(--r-md); padding: 9px 10px; display: grid; gap: 3px; margin-bottom: 6px; }
 .companion-item strong { font-size: var(--fs-sm); font-weight: 600; }
 .companion-kind { font-size: var(--fs-2xs); letter-spacing: .06em; text-transform: uppercase; color: var(--warn); }

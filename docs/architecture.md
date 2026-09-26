@@ -93,6 +93,7 @@ configuration. Changes use the existing project/default scope and Apply flow.
 | **Decision model / Jev** | Agents › Setup › Connections configures Jev, a third-party classifier model (TypeSafe's `jev-1.13`). Routing and intake behavior live together in Agents › Setup. Optional; fixed defaults apply without it. |
 | **Autopilot / New work** | Autopilot lets the assistant start work on its own; **New work** is the master switch that holds every kind of new start while current workers finish. |
 | **Auto build / Verify first** | Auto build starts a task as soon as it is ready. Verify first holds it in **Review** until you press **Approve build**. |
+| **Delegated decision** | An answer Mefi gives for you, attributed as **Mefi decided**. A retry preserves your stop, loop guard, loop history, duplicate link and approval. Its two-per-task daily budget survives restarts. |
 | **Swarm / Cluster** | Agent mode: Swarm spreads workers across the queue, Cluster keeps them on one goal at a time. |
 | **Awaiting verification** | A finished attempt whose completion is not yet established; housekeeping checks the evidence before it becomes **Done**. |
 | **Agent brain** | The Live view (`J`) that draws a task's **pipeline** from recorded **work events**: the head (the companion), the lead, the steps and the sub-agents; plus the **Playbook** of recipes and **project map** under Agents › Workflows. The seats live under Agents › Setup. See [roadmap-0.4.0.md](roadmap-0.4.0.md) and [agent-loop.md §13](agent-loop.md#13-the-agent-brain). |

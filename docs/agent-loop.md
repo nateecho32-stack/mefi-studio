@@ -898,6 +898,11 @@ out). Naming the same cards is not enough on its own: "task_205… duplicates
 the parent gate card" and "both duplicate gate cards are already done" are
 different questions. A grant or a risk is never folded, nor is a host-raised
 run failure, and an answer that failed to apply is not carried over.
+Owner-only leftovers also fold when neither title nor detail names a task,
+both asks contain at least four content words, and their shared words cover
+at least 40% of the longer ask. This comparison is symmetric; a short check
+request does not disappear into an unrelated longer remedy. Clearing an ask
+counts as leaving it for review when a later ask folds into it.
 
 **Retried asks.** An issue on a task that has already failed twice or more
 does not recommend a plain retry, which is the answer already given: it
@@ -1266,6 +1271,37 @@ through `OPENCODE_CONFIG`, Claude Code the other through `--mcp-config`
 (`executorCore.cliInvocation`'s `desk`). The worker's `ask_desk` call
 (`desk-mcp.mjs`) waits for `askDesk`, which shares the queue, the fold and the
 per-run limit with `MEFI_HELP`. The files are removed when the run finishes.
+
+**The desk handles asks.** With `settings.agentBrain.deskResolves` on (the
+Agent brain's Seats tab, Agents › Setup, or the companion's Settings tab),
+every assistant tick runs `assistantDeskResolvePass`: up to three open asks
+(issue and family asks) and parked cards go to the desk seat
+(`desk-resolve.cjs`), whose choice is applied through `assistantAnswer`
+(`origin: "desk"`, not recorded as the owner's preference) and posted in the
+thread as a notice. An answer given for the owner is never the owner's:
+`assistantIssueAction` takes it as origin `"delegate"` (with `by`), logs
+"Mefi decided", stamps `by` and the desk's reason on the task's
+decision and on the question's answer, and re-arms with
+`backlog.delegateRetry` instead of the owner's `retryTask`. That re-arm never
+lifts the owner's stop (`ownerHold`), keeps the loop guard, loop ledger, the duplicate
+link and the build approval, leaves a parked card two failures from parking
+again, and pins nothing; family and repeating-work answers stamp `by` too, so
+a hold placed for the owner is not the owner's own. Permission, risk and
+owner-only asks never reach the desk, nor does a question the desk itself
+handed on (`context.raisedBy: "desk"`, which triage also never settles). A
+card is settled at most twice a day, counted on the card (`assistantRetries`)
+and in `assistantState.decideHistory`, so a restart does not reset either
+budget. A card is left for the owner only when the desk's model answered
+"leave it"; a model that did not answer gives the call back and the pass waits
+five minutes. An answer that could not be applied (a worker holds the card,
+its budget is spent) reopens the question for the owner. A card the owner
+stopped is never settled or re-armed for them, and a card both stopped and
+parked lists as held (`companion.taskNeed` checks holds first). The switch is
+global (`readSettings`), not a team-profile field. The companion's **Clear list** closes this project's
+listed asks as left for review and marks every listed item cleared at its own
+time (`companion.markCleared`/`dropCleared`, kept in `companion.json`), so the
+badge, the panel and the chat's needs-you digest agree and an item returns only
+when it is new.
 
 **The head's drafts.** With `settings.agentBrain.headDrafts` on, `prepareRun`
 asks the head (the heavy role, data only: `DATA_ONLY_CLIS`) to draft a

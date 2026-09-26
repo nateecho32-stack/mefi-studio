@@ -66,7 +66,7 @@ function validate(configuration) {
     if (!record(choice) || !["auto", ...CLIS].includes(choice.cli ?? "auto")) return "Unknown subtask builder.";
     if (choice.model !== undefined && (typeof choice.model !== "string" || !/^[A-Za-z0-9._:/-]{0,120}$/.test(choice.model))) return "Invalid subtask model id.";
   }
-  for (const [key, enabled] of Object.entries(configuration.agentBrain || {})) if (!["deskTool", "nestedDelegation", "headDrafts", "contextScout"].includes(key) || typeof enabled !== "boolean") return "Unknown delegation switch.";
+  for (const [key, enabled] of Object.entries(configuration.agentBrain || {})) if (!["deskTool", "nestedDelegation", "headDrafts", "contextScout", "deskResolves"].includes(key) || typeof enabled !== "boolean") return "Unknown delegation switch.";
   if (configuration.agentSkills !== undefined) { const error = addons.validate(configuration.agentSkills); if (error) return error; }
   if (configuration.agentTools !== undefined) { const error = tools.validate(configuration.agentTools); if (error) return error; }
   // Bound user strings and forbid nested prototype-shaped input. No credentials,

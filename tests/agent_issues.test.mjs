@@ -367,6 +367,42 @@ test("a different ask, an old one, an unanswered one, or a grant or a risk is no
   }
 });
 
+test("an owner-only leftover restated in other words by sibling cards folds; a different one does not", () => {
+  // The live store's MT-1 run, 2026-09-26: five cards asked for one quiet host
+  // window every half hour, each in its own words.
+  const first = card(worker("owner", "Provide one unshared quiesced host window of >=20 min with this card's `npm run check` verifier not running concurrently", { taskId: "task_111d2f279cd2b926" }), { id: "q_quiet" });
+  assert.equal(first.context.issueKind, "owner");
+  for (const said of [
+    "MT-1 needs an unshared quiesced host (~20 min+, verifier not concurrent) for the matched-pairs perf lane, a manual owner run, or a re-scope",
+    "an unshared quiesced >=20-min window with this card's `npm run check` verifier not concurrent, or re-scope the card.",
+  ]) {
+    const reworded = worker("owner", said, { taskId: "task_0f6d924ae3fd385d" });
+    assert.equal(repeatAsk(reworded, [first], { now: HOUR })?.id, "q_quiet", said);
+    const original = worker("owner", first.options[0].action.payload.ask, { taskId: "task_111d2f279cd2b926" });
+    assert.equal(repeatAsk(original, [card(reworded, { id: "q_reworded" })], { now: HOUR })?.id, "q_reworded", `reverse: ${said}`);
+  }
+  // A different leftover in the same run is still asked, even one sharing a few of its words.
+  assert.equal(repeatAsk(worker("owner", "decide whether the 637MB-start green satisfies the >1GB condition", { taskId: "task_ffbd2a3ac16c1dc1" }), [first], { now: HOUR }), null);
+  assert.equal(repeatAsk(worker("owner", "re-run npm run check verification so the card can go terminal", { taskId: "task_b" }), [first], { now: HOUR }), null);
+  const checkOnly = card(worker("owner", "re-run npm run check verification so the card can go terminal", { taskId: "task_b" }));
+  assert.equal(repeatAsk(worker("owner", first.options[0].action.payload.ask, { taskId: "task_a" }), [checkOnly], { now: HOUR }), null, "a short earlier ask is also distinct");
+  // Only the owner kind folds on words, and never past the day.
+  const scope = card(worker("scope", "the parser also needs the tokenizer rewritten for trailing commas", { taskId: "task_a" }), { id: "q_scope" });
+  assert.equal(repeatAsk(worker("scope", "the tokenizer needs rewriting for trailing commas in the parser too", { taskId: "task_b" }), [scope], { now: HOUR }), null);
+  assert.equal(repeatAsk(worker("owner", "an unshared quiesced >=20-min window with the verifier not concurrent", { taskId: "task_b" }), [first], { now: 25 * HOUR + 1_000 }), null);
+});
+
+test("owner wording alone never folds a task reference in either ask's detail", () => {
+  const first = worker("owner", "Provide one quiet host window for the performance verification", { taskId: "task_11111111" });
+  const reworded = worker("owner", "The performance verification needs a quiet host window", { taskId: "task_22222222" });
+  assert.ok(repeatAsk(reworded, [card(first)], { now: HOUR }), "control: wording folds without a named card");
+  for (const id of ["task_11111111", "task_22222222", "task_33333333"]) {
+    const detail = `For ${id}.`;
+    assert.equal(repeatAsk({ ...reworded, detail }, [card(first)], { now: HOUR }), null, `new ask detail: ${id}`);
+    assert.equal(repeatAsk(reworded, [card({ ...first, detail })], { now: HOUR }), null, `saved ask detail: ${id}`);
+  }
+});
+
 test("an ask about its own card or its split parent is not another card's ask", () => {
   const parent = card(worker("owner", "Will you flip task_parent00001 to done in the board?", { taskId: "task_parent00001" }), { id: "q_parent" });
   const child = worker("owner", "Will you flip task_child000001 to done in the board?", { taskId: "task_child000001", splitFrom: "task_parent00001" });
@@ -392,4 +428,14 @@ test("a card saved before asks rode on its options is still read by its title", 
     if (renamed) words.context.taskTitle = renamed;
     assert.equal(repeatAsk(worker("owner", "Should the owner land or unstage the staged files?", { taskId: "task_b" }), [words], { now: HOUR })?.id, "q_words", String(renamed));
   }
+});
+
+test("a question the desk handed on is never settled for the owner and says who raised it", () => {
+  const policy = { auto: ["blocked", "check-failed", "verify", "run-failed"], autoRetryLimit: 5 };
+  const desk = triageIssue({ kind: "blocked", title: "The desk could not answer: which env file?", source: "desk", taskId: "task_1", attempts: 0 }, { policy, now: HOUR });
+  assert.equal(desk.decision, "ask");
+  assert.equal(desk.issue.source, "desk");
+  assert.equal(desk.question.context.raisedBy, "desk");
+  // The same blocker from a worker inside the budget is still settled.
+  assert.equal(triageIssue({ kind: "blocked", title: "npm ci failed", source: "worker", taskId: "task_1", attempts: 0 }, { policy, now: HOUR }).decision, "auto");
 });

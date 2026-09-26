@@ -221,6 +221,7 @@ const api = {
     ...(typeof payload.deskTool === "boolean" ? { deskTool: payload.deskTool } : {}),
     ...(typeof payload.nestedDelegation === "boolean" ? { nestedDelegation: payload.nestedDelegation } : {}),
     ...(typeof payload.headDrafts === "boolean" ? { headDrafts: payload.headDrafts } : {}),
+    ...(typeof payload.deskResolves === "boolean" ? { deskResolves: payload.deskResolves } : {}),
     ...(payload.seats && typeof payload.seats === "object" ? { seats: Object.fromEntries(["lead", "desk", "companion", "scout", "overseer"].filter((seat) => payload.seats[seat]).map((seat) => [seat, {
       ...(typeof payload.seats[seat].model === "string" ? { model: payload.seats[seat].model } : {}),
       ...(typeof payload.seats[seat].effort === "string" ? { effort: payload.seats[seat].effort } : {}),
@@ -230,6 +231,7 @@ const api = {
   } : {}),
   companionState: () => ipcRenderer.invoke("companion:state"),
   companionWelcome: () => ipcRenderer.invoke("companion:welcome"),
+  companionClear: () => ipcRenderer.invoke("companion:clear"),
   companionSeen: (reason) => ipcRenderer.invoke("companion:seen", { reason: String(reason ?? "active").slice(0, 40) }),
   companionPrefs: (prefs) => ipcRenderer.invoke("companion:prefs", prefs && typeof prefs === "object" ? { ...(typeof prefs.look === "string" ? { look: prefs.look } : {}), ...(typeof prefs.scope === "string" ? { scope: prefs.scope } : {}), ...Object.fromEntries(["roaming", "pinned", "bubbles", "growth"].filter((key) => typeof prefs[key] === "boolean").map((key) => [key, prefs[key]])), ...(prefs.anchor && typeof prefs.anchor === "object" ? { anchor: { x: prefs.anchor.x, y: prefs.anchor.y } } : {}) } : {}),
   onBrainEvent: (callback) => ipcRenderer.on("brain:event", (_event, payload) => callback(payload)),

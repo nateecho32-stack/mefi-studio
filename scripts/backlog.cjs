@@ -260,6 +260,44 @@ function retryTask(task, now = Date.now()) {
   return next;
 }
 
+// A re-arm made for the owner, not by them: the desk or the assistant settled
+// an ask under the owner's permission mode (main.cjs assistantIssueAction,
+// origin "delegate"). retryTask is the owner saying "go on", so it lifts every
+// brake; this lifts only what stands between a failed card and its next
+// dispatch. It never lifts the owner's own stop, keeps the loop ledger, the
+// duplicate link and the build approval, and leaves a parked card two
+// failures from parking again. A loop hold stays in place even if the answer
+// changes the approach. assistantRetries is the card's own record of
+// these re-arms, so the per-card budget survives a restart.
+const DELEGATE_PER_DAY = 2;
+const DELEGATE_PARK_ROOM = 2;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function delegatedRetries(task, now = Date.now()) {
+  return rows(task?.assistantRetries).filter((row) => Number(row.at) > now - DAY_MS && Number(row.at) <= now);
+}
+
+function delegateRetry(task, now = Date.now(), { by = "desk", kind = null } = {}) {
+  if (!task || typeof task !== "object") return { ok: false, error: "That task is no longer on the board." };
+  if (task.ownerHold && typeof task.ownerHold === "object" && !Array.isArray(task.ownerHold)) return { ok: false, held: true, error: "You stopped this card, so only you can resume it." };
+  if (completedTask(task) || task.status === "archived") return { ok: false, error: "This task is finished." };
+  if (task.status === "active" || task.status === "running" || task.runId || task.lease) return { ok: false, error: "A worker holds this task." };
+  const recent = delegatedRetries(task, now);
+  if (recent.length >= DELEGATE_PER_DAY) return { ok: false, budget: true, error: `This card was already re-armed for you ${recent.length} times today.` };
+  const next = { ...task, status: "open", updatedAt: now };
+  for (const name of ["nextRunAt", "lastRunError", "startFailures", "providerFailures"]) delete next[name];
+  if (Number(task.runFailures) >= 5) next.runFailures = 5 - DELEGATE_PARK_ROOM;
+  if (["verify", "check-failed"].includes(kind) && (task.verification?.state === "failed" || Number(task.verifyAttempts) >= 3)) {
+    delete next.verification;
+    delete next.verificationReceiptId;
+    next.verifyAttempts = Math.min(Number(task.verifyAttempts) || 0, 3 - DELEGATE_PARK_ROOM);
+  }
+  const who = String(by || "desk").slice(0, 20);
+  next.assistantRetries = [...recent, { at: now, by: who, ...(kind ? { kind: String(kind).slice(0, 40) } : {}) }].slice(-10);
+  next.logs = [...rows(task.logs), { at: now, kind: "status", text: `Re-armed for you by the ${who === "desk" ? "desk" : "assistant"} — failure budget and loop ledger kept` }].slice(-40);
+  return { ok: true, task: next };
+}
+
 // The keeper stamps loop holds only on a host whose workState honours them:
 // assistantKeeperJob passes hostCaps.loopHold from this.
 const LOOP_HOLD = 1;
@@ -267,4 +305,4 @@ const LOOP_HOLD = 1;
 // whose workState waits a linked card (duplicateState): hostCaps.duplicateWait.
 const DUPLICATE_WAIT = 1;
 
-module.exports = { workState, summarizeBacklog, retryTask, dependencyState, dependencyIds, completedTask, droppedTask, validateDependencies, buildScope, hasBuildApproval, buildAllowed, LOOP_HOLD, DUPLICATE_WAIT };
+module.exports = { workState, summarizeBacklog, retryTask, delegateRetry, delegatedRetries, DELEGATE_PER_DAY, dependencyState, dependencyIds, completedTask, droppedTask, validateDependencies, buildScope, hasBuildApproval, buildAllowed, LOOP_HOLD, DUPLICATE_WAIT };

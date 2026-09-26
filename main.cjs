@@ -60,6 +60,7 @@ const taskAttempts = require("./scripts/task-attempts.cjs");
 const workAdmission = require("./scripts/work-admission.cjs");
 const taskOversight = require("./scripts/task-oversight.cjs");
 const companionModule = require("./scripts/companion.cjs");
+const deskResolve = require("./scripts/desk-resolve.cjs");
 const executorActivity = require("./scripts/executor-activity.cjs");
 const taskHandoffs = require("./scripts/task-handoffs.cjs");
 const executorWorktrees = require("./scripts/executor-worktrees.cjs");
@@ -7648,6 +7649,8 @@ async function assistantTick(reason = "timer") {
     } catch (error) {
       logError(`job supervision failed: ${error.message}`);
     }
+    // The owner's "Mefi handles asks" switch; the pass reads it and returns at once when off.
+    if (typeof assistantDeskResolvePass === "function") assistantDeskResolvePass().catch((error) => logError(`desk pass failed: ${error.message}`));
     const hidden = !window || window.isDestroyed() || window.isMinimized() || !window.isVisible();
     assistantState.intervalMs = hidden ? 120000 : 30000;
     assistantState.nextTickAt = assistantLoop && assistantState.status === "running" ? now + assistantState.intervalMs : 0;
@@ -8225,7 +8228,8 @@ function assistantAppendReply(text, via, intent, { offers = null, notice = false
 async function assistantNeedsYouDigest(now = Date.now()) {
   try {
     const tasks = (await (await getEyes()).readJson(TASKS_PATH, [])).filter((task) => task && !task.archived);
-    const { items, counts } = companionModule.queue({ questions: assistantState?.questions ?? [], tasks, now, project: projects.current().name ?? null });
+    const marks = typeof agentBrain !== "undefined" && agentBrain?.clearedMarks ? await agentBrain.clearedMarks().catch(() => ({})) : {};
+    const { items, counts } = companionModule.dropCleared(companionModule.queue({ questions: assistantState?.questions ?? [], tasks, now, project: projects.current().name ?? null }), marks);
     return {
       total: counts.total,
       counts: Object.fromEntries(Object.entries(counts).filter(([key, value]) => key !== "total" && value > 0)),
@@ -8240,6 +8244,108 @@ async function assistantNeedsYouDigest(now = Date.now()) {
     };
   } catch {
     return null;
+  }
+}
+
+// ---- the desk handles asks ----------------------------------------------------
+// The owner's "Mefi handles asks" switch (settings.agentBrain.deskResolves):
+// each tick the companion settles open asks and re-arms parked cards on the
+// desk seat (scripts/desk-resolve.cjs holds the rules) and posts what it chose
+// as a notice. An answer goes through assistantAnswer with origin "desk", so
+// it is attributed to the desk and re-arms with backlog.delegateRetry: the
+// owner's stop, the loop ledger and the failure budget stay. The budgets live
+// in assistantState.decideHistory (and on each card, assistantRetries), so a
+// restart does not reset them. A card is left for the owner only when the
+// desk's model actually answered "leave it"; a model that did not answer
+// backs the pass off for a few minutes and the card is read again.
+const deskResolveState = { busy: false, left: new Map(), backoffUntil: 0 };
+const DESK_RESOLVE_BACKOFF_MS = 5 * 60 * 1000;
+function deskResolvesOn(settings) {
+  return settings?.agentBrain?.deskResolves === true;
+}
+async function assistantDeskResolvePass() {
+  if (deskResolveState.busy || !assistantState || !projects.open()) return null;
+  if (Date.now() < deskResolveState.backoffUntil) return null;
+  deskResolveState.busy = true;
+  try {
+    // The owner's global switch: a project's team profile carries no copy of
+    // it (agentProfiles.effective would read it as off).
+    if (!deskResolvesOn(await readSettings())) return null;
+    const projectId = projects.current().id;
+    const tasks = (await (await getEyes()).readJson(TASKS_PATH, [])).filter((task) => task && !task.archived);
+    const byId = new Map(tasks.map((task) => [task.id, task]));
+    // The owner's stop is theirs alone: a card they stopped is never settled
+    // or re-armed for them, whatever it waits on.
+    const ownerHeld = (task) => Boolean(task?.ownerHold && typeof task.ownerHold === "object" && !Array.isArray(task.ownerHold));
+    const cards = [];
+    for (const question of assistantState.questions) {
+      if (question?.status !== "open" || deskResolveState.left.has(question.id)) continue;
+      const pick = deskResolve.resolvable(question);
+      const task = byId.get(question.context?.taskId) ?? null;
+      if (!pick.ok || ownerHeld(task)) { deskResolveState.left.set(question.id, Date.now()); continue; }
+      cards.push({ key: question.id, question, options: pick.options, task });
+    }
+    // What the owner cleared from the needs-you list stays off it for the desk too.
+    const marks = agentBrain?.clearedMarks ? await agentBrain.clearedMarks().catch(() => ({})) : {};
+    const listed = companionModule.dropCleared(companionModule.queue({ questions: assistantState.questions, tasks, now: Date.now() }), marks);
+    for (const item of deskResolve.parkedItems(listed.items)) {
+      const key = `${item.id}@${item.at}`;
+      const task = byId.get(item.taskId) ?? null;
+      if (deskResolveState.left.has(key) || ownerHeld(task)) continue;
+      cards.push({
+        key, parked: item, task,
+        question: { status: "open", source: "issue", title: `Parked: ${item.title}`, context: { taskId: item.taskId, taskTitle: item.title, issueKind: "run-failed" } },
+        options: [{ id: "retry", label: "Try again", description: "Re-arm the parked card; two more failures park it again." }],
+      });
+    }
+    let spent = 0;
+    for (const card of cards) {
+      if (spent >= deskResolve.LIMITS.perPass) break;
+      const now = Date.now();
+      const budgetKey = card.task?.id ?? card.key;
+      const room = deskResolve.budget(assistantState.decideHistory, budgetKey, now);
+      const cardRoom = card.task ? backlog.delegatedRetries(card.task, now).length < backlog.DELEGATE_PER_DAY : true;
+      if (!room.ok || !cardRoom) {
+        if (room.reason === "hour") break;
+        deskResolveState.left.set(card.key, now);
+        assistantLog("desk", `left for you: ${assistantClip(card.question.title, 80)} · already settled twice today`);
+        continue;
+      }
+      const history = assistantState.decideHistory;
+      assistantState.decideHistory = deskResolve.spend(history, budgetKey, now);
+      spent += 1;
+      const prompt = deskResolve.resolvePrompt(card);
+      const result = await seatFetch("desk", prompt.system, prompt.user, 1200).catch((error) => ({ ok: false, error: error.message }));
+      // A project switch mid-call: the answer belongs to a board no longer open.
+      if (projects.current().id !== projectId) break;
+      if (!result?.ok) {
+        // No answer is not "leave it": the call is given back, the pass waits a
+        // few minutes, and the card is read again then.
+        assistantState.decideHistory = history;
+        deskResolveState.backoffUntil = Date.now() + DESK_RESOLVE_BACKOFF_MS;
+        assistantLog("desk", `the desk's model did not answer (${assistantClip(String(result?.error ?? "no reply"), 100)}) · trying again in a few minutes`);
+        break;
+      }
+      deskResolveState.left.set(card.key, now);
+      const decision = deskResolve.parseResolution(result.text, card.options);
+      if (!decision || decision.leave) {
+        const why = decision?.reason ?? "no usable answer";
+        assistantLog("desk", `left for you: ${assistantClip(card.question.title, 80)} · ${assistantClip(why, 120)}`);
+        continue;
+      }
+      const applied = card.parked
+        ? await assistantDelegateRearm(card.parked.taskId, { by: "desk", kind: "parked", liftLoop: false }).catch((error) => ({ ok: false, error: error.message }))
+        : await assistantAnswer({ id: card.question.id, optionId: decision.optionId, ...(decision.text ? { text: decision.text } : {}), origin: "desk", reason: decision.reason }).catch((error) => ({ ok: false, error: error.message }));
+      const ok = applied?.ok !== false;
+      const title = card.parked ? card.parked.title : card.question.title;
+      assistantAppendReply(deskResolve.noticeText({ title, label: decision.label, reason: decision.reason, ok, error: applied?.error }), "local", "desk", { notice: true });
+      assistantLog("desk", `${ok ? "settled" : "could not settle"}: ${assistantClip(title, 80)} · ${decision.label}`);
+      await saveAssistant({ force: true });
+    }
+    if (spent) await saveAssistant({ force: true });
+    return { ok: true, spent };
+  } finally {
+    deskResolveState.busy = false;
   }
 }
 
@@ -9853,7 +9959,10 @@ async function assistantRaiseIssue(raw, { openAsks = null, fromFailure = false }
     }
     const option = earlier.options?.find((entry) => entry.id === earlier.answer?.optionId) ?? null;
     const said = earlier.answer?.text ? `: ${assistantClip(earlier.answer.text, 200)}` : "";
-    const verb = option?.action?.kind === "issue" ? option.action.action : option?.dismiss ? "hold" : "instruct";
+    // An ask the owner Cleared from the needs-you list (no option, no words)
+    // was left for review, not answered with a note.
+    const cleared = earlier.answer?.via === "clear" || (earlier.status === "dismissed" && !option && !earlier.answer?.text);
+    const verb = option?.action?.kind === "issue" ? option.action.action : option?.dismiss || cleared ? "hold" : "instruct";
     const applied = await assistantIssueAction({ action: verb, payload: { taskId: issue.taskId, issueKind: issue.kind, ask: issue.title } },
       `already answered on another card (${earlier.id})${said}`, { origin: "assistant" });
     assistantLog("decision", `already answered on another card (${earlier.id}) · ${earlier.answer?.label ?? verb}${applied?.error ? ` — ${applied.error}` : ""}`);
@@ -9865,15 +9974,22 @@ async function assistantRaiseIssue(raw, { openAsks = null, fromFailure = false }
 
 // What an answer does to the work it was about. Every verb writes the decision
 // onto the task first — the worker re-reads its own record, so the next attempt
-// starts from what was decided — and only then re-arms it. Only the owner's
-// answer re-arms: the assistant's own (origin "assistant") is a record, and an
+// starts from what was decided — and only then re-arms it. The owner's answer
+// re-arms with retryTask (the owner saying "go on"); the assistant's own
+// triage answer (origin "assistant") is a record only; an answer given FOR the
+// owner (origin "delegate": the desk or the assistant under the owner's
+// permission mode, `by` naming which) re-arms with backlog.delegateRetry,
+// which keeps the owner's stop, the loop ledger and the failure budget. An
 // answer about work that has since finished is kept without reopening it.
-async function assistantIssueAction(action = {}, note = null, { origin = "owner" } = {}) {
+async function assistantIssueAction(action = {}, note = null, { origin = "owner", by = null, reason = null } = {}) {
   const verb = String(action.action ?? "").trim();
   const payload = action.payload ?? {};
   const taskId = typeof payload.taskId === "string" ? payload.taskId : null;
   const text = String(note ?? "").trim().slice(0, 400);
   const byAssistant = origin === "assistant";
+  const delegated = origin === "delegate";
+  const decider = delegated ? (["desk", "auto", "chat"].includes(by) ? by : "desk") : byAssistant ? "assistant" : "owner";
+  const why = delegated && reason ? assistantClip(String(reason), 160) : "";
   // The owner's hold changes nothing. The assistant records one only when it
   // folds a repeat ask into an earlier card the owner held, so this card's
   // worker reads that it was already left for review.
@@ -9906,6 +10022,7 @@ async function assistantIssueAction(action = {}, note = null, { origin = "owner"
     const index = board.tasks.findIndex((task) => task?.id === taskId);
     if (index < 0) return { ok: false, error: "That task is no longer on the board." };
     const task = board.tasks[index];
+    if (delegated && task.ownerHold) return { ok: false, held: true, error: "You stopped this card, so only you can resume it." };
     if (verb === "split" && !byAssistant) {
       // A split extends a chain from its root title: "Follow-up: X", then
       // "Follow-up 2: X" and "Follow-up 3: X", so a follow-up's own split never
@@ -9921,7 +10038,7 @@ async function assistantIssueAction(action = {}, note = null, { origin = "owner"
       const splitTitle = depth === 1 ? `Follow-up: ${root}` : `Follow-up ${depth}: ${root}`;
       // The new card's brief is the ask itself; a typed note still wins.
       const brief = ask
-        ? `${ask}${askDetail ? ` — ${askDetail}` : ""}\n\nSplit out of "${task.title ?? "the task"}" (${taskId}) by the owner: build only this. If it turns out to be something only the owner can do (the board, Studio's task store, another session's files), put it under owner: in MEFI_RESULT and finish; do not ask to split it again.`
+        ? `${ask}${askDetail ? ` — ${askDetail}` : ""}\n\nSplit out of "${task.title ?? "the task"}" (${taskId}) by ${delegated ? "the assistant for the owner" : "the owner"}: build only this. If it turns out to be something only the owner can do (the board, Studio's task store, another session's files), put it under owner: in MEFI_RESULT and finish; do not ask to split it again.`
         : `Work the agent found while building "${task.title ?? "the task"}" that its brief did not cover. Decide the scope from the parent task's decision log.`;
       // The follow-up is admitted in this same write and BEFORE the decision
       // is recorded, so a refused follow-up leaves the card as it was instead
@@ -9933,7 +10050,7 @@ async function assistantIssueAction(action = {}, note = null, { origin = "owner"
       const admitted = workAdmission.admitTask(board, {
         title: splitTitle, prompt: text || brief, source: "chat", splitFrom: taskId, splitDepth: depth,
       }, {
-        origin: { kind: "split", by: "owner" }, now: Date.now(), log: "task created by the assistant",
+        origin: { kind: "split", by: delegated ? decider : "owner" }, now: Date.now(), log: "task created by the assistant",
         allocateId: () => "task_" + crypto.randomBytes(8).toString("hex"), project: { id: projects.current().id, path: projectRoot() },
       });
       if (admitted.refused) return { ok: false, error: `The follow-up task could not be created: ${admitted.reason}` };
@@ -9944,13 +10061,16 @@ async function assistantIssueAction(action = {}, note = null, { origin = "owner"
     const at = Date.now();
     task.decisions = [...(Array.isArray(task.decisions) ? task.decisions : []), {
       at, kind: payload.issueKind ?? null, choice: verb, text: text || null,
+      ...(decider !== "owner" ? { by: decider } : {}),
+      ...(why ? { reason: why } : {}),
       ...(ask ? { ask } : {}),
       ...(verb === "grant" && payload.permission ? { permission: String(payload.permission).slice(0, 60) } : {}),
     }].slice(-12);
     if (verb === "grant" && payload.permission) {
       task.grants = [...new Set([...(Array.isArray(task.grants) ? task.grants : []), String(payload.permission).slice(0, 60)])].slice(0, 10);
     }
-    task.logs = [...(task.logs ?? []), { at, kind: "decision", text: `${byAssistant ? "Assistant decided" : "You decided"}: ${wording}${text ? ` — ${text}` : ""}` }].slice(-40);
+    const who = byAssistant ? "Assistant decided" : delegated ? "Mefi decided" : "You decided";
+    task.logs = [...(task.logs ?? []), { at, kind: "decision", text: `${who}: ${wording}${text ? ` — ${text}` : ""}${why ? ` (${why})` : ""}` }].slice(-40);
     task.updatedAt = at;
     return { ok: true };
   });
@@ -9960,7 +10080,9 @@ async function assistantIssueAction(action = {}, note = null, { origin = "owner"
   if (byAssistant) return { ok: true, task: taskId, decision: verb, rearmed: false };
   // The thread says what the answer did, when the live map asks for that.
   const said = (result) => {
-    if (policy.announce === true && typeof assistantAppendReply === "function") {
+    // A delegated answer is announced by whoever gave it (the decide pass
+    // posts one notice per settle), never as the owner's.
+    if (policy.announce === true && !delegated && typeof assistantAppendReply === "function") {
       try {
         assistantAppendReply(`Your answer on "${assistantClip(title ?? taskId, 60)}": ${wording}${verb === "split" && split ? ` — "${split.title}" is on the board` : ""}.`, "local", "status");
         saveAssistant({ force: true }).catch(() => {});
@@ -9988,10 +10110,42 @@ async function assistantIssueAction(action = {}, note = null, { origin = "owner"
     // the decision on it and the plan is opened from the task itself.
     assistantLog("decision", `"${assistantClip(title ?? taskId, 60)}" goes back to planning`);
   }
+  if (delegated) {
+    const rearmed = await assistantDelegateRearm(taskId, { by: decider, kind: payload.issueKind ?? null, liftLoop: verb !== "retry" });
+    if (!rearmed.ok) return { ok: false, task: taskId, decision: verb, rearmed: false, error: rearmed.error ?? "The card could not be re-armed." };
+    return { ok: true, task: taskId, decision: verb, rearmed: true };
+  }
   const retried = await backlogControl({ action: "retry", taskId });
   if (!retried?.ok) return said({ ok: true, task: taskId, decision: verb, error: retried?.error ?? null });
   assistantAskForWork("a decision was answered");
   return said({ ok: true, task: taskId, decision: verb });
+}
+
+// A card re-armed FOR the owner (a delegated answer, a parked card the desk
+// retries): backlogControl's retry guards, then backlog.delegateRetry, which
+// never lifts the owner's stop and keeps the budgets that park a loop. No pin:
+// work settled for the owner never jumps the owner's own queue.
+async function assistantDelegateRearm(taskId, { by = "desk", kind = null, liftLoop = false } = {}) {
+  if (typeof taskId !== "string" || !taskId) return { ok: false, error: "Choose a task first." };
+  const changed = await mutateBoard((board) => {
+    const index = board.tasks.findIndex((task) => task?.id === taskId);
+    if (index < 0) return { ok: false, error: "This task is no longer on the board." };
+    const task = board.tasks[index];
+    const state = backlog.workState(task, Date.now(), { tasks: board.tasks, autoBuild: autopilot.autoBuild });
+    if (state.stage === "grouped") return { ok: false, error: "This task belongs to a group; it is re-armed through its plan." };
+    if (state.blockedBy === "dependencies") return { ok: false, error: state.reason };
+    if (state.stage === "running" || autopilot.jobs.some((job) => job.taskId === taskId)) return { ok: false, error: "A worker holds this task." };
+    if (state.stage === "review") return { ok: false, error: "This attempt is still being verified." };
+    const next = backlog.delegateRetry(task, Date.now(), { by, kind, liftLoop });
+    if (!next.ok) return next;
+    board.tasks[index] = next.task;
+    return { ok: true, taskId };
+  });
+  if (!changed?.ok) return { ok: false, error: changed?.error ?? "The card could not be re-armed.", held: changed?.held === true, budget: changed?.budget === true };
+  assistantAskForWork(`a card was re-armed for you by the ${by === "desk" ? "desk" : "assistant"}`);
+  await refreshAutopilotQueue();
+  emitAutopilot();
+  return { ok: true, taskId };
 }
 
 // The owner's answer to a duplicate-family ask (assistant.mjs auditPass
@@ -10001,11 +10155,16 @@ async function assistantIssueAction(action = {}, note = null, { origin = "owner"
 // (duplicateOf): backlog.workState waits it on that card, the keeper closes it
 // as the same work once that card is completed, and Run anyway (retryTask)
 // drops the link. The kept card waits on nothing. "keep-all" links nothing.
-async function assistantFamilyAction(action = {}) {
+async function assistantFamilyAction(action = {}, { by = "owner" } = {}) {
   const choice = ["keep-oldest", "keep-all", "hold", "let-run"].includes(action.choice) ? action.choice : null;
   if (!choice) return { ok: false, error: `unknown family decision: ${action.choice}` };
+  // Who decided: the owner, or the desk/assistant answering for them. It is
+  // stamped on every card, so a hold placed for the owner is never mistaken
+  // for the owner's own (only by:"owner" survives the loop-guard switches).
+  const decider = ["desk", "auto", "chat"].includes(by) ? by : "owner";
+  const decidedText = decider === "owner" ? "You decided" : "Mefi decided";
   const memberIds = [...new Set((Array.isArray(action.memberIds) ? action.memberIds : []).filter((id) => typeof id === "string" && id))].slice(0, 40);
-  if (choice === "hold" || choice === "let-run") return assistantChurnAction(choice, memberIds, action);
+  if (choice === "hold" || choice === "let-run") return assistantChurnAction(choice, memberIds, action, { by: decider });
   const keepId = choice === "keep-oldest" && typeof action.keepId === "string" ? action.keepId : null;
   if (memberIds.length < 2 || (choice === "keep-oldest" && !memberIds.includes(keepId))) return { ok: false, error: "That decision does not name the cards it is about." };
   let keptTitle = null;
@@ -10017,7 +10176,7 @@ async function assistantFamilyAction(action = {}) {
     const at = Date.now();
     let linked = 0;
     for (const task of members) {
-      task.familyDecision = { at, choice, keepId };
+      task.familyDecision = { at, choice, keepId, ...(decider !== "owner" ? { by: decider } : {}) };
       if (!keep) continue;
       if (task === keep) {
         delete task.duplicateOf;
@@ -10025,7 +10184,7 @@ async function assistantFamilyAction(action = {}) {
       }
       if (task.status === "done" || task.status === "archived") continue;
       task.duplicateOf = keep.id;
-      task.logs = [...(task.logs ?? []), { at, kind: "decision", text: `You decided: the same work as "${assistantClip(keep.title || keep.id, 80)}" — this card waits for it and closes when it is done` }].slice(-40);
+      task.logs = [...(task.logs ?? []), { at, kind: "decision", text: `${decidedText}: the same work as "${assistantClip(keep.title || keep.id, 80)}" — this card waits for it and closes when it is done` }].slice(-40);
       task.updatedAt = at;
       linked += 1;
     }
@@ -10044,8 +10203,10 @@ async function assistantFamilyAction(action = {}) {
 // (loopGuard by: "owner", released only by Try again, never by the loop-guard
 // switches); "let-run" changes nothing. Both stamp every member, so only runs
 // after the answer count towards asking again.
-async function assistantChurnAction(choice, memberIds, action = {}) {
+async function assistantChurnAction(choice, memberIds, action = {}, { by = "owner" } = {}) {
   if (memberIds.length < 1) return { ok: false, error: "That decision does not name the cards it is about." };
+  const decider = ["desk", "auto", "chat"].includes(by) ? by : "owner";
+  const decidedText = decider === "owner" ? "You decided" : "Mefi decided";
   const holdIds = new Set(choice === "hold" ? (Array.isArray(action.holdIds) ? action.holdIds : []).filter((id) => memberIds.includes(id)) : []);
   const reason = String(action.reason ?? "").trim().slice(0, 160) || "this work keeps coming back without changing anything";
   const recorded = await mutateBoard((board) => {
@@ -10057,11 +10218,11 @@ async function assistantChurnAction(choice, memberIds, action = {}) {
     for (const task of members) {
       // Its own field: familyDecision is the duplicate answer, and each used
       // to erase the other (assistant.mjs auditPass reads both).
-      task.churnDecision = { at, choice };
+      task.churnDecision = { at, choice, ...(decider !== "owner" ? { by: decider } : {}) };
       const waiting = !task.runId && !task.lease && !task.absorbedInto && (!task.status || ["open", "pending", "queued"].includes(task.status));
       if (!holdIds.has(task.id) || !waiting) continue;
-      task.loopGuard = { v: 1, at, kind: "family", count: 0, reason: `you held it for review: ${reason}`, remedy: "Read the last attempts, then edit, split or close the brief, or choose Try again to run it as it is.", by: "owner" };
-      task.logs = [...(task.logs ?? []), { at, kind: "decision", text: `You decided: hold this work for your review — ${reason}` }].slice(-40);
+      task.loopGuard = { v: 1, at, kind: "family", count: 0, reason: `${decider === "owner" ? "you held it for review" : "held for your review"}: ${reason}`, remedy: "Read the last attempts, then edit, split or close the brief, or choose Try again to run it as it is.", by: decider };
+      task.logs = [...(task.logs ?? []), { at, kind: "decision", text: `${decidedText}: hold this work for your review — ${reason}` }].slice(-40);
       task.updatedAt = at;
       held += 1;
     }
@@ -10088,7 +10249,7 @@ function assistantQuestionId() {
   return `q_${Date.now()}_${assistantQuestionSeq}`;
 }
 
-function assistantQuestionAction(option, text = null, { origin = "click" } = {}) {
+function assistantQuestionAction(option, text = null, { origin = "click", by = null, reason = null } = {}) {
   const action = option?.action;
   if (!action || typeof action !== "object") return null;
   if (action.kind === "message") return assistantMessage(String(action.text ?? option.reply ?? ""));
@@ -10108,9 +10269,14 @@ function assistantQuestionAction(option, text = null, { origin = "click" } = {})
   // A decision about a piece of work: the answer is written onto the task and
   // the work re-armed the way it was answered. Anything the owner typed rides
   // along as the note the next worker reads first.
-  if (action.kind === "issue") return assistantIssueAction(action, text ?? option.note ?? null);
+  // Answered FOR the owner (origin "delegate": the desk, or the assistant under
+  // the owner's permission mode), the answer is attributed and re-arms without
+  // lifting the owner's stop or the budgets that park a loop.
+  if (action.kind === "issue") return origin === "delegate"
+    ? assistantIssueAction(action, text ?? option.note ?? null, { origin: "delegate", by, reason })
+    : assistantIssueAction(action, text ?? option.note ?? null);
   // The owner's decision about a duplicate family (the keeper's family ask).
-  if (action.kind === "family") return assistantFamilyAction(action);
+  if (action.kind === "family") return assistantFamilyAction(action, origin === "delegate" ? { by: by ?? "desk" } : {});
   return null;
 }
 
@@ -10158,6 +10324,7 @@ function assistantQuestionContext(raw = {}) {
     file: clip(raw.file, 200),
     check: clip(raw.check, 120),
     evidence: (Array.isArray(raw.evidence) ? raw.evidence : []).map((line) => clip(line, 200)).filter(Boolean).slice(-4),
+    ...(["worker", "host", "desk", "assistant"].includes(raw.raisedBy) ? { raisedBy: raw.raisedBy } : {}),
   };
 }
 
@@ -10236,9 +10403,15 @@ async function assistantAnswer(payload = {}) {
     const name = question.context?.taskTitle ? `"${question.context.taskTitle}"` : "Its card";
     return { ok: false, gone: true, error: `${name} is no longer on this board, so this question was cleared.`, state: assistantState };
   }
+  // Answered FOR the owner: origin "desk" (the desk's pass) or "delegate" with
+  // `by`. Such an answer is attributed on the card and the task, re-arms
+  // without lifting the owner's stop, and is never learned as the owner's.
+  const delegatedBy = payload.origin === "desk" ? "desk"
+    : payload.origin === "delegate" ? (["desk", "auto", "chat"].includes(payload.by) ? payload.by : "desk") : null;
+  const delegatedReason = delegatedBy ? String(payload.reason ?? "").replace(/\s+/g, " ").trim().slice(0, 200) : "";
   // The companion learns how the owner answers (shown as editable preferences,
   // never applied on its own): the ask's kind and the verb chosen.
-  if (typeof agentBrain !== "undefined" && agentBrain && question.source === "issue") {
+  if (typeof agentBrain !== "undefined" && agentBrain && question.source === "issue" && !delegatedBy) {
     agentBrain.recordDecision({ kind: question.context?.issueKind ?? "issue", verb: option?.dismiss ? "hold" : option?.action?.kind === "issue" ? option.action.action : text ? "instruct" : option?.id });
   }
   if (option?.dismiss) {
@@ -10255,14 +10428,29 @@ async function assistantAnswer(payload = {}) {
     optionId: option?.id ?? null,
     label: option?.label ?? text.slice(0, 120),
     text: text || null,
-    via: option ? "option" : "text",
+    via: delegatedBy ? (delegatedBy === "desk" ? "desk" : "delegate") : option ? "option" : "text",
+    ...(delegatedBy ? { by: delegatedBy } : {}),
+    ...(delegatedReason ? { reason: delegatedReason } : {}),
   };
-  assistantLog("question", `answered: ${question.answer.label}`);
+  assistantLog("question", `answered${delegatedBy ? ` for you by the ${delegatedBy === "desk" ? "desk" : "assistant"}` : ""}: ${question.answer.label}`);
   assistantEmit({ kind: "question", ...question });
   await saveAssistant({ force: true });
   try {
     if (option?.action) {
-      const applied = await assistantQuestionAction(option, text || null, { origin: payload.origin === "chat" ? "chat" : "click" });
+      const applied = await assistantQuestionAction(option, text || null, delegatedBy
+        ? { origin: "delegate", by: delegatedBy, reason: delegatedReason || null }
+        : { origin: payload.origin === "chat" ? "chat" : "click" });
+      // An answer given for the owner that could not land (a worker holds the
+      // card, its budget for today is spent) was never the owner's answer: the
+      // card goes back to waiting for them instead of closing with an error.
+      if (applied && applied.ok === false && delegatedBy) {
+        question.status = "open";
+        question.answer = null;
+        assistantLog("question", `left for you: ${assistantClip(question.title, 80)} · ${assistantClip(String(applied.error ?? "it did not apply"), 120)}`);
+        assistantEmit({ kind: "question", ...question });
+        await saveAssistant({ force: true });
+        return { ok: false, reopened: true, error: String(applied.error ?? "").slice(0, 200) || "It did not apply.", state: assistantState };
+      }
       // An action that could not land (the task moved on, a worker holds it)
       // is reported on the answer rather than silently swallowed.
       if (applied && applied.ok === false) {
@@ -10279,7 +10467,9 @@ async function assistantAnswer(payload = {}) {
         await saveAssistant({ force: true });
         return { ok: true, dispatch: applied.dispatch, state: assistantState };
       }
-    } else {
+    } else if (!delegatedBy) {
+      // A reply is the owner speaking in the thread; an answer given for the
+      // owner never puts words in their mouth.
       const reply = text || option?.reply || option?.label || "";
       // The responder can take as long as an AI call; the answer is already
       // recorded, so the click returns and the thread fills in when it lands.
@@ -17526,11 +17716,17 @@ function registerIpc() {
   // delegated slice may split again, and whether workers get ask_desk.
   const brainSettingsView = (settings) => ({
     ok: true,
-    agentBrain: { deskTool: settings?.agentBrain?.deskTool === true, nestedDelegation: settings?.agentBrain?.nestedDelegation === true, headDrafts: settings?.agentBrain?.headDrafts === true, contextScout: settings?.agentBrain?.contextScout !== false },
+    agentBrain: { deskTool: settings?.agentBrain?.deskTool === true, nestedDelegation: settings?.agentBrain?.nestedDelegation === true, headDrafts: settings?.agentBrain?.headDrafts === true, contextScout: settings?.agentBrain?.contextScout !== false, deskResolves: settings?.agentBrain?.deskResolves === true },
     seats: Object.fromEntries(["lead", "desk", "companion", "scout", "overseer"].map((seat) => [seat, seatChoice(settings, seat)])),
     zenKey: keyAvailable(settings, "zenApiKeyEncrypted"),
   });
-  ipcMain.handle("brain:settings", async () => brainSettingsView(await readAgentSettings()));
+  ipcMain.handle("brain:settings", async () => {
+    const view = brainSettingsView(await readAgentSettings());
+    // deskResolves is the owner's global switch (brain:settings-save writes it
+    // there), not a team-profile field: read it where the desk pass reads it.
+    view.agentBrain.deskResolves = deskResolvesOn(await readSettings().catch(() => null));
+    return view;
+  });
   ipcMain.handle("brain:settings-save", async (_event, payload = {}) => {
     const efforts = SEAT_EFFORTS;
     const model = /^[A-Za-z0-9._:/-]{1,80}$/;
@@ -17542,7 +17738,7 @@ function registerIpc() {
     }
     const saved = await updateSettings((settings) => {
       settings.agentBrain = { ...(settings.agentBrain ?? {}) };
-      for (const key of ["deskTool", "nestedDelegation", "headDrafts", "contextScout"]) if (typeof payload?.[key] === "boolean") settings.agentBrain[key] = payload[key];
+      for (const key of ["deskTool", "nestedDelegation", "headDrafts", "contextScout", "deskResolves"]) if (typeof payload?.[key] === "boolean") settings.agentBrain[key] = payload[key];
       settings.agentSeats = { ...(settings.agentSeats ?? {}) };
       for (const seat of ["lead", "desk", "companion", "scout", "overseer"]) {
         const row = payload?.seats?.[seat];
@@ -17550,6 +17746,8 @@ function registerIpc() {
         settings.agentSeats[seat] = { ...(settings.agentSeats[seat] ?? {}), ...(row.effort !== undefined ? { effort: row.effort } : {}), ...(row.model !== undefined ? { model: String(row.model) } : {}), ...(typeof row.fast === "boolean" ? { fast: row.fast } : {}), ...(row.provider !== undefined ? { provider: row.provider } : {}) };
       }
     });
+    // Turned on, the desk looks at what is waiting now rather than at the next tick.
+    if (payload?.deskResolves === true) { deskResolveState.left.clear(); assistantDeskResolvePass().catch(() => {}); }
     return brainSettingsView(saved);
   });
   // With the companion covering all projects, the other projects' open asks
@@ -17568,12 +17766,40 @@ function registerIpc() {
     }
     return rows;
   };
-  ipcMain.handle("companion:state", async () => {
-    if (!agentBrain) return brainOff;
+  const companionView = async () => {
     await ensureAssistant();
     const running = autopilot.jobs.filter((entry) => !entry.finished).length;
     const others = (await agentBrain.companionScope()) === "all" ? await otherProjectAsks() : [];
-    return agentBrain.companionState({ questions: assistantState?.questions ?? [], tasks: await brainTasks(), running, project: projects.current().name ?? null, others });
+    const view = await agentBrain.companionState({ questions: assistantState?.questions ?? [], tasks: await brainTasks(), running, project: projects.current().name ?? null, others });
+    // The global switch, as the desk pass reads it (a team profile has no copy).
+    const deskResolves = deskResolvesOn(await readSettings().catch(() => null));
+    return view?.ok ? { ...view, deskResolves } : view;
+  };
+  ipcMain.handle("companion:state", async () => (agentBrain ? companionView() : brainOff));
+  // The owner's Clear: this project's open asks on the list are closed as
+  // "left for review" (nothing on their cards changes), and every item listed,
+  // cards and other projects' asks too, stays off the list until it is new.
+  ipcMain.handle("companion:clear", async () => {
+    if (!agentBrain) return brainOff;
+    const view = await companionView();
+    const items = view?.queue?.items ?? [];
+    const at = Date.now();
+    let closed = 0;
+    for (const item of items) {
+      if (item.kind !== "question" || item.projectId) continue;
+      const question = assistantState.questions.find((entry) => entry.id === item.id && entry.status === "open");
+      if (!question) continue;
+      question.status = "dismissed";
+      question.answer = { at, optionId: null, label: "Cleared from the needs-you list", text: null, via: "clear" };
+      assistantEmit({ kind: "question", ...question });
+      closed += 1;
+    }
+    if (closed) {
+      assistantLog("question", `cleared ${closed} ask${closed === 1 ? "" : "s"} from the needs-you list`);
+      await saveAssistant({ force: true });
+    }
+    await agentBrain.clearQueue({ items: items.map((item) => ({ id: item.id, at: item.at })) });
+    return { ok: true, cleared: items.length, closed };
   });
   ipcMain.handle("companion:welcome", async () => (agentBrain ? agentBrain.welcome({ tasks: await brainTasks() }) : brainOff));
   ipcMain.handle("companion:seen", async (_event, payload) => (agentBrain ? agentBrain.seen({ reason: payload?.reason ?? "active" }) : brainOff));

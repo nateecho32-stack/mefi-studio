@@ -333,6 +333,9 @@ export function emptyState(now = Date.now()) {
     nodeFolders: {},
     closedAt: 0,
     resumed: null,
+    // The answers given for the owner in the last day ({ key, at }): the
+    // hourly budget of the decide pass, kept so a restart does not reset it.
+    decideHistory: [],
   };
 }
 
@@ -493,6 +496,9 @@ function normalizeQuestionContext(entry) {
     file: clip(entry.file, 200),
     check: clip(entry.check, 120),
     evidence: asArray(entry.evidence).map((line) => clip(line, 200)).filter(Boolean).slice(-4),
+    // Who raised it: a worker, the host (a run that stopped) or the desk (a
+    // help line it could not answer). The desk never settles its own hand-offs.
+    raisedBy: oneOf(entry.raisedBy, ["worker", "host", "desk", "assistant"], null),
   };
   return Object.values(context).some((value) => (Array.isArray(value) ? value.length : value)) ? context : null;
 }
@@ -508,6 +514,10 @@ function normalizeQuestion(entry, index) {
         label: str(entry.answer.label).slice(0, 120) || null,
         text: str(entry.answer.text).slice(0, 400) || null,
         via: str(entry.answer.via).slice(0, 24) || null,
+        // Who answered when it was not the owner (the desk, the assistant) and
+        // the reason it gave, so the card still says so after a reload.
+        ...(str(entry.answer.by).trim() ? { by: str(entry.answer.by).trim().slice(0, 20) } : {}),
+        ...(str(entry.answer.reason).trim() ? { reason: str(entry.answer.reason).trim().slice(0, 200) } : {}),
         // Why an answer could not be applied (the task moved on, the split
         // chain is at its limit), kept so the card still says so after a reload.
         ...(str(entry.answer.error).trim() ? { error: str(entry.answer.error).trim().slice(0, 200) } : {}),
@@ -613,6 +623,10 @@ export function normalizeState(raw, now = Date.now()) {
     state.nodeFolders = normalizeNodeFolders(raw.nodeFolders);
     state.closedAt = num(raw.closedAt, 0);
     state.resumed = normalizeResumed(raw.resumed);
+    state.decideHistory = asArray(raw.decideHistory)
+      .filter((row) => isObject(row) && num(row.at, 0) > now - DAY && num(row.at, 0) <= now + MINUTE)
+      .map((row) => ({ key: str(row.key).slice(0, 120) || null, at: num(row.at, 0) }))
+      .slice(-200);
     return state;
   } catch {
     return emptyState(now);

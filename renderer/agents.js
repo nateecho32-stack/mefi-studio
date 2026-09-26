@@ -253,11 +253,17 @@
     const live = card("What needs you", "Live status and decisions from the assistant."); live.id = "agents-overview-live"; root.append(live);
     const hub = card("Team work hub", "Agents share work state and messages here while they build."); hub.id = "agents-work-hub"; root.append(hub);
   }
+  // Status pushes arrive about twice a second; the live cards repaint only
+  // while the sheet is open, and only when what they show has changed.
+  let overviewPainted = null, overviewSignature = "";
   function paintOverview() {
-    const root = $("agents-overview-live"); if (!root) return;
-    while (root.children.length > 2) root.lastChild.remove();
+    const root = $("agents-overview-live"); if (!root || $("agents-overlay")?.hidden !== false) return;
     const questions = (liveAssistant?.questions || []).filter((item) => item.status === "open");
     const running = (liveStatus?.running || []).filter((item) => !item.finished);
+    const signature = JSON.stringify([questions.map((item) => item.title), running.map((run) => [run.title, run.phase, run.taskId]), (liveAssistant?.agents || []).map((agent) => [agent.role, agent.status, agent.step]), (liveAssistant?.mail || []).slice(-8).map((item) => [item.from, item.to, item.text]), queue.known, Boolean($("agents-work-hub"))]);
+    if (overviewPainted === root && overviewSignature === signature) return;
+    overviewPainted = root; overviewSignature = signature;
+    while (root.children.length > 2) root.lastChild.remove();
     const count = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
     root.append(node("p", "agents-effective", `${running.length} running · ${count(questions.length, "decision")} needed`));
     for (const question of questions) root.append(button(question.title || "Decision needed", () => window.MefiCompanion?.open(), "ghost"));
@@ -529,7 +535,7 @@
     const subscriptionFirst = node("input"); subscriptionFirst.type = "checkbox"; subscriptionFirst.checked = config.aiSubscriptionFirst !== false; subscriptionFirst.setAttribute("role", "switch");
     subscriptionFirst.addEventListener("change", () => { config.aiSubscriptionFirst = subscriptionFirst.checked; dirty(); });
     behavior.append(field("Use subscription logins first", subscriptionFirst, "Automatic assistant routing checks signed-in coding tools before API keys. Turn this off to use the saved provider order."));
-    for (const [key, title, detail] of [["contextScout", "Use Luna to scout task context", "Fast tier by default; local references still gather when this is off."], ["deskTool", "Let workers ask the desk", "OpenCode and Claude workers can ask for help during a run."], ["headDrafts", "Draft complex pipelines", "Let the lead draft steps when no saved recipe fits."], ["nestedDelegation", "Allow nested delegation", "Delegated work may split again within the existing depth limit."]]) {
+    for (const [key, title, detail] of [["contextScout", "Use Luna to scout task context", "Fast tier by default; local references still gather when this is off."], ["deskTool", "Let workers ask the desk", "OpenCode and Claude workers can ask for help during a run."], ["deskResolves", "Let the desk handle asks", "The companion settles open asks and parked cards for you on the desk's model; permission, risk and owner-only asks still wait for you."], ["headDrafts", "Draft complex pipelines", "Let the lead draft steps when no saved recipe fits."], ["nestedDelegation", "Allow nested delegation", "Delegated work may split again within the existing depth limit."]]) {
       const input = node("input"); input.type = "checkbox"; input.checked = key === "contextScout" ? config.agentBrain?.[key] !== false : config.agentBrain?.[key] === true; input.setAttribute("role", "switch"); input.addEventListener("change", () => { config.agentBrain = { ...config.agentBrain, [key]: input.checked }; dirty(); }); behavior.append(field(title, input, detail));
     }
     const name = $("agents-team-name"); if (document.activeElement !== name) name.value = item.name;
@@ -597,7 +603,7 @@
   async function open(options = {}) {
     mount();
     params = { section: options.section === "setup" ? "setup" : "overview", pane: ["connections", "team", "routing", "behavior"].includes(options.pane) ? options.pane : "team" };
-    window.MefiNav?.claim("agents"); $("agents-overlay").hidden = false;
+    window.MefiNav?.claim("agents"); $("agents-overlay").hidden = false; paintOverview();
     $("agents-title").textContent = params.section === "overview" ? "Agents" : `Agent setup · ${children.setup.find(([, , value]) => value.pane === params.pane)?.[0] || "Team"}`;
     for (const pane of $("agents-body").children) if (pane.classList.contains("agents-pane")) pane.hidden = pane.id !== `agents-${params.section === "overview" ? "overview" : params.pane}`;
     $("agents-save-bar").hidden = params.section !== "setup" || params.pane === "connections";

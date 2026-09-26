@@ -34,6 +34,21 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-26 - Permission modes Phase 0: delegated safeguards and recovered gate evidence
+
+Recovered isolated Phase 0 commit 2500481 and tightened delegated retries:
+loop holds are retained, verification state changes only for verification
+kinds, and owner-held cards reject a delegated answer before writing it.
+126 focused decision, issue, companion and family tests pass. The inherited
+full gate recorded 3702/3707 Node passes (four skips, preview startup
+cancellation failed), 34/37 Electron passes (one skip), 248 Python contracts
+(one skip), and six path-lock checks. A fresh serialized rerun passes all
+16 preview tests; Command rendering times out at 100 seconds and Unified
+Agents reproduces the documented primary-destinations-at-600/1.5 failure.
+These are reported, not counted as a green full gate. The bar-clearing chat
+owns the post-landing full gate and isolated companion panel proof. Test
+logs are outside Git in C:/wt/phase0-focused.log and phase0-rerun.log.
+
 ## 2026-09-26 - Vibe panels, cards and dock (Milestone A): gates on a private worktree of 06b5d7d
 
 Detached worktree C:\wt\vibe-a at 06b5d7d plus the Vibe panels change only

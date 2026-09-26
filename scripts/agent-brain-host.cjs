@@ -244,6 +244,7 @@ function createAgentBrain(options = {}) {
       roaming: saw.roaming !== false, pinned: saw.pinned === true, bubbles: saw.bubbles !== false, growth: saw.growth !== false,
       anchor: validAnchor(saw.anchor) ? saw.anchor : null,
       decisions: Array.isArray(saw.decisions) ? saw.decisions.slice(-LIMITS.decisionsKept) : [],
+      cleared: mods.companion.markCleared(saw.cleared, []),
     });
   }
 
@@ -807,8 +808,8 @@ function createAgentBrain(options = {}) {
   // ---- the companion --------------------------------------------------------
 
   function saveCompanion(s) {
-    const { lastSeenAt, look, scope: reach, decisions, roaming, pinned, bubbles, growth, anchor } = s.companion;
-    const value = { v: 2, lastSeenAt, look, scope: reach, decisions, roaming, pinned, bubbles, growth, anchor };
+    const { lastSeenAt, look, scope: reach, decisions, roaming, pinned, bubbles, growth, anchor, cleared } = s.companion;
+    const value = { v: 2, lastSeenAt, look, scope: reach, decisions, roaming, pinned, bubbles, growth, anchor, cleared: cleared ?? {} };
     if (!sharedCompanion) return persist(s, s.files.companion, value);
     sharedCompanion.writes = sharedCompanion.writes.then(() => writeJsonAtomic(sharedCompanion.file, value)).catch((error) => warn("save companion", error));
     return sharedCompanion.writes;
@@ -851,14 +852,15 @@ function createAgentBrain(options = {}) {
   async function companionState({ questions = [], tasks = [], running = 0, project = null, others = [] } = {}) {
     const s = scope();
     await ready(s);
-    const queue = mods.companion.queue({ questions, tasks, now: now(), project });
+    const listed = mods.companion.queue({ questions, tasks, now: now(), project });
     if (s.companion.scope === "all") {
       for (const other of Array.isArray(others) ? others : []) {
         const extra = mods.companion.queue({ questions: other.questions ?? [], tasks: [], now: now(), project: other.project ?? null });
-        queue.items.push(...extra.items.map((item) => ({ ...item, projectId: other.projectId ?? null })));
-        for (const [key, value] of Object.entries(extra.counts)) queue.counts[key] = (queue.counts[key] ?? 0) + value;
+        listed.items.push(...extra.items.map((item) => ({ ...item, projectId: other.projectId ?? null })));
       }
     }
+    // What the owner cleared stays cleared until it is new again.
+    const queue = mods.companion.dropCleared(listed, s.companion.cleared);
     const state = mods.companion.stateFor({ running, needsYou: queue.counts.total, greetingUntil: s.companion.greetingUntil, now: now() });
     return {
       ok: true,
@@ -895,6 +897,22 @@ function createAgentBrain(options = {}) {
     for (const [key, value] of Object.entries({ roaming, pinned, bubbles, growth, anchor })) if (value !== undefined) s.companion[key] = value;
     await saveCompanion(s);
     return { ok: true, look: s.companion.look, scope: s.companion.scope };
+  }
+
+  // The owner's Clear on the needs-you list: every listed item is marked seen
+  // at its own time (companion.markCleared), in the one companion file.
+  async function clearQueue({ items = [] } = {}) {
+    const s = scope();
+    await ready(s);
+    s.companion.cleared = mods.companion.markCleared(s.companion.cleared, items);
+    await saveCompanion(s);
+    return { ok: true, cleared: Array.isArray(items) ? items.length : 0 };
+  }
+
+  async function clearedMarks() {
+    const s = scope();
+    await ready(s);
+    return s.companion.cleared ?? {};
   }
 
   function recordDecision({ kind, verb } = {}) {
@@ -1033,6 +1051,8 @@ function createAgentBrain(options = {}) {
     companionState,
     companionPrefs,
     companionScope,
+    clearQueue,
+    clearedMarks,
     recordDecision,
     state,
     events,

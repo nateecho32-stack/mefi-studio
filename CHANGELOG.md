@@ -22,9 +22,31 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   and Ideas while fresh ones wait. The status pill opens what it names, and a
   decision toast answers in Vibe's own drawer while Vibe is the mode.
 
+- The desk can handle asks for you. With "Let the desk handle asks for you"
+  on (the companion's Settings tab, the Agent brain's Seats tab or Agents ›
+  Setup), your companion settles open asks and re-arms parked cards on the
+  desk's model and says in the chat what it chose and why. Permission, risk
+  and "only you can do this" asks always wait for you. The companion's list
+  also gains **Clear list**, which takes stuck items off it until something
+  new happens to them.
+
 ### Fixed
 - A Vibe card whose count was empty (Freshly done, or Building now with
   nothing running) pushed its title to the far edge of the card.
+- An answer the desk gave for you counted as yours: the card said "You
+  decided", your own stop on the card was lifted, and its failure and loop
+  budgets were wiped, so a failing card could loop through the desk all day.
+  Such answers are now marked "Mefi decided" with its reason.
+  They keep your stop and the card's budgets, and they are never learned as
+  your preference. If one cannot be applied, the card goes back to waiting
+  for you.
+- A question the desk could not answer, and handed on to you, was quietly
+  settled as a retry instead of reaching you.
+- The companion's list showed a parked card's project as a raw id, and a card
+  you had stopped could still be retried as "parked".
+- "Only you can do this" asks that several cards raised about the same need,
+  in different words, now fold into one. An ask you had cleared no longer
+  comes back as an instruction.
 
 ## [0.4.3] - 2026-09-26
 

@@ -69,7 +69,7 @@ const reviewAt = (task) => num(task.awaitingAt) || num(task.lastAttempt?.at) || 
 
 /**
  * Why a task waits on the owner, if it does, with backlog.workState's
- * precedence: a parked card before a held one before one awaiting approval. A
+ * holds first: a held card before a parked one before one awaiting approval. A
  * card cooling toward its next retry is not parked: the loop will run it
  * again on its own.
  */
@@ -82,8 +82,11 @@ function taskNeed(task, now) {
   if (!isQueued(task)) return null;
   const cooling = num(task.nextRunAt) > now;
   const parked = num(task.parkedAt) > 0 || num(task.verifyAttempts) >= PARK_VERIFY_ATTEMPTS || num(task.runFailures) >= PARK_RUN_FAILURES;
-  if (parked && !cooling) return { kind: "parked", at: num(task.parkedAt) || num(task.lastAttempt?.at) || num(task.updatedAt) };
+  // A hold (the owner's stop, or the keeper's loop hold) is listed before a
+  // park: a card both held and parked must read as held, or whoever re-arms
+  // parked cards (the desk) would lift the owner's own stop.
   if (isObject(task.ownerHold) || isObject(task.loopGuard)) return { kind: "held", at: num(task.ownerHold?.at) || num(task.loopGuard?.at) || num(task.updatedAt) };
+  if (parked && !cooling) return { kind: "parked", at: num(task.parkedAt) || num(task.lastAttempt?.at) || num(task.updatedAt) };
   if (task.needsApproval || stageName(task) === "approval") return { kind: "approval", at: num(task.updatedAt) || num(task.createdAt) };
   return null;
 }
@@ -222,7 +225,10 @@ function queue({ questions = [], tasks = [], now, project = null } = {}) {
       kind: need.kind,
       taskId: String(task.id),
       title: clip(task.title, LIMITS.title) || String(task.id),
-      project: task.projectId ?? project,
+      // The project's name as the host passes it: a card's projectId is an id
+      // ("project_9ebe…"), and item.projectId means another project's ask to
+      // the renderer (agent-brain.js queueItem), so neither goes here.
+      project: project ?? null,
       at: need.at,
       actions: TASK_ACTIONS[need.kind].map((action) => ({ ...action })),
     });
@@ -230,6 +236,32 @@ function queue({ questions = [], tasks = [], now, project = null } = {}) {
   items.sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind) || a.at - b.at || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const counts = { total: items.length, question: 0, approval: 0, held: 0, parked: 0, review: 0 };
   for (const item of items) counts[item.kind] += 1;
+  return { items, counts };
+}
+
+// ---- clearing the queue ------------------------------------------------------------------
+// Things get stuck in the queue: an ask whose work moved on, a card parked
+// by an older build. The owner's Clear marks every item as seen at its own
+// time; an item comes back only when it is new or its reason is newer (a card
+// parked again later, say), so clearing never hides what happens next.
+
+const CLEARED_KEPT = 400;
+
+/** The owner's clear marks after clearing `items`: { [itemId]: at }, bounded. */
+function markCleared(marks, items) {
+  const next = { ...(isObject(marks) ? marks : {}) };
+  for (const item of asArray(items)) if (isObject(item) && item.id) next[String(item.id)] = Math.max(num(next[String(item.id)]), num(item.at));
+  const rows = Object.entries(next).filter(([, at]) => Number.isFinite(Number(at)));
+  if (rows.length <= CLEARED_KEPT) return Object.fromEntries(rows);
+  return Object.fromEntries(rows.sort((a, b) => Number(b[1]) - Number(a[1])).slice(0, CLEARED_KEPT));
+}
+
+/** The queue without the items the owner cleared, with its counts redone. */
+function dropCleared(queue, marks) {
+  const cleared = isObject(marks) ? marks : {};
+  const items = asArray(queue?.items).filter((item) => !(String(item.id) in cleared) || num(item.at) > num(cleared[String(item.id)]));
+  const counts = { total: items.length, question: 0, approval: 0, held: 0, parked: 0, review: 0 };
+  for (const item of items) counts[item.kind] = (counts[item.kind] ?? 0) + 1;
   return { items, counts };
 }
 
@@ -288,5 +320,7 @@ module.exports = {
   formatAway,
   digest,
   queue,
+  markCleared,
+  dropCleared,
   preferences,
 };

@@ -1299,6 +1299,7 @@
       box.append(input, words);
       el.seats.append(box);
     };
+    toggle("deskResolves", "Let the desk handle asks for you", "Your companion settles open asks and re-arms parked cards on the desk's model, then says in the chat what it chose and why. Permission, risk and owner-only asks always wait for you, and no card is settled more than twice a day.");
     toggle("deskTool", "Give workers the ask_desk tool", "OpenCode and Claude Code runs can ask the desk mid-run and wait for the answer. Off: they print MEFI_HELP lines and the answer reaches their next run.");
     toggle("headDrafts", "Let the head draft pipelines for complex tasks", "When no Playbook recipe fits a compound or systemic task, your heavy model drafts its steps once (at most 10 an hour). Off: such tasks start from the template until the Playbook has a recipe.");
     toggle("nestedDelegation", "Let delegated slices split again", "A sub-agent's part may be divided once more, never past three levels. Off: only an original task is divided, as before.");
@@ -1761,7 +1762,7 @@
     const panel = companion.panel;
     const state = companion.state;
     if (window.MefiCompanionUI?.managed()) {
-      window.MefiCompanionUI.render({ state, name: companionName(), status: stateWords(state), digest: companion.digest, queueItem, dismissDigest: () => { companion.digest = null; renderPanel(); } });
+      window.MefiCompanionUI.render({ state, name: companionName(), status: stateWords(state), digest: companion.digest, queueItem, clearItem, dismissDigest: () => { companion.digest = null; renderPanel(); } });
       return;
     }
     panel.textContent = "";
@@ -1793,6 +1794,7 @@
     queue.append(node("h3", "", items.length ? `Needs you · ${items.length}` : "Nothing needs you"));
     if (!items.length) queue.append(node("p", "ab-quiet", state?.state === "working" ? "Agents are working. I'll call you if something comes up." : "All quiet. I'm resting until the next task."));
     for (const item of items.slice(0, 12)) queue.append(queueItem(item));
+    if (items.length) queue.append(clearItem({ count: items.length }));
     panel.append(queue);
     const prefs = state?.preferences ?? [];
     if (prefs.length) {
@@ -1861,6 +1863,37 @@
       actions.append(button);
     }
     row.append(actions);
+    return row;
+  }
+
+  // Clear the list when things get stuck in it. It asks once before it acts:
+  // this project's asks close as left for review and every listed card stays
+  // off the list until something new happens to it.
+  function clearItem(item) {
+    const row = node("div", "companion-clear");
+    const count = Number(item?.count) || 0;
+    const words = node("span", "ab-quiet", `${count} waiting on you`);
+    const button = node("button", "ghost mini", "Clear list");
+    button.type = "button";
+    button.title = "Take everything off this list. Asks close as left for review; cards stay on the board.";
+    let armed = null;
+    const disarm = () => { clearTimeout(armed); armed = null; button.textContent = "Clear list"; button.classList.remove("danger"); };
+    button.addEventListener("click", async () => {
+      if (!armed) {
+        button.textContent = `Clear ${count}?`;
+        button.classList.add("danger");
+        armed = setTimeout(disarm, 5000);
+        return;
+      }
+      disarm();
+      button.disabled = true;
+      const result = await bridge()?.companionClear?.().catch((error) => ({ ok: false, error: String(error?.message ?? error) }));
+      if (!result?.ok) window.MefiToast?.(result?.error ?? "The list could not be cleared", "warn");
+      else window.MefiToast?.(`Cleared ${result.cleared} item${result.cleared === 1 ? "" : "s"}${result.closed ? ` · ${result.closed} ask${result.closed === 1 ? "" : "s"} left for review` : ""}`, "info");
+      button.disabled = false;
+      refreshCompanion(true);
+    });
+    row.append(words, button);
     return row;
   }
 

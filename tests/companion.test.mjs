@@ -4,7 +4,7 @@
 // are only ever suggestions drawn from enough answers.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { STATES, LOOKS, stateFor, formatAway, digest, queue, preferences } from "../scripts/companion.cjs";
+import { STATES, LOOKS, stateFor, formatAway, digest, queue, preferences, markCleared, dropCleared } from "../scripts/companion.cjs";
 
 const MIN = 60 * 1000;
 const HOUR = 60 * MIN;
@@ -167,7 +167,8 @@ test("queue items carry their actions, labels and projects", () => {
   assert.equal(byId.q_old.project, "proj_a");
   assert.deepEqual(byId["approval:t_approval_b"].actions, [{ id: "approve", label: "Approve build" }]);
   assert.deepEqual(byId["held:t_loop"].actions, [{ id: "retry", label: "Try again" }, { id: "open", label: "Open task" }]);
-  assert.equal(byId["held:t_loop"].project, "proj_c");
+  // A card's projectId is an id, not a name: this board's cards carry the name the host passes.
+  assert.equal(byId["held:t_loop"].project, "proj_a");
   assert.equal(byId["held:t_loop"].at, NOW - 3 * HOUR);
   assert.deepEqual(byId["parked:t_parked"].actions, [{ id: "retry", label: "Try again" }, { id: "open", label: "Open task" }]);
   assert.deepEqual(byId["review:t_review"].actions, [{ id: "checks", label: "View checks" }]);
@@ -220,4 +221,43 @@ test("preferences list at most five kinds, most answered first, with every verb 
   assert.equal(preferences([{ kind: "k", verb: "custom" }, { kind: "k", verb: "custom" }, { kind: "k", verb: "custom" }, { kind: "k", verb: "custom" }])[0], 'You usually choose "custom" for k questions (4 of 4).');
   assert.deepEqual(preferences(), []);
   assert.deepEqual(preferences("nope"), []);
+});
+
+test("clearing the queue hides what was listed until it is new again", () => {
+  const listed = queue({
+    questions: [{ id: "q_old", status: "open", title: "Stuck ask", at: NOW - HOUR, options: [] }],
+    tasks: [{ id: "t_parked", title: "Parked card", status: "open", parkedAt: NOW - 2 * HOUR }],
+    now: NOW,
+  });
+  assert.equal(listed.counts.total, 2);
+  const marks = markCleared({}, listed.items);
+  const cleared = dropCleared(listed, marks);
+  assert.equal(cleared.counts.total, 0);
+  assert.deepEqual(cleared.items, []);
+  // A new ask, or the same card parked again later, comes back.
+  const later = queue({
+    questions: [{ id: "q_old", status: "open", title: "Stuck ask", at: NOW - HOUR, options: [] }, { id: "q_new", status: "open", title: "New ask", at: NOW, options: [] }],
+    tasks: [{ id: "t_parked", title: "Parked card", status: "open", parkedAt: NOW }],
+    now: NOW,
+  });
+  const shown = dropCleared(later, marks);
+  assert.deepEqual(shown.items.map((item) => item.id), ["q_new", "parked:t_parked"]);
+  assert.equal(shown.counts.question, 1);
+  assert.equal(shown.counts.parked, 1);
+  // Marks keep the newest time per item and stay bounded.
+  assert.equal(markCleared({ a: 5 }, [{ id: "a", at: 3 }]).a, 5);
+  const many = markCleared({}, Array.from({ length: 450 }, (_, index) => ({ id: `i${index}`, at: index })));
+  assert.equal(Object.keys(many).length, 400);
+  assert.ok(!("i0" in many) && "i449" in many);
+  assert.deepEqual(dropCleared(null, null), { items: [], counts: { total: 0, question: 0, approval: 0, held: 0, parked: 0, review: 0 } });
+});
+
+test("a card both stopped and parked reads as held, so nothing re-arms it past the owner's stop", () => {
+  const tasks = [
+    { id: "t_both", title: "Stopped and parked", status: "open", runFailures: 5, ownerHold: { at: NOW - HOUR } },
+    { id: "t_loop_parked", title: "Loop-held and parked", status: "open", verifyAttempts: 3, loopGuard: { at: NOW - HOUR } },
+  ];
+  const { items } = queue({ tasks, now: NOW, project: "2d Trippy Hell" });
+  assert.deepEqual(items.map((item) => item.id), ["held:t_both", "held:t_loop_parked"]);
+  assert.ok(items.every((item) => item.project === "2d Trippy Hell" && !("projectId" in item)), "named by the project, never by its id");
 });

@@ -6971,6 +6971,8 @@ html[data-motion="off"] .companion-orb, html[data-motion="off"] .companion-orb .
 .companion-digest { border: 1px solid rgba(87, 255, 154, .3); border-radius: var(--r-lg); padding: 10px 12px; background: var(--live-dim); }
 .companion-digest ul, .companion-prefs ul { margin: 6px 0 8px; padding-left: 18px; font-size: var(--fs-sm); display: grid; gap: 3px; }
 .companion-queue h3, .companion-prefs h3 { margin: 0 0 6px; font-size: var(--fs-xs); letter-spacing: var(--track-eyebrow); text-transform: uppercase; color: var(--dim); }
+.companion-clear { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px; }
+.companion-clear button.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
 .companion-item { border: 1px solid var(--hairline); border-radius: var(--r-md); padding: 9px 10px; display: grid; gap: 3px; margin-bottom: 6px; }
 .companion-item strong { font-size: var(--fs-sm); font-weight: 600; }
 .companion-kind { font-size: var(--fs-2xs); letter-spacing: .06em; text-transform: uppercase; color: var(--warn); }
@@ -58726,6 +58728,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     });
     const growth = node("span", "companion-growth"); growth.setAttribute("aria-hidden", "true"); for (let i = 0; i < 3; i++) growth.append(node("i")); orb.append(growth);
     for (const [key, label] of [["newWork", "Allow new work"], ["enabled", "Run the queue"], ["proactive", "Proactive suggestions"]]) addField(key, label, null, (value) => window.MefiAgentControls?.set(key, value));
+    // The desk settles asks for the owner (main.cjs assistantDeskResolvePass).
+    addField("deskResolves", "Let me handle asks for you", null, async (value) => {
+      const result = await window.mefiStudio?.brainSettingsSave?.({ deskResolves: value });
+      if (result?.ok === false) throw new Error(result.error || "That could not be saved.");
+      if (latest?.state) latest.state.deskResolves = value;
+      window.MefiCompanion?.refresh();
+    });
     addField("roaming", "Roam around the studio", null, (value) => preference({ roaming: value }));
     addField("pinned", "Pin companion position", null, (value) => preference({ pinned: value, anchor: anchor() }));
     addField("bubbles", "Show speech bubbles", null, (value) => preference({ bubbles: value }));
@@ -58841,10 +58850,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     const statusItems = [];
     if (data.digest) statusItems.push({ id: "digest", kind: "digest", ...data.digest });
-    for (const item of state.queue?.items || []) statusItems.push(item);
+    const waiting = state.queue?.items || [];
+    for (const item of waiting) statusItems.push(item);
+    // Below the list, so each item's own answer stays the first control.
+    if (waiting.length && data.clearItem) statusItems.push({ id: "clear", kind: "clear", count: waiting.length });
     if (!statusItems.length) statusItems.push({ id: "empty", kind: "empty", text: state.state === "working" ? "Agents are working. I'll let you know when something needs you." : "All quiet. Ready when you are." });
     keyed(panes.status, statusItems, (item) => {
       if (item.kind === "empty") return node("p", "muted", item.text);
+      if (item.kind === "clear") return data.clearItem(item);
       if (item.kind === "digest") { const box = node("div", "companion-digest"); box.append(node("strong", "", item.headline)); for (const line of item.lines || []) box.append(node("p", "ab-quiet", line)); box.append(button("Thanks", data.dismissDigest)); return box; }
       return data.queueItem(item);
     });
@@ -60971,6 +60984,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       box.append(input, words);
       el.seats.append(box);
     };
+    toggle("deskResolves", "Let the desk handle asks for you", "Your companion settles open asks and re-arms parked cards on the desk's model, then says in the chat what it chose and why. Permission, risk and owner-only asks always wait for you, and no card is settled more than twice a day.");
     toggle("deskTool", "Give workers the ask_desk tool", "OpenCode and Claude Code runs can ask the desk mid-run and wait for the answer. Off: they print MEFI_HELP lines and the answer reaches their next run.");
     toggle("headDrafts", "Let the head draft pipelines for complex tasks", "When no Playbook recipe fits a compound or systemic task, your heavy model drafts its steps once (at most 10 an hour). Off: such tasks start from the template until the Playbook has a recipe.");
     toggle("nestedDelegation", "Let delegated slices split again", "A sub-agent's part may be divided once more, never past three levels. Off: only an original task is divided, as before.");
@@ -61433,7 +61447,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const panel = companion.panel;
     const state = companion.state;
     if (window.MefiCompanionUI?.managed()) {
-      window.MefiCompanionUI.render({ state, name: companionName(), status: stateWords(state), digest: companion.digest, queueItem, dismissDigest: () => { companion.digest = null; renderPanel(); } });
+      window.MefiCompanionUI.render({ state, name: companionName(), status: stateWords(state), digest: companion.digest, queueItem, clearItem, dismissDigest: () => { companion.digest = null; renderPanel(); } });
       return;
     }
     panel.textContent = "";
@@ -61465,6 +61479,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     queue.append(node("h3", "", items.length ? `Needs you · ${items.length}` : "Nothing needs you"));
     if (!items.length) queue.append(node("p", "ab-quiet", state?.state === "working" ? "Agents are working. I'll call you if something comes up." : "All quiet. I'm resting until the next task."));
     for (const item of items.slice(0, 12)) queue.append(queueItem(item));
+    if (items.length) queue.append(clearItem({ count: items.length }));
     panel.append(queue);
     const prefs = state?.preferences ?? [];
     if (prefs.length) {
@@ -61533,6 +61548,37 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       actions.append(button);
     }
     row.append(actions);
+    return row;
+  }
+
+  // Clear the list when things get stuck in it. It asks once before it acts:
+  // this project's asks close as left for review and every listed card stays
+  // off the list until something new happens to it.
+  function clearItem(item) {
+    const row = node("div", "companion-clear");
+    const count = Number(item?.count) || 0;
+    const words = node("span", "ab-quiet", `${count} waiting on you`);
+    const button = node("button", "ghost mini", "Clear list");
+    button.type = "button";
+    button.title = "Take everything off this list. Asks close as left for review; cards stay on the board.";
+    let armed = null;
+    const disarm = () => { clearTimeout(armed); armed = null; button.textContent = "Clear list"; button.classList.remove("danger"); };
+    button.addEventListener("click", async () => {
+      if (!armed) {
+        button.textContent = `Clear ${count}?`;
+        button.classList.add("danger");
+        armed = setTimeout(disarm, 5000);
+        return;
+      }
+      disarm();
+      button.disabled = true;
+      const result = await bridge()?.companionClear?.().catch((error) => ({ ok: false, error: String(error?.message ?? error) }));
+      if (!result?.ok) window.MefiToast?.(result?.error ?? "The list could not be cleared", "warn");
+      else window.MefiToast?.(`Cleared ${result.cleared} item${result.cleared === 1 ? "" : "s"}${result.closed ? ` · ${result.closed} ask${result.closed === 1 ? "" : "s"} left for review` : ""}`, "info");
+      button.disabled = false;
+      refreshCompanion(true);
+    });
+    row.append(words, button);
     return row;
   }
 
@@ -61899,11 +61945,17 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const live = card("What needs you", "Live status and decisions from the assistant."); live.id = "agents-overview-live"; root.append(live);
     const hub = card("Team work hub", "Agents share work state and messages here while they build."); hub.id = "agents-work-hub"; root.append(hub);
   }
+  // Status pushes arrive about twice a second; the live cards repaint only
+  // while the sheet is open, and only when what they show has changed.
+  let overviewPainted = null, overviewSignature = "";
   function paintOverview() {
-    const root = $("agents-overview-live"); if (!root) return;
-    while (root.children.length > 2) root.lastChild.remove();
+    const root = $("agents-overview-live"); if (!root || $("agents-overlay")?.hidden !== false) return;
     const questions = (liveAssistant?.questions || []).filter((item) => item.status === "open");
     const running = (liveStatus?.running || []).filter((item) => !item.finished);
+    const signature = JSON.stringify([questions.map((item) => item.title), running.map((run) => [run.title, run.phase, run.taskId]), (liveAssistant?.agents || []).map((agent) => [agent.role, agent.status, agent.step]), (liveAssistant?.mail || []).slice(-8).map((item) => [item.from, item.to, item.text]), queue.known, Boolean($("agents-work-hub"))]);
+    if (overviewPainted === root && overviewSignature === signature) return;
+    overviewPainted = root; overviewSignature = signature;
+    while (root.children.length > 2) root.lastChild.remove();
     const count = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
     root.append(node("p", "agents-effective", `${running.length} running · ${count(questions.length, "decision")} needed`));
     for (const question of questions) root.append(button(question.title || "Decision needed", () => window.MefiCompanion?.open(), "ghost"));
@@ -62175,7 +62227,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const subscriptionFirst = node("input"); subscriptionFirst.type = "checkbox"; subscriptionFirst.checked = config.aiSubscriptionFirst !== false; subscriptionFirst.setAttribute("role", "switch");
     subscriptionFirst.addEventListener("change", () => { config.aiSubscriptionFirst = subscriptionFirst.checked; dirty(); });
     behavior.append(field("Use subscription logins first", subscriptionFirst, "Automatic assistant routing checks signed-in coding tools before API keys. Turn this off to use the saved provider order."));
-    for (const [key, title, detail] of [["contextScout", "Use Luna to scout task context", "Fast tier by default; local references still gather when this is off."], ["deskTool", "Let workers ask the desk", "OpenCode and Claude workers can ask for help during a run."], ["headDrafts", "Draft complex pipelines", "Let the lead draft steps when no saved recipe fits."], ["nestedDelegation", "Allow nested delegation", "Delegated work may split again within the existing depth limit."]]) {
+    for (const [key, title, detail] of [["contextScout", "Use Luna to scout task context", "Fast tier by default; local references still gather when this is off."], ["deskTool", "Let workers ask the desk", "OpenCode and Claude workers can ask for help during a run."], ["deskResolves", "Let the desk handle asks", "The companion settles open asks and parked cards for you on the desk's model; permission, risk and owner-only asks still wait for you."], ["headDrafts", "Draft complex pipelines", "Let the lead draft steps when no saved recipe fits."], ["nestedDelegation", "Allow nested delegation", "Delegated work may split again within the existing depth limit."]]) {
       const input = node("input"); input.type = "checkbox"; input.checked = key === "contextScout" ? config.agentBrain?.[key] !== false : config.agentBrain?.[key] === true; input.setAttribute("role", "switch"); input.addEventListener("change", () => { config.agentBrain = { ...config.agentBrain, [key]: input.checked }; dirty(); }); behavior.append(field(title, input, detail));
     }
     const name = $("agents-team-name"); if (document.activeElement !== name) name.value = item.name;
@@ -62243,7 +62295,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   async function open(options = {}) {
     mount();
     params = { section: options.section === "setup" ? "setup" : "overview", pane: ["connections", "team", "routing", "behavior"].includes(options.pane) ? options.pane : "team" };
-    window.MefiNav?.claim("agents"); $("agents-overlay").hidden = false;
+    window.MefiNav?.claim("agents"); $("agents-overlay").hidden = false; paintOverview();
     $("agents-title").textContent = params.section === "overview" ? "Agents" : `Agent setup · ${children.setup.find(([, , value]) => value.pane === params.pane)?.[0] || "Team"}`;
     for (const pane of $("agents-body").children) if (pane.classList.contains("agents-pane")) pane.hidden = pane.id !== `agents-${params.section === "overview" ? "overview" : params.pane}`;
     $("agents-save-bar").hidden = params.section !== "setup" || params.pane === "connections";

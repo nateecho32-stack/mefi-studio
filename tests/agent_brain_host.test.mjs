@@ -459,3 +459,27 @@ test("atomic writes leave no temp behind and clear stale temps from killed or re
     await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
   }
 });
+
+test("the owner's clear keeps listed items off the companion queue across restarts", async () => {
+  const h = harness(); await h.setup();
+  try {
+    const questions = [{ id: "q1", status: "open", title: "Stuck ask", at: 500, options: [] }];
+    const before = await h.brain.companionState({ questions });
+    assert.equal(before.queue.counts.total, 1);
+    assert.deepEqual(await h.brain.clearQueue({ items: before.queue.items }), { ok: true, cleared: 1 });
+    assert.equal((await h.brain.companionState({ questions })).queue.counts.total, 0);
+    assert.equal((await h.brain.companionState({ questions })).state, "resting");
+    await h.brain.flush();
+    const saved = JSON.parse(await readFile(path.join(h.dir(), "companion.json"), "utf8"));
+    assert.deepEqual(saved.cleared, { q1: 500 });
+    const fresh = host.createAgentBrain({ dataFile: (name) => path.join(h.dir(), name), now: () => h.clock.t });
+    assert.equal((await fresh.companionState({ questions })).queue.counts.total, 0);
+    assert.deepEqual(await fresh.clearedMarks(), { q1: 500 });
+    const next = [...questions, { id: "q2", status: "open", title: "New ask", at: 900, options: [] }];
+    assert.deepEqual((await fresh.companionState({ questions: next })).queue.items.map((item) => item.id), ["q2"]);
+    await fresh.flush();
+  } finally {
+    await h.brain.flush();
+    await h.cleanup();
+  }
+});

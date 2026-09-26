@@ -194,6 +194,13 @@
     });
     const growth = node("span", "companion-growth"); growth.setAttribute("aria-hidden", "true"); for (let i = 0; i < 3; i++) growth.append(node("i")); orb.append(growth);
     for (const [key, label] of [["newWork", "Allow new work"], ["enabled", "Run the queue"], ["proactive", "Proactive suggestions"]]) addField(key, label, null, (value) => window.MefiAgentControls?.set(key, value));
+    // The desk settles asks for the owner (main.cjs assistantDeskResolvePass).
+    addField("deskResolves", "Let me handle asks for you", null, async (value) => {
+      const result = await window.mefiStudio?.brainSettingsSave?.({ deskResolves: value });
+      if (result?.ok === false) throw new Error(result.error || "That could not be saved.");
+      if (latest?.state) latest.state.deskResolves = value;
+      window.MefiCompanion?.refresh();
+    });
     addField("roaming", "Roam around the studio", null, (value) => preference({ roaming: value }));
     addField("pinned", "Pin companion position", null, (value) => preference({ pinned: value, anchor: anchor() }));
     addField("bubbles", "Show speech bubbles", null, (value) => preference({ bubbles: value }));
@@ -309,10 +316,14 @@
     }
     const statusItems = [];
     if (data.digest) statusItems.push({ id: "digest", kind: "digest", ...data.digest });
-    for (const item of state.queue?.items || []) statusItems.push(item);
+    const waiting = state.queue?.items || [];
+    for (const item of waiting) statusItems.push(item);
+    // Below the list, so each item's own answer stays the first control.
+    if (waiting.length && data.clearItem) statusItems.push({ id: "clear", kind: "clear", count: waiting.length });
     if (!statusItems.length) statusItems.push({ id: "empty", kind: "empty", text: state.state === "working" ? "Agents are working. I'll let you know when something needs you." : "All quiet. Ready when you are." });
     keyed(panes.status, statusItems, (item) => {
       if (item.kind === "empty") return node("p", "muted", item.text);
+      if (item.kind === "clear") return data.clearItem(item);
       if (item.kind === "digest") { const box = node("div", "companion-digest"); box.append(node("strong", "", item.headline)); for (const line of item.lines || []) box.append(node("p", "ab-quiet", line)); box.append(button("Thanks", data.dismissDigest)); return box; }
       return data.queueItem(item);
     });

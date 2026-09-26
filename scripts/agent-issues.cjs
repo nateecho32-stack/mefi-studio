@@ -319,7 +319,10 @@ function normalizeIssue(raw = {}, { now = null } = {}) {
     severity: ISSUE_KINDS[kind].severity,
     title,
     detail,
-    source: ["worker", "assistant", "host"].includes(raw.source) ? raw.source : "worker",
+    // "desk": the desk could not answer a worker's help line and handed it on
+    // (agent-brain-host pumpDesk). It is never auto-settled and never handed
+    // back to the desk: that would loop the question between the two.
+    source: ["worker", "assistant", "host", "desk"].includes(raw.source) ? raw.source : "worker",
     taskId: clean(raw.taskId, 80) || null,
     taskTitle: clean(raw.taskTitle, TITLE_MAX) || null,
     runId: clean(raw.runId, 80) || null,
@@ -395,7 +398,7 @@ function triageIssue(issue, { policy = DEFAULT_POLICY, openAsks = 0, now = Date.
   if (!normalized) return { ok: false, reason: "empty-issue" };
   const rules = normalizePolicy(policy);
   const kind = ISSUE_KINDS[normalized.kind];
-  const auto = kind.autoAnswer && rules.auto.includes(normalized.kind) && !ALWAYS_ASK.has(normalized.kind);
+  const auto = kind.autoAnswer && rules.auto.includes(normalized.kind) && !ALWAYS_ASK.has(normalized.kind) && normalized.source !== "desk";
   if (auto && normalized.attempts < rules.autoRetryLimit) {
     return {
       ok: true,
@@ -492,6 +495,7 @@ function questionForIssue(issue, { now = Date.now(), policy = DEFAULT_POLICY } =
       file: normalized.file,
       check: normalized.check,
       evidence: normalized.evidence,
+      raisedBy: normalized.source,
     },
     options,
   };
@@ -594,6 +598,13 @@ function ownerResultIssue(parts) {
 // word for word, or reworded around the same card ids. Either way it is one
 // decision: the owner has already answered it, or still has it open.
 const REPEAT_WINDOW_MS = 24 * 60 * 60 * 1000;
+// An owner-only leftover folds on its words alone when this share of the
+// longer ask's words are shared (askAgreement). Workers on sibling cards
+// restate one blocker ("MT-1 needs a quiesced >=20-min host") in their own
+// words every half hour. Measuring against the shorter ask also folded
+// "re-run npm run check so the card can go terminal" into that blocker,
+// which is another question.
+const OWNER_FOLD_AGREEMENT = 0.4;
 const TASK_REF = /\btask_[a-z0-9_]{8,}\b/gi;
 
 // The other cards an ask names, sorted; the cards it is about do not count.
@@ -621,6 +632,18 @@ const stemAsk = (word) => {
 const askTerms = (text) => new Set(askWords(String(text ?? "").replace(TASK_REF, " ")).split(" ")
   // Commit hashes and other ids are not words of the ask.
   .filter((word) => word.length >= 3 && !ASK_FILLER.has(word) && !/\d/.test(word)).map(stemAsk));
+
+// Share of the longer ask's content words that the other ask also uses:
+// a short ask sharing a few
+// common words with a long one is not the same ask.
+function askAgreement(a, b) {
+  const mine = askTerms(a);
+  const theirs = askTerms(b);
+  if (!mine.size || !theirs.size) return 0;
+  let shared = 0;
+  for (const word of mine) if (theirs.has(word)) shared += 1;
+  return shared / Math.max(mine.size, theirs.size);
+}
 
 // Share of the shorter ask's content words that the other ask also uses.
 function askOverlap(a, b) {
@@ -657,7 +680,8 @@ function savedAsk(question) {
 /**
  * An earlier issue question that asks what this issue asks: the same kind,
  * raised inside the window, naming the same other cards in mostly the same
- * words, or asking in exactly the same words. The newest match wins. A host-raised issue (a run that stopped) is
+ * words, or asking in exactly the same words, or (an owner-only leftover that
+ * names no card) asking in mostly the same words. The newest match wins. A host-raised issue (a run that stopped) is
  * about its own run and never repeats another card's. A grant or a risk is
  * about the task that asked, so another card's answer never stands in for
  * it, and an answer that could not be applied is no answer to carry over.
@@ -683,7 +707,11 @@ function repeatAsk(issue, questions, { now = Date.now(), windowMs = REPEAT_WINDO
     // the owner.
     const sameCards = mine.length > 0 && mine.join(" ") === theirs.join(" ") && askOverlap(normalized.title, saved.ask) >= 0.5;
     const sameWords = words.length >= 12 && askWords(saved.ask) === words;
-    if (sameCards || sameWords) found = question;
+    // The same thing asked of the owner in other words. Only when neither ask
+    // names a card: an ask about a card, even its own, is about that card.
+    const sameLeftover = normalized.kind === "owner" && !askRefs(`${normalized.title} ${normalized.detail ?? ""}`).length
+      && !askRefs(`${saved.ask} ${saved.detail}`).length && askAgreement(normalized.title, saved.ask) >= OWNER_FOLD_AGREEMENT;
+    if (sameCards || sameWords || sameLeftover) found = question;
   }
   return found;
 }

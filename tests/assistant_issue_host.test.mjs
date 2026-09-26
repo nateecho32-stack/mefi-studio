@@ -10,6 +10,7 @@ import agentIssues from "../scripts/agent-issues.cjs";
 import brains from "../scripts/brains.cjs";
 import workAdmission from "../scripts/work-admission.cjs";
 import executorCore from "../scripts/executor-core.cjs";
+import backlogModule from "../scripts/backlog.cjs";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
 const section = (start, end) => {
@@ -41,6 +42,12 @@ function issueHost({ policy = brains.issuePolicyFor(brains.defaultMap()), tasks 
     getEyes: async () => ({ readJson: async () => structuredClone(board.tasks) }),
     mutateBoard: async (fn) => fn(board),
     backlogControl: async (payload) => { backlog.push(payload); return { ok: true }; },
+    // A delegated answer (the desk, or the assistant for the owner) re-arms
+    // through the real backlog.delegateRetry, never the owner's retry.
+    backlog: backlogModule,
+    autopilot: { autoBuild: true, jobs: [] },
+    refreshAutopilotQueue: async () => {},
+    emitAutopilot: () => {},
     rememberWorkShape: (taskId, shape) => shapes.push({ taskId, shape }),
     // A split admits its follow-up through the real admission module inside
     // the decision's own board write; `created` records each card admitted.
@@ -122,6 +129,53 @@ test("a map with no triage part settles nothing and records no decision", async 
   assert.deepEqual(plain(h.backlog), []);
   assert.equal(h.state.questions.length, 0);
   assert.ok(h.logs.some((row) => row.kind === "issue"), "the issue is still recorded in the log");
+});
+
+test("an answer the desk gives for you is attributed to it and keeps every brake", async () => {
+  const h = issueHost({ tasks: [{ id: "task_1", title: "Add the retry banner", status: "open", logs: [], runFailures: 5, loopLedger: { v: 1, at: 500, n: 3, reasons: { same: 3 } }, buildApproval: { version: 1, scope: "s", approvedAt: 1 } }] });
+  const question = await h.env.assistantRaiseIssue(workerIssue("check-failed", "npm test fails in board.test", { attempts: 4 }));
+  assert.ok(question, "past the budget it is a card");
+  const result = await h.env.assistantAnswer({ id: question.id, optionId: "retry-deep", origin: "desk", reason: "the same check failed twice on the light model" });
+  assert.equal(result.ok, true);
+  const task = card(h);
+  assert.deepEqual(plain(h.backlog), [], "never the owner's retry, which lifts every brake");
+  assert.equal(task.runFailures, 3, "a parked card is left two failures from parking again");
+  assert.deepEqual(plain(task.loopLedger), { v: 1, at: 500, n: 3, reasons: { same: 3 } }, "the loop ledger is kept");
+  assert.ok(task.buildApproval, "the build approval is kept");
+  assert.equal(task.pin, undefined, "work settled for you never jumps your queue");
+  assert.equal(task.decisions.at(-1).by, "desk");
+  assert.match(task.decisions.at(-1).reason, /same check failed twice/);
+  assert.ok(task.logs.some((row) => /^Mefi decided: try again with a heavier model/.test(row.text)));
+  assert.ok(!task.logs.some((row) => /^You decided/.test(row.text)), "never logged as yours");
+  assert.equal(task.assistantRetries.length, 1, "the per-card budget is on the card, so a restart keeps it");
+  const saved = h.state.questions.find((entry) => entry.id === question.id);
+  assert.equal(saved.answer.by, "desk");
+  assert.equal(saved.answer.via, "desk");
+  assert.match(saved.answer.reason, /same check failed twice/);
+  assert.deepEqual(plain(h.shapes.map((row) => row.taskId)), ["task_1"], "a heavier model is still a routing hint");
+});
+
+test("an answer given for you never lifts your stop: the card goes back to waiting for you", async () => {
+  const h = issueHost({ tasks: [{ id: "task_1", title: "Add the retry banner", status: "open", logs: [], ownerHold: { at: 900, reason: "wait for me" } }] });
+  const question = await h.env.assistantRaiseIssue(workerIssue("check-failed", "npm test fails in board.test", { attempts: 4 }));
+  const result = await h.env.assistantAnswer({ id: question.id, optionId: "retry", origin: "delegate", by: "auto" });
+  assert.equal(result.ok, false);
+  assert.equal(result.reopened, true);
+  const saved = h.state.questions.find((entry) => entry.id === question.id);
+  assert.equal(saved.status, "open", "it was never your answer, so the card waits for you again");
+  assert.equal(saved.answer, null);
+  assert.ok(card(h).ownerHold, "your stop is untouched");
+  assert.equal(card(h).decisions, undefined, "a refused delegated answer makes no task decision");
+  assert.deepEqual(plain(h.backlog), []);
+});
+
+test("a question the desk could not answer reaches you as a card and is never settled for you", async () => {
+  const h = issueHost();
+  const question = await h.env.assistantRaiseIssue({ kind: "blocked", title: "The desk could not answer: which env file?", source: "desk", taskId: "task_1", taskTitle: "Add the retry banner", attempts: 0 });
+  assert.ok(question, "a blocked hand-off inside the retry budget is still a card");
+  assert.equal(question.context.raisedBy, "desk");
+  assert.deepEqual(plain(h.backlog), []);
+  assert.equal(card(h).decisions, undefined, "nothing was recorded as settled");
 });
 
 test("past the retry budget the same issue reaches the owner", async () => {
