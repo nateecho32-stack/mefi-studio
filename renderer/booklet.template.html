@@ -225,8 +225,11 @@
   </div>
 </section>
 <!-- Vibe: the calm front door (renderer/vibe.js). One box to talk or build,
-     what is building, what needs you and what just finished, and a five-stop
-     dock. The Build view (everything above and below) is one switch away. -->
+     and cards that come and go with what is happening: what needs you, what
+     is building, what just finished, fresh ideas. The dock's stops come and
+     go the same way, and each opens a compact panel beside the front door
+     (renderer/vibe-panels.js) instead of a Build sheet. The Build view
+     (everything above and below) is one switch away. -->
 <section id="vibe-layer" class="vibe" aria-label="Vibe" hidden tabindex="-1">
   <div class="vibe-sky" aria-hidden="true"><i class="vibe-aurora one"></i><i class="vibe-aurora two"></i><i class="vibe-aurora three"></i></div>
   <header class="vibe-top">
@@ -237,10 +240,10 @@
       <button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button>
     </div>
     <div class="vibe-top-actions">
-      <span id="vibe-pulse" class="vibe-pulse" data-tone="quiet" role="status"><i aria-hidden="true"></i><span id="vibe-pulse-text">All quiet</span></span>
+      <button id="vibe-pulse" class="vibe-pulse" type="button" data-tone="quiet" title="What needs you and what is building"><i aria-hidden="true"></i><span id="vibe-pulse-text" role="status">All quiet</span></button>
       <button class="vibe-icon" type="button" data-nav="palette" title="Search everything (Ctrl K)" aria-label="Search everything"><svg class="glyph" aria-hidden="true"><use href="#g-search"/></svg></button>
       <button id="vibe-chat-toggle" class="vibe-icon" type="button" aria-controls="vibe-chat" aria-expanded="false" title="Conversation" aria-label="Conversation"><svg class="glyph" aria-hidden="true"><use href="#g-plane"/></svg><i id="vibe-chat-dot" class="vibe-dot" hidden></i></button>
-      <button class="vibe-icon" type="button" data-nav="studio" title="Settings (Ctrl ,)" aria-label="Settings"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg></button>
+      <button class="vibe-icon" type="button" data-vibe-panel="settings" title="Settings" aria-label="Settings"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg></button>
     </div>
   </header>
   <div class="vibe-stage">
@@ -263,32 +266,39 @@
     <!-- What stops the agents from working on their own, and the one control
          that fixes it: Start agents, Resume, Connect an AI (vibe.js). -->
     <div id="vibe-gate" class="vibe-gate" role="status" aria-live="polite" hidden><i class="vibe-gate-dot" aria-hidden="true"></i><span class="vibe-gate-copy"><b id="vibe-gate-title"></b><span id="vibe-gate-text"></span></span><button id="vibe-gate-action" class="vibe-btn primary" type="button" hidden></button></div>
+    <!-- Cards show only while they have something to say (vibe.js cards()). -->
     <section class="vibe-lanes" aria-label="What is happening">
-      <article class="vibe-lane" data-lane="building" aria-labelledby="vibe-lane-building-title">
+      <article id="vibe-card-needs" class="vibe-lane" data-lane="needs" aria-labelledby="vibe-lane-needs-title" hidden>
+        <header><span class="vibe-lane-mark" aria-hidden="true"></span><h2 id="vibe-lane-needs-title">Needs you</h2><span id="vibe-count-needs" class="vibe-count"></span></header>
+        <ol id="vibe-lane-needs" class="vibe-rows"></ol>
+      </article>
+      <article id="vibe-card-building" class="vibe-lane" data-lane="building" aria-labelledby="vibe-lane-building-title" hidden>
         <header><span class="vibe-lane-mark" aria-hidden="true"></span><h2 id="vibe-lane-building-title">Building now</h2><span id="vibe-count-building" class="vibe-count"></span></header>
         <ol id="vibe-lane-building" class="vibe-rows"></ol>
         <button class="vibe-lane-link" type="button" data-nav="command">Watch it live <span aria-hidden="true">→</span></button>
       </article>
-      <article class="vibe-lane" data-lane="needs" aria-labelledby="vibe-lane-needs-title">
-        <header><span class="vibe-lane-mark" aria-hidden="true"></span><h2 id="vibe-lane-needs-title">Needs you</h2><span id="vibe-count-needs" class="vibe-count"></span></header>
-        <ol id="vibe-lane-needs" class="vibe-rows"></ol>
-        <button class="vibe-lane-link" type="button" data-nav="tasks">All your tasks <span aria-hidden="true">→</span></button>
-      </article>
-      <article class="vibe-lane" data-lane="done" aria-labelledby="vibe-lane-done-title">
+      <article id="vibe-card-done" class="vibe-lane" data-lane="done" aria-labelledby="vibe-lane-done-title" hidden>
         <header><span class="vibe-lane-mark" aria-hidden="true"></span><h2 id="vibe-lane-done-title">Freshly done</h2><span id="vibe-count-done" class="vibe-count"></span></header>
         <ol id="vibe-lane-done" class="vibe-rows"></ol>
-        <button class="vibe-lane-link" type="button" data-nav="eyes">See the evidence <span aria-hidden="true">→</span></button>
+        <button class="vibe-lane-link" type="button" data-vibe-panel="tasks" data-vibe-fold="done">All finished work <span aria-hidden="true">→</span></button>
+      </article>
+      <article id="vibe-card-ideas" class="vibe-lane" data-lane="ideas" aria-labelledby="vibe-lane-ideas-title" hidden>
+        <header><span class="vibe-lane-mark" aria-hidden="true"></span><h2 id="vibe-lane-ideas-title">Fresh ideas</h2><span id="vibe-count-ideas" class="vibe-count"></span></header>
+        <ol id="vibe-lane-ideas" class="vibe-rows"></ol>
+        <button class="vibe-lane-link" type="button" data-vibe-panel="ideas">All ideas <span aria-hidden="true">→</span></button>
       </article>
     </section>
+    <p id="vibe-quiet" class="vibe-quiet" hidden>All quiet. Describe something above and it starts here.</p>
     <button id="vibe-last" class="vibe-last" type="button" hidden><span id="vibe-last-who" class="vibe-last-who">Mefi</span><span id="vibe-last-text" class="vibe-last-text"></span><span class="vibe-last-open">Open conversation</span></button>
   </div>
+  <!-- Watch, Plans and Ideas step in only while they have something to show. -->
   <nav id="vibe-dock" class="vibe-dock" aria-label="Go to">
-    <button type="button" data-nav="command" title="Watch the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span></button>
-    <button type="button" data-nav="tasks" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
-    <button type="button" data-nav="plans" title="Plan an idea before building it (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span></button>
-    <button type="button" data-nav="ideas" title="Ideas the agents noticed (I)"><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg><span>Ideas</span><span class="count" data-badge="ideas" hidden></span></button>
-    <button type="button" data-nav="agents" title="Your agents, models and usage"><svg class="glyph" aria-hidden="true"><use href="#g-agents"/></svg><span>Agents</span></button>
-    <button type="button" data-nav="palette" title="Everything else (Ctrl K)"><svg class="glyph" aria-hidden="true"><use href="#g-more"/></svg><span>More</span></button>
+    <button id="vibe-stop-watch" type="button" data-nav="command" data-vibe-stop="watch" title="Watch the agents work on the live node tree (D)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span></button>
+    <button id="vibe-stop-tasks" type="button" data-vibe-panel="tasks" data-vibe-stop="tasks" title="Your tasks and results"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
+    <button id="vibe-stop-plans" type="button" data-vibe-panel="plans" data-vibe-stop="plans" title="Plans in progress" hidden><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span></button>
+    <button id="vibe-stop-ideas" type="button" data-vibe-panel="ideas" data-vibe-stop="ideas" title="Ideas the agents noticed" hidden><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg><span>Ideas</span><span class="count" data-badge="ideas" hidden></span></button>
+    <button id="vibe-stop-team" type="button" data-vibe-panel="team" data-vibe-stop="team" title="Who is working, and on which models"><svg class="glyph" aria-hidden="true"><use href="#g-agents"/></svg><span>Team</span></button>
+    <button id="vibe-stop-more" type="button" data-nav="palette" data-vibe-stop="more" title="Everything else (Ctrl K)"><svg class="glyph" aria-hidden="true"><use href="#g-more"/></svg><span>More</span></button>
   </nav>
   <aside id="vibe-chat" class="vibe-chat" aria-labelledby="vibe-chat-title" hidden>
     <header class="vibe-chat-head"><div><small>Conversation</small><h2 id="vibe-chat-title">Mefi</h2></div><button id="vibe-chat-close" class="vibe-icon" type="button" aria-label="Close the conversation" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
@@ -300,6 +310,14 @@
     <header class="vibe-chat-head"><div><small id="vibe-ask-kicker">Needs you</small><h2 id="vibe-ask-title">A decision</h2></div><button id="vibe-ask-close" class="vibe-icon" type="button" aria-label="Close the decision" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
     <div id="vibe-ask-body" class="vibe-ask-body"></div>
     <footer class="vibe-ask-foot"><span id="vibe-ask-note" class="vibe-ask-note" role="status" aria-live="polite"></span><button id="vibe-ask-watch" class="vibe-ask-link" type="button">Open in Watch</button></footer>
+  </aside>
+  <!-- Vibe's menus: Tasks, Plans, Ideas, Team and Settings as compact panels
+       beside the front door (renderer/vibe-panels.js). Full view opens the
+       Build page for the same thing inside Vibe's rail. -->
+  <aside id="vibe-panel" class="vibe-chat vibe-panel" aria-labelledby="vibe-panel-title" hidden>
+    <header class="vibe-chat-head"><div class="vibe-panel-heading"><button id="vibe-panel-back" class="vibe-icon vibe-panel-back" type="button" aria-label="Back" title="Back (Esc)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-back"/></svg></button><div><small id="vibe-panel-kicker">Vibe</small><h2 id="vibe-panel-title">Tasks</h2></div></div><button id="vibe-panel-close" class="vibe-icon" type="button" aria-label="Close the panel" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
+    <div id="vibe-panel-body" class="vibe-panel-body"></div>
+    <footer class="vibe-ask-foot vibe-panel-foot"><span id="vibe-panel-note" class="vibe-ask-note" role="status" aria-live="polite"></span><button id="vibe-panel-full" class="vibe-ask-link" type="button">Full view <span aria-hidden="true">↗</span></button></footer>
   </aside>
 </section>
 <!-- Vibe's frame for every other page (renderer/vibe.js). In Vibe mode this

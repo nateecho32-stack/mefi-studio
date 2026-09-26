@@ -34,6 +34,23 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-26 - Vibe panels, cards and dock (Milestone A): gates on a private worktree of 06b5d7d
+
+Detached worktree C:\wt\vibe-a at 06b5d7d plus the Vibe panels change only
+(renderer/vibe.js, vibe.css, new vibe-panels.js, the Vibe block of the
+template, nav.js decision toast, music.js themes(), build-booklet and its
+fixture list, tests/vibe_panels.test.mjs, docs). `npm run check` and `npm run
+audit` passed. `npm test`: Node parallel stage 3685 tests, 0 failures (4
+skipped); Python contracts and the normalized-path lock passed; the Electron
+fixture stage failed three of 36. `media_window_render` passed solo.
+`command_render` failed in the stage and once solo under load, then passed
+solo twice, and passes on a clean worktree of 06b5d7d: the known load flake.
+`unified_studio_render` fails "primary destinations stay visible at 600 / 1.5"
+on the branch and identically on a clean worktree of 06b5d7d, so it predates
+this change (the same failure the v0.4.3 tag run and the Command performance
+pass recorded). The new vibe_panels suite (8 tests) and vibe_pipeline /
+vibe_frame / booklet_build pass.
+
 ## 2026-09-26 - Tag release Electron fixtures failed twice; same-commit branch gates passed
 
 Both executions of the v0.4.3 tag workflow on a5e2b26 passed dependency setup

@@ -57,6 +57,7 @@ const CODE_SOURCES = [
   "demo-panel.js",
   "companion-ui.js", "companion-hub.js", "project-map-view.js", "agent-brain.js",
   "agents.js",
+  "vibe-panels.js",
   "vibe.js",
   "booklet.js",
 ];
@@ -159,7 +160,8 @@ export async function build({ root = ROOT } = {}) {
   const projectMapView = await readFile(path.join(RENDERER, "project-map-view.js"), "utf8");
   const fileInputs = await readFile(path.join(RENDERER, "file-inputs.js"), "utf8");
   const treeDynamics = await readFile(path.join(RENDERER, "tree-dynamics.js"), "utf8");
-  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle, cameraTour, explorer, analyzer, tasks, ideas, overhead, brains, palette, eyes, boot, startup, workspace, mediaWindow, music, together, planning, onboarding, community, demoPanel, companionUi, companionHub, projectMapView, agentBrain, agents, vibe, booklet];
+  const vibePanels = await readFile(path.join(RENDERER, "vibe-panels.js"), "utf8");
+  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle, cameraTour, explorer, analyzer, tasks, ideas, overhead, brains, palette, eyes, boot, startup, workspace, mediaWindow, music, together, planning, onboarding, community, demoPanel, companionUi, companionHub, projectMapView, agentBrain, agents, vibePanels, vibe, booklet];
   const code = codeParts.join("\n");
   const html = template
     .replace("__BOOKLET_DATA__", () => catalog.trim())

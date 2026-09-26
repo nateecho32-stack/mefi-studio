@@ -126,7 +126,8 @@
       if (knownQuestions.has(question.id)) continue;
       knownQuestions.add(question.id);
       const toast = window.MefiToast?.(`Decision needed: ${question.title}`, "warn", {
-        action: { label: "Answer", run: () => go("command", { rail: "ask" }) },
+        // In Vibe mode the decision opens in Vibe's own drawer, never Build's.
+        action: { label: "Answer", run: () => (vibeMode() && window.MefiVibe?.openNeed ? window.MefiVibe.openNeed({ kind: "question", id: question.id }) : go("command", { rail: "ask" })) },
         onDismiss: () => questionToasts.delete(question.id),
       });
       if (toast) questionToasts.set(question.id, toast);

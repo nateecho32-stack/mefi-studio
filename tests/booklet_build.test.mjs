@@ -57,6 +57,7 @@ const INLINE_SCRIPTS = [
   "demo-panel.js",
   "agent-brain.js",
   "project-map-view.js",
+  "vibe-panels.js",
   "vibe.js",
   "booklet.js",
 ];

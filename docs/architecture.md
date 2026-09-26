@@ -122,12 +122,29 @@ configuration. Changes use the existing project/default scope and Apply flow.
 
 - Studio has two modes, switched at the top of Vibe, from the foot of Vibe's
   rail, or with **Switch to Build** in Search. **Vibe** is the calm front
-  door: one box to talk it over with Mefi or build it as a task, what is
-  building, what needs you and what just finished, and a dock to Watch
-  (Command), Tasks, Plans, Ideas, Agents and Search. **Build** is the full
-  studio described below. The choice is remembered across launches.
+  door: one box to talk it over with Mefi or build it as a task, cards for
+  what needs you, what is building, what just finished and fresh ideas, and a
+  dock. **Build** is the full studio described below. The choice is
+  remembered across launches.
+- Vibe shows only what has something to say. A card appears while it has
+  rows (Freshly done covers the last half day) and a quiet project gets one
+  calm line instead of empty boxes. The dock always has Tasks, Team and More;
+  Watch steps in while agents work, Plans while a plan is in play, Ideas while
+  fresh ones wait. With cards up on a short window the greeting and the
+  starter chips step aside.
+- Vibe's menus are its own (`renderer/vibe-panels.js`): Tasks, Plans, Ideas,
+  Team and Settings open as a compact panel beside the front door, one side
+  panel at a time with the conversation and the decision drawer, and a wide
+  window moves the cards over to make room. Rows open their detail (Back or
+  **Esc** steps out); each action uses the host call its Build page uses: a
+  task can be started, stopped, dropped or given a note for its next attempt
+  (its saved notes reach the worker's brief), a finished one sent back with
+  **Ask for a change**, an idea built, kept or dismissed. Team shows who is
+  building and each seat's model, with Start, Resume or Pause. **Full view**
+  opens the Build page for the same thing inside Vibe's rail. The status pill
+  opens what it names, and a decision toast answers in Vibe's drawer.
 - Nothing you click in Vibe mode leaves it. Every other page, whether opened
-  from the dock, a lane, Search, a key, the companion or a link inside
+  from Full view, Watch, Search, a key, the companion or a link inside
   another page, opens inside Vibe's own narrow rail instead of Build's menu:
   the spark at its top returns to Vibe, and the Build switch at its foot is
   the only way out of the mode. Home is Vibe, so **H**, every Home button and

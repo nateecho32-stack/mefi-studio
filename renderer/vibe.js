@@ -98,7 +98,7 @@
   }
 
   // ---- data -----------------------------------------------------------------
-  const state = { projects: [], activeId: null, tasks: [], assistant: {}, status: {}, backlog: null, pending: false, chatOpen: false, seenMessages: 0, need: null, askSending: false, gateBusy: false };
+  const state = { projects: [], activeId: null, tasks: [], assistant: {}, status: {}, backlog: null, ideas: [], plans: [], pending: false, chatOpen: false, seenMessages: 0, need: null, askSending: false, gateBusy: false };
   let initialized = false;
   let refreshFlight = null;
   const projectId = () => window.MefiWorkspace?.activeProjectId?.() || state.activeId;
@@ -113,8 +113,8 @@
   async function refresh() {
     if (!api()) { render(); return; }
     if (refreshFlight) return refreshFlight;
-    const calls = ["projectsList", "tasksList", "assistantState", "assistantStatus", "backlogStatus"];
-    refreshFlight = Promise.allSettled(calls.map((method) => Promise.resolve().then(() => api()[method]?.()))).then((results) => {
+    const calls = ["projectsList", "tasksList", "assistantState", "assistantStatus", "backlogStatus", "ideasList"];
+    refreshFlight = Promise.allSettled(calls.map((method) => Promise.resolve().then(() => api()[method]?.()))).then(async (results) => {
       const value = (index) => results[index].status === "fulfilled" ? results[index].value : null;
       const projects = value(0);
       if (projects?.projects) { state.projects = projects.projects; state.activeId = projects.activeId ?? state.activeId; }
@@ -122,9 +122,20 @@
       if (value(2)?.state && belongs(value(2).state)) state.assistant = value(2).state;
       if (value(3)?.status && belongs(value(3).status)) state.status = value(3).status;
       if (value(4)?.ok && belongs(value(4))) state.backlog = value(4);
+      if (Array.isArray(value(5)?.ideas) && belongs(value(5))) state.ideas = value(5).ideas;
+      // Plans name their project, so they are read once the project is known.
+      await readPlans();
       render();
     }).finally(() => { refreshFlight = null; });
     return refreshFlight;
+  }
+  async function readPlans() {
+    const id = projectId();
+    if (!id || !api()?.planningList) return;
+    try {
+      const result = await api().planningList({ projectId: id });
+      if (Array.isArray(result?.plans) && (!result.projectId || result.projectId === projectId())) state.plans = result.plans;
+    } catch { /* plans are optional here; the next refresh tries again */ }
   }
 
   // The backlog (approvals, stuck work, what is next) has no push of its own:
@@ -174,9 +185,15 @@
     const tasks = scoped(state.tasks);
     const checking = tasks.filter((task) => !runningIds.has(task.id) && ["awaiting_verification", "verifying"].includes(task.status));
     const next = (Array.isArray(state.backlog?.next) ? state.backlog.next : []).filter((item) => !runningIds.has(item.id) && ["ready", "waiting", "cooling"].includes(item.stage ?? "ready")).slice(0, 2);
-    const finished = tasks.filter((task) => done(task) && describe(task).stage !== "review").sort((a, b) => stamp(b) - stamp(a)).slice(0, 3);
-    return { running, checking, next, finished, needs: needs(), gate: runState() };
+    // Freshly done is the last half day; older results live in the Tasks panel.
+    const finished = tasks.filter((task) => done(task) && describe(task).stage !== "review" && Date.now() - stamp(task) < FRESH_MS).sort((a, b) => stamp(b) - stamp(a)).slice(0, 3);
+    return { running, checking, next, finished, ideas: freshIdeas(), plans: activePlans(), needs: needs(), gate: runState() };
   }
+  const FRESH_MS = 12 * 3600000;
+  // Ideas nobody has looked at yet, newest first; Skip marks one read.
+  const freshIdeas = () => scoped(state.ideas).filter((idea) => idea && !idea.read && idea.status !== "done" && !idea.taskId).sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
+  // Plans still in play: not archived, not already turned into tasks.
+  const activePlans = () => scoped(state.plans).filter((plan) => plan && plan.archivedAt == null && plan.status !== "converted");
 
   // What is holding every agent back, read from the same two switches (and
   // the launch hold) Build's Home reads, with the one control that clears it.
@@ -252,27 +269,27 @@
   function empty(text) { return el("li", "vibe-empty", text); }
   const go = (id, params) => window.MefiNav?.go?.(id, params);
 
+  // A row opens its task in the Tasks panel beside Vibe, not the Build board.
+  const openTask = (taskId) => openPanel("tasks", taskId ? { taskId } : {});
   function renderLanes() {
     const data = lanes();
-    if (!changed("lanes", [data, projectId(), state.gateBusy])) return;
+    if (!changed("lanes", [data, projectId(), state.gateBusy])) { sharePanels(); return; }
     const building = $("lane-building");
     building.replaceChildren();
     for (const job of data.running.slice(0, 3)) {
       const phase = job.phase ? String(job.phase).replace(/_/g, " ") : "working";
       building.append(row({ tone: "live", title: job.title || "A task", meta: `${phase} · started ${ago(job.startedAt)}`, progress: job.progress, onOpen: () => go("command", job.taskId ? { selected: `task:${job.taskId}` } : {}) }));
     }
-    for (const task of data.checking.slice(0, Math.max(0, 4 - building.children.length))) building.append(row({ tone: "check", title: task.title || "A finished task", meta: "checking its work", onOpen: () => go("tasks", { taskId: task.id }) }));
+    for (const task of data.checking.slice(0, Math.max(0, 4 - building.children.length))) building.append(row({ tone: "check", title: task.title || "A finished task", meta: "checking its work", onOpen: () => openTask(task.id) }));
     const heldBack = data.gate && ["held", "paused", "key"].includes(data.gate.key);
-    for (const item of data.next.slice(0, Math.max(0, 4 - building.children.length))) building.append(row({ tone: "next", title: item.title || "Next task", meta: heldBack ? "queued · waiting for the agents" : item.stage === "waiting" ? "waiting for what it depends on" : item.stage === "cooling" ? "trying again soon" : "up next", onOpen: () => go("tasks", item.id ? { taskId: item.id } : {}) }));
-    if (!building.children.length) building.append(empty(heldBack ? "Nothing can build until the agents are running." : "Nothing is building. Describe something above and it starts here."));
+    for (const item of data.next.slice(0, Math.max(0, 4 - building.children.length))) building.append(row({ tone: "next", title: item.title || "Next task", meta: heldBack ? "queued · waiting for the agents" : item.stage === "waiting" ? "waiting for what it depends on" : item.stage === "cooling" ? "trying again soon" : "up next", onOpen: () => openTask(item.id) }));
     $("count-building").textContent = data.running.length ? String(data.running.length) : "";
 
     const needs = $("lane-needs");
     needs.replaceChildren();
     for (const need of data.needs.slice(0, 4)) needs.append(row({ tone: need.tone, title: need.title, meta: need.meta, action: { label: need.verb, run: () => openNeed(need) }, onOpen: () => openNeed(need) }));
-    if (data.needs.length > 4) needs.append(row({ tone: "next", title: `${data.needs.length - 4} more waiting on you`, meta: "on the task board", onOpen: () => go("tasks", { filter: "review" }) }));
+    if (data.needs.length > 4) needs.append(row({ tone: "next", title: `${data.needs.length - 4} more waiting on you`, meta: "in your tasks", onOpen: () => openPanel("tasks", { fold: "needs" }) }));
     const needCount = data.needs.length;
-    if (!needs.children.length) needs.append(empty("You're all caught up."));
     $("count-needs").textContent = needCount ? String(needCount) : "";
     layer.dataset.needs = needCount ? "yes" : "no";
 
@@ -280,10 +297,23 @@
     finished.replaceChildren();
     for (const task of data.finished) {
       const verified = task.verification?.state === "verified";
-      finished.append(row({ tone: "done", title: task.title || "A task", meta: `${verified ? "verified" : "done"} · ${ago(task.updatedAt || task.createdAt)}`, onOpen: () => go("tasks", { taskId: task.id }) }));
+      finished.append(row({ tone: "done", title: task.title || "A task", meta: `${verified ? "verified" : "done"} · ${ago(task.updatedAt || task.createdAt)}`, onOpen: () => openTask(task.id) }));
     }
-    if (!finished.children.length) finished.append(empty("Finished work lands here."));
     $("count-done").textContent = "";
+
+    const ideas = $("lane-ideas");
+    ideas.replaceChildren();
+    for (const idea of data.ideas.slice(0, 3)) ideas.append(row({ tone: "idea", title: idea.title || idea.detail || "An idea", meta: [idea.source, idea.at ? ago(idea.at) : ""].filter(Boolean).join(" · ") || "new idea", action: { label: "Build it", run: () => void promoteIdea(idea) }, onOpen: () => openPanel("ideas", { ideaId: idea.id }) }));
+    $("count-ideas").textContent = data.ideas.length > 3 ? String(data.ideas.length) : "";
+
+    // Cards come and go with what they have to say; with none up, one calm
+    // line under the box says so, unless the gate banner already speaks.
+    const shown = { needs: needCount > 0, building: building.children.length > 0, done: finished.children.length > 0, ideas: ideas.children.length > 0 };
+    for (const [key, on] of Object.entries(shown)) $(`card-${key}`).hidden = !on;
+    const visible = Object.values(shown).filter(Boolean).length;
+    layer.dataset.cards = visible ? "some" : "none";
+    $("quiet").hidden = visible > 0 || Boolean(data.gate);
+    renderDock(data);
 
     renderGate();
     // The pill says the one thing that matters most: agents held back, then
@@ -292,6 +322,72 @@
     const blocked = data.gate && ["held", "key"].includes(data.gate.key);
     pulse.dataset.tone = blocked || needCount ? "ask" : data.running.length ? "live" : "quiet";
     $("pulse-text").textContent = blocked ? data.gate.pill : needCount ? `${needCount} need${needCount === 1 ? "s" : ""} you` : data.running.length ? `${data.running.length} building` : data.gate ? data.gate.pill : "All quiet";
+    sharePanels(data);
+  }
+
+  // ---- the dock ---------------------------------------------------------------
+  // Tasks, Team and More always stand; Watch steps in while agents work, Plans
+  // while a plan is in play, Ideas while fresh ones wait. The stop whose panel
+  // is open is marked, so the dock doubles as the panel's tab strip.
+  const STOPS = ["watch", "tasks", "plans", "ideas", "team", "more"];
+  const PANEL_STOPS = new Set(["tasks", "plans", "ideas", "team"]);
+  function dockStops(data = lanes()) {
+    return { watch: data.running.length > 0 || data.checking.length > 0, tasks: true, plans: data.plans.length > 0, ideas: data.ideas.length > 0, team: true, more: true };
+  }
+  function renderDock(data) {
+    const stops = dockStops(data);
+    const open = window.MefiVibePanels?.current?.() ?? null;
+    for (const key of STOPS) {
+      const button = $(`stop-${key}`);
+      if (!button) continue;
+      // An open panel keeps its own stop, even after its last item leaves.
+      button.hidden = !stops[key] && open !== key;
+      if (PANEL_STOPS.has(key)) button.setAttribute("aria-pressed", String(open === key));
+    }
+  }
+
+  // ---- panels -------------------------------------------------------------------
+  // Vibe's menus (renderer/vibe-panels.js) read what the front door already
+  // holds, so opening one costs no extra round trip. One side panel at a
+  // time: a menu, the conversation, or a decision.
+  function shared(data = lanes()) {
+    return {
+      projectId: projectId(), projectName: state.projects.find((item) => item.id === projectId())?.name || "",
+      tasks: scoped(state.tasks), needs: data.needs, running: data.running, checking: data.checking, next: data.next,
+      backlog: state.backlog && belongs(state.backlog) ? state.backlog : null, status: state.status || {}, assistant: state.assistant || {},
+      ideas: scoped(state.ideas), plans: data.plans, gate: data.gate ? { key: data.gate.key, title: data.gate.title, text: data.gate.text, label: data.gate.action?.label ?? null } : null,
+      companion: companion(), person: person(),
+    };
+  }
+  function sharePanels(data) { if (window.MefiVibePanels?.isOpen?.()) window.MefiVibePanels.update(shared(data)); }
+  function openPanel(kind, options = {}) {
+    if (!window.MefiVibePanels) return false;
+    if (!active()) go("vibe");
+    closeAsk({ quiet: true });
+    if (state.chatOpen) closeChat();
+    window.MefiVibePanels.open(kind, { ...options, data: shared() });
+    signatures.delete("lanes"); renderDock(lanes());
+    return true;
+  }
+  function closeDrawers() {
+    closeAsk({ quiet: true });
+    if (state.chatOpen) closeChat();
+  }
+  // Build it on an idea: the same promotion as the Ideas page's Make task.
+  async function promoteIdea(idea) {
+    if (!api()?.backlogControl) { feedback("Ideas can be built from the desktop app.", "warn"); return false; }
+    try {
+      const result = await api().backlogControl({ action: "promote", ideaId: idea.id, projectId: projectId() });
+      if (!result || result.ok === false) throw new Error(result?.error || "That idea could not become a task.");
+      state.ideas = state.ideas.map((item) => item.id === idea.id ? { ...item, read: true, status: "accepted", taskId: result.taskIds?.[0] ?? item.taskId ?? true } : item);
+      feedback(`"${idea.title || "The idea"}" is now a task.`, "good");
+      signatures.delete("lanes"); renderLanes();
+      scheduleBacklog();
+      return true;
+    } catch (error) {
+      feedback(error?.message || "That idea could not become a task.", "bad");
+      return false;
+    }
   }
   function messages() {
     return (Array.isArray(state.assistant.messages) ? state.assistant.messages : []).filter((message) => ["user", "assistant"].includes(message?.role) && belongs(message)).slice(-60);
@@ -402,6 +498,7 @@
   // ---- conversation drawer --------------------------------------------------
   function openChat() {
     closeAsk({ quiet: true });
+    window.MefiVibePanels?.close?.({ quiet: true });
     state.chatOpen = true; $("chat").hidden = false; layer.dataset.chat = "open";
     $("chat-toggle").setAttribute("aria-expanded", "true");
     state.seenMessages = messages().length;
@@ -437,6 +534,7 @@
   const needKey = (need) => need ? `${need.kind}:${need.id}` : "";
   function openNeed(need) {
     if (state.chatOpen) closeChat();
+    window.MefiVibePanels?.close?.({ quiet: true });
     state.need = { kind: need.kind, id: need.id };
     $("ask").hidden = false; layer.dataset.ask = "open";
     signatures.delete("ask"); $("ask-note").textContent = "";
@@ -673,6 +771,7 @@
     layer.hidden = true;
     document.body.classList.remove("vibe-active");
     closeAsk({ quiet: true });
+    window.MefiVibePanels?.close?.({ quiet: true });
     paintRail();
     if (!window.MefiWorkspace?.isActive?.()) window.MefiIdle?.setHomeBackdrop?.(false);
   }
@@ -699,8 +798,30 @@
     $("chat-close").addEventListener("click", () => { closeChat(); $("chat-toggle").focus(); });
     $("last").addEventListener("click", openChat);
     $("ask-close").addEventListener("click", () => closeAsk());
+    // The pill opens what it names: what needs you, what holds the agents, or the work.
+    $("pulse").addEventListener("click", () => {
+      const waiting = needs();
+      const gate = runState();
+      if (waiting.length) openNeed(waiting[0]);
+      else if (gate && ["held", "key", "paused"].includes(gate.key)) openPanel("team");
+      else openPanel("tasks");
+    });
+    // Every [data-vibe-panel] control (dock stops, the settings button, card
+    // links) opens its panel; a dock stop whose panel is open closes it.
+    layer.addEventListener("click", (event) => {
+      const trigger = event.target?.closest?.("[data-vibe-panel]");
+      if (!trigger || !layer.contains(trigger)) return;
+      event.preventDefault();
+      const kind = trigger.dataset.vibePanel;
+      if (trigger.dataset.vibeStop && window.MefiVibePanels?.current?.() === kind) { window.MefiVibePanels.close(); return; }
+      openPanel(kind, trigger.dataset.vibeFold ? { fold: trigger.dataset.vibeFold } : {});
+    });
+    // Unread ideas change with the ideas page and the scanners; the card and
+    // the dock follow them.
+    api()?.onIdeas?.((ideas) => { if (!Array.isArray(ideas)) return; state.ideas = ideas; if (active()) renderLanes(); });
     layer.addEventListener("keydown", (event) => {
       if (event.key !== "Escape") return;
+      if (window.MefiVibePanels?.isOpen?.()) { event.preventDefault(); event.stopPropagation(); window.MefiVibePanels.escape(); return; }
       if (!$("ask").hidden) { event.preventDefault(); event.stopPropagation(); closeAsk(); return; }
       if (state.chatOpen) { event.preventDefault(); event.stopPropagation(); closeChat(); $("chat-toggle").focus(); }
     });
@@ -817,7 +938,21 @@
   // Studio: what holds the agents back, what waits on you, what is building.
   function snapshot() {
     const data = lanes();
-    return { mode: mode(), active: active(), gate: data.gate?.key ?? null, needs: data.needs.map(({ kind, id, title }) => ({ kind, id, title })), building: data.running.length, checking: data.checking.map((task) => task.id), open: state.need ? { ...state.need } : null };
+    const stops = dockStops(data);
+    const cards = { needs: data.needs.length > 0, building: data.running.length + data.checking.length + data.next.length > 0, done: data.finished.length > 0, ideas: data.ideas.length > 0 };
+    return { mode: mode(), active: active(), gate: data.gate?.key ?? null, needs: data.needs.map(({ kind, id, title }) => ({ kind, id, title })), building: data.running.length, checking: data.checking.map((task) => task.id),
+      open: state.need ? { ...state.need } : null, cards: Object.keys(cards).filter((key) => cards[key]), dock: STOPS.filter((key) => stops[key]), panel: window.MefiVibePanels?.current?.() ?? null };
   }
-  window.MefiVibe = { enter, exit, isActive: active, refresh, mode, setMode, landing, startup, showNotes, closeNotes, snapshot, ready: () => refreshFlight ?? Promise.resolve() };
+  // A decision raised anywhere (a toast, the companion) opens in Vibe's own
+  // drawer: the question by id, or any need by kind and id.
+  function openNeedById(ref = {}) {
+    const wanted = typeof ref === "string" ? { kind: "question", id: ref } : ref;
+    if (!active()) go("vibe");
+    const need = needs().find((item) => item.kind === (wanted.kind || "question") && item.id === wanted.id);
+    if (need) { openNeed(need); return true; }
+    // Not known here yet (the push is still on its way): read, then look again.
+    void refresh().then(() => { const late = needs().find((item) => item.kind === (wanted.kind || "question") && item.id === wanted.id); if (late) openNeed(late); });
+    return false;
+  }
+  window.MefiVibe = { enter, exit, isActive: active, refresh, mode, setMode, landing, startup, showNotes, closeNotes, snapshot, openPanel, closeDrawers, openNeed: openNeedById, paintDock: () => renderDock(lanes()), promoteIdea: (idea) => promoteIdea(idea), feedback: (text, tone) => feedback(text, tone), ready: () => refreshFlight ?? Promise.resolve() };
 })();

@@ -7,6 +7,25 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Vibe has its own menus. Tasks, Plans, Ideas, Team and Settings open as
+  compact panels beside the front door instead of Build's full pages: short
+  rows with one or two actions, a row opens its detail, Back or Esc steps out,
+  and **Full view** opens the Build page for the same thing inside Vibe's
+  rail. A queued task takes a note for its next attempt, a finished one can
+  be sent back with **Ask for a change**, an idea is built or set aside in
+  place, and Team shows who is building and which model each seat runs on.
+- Vibe's cards and dock come and go with what they have to say. Needs you,
+  Building now, Freshly done (the last half day) and the new Fresh ideas card
+  show only while they have something; a quiet project gets one calm line.
+  Watch steps into the dock while agents work, Plans while a plan is in play
+  and Ideas while fresh ones wait. The status pill opens what it names, and a
+  decision toast answers in Vibe's own drawer while Vibe is the mode.
+
+### Fixed
+- A Vibe card whose count was empty (Freshly done, or Building now with
+  nothing running) pushed its title to the far edge of the card.
+
 ## [0.4.3] - 2026-09-26
 
 ### Added
