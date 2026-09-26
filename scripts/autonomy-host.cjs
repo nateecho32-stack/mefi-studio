@@ -245,6 +245,13 @@ function createAutonomyHost(io) {
       for (const item of queue.items.filter((entry) => ["parked", "held"].includes(entry.kind))) {
         const task = byId.get(item.taskId);
         if (!task || task.ownerHold || task.loopGuard?.by === "owner" || questions.some((question) => question.context?.taskId === task.id)) continue;
+        // An ask about this card that was already settled or left for review
+        // since it parked covers this park: raising it again would put the
+        // card the owner just dismissed straight back on their list. A card
+        // that parks again later (a newer item.at) is asked about afresh.
+        const settled = rows(state().questions).some((question) => question.context?.taskId === task.id && ["answered", "dismissed"].includes(question.status)
+          && Number(question.answer?.at ?? question.at) >= Number(item.at));
+        if (settled) continue;
         const kind = Number(task.verifyAttempts) >= 3 ? "verify" : "run-failed";
         const question = io.question(issues.questionForIssue({ kind, source: "host", taskId: task.id, taskTitle: task.title, title: item.title, attempts: task.runFailures ?? 0 }, { now: now() }));
         if (question) questions.push(question);

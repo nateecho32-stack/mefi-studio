@@ -24,7 +24,8 @@
   weighted Beta records and per-task model skill summaries.
 - `scripts/model-performance.cjs`: observations retain project identity; cached
   snapshots and `taskSkills` support a project filter.
-- `scripts/autonomy.cjs`: pure mode table, elevated categories, approval inheritance,
+- `scripts/autonomy.cjs`: pure mode table, elevated categories, approval inheritance
+  (`accepted`) and the owner's-work lineage the Auto gate follows (`ownerWork`),
   settings migration and exact-attempt sessionless check eligibility.
 - `scripts/autonomy-host.cjs`: one desk decision pass, persisted suggestions and
   budgets, decision reservations, interruption recovery, to-dos and notices.

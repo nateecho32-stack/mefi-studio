@@ -59,6 +59,30 @@ test("scope-bound approval passes to actual splits and delegation children, with
   assert.equal(autonomy.needsApproval(task, { level: "auto" }), false);
 });
 
+test("under Auto and Elevated only, slices and splits of the owner's own card build; an agent's handoff or request still waits", () => {
+  // The owner's card needs no approval here, so it never carries one: its
+  // executor-made slices must not wait for an approval the parent never had.
+  const parent = { id: "own", title: "Owner feature", status: "awaiting_verification", projectId: "p", origin: { kind: "composer", by: "owner" }, delegation: { version: 1, childTaskIds: ["slice"] } };
+  const slice = { id: "slice", status: "open", source: "agent", projectId: "p", parentTaskId: "own", origin: { kind: "delegation", by: "agent" } };
+  const split = { id: "split", status: "open", projectId: "p", splitFrom: "own", origin: { kind: "split", by: "desk" } };
+  const handoff = { id: "handoff", status: "open", projectId: "p", parentTaskId: "own", origin: { kind: "handoff", by: "agent" } };
+  const filed = { id: "filed", status: "open", projectId: "p", origin: { kind: "request", by: "a-eyes" } };
+  const tasks = [parent, slice, split, handoff, filed];
+  for (const level of ["auto", "elevated"]) {
+    assert.equal(autonomy.needsApproval(slice, { level, tasks }), false, level);
+    assert.equal(autonomy.needsApproval(split, { level, tasks }), false, level);
+    assert.equal(autonomy.needsApproval(handoff, { level, tasks }), true, `${level}: a generic handoff is new work an agent filed`);
+    assert.equal(autonomy.needsApproval(filed, { level, tasks }), true, level);
+    assert.equal(backlog.workState(slice, 1, { tasks, approve: (item, options) => autonomy.needsApproval(item, { level, ...options }) }).stage, "ready", level);
+  }
+  // A slice of an agent's card is still the agent's work.
+  const agents = { ...parent, id: "theirs", origin: { kind: "request", by: "a-eyes" }, delegation: { version: 1, childTaskIds: ["slice2"] } };
+  assert.equal(autonomy.needsApproval({ ...slice, id: "slice2", parentTaskId: "theirs" }, { level: "auto", tasks: [agents] }), true);
+  // Switched off, agent-filed work builds too; Accept per task still waits for the owner's OK.
+  assert.equal(autonomy.needsApproval(filed, { level: "auto", elevated: { "agent-filed": false }, tasks }), false);
+  assert.equal(autonomy.needsApproval(slice, { level: "accept", tasks }), true);
+});
+
 test("strong learned disagreement leaves Auto to the owner, and map overlays retain non-auto rules", () => {
   assert.equal(autonomy.route({ item: ask(), task, confidence: 0.95, option: { id: "split" }, learned: { verb: "narrow", share: 0.8, n: 9 } }), "advise");
   assert.deepEqual(autonomy.issueOverlay("ask", { triage: true, asks: true, splitDepth: 2 }).auto, []);

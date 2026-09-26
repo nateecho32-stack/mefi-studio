@@ -46,10 +46,26 @@ function accepted(task, { tasks = [] } = {}, visited = new Set()) {
   return linked && accepted(parent, { tasks }, visited);
 }
 
+// The owner's own work: a card they created, or an actual split or delegated
+// slice of one (the same links acceptance follows). Under Auto and Elevated
+// only the owner's card builds without an approval, so its slices must too:
+// otherwise the parent waits on its slices and the slices wait on the owner.
+function ownerWork(task, { tasks = [] } = {}, visited = new Set()) {
+  if (!task || visited.has(task.id)) return false;
+  if (task.origin?.by === "owner" || hasBuildApproval(task)) return true;
+  visited.add(task.id);
+  const parentId = task.splitFrom || task.parentTaskId;
+  if (!parentId) return false;
+  const parent = rows(tasks).find((row) => row?.id === parentId && sameProject(task, row));
+  if (!parent) return false;
+  const linked = task.splitFrom === parent.id || rows(parent.delegation?.childTaskIds).includes(task.id);
+  return linked && ownerWork(parent, { tasks }, visited);
+}
+
 function needsApproval(task, { level = DEFAULT_LEVEL, elevated = {}, tasks = [] } = {}) {
   if (accepted(task, { tasks })) return false;
   if (level === "ask" || level === "accept") return true;
-  return elevated["agent-filed"] !== false && task?.origin?.by !== "owner";
+  return elevated["agent-filed"] !== false && !ownerWork(task, { tasks });
 }
 
 function classify({ question, approval, parked, task, option, action, kind } = {}) {
@@ -115,4 +131,4 @@ function issueOverlay(level, mapPolicy = {}, { accepted: isAccepted = false } = 
   return { ...mapPolicy, auto: level === "ask" || level === "accept" && !isAccepted ? [] : [...RETRY_KINDS] };
 }
 
-module.exports = { LEVELS, DEFAULT_LEVEL, ELEVATED, RETRY_KINDS, migrate, normalize, accepted, needsApproval, classify, canDelegate, route, sessionless, issueOverlay };
+module.exports = { LEVELS, DEFAULT_LEVEL, ELEVATED, RETRY_KINDS, migrate, normalize, accepted, ownerWork, needsApproval, classify, canDelegate, route, sessionless, issueOverlay };

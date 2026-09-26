@@ -1334,6 +1334,18 @@ admission path, targeted by a hash of the saved request. A changed brief is
 refused; agent-filed work keeps its normal dispatch approval gate. Companion
 OpenRouter credentials and LM Studio seats count at both availability gates.
 
+That gate is `autonomy.needsApproval`, passed to `backlog.workState` as
+`approve`. Under Auto and Elevated only it holds work an agent filed while the
+"Work agents propose" switch is on, and it counts the owner's own work as the
+owner's (`autonomy.ownerWork`): a card they created, plus the actual splits and
+delegated slices of it. The links are the same ones acceptance follows. Without
+that, the executor's slices of an owner card would wait for an approval the
+parent never needed, and the parent would wait on them in turn. Generic
+handoffs and requests an agent filed still wait. The decide pass raises one
+ask for a parked or loop-held card that has none. An ask about that card that
+was settled or left for review after it parked covers that park, so a
+dismissed card is not raised again until it parks again.
+
 ### Permission modes and learning — Vibe controls
 
 `renderer/autonomy-ui.js` supplies the saved mode chip and settings to Vibe,

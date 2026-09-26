@@ -68,6 +68,27 @@ test("Accept per task delegates only accepted task scopes", async () => {
   }
 });
 
+test("a parked card's ask left for review stays off the list until the card parks again", async () => {
+  for (const level of ["ask", "auto"]) {
+    const f = fixture({ level, task: { runFailures: 5, parkedAt: NOW - 60000 }, reply: { optionId: null, confidence: 0.2, reason: "This needs you." } });
+    f.question.status = "superseded";
+    const raised = () => f.state.questions.filter((q) => q.context?.taskId === "task" && q !== f.question);
+    await f.host.decide();
+    assert.equal(raised().length, 1, `${level}: the parked card gets one ask`);
+    const ask = raised()[0];
+    ask.status = "dismissed";
+    ask.answer = { at: NOW, optionId: "hold", label: "Leave it for review", via: "option" };
+    f.advance(60000);
+    await f.host.decide();
+    await f.host.decide();
+    assert.equal(raised().length, 1, `${level}: left for review, it is not raised again`);
+    f.board.tasks[0].parkedAt = NOW + 120000;
+    f.advance(120000);
+    await f.host.decide();
+    assert.equal(raised().length, 2, `${level}: parked again later, it is asked about afresh`);
+  }
+});
+
 test("Auto saves its decision, Undo restores the parked budget and does not refund automatic retries", async () => {
   const f = fixture({ kind: "run-failed", task: { runFailures: 5 }, reply: { optionId: "retry", confidence: 0.9, reason: "The transient failure has cleared." } });
   await f.host.decide();

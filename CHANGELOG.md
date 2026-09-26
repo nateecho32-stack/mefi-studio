@@ -95,6 +95,13 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 - "Only you can do this" asks that several cards raised about the same need,
   in different words, now fold into one. An ask you had cleared no longer
   comes back as an instruction.
+- In Auto and Elevated only, the pieces Studio split off your own task waited
+  for your approval, as if an agent had filed them. Your task then waited on
+  its pieces, so your own work stalled. Pieces of your own work now build.
+  Follow-ups and requests an agent files still wait while "Work agents
+  propose" is on.
+- A parked card whose ask you left for review got the same ask back on the
+  next pass. It now stays off your list until the card parks again.
 
 ## [0.4.3] - 2026-09-26
 

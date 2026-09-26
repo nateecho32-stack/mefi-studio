@@ -34,6 +34,19 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-26 - Permission modes follow-up: owner-card slices build in Auto, dismissed parked asks stay dismissed
+
+Detached worktree C:\wt\assist-v at 6e03f15 plus the two fixes only
+(scripts/autonomy.cjs ownerWork, scripts/autonomy-host.cjs settled-park
+check, their tests and docs). Before the fix, on 6e03f15, the two new tests
+fail: a delegated slice of an owner card read "approval" under Auto, and a
+dismissed synthesized parked-card ask came back on the next pass (reproduced
+with a scratch fixture in both Always ask and Auto). `npm run check` and
+`npm run audit` passed. `npm test`: Node suites passed (3806 tests, 0
+failures; Electron fixtures 37 passed, 0 failed, `command_render` included
+this run), Python contracts passed (one skip), and the normalized-path lock
+passed.
+
 ## 2026-09-26 - Permission modes shared integration
 
 Landed 31bc533 on main by merging each touched file against efe812c, with
