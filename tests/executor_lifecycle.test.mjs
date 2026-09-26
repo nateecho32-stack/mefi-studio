@@ -3,6 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
+import autonomy from "../scripts/autonomy.cjs";
 import { readFile, mkdtemp, unlink, rmdir } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
@@ -68,7 +69,7 @@ test("session evidence belongs to the exact user dispatch, never the nearest con
 test("worker attribution waits for its identity and refuses sibling or finished jobs", async () => {
   const first = { id: "run_100_1", startedAt: 100, sessionId: null };
   const second = { id: "run_100_2", startedAt: 100, sessionId: "sibling" };
-  const env = vm.createContext({ autopilot: { jobs: [first, second] }, queueExecutorCheckpoint() {} });
+  const env = vm.createContext({ autonomy, autonomySettings: autonomy.migrate({}), autopilot: { jobs: [first, second] }, queueExecutorCheckpoint() {} });
   vm.runInContext(section("async function attributeRunSession(", "function watchRunSession("), env);
   const reader = { listSessions: () => assert.fail("timestamp matching must not be used"), findRunSession: () => null };
   assert.equal(await env.attributeRunSession(reader, first), false);
@@ -87,7 +88,7 @@ function settingsHost() {
   let saved = { ui: { autopilot: { enabled: false, execute: false, parallel: 1, minutes: 7 } } };
   const events = [];
   const autopilot = { enabled: true, execute: false, parallel: 2, jobs: [], minutes: 5, parkedUntil: 0 };
-  const env = vm.createContext({
+  const env = vm.createContext({ autonomy, autonomySettings: autonomy.migrate({}),
     Date, os: { cpus: () => Array(8).fill({}) }, autopilot, EXECUTOR_PARALLEL_MAX: 12, EXECUTOR_PARALLEL_CAP: 3,
     readSettings: async () => structuredClone(saved), writeSettings: async (next) => { saved = structuredClone(next); events.push("saved"); },
     settingsDisk: { queue: Promise.resolve() },
@@ -151,7 +152,7 @@ function finishHost({ owner = "run_100_1", missing = false, failWrites = 0, comm
   const effects = [], timers = [], logs = [], records = [], roles = [], contexts = [];
   const verificationJobs = [];
   let mutations = 0;
-  const env = vm.createContext({
+  const env = vm.createContext({ autonomy, autonomySettings: autonomy.migrate({}),
     Date, console, entry, autopilot, executorResume, executorCore, job: { kind: "task", title: ref.title, prompt: ref.prompt, source: "chat", ref: structuredClone(ref) }, assistantModule: assistant, taskHandoffs, queueExecutorCheckpoint() {},
     agentModes, verificationJobs, runVerificationJobs: async () => effects.push("verify"),
     eyes: { findRunSession: () => ({ id: "own-session" }), readJson: async (key) => key === "history" ? [] : {}, writeJson: async (key, value) => records.push([key, structuredClone(value)]) },
@@ -463,7 +464,7 @@ function dispatchHost({ interrupt = null, refuse = false, throwClaim = false, ed
     },
     releaseWrite: (files, owner) => { releases.push(owner); for (const file of files) if (registered.get(file) === owner) registered.delete(file); },
   };
-  const env = vm.createContext({
+  const env = vm.createContext({ autonomy, autonomySettings: autonomy.migrate({}),
     Date, path, process: { pid: 999 }, backlog, executorResume, executorCore, autopilot, autopilotJobSeq: 0, assistantCache: { store: {} },
     assistantModule, getAssistant: async () => assistantModule,
     projectSwitching: false, assistantState: { status: "running" }, executorUpdateHold: () => hold,
@@ -652,7 +653,7 @@ function childHost({ throwFallback = false, throwKill = false, pool = {}, label 
   let now = 100000;
   class Clock extends Date { static now() { return now; } }
   const entry = { id: "run_100_1", finished: false, spoke: false, handoffs: [], calls: new Set(), issues: [], outputTail: [], outputLog: [], child: null };
-  const env = vm.createContext({
+  const env = vm.createContext({ autonomy, autonomySettings: autonomy.migrate({}),
     Date: Clock, entry, runRoute: { grok: true, cli: "grok", opencode: { env: {}, modelArgs: "" } }, runRoot: "C:/fixture", prompt: "fixture brief", startedAt: 1,
     process: { env: {} }, assistantModule: assistant, executorActivity, executorCore, autopilot: { parallel: 1, jobs: [entry], ...pool }, eyes: {}, queueExecutorCheckpoint() {},
     job: { kind: "task", ref: { id: "task" }, title: "Fixture work" },
@@ -928,7 +929,7 @@ test("assistant supervision requests a safe stop instead of settling a still-liv
   const stopped = [], reaped = [], problems = [];
   const live = { startedAt: 1, pid: 11, child: { pid: 11 }, title: "Overdue worker", stop: (reason) => stopped.push(reason), reap: () => assert.fail("a live worker must keep its claim") };
   const ghost = { startedAt: 1, pid: null, child: null, title: "Missing worker", reap: async (code, reason) => reaped.push({ code, reason }) };
-  const env = vm.createContext({
+  const env = vm.createContext({ autonomy, autonomySettings: autonomy.migrate({}),
     SMOKE: false, CAPTURE: false, CLI_MODE: false, ASSISTANT_JOB_WEDGED_MS: 600000,
     autopilot: { execute: true, jobs: [live, ghost], parallel: 2, queueDepth: 0 },
     assistantClip: (value) => value, assistantSetProblems: (_roles, items) => problems.push(...items),
@@ -1108,7 +1109,7 @@ test("escape codes alone are not speech, and cursor codes do not hide the verdic
 test("supervision measures an opencode fallback from its own start, not from the claim", () => {
   const stopped = [];
   const fallback = { startedAt: 1, attachedAt: 500000, pid: 22, child: { pid: 22 }, title: "Replacement run", stop: (reason) => stopped.push(reason) };
-  const env = vm.createContext({
+  const env = vm.createContext({ autonomy, autonomySettings: autonomy.migrate({}),
     SMOKE: false, CAPTURE: false, CLI_MODE: false, ASSISTANT_JOB_WEDGED_MS: 600000,
     autopilot: { execute: true, jobs: [fallback], parallel: 1, queueDepth: 0 },
     assistantClip: (value) => value, assistantSetProblems() {},

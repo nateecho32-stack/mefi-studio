@@ -68,6 +68,33 @@ desk MCP tool for OpenCode and Claude Code workers. Text-only assistant seats
 do not execute MCP tools. Other MCP servers remain in the coding CLI's own
 configuration. Changes use the existing project/default scope and Apply flow.
 
+## Permission modes
+
+The global `settings.autonomy` stores a mode and six elevated switches. Always
+ask computes a suggestion; Accept per task delegates worker questions only
+within an accepted scope; Auto acts at confidence 0.7 or above; Elevated only
+uses the offered conservative recommendation when uncertain. Owner holds and
+desk escalations always stay with the owner. Grants, irreversible changes,
+closing owner-created work, agent-filed work, heavier models and human to-dos
+have individual switches, all enabled initially. Disabling the first two
+requires acknowledging their warning. A human to-do is filed, not performed.
+
+Build approval is checked in queue summaries, selection, claiming and the last
+launch check. Accepted split and delegation children inherit their parent's
+approval within the same project. The old desk switch aliases Auto/Always ask,
+and the old new-work switch also updates the mode. Existing saved
+`autoBuild:false` preferences migrate to Always ask.
+
+`assistantState.decisions` keeps 300 automatic choices with reasons, confidence
+and task snapshots. A task reservation prevents dispatch until the ledger save
+finishes; a task-side proof recovers an interrupted save. Undo reopens the ask
+and restores fields still bearing that decision's values. It waits for workers,
+keeps later edits and does not refund daily retry budgets. `assistantState.todos`
+keeps at most 50 For you items. One edited notice each reports Needs you and
+Decided for you, using the companion queue's count. Sessionless CLI completion
+needs named, recorded passing checks tied to the exact attempt, no outstanding
+work, and a successful exit; model claims alone cannot confirm it.
+
 ## Glossary
 
 | Term | Meaning |
@@ -93,6 +120,9 @@ configuration. Changes use the existing project/default scope and Apply flow.
 | **Decision model / Jev** | Agents › Setup › Connections configures Jev, a third-party classifier model (TypeSafe's `jev-1.13`). Routing and intake behavior live together in Agents › Setup. Optional; fixed defaults apply without it. |
 | **Autopilot / New work** | Autopilot lets the assistant start work on its own; **New work** is the master switch that holds every kind of new start while current workers finish. |
 | **Auto build / Verify first** | Auto build starts a task as soon as it is ready. Verify first holds it in **Review** until you press **Approve build**. |
+| **Permission mode** | The saved rule for which decisions Mefi can make: Always ask, Accept per task, Auto or Elevated only. Elevated switches reserve particular categories for the owner. |
+| **Decision ledger** | The project's saved automatic choices, reasons and Undo evidence. Undo preserves later edits and does not reset budgets. |
+| **For you** | Up to 50 human-only to-dos separated from worker questions. |
 | **Delegated decision** | An answer Mefi gives for you, attributed as **Mefi decided**. A retry preserves your stop, loop guard, loop history, duplicate link and approval. Its two-per-task daily budget survives restarts. |
 | **Swarm / Cluster** | Agent mode: Swarm spreads workers across the queue, Cluster keeps them on one goal at a time. |
 | **Awaiting verification** | A finished attempt whose completion is not yet established; housekeeping checks the evidence before it becomes **Done**. |

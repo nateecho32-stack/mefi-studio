@@ -20,8 +20,9 @@ function hasBuildApproval(item) {
   return item?.buildApproval?.version === 1 && item.buildApproval.scope === buildScope(item);
 }
 
-function buildAllowed(item, { autoBuild = true } = {}) {
-  return autoBuild !== false || hasBuildApproval(item);
+function buildAllowed(item, { autoBuild = true, approve = null, tasks = [] } = {}) {
+  const required = typeof approve === "function" ? approve(item, { tasks }) : autoBuild === false;
+  return !required || hasBuildApproval(item);
 }
 
 function dependencyIds(item) {
@@ -120,7 +121,7 @@ function validateDependencies(tasks, taskId, dependsOn) {
 // is itself blocked (held, parked, or waiting on a blocked card in turn), the
 // wait is blocked too and names that card's hold, so a handoff parent counts
 // this child as needing review instead of waiting on it forever.
-function duplicateState(item, tasks, now, autoBuild, memo = null) {
+function duplicateState(item, tasks, now, autoBuild, memo = null, approve = null) {
   const target = typeof item?.duplicateOf === "string" ? item.duplicateOf.trim() : "";
   if (!target || target === item.id) return null;
   const shared = memo && memo.tasks === tasks ? memo : null;
@@ -134,12 +135,12 @@ function duplicateState(item, tasks, now, autoBuild, memo = null) {
   }
   const title = String(original.title ?? "").trim().slice(0, 120) || original.id;
   if (completedTask(original)) return { stage: "waiting", blockedBy: "duplicate", reason: `${title} is done; this card closes as the same work`, duplicateOf: original.id };
-  const held = workState(original, now, { tasks, autoBuild, memo: shared });
+  const held = workState(original, now, { tasks, autoBuild, approve, memo: shared });
   if (held.stage === "blocked") return { stage: "blocked", blockedBy: "duplicate", reason: `Waiting for ${title} (the same work), which is blocked: ${String(held.reason ?? "").slice(0, 400)}`, duplicateOf: original.id };
   return { stage: "waiting", blockedBy: "duplicate", reason: `Waiting for ${title} (the same work)`, duplicateOf: original.id };
 }
 
-function workState(item, now = Date.now(), { tasks = null, autoBuild = true, memo = null } = {}) {
+function workState(item, now = Date.now(), { tasks = null, autoBuild = true, approve = null, memo = null } = {}) {
   if (item.absorbedInto) return { stage: "grouped", reason: "Included in a task group", groupId: item.absorbedInto };
   if (item.status === "done" || item.status === "archived") return { stage: "done", reason: droppedTask(item) ? "Dropped by you before it finished" : item.status === "archived" ? "Archived completion" : "Completed" };
   if (item.status === "awaiting_verification" || item.status === "verifying") {
@@ -156,6 +157,7 @@ function workState(item, now = Date.now(), { tasks = null, autoBuild = true, mem
     return { stage: "review", reason: "Run finished; checking its completion evidence" };
   }
   if (item.status === "active" || item.status === "running") return { stage: "running", reason: "A worker holds this task" };
+  if (item.autonomyPending || item.autonomyUndo) return { stage: "blocked", blockedBy: "decision", canRetry: false, reason: item.autonomyUndo ? "Undo is waiting for the current run to finish" : "Saving Mefi's decision before this task can start" };
   const dependency = Array.isArray(tasks) ? dependencyState(item, tasks, memo) : { dependencies: [] };
   if (dependency.stage) return dependency;
   if (item.verification?.state === "failed" || Number(item.verifyAttempts) >= 3) {
@@ -186,19 +188,19 @@ function workState(item, now = Date.now(), { tasks = null, autoBuild = true, mem
   }
   // The owner's duplicate link waits the card on the one it names; the card's
   // own parks and hold above come first, so a link never masks them.
-  const duplicate = Array.isArray(tasks) ? duplicateState(item, tasks, now, autoBuild, memo) : null;
+  const duplicate = Array.isArray(tasks) ? duplicateState(item, tasks, now, autoBuild, memo, approve) : null;
   if (duplicate) return duplicate;
   if (Number(item.nextRunAt) > now) return { stage: "cooling", reason: "Waiting before another attempt", retryAt: Number(item.nextRunAt) };
   if (item.status && item.status !== "open" && item.status !== "pending" && item.status !== "queued") return { stage: "blocked", reason: `Held (${String(item.status).slice(0, 40)})` };
-  if (!buildAllowed(item, { autoBuild })) return { stage: "approval", reason: "Verify first: review this task and approve its build", canApprove: true, buildScope: buildScope(item), ...dependency };
+  if (!buildAllowed(item, { autoBuild, approve, tasks })) return { stage: "approval", reason: "Review this task and approve its build", canApprove: true, buildScope: buildScope(item), ...dependency };
   return { stage: "ready", reason: item.pin ? "You chose this to go next" : "Ready for an available worker", ...dependency };
 }
 
-function summarizeBacklog({ tasks = [], requests = [], ideas = [], jobs = [], compare, ideaEligible, now = Date.now(), paused = false, draining = false, waiting = null, lastError = null, parkedUntil = 0, autoBuild = true } = {}) {
+function summarizeBacklog({ tasks = [], requests = [], ideas = [], jobs = [], compare, ideaEligible, now = Date.now(), paused = false, draining = false, waiting = null, lastError = null, parkedUntil = 0, autoBuild = true, approve = null } = {}) {
   const board = rows(tasks);
   const memo = boardMemo(board);
   const heldIds = new Set(rows(jobs).map((job) => job.taskId).filter(Boolean));
-  const taskStates = board.map((task) => ({ id: task.id, kind: "task", title: String(task.title ?? "Untitled task"), dependencies: dependencyState(task, board, memo).dependencies, ...(heldIds.has(task.id) ? { stage: "running", reason: "A worker is building this task" } : workState(task, now, { tasks: board, autoBuild, memo })) }));
+  const taskStates = board.map((task) => ({ id: task.id, kind: "task", title: String(task.title ?? "Untitled task"), dependencies: dependencyState(task, board, memo).dependencies, ...(heldIds.has(task.id) ? { stage: "running", reason: "A worker is building this task" } : workState(task, now, { tasks: board, autoBuild, approve, memo })) }));
   const represented = new Set(board.filter((task) => task.status !== "archived").map((task) => key(task.title)).filter(Boolean));
   const uniqueRequests = rows(requests).filter((request) => {
     const titleKey = key(request.title || request.prompt);
@@ -225,7 +227,7 @@ function summarizeBacklog({ tasks = [], requests = [], ideas = [], jobs = [], co
     const row = { id: request.id ?? `request_${index}`, kind: "request", title: String(request.title || request.prompt || "Queued request").slice(0, 120) };
     const card = onBoard(request);
     if (card) return { ...row, stage: "represented", reason: `Already on the board as "${String(card.title ?? card.id ?? "another card").slice(0, 120)}"`, ...(card.id ? { taskId: card.id } : {}) };
-    return { ...row, ...workState(request, now, { tasks: board, autoBuild, memo }) };
+    return { ...row, ...workState(request, now, { tasks: board, autoBuild, approve, memo }) };
   });
   const all = [...taskStates, ...requestStates];
   const counts = Object.fromEntries(["ready", "running", "review", "blocked", "cooling", "done", "grouped", "waiting", "approval", "represented"].map((stage) => [stage, all.filter((row) => row.stage === stage).length]));

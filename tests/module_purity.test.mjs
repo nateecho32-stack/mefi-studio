@@ -12,6 +12,8 @@ import test from "node:test";
 // bootstrap.structure.test.ts.)
 
 const PROMISES = [
+  { file: "scripts/decision-ledger.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/autonomy.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   { file: "scripts/brains.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "clock"] },
   { file: "scripts/agent-issues.cjs", says: "Pure module: no Electron, no filesystem, no network. Time is injectable", keeps: ["electron", "filesystem", "network", "injectableClock"] },
   { file: "scripts/policy.mjs", says: "Pure module: no Electron, no network, no clock reads (time is injected)", keeps: ["electron", "network", "clock"] },

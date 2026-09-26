@@ -11,6 +11,9 @@ import brains from "../scripts/brains.cjs";
 import workAdmission from "../scripts/work-admission.cjs";
 import executorCore from "../scripts/executor-core.cjs";
 import backlogModule from "../scripts/backlog.cjs";
+import autonomy from "../scripts/autonomy.cjs";
+import decisionLedger from "../scripts/decision-ledger.cjs";
+import { createAutonomyHost } from "../scripts/autonomy-host.cjs";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
 const section = (start, end) => {
@@ -695,4 +698,38 @@ test("a start kill inside its grace is requeued uncharged, so nothing is asked a
   const spent = issueHost();
   const question = await spent.env.assistantBuildFailureQuestion({ ...job, ref: { ...job.ref, startFailures: 5 } }, 5, { error: "the worker never started", outputTail: [] });
   assert.ok(question);
+});
+
+
+// The production permission pass calls the real host answer/action functions.
+// Only persistence, the model and Electron notifications are replaced.
+test("the permission pass uses the real answer transaction and restores it with Undo", async () => {
+  for (const level of ["ask", "accept", "auto", "elevated"]) {
+    const h = issueHost({ tasks: [{ id: "task_1", title: "Fix parser", status: "open", runFailures: 5, origin: { by: "owner" }, logs: [] }] });
+    const settings = { autonomy: { level, elevated: {} } };
+    let seq = 0;
+    Object.assign(h.env, { autonomy, decisionLedger, createAutonomyHost, readSettings: async () => settings });
+    const host = createAutonomyHost({ getState: () => h.state, ensure: async () => {}, projectId: () => "fixture", id: () => `real${++seq}`,
+      readSettings: async () => settings, readTasks: async () => structuredClone(h.board.tasks), mutate: h.env.mutateBoard,
+      answer: h.env.assistantAnswer, question: h.env.assistantQuestion, save: async () => {}, cleared: async () => ({}),
+      callDesk: async () => ({ ok: true, text: '{"optionId":"retry","confidence":0.9,"reason":"The transient issue is resolved."}' }) });
+    const question = await h.env.assistantRaiseIssue(workerIssue("run-failed", "transient failure", { attempts: 5 }));
+    assert.ok(question, "production triage always exposes the ask to the shared permission pass");
+    await host.decide();
+    if (["auto", "elevated"].includes(level)) {
+      assert.equal(card(h).runFailures, 3);
+      assert.match(card(h).logs.at(-1).text, /Mefi decided/);
+      assert.equal(h.state.decisions.length, 1);
+      assert.equal(card(h).autonomyPending, undefined);
+      assert.equal(h.backlog.length, 0, "the owner's unrestricted retry is never called");
+      await host.undo({ id: h.state.decisions[0].id });
+      assert.equal(card(h).runFailures, 5);
+      assert.equal(question.status, "open");
+      assert.equal(card(h).assistantRetries.length, 1);
+    } else {
+      assert.equal(card(h).runFailures, 5);
+      assert.equal(question.status, "open");
+      if (level === "ask") assert.equal(question.context.suggestion.optionId, "retry");
+    }
+  }
 });

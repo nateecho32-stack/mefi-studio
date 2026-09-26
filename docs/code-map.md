@@ -1,5 +1,16 @@
 # Code map
 
+## Permission decisions
+
+- `scripts/autonomy.cjs`: pure mode table, elevated categories, approval inheritance,
+  settings migration and exact-attempt sessionless check eligibility.
+- `scripts/autonomy-host.cjs`: one desk decision pass, persisted suggestions and
+  budgets, decision reservations, interruption recovery, to-dos and notices.
+- `scripts/decision-ledger.cjs`: bounded decision rows and conflict-aware Undo
+  that preserves later edits and never refunds automatic retry budgets.
+- `main.cjs` / `preload.cjs`: `autonomy:state`, `autonomy:set`, `autonomy:undo`
+  and `autonomy:todo`; the same approval predicate reaches every dispatch gate.
+
 ## Unified Studio ownership
 
 - `renderer/file-inputs.js`: shared bounded UTF-8 file drops and picker imports into editable drafts, with project/surface guards; wired by Home, Vibe and Plans.

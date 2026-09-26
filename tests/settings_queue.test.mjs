@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
+import autonomy from "../scripts/autonomy.cjs";
 import authStore from "../scripts/auth-store.cjs";
 
 const main = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
@@ -25,7 +26,7 @@ async function host(initial) {
   if (initial !== undefined) await writeFile(file, initial);
   const logs = [];
   let savedProjects = {};
-  const env = vm.createContext({
+  const env = vm.createContext({ autonomy, autonomySettings: autonomy.migrate({}),
     path, readFile, readFileSync, writeFileSync, authStore,
     SETTINGS_PATH: file, AUTH_PATH: path.join(dir, "auth.json"),
     projects: { saved: () => savedProjects },
@@ -33,7 +34,7 @@ async function host(initial) {
     console: { error: (line) => logs.push(line) },
   });
   vm.runInContext(section("const settingsDisk =", "const projects = createProjects("), env);
-  vm.runInContext(section("async function readSettings(", "function send(channel, payload)"), env);
+  vm.runInContext(section("function rememberAutonomySettings(", "function send(channel, payload)"), env);
   // The startup read is an object property in main.cjs; lift it as one.
   vm.runInContext(`var startup = {${section("  saved: (() => {", "  isDirectory:")}};`, env);
   savedProjects = env.startup.saved ?? {};

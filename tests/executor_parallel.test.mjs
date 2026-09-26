@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
+import autonomy from "../scripts/autonomy.cjs";
 import { readFile, mkdtemp, unlink, rmdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -21,7 +22,7 @@ const section = (start, end) => {
 test("worker-only config disables snapshots while preserving provider, permissions and inherited settings", () => {
   const inherited = { snapshot: true, permission: { edit: "ask", bash: { "git status": "allow" } }, provider: { custom: { name: "Other" }, "mefi-zai": { options: { timeout: 55 } } }, instructions: ["RULES.md"] };
   const environment = { OPENCODE_CONFIG_CONTENT: JSON.stringify(inherited), OTHER: "unchanged" };
-  const env = vm.createContext({ process: { env: environment } });
+  const env = vm.createContext({ autonomy, autonomySettings: autonomy.migrate({}), process: { env: environment } });
   vm.runInContext(section("function executorOpencodeEnv(", "// Which route an autopilot"), env);
   const extra = { OPENCODE_CONFIG_CONTENT: JSON.stringify({ provider: { "mefi-zai": { options: { apiKey: "{env:FIXTURE_KEY}" }, models: { fixture: {} } } } }), FIXTURE_KEY: "fixture-value" };
   const result = env.executorOpencodeEnv(extra);
@@ -40,7 +41,7 @@ test("worker-only config disables snapshots while preserving provider, permissio
 
 test("every OpenCode route, including Grok fallback, receives snapshot-free worker config", async () => {
   let settings = { aiProvider: "opencode" };
-  const env = vm.createContext({
+  const env = vm.createContext({ autonomy, autonomySettings: autonomy.migrate({}),
     process: { env: {} }, AI_PROVIDERS: ["auto", "opencode", "zai"], AI_AUTO_PROVIDERS: ["zai", "opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"], ZAI_MODEL_ROUTINE: "fixture", ZAI_MODEL_HEAVY: "fixture-heavy", ASSISTANT_MODEL: "fixture-go",
     readSettings: async () => settings, zaiOpencodeEnv: async () => ({ OPENCODE_CONFIG_CONTENT: '{"provider":{"fixture":{}}}', FIXTURE_KEY: "value" }),
     opencodeGoLogin: async () => true,
@@ -57,7 +58,7 @@ test("every OpenCode route, including Grok fallback, receives snapshot-free work
 test("the auto order decides which account the opencode builder runner uses", async () => {
   let settings = { aiProvider: "auto", aiAutoProviders: ["zai", "opencode"] };
   let goLogin = true;
-  const env = vm.createContext({
+  const env = vm.createContext({ autonomy, autonomySettings: autonomy.migrate({}),
     process: { env: {} }, AI_PROVIDERS: ["auto", "opencode", "zai"], AI_AUTO_PROVIDERS: ["zai", "opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"], ZAI_MODEL_ROUTINE: "fixture", ZAI_MODEL_HEAVY: "fixture-heavy", ASSISTANT_MODEL: "fixture-go",
     readSettings: async () => settings, zaiOpencodeEnv: async () => ({ OPENCODE_CONFIG_CONTENT: '{"provider":{"fixture":{}}}', FIXTURE_KEY: "value" }),
     opencodeGoLogin: async () => goLogin,
@@ -89,7 +90,7 @@ test("the auto order decides which account the opencode builder runner uses", as
 test("manual mode retains its two-worker default and one-to-three worker limits", async () => {
   let saved = {};
   const autopilot = { enabled: false, execute: false, parallel: 2, jobs: [], minutes: 5 };
-  const env = vm.createContext({
+  const env = vm.createContext({ autonomy, autonomySettings: autonomy.migrate({}),
     os: { cpus: () => Array(16).fill({}) }, autopilot,
     EXECUTOR_PARALLEL_MAX: 12, EXECUTOR_PARALLEL_CAP: 3,
     readSettings: async () => ({ ui: { marker: "retained" } }), writeSettings: async (next) => { saved = next; },
@@ -120,7 +121,7 @@ test("real selection, file claims and fill loop run independent tasks together b
   ] };
   const launched = [];
   const autopilot = { execute: true, parallel: 2, jobs: [] };
-  const env = vm.createContext({
+  const env = vm.createContext({ autonomy, autonomySettings: autonomy.migrate({}),
     Date, console, path, process: { pid: 321 }, backlog, executorResume, executorCore, assistantModule: assistant, getAssistant: async () => assistant, assistantCache: { store: {} }, autopilot, autopilotJobSeq: 0,
     projectSwitching: false, assistantState: { status: "running" }, SMOKE: false, CAPTURE: false, CLI_MODE: false, executorUpdateHold: () => null,
     projects: { current: () => ({ id: "fixture", path: "C:/fixture" }), open: () => ({ id: "fixture", path: "C:/fixture" }) }, projectRoot: () => "C:/fixture",

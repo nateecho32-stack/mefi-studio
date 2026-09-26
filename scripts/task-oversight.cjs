@@ -268,7 +268,7 @@ function boardDigest(input = {}) {
     if (task.status === "archived") { counts.archived += 1; return; }
     const job = jobByTask.get(id) ?? null;
     const given = plainObject(states.get(id));
-    const state = given && typeof given.stage === "string" ? given : job ? { stage: "running", reason: "A worker is building this task" } : stateOf(task, now, { tasks: board, autoBuild });
+    const state = given && typeof given.stage === "string" ? given : job ? { stage: "running", reason: "A worker is building this task" } : stateOf(task, now, { tasks: board, autoBuild, approve: source.approve });
     if (state.stage === "grouped") { counts.grouped += 1; return; }
     const { group, need } = digestGroup(task, state);
     const row = digestRow(task, state, job, now, sizes);
@@ -569,7 +569,7 @@ function taskEvents(previousIndex, tasks, options = {}) {
     }
     // Only the task's own parks and holds matter here, so no board is passed:
     // a prerequisite wait is not something the worker did.
-    const state = stateOf(task, now, { autoBuild });
+    const state = stateOf(task, now, { autoBuild, approve: typeof opts.approve === "function" ? (item) => opts.approve(item, { tasks }) : null });
     const given = plainObject(states.get(id));
     const cur = indexEntry(task, typeof given?.stage === "string" ? given.stage : state.stage, owned);
     index[id] = cur;

@@ -9,6 +9,7 @@
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import decisionLedger from "./decision-ledger.cjs";
 import { fileURLToPath } from "node:url";
 import { dependencyIds } from "./backlog.cjs";
 import workAdmission from "./work-admission.cjs";
@@ -336,6 +337,8 @@ export function emptyState(now = Date.now()) {
     // The answers given for the owner in the last day ({ key, at }): the
     // hourly budget of the decide pass, kept so a restart does not reset it.
     decideHistory: [],
+    decisions: [],
+    todos: [],
   };
 }
 
@@ -488,6 +491,9 @@ function normalizeQuestionContext(entry) {
   const clip = (value, max) => str(value).trim().slice(0, max) || null;
   const context = {
     issueKind: clip(entry.issueKind, 40),
+    undoneFrom: clip(entry.undoneFrom, 100),
+    sessionless: entry.sessionless === true,
+    suggestion: entry.suggestion && typeof entry.suggestion === "object" ? { optionId: clip(entry.suggestion.optionId, 40), reason: clip(entry.suggestion.reason, 400), at: Number(entry.suggestion.at) || 0 } : null,
     severity: oneOf(entry.severity, ["blocker", "decision", "note"], null),
     taskId: clip(entry.taskId, 80),
     taskTitle: clip(entry.taskTitle, 140),
@@ -623,10 +629,12 @@ export function normalizeState(raw, now = Date.now()) {
     state.nodeFolders = normalizeNodeFolders(raw.nodeFolders);
     state.closedAt = num(raw.closedAt, 0);
     state.resumed = normalizeResumed(raw.resumed);
+    state.decisions = decisionLedger.normalize(raw.decisions);
+    state.todos = asArray(raw.todos).filter((row) => isObject(row) && typeof row.id === "string").slice(-50).map((row) => ({ id: row.id.slice(0, 100), taskId: str(row.taskId).slice(0, 100) || null, text: str(row.text).slice(0, 400), at: num(row.at, 0), doneAt: num(row.doneAt, 0) || null, dismissed: row.dismissed === true }));
     state.decideHistory = asArray(raw.decideHistory)
       .filter((row) => isObject(row) && num(row.at, 0) > now - DAY && num(row.at, 0) <= now + MINUTE)
       .map((row) => ({ key: str(row.key).slice(0, 120) || null, at: num(row.at, 0) }))
-      .slice(-200);
+      .slice(-1000);
     return state;
   } catch {
     return emptyState(now);

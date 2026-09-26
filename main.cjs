@@ -52,6 +52,10 @@ const authStore = require("./scripts/auth-store.cjs");
 const { createProjects } = require("./scripts/projects.cjs");
 const { createAssistantPush } = require("./scripts/assistant-push.cjs");
 const backlog = require("./scripts/backlog.cjs");
+const autonomy = require("./scripts/autonomy.cjs");
+const { createAutonomyHost } = require("./scripts/autonomy-host.cjs");
+const decisionLedger = require("./scripts/decision-ledger.cjs");
+let autonomySettings = autonomy.migrate({});
 const boardGrowth = require("./scripts/board-growth.cjs");
 const boardGrouping = require("./scripts/board-grouping.cjs");
 const taskContext = require("./scripts/task-context.cjs");
@@ -2053,7 +2057,7 @@ async function classifyPendingWork() {
       && (!task.status || ["open", "pending", "queued"].includes(task.status))
       && (task.runFailures ?? 0) < 5
       && !(task.nextRunAt && task.nextRunAt > now)
-      && backlog.workState(task, now, { tasks, autoBuild: autopilot.autoBuild }).stage === "ready")
+      && backlog.workState(task, now, { tasks, autoBuild: autopilot.autoBuild, approve: autopilot.approve }).stage === "ready")
     .sort((a, b) => (a.createdAt ?? a.updatedAt ?? 0) - (b.createdAt ?? b.updatedAt ?? 0))
     .slice(0, WORK_SHAPE_PER_PASS);
   if (!pending.length) return { ok: true, attempted: false, shaped: 0 };
@@ -4951,7 +4955,7 @@ async function saveAssistant({ force = false } = {}) {
   }
   if (assistantSaveTimer) clearTimeout(assistantSaveTimer);
   assistantSaveTimer = null;
-  await assistantWrite();
+  return assistantWrite();
 }
 
 // One writer at a time: a write asked for mid-write runs once more after it,
@@ -4962,16 +4966,20 @@ function assistantWrite() {
     return assistantWriting;
   }
   assistantWriting = (async () => {
+    let failure = null;
     do {
       assistantWriteAgain = false;
       assistantSavedAt = Date.now();
       try {
         const eyes = await getEyes();
         await eyes.writeJson(ASSISTANT_PATH, assistantState);
+        failure = null;
       } catch (error) {
+        failure = String(error.message ?? error);
         logLine(`[assistant] save failed: ${error.message}`);
       }
     } while (assistantWriteAgain);
+    return failure ? { ok: false, error: failure } : { ok: true };
   })().finally(() => {
     assistantWriting = null;
   });
@@ -6368,7 +6376,7 @@ async function assistantThinkerFacts(now, assistant) {
   try {
     const eyes = await getEyes();
     const [tasks, requests] = await Promise.all([eyes.readJson(TASKS_PATH, []), eyes.readJson(REQUESTS_PATH, [])]);
-    const readiness = backlog.summarizeBacklog({ tasks, requests, jobs, now, compare: compareWork, autoBuild: autopilot.autoBuild,
+    const readiness = backlog.summarizeBacklog({ tasks, requests, jobs, now, compare: compareWork, autoBuild: autopilot.autoBuild, approve: autopilot.approve,
       paused: facts.executor.held || !autopilot.execute, waiting: autopilot.waiting, lastError: autopilot.lastError, parkedUntil: autopilot.parkedUntil });
     // The dispatcher's order with what ranks each row (pin, source, origin), so
     // thinkPlan picks in that order and sees when the owner's choice leads.
@@ -6493,7 +6501,7 @@ async function assistantCompactorJob(now, entry) {
           return rest;
         })
       : out.tasks;
-    const readiness = backlog.summarizeBacklog({ tasks, requests: out.requests, ideas: out.ideas, jobs: autopilot.jobs, compare: compareWork, now, autoBuild: autopilot.autoBuild });
+    const readiness = backlog.summarizeBacklog({ tasks, requests: out.requests, ideas: out.ideas, jobs: autopilot.jobs, compare: compareWork, now, autoBuild: autopilot.autoBuild, approve: autopilot.approve });
     const report = { ...out.report, runnable: readiness.counts.ready,
       text: String(out.report?.text ?? "Backlog reviewed").replace(/\d+ jobs? runnable/g, `${readiness.counts.ready} work item${readiness.counts.ready === 1 ? "" : "s"} ready`),
       reviewed: { ...out.report?.reviewed, next: readiness.next[0]?.title ?? null } };
@@ -8126,7 +8134,7 @@ async function assistantMessageFacts(now, query = "") {
     const assistant = await getAssistant();
     if (Array.isArray(raw.tasks) && Array.isArray(raw.requests)) {
       readiness = backlog.summarizeBacklog({ tasks: raw.tasks, requests: raw.requests, jobs: (autopilot.jobs ?? []).filter((job) => !job.finished), now, compare: compareWork,
-        autoBuild: autopilot.autoBuild,
+        autoBuild: autopilot.autoBuild, approve: autopilot.approve,
         paused: assistantState.status === "paused" || !autopilot.execute, waiting: autopilot.waiting, lastError: autopilot.lastError, parkedUntil: autopilot.parkedUntil });
       const readyTasks = readiness.taskStates.filter((task) => task.stage === "ready").length;
       raw.backlog = { counts: { ...readiness.counts, readyTasks, readyRequests: readiness.counts.ready - readyTasks }, paused: readiness.paused,
@@ -8153,7 +8161,7 @@ function assistantBoardFacts(facts, raw, readiness, now) {
     facts.board = taskOversight.boardDigest({
       tasks: raw.tasks, requests: raw.requests ?? [], taskStates: readiness?.taskStates ?? null,
       jobs: (autopilot.jobs ?? []).filter((job) => !job.finished), questions: assistantState?.questions ?? [],
-      focus: assistantState?.focus ?? null, compare: compareWork, autoBuild: autopilot.autoBuild !== false, now,
+      focus: assistantState?.focus ?? null, compare: compareWork, autoBuild: autopilot.autoBuild !== false, approve: autopilot.approve, now,
     });
     facts.asks = facts.board.asks;
     facts.events = (taskEventTails.get(projects.current().id) ?? []).slice(-8);
@@ -8247,107 +8255,33 @@ async function assistantNeedsYouDigest(now = Date.now()) {
   }
 }
 
-// ---- the desk handles asks ----------------------------------------------------
-// The owner's "Mefi handles asks" switch (settings.agentBrain.deskResolves):
-// each tick the companion settles open asks and re-arms parked cards on the
-// desk seat (scripts/desk-resolve.cjs holds the rules) and posts what it chose
-// as a notice. An answer goes through assistantAnswer with origin "desk", so
-// it is attributed to the desk and re-arms with backlog.delegateRetry: the
-// owner's stop, the loop ledger and the failure budget stay. The budgets live
-// in assistantState.decideHistory (and on each card, assistantRetries), so a
-// restart does not reset them. A card is left for the owner only when the
-// desk's model actually answered "leave it"; a model that did not answer
-// backs the pass off for a few minutes and the card is read again.
-const deskResolveState = { busy: false, left: new Map(), backoffUntil: 0 };
-const DESK_RESOLVE_BACKOFF_MS = 5 * 60 * 1000;
-function deskResolvesOn(settings) {
-  return settings?.agentBrain?.deskResolves === true;
+// ---- permission modes and the shared decision pass ----------------------------
+let autonomyHost = null;
+function getAutonomyHost() {
+  if (!autonomyHost) autonomyHost = createAutonomyHost({
+    getState: () => assistantState, ensure: ensureAssistant,
+    projectId: () => projects.open() ? projects.current().id : null,
+    projectName: () => projects.current().name,
+    id: () => "decision_" + crypto.randomBytes(8).toString("hex"),
+    readSettings, updateSettings, setAutopilot,
+    readTasks: async () => (await (await getEyes()).readJson(TASKS_PATH, [])).filter((task) => task && !task.archived),
+    mutate: mutateBoard, answer: assistantAnswer, question: assistantQuestion,
+    callDesk: (prompt) => seatFetch("desk", prompt.system, prompt.user, 1200).catch((error) => ({ ok: false, error: error.message })),
+    cleared: async () => agentBrain?.clearedMarks ? agentBrain.clearedMarks() : {},
+    save: async () => { const result = await saveAssistant({ force: true }); if (result?.ok === false) throw new Error(`Could not save the decision history: ${result.error}`); }, emit: () => assistantEmit({ kind: "autonomy" }),
+    context: async (taskId) => typeof assistantDecisionContext === "function" ? assistantDecisionContext(taskId) : { mode: autonomySettings.level },
+    correction: async (decision) => agentBrain?.recordDecision?.({ kind: decision.kind, verb: "undo", source: decision.source, correction: { was: decision.choice } }),
+  });
+  return autonomyHost;
 }
-async function assistantDeskResolvePass() {
-  if (deskResolveState.busy || !assistantState || !projects.open()) return null;
-  if (Date.now() < deskResolveState.backoffUntil) return null;
-  deskResolveState.busy = true;
-  try {
-    // The owner's global switch: a project's team profile carries no copy of
-    // it (agentProfiles.effective would read it as off).
-    if (!deskResolvesOn(await readSettings())) return null;
-    const projectId = projects.current().id;
-    const tasks = (await (await getEyes()).readJson(TASKS_PATH, [])).filter((task) => task && !task.archived);
-    const byId = new Map(tasks.map((task) => [task.id, task]));
-    // The owner's stop is theirs alone: a card they stopped is never settled
-    // or re-armed for them, whatever it waits on.
-    const ownerHeld = (task) => Boolean(task?.ownerHold && typeof task.ownerHold === "object" && !Array.isArray(task.ownerHold));
-    const cards = [];
-    for (const question of assistantState.questions) {
-      if (question?.status !== "open" || deskResolveState.left.has(question.id)) continue;
-      const pick = deskResolve.resolvable(question);
-      const task = byId.get(question.context?.taskId) ?? null;
-      if (!pick.ok || ownerHeld(task)) { deskResolveState.left.set(question.id, Date.now()); continue; }
-      cards.push({ key: question.id, question, options: pick.options, task });
-    }
-    // What the owner cleared from the needs-you list stays off it for the desk too.
-    const marks = agentBrain?.clearedMarks ? await agentBrain.clearedMarks().catch(() => ({})) : {};
-    const listed = companionModule.dropCleared(companionModule.queue({ questions: assistantState.questions, tasks, now: Date.now() }), marks);
-    for (const item of deskResolve.parkedItems(listed.items)) {
-      const key = `${item.id}@${item.at}`;
-      const task = byId.get(item.taskId) ?? null;
-      if (deskResolveState.left.has(key) || ownerHeld(task)) continue;
-      cards.push({
-        key, parked: item, task,
-        question: { status: "open", source: "issue", title: `Parked: ${item.title}`, context: { taskId: item.taskId, taskTitle: item.title, issueKind: "run-failed" } },
-        options: [{ id: "retry", label: "Try again", description: "Re-arm the parked card; two more failures park it again." }],
-      });
-    }
-    let spent = 0;
-    for (const card of cards) {
-      if (spent >= deskResolve.LIMITS.perPass) break;
-      const now = Date.now();
-      const budgetKey = card.task?.id ?? card.key;
-      const room = deskResolve.budget(assistantState.decideHistory, budgetKey, now);
-      const cardRoom = card.task ? backlog.delegatedRetries(card.task, now).length < backlog.DELEGATE_PER_DAY : true;
-      if (!room.ok || !cardRoom) {
-        if (room.reason === "hour") break;
-        deskResolveState.left.set(card.key, now);
-        assistantLog("desk", `left for you: ${assistantClip(card.question.title, 80)} · already settled twice today`);
-        continue;
-      }
-      const history = assistantState.decideHistory;
-      assistantState.decideHistory = deskResolve.spend(history, budgetKey, now);
-      spent += 1;
-      const prompt = deskResolve.resolvePrompt(card);
-      const result = await seatFetch("desk", prompt.system, prompt.user, 1200).catch((error) => ({ ok: false, error: error.message }));
-      // A project switch mid-call: the answer belongs to a board no longer open.
-      if (projects.current().id !== projectId) break;
-      if (!result?.ok) {
-        // No answer is not "leave it": the call is given back, the pass waits a
-        // few minutes, and the card is read again then.
-        assistantState.decideHistory = history;
-        deskResolveState.backoffUntil = Date.now() + DESK_RESOLVE_BACKOFF_MS;
-        assistantLog("desk", `the desk's model did not answer (${assistantClip(String(result?.error ?? "no reply"), 100)}) · trying again in a few minutes`);
-        break;
-      }
-      deskResolveState.left.set(card.key, now);
-      const decision = deskResolve.parseResolution(result.text, card.options);
-      if (!decision || decision.leave) {
-        const why = decision?.reason ?? "no usable answer";
-        assistantLog("desk", `left for you: ${assistantClip(card.question.title, 80)} · ${assistantClip(why, 120)}`);
-        continue;
-      }
-      const applied = card.parked
-        ? await assistantDelegateRearm(card.parked.taskId, { by: "desk", kind: "parked", liftLoop: false }).catch((error) => ({ ok: false, error: error.message }))
-        : await assistantAnswer({ id: card.question.id, optionId: decision.optionId, ...(decision.text ? { text: decision.text } : {}), origin: "desk", reason: decision.reason }).catch((error) => ({ ok: false, error: error.message }));
-      const ok = applied?.ok !== false;
-      const title = card.parked ? card.parked.title : card.question.title;
-      assistantAppendReply(deskResolve.noticeText({ title, label: decision.label, reason: decision.reason, ok, error: applied?.error }), "local", "desk", { notice: true });
-      assistantLog("desk", `${ok ? "settled" : "could not settle"}: ${assistantClip(title, 80)} · ${decision.label}`);
-      await saveAssistant({ force: true });
-    }
-    if (spent) await saveAssistant({ force: true });
-    return { ok: true, spent };
-  } finally {
-    deskResolveState.busy = false;
-  }
-}
+function deskResolvesOn(settings) { return ["auto", "elevated"].includes(autonomy.migrate(settings ?? {}).level); }
+function autonomyState() { return getAutonomyHost().state(); }
+function autonomySet(payload) { return getAutonomyHost().set(payload); }
+function autonomyUndo(payload) { return getAutonomyHost().undo(payload); }
+function autonomyTodo(payload) { return getAutonomyHost().todo(payload); }
+function assistantDecidePass() { return getAutonomyHost().decide(); }
+// Kept for older callers and the legacy desk toggle.
+function assistantDeskResolvePass() { return assistantDecidePass(); }
 
 // ---- task notices -----------------------------------------------------------
 // What the thread hears when a task the owner cares about moves: started,
@@ -8386,7 +8320,7 @@ function assistantObserveTasks(tasks) {
   const projectId = projects.current().id;
   let events = [];
   try {
-    const result = taskOversight.taskEvents(taskEventIndexes.get(projectId) ?? null, tasks, { now: Date.now(), isOwned: assistantOwnsTask, autoBuild: autopilot.autoBuild !== false, watchAll: true });
+    const result = taskOversight.taskEvents(taskEventIndexes.get(projectId) ?? null, tasks, { now: Date.now(), isOwned: assistantOwnsTask, autoBuild: autopilot.autoBuild !== false, approve: autopilot.approve, watchAll: true });
     taskEventIndexes.set(projectId, result.index);
     events = result.events;
     // The agents' own cards the owner never touched still reach the owner
@@ -8450,6 +8384,10 @@ const NEEDS_YOU_EVERY_MS = 10 * 60000;
 const needsYouPending = new Map();
 function assistantNeedsYouNotice(attention, projectId = projects.current().id) {
   if (!assistantOwnsProject(projectId)) return null;
+  if (typeof createAutonomyHost === "function") {
+    getAutonomyHost().notices().then(() => saveAssistant()).catch((error) => logError(`needs-you refresh failed: ${error.message}`));
+    return null;
+  }
   const now = Date.now();
   const pending = (needsYouPending.get(projectId) ?? []).filter((row) => now - row.at < 30 * 60000);
   for (const event of attention) {
@@ -9232,7 +9170,7 @@ async function assistantWorkOn(raw, { origin = "click" } = {}) {
         // re-arming (a finished or held card, a duplicate link) is the owner's
         // acknowledgement, never the thinker's, and a claimed or verifying
         // card is not waiting for anyone.
-        if (task.pin === true || backlog.workState(task, now, { tasks: board.tasks, autoBuild: autopilot.autoBuild }).stage !== "ready") return { hit: true, thinkerError: "it is no longer ready to put first" };
+        if (task.pin === true || backlog.workState(task, now, { tasks: board.tasks, autoBuild: autopilot.autoBuild, approve: autopilot.approve }).stage !== "ready") return { hit: true, thinkerError: "it is no longer ready to put first" };
         // Older than every pin on the board and in the inbox: among pins the
         // newest wins, so the owner's clicks, earlier and later, still go
         // first. thinkerPin marks this pinAt as the thinker's, which
@@ -9285,7 +9223,7 @@ async function assistantWorkOn(raw, { origin = "click" } = {}) {
       task.updatedAt = now;
       task.logs = [...(task.logs ?? []), { at: now, kind: "status", text: `${wasFinished ? "reopened — work on it" : "pinned — work on it"}${unlinked ? " · duplicate link dropped, it runs on its own" : ""}` }].slice(-40);
       return { tasks: board.tasks, hit: true, id: task.id, status: task.status, wasFinished,
-        readiness: backlog.workState(task, now, { tasks: board.tasks, autoBuild: autopilot.autoBuild }), scope: backlog.buildScope(task) };
+        readiness: backlog.workState(task, now, { tasks: board.tasks, autoBuild: autopilot.autoBuild, approve: autopilot.approve }), scope: backlog.buildScope(task) };
     });
     if (pinned.hit) {
       if (pinned.projectError) return { ok: false, error: pinned.projectError };
@@ -9899,15 +9837,20 @@ async function brainsDraft(payload = {}) {
 // question pruner ages cards by expireHours. Refreshed on every read below.
 let issuePolicySeen = null;
 
-async function liveIssuePolicy() {
-  const policy = await activeIssuePolicy();
+async function liveIssuePolicy(taskId = null) {
+  let policy = await activeIssuePolicy();
+  if (typeof autonomy !== "undefined") {
+    const config = autonomy.migrate(await readSettings());
+    const tasks = taskId ? await (await getEyes()).readJson(TASKS_PATH, []) : [];
+    policy = autonomy.issueOverlay(config.level, policy, { accepted: autonomy.accepted(tasks.find((task) => task.id === taskId), { tasks }) });
+  }
   issuePolicySeen = policy && typeof policy === "object" ? policy : null;
   return issuePolicySeen ?? {};
 }
 
 async function assistantRaiseIssue(raw, { openAsks = null, fromFailure = false } = {}) {
   await ensureAssistant();
-  const policy = await liveIssuePolicy();
+  const policy = await liveIssuePolicy(raw?.taskId);
   // The intake node's "from failures" switch: a map may keep stopped runs out
   // of the decision lane entirely, log line and all.
   if (fromFailure && policy.fromFailures === false) return null;
@@ -9926,7 +9869,7 @@ async function assistantRaiseIssue(raw, { openAsks = null, fromFailure = false }
     assistantLog("issue", "its card is no longer on the board · not asked");
     return null;
   }
-  if (triage.decision === "auto") {
+  if (triage.decision === "auto" && typeof autonomy === "undefined") {
     // The assistant's answer is recorded on the card, never applied as a
     // retry: settle has already re-armed a failed run with its failure
     // counted, and a retry here would erase the budgets that stop a loop.
@@ -9969,7 +9912,7 @@ async function assistantRaiseIssue(raw, { openAsks = null, fromFailure = false }
     await saveAssistant({ force: true });
     return null;
   }
-  return assistantQuestion(triage.question);
+  return assistantQuestion(triage.question ?? agentIssues.questionForIssue(issue, { policy, now: Date.now() }));
 }
 
 // What an answer does to the work it was about. Every verb writes the decision
@@ -9981,7 +9924,7 @@ async function assistantRaiseIssue(raw, { openAsks = null, fromFailure = false }
 // permission mode, `by` naming which) re-arms with backlog.delegateRetry,
 // which keeps the owner's stop, the loop ledger and the failure budget. An
 // answer about work that has since finished is kept without reopening it.
-async function assistantIssueAction(action = {}, note = null, { origin = "owner", by = null, reason = null } = {}) {
+async function assistantIssueAction(action = {}, note = null, { origin = "owner", by = null, reason = null, decisionId = null } = {}) {
   const verb = String(action.action ?? "").trim();
   const payload = action.payload ?? {};
   const taskId = typeof payload.taskId === "string" ? payload.taskId : null;
@@ -10023,6 +9966,15 @@ async function assistantIssueAction(action = {}, note = null, { origin = "owner"
     if (index < 0) return { ok: false, error: "That task is no longer on the board." };
     const task = board.tasks[index];
     if (delegated && task.ownerHold) return { ok: false, held: true, error: "You stopped this card, so only you can resume it." };
+    if (delegated && (task.runId || task.lease || task.loopGuard?.by === "owner" || autopilot.jobs.some((job) => job.taskId === taskId))) return { ok: false, error: "This card is held by you or a worker." };
+    if (delegated && backlog.delegatedRetries(task, Date.now()).length >= 2) return { ok: false, error: "This card has already been settled twice today." };
+    let delegatedNext = null;
+    if (delegated && !["split", "acknowledge"].includes(verb) && !["done", "archived"].includes(task.status)) {
+      const state = backlog.workState(task, Date.now(), { tasks: board.tasks, ...autopilot });
+      if (["grouped", "running", "review"].includes(state.stage) || state.blockedBy === "dependencies") return { ok: false, error: state.reason };
+      delegatedNext = backlog.delegateRetry(task, Date.now(), { by: decider, kind: payload.issueKind });
+      if (!delegatedNext.ok) return delegatedNext;
+    }
     if (verb === "split" && !byAssistant) {
       // A split extends a chain from its root title: "Follow-up: X", then
       // "Follow-up 2: X" and "Follow-up 3: X", so a follow-up's own split never
@@ -10072,6 +10024,8 @@ async function assistantIssueAction(action = {}, note = null, { origin = "owner"
     const who = byAssistant ? "Assistant decided" : delegated ? "Mefi decided" : "You decided";
     task.logs = [...(task.logs ?? []), { at, kind: "decision", text: `${who}: ${wording}${text ? ` — ${text}` : ""}${why ? ` (${why})` : ""}` }].slice(-40);
     task.updatedAt = at;
+    if (delegatedNext) board.tasks[index] = { ...delegatedNext.task, decisions: task.decisions, logs: task.logs, grants: task.grants, updatedAt: at };
+    if (decisionId && typeof stampAutonomyTask === "function") stampAutonomyTask(board.tasks[index], decisionId);
     return { ok: true };
   });
   if (!recorded?.ok) return { ok: false, error: recorded?.error ?? "That task could not be updated." };
@@ -10111,8 +10065,9 @@ async function assistantIssueAction(action = {}, note = null, { origin = "owner"
     assistantLog("decision", `"${assistantClip(title ?? taskId, 60)}" goes back to planning`);
   }
   if (delegated) {
-    const rearmed = await assistantDelegateRearm(taskId, { by: decider, kind: payload.issueKind ?? null, liftLoop: verb !== "retry" });
-    if (!rearmed.ok) return { ok: false, task: taskId, decision: verb, rearmed: false, error: rearmed.error ?? "The card could not be re-armed." };
+    assistantAskForWork(`a card was re-armed for you by ${decider}`);
+    await refreshAutopilotQueue();
+    emitAutopilot();
     return { ok: true, task: taskId, decision: verb, rearmed: true };
   }
   const retried = await backlogControl({ action: "retry", taskId });
@@ -10131,7 +10086,7 @@ async function assistantDelegateRearm(taskId, { by = "desk", kind = null, liftLo
     const index = board.tasks.findIndex((task) => task?.id === taskId);
     if (index < 0) return { ok: false, error: "This task is no longer on the board." };
     const task = board.tasks[index];
-    const state = backlog.workState(task, Date.now(), { tasks: board.tasks, autoBuild: autopilot.autoBuild });
+    const state = backlog.workState(task, Date.now(), { tasks: board.tasks, autoBuild: autopilot.autoBuild, approve: autopilot.approve });
     if (state.stage === "grouped") return { ok: false, error: "This task belongs to a group; it is re-armed through its plan." };
     if (state.blockedBy === "dependencies") return { ok: false, error: state.reason };
     if (state.stage === "running" || autopilot.jobs.some((job) => job.taskId === taskId)) return { ok: false, error: "A worker holds this task." };
@@ -10155,7 +10110,7 @@ async function assistantDelegateRearm(taskId, { by = "desk", kind = null, liftLo
 // (duplicateOf): backlog.workState waits it on that card, the keeper closes it
 // as the same work once that card is completed, and Run anyway (retryTask)
 // drops the link. The kept card waits on nothing. "keep-all" links nothing.
-async function assistantFamilyAction(action = {}, { by = "owner" } = {}) {
+async function assistantFamilyAction(action = {}, { by = "owner", decisionId = null } = {}) {
   const choice = ["keep-oldest", "keep-all", "hold", "let-run"].includes(action.choice) ? action.choice : null;
   if (!choice) return { ok: false, error: `unknown family decision: ${action.choice}` };
   // Who decided: the owner, or the desk/assistant answering for them. It is
@@ -10164,7 +10119,7 @@ async function assistantFamilyAction(action = {}, { by = "owner" } = {}) {
   const decider = ["desk", "auto", "chat"].includes(by) ? by : "owner";
   const decidedText = decider === "owner" ? "You decided" : "Mefi decided";
   const memberIds = [...new Set((Array.isArray(action.memberIds) ? action.memberIds : []).filter((id) => typeof id === "string" && id))].slice(0, 40);
-  if (choice === "hold" || choice === "let-run") return assistantChurnAction(choice, memberIds, action, { by: decider });
+  if (choice === "hold" || choice === "let-run") return assistantChurnAction(choice, memberIds, action, { by: decider, decisionId });
   const keepId = choice === "keep-oldest" && typeof action.keepId === "string" ? action.keepId : null;
   if (memberIds.length < 2 || (choice === "keep-oldest" && !memberIds.includes(keepId))) return { ok: false, error: "That decision does not name the cards it is about." };
   let keptTitle = null;
@@ -10173,6 +10128,8 @@ async function assistantFamilyAction(action = {}, { by = "owner" } = {}) {
     const keep = keepId ? byId.get(keepId) : null;
     if (choice === "keep-oldest" && !keep) return { ok: false, error: "The card to keep is no longer on the board." };
     const members = memberIds.map((id) => byId.get(id)).filter(Boolean);
+    if (decider !== "owner" && members.some((task) => task.ownerHold || task.loopGuard?.by === "owner" || task.runId || task.lease || ["running", "active", "verifying", "awaiting_verification"].includes(task.status))) return { ok: false, error: "One of these cards is held by you or a worker." };
+    if (decider !== "owner" && members.some((task) => backlog.delegatedRetries(task, Date.now()).length >= 2)) return { ok: false, error: "One of these cards has already been settled twice today." };
     const at = Date.now();
     let linked = 0;
     for (const task of members) {
@@ -10188,6 +10145,7 @@ async function assistantFamilyAction(action = {}, { by = "owner" } = {}) {
       task.updatedAt = at;
       linked += 1;
     }
+    if (decisionId && typeof stampAutonomyTask === "function") for (const task of members) stampAutonomyTask(task, decisionId);
     keptTitle = keep?.title ?? null;
     return { ok: true, stamped: members.length, linked };
   });
@@ -10203,7 +10161,7 @@ async function assistantFamilyAction(action = {}, { by = "owner" } = {}) {
 // (loopGuard by: "owner", released only by Try again, never by the loop-guard
 // switches); "let-run" changes nothing. Both stamp every member, so only runs
 // after the answer count towards asking again.
-async function assistantChurnAction(choice, memberIds, action = {}, { by = "owner" } = {}) {
+async function assistantChurnAction(choice, memberIds, action = {}, { by = "owner", decisionId = null } = {}) {
   if (memberIds.length < 1) return { ok: false, error: "That decision does not name the cards it is about." };
   const decider = ["desk", "auto", "chat"].includes(by) ? by : "owner";
   const decidedText = decider === "owner" ? "You decided" : "Mefi decided";
@@ -10212,6 +10170,8 @@ async function assistantChurnAction(choice, memberIds, action = {}, { by = "owne
   const recorded = await mutateBoard((board) => {
     const byId = new Map(board.tasks.filter((task) => task?.id).map((task) => [task.id, task]));
     const members = memberIds.map((id) => byId.get(id)).filter(Boolean);
+    if (decider !== "owner" && members.some((task) => task.ownerHold || task.loopGuard?.by === "owner" || task.runId || task.lease || ["running", "active", "verifying", "awaiting_verification"].includes(task.status))) return { ok: false, error: "One of these cards is held by you or a worker." };
+    if (decider !== "owner" && members.some((task) => backlog.delegatedRetries(task, Date.now()).length >= 2)) return { ok: false, error: "One of these cards has already been settled twice today." };
     if (!members.length) return { ok: false, error: "Those cards are no longer on the board." };
     const at = Date.now();
     let held = 0;
@@ -10226,6 +10186,7 @@ async function assistantChurnAction(choice, memberIds, action = {}, { by = "owne
       task.updatedAt = at;
       held += 1;
     }
+    if (decisionId && typeof stampAutonomyTask === "function") for (const task of members) stampAutonomyTask(task, decisionId);
     return { ok: true, stamped: members.length, held };
   });
   if (!recorded?.ok) return { ok: false, error: recorded?.error ?? "Those cards could not be updated." };
@@ -10249,7 +10210,7 @@ function assistantQuestionId() {
   return `q_${Date.now()}_${assistantQuestionSeq}`;
 }
 
-function assistantQuestionAction(option, text = null, { origin = "click", by = null, reason = null } = {}) {
+function assistantQuestionAction(option, text = null, { origin = "click", by = null, reason = null, decisionId = null } = {}) {
   const action = option?.action;
   if (!action || typeof action !== "object") return null;
   if (action.kind === "message") return assistantMessage(String(action.text ?? option.reply ?? ""));
@@ -10265,6 +10226,7 @@ function assistantQuestionAction(option, text = null, { origin = "click", by = n
     return assistantChatAction(held);
   }
   if (action.kind === "backlog") return backlogControl({ ...(action.payload ?? {}), action: action.action });
+  if (action.kind === "confirm-result") return assistantConfirmResult(action, { origin, by, reason, decisionId });
   if (action.kind === "control") return assistantControl(String(action.action ?? ""));
   // A decision about a piece of work: the answer is written onto the task and
   // the work re-armed the way it was answered. Anything the owner typed rides
@@ -10273,11 +10235,34 @@ function assistantQuestionAction(option, text = null, { origin = "click", by = n
   // the owner's permission mode), the answer is attributed and re-arms without
   // lifting the owner's stop or the budgets that park a loop.
   if (action.kind === "issue") return origin === "delegate"
-    ? assistantIssueAction(action, text ?? option.note ?? null, { origin: "delegate", by, reason })
+    ? assistantIssueAction(action, text ?? option.note ?? null, { origin: "delegate", by, reason, decisionId })
     : assistantIssueAction(action, text ?? option.note ?? null);
   // The owner's decision about a duplicate family (the keeper's family ask).
-  if (action.kind === "family") return assistantFamilyAction(action, origin === "delegate" ? { by: by ?? "desk" } : {});
+  if (action.kind === "family") return assistantFamilyAction(action, origin === "delegate" ? { by: by ?? "desk", decisionId } : {});
   return null;
+}
+
+function stampAutonomyTask(task, id) {
+  task.autonomyApplied = { id, after: decisionLedger.snapshot([task], [task.id])[0] };
+}
+
+async function assistantConfirmResult(action, { origin = "click", by = "owner", reason = "", decisionId = null } = {}) {
+  const delegated = origin === "delegate";
+  const result = await mutateBoard((board) => {
+    const task = board.tasks.find((row) => row.id === action.taskId);
+    if (!task || task.ownerHold || task.loopGuard?.by === "owner" || task.runId || task.lease) return { ok: false, error: "This result is no longer available to confirm." };
+    const proof = autonomy.sessionless(task);
+    if (!proof.canConfirm || proof.runId !== action.runId) return { ok: false, error: "This run needs named passing checks before Mefi can confirm it." };
+    const at = Date.now();
+    task.status = "done"; task.doneAt = at;
+    task.verification = { ...task.verification, state: "manual", at, by: delegated ? by : "owner", reason: `Confirmed from recorded checks: ${proof.checks.join(", ")}` };
+    task.logs = [...(task.logs ?? []), { at, kind: "decision", text: `${delegated ? "Mefi" : "You"} decided: confirm the result — ${reason || task.verification.reason}` }].slice(-40);
+    task.updatedAt = at;
+    if (decisionId) stampAutonomyTask(task, decisionId);
+    return { ok: true, taskId: task.id };
+  });
+  if (result.ok) { await refreshAutopilotQueue(); emitAutopilot(); }
+  return result;
 }
 
 // Questions do not stay open forever: a decision nobody made after two days is
@@ -10316,6 +10301,9 @@ function assistantQuestionContext(raw = {}) {
   const clip = (value, max) => String(value ?? "").trim().slice(0, max) || null;
   return {
     issueKind: clip(raw.issueKind, 40),
+    undoneFrom: clip(raw.undoneFrom, 100),
+    sessionless: raw.sessionless === true,
+    suggestion: raw.suggestion && typeof raw.suggestion === "object" ? { optionId: clip(raw.suggestion.optionId, 40), reason: clip(raw.suggestion.reason, 400), at: Number(raw.suggestion.at) || 0 } : null,
     severity: ["blocker", "decision", "note"].includes(raw.severity) ? raw.severity : null,
     taskId: clip(raw.taskId, 80),
     taskTitle: clip(raw.taskTitle, 140),
@@ -10376,6 +10364,7 @@ function assistantQuestion(payload = {}) {
 
 async function assistantAnswer(payload = {}) {
   await ensureAssistant();
+  if (payload.projectId && payload.projectId !== projects.current().id) return { ok: false, error: "The selected project changed." };
   assistantPruneQuestions();
   const question = assistantState.questions.find((entry) => entry.id === payload.id && entry.status === "open");
   if (!question) return { ok: false, error: "That question is no longer waiting.", state: assistantState };
@@ -10408,6 +10397,7 @@ async function assistantAnswer(payload = {}) {
   // without lifting the owner's stop, and is never learned as the owner's.
   const delegatedBy = payload.origin === "desk" ? "desk"
     : payload.origin === "delegate" ? (["desk", "auto", "chat"].includes(payload.by) ? payload.by : "desk") : null;
+  if (delegatedBy && typeof createAutonomyHost === "function" && !assistantState.decisions?.some((row) => row.id === payload.decisionId && row.questionId === question.id && row.pending)) return { ok: false, error: "Automatic answers must first be saved in the decision history." };
   const delegatedReason = delegatedBy ? String(payload.reason ?? "").replace(/\s+/g, " ").trim().slice(0, 200) : "";
   // The companion learns how the owner answers (shown as editable preferences,
   // never applied on its own): the ask's kind and the verb chosen.
@@ -10438,7 +10428,7 @@ async function assistantAnswer(payload = {}) {
   try {
     if (option?.action) {
       const applied = await assistantQuestionAction(option, text || null, delegatedBy
-        ? { origin: "delegate", by: delegatedBy, reason: delegatedReason || null }
+        ? { origin: "delegate", by: delegatedBy, reason: delegatedReason || null, decisionId: payload.decisionId }
         : { origin: payload.origin === "chat" ? "chat" : "click" });
       // An answer given for the owner that could not land (a worker holds the
       // card, its budget for today is spent) was never the owner's answer: the
@@ -10784,6 +10774,7 @@ const autopilot = {
   execute: false, // bootAutopilot loads the saved choice before any worker can run
   held: false, // launch hold: an interactive start waits for the user before any agent or worker runs (releaseStartupHold)
   autoBuild: true, // verify-first holds each saved scope until explicitly approved
+  approve: (item, { tasks = [] } = {}) => autonomy.needsApproval(item, { ...autonomySettings, tasks }),
   minutes: 5,
   parallel: 2, // retained manual worker limit
   adaptiveParallel: true, // the Machine agent admits workers from measured responsiveness
@@ -11208,7 +11199,7 @@ async function readBacklogStatus() {
     return { tasks, requests, ideas };
   });
   const snapshot = backlog.summarizeBacklog({ ...board, jobs: autopilot.jobs, compare: compareWork, ideaEligible: assistant.backlogIdeaEligible,
-    autoBuild: autopilot.autoBuild,
+    autoBuild: autopilot.autoBuild, approve: autopilot.approve,
     paused: assistantState.status === "paused" || !autopilot.execute,
     draining: Boolean(assistantState.prefs?.backlogMode), waiting: autopilot.waiting, lastError: autopilot.lastError, parkedUntil: autopilot.parkedUntil });
   return { ok: true, projectId: projects.current().id, ...snapshot };
@@ -11219,7 +11210,7 @@ async function admitBacklogIdeas({ ideaIds = null } = {}) {
   if (typeof assistant.promoteIdeaBacklog !== "function") return { ok: false, error: "Idea admission is unavailable. Restart after updating Studio." };
   const result = await mutateBoard((board) => {
     const explicit = Array.isArray(ideaIds) && ideaIds.length > 0;
-    const summary = backlog.summarizeBacklog({ ...board, jobs: autopilot.jobs, autoBuild: autopilot.autoBuild });
+    const summary = backlog.summarizeBacklog({ ...board, jobs: autopilot.jobs, autoBuild: autopilot.autoBuild, approve: autopilot.approve });
     const occupied = summary.counts.ready + summary.counts.running + summary.counts.review + summary.counts.cooling + summary.counts.waiting + summary.counts.approval;
     const limit = explicit ? 1 : Math.max(0, 3 - occupied);
     if (!limit || (!explicit && (assistantState?.status === "paused" || !autopilot.execute))) return { promoted: 0, taskIds: [] };
@@ -11263,7 +11254,7 @@ async function backlogControl({ action, taskId, ideaId, projectId, expectedScope
       const index = board.tasks.findIndex((task) => task?.id === taskId);
       if (index < 0) return { ok: false, error: "This task is no longer on the board." };
       const task = board.tasks[index];
-      const state = backlog.workState(task, Date.now(), { tasks: board.tasks, autoBuild: autopilot.autoBuild });
+      const state = backlog.workState(task, Date.now(), { tasks: board.tasks, autoBuild: autopilot.autoBuild, approve: autopilot.approve });
       if (state.stage === "grouped") return { ok: false, error: "This task belongs to a group. Open its plan; retrying this member separately could duplicate the work." };
       if (state.blockedBy === "dependencies") return { ok: false, error: state.reason };
       if (state.stage === "running" || autopilot.jobs.some((job) => job.taskId === taskId)) return { ok: false, error: "This task already has a worker. Let it finish before changing its queue position." };
@@ -12859,10 +12850,10 @@ async function spawnNextJob(options) {
   const { open, ranked } = executorCore.selectCandidates({
     tasks, now, liveTaskIds, liveKeys, titleKey: workTitleKey, conflicts: (task) => conflictsWithLiveFix(eyes, task),
     released: typeof autopilot.fillReleased?.has === "function" ? autopilot.fillReleased : null,
-    autoBuild: autopilot.autoBuild, taskStart, cluster: clusterSelection, compare: compareWork,
+    autoBuild: autopilot.autoBuild, approve: autopilot.approve, taskStart, cluster: clusterSelection, compare: compareWork,
   });
   if (!ranked.length) {
-    const stop = executorCore.idleStopReason({ open, tasks, now, autoBuild: autopilot.autoBuild, taskStart, cluster: clusterSelection });
+    const stop = executorCore.idleStopReason({ open, tasks, now, autoBuild: autopilot.autoBuild, approve: autopilot.approve, taskStart, cluster: clusterSelection });
     // The board had nothing ready to run, which is when the foreman should
     // promote more of the inbox (assistantForemanJob): nothing at all, or
     // only cards that are cooling, waiting on prerequisites or parked for
@@ -13187,7 +13178,7 @@ async function spawnNextJob(options) {
       // never run an updated brief under the old selection's file locks.
       const scopeUnchanged = (current) => backlog.buildScope(current) === selectedScope && Boolean(current.pin) === Boolean(job.ref.pin);
       const current = board.tasks.find((item) => item && item.id === job.ref.id);
-      if (!current || !executorCore.isQueued(current) || backlog.workState(current, Date.now(), { tasks: board.tasks, autoBuild: autopilot.autoBuild }).stage !== "ready" || (current.runId && current.runId !== entry.id)) return null;
+      if (!current || !executorCore.isQueued(current) || backlog.workState(current, Date.now(), { tasks: board.tasks, autoBuild: autopilot.autoBuild, approve: autopilot.approve }).stage !== "ready" || (current.runId && current.runId !== entry.id)) return null;
       if (!scopeUnchanged(current)) return null;
       current.status = "active";
       current.runId = entry.id;
@@ -13224,7 +13215,7 @@ async function spawnNextJob(options) {
       const result = await mutateBoard((board) => {
         if (!modeUnchanged() || !dispatchAllowed() || executorUpdateHold() || projectSwitching) return null;
         const current = board.tasks.find((row) => row?.runId === entry.id);
-        if (!current || !backlog.buildAllowed(current, autopilot)) return null;
+        if (!current || !backlog.buildAllowed(current, { ...autopilot, tasks: board.tasks })) return null;
         return taskDelegation.admit(board, { kind: job.kind, ref: job.ref, entry, plan: entry.delegationPlan, scope: selectedScope, now: Date.now(), nest: entry.nestDelegation === true, maxDepth: EXECUTOR_MAX_DEPTH });
       });
       if (result?.admitted) {
@@ -13257,7 +13248,7 @@ async function spawnNextJob(options) {
     await cancelClaim(autopilot.capacity?.reason || "capacity");
     return "resources";
   }
-  if (!launchAllowed(entry) || !backlog.buildAllowed(job.ref, autopilot)) {
+  if (!launchAllowed(entry) || !backlog.buildAllowed(job.ref, { ...autopilot, tasks })) {
     await cancelClaim(executorUpdateHold() || "paused or build not allowed");
     return "empty";
   }
@@ -13269,11 +13260,11 @@ async function spawnNextJob(options) {
     stillOwned = await withBoardLock(async () => {
       const saved = await eyes.readJson(TASKS_PATH, []);
       const current = saved.find((item) => item?.runId === entry.id);
-      return Boolean(current && backlog.buildScope(current) === selectedScope && backlog.buildAllowed(current, autopilot)
+      return Boolean(current && backlog.buildScope(current) === selectedScope && backlog.buildAllowed(current, { ...autopilot, tasks: saved })
         && !backlog.dependencyState(current, saved).stage);
     });
   } catch {}
-  if (!stillOwned || !launchAllowed(entry) || !backlog.buildAllowed(job.ref, autopilot)
+  if (!stillOwned || !launchAllowed(entry) || !backlog.buildAllowed(job.ref, { ...autopilot, tasks })
     || (typeof projects.active === "function" && runProject?.id !== projects.active()?.id)) {
     await cancelClaim("claim or scope changed before launch");
     return "lost";
@@ -15415,6 +15406,9 @@ async function setAutopilot(prefs = {}, source = null) {
     let autoBuild;
     await updateSettings((settings) => {
       autoBuild = buildRevision !== null && buildRevision === setAutopilot.buildRevision ? prefs.autoBuild : autopilot.autoBuild !== false;
+      if (buildRevision !== null && buildRevision === setAutopilot.buildRevision && source !== "boot" && source !== "autonomy") {
+        settings.autonomy = { ...autonomy.migrate(settings), level: autoBuild ? "auto" : "ask" };
+      }
       settings.ui = {
         ...(settings.ui ?? {}),
         // A breaker park (parkedUntil, set in finish) is not the operator
@@ -15610,7 +15604,7 @@ async function bootAutopilot() {
     await setAutopilot({
       enabled: saved.enabled ?? true,
       execute: saved.execute ?? true,
-      autoBuild: saved.autoBuild !== false,
+      autoBuild: !["ask", "accept"].includes(autonomy.migrate(settings).level),
       minutes: saved.minutes ?? autopilot.minutes,
       parallel: savedExecutorParallel(saved),
       // Legacy widths were also saved automatically. Only an explicit mode
@@ -15646,6 +15640,11 @@ async function readAgentSettings() {
   return typeof agentProfiles !== "undefined" ? agentProfiles.effective(settings, projects.current().id, agentProfiles.current()) : settings;
 }
 
+function rememberAutonomySettings(settings) {
+  autonomySettings = autonomy.migrate(settings);
+  return settings;
+}
+
 async function readSettings() {
   let bytes = null, failure = null;
   try {
@@ -15659,9 +15658,9 @@ async function readSettings() {
   if (Object.keys(stale).length) {
     await authStore.writeAuthStore(AUTH_PATH, { ...auth, ...stale });
     await authStore.atomicWriteJson(SETTINGS_PATH, { ...plain, projects: projects.saved() });
-    return authStore.mergeAuthFields(plain, { ...auth, ...stale });
+    return rememberAutonomySettings(authStore.mergeAuthFields(plain, { ...auth, ...stale }));
   }
-  return authStore.mergeAuthFields(settings, auth);
+  return rememberAutonomySettings(authStore.mergeAuthFields(settings, auth));
 }
 
 // Callers pass the merged readSettings() view. Credential fields ride that
@@ -15682,6 +15681,7 @@ async function writeSettings(next) {
     await authStore.atomicWriteJson(SETTINGS_PATH, saved);
     Object.assign(settingsDisk, { good: JSON.stringify(saved), held: null, unreadable: false });
   }
+  rememberAutonomySettings(next);
   if (Object.keys(auth).length || Object.keys(await authStore.readAuthStore(AUTH_PATH)).length) {
     await authStore.writeAuthStore(AUTH_PATH, auth);
   }
@@ -16421,6 +16421,7 @@ async function gatherReferences({ text, useWeb = false, useTree = true, useIdeas
 // every wait under the lock read "already in progress" until its timeout and
 // the save-and-switch path could never complete.)
 function projectBusyReason({ ownSwitch = false } = {}) {
+  if (typeof autonomyHost !== "undefined" && autonomyHost?.busy) return "Mefi is saving a decision. Try switching again in a moment.";
   if (projectSwitching && !ownSwitch) return "A project switch is already in progress.";
   if (autopilot.jobs.length) return `Finish or stop the ${autopilot.jobs.length} running build(s) before switching projects.`;
   if (projectOperations || projectAgentJobs || pool.running.size || pool.queue.length || assistantTickInFlight || assistantTickDemand || autopilotPassInFlight || executorFillInFlight) return "The assistant is finishing work in this project. Pause it, let the current work finish, then switch.";
@@ -17703,7 +17704,10 @@ function registerIpc() {
   // the project map and the companion. Reads only, except the Playbook's own
   // actions, the map rebuild and the companion's seen/prefs.
   const brainOff = { ok: false, error: "The Agent Brain is not available in this build" };
-  const brainTasks = async () => (await (await getEyes()).readJson(TASKS_PATH, [])).filter((task) => task && !task.archived);
+  const brainTasks = async () => {
+    const tasks = (await (await getEyes()).readJson(TASKS_PATH, [])).filter((task) => task && !task.archived);
+    return tasks.map((task) => ({ ...task, needsApproval: backlog.workState(task, Date.now(), { tasks, ...autopilot }).stage === "approval" }));
+  };
   ipcMain.handle("brain:state", async (_event, payload) => (agentBrain ? agentBrain.state(payload ?? {}) : brainOff));
   ipcMain.handle("brain:events", async (_event, payload) => (agentBrain ? agentBrain.events(payload ?? {}) : brainOff));
   ipcMain.handle("brain:playbook", async () => (agentBrain ? agentBrain.playbookState() : brainOff));
@@ -17747,7 +17751,7 @@ function registerIpc() {
       }
     });
     // Turned on, the desk looks at what is waiting now rather than at the next tick.
-    if (payload?.deskResolves === true) { deskResolveState.left.clear(); assistantDeskResolvePass().catch(() => {}); }
+    if (typeof payload?.deskResolves === "boolean") await autonomySet({ level: payload.deskResolves ? "auto" : "ask" });
     return brainSettingsView(saved);
   });
   // With the companion covering all projects, the other projects' open asks
@@ -17775,6 +17779,10 @@ function registerIpc() {
     const deskResolves = deskResolvesOn(await readSettings().catch(() => null));
     return view?.ok ? { ...view, deskResolves } : view;
   };
+  ipcMain.handle("autonomy:state", async () => autonomyState());
+  ipcMain.handle("autonomy:set", async (_event, payload) => autonomySet(payload ?? {}));
+  ipcMain.handle("autonomy:undo", async (_event, payload) => autonomyUndo(payload ?? {}));
+  ipcMain.handle("autonomy:todo", async (_event, payload) => autonomyTodo(payload ?? {}));
   ipcMain.handle("companion:state", async () => (agentBrain ? companionView() : brainOff));
   // The owner's Clear: this project's open asks on the list are closed as
   // "left for review" (nothing on their cards changes), and every item listed,

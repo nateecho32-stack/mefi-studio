@@ -34,6 +34,27 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-26 - Permission modes Phase 1 isolated full gate
+
+Validated snapshot bdd08f1 in the isolated assist-g1 worktree. Check and audit
+passed with zero findings. Full npm test: Node 3732 passed / 4 skipped / 0
+failed; Electron 35 passed / 1 skipped / 1 failed; exclusive probes 2 passed
+and occlusion capability-skipped; Python 248 tests with 1 skip; all six
+path-lock checks passed. The only failure is Unified Studio's previously
+reproduced primary-destinations visibility assertion at 600px / 150% zoom.
+The full command therefore correctly exited 1. Command rendering passed.
+Sources remained unchanged during the run. Logs: C:/wt/phase1-full.log,
+C:/wt/phase1-gate-check.log and C:/wt/phase1-gate-audit.log.
+
+## 2026-09-26 - Permission modes Phase 1 focused gate
+
+Implemented saved permission modes, elevated switches, shared dispatch approval,
+persisted suggestions, a decision ledger with Undo, interruption recovery and
+human to-dos in the isolated assist-1 worktree. The fast suite passed 3730 tests
+with 4 skips before the final persistence guards; 118 focused host, durability
+and executor tests passed afterward. Check and audit passed (zero findings).
+The booklet build passed. Full gate validation follows on the isolated snapshot.
+
 ## 2026-09-26 - Permission modes Phase 0: delegated safeguards and recovered gate evidence
 
 Recovered isolated Phase 0 commit 2500481 and tightened delegated retries:

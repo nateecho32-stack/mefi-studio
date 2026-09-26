@@ -76,14 +76,14 @@ test("the prompt names the card, the task and only the allowed options", () => {
 
 test("a reply is read only against the options offered", () => {
   const { options } = resolvable(ask({ options: [issueOption("retry"), issueOption("instruct"), issueOption("replan")] }));
-  assert.deepEqual(parseResolution('Sure.\n```json\n{"optionId":"replan","reason":"Failed twice the same way."}\n```', options), { leave: false, optionId: "replan", label: "replan", text: null, reason: "Failed twice the same way." });
+  assert.deepEqual(parseResolution('Sure.\n```json\n{"optionId":"replan","reason":"Failed twice the same way."}\n```', options), { leave: false, optionId: "replan", label: "replan", text: null, reason: "Failed twice the same way.", confidence: 0 });
   const told = parseResolution({ optionId: "instruct", text: "Run the parser tests before editing the caller.", reason: "Say what to do first." }, options);
   assert.equal(told.optionId, "instruct");
   assert.equal(told.text, "Run the parser tests before editing the caller.");
   // An instruction with no line, an id not on the card, or null: left for the owner.
   assert.equal(parseResolution({ optionId: "instruct", reason: "x" }, options).leave, true);
   assert.equal(parseResolution({ optionId: "grant", reason: "x" }, options).leave, true);
-  assert.deepEqual(parseResolution('{"optionId": null, "reason": "Needs a product call."}', options), { leave: true, reason: "Needs a product call." });
+  assert.deepEqual(parseResolution('{"optionId": null, "reason": "Needs a product call."}', options), { leave: true, reason: "Needs a product call.", confidence: 0 });
   assert.equal(parseResolution("no json here", options), null);
   assert.equal(parseResolution('{"answer":"wrong contract"}', options), null);
 });

@@ -4,6 +4,7 @@
 // No Electron profile, filesystem writes, credentials or network are used.
 import assert from "node:assert/strict";
 import vm from "node:vm";
+import autonomy from "../../scripts/autonomy.cjs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { EventEmitter } from "node:events";
@@ -70,7 +71,7 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
   const stream = () => Object.assign(new EventEmitter(), { setEncoding() {} });
   // The per-run task context files (writeTaskRunContext), kept in memory.
   const runFiles = new Map();
-  const env = vm.createContext({
+  const env = vm.createContext({ autonomy, autonomySettings: autonomy.migrate({}),
     mkdir: async () => {}, writeFile: async (file, text) => { runFiles.set(file, String(text)); },
     readdir: async (dir) => [...runFiles.keys()].filter((file) => path.dirname(file) === dir).map((file) => path.basename(file)),
     rm: async (file) => { runFiles.delete(file); },

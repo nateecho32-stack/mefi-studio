@@ -52,11 +52,11 @@ function isQueued(task) {
 // card, and only with the brief it was started with; a focused Cluster runs
 // only its focus. Resumable work goes first (executorResume.compare), then
 // the host's worth order (`compare`: pin, band, age).
-function selectCandidates({ tasks, now, liveTaskIds, liveKeys, titleKey, conflicts, released = null, autoBuild, taskStart = null, cluster = null, compare }) {
+function selectCandidates({ tasks, now, liveTaskIds, liveKeys, titleKey, conflicts, released = null, autoBuild, approve = null, taskStart = null, cluster = null, compare }) {
   const open = tasks
     .filter((task) => task && isQueued(task) && !liveTaskIds.has(task.id) && !liveKeys.has(titleKey(task.title)) && !conflicts(task))
     .sort((a, b) => (a.createdAt ?? a.updatedAt ?? 0) - (b.createdAt ?? b.updatedAt ?? 0));
-  const runnable = open.filter((task) => (task.runFailures ?? 0) < MAX_RUN_FAILURES && backlog.workState(task, now, { tasks, autoBuild }).stage === "ready" && !(task.nextRunAt && task.nextRunAt > now) && !released?.has(task.id));
+  const runnable = open.filter((task) => (task.runFailures ?? 0) < MAX_RUN_FAILURES && backlog.workState(task, now, { tasks, autoBuild, approve }).stage === "ready" && !(task.nextRunAt && task.nextRunAt > now) && !released?.has(task.id));
   // Pick by what the job is FOR, not just who filed it: the worth order puts
   // the overseer's own upkeep last, where it once took 20 of 34 slots.
   const ranked = runnable
@@ -69,9 +69,9 @@ function selectCandidates({ tasks, now, liveTaskIds, liveKeys, titleKey, conflic
 // Why nothing started when no card was ranked: a focused Cluster waits on its
 // own work, otherwise the reason the waiting cards give (the named card's
 // alone for an explicit Start), in this order.
-function idleStopReason({ open, tasks, now, autoBuild, taskStart = null, cluster = null }) {
+function idleStopReason({ open, tasks, now, autoBuild, approve = null, taskStart = null, cluster = null }) {
   if (cluster?.focus) return "cluster";
-  const states = (taskStart ? tasks.filter((task) => task?.id === taskStart.taskId) : open).map((item) => backlog.workState(item, now, { tasks, autoBuild }));
+  const states = (taskStart ? tasks.filter((task) => task?.id === taskStart.taskId) : open).map((item) => backlog.workState(item, now, { tasks, autoBuild, approve }));
   if (states.some((item) => item.stage === "approval")) return "approval";
   if (states.some((item) => item.stage === "cooling")) return "cooldown";
   if (states.some((item) => item.blockedBy === "dependencies")) return "prerequisites";

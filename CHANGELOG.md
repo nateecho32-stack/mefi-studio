@@ -8,6 +8,14 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- Four saved permission modes: Always ask, Accept per task, Auto (default),
+  and Elevated only. Six elevated categories keep their decisions with the
+  owner unless switched off; grants and irreversible changes require the
+  warning acknowledgement. Agent-filed tasks wait for approval by default.
+- Automatic answers have a bounded decision history with reasons and Undo.
+  Undo waits for a running worker and preserves later edits and daily budgets.
+  Real-world leftovers become a short For you list. Task reservations keep
+  work from starting until the decision and its undo evidence are saved.
 - Vibe has its own menus. Tasks, Plans, Ideas, Team and Settings open as
   compact panels beside the front door instead of Build's full pages: short
   rows with one or two actions, a row opens its detail, Back or Esc steps out,
