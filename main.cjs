@@ -2674,7 +2674,27 @@ function normalizeLmStudioEndpoint(value) {
 
 // An OpenAI-compatible server needs a model id per request. When no override
 // is saved, ask the endpoint which model it serves instead of guessing one.
+// Every assistant call on such a route resolved it again, a GET /models of up
+// to 5 s each, so an answer is remembered per endpoint (a model for a minute,
+// a miss for 15 s so a server started meanwhile is soon noticed) and callers
+// that ask while a probe is out share it.
+const COMPAT_MODEL_TTL_MS = 60 * 1000;
+const COMPAT_MODEL_MISS_TTL_MS = 15 * 1000;
+const compatModelProbes = new Map();
 async function compatEndpointModel(endpoint) {
+  const known = compatModelProbes.get(endpoint);
+  if (known?.pending) return known.pending;
+  if (known && Date.now() - known.at < (known.model ? COMPAT_MODEL_TTL_MS : COMPAT_MODEL_MISS_TTL_MS)) return known.model;
+  const entry = { pending: probeCompatEndpointModel(endpoint), model: null, at: 0 };
+  compatModelProbes.delete(endpoint);
+  compatModelProbes.set(endpoint, entry);
+  if (compatModelProbes.size > 16) compatModelProbes.delete(compatModelProbes.keys().next().value);
+  const model = await entry.pending;
+  Object.assign(entry, { pending: null, model, at: Date.now() });
+  return model;
+}
+
+async function probeCompatEndpointModel(endpoint) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5000);
   try {
@@ -2748,14 +2768,29 @@ async function resolveAiCandidate(provider, role, settings, { allowCli, zaiKey, 
 
 async function resolveAutoRoute(role, settings, { allowCli, zaiKey, goKey, zenKey, openrouterKey }) {
   const order = autoProviderOrder(settings);
-  const candidates = (await Promise.all(order.map((id) => resolveAiCandidate(id, role, settings, { allowCli, zaiKey, goKey, zenKey, openrouterKey })))).filter(Boolean);
+  const armed = autoFallbackEnabled(settings);
+  const resolve = (id) => resolveAiCandidate(id, role, settings, { allowCli, zaiKey, goKey, zenKey, openrouterKey });
+  // Walk to the first usable entry. Unarmed, that is the route and the rest
+  // are not resolved at all (no CLI lookup, no endpoint probe). Armed, the
+  // HTTP entries past it resolve together for the retry list; a CLI route
+  // never joins that list, so those entries are skipped.
+  const candidates = [];
+  let index = 0;
+  for (; index < order.length && !candidates.length; index += 1) {
+    const candidate = await resolve(order[index]);
+    if (candidate) candidates.push(candidate);
+  }
+  if (armed && candidates.length) {
+    const rest = order.slice(index).filter((id) => !["grok", "claude", "codex", "antigravity"].includes(id));
+    candidates.push(...(await Promise.all(rest.map(resolve))).filter(Boolean));
+  }
   if (!candidates.length) {
     return { ok: false, error: `no usable provider in the auto order (${order.map((id) => AUTO_PROVIDER_NAMES[id]).join(" > ")}) - save a key, install a CLI or change the order in the Studio tab` };
   }
   const [primary, ...rest] = candidates;
   // A CLI route is never a silent retry target: it can prompt or hang, so the
   // fallback list keeps the HTTP entries only.
-  const fallbacks = autoFallbackEnabled(settings) ? rest.filter((candidate) => !candidate.cli) : [];
+  const fallbacks = armed ? rest.filter((candidate) => !candidate.cli) : [];
   return { ok: true, ...primary, fallback: fallbacks[0] ?? null, fallbacks };
 }
 
