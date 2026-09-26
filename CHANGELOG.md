@@ -412,6 +412,18 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   settled checkout was kept as if it held unsaved edits.
 
 ### Changed
+- **Home and the task board follow your theme.** The workspace was still
+  written in an older olive-and-cream palette of about 170 one-off colours,
+  and a patch layer repainted only part of it, so borders, secondary text,
+  status chips and the companion stayed olive on every theme. Every one of
+  them is now a theme token, status colours come from the shared ok / warn /
+  bad / info tokens (plus a new `--idea` violet for ideas and grouped work),
+  and its corner radii use the radius scale.
+- **Buttons and tints stop showing the old gold.** Every button's resting
+  and hover fill was a fixed warm brown, and 33 hovers, borders and chips
+  used the retired champagne gold; they now take the theme's surface and
+  accent. Hand-written warning, error and live tints go through their
+  tokens too.
 - **`npm test` runs every leg and every stage**, even after one fails, and
   ends with a pass/FAIL line per leg; one red suite used to hide whether the
   Electron lane, the Python contracts and the path lock passed.

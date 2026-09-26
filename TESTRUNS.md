@@ -97,6 +97,10 @@ Cloud container (Linux, root, Node 22.22, xvfb, software rendering) on claude/op
 
 Reviewed the agent pipeline stage by stage (dispatch and claim, the worker run, settlement, verification, the loop's control plane) and fixed what reproduced, in commits b643750, 6f311c6, 08ab5ae, e98f586 and 7ce96a0; each fix has a regression test that fails on the tree before it. Ran on Linux with Node 22 (the package asks for 24) and Python 3.11, with no `npm ci`, so no Electron binary: the Electron lane of `npm test` did not run and is not claimed here. `npm run check` and `npm run audit` exited 0 (zero findings). `npm run test:fast` exited 0: 2602 pass, 0 fail, 14 skipped. `python -m unittest discover -s tools -p "test_mefi_studio_*.py"`: 248 OK, 3 skipped. `node tools/test_normalized_path_lock.mjs` passed. `node tools/monitor_loop.mjs --scenario all --minutes 60 --tasks 9` printed the same board, run and settlement lines before and after the changes. One Python pin in `tools/test_mefi_studio_assistant.py` was updated to the new `infraFail` expression, whose intent it states. No project state, settings or secrets were added.
 
+## 2026-09-24 evening - Styling consistency: Home, the task board, buttons and status tints move onto theme tokens
+
+Linux cloud container (Node 22, Python 3), branch claude/pensive-dirac-fkvdzi after the menu pass (094ab62). CSS only: renderer/styles.css plus the rebuilt renderer/booklet.html. The workspace and task-board block (styles.css about lines 2361-2900) mapped 182 colour literals from the old olive palette onto tokens (neutrals by lightness to --bg, --panel-solid, an 8% accent mix, --hairline(-strong), --ivory, --muted, --dim; status to --good, --warn, --bad, --info and a new --idea) and 35 radii onto --r-*; its accent now defaults to the theme's. 33 rgba(201,168,106,a) old-gold tints became --tint-gold-* or color-mix of --gold; 42 hand-written warn, bad, live and gold-bright tints became color-mix of their tokens; the global button rest and hover fills became theme surface and accent mixes. Canvas colours in renderer/*.js and the neutral near-black shadows were left alone. Compared npm run start:web renders of HEAD (a worktree on port 4174) and the change on the aurora, violet and ember themes. npm run build-booklet ok; npm run check ok (109 targets, 245 specs, all selectors used); npm run audit 0 findings; npm run test:fast 2585 tests, 2571 pass, 14 skipped, 0 fail; Python contracts 248 OK (3 skipped). The Electron lane and full npm test were not run here (no attended desktop).
+
 ## 2026-09-24 - Menu design pass: the rail fits 900px, Search groups its sections, toasts clear the open menu
 
 Linux cloud container (Node 22, Python 3), branch claude/pensive-dirac-fkvdzi on 340940f plus uncommitted renderer CSS changes. Reviewed the menus in npm run start:web with headless Chromium at 1400x900, 1280x720 and 600x560. Found that the open rail needed about 706px of list in 624px at 900px tall and 620px in 472px at 720px tall, the resting Settings tile ellipsized, the <=640px rule shrank open heads to 9.5px, the unpinned open rail sat under the tip toast, Search repeated each row's section, the palette field's ring cut the sheet's corner, the project panel's brand wore the current-page pill and the Shortcuts key column was 112px for an 80px keycap. Changes are CSS only (renderer/styles.css) plus the rebuilt renderer/booklet.html. Afterwards the list measures 632 in 632 at 900px and 571 in 571 at 720px. npm run build-booklet ok; npm run check ok (109 targets, 245 specs, CSS merge skipped with no merge, all selectors used); npm run audit 0 findings; npm run test:fast 2585 tests, 2571 pass, 14 skipped, 0 fail; Python contracts 248 OK (3 skipped). Electron: python tools/verify_workspace.py --menus-only under xvfb-run with ELECTRON_DISABLE_SANDBOX=1 and a local electron.exe symlink (the verifier is Windows-pathed): the menu checks and the five-size layout sweep passed, then the run failed at 'menu checks never start a coding worker' (5 !== 0); the same command on the stashed baseline fails identically, so that check is environmental on this Linux container. The full npm test gate was not run here (no attended desktop).
@@ -424,6 +428,64 @@ created walkthrough companion ID; the final audit is clean.
 Logs: %TEMP%/mefi-agent-compact-{check,audit,render,full-test}.log.
 Captures/report: %TEMP%/mefi-agent-compact/. No live application data or
 portable data was changed.
+
+Command, exactly as specified, from the package root, combined stdout+stderr captured at
+the OS level (cmd `> log 2>&1`, preserving order) - exit **1**:
+
+```text
+✖ real performance profiler catches blocking work, freezes captures and fits a narrow window (27253.745ms)
+✔ desktop performance capture measures real Electron processes and IPC without exporting payloads (9029.4255ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 1
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 36802.6363
+
+✖ failing tests:
+
+test at tests\performance_render.test.mjs:80:1
+✖ real performance profiler catches blocking work, freezes captures and fits a narrow window (27253.745ms)
+  AssertionError [ERR_ASSERTION]:
+  Error: Profiler JSON download timed out after 5180ms at 1.04x observed pace
+      at Timeout._onTimeout (C:\Users\echor\OneDrive\Desktop\Coding Projects\Mefi's Studio AI+\tests\fixtures\performance-render-electron.cjs:137:22)
+      at listOnTimeout (node:internal/timers:685:17)
+      at process.processTimers (node:internal/timers:618:7)
+
+  Error: Profiler JSON download timed out after 5180ms at 1.04x observed pace
+      at Timeout._onTimeout (C:\Users\echor\OneDrive\Desktop\Coding Projects\Mefi's Studio AI+\tests\fixtures\performance-render-electron.cjs:137:22)
+      at listOnTimeout (node:internal/timers:685:17)
+      at process.processTimers (node:internal/timers:618:7)
+
+  1 !== 0
+
+      at runFixture (file:///C:/Users/echor/OneDrive/Desktop/Coding%20Projects/Mefi's%20Studio%20AI+/tests/performance_render.test.mjs:68:12)
+      at async TestContext.<anonymous> (file:///C:/Users/echor/OneDrive/Desktop/Coding%20Projects/Mefi's%20Studio%20AI+/tests/performance_render.test.mjs:81:18)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+```
+
+Raw combined log preserved at `%TEMP%\opencode\pak_capture_20260922-1.log`; host samples
+at `%TEMP%\opencode\pak_capture_20260922-1.host.txt`. The failure is the fixture's own
+pace-scaled download budget (5,180 ms at 1.04x observed timer pace), not the pak-load
+line: the string `chrome_100_percent.pak` appears nowhere in the output, so the stray
+pak-load line remains unreproduced. The parent card's result claimed a repo-relative
+handoff doc `docs/handoffs/mefi-studio-perf-render-pak-load-capture.md` at `d57cd410`;
+neither the doc nor that revision exists on this checkout (`git show d57cd410` ->
+unknown revision; no `docs/handoffs/` directory), so that record could not be
+corroborated. Remaining: a genuine cold-OneDrive capture still needs a host where
+OneDrive is actively syncing and the Electron pak is dehydrated/starved - this host can
+provide neither, so the card cannot be closed from here. No test/fixture source was
+modified beyond this ledger entry.
 ## Read Before Any Tests
 
 This is the test guide for the standalone Mefi's Studio AI+ repository. Run all commands from this repository root.
