@@ -457,6 +457,34 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   model-performance ctime check on filesystems that do not advance ctime.
 - The TESTRUNS append helper no longer doubles a "(task, run)" suffix the
   title already carries.
+- **The node styles are remastered, and every node moves.** Both canvases
+  paint every node through one shared module (`renderer/node-styles.js`), so
+  the tree rail's own drifted copies of the eight styles are gone and the rail
+  wears the Command view's looks. Every node animates all the time, faster
+  while it works; reduced motion holds each style in a designed still pose.
+  - The Void collection has full style packs, each with its own agent ring,
+    hub dress, work orbit, arrival, selection, wires, pulses and landing:
+    **Sigil** is a hex seal whose rune ring turns while six hex cells
+    assemble round it as it works; **Singularity** is a black hole with a
+    tilted accretion disc, falling sparks, jets at work and wires bent by
+    its gravity; **Prism** is a turning crystal whose light band sweeps and
+    whose wires split into three spectral strands.
+  - The five free styles are polished and follow the theme (no fixed navy
+    bodies on light themes): orbs sway with a travelling glint, Soft glass
+    sweeps a sheen, Minimal breathes and keeps its agents' glyph and status
+    ring, Halo turns a dashed ring without a blur, Crystal is an octagonal
+    brilliant.
+  - Wires, pulses and landings wear the style, the done badge pulses, labels
+    step clear of a look that reaches past its node, and the picker
+    thumbnails animate when motion is allowed. Paints are cached per canvas:
+    a steady frame builds no gradients.
+  - Wires stop at each node's edge instead of crossing a see-through body,
+    and the rims round a node (the file-clash rim, the done echo) follow its
+    shape: a hexagon round Sigil, an octagon round Crystal, a kite round Prism.
+  - On light themes a resting node keeps its state readable: done, blocked
+    and stale rims stand at least 3:1 off the page, status badges are filled
+    wells, and a Singularity stays a black core in a coloured ring. A stale
+    session reads as stalled: its rim is dashed and it moves at a slower pace.
 
 ### Security
 - The Analyzer's GitHub issue read runs `gh` without a shell and without

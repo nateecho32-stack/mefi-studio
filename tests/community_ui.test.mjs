@@ -35,9 +35,9 @@ const CATALOG = {
     { key: "dusk", name: "Neon Dusk", accent: "#ff5fa2", bright: "#ffa3cb", accent2: "#3fd0ff" },
   ],
   nodeStyles: [
-    { key: "singularity", name: "Singularity", detail: "A dark core in a bright ring" },
-    { key: "prism", name: "Prism", detail: "Refracting facets" },
-    { key: "sigil", name: "Sigil", detail: "Rune-marked rings" },
+    { key: "singularity", name: "Singularity", detail: "A black hole with a turning disc" },
+    { key: "prism", name: "Prism", detail: "A turning crystal that splits light" },
+    { key: "sigil", name: "Sigil", detail: "Hex runes that assemble as it works" },
   ],
 };
 const MINUTE = 60000, HOUR = 60 * MINUTE, DAY = 24 * HOUR;
@@ -236,6 +236,17 @@ test("the fork sentence and agent prompt are exact, and match scripts/community.
     assert.equal(community.FORK_COPY, FORK, "the renderer copy is a duplicate of the rules module's");
     assert.equal(community.AGENT_PROMPT, AGENT);
   }
+});
+
+test("the stub catalog's node styles are music.js's, and docs/community.md lists each one as written", async () => {
+  // NODE_STYLES as music.js declares it; premiumCatalog() hands out its premium rows as { key, name, detail }.
+  const literal = musicSource.match(/const NODE_STYLES = (\{[\s\S]*?\n {2}\});/);
+  assert.ok(literal, "music.js declares NODE_STYLES");
+  const styles = vm.runInNewContext(`(${literal[1]})`);
+  const premium = Object.entries(styles).filter(([, style]) => style.premium === true).map(([key, style]) => ({ key, name: style.name, detail: style.detail }));
+  assert.deepEqual(CATALOG.nodeStyles, premium, "the stub is a copy of what premiumCatalog() hands the Community card");
+  const docs = await readFile(new URL("../docs/community.md", import.meta.url), "utf8");
+  for (const style of CATALOG.nodeStyles) assert.ok(docs.includes(`| **${style.name}** | \`${style.key}\` | ${style.detail} |`), `docs/community.md's row for ${style.key}`);
 });
 
 test("every id the module looks up exists in the template", () => {

@@ -31,6 +31,7 @@ const CODE_SOURCES = [
   "graph.js",
   "model-lab.js",
   "tracker.js",
+  "node-styles.js",
   "tree3d.js",
   "idle.js",
   "camera-tour.js",
@@ -96,7 +97,7 @@ export async function build({ root = ROOT } = {}) {
   const catalog = await readFile(path.join(root, "data", "models.json"), "utf8");
   const parsed = JSON.parse(catalog);
 
-  const [styles, musicStyles, planningStyles, brainStyles, taskGroups, nav, sidebar, graph, modelLab, tracker, tree, idle, cameraTour, explorer, analyzer, tasks, ideas, overhead, brains, palette, eyes, boot, startup, workspace, mediaWindow, music, together, planning, onboarding, community, demoPanel, agentBrain, booklet] = await Promise.all([
+  const [styles, musicStyles, planningStyles, brainStyles, taskGroups, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, idle, cameraTour, explorer, analyzer, tasks, ideas, overhead, brains, palette, eyes, boot, startup, workspace, mediaWindow, music, together, planning, onboarding, community, demoPanel, agentBrain, booklet] = await Promise.all([
     readFile(path.join(RENDERER, "styles.css"), "utf8"),
     readFile(path.join(RENDERER, "music.css"), "utf8"),
     readFile(path.join(RENDERER, "planning.css"), "utf8"),
@@ -107,6 +108,7 @@ export async function build({ root = ROOT } = {}) {
     readFile(path.join(RENDERER, "graph.js"), "utf8"),
     readFile(path.join(RENDERER, "model-lab.js"), "utf8"),
     readFile(path.join(RENDERER, "tracker.js"), "utf8"),
+    readFile(path.join(RENDERER, "node-styles.js"), "utf8"),
     readFile(path.join(RENDERER, "tree3d.js"), "utf8"),
     readFile(path.join(RENDERER, "idle.js"), "utf8"),
     readFile(path.join(RENDERER, "camera-tour.js"), "utf8"),
@@ -153,7 +155,7 @@ export async function build({ root = ROOT } = {}) {
   ]);
   const nodeVisuals = await readFile(path.join(RENDERER, "node-visuals.js"), "utf8");
   const projectMapView = await readFile(path.join(RENDERER, "project-map-view.js"), "utf8");
-  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, nav, sidebar, graph, modelLab, tracker, tree, idle, cameraTour, explorer, analyzer, tasks, ideas, overhead, brains, palette, eyes, boot, startup, workspace, mediaWindow, music, together, planning, onboarding, community, demoPanel, companionUi, companionHub, projectMapView, agentBrain, agents, vibe, booklet];
+  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, idle, cameraTour, explorer, analyzer, tasks, ideas, overhead, brains, palette, eyes, boot, startup, workspace, mediaWindow, music, together, planning, onboarding, community, demoPanel, companionUi, companionHub, projectMapView, agentBrain, agents, vibe, booklet];
   const code = codeParts.join("\n");
   const html = template
     .replace("__BOOKLET_DATA__", () => catalog.trim())

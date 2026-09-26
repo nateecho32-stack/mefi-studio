@@ -29,9 +29,9 @@ colors** and the five original node styles. The Void collection adds:
 
 | Node style | Key | Look |
 | --- | --- | --- |
-| **Singularity** | `singularity` | A dark core in a bright ring |
-| **Prism** | `prism` | Refracting facets |
-| **Sigil** | `sigil` | Rune-marked rings |
+| **Singularity** | `singularity` | A black hole with a turning disc |
+| **Prism** | `prism` | A turning crystal that splits light |
+| **Sigil** | `sigil` | Hex runes that assemble as it works |
 
 - Each Void theme has a second accent hue (`--accent-2`). While one is on,
   `:root[data-studio-theme-tier="premium"]` gives primary buttons a gradient

@@ -225,7 +225,7 @@ test("the bridge, the IPC handlers and the bundle all carry the tracker", () => 
   assert.match(mainSource, /mergeLedgers\(\{ studio: state\.observations, store: store\.rows \}\)/, "both ledgers feed one report");
   assert.match(mainSource, /eyes\.usageLedger\(\{ since: now - USAGE_LEDGER_DAYS \* 86400000, now \}\)/, "coding sessions come from the store reader");
   assert.match(buildSource, /readFile\(path\.join\(RENDERER, "tracker\.js"\), "utf8"\)/);
-  assert.match(buildSource, /modelLab, tracker, tree/);
+  assert.match(buildSource, /modelLab, tracker, nodeStyles, tree/);
 });
 
 test("the store read is a worker method and the project facade scopes it", () => {

@@ -73,6 +73,7 @@ configuration. Changes use the existing project/default scope and Apply flow.
 | **Agent brain** | The Live view (`J`) that draws a task's **pipeline** from recorded **work events**: the head (the companion), the lead, the steps and the sub-agents; plus the **Playbook** of recipes and **project map** under Agents › Workflows. The seats live under Agents › Setup. See [roadmap-0.4.0.md](roadmap-0.4.0.md) and [agent-loop.md §13](agent-loop.md#13-the-agent-brain). |
 | **Companion** | The roaming character (named under General): click it to ask questions, create tasks, navigate, see the team and its messages, change settings, or handle its needs-you queue. It also gives a welcome-back digest and covers this project or all of them. Its default model is GPT-6 Luna on Zen at medium reasoning and fast service when Zen is connected. |
 | **Orb, callout, absorb** | Command-view vocabulary: an orb is a node, a callout is its floating card, and absorb is a finished node collapsing into its host. |
+| **Node style / `MefiNodeStyles`** | How a node is drawn: one of eight looks (five free, three in the Void collection), painted on both the Command view and the tree rail by `renderer/node-styles.js`. Each look owns its body and may take over the agent ring, hub dress, work orbit, arrival, selection, wires, pulses and landing; per-node motion records keep every node animating, and reduced motion freezes each look to a still pose. |
 | **Ruins Runner** | The author's LÖVE game, an optional external project Studio can launch. A fresh clone works without it. |
 | **Discord Server Styler** | An optional separate bot and local dashboard. Settings can start it, open its dashboard or folder, show its status and stop a process Studio started. |
 | **Void collection** | Four themes (Void, Eclipse, Abyss, Neon Dusk) and three node styles (Singularity, Prism, Sigil). Anyone can preview them in Settings › Appearance. A preview resets when the canvas preview closes or you leave Settings; members of the Void Engine Discord can save their choices. Settings › Community shows the collection and its link. Everything else stays free. |
@@ -529,7 +530,11 @@ proposal is left out and counted in its note.
   (**Classic orbs**, **Soft glass**, **Minimal**, **Halo**, **Crystal**, plus
   the Void collection's **Singularity**, **Prism** and **Sigil** for Discord
   members) and arrangement (**Constellation**, **Branches**, **Rings**,
-  **Helix**, **Terraces**) per project, in 2D or real 3D.
+  **Helix**, **Terraces**) per project, in 2D or real 3D. Every node style
+  moves all the time and faster while its node works (a Sigil's hex cells
+  assemble, a Singularity's disc spins up, a Prism's shards orbit); a stale
+  session's rim is dashed and it moves at a slower pace; reduced motion holds
+  each in a still pose. Wires stop at each node's edge.
 - The sky follows the colour theme — Aurora ribbons, Deep space, Nebula,
   Rising embers, Fireflies, Soft bokeh, Warm dust — or pick a **Backdrop**
   (plus Quiet grid and Minimal) in the Ambience pop. **Speech bubbles** beside

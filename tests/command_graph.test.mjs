@@ -632,20 +632,6 @@ test("orbs reserve size and brightness emphasis for working or inspected nodes",
   assert.equal(env.nodeVisualProfile(quiet).prominent, true);
 });
 
-test("orbs retain luminous cores and a single status rim without stacked status rings", () => {
-  const state = { selected: null, hoverNode: null };
-  const env = vm.createContext({ state, Math, rgba: (_tint, alpha) => `rgba(220,180,110,${alpha})` });
-  vm.runInContext(section("function nodeVisualProfile(", "function arrangeProjectedNodes("), env);
-  for (const kind of ["task", "agent", "session"]) {
-    const paints = [], gradients = [];
-    const ctx = { save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, arc() {}, fillRect() {}, fill() { paints.push(["fill", this.fillStyle]); }, stroke() { paints.push(["stroke", this.strokeStyle]); }, createRadialGradient() { const stops = []; gradients.push(stops); return { addColorStop: (...stop) => stops.push(stop) }; } };
-    env.drawNodeSurface(ctx, { id: kind, kind }, { x: 50, y: 50 }, 12, [220, 180, 110], { active: true });
-    assert.equal(paints.filter(([operation]) => operation === "stroke").length, 1);
-    assert.equal(gradients.length, 2, "one restrained halo and one coloured core");
-    assert.ok(paints.some(([operation, value]) => operation === "fill" && value === "#151a22"), "connections must not show through the core");
-  }
-});
-
 test("collapsed panel headers stay outside the graph while their side gutters become usable", () => {
   const { env, state, el } = graphContext({ width: 1920, height: 1200 });
   state.feedCollapsed = true;
@@ -671,21 +657,6 @@ test("collapsed Live work returns its gutter to the graph and keeps assistant co
   assert.equal(env.feedVisible(), false); assert.equal(env.chatMode(), false, "the hidden rail cannot swallow the floating assistant composer");
   state.feedCollapsed = false;
   assert.equal(env.feedVisible(), true); assert.equal(env.chatMode(), true);
-});
-
-test("Classic, Soft glass and Minimal use distinct rendering without altering node geometry", () => {
-  const state = { selected: null, hoverNode: null, nodeStyle: "orbs" };
-  const env = vm.createContext({ state, Math, rgba: (_tint, alpha) => `rgba(220,180,110,${alpha})` });
-  vm.runInContext(section("function nodeVisualProfile(", "function graphLayoutSeeds("), env);
-  const node = { id: "task", kind: "task", x: 4, y: 5, z: 6 };
-  const counts = {};
-  for (const style of ["orbs", "glass", "minimal"]) {
-    const calls = { radial: 0, linear: 0, fill: 0 };
-    const ctx = { save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, arc() {}, fill() { calls.fill += 1; }, stroke() {}, createRadialGradient() { calls.radial += 1; return { addColorStop() {} }; }, createLinearGradient() { calls.linear += 1; return { addColorStop() {} }; } };
-    state.nodeStyle = style; env.drawNodeSurface(ctx, node, { x: 50, y: 50 }, 12, [220, 180, 110], { active: true }); counts[style] = calls;
-  }
-  assert.deepEqual(counts, { orbs: { radial: 2, linear: 0, fill: 4 }, glass: { radial: 0, linear: 1, fill: 2 }, minimal: { radial: 0, linear: 0, fill: 1 } });
-  assert.deepEqual([node.x, node.y, node.z], [4, 5, 6]);
 });
 
 test("style changes preserve managed positions and only explicit layout changes request a reflow", () => {
@@ -733,30 +704,274 @@ test("blue work orbits are optional, truthful and static for reduced motion", ()
   assert.ok(node._orbitTrail.drawn, "explicit queued work retains the old blue indicator");
 });
 
-test("Extra glow adds a bounded visible halo to every chosen style without changing geometry", () => {
-  const state = { extraGlow: false };
-  const env = vm.createContext({ state, Math, rgba: (_tint, alpha) => `rgba(220,180,110,${alpha})` });
+// The node painters live in renderer/node-styles.js (tests/node_styles.test.mjs);
+// idle.js keeps thin adapters that hand each node to window.MefiNodeStyles
+// and keep their own plain drawing when it is absent or a style declines.
+test("drawNodeSurface hands each node to MefiNodeStyles, and a bare harness paints one plain disc", () => {
+  const painted = [];
+  const theme = { key: "theme" }, motion = { seed: 0.5, clock: 3 };
+  const spy = { paint(ctx, style, p, radius, tint, o) { painted.push({ ctx, style, p, radius, tint, o: { ...o } }); } };
+  const state = { nodeStyle: "prism", extraGlow: true, nodeTheme: theme };
+  const env = vm.createContext({ state, Math, WeakMap, Map, window: { MefiNodeStyles: spy }, rgba: (_tint, alpha) => `rgba(1,2,3,${alpha})` });
   vm.runInContext(section("function traceNodeSurface(", "function drawWorkOrbit("), env);
-  const node = { id: "task", kind: "task", x: 10, y: 20, z: 30 };
-  for (const style of ["orbs", "glass", "minimal"]) {
-    // Paints may be built in unit space and filled under scale(radius), so a
-    // radial paint's reach is its outer radius times the scale at fill time.
-    const created = [], filled = [], stack = [];
-    let scale = 1;
-    const ctx = {
-      save() { stack.push(scale); }, restore() { scale = stack.pop() ?? 1; }, translate() {}, scale(factor) { scale *= factor; }, beginPath() {}, arc() {}, stroke() {},
-      fill() { if (this.fillStyle?.outer != null) filled.push({ paint: this.fillStyle, reach: this.fillStyle.outer * scale }); },
-      createRadialGradient(...args) { const paint = { outer: args[5], addColorStop() {} }; created.push(paint); return paint; }, createLinearGradient: () => ({ addColorStop() {} }),
-    };
-    state.nodeStyle = style; state.extraGlow = false;
-    env.drawNodeSurface(ctx, node, { x: 100, y: 100 }, 12, [220, 180, 110]); const normal = created.length;
-    state.extraGlow = true; filled.length = 0; env.drawNodeSurface(ctx, node, { x: 100, y: 100 }, 12, [220, 180, 110]);
-    assert.equal(created.length - normal, style === "orbs" ? 1 : normal + 1, "orbs reuse their base paints; enabling glow adds one new halo"); assert.equal(node._extraGlow, true);
-    const glow = filled.filter(({ paint }) => created.indexOf(paint) >= normal);
-    assert.ok(glow.length === 1 && glow[0].reach > 12 && glow[0].reach <= 12 * 2.25, "the glow reaches past the orb");
-    assert.ok(Math.max(...filled.map(({ reach }) => reach)) <= 12 * 2.25, "glow leaves a crisp edge instead of filling the surrounding branch");
-  }
-  assert.deepEqual([node.x, node.y, node.z], [10, 20, 30]);
+  const ctx = {}, p = { x: 40, y: 60 }, tint = [220, 180, 110];
+  const agent = { id: "agent:a", kind: "agent", _fade: 0.5, x: 1, y: 2, z: 3 };
+  env.drawNodeSurface(ctx, agent, p, 12, tint, { selected: true, active: false, alpha: 0.4, time: 1234, still: true, detail: 2, chosen: true, motion });
+  assert.equal(painted.length, 1);
+  const [call] = painted;
+  assert.ok(call.ctx === ctx && call.p === p && call.tint === tint, "the canvas, point and tint pass through as given");
+  assert.deepEqual([call.style, call.radius], ["prism", 12]);
+  assert.deepEqual({ ...call.o, motion: call.o.motion === motion, theme: call.o.theme === theme }, { kind: "agent", selected: true, chosen: true, active: false, stale: false, alpha: 0.2, glyph: true, monogram: false, motion: true, time: 1234, still: true, detail: 2, extraGlow: true, theme: true }, "flags, the fade × emphasis alpha, the clock, the tier and the theme are forwarded");
+  assert.equal(agent._extraGlow, true);
+  assert.deepEqual([agent.x, agent.y, agent.z], [1, 2, 3], "painting never moves a node");
+  env.drawNodeSurface(ctx, { kind: "assistant" }, p, 15, tint);
+  assert.deepEqual([painted[1].o.monogram, painted[1].o.glyph, painted[1].o.alpha, painted[1].o.time, painted[1].o.still, painted[1].o.detail, painted[1].o.motion], [true, true, 1, 0, false, 3, null], "the hub wears its monogram; defaults for an old caller");
+  env.drawNodeSurface(ctx, { kind: "agent" }, p, 4, tint);
+  assert.equal(painted[2].o.glyph, false, "an agent too small for its glyph is told so");
+  state.nodeStyle = undefined; state.extraGlow = false;
+  env.drawNodeSurface(ctx, { kind: "task" }, p, 12, tint, { active: true });
+  assert.deepEqual([painted[3].style, painted[3].o.extraGlow, painted[3].o.active], ["orbs", false, true]);
+  // A stale session is told so (its rim is dashed, its clock slowed).
+  env.drawNodeSurface(ctx, { kind: "session", stale: true }, p, 12, tint);
+  env.drawNodeSurface(ctx, { kind: "session", state: "stale" }, p, 12, tint);
+  assert.deepEqual([painted[4].o.stale, painted[5].o.stale], [true, true]);
+  // No module (a bare harness, a slice sandbox): one plain disc.
+  const bare = vm.createContext({ state: { nodeStyle: "sigil", extraGlow: true }, Math, rgba: (_tint, alpha) => `rgba(1,2,3,${alpha})` });
+  vm.runInContext(section("function traceNodeSurface(", "function drawWorkOrbit("), bare);
+  const calls = { arc: 0, fill: 0, stroke: 0, saves: 0, restores: 0, alphas: [] };
+  const disc = { save() { calls.saves++; }, restore() { calls.restores++; }, beginPath() {}, arc() { calls.arc++; }, fill() { calls.fill++; calls.alphas.push(this.globalAlpha); }, stroke() { calls.stroke++; calls.alphas.push(this.globalAlpha); } };
+  const node = { kind: "task", _fade: 0.5 };
+  bare.drawNodeSurface(disc, node, p, 12, tint, { alpha: 0.4 });
+  assert.deepEqual([calls.arc, calls.fill, calls.stroke], [1, 1, 1]);
+  assert.equal(calls.saves, calls.restores);
+  assert.deepEqual(calls.alphas, [0.2, 0.2], "the fallback keeps the fade and emphasis");
+  assert.equal(node._extraGlow, true);
+});
+
+test("the agent dress, hub dress and work orbit let a style draw its own and keep theirs otherwise", () => {
+  const glyphs = [], asked = [], details = [], options = { ring: new Set(), hub: new Set(), orbit: new Set() };
+  let arcs = [], answer = false;
+  const spy = {
+    glyph: (style) => style === "sigil" ? { ink: "INK", scale: 0.5, ringGap: 4 } : null,
+    ring: (_ctx, style, _p, _radius, _tint, o) => { options.ring.add(o); details.push(o.detail); asked.push(["ring", style, o.status, o.ring, o.still]); return answer; },
+    hubDress: (_ctx, style, _p, _radius, _tint, o) => { options.hub.add(o); details.push(o.detail); asked.push(["hub", style, o.crew]); return answer; },
+    orbit: (_ctx, style, _p, _radius, _tint, o) => { options.orbit.add(o); details.push(o.detail); asked.push(["orbit", style, o.running, o.ring]); return answer; },
+  };
+  const state = { nodeStyle: "sigil", nodeTheme: null, agentTrails: new Map(), nodes: [{ kind: "agent" }], orbitTrails: true };
+  const env = vm.createContext({
+    state, Math, Map, WeakMap, emphasis: () => 1, agentHex: () => "#8fd0ff", rgba: (_tint, alpha) => `rgba(1,2,3,${alpha})`, rgb: () => "rgb(1,2,3)",
+    NODE_RGB: { amber: [255, 212, 121], done: [104, 236, 164] }, TRAIL_MAX: 8, TRAIL_MS: 500,
+    window: { MefiNodeStyles: spy, MefiTree: { agentGlyph: (...args) => glyphs.push(args.slice(1)), glyphInk: () => "#0b1016" } },
+  });
+  vm.runInContext(section("function traceNodeSurface(", "function graphLayoutSeeds("), env);
+  const ctx = { save() {}, restore() {}, beginPath() {}, arc: (...args) => arcs.push(args), stroke() {}, fill() {}, setLineDash() {}, moveTo() {}, lineTo() {}, fillText() {} };
+  const p = { x: 50, y: 50 }, tint = [120, 180, 220];
+  const agent = { id: "agent:a", kind: "agent", role: "watcher", status: "running" };
+  env.drawAgentDress(ctx, agent, p, 10, tint, 100, false);
+  assert.deepEqual(glyphs.at(-1), ["watcher", 50, 50, 5, "INK"], "the style's glyph size and ink");
+  assert.deepEqual(asked.at(-1), ["ring", "sigil", "running", 14, false], "the ring sits the style's gap out");
+  assert.equal(arcs.length, 2, "a declined ring keeps the spinning arc and its tail");
+  arcs = []; answer = true;
+  env.drawAgentDress(ctx, agent, p, 10, tint, 100, false);
+  assert.equal(arcs.length, 0, "a style that draws the ring replaces it");
+  state.nodeStyle = "orbs"; answer = false;
+  env.drawAgentDress(ctx, agent, p, 10, tint, 100, true);
+  assert.deepEqual(glyphs.at(-1), ["watcher", 50, 50, 7, "#0b1016"], "no glyph dress: the orb's own ink at 0.7");
+  assert.deepEqual(asked.at(-1), ["ring", "orbs", "running", 13.5, true]);
+  state.nodeStyle = "minimal"; const before = asked.length;
+  env.drawAgentDress(ctx, agent, p, 10, tint, 100, false);
+  assert.equal(asked.length, before + 1, "Minimal dresses its agents too");
+  assert.deepEqual([glyphs.at(-1)[0], asked.at(-1)], ["watcher", ["ring", "minimal", "running", 13.5, false]], "its glyph and its status ring");
+  state.nodeStyle = "prism"; arcs = [];
+  env.drawHubDress(ctx, { kind: "assistant" }, p, 15, tint, 100, false);
+  assert.deepEqual(asked.at(-1), ["hub", "prism", true]);
+  assert.equal(arcs.length, 2, "a declined hub dress keeps the breathing ring and the crew ring");
+  arcs = []; answer = true;
+  env.drawHubDress(ctx, { kind: "assistant" }, p, 15, tint, 100, false);
+  assert.equal(arcs.length, 0);
+  const work = { id: "work", kind: "task", _workLabel: "Running" };
+  env.drawWorkOrbit(ctx, work, p, 12, 100, false);
+  assert.deepEqual(asked.at(-1), ["orbit", "prism", true, 21]);
+  assert.equal(arcs.length, 0, "a style's own orbit replaces the blue arcs");
+  assert.deepEqual({ ...work._orbitTrail, phase: undefined }, { drawn: true, animated: true, segments: 3, phase: undefined, radius: 21 }, "and still reports the orbit it drew");
+  assert.equal([...options.orbit][0].run, 1, "a Running orbit is all Running (o.run, eased over a Running <-> Next change)");
+  answer = false;
+  env.drawWorkOrbit(ctx, work, p, 12, 100, false);
+  assert.equal(arcs.length, 4, "a declined orbit keeps the blue arcs");
+  assert.deepEqual([options.ring.size, options.hub.size, options.orbit.size], [1, 1, 1], "each hook's options are one scratch, reused for every node");
+  // Each hook gets the tier drawFrame capped for the node (node._detail), T3
+  // for a node the loop has not tiered.
+  assert.ok(details.every((detail) => detail === 3), "no tier yet: full detail");
+  details.length = 0;
+  agent._detail = 1; work._detail = 2;
+  env.drawAgentDress(ctx, agent, p, 10, tint, 100, false);
+  env.drawHubDress(ctx, { kind: "assistant", _detail: 0 }, p, 15, tint, 100, false);
+  env.drawWorkOrbit(ctx, work, p, 12, 100, false);
+  assert.deepEqual(details, [1, 0, 2], "the ring, the hub dress and the orbit read the node's capped tier");
+  // The orbit turns on the record's integrated phase, so starting or stopping
+  // work never jumps it; reduced motion parks it at π/3.
+  work._m = { orbit: 1.23 };
+  env.drawWorkOrbit(ctx, work, p, 12, 100, false);
+  assert.equal(work._orbitTrail.phase, 1.23);
+  env.drawWorkOrbit(ctx, work, p, 12, 5000, true);
+  assert.equal(work._orbitTrail.phase, Math.PI / 3);
+});
+
+// drawFrame's landing pass hands every arrived pulse to landPulse.
+test("a landed pulse kicks its node's motion once and belongs to the style for the landing tail", () => {
+  const lands = [];
+  let answer = true;
+  const styles = { land: (_ctx, style, point, radius, tint, u, o) => { lands.push({ style, point, radius, tint: [...tint], u, kind: o.kind, detail: o.detail, pulse: o.pulse, motion: o.motion }); return answer; } };
+  const record = { kick: 0 };
+  const state = { nodeStyle: "sigil", nodeMotion: new Map([["task", record]]), styleBurstUntil: 0 };
+  const env = vm.createContext({ state, Math, LAND_TAIL_MS: 380, hexToRgb: () => [1, 2, 3] });
+  vm.runInContext(section("function landPulse(", "function surgeLine("), env);
+  const look = { kind: "dot", time: 0, still: false, rTo: 0, detail: 3, pulse: null, motion: null };
+  const node = { id: "task", _pr: 12, _detail: 1 }, point = { x: 10, y: 20 };
+  const pulse = { to: node, color: "#010203", wave: true };
+  env.landPulse({}, styles, pulse, point, 0, look, 1000, false);
+  assert.equal(record.kick, 1, "the arrival kicks the node's motion");
+  assert.equal(state.styleBurstUntil, 1380, "a landing draws at the hot cadence for its tail");
+  assert.deepEqual({ ...lands[0], pulse: lands[0].pulse === pulse, motion: lands[0].motion === record }, { style: "sigil", point, radius: 12, tint: [1, 2, 3], u: 0, kind: "wave", detail: 1, pulse: true, motion: true }, "the landing gets the target's radius and its capped tier");
+  record.kick = 0.4;
+  env.landPulse({}, styles, pulse, point, 190, look, 1190, false);
+  assert.equal(record.kick, 0.4, "only the first landed frame kicks");
+  assert.equal(lands[1].u, 0.5, "u runs over the landing tail");
+  env.landPulse({}, styles, pulse, point, 900, look, 1900, false);
+  assert.equal(lands[2].u, 1);
+  assert.equal(pulse._landed, undefined, "a style that lands keeps the pulse to the end of its tail");
+  // A style without a landing: the kick still lands, the pulse goes.
+  answer = false; state.styleBurstUntil = 0; record.kick = 0;
+  const declined = { to: node };
+  env.landPulse({}, styles, declined, point, 5, look, 2000, false);
+  assert.deepEqual([record.kick, declined._landed, state.styleBurstUntil], [1, true, 0]);
+  // Reduced motion: no kick, the landing's end pose.
+  const quiet = { to: { id: "task" } }; record.kick = 0;
+  env.landPulse({}, styles, quiet, point, -400, look, 3000, true);
+  assert.deepEqual([record.kick, lands.at(-1).u, lands.at(-1).detail], [0, 1, 3], "a node not tiered yet lands at full detail");
+  // drawFrame keeps a pulse through its landing only with the node styles, and
+  // an arrived pulse no longer draws its head.
+  const frame = section("function drawFrame(", "function measure(");
+  assert.ok(frame.includes("const landTail = nodeStyles ? LAND_TAIL_MS : 0;"));
+  assert.ok(frame.includes("now - pulse.start < pulse.duration + (pulse._landed ? 0 : landTail)"));
+  assert.ok(frame.includes("if (!still && now - pulse.start >= pulse.duration) continue;"));
+  assert.ok(frame.includes("pulseLook.detail = pulse.to?._detail ?? 3;"), "a travelling pulse carries its target's tier to surge");
+  // A style's pulse to a node that left the graph (folded, absorbed) would
+  // fly to where it last stood and land there as a stray mark: it is dropped.
+  assert.ok(frame.includes("if (pulseLook && !screenPoints.has(pulse.to?.id)) { pulse._landed = true; continue; }"));
+  const landing = frame.indexOf("landPulse(ctx, nodeStyles, pulse, screenPoints.get(pulse.to.id), since, pulseLook, time, still);");
+  assert.ok(landing > 0 && frame.lastIndexOf("if (!screenPoints.has(pulse.to?.id)) { pulse._landed = true; continue; }", landing) > frame.lastIndexOf("for (const pulse of state.pulses)", landing), "and so is its landing");
+  assert.ok(frame.includes("node._detail = detail;"), "the node loop leaves each node's tier for its hooks, wires and pulses");
+});
+
+test("graph connections offer each wire to the style and keep the plain line when it declines", () => {
+  const assistant = { node: { id: "assistant", kind: "assistant", _pr: 15, _detail: 3, _m: { seed: 0.25 } }, p: { x: 50, y: 80 } };
+  const task = { node: { id: "task", kind: "task", _pr: 12, _detail: 2, _m: { seed: 0.75 } }, p: { x: 850, y: 480 } };
+  const agent = { node: { id: "agent", kind: "agent", role: "builder", status: "running", _detail: 1, targetNode: task.node }, p: { x: 890, y: 480 } };
+  const offered = [];
+  let answer = false;
+  const spy = { wire: (_pen, style, a, b, o) => { offered.push({ style, a, b, o: { ...o, cp: o.cp && { ...o.cp }, dash: o.dash && [...o.dash], tint: o.tint && [...o.tint] } }); return answer; } };
+  const theme = { key: "theme" };
+  const state = { nodeStyle: "sigil", nodeLayout: "tree", nodeTheme: theme, edges: [{ a: 0, b: 1 }, { a: 0, b: 2 }, { a: 1, b: 2 }], branchParents: new Map([["task", "assistant"]]), agentLayout: new Map([["agent", { hostId: "task" }]]) };
+  const env = vm.createContext({ state, Math, Map, NODE_RGB: { task: [1, 2, 3] }, rgba: () => "color", agentRgb: () => [4, 5, 6], colorOf: () => [7, 8, 9], isBusyNode: () => false, window: { MefiNodeStyles: spy } });
+  vm.runInContext(section("function drawGraphConnections(", "function drawFrame("), env);
+  let paths = [], path;
+  const dashes = [], caps = [];
+  const ctx = { lineCap: "butt", beginPath() { path = []; }, moveTo(x, y) { path.push([x, y]); }, lineTo(x, y) { path.push([x, y]); }, bezierCurveTo(...points) { path.push(points.slice(-2)); }, stroke() { paths.push(path); caps.push(this.lineCap); }, setLineDash(dash) { dashes.push(dash); } };
+  const render = () => { paths = []; offered.length = 0; dashes.length = 0; caps.length = 0; env.drawGraphConnections(ctx, [assistant, task, agent], new Set(), false, 500); return paths; };
+  assert.deepEqual(render(), [[[50, 80], [850, 480]], [[890, 480], [850, 480]]], "a declined wire keeps the plain branch and tether");
+  assert.ok(caps.every((cap) => cap === "round") && ctx.lineCap === "butt", "every line has round caps, and the nodes after them get the canvas default back");
+  assert.ok(dashes.every((dash) => Object.isFrozen(dash)), "the plain lines share frozen dash patterns: no edge allocates one a frame");
+  const first = [...dashes];
+  render();
+  assert.ok(dashes.every((dash, index) => dash === first[index]), "the same dash arrays, frame after frame");
+  assert.equal(offered.length, 2);
+  const [edge, tether] = offered;
+  assert.ok(edge.a === assistant.p && edge.b === task.p && tether.a === agent.p && tether.b === task.p, "the painted points pass through");
+  assert.equal(edge.o.theme, theme, "the wire carries the node theme");
+  assert.deepEqual({ ...edge.o, theme: null }, { kind: "task", tint: [1, 2, 3], alpha: 0.32, width: 1, dash: [2, 4], march: false, flow: false, double: false, active: false, inspected: false, curved: true, cp: { x1: 50, y1: 280, x2: 850, y2: 280 }, far: false, time: 500, still: true, seed: 0.75, rA: 15, rB: 12, detail: 2, lifetime: 1, theme: null }, "the branch arrives with its look, its S-curve controls, both radii and the lower end's tier");
+  assert.deepEqual({ ...tether.o, alpha: Math.round(tether.o.alpha * 100) / 100, theme: null }, { kind: "tether", tint: [4, 5, 6], alpha: 0.18, width: 1, dash: [6, 4], march: false, flow: true, double: false, active: true, inspected: false, curved: false, cp: null, far: false, time: 500, still: true, seed: 0, rA: 0, rB: 12, detail: 1, lifetime: 1, theme: null }, "the tether is a wire of its own kind; a working one carries work (flow) even with motion off");
+  task.node._detail = undefined; agent.node._detail = undefined; render();
+  assert.deepEqual(offered.map(({ o }) => o.detail), [3, 3], "ends not tiered yet: full detail");
+  assert.ok(offered.every(({ style }) => style === "sigil"));
+  // A busy task's branch carries work: it flows, and marches while motion is on.
+  env.isBusyNode = (node) => node.id === "task";
+  env.noMotion = () => false;
+  render();
+  assert.deepEqual([offered[0].o.active, offered[0].o.march, offered[0].o.flow, offered[0].o.still], [true, true, true, false]);
+  env.noMotion = () => true;
+  render();
+  assert.deepEqual([offered[0].o.march, offered[0].o.flow, offered[0].o.still], [false, true, true], "reduced motion: no march, the flow is still offered (held)");
+  delete env.noMotion; env.isBusyNode = () => false;
+  answer = true;
+  assert.deepEqual(render(), [], "a style that draws the wire replaces the plain line");
+  assert.equal(ctx.lineCap, "butt");
+});
+
+test("the session and todo hops on the way to busy work carry work too, and the edge loop allocates no look", () => {
+  const root = { node: { id: "root", kind: "root" }, p: { x: 0, y: 0 } };
+  const session = { node: { id: "s1", kind: "session" }, p: { x: 100, y: 100 } };
+  const todo = { node: { id: "s1:0", kind: "todo", sessionId: "s1", state: "active" }, p: { x: 200, y: 200 } };
+  const offered = [];
+  const spy = { wire: (_pen, _style, _a, _b, o) => { offered.push({ kind: o.kind, active: o.active, march: o.march, flow: o.flow, dash: o.dash }); return true; } };
+  const state = { nodeStyle: "orbs", nodeLayout: "constellation", edges: [{ a: 0, b: 1 }, { a: 1, b: 2 }] };
+  let busy = new Set();
+  const env = vm.createContext({ state, Math, Map, NODE_RGB: { task: [1, 2, 3] }, rgba: () => "color", agentRgb: () => [4, 5, 6], colorOf: () => [7, 8, 9], isBusyNode: (node) => busy.has(node.id), window: { MefiNodeStyles: spy } });
+  vm.runInContext(section("function drawGraphConnections(", "function drawFrame("), env);
+  const ctx = { beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, setLineDash() {} };
+  const render = () => { offered.length = 0; env.drawGraphConnections(ctx, [root, session, todo], new Set(), false, 500); return offered.map(({ kind, flow }) => `${kind}:${flow}`); };
+  assert.deepEqual(render(), ["session:false", "todo:false"], "quiet hops carry nothing");
+  busy = new Set(["s1", "s1:0"]);
+  env.noMotion = () => false;
+  assert.deepEqual(render(), ["session:true", "todo:true"], "the hops toward busy work flow (the style runs them calmer than the task's own wire)");
+  assert.ok(offered.every(({ active, march }) => active === true && march === false), "active, with no dashes to march");
+  env.noMotion = () => true;
+  assert.deepEqual(render(), ["session:true", "todo:true"], "reduced motion still offers them, held");
+  delete env.noMotion;
+  const loop = section("function drawGraphConnectionsImpl(", "// ---------- backdrop scenes");
+  assert.ok(loop.includes("const style = edgeStyleInto(EDGE_LOOK, edge, a, b, active, inspected, primary);"), "the edge loop fills one look scratch");
+  assert.ok(!loop.includes("{ active, inspected, primary }"), "and builds no option literal per edge");
+});
+
+// A pulse along a tree branch rides the branch's S-curve; the hub link and
+// the constellation stay straight.
+test("a travelling pulse carries its branch's S-curve controls and the node theme to surge", () => {
+  // drawFrame's pulse pass, run on its own with a spy surge.
+  const frame = section("function drawFrame(", "function measure(");
+  const start = frame.indexOf("    // pulses: bright travelling dots"), end = frame.indexOf("    // particles: vaporized external work");
+  assert.ok(start > 0 && end > start, "the pulse pass");
+  const surges = [], lands = [];
+  const spy = { surge: (_ctx, style, _from, _to, _t, pulse, o) => { surges.push({ id: pulse.id, style, cp: o.cp && { ...o.cp }, theme: o.theme, kind: o.kind }); return true; } };
+  const theme = { key: "theme" };
+  const root = { id: "root", kind: "root", x: 0, y: 0 }, hub = { id: "assistant", kind: "assistant", x: 100, y: 0 };
+  const session = { id: "s1", kind: "session", x: 40, y: 100 }, task = { id: "t1", kind: "task", x: 200, y: 300 };
+  const state = { nodeStyle: "orbs", nodeLayout: "tree", nodeTheme: theme, nodeMotion: new Map(), pulses: [], branchParents: new Map([["s1", "root"], ["t1", "s1"], ["assistant", "root"]]) };
+  const env = vm.createContext({
+    state, Math, Map, Date: { now: () => 1000 }, LAND_TAIL_MS: 380, musicBands: { bass: 0 }, hexToRgb: () => [1, 2, 3],
+    project: (node) => ({ x: node.x, y: node.y }), surgeLine() { throw new Error("the style drew it"); }, landPulse: (...args) => lands.push(args),
+  });
+  vm.runInContext(`function pulsePass(ctx, nodeStyles, time, still, screenPoints) {\n${frame.slice(start, end)}\n}`, env);
+  const screen = new Map([root, hub, session, task].map((node) => [node.id, { x: node.x, y: node.y }]));
+  const run = () => {
+    surges.length = 0;
+    const pulse = (id, from, to, extra = {}) => ({ id, from, to, start: 500, duration: 900, color: "#ffffff", ...extra });
+    state.pulses = [pulse("down", session, task), pulse("up", task, session, { wave: true }), pulse("hub", root, hub), pulse("back", hub, root), pulse("across", hub, task)];
+    env.pulsePass({}, spy, 1000, false, screen);
+    return Object.fromEntries(surges.map(({ id, cp }) => [id, cp]));
+  };
+  const tree = run();
+  assert.deepEqual(tree.down, { x1: 40, y1: 200, x2: 200, y2: 200 }, "parent → child rides the branch's S-curve");
+  assert.deepEqual(tree.up, { x1: 200, y1: 200, x2: 40, y2: 200 }, "child → parent too, the same curve walked the other way");
+  assert.deepEqual([tree.hub, tree.back, tree.across], [null, null, null], "the hub link (either way) and a pulse off any branch stay straight");
+  assert.ok(surges.every(({ theme: seen, style }) => seen === theme && style === "orbs"), "every pulse carries the node theme");
+  assert.deepEqual(surges.map(({ kind }) => kind), ["dot", "wave", "dot", "dot", "dot"]);
+  assert.equal(lands.length, 0, "nothing has landed yet");
+  state.nodeLayout = "layers";
+  assert.deepEqual(run().down, { x1: 40, y1: 200, x2: 200, y2: 200 }, "Layers draws the same S-curves");
+  state.nodeLayout = "constellation";
+  assert.ok(Object.values(run()).every((cp) => cp === null), "the constellation's straight wires carry straight pulses");
+  assert.ok(section("function landPulse(", "function surgeLine(").includes("look.cp = null;"), "a landing never sees a travelling pulse's curve");
+
 });
 
 test("Branches follows real parent edges, Rings uses separate concentric slots, and layouts retain surviving points", () => {
@@ -1683,21 +1898,6 @@ test("circular 3D views retain meaningful volume and separate work rims through 
   }
 });
 
-test("Halo and Crystal use distinct bounded surfaces while preserving node positions", () => {
-  const env = vm.createContext({ state: { nodeStyle: "halo" }, Math, rgba: (_tint, alpha) => `rgba(120,180,220,${alpha})` });
-  vm.runInContext(section("function traceNodeSurface(", "function drawWorkOrbit("), env);
-  const node = { kind: "task", x: 1, y: 2, z: 3 };
-  for (const style of ["halo", "crystal"]) {
-    const calls = { arcs: 0, lines: 0, saves: 0, restores: 0 };
-    const ctx = { save() { calls.saves++; }, restore() { calls.restores++; }, translate() {}, scale() {}, beginPath() {}, closePath() {}, moveTo() {}, lineTo() { calls.lines++; }, arc() { calls.arcs++; }, stroke() {}, fill() {}, createLinearGradient() { return { addColorStop() {} }; } };
-    env.state.nodeStyle = style;
-    env.drawNodeSurface(ctx, node, { x: 50, y: 50 }, 12, [120,180,220]);
-    assert.equal(calls.saves, calls.restores);
-    assert.ok(style === "halo" ? calls.arcs === 3 && calls.lines === 0 : calls.lines >= 8 && calls.arcs === 0);
-    assert.deepEqual([node.x,node.y,node.z], [1,2,3]);
-  }
-});
-
 test("verification stays distinct from running work even when its saved graph state is active", () => {
   const state = { selected: null, hoverNode: null };
   const NODE_RGB = { warm: [230,201,141], verify: [151,179,244], task: [140,155,180], dust: [157,183,255] };
@@ -1712,113 +1912,6 @@ test("verification stays distinct from running work even when its saved graph st
   const labels = labelContext();
   const projected = [verifying, running].map((node) => ({ node, p: { k: 1, depth: 800 } }));
   assert.deepEqual(Array.from(labels.env.labelCandidates(projected), ({ node }) => node.id), [running.id, verifying.id]);
-});
-
-// The Void collection's gem and seal shapes, built from tree3d.js exactly as
-// the rail builds them and handed to the Command view on window.MefiTree.
-const treeSource = await readFile(new URL("../renderer/tree3d.js", import.meta.url), "utf8");
-function voidShapesWindow() {
-  const a = treeSource.indexOf("  function buildVoidShapes("), b = treeSource.indexOf("  const VOID_SHAPES = buildVoidShapes();", a);
-  assert.ok(a >= 0 && b > a, "missing the shared Void shapes in tree3d.js");
-  return { MefiTree: { voidShapes: vm.runInNewContext(`${treeSource.slice(a, b)}buildVoidShapes();`, { Math, Object }) } };
-}
-
-test("every node style respects Follow/search dimming and its lifecycle fade", () => {
-  const env = vm.createContext({ state: {}, Math, WeakMap, Map, window: voidShapesWindow(), rgba: (_tint, alpha) => `rgba(120,180,220,${alpha})` });
-  vm.runInContext(section("function traceNodeSurface(", "function drawWorkOrbit("), env);
-  for (const style of ["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil"]) {
-    const alphas = [];
-    const ctx = { save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, arc() {}, fill() { alphas.push(this.globalAlpha); }, stroke() { alphas.push(this.globalAlpha); }, createRadialGradient: () => ({ addColorStop() {} }), createLinearGradient: () => ({ addColorStop() {} }) };
-    env.state.nodeStyle = style;
-    env.drawNodeSurface(ctx, { kind: "task", _fade: 0.5 }, { x: 50, y: 50 }, 12, [120,180,220], { alpha: 0.4 });
-    assert.ok(alphas.length > 0 && alphas.every((alpha) => alpha === 0.2), `${style} preserves both independent fading factors`);
-  }
-});
-
-// A canvas stand-in that follows translate/scale, so every point a painter
-// touches is measured in screen space, and counts what each frame allocates.
-// `reach` covers everything (glows included); `pathReach` only the straight
-// path work (facets, marks, seals).
-function recordingContext() {
-  const calls = { fill: 0, stroke: 0, arc: 0, lineTo: 0, radial: 0, linear: 0, conic: 0, saves: 0, restores: 0, reach: 0, pathReach: 0, lineWidths: [], texts: [] };
-  const stack = [];
-  let t = { x: 0, y: 0, s: 1 };
-  const distance = (x, y) => Math.hypot(t.x + x * t.s - 50, t.y + y * t.s - 50);
-  const point = (x, y, extra = 0) => { calls.reach = Math.max(calls.reach, distance(x, y) + extra * t.s); };
-  const pathPoint = (x, y) => { point(x, y); calls.pathReach = Math.max(calls.pathReach, distance(x, y)); };
-  const ctx = {
-    calls,
-    save() { calls.saves++; stack.push({ ...t }); }, restore() { calls.restores++; t = stack.pop(); },
-    translate(x, y) { t.x += x * t.s; t.y += y * t.s; }, scale(s) { t.s *= s; },
-    beginPath() {}, closePath() {}, moveTo: (x, y) => pathPoint(x, y), lineTo: (x, y) => { calls.lineTo++; pathPoint(x, y); },
-    arc: (x, y, r) => { calls.arc++; point(x, y, r); },
-    fill() { calls.fill++; }, stroke() { calls.stroke++; calls.lineWidths.push(this.lineWidth); },
-    fillText(text) { calls.texts.push({ text, ink: this.fillStyle }); },
-    createRadialGradient() { calls.radial++; return { addColorStop() {} }; }, createLinearGradient() { calls.linear++; return { addColorStop() {} }; },
-    createConicGradient() { calls.conic++; return { addColorStop() {} }; },
-  };
-  return ctx;
-}
-
-test("Singularity, Prism and Sigil draw distinct bounded surfaces and reuse their paints on the next frame", () => {
-  const state = { nodeStyle: "orbs" };
-  const env = vm.createContext({ state, Math, WeakMap, Map, window: voidShapesWindow(), rgba: (tint, alpha) => `rgba(${tint.join(",")},${alpha})` });
-  vm.runInContext(section("function traceNodeSurface(", "function drawWorkOrbit("), env);
-  const node = { kind: "task", x: 1, y: 2, z: 3 };
-  const shapes = new Set();
-  for (const style of ["singularity", "prism", "sigil"]) {
-    state.nodeStyle = style;
-    const first = recordingContext();
-    env.drawNodeSurface(first, node, { x: 50, y: 50 }, 12, [220, 180, 110], { active: true });
-    const { calls } = first;
-    assert.ok(calls.fill > 0 && calls.stroke > 0, `${style} paints a surface and an outline`);
-    assert.equal(calls.saves, calls.restores, `${style} leaves the canvas state as it found it`);
-    assert.ok(calls.reach <= 12 * 1.8, `${style} stays inside its glow radius (${calls.reach.toFixed(1)}px)`);
-    assert.ok(calls.pathReach <= 12 * 1.1, `${style} keeps its facets and marks on the node (${calls.pathReach.toFixed(1)}px)`);
-    if (style === "singularity") assert.equal(calls.conic, 1, "the accretion disc's brightness turns with the angle");
-    assert.ok(calls.lineTo < 64 && calls.arc < 8, `${style} has a small, fixed amount of path work`);
-    shapes.add(`${calls.arc}/${calls.lineTo}/${calls.fill}/${calls.stroke}`);
-    // The next frame, with a fresh but equal tint, allocates no new paints.
-    const painted = (recorded) => recorded.calls.radial + recorded.calls.linear + recorded.calls.conic;
-    const gradients = painted(first);
-    env.drawNodeSurface(first, node, { x: 80, y: 20 }, 12, [220, 180, 110], { active: true });
-    assert.equal(painted(first), gradients, `${style} reuses its cached paints`);
-    // Paints belong to their context: another canvas builds its own once.
-    const other = recordingContext();
-    env.drawNodeSurface(other, node, { x: 50, y: 50 }, 12, [220, 180, 110], { active: true });
-    assert.equal(painted(other), gradients);
-    env.drawNodeSurface(other, node, { x: 50, y: 50 }, 12, [220, 180, 110], { active: true });
-    assert.equal(painted(other), gradients);
-    assert.deepEqual([node.x, node.y, node.z], [1, 2, 3], `${style} leaves node geometry alone`);
-  }
-  assert.equal(shapes.size, 3, "each premium style has its own drawing");
-  for (const style of ["singularity", "prism", "sigil"]) {
-    state.nodeStyle = style;
-    const quiet = recordingContext(), chosen = recordingContext();
-    env.drawNodeSurface(quiet, node, { x: 50, y: 50 }, 12, [120, 180, 220]);
-    env.drawNodeSurface(chosen, node, { x: 50, y: 50 }, 12, [120, 180, 220], { selected: true });
-    assert.ok(Math.max(...chosen.calls.lineWidths) > Math.max(...quiet.calls.lineWidths), `${style} marks the selected node`);
-    if (style !== "singularity") assert.ok(quiet.calls.reach <= 12 * 1.1, `${style} glows only while it works or is chosen`);
-    // The hub's monogram reads on every Void body: a light ink, never the dark one.
-    const hub = recordingContext();
-    env.drawNodeSurface(hub, { kind: "assistant" }, { x: 50, y: 50 }, 15, [120, 180, 220]);
-    const [monogram] = hub.calls.texts, ink = monogram?.ink.match(/\d+/g)?.slice(0, 3).map(Number);
-    assert.equal(monogram?.text, "M");
-    assert.ok(ink && ink[0] * 0.2126 + ink[1] * 0.7152 + ink[2] * 0.0722 > 200, `${style} writes the hub's M in a light ink (${monogram?.ink})`);
-  }
-  // Prism cuts fewer planes as it shrinks: three, then two halves, then one.
-  state.nodeStyle = "prism";
-  const fills = [12, 5, 3].map((radius) => { const recorded = recordingContext(); env.drawNodeSurface(recorded, node, { x: 50, y: 50 }, radius, [120, 180, 220]); return recorded.calls.fill; });
-  assert.ok(fills[0] > fills[1] && fills[1] > fills[2], `a small gem keeps fewer facets (${fills.join(", ")} fills)`);
-  state.nodeStyle = "sigil";
-  const small = recordingContext(), large = recordingContext(), medium = recordingContext();
-  env.drawNodeSurface(small, node, { x: 50, y: 50 }, 4, [120, 180, 220]);
-  env.drawNodeSurface(medium, node, { x: 50, y: 50 }, 8, [120, 180, 220]);
-  env.drawNodeSurface(large, node, { x: 50, y: 50 }, 12, [120, 180, 220]);
-  assert.equal(small.calls.lineTo, 0, "a tiny sigil skips marks it could not show");
-  // Three marks on a small seal, six on a large one (three lineTo per diamond, plus the seal's three).
-  assert.equal(medium.calls.lineTo, 3 * 3 + 3, "a small sigil carries three marks around its seal");
-  assert.equal(large.calls.lineTo, 6 * 3 + 3, "a large sigil carries six");
 });
 
 test("the Void collection's styles pass the Command style allowlist; unknown keys still do not", () => {

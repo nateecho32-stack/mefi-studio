@@ -1829,3 +1829,67 @@ test("A link dropped from Discord or a browser plays, and a stray text drop does
   panel.dispatch("drop", { dataTransfer: transfer({}) });
   assert.equal(env.music.status().provider, "YouTube");
 });
+
+// ---- The node-style picker thumbnails (renderer/music.css .music-preview-*) ----
+// Every thumbnail animation sits in a rule inside
+// @media (prefers-reduced-motion: no-preference), so the html[data-motion]
+// rules and reduced motion leave the designed still pose; its period scales
+// with --node-tempo (the chosen tile plays at working tempo); and the
+// music-node-* keyframes only move, turn, scale or fade.
+test("the node-style thumbnails animate only when motion is allowed, at the node tempo, and only move or fade", async () => {
+  const css = await readFile(new URL("../renderer/music.css", import.meta.url), "utf8");
+  const start = css.indexOf("/* node style: orbs */");
+  const last = css.lastIndexOf("@keyframes music-node-");
+  assert.ok(start >= 0 && last > start, "the carved thumbnail blocks and their keyframes");
+  const carve = css.slice(start, css.indexOf("\n", last)).replace(/\/\*[\s\S]*?\*\//g, "");
+  // Walk the braces: an animation must sit in a rule inside
+  // @media (prefers-reduced-motion: no-preference), never at the top level.
+  const animations = [];
+  const keyframes = new Map();
+  let depth = 0;
+  let media = null;
+  let prelude = "";
+  for (let i = 0; i < carve.length; i += 1) {
+    const ch = carve[i];
+    if (ch === "{") {
+      const head = prelude.trim();
+      if (depth === 0 && head.startsWith("@keyframes ")) {
+        const close = carve.indexOf("} }", i);
+        keyframes.set(head.slice(11).trim(), carve.slice(i + 1, close + 1));
+        i = close + 2;
+        prelude = "";
+        continue;
+      }
+      if (depth === 0 && head.startsWith("@media")) media = head;
+      depth += 1;
+      prelude = "";
+    } else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) media = null;
+      prelude = "";
+    } else if (ch === ";" && depth > 0) {
+      const declaration = prelude.trim();
+      if (/^animation\s*:/.test(declaration)) animations.push({ value: declaration.replace(/^animation\s*:\s*/, ""), media, depth });
+      prelude = "";
+    } else {
+      prelude += ch;
+    }
+  }
+  assert.equal(depth, 0, "balanced braces");
+  assert.ok(animations.length >= 30, `the thumbnails animate (${animations.length} declarations)`);
+  for (const { value, media: where, depth: level } of animations) {
+    assert.equal(where, "@media (prefers-reduced-motion: no-preference)", `${value} runs only when motion is allowed`);
+    assert.equal(level, 2, `${value} sits in a rule inside the motion block`);
+    assert.match(value, /^music-node-[a-z-]+ calc\([\d.]+s \* var\(--node-tempo\)\) /, `${value} lasts its period times --node-tempo`);
+  }
+  assert.ok(keyframes.size >= 10, "the thumbnails' own keyframes");
+  const used = new Set(animations.map(({ value }) => value.split(" ")[0]));
+  for (const [name, body] of keyframes) {
+    assert.match(name, /^music-node-[a-z-]+$/);
+    assert.ok(used.has(name), `${name} is used by a thumbnail`);
+    const properties = [...body.matchAll(/([a-z-]+)\s*:/g)].map((match) => match[1]);
+    assert.ok(properties.length > 0, `${name} sets something`);
+    for (const property of properties) assert.ok(["rotate", "scale", "translate", "opacity"].includes(property), `${name} only moves or fades (${property})`);
+  }
+  for (const name of used) assert.ok(keyframes.has(name), `${name} is defined next to the thumbnails`);
+});

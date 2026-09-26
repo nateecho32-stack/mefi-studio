@@ -264,36 +264,214 @@ body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + var(--m
 .music-station[data-state="playing"] .music-station-copy strong::after { content: " ♪"; color: var(--gold); }
 .music-radio-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-bottom: 18px; }
 .music-radio-controls button { font-size: 12px; }
-.music-node-preview { position: relative; display: block; height: 41px; margin: 0 0 4px; color: var(--gold-bright); }
+.music-node-preview { --node-tempo: 1; position: relative; display: block; height: 41px; margin: 0 0 4px; color: var(--gold-bright); }
 .music-node-preview i { position: absolute; display: block; width: 10px; height: 10px; top: 16px; left: calc(50% - 5px); border: 1px solid currentColor; border-radius: 50%; background: var(--panel-solid); }
 .music-node-preview i:nth-child(2) { width: 7px; height: 7px; top: 6px; left: calc(50% - 30px); opacity: .6; }
 .music-node-preview i:nth-child(3) { width: 7px; height: 7px; top: 29px; left: calc(50% + 24px); opacity: .6; }
-.music-preview-orbs i { background: radial-gradient(circle at 35% 30%, var(--gold-bright), var(--gold-dim) 60%, transparent 75%); box-shadow: 0 0 10px var(--gold-dim), 0 0 0 3px var(--tint-gold-2); }
-.music-preview-orbs i:first-child { width: 19px; height: 19px; top: 12px; left: calc(50% - 9px); }
-.music-preview-glass i { background: linear-gradient(140deg, color-mix(in srgb, var(--gold-bright) 35%, transparent), var(--tint-gold-1)); border-color: color-mix(in srgb, var(--gold-bright) 65%, transparent); box-shadow: inset 0 1px 2px rgba(255,255,255,.3); }
-.music-preview-glass i:first-child { width: 23px; height: 23px; top: 9px; left: calc(50% - 11px); }
-.music-preview-glass i:not(:first-child) { width: 12px; height: 12px; }
-.music-preview-minimal i { width: 5px; height: 5px; top: 18px; left: calc(50% - 2px); border: 0; background: currentColor; }
-.music-preview-minimal i:nth-child(2) { top: 7px; left: calc(50% - 28px); }
-.music-preview-minimal i:nth-child(3) { top: 30px; left: calc(50% + 26px); }
-.music-preview-halo i { background: transparent; border-width: 2px; box-shadow: 0 0 7px var(--gold), inset 0 0 5px var(--gold-dim); }
-.music-preview-halo i:first-child { width: 23px; height: 23px; top: 9px; left: calc(50% - 11px); outline: 1px solid var(--gold-dim); outline-offset: 4px; }
-.music-preview-crystal i { border-radius: 1px; transform: rotate(45deg); background: linear-gradient(135deg, var(--gold-bright), var(--gold-dim) 48%, var(--panel-solid) 51%, var(--gold)); box-shadow: 0 0 8px var(--gold-dim); }
-.music-preview-crystal i:first-child { width: 21px; height: 21px; top: 10px; left: calc(50% - 10px); }
-/* The Void collection in miniature, drawn like the canvas painters: a black
-   core in a thin photon ring inside an accretion ring that is brightest low on
-   the left; a kite-cut gem (light crown, mid and shadowed pavilion, the second
-   hue refracting along its lower right edge); a double ring with small marks
-   in the second hue around a centre seal. */
-.music-preview-singularity i { border: 0; background: radial-gradient(circle closest-side, #020105 0 40%, var(--gold-bright) 52% 70%, color-mix(in srgb, var(--gold) 45%, transparent) 84%, transparent); box-shadow: -1px 1px 5px -1px var(--gold); }
-.music-preview-singularity i:first-child { width: 22px; height: 22px; top: 9px; left: calc(50% - 11px); background: radial-gradient(circle closest-side, #020105 0 47%, var(--gold-bright) 52% 61%, #020105 66% 69%, transparent 73%), conic-gradient(from 220deg, color-mix(in srgb, var(--gold-bright) 50%, #fff), var(--gold-bright) 12%, color-mix(in srgb, var(--gold) 38%, transparent) 32%, rgba(var(--accent-2-rgb, var(--studio-accent-rgb)), .3) 50%, color-mix(in srgb, var(--gold) 38%, transparent) 68%, var(--gold-bright) 88%, color-mix(in srgb, var(--gold-bright) 50%, #fff)); box-shadow: -2px 2px 10px -3px var(--gold-bright), 1px -1px 12px -4px rgba(var(--accent-2-rgb, var(--studio-accent-rgb)), .5); }
-.music-preview-prism { filter: drop-shadow(0 0 3px color-mix(in srgb, var(--gold) 45%, transparent)); }
-.music-preview-prism i { border: 0; border-radius: 0; background: linear-gradient(180deg, color-mix(in srgb, var(--gold-bright) 42%, #fff) 0 36%, transparent 36%), linear-gradient(84.9deg, color-mix(in srgb, var(--gold-bright) 74%, #07080f) 0 45%, color-mix(in srgb, var(--gold-bright) 46%, #07080f) 45%); clip-path: polygon(50% 0, 100% 36.2%, 50% 100%, 0 36.2%); }
-.music-preview-prism i:not(:first-child) { width: 6px; height: 7.5px; }
-.music-preview-prism i:first-child { width: 20px; height: 24px; top: 8px; left: calc(50% - 10px); background: radial-gradient(circle at 36% 21%, #fff 0 .8px, transparent 1.4px), linear-gradient(123deg, transparent 0 67.5%, var(--accent-2, var(--gold-bright)) 67.5% 72%, transparent 72%), linear-gradient(180deg, color-mix(in srgb, var(--gold-bright) 42%, #fff) 0 36%, transparent 36%), linear-gradient(84.9deg, color-mix(in srgb, var(--gold-bright) 74%, #07080f) 0 45%, color-mix(in srgb, var(--gold-bright) 46%, #07080f) 45%); }
-.music-preview-sigil i { border: 1px solid currentColor; background: radial-gradient(circle, currentColor 0 1px, transparent 1.6px), var(--panel-solid); }
-.music-preview-sigil i:first-child { width: 22px; height: 22px; top: 9px; left: calc(50% - 11px); border-width: 1.5px; box-shadow: 0 0 9px -3px var(--gold); background: radial-gradient(circle at 50% 12%, var(--accent-2, currentColor) 0 1px, transparent 1.6px), radial-gradient(circle at 83% 31%, var(--accent-2, currentColor) 0 1px, transparent 1.6px), radial-gradient(circle at 83% 69%, var(--accent-2, currentColor) 0 1px, transparent 1.6px), radial-gradient(circle at 50% 88%, var(--accent-2, currentColor) 0 1px, transparent 1.6px), radial-gradient(circle at 17% 69%, var(--accent-2, currentColor) 0 1px, transparent 1.6px), radial-gradient(circle at 17% 31%, var(--accent-2, currentColor) 0 1px, transparent 1.6px), radial-gradient(circle closest-side, transparent 0 55%, color-mix(in srgb, currentColor 40%, transparent) 57% 63%, transparent 65%), var(--panel-solid); }
-.music-preview-sigil i:first-child::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4.5px; height: 4.5px; background: currentColor; transform: translate(-50%, -50%) rotate(45deg); }
+/* The chosen tile plays at the working tempo, as a working node does. */
+.music-node-choice[aria-pressed="true"] .music-node-preview { --node-tempo: .4; }
+/* The node styles in miniature. One carved block per style, each opened by
+   its "node style: <name>" banner: the style's own rules, then its own
+   motion inside its own prefers-reduced-motion block (html[data-motion]
+   stops it too). A block ends at the blank line before the next banner.
+   The static rules are the still pose; every loop lasts its period times
+   --node-tempo and moves only rotate, scale, translate or opacity. */
+
+/* node style: orbs */
+/* A soft specular body in a breathing halo; a glint orbits the rim. */
+.music-preview-orbs i { --orb-r: 3.5px; border-color: color-mix(in srgb, currentColor 70%, transparent); background: radial-gradient(circle at 34% 30%, color-mix(in srgb, currentColor 25%, #fff) 0 9%, currentColor 26%, color-mix(in srgb, currentColor 46%, var(--bg-deep)) 64%, color-mix(in srgb, currentColor 16%, var(--bg-deep)) 100%); box-shadow: 0 0 5px -1px color-mix(in srgb, currentColor 60%, transparent); }
+.music-preview-orbs i:first-child { --orb-r: 9.5px; width: 19px; height: 19px; top: 11px; left: calc(50% - 9.5px); }
+.music-preview-orbs i::before { content: ""; position: absolute; inset: -9px; border-radius: 50%; background: radial-gradient(circle closest-side, transparent calc(var(--orb-r) - .5px), color-mix(in srgb, currentColor 34%, transparent) calc(var(--orb-r) + 1.5px), color-mix(in srgb, currentColor 10%, transparent) calc(var(--orb-r) + 5px), transparent); opacity: .8; }
+.music-preview-orbs i:first-child::after { content: ""; position: absolute; inset: -1px; border-radius: 50%; background: radial-gradient(circle at 50% 10%, color-mix(in srgb, currentColor 18%, #fff) 0 .9px, transparent 1.6px); rotate: 110deg; }
+@media (prefers-reduced-motion: no-preference) {
+  .music-preview-orbs i { animation: music-node-sway calc(7s * var(--node-tempo)) ease-in-out infinite; }
+  .music-preview-orbs i::before { animation: music-node-breathe calc(4.2s * var(--node-tempo)) ease-in-out infinite; }
+  .music-preview-orbs i:nth-child(2), .music-preview-orbs i:nth-child(2)::before { animation-delay: -1.4s; }
+  .music-preview-orbs i:nth-child(3), .music-preview-orbs i:nth-child(3)::before { animation-delay: -2.8s; }
+  .music-preview-orbs i:first-child::after { animation: music-node-turn calc(4.7s * var(--node-tempo)) linear infinite; }
+}
+
+/* node style: glass */
+/* Tinted glass: a wash, a frost line and an arc of light; a sheen band sweeps across each pane in turn. */
+.music-preview-glass i { overflow: hidden; border-color: color-mix(in srgb, currentColor 62%, transparent); background: linear-gradient(140deg, color-mix(in srgb, currentColor 48%, transparent), color-mix(in srgb, currentColor 12%, transparent) 55%, color-mix(in srgb, currentColor 4%, transparent)), color-mix(in srgb, currentColor 14%, var(--bg-deep)); box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 14%, transparent), 0 0 8px -2px color-mix(in srgb, currentColor 45%, transparent); }
+.music-preview-glass i:first-child { width: 23px; height: 23px; top: 9px; left: calc(50% - 11.5px); }
+.music-preview-glass i:nth-child(2) { width: 11px; height: 11px; top: 4px; left: calc(50% - 32px); }
+.music-preview-glass i:nth-child(3) { width: 11px; height: 11px; top: 27px; left: calc(50% + 22px); }
+.music-preview-glass i::before { content: ""; position: absolute; inset: 1.5px; border: 1.2px solid transparent; border-top-color: color-mix(in srgb, #fff 58%, transparent); border-radius: 50%; rotate: -42deg; }
+.music-preview-glass i::after { content: ""; position: absolute; inset: -40%; background: linear-gradient(115deg, transparent 38%, color-mix(in srgb, currentColor 40%, transparent) 44%, color-mix(in srgb, currentColor 22%, #fff) 50%, color-mix(in srgb, currentColor 40%, transparent) 56%, transparent 62%); translate: -14% 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .music-preview-glass i::before { animation: music-node-arc calc(6s * var(--node-tempo)) ease-in-out infinite; }
+  .music-preview-glass i::after { animation: music-node-sheen calc(6.8s * var(--node-tempo)) ease-in-out infinite; }
+  .music-preview-glass i:nth-child(2)::before { animation-delay: -2s; }
+  .music-preview-glass i:nth-child(3)::before { animation-delay: -4s; }
+  .music-preview-glass i:nth-child(2)::after { animation-delay: -2.3s; }
+  .music-preview-glass i:nth-child(3)::after { animation-delay: -4.5s; }
+}
+
+/* node style: minimal */
+/* Quiet points that breathe; a sonar ring leaves the main one (a solid dot,
+   no ring standing round it: the ring only ever travels out and fades). */
+.music-preview-minimal i { width: 6px; height: 6px; top: 17.5px; left: calc(50% - 3px); border: 0; background: currentColor; }
+.music-preview-minimal i:first-child { width: 8px; height: 8px; top: 16.5px; left: calc(50% - 4px); }
+.music-preview-minimal i:nth-child(2) { width: 5px; height: 5px; top: 7px; left: calc(50% - 28px); }
+.music-preview-minimal i:nth-child(3) { width: 5px; height: 5px; top: 30px; left: calc(50% + 26px); }
+.music-preview-minimal i:first-child::after { content: ""; position: absolute; inset: -1px; border: 1px solid currentColor; border-radius: 50%; opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .music-preview-minimal i { animation: music-node-pulse calc(3.6s * var(--node-tempo)) ease-in-out infinite; }
+  .music-preview-minimal i:nth-child(2) { animation-delay: -1.2s; }
+  .music-preview-minimal i:nth-child(3) { animation-delay: -2.4s; }
+  .music-preview-minimal i:first-child::after { animation: music-node-sonar calc(3.6s * var(--node-tempo)) cubic-bezier(.2, .6, .35, 1) infinite; }
+}
+
+/* node style: halo */
+/* Glowing rings round a dark core: the glow breathes, a dashed inner ring
+   turns, the centre pulses, and the chosen tile runs a comet round the rim. */
+.music-preview-halo::before { content: ""; position: absolute; width: 41px; height: 41px; top: 0; left: calc(50% - 20.5px); border-radius: 50%; background: radial-gradient(closest-side, transparent 50%, color-mix(in srgb, currentColor 32%, transparent) 57%, color-mix(in srgb, currentColor 9%, transparent) 76%, transparent); opacity: .85; }
+.music-preview-halo i { border: 1.5px solid currentColor; background: radial-gradient(circle, currentColor 0 1.2px, transparent 1.8px), color-mix(in srgb, currentColor 10%, var(--bg-deep)); box-shadow: 0 0 5px color-mix(in srgb, currentColor 55%, transparent), inset 0 0 3px color-mix(in srgb, currentColor 35%, transparent); }
+.music-preview-halo i:first-child { width: 23px; height: 23px; top: 9px; left: calc(50% - 11.5px); border-width: 2px; background: color-mix(in srgb, currentColor 8%, var(--bg-deep)); box-shadow: 0 0 7px color-mix(in srgb, currentColor 60%, transparent), inset 0 0 5px color-mix(in srgb, currentColor 30%, transparent); }
+.music-preview-halo i:nth-child(2) { width: 9px; height: 9px; top: 5px; left: calc(50% - 31px); }
+.music-preview-halo i:nth-child(3) { width: 9px; height: 9px; top: 28px; left: calc(50% + 23px); }
+.music-preview-halo i:first-child::before { content: ""; position: absolute; inset: 2.5px; border-radius: 50%; background: repeating-conic-gradient(currentColor 0 22.5deg, transparent 0 45deg); mask: radial-gradient(closest-side, transparent calc(100% - 1.4px), #000 calc(100% - 1px)); opacity: .6; }
+.music-preview-halo i:first-child::after { content: ""; position: absolute; width: 4px; height: 4px; top: calc(50% - 2px); left: calc(50% - 2px); border-radius: 50%; background: currentColor; box-shadow: 0 0 4px currentColor; }
+.music-preview-halo::after { content: ""; position: absolute; width: 27px; height: 27px; top: 7px; left: calc(50% - 13.5px); border-radius: 50%; background: radial-gradient(circle at 50% 1.7px, color-mix(in srgb, currentColor 20%, #fff) 0 1.4px, transparent 2.1px), conic-gradient(transparent 0 58%, color-mix(in srgb, currentColor 60%, transparent) 80%, color-mix(in srgb, currentColor 25%, #fff) 100%); mask: radial-gradient(closest-side, transparent calc(100% - 4.4px), #000 calc(100% - 3.8px) calc(100% - .6px), transparent 100%); opacity: 0; rotate: 40deg; }
+.music-node-choice[aria-pressed="true"] .music-preview-halo::after { opacity: 1; }
+@media (prefers-reduced-motion: no-preference) {
+  .music-preview-halo::before { animation: music-node-breathe calc(3.2s * var(--node-tempo)) ease-in-out infinite; }
+  .music-preview-halo i:first-child::before { animation: music-node-turn calc(14s * var(--node-tempo)) linear infinite; }
+  .music-preview-halo i:first-child::after { animation: music-node-pulse calc(3.1s * var(--node-tempo)) ease-in-out infinite; }
+  .music-preview-halo::after { animation: music-node-turn calc(3.6s * var(--node-tempo)) linear infinite; }
+}
+
+/* node style: crystal */
+/* An octagonal brilliant: a lit rim, eight facet tones under a light from the
+   upper left and a table; it rocks, and a star twinkles at its lit corner. */
+.music-preview-crystal::before { content: ""; position: absolute; width: 33px; height: 33px; top: 4px; left: calc(50% - 16.5px); border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, currentColor 30%, transparent), color-mix(in srgb, currentColor 8%, transparent) 62%, transparent); opacity: .8; }
+.music-preview-crystal i { border: 0; border-radius: 0; clip-path: polygon(29.3% 0, 70.7% 0, 100% 29.3%, 100% 70.7%, 70.7% 100%, 29.3% 100%, 0 70.7%, 0 29.3%); background: linear-gradient(135deg, color-mix(in srgb, currentColor 40%, #fff), currentColor 45%, color-mix(in srgb, currentColor 55%, var(--bg-deep))); }
+.music-preview-crystal i:first-child { width: 21px; height: 21px; top: 10px; left: calc(50% - 10.5px); }
+.music-preview-crystal i:nth-child(2) { width: 9px; height: 9px; top: 5px; left: calc(50% - 31px); opacity: .75; }
+.music-preview-crystal i:nth-child(3) { width: 9px; height: 9px; top: 28px; left: calc(50% + 23px); opacity: .75; }
+.music-preview-crystal i::before { content: ""; position: absolute; inset: 1px; clip-path: inherit; background: conic-gradient(from -22.5deg, currentColor 0 45deg, color-mix(in srgb, currentColor 74%, var(--bg-deep)) 0 90deg, color-mix(in srgb, currentColor 52%, var(--bg-deep)) 0 135deg, color-mix(in srgb, currentColor 32%, var(--bg-deep)) 0 180deg, color-mix(in srgb, currentColor 52%, var(--bg-deep)) 0 225deg, color-mix(in srgb, currentColor 74%, var(--bg-deep)) 0 270deg, currentColor 0 315deg, color-mix(in srgb, currentColor 45%, #fff) 0); }
+.music-preview-crystal i::after { content: ""; position: absolute; inset: 29%; clip-path: inherit; background: linear-gradient(135deg, color-mix(in srgb, currentColor 55%, #fff), color-mix(in srgb, currentColor 85%, var(--bg-deep))); }
+.music-preview-crystal::after { content: ""; position: absolute; width: 9px; height: 9px; top: 9.5px; left: calc(50% - 11px); background: linear-gradient(90deg, transparent, color-mix(in srgb, currentColor 15%, #fff) 40% 60%, transparent) center / 100% 1px no-repeat, linear-gradient(transparent, color-mix(in srgb, currentColor 15%, #fff) 40% 60%, transparent) center / 1px 100% no-repeat; opacity: .6; }
+@media (prefers-reduced-motion: no-preference) {
+  .music-preview-crystal::before { animation: music-node-breathe calc(5.6s * var(--node-tempo)) ease-in-out infinite; }
+  .music-preview-crystal i { animation: music-node-rock calc(7.5s * var(--node-tempo)) ease-in-out infinite; }
+  .music-preview-crystal i:nth-child(2) { animation-delay: -2.5s; }
+  .music-preview-crystal i:nth-child(3) { animation-delay: -5s; }
+  .music-preview-crystal::after { animation: music-node-twinkle calc(3.4s * var(--node-tempo)) ease-in-out infinite; }
+}
+
+/* node style: singularity */
+/* A black hole: a black core in a photon ring (brightest on top, with the
+   disc's far side lensed over it), a tilted accretion disc that turns,
+   bright on its approaching left side, passing behind the core and in front
+   of it, with sparks riding it; the chosen tile fires jets. i:1 is the far
+   half of the disc, i:2 the core, i:3 the near half; the small ones are the
+   ::before and ::after. */
+.music-preview-singularity { overflow-x: clip; }
+.music-preview-singularity i:nth-child(n) { border: 0; opacity: 1; }
+.music-preview-singularity i:is(:first-child, :nth-child(3)) { width: 40px; height: 40px; top: .5px; left: calc(50% - 20px); border-radius: 50%; rotate: -14deg; scale: 1 .3; background: linear-gradient(90deg, color-mix(in srgb, currentColor 30%, var(--ivory)) 6%, color-mix(in srgb, currentColor 70%, var(--ivory)) 26%, currentColor 46%, color-mix(in srgb, currentColor 55%, transparent) 70%, color-mix(in srgb, var(--accent-2, currentColor) 55%, transparent) 90%); mask: radial-gradient(closest-side, transparent 44%, #000 50%, rgb(0 0 0 / .5) 70%, transparent); }
+.music-preview-singularity i:nth-child(3) { clip-path: inset(50% 0 0 0); }
+.music-preview-singularity i:is(:first-child, :nth-child(3))::before { content: ""; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 20deg, transparent 0 5%, color-mix(in srgb, #fff 70%, transparent) 8%, transparent 12% 26%, color-mix(in srgb, #fff 45%, transparent) 29%, transparent 33% 46%, color-mix(in srgb, #fff 62%, transparent) 50%, transparent 54% 66%, color-mix(in srgb, #fff 35%, transparent) 69%, transparent 73% 84%, color-mix(in srgb, #fff 52%, transparent) 88%, transparent 92%); }
+.music-preview-singularity i:is(:first-child, :nth-child(3))::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 50% 22%, #fff 0 1.3px, transparent 2.1px); rotate: 200deg; }
+.music-preview-singularity i:nth-child(2) { width: 14px; height: 14px; top: 13.5px; left: calc(50% - 7px); border-radius: 50%; background: radial-gradient(closest-side, #030206 calc(100% - 1.2px), transparent calc(100% - .6px)), conic-gradient(color-mix(in srgb, currentColor 15%, var(--ivory)), color-mix(in srgb, currentColor 75%, var(--ivory)) 25%, color-mix(in srgb, currentColor 70%, transparent) 50%, color-mix(in srgb, currentColor 75%, var(--ivory)) 75%, color-mix(in srgb, currentColor 15%, var(--ivory))); box-shadow: 0 0 3px color-mix(in srgb, currentColor 55%, transparent), 0 0 12px 2px color-mix(in srgb, currentColor 20%, transparent); }
+.music-preview-singularity i:nth-child(2)::before { content: ""; position: absolute; inset: -3.5px; border-radius: 50%; background: radial-gradient(closest-side, transparent calc(100% - 3.2px), color-mix(in srgb, currentColor 55%, var(--ivory)) calc(100% - 2px), color-mix(in srgb, currentColor 40%, transparent) calc(100% - 1px), transparent); mask: linear-gradient(to bottom, #000 18%, transparent 55%); rotate: -14deg; }
+.music-preview-singularity i:nth-child(2)::after { content: ""; position: absolute; width: 3px; height: 44px; top: -15px; left: 5.5px; background: linear-gradient(transparent, color-mix(in srgb, currentColor 40%, var(--ivory)) 18%, transparent 36% 64%, color-mix(in srgb, currentColor 40%, var(--ivory)) 82%, transparent); mask: linear-gradient(90deg, transparent, #000 35% 65%, transparent); rotate: -14deg; opacity: 0; }
+.music-node-choice[aria-pressed="true"] .music-preview-singularity i:nth-child(2)::after { opacity: .85; }
+.music-preview-singularity::before, .music-preview-singularity::after { content: ""; position: absolute; width: 15px; height: 15px; top: 2px; left: calc(50% - 33px); rotate: -14deg; background: radial-gradient(7.5px 1.8px at 50% 0, transparent 50%, color-mix(in srgb, currentColor 45%, var(--ivory)) 58%, color-mix(in srgb, currentColor 40%, transparent) 80%, transparent) 0 100% / 100% 50% no-repeat, radial-gradient(circle, #030206 0 2.3px, color-mix(in srgb, currentColor 35%, var(--ivory)) 2.6px 3.1px, transparent 3.7px), radial-gradient(7.5px 1.8px at 50% 50%, transparent 50%, currentColor 60%, color-mix(in srgb, currentColor 30%, transparent) 82%, transparent), radial-gradient(circle closest-side, color-mix(in srgb, currentColor 30%, transparent), transparent); opacity: .85; }
+.music-preview-singularity::after { top: 24px; left: calc(50% + 18px); }
+@media (prefers-reduced-motion: no-preference) {
+  .music-preview-singularity i:is(:first-child, :nth-child(3))::before { animation: music-node-turn calc(4s * var(--node-tempo)) linear infinite reverse; }
+  .music-preview-singularity i:is(:first-child, :nth-child(3))::after { animation: music-node-turn calc(2.6s * var(--node-tempo)) linear infinite reverse; }
+  .music-preview-singularity i:nth-child(2)::before { animation: music-node-shimmer calc(3.3s * var(--node-tempo)) ease-in-out infinite; }
+  .music-node-choice[aria-pressed="true"] .music-preview-singularity i:nth-child(2)::after { animation: music-node-jet calc(1.8s * var(--node-tempo)) ease-in-out infinite; }
+  .music-preview-singularity::before, .music-preview-singularity::after { animation: music-node-flicker calc(5s * var(--node-tempo)) ease-in-out infinite; }
+  .music-preview-singularity::after { animation-delay: -2.5s; }
+}
+
+/* node style: prism */
+/* A bipyramid gem: crown and pavilion facets turn under a fixed light, a
+   band of light sweeps across, and a spectral edge (rose, the second hue,
+   blue) flares as it passes. i:1 is the crown, i:2 the pavilion, i:3 the
+   whole gem's sweep, glint and edge; ::before is the glow, ::after the two
+   small gems. The chosen tile works: ::before and ::after become two shards
+   orbiting the gem on a tilted ellipse, half a turn apart, small and dim on
+   the far side (seen through the crystal), and the glow moves onto the
+   frame. */
+.music-preview-prism::before { content: ""; position: absolute; width: 34px; height: 34px; top: 3.5px; left: calc(50% - 17px); border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, currentColor 28%, transparent), color-mix(in srgb, currentColor 8%, transparent) 60%, transparent); opacity: .8; }
+.music-preview-prism i:nth-child(n) { width: 20px; left: calc(50% - 10px); border: 0; border-radius: 0; opacity: 1; overflow: hidden; }
+.music-preview-prism i:first-child { height: 9.5px; top: 7.5px; clip-path: polygon(50% 0, 100% 100%, 0 100%); background: color-mix(in srgb, currentColor 72%, #fff); }
+.music-preview-prism i:nth-child(2) { height: 16.5px; top: 17px; clip-path: polygon(0 0, 100% 0, 50% 100%); background: color-mix(in srgb, currentColor 70%, #0a0c12); }
+.music-preview-prism i:nth-child(3) { height: 26px; top: 7.5px; clip-path: polygon(50% 0, 100% 36.5%, 50% 100%, 0 36.5%); background: none; }
+.music-preview-prism i:first-child::before { content: ""; position: absolute; width: 44px; height: 44px; top: -22px; left: calc(50% - 22px); background: repeating-conic-gradient(color-mix(in srgb, currentColor 30%, #fff) 0 30deg, color-mix(in srgb, currentColor 80%, #0a0c12) 0 60deg); rotate: 12deg; }
+.music-preview-prism i:nth-child(2)::before { content: ""; position: absolute; width: 44px; height: 44px; top: calc(100% - 22px); left: calc(50% - 22px); background: repeating-conic-gradient(color-mix(in srgb, currentColor 88%, #0a0c12) 0 17deg, color-mix(in srgb, currentColor 42%, #0a0c12) 0 34deg); rotate: 8deg; }
+.music-preview-prism i:first-child::after { content: ""; position: absolute; inset: 0; background: linear-gradient(0deg, color-mix(in srgb, currentColor 25%, #fff) 0 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, #fff 30%, transparent), transparent 55%, color-mix(in srgb, #0a0c12 32%, transparent)); }
+.music-preview-prism i:nth-child(2)::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, color-mix(in srgb, #fff 14%, transparent), transparent 45%, color-mix(in srgb, #0a0c12 45%, transparent)); }
+.music-preview-prism i:nth-child(3)::before { content: ""; position: absolute; inset: -20% -80%; background: linear-gradient(105deg, transparent 42%, color-mix(in srgb, #fff 72%, transparent) 50%, transparent 58%); translate: -12% 0; }
+.music-preview-prism i:nth-child(3)::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, color-mix(in srgb, #fff 92%, transparent), transparent) 4.9px 6.35px / 5px .9px no-repeat, linear-gradient(transparent, color-mix(in srgb, #fff 92%, transparent), transparent) 6.95px 4.3px / .9px 5px no-repeat, linear-gradient(121deg, transparent 62.5%, #ff6fae 62.5% 65.5%, var(--accent-2, currentColor) 65.5% 68.5%, #5b9dff 68.5% 72%, transparent 72%); opacity: .85; }
+.music-preview-prism::after { content: ""; position: absolute; width: 64px; height: 36px; top: 3px; left: calc(50% - 32px); clip-path: polygon(5.5px 1.5px, 9px 5.3px, 5.5px 12px, 2px 5.3px, 5.5px 1.5px, 58.5px 24.5px, 62px 28.3px, 58.5px 35px, 55px 28.3px, 58.5px 24.5px); background: conic-gradient(at 5.5px 5.3px, color-mix(in srgb, currentColor 80%, #fff) 0 90deg, color-mix(in srgb, currentColor 42%, #0a0c12) 0 180deg, color-mix(in srgb, currentColor 70%, #0a0c12) 0 270deg, color-mix(in srgb, currentColor 40%, #fff) 0) 0 0 / 33px 36px no-repeat, conic-gradient(at 25.5px 28.3px, color-mix(in srgb, currentColor 80%, #fff) 0 90deg, color-mix(in srgb, currentColor 42%, #0a0c12) 0 180deg, color-mix(in srgb, currentColor 70%, #0a0c12) 0 270deg, color-mix(in srgb, currentColor 40%, #fff) 0) 33px 0 / 33px 36px no-repeat; opacity: .8; }
+.music-node-choice[aria-pressed="true"] .music-preview-prism { isolation: isolate; background: radial-gradient(circle 17px at 50% 20.5px, color-mix(in srgb, currentColor 22%, transparent), color-mix(in srgb, currentColor 6%, transparent) 60%, transparent); }
+.music-node-choice[aria-pressed="true"] .music-preview-prism::before, .music-node-choice[aria-pressed="true"] .music-preview-prism::after { z-index: 1; width: 4px; height: 7px; top: 14.5px; left: calc(50% - 2px); border-radius: 0; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); background: linear-gradient(90deg, color-mix(in srgb, currentColor 55%, #fff) 50%, color-mix(in srgb, currentColor 78%, #0a0c12) 50%); translate: 16.9px -3px; scale: .97 .98; opacity: .84; }
+.music-node-choice[aria-pressed="true"] .music-preview-prism::before { translate: -16.9px 3px; scale: .77 .78; opacity: .51; }
+@media (prefers-reduced-motion: no-preference) {
+  .music-preview-prism::before { animation: music-node-breathe calc(4.5s * var(--node-tempo)) ease-in-out infinite; }
+  .music-preview-prism i:first-child::before { animation: music-node-crown calc(2.4s * var(--node-tempo)) linear infinite; }
+  .music-preview-prism i:nth-child(2)::before { animation: music-node-pavilion calc(2.4s * var(--node-tempo)) linear infinite; }
+  .music-preview-prism i:nth-child(3)::before { animation: music-node-sweep calc(3.2s * var(--node-tempo)) ease-in-out infinite; }
+  .music-preview-prism i:nth-child(3)::after { animation: music-node-flare calc(3.2s * var(--node-tempo)) ease-in-out infinite; }
+  .music-preview-prism::after { animation: music-node-shimmer calc(5s * var(--node-tempo)) ease-in-out infinite; }
+  .music-node-choice[aria-pressed="true"] .music-preview-prism::before, .music-node-choice[aria-pressed="true"] .music-preview-prism::after { animation: music-node-shard calc(3.6s * var(--node-tempo)) linear infinite; }
+  .music-node-choice[aria-pressed="true"] .music-preview-prism::before { animation-delay: calc(-1.8s * var(--node-tempo)); }
+}
+
+/* node style: sigil */
+/* A hex seal: a lit rim with the second hue at its corners, a ring of six
+   runes that turns and lights one rune at a time, an inner hexagon turning
+   the other way and a breathing diamond seal; a hex scan leaves it. The
+   chosen tile works: six hex cells light one after another round it. i:1 is
+   the seal, i:2 the rune ring, i:3 the two small seals; ::before is the
+   scan (the cells when chosen), ::after the diamond. */
+.music-preview-sigil i:nth-child(n) { border: 0; border-radius: 0; opacity: 1; }
+.music-preview-sigil i:first-child { width: 22.5px; height: 26px; top: 7.5px; left: calc(50% - 11.25px); clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); background: radial-gradient(closest-side, color-mix(in srgb, currentColor 24%, transparent), transparent), color-mix(in srgb, currentColor 12%, var(--bg-deep)); }
+.music-preview-sigil i:first-child::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 50% 3.5%, var(--accent-2, currentColor) 0 1.5px, transparent 2.3px), radial-gradient(circle at 96.6% 26.7%, var(--accent-2, currentColor) 0 1.5px, transparent 2.3px), radial-gradient(circle at 96.6% 73.3%, var(--accent-2, currentColor) 0 1.5px, transparent 2.3px), radial-gradient(circle at 50% 96.5%, var(--accent-2, currentColor) 0 1.5px, transparent 2.3px), radial-gradient(circle at 3.4% 73.3%, var(--accent-2, currentColor) 0 1.5px, transparent 2.3px), radial-gradient(circle at 3.4% 26.7%, var(--accent-2, currentColor) 0 1.5px, transparent 2.3px), linear-gradient(160deg, color-mix(in srgb, currentColor 45%, #fff), currentColor 50%, color-mix(in srgb, currentColor 65%, var(--bg-deep))); mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22.5 26'%3E%3Cpath d='M11.25 .9L21.73 6.95V19.05L11.25 25.1L.77 19.05V6.95Z' fill='none' stroke='black' stroke-width='1.5'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat; }
+.music-preview-sigil i:first-child::after { content: ""; position: absolute; width: 13px; height: 13px; top: calc(50% - 6.5px); left: calc(50% - 6.5px); background: currentColor; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 13 13'%3E%3Cpath d='M12 6.5L9.25 11.26H3.75L1 6.5L3.75 1.74H9.25Z' fill='none' stroke='black' stroke-width='.9'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat; opacity: .55; }
+.music-preview-sigil i:nth-child(2) { width: 22px; height: 22px; top: 9.5px; left: calc(50% - 11px); background: color-mix(in srgb, currentColor 70%, transparent); mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22' fill='none' stroke='black' stroke-width='.95' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='6.3' stroke-width='.5' stroke-opacity='.5'/%3E%3Cpath d='M11 3.6V.9M11 2.1L12.2 1.1'/%3E%3Cpath transform='rotate(60 11 11)' d='M9.9 3.4L11 .9L12.1 3.4'/%3E%3Cpath transform='rotate(120 11 11)' d='M11 3.6V.9M9.9 2.3H12.1'/%3E%3Cpath transform='rotate(180 11 11)' d='M11 3.6V.9M11 2.4L12.2 3.4'/%3E%3Cpath transform='rotate(240 11 11)' d='M11 3.6V.9M9.9 2.3H12.1'/%3E%3Cpath transform='rotate(300 11 11)' d='M11 3.6V.9M11 2.1L9.8 1.1'/%3E%3Cg fill='black' stroke='none'%3E%3Ccircle cx='15.4' cy='3.38' r='.55'/%3E%3Ccircle cx='19.8' cy='11' r='.55'/%3E%3Ccircle cx='15.4' cy='18.62' r='.55'/%3E%3Ccircle cx='6.6' cy='18.62' r='.55'/%3E%3Ccircle cx='2.2' cy='11' r='.55'/%3E%3Ccircle cx='6.6' cy='3.38' r='.55'/%3E%3C/g%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat; }
+.music-preview-sigil i:nth-child(2)::before { content: ""; position: absolute; inset: 0; background: conic-gradient(from -90deg, color-mix(in srgb, var(--accent-2, currentColor) 60%, transparent) 0 60deg, color-mix(in srgb, var(--accent-2, currentColor) 70%, var(--ivory)) 0 120deg, transparent 0); }
+.music-preview-sigil i:nth-child(3) { overflow: hidden; width: 64px; height: 36px; top: 3px; left: calc(50% - 32px); background: radial-gradient(circle at 5.5px 6.5px, var(--accent-2, currentColor) 0 1.4px, transparent 2px), radial-gradient(circle at 58.5px 29.5px, var(--accent-2, currentColor) 0 1.4px, transparent 2px), currentColor; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 36' fill='black' fill-opacity='.2' stroke='black' stroke-width='.9'%3E%3Cpath d='M5.5 1.9l3.98 2.3v4.6l-3.98 2.3-3.98-2.3v-4.6z'/%3E%3Cpath d='M58.5 24.9l3.98 2.3v4.6l-3.98 2.3-3.98-2.3v-4.6z'/%3E%3Ccircle cx='5.5' cy='6.5' r='1.15' fill-opacity='1' stroke='none'/%3E%3Ccircle cx='58.5' cy='29.5' r='1.15' fill-opacity='1' stroke='none'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat; opacity: .8; }
+.music-preview-sigil i:nth-child(3)::before { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 45%, color-mix(in srgb, #fff 70%, transparent) 50%, transparent 55%); translate: -70% 0; }
+.music-preview-sigil::before { content: ""; position: absolute; width: 22.5px; height: 26px; top: 7.5px; left: calc(50% - 11.25px); background: color-mix(in srgb, currentColor 55%, var(--ivory)); mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22.5 26'%3E%3Cpath d='M11.25 .9L21.73 6.95V19.05L11.25 25.1L.77 19.05V6.95Z' fill='none' stroke='black' stroke-width='.7'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat; opacity: 0; }
+.music-node-choice[aria-pressed="true"] .music-preview-sigil::before { width: 40px; height: 36px; top: 2.5px; left: calc(50% - 20px); background: conic-gradient(var(--accent-2, currentColor) 0 60deg, currentColor 0); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 36' fill='black' stroke='black' stroke-width='.8'%3E%3Cpath fill-opacity='.8' d='M27.75 1.35l2.81 1.625v3.25l-2.81 1.625-2.81-1.625v-3.25z'/%3E%3Cpath fill-opacity='.6' d='M12.25 1.35l2.81 1.625v3.25l-2.81 1.625-2.81-1.625v-3.25z'/%3E%3Cpath fill-opacity='.45' d='M4.5 14.75l2.81 1.625v3.25l-2.81 1.625-2.81-1.625v-3.25z'/%3E%3Cpath fill-opacity='.38' d='M12.25 28.15l2.81 1.625v3.25l-2.81 1.625-2.81-1.625v-3.25z'/%3E%3Cpath fill-opacity='.32' d='M27.75 28.15l2.81 1.625v3.25l-2.81 1.625-2.81-1.625v-3.25z'/%3E%3Cpath fill-opacity='.28' d='M35.5 14.75l2.81 1.625v3.25l-2.81 1.625-2.81-1.625v-3.25z'/%3E%3C/svg%3E"); opacity: 1; }
+.music-preview-sigil::after { content: ""; position: absolute; width: 5px; height: 5px; top: 18px; left: calc(50% - 2.5px); rotate: 45deg; background: color-mix(in srgb, currentColor 55%, var(--ivory)); box-shadow: 0 0 5px color-mix(in srgb, currentColor 70%, transparent); }
+@media (prefers-reduced-motion: no-preference) {
+  .music-preview-sigil i:nth-child(2) { animation: music-node-turn calc(9s * var(--node-tempo)) linear infinite; }
+  .music-preview-sigil i:nth-child(2)::before { animation: music-node-turn calc(6s * var(--node-tempo)) steps(6) infinite; }
+  .music-preview-sigil i:first-child::after { animation: music-node-turn calc(20s * var(--node-tempo)) linear infinite reverse; }
+  .music-preview-sigil i:nth-child(3)::before { animation: music-node-sweep calc(5s * var(--node-tempo)) ease-in-out infinite; }
+  .music-preview-sigil::before { animation: music-node-scan calc(3.2s * var(--node-tempo)) cubic-bezier(.25, .4, .45, 1) infinite; }
+  .music-node-choice[aria-pressed="true"] .music-preview-sigil::before { animation: music-node-turn calc(3.5s * var(--node-tempo)) steps(6) infinite; }
+  .music-preview-sigil::after { animation: music-node-pulse calc(3.2s * var(--node-tempo)) ease-in-out infinite; }
+}
+
+/* The thumbnails' loops (only the carves' motion blocks above run them). */
+@keyframes music-node-turn { from { rotate: 0deg; } to { rotate: 1turn; } }
+@keyframes music-node-breathe { 0%, 100% { opacity: .55; scale: .9; } 50% { opacity: 1; scale: 1.05; } }
+@keyframes music-node-sway { 0%, 100% { rotate: -9deg; } 50% { rotate: 9deg; } }
+@keyframes music-node-arc { 0%, 100% { rotate: -58deg; } 50% { rotate: -26deg; } }
+@keyframes music-node-sheen { 0%, 58% { translate: -75% 0; } 86%, 100% { translate: 75% 0; } }
+@keyframes music-node-pulse { 0%, 100% { scale: 1; } 50% { scale: 1.22; } }
+@keyframes music-node-sonar { from { scale: .7; opacity: .6; } to { scale: 2.3; opacity: 0; } }
+@keyframes music-node-rock { 0%, 100% { rotate: -7deg; } 50% { rotate: 7deg; } }
+@keyframes music-node-twinkle { 0%, 78%, 100% { opacity: 0; scale: .2; rotate: 0deg; } 88% { opacity: 1; scale: 1; rotate: 45deg; } }
+@keyframes music-node-shimmer { 0%, 100% { opacity: .62; } 50% { opacity: 1; } }
+@keyframes music-node-flicker { 0%, 100% { opacity: .85; } 50% { opacity: 1; } }
+@keyframes music-node-jet { 0%, 100% { opacity: .72; scale: 1 .86; } 45% { opacity: 1; scale: 1 1.06; } }
+@keyframes music-node-crown { from { rotate: 0deg; } to { rotate: -60deg; } }
+@keyframes music-node-pavilion { from { rotate: 0deg; } to { rotate: 34deg; } }
+@keyframes music-node-sweep { 0% { translate: -70% 0; } 50%, 100% { translate: 70% 0; } }
+@keyframes music-node-flare { 0%, 100% { opacity: .5; } 30% { opacity: 1; } }
+@keyframes music-node-shard { 0%, 100% { translate: 18.3px -6.7px; scale: .78 .88; opacity: .68; } 6.25% { translate: 17.7px -4px; scale: .93 .96; opacity: .8; } 12.5% { translate: 14.4px -.7px; scale: 1.02 1.02; opacity: .9; } 18.75% { translate: 8.9px 2.7px; scale: 1.03 1.06; opacity: .98; } 25% { translate: 2.1px 5.6px; scale: .95 1.08; opacity: 1; } 31.25% { translate: -5.1px 7.8px; scale: .8 1.06; opacity: .98; } 37.5% { translate: -11.5px 8.7px; scale: .61 1.02; opacity: .9; } 43.75% { translate: -16.1px 8.3px; scale: .72 .96; opacity: .8; } 50% { translate: -18.3px 6.7px; scale: .78 .88; opacity: .68; } 56.25% { translate: -17.7px 4px; scale: .78 .8; opacity: .55; } 62.5% { translate: -14.4px .7px; scale: .74 .74; opacity: .45; } 68.75% { translate: -8.9px -2.7px; scale: .67 .7; opacity: .37; } 75% { translate: -2.1px -5.6px; scale: .6 .68; opacity: .35; } 81.25% { translate: 5.1px -7.8px; scale: .52 .7; opacity: .37; } 87.5% { translate: 11.5px -8.7px; scale: .44 .74; opacity: .45; } 93.75% { translate: 16.1px -8.3px; scale: .61 .8; opacity: .55; } }
+@keyframes music-node-scan { 0% { scale: 1.04; opacity: 0; } 15% { opacity: .95; } 100% { scale: 1.5; opacity: 0; } }
+
 .music-node-layout .music-node-preview { width: 80px; max-width: 100%; align-self: center; }
 .music-node-layout .music-node-preview i { width: 6px; height: 6px; opacity: .8; }
 .music-node-layout .music-node-preview i:first-child { width: 8px; height: 8px; opacity: 1; }
