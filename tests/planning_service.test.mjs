@@ -304,7 +304,9 @@ test("approved plan task IDs survive automatic deduplication and grouping", asyn
 test("planning prompt preserves canonical decisions and refuses over-budget context instead of truncating", () => {
   const plan = { title: "Export", destination: "CSV", outOfScope: "Emails", unknowns: [], questions: [{ id: "q", question: "Rows?", status: "resolved", resolution: "Visible only", evidence: "User choice", dependsOn: [] }] };
   const prompt = planningPrompt(plan, "spec");
-  assert.match(prompt.system, /no tools/); assert.match(prompt.user, /Visible only/);
+  assert.match(prompt.system, /explicitly provided Studio research tools/);
+  assert.match(prompt.system, /cannot execute implementation work, change files, approve a specification, or resolve a human's decision/);
+  assert.match(prompt.user, /Visible only/);
   assert.throws(() => planningPrompt({ ...plan, destination: "x".repeat(100001) }, "spec"), /too large/);
 });
 
@@ -519,4 +521,15 @@ test("archived plans are set aside: counted, not ranked, and closed to Mefi unti
   assert.equal(restored.ok, true, restored.error);
   assert.equal(restored.plan.archivedAt, undefined);
   assert.equal((await f.service.summary({ projectId: f.project.id })).archived, 0);
+});
+
+
+test("resuming an interview retains early human answers and complete attached text after many advice turns", () => {
+  const answer = "Attached project notes: " + "x".repeat(2500) + " UNIQUE_REQUIREMENT_AT_END";
+  const plan = { title: "Continue", destination: "Resume the design", outOfScope: "", unknowns: [], questions: [{ id: "q1", question: "Which data?", status: "open", dependsOn: [], notes: [{ author: "user", kind: "answer", text: answer }, ...Array.from({ length: 15 }, (_, i) => ({ author: "assistant", kind: "advice", text: `Advice ${i}` }))] }] };
+  const prompt = JSON.parse(planningPrompt(plan, "interview", { questionId: "q1" }).user);
+  assert.equal(prompt.questions[0].earlierUserAnswers[0].text, answer);
+  assert.equal(prompt.questions[0].confirmedByUser, null);
+  assert.equal(prompt.questions[0].earlierNotesOmitted, 3);
+  assert.equal(prompt.questions[0].interview.length, 12);
 });

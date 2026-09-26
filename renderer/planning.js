@@ -16,6 +16,19 @@
   let workFlight = null;
   let priorFocus = null;
   let drafts = {};
+  let restoreSelection = true;
+  const selectionKey = () => `mefiStudio.planning.selection.v1.${state.projectId}`;
+  function rememberSelection() {
+    if (!state.projectId || restoreSelection) return;
+    try { localStorage.setItem(selectionKey(), state.selected); } catch { /* Keep the open plan in memory. */ }
+  }
+  function restoreProjectPlan() {
+    if (!restoreSelection) return;
+    let saved;
+    try { saved = localStorage.getItem(selectionKey()); } catch {}
+    state.selected = saved === "new" || state.plans.some((item) => item.id === saved && !archived(item)) ? saved : state.plans.find((item) => !archived(item))?.id || "new";
+    restoreSelection = false;
+  }
   let sliceCounter = 0;
   let exploreTimer = null;
   let exploreFlight = null;
@@ -121,6 +134,7 @@
     control.addEventListener(options.select ? "change" : "input", () => { change(control.value); persist(); renderDraftFeedback(); if (fieldTargets[id]) scheduleExploration(); });
     control.addEventListener("focus", () => { if (fieldTargets[id]) { focusedField = fieldTargets[id]; if ($("help-target")) $("help-target").textContent = `Helping with ${targetLabels[focusedField].toLowerCase()}`; } });
     control.addEventListener("keydown", (event) => advanceField(event, control));
+    if (!options.locked && (id === "destination" || id === "interview-answer" || id === "spec-text" || id.startsWith("evidence-"))) window.MefiFileInputs?.bind(control, { scope: () => `${state.epoch}:${draftKey()}`, blocked: () => state.busy || !state.opened, limit: control.maxLength });
     return control;
   }
   function form(parent, id, run, label, locked = false) {
@@ -192,6 +206,7 @@
   }
   function selectStep(id) {
     viewedStep = id;
+    draft().viewedStep = id; draft().workflowStep = workflowState(plan()).current; persist();
     if ($("workflow")) $("workflow").dataset.viewedStep = id;
     for (const [key] of flowStages) {
       const stage = $(`stage-${key}`); if (!stage) continue;
@@ -355,6 +370,10 @@
       node("summary", "", `${hit.file}:${hit.line}`, entry);
       node("pre", "", hit.snippet, entry);
     }
+    if (references?.overview?.length) {
+      const overview = branch("Project overview", references.structure?.join(" · "));
+      for (const hit of references.overview) { const entry = node("details", "planning-file-node", undefined, overview); node("summary", "", `${hit.file}:${hit.line}`, entry); node("pre", "", hit.snippet, entry); }
+    }
     if (references?.limitations?.length) { const limits = node("details", "planning-scan-limits", undefined, files); node("summary", "", "Scan coverage", limits); for (const line of references.limitations) node("p", "planning-subtle", line, limits); }
     const item = plan();
     const decisions = branch("Decisions to shape", item ? `${item.questions.length} questions · ${item.questions.filter((question) => question.status === "resolved").length} decided` : "Questions appear here as the idea takes shape.");
@@ -466,7 +485,8 @@
     if (!area) { area = node("section", "planning-workflow", undefined, $("detail")); area.id = "plans-workflow"; area.setAttribute("aria-label", "From idea to verified work"); }
     area.replaceChildren();
     const flow = workflowState(item); area.dataset.stage = flow.current;
-    if (viewedStepKey !== draftKey() || lastWorkflowStep !== flow.current) viewedStep = flow.current;
+    if (viewedStepKey !== draftKey()) viewedStep = draft().workflowStep === flow.current && flowStages.some(([id]) => id === draft().viewedStep) ? draft().viewedStep : flow.current;
+    else if (lastWorkflowStep !== flow.current) viewedStep = flow.current;
     viewedStepKey = draftKey(); lastWorkflowStep = flow.current; area.dataset.viewedStep = viewedStep;
     const head = node("div", "planning-flow-head", undefined, area);
     const heading = node("div", "", undefined, head);
@@ -482,6 +502,7 @@
         : button("Archive plan", head, () => act("archive", {}, null, "Plan archived. Find it under Archived in the list; restoring brings it back as it was."), "archive");
       shelf.classList.add("mini");
     }
+    if (item && !archived(item)) navigation("Continue where you left off", head, () => $(`stage-${viewedStep}`)?.click?.(), "resume");
     const rail = node("ol", "planning-flow-rail", undefined, area); rail.setAttribute("aria-label", "Planning and work stages");
     const decided = `${flow.resolved.length}/${flow.questions.length} recorded`;
     const subtitles = { idea: item ? "Destination saved" : "Set a destination", explore: flow.ask?.awaiting ? "Waiting for your answer" : `${flow.frontier.length} ready · ${flow.blocked.length} blocked`, decisions: decided, review: confirmed(item) ? "Confirmed by you" : "Review decisions", spec: item?.spec?.stale ? "Needs revision" : item?.spec ? "Draft saved" : "Draft specification", approval: item?.spec?.approvedAt ? "Approved by you" : "Review specification", build: frozen(item) ? `${flow.work.filter((task) => task.stage === "running").length} working · ${countLabel(item.taskIds?.length || 0, "task")}` : "Create tasks", verify: frozen(item) ? `${flow.work.filter((task) => task.stage === "done").length}/${flow.work.length} confirmed` : "Check the result" };
@@ -586,6 +607,7 @@
   }
   async function act(action, payload = {}, clean, success = "Saved.", assist = false) {
     if (state.busy || !state.projectId) return false;
+    if ([...$("detail").querySelectorAll("textarea")].some((input) => window.MefiFileInputs?.isReading(input))) { note("Wait for the files to finish reading."); return false; }
     const epoch = state.epoch; const projectId = state.projectId; const selected = state.selected;
     const current = plan(); const savedDraft = draft(); const key = draftKey();
     const request = { projectId, ...(current ? { planId: current.id, version: current.version } : {}), ...payload, ...(assist ? {} : { action }) };
@@ -1017,6 +1039,7 @@
     }
   }
   function render() {
+    rememberSelection();
     if (composeKey !== draftKey()) { stopExploration(); composeKey = draftKey(); focusedField = "destination"; copilot = { status: "idle", result: null, signature: null, error: "" }; suggestionUndo = null; }
     renderList(); $("detail").replaceChildren();
     if (!state.projectId) {
@@ -1079,12 +1102,12 @@
       if (!api()?.projectsList || !api()?.planningList) { render(); note("Planning is available in the desktop app."); return; }
       const projects = guard(await api().projectsList());
       if (epoch !== state.epoch || readId !== state.readId) return;
-      if (state.projectId !== projects.activeId) { state.projectId = projects.activeId; state.plans = []; state.selected = "new"; state.tasks = null; state.workError = null; state.existing = null; state.workReadId += 1; }
+      if (state.projectId !== projects.activeId) { restoreSelection = true; state.projectId = projects.activeId; state.plans = []; state.selected = "new"; state.tasks = null; state.workError = null; state.existing = null; state.workReadId += 1; }
       const projectId = state.projectId; state.projectName = projects.projects.find((item) => item.id === projectId)?.name || "No project selected";
       if (!projectId) { render(); note(); return; }
       const result = guard(await api().planningList({ projectId }));
       if (epoch !== state.epoch || readId !== state.readId || projectId !== state.projectId || (result.projectId && result.projectId !== projectId)) return;
-      state.plans = result.plans || []; state.existing = result.existing ?? null; render(); if (refreshTasks) void refreshWork();
+      state.plans = result.plans || []; state.existing = result.existing ?? null; restoreProjectPlan(); render(); if (refreshTasks) void refreshWork();
     } catch (error) { if (epoch === state.epoch && readId === state.readId) { render(); note(error.message, true); } }
   }
   async function open(options = {}) {
@@ -1094,7 +1117,6 @@
     if (!state.opened) return;
     if (options.create) { state.selected = "new"; if (options.destination && !draft().details?.destination) { draft().details = { title: "", destination: String(options.destination), outOfScope: "" }; persist(); } }
     else if (options.planId) state.selected = options.planId;
-    else if (state.selected === "new" && state.plans.some((item) => !archived(item))) state.selected = state.plans.find((item) => !archived(item)).id;
     render(); if (state.projectId && api()?.planningList && $("notice").dataset.error !== "true") note();
     startWorkPoll();
     (options.create ? $("title") : $("new"))?.focus();
@@ -1124,6 +1146,7 @@
     window.addEventListener("mefi:project-changed", (event) => {
       const projectId = event.detail?.projectId; if (projectId === state.projectId) return;
       stopExploration();
+      rememberSelection(); restoreSelection = true;
       persist(); state.epoch += 1; state.readId += 1; state.workReadId += 1; state.projectId = projectId; state.selected = "new"; state.plans = []; state.tasks = null; state.workError = null; state.existing = null; state.busy = false; state.pending = null;
       if (state.opened) { render(); note("Opening this project's plans…"); void refresh(); }
     });

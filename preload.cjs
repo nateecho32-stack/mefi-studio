@@ -2,6 +2,9 @@
 const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 const api = {
+  mediaSceneSample: (rect) => ipcRenderer.invoke("media:scene-sample", rect),
+  youtubeSearch: (query) => ipcRenderer.invoke("media:youtube-search", query),
+  mediaClipboardLink: () => ipcRenderer.invoke("media:clipboard-link"),
   performanceControl: (payload) => ipcRenderer.invoke("performance:control", payload ?? {}),
   performanceSnapshot: () => ipcRenderer.invoke("performance:snapshot"),
   projectsList: () => ipcRenderer.invoke("projects:list"),

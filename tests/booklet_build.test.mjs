@@ -21,6 +21,7 @@ const RENDERER = path.join(STUDIO, "renderer");
 // Keep in step with the inline list in scripts/build-booklet.mjs; the fixture
 // only counts as faithful while it copies the same inputs the real build reads.
 const INLINE_SCRIPTS = [
+  "file-inputs.js",
   "performance-core.js",
   "profiler.js",
   "stage-labels.js",
@@ -33,6 +34,7 @@ const INLINE_SCRIPTS = [
   "tracker.js",
   "node-styles.js",
   "tree3d.js",
+  "tree-dynamics.js",
   "idle.js",
   "camera-tour.js",
   "explorer.js",

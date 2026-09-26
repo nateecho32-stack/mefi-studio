@@ -66,6 +66,8 @@ const executorWorktrees = require("./scripts/executor-worktrees.cjs");
 const agentModes = require("./scripts/agent-modes.cjs");
 const agentProfiles = require("./scripts/agent-profiles.cjs");
 const agentAddons = require("./scripts/agent-addons.cjs");
+const agentTools = require("./scripts/agent-tools.cjs");
+const agentToolConfigs = require("./scripts/agent-tool-configs.cjs");
 const agentModels = require("./scripts/agent-models.cjs");
 const agentIssues = require("./scripts/agent-issues.cjs");
 const brains = require("./scripts/brains.cjs");
@@ -1328,11 +1330,14 @@ async function communityMutate(change) {
 // firstSeenAt, which starts the three-day quiet period before the first card.
 async function communitySnapshot() {
   if (!community) return communityUnavailableStatus();
-  let { state } = await communityRead();
+  let { settings, state } = await communityRead();
   if (state.firstSeenAt == null) {
     state = await communityMutate((current) => (current.firstSeenAt == null ? { ...current, firstSeenAt: Date.now() } : null));
   }
-  return community.publicStatus({ state, now: Date.now(), clientId: communityClientId(), linking: Boolean(communityLinkRun) });
+  // This machine's opt-in lives outside the app payload, so rebuilds and
+  // updates preserve it without changing the default for other installs.
+  const selfUnlocked = community.SELF_UNLOCKED === true || settings.localStyleUnlock === true;
+  return community.publicStatus({ state, now: Date.now(), clientId: communityClientId(), linking: Boolean(communityLinkRun), selfUnlocked });
 }
 
 // Mirrors publishRelease: only a change a user could see reaches the renderer.
@@ -3780,7 +3785,7 @@ function cliModelArg(value) {
 // run is. Auth is the CLI's own login, so no key is stored or read.
 async function claudeCompletion(system, user, model, { timeoutMs = 180000 } = {}) {
   const selected = cliModelArg(model);
-  const command = `claude -p --output-format json --tools= --permission-mode dontAsk --no-session-persistence${selected ? ` --model ${selected}` : ""}`;
+  const command = `claude -p --output-format json --strict-mcp-config --tools= --permission-mode dontAsk --no-session-persistence${selected ? ` --model ${selected}` : ""}`;
   return await new Promise((resolve) => {
     const child = spawn("cmd.exe", ["/d", "/s", "/c", command], { cwd: projectRoot(), windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
     let text = "";
@@ -4198,6 +4203,11 @@ async function assistantFetch(system, user, maxTokens = 6000, { role = "routine"
     return agentProfiles.run(snapshot, () => assistantFetch(system, user, maxTokens, { role, taskType, allowCli, skillRole }));
   }
   if (typeof agentAddons !== "undefined" && skillRole) system += scrubOutbound(await agentAddons.instructions(projectRoot(), await readAgentSettings(), skillRole));
+  if (typeof agentTools !== "undefined" && !agentTools.active.getStore() && taskType !== "ai-probe") {
+    return agentTools.run({ system, user, root: projectRoot(), settings: await readAgentSettings(), role: skillRole || role, scrub: scrubOutbound,
+      onTool: (tool) => logLine(`[tools:${skillRole || role}] ${tool.name}: ${tool.ok ? "completed" : "failed"}`),
+      call: (prompt, input) => assistantFetch(prompt, input, maxTokens, { role, taskType, allowCli: allowCli === false ? false : DATA_ONLY_CLIS, skillRole: null }) });
+  }
   // The transmission gate. Every assistant call — chat, the cadence passes,
   // the overseer, ideas, the analyzer, setup assist, the judge and the probe —
   // funnels through here, and the HTTP body is built from `user` a few lines
@@ -4224,6 +4234,13 @@ async function assistantFetch(system, user, maxTokens = 6000, { role = "routine"
 // The CLI half of assistantFetch, shared with the data-only callers
 // (planning, brain drafts, the analyzer read) that may ride Claude Code.
 async function cliAssistantCall(route, system, user, maxTokens, { role = "routine", taskType = role, source = "request" } = {}) {
+  if (typeof agentTools !== "undefined" && !agentTools.active.getStore() && taskType !== "ai-probe") {
+    const settings = await readAgentSettings();
+    if (typeof agentAddons !== "undefined") system += scrubOutbound(await agentAddons.instructions(projectRoot(), settings, role));
+    return agentTools.run({ system, user, root: projectRoot(), settings, role, scrub: scrubOutbound,
+      onTool: (tool) => logLine(`[tools:${role}] ${tool.name}: ${tool.ok ? "completed" : "failed"}`),
+      call: (prompt, input) => cliAssistantCall(route, prompt, scrubOutbound(input), maxTokens, { role, taskType, source }) });
+  }
   // A paused CLI is not spawned at all — its failures tend to run to the
   // full 180 s timeout — so the turn goes straight to the fallback below.
   const gate = providerBreaker.enter(route.provider);
@@ -4258,6 +4275,13 @@ async function cliAssistantCall(route, system, user, maxTokens, { role = "routin
 // primary call, and the opt-in fallback walk down the auto order. Split out so
 // the grok-CLI route can land here when the CLI cannot answer.
 async function httpAssistantCall(route, system, user, maxTokens, { taskType = "routine", source = "request", role = "routine", effort = null, serviceTier = null, pinned = false, timeoutMs = 120000 } = {}) {
+  if (typeof agentTools !== "undefined" && !agentTools.active.getStore() && taskType !== "ai-probe") {
+    const settings = await readAgentSettings();
+    if (typeof agentAddons !== "undefined") system += scrubOutbound(await agentAddons.instructions(projectRoot(), settings, role));
+    return agentTools.run({ system, user, root: projectRoot(), settings, role, scrub: scrubOutbound,
+      onTool: (tool) => logLine(`[tools:${role}] ${tool.name}: ${tool.ok ? "completed" : "failed"}`),
+      call: (prompt, input) => httpAssistantCall(route, prompt, scrubOutbound(input), maxTokens, { taskType, source, role, effort, serviceTier, pinned, timeoutMs }) });
+  }
   // A seat call (seatFetch) names its model outright; the router must not
   // swap it for another.
   if (!pinned) route = await applyModelRouting(route, { role, taskType, task: user });
@@ -9012,7 +9036,7 @@ async function assistantMessage(raw, options = {}) {
   if (!text) return { ok: false, error: "empty" };
   await ensureAssistant();
   const ui = assistantUiContext(options?.context);
-  const user = { id: assistantMessageId(), projectId: projects.current().id, at: Date.now(), role: "user", text: text.slice(0, 2000), via: "local", intent: "chat", ...(ui ? { ui } : {}) };
+  const user = { id: assistantMessageId(), projectId: projects.current().id, at: Date.now(), role: "user", text: text.slice(0, 16000), via: "local", intent: "chat", ...(ui ? { ui } : {}) };
   assistantState.messages.push(user);
   assistantTrim(assistantState.messages, assistantCaps().messages);
   assistantLog("message", user.text.slice(0, 160));
@@ -10758,7 +10782,12 @@ async function seatFetch(seat, system, user, maxTokens = 2400, { fallback = null
   if (typeof agentProfiles !== "undefined" && !agentProfiles.current()) return agentProfiles.run(agentProfiles.capture(await readSettings(), projects.current().id), () => seatFetch(seat, system, user, maxTokens, { fallback, timeoutMs }));
   const settings = await (typeof readAgentSettings === "function" ? readAgentSettings() : readSettings());
   const chosen = seatChoice(settings, seat);
-  if (typeof agentAddons !== "undefined") system += scrubOutbound(await agentAddons.instructions(projectRoot(), settings, seat));
+  if (typeof agentAddons !== "undefined" && (typeof agentTools === "undefined" || !agentTools.active.getStore())) system += scrubOutbound(await agentAddons.instructions(projectRoot(), settings, seat));
+  if (typeof agentTools !== "undefined" && !agentTools.active.getStore()) {
+    return agentTools.run({ system, user, root: projectRoot(), settings, role: seat, scrub: scrubOutbound,
+      onTool: (tool) => logLine(`[tools:${seat}] ${tool.name}: ${tool.ok ? "completed" : "failed"}`),
+      call: (prompt, input) => seatFetch(seat, prompt, input, maxTokens, { fallback, timeoutMs }) });
+  }
   if (chosen.provider === "zen") {
     const zenKey = decryptKey(settings, "zenApiKeyEncrypted");
     if (zenKey) {
@@ -11109,12 +11138,12 @@ function planningService() {
       },
       gatherContext: async ({ plan, questionId, useWeb }) => {
         const question = plan.questions.find((item) => item.id === questionId);
-        const query = `${plan.title} ${question?.question || plan.destination}`.slice(0, 2000);
+        const latestAnswer = (question?.notes || []).filter((note) => note.author === "user").at(-1)?.text || "";
+        const query = `${plan.title}\n${question?.question || ""}\n${latestAnswer.slice(0, 2000)}\n${plan.destination.slice(0, 4000)}`;
         const analyzer = await getAnalyzer();
-        const analysis = await analyzer.verifyIdea(query, { root: project.path });
-        const code = (analysis?.hits || []).slice(0, 14).map(({ file, line, snippet }) => ({ file, line, snippet: String(snippet || "").slice(0, 500) }));
-        const web = useWeb ? await (await getReference()).webSearch(query, { limit: 5 }) : [];
-        return { code, web, webRequested: useWeb, note: "Keyword matches are leads for inspection, not proof that a feature exists. No prototype or test was run." };
+        const references = await analyzer.explorePlanningFiles(query, { root: project.path, fresh: true });
+        const web = useWeb ? await (await getReference()).webSearch(`${plan.title} ${question?.question || plan.destination}`.slice(0, 2000), { limit: 5 }) : [];
+        return { ...references, web, webRequested: useWeb };
       },
     }));
   }
@@ -12887,6 +12916,7 @@ async function spawnNextJob(options) {
   const cancelClaim = (reason = null, reapReason = null, charged = false) => {
     // A claim released before launch never finishes: its desk tool files go now.
     if (typeof agentBrain !== "undefined" && agentBrain && entry?.deskTool) agentBrain.releaseDeskTool(entry.id);
+    if (typeof agentToolConfigs !== "undefined" && entry?.toolConfigs) agentToolConfigs.remove(entry.toolConfigs).catch(() => {});
     if (entry.releaseReason == null) {
       entry.releaseReason = (typeof reason === "string" && reason) || (typeof reapReason === "string" && reapReason) || null;
       if (entry.releaseReason && charged === true && job.ref?.id) {
@@ -13243,6 +13273,10 @@ async function spawnNextJob(options) {
   // the worker would declare success on a job it never saw.
   let prompt = "";
   try {
+    if (typeof agentToolConfigs !== "undefined" && (!(runRoute?.grok || runRoute?.codex || runRoute?.antigravity) || runRoute?.opencode && !runRoute.opencode.error)) {
+      entry.toolConfigs = await agentToolConfigs.prepare({ root: entry.worktree?.path || projectRoot(), settings: entry.agentConfiguration?.configuration || await readAgentSettings(), desk: entry.deskTool,
+        script: path.join(STUDIO_ROOT, "scripts", "agent-tools-mcp.cjs") });
+    }
     const skillInstructions = typeof agentAddons === "undefined" ? "" : scrubOutbound(await agentAddons.instructions(projectRoot(), entry.agentConfiguration?.configuration || await readAgentSettings(), "builder"));
     // A task's saved record goes to the worker as its own small run file
     // (writeTaskRunContext); the handoff header points at it. Only when that
@@ -13290,6 +13324,7 @@ async function spawnNextJob(options) {
     // exact dispatch identity before freezing the attempt's evidence.
     await attributeRunSession(eyes, entry);
     entry.finished = true;
+    if (typeof agentToolConfigs !== "undefined" && entry.toolConfigs) agentToolConfigs.remove(entry.toolConfigs).catch(() => {});
     if (entry.activityTimer) clearTimeout(entry.activityTimer);
     if (entry.checkpointTimer) clearTimeout(entry.checkpointTimer);
     // Release the write-lock registry claims first so a waiting dispatch is
@@ -13734,7 +13769,7 @@ async function spawnNextJob(options) {
   // prompt rides stdin for every route but grok, and the write + end is what
   // gives `opencode run` a clean prompt and a clean EOF.
   const spawnAttempt = (route, cli) => {
-    const invocation = executorCore.cliInvocation(route, cli, prompt, { modelArg: (value) => cliModelArg(value), agyModelArg: (value) => agyModelArg(value), desk: entry.deskTool ?? null });
+    const invocation = executorCore.cliInvocation(route, cli, prompt, { modelArg: (value) => cliModelArg(value), agyModelArg: (value) => agyModelArg(value), desk: entry.toolConfigs ?? entry.deskTool ?? null });
     const child = spawn(invocation.command, invocation.args, {
       cwd: entry.worktree?.path || runRoot,
       env: { ...process.env, ...invocation.env },
@@ -16851,9 +16886,10 @@ function registerIpc() {
     const routing = await aiRoutingView(effective);
     const seats = Object.fromEntries(Object.keys(SEAT_DEFAULTS).map((seat) => [seat, seatChoice(effective, seat)]));
     const skills = await agentAddons.catalog(projectRoot());
+    const mcpTools = await agentTools.mcp.catalog();
     const choices = await agentProfiles.run({ projectId, configuration: agentProfiles.extract(effective) }, async () => Object.fromEntries(await Promise.all(["routine", "heavy"].map(async (role) => {
       const requested = roleProvider(effective, role);
-      const route = await resolveAiRoute(role).catch((error) => ({ ok: false, error: error.message }));
+      const route = await resolveAiRoute(role, { allowCli: DATA_ONLY_CLIS }).catch((error) => ({ ok: false, error: error.message }));
       return [role, { ok: route.ok, provider: route.provider || requested, model: route.model || "Provider default", inherited: !effective.aiRoleProviders?.[role], reason: route.error || (requested === "auto" ? "First available route in your fallback order" : requested !== route.provider ? `${requested} is unavailable; using an enabled fallback` : "Selected route"), ...agentProfiles.capabilities(route.provider, route.model) }];
     }))));
     for (const [seat, chosen] of Object.entries(seats)) {
@@ -16870,7 +16906,7 @@ function registerIpc() {
         choices[seat] = { ok: route.ok, provider: route.provider || chosen.provider, model: route.model || "Provider default", inherited: false, reason: route.error || (route.provider !== chosen.provider ? "Using an enabled fallback" : "Selected seat route"), ...agentProfiles.capabilities(route.provider, route.model) };
       }
     }
-    return { ...state, name: scope === "defaults" ? "Studio defaults" : state.name, scope, configuration: agentProfiles.extract(effective), routing, seats, choices, skills,
+    return { ...state, name: scope === "defaults" ? "Studio defaults" : state.name, scope, configuration: agentProfiles.extract(effective), routing, seats, choices, skills, mcpTools,
       capabilities: Object.fromEntries(["routine", "heavy"].map((role) => {
         const provider = roleProvider(effective, role);
         const model = assistantModelOverride(effective, role, provider);
@@ -17285,6 +17321,10 @@ function registerIpc() {
   });
 
   // ---- A-Eyes -------------------------------------------------------------
+  ipcMain.handle("media:scene-sample", require("./scripts/media-scene.cjs").createSceneSampler(() => window));
+  ipcMain.handle("media:youtube-search", require("./scripts/youtube-explorer.cjs").createYouTubeExplorer(() => window));
+  ipcMain.handle("media:clipboard-link", require("./scripts/media-clipboard.cjs").createMediaClipboardReader(() => window, clipboard));
+
   // The evidence walk behind eyes:state (tools/logs, two levels, one stat per
   // PNG) is shared by overlapping reads and kept for 30 s per folder: several
   // surfaces read the state together, and screenshots arrive far less often.

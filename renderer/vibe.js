@@ -319,6 +319,7 @@
     $("chat-dot").hidden = !unread;
   }
   function renderHead() {
+    syncDraft();
     const project = state.projects.find((item) => item.id === projectId());
     $("project-name").textContent = project?.name || "Choose a project";
     $("kicker").textContent = greeting();
@@ -331,6 +332,14 @@
   }
 
   // ---- composer -------------------------------------------------------------
+  let draftProject = null, draftEpoch = 0;
+  const draftKey = (id) => `mefiStudio.vibe.draft.${id}`;
+  function saveDraft() { if (draftProject) write(draftKey(draftProject), $("input").value); }
+  function syncDraft(id = projectId()) {
+    if (id === draftProject) return;
+    saveDraft(); draftProject = id; draftEpoch++;
+    $("input").value = id ? read(draftKey(id)) || "" : ""; grow();
+  }
   const SPARKS = [
     ["Fix something broken", "Something is broken: "],
     ["Add a feature", "Add a feature: "],
@@ -343,7 +352,7 @@
     for (const [label, prompt] of SPARKS) {
       const chip = el("button", "vibe-spark", label);
       chip.type = "button";
-      chip.addEventListener("click", () => { const input = $("input"); input.value = prompt; input.focus(); input.setSelectionRange(prompt.length, prompt.length); grow(); });
+      chip.addEventListener("click", () => { const input = $("input"); input.value = prompt; input.focus(); input.setSelectionRange(prompt.length, prompt.length); grow(); saveDraft(); });
       holder.append(chip);
     }
   }
@@ -356,8 +365,10 @@
   }
   async function send(intent) {
     const input = $("input");
+    if (window.MefiFileInputs?.isReading(input)) { feedback("Wait for the files to finish reading."); return; }
     const value = input.value.trim();
     const id = projectId();
+    const epoch = draftEpoch;
     if (state.pending) return;
     if (!value) { input.focus(); feedback("Describe what you have in mind first."); return; }
     if (!id || !api()) { feedback("Choose a project first: select the project name at the top left.", "warn"); return; }
@@ -371,7 +382,8 @@
         ? await api().tasksCreate({ title: value.split("\n")[0].slice(0, 180), prompt: value, projectId: id })
         : await api().assistantMessage(value, id, { view: "Vibe", companion: companion() });
       if (!result || result.ok === false) throw new Error(result?.error || "That didn't go through.");
-      if (input.value.trim() === value) { input.value = ""; grow(); }
+      if (projectId() !== id || draftEpoch !== epoch) return;
+      if (input.value.trim() === value) { input.value = ""; grow(); saveDraft(); }
       if (result.state) state.assistant = result.state;
       if (intent === "build") {
         // Say where it really goes: a held or paused queue, or no AI, keeps
@@ -383,7 +395,7 @@
       } else feedback("");
       await refresh();
     } catch (error) {
-      feedback(`${error?.message || "That didn't go through."} Your text is still in the box.`, "bad");
+      if (projectId() === id && draftEpoch === epoch) feedback(`${error?.message || "That didn't go through."} Your text is still in the box.`, "bad");
     } finally { busy(false); renderChat(); }
   }
 
@@ -672,8 +684,11 @@
     initialized = true;
     renderSparks();
     $("compose").addEventListener("submit", (event) => { event.preventDefault(); void send("build"); });
+    window.MefiFileInputs?.bind($("input"), { scope: () => `${draftEpoch}:${projectId()}`, blocked: () => state.pending || !projectId() });
     $("talk").addEventListener("click", () => void send("talk"));
-    $("input").addEventListener("input", () => { grow(); if ($("feedback").textContent && !state.pending) feedback(""); });
+    $("input").addEventListener("input", () => { grow(); saveDraft(); if ($("feedback").textContent && !state.pending) feedback(""); });
+    window.addEventListener("mefi:project-changed", (event) => syncDraft(event.detail?.projectId));
+    window.addEventListener("beforeunload", saveDraft);
     $("input").addEventListener("keydown", (event) => {
       if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
       event.preventDefault();

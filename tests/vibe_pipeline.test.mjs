@@ -48,6 +48,7 @@ function bridge({ held = false, execute = true, paused = false, keyPresent = tru
 
 async function load(options = {}) {
   const { api, calls } = bridge(options);
+  const storage = options.storage || new Map(), events = {};
   const { document, get } = createDom({ ids: templateIds((id) => id.startsWith("vibe-")) });
   const lookup = document.getElementById;
   document.getElementById = (id) => lookup(id) ?? document.querySelector(`#${id}`);
@@ -57,14 +58,14 @@ async function load(options = {}) {
   get("vibe-gate").hidden = true;
   const gone = [];
   const window = {
-    addEventListener() {}, dispatchEvent() { return true; },
+    addEventListener(name, callback) { (events[name] ||= []).push(callback); }, dispatchEvent(event) { for (const callback of events[event.type] || []) callback(event); return true; },
     mefiStudio: api,
     MefiNav: { register() {}, current: () => "vibe", go: (id, params) => gone.push([id, params ?? null]) },
   };
   const context = vm.createContext({
     window, document, console,
     location: { search: "" },
-    localStorage: { getItem: (key) => (key === "mefiStudio.uiMode" ? "vibe" : null), setItem() {}, length: 0, key: () => null },
+    localStorage: { getItem: (key) => storage.get(key) ?? (key === "mefiStudio.uiMode" ? "vibe" : null), setItem: (key, value) => storage.set(key, value), length: 0, key: () => null },
     requestAnimationFrame: () => 0, setTimeout: () => 0, clearTimeout() {},
     CustomEvent: class { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
   });
@@ -73,7 +74,7 @@ async function load(options = {}) {
   await settle();
   const fire = (element, type) => { for (const fn of element.listeners?.[type] ?? []) fn({ type, preventDefault() {}, stopPropagation() {} }); };
   const vibe = { ...window.MefiVibe, snapshot: () => plain(window.MefiVibe.snapshot()) };
-  return { vibe, calls, gone, get, fire };
+  return { vibe, calls, gone, get, fire, storage, window };
 }
 
 test("a held launch shows Start agents in Vibe, and it releases the agents", async () => {
@@ -141,4 +142,23 @@ test("approve, retry and answer from the drawer, in order, without leaving Vibe"
   assert.equal(vibe.snapshot().open, null, "the drawer closes when nothing is left");
   assert.deepEqual(vibe.snapshot().needs, []);
   assert.equal(gone.length, 0, "nothing navigated away from Vibe");
+});
+
+
+test("Vibe restores unsent file text after restart and keeps drafts separate across projects", async () => {
+  const env = await load();
+  env.get("vibe-input").value = "Continue this plan\n--- Attached file: plan.md ---\nKeep the old decisions";
+  env.fire(env.get("vibe-input"), "input");
+  const reopened = await load({ storage: env.storage });
+  assert.equal(reopened.get("vibe-input").value, env.get("vibe-input").value);
+  let activeId = "p2";
+  reopened.window.MefiWorkspace = { activeProjectId: () => activeId };
+  reopened.window.dispatchEvent({ type: "mefi:project-changed", detail: { projectId: activeId } });
+  assert.equal(reopened.get("vibe-input").value, "");
+  reopened.get("vibe-input").value = "Second project's draft"; reopened.fire(reopened.get("vibe-input"), "input");
+  activeId = "p1";
+  reopened.window.dispatchEvent({ type: "mefi:project-changed", detail: { projectId: activeId } });
+  assert.equal(reopened.get("vibe-input").value, env.get("vibe-input").value);
+  assert.equal(reopened.storage.get("mefiStudio.vibe.draft.p2"), "Second project's draft");
+  assert.deepEqual(reopened.calls, []);
 });

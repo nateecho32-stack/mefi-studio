@@ -210,6 +210,9 @@ function zenContext(enabled = true) {
   const window = { MefiNav: { top: () => "command" }, MefiCameraTour: { create: () => tour } };
   const env = vm.createContext({ state, el, document, window, Date: class extends Date { static now() { return 31000; } }, Math, Object, Array, Boolean, String, Number, AMBIENT_ZEN_MS: 30000, ORBIT_BASE: 0.003, ORBIT_ENERGY: 0.001, PITCH_MAX: 0.55, CAMERA_SMOOTH: 0.38, noMotion: () => false, hideTip() {}, bumpHud() {}, syncViewControls() {}, renderHint() {}, renderFollowStatus() {}, updateFollowCamera() {}, glideZoom(zoom) { state.zoomTarget = zoom; }, writeStore: (...args) => writes.push(args) });
   vm.runInContext(section("function canAmbientZen()", "function canDim()"), env);
+  env.EDGE_ZEN_MS = 1500;
+  window.innerWidth = 1200;
+  window.innerHeight = 800;
   vm.runInContext(section("function orbitTarget(", "function computeBranch("), env);
   vm.runInContext(section("// An outside camera director", "function updateFollowCamera("), env);
   return { state, el, document, window, env, classes, writes, tour };
@@ -246,6 +249,62 @@ test("ambient Zen requires opt-in, waits thirty idle seconds, flies the tree, an
   assert.deepEqual(writes, [["mefiStudio.ambientZen", "1"], ["mefiStudio.ambientZen", "0"]]);
 });
 
+test("parking at the right edge starts a temporary Zen flight and movement back restores controls", () => {
+  const { env, state, el, writes, tour } = zenContext(false);
+  const edge = { clientX: 1199, clientY: 400, buttons: 0 };
+  env.ambientZenInput("mousemove", edge, 1000);
+  assert.equal(env.checkAmbientZen(2499), false, "a passing pointer does not start the tour");
+  assert.equal(env.checkAmbientZen(2500), true);
+  assert.equal(state.director, tour);
+  assert.equal(el.hud.inert, true);
+  assert.equal(env.ambientZenInput("mousemove", { ...edge, clientY: 450 }, 3000), null);
+  assert.equal(env.checkAmbientZen(4000), true, "movement along the edge keeps the tour running");
+  assert.equal(env.ambientZenInput("mousemove", { ...edge, clientX: 1100 }, 4100), true);
+  assert.equal(el.hud.inert, false);
+  assert.equal(state.director, null);
+  assert.equal(state.zenEdgeSince, null);
+  assert.equal(env.checkAmbientZen(90000), false, "the saved idle preference stays disabled");
+  assert.deepEqual(writes, []);
+  env.ambientZenInput("mousemove", edge, 100000);
+  env.setAmbientZen(false);
+  assert.equal(env.checkAmbientZen(103000), false, "leaving the view also cancels a pending edge gesture");
+});
+
+test("edge dwell cancels on input, leaving the edge, or losing the window", () => {
+  for (const type of ["pointerdown", "wheel", "touchstart", "keydown", "focusin", "blur", "resize", "mouseout", "mousemove"]) {
+    const { env, state } = zenContext(false);
+    env.ambientZenInput("mousemove", { clientX: 1199, clientY: 300 }, 1000);
+    env.ambientZenInput(type, { clientX: 900, clientY: 300 }, 2000);
+    assert.equal(env.checkAmbientZen(5000), false, type);
+    assert.equal(state.zenEdgeSince, null, type);
+  }
+  const { env } = zenContext(false);
+  for (const event of [
+    { clientX: 1199, clientY: 300, buttons: 1 },
+    { clientX: 1200, clientY: 300 },
+    { clientX: 1199, clientY: 800 },
+    { clientX: 1199, clientY: -1 },
+    { clientX: 0, clientY: 300 },
+  ]) {
+    env.ambientZenInput("mousemove", event, 1000);
+    assert.equal(env.checkAmbientZen(5000), false);
+  }
+});
+
+test("edge flights wake on a click or key and honor reduced motion", () => {
+  for (const type of ["pointerdown", "keydown"]) {
+    const { env, state, el } = zenContext(false);
+    env.noMotion = () => true;
+    env.ambientZenInput("mousemove", { clientX: 1199, clientY: 300 }, 1000);
+    assert.equal(env.checkAmbientZen(2500), true);
+    assert.equal(state.director, undefined, "reduced motion fades the HUD without flying");
+    assert.equal(el.hud.inert, true);
+    assert.equal(env.ambientZenInput(type, { clientX: 1199, clientY: 300 }, 3000), true);
+    assert.equal(el.hud.inert, false);
+    assert.equal(env.checkAmbientZen(6000), false);
+  }
+});
+
 test("Music, menus, typing, dragging, hidden windows and other views cannot enter ambient Zen", () => {
   for (const block of [
     ({ state }) => { state.settingsPreview = { x: 600, y: 0, w: 500, h: 700 }; },
@@ -255,6 +314,8 @@ test("Music, menus, typing, dragging, hidden windows and other views cannot ente
     ({ state }) => { state.rotating = { x: 1 }; },
     ({ state }) => { state.query = "work"; },
     ({ state }) => { state.feedMenuOpen = true; },
+    ({ el }) => { el.pop = { hidden: false }; },
+    ({ el }) => { el.viewPop = { hidden: false }; },
     ({ document }) => { document.activeElement = { matches: () => true }; },
     ({ document }) => { document.querySelectorAll = () => [{ closest: () => null }]; },
     ({ document }) => { document.hidden = true; },
@@ -264,6 +325,9 @@ test("Music, menus, typing, dragging, hidden windows and other views cannot ente
     assert.equal(fixture.env.checkAmbientZen(90000), false);
     assert.equal(fixture.state.lastInput, 90000, "an unavailable view needs a fresh idle interval afterward");
     assert.equal(fixture.el.hud.inert, false);
+    fixture.env.ambientZenInput("mousemove", { clientX: 1199, clientY: 300 }, 100000);
+    assert.equal(fixture.env.checkAmbientZen(103000), false, "the edge shortcut respects the same blockers");
+    assert.equal(fixture.state.zenEdgeSince, null);
   }
 });
 

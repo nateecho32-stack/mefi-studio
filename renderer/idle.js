@@ -239,6 +239,7 @@
   const POPUP_MS = 45000; // evidence popup interval
   const HUD_DIM_MS = 6000;
   const AMBIENT_ZEN_MS = 30000;
+  const EDGE_ZEN_MS = 1500;
   const DEFAULT_HINT = "click a node to zoom in · drag to pan · right-drag to orbit · wheel to zoom · V 2D/3D · Esc leaves";
   const LABEL_MODES = ["auto", "updates", "all", "none"];
 
@@ -265,7 +266,7 @@
     inputSource: null,
     inputError: null,
     inputGeneration: 0,
-    captureArmed: false, // OS capture starts only after an explicit control gesture in this visit.
+    captureArmed: false, // Armed on entry from the saved Audio Link preference.
     musicUiAt: 0,
     localAudio: null,
     mediaElements: new WeakMap(),
@@ -301,6 +302,7 @@
     hudTimer: null,
     ambientZenEnabled: readStore("mefiStudio.ambientZen") === "1",
     ambientZen: false,
+    zenEdgeSince: null,
     zenDirector: null, // the camera tour Zen is flying, while it flies
     tasks: [],
     allTasks: [],
@@ -577,6 +579,10 @@
 
   function ensureReactiveInput() {
     if (!state.reactive) return;
+    // Reconnect the user's saved link when the tree returns after a reload or
+    // navigation. Diagnostics never acquire devices; denials remain one-shot.
+    const diagnostic = /[?&](?:smoke|capture)=1(?:&|$)/.test(String(window.location?.search || ""));
+    if (!state.inputError) state.captureArmed = !diagnostic;
     ensureAudio();
     useReactiveInput();
   }
@@ -3694,7 +3700,8 @@
     const ty = touring ? el.height / 2 : area.y + area.h / 2;
     const center = state.center;
     const left = center ? Math.hypot(tx - center.x, ty - center.y) : 0;
-    if (!center || still || state.camMode === "orbit" || center.frameKey !== frameKey || left < 0.25) {
+    const mediaGlide = Boolean(state.mediaFocus || Date.now() < (state.mediaFocusGlideUntil || 0));
+    if (!center || still || state.camMode === "orbit" && !mediaGlide || center.frameKey !== frameKey || left < 0.25) {
       state.center = { x: tx, y: ty, frameKey };
       return 0;
     }
@@ -3882,8 +3889,29 @@
     }
     const usable = spaces.filter((area) => area.w >= 160 && area.h >= 160);
     state.graphArea = (usable.length ? usable : spaces).sort((a, b) => b.w * b.h - a.w * a.h)[0] ?? { x: left, y: top, w: 1, h: 1 };
+    state.mediaSceneBase = { ...state.graphArea };
+    if (state.mediaFocus && globalThis.document?.body?.dataset?.mediaBackground === "true") {
+      const area = state.graphArea;
+      const w = Math.max(160, area.w * .72), h = Math.max(160, area.h * .72);
+      if (w <= area.w && h <= area.h) state.graphArea = { x: area.x + (area.w - w) * state.mediaFocus.x, y: area.y + (area.h - h) * state.mediaFocus.y, w, h };
+    }
     state.graphAreaAt = now;
     return state.graphArea;
+  }
+
+  function mediaSceneArea() {
+    if (!state.active || state.settingsPreview || state.focus || state.panning || state.rotating || state.director || state.camMode !== "orbit" || noMotion() || document.hidden || document.body?.dataset?.mediaBackground !== "true") return null;
+    if (document.getElementById("music-dropdown")?.hidden === false || window.MefiNav?.state?.sheet || window.MefiNav?.state?.transient) return null;
+    usableArea();
+    return state.mediaSceneBase ? { ...state.mediaSceneBase } : null;
+  }
+  function setMediaFocus(point) {
+    if (point && (!mediaSceneArea() || !Number.isFinite(point.x) || !Number.isFinite(point.y))) return false;
+    const next = point ? { x: Math.max(0, Math.min(1, point.x)), y: Math.max(0, Math.min(1, point.y)) } : null;
+    if (!next && !state.mediaFocus) return true;
+    state.mediaFocus = next; state.mediaFocusGlideUntil = Date.now() + 10000;
+    state.graphAreaAt = 0; wakeFrames();
+    return true;
   }
 
   function autoFit({ ease = false } = {}) {
@@ -4138,6 +4166,7 @@
   }
   function drawNodeSurface(ctx, node, p, radius, tint, { selected = false, active = false, alpha = 1, time = 0, still = false, detail = 3, chosen = false, motion = null } = {}) {
     node._extraGlow = state.extraGlow === true;
+    globalThis.window?.MefiTreeDynamics?.outline?.(ctx, state.nodeStyle ?? "orbs", p, radius, motion, (node._fade ?? 1) * alpha);
     const styles = globalThis.window?.MefiNodeStyles;
     if (styles) {
       // A node that wears a glyph (the hub's monogram, an agent's role) is
@@ -7222,8 +7251,9 @@
   function drawGraphConnections(ctx, projected, runningIds, audioLinked = false, time = 0, layers = null) {
     const profiler = globalThis.window?.MefiProfiler;
     const span = profiler?.begin("command.connections");
+    const restoreBrightness = globalThis.window?.MefiTreeDynamics?.beginPaint?.([ctx, layers?.far], "lines");
     try { return drawGraphConnectionsImpl(ctx, projected, runningIds, audioLinked, time, layers); }
-    finally { profiler?.end(span); }
+    finally { restoreBrightness?.(); profiler?.end(span); }
   }
 
   // An agent tether's dash, handed to a style that draws the tether itself.
@@ -7392,6 +7422,8 @@
   function drawBackdrop(ctx, time, still, energy, musicBands, musicBeat) {
     const width = el.width, height = el.height;
     ctx.clearRect(0, 0, width, height);
+    // Media supplies the sky; keep both node layers at their normal opacity.
+    if (globalThis.document?.body?.dataset?.mediaBackground === "true") return;
     const scene = activeBackdrop();
     const backdrop = hexToRgb(state.canvasPalette?.background ?? "#050507");
     const accent = state.canvasPalette?.accent ? hexToRgb(state.canvasPalette.accent) : NODE_RGB.warm;
@@ -8301,11 +8333,12 @@
     state.lastFrame = time;
     const still = noMotion();
     const measuredEnergy = audioEnergy();
-    const backgroundLinked = !still && state.reactive && Boolean(state.inputStream || state.localAudio) && state.audioEffects?.background === true && state.audioResponse > 0;
+    const reactionsAllowed = globalThis.window?.MefiTreeDynamics?.musicEnabled?.() !== false;
+    const backgroundLinked = reactionsAllowed && !still && state.reactive && Boolean(state.inputStream || state.localAudio) && state.audioEffects?.background === true && state.audioResponse > 0;
     const energy = backgroundLinked ? measuredEnergy * Math.min(1, state.audioResponse) : 0;
     const musicBands = backgroundLinked ? { bass: state.bands.bass * Math.min(1, state.audioResponse), mid: state.bands.mid * Math.min(1, state.audioResponse), treble: state.bands.treble * Math.min(1, state.audioResponse) } : { bass: 0, mid: 0, treble: 0 };
     const musicBeat = !backgroundLinked || state.audioEffects?.percussion !== true || !state.reactive || !state.inputStream && !state.localAudio ? 0 : (state.music?.beat ?? 0) * Math.min(1, state.audioResponse);
-    const audioLinked = !still && state.reactive && Boolean(state.inputStream || state.localAudio);
+    const audioLinked = reactionsAllowed && !still && state.reactive && Boolean(state.inputStream || state.localAudio);
     // Nodes the assistant has been told to work on (Work on it): pinned board
     // tasks plus pinned, still-queued inbox requests. One set per frame.
     const pinnedIds = workPinIds();
@@ -8322,11 +8355,11 @@
     if (Number.isFinite(state.fitTarget)) {
       const before = state.fit;
       const settle = still || Math.abs(state.fitTarget - state.fit) < 0.0015;
-      state.fit = settle ? state.fitTarget : state.fit + (state.fitTarget - state.fit) * perSec(0.18, dt);
+      state.fit = settle ? state.fitTarget : state.fit + (state.fitTarget - state.fit) * perSec(state.mediaFocus ? 0.012 : 0.18, dt);
       if (state.camMode === "follow") state.zoom = Math.max(0.45, Math.min(2.6, state.zoom * before / state.fit));
       if (settle) state.fitTarget = null;
     }
-    const cameraEase = perSec(CAMERA_EASE, dt);
+    const cameraEase = perSec(state.mediaFocus || Date.now() < (state.mediaFocusGlideUntil || 0) ? 0.012 : CAMERA_EASE, dt);
     const centerFlight = stepCenter(graphArea, still, cameraEase);
     updateFollowCamera(Date.now());
     const directed = stepDirector(dt, still);
@@ -8407,7 +8440,7 @@
     // Zen (and any directed flight) has faded the rails out, so it paints the
     // whole canvas; the frame itself stays put: changing it would re-seed the
     // layout, and waking would snap it back.
-    const clip = directed || state.ambientZen ? { x: 0, y: 0, w: el.width, h: el.height } : graphArea;
+    const clip = directed || state.ambientZen ? { x: 0, y: 0, w: el.width, h: el.height } : state.mediaFocus && state.mediaSceneBase ? state.mediaSceneBase : graphArea;
     ctx.save();
     ctx.beginPath();
     ctx.rect(clip.x, clip.y, clip.w, clip.h);
@@ -8485,6 +8518,12 @@
       }
     }
     state.lifeHot = lifeHot;
+    for (const { node } of projected) node._treeScale = 1;
+    const treeMoving = globalThis.window?.MefiTreeDynamics?.apply(projected, graphArea, {
+      dt, time, music: visualMusic, response: state.audioResponse, linked: audioLinked, still,
+      interactive: Boolean(state.focus || state.panning || state.rotating || state.director || state.ambientZen || state.camMode !== "orbit"),
+    });
+    if (treeMoving && !still) state.motionHot = true;
     const screenPoints = new Map(projected.map(({ node, p }) => [node.id, p]));
     computeBranch();
     // A focused node that left the graph releases the focus; otherwise the
@@ -8650,6 +8689,7 @@
     const selectReachFloor = nodeStyles ? nodeStyles.PREMIUM.includes(state.nodeStyle) : false;
     const growNow = Date.now();
     const nodesSpan = profiler?.begin("command.nodes");
+    const restoreNodeBrightness = globalThis.window?.MefiTreeDynamics?.beginPaint?.([ctx, far], "nodes");
     try {
     for (const { node, p } of ordered) {
       if (node._absorbed) continue;
@@ -8686,7 +8726,7 @@
       // Hover and selection ease the node up a twentieth (the record's sel),
       // on top of the lift that raises its size cap.
       const pop = motion ? 1 + 0.05 * motion.sel : 1;
-      const radius = Math.max(2, Math.min(visual.maxRadius, base * Math.max(0.75, Math.min(1.15, p.k))) * nodeScale) * pop;
+      const radius = Math.max(2, Math.min(visual.maxRadius, base * Math.max(0.75, Math.min(1.15, p.k))) * nodeScale) * pop * (node._treeScale ?? 1);
       node._px = p.x; node._py = p.y; node._pr = radius;
       // The detail tier is capped on the far layer, when dimmed, while the
       // camera flies and when frames run long; a lit node may go one tier
@@ -8760,7 +8800,7 @@
       // The badge pops in as the hold starts and shrinks away once read.
       if (hold && (!hold.ackedAt || !still && growNow - hold.ackedAt < DONE_BADGE_OUT_MS)) drawDoneBadge(ctx, node, p, radius, time, still, hold, growNow, dim);
     }
-    } finally { profiler?.end(nodesSpan); }
+    } finally { restoreNodeBrightness?.(); profiler?.end(nodesSpan); }
 
     // Behind Home the tree is scenery seen through frosted glass: orbs, links
     // and sky only. Its words would blur into smudges, so the text layers
@@ -11101,7 +11141,7 @@
   function canAmbientZen() {
     const top = window.MefiNav?.top?.();
     const focus = document.activeElement;
-    return Boolean((!state.director || state.director === state.zenDirector) && state.ambientZenEnabled && state.active && !document.hidden && !state.settingsPreview &&
+    return Boolean((!state.director || state.director === state.zenDirector) && (state.ambientZenEnabled || state.zenEdgeSince != null) && state.active && !document.hidden && !state.settingsPreview &&
       !document.body.dataset.sheet && (!top || top === "command") &&
       !state.panning && !state.rotating && !state.query &&
       // No open menu or popover fades out from under the pointer: Ambience,
@@ -11115,6 +11155,7 @@
 
   function setAmbientZen(active) {
     const next = Boolean(active);
+    if (!next) state.zenEdgeSince = null;
     if (next === state.ambientZen || (next && !canAmbientZen())) return false;
     state.ambientZen = next;
     if (next) {
@@ -11147,7 +11188,23 @@
 
   function wakeAmbientZen(now = Date.now()) {
     state.lastInput = now;
+    state.zenEdgeSince = null;
     return setAmbientZen(false);
+  }
+
+  // Parking in the last eight CSS pixels is an explicit, temporary Zen
+  // gesture. It leaves the saved thirty-second idle preference untouched.
+  function ambientZenInput(type, event, now = Date.now()) {
+    const atEdge = type === "mousemove" && !event.buttons &&
+      event.clientX >= window.innerWidth - 8 && event.clientX < window.innerWidth &&
+      event.clientY >= 0 && event.clientY < window.innerHeight;
+    if (atEdge && state.ambientZen && canAmbientZen()) return null;
+    const woke = wakeAmbientZen(now);
+    if (atEdge) {
+      state.zenEdgeSince = now;
+      if (!canAmbientZen()) state.zenEdgeSince = null;
+    }
+    return woke;
   }
 
   function setAmbientZenEnabled(enabled) {
@@ -11161,10 +11218,12 @@
   function checkAmbientZen(now = Date.now()) {
     if (!canAmbientZen()) {
       if (state.ambientZen) setAmbientZen(false);
+      state.zenEdgeSince = null;
       state.lastInput = now;
       return false;
     }
-    if (!state.ambientZen && now - state.lastInput >= AMBIENT_ZEN_MS) setAmbientZen(true);
+    const edgeReady = state.zenEdgeSince != null && now - state.zenEdgeSince >= EDGE_ZEN_MS;
+    if (!state.ambientZen && (edgeReady || (state.ambientZenEnabled && now - state.lastInput >= AMBIENT_ZEN_MS))) setAmbientZen(true);
     return state.ambientZen;
   }
 
@@ -11540,11 +11599,12 @@
       return cleared;
     };
     fit(el.canvas, el.ctx);
-    // A fresh opaque bitmap is black: until the next frame paints the sky it
-    // shows the theme's background, as the element's CSS background did.
+    // Seed the sky until the next frame, except when media supplies it.
     if (el.far && el.farCtx && fit(el.far, el.farCtx)) {
-      el.farCtx.fillStyle = state.canvasPalette?.background ?? "#050507";
-      el.farCtx.fillRect(0, 0, width, height);
+      if (document.body?.dataset?.mediaBackground !== "true") {
+        el.farCtx.fillStyle = state.canvasPalette?.background ?? "#050507";
+        el.farCtx.fillRect(0, 0, width, height);
+      }
     }
     el.width = width;
     el.height = height;
@@ -11628,10 +11688,9 @@
       el.canvas = document.getElementById("idle-layer");
     // The far layer: the sky, and whatever a focused branch pushes behind it.
     el.far = document.getElementById("idle-layer-far");
-    // Opaque: drawBackdrop paints the whole sky first every frame, and nothing
-    // reads the layer's transparency, so the compositor need not blend it
-    // with what lies under it.
-    el.farCtx = el.far?.getContext?.("2d", { alpha: false }) ?? null;
+    // Transparent when video supplies the sky; ordinary scenes still paint
+    // the whole backdrop. Nodes retain their own full-strength paint.
+    el.farCtx = el.far?.getContext?.("2d", { alpha: true }) ?? null;
       el.hud = document.getElementById("idle-hud");
       if (!el.canvas) return;
       el.ctx = el.canvas.getContext("2d");
@@ -12332,8 +12391,9 @@
   ["mousemove", "pointerdown", "wheel", "touchstart", "keydown", "focusin"].forEach((type) =>
     window.addEventListener(
       type,
-      () => {
-        const woke = wakeAmbientZen();
+      (event) => {
+        const woke = ambientZenInput(type, event);
+        if (woke === null) return; // small movements along the parked edge keep the flight going
         if (state.active && type !== "mousemove") {
           state.ambient = false;
           el.hud?.classList.add("forced");
@@ -12347,10 +12407,16 @@
     )
   );
 
+  window.addEventListener("blur", () => wakeAmbientZen());
+  window.addEventListener("resize", () => wakeAmbientZen());
+  window.addEventListener("mouseout", (event) => {
+    if (!event.relatedTarget) wakeAmbientZen();
+  });
+
   // Input anywhere in the window, and the page's own change events, end a rest
   // before their handlers run (capture), so the answer is never a rest frame late.
   for (const type of ["pointerdown", "pointermove", "pointerup", "wheel", "keydown", "keyup", "focusin", "resize"]) window.addEventListener(type, wakeFrames, { capture: true, passive: true });
-  for (const type of ["mefi-music-change", "mefi-theme-change", "mefi-tree-preferences", "mefi:nav", "mefi:tree-select", "mefi:assistant-focus", "mefi:project-changed"]) window.addEventListener(type, wakeFrames, true);
+  for (const type of ["mefi-music-change", "mefi-theme-change", "mefi-tree-preferences", "mefi:tree-dynamics", "mefi:tree-sample", "mefi:media-background", "mefi:nav", "mefi:tree-select", "mefi:assistant-focus", "mefi:project-changed"]) window.addEventListener(type, wakeFrames, true);
   document.addEventListener?.("visibilitychange", wakeFrames);
   window.addEventListener("mefi-music-change", syncMusicNode);
   window.addEventListener("mefi-theme-change", syncGraphTheme);
@@ -12358,6 +12424,7 @@
   applyTreePreferences(window.MefiMusic?.graphPreferences?.() ?? {});
 
   window.MefiIdle = {
+    mediaSceneArea, setMediaFocus,
     queueSettings,
     refreshQueueSettings,
     setQueueSetting,

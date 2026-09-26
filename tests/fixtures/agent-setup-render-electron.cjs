@@ -61,6 +61,7 @@ app.whenReady().then(async () => {
     brainState: {ok:true,tasks:[],recent:[]}, brainPlaybook: {ok:true,recipes:[]}, brainMap: {ok:true,map:{systems:[],edges:[],files:[]}},
   });
   // Exercise catalog search; short menus now use the shared compact tile picker.
+  responses.agentsState.mcpTools = [{ id: "docs/search", server: "docs", name: "search", description: "Search fixture documentation" }];
   responses.openrouterModels.models.push(...Array.from({ length: 30 }, (_, index) => ({ id: "fixture/model-" + index, name: "Other model " + index })));
   responses.assistantStatus.status.enabled = true;
   const preload = path.join(root, "unified-preload.cjs");
@@ -135,12 +136,18 @@ app.whenReady().then(async () => {
   await click('#agent-companion-addons input[type=checkbox]');
   assert.ok(await run("return window.MefiAgents.draft().agentSkills.companion.includes('1234567890abcdef12345678');"));
   assert.equal(await run("return window.MefiAgents.draft().agentSkills.desk;"),undefined);
+  await click('#agent-companion-tool-webSearch');
+  await click('#agent-companion-tool-projectRead');
+  await click('#agent-companion-addons [data-mcp-tool="docs/search"]');
+  assert.deepEqual(await run("return window.MefiAgents.draft().agentTools.companion;"), { webSearch: false, projectRead: true, mcpTools: ["docs/search"] });
+  assert.equal(await run("return window.MefiAgents.draft().agentTools.desk;"), undefined);
   await capture('agent-addons.png');
   await run("document.querySelector('#agents-save-bar .primary').click();");
   await until("document.getElementById('agents-save-status').textContent.startsWith('Saved')",'apply draft');
   await run("window.MefiAgents.reload();");
   await until("document.getElementById('agent-companion-model')?.value==='openai/gpt-6-fixture'",'persisted model');
   assert.equal(await run("return window.MefiAgents.draft().agentSeats.companion.effort;"),'high');
+  assert.deepEqual(await run("return window.MefiAgents.draft().agentTools.companion;"), { webSearch: false, projectRead: true, mcpTools: ["docs/search"] });
   // Switching a provider cannot carry the previous provider's model; switching
   // back restores it even after saving and reloading the project team.
   await click('#agent-companion-provider'); await click('#agent-companion-providers [data-provider=zen]');
@@ -150,7 +157,7 @@ app.whenReady().then(async () => {
   await run("const m=document.getElementById('agent-companion-model');m.value='__custom';m.dispatchEvent(new Event('change',{bubbles:true}));const c=document.querySelector('[aria-label=\"companion custom model ID\"]');c.value='vendor/new-model';c.dispatchEvent(new Event('change',{bubbles:true}));");
   assert.equal(await run("return window.MefiAgents.draft().agentSeats.companion.model;"),'vendor/new-model');
   await click('#agent-builder-provider'); await click('#agent-builder-providers [data-provider=claude]');
-  await click('#agent-builder-add'); await click('#agent-builder-addons > .studio-field input');
+  await click('#agent-builder-add'); await click('#agent-builder-desk-tool');
   assert.equal(await run("return window.MefiAgents.draft().agentBrain.deskTool;"),true);
   // Adding MCP on the worker must not start any work during setup.
   assert.ok(await run("return !window.unifiedFixture.calls().some(c=>['assistantControl','assistantAutopilot'].includes(c.name));"));

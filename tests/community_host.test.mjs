@@ -179,6 +179,33 @@ test("status stamps firstSeenAt once and the card waits out the first three days
   assert.equal(h.calls.length, 0, "the card cadence never reaches the network");
 });
 
+test("a machine-local style unlock survives community saves and a fresh host", async () => {
+  const h = host({ settings: { localStyleUnlock: true }, env: {} });
+  const first = (await h.invoke("community:status")).status;
+  assert.equal(first.linked, false);
+  assert.equal(first.selfUnlocked, true);
+  assert.deepEqual(first.entitlement, { premium: true, perks: ["premium"], validUntil: null, reason: "self" });
+  await h.invoke("community:prompt", { action: "never" });
+  await h.invoke("community:unlink");
+  assert.equal(h.settings.localStyleUnlock, true, "community normalization preserves the machine setting");
+  const restarted = host({ settings: h.settings, env: {} });
+  restarted.advance(365 * DAY);
+  const status = (await restarted.invoke("community:status")).status;
+  assert.deepEqual(status.entitlement, first.entitlement, "a new host keeps the unlock without an expiry");
+  assert.equal(status.prompt.due, false);
+  assert.equal(h.calls.length + restarted.calls.length, 0, "no Discord request is needed");
+});
+
+test("local style unlock is opt-in and keeps the fork switch working", async () => {
+  for (const value of [undefined, false, "true", 1, null]) {
+    const status = (await host({ settings: { localStyleUnlock: value }, env: {} }).invoke("community:status")).status;
+    assert.equal(status.entitlement.premium, false, `only boolean true opts in: ${value}`);
+    assert.equal(status.selfUnlocked, false);
+  }
+  const fork = host({ rules: { ...community, SELF_UNLOCKED: true } });
+  assert.equal((await fork.invoke("community:status")).status.entitlement.premium, true);
+});
+
 test("community:prompt accepts exactly the rules module's PROMPT_ACTIONS", async () => {
   const actions = [...community.PROMPT_ACTIONS];
   assert.deepEqual(plain(host().run("[...COMMUNITY_PROMPT_ACTIONS]")), actions, "the gate is built from the export");

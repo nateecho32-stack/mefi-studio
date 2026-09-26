@@ -82,6 +82,14 @@ app.whenReady().then(async () => {
   await contents.debugger.sendCommand("Emulation.setFocusEmulationEnabled", { enabled: true });
   await contents.debugger.sendCommand("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "no-preference" }] });
   await until("window.MefiPlanning && window.MefiNav");
+  for (const [surface, inputId] of [["workspace", "workspace-input"], ["vibe", "vibe-input"]]) {
+    await run(`await window.MefiNav.go(${JSON.stringify(surface)});`);
+    await until("window.MefiWorkspace.activeProjectId()==='planning-demo'");
+    await run(`const input=document.getElementById(${JSON.stringify(inputId)}),transfer=new DataTransfer();transfer.items.add(new File(['Read the saved plan before continuing.'],'notes.txt'));input.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:transfer}));`);
+    await until(`document.getElementById(${JSON.stringify(inputId)}).value.includes('Read the saved plan')`);
+    assert.match(await run(`return document.getElementById(${JSON.stringify(inputId)}).value;`), /Attached file: notes.txt/);
+    await capture(`${surface}-file-draft.png`);
+  }
   await run("await window.MefiPlanning.open({create:true});");
   await until("document.getElementById('plans-title')");
   report.initialLayout = await run("const workflow=document.getElementById('plans-workflow').getBoundingClientRect(),save=document.getElementById('plans-save-details'),rect=save.getBoundingClientRect();return {workflowHeight:workflow.height,saveVisible:rect.bottom<innerHeight&&document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2)===save};");
@@ -161,6 +169,13 @@ app.whenReady().then(async () => {
   report.stepForward = await run("const animation=document.getElementById('plans-review-section').getAnimations().find(item=>item.effect.getTiming().duration===260);return {transform:animation?.effect.getKeyframes()[0].transform,focus:document.activeElement.id};");
   assert.equal(report.stepForward.transform, 'translateX(12px)');
   await capture("planning-step-review.png");
+  await run("document.getElementById('plans-stage-explore').click();const input=document.getElementById('plans-interview-answer'),transfer=new DataTransfer();transfer.items.add(new File(['# Earlier plan\\n- [ ] Continue the welcome flow'], 'handoff.md',{type:'text/markdown'}));input.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:transfer}));");
+  await until("document.getElementById('plans-interview-answer').value.includes('Continue the welcome flow')");
+  await run("window.MefiPlanning.close();await window.MefiPlanning.open();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));document.getElementById('plans-resume').click();");
+  report.fileResume = await run("return {step:document.getElementById('plans-workflow').dataset.viewedStep,disabled:document.getElementById('plans-resume').disabled,focus:document.activeElement.id};");
+  assert.match(await run("return document.getElementById('plans-interview-answer').value;"), /Attached file: handoff.md/);
+  assert.equal(await run("return document.activeElement.id;"), "plans-interview-answer");
+  await capture("planning-file-resume.png");
   await contents.debugger.sendCommand("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
   await run("document.getElementById('plans-stage-idea').click();");
   assert.equal(await run("return document.getElementById('plans-destination-section').getAnimations().length;"), 0, "OS reduced motion suppresses the slide while navigating");

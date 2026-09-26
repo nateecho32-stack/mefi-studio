@@ -2,6 +2,11 @@
 
 ## Unified Studio ownership
 
+- `renderer/file-inputs.js`: shared bounded UTF-8 file drops and picker imports into editable drafts, with project/surface guards; wired by Home, Vibe and Plans.
+
+- `scripts/agent-tools.cjs`, `agent-mcp.cjs`: per-role tool policies, bounded research turns, public web search, scoped file reads and the stdio MCP client.
+- `scripts/agent-tool-configs.cjs`, `agent-tools-mcp.cjs`: captured per-run tool attachments and the coding worker MCP adapter.
+
 - `renderer/agents.js` / `agents.css`: the Agents workspace, relocated setup controls, scoped drafts, presets and shared operational state.
 - `scripts/agent-addons.cjs` / `agent-models.cjs`: per-agent local skill discovery and prompt attachment, plus read-only provider model rosters with credentials kept in the host.
 - `renderer/studio-ui.js` / `studio-ui.css`: scrollbar-free overflow, accessible dropdowns, shared appearance presets and shared glass surface recipes. The stylesheet follows the base page styles; component styles retain their layout and semantic status colours.
@@ -195,8 +200,9 @@ imports.
 | `tasks.js` | 1,571 | The task board, per-task logs and ideas, and the reference menu. |
 | `explorer.js` | 1,430 | Sessions: session list/detail with Assistant, Activity and Diagnostics tabs. |
 | `booklet.js` | 1,318 | The expandable model catalog, filters, seven-category Settings navigation and control search, the studio launcher and the boot sequence. |
-| `music.js` | 1,291 | Appearance controls in Settings and the optional canvas preview; the separate audio dropdown (`openAudio` / `toggleAudio`) owns local music, radio, Links, connection setup, reactions and recommendations. Includes colour themes, node styles and layouts, the members' Void collection (gated by `MefiCommunity`) and media parsing (`MefiMusic.playLink` / `linkInfo` for other modules). |
-| `media-window.js` | | The Links player's persistent floating surface: pointer and keyboard move/resize, viewport bounds, hover controls, minimize, saved geometry, and a single dodge in menus that yields to intentional interaction. Bundled before `music.js`; styling lives in `music.css`. |
+| `music.js` | | Appearance controls in Settings and the optional canvas preview; the hover/click audio dropdown (`openAudio` / `toggleAudio`) owns local music, radio, Links, connection setup, reactions and recommendations. Includes saved URL visibility and copied-link offers through the focused-main-frame-only `scripts/media-clipboard.cjs` helper. Also owns colour themes, node styles and layouts, the members' Void collection (gated by `MefiCommunity`) and media parsing (`MefiMusic.playLink` / `linkInfo` for other modules). |
+| `tree-dynamics.js` | | Shared saved tree modes and controls, bounded live shape transforms, count-aware sizing, music deformation and stable dark/bright video-region selection. Loaded before `idle.js`; transforms painted positions before wires, labels and hit targets. Also owns independent node/line brightness paint passes, enable switches and optional contrasting node outlines. Controls synchronize across Appearance, Audio reactions and the media window's brightness section. |
+| `media-window.js` | | The Links player's persistent floating surface: pointer and keyboard move/resize, viewport bounds, controls hosted in the media menu, background/transparency, stable dark-area tree placement, task-completion fades and notifications, minimize, saved geometry, and a single dodge in menus that yields to intentional interaction. Bundled before `music.js`; styling lives in `music.css`. Host helpers `scripts/media-scene.cjs` return brightness scores only; `scripts/youtube-explorer.cjs` provides bounded public YouTube search results to the explorer in `music.js`, which also records recent playback position. |
 | `workspace.js` | | The home screen: project context, bottom composer, compact current-task summary, Activity panel, scoped start/resume, app preview controls and durable results. Task presentation comes from the shared helpers in `tasks.js`; selected task identity comes from `nav.js`. |
 | `vibe.js` / `vibe.css` | | `window.MefiVibe`: Vibe, the calm front door (one box to talk or build, Building now / Needs you / Freshly done, a dock), the Vibe / Build switch and the one-time "what's new" card. In Vibe mode it also owns `#vibe-rail`, the frame every other page opens inside, in place of Build's menu. |
 | `planning.js` | | The plan interview, live writing partner and file tree, editable suggestions, Enter field navigation, and reviewed task handoffs. |

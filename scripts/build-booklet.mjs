@@ -26,6 +26,7 @@ const CODE_SOURCES = [
   "profiler.js",
   "task-groups.js",
   "studio-ui.js",
+  "file-inputs.js",
   "nav.js",
   "sidebar.js",
   "graph.js",
@@ -33,6 +34,7 @@ const CODE_SOURCES = [
   "tracker.js",
   "node-styles.js",
   "tree3d.js",
+  "tree-dynamics.js",
   "idle.js",
   "camera-tour.js",
   "explorer.js",
@@ -155,7 +157,9 @@ export async function build({ root = ROOT } = {}) {
   ]);
   const nodeVisuals = await readFile(path.join(RENDERER, "node-visuals.js"), "utf8");
   const projectMapView = await readFile(path.join(RENDERER, "project-map-view.js"), "utf8");
-  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, idle, cameraTour, explorer, analyzer, tasks, ideas, overhead, brains, palette, eyes, boot, startup, workspace, mediaWindow, music, together, planning, onboarding, community, demoPanel, companionUi, companionHub, projectMapView, agentBrain, agents, vibe, booklet];
+  const fileInputs = await readFile(path.join(RENDERER, "file-inputs.js"), "utf8");
+  const treeDynamics = await readFile(path.join(RENDERER, "tree-dynamics.js"), "utf8");
+  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle, cameraTour, explorer, analyzer, tasks, ideas, overhead, brains, palette, eyes, boot, startup, workspace, mediaWindow, music, together, planning, onboarding, community, demoPanel, companionUi, companionHub, projectMapView, agentBrain, agents, vibe, booklet];
   const code = codeParts.join("\n");
   const html = template
     .replace("__BOOKLET_DATA__", () => catalog.trim())

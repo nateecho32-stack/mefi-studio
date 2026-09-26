@@ -7,6 +7,22 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-09-26
+
+### Added
+- Saved node and connecting-line brightness sliders (0–200%) have independent enable switches. Optional contrasting node outlines improve tree readability. Controls synchronize between the media menu and Appearance without moving the tree or dimming labels, video, or menus.
+- The media menu offers newly copied playable links with Play, Add to queue, Queue next and Dismiss. Copied-link detection and URL visibility are saved toggles; Show links masks pasted URLs and hides clipboard, recent and queue URLs without changing playback.
+- Hover the audio/media button to open the current source's settings. The dropdown stays open while crossing into it, holds open for slider adjustments, preserves keyboard focus on hover, and stays hidden in Zen.
+- Tree modes & movement adds Steady, Music, Video and combined reactions, live ring/wave/spiral shapes, size/width/height/rotation/position controls, count-aware spacing, per-part music movement, and smoothed dark or bright video-region positioning. Controls are shared between Appearance and Audio reactions and saved locally.
+- Parking the mouse at the right edge of Live / Command view starts the Zen tree tour after a short pause and hides the pointer. Moving back, clicking or typing returns to the live controls.
+- A machine-local `localStyleUnlock` preference keeps the Void themes and node styles unlocked across rebuilds and updates without changing release defaults.
+- Link media keeps settings in Music & video so YouTube controls stay clickable and Zen stays clear. Adds a darkened video background, transparency, optional slow tree placement in dark areas, task-completion fades, ten-minute playback/placement restoration, saved volume/mute and Audio Link restoration, and a built-in YouTube explorer with Next video.
+- The media menu now has a persistent Up next queue: add links or YouTube results, queue an item next, play immediately, or remove it. Next video uses queued items first; YouTube, Vimeo and direct files advance automatically on completion.
+- Separate Tree transparency and Video transparency sliders keep the node tree readable. Video brightness now defaults to 100% with an adjustable 25–150% range instead of fixed dimming; inactive page styles no longer dim the Command tree over video.
+- Drop text and code files into Home, Vibe and Plans, or use Add files, to include editable file contents in a draft. Plans restore the last selected plan and step per project, and Vibe keeps project-specific drafts.
+- Planning reads fresh project excerpts, README/build context and explicitly named files; resumed interviews retain earlier human answers.
+- Per-agent web search, project-read permissions and MCP tool allowlists in Agents setup, with shared research turns across AI surfaces and MCP attachments for OpenCode and Claude workers. See [Agent tools](docs/agent-tools.md).
+
 ## [0.4.2] - 2026-09-25
 
 ### Added
@@ -1105,7 +1121,9 @@ which installed copies pick up through the in-app updater.
   locked or the cover window is destroyed.
 - Project switch drains background work instead of refusing it.
 
-[Unreleased]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.4.0...main
+[Unreleased]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.4.3...main
+[0.4.3]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.4.2...v0.4.3
+[0.4.2]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.4.0...v0.4.2
 [0.4.0]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.3.0...v0.3.3
 [0.3.0]: https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.3.0

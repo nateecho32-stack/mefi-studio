@@ -12,7 +12,7 @@ const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = path.join(studio, "node_modules", "electron", "dist", process.platform === "win32" ? "electron.exe" : process.platform === "darwin" ? "Electron.app/Contents/MacOS/Electron" : "electron");
 const canRun = existsSync(executable) && (process.platform !== "linux" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
 
-test("Floating media renders borderless, reveals controls and retains its iframe through movement and navigation", { skip: !canRun, timeout: 75000 }, async (t) => {
+test("Floating media renders borderless, keeps provider settings clickable beside its controls and retains its iframe through movement and navigation", { skip: !canRun, timeout: 120000 }, async (t) => {
   const fixture = await mkdtemp(path.join(tmpdir(), "mefi-media-render-"));
   try {
     await mkdir(path.join(fixture, "renderer")); await mkdir(path.join(fixture, "data"));
@@ -29,7 +29,7 @@ test("Floating media renders borderless, reveals controls and retains its iframe
         const killer = spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
         killer.once("error", () => child.kill());
       } else child.kill();
-    }, 55000);
+    }, 90000);
     const code = await new Promise((resolve, reject) => { child.once("error", reject); child.once("close", resolve); }).finally(() => clearTimeout(timer));
     let report;
     try { report = JSON.parse(await readFile(path.join(fixture, "report.json"), "utf8")); } catch {}
@@ -42,9 +42,9 @@ test("Floating media renders borderless, reveals controls and retains its iframe
     assert.equal(code, 0, `${report?.failure || "No media report"}\n${output}`);
     assert.deepEqual(report.errors, []);
     assert.equal(report.playerLoads, 1, "one provider load across all movement, resizing, minimize and navigation");
-    assert.ok(report.borderless && report.hover && report.drag && report.resize && report.dodge && report.follow && report.pin && report.minimize && report.closed);
+    assert.ok(report.clipboardOffer && report.hoverDropdown && report.queue && report.zen && report.menus && report.tree && report.background && report.borderless && report.hover && report.drag && report.resize && report.dodge && report.follow && report.pin && report.minimize && report.closed);
     assert.deepEqual(report.layouts.map(layout => layout.width), [1440, 600]);
-    assert.ok(report.layouts.every(layout => layout.contained && layout.controlsFit));
+    assert.ok(report.layouts.every(layout => layout.contained && layout.controlsFit && layout.providerClear));
   } finally {
     assert.equal(path.dirname(fixture), path.resolve(tmpdir()));
     assert.ok(path.basename(fixture).startsWith("mefi-media-render-"));

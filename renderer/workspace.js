@@ -924,6 +924,7 @@
   }
   async function submit(event) {
     event?.preventDefault();
+    if (window.MefiFileInputs?.isReading($("input"))) { feedback("Wait for the files to finish reading."); return; }
     const value = $("input").value.trim();
     if (!value || state.pending || state.switching || !state.activeId || !api()) return;
     const id = state.activeId; const mode = state.mode;
@@ -1065,6 +1066,7 @@
       if (projectActions?.open && (!projectActions.contains(event.target) || event.target.closest?.("button"))) projectActions.open = false;
     });
     $("form").addEventListener("submit", submit);
+    window.MefiFileInputs?.bind($("input"), { scope: () => `${state.epoch}:${state.activeId}:${state.mode}`, blocked: () => state.pending || state.switching || !state.activeId });
     $("activity-toggle")?.addEventListener("click", () => setActivityOpen($("activity-drawer").hidden, true));
     $("activity-close")?.addEventListener("click", () => setActivityOpen(false, true));
     $("progress-open")?.addEventListener("click", () => setActivityOpen(true, true));

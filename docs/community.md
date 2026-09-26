@@ -393,6 +393,13 @@ token.
 
 ## Unlocking it yourself
 
+For one PC, set the top-level `localStyleUnlock` field to `true` in that
+machine's Electron `settings.json` (`%APPDATA%\Mefi's Studio AI+\settings.json`
+on Windows). Restart Studio after enabling it. This unlocks the themes and
+node styles without Discord and survives app rebuilds and updates. The file
+is outside the app payload and is never packaged; new installations remain
+locked by default. Set the field to `false` or remove it to undo the opt-in.
+
 Studio is MIT-licensed, and the Void collection is a thank-you to community
 members, not DRM. There is one switch and no obfuscation. In your fork, open
 `scripts/community.cjs` and change:

@@ -3,8 +3,9 @@
 "use strict";
 const { AsyncLocalStorage } = require("node:async_hooks");
 const addons = require("./agent-addons.cjs");
+const tools = require("./agent-tools.cjs");
 const runtime = new AsyncLocalStorage();
-const FIELDS = Object.freeze(["aiProvider", "aiRoleProviders", "aiModels", "aiModelsByProvider", "aiAutoProviders", "aiAutoFallback", "aiFallbackOpenCode", "aiSubscriptionFirst", "modelSelection", "executorCli", "executorModel", "executorModels", "executorTier", "executorTierModels", "agentSeats", "agentSubtasks", "agentSkills", "agentBrain", "agentEfforts", "agentMode", "agentReporting"]);
+const FIELDS = Object.freeze(["aiProvider", "aiRoleProviders", "aiModels", "aiModelsByProvider", "aiAutoProviders", "aiAutoFallback", "aiFallbackOpenCode", "aiSubscriptionFirst", "modelSelection", "executorCli", "executorModel", "executorModels", "executorTier", "executorTierModels", "agentSeats", "agentSubtasks", "agentSkills", "agentTools", "agentBrain", "agentEfforts", "agentMode", "agentReporting"]);
 const PROVIDERS = Object.freeze(["auto", "zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"]);
 const CLIS = Object.freeze(["opencode", "grok", "claude", "codex", "antigravity"]);
 const EFFORTS = Object.freeze(["minimal", "low", "medium", "high", "xhigh", "max"]);
@@ -67,6 +68,7 @@ function validate(configuration) {
   }
   for (const [key, enabled] of Object.entries(configuration.agentBrain || {})) if (!["deskTool", "nestedDelegation", "headDrafts", "contextScout"].includes(key) || typeof enabled !== "boolean") return "Unknown delegation switch.";
   if (configuration.agentSkills !== undefined) { const error = addons.validate(configuration.agentSkills); if (error) return error; }
+  if (configuration.agentTools !== undefined) { const error = tools.validate(configuration.agentTools); if (error) return error; }
   // Bound user strings and forbid nested prototype-shaped input. No credentials,
   // queue switches, endpoints or arbitrary settings can ride a team snapshot.
   const inspect = (value, depth = 0) => {

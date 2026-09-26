@@ -9,13 +9,17 @@ vm.runInContext(`${source.slice(source.indexOf("  const THEMES"), source.indexOf
 const helpers = pure.api;
 const flush = async () => { for (let index = 0; index < 15; index += 1) await Promise.resolve(); };
 
-function environment({ saved = null, recommend, preview = false, previewRegistered = false, workspaceActive = false, audioLink = null, search = "", premiumSaved = null, hint = null, community = null, bridge = null } = {}) {
+function environment({ menuSaved = null, queueSaved = null, mediaVolumeSaved = null, resume = null, saved = null, recommend, preview = false, previewRegistered = false, workspaceActive = false, audioLink = null, search = "", premiumSaved = null, hint = null, community = null, bridge = null } = {}) {
   const ids = new Map();
   const events = [];
   const revoked = [];
   const opened = [];
   const styles = new Map();
   const storage = new Map(saved ? [["mefiStudio.music.v1", JSON.stringify(saved)]] : []);
+  if (resume) storage.set("mefiStudio.mediaResume.v1", JSON.stringify(resume));
+  if (mediaVolumeSaved) storage.set("mefiStudio.mediaVolume.v1", JSON.stringify(mediaVolumeSaved));
+  if (queueSaved) storage.set("mefiStudio.mediaQueue.v1", JSON.stringify(queueSaved));
+  if (menuSaved) storage.set("mefiStudio.mediaMenu.v1", JSON.stringify(menuSaved));
   // The Void collection: a saved premium choice and the community boot hint.
   if (premiumSaved) storage.set("mefiStudio.music.premium.v1", JSON.stringify(premiumSaved));
   if (hint) storage.set("mefiStudio.community.v1", JSON.stringify(hint));
@@ -38,7 +42,7 @@ function environment({ saved = null, recommend, preview = false, previewRegister
   let blob = 0;
   let document;
   class Element {
-    constructor(tag) { this.tagName = tag; this.children = []; this.dataset = {}; this.attrs = {}; this.listeners = {}; this.style = { setProperty: (key, value) => styles.set(key, value) }; this.classList = { add() {}, remove() {} }; this.hidden = false; this.disabled = false; this.value = ""; }
+    constructor(tag) { this.tagName = tag; this.children = []; this.dataset = {}; this.attrs = {}; this.listeners = {}; this.style = { setProperty: (key, value) => styles.set(key, value) }; const classes = new Set(); this.classList = { add: (...values) => values.forEach(value => classes.add(value)), remove: (...values) => values.forEach(value => classes.delete(value)), contains: value => classes.has(value) }; this.hidden = false; this.disabled = false; this.value = ""; }
     set id(value) { this._id = value; ids.set(value, this); }
     get id() { return this._id; }
     set textContent(value) { this.textWrites = (this.textWrites || 0) + 1; this.text = String(value); this.children = []; }
@@ -70,11 +74,16 @@ function environment({ saved = null, recommend, preview = false, previewRegister
     addEventListener: (type, callback) => documentListeners.set(type, callback),
     removeEventListener: (type, callback) => { if (documentListeners.get(type) === callback) documentListeners.delete(type); },
     getElementById: (id) => ids.get(id) ?? null,
-    createElement: (tag) => tag === "audio" ? (audios.push(audio = new Audio()), audio) : new Element(tag),
+    createElement: (tag) => { if (tag === "audio") { audios.push(audio = new Audio()); return audio; } const node = new Element(tag); if (tag === "iframe") { node.messages = []; node.contentWindow = { postMessage: (data, origin) => node.messages.push([JSON.parse(data), origin]) }; } return node; },
   };
+  for (const id of ["idle-music-toggle", "settings-audio-open"]) {
+    const anchor = document.createElement("button"); anchor.id = id;
+    anchor.getBoundingClientRect = () => ({ width: 150, height: 36, top: 84, bottom: 120, right: 950 });
+    document.body.append(anchor);
+  }
   const context = vm.createContext({
     URL: RuntimeURL, document,
-    localStorage: { getItem: (key) => storage.get(key), setItem: (key, value) => { writes.push([key, value]); storage.set(key, value); } },
+    localStorage: { removeItem: key => storage.delete(key), getItem: (key) => storage.get(key), setItem: (key, value) => { writes.push([key, value]); storage.set(key, value); } },
     CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options.detail; } },
     window: {
       dispatchEvent: (event) => events.push(event), addEventListener: (type, callback) => listeners.set(type, callback), open: (url) => opened.push(url),
@@ -124,6 +133,7 @@ function environment({ saved = null, recommend, preview = false, previewRegister
     resize: (rect) => { previewRect = rect; listeners.get("resize")?.(); },
     view: (view) => { treeView = view; listeners.get("mefi-tree-view")?.({ detail: { view } }); },
     emit: (type, detail) => listeners.get(type)?.({ detail }),
+    message: (event) => listeners.get("message")?.(event),
     pointer: (target) => documentListeners.get("pointerdown")?.({ target }),
     gesture: (type, target, detail = {}) => {
       const event = { type, target, pointerId: 1, button: 0, prevented: false, stopped: false,
@@ -1436,6 +1446,157 @@ test("The audio dropdown stays beneath its opener, dismisses without stopping pl
   assert.equal(env.audio.paused, false);
 });
 
+test("Hover opens current media without taking focus and lets the pointer cross into the dropdown", async () => {
+  const env = environment();
+  const anchor = env.ids.get("idle-music-toggle"), dropdown = env.ids.get("music-dropdown");
+  const editor = env.document.createElement("textarea"); editor.focus();
+  env.music.addFiles([file("Hover.mp3")]); env.ids.get("music-play").click(); await flush();
+  env.audio.currentTime = 32;
+  anchor.dispatch("pointerenter", { pointerType: "mouse" }); env.advance(100);
+  assert.equal(dropdown.hidden, true, "passing over the button is not enough");
+  anchor.dispatch("pointerleave"); env.advance(500);
+  assert.equal(dropdown.hidden, true);
+  anchor.dispatch("pointerenter", { pointerType: "mouse" }); env.advance(200);
+  assert.equal(dropdown.hidden, false);
+  assert.equal(env.document.activeElement, editor, "hover must not interrupt typing");
+  assert.equal(env.ids.get("music-local-panel").hidden, false);
+  anchor.dispatch("pointerleave"); env.advance(300);
+  dropdown.dispatch("pointerenter"); env.advance(1000);
+  assert.equal(dropdown.hidden, false, "the gap between button and menu is safe to cross");
+  dropdown.dispatch("pointerleave"); env.advance(450);
+  assert.equal(dropdown.hidden, true);
+  assert.equal(anchor.attrs["aria-expanded"], "false");
+  assert.equal(env.document.activeElement, editor);
+  assert.equal(env.audio.paused, false);
+  assert.equal(env.audio.currentTime, 32);
+});
+
+test("Clicking a hovered opener or using a setting holds the menu open for adjustments", () => {
+  for (const interaction of ["click", "pointerdown", "focusin"]) {
+    const env = environment({ saved: { source: "radio", station: "groovesalad" } });
+    const anchor = env.ids.get("settings-audio-open"), dropdown = env.ids.get("music-dropdown");
+    anchor.dispatch("pointerenter", { pointerType: "mouse" }); env.advance(200);
+    assert.equal(env.ids.get("music-radio-panel").hidden, false);
+    if (interaction === "click") env.music.toggleAudio(anchor);
+    else dropdown.dispatch(interaction, { target: env.ids.get("music-radio-volume") });
+    anchor.dispatch("pointerleave"); dropdown.dispatch("pointerleave"); env.advance(1000);
+    assert.equal(dropdown.hidden, false, interaction);
+    dropdown.dispatch("keydown", { key: "Escape" });
+    assert.equal(dropdown.hidden, true);
+    assert.equal(env.document.activeElement, anchor);
+  }
+});
+
+test("Hover respects touch, dismissal, navigation, window blur and Zen", () => {
+  const env = environment();
+  const anchor = env.ids.get("idle-music-toggle"), dropdown = env.ids.get("music-dropdown");
+  anchor.dispatch("pointerenter", { pointerType: "touch" }); env.advance(500);
+  assert.equal(dropdown.hidden, true);
+  const editor = env.document.createElement("textarea"); editor.focus();
+  anchor.dispatch("pointerenter", { pointerType: "mouse" }); env.advance(200);
+  dropdown.dispatch("keydown", { key: "Escape" }); env.advance(1000);
+  assert.equal(dropdown.hidden, true);
+  assert.equal(env.document.activeElement, editor, "Escape from an untouched hover keeps typing focus");
+  for (const dismiss of [() => env.music.closeAudio(), () => env.emit("mefi:nav", { id: "workspace", action: "open" }), () => env.emit("blur")]) {
+    anchor.dispatch("pointerleave"); anchor.dispatch("pointerenter", { pointerType: "mouse" });
+    dismiss(); env.advance(1000);
+    assert.equal(dropdown.hidden, true, "dismissal cancels pending hover opening");
+  }
+  anchor.dispatch("pointerenter", { pointerType: "mouse" });
+  env.document.body.classList.add("command-zen"); env.advance(1000);
+  assert.equal(dropdown.hidden, true);
+  env.music.openAudio(anchor);
+  assert.equal(dropdown.hidden, true, "explicit opens also respect Zen");
+  env.document.body.classList.remove("command-zen");
+  env.music.toggleAudio(anchor);
+  assert.equal(dropdown.hidden, false, "click remains available after Zen");
+});
+
+test("Copied media links offer play or queue actions without autoplay and do not nag after dismissal", async () => {
+  let clipboard = "https://youtu.be/dQw4w9WgXcQ", reads = 0;
+  const env = environment({ bridge: { mediaClipboardLink: async () => { reads++; return { ok: true, url: clipboard }; } } });
+  const offer = env.ids.get("music-clipboard-offer");
+  assert.equal(reads, 0, "the clipboard is not read at startup");
+  env.music.openAudio(); await flush();
+  assert.equal(offer.hidden, false);
+  assert.equal(env.music.status().source, "local", "an offer cannot change playback");
+  env.ids.get("music-clipboard-queue").click();
+  assert.equal(offer.hidden, true);
+  assert.equal(JSON.parse(env.storage.get("mefiStudio.mediaQueue.v1"))[0].url, "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+  clipboard = "https://vimeo.com/12345678"; env.advance(2000); await flush();
+  env.ids.get("music-clipboard-next").click();
+  assert.match(JSON.parse(env.storage.get("mefiStudio.mediaQueue.v1"))[0].url, /vimeo/);
+  clipboard = "https://example.com/new.mp4"; env.advance(2000); await flush();
+  env.ids.get("music-clipboard-dismiss").click(); env.advance(4000); await flush();
+  assert.equal(offer.hidden, true, "an unchanged dismissed link stays dismissed");
+  clipboard = "https://example.com/another.mp4"; env.advance(2000); await flush();
+  env.ids.get("music-clipboard-play").click();
+  assert.equal(env.music.status().source, "link");
+  assert.equal(env.music.linkElement().url, clipboard);
+  assert.equal(offer.hidden, true);
+  env.music.closeAudio(); const before = reads; env.advance(10000); await flush();
+  assert.equal(reads, before, "closed menus stop clipboard polling");
+});
+
+test("Copied-link detection respects its saved toggle, focus, invalid links and late clipboard responses", async () => {
+  let resolve, reads = 0, clipboard = "https://example.com/movie.mp4";
+  const env = environment({ menuSaved: { copiedLinks: false }, bridge: { mediaClipboardLink: () => { reads++; return new Promise(done => { resolve = done; }); } } });
+  env.music.openAudio(); await flush(); assert.equal(reads, 0);
+  const toggle = env.ids.get("music-copied-links"); toggle.checked = true; toggle.dispatch("change");
+  assert.equal(reads, 1);
+  env.music.closeAudio(); resolve({ ok: true, url: clipboard }); await flush();
+  assert.equal(env.ids.get("music-clipboard-offer").hidden, true, "late reads cannot reopen a dismissed menu");
+  env.window.mefiStudio.mediaClipboardLink = async () => { reads++; return { ok: true, url: clipboard }; };
+  env.document.hasFocus = () => false; env.music.openAudio(); await flush();
+  assert.equal(reads, 1);
+  env.document.hasFocus = () => true;
+  for (clipboard of ["not a link", "javascript:alert(1)", "https://example.com/article", "https://user:pass@example.com/video.mp4"]) {
+    env.advance(2000); await flush(); assert.equal(env.ids.get("music-clipboard-offer").hidden, true);
+  }
+  clipboard = "https://example.com/movie.mp4"; env.advance(2000); await flush();
+  assert.equal(env.ids.get("music-clipboard-offer").hidden, false);
+  toggle.checked = false; toggle.dispatch("change"); const before = reads; env.advance(4000); await flush();
+  assert.equal(reads, before); assert.equal(env.ids.get("music-clipboard-offer").hidden, true);
+  assert.equal(JSON.parse(env.storage.get("mefiStudio.mediaMenu.v1")).copiedLinks, false);
+});
+
+test("Show links masks pasted URLs and hides queue and clipboard URLs without changing playback, and survives reload", async () => {
+  const env = environment({ queueSaved: [{ url: "https://example.com/queued.mp4", title: "Queued video" }], bridge: { mediaClipboardLink: async () => ({ ok: true, url: "https://vimeo.com/12345678" }) } });
+  env.music.playLink("https://youtu.be/dQw4w9WgXcQ"); const player = env.music.linkElement().element;
+  env.music.openAudio(); await flush();
+  const input = env.ids.get("music-link-url"), show = env.ids.get("music-show-links");
+  input.value = "https://example.com/pasted.mp4";
+  show.click();
+  assert.equal(show.attrs["aria-pressed"], "false"); assert.equal(input.type, "password");
+  assert.equal(env.ids.get("music-link-queue-list").children[0].children[0].children[1].hidden, true);
+  assert.equal(env.ids.get("music-clipboard-offer").children[1].hidden, true);
+  assert.equal(env.music.linkElement().element, player);
+  const restored = environment({ menuSaved: JSON.parse(env.storage.get("mefiStudio.mediaMenu.v1")) });
+  assert.equal(restored.ids.get("music-link-url").type, "password");
+  show.click();
+  assert.equal(input.type, "text"); assert.equal(input.value, "https://example.com/pasted.mp4");
+  assert.equal(env.ids.get("music-link-queue-list").children[0].children[0].children[1].hidden, false);
+  assert.equal(env.ids.get("music-clipboard-offer").children[1].hidden, false);
+});
+
+test("Audio setting option menus keep their owner open and consume Escape before the media dropdown", () => {
+  const env = environment();
+  const dropdown = env.ids.get("music-dropdown"), option = env.document.createElement("button");
+  let expanded = true;
+  env.window.MefiSelect = { owns: owner => expanded && owner === dropdown, contains: target => expanded && target === option, close: () => { expanded = false; } };
+  env.music.openAudio();
+  dropdown.dispatch("focusout", { relatedTarget: option }); env.pointer(option);
+  assert.equal(dropdown.hidden, false, "the portaled source selector belongs to this menu");
+  dropdown.dispatch("keydown", { key: "Escape" });
+  assert.equal(expanded, false);
+  assert.equal(dropdown.hidden, false);
+  dropdown.dispatch("keydown", { key: "Escape" });
+  assert.equal(dropdown.hidden, true);
+  env.music.openAudio(); expanded = true;
+  env.music.closeAudio();
+  assert.equal(expanded, false, "closing the parent cannot leave an orphan settings popup");
+});
+
 test("A member's Void boxes trade the fork path for one quiet line with a Settings link; the lock marks go with the lock", () => {
   let premium = true;
   let current = { configured: true, linked: true, state: "ok", selfUnlocked: false };
@@ -1559,6 +1720,17 @@ test("outside dismissal consumes pointerdown, pointerup and click, then accepts 
   }
   assert.equal(env.ids.get("music-overlay").hidden, true);
   for (const type of ["pointerdown", "pointerup", "click"]) assert.equal(env.gesture(type, canvas).stopped, false, `next ${type} reaches the tree`);
+});
+
+test("Media side controls remain usable while the Appearance preview menu is open", () => {
+  const env = environment({ preview: true, previewRegistered: true });
+  env.music.openPreview();
+  const control = env.document.createElement("button");
+  control.closest = selector => selector === "#media-window" ? control : null;
+  for (const type of ["pointerdown", "pointerup", "click"]) {
+    assert.equal(env.gesture(type, control).stopped, false);
+  }
+  assert.equal(env.ids.get("music-overlay").hidden, false);
 });
 
 test("the live Settings drawer switches sections, reveals searched controls and dismisses without selecting work", () => {
@@ -1892,4 +2064,144 @@ test("the node-style thumbnails animate only when motion is allowed, at the node
     for (const property of properties) assert.ok(["rotate", "scale", "translate", "opacity"].includes(property), `${name} only moves or fades (${property})`);
   }
   for (const name of used) assert.ok(keyframes.has(name), `${name} is defined next to the thumbnails`);
+});
+
+
+test("video queue adds without interrupting playback, reorders, removes and survives reload without autoplay", async () => {
+  const env = environment(); env.music.playLink(`https://youtu.be/${YT}`);
+  const current = env.music.linkElement().element;
+  const add = (url, next = false) => { env.ids.get("music-link-url").value = url; env.ids.get(next ? "music-link-queue-first" : "music-link-queue-add").click(); };
+  add("https://vimeo.com/12345678"); add("https://example.com/second.mp4"); add("https://example.com/first.mp4", true);
+  assert.equal(env.music.linkElement().element, current);
+  const list = env.ids.get("music-link-queue-list"); assert.equal(list.children.length, 3);
+  list.children[2].children[1].children[1].click();
+  let queue = JSON.parse(env.storage.get("mefiStudio.mediaQueue.v1")); assert.equal(queue[0].url, "https://example.com/second.mp4");
+  list.children[1].children[1].children[2].click();
+  queue = JSON.parse(env.storage.get("mefiStudio.mediaQueue.v1")); assert.equal(queue.length, 2); assert.match(queue[1].url, /vimeo/);
+  assert.equal(env.music.linkElement().element, current);
+  const restored = environment({ queueSaved: queue }); await flush();
+  assert.equal(restored.music.linkElement(), null); assert.equal(restored.ids.get("music-link-queue-list").children.length, 2);
+  restored.ids.get("music-link-queue-next").click();
+  assert.equal(restored.music.linkElement().url, queue[0].url); assert.equal(restored.ids.get("music-link-queue-list").children.length, 1);
+  restored.ids.get("music-link-next").click(); assert.equal(restored.music.linkElement().url, queue[1].url);
+  assert.equal(restored.ids.get("music-link-queue-next").disabled, true);
+});
+
+test("queued end events advance once, ignore stale or foreign frames and restart repeated URLs", () => {
+  const urls = [`https://www.youtube.com/watch?v=${YT}`, "https://vimeo.com/12345678", "https://example.com/movie.mp4"];
+  const env = environment({ queueSaved: urls.map(url => ({ url, title: "Queued video" })) });
+  env.music.playLink(urls[0]); const first = env.music.linkElement().element;
+  const yt = (value, overrides = {}) => env.message({ source: first.contentWindow, origin: "https://www.youtube-nocookie.com", data: { event: "onStateChange", info: value }, ...overrides });
+  yt(0); assert.equal(env.ids.get("music-link-queue-list").children.length, 3, "unstarted metadata must not skip the queue");
+  yt(1); yt(0, { origin: "https://evil.test" }); assert.equal(env.music.linkElement().element, first);
+  yt(0); const repeated = env.music.linkElement().element;
+  assert.notEqual(repeated, first); assert.equal(env.music.linkElement().url, urls[0]);
+  yt(0); assert.equal(env.ids.get("music-link-queue-list").children.length, 2, "late old-frame end cannot consume another item");
+  env.ids.get("music-link-next").click(); const vimeo = env.music.linkElement().element;
+  const vm = event => env.message({ source: vimeo.contentWindow, origin: "https://player.vimeo.com", data: { event, data: { seconds: 9 } } });
+  vm("play"); vm("ended"); assert.equal(env.music.linkElement().url, urls[2]);
+  assert.equal(env.ids.get("music-link-queue-list").children.length, 0);
+  env.ids.get("music-link-url").value = urls[0]; env.ids.get("music-link-queue-add").click();
+  const native = env.music.linkElement().element; native.ended = true; native.dispatch("ended");
+  assert.equal(env.music.linkElement().url, urls[0]); native.dispatch("ended"); assert.equal(env.ids.get("music-link-queue-list").children.length, 0);
+});
+
+test("queue validates persisted entries, bounds storage and keeps manual queue ahead of explorer results", async () => {
+  const env = environment({ queueSaved: [{ url: "javascript:alert(1)" }, { url: "https://www.twitch.tv/example" }, { url: "https://example.com/queued.mp4", title: "Queued" }], bridge: { youtubeSearch: async () => ({ ok: true, results: [{ id: YT, title: "First" }, { id: "M7lc1UVf-VE", title: "Second" }] }) } });
+  assert.equal(env.ids.get("music-link-queue-list").children.length, 1);
+  env.ids.get("music-youtube-query").value = "music"; env.ids.get("music-youtube-search").click(); await flush();
+  const results = env.ids.get("music-youtube-results");
+  results.children[0].children[1].click(); results.children[1].children[2].click();
+  assert.equal(env.ids.get("music-link-queue-list").children.length, 2);
+  env.ids.get("music-link-next").click(); assert.equal(env.music.linkElement().url, "https://example.com/queued.mp4");
+  results.children[0].children[3].click();
+  assert.match(JSON.parse(env.storage.get("mefiStudio.mediaQueue.v1"))[0].url, new RegExp(YT));
+  env.ids.get("music-link-url").value = "https://example.com/repeat.mp4";
+  for (let index = 0; index < 55; index++) env.ids.get("music-link-queue-add").click();
+  assert.equal(JSON.parse(env.storage.get("mefiStudio.mediaQueue.v1")).length, 50);
+  assert.equal(env.ids.get("music-link-queue-list").children.length, 50);
+});
+
+test("video volume and mute control YouTube, Vimeo and native files and survive reload", async () => {
+  const env = environment(); env.music.playLink(`https://www.youtube.com/watch?v=${YT}`);
+  let frame = env.music.linkElement().element;
+  env.ids.get("music-link-volume").value = "35"; env.ids.get("music-link-volume").dispatch("input");
+  assert.equal(frame.messages.at(-2)[0].func, "setVolume"); assert.equal(frame.messages.at(-2)[0].args[0], 35);
+  env.ids.get("music-link-mute").click(); assert.equal(frame.messages.at(-1)[0].func, "mute");
+  const restored = environment({ mediaVolumeSaved: JSON.parse(env.storage.get("mefiStudio.mediaVolume.v1")) });
+  restored.music.playLink(`https://www.youtube.com/watch?v=${YT}`); frame = restored.music.linkElement().element;
+  restored.message({ source: frame.contentWindow, origin: "https://www.youtube-nocookie.com", data: { event: "onReady" } });
+  assert.equal(frame.messages.at(-2)[0].args[0], 35); assert.equal(frame.messages.at(-1)[0].func, "mute");
+  restored.message({ source: frame.contentWindow, origin: "https://www.youtube-nocookie.com", data: { event: "infoDelivery", info: { volume: 60, muted: false } } });
+  assert.equal(restored.ids.get("music-link-volume").value, "60"); assert.equal(restored.ids.get("music-link-mute").attrs["aria-pressed"], "false");
+  env.music.playLink("https://vimeo.com/12345678"); frame = env.music.linkElement().element;
+  env.ids.get("music-link-volume").value = "20"; env.ids.get("music-link-volume").dispatch("input");
+  assert.deepEqual(frame.messages.at(-2)[0], { method: "setVolume", value: .2 });
+  env.music.playLink("https://example.com/video.mp4"); frame = env.music.linkElement().element;
+  assert.equal(frame.volume, .2); assert.equal(frame.muted, false);
+  env.ids.get("music-link-mute").click(); assert.equal(frame.muted, true);
+});
+
+test("YouTube explorer plays results, advances to the next result and supports playlist Next", async () => {
+  const env = environment({ bridge: { youtubeSearch: async query => { assert.equal(query, "quiet music"); return { ok: true, results: [{ id: YT, title: "First", channel: "One" }, { id: "M7lc1UVf-VE", title: "Second" }] }; } } });
+  env.ids.get("music-youtube-query").value = "quiet music"; env.ids.get("music-youtube-search").click(); await flush();
+  const results = env.ids.get("music-youtube-results"); assert.equal(results.children.length, 2);
+  results.children[0].children[1].click(); assert.match(env.music.linkElement().url, new RegExp(YT));
+  env.ids.get("music-link-next").click(); assert.match(env.music.linkElement().url, /M7lc1UVf-VE/);
+  env.music.playLink(`https://www.youtube.com/watch?v=${YT}&list=PLabcdefghijk`);
+  const frame = env.music.linkElement().element; env.ids.get("music-link-next").click();
+  assert.equal(frame.messages.at(-1)[0].func, "nextVideo");
+});
+
+test("YouTube restores observed position and playback, ignores foreign messages and follows playlist changes", async () => {
+  const env = environment(); env.music.playLink(`https://www.youtube.com/watch?v=${YT}`);
+  const frame = env.music.linkElement().element;
+  frame.dispatch("load");
+  assert.equal(frame.messages.at(-1)[0].event, "listening");
+  const delivery = (info, overrides = {}) => env.message({ source: frame.contentWindow, origin: "https://www.youtube-nocookie.com", data: JSON.stringify({ event: "infoDelivery", info }), ...overrides });
+  delivery({ currentTime: 999, playerState: 1 }, { origin: "https://evil.test" });
+  delivery({ currentTime: 999, playerState: 1 }, { source: {} });
+  env.emit("pagehide");
+  assert.equal(JSON.parse(env.storage.get("mefiStudio.mediaResume.v1")).startMs, 0);
+  delivery({ currentTime: 123.75, playerState: 1, videoData: { video_id: "M7lc1UVf-VE" } }); env.emit("pagehide");
+  let saved = JSON.parse(env.storage.get("mefiStudio.mediaResume.v1"));
+  assert.equal(saved.startMs, 123750); assert.equal(saved.autoplay, true); assert.match(saved.url, /v=M7lc1UVf-VE/);
+  const restored = environment({ resume: saved }); await flush();
+  assert.match(restored.music.linkElement().element.src, /start=123/); assert.match(restored.music.linkElement().element.src, /autoplay=1/);
+  delivery({ currentTime: 48.5, playerState: 2 });
+  saved = JSON.parse(env.storage.get("mefiStudio.mediaResume.v1"));
+  assert.equal(saved.startMs, 48500); assert.equal(saved.autoplay, false);
+  const paused = environment({ resume: saved }); await flush();
+  assert.match(paused.music.linkElement().element.src, /start=48/); assert.doesNotMatch(paused.music.linkElement().element.src, /autoplay=1/);
+  env.music.setSource("local"); delivery({ currentTime: 123, playerState: 1 });
+  assert.equal(env.storage.has("mefiStudio.mediaResume.v1"), false);
+});
+
+test("Vimeo subscribes to playback updates and restores a paused seek", async () => {
+  const env = environment(); env.music.playLink("https://vimeo.com/12345678");
+  const frame = env.music.linkElement().element; frame.dispatch("load");
+  assert.deepEqual(frame.messages.map(([data]) => data.value), ["timeupdate", "play", "pause", "ended", "volumechange"]);
+  env.message({ source: frame.contentWindow, origin: "https://player.vimeo.com", data: { event: "pause", data: { seconds: 67.25 } } });
+  const saved = JSON.parse(env.storage.get("mefiStudio.mediaResume.v1"));
+  assert.equal(saved.startMs, 67250); assert.equal(saved.autoplay, false);
+  const restored = environment({ resume: saved }); await flush();
+  assert.match(restored.music.linkElement().element.src, /#t=67s$/);
+});
+
+test("A recent open link returns within ten minutes, while closed, expired and diagnostic players stay closed", async () => {
+  const url = "https://youtu.be/dQw4w9WgXcQ";
+  const env = environment(); env.music.playLink(url, { autoplay: false });
+  env.emit("beforeunload");
+  const saved = JSON.parse(env.storage.get("mefiStudio.mediaResume.v1"));
+  const restored = environment({ resume: saved }); await flush();
+  assert.equal(restored.music.linkElement()?.provider, "youtube");
+  for (const resume of [{ ...saved, at: Date.now() - 600001 }, { ...saved, at: Date.now() + 60000 }, { ...saved, url: "javascript:alert(1)" }]) {
+    const old = environment({ resume }); await flush(); assert.equal(old.music.linkElement(), null);
+  }
+  const diagnostic = environment({ resume: saved, search: "?capture=1" }); await flush();
+  assert.equal(diagnostic.music.linkElement(), null);
+  env.music.setSource("local"); env.emit("beforeunload");
+  assert.equal(env.storage.has("mefiStudio.mediaResume.v1"), false);
+  const closed = environment({ saved: { source: "link", links: [url] } }); await flush();
+  assert.equal(closed.music.linkElement(), null, "link history alone does not reopen a dismissed player");
 });

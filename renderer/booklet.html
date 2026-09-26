@@ -3201,6 +3201,7 @@ html[data-no-blur] {
 #idle-hud .cmd-feed.collapsed .feed-state { margin: 0 2px 0 4px; font-size: 10px; font-weight: 500; }
 #idle-hud .cmd-feed.collapsed .feed-toggle .glyph { margin-left: 4px; }
 body.command-zen #idle-hud { opacity: 0; pointer-events: none; }
+body.command-zen, body.command-zen * { cursor: none !important; }
 body.command-zen #idle-hud * { pointer-events: none !important; }
 body:not(.command-zen) #idle-hud .feed-content:not([hidden]),
 body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: command-panel-return 320ms var(--ease); }
@@ -5161,6 +5162,13 @@ body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + var(--m
 .music-side { padding: 22px; border-top: 1px solid var(--hairline); background: var(--tint-gold-1); }
 .music-section + .music-section { margin-top: 26px; padding-top: 24px; border-top: 1px solid var(--hairline); }
 .music-section h3 { margin: 7px 0 15px; font-size: 19px; }
+.music-tree-dynamics { margin-block: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+.music-tree-dynamics > summary { cursor: pointer; font-weight: 600; padding-block: 8px; }
+.music-tree-control { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(70px, 1fr) 42px; align-items: center; gap: 8px; margin-block: 10px; font-size: 12px; }
+.music-tree-control input[type="range"] { min-width: 0; width: 100%; }
+.music-tree-control :is(select, .studio-select) { grid-column: 2 / 4; min-width: 0; width: 100%; }
+.music-tree-control input[type="checkbox"] { justify-self: end; grid-column: 2 / 4; }
+.music-tree-control output { text-align: right; font-variant-numeric: tabular-nums; }
 /* Color theme opens the Look group, under its label; the node tree follows it. */
 .music-colors > .eyebrow { display: none; }
 .music-colors h3 { font: 600 16px/1.4 var(--font-ui); color: var(--ivory); margin: 0 0 12px; }
@@ -5260,43 +5268,80 @@ body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + var(--m
 .music-together-copy small { color: var(--muted); font-size: 11px; }
 .music-link-tools button[hidden] { display: none; }
 
-/* Media floats outside Settings. The provider stays mounted in this one surface. */
-.media-window { position: fixed; z-index: calc(var(--z-transient, 90) + 1); isolation: isolate; margin: 0; padding: 0; border: 0; border-radius: 8px; background: #08090a; box-shadow: 0 10px 36px #0007; color: #fff; overflow: hidden; }
-.media-window[hidden] { display: none; }
+/* Provider content stays clear; settings live in the menu and grips stay outside the video. */
+.media-window { position: fixed; z-index: calc(var(--z-transient, 90) + 1); isolation: isolate; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin: 0; padding: 8px; border: 0; border-radius: 8px; background: transparent; color: #fff; }
+.media-window[hidden], .media-window [hidden], .media-window-controls [hidden] { display: none !important; }
 .media-window[data-dodging="true"] { transition: left 180ms ease-out, top 180ms ease-out; }
-.media-window .music-link-player, .media-window .music-link-frame { display: block; width: 100%; height: 100%; margin: 0; border: 0; border-radius: 0; aspect-ratio: auto; }
+.media-window .music-link-player, .media-window .music-link-frame { display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; margin: 0; border: 0; border-radius: 0; aspect-ratio: auto; }
+.media-window .music-link-player { overflow: hidden; background: #08090a; transition: opacity 700ms ease; }
 .media-window .music-link-media { object-fit: contain; }
-.media-window-controls { position: absolute; z-index: 2; inset: 0 0 auto; display: flex; align-items: center; gap: 4px; padding: 7px 8px 18px; background: linear-gradient(#000c, #0008 70%, transparent); opacity: 0; pointer-events: none; transition: opacity 140ms ease; }
-.media-window-controls button { flex: 0 0 auto; min-width: 28px; min-height: 28px; margin: 0; padding: 4px 8px; border: 0; border-radius: 6px; background: #14171cbf; color: #fff; font: 500 11px/1.4 var(--font-ui); box-shadow: none; touch-action: none; }
-.media-window-controls button:hover { background: #39434eee; }
+.media-window-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; min-height: 0; padding: 6px; overflow: visible; border-radius: 7px; background: var(--panel-solid); pointer-events: auto; font: 11px/1.4 var(--font-ui); }
+.media-window-controls button { flex: 0 0 auto; min-width: 0; min-height: 28px; margin: 0; padding: 4px 8px; border: 0; border-radius: 6px; background: #242a32; color: #fff; font: 500 11px/1.4 var(--font-ui); box-shadow: none; white-space: normal; }
+.media-window-controls button:hover { background: #39434e; }
 .media-window-controls button[aria-pressed="true"] { background: var(--gold-bright); color: var(--on-accent, #111); }
-.media-window-controls .media-window-move { flex: 1 1 auto; cursor: grab; text-align: left; font-size: 18px; line-height: 20px; }
-.media-window-caption { position: absolute; z-index: 2; bottom: 42px; left: 10px; max-width: calc(100% - 20px); min-height: 24px; padding: 3px 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; border-radius: 4px; color: #fff; background: #08090acc; font: 11px/1.4 var(--font-ui); opacity: 0; pointer-events: none; transition: opacity 140ms ease; }
-.media-window:hover .media-window-controls, .media-window:focus-within .media-window-controls, .media-window[data-interacting="true"] .media-window-controls, .media-window[data-minimized="true"] .media-window-controls,
-.media-window:hover .media-window-caption, .media-window:focus-within .media-window-caption { opacity: 1; pointer-events: auto; }
+.media-window-controls button:disabled { opacity: .45; }
+.media-window-toolbar { grid-column: 1 / -1; display: flex; flex: 0 0 auto; gap: 4px; }
+.media-window-toolbar .media-window-move { flex: 1; }
+.media-window-controls .media-window-move { cursor: grab; text-align: center; font-size: 18px; line-height: 20px; touch-action: none; }
+.media-window-controls .media-window-caption { grid-column: 1 / -1; font-size: 10px; overflow-wrap: anywhere; }
+.media-window-transparency { grid-column: 1 / -1; display: grid; flex: 0 0 auto; gap: 4px; padding: 6px 2px; }
+.media-window-transparency input { width: 100%; min-width: 0; margin: 0; padding: 0; accent-color: var(--gold-bright); }
 .media-window button:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
 .media-window-resize { position: absolute; z-index: 3; min-width: 0; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; touch-action: none; }
 .media-window-resize:hover { background: #ffffff30; }
-.media-window-resize[data-edge="n"], .media-window-resize[data-edge="s"] { height: 6px; left: 16px; right: 16px; cursor: ns-resize; }
+.media-window-resize[data-edge="n"], .media-window-resize[data-edge="s"] { height: 8px; left: 8px; right: 8px; cursor: ns-resize; }
 .media-window-resize[data-edge="n"] { top: 0; }
 .media-window-resize[data-edge="s"] { bottom: 0; }
-.media-window-resize[data-edge="e"], .media-window-resize[data-edge="w"] { width: 6px; top: 16px; bottom: 16px; cursor: ew-resize; }
+.media-window-resize[data-edge="e"], .media-window-resize[data-edge="w"] { width: 8px; top: 8px; bottom: 8px; cursor: ew-resize; }
 .media-window-resize[data-edge="e"] { right: 0; }
 .media-window-resize[data-edge="w"] { left: 0; }
-.media-window-resize[data-edge="ne"], .media-window-resize[data-edge="se"], .media-window-resize[data-edge="sw"], .media-window-resize[data-edge="nw"] { width: 16px; height: 16px; }
+.media-window-resize[data-edge="ne"], .media-window-resize[data-edge="se"], .media-window-resize[data-edge="sw"], .media-window-resize[data-edge="nw"] { width: 8px; height: 8px; }
 .media-window-resize[data-edge="ne"] { top: 0; right: 0; cursor: nesw-resize; }
 .media-window-resize[data-edge="se"] { bottom: 0; right: 0; cursor: nwse-resize; }
 .media-window-resize[data-edge="sw"] { bottom: 0; left: 0; cursor: nesw-resize; }
 .media-window-resize[data-edge="nw"] { top: 0; left: 0; cursor: nwse-resize; }
-.media-window-resize[data-edge="se"]::after { content: ""; position: absolute; width: 7px; height: 7px; bottom: 4px; right: 4px; border: solid #fff; border-width: 0 2px 2px 0; opacity: 0; }
-.media-window:hover .media-window-resize::after, .media-window-resize:focus-visible::after { opacity: .8; }
 .media-window[data-interacting="true"] .music-link-player { pointer-events: none; }
 .media-window[data-interacting="true"] { user-select: none; }
-.media-window[data-minimized="true"] .music-link-player, .media-window[data-minimized="true"] .media-window-caption { visibility: hidden; }
-.media-window[data-minimized="true"] .media-window-controls { padding-bottom: 7px; background: #14171c; }
-.media-window[data-shape="audio"] .media-window-caption { display: none; }
-@media (hover: none) { .media-window-controls { opacity: 1; pointer-events: auto; } }
-@media (prefers-reduced-motion: reduce) { .media-window, .media-window-controls, .media-window-caption { transition: none; } }
+.media-window[data-minimized="true"] { visibility: hidden; }
+.media-window[data-minimized="true"] .music-link-player { display: none; }
+/* Keep the same playing frame below the work; controls live in the audio menu. */
+.media-window[data-background="true"] { display: contents; }
+.media-window[data-background="true"] .music-link-player { position: fixed; inset: 0; z-index: calc(var(--z-workspace) - 1); pointer-events: none; }
+.music-video-settings { margin-top: 12px; }
+.music-link-volume { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.music-link-volume[hidden] { display: none; }
+.music-link-volume label { display: grid; flex: 1; gap: 4px; min-width: 0; }
+.music-link-volume input { width: 100%; accent-color: var(--gold-bright); }
+.music-link-volume button { min-width: 70px; }
+.music-youtube-explorer { margin-top: 12px; }
+.music-youtube-explorer summary { cursor: pointer; font-weight: 600; padding: 10px 0; }
+.music-youtube-results { display: grid; gap: 8px; max-height: 320px; overflow: auto; }
+.music-youtube-result { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px; border: 1px solid var(--hairline); border-radius: 10px; background: rgba(12,18,28,.85); }
+.music-youtube-result > span { flex: 1; min-width: 0; }
+.music-youtube-result strong, .music-youtube-result small { display: block; overflow-wrap: anywhere; }
+.music-youtube-result small { opacity: .75; margin-top: 4px; }
+.music-youtube-result button { flex: none; }
+.music-youtube-result > span { flex-basis: 100%; }
+.music-link-queue { margin-top: 16px; }
+.music-link-queue-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.music-link-queue-list { display: grid; gap: 8px; max-height: 320px; overflow: auto; list-style: none; margin: 8px 0; padding: 0; }
+.music-link-queue-item { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--panel-solid); }
+.music-link-queue-copy { min-width: 0; overflow-wrap: anywhere; }
+.music-link-queue-copy strong, .music-link-queue-copy small { display: block; }
+.music-link-queue-copy small { color: var(--muted); font-size: 11px; margin-top: 3px; }
+.music-link-queue-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+#media-window-dark { grid-column: 1 / -1; }
+body.command-zen :is(.media-window-controls, .media-window-resize, #music-dropdown) { visibility: hidden !important; pointer-events: none; }
+body[data-media-background="true"] :is(#workspace-layer, #vibe-layer, .ws-main) { background: transparent; }
+body[data-media-background="true"] > main { position: relative; z-index: var(--z-sheet); }
+body[data-media-background="true"]:is([data-media-view="workspace"], [data-media-view="vibe"]) > main { visibility: hidden; }
+body[data-media-visible="true"].command-active :is(#idle-layer-far, #idle-layer):not([hidden]),
+html[data-shell="rail"] body[data-media-visible="true"].command-active :is(#idle-layer-far, #idle-layer):not([hidden]) { opacity: var(--media-tree-opacity, 1); }
+body[data-media-background="true"] #idle-layer-far { background: transparent; }
+body[data-media-background="true"].command-active:not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head, #tabs) { visibility: hidden; }
+html[data-shell="rail"] body[data-media-background="true"] :is(.workspace-page, .agents-overlay, #plans-overlay) { background: color-mix(in srgb, var(--bg) 75%, transparent); }
+html[data-motion="off"] .media-window, html[data-motion="off"] .media-window .music-link-player { transition: none; }
+@media (prefers-reduced-motion: reduce) { .media-window, .media-window .music-link-player { transition: none; } }
 .music-together-note { margin: 0; color: var(--gold-bright); font-size: 12px; }
 .music-together-note:empty { display: none; }
 .music-together-note[data-error="true"] { color: var(--bad); }
@@ -5765,7 +5810,16 @@ body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left
 .music-dropdown[data-source="radio"] { width: min(540px, calc(100vw - 24px)); }
 .music-dropdown[data-video="true"] { width: min(624px, calc(100vw - 24px)); }
 .music-dropdown-header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--hairline); background: var(--panel-solid); }
-.music-dropdown-header h2 { margin: 0; font: 600 15px/1.4 var(--font-ui); }
+.music-dropdown-header h2 { flex: 1; margin: 0; font: 600 15px/1.4 var(--font-ui); }
+.music-dropdown-header { flex-wrap: wrap; }
+.music-clipboard-offer { flex: 1 0 100%; min-width: 0; display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--hairline); }
+.music-clipboard-offer small { min-width: 0; max-width: 100%; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.music-clipboard-offer .music-link-tools { margin: 0; }
+.music-clipboard-toggle { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 12px; }
+.music-clipboard-toggle input { width: auto; accent-color: var(--gold); }
+.music-tree-visibility { min-width: 0; padding: 10px 0; border-top: 1px solid var(--hairline); }
+.music-tree-visibility > summary { cursor: pointer; font-weight: 600; }
+.media-window-controls > .music-tree-visibility { grid-column: 1 / -1; }
 .music-dropdown-header button { flex: none; }
 .music-dropdown-body { min-width: 0; padding: 16px; }
 .music-dropdown .music-main { padding: 16px 0; margin-top: 14px; }
@@ -5789,7 +5843,7 @@ body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left
 .music-dropdown .music-connection .music-fineprint { margin-top: 6px; }
 .music-dropdown input[type="range"] { padding: 0; width: 100%; min-width: 0; height: 24px; accent-color: var(--gold); }
 .music-dropdown .music-volume input { flex: 1; }
-.music-dropdown :is(input[type="text"], textarea, select) { background: var(--bg-deep); color: var(--ivory); }
+.music-dropdown :is(input[type="text"], input[type="password"], textarea, select) { background: var(--bg-deep); color: var(--ivory); }
 .music-dropdown .music-link-form { flex-wrap: wrap; }
 .music-dropdown .music-link-form input { flex: 1 1 200px; }
 .music-dropdown .music-link-now { flex-wrap: wrap; }
@@ -7682,6 +7736,10 @@ html[data-studio-style] .catalog-model { border-radius: var(--r-lg); }
 .eyes-col > .panel > .row:first-of-type > .studio-select { grid-column: 1 / -1; }
 .eyes-col > .panel > .row:nth-of-type(2) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .eyes-col > .panel > .row .studio-select { width: 100%; }
+/* Shared text/code imports in Home, Vibe and Plans. */
+.file-input-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; grid-column: 1 / -1; font-size: 12px; color: var(--muted); margin: 6px 0; }
+.file-input-tools span { flex: 1; min-width: 140px; overflow-wrap: anywhere; }
+.file-drop-active { outline: 2px solid var(--gold); outline-offset: 2px; }
 
 /* A little light, a trailing wisp, and expressions made of floating text. */
 .agent-creature { display: block; width: 100%; height: 100%; overflow: visible; color: var(--gold-bright); pointer-events: none; }
@@ -9362,7 +9420,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     <hr class="pop-sep">
     <div class="pop-group" role="group" aria-labelledby="idle-ambience-calm">
       <div class="eyebrow" id="idle-ambience-calm">Calm</div>
-      <label class="switch pop-row" title="Fade the panels and fly the camera around the tree after 30 seconds without input. Move the mouse or press a key to glide back."><span class="grow">Zen mode</span><input type="checkbox" id="idle-ambient-zen"><span class="track"></span></label>
+      <label class="switch pop-row" title="Fade the panels and tour the tree after 30 seconds without input. You can also park the mouse at the right edge for about two seconds. Move back into the view or press a key to return."><span class="grow">Zen mode</span><input type="checkbox" id="idle-ambient-zen"><span class="track"></span></label>
     </div>
     <hr class="pop-sep">
     <button class="ghost mini pop-link" type="button" data-nav="studio" data-nav-params='{"category":"appearance"}'>All appearance settings ↗</button>
@@ -14864,6 +14922,65 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   window.MefiSelect = { enhance: enhanceSelect, refresh: schedule, close: closeSelect, owns: (parent) => Boolean(popup && parent?.contains(popup.select)), contains: (target) => Boolean(popup?.root.contains(target)), near: (parent, x, y) => { if (!popup || !parent?.contains(popup.select)) return false; const box = popup.root.getBoundingClientRect(); return x >= box.left - 16 && x <= box.right + 16 && y >= box.top - 16 && y <= box.bottom + 16; } };
   window.MefiAppearance = { get: () => ({ ...appearance }), apply: applyAppearance, mount: mountAppearance };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
+})();
+
+// Import explicitly chosen text/code files into an editable, unsent draft.
+// File APIs keep this independent of Electron paths and arbitrary host reads.
+(() => {
+  "use strict";
+  const bindings = new WeakMap();
+  const extensions = /\.(?:txt|md|mdx|rst|adoc|csv|tsv|json|jsonc|ya?ml|toml|xml|html?|css|scss|less|js|mjs|cjs|jsx|ts|tsx|py|lua|rb|go|rs|java|kt|swift|c|h|cpp|hpp|cs|php|vue|svelte|sh|ps1|sql)$/i;
+  const hasFiles = (event) => Array.from(event.dataTransfer?.types || []).includes("Files") || event.dataTransfer?.files?.length;
+  function bind(input, { scope = () => "", blocked = () => false, limit = 16000 } = {}) {
+    if (!input || bindings.has(input)) return;
+    const bar = document.createElement("div"); bar.className = "file-input-tools";
+    const pick = document.createElement("button"); pick.type = "button"; pick.className = "ghost mini"; pick.textContent = "Add files";
+    const picker = document.createElement("input"); picker.type = "file"; picker.multiple = true; picker.hidden = true;
+    const status = document.createElement("span"); status.setAttribute("role", "status"); status.textContent = "Drop text or code files into the box";
+    bar.append(pick, picker, status); input.insertAdjacentElement("afterend", bar);
+    const state = { reading: false }; bindings.set(input, state);
+    const unavailable = () => input.disabled || input.readOnly || blocked();
+    async function add(files, selectedScope = scope()) {
+      if (unavailable() || state.reading) return;
+      const selected = Array.from(files || []);
+      if (!selected.length) return;
+      if (selected.length > 8) { status.textContent = "Choose up to 8 files at a time."; return; }
+      state.reading = true; pick.disabled = true; status.textContent = "Reading files…";
+      const blocks = [], errors = [];
+      const cap = Math.min(limit, input.maxLength > 0 ? input.maxLength : limit);
+      let used = input.value.length;
+      try {
+        for (const file of selected) {
+          const name = String(file.name || "file").replace(/[\r\n]/g, " ");
+          if (!extensions.test(name)) { errors.push(`${name}: choose a text or code file (PDFs, images and folders aren't supported here).`); continue; }
+          if (file.size > 128 * 1024) { errors.push(`${name}: exceeds 128 KB.`); continue; }
+          try {
+            const buffer = await file.slice(0, 128 * 1024 + 1).arrayBuffer();
+            if (buffer.byteLength > 128 * 1024) throw new Error("exceeds 128 KB");
+            const text = new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+            if (/[\u0000-\u0008\u000e-\u001f]/.test(text)) throw new Error("contains binary data");
+            const block = `\n\n--- Attached file: ${name} ---\n${text}\n--- End attached file ---`;
+            if (used + block.length > cap) throw new Error(`won't fit in this draft (${cap.toLocaleString()} characters); use a smaller excerpt`);
+            used += block.length; blocks.push(block);
+          } catch (error) { errors.push(`${name}: ${error.message}.`); }
+        }
+        if (scope() !== selectedScope || !input.isConnected || unavailable()) { status.textContent = "The draft changed. Add the files again in the intended box."; return; }
+        const addition = blocks.join("");
+        if (input.value.length + addition.length > cap) { status.textContent = "The draft grew while reading. Add a smaller excerpt."; return; }
+        if (addition) { input.value += addition; input.dispatchEvent(new Event("input", { bubbles: true })); input.focus(); }
+        status.textContent = [blocks.length ? `${blocks.length} file${blocks.length === 1 ? "" : "s"} added to the draft. Review before sending.` : "No files added.", ...errors].join(" ");
+      } finally { state.reading = false; pick.disabled = false; picker.value = ""; }
+    }
+    let pickerScope;
+    pick.addEventListener("click", () => { if (!unavailable()) { pickerScope = scope(); picker.click(); } });
+    picker.addEventListener("change", () => { void add(picker.files, pickerScope); });
+    input.addEventListener("dragover", (event) => { if (hasFiles(event)) { event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = unavailable() ? "none" : "copy"; input.classList.add("file-drop-active"); } });
+    input.addEventListener("dragleave", () => input.classList.remove("file-drop-active"));
+    input.addEventListener("drop", (event) => { if (hasFiles(event)) { event.preventDefault(); event.stopPropagation(); input.classList.remove("file-drop-active"); void add(event.dataTransfer.files); } });
+  }
+  // A file dropped outside supported surfaces must never navigate away.
+  for (const name of ["dragover", "drop"]) document.addEventListener(name, (event) => { if (hasFiles(event)) event.preventDefault(); });
+  window.MefiFileInputs = { bind, isReading: (input) => bindings.get(input)?.reading === true };
 })();
 
 // Mefi's Studio AI+ — navigation registry for Home, Work, Live and Models,
@@ -27160,6 +27277,220 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   };
 })();
 
+// Shared, saved controls for the Command tree and its Appearance preview.
+// Only painted positions change: graph identity, work and saved anchors stay intact.
+(function () {
+  "use strict";
+  const KEY = "mefiStudio.treeDynamics.v1";
+  const defaults = Object.freeze({ mode: "music", shape: "layout", width: 1, height: 1, rotation: 0, x: 0, y: 0,
+    nodeSize: 1, adaptCount: true, nodeMotion: .25, shapeMotion: .25, positionMotion: .2,
+    videoTarget: "dark", videoStrength: .7, videoShape: true, smoothing: 2, dwell: 15,
+    nodeBrightness: 1, lineBrightness: 1, nodeBrightnessEnabled: true, lineBrightnessEnabled: true, outlines: false });
+  const visibilityKeys = ["nodeBrightness", "lineBrightness", "nodeBrightnessEnabled", "lineBrightnessEnabled", "outlines"];
+  const ranges = { width: [.4, 1], height: [.4, 1], rotation: [-180, 180], x: [-1, 1], y: [-1, 1],
+    nodeSize: [.5, 1.6], nodeMotion: [0, 1], shapeMotion: [0, 1], positionMotion: [0, 1],
+    videoStrength: [0, 1], smoothing: [.2, 8], dwell: [5, 60], nodeBrightness: [0, 2], lineBrightness: [0, 2] };
+  const choices = { mode: ["steady", "music", "video", "hybrid"], shape: ["layout", "ring", "wave", "spiral"], videoTarget: ["dark", "bright"] };
+  const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+  function normalize(value) {
+    const result = { ...defaults };
+    if (!value || typeof value !== "object" || Array.isArray(value)) return result;
+    for (const [key, bounds] of Object.entries(ranges)) if (typeof value[key] === "number" && Number.isFinite(value[key])) result[key] = clamp(value[key], ...bounds);
+    for (const [key, options] of Object.entries(choices)) if (options.includes(value[key])) result[key] = value[key];
+    for (const key of ["adaptCount", "videoShape", "nodeBrightnessEnabled", "lineBrightnessEnabled", "outlines"]) if (typeof value[key] === "boolean") result[key] = value[key];
+    return result;
+  }
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem(KEY)); } catch {}
+  if (!saved) {
+    try { if (JSON.parse(localStorage.getItem("mefiStudio.mediaWindow.v1"))?.trackDark === true) saved = { mode: "hybrid" }; } catch {}
+  }
+  let prefs = normalize(saved), revision = 0, available = false, count = 0, statusText = "Video positioning waits for a background video.";
+  let candidate = -1, streak = 0, current = 4, movedAt = -Infinity, scene = null;
+  const positions = new Map(), panels = [];
+  const musicEnabled = () => prefs.mode === "music" || prefs.mode === "hybrid";
+  const videoEnabled = () => prefs.mode === "video" || prefs.mode === "hybrid";
+  function clearScene() { scene = null; candidate = -1; streak = 0; current = 4; movedAt = -Infinity; }
+  function update(changes) {
+    prefs = normalize({ ...prefs, ...changes });
+    if (!Object.keys(changes || {}).every(key => visibilityKeys.includes(key))) { revision++; clearScene(); }
+    try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch {}
+    refresh();
+    window.dispatchEvent(new CustomEvent("mefi:tree-dynamics", { detail: { ...prefs } }));
+    return { ...prefs };
+  }
+  function setVideoAvailable(value) {
+    if (available === Boolean(value)) return;
+    available = Boolean(value); revision++; clearScene();
+    statusText = available ? "Waiting for a stable video region; close menus to sample." : "Video positioning waits for a background video.";
+    refresh();
+  }
+  // Match the area scored by the host to the footprint used by the tree.
+  function footprint() {
+    const minimum = prefs.adaptCount ? clamp(.48 + Math.sqrt(count) * .035, .48, .94) : .4;
+    return { coverageW: Math.max(minimum, prefs.width * .78), coverageH: Math.max(minimum, prefs.height * .78) };
+  }
+  function sampleRequest() { return available && videoEnabled() && prefs.videoStrength > 0 ? { revision, ...footprint() } : null; }
+  function acceptSample(scores, token, now = Date.now()) {
+    if (token !== revision || !sampleRequest() || !Array.isArray(scores) || scores.length !== 9 || !scores.every(n => Number.isFinite(n) && n >= 0 && n <= 1)) return false;
+    const costs = scores.map(n => prefs.videoTarget === "bright" ? 1 - n : n);
+    const best = costs.indexOf(Math.min(...costs));
+    statusText = `Tracking ${prefs.videoTarget} regions · ${count} visible nodes`;
+    if (best === current || costs[current] - costs[best] < .04) { streak = 0; refresh(); return false; }
+    streak = best === candidate ? streak + 1 : 1; candidate = best;
+    if (streak < 2 || now - movedAt < prefs.dwell * 1000) { refresh(); return false; }
+    const row = Math.floor(best / 3), col = best % 3;
+    const across = costs[row * 3 + 2] - costs[row * 3], down = costs[6 + col] - costs[col];
+    scene = { x: col - 1, y: row - 1, width: 1 - Math.min(.25, Math.abs(across)), height: 1 - Math.min(.25, Math.abs(down)) };
+    current = best; movedAt = now; streak = 0; refresh();
+    window.dispatchEvent(new CustomEvent("mefi:tree-sample"));
+    return true;
+  }
+  const phaseOf = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h / 4294967296 * Math.PI * 2; };
+  function apply(projected, area, { dt = 0, time = 0, music = null, response = 0, linked = false, still = false, interactive = false } = {}) {
+    const live = projected.filter(({ node }) => !node.dying && !node._absorbed);
+    if (count !== live.length) { count = live.length; revision++; candidate = -1; streak = 0; refresh(); }
+    const ids = new Set(projected.map(({ node }) => node.id));
+    for (const id of positions.keys()) if (!ids.has(id)) positions.delete(id);
+    // Inspect, pan, Follow and tours own the camera while in use.
+    if (interactive || !live.length) { positions.clear(); return false; }
+    const audio = !still && linked && musicEnabled() ? clamp(response, 0, 2) : 0;
+    const bass = clamp(Number(music?.bass) || 0, 0, 1) * audio;
+    const mid = clamp(Number(music?.mid) || 0, 0, 1) * audio;
+    const treble = clamp(Number(music?.treble) || 0, 0, 1) * audio;
+    const video = !still && available && videoEnabled() ? scene : null;
+    const strength = video ? prefs.videoStrength : 0;
+    const density = prefs.adaptCount ? clamp(1 / Math.sqrt(Math.max(1, count / 24)), .35, 1) : 1;
+    const minimum = prefs.adaptCount ? clamp(Math.sqrt(count) / 18, .4, .9) : .4;
+    const width = Math.max(minimum, prefs.width) * (1 - bass * prefs.shapeMotion * .12) * (prefs.videoShape && video ? 1 - (1 - video.width) * strength : 1);
+    const height = Math.max(minimum, prefs.height) * (1 - mid * prefs.shapeMotion * .12) * (prefs.videoShape && video ? 1 - (1 - video.height) * strength : 1);
+    const angle = prefs.rotation * Math.PI / 180 + Math.sin(time / 2400) * mid * prefs.shapeMotion * .12;
+    const cx = area.x + area.w / 2, cy = area.y + area.h / 2;
+    const inset = Math.min(36 * Math.max(1, prefs.nodeSize), Math.min(area.w, area.h) / 4);
+    const halfW = Math.max(1, area.w / 2 - inset), halfH = Math.max(1, area.h / 2 - inset);
+    const sizeLimit = prefs.shape === "ring" ? Math.PI * Math.min(halfW * width, halfH * height) / Math.max(1, count) / 26
+      : Math.sqrt(area.w * area.h * width * height / Math.max(1, count)) / 70;
+    const countScale = prefs.adaptCount ? clamp(sizeLimit / prefs.nodeSize, .35, 1) : 1;
+    const offsetX = clamp(prefs.x + (video?.x ?? 0) * strength + Math.sin(time / 1700) * bass * prefs.positionMotion * .2, -1, 1);
+    const offsetY = clamp(prefs.y + (video?.y ?? 0) * strength + Math.sin(time / 2200) * mid * prefs.positionMotion * .2, -1, 1);
+    // Ordered identities keep membership deterministic through graph refreshes.
+    const ordered = [...live].sort((a, b) => String(a.node.id).localeCompare(String(b.node.id)));
+    const rank = new Map(ordered.map((entry, i) => [entry.node.id, i]));
+    let reachX = 1, reachY = 1;
+    const targets = projected.map(entry => {
+      const { node, p } = entry, i = rank.get(node.id) ?? 0, t = i / Math.max(1, count - 1), theta = i / Math.max(1, count) * Math.PI * 2 - Math.PI / 2;
+      let x = p.x - cx, y = p.y - cy;
+      if (prefs.shape === "ring") { x = Math.cos(theta) * halfW * .85; y = Math.sin(theta) * halfH * .85; }
+      if (prefs.shape === "wave") { x = (t * 2 - 1) * halfW * .85; y = Math.sin(t * Math.PI * 4) * halfH * .65; }
+      if (prefs.shape === "spiral") { const r = .15 + .7 * Math.sqrt(t); x = Math.cos(t * Math.PI * 6) * halfW * r; y = Math.sin(t * Math.PI * 6) * halfH * r; }
+      if (count === 1 && prefs.shape !== "layout") { x = 0; y = 0; }
+      const phase = phaseOf(node.id), drift = (bass + treble) * prefs.nodeMotion * 12 * density;
+      const tx = (x * Math.cos(angle) - y * Math.sin(angle)) * width + Math.sin(time / 1100 + phase) * drift;
+      const ty = (x * Math.sin(angle) + y * Math.cos(angle)) * height + Math.cos(time / 1400 + phase) * drift;
+      if (!node.dying && !node._absorbed) { reachX = Math.max(reachX, Math.abs(tx)); reachY = Math.max(reachY, Math.abs(ty)); }
+      node._treeScale = prefs.nodeSize * countScale * (1 + bass * prefs.nodeMotion * .12 * density);
+      return { entry, x: tx, y: ty };
+    });
+    // Reserve space for placement and never clip the transformed tree to a rail.
+    const placing = Math.max(Math.abs(offsetX), Math.abs(offsetY));
+    const room = 1 - placing * .28;
+    const fit = Math.min(1, halfW * room / reachX, halfH * room / reachY);
+    const shiftX = offsetX * Math.max(0, halfW - reachX * fit), shiftY = offsetY * Math.max(0, halfH - reachY * fit);
+    const ease = still ? 1 : 1 - Math.exp(-Math.max(0, dt) / prefs.smoothing);
+    let moving = false;
+    for (const { entry, x, y } of targets) {
+      const target = { x: cx + x * fit + shiftX, y: cy + y * fit + shiftY };
+      // Smooth offsets, rather than absolute points, so camera motion and hit tests agree.
+      const previous = positions.get(entry.node.id) ?? { x: 0, y: 0 };
+      const dx = target.x - entry.p.x, dy = target.y - entry.p.y;
+      previous.x += (dx - previous.x) * ease; previous.y += (dy - previous.y) * ease;
+      moving ||= Math.abs(dx - previous.x) + Math.abs(dy - previous.y) > .1;
+      entry.p.x = clamp(entry.p.x + previous.x, cx - halfW, cx + halfW);
+      entry.p.y = clamp(entry.p.y + previous.y, cy - halfH, cy + halfH);
+      positions.set(entry.node.id, previous);
+    }
+    return moving || audio > 0;
+  }
+  function refresh() {
+    for (const panel of panels) {
+      for (const [key, { input, output }] of Object.entries(panel.fields)) {
+        if (input.type === "checkbox") input.checked = prefs[key]; else input.value = String(prefs[key]);
+        if (output) output.textContent = key === "rotation" ? `${prefs[key]}°` : ["smoothing", "dwell"].includes(key) ? `${prefs[key]}s` : `${Math.round(prefs[key] * 100)}%`;
+        if (key === "nodeBrightness" || key === "lineBrightness") input.disabled = !prefs[`${key}Enabled`];
+      }
+      if (panel.status) panel.status.textContent = `${count} visible nodes · ${videoEnabled() ? statusText : "Shape and position update live in Overview."}`;
+    }
+  }
+  // Canvas filters affect only the requested paint pass. Menus, video and text
+  // retain their own colors, and the default 100% path adds no filter work.
+  function beginPaint(contexts, kind) {
+    const key = kind === "lines" ? "lineBrightness" : "nodeBrightness";
+    const amount = prefs[`${key}Enabled`] ? prefs[key] : 1;
+    if (amount === 1) return null;
+    const saved = [...new Set(contexts.filter(Boolean))].map(ctx => [ctx, ctx.filter]);
+    for (const [ctx, previous] of saved) ctx.filter = `${previous && previous !== "none" ? `${previous} ` : ""}brightness(${amount})`;
+    return () => { for (const [ctx, previous] of saved) ctx.filter = previous || "none"; };
+  }
+  function outline(ctx, style, p, radius, motion, alpha = 1) {
+    if (!prefs.outlines) return;
+    ctx.save(); ctx.globalAlpha *= alpha; ctx.beginPath();
+    if (window.MefiNodeStyles?.outline) window.MefiNodeStyles.outline(ctx, style, p.x, p.y, radius + 1.5, motion);
+    else ctx.arc(p.x, p.y, radius + 1.5, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(0,0,0,0.9)"; ctx.lineWidth = 4; ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255,0.9)"; ctx.lineWidth = 1; ctx.stroke();
+    ctx.restore();
+  }
+  function mountVisibility(host, prefix) {
+    const add = (tag, text, parent) => { const e = document.createElement(tag); if (text) e.textContent = text; parent.append(e); return e; };
+    const root = add("details", null, host); root.className = "music-tree-visibility";
+    add("summary", "Tree brightness & outlines", root);
+    const fields = {};
+    for (const [key, title] of [["nodeBrightnessEnabled", "Adjust node brightness"], ["nodeBrightness", "Node brightness"], ["lineBrightnessEnabled", "Adjust line brightness"], ["lineBrightness", "Connecting line brightness"], ["outlines", "Node outlines"]]) {
+      const row = add("label", null, root); row.className = "music-tree-control";
+      add("span", title, row);
+      const input = add("input", null, row); input.id = `${prefix}-tree-${key}`; input.setAttribute("aria-label", title);
+      let output;
+      if (typeof defaults[key] === "boolean") input.type = "checkbox";
+      else { input.type = "range"; input.min = "0"; input.max = "2"; input.step = ".05"; output = add("output", null, row); output.setAttribute("for", input.id); }
+      input.addEventListener(input.type === "range" ? "input" : "change", () => update({ [key]: input.type === "checkbox" ? input.checked : Number(input.value) }));
+      fields[key] = { input, output };
+    }
+    const hint = add("p", "Brightness changes nodes and connecting lines independently. Turn an adjustment off to use normal brightness without losing its slider setting. Outlines add a contrasting edge around each node.", root); hint.className = "music-fineprint";
+    const reset = add("button", "Reset tree brightness", root); reset.type = "button"; reset.className = "ghost";
+    reset.addEventListener("click", () => update(Object.fromEntries(visibilityKeys.map(key => [key, defaults[key]]))));
+    panels.push({ fields }); refresh(); return root;
+  }
+  function mount(host, prefix) {
+    const add = (tag, text, parent = host) => { const e = document.createElement(tag); if (text) e.textContent = text; parent.append(e); return e; };
+    const root = add("details"); root.className = "music-tree-dynamics";
+    add("summary", "Tree modes & movement", root);
+    const intro = add("p", "Shape, position and music response for every visible node. Use Overview to edit; connect Audio Link for music and choose Background for video.", root); intro.className = "music-fineprint";
+    const fields = {};
+    function control(key, title, options) {
+      const row = add("label", null, root); row.className = "music-tree-control";
+      add("span", title, row);
+      const input = add(options ? "select" : "input", null, row); input.id = `${prefix}-tree-${key}`; input.setAttribute("aria-label", title);
+      let output;
+      if (options) for (const [value, label] of options) { const option = add("option", label, input); option.value = value; }
+      else if (typeof defaults[key] === "boolean") input.type = "checkbox";
+      else { input.type = "range"; [input.min, input.max] = ranges[key].map(String); input.step = key === "rotation" || key === "dwell" ? "1" : key === "smoothing" ? ".1" : ".05"; output = add("output", null, row); output.setAttribute("for", input.id); }
+      input.addEventListener(input.type === "range" ? "input" : "change", () => update({ [key]: input.type === "checkbox" ? input.checked : options ? input.value : Number(input.value) }));
+      fields[key] = { input, output };
+    }
+    control("mode", "Reaction mode", [["steady", "Steady"], ["music", "Music"], ["video", "Video"], ["hybrid", "Music + video"]]);
+    control("shape", "Live shape", [["layout", "Chosen layout"], ["ring", "Ring"], ["wave", "Wave"], ["spiral", "Spiral"]]);
+    for (const [key, title] of [["adaptCount", "Adapt spacing to node count"], ["width", "Shape width"], ["height", "Shape height"], ["rotation", "Shape rotation"], ["x", "Horizontal position"], ["y", "Vertical position"], ["nodeSize", "Node size"], ["nodeMotion", "Music · node movement & size"], ["shapeMotion", "Music · shape deformation"], ["positionMotion", "Music · position sway"]]) control(key, title);
+    control("videoTarget", "Video positioning", [["dark", "Seek dark regions"], ["bright", "Seek bright regions"]]);
+    for (const [key, title] of [["videoStrength", "Video positioning strength"], ["videoShape", "Adapt shape to video regions"], ["smoothing", "Movement smoothing"], ["dwell", "Video region hold"]]) control(key, title);
+    const reset = add("button", "Reset tree movement", root); reset.type = "button"; reset.className = "ghost"; reset.addEventListener("click", () => update(Object.fromEntries(Object.entries(defaults).filter(([key]) => !visibilityKeys.includes(key)))));
+    const status = add("p", null, root); status.className = "music-fineprint"; status.setAttribute("role", "status");
+    mountVisibility(root, prefix);
+    panels.push({ fields, status }); refresh(); return root;
+  }
+  window.MefiTreeDynamics = { normalize, update, mount, mountVisibility, beginPaint, outline, apply, musicEnabled, videoEnabled, sampleRequest, acceptSample, setVideoAvailable,
+    preferences: () => ({ ...prefs }), status: () => ({ count, available, scene: scene ? { ...scene } : null, revision }) };
+})();
+
 // Mefi's Studio AI+ — Command view: the constellation that is also the menu.
 //
 // Sessions, todos and your own tasks are one 3D node graph on a full-screen
@@ -27401,6 +27732,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   const POPUP_MS = 45000; // evidence popup interval
   const HUD_DIM_MS = 6000;
   const AMBIENT_ZEN_MS = 30000;
+  const EDGE_ZEN_MS = 1500;
   const DEFAULT_HINT = "click a node to zoom in · drag to pan · right-drag to orbit · wheel to zoom · V 2D/3D · Esc leaves";
   const LABEL_MODES = ["auto", "updates", "all", "none"];
 
@@ -27427,7 +27759,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     inputSource: null,
     inputError: null,
     inputGeneration: 0,
-    captureArmed: false, // OS capture starts only after an explicit control gesture in this visit.
+    captureArmed: false, // Armed on entry from the saved Audio Link preference.
     musicUiAt: 0,
     localAudio: null,
     mediaElements: new WeakMap(),
@@ -27463,6 +27795,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     hudTimer: null,
     ambientZenEnabled: readStore("mefiStudio.ambientZen") === "1",
     ambientZen: false,
+    zenEdgeSince: null,
     zenDirector: null, // the camera tour Zen is flying, while it flies
     tasks: [],
     allTasks: [],
@@ -27739,6 +28072,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 
   function ensureReactiveInput() {
     if (!state.reactive) return;
+    // Reconnect the user's saved link when the tree returns after a reload or
+    // navigation. Diagnostics never acquire devices; denials remain one-shot.
+    const diagnostic = /[?&](?:smoke|capture)=1(?:&|$)/.test(String(window.location?.search || ""));
+    if (!state.inputError) state.captureArmed = !diagnostic;
     ensureAudio();
     useReactiveInput();
   }
@@ -30856,7 +31193,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const ty = touring ? el.height / 2 : area.y + area.h / 2;
     const center = state.center;
     const left = center ? Math.hypot(tx - center.x, ty - center.y) : 0;
-    if (!center || still || state.camMode === "orbit" || center.frameKey !== frameKey || left < 0.25) {
+    const mediaGlide = Boolean(state.mediaFocus || Date.now() < (state.mediaFocusGlideUntil || 0));
+    if (!center || still || state.camMode === "orbit" && !mediaGlide || center.frameKey !== frameKey || left < 0.25) {
       state.center = { x: tx, y: ty, frameKey };
       return 0;
     }
@@ -31044,8 +31382,29 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
     const usable = spaces.filter((area) => area.w >= 160 && area.h >= 160);
     state.graphArea = (usable.length ? usable : spaces).sort((a, b) => b.w * b.h - a.w * a.h)[0] ?? { x: left, y: top, w: 1, h: 1 };
+    state.mediaSceneBase = { ...state.graphArea };
+    if (state.mediaFocus && globalThis.document?.body?.dataset?.mediaBackground === "true") {
+      const area = state.graphArea;
+      const w = Math.max(160, area.w * .72), h = Math.max(160, area.h * .72);
+      if (w <= area.w && h <= area.h) state.graphArea = { x: area.x + (area.w - w) * state.mediaFocus.x, y: area.y + (area.h - h) * state.mediaFocus.y, w, h };
+    }
     state.graphAreaAt = now;
     return state.graphArea;
+  }
+
+  function mediaSceneArea() {
+    if (!state.active || state.settingsPreview || state.focus || state.panning || state.rotating || state.director || state.camMode !== "orbit" || noMotion() || document.hidden || document.body?.dataset?.mediaBackground !== "true") return null;
+    if (document.getElementById("music-dropdown")?.hidden === false || window.MefiNav?.state?.sheet || window.MefiNav?.state?.transient) return null;
+    usableArea();
+    return state.mediaSceneBase ? { ...state.mediaSceneBase } : null;
+  }
+  function setMediaFocus(point) {
+    if (point && (!mediaSceneArea() || !Number.isFinite(point.x) || !Number.isFinite(point.y))) return false;
+    const next = point ? { x: Math.max(0, Math.min(1, point.x)), y: Math.max(0, Math.min(1, point.y)) } : null;
+    if (!next && !state.mediaFocus) return true;
+    state.mediaFocus = next; state.mediaFocusGlideUntil = Date.now() + 10000;
+    state.graphAreaAt = 0; wakeFrames();
+    return true;
   }
 
   function autoFit({ ease = false } = {}) {
@@ -31300,6 +31659,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
   function drawNodeSurface(ctx, node, p, radius, tint, { selected = false, active = false, alpha = 1, time = 0, still = false, detail = 3, chosen = false, motion = null } = {}) {
     node._extraGlow = state.extraGlow === true;
+    globalThis.window?.MefiTreeDynamics?.outline?.(ctx, state.nodeStyle ?? "orbs", p, radius, motion, (node._fade ?? 1) * alpha);
     const styles = globalThis.window?.MefiNodeStyles;
     if (styles) {
       // A node that wears a glyph (the hub's monogram, an agent's role) is
@@ -34384,8 +34744,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   function drawGraphConnections(ctx, projected, runningIds, audioLinked = false, time = 0, layers = null) {
     const profiler = globalThis.window?.MefiProfiler;
     const span = profiler?.begin("command.connections");
+    const restoreBrightness = globalThis.window?.MefiTreeDynamics?.beginPaint?.([ctx, layers?.far], "lines");
     try { return drawGraphConnectionsImpl(ctx, projected, runningIds, audioLinked, time, layers); }
-    finally { profiler?.end(span); }
+    finally { restoreBrightness?.(); profiler?.end(span); }
   }
 
   // An agent tether's dash, handed to a style that draws the tether itself.
@@ -34554,6 +34915,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   function drawBackdrop(ctx, time, still, energy, musicBands, musicBeat) {
     const width = el.width, height = el.height;
     ctx.clearRect(0, 0, width, height);
+    // Media supplies the sky; keep both node layers at their normal opacity.
+    if (globalThis.document?.body?.dataset?.mediaBackground === "true") return;
     const scene = activeBackdrop();
     const backdrop = hexToRgb(state.canvasPalette?.background ?? "#050507");
     const accent = state.canvasPalette?.accent ? hexToRgb(state.canvasPalette.accent) : NODE_RGB.warm;
@@ -35463,11 +35826,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     state.lastFrame = time;
     const still = noMotion();
     const measuredEnergy = audioEnergy();
-    const backgroundLinked = !still && state.reactive && Boolean(state.inputStream || state.localAudio) && state.audioEffects?.background === true && state.audioResponse > 0;
+    const reactionsAllowed = globalThis.window?.MefiTreeDynamics?.musicEnabled?.() !== false;
+    const backgroundLinked = reactionsAllowed && !still && state.reactive && Boolean(state.inputStream || state.localAudio) && state.audioEffects?.background === true && state.audioResponse > 0;
     const energy = backgroundLinked ? measuredEnergy * Math.min(1, state.audioResponse) : 0;
     const musicBands = backgroundLinked ? { bass: state.bands.bass * Math.min(1, state.audioResponse), mid: state.bands.mid * Math.min(1, state.audioResponse), treble: state.bands.treble * Math.min(1, state.audioResponse) } : { bass: 0, mid: 0, treble: 0 };
     const musicBeat = !backgroundLinked || state.audioEffects?.percussion !== true || !state.reactive || !state.inputStream && !state.localAudio ? 0 : (state.music?.beat ?? 0) * Math.min(1, state.audioResponse);
-    const audioLinked = !still && state.reactive && Boolean(state.inputStream || state.localAudio);
+    const audioLinked = reactionsAllowed && !still && state.reactive && Boolean(state.inputStream || state.localAudio);
     // Nodes the assistant has been told to work on (Work on it): pinned board
     // tasks plus pinned, still-queued inbox requests. One set per frame.
     const pinnedIds = workPinIds();
@@ -35484,11 +35848,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (Number.isFinite(state.fitTarget)) {
       const before = state.fit;
       const settle = still || Math.abs(state.fitTarget - state.fit) < 0.0015;
-      state.fit = settle ? state.fitTarget : state.fit + (state.fitTarget - state.fit) * perSec(0.18, dt);
+      state.fit = settle ? state.fitTarget : state.fit + (state.fitTarget - state.fit) * perSec(state.mediaFocus ? 0.012 : 0.18, dt);
       if (state.camMode === "follow") state.zoom = Math.max(0.45, Math.min(2.6, state.zoom * before / state.fit));
       if (settle) state.fitTarget = null;
     }
-    const cameraEase = perSec(CAMERA_EASE, dt);
+    const cameraEase = perSec(state.mediaFocus || Date.now() < (state.mediaFocusGlideUntil || 0) ? 0.012 : CAMERA_EASE, dt);
     const centerFlight = stepCenter(graphArea, still, cameraEase);
     updateFollowCamera(Date.now());
     const directed = stepDirector(dt, still);
@@ -35569,7 +35933,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     // Zen (and any directed flight) has faded the rails out, so it paints the
     // whole canvas; the frame itself stays put: changing it would re-seed the
     // layout, and waking would snap it back.
-    const clip = directed || state.ambientZen ? { x: 0, y: 0, w: el.width, h: el.height } : graphArea;
+    const clip = directed || state.ambientZen ? { x: 0, y: 0, w: el.width, h: el.height } : state.mediaFocus && state.mediaSceneBase ? state.mediaSceneBase : graphArea;
     ctx.save();
     ctx.beginPath();
     ctx.rect(clip.x, clip.y, clip.w, clip.h);
@@ -35647,6 +36011,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       }
     }
     state.lifeHot = lifeHot;
+    for (const { node } of projected) node._treeScale = 1;
+    const treeMoving = globalThis.window?.MefiTreeDynamics?.apply(projected, graphArea, {
+      dt, time, music: visualMusic, response: state.audioResponse, linked: audioLinked, still,
+      interactive: Boolean(state.focus || state.panning || state.rotating || state.director || state.ambientZen || state.camMode !== "orbit"),
+    });
+    if (treeMoving && !still) state.motionHot = true;
     const screenPoints = new Map(projected.map(({ node, p }) => [node.id, p]));
     computeBranch();
     // A focused node that left the graph releases the focus; otherwise the
@@ -35812,6 +36182,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const selectReachFloor = nodeStyles ? nodeStyles.PREMIUM.includes(state.nodeStyle) : false;
     const growNow = Date.now();
     const nodesSpan = profiler?.begin("command.nodes");
+    const restoreNodeBrightness = globalThis.window?.MefiTreeDynamics?.beginPaint?.([ctx, far], "nodes");
     try {
     for (const { node, p } of ordered) {
       if (node._absorbed) continue;
@@ -35848,7 +36219,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       // Hover and selection ease the node up a twentieth (the record's sel),
       // on top of the lift that raises its size cap.
       const pop = motion ? 1 + 0.05 * motion.sel : 1;
-      const radius = Math.max(2, Math.min(visual.maxRadius, base * Math.max(0.75, Math.min(1.15, p.k))) * nodeScale) * pop;
+      const radius = Math.max(2, Math.min(visual.maxRadius, base * Math.max(0.75, Math.min(1.15, p.k))) * nodeScale) * pop * (node._treeScale ?? 1);
       node._px = p.x; node._py = p.y; node._pr = radius;
       // The detail tier is capped on the far layer, when dimmed, while the
       // camera flies and when frames run long; a lit node may go one tier
@@ -35922,7 +36293,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       // The badge pops in as the hold starts and shrinks away once read.
       if (hold && (!hold.ackedAt || !still && growNow - hold.ackedAt < DONE_BADGE_OUT_MS)) drawDoneBadge(ctx, node, p, radius, time, still, hold, growNow, dim);
     }
-    } finally { profiler?.end(nodesSpan); }
+    } finally { restoreNodeBrightness?.(); profiler?.end(nodesSpan); }
 
     // Behind Home the tree is scenery seen through frosted glass: orbs, links
     // and sky only. Its words would blur into smudges, so the text layers
@@ -38263,7 +38634,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   function canAmbientZen() {
     const top = window.MefiNav?.top?.();
     const focus = document.activeElement;
-    return Boolean((!state.director || state.director === state.zenDirector) && state.ambientZenEnabled && state.active && !document.hidden && !state.settingsPreview &&
+    return Boolean((!state.director || state.director === state.zenDirector) && (state.ambientZenEnabled || state.zenEdgeSince != null) && state.active && !document.hidden && !state.settingsPreview &&
       !document.body.dataset.sheet && (!top || top === "command") &&
       !state.panning && !state.rotating && !state.query &&
       // No open menu or popover fades out from under the pointer: Ambience,
@@ -38277,6 +38648,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 
   function setAmbientZen(active) {
     const next = Boolean(active);
+    if (!next) state.zenEdgeSince = null;
     if (next === state.ambientZen || (next && !canAmbientZen())) return false;
     state.ambientZen = next;
     if (next) {
@@ -38309,7 +38681,23 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 
   function wakeAmbientZen(now = Date.now()) {
     state.lastInput = now;
+    state.zenEdgeSince = null;
     return setAmbientZen(false);
+  }
+
+  // Parking in the last eight CSS pixels is an explicit, temporary Zen
+  // gesture. It leaves the saved thirty-second idle preference untouched.
+  function ambientZenInput(type, event, now = Date.now()) {
+    const atEdge = type === "mousemove" && !event.buttons &&
+      event.clientX >= window.innerWidth - 8 && event.clientX < window.innerWidth &&
+      event.clientY >= 0 && event.clientY < window.innerHeight;
+    if (atEdge && state.ambientZen && canAmbientZen()) return null;
+    const woke = wakeAmbientZen(now);
+    if (atEdge) {
+      state.zenEdgeSince = now;
+      if (!canAmbientZen()) state.zenEdgeSince = null;
+    }
+    return woke;
   }
 
   function setAmbientZenEnabled(enabled) {
@@ -38323,10 +38711,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   function checkAmbientZen(now = Date.now()) {
     if (!canAmbientZen()) {
       if (state.ambientZen) setAmbientZen(false);
+      state.zenEdgeSince = null;
       state.lastInput = now;
       return false;
     }
-    if (!state.ambientZen && now - state.lastInput >= AMBIENT_ZEN_MS) setAmbientZen(true);
+    const edgeReady = state.zenEdgeSince != null && now - state.zenEdgeSince >= EDGE_ZEN_MS;
+    if (!state.ambientZen && (edgeReady || (state.ambientZenEnabled && now - state.lastInput >= AMBIENT_ZEN_MS))) setAmbientZen(true);
     return state.ambientZen;
   }
 
@@ -38702,11 +39092,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       return cleared;
     };
     fit(el.canvas, el.ctx);
-    // A fresh opaque bitmap is black: until the next frame paints the sky it
-    // shows the theme's background, as the element's CSS background did.
+    // Seed the sky until the next frame, except when media supplies it.
     if (el.far && el.farCtx && fit(el.far, el.farCtx)) {
-      el.farCtx.fillStyle = state.canvasPalette?.background ?? "#050507";
-      el.farCtx.fillRect(0, 0, width, height);
+      if (document.body?.dataset?.mediaBackground !== "true") {
+        el.farCtx.fillStyle = state.canvasPalette?.background ?? "#050507";
+        el.farCtx.fillRect(0, 0, width, height);
+      }
     }
     el.width = width;
     el.height = height;
@@ -38790,10 +39181,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       el.canvas = document.getElementById("idle-layer");
     // The far layer: the sky, and whatever a focused branch pushes behind it.
     el.far = document.getElementById("idle-layer-far");
-    // Opaque: drawBackdrop paints the whole sky first every frame, and nothing
-    // reads the layer's transparency, so the compositor need not blend it
-    // with what lies under it.
-    el.farCtx = el.far?.getContext?.("2d", { alpha: false }) ?? null;
+    // Transparent when video supplies the sky; ordinary scenes still paint
+    // the whole backdrop. Nodes retain their own full-strength paint.
+    el.farCtx = el.far?.getContext?.("2d", { alpha: true }) ?? null;
       el.hud = document.getElementById("idle-hud");
       if (!el.canvas) return;
       el.ctx = el.canvas.getContext("2d");
@@ -39494,8 +39884,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   ["mousemove", "pointerdown", "wheel", "touchstart", "keydown", "focusin"].forEach((type) =>
     window.addEventListener(
       type,
-      () => {
-        const woke = wakeAmbientZen();
+      (event) => {
+        const woke = ambientZenInput(type, event);
+        if (woke === null) return; // small movements along the parked edge keep the flight going
         if (state.active && type !== "mousemove") {
           state.ambient = false;
           el.hud?.classList.add("forced");
@@ -39509,10 +39900,16 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     )
   );
 
+  window.addEventListener("blur", () => wakeAmbientZen());
+  window.addEventListener("resize", () => wakeAmbientZen());
+  window.addEventListener("mouseout", (event) => {
+    if (!event.relatedTarget) wakeAmbientZen();
+  });
+
   // Input anywhere in the window, and the page's own change events, end a rest
   // before their handlers run (capture), so the answer is never a rest frame late.
   for (const type of ["pointerdown", "pointermove", "pointerup", "wheel", "keydown", "keyup", "focusin", "resize"]) window.addEventListener(type, wakeFrames, { capture: true, passive: true });
-  for (const type of ["mefi-music-change", "mefi-theme-change", "mefi-tree-preferences", "mefi:nav", "mefi:tree-select", "mefi:assistant-focus", "mefi:project-changed"]) window.addEventListener(type, wakeFrames, true);
+  for (const type of ["mefi-music-change", "mefi-theme-change", "mefi-tree-preferences", "mefi:tree-dynamics", "mefi:tree-sample", "mefi:media-background", "mefi:nav", "mefi:tree-select", "mefi:assistant-focus", "mefi:project-changed"]) window.addEventListener(type, wakeFrames, true);
   document.addEventListener?.("visibilitychange", wakeFrames);
   window.addEventListener("mefi-music-change", syncMusicNode);
   window.addEventListener("mefi-theme-change", syncGraphTheme);
@@ -39520,6 +39917,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   applyTreePreferences(window.MefiMusic?.graphPreferences?.() ?? {});
 
   window.MefiIdle = {
+    mediaSceneArea, setMediaFocus,
     queueSettings,
     refreshQueueSettings,
     setQueueSetting,
@@ -51423,6 +51821,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
   async function submit(event) {
     event?.preventDefault();
+    if (window.MefiFileInputs?.isReading($("input"))) { feedback("Wait for the files to finish reading."); return; }
     const value = $("input").value.trim();
     if (!value || state.pending || state.switching || !state.activeId || !api()) return;
     const id = state.activeId; const mode = state.mode;
@@ -51564,6 +51963,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       if (projectActions?.open && (!projectActions.contains(event.target) || event.target.closest?.("button"))) projectActions.open = false;
     });
     $("form").addEventListener("submit", submit);
+    window.MefiFileInputs?.bind($("input"), { scope: () => `${state.epoch}:${state.activeId}:${state.mode}`, blocked: () => state.pending || state.switching || !state.activeId });
     $("activity-toggle")?.addEventListener("click", () => setActivityOpen($("activity-drawer").hidden, true));
     $("activity-close")?.addEventListener("click", () => setActivityOpen(false, true));
     $("progress-open")?.addEventListener("click", () => setActivityOpen(true, true));
@@ -51761,11 +52161,19 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   const finite = (value, fallback) => Number.isFinite(value) ? value : fallback;
   const distance = (point, box) => Math.hypot(Math.max(box.x - point.x, 0, point.x - box.x - box.width), Math.max(box.y - point.y, 0, point.y - box.y - box.height));
 
-  function create({ content, onClose, onSettings }) {
+  function create({ content, onClose, onSettings, settingsHost }) {
     let saved;
     try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); } catch {}
     let pinned = saved?.pinned === true;
     let avoid = saved?.avoid !== false;
+    let background = saved?.background === true;
+    let transparency = clamp(finite(saved?.transparency, 0), 0, 90);
+    let treeTransparency = clamp(finite(saved?.treeTransparency, 0), 0, 90);
+    let videoBrightness = clamp(finite(saved?.videoBrightness, 100), 25, 150);
+    let fadeOnDone = saved?.fadeOnDone !== false, faded = false;
+    let trackDark = saved?.trackDark === true, sceneTimer = null, sceneBusy = false;
+    let darkCandidate = -1, darkStreak = 0, darkCurrent = 4, darkMovedAt = 0;
+    let knownTasks = null, projectId = null, taskRevision = 0;
     let box = null, shape = "video", minimized = false, gesture = null;
     let visible = false, hovered = false, yielded = false, awaySince = 0, lastDistance = Infinity, graceUntil = 0;
     let size = {};
@@ -51775,6 +52183,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
     const now = () => window.performance.now();
     const root = document.createElement("section");
+    if (settingsHost) settingsHost.hidden = true;
     root.id = "media-window"; root.className = "media-window"; root.hidden = true;
     root.setAttribute("role", "region"); root.setAttribute("aria-label", "Media player");
     const controls = document.createElement("div"); controls.className = "media-window-controls";
@@ -51787,7 +52196,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     };
     const move = button("move", "⠿", "Move media · drag or use arrow keys (Shift for fine steps)");
     move.className = "media-window-move";
-    const pin = button("pin", "Pin", "Pin media in place", () => { pinned = !pinned; paintToggles(); persist(); });
+    const pin = button("pin", "Pin", "Pin media in place", () => { pinned = !pinned; root.dataset.dodging = "false"; paintToggles(); persist(); });
     const dodge = button("avoid", "Move aside", "Move aside near the pointer in menus", () => { avoid = !avoid; yielded = false; paintToggles(); persist(); });
     const minimize = button("minimize", "−", "Minimize media", () => {
       minimized = !minimized; root.dataset.minimized = String(minimized);
@@ -51797,12 +52206,62 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       root.setAttribute("aria-label", minimized ? "Media player minimized" : "Media player");
       layout();
     });
-    button("close", "×", "Close media and stop playback", () => { hide(); onClose(); });
+    const close = button("close", "×", "Close media and stop playback", () => { hide(); onClose(); });
+    const backgroundButton = button("background", "Background", "Use video as Studio background", () => {
+      end(); background = !background;
+      if (minimized) minimize.click();
+      paintVideo(); layout(); persist();
+    });
+    const opacityLabel = document.createElement("label"); opacityLabel.className = "media-window-transparency";
+    const opacityText = document.createElement("span");
+    const opacityInput = document.createElement("input");
+    opacityInput.id = "media-window-transparency"; opacityInput.type = "range";
+    opacityInput.min = "0"; opacityInput.max = "90"; opacityInput.step = "5";
+    opacityInput.setAttribute("aria-label", "Video transparency");
+    opacityInput.addEventListener("input", () => { transparency = clamp(Number(opacityInput.value) || 0, 0, 90); faded = false; paintVideo(); persist(); });
+    opacityLabel.append(opacityText, opacityInput); controls.append(opacityLabel);
+    const treeOpacityLabel = document.createElement("label"); treeOpacityLabel.className = "media-window-transparency";
+    const treeOpacityText = document.createElement("span");
+    const treeOpacityInput = document.createElement("input");
+    treeOpacityInput.id = "media-window-tree-transparency"; treeOpacityInput.type = "range";
+    treeOpacityInput.min = "0"; treeOpacityInput.max = "90"; treeOpacityInput.step = "5";
+    treeOpacityInput.setAttribute("aria-label", "Tree transparency");
+    treeOpacityInput.addEventListener("input", () => { treeTransparency = clamp(Number(treeOpacityInput.value) || 0, 0, 90); paintVideo(); persist(); });
+    treeOpacityLabel.append(treeOpacityText, treeOpacityInput);
+    const brightnessLabel = document.createElement("label"); brightnessLabel.className = "media-window-transparency";
+    const brightnessText = document.createElement("span");
+    const brightnessInput = document.createElement("input");
+    brightnessInput.id = "media-window-brightness"; brightnessInput.type = "range";
+    brightnessInput.min = "25"; brightnessInput.max = "150"; brightnessInput.step = "5";
+    brightnessInput.setAttribute("aria-label", "Video brightness");
+    brightnessInput.addEventListener("input", () => { videoBrightness = clamp(Number(brightnessInput.value) || 100, 25, 150); faded = false; paintVideo(); persist(); });
+    brightnessLabel.append(brightnessText, brightnessInput);
+    const fadeButton = button("fade", "Fade on finish", "Fade video and notify when a task finishes", () => {
+      fadeOnDone = !fadeOnDone;
+      if (!fadeOnDone) faded = false;
+      paintVideo(); persist();
+    });
+    const restoreButton = button("restore", "Restore video", "Restore video after task completion", () => { faded = false; paintVideo(); });
+    const darkButton = button("dark", "Keep tree in dark areas", "Slowly move the tree toward a consistently darker part of the background video", () => {
+      if (window.MefiTreeDynamics) {
+        const dynamics = window.MefiTreeDynamics;
+        const enabled = dynamics.videoEnabled() && dynamics.preferences().videoTarget === "dark";
+        dynamics.update({ mode: enabled ? (dynamics.musicEnabled() ? "music" : "steady") : (dynamics.musicEnabled() ? "hybrid" : "video"), videoTarget: "dark" });
+        return;
+      }
+      trackDark = !trackDark; darkCandidate = -1; darkStreak = 0; darkCurrent = 4; darkMovedAt = 0;
+      window.MefiIdle?.setMediaFocus?.(null); paintVideo(); persist();
+    });
     const caption = document.createElement("button");
     caption.type = "button"; caption.className = "media-window-caption";
     caption.id = "media-window-settings"; caption.title = "Open Audio settings";
     caption.addEventListener("click", onSettings);
-    root.append(content, controls, caption);
+    const toolbar = document.createElement("div"); toolbar.className = "media-window-toolbar";
+    toolbar.append(move, minimize, close);
+    controls.append(toolbar, backgroundButton, opacityLabel, treeOpacityLabel, brightnessLabel, darkButton, fadeButton, restoreButton, caption, pin, dodge);
+    window.MefiTreeDynamics?.mountVisibility?.(controls, "media");
+    root.append(content);
+    (settingsHost || root).append(controls);
     const edges = [];
     for (const edge of ["n", "e", "s", "w", "ne", "se", "sw", "nw"]) {
       const grip = document.createElement("button");
@@ -51827,26 +52286,31 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     function limits() {
       const area = bounds();
       const maxWidth = Math.max(1, area.right - area.left), maxHeight = Math.max(1, area.bottom - area.top);
-      return { area, maxWidth, maxHeight, minWidth: Math.min(304, maxWidth), minHeight: Math.min(shape === "tall" ? 240 : shape === "audio" ? 104 : 152, maxHeight) };
+      return { area, maxWidth, maxHeight, minWidth: Math.min(464, maxWidth), minHeight: Math.min(shape === "tall" ? 240 : shape === "audio" ? 104 : 216, maxHeight) };
     }
     function fit(candidate) {
       const { area, maxWidth, maxHeight, minWidth, minHeight } = limits();
-      const width = clamp(finite(candidate.width, 440), minWidth, maxWidth);
+      const width = clamp(finite(candidate.width, 600), minWidth, maxWidth);
       const height = clamp(finite(candidate.height, 248), minHeight, maxHeight);
       return { width, height, x: clamp(finite(candidate.x, area.right - width), area.left, area.right - width), y: clamp(finite(candidate.y, area.bottom - height), area.top, area.bottom - height) };
     }
-    function visibleBox() { return minimized ? { ...box, width: Math.min(box.width, 304), height: 44 } : box; }
+    function visibleBox() {
+      if (minimized) return { ...box, width: Math.min(box.width, 304), height: 44 };
+      if (background) { const area = bounds(); return { x: area.left, y: area.top, width: area.right - area.left, height: area.bottom - area.top }; }
+      return box;
+    }
     function layout() {
       if (!box) return;
       box = fit(box);
       const current = visibleBox();
       Object.assign(root.style, { left: `${current.x}px`, top: `${current.y}px`, width: `${current.width}px`, height: `${current.height}px` });
-      for (const grip of edges) grip.hidden = minimized;
+      for (const grip of edges) grip.hidden = minimized || background;
+      paintVideo();
     }
     function persist() {
       if (!box) return;
       const area = bounds();
-      saved = { pinned, avoid, size, x: (box.x - area.left) / Math.max(1, area.right - area.left - box.width), y: (box.y - area.top) / Math.max(1, area.bottom - area.top - box.height) };
+      saved = { pinned, avoid, background, transparency, treeTransparency, videoBrightness, fadeOnDone, trackDark, size, x: (box.x - area.left) / Math.max(1, area.right - area.left - box.width), y: (box.y - area.top) / Math.max(1, area.bottom - area.top - box.height) };
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch {}
     }
     function paintToggles() {
@@ -51855,12 +52319,101 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       pin.setAttribute("aria-label", pin.title);
       dodge.title = pinned ? "Move aside is paused while pinned" : "Move aside near the pointer in menus";
     }
+    function paintVideo() {
+      if (settingsHost) settingsHost.hidden = !visible;
+      const backdrop = visible && background && !minimized;
+      const backdropChanged = document.body.dataset.mediaBackground !== String(backdrop);
+      root.dataset.background = String(backdrop);
+      document.body.dataset.mediaVisible = String(visible && !minimized);
+      document.body.dataset.mediaBackground = String(backdrop);
+      document.body.style.setProperty("--media-tree-opacity", String(1 - treeTransparency / 100));
+      document.body.dataset.mediaView = window.MefiNav?.top?.() || window.MefiNav?.current?.() || "";
+      if (backdropChanged && typeof CustomEvent === "function") window.dispatchEvent?.(new CustomEvent("mefi:media-background"));
+      content.style.opacity = String(faded ? 0.08 : (1 - transparency / 100));
+      content.style.filter = `brightness(${videoBrightness / 100})`;
+      backgroundButton.setAttribute("aria-pressed", String(background));
+      backgroundButton.textContent = background ? "Float video" : "Background";
+      fadeButton.setAttribute("aria-pressed", String(fadeOnDone));
+      const dynamics = window.MefiTreeDynamics;
+      dynamics?.setVideoAvailable(backdrop && !faded);
+      const tracking = dynamics ? Boolean(dynamics.sampleRequest()) : trackDark;
+      darkButton.setAttribute("aria-pressed", String(dynamics ? dynamics.videoEnabled() && dynamics.preferences().videoTarget === "dark" : trackDark));
+      restoreButton.hidden = !faded;
+      opacityInput.value = String(transparency);
+      opacityText.textContent = `Video transparency · ${transparency}%`;
+      treeOpacityInput.value = String(treeTransparency);
+      treeOpacityText.textContent = `Tree transparency · ${treeTransparency}%`;
+      brightnessInput.value = String(videoBrightness);
+      brightnessText.textContent = `Video brightness · ${videoBrightness}%`;
+      move.disabled = background; pin.disabled = background; dodge.disabled = background;
+      // A backdrop must never take keyboard focus or intercept workspace clicks.
+      content.inert = backdrop || minimized;
+      if (backdrop && tracking && window.mefiStudio?.mediaSceneSample && !sceneTimer) sceneTimer = window.setInterval(sampleDarkArea, 5000);
+      if ((!backdrop || !tracking) && sceneTimer) { window.clearInterval(sceneTimer); sceneTimer = null; }
+      if (dynamics || !backdrop || !trackDark) {
+        darkCandidate = -1; darkStreak = 0; darkCurrent = 4; darkMovedAt = 0;
+        window.MefiIdle?.setMediaFocus?.(null);
+      }
+    }
+    async function sampleDarkArea() {
+      const dynamics = window.MefiTreeDynamics, request = dynamics?.sampleRequest();
+      if (sceneBusy || !visible || !background || minimized || !(dynamics ? request : trackDark) || faded || document.hidden) return;
+      const area = window.MefiIdle?.mediaSceneArea?.();
+      if (!area) return;
+      sceneBusy = true;
+      try {
+        const result = await window.mefiStudio.mediaSceneSample({ ...area, ...(request || {}) });
+        if (!visible || !background || minimized || faded || !(dynamics ? dynamics.sampleRequest() : trackDark) || !window.MefiIdle?.mediaSceneArea?.()) return;
+        const scores = result?.scores;
+        if (!result?.ok || !Array.isArray(scores) || scores.length !== 9 || !scores.every(Number.isFinite)) return;
+        if (dynamics) { dynamics.acceptSample(scores, request.revision); return; }
+        const best = scores.indexOf(Math.min(...scores));
+        // Broad overlapping regions, sustained improvement, then a long dwell:
+        // scene cuts and a passing shadow cannot send the tree chasing the video.
+        if (best === darkCurrent || scores[darkCurrent] - scores[best] < 0.04) { darkStreak = 0; return; }
+        darkStreak = best === darkCandidate ? darkStreak + 1 : 1; darkCandidate = best;
+        if (darkStreak < 3 || Date.now() - darkMovedAt < 30000) return;
+        if (window.MefiIdle.setMediaFocus({ x: (best % 3) / 2, y: Math.floor(best / 3) / 2 })) {
+          darkCurrent = best; darkMovedAt = Date.now(); darkStreak = 0;
+        }
+      } catch {} finally { sceneBusy = false; }
+    }
+    function noticeTasks(tasks) {
+      if (!Array.isArray(tasks)) return;
+      taskRevision++;
+      const next = new Map();
+      const completed = [];
+      for (const task of tasks) {
+        if (!task?.id || projectId && task.projectId && task.projectId !== projectId) continue;
+        const key = `${task.projectId || projectId || ""}:${task.id}`;
+        const previous = knownTasks?.get(key);
+        next.set(key, task.status);
+        if (previous && !["done", "archived", "absorbed"].includes(previous) && task.status === "done" && !task.dropped) completed.push(task);
+      }
+      knownTasks = next;
+      if (!visible || !fadeOnDone || !completed.length) return;
+      faded = true; paintVideo();
+      const task = completed[0];
+      window.MefiToast?.(completed.length === 1 ? `Task finished: ${task.title || "Untitled task"}` : `${completed.length} tasks finished`, "good", {
+        duration: 15000,
+        action: { label: "View result", run: () => window.MefiNav?.go?.("tasks", { taskId: task.id, projectId: task.projectId || projectId }) },
+        secondary: { label: "Restore video", run: () => { faded = false; paintVideo(); } },
+      });
+    }
+    function seedTasks() {
+      const revision = taskRevision;
+      Promise.resolve(window.mefiStudio?.tasksList?.()).then((result) => {
+        if (revision !== taskRevision || !result?.ok || !Array.isArray(result.tasks)) return;
+        projectId = result.projectId || projectId; noticeTasks(result.tasks);
+      }).catch(() => {});
+    }
     function show(link) {
+      window.MefiTreeDynamics?.setVideoAvailable(false);
       root.dataset.dodging = "false";
       const nextShape = link.shape || "video";
       if (!box || nextShape !== shape) {
         shape = nextShape;
-        const defaults = shape === "tall" ? { width: 380, height: 352 } : shape === "compact" ? { width: 380, height: 152 } : shape === "audio" ? { width: 380, height: 104 } : { width: 440, height: 248 };
+        const defaults = shape === "tall" ? { width: 540, height: 368 } : shape === "compact" ? { width: 540, height: 216 } : shape === "audio" ? { width: 540, height: 104 } : { width: 600, height: 264 };
         const preferred = size[shape];
         box = fit({ ...defaults, width: finite(preferred?.width, defaults.width), height: finite(preferred?.height, defaults.height), x: box?.x, y: box?.y });
         const area = bounds();
@@ -51874,15 +52427,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
     function hide() {
       if (minimized) minimize.click();
-      end(); visible = false; root.hidden = true; hovered = false; yielded = false; awaySince = 0;
+      end(); visible = false; root.hidden = true; hovered = false; yielded = false; awaySince = 0; faded = false; paintVideo();
     }
     function reveal() {
       if (minimized) minimize.click();
       graceUntil = now() + 1600;
-      move.focus({ preventScroll: true });
+      (background ? backgroundButton : move).focus({ preventScroll: true });
     }
     function start(event, edge = "move") {
-      if (event.button !== 0 || gesture || !visible) return;
+      if (event.button !== 0 || gesture || !visible || background) return;
       event.preventDefault(); event.stopPropagation();
       gesture = { edge, x: event.clientX, y: event.clientY, box: { ...box }, target: event.currentTarget, pointerId: event.pointerId };
       root.dataset.dodging = "false";
@@ -51911,7 +52464,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
     function keyboard(event, edge) {
       const vectors = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
-      if (!vectors[event.key] || !box) return;
+      if (!vectors[event.key] || !box || background) return;
       event.preventDefault(); event.stopPropagation();
       root.dataset.dodging = "false";
       const step = event.shiftKey ? 2 : 16;
@@ -51929,7 +52482,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         box = changed(event.clientX - gesture.x, event.clientY - gesture.y, gesture.edge, gesture.box);
         layout(); return;
       }
-      if (!visible || minimized || event.buttons || event.pointerType && event.pointerType !== "mouse") return;
+      if (!visible || minimized || background || event.buttons || event.pointerType && event.pointerType !== "mouse") return;
       const point = { x: event.clientX, y: event.clientY }, gap = distance(point, box), time = now();
       const approaching = gap < lastDistance; lastDistance = gap;
       // After one dodge, following the player always wins. Rearm only after
@@ -51966,9 +52519,16 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     window.addEventListener("blur", () => { end(); hovered = false; });
     window.addEventListener("resize", () => { end(); root.dataset.dodging = "false"; layout(); });
     window.addEventListener("mefi:shell", layout);
+    window.addEventListener("mefi:tree-dynamics", paintVideo);
     window.addEventListener("mefi:nav", () => { lastDistance = Infinity; awaySince = 0; root.dataset.dodging = "false"; layout(); });
+    window.mefiStudio?.onTasks?.(noticeTasks);
+    window.mefiStudio?.onProjects?.((payload) => {
+      if (!payload?.activeId || payload.activeId === projectId) return;
+      projectId = payload.activeId; knownTasks = null; taskRevision++; faded = false; paintVideo(); seedTasks();
+    });
+    seedTasks();
     paintToggles();
-    return { show, hide, reveal };
+    return { show, hide, reveal, snapshot: () => ({ minimized }), restore: (value) => { if (Boolean(value?.minimized) !== minimized) minimize.click(); } };
   }
   window.MefiMediaWindow = { create };
 })();
@@ -51984,6 +52544,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 (() => {
   "use strict";
   const STORAGE_KEY = "mefiStudio.music.v1";
+  const LINK_RESUME_KEY = "mefiStudio.mediaResume.v1";
+  const LINK_RESUME_MS = 600000;
+  const LINK_QUEUE_KEY = "mefiStudio.mediaQueue.v1";
+  const LINK_QUEUE_LIMIT = 50;
+  let linkResumeTimer = null;
+  let linkWatchTimer = null, linkPlayback = null;
+  let youtubeResults = [], youtubeSearching = false;
   const THEMES = {
     gold: { name: "Studio gold", accent: "#c9a86a", bright: "#e6c98d", rgb: "201,168,106", bg: "#050507", panel: "#0d0e12", muted: "#aaa18f" },
     midnight: { name: "Midnight", accent: "#82a8e6", bright: "#bbd5ff", rgb: "130,168,230", bg: "#050913", panel: "#0d1524", muted: "#a2b2ca" },
@@ -52242,6 +52809,27 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   let stored;
   try { stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); } catch {}
   const prefs = safePreferences(stored);
+  const MEDIA_UI_KEY = "mefiStudio.mediaMenu.v1";
+  let mediaMenu = { showLinks: true, copiedLinks: true };
+  try {
+    const savedMenu = JSON.parse(localStorage.getItem(MEDIA_UI_KEY) || "null");
+    mediaMenu = { showLinks: savedMenu?.showLinks !== false, copiedLinks: savedMenu?.copiedLinks !== false };
+  } catch {}
+  let clipboardOffer = null, lastClipboardUrl = null, clipboardTimer = 0, clipboardBusy = false, clipboardGeneration = 0;
+  let linkQueue = [];
+  try {
+    const savedQueue = JSON.parse(localStorage.getItem(LINK_QUEUE_KEY) || "[]");
+    if (Array.isArray(savedQueue)) linkQueue = savedQueue.slice(0, LINK_QUEUE_LIMIT).flatMap(item => {
+      const link = mediaLink(item?.url);
+      return playableLink(link) ? [{ url: link.url, title: typeof item.title === "string" ? item.title.slice(0, 160) : link.label }] : [];
+    });
+  } catch {}
+  let mediaVolume = prefs.volume, mediaMuted = false, mediaVolumeApplied = false;
+  try {
+    const savedVolume = JSON.parse(localStorage.getItem("mefiStudio.mediaVolume.v1") || "null");
+    if (Number.isFinite(savedVolume?.volume)) mediaVolume = Math.max(0, Math.min(1, savedVolume.volume));
+    mediaMuted = savedVolume?.muted === true;
+  } catch {}
   const PREMIUM_KEY = "mefiStudio.music.premium.v1";
   const COMMUNITY_HINT_KEY = "mefiStudio.community.v1";
   let storedPremium;
@@ -52268,6 +52856,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   let dropdownFrame = 0;
   let dropdownAnchor = null;
   let dropdownFocus = null;
+  let dropdownHover = false;
+  let dropdownOpenTimer = 0;
+  let dropdownCloseTimer = 0;
   let restoreWorkspace = false;
   let deckB = null;
   let pendingDeck = null;
@@ -52831,8 +53422,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     render(); announce();
   }
   // The player for state.link, built once per link: reopening the sheet or
-  // repainting keeps the same frame, so nothing restarts. Autoplay is asked for
-  // only by a Play that just happened, never by a restore after a relaunch.
+  // repainting keeps the same frame, so nothing restarts. Recent restores retain
+  // the last observed playback state, including a deliberately paused video.
   function mountLink() {
     const link = state.link;
     if (!link || state.source !== "link" || !els.linkPlayer) return;
@@ -52844,16 +53435,19 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     // embed's own start parameter where it has one, and a file seeks once
     // its length is known.
     const startSeconds = Math.floor(state.linkStartMs / 1000);
+    linkPlayback = { startMs: state.linkStartMs, playing: autoplay, url: link.url, observed: false, savedAt: 0 };
+    mediaVolumeApplied = false;
     state.linkAutoplay = false; state.linkStartMs = 0;
     if (link.kind === "media") {
       const player = element("video", "music-link-frame music-link-media", null, els.linkPlayer);
       player.dataset.url = link.url; player.dataset.shape = link.shape;
       player.controls = true; player.preload = "metadata"; player.playsInline = true;
       player.title = link.label;
-      player.volume = prefs.volume;
+      player.volume = mediaVolume; player.muted = mediaMuted;
       const sync = () => { if (els.linkFrame !== player) return; state.linkPlaying = !player.paused && !player.ended; renderLinkNow(); announce(); };
       for (const name of ["play", "playing", "pause", "ended"]) player.addEventListener(name, sync);
-      player.addEventListener("volumechange", () => { if (els.linkFrame === player && Number.isFinite(player.volume)) { prefs.volume = player.volume; persist(); } });
+      player.addEventListener("ended", () => { if (els.linkFrame === player) playQueued(); });
+      player.addEventListener("volumechange", () => { if (els.linkFrame === player && Number.isFinite(player.volume)) { mediaVolume = player.volume; mediaMuted = Boolean(player.muted); prefs.volume = player.volume; persist(); saveLinkVolume(); paintLinkVolume(); } });
       player.addEventListener("error", () => {
         if (els.linkFrame !== player) return;
         state.linkPlaying = false;
@@ -52869,6 +53463,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       if (autoplay && typeof player.play === "function") {
         try { Promise.resolve(player.play()).catch(() => {}); } catch {}
       }
+      rememberLink();
       return;
     }
     const frame = element("iframe", "music-link-frame", null, els.linkPlayer);
@@ -52885,8 +53480,210 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     // may see the origin, and main.cjs names Studio to YouTube's.
     frame.referrerPolicy = "strict-origin-when-cross-origin";
     els.linkFrame = frame;
+    const subscribe = () => {
+      if (els.linkFrame !== frame) return;
+      if (link.provider === "youtube") sendLinkMessage({ event: "listening", id: "studio-media", channel: "widget" });
+      if (link.provider === "vimeo") for (const value of ["timeupdate", "play", "pause", "ended", "volumechange"]) sendLinkMessage({ method: "addEventListener", value });
+    };
+    frame.addEventListener("load", subscribe);
+    if (link.provider === "youtube") linkWatchTimer = window.setInterval(subscribe, 500);
+    rememberLink();
+  }
+  function sendLinkMessage(message) {
+    const frame = els.linkFrame;
+    if (!frame?.contentWindow) return;
+    try { frame.contentWindow.postMessage(JSON.stringify(message), new URL(frame.src).origin); } catch {}
+  }
+  function saveLinkVolume() {
+    try { localStorage.setItem("mefiStudio.mediaVolume.v1", JSON.stringify({ volume: mediaVolume, muted: mediaMuted })); } catch {}
+  }
+  function paintLinkVolume() {
+    if (!els.linkVolume) return;
+    els.linkVolumeControls.hidden = !state.link || state.source !== "link" || !(state.link.kind === "media" || ["youtube", "vimeo"].includes(state.link.provider));
+    els.linkVolume.value = String(Math.round(mediaVolume * 100));
+    els.linkVolumeLabel.textContent = `Volume · ${Math.round(mediaVolume * 100)}%`;
+    els.linkMute.textContent = mediaMuted ? "Unmute" : "Mute";
+    els.linkMute.setAttribute("aria-pressed", String(mediaMuted));
+  }
+  function applyLinkVolume() {
+    const frame = els.linkFrame;
+    if (!frame) return;
+    if (state.link?.kind === "media") { frame.volume = mediaVolume; frame.muted = mediaMuted; }
+    if (state.link?.provider === "youtube") {
+      sendLinkMessage({ event: "command", func: "setVolume", args: [Math.round(mediaVolume * 100)], id: "studio-media", channel: "widget" });
+      sendLinkMessage({ event: "command", func: mediaMuted ? "mute" : "unMute", args: [], id: "studio-media", channel: "widget" });
+    }
+    if (state.link?.provider === "vimeo") {
+      sendLinkMessage({ method: "setVolume", value: mediaVolume });
+      sendLinkMessage({ method: "setMuted", value: mediaMuted });
+    }
+    paintLinkVolume();
+  }
+  function saveLinkQueue() {
+    try { localStorage.setItem(LINK_QUEUE_KEY, JSON.stringify(linkQueue)); } catch {}
+    renderLinkQueue(); renderLinkNow(); scheduleDropdown();
+  }
+  function queueLink(raw, title = null, next = false) {
+    const link = mediaLink(raw);
+    if (!playableLink(link)) { note("Paste a playable media link to add it to the queue.", true); return false; }
+    if (linkQueue.length >= LINK_QUEUE_LIMIT) { note("The queue holds 50 videos. Remove one before adding another.", true); return false; }
+    const item = { url: link.url, title: typeof title === "string" && title.trim() ? title.trim().slice(0, 160) : link.label };
+    if (next) linkQueue.unshift(item); else linkQueue.push(item);
+    saveLinkQueue(); note(`${item.title} ${next ? "will play next" : "added to the queue"}.`);
+    return true;
+  }
+  function playQueued(index = 0) {
+    const item = linkQueue[index];
+    if (!item) return false;
+    const placement = els.floatingPlayer?.snapshot?.();
+    // Repeated entries are intentional: remount to restart the same video.
+    if (state.link?.url === item.url) unmountLink();
+    if (!playLink(item.url, { label: item.title })) return false;
+    linkQueue.splice(index, 1); saveLinkQueue();
+    els.floatingPlayer?.restore?.(placement); rememberLink();
+    return true;
+  }
+  function renderLinkQueue() {
+    if (!els.linkQueueList) return;
+    els.linkQueueHeading.textContent = `Up next · ${linkQueue.length}`;
+    els.linkQueueNext.disabled = !linkQueue.length;
+    els.linkQueueEmpty.hidden = Boolean(linkQueue.length);
+    els.linkQueueList.textContent = "";
+    linkQueue.forEach((item, index) => {
+      const row = element("li", "music-link-queue-item", null, els.linkQueueList);
+      const copy = element("span", "music-link-queue-copy", null, row);
+      element("strong", null, `${index + 1}. ${item.title}`, copy);
+      element("small", null, item.url, copy).hidden = !mediaMenu.showLinks;
+      const actions = element("span", "music-link-queue-actions", null, row);
+      button("Play now", "ghost", actions, () => playQueued(index)).setAttribute("aria-label", `Play ${item.title} now`);
+      const next = button("Play next", "ghost", actions, () => { linkQueue.unshift(...linkQueue.splice(index, 1)); saveLinkQueue(); });
+      next.disabled = index === 0; next.setAttribute("aria-label", `Move ${item.title} to next`);
+      button("Remove", "ghost", actions, () => {
+        linkQueue.splice(index, 1); saveLinkQueue();
+        const neighbor = els.linkQueueList.children[Math.min(index, linkQueue.length - 1)];
+        (neighbor?.querySelector?.("button") || els.linkInput).focus();
+      }).setAttribute("aria-label", `Remove ${item.title} from queue`);
+    });
+  }
+  function nextVideo() {
+    if (playQueued()) return;
+    const current = linkPlayback?.url || state.link?.url;
+    const index = youtubeResults.findIndex(item => item.url === current);
+    if (index >= 0 && index + 1 < youtubeResults.length) { playLink(youtubeResults[index + 1].url); return; }
+    if (state.link?.provider === "youtube" && new URL(state.link.url).searchParams.has("list")) {
+      sendLinkMessage({ event: "command", func: "nextVideo", args: [], id: "studio-media", channel: "widget" }); return;
+    }
+    els.youtubeExplorer.open = true; els.youtubeQuery.focus();
+    els.youtubeNotice.textContent = "Search and play a result below. Next video follows that list, or your YouTube playlist.";
+    scheduleDropdown();
+  }
+  async function searchYouTube() {
+    if (youtubeSearching) return;
+    const query = els.youtubeQuery.value.trim();
+    if (!query) { els.youtubeQuery.focus(); return; }
+    if (!window.mefiStudio?.youtubeSearch) { els.youtubeNotice.textContent = "Restart Studio to enable YouTube search."; return; }
+    youtubeSearching = true; els.youtubeSearch.disabled = true;
+    els.youtubeNotice.textContent = "Searching YouTube…";
+    try {
+      const response = await window.mefiStudio.youtubeSearch(query);
+      if (!response?.ok) throw new Error(response?.error || "YouTube search is unavailable.");
+      youtubeResults = (response.results || []).filter(item => item && /^[\w-]{11}$/.test(item.id)).slice(0, 20).map(item => ({ ...item, url: `https://www.youtube.com/watch?v=${item.id}` }));
+      els.youtubeResults.textContent = "";
+      for (const item of youtubeResults) {
+        const card = element("article", "music-youtube-result", null, els.youtubeResults);
+        const copy = element("span", null, null, card);
+        element("strong", null, item.title, copy);
+        element("small", null, [item.channel, item.duration].filter(Boolean).join(" · "), copy);
+        button("Play", "ghost", card, () => playLink(item.url, { label: item.title })).setAttribute("aria-label", `Play ${item.title}`);
+        button("Add to queue", "ghost", card, () => queueLink(item.url, item.title)).setAttribute("aria-label", `Add ${item.title} to queue`);
+        button("Queue next", "ghost", card, () => queueLink(item.url, item.title, true)).setAttribute("aria-label", `Queue ${item.title} next`);
+      }
+      els.youtubeNotice.textContent = youtubeResults.length ? `${youtubeResults.length} videos · Next video follows these results.` : "No videos found. Try another search.";
+    } catch (error) { els.youtubeNotice.textContent = error?.message || "YouTube search is unavailable."; }
+    finally { youtubeSearching = false; els.youtubeSearch.disabled = false; scheduleDropdown(); }
+  }
+  function linkMessage(event) {
+    const frame = els.linkFrame;
+    if (!frame?.contentWindow || !linkPlayback || event.source !== frame.contentWindow) return;
+    try { if (event.origin !== new URL(frame.src).origin) return; } catch { return; }
+    let message = event.data;
+    try { if (typeof message === "string") message = JSON.parse(message); } catch { return; }
+    if (!message || typeof message !== "object") return;
+    let seconds, playing, ended = false;
+    if (state.link?.provider === "youtube") {
+      if (message.event === "onReady") { applyLinkVolume(); mediaVolumeApplied = true; return; }
+      if (!["infoDelivery", "initialDelivery", "onStateChange"].includes(message.event)) return;
+      if (linkWatchTimer) window.clearInterval(linkWatchTimer);
+      linkWatchTimer = null;
+      if (message.event === "initialDelivery") sendLinkMessage({ event: "command", func: "addEventListener", args: ["onStateChange"], id: "studio-media", channel: "widget" });
+      const info = message.info;
+      if (!mediaVolumeApplied) { applyLinkVolume(); mediaVolumeApplied = true; }
+      else if (info && typeof info === "object" && (Number.isFinite(info.volume) || typeof info.muted === "boolean")) {
+        if (Number.isFinite(info.volume)) mediaVolume = Math.max(0, Math.min(1, info.volume / 100));
+        if (typeof info.muted === "boolean") mediaMuted = info.muted;
+        saveLinkVolume(); paintLinkVolume();
+      }
+      const playerState = message.event === "onStateChange" ? info : info?.playerState;
+      if (playerState === 1) linkPlayback.queueStarted = true;
+      ended = playerState === 0;
+      if ([0, 1, 2, 3].includes(playerState)) playing = playerState === 1 || playerState === 3;
+      seconds = info?.currentTime;
+      // A playlist may have advanced since the original link was opened.
+      if (/^[\w-]{11}$/.test(info?.videoData?.video_id || "")) {
+        const url = new URL(linkPlayback.url); url.pathname = "/watch";
+        url.searchParams.set("v", info.videoData.video_id); url.searchParams.delete("t");
+        linkPlayback.url = url.href;
+      }
+    } else if (state.link?.provider === "vimeo") {
+      if (message.event === "ready") {
+        for (const value of ["timeupdate", "play", "pause", "ended", "volumechange"]) sendLinkMessage({ method: "addEventListener", value });
+        applyLinkVolume();
+        return;
+      }
+      if (message.event === "volumechange") {
+        if (Number.isFinite(message.data?.volume)) mediaVolume = Math.max(0, Math.min(1, message.data.volume));
+        if (typeof message.data?.muted === "boolean") mediaMuted = message.data.muted;
+        saveLinkVolume(); paintLinkVolume(); return;
+      }
+      if (!["timeupdate", "play", "pause", "ended"].includes(message.event)) return;
+      seconds = message.data?.seconds;
+      if (message.event === "play") linkPlayback.queueStarted = true;
+      ended = message.event === "ended";
+      if (message.event !== "timeupdate") playing = message.event === "play";
+    } else return;
+    // Initial, unstarted metadata must not erase a restored seek before playback.
+    if (Number.isFinite(seconds) && seconds >= 0 && (seconds > 0 || linkPlayback.observed || playing !== undefined)) linkPlayback.startMs = Math.min(seconds * 1000, 86_400_000);
+    if (playing !== undefined) { linkPlayback.playing = playing; linkPlayback.observed = true; }
+    if (Date.now() - linkPlayback.savedAt >= 1000 || playing === false) rememberLink();
+    if (ended && linkPlayback.queueStarted) { linkPlayback.queueStarted = false; playQueued(); }
+  }
+  // Keep a recent presence stamp while open, including paused/minimized media.
+  // Explicitly closing the player or changing source clears it; closing Studio
+  // saves one final stamp. This also covers a renderer/app crash between beats.
+  function rememberLink() {
+    if (!els.linkFrame || !state.link || state.source !== "link") return;
+    const native = state.link.kind === "media";
+    try {
+      localStorage.setItem(LINK_RESUME_KEY, JSON.stringify({ at: Date.now(), url: linkPlayback?.url || state.link.url,
+        startMs: native ? (Number.isFinite(els.linkFrame.duration) ? Math.max(0, Number(els.linkFrame.currentTime) || 0) * 1000 : linkPlayback?.startMs || 0) : linkPlayback?.startMs || 0,
+        autoplay: native ? !els.linkFrame.paused && !els.linkFrame.ended : Boolean(linkPlayback?.playing), window: els.floatingPlayer?.snapshot?.() }));
+      if (linkPlayback) linkPlayback.savedAt = Date.now();
+    } catch {}
+    if (!linkResumeTimer) linkResumeTimer = window.setInterval(rememberLink, 15000);
+  }
+  function restoreRecentLink(saved) {
+    if (!saved || !Number.isFinite(saved.at) || saved.at > Date.now() || Date.now() - saved.at > LINK_RESUME_MS || els.linkFrame) return;
+    if (playLink(saved.url, { autoplay: saved.autoplay === true, startMs: Number(saved.startMs) || 0 })) {
+      els.floatingPlayer?.restore?.(saved.window);
+      rememberLink();
+    }
   }
   function unmountLink() {
+    if (linkResumeTimer) window.clearInterval(linkResumeTimer);
+    linkResumeTimer = null;
+    if (linkWatchTimer) window.clearInterval(linkWatchTimer);
+    linkWatchTimer = null; linkPlayback = null;
+    try { localStorage.removeItem(LINK_RESUME_KEY); } catch {}
     els.floatingPlayer?.hide();
     const frame = els.linkFrame;
     if (!frame) return;
@@ -52898,9 +53695,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   // The one door for every link, from the Links field, a recent chip, a drop,
   // or another part of Studio (MefiMusic.playLink). Returns true when the link
   // is now the playing source; a hand-off leaves whatever is playing alone.
-  function playLink(raw, { autoplay = true, startMs = 0 } = {}) {
+  function playLink(raw, { autoplay = true, startMs = 0, label = null } = {}) {
     init();
     const link = mediaLink(raw);
+    if (link && typeof label === "string" && label.trim()) link.label = label.trim().slice(0, 160);
     if (!link) { note("That doesn't look like a link. Paste a YouTube, Spotify, SoundCloud or Vimeo link, or a link to an audio or video file.", true); return false; }
     if (!playableLink(link)) {
       state.handoff = link;
@@ -53064,14 +53862,68 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     els.recommend.textContent = state.sending ? "Finding a direction…" : "Ask for recommendations";
     els.aiHint.textContent = recommender || window.mefiStudio?.musicRecommend ? "Uses Studio’s configured assistant. Recommendations appear here." : "Music recommendations need Studio’s assistant connection.";
   }
+  function saveMediaMenu() {
+    try { localStorage.setItem(MEDIA_UI_KEY, JSON.stringify(mediaMenu)); } catch {}
+  }
+  function renderClipboardOffer() {
+    if (!els.clipboardOffer) return;
+    els.clipboardOffer.hidden = !clipboardOffer;
+    els.clipboardTitle.textContent = clipboardOffer ? `Copied link · ${clipboardOffer.label}` : "";
+    els.clipboardUrl.textContent = clipboardOffer?.url || "";
+    els.clipboardUrl.hidden = !mediaMenu.showLinks;
+    scheduleDropdown();
+  }
+  function useClipboardOffer(action) {
+    if (!clipboardOffer) return;
+    const url = clipboardOffer.url;
+    if (action === "dismiss" || (action === "play" ? playLink(url) : queueLink(url, null, action === "next"))) {
+      clipboardOffer = null; renderClipboardOffer();
+    }
+  }
+  function stopClipboardChecks() {
+    if (clipboardTimer) window.clearInterval(clipboardTimer);
+    clipboardTimer = 0; clipboardGeneration++;
+  }
+  async function checkClipboardLink() {
+    if (clipboardBusy || !mediaMenu.copiedLinks || els.dropdown?.hidden !== false || document.body.classList.contains("command-zen") || document.visibilityState === "hidden" || document.hasFocus?.() === false || !window.mefiStudio?.mediaClipboardLink) return;
+    clipboardBusy = true;
+    const generation = clipboardGeneration;
+    try {
+      const result = await window.mefiStudio.mediaClipboardLink();
+      if (generation !== clipboardGeneration || !result?.ok || els.dropdown.hidden || !mediaMenu.copiedLinks) return;
+      const link = typeof result.url === "string" && result.url.length <= 8192 ? playableLink(mediaLink(result.url)) : null;
+      const url = link?.url || "";
+      const available = url && url !== state.link?.url && !linkQueue.some(item => item.url === url);
+      if (url === lastClipboardUrl) {
+        if (!available && clipboardOffer) { clipboardOffer = null; renderClipboardOffer(); }
+        return;
+      }
+      lastClipboardUrl = url;
+      clipboardOffer = available ? link : null;
+      renderClipboardOffer();
+    } catch { /* Clipboard unavailability leaves manual paste available. */ }
+    finally { clipboardBusy = false; }
+  }
+  function startClipboardChecks() {
+    stopClipboardChecks();
+    if (!mediaMenu.copiedLinks || !window.mefiStudio?.mediaClipboardLink) return;
+    void checkClipboardLink();
+    clipboardTimer = window.setInterval(checkClipboardLink, 2000);
+  }
+  function renderMediaMenu() {
+    els.showLinks?.setAttribute("aria-pressed", String(mediaMenu.showLinks));
+    if (els.linkInput) els.linkInput.type = mediaMenu.showLinks ? "text" : "password";
+    if (els.copiedLinks) els.copiedLinks.checked = mediaMenu.copiedLinks;
+    renderLinks(); renderLinkQueue(); renderClipboardOffer();
+  }
   function renderLinks() {
     if (!els.recent) return;
     els.recent.textContent = "";
     for (const url of prefs.links) {
       const item = mediaLink(url);
       if (!item) continue;
-      const recent = button(`${item.providerName} ${item.short}`, "ghost music-recent-link", els.recent, () => playLink(url));
-      recent.title = url;
+      const recent = button(mediaMenu.showLinks ? `${item.providerName} ${item.short}` : `${item.providerName} · Recent ${els.recent.children.length + 1}`, "ghost music-recent-link", els.recent, () => playLink(url));
+      recent.title = mediaMenu.showLinks ? url : "";
       recent.dataset.provider = item.provider;
       if (state.source === "link" && state.link?.url === url) recent.setAttribute("aria-current", "true");
     }
@@ -53082,7 +53934,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       element("strong", null, handoff.label, els.linkHandoff);
       element("p", null, handoffNote(handoff), els.linkHandoff);
       const open = button(handoff.jam ? "Open the Jam in Spotify ↗" : `Open in ${handoff.provider === "web" ? "your browser" : handoff.providerName} ↗`, "primary", els.linkHandoff, () => openLink(handoff.url), "music-link-handoff-open");
-      open.title = handoff.url;
+      open.title = mediaMenu.showLinks ? handoff.url : "";
       if (handoff.jam) element("small", null, "Tip: choose Desktop audio under Listen to and the node tree follows the Jam.", els.linkHandoff);
     }
     renderLinkNow();
@@ -53091,11 +53943,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   // to take it elsewhere (its own site, or a copy to post in Discord).
   function renderLinkNow() {
     if (!els.linkNow) return;
+    paintLinkVolume();
     const link = state.source === "link" ? state.link : null;
     els.linkNow.hidden = !link;
+    if (els.linkNext) els.linkNext.hidden = !linkQueue.length && link?.provider !== "youtube";
     if (!link) return;
     els.linkNowTitle.textContent = link.label;
-    els.linkNowDetail.textContent = link.kind === "media" ? `${state.linkPlaying ? "Playing in Studio" : "Studio's player"} · from ${link.host}` : `${link.providerName} player · Studio's buttons don't control it`;
+    els.linkNowDetail.textContent = link.kind === "media" ? `${state.linkPlaying ? "Playing in Studio" : "Studio's player"}${mediaMenu.showLinks ? ` · from ${link.host}` : ""}` : `${link.providerName} player · playback settings are inside the video`;
   }
   function renderRadio() {
     if (!els.radioState) return;
@@ -53235,6 +54089,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const layoutHint = element("p", "music-fineprint", "Choosing a layout rearranges the tree. Existing nodes keep their places as work updates.", layoutSection);
     layoutHint.id = "music-node-layout-hint";
     els.nodeLayouts.setAttribute("aria-describedby", layoutHint.id);
+    window.MefiTreeDynamics?.mount(layoutSection, "appearance");
     const effectsHeading = element("h4", "music-node-label", "Effects", nodeSection); effectsHeading.id = "music-effects-label";
     const effects = element("div", "music-effects", null, nodeSection); effects.setAttribute("role", "group"); effects.setAttribute("aria-labelledby", effectsHeading.id);
     for (const [key, id, effectClass, title, hint] of [
@@ -53256,11 +54111,27 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     els.dropdown = dropdown; dropdown.id = "music-dropdown"; dropdown.hidden = true; dropdown.tabIndex = -1;
     dropdown.setAttribute("role", "dialog"); dropdown.setAttribute("aria-modal", "false"); dropdown.setAttribute("aria-labelledby", "music-dropdown-heading");
     const dropdownHeader = element("header", "music-dropdown-header", null, dropdown);
+    els.dropdownHeader = dropdownHeader;
     const dropdownTitle = element("h2", null, "Music & video", dropdownHeader); dropdownTitle.id = "music-dropdown-heading";
+    els.showLinks = button("Show links", "ghost mini", dropdownHeader, () => { mediaMenu.showLinks = !mediaMenu.showLinks; saveMediaMenu(); renderMediaMenu(); }, "music-show-links");
+    els.showLinks.title = "Show or hide URLs in the media menu";
     button("Close", "ghost mini", dropdownHeader, () => closeAudio({ focus: true }), "music-dropdown-close");
+    els.clipboardOffer = element("section", "music-clipboard-offer", null, dropdownHeader); els.clipboardOffer.id = "music-clipboard-offer"; els.clipboardOffer.hidden = true;
+    els.clipboardTitle = element("strong", null, "", els.clipboardOffer); els.clipboardTitle.setAttribute("role", "status");
+    els.clipboardUrl = element("small", null, "", els.clipboardOffer);
+    const clipboardActions = element("div", "music-link-tools", null, els.clipboardOffer);
+    for (const [action, label] of [["play", "Play"], ["queue", "Add to queue"], ["next", "Queue next"], ["dismiss", "Dismiss"]]) button(label, "ghost mini", clipboardActions, () => useClipboardOffer(action), `music-clipboard-${action}`);
     const dropdownBody = element("div", "music-dropdown-body", null, dropdown);
     els.dropdownBody = dropdownBody;
     const connection = element("div", "music-connection", null, dropdownBody);
+    const copiedLinksLabel = element("label", "music-clipboard-toggle", null, connection);
+    els.copiedLinks = element("input", null, null, copiedLinksLabel); els.copiedLinks.id = "music-copied-links"; els.copiedLinks.type = "checkbox";
+    element("span", null, "Offer copied media links", copiedLinksLabel);
+    els.copiedLinks.addEventListener("change", () => {
+      mediaMenu.copiedLinks = els.copiedLinks.checked; saveMediaMenu();
+      clipboardOffer = null; renderClipboardOffer();
+      if (mediaMenu.copiedLinks) { lastClipboardUrl = null; startClipboardChecks(); } else stopClipboardChecks();
+    });
     const main = element("section", "music-main", null, dropdownBody);
     main.id = "music-sound"; main.setAttribute("aria-labelledby", "music-sound-label");
     const soundLabel = element("p", "eyebrow music-group-label", "Sound", main); soundLabel.id = "music-sound-label"; soundLabel.tabIndex = -1;
@@ -53345,6 +54216,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     els.linkInput.autocomplete = "off"; els.linkInput.spellcheck = false;
     button("Play", "primary", linkForm, () => playLink(els.linkInput.value), "music-link-load");
     linkForm.addEventListener("submit", (event) => { event.preventDefault(); playLink(els.linkInput.value); });
+    const queueTools = element("div", "music-link-tools", null, els.link);
+    button("Add to queue", "ghost", queueTools, () => queueLink(els.linkInput.value), "music-link-queue-add");
+    button("Queue next", "ghost", queueTools, () => queueLink(els.linkInput.value, null, true), "music-link-queue-first");
     els.linkHandoff = element("div", "music-link-handoff", null, els.link); els.linkHandoff.id = "music-link-handoff"; els.linkHandoff.hidden = true;
     els.recent = element("div", "music-recent", null, els.link); els.recent.setAttribute("aria-label", "Recent links");
     // renderer/together.js fills this, above the player, with Listen together and the
@@ -53356,16 +54230,45 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     els.linkNowDetail = element("small", null, null, nowCopy);
     const nowTools = element("span", "music-link-tools", null, els.linkNow);
     button("Show player", "ghost", nowTools, () => { mountLink(); els.floatingPlayer?.reveal(); }, "music-link-show");
+    els.linkNext = button("Next video", "ghost", nowTools, nextVideo, "music-link-next");
     button("Copy link", "ghost", nowTools, () => state.link && copyLink(state.link.url), "music-link-copy").title = "Copy the link to share it in Discord";
     button("Open ↗", "ghost", nowTools, () => state.link && openLink(state.link.url), "music-link-open").title = "Open the original page";
     els.linkPlayer = element("div", "music-link-player", null, els.link);
+    const videoSettings = element("section", "music-video-settings", null, els.link);
+    element("h3", null, "Video settings", videoSettings);
+    els.linkVolumeControls = element("div", "music-link-volume", null, videoSettings);
+    const linkVolumeLabel = element("label", null, null, els.linkVolumeControls);
+    els.linkVolumeLabel = element("span", null, "Volume", linkVolumeLabel);
+    els.linkVolume = element("input", null, null, linkVolumeLabel); els.linkVolume.id = "music-link-volume";
+    els.linkVolume.type = "range"; els.linkVolume.min = "0"; els.linkVolume.max = "100"; els.linkVolume.step = "1";
+    els.linkVolume.setAttribute("aria-label", "Video volume");
+    els.linkVolume.addEventListener("input", () => { mediaVolume = Math.max(0, Math.min(1, (Number(els.linkVolume.value) || 0) / 100)); if (mediaVolume > 0) mediaMuted = false; saveLinkVolume(); applyLinkVolume(); });
+    els.linkMute = button("Mute", "ghost", els.linkVolumeControls, () => { mediaMuted = !mediaMuted; saveLinkVolume(); applyLinkVolume(); }, "music-link-mute");
     els.floatingPlayer = window.MefiMediaWindow?.create({
       content: els.linkPlayer,
+      settingsHost: videoSettings,
       onSettings: () => open("sound"),
       onClose: () => { unmountLink(); state.link = null; render(); announce(); },
     });
-    element("p", "music-fineprint", "Media opens in a floating window. Hover for controls, drag the grip to move, or drag an edge to resize. In menus it moves aside once; follow it to use the player, or turn on Pin to keep it still.", els.link);
-    element("p", "music-fineprint", "Embedded players belong to their services, so their sign-in, ads and availability rules apply and Studio’s transport buttons don’t control them. Set the audio link to Desktop audio and the node tree follows them.", els.link);
+    els.youtubeExplorer = element("details", "music-youtube-explorer", null, els.link);
+    element("summary", null, "Explore YouTube", els.youtubeExplorer);
+    const searchForm = element("form", "music-link-form", null, els.youtubeExplorer);
+    els.youtubeQuery = element("input", null, null, searchForm); els.youtubeQuery.id = "music-youtube-query";
+    els.youtubeQuery.type = "search"; els.youtubeQuery.maxLength = 160; els.youtubeQuery.placeholder = "Search YouTube videos"; els.youtubeQuery.setAttribute("aria-label", "Search YouTube");
+    els.youtubeSearch = button("Search", "ghost", searchForm, searchYouTube, "music-youtube-search");
+    searchForm.addEventListener("submit", event => { event.preventDefault(); searchYouTube(); });
+    els.youtubeNotice = element("p", "music-fineprint", "Find a video, then Play. Next video follows your results or YouTube playlist.", els.youtubeExplorer); els.youtubeNotice.setAttribute("role", "status");
+    els.youtubeResults = element("div", "music-youtube-results", null, els.youtubeExplorer); els.youtubeResults.id = "music-youtube-results";
+    const queue = element("section", "music-link-queue", null, els.link); queue.setAttribute("aria-label", "Video queue");
+    const queueHeader = element("div", "music-link-queue-header", null, queue);
+    els.linkQueueHeading = element("h3", null, "Up next", queueHeader); els.linkQueueHeading.setAttribute("aria-live", "polite");
+    els.linkQueueNext = button("Play next video", "ghost", queueHeader, () => playQueued(), "music-link-queue-next");
+    els.linkQueueEmpty = element("p", "music-fineprint", "Your queue is empty. Add a link above or choose a YouTube result.", queue);
+    els.linkQueueList = element("ol", "music-link-queue-list", null, queue); els.linkQueueList.id = "music-link-queue-list";
+    element("p", "music-fineprint", "Queued videos play first when you press Next video. YouTube, Vimeo and direct files also advance automatically when they finish. Your queue is saved across reloads.", queue);
+    renderLinkQueue();
+    element("p", "music-fineprint", "Video settings live here in Music & video. Background and Transparency put the video behind your work; Float video restores its controls. Keep tree in dark areas waits for a consistently darker area, then glides slowly. Fade on finish dims the video and notifies you when a task completes.", els.link);
+    element("p", "music-fineprint", "Embedded players use their service’s sign-in, ads and availability rules. YouTube and Vimeo remember playback when Studio reopens within ten minutes. Set the audio link to Desktop audio and the node tree follows them.", els.link);
     els.link.addEventListener("dragover", (event) => {
       const types = Array.from(event.dataTransfer?.types || []);
       if (!types.includes("text/uri-list") && !types.includes("text/plain")) return;
@@ -53384,6 +54287,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     audioLink.id = "music-audio-reactions";
     audioLink.setAttribute("aria-labelledby", "music-audio-heading");
     const audioHeading = element("summary", null, "Audio reactions", audioLink); audioHeading.id = "music-audio-heading";
+    window.MefiTreeDynamics?.mount(audioLink, "audio");
     element("p", "music-fineprint", "Gentle waves, node glow and tree motion follow quiet or loud music. Add drum accents or background glow when you want more movement.", audioLink);
     const audioControls = element("div", "music-audio-controls", null, connection);
     const sourceLabel = element("label", null, "Listen to", audioControls);
@@ -53432,8 +54336,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     els.recommendation = element("div", "music-recommendation", "", ai); els.recommendation.id = "music-recommendation"; els.recommendation.setAttribute("aria-live", "polite");
     els.notice = element("p", "music-notice", "", dropdownBody); els.notice.setAttribute("role", "status");
     dropdown.addEventListener("keydown", audioKey);
+    dropdown.addEventListener("pointerenter", cancelAudioHoverTimers);
+    dropdown.addEventListener("pointerleave", leaveAudioHover);
+    dropdown.addEventListener("pointerdown", pinAudioDropdown);
+    dropdown.addEventListener("focusin", pinAudioDropdown);
     dropdown.addEventListener("focusout", (event) => {
-      if (event.relatedTarget && !dropdown.contains(event.relatedTarget) && !dropdownAnchor?.contains(event.relatedTarget)) closeAudio();
+      if (event.relatedTarget && !dropdown.contains(event.relatedTarget) && !dropdownAnchor?.contains(event.relatedTarget) && !audioSelectContains(event.relatedTarget)) closeAudio();
     });
     const preview = element("section", "music-preview", null, els.overlay);
     preview.setAttribute("aria-labelledby", "music-preview-heading");
@@ -53467,12 +54375,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const anchor = dropdownAnchor?.getBoundingClientRect?.();
     const strip = dropdownAnchor?.closest?.(".cmd-tools")?.getBoundingClientRect?.();
     const bottom = anchor?.height ? Math.max(anchor.bottom, strip?.bottom || 0) : 64;
-    const top = Math.max(edge, Math.min(bottom + 8, height - 160));
+    const above = anchor?.height ? Math.max(0, anchor.top - 8 - edge) : 0;
+    const below = height - bottom - 8 - edge;
+    const flip = below < 280 && above > below && above >= 240;
+    const top = flip ? edge : Math.max(edge, Math.min(bottom + 8, height - 280));
     const panelWidth = els.dropdown.getBoundingClientRect().width;
     const right = anchor?.width ? width - anchor.right : edge;
     els.dropdown.style.top = `${Math.round(top)}px`;
     els.dropdown.style.right = `${Math.round(Math.max(edge, Math.min(right, width - panelWidth - edge)))}px`;
-    els.dropdown.style.maxHeight = `${Math.max(0, height - top - edge)}px`;
+    els.dropdown.style.maxHeight = `${Math.max(0, flip ? above : height - top - edge)}px`;
   }
   function scheduleDropdown() {
     if (els.dropdown?.hidden !== false || dropdownFrame) return;
@@ -53480,30 +54391,83 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     else positionDropdown();
   }
   function audioOutside(event) {
-    if (!els.dropdown?.contains(event.target) && !dropdownAnchor?.contains(event.target)) closeAudio();
+    if (!els.dropdown?.contains(event.target) && !dropdownAnchor?.contains(event.target) && !audioSelectContains(event.target)) closeAudio();
+  }
+  function audioSelectContains(target) {
+    return window.MefiSelect?.owns?.(els.dropdown) && window.MefiSelect?.contains?.(target);
   }
   function audioKey(event) {
     if (event.key === "Escape" && els.dropdown?.hidden === false) {
-      event.preventDefault(); event.stopPropagation(); closeAudio({ focus: true });
+      if (window.MefiSelect?.owns?.(els.dropdown)) {
+        event.preventDefault(); event.stopPropagation(); window.MefiSelect.close(true); return;
+      }
+      event.preventDefault(); event.stopPropagation(); closeAudio({ focus: !dropdownHover });
     }
   }
-  function openAudio(anchor) {
+  function cancelAudioHoverTimers() {
+    window.clearTimeout(dropdownOpenTimer); window.clearTimeout(dropdownCloseTimer);
+    dropdownOpenTimer = 0; dropdownCloseTimer = 0;
+  }
+  function pinAudioDropdown() {
+    cancelAudioHoverTimers();
+    dropdownHover = false;
+  }
+  function leaveAudioHover() {
+    cancelAudioHoverTimers();
+    if (dropdownHover) dropdownCloseTimer = window.setTimeout(() => closeAudio(), 450);
+  }
+  function bindAudioHover(anchor) {
+    if (!anchor) return;
+    anchor.addEventListener("pointerenter", (event) => {
+      if (event.pointerType !== "mouse") return;
+      cancelAudioHoverTimers();
+      if (els.dropdown?.hidden === false) return;
+      dropdownOpenTimer = window.setTimeout(() => {
+        dropdownOpenTimer = 0;
+        if (!document.body.classList.contains("command-zen") && anchor.getBoundingClientRect().width > 0) openAudio(anchor, { hover: true });
+      }, 200);
+    });
+    anchor.addEventListener("pointerleave", leaveAudioHover);
+    // Touch and keyboard activation keep the existing click behavior.
+    anchor.addEventListener("pointercancel", cancelAudioHoverTimers);
+  }
+  function openAudio(anchor, { hover = false } = {}) {
     init();
-    if (!els.dropdown.hidden) { els.dropdown.focus(); return; }
+    cancelAudioHoverTimers();
+    if (document.body.classList.contains("command-zen")) return;
+    if (!els.dropdown.hidden) { if (!hover) { pinAudioDropdown(); els.dropdown.focus({ preventScroll: true }); } return; }
     if (state.opened) close();
     const toolbar = document.getElementById?.("idle-music-toggle");
     dropdownAnchor = anchor || (toolbar?.getBoundingClientRect?.().width ? toolbar : document.getElementById?.("settings-audio-open"));
     dropdownFocus = document.activeElement;
+    dropdownHover = hover;
     dropdownAnchor?.setAttribute("aria-expanded", "true");
     els.dropdown.hidden = false;
     mountLink(); render(); positionDropdown();
+    startClipboardChecks();
+    if (hover) {
+      // Bring the current source's controls back into view, even if the last
+      // visit ended down in the queue or recommendations. Only this panel scrolls.
+      const current = state.source === "link" && state.link
+        ? (els.linkVolumeControls.hidden ? els.linkNow : els.linkVolumeControls.parentElement)
+        : state.source === "radio" ? els.radioVolume.parentElement.parentElement : els.local;
+      const top = current?.getBoundingClientRect?.().top;
+      const panelTop = els.dropdown.getBoundingClientRect().top;
+      const headerHeight = els.dropdownHeader.getBoundingClientRect().height;
+      els.dropdown.scrollTop = Number.isFinite(top) && Number.isFinite(panelTop)
+        ? Math.max(0, (els.dropdown.scrollTop || 0) + top - panelTop - headerHeight - 12) : 0;
+    }
     document.addEventListener("pointerdown", audioOutside);
     document.addEventListener("keydown", audioKey, true);
     window.addEventListener("scroll", scheduleDropdown, true);
-    els.dropdown.focus({ preventScroll: true });
+    if (!hover) els.dropdown.focus({ preventScroll: true });
   }
   function closeAudio({ focus = false } = {}) {
+    stopClipboardChecks();
+    cancelAudioHoverTimers();
+    dropdownHover = false;
     if (els.dropdown?.hidden !== false) return;
+    if (window.MefiSelect?.owns?.(els.dropdown)) window.MefiSelect.close();
     els.dropdown.hidden = true;
     dropdownAnchor?.setAttribute("aria-expanded", "false");
     document.removeEventListener?.("pointerdown", audioOutside);
@@ -53516,7 +54480,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     dropdownAnchor = null; dropdownFocus = null;
   }
   function toggleAudio(anchor) {
-    if (els.dropdown?.hidden === false) closeAudio({ focus: true });
+    if (els.dropdown?.hidden === false && dropdownHover) openAudio(anchor);
+    else if (els.dropdown?.hidden === false) closeAudio({ focus: true });
     else openAudio(anchor);
   }
   function updatePreview() {
@@ -53547,6 +54512,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   function init() {
     if (initialized) return;
     initialized = true;
+    let recentLink;
+    try { recentLink = JSON.parse(localStorage.getItem(LINK_RESUME_KEY) || "null"); localStorage.removeItem(LINK_RESUME_KEY); } catch {}
     audio = document.createElement("audio"); audio.preload = "metadata"; audio.volume = prefs.volume;
     audio.addEventListener("play", () => { renderTransport(); announce(); });
     audio.addEventListener("pause", () => { renderTransport(); announce(); });
@@ -53573,14 +54540,17 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const unlocked = premiumAllowed();
     if (unlocked && premium.nodeStyle) effective.nodeStyle = premium.nodeStyle;
     build();
+    for (const id of ["idle-music-toggle", "settings-audio-open"]) bindAudioHover(document.getElementById(id));
+    window.addEventListener("blur", () => closeAudio());
     if (unlocked && premium.theme) event("mefi-theme-change", paintTheme(premium.theme));
     else applyTheme(prefs.theme, false);
-    syncTreePreferences(false); renderPremiumLocks(unlocked); render();
+    syncTreePreferences(false); renderPremiumLocks(unlocked); render(); renderMediaMenu();
     if (lastLink) els.linkInput.value = lastLink.url;
     // A station that was sounding when Studio closed is tuned again. Smoke and
     // capture runs share the owner's profile, so they stay silent.
     const headless = /[?&](?:smoke|capture)=1(?:&|$)/.test(String(window.location?.search || ""));
     if (state.source === "radio" && prefs.radioOn && station(state.station) && !headless) tune(state.station);
+    if (!headless && recentLink) Promise.resolve(window.MefiBoot?.ready?.()).then(() => restoreRecentLink(recentLink)).catch(() => {});
     window.addEventListener("resize", () => { schedulePreview(); scheduleDropdown(); });
     // Capture the complete dismissal gesture before the tree or rail sees it.
     for (const type of ["pointerdown", "pointerup", "pointercancel", "click", "auxclick", "contextmenu"]) window.addEventListener(type, appearanceOutside, true);
@@ -53614,7 +54584,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       const dropdownObserver = new window.ResizeObserver(scheduleDropdown);
       dropdownObserver.observe(els.dropdown); dropdownObserver.observe(els.dropdownBody);
     }
-    window.addEventListener("beforeunload", () => { for (const track of state.tracks) URL.revokeObjectURL(track.url); });
+    window.addEventListener("pagehide", rememberLink);
+    window.addEventListener("message", linkMessage);
+    window.addEventListener("beforeunload", () => { rememberLink(); for (const track of state.tracks) URL.revokeObjectURL(track.url); });
   }
   let settingsHosts = null;
   let previewRoute = "music";
@@ -53678,7 +54650,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   function appearanceOutside(event) {
     // Vibe's rail is how Vibe mode moves between pages: its clicks navigate
     // (go() leaves the preview) instead of dismissing into Command.
-    if (event.target?.closest?.("#vibe-rail")) return;
+    if (event.target?.closest?.("#vibe-rail") || event.target?.closest?.("#media-window")) return;
     const consume = () => { event.preventDefault(); event.stopImmediatePropagation(); };
     const canDismiss = () => {
       const transient = window.MefiNav?.state?.transient;
@@ -54342,6 +55314,19 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   let workFlight = null;
   let priorFocus = null;
   let drafts = {};
+  let restoreSelection = true;
+  const selectionKey = () => `mefiStudio.planning.selection.v1.${state.projectId}`;
+  function rememberSelection() {
+    if (!state.projectId || restoreSelection) return;
+    try { localStorage.setItem(selectionKey(), state.selected); } catch { /* Keep the open plan in memory. */ }
+  }
+  function restoreProjectPlan() {
+    if (!restoreSelection) return;
+    let saved;
+    try { saved = localStorage.getItem(selectionKey()); } catch {}
+    state.selected = saved === "new" || state.plans.some((item) => item.id === saved && !archived(item)) ? saved : state.plans.find((item) => !archived(item))?.id || "new";
+    restoreSelection = false;
+  }
   let sliceCounter = 0;
   let exploreTimer = null;
   let exploreFlight = null;
@@ -54447,6 +55432,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     control.addEventListener(options.select ? "change" : "input", () => { change(control.value); persist(); renderDraftFeedback(); if (fieldTargets[id]) scheduleExploration(); });
     control.addEventListener("focus", () => { if (fieldTargets[id]) { focusedField = fieldTargets[id]; if ($("help-target")) $("help-target").textContent = `Helping with ${targetLabels[focusedField].toLowerCase()}`; } });
     control.addEventListener("keydown", (event) => advanceField(event, control));
+    if (!options.locked && (id === "destination" || id === "interview-answer" || id === "spec-text" || id.startsWith("evidence-"))) window.MefiFileInputs?.bind(control, { scope: () => `${state.epoch}:${draftKey()}`, blocked: () => state.busy || !state.opened, limit: control.maxLength });
     return control;
   }
   function form(parent, id, run, label, locked = false) {
@@ -54518,6 +55504,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
   function selectStep(id) {
     viewedStep = id;
+    draft().viewedStep = id; draft().workflowStep = workflowState(plan()).current; persist();
     if ($("workflow")) $("workflow").dataset.viewedStep = id;
     for (const [key] of flowStages) {
       const stage = $(`stage-${key}`); if (!stage) continue;
@@ -54681,6 +55668,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       node("summary", "", `${hit.file}:${hit.line}`, entry);
       node("pre", "", hit.snippet, entry);
     }
+    if (references?.overview?.length) {
+      const overview = branch("Project overview", references.structure?.join(" · "));
+      for (const hit of references.overview) { const entry = node("details", "planning-file-node", undefined, overview); node("summary", "", `${hit.file}:${hit.line}`, entry); node("pre", "", hit.snippet, entry); }
+    }
     if (references?.limitations?.length) { const limits = node("details", "planning-scan-limits", undefined, files); node("summary", "", "Scan coverage", limits); for (const line of references.limitations) node("p", "planning-subtle", line, limits); }
     const item = plan();
     const decisions = branch("Decisions to shape", item ? `${item.questions.length} questions · ${item.questions.filter((question) => question.status === "resolved").length} decided` : "Questions appear here as the idea takes shape.");
@@ -54792,7 +55783,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (!area) { area = node("section", "planning-workflow", undefined, $("detail")); area.id = "plans-workflow"; area.setAttribute("aria-label", "From idea to verified work"); }
     area.replaceChildren();
     const flow = workflowState(item); area.dataset.stage = flow.current;
-    if (viewedStepKey !== draftKey() || lastWorkflowStep !== flow.current) viewedStep = flow.current;
+    if (viewedStepKey !== draftKey()) viewedStep = draft().workflowStep === flow.current && flowStages.some(([id]) => id === draft().viewedStep) ? draft().viewedStep : flow.current;
+    else if (lastWorkflowStep !== flow.current) viewedStep = flow.current;
     viewedStepKey = draftKey(); lastWorkflowStep = flow.current; area.dataset.viewedStep = viewedStep;
     const head = node("div", "planning-flow-head", undefined, area);
     const heading = node("div", "", undefined, head);
@@ -54808,6 +55800,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         : button("Archive plan", head, () => act("archive", {}, null, "Plan archived. Find it under Archived in the list; restoring brings it back as it was."), "archive");
       shelf.classList.add("mini");
     }
+    if (item && !archived(item)) navigation("Continue where you left off", head, () => $(`stage-${viewedStep}`)?.click?.(), "resume");
     const rail = node("ol", "planning-flow-rail", undefined, area); rail.setAttribute("aria-label", "Planning and work stages");
     const decided = `${flow.resolved.length}/${flow.questions.length} recorded`;
     const subtitles = { idea: item ? "Destination saved" : "Set a destination", explore: flow.ask?.awaiting ? "Waiting for your answer" : `${flow.frontier.length} ready · ${flow.blocked.length} blocked`, decisions: decided, review: confirmed(item) ? "Confirmed by you" : "Review decisions", spec: item?.spec?.stale ? "Needs revision" : item?.spec ? "Draft saved" : "Draft specification", approval: item?.spec?.approvedAt ? "Approved by you" : "Review specification", build: frozen(item) ? `${flow.work.filter((task) => task.stage === "running").length} working · ${countLabel(item.taskIds?.length || 0, "task")}` : "Create tasks", verify: frozen(item) ? `${flow.work.filter((task) => task.stage === "done").length}/${flow.work.length} confirmed` : "Check the result" };
@@ -54912,6 +55905,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
   async function act(action, payload = {}, clean, success = "Saved.", assist = false) {
     if (state.busy || !state.projectId) return false;
+    if ([...$("detail").querySelectorAll("textarea")].some((input) => window.MefiFileInputs?.isReading(input))) { note("Wait for the files to finish reading."); return false; }
     const epoch = state.epoch; const projectId = state.projectId; const selected = state.selected;
     const current = plan(); const savedDraft = draft(); const key = draftKey();
     const request = { projectId, ...(current ? { planId: current.id, version: current.version } : {}), ...payload, ...(assist ? {} : { action }) };
@@ -55343,6 +56337,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
   }
   function render() {
+    rememberSelection();
     if (composeKey !== draftKey()) { stopExploration(); composeKey = draftKey(); focusedField = "destination"; copilot = { status: "idle", result: null, signature: null, error: "" }; suggestionUndo = null; }
     renderList(); $("detail").replaceChildren();
     if (!state.projectId) {
@@ -55405,12 +56400,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       if (!api()?.projectsList || !api()?.planningList) { render(); note("Planning is available in the desktop app."); return; }
       const projects = guard(await api().projectsList());
       if (epoch !== state.epoch || readId !== state.readId) return;
-      if (state.projectId !== projects.activeId) { state.projectId = projects.activeId; state.plans = []; state.selected = "new"; state.tasks = null; state.workError = null; state.existing = null; state.workReadId += 1; }
+      if (state.projectId !== projects.activeId) { restoreSelection = true; state.projectId = projects.activeId; state.plans = []; state.selected = "new"; state.tasks = null; state.workError = null; state.existing = null; state.workReadId += 1; }
       const projectId = state.projectId; state.projectName = projects.projects.find((item) => item.id === projectId)?.name || "No project selected";
       if (!projectId) { render(); note(); return; }
       const result = guard(await api().planningList({ projectId }));
       if (epoch !== state.epoch || readId !== state.readId || projectId !== state.projectId || (result.projectId && result.projectId !== projectId)) return;
-      state.plans = result.plans || []; state.existing = result.existing ?? null; render(); if (refreshTasks) void refreshWork();
+      state.plans = result.plans || []; state.existing = result.existing ?? null; restoreProjectPlan(); render(); if (refreshTasks) void refreshWork();
     } catch (error) { if (epoch === state.epoch && readId === state.readId) { render(); note(error.message, true); } }
   }
   async function open(options = {}) {
@@ -55420,7 +56415,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (!state.opened) return;
     if (options.create) { state.selected = "new"; if (options.destination && !draft().details?.destination) { draft().details = { title: "", destination: String(options.destination), outOfScope: "" }; persist(); } }
     else if (options.planId) state.selected = options.planId;
-    else if (state.selected === "new" && state.plans.some((item) => !archived(item))) state.selected = state.plans.find((item) => !archived(item)).id;
     render(); if (state.projectId && api()?.planningList && $("notice").dataset.error !== "true") note();
     startWorkPoll();
     (options.create ? $("title") : $("new"))?.focus();
@@ -55450,6 +56444,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     window.addEventListener("mefi:project-changed", (event) => {
       const projectId = event.detail?.projectId; if (projectId === state.projectId) return;
       stopExploration();
+      rememberSelection(); restoreSelection = true;
       persist(); state.epoch += 1; state.readId += 1; state.workReadId += 1; state.projectId = projectId; state.selected = "new"; state.plans = []; state.tasks = null; state.workError = null; state.existing = null; state.busy = false; state.pending = null;
       if (state.opened) { render(); note("Opening this project's plans…"); void refresh(); }
     });
@@ -60924,13 +61919,36 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     for (const missing of selected.filter((key) => !(saved.skills || []).some((skill) => skill.id === key))) list.append(button("Remove unavailable skill", () => { config.agentSkills[id] = config.agentSkills[id].filter((key) => key !== missing); dirty(); refreshRows(`agent-${id}-add`); }, "ghost mini"));
     if (!(saved.skills || []).length) list.append(node("p", "muted", "No installed skills found. Add a SKILL.md folder under .agents/skills, .claude/skills, .codex/skills or .opencode/skills, then reload saved settings."));
-    panel.append(list, node("h4", "", "MCP tools"));
+    panel.append(list, node("h4", "", "Allowed Studio tools"));
+    const supportedTools = id !== "builder" || ["opencode", "claude"].includes(provider);
+    const permissions = config.agentTools?.[id] || {};
+    const setPermission = (key, value) => { config.agentTools = { ...config.agentTools, [id]: { ...config.agentTools?.[id], [key]: value } }; dirty(); };
+    for (const [key, label, detail, enabled] of [
+      ["webSearch", "Search the web", "Search queries leave this device. Answers can cite returned source links. Bing search is built in; BRAVE_SEARCH_API_KEY enables Brave.", permissions.webSearch !== false],
+      ["projectRead", "Read project files", "Read small text files within this project. Hidden files, credentials and local app data are excluded.", permissions.projectRead === true],
+    ]) {
+      const input = node("input"); input.id = `agent-${id}-tool-${key}`; input.type = "checkbox"; input.checked = enabled; input.disabled = !supportedTools;
+      input.addEventListener("change", () => setPermission(key, input.checked)); panel.append(field(label, input, detail));
+    }
+    panel.append(node("h4", "", "MCP tool allowlist"));
+    for (const tool of saved.mcpTools || []) {
+      const input = node("input"); input.dataset.mcpTool = tool.id; input.type = "checkbox"; input.checked = (permissions.mcpTools || []).includes(tool.id); input.disabled = !supportedTools;
+      input.addEventListener("change", () => {
+        const previous = config.agentTools?.[id]?.mcpTools || [];
+        const next = input.checked ? [...previous, tool.id] : previous.filter((key) => key !== tool.id);
+        if (next.length > 16) { input.checked = false; say("Choose up to sixteen MCP tools per agent.", true); return; }
+        setPermission("mcpTools", next);
+      });
+      panel.append(field(`${tool.server} · ${tool.name}`, input, tool.description));
+    }
+    for (const missing of (permissions.mcpTools || []).filter((key) => !(saved.mcpTools || []).some((tool) => tool.id === key))) panel.append(button(`Remove unavailable tool: ${missing}`, () => { setPermission("mcpTools", (config.agentTools[id].mcpTools || []).filter((key) => key !== missing)); refreshRows(`agent-${id}-add`); }, "ghost mini"));
+    panel.append(node("p", "muted", "Configure trusted stdio servers and their tools in ~/.mefi-studio/mcp.json, then reload saved settings. Selecting an MCP tool allows that server to run for this agent; it may read or change data using its own credentials."));
     if (id === "builder") {
-      const supported = ["opencode", "claude"].includes(provider), input = node("input"); input.type = "checkbox"; input.checked = config.agentBrain?.deskTool === true; input.disabled = !supported;
+      const supported = ["opencode", "claude"].includes(provider), input = node("input"); input.id = "agent-builder-desk-tool"; input.type = "checkbox"; input.checked = config.agentBrain?.deskTool === true; input.disabled = !supported;
       input.addEventListener("change", () => { config.agentBrain = { ...config.agentBrain, deskTool: input.checked }; dirty(); });
       panel.append(field("Studio desk · ask_desk", input, supported ? "Give this coding worker an MCP tool for help from the desk agent." : "Available with OpenCode and Claude Code workers."));
-      panel.append(node("p", "muted", "Other MCP servers are managed in your coding tool's own configuration."));
-    } else panel.append(node("p", "muted", "This agent makes text-only calls. Attach MCP tools to the coding worker below; selected skills guide this agent's answers."));
+      panel.append(node("p", "muted", supportedTools ? "Studio search and selected MCP tools attach to this worker. The coding CLI also has its own tools and runs with automatic approval and broad file/command access. These checkboxes limit Studio tools only; manage native tools and MCP servers in the CLI configuration." : "Studio tool attachment supports OpenCode and Claude Code. This worker uses its CLI's native search, tools and permissions; it runs with broad file/command access."));
+    } else panel.append(node("p", "muted", "Studio enforces these tool choices for every turn. File writes and shell commands are unavailable unless you explicitly select an MCP tool that provides them. Skills guide answers and never grant tool permissions."));
     return panel;
   }
   function agentRow({ id, title, detail, provider, model, effort = "", fast = false, builder = false, seat = false, setProvider, setModel, setEffort, setFast }, config, saved) {
@@ -60971,7 +61989,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         if (key === provider) { picker.hidden = true; trigger.setAttribute("aria-expanded", "false"); trigger.focus(); return; }
         setProvider(key); refreshRows(trigger.id); loadProviderModels(key);
       }, "agents-provider-option"); option.dataset.provider = key; option.setAttribute("aria-pressed", String(provider === key));
-      option.disabled = seat && ["codex", "grok", "antigravity"].includes(key);
+      option.disabled = !builder && ["codex", "grok", "antigravity"].includes(key);
       const words = node("span"); words.append(node("strong", "", builder && key === "opencode" ? "OpenCode" : providerNames[key]), node("small", "muted", option.disabled ? "Coding workers only" : providerNote(key, saved)));
       option.append(providerIcon(key), words); picker.append(option);
     }
@@ -61470,6 +62488,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     $("chat-dot").hidden = !unread;
   }
   function renderHead() {
+    syncDraft();
     const project = state.projects.find((item) => item.id === projectId());
     $("project-name").textContent = project?.name || "Choose a project";
     $("kicker").textContent = greeting();
@@ -61482,6 +62501,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
 
   // ---- composer -------------------------------------------------------------
+  let draftProject = null, draftEpoch = 0;
+  const draftKey = (id) => `mefiStudio.vibe.draft.${id}`;
+  function saveDraft() { if (draftProject) write(draftKey(draftProject), $("input").value); }
+  function syncDraft(id = projectId()) {
+    if (id === draftProject) return;
+    saveDraft(); draftProject = id; draftEpoch++;
+    $("input").value = id ? read(draftKey(id)) || "" : ""; grow();
+  }
   const SPARKS = [
     ["Fix something broken", "Something is broken: "],
     ["Add a feature", "Add a feature: "],
@@ -61494,7 +62521,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     for (const [label, prompt] of SPARKS) {
       const chip = el("button", "vibe-spark", label);
       chip.type = "button";
-      chip.addEventListener("click", () => { const input = $("input"); input.value = prompt; input.focus(); input.setSelectionRange(prompt.length, prompt.length); grow(); });
+      chip.addEventListener("click", () => { const input = $("input"); input.value = prompt; input.focus(); input.setSelectionRange(prompt.length, prompt.length); grow(); saveDraft(); });
       holder.append(chip);
     }
   }
@@ -61507,8 +62534,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   async function send(intent) {
     const input = $("input");
+    if (window.MefiFileInputs?.isReading(input)) { feedback("Wait for the files to finish reading."); return; }
     const value = input.value.trim();
     const id = projectId();
+    const epoch = draftEpoch;
     if (state.pending) return;
     if (!value) { input.focus(); feedback("Describe what you have in mind first."); return; }
     if (!id || !api()) { feedback("Choose a project first: select the project name at the top left.", "warn"); return; }
@@ -61522,7 +62551,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         ? await api().tasksCreate({ title: value.split("\n")[0].slice(0, 180), prompt: value, projectId: id })
         : await api().assistantMessage(value, id, { view: "Vibe", companion: companion() });
       if (!result || result.ok === false) throw new Error(result?.error || "That didn't go through.");
-      if (input.value.trim() === value) { input.value = ""; grow(); }
+      if (projectId() !== id || draftEpoch !== epoch) return;
+      if (input.value.trim() === value) { input.value = ""; grow(); saveDraft(); }
       if (result.state) state.assistant = result.state;
       if (intent === "build") {
         // Say where it really goes: a held or paused queue, or no AI, keeps
@@ -61534,7 +62564,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       } else feedback("");
       await refresh();
     } catch (error) {
-      feedback(`${error?.message || "That didn't go through."} Your text is still in the box.`, "bad");
+      if (projectId() === id && draftEpoch === epoch) feedback(`${error?.message || "That didn't go through."} Your text is still in the box.`, "bad");
     } finally { busy(false); renderChat(); }
   }
 
@@ -61823,8 +62853,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     initialized = true;
     renderSparks();
     $("compose").addEventListener("submit", (event) => { event.preventDefault(); void send("build"); });
+    window.MefiFileInputs?.bind($("input"), { scope: () => `${draftEpoch}:${projectId()}`, blocked: () => state.pending || !projectId() });
     $("talk").addEventListener("click", () => void send("talk"));
-    $("input").addEventListener("input", () => { grow(); if ($("feedback").textContent && !state.pending) feedback(""); });
+    $("input").addEventListener("input", () => { grow(); saveDraft(); if ($("feedback").textContent && !state.pending) feedback(""); });
+    window.addEventListener("mefi:project-changed", (event) => syncDraft(event.detail?.projectId));
+    window.addEventListener("beforeunload", saveDraft);
     $("input").addEventListener("keydown", (event) => {
       if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
       event.preventDefault();

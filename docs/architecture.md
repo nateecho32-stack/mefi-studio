@@ -1,5 +1,30 @@
 # How Studio is put together
 
+Home and Vibe composers accept dropped text/code files and an **Add files**
+picker. Plans supports the same imports in the outcome, interview answer,
+evidence and specification fields. Contents are inserted as labelled, editable
+text in the draft; review or remove them before sending or saving. Each import
+accepts up to eight UTF-8 files, 128 KB per file, within the destination field's
+character limit. Unsupported formats (including PDFs, images and folders),
+binary files and files that do not fit are reported without silently truncating
+them. A drop never sends a message or approves a plan.
+
+Plans remembers the selected plan (including a new unsaved draft) separately
+for each project, restores the viewed stage when its workflow has not advanced,
+and offers **Continue where you left off** to focus it. Saved decisions,
+interview answers, drafts and task handoffs remain in their existing stores.
+Vibe also saves an independent composer draft per project. Planning replies
+read fresh, bounded project excerpts plus README/build/architecture context,
+with private paths excluded and credentials redacted. Exact file mentions
+receive priority. Earlier human answers remain available on resumed interviews;
+over-budget context is refused rather than silently dropping requirements.
+
+Agent setup now exposes per-role web search, project reads and MCP tool
+allowlists beside selected skills. The host executes bounded research turns
+for model calls; OpenCode and Claude builders receive the same tools through
+MCP. See [Agent tools](agent-tools.md) for setup, execution limits and the
+distinction between Studio permissions and native coding CLI access.
+
 The detailed feature walkthrough that used to live in the README. It is
 written in Studio's own vocabulary, so start with the glossary. For first
 steps read [GETTING_STARTED.md](../GETTING_STARTED.md); for the code-level
@@ -78,7 +103,7 @@ configuration. Changes use the existing project/default scope and Apply flow.
 | **Discord Server Styler** | An optional separate bot and local dashboard. Settings can start it, open its dashboard or folder, show its status and stop a process Studio started. |
 | **Void collection** | Four themes (Void, Eclipse, Abyss, Neon Dusk) and three node styles (Singularity, Prism, Sigil). Anyone can preview them in Settings › Appearance. A preview resets when the canvas preview closes or you leave Settings; members of the Void Engine Discord can save their choices. Settings › Community shows the collection and its link. Everything else stays free. |
 | **Community link** | An optional Discord login (Settings › Community, which **Community** at the menu foot opens) that lets Studio read your membership and roles in the Void Engine server: when you link, then every seven days (after a failed check, in an hour, six hours, then daily) and whenever you press **Check now**. The data is kept in `settings.community`, and the refresh token is encrypted in `community-auth.json`. |
-| **`SELF_UNLOCKED`** | The documented fork switch in `scripts/community.cjs`. Setting it to `true` unlocks every perk without Discord. |
+| **`SELF_UNLOCKED`** | The documented fork switch in `scripts/community.cjs`. Setting it to `true` unlocks every perk without Discord. To unlock only one PC across rebuilds and updates, set `localStyleUnlock: true` in that machine's `settings.json`; the default for new installations stays locked. |
 
 ## Highlights
 
@@ -443,6 +468,36 @@ proposal is left out and counted in its note.
 
 ### Command center and the node tree
 
+- **Tree brightness & outlines**, under Tree modes & movement in Appearance ›
+  Layout and Music & video › Audio reactions, provides node and connecting-line
+  brightness sliders from 0–200%; independent adjustment switches restore normal
+  brightness while retaining each slider value. Optional node outlines add dark
+  and light edges around the chosen node shape. These controls also live directly
+  in the video's media settings, synchronize across panels, and persist locally.
+  Brightness applies to the separate node/connection paint passes; labels, menus,
+  video brightness, transparency and tree position remain independent.
+- **Tree modes & movement**, in Appearance › Layout and Music & video › Audio
+  reactions, shares saved controls across both panels. **Steady** disables music
+  and video reactions; **Music**, **Video**, and **Music + video** select the inputs.
+  Audio Link must be connected for music; video tracking needs a background video
+  and the desktop host. Existing glow, connection, percussion, background and
+  camera reaction toggles remain independent. Music sliders also control node
+  movement/size, shape deformation and position sway; zero settles each part.
+- **Live shape** keeps the chosen layout or smoothly arranges the visible nodes
+  in a ring, wave or spiral. Width, height, rotation, horizontal/vertical position
+  and node size update immediately in Overview. **Adapt spacing to node count**
+  reserves more room for larger trees and reduces node size in dense shapes.
+  Nodes keep their identities and work relationships; connections, labels and
+  pointer targets follow their displayed positions. Inspect, Follow, manual
+  navigation and camera tours take priority over these position changes.
+- Video positioning can seek **dark** or **bright** broad regions, with strength,
+  optional shape adaptation, movement smoothing and a 5–60 second region hold.
+  Samples run every five seconds with two consistent improvements required.
+  The sampled footprint follows tree size and node count. Scene changes ease in;
+  menus pause sampling, and reduced motion disables automatic audio/video motion.
+  Only nine brightness values leave the host; images are never saved or sent.
+  Reset restores movement defaults without changing playback or the chosen layout.
+
 - **Automatic 3D Overview** borrows the demo flight's damped motion for a
   gentle pan and changing scale. It frames all stable tree anchors together
   using their current perspective bounds, leaving room for node rims inside
@@ -452,7 +507,11 @@ proposal is left out and counted in its note.
   connections and new nodes stay aligned. The existing Spin control enables
   motion; paused spin, selection, search, manual navigation, reduced motion and
   hidden-view suspension retain their existing behavior. Fit resets the lens.
-- **Zen / demo flight** starts with a wide view, then glides between visible
+- **Zen / demo flight.** Park the mouse at the right edge of Live / Command view for about
+  two seconds to start it and hide the pointer; move back into the view, click
+  or press a key to return. Open menus, typing and dragging hold it off. This
+  shortcut leaves the optional thirty-second idle Zen setting unchanged.
+- The flight starts with a wide view, then glides between visible
   branches with their neighbouring nodes in frame. It follows the actual
   layout positions, adapts zoom to the window and perspective, and pulls back
   during travel and every fourth stop. The scene eases toward the
@@ -499,7 +558,19 @@ proposal is left out and counted in its note.
   Audio reactions and recommendations expand in place. The dropdown changes
   size with its visible content and scrolls within the window when needed;
   closing it keeps playback running. Settings › Audio opens the same dropdown
-  and keeps the separate sound-effect preferences.
+  and keeps the separate sound-effect preferences. Hover either media button
+  for 200ms to open the current source's controls without moving keyboard focus.
+  A 450ms grace period lets the pointer cross into the menu. Leaving closes an
+  untouched hover; clicking the opener or interacting with a control holds it
+  open until dismissal. Touch retains click access. Navigation, window blur and
+  Zen cancel pending hover opens; media controls remain hidden in Zen.
+  **Offer copied media links** checks the clipboard while this menu is open
+  and Studio is focused. A new playable link offers **Play**, **Add to queue**,
+  **Queue next**, or **Dismiss**; detection never starts playback. It ignores
+  current/queued links and keeps dismissed, unchanged links quiet. The option
+  is saved. **Show links**, in the menu header, saves whether pasted URLs,
+  clipboard offers, recent-link tooltips and queue URLs are visible; hiding
+  links masks the paste field while preserving its value and playback.
 - **Live work** shows the current worker and step, readiness counts, the
   active agent roster and a ranked queue. Readiness uses a single-line strip;
   compact task cards put the title beside elapsed time, with current activity,
@@ -591,13 +662,28 @@ proposal is left out and counted in its note.
   SoundCloud or Vimeo link in that service's embed, and a plain audio or
   video file (a Discord attachment, say) in its own `<video>`. The player lives
   in a borderless floating window across Studio, keeping the same playing frame
-  while you navigate. Hover for **Pin**, **Move aside**, minimize and close;
+  while you navigate. **Video settings** inside Music & video holds **Pin**, **Move aside**, minimize and close without covering the provider’s controls or settings;
   drag its grip or any edge to move or resize it. The grip and bottom-right
   resize control also accept arrow keys, with Shift for fine steps. In deeper
   menus, Move aside glides out of the pointer's way once; following it, hovering
   or focusing it keeps it still. Pin and reduced motion also prevent dodging.
   Geometry and toggles are remembered locally; automatic moves are temporary.
+  **Background** puts the video behind the workspace without intercepting clicks;
+  the node tree keeps full-strength nodes and labels over the video, with separate brightness and transparency controls, and
+  inactive pages stay hidden beneath Command.
+  **Float video** brings back the interactive provider player. **Video transparency** and **Tree transparency** independently control the video and Command canvases, keeping menus readable. Zero transparency means full opacity. **Video brightness** ranges from 25–150% and defaults to 100%, replacing the old fixed 55% dimming; inactive workspace page styles cannot override the tree slider. These values are saved with media settings. Controls disappear with the media menu and stay hidden in Zen. **Keep tree in dark areas** is a shortcut for the shared video reaction mode. It samples broad on-screen regions every five seconds, requires two consistent improvements and the configured region hold, then smoothly moves the tree. Sampling pauses during menus, manual camera interaction and Zen. No screenshots are saved or transmitted. **Fade on finish**
+  dims the media when a known task newly reaches Done, with a notification to
+  **View result** or **Restore video**. Historical, dropped and merely awaiting
+  verification tasks do not trigger it. Restore video also remains in the panel.
   **Show player** restores a minimized window, and closing it stops playback.
+  An open player returns after Studio closes or reloads if it was present in
+  the last ten minutes, retaining geometry, background/transparency preferences
+  and minimized state. Explicitly closing the player or switching sources clears
+  this restore record. Native files, YouTube and Vimeo resume their saved position/play state; provider autoplay restrictions can still require Play. YouTube playlist changes update the saved video. Diagnostic launches do not restore media.
+  **Explore YouTube** searches public YouTube results inside the media menu; **Play** opens a result and **Next video** advances through those results or the current YouTube playlist. Public search availability depends on YouTube; failures retain the paste-link option. Search data is parsed in the host without executing page scripts and only bounded video summaries reach the renderer.
+  **Up next** is a saved queue of up to 50 media links. **Add to queue** appends a pasted link or YouTube result without interrupting playback; **Queue next** inserts it first. Each queue row has **Play now**, **Play next** (move to the front), and **Remove**. **Next video** consumes the queue before explorer results or a provider playlist. YouTube, Vimeo and direct files also consume the next queued entry when playback ends; other embeds can be advanced manually. Repeated videos restart, and late messages from a replaced player cannot skip queued items. Reloading restores the queue without starting it; the separate ten-minute player restoration still governs current playback.
+  Audio Link retains its enabled state and selected source. Reentering the node view after a reload reconnects an enabled link; capture/smoke launches stay silent, and denied or disconnected sources offer an explicit retry instead of repeatedly requesting access.
+  Video settings also includes **Volume** and **Mute** for YouTube, Vimeo and direct media files. Their level and mute state persist across reloads, and provider volume updates keep the menu in sync.
   Links nothing
   can embed, such as a Spotify Jam or Twitch, open in their own app. The
   booklet's CSP `frame-src` lists exactly the players `music.js` builds.

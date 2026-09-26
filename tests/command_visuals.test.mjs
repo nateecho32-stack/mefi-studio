@@ -482,6 +482,10 @@ test("every backdrop scene paints, in motion and in the still frame", () => {
   state.backdrop = "follow";
   state.themeKey = "violet";
   assert.equal(env.activeBackdrop(), "nebula");
+  env.document = { body: { dataset: { mediaBackground: "true" } } };
+  const beforeVideo = ctx.calls.length;
+  env.drawBackdrop(ctx, 5000, false, 0.2, bands, 0);
+  assert.deepEqual(ctx.calls.slice(beforeVideo).map(([name]) => name), ["clearRect"], "video clears only the sky, leaving the node painters at normal opacity");
 });
 
 test("the HUD, the stylesheet and the public API carry the new controls", () => {
@@ -849,7 +853,7 @@ test("a click glides the zoom with the camera instead of snapping it", () => {
     "const glide = state.returning ? CAMERA_RETURN_SMOOTH : CAMERA_SMOOTH;",
     "state.zoom = Math.exp(smoothDamp(Math.log(state.zoom), Math.log(state.zoomTarget), camVel, \"zoom\", glide, dt));",
     "state.camera.x = smoothDamp(state.camera.x, state.camera.tx, camVel, \"x\", glide, dt);",
-    "const cameraEase = perSec(CAMERA_EASE, dt);",
+    "const cameraEase = perSec(state.mediaFocus || Date.now() < (state.mediaFocusGlideUntil || 0) ? 0.012 : CAMERA_EASE, dt);",
     "state.cameraMoving = !still && (flightPx > 8 || centerFlight > 8 || (state.zoomTarget != null",
     "const frame = state.graphFrame ?? area;",
     "const centerFlight = stepCenter(graphArea, still, cameraEase);",

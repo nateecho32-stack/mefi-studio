@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.2"><img src="https://img.shields.io/badge/release-v0.4.2-D8AE65?style=flat-square" alt="Release 0.4.2"></a>
+  <a href="https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.3"><img src="https://img.shields.io/badge/release-v0.4.3-D8AE65?style=flat-square" alt="Release 0.4.3"></a>
   <a href="https://github.com/nateecho32-stack/mefi-studio/actions/workflows/ci.yml"><img src="https://github.com/nateecho32-stack/mefi-studio/actions/workflows/ci.yml/badge.svg?branch=main&style=flat-square" alt="Studio checks"></a>
   <img src="https://img.shields.io/badge/platform-Windows-0078D4?style=flat-square&logo=windows&logoColor=white" alt="Platform: Windows">
   <img src="https://img.shields.io/badge/node-24-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white" alt="Node 24">
@@ -21,19 +21,19 @@
   <img src="docs/images/workspace.png" width="900" alt="The workspace: a status strip, a conversation with the companion, and the project's work queue">
 </p>
 
-**[Download 0.4.2 for Windows](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.2)** · [Watch the 40-second showreel](https://github.com/nateecho32-stack/mefi-studio/releases/download/v0.4.2/mefi-studio-v0.4.2-discord.mp4)
+**[Download 0.4.3 for Windows](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.3)** · [Watch the 40-second showreel](https://github.com/nateecho32-stack/mefi-studio/releases/download/v0.4.2/mefi-studio-v0.4.2-discord.mp4)
 
-**Quick links:** [What's new](#whats-new-in-042) · [Install](#install-and-run) · [First launch](#first-launch) · [Tour](#a-short-tour) · [Keys and privacy](#keys-and-privacy) · [Community](#community--perks) · [Docs](#documentation) · [Contributing](#contributing)
+**Quick links:** [What's new](#whats-new-in-043) · [Install](#install-and-run) · [First launch](#first-launch) · [Tour](#a-short-tour) · [Keys and privacy](#keys-and-privacy) · [Community](#community--perks) · [Docs](#documentation) · [Contributing](#contributing)
 
-## What's new in 0.4.2
+## What's new in 0.4.3
 
-- **Vibe mode:** a focused home for conversations, tasks, live work and decisions. Answer agents, approve builds and retry blocked work from the same workspace; switch to Build for the full studio.
-- **Remastered visuals:** eight node styles with distinct shapes, motion and activity effects, clearer previews and reduced-motion support. Five are included; three belong to the optional Void collection.
-- **More dependable planning:** archive and restore plans, recover from failed replies, and keep approvals when renaming a plan or saving an unchanged specification.
-- **Clearer agent decisions:** see why a task needs help, with fewer repeated offers and more useful task counts.
-- **Less unnecessary work:** quieter rendering while idle, fewer repeated background reads and focused task context for builders.
+- **Media controls:** queue copied links and YouTube results, browse videos in the built-in explorer, and restore playback, volume and placement.
+- **A more expressive live tree:** choose music and video reaction modes, shapes, movement and placement; independently tune node and line brightness, outlines and transparency.
+- **Files and plans:** drop text and code files into Home, Vibe and Plans. Plans restore your selected step, Vibe keeps drafts per project, and planning uses fresh project context.
+- **Tools for each agent:** configure web search, project reads and MCP tools by role, with shared research turns and MCP attachments for OpenCode and Claude workers.
+- **Zen tree tour:** let the Command view take a slow tree tour when you park at the right edge, then return to controls with a key, click or pointer movement.
 
-Read the [0.4.2 release notes](docs/releases/0.4.2.md) or the full
+Read the [0.4.3 release notes](docs/releases/0.4.3.md) or the full
 [changelog](CHANGELOG.md). Existing portable installations can check **App updates**.
 The showreel illustrates Studio's visual style and workflow using sample tasks.
 
@@ -68,7 +68,7 @@ npm start
 
 - `npm start` needs a normal shell. If `ELECTRON_RUN_AS_NODE` is set (some agent harnesses set it), Studio refuses to start and prints the fix.
 - `Run Mefi's Studio AI+.cmd` starts the portable build when one exists in `dist/`, otherwise the source install.
-- **Portable build:** [download 0.4.2](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.2), extract the whole folder, then open `Mefi Studio AI+.exe`. It keeps its own data next to the executable.
+- **Portable build:** [download 0.4.3](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.3), extract the whole folder, then open `Mefi Studio AI+.exe`. It keeps its own data next to the executable.
 - `npm run start:web` serves a browser-only preview on <http://localhost:4173>; it cannot launch workers.
 
 ## First launch

@@ -35,7 +35,7 @@ function savedPlan() {
   return result.plan;
 }
 
-async function environment(item = savedPlan(), storage = new Map(), { activeId = "project-a" } = {}) {
+async function environment(item = savedPlan(), storage = new Map(), { activeId = "project-a", openOptions } = {}) {
   const root = new Element(); const fixed = new Map(); const events = {}; const calls = []; const planningReads = []; const sidebarOpens = []; const polls = new Map(); const navigation = []; const documentEvents = {}; const emitted = [];
   for (const id of ["overlay", "sheet", "notice", "new", "refresh", "close", "project", "list", "detail"]) { const element = new Element(["new", "refresh", "close"].includes(id) ? "button" : "div"); element.id = `plans-${id}`; fixed.set(element.id, element); root.append(element); }
   const find = (id, node = root) => node.id === id ? node : node.children.map((child) => find(id, child)).find(Boolean);
@@ -59,7 +59,7 @@ async function environment(item = savedPlan(), storage = new Map(), { activeId =
   const tick = async () => { const pending = [...timers]; timers.clear(); for (const [, fn] of pending) fn(); await flush(); };
   vm.runInContext(stageSource, context);
   vm.runInContext(source, context);
-  await context.window.MefiPlanning.open({ planId: item.id }); await flush();
+  await context.window.MefiPlanning.open(openOptions ?? { planId: item.id }); await flush();
   const input = async (id, value) => { const target = el(id); assert.ok(target, `Missing input ${id}`); target.value = value; await target.trigger("input"); };
   return { ui: context.window.MefiPlanning, el, input, bridge, data, projects, events, calls, planningReads, sidebarOpens, emitted, storage, polls, tasks, navigation, document, documentEvents, timers, tick };
 }
@@ -715,4 +715,53 @@ test("archiving folds a plan under Archived as read-only, and Restore brings it 
   assert.equal(env.calls.at(-1).action, "restore");
   assert.equal(env.data["project-a"][0].archivedAt, undefined);
   assert.equal(env.el("approve").disabled, false, "the restored plan is back as it was");
+});
+
+
+test("restarting Plans restores the selected plan and viewed step while preserving its draft", async () => {
+  const item = savedPlan(), storage = new Map();
+  const env = await environment(item, storage);
+  await env.el("stage-idea").trigger("click");
+  await env.input("destination", "Unsent continuation from yesterday");
+  env.ui.close();
+  const reopened = await environment(item, storage, { openOptions: {} });
+  assert.equal(reopened.el("destination").value, "Unsent continuation from yesterday");
+  assert.equal(reopened.el("workflow").dataset.viewedStep, "idea");
+  assert.ok(reopened.el("resume"));
+  assert.equal(reopened.calls.length, 0, "resuming cannot mutate or approve the plan");
+});
+
+test("a new unsaved plan remains selected on reopen instead of being replaced by a saved plan", async () => {
+  const item = savedPlan(), storage = new Map();
+  const env = await environment(item, storage);
+  await env.ui.open({ create: true });
+  await env.input("title", "Continue this draft");
+  await env.input("destination", "Keep my draft and attached file text");
+  env.ui.close();
+  const reopened = await environment(item, storage, { openOptions: {} });
+  assert.equal(reopened.el("title").value, "Continue this draft");
+  assert.equal(reopened.el("destination").value, "Keep my draft and attached file text");
+  assert.equal(reopened.el("workflow").dataset.stage, "idea");
+});
+
+test("project switches restore each project's selection and discard an unavailable selection", async () => {
+  const env = await environment();
+  const first = env.data["project-a"][0];
+  env.projects.activeId = "project-b";
+  env.events["mefi:project-changed"]({ detail: { projectId: "project-b" } });
+  await flush();
+  await env.input("title", "Project B draft");
+  env.projects.activeId = "project-a";
+  env.events["mefi:project-changed"]({ detail: { projectId: "project-a" } });
+  await flush();
+  assert.equal(env.el("title").value, first.title);
+  env.projects.activeId = "project-b";
+  env.events["mefi:project-changed"]({ detail: { projectId: "project-b" } });
+  await flush();
+  assert.equal(env.el("title").value, "Project B draft");
+  env.storage.set("mefiStudio.planning.selection.v1.project-a", "deleted-plan");
+  env.projects.activeId = "project-a";
+  env.events["mefi:project-changed"]({ detail: { projectId: "project-a" } });
+  await flush();
+  assert.equal(env.el("title").value, first.title);
 });

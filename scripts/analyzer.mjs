@@ -408,9 +408,11 @@ export async function explorePlanningFiles(query, { root = DEFAULT_ROOT, fresh =
   try { inventory = await entry.promise; }
   catch (error) { if (planningInventories.get(root) === entry) planningInventories.delete(root); throw error; }
   const words = projectKeywords(String(query).slice(0, 24000));
+  // Exact paths remain useful even when the wording has no keyword overlap.
+  const mentioned = new Set((String(query).match(/[\w@./\\-]+\.[a-z0-9]+/gi) || []).map((name) => name.replace(/\\/g, "/").replace(/^\.\//, "").toLowerCase()));
   const ranked = inventory.textFiles.map((file) => {
     const name = file.file.toLowerCase();
-    let score = words.reduce((sum, word) => sum + (name.includes(word) ? 5 : 0), 0), line = 0, best = 0;
+    let score = (mentioned.has(name) ? 100 : 0) + words.reduce((sum, word) => sum + (name.includes(word) ? 5 : 0), 0), line = 0, best = 0;
     for (let index = 0; index < file.lines.length; index++) {
       const text = file.lines[index].toLowerCase();
       const hits = words.reduce((sum, word) => sum + Number(text.includes(word)), 0);
@@ -423,7 +425,9 @@ export async function explorePlanningFiles(query, { root = DEFAULT_ROOT, fresh =
     const start = Math.max(0, line - 3), end = Math.min(file.lines.length, line + 5);
     return { file: file.file, line: start + 1, endLine: end, snippet: safeExcerpt(file.lines.slice(start, end).join("\n"), 1800) };
   });
-  return { code, scanned: inventory.files.length, limitations: inventory.limitations, note: "Matching file excerpts, not proof of completed behavior. No commands, prototypes, or tests were run." };
+  const overview = inventory.textFiles.filter((file) => /^(?:readme(?:\.[^.]+)?|agents\.md|package\.json|cargo\.toml|pyproject\.toml|go\.mod|makefile|cmakelists\.txt)$/i.test(file.file) || /^docs\/(?:architecture|code-map)\.md$/i.test(file.file)).slice(0, 6).map((file) => ({ file: file.file, line: 1, snippet: safeExcerpt(file.lines.slice(0, 45).join("\n"), 2200) }));
+  const structure = [...new Set(inventory.files.map((file) => file.file.includes("/") ? `${file.file.split("/")[0]}/` : file.file))].slice(0, 60);
+  return { code, overview, structure, scanned: inventory.files.length, limitations: inventory.limitations, note: "Bounded project overview and matching file excerpts, not proof of completed behavior. Excerpts may be shortened; read the original for full context. No commands, prototypes, or tests were run." };
 }
 
 function planItems(text, limitations) {

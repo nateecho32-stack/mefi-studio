@@ -43,7 +43,7 @@ function fixture({ selection = "auto", loaded = true, playing = false, saved = f
   return { env, state, player, element, requests, events, nodes, writes, status, stream };
 }
 
-test("legacy automatic source preference migrates without turning saved capture into a new permission gesture", () => {
+test("saved Audio Link and source reconnect on entry, while off and diagnostic launches stay silent", () => {
   const expression = source.match(/audioSource: (.+),\r?\n/)[1];
   for (const [stored, expected] of [
     [{}, "auto"], [{ "mefiStudio.zenSource": "desktop" }, "auto"], [{ "mefiStudio.zenSource": "mic" }, "mic"],
@@ -51,10 +51,19 @@ test("legacy automatic source preference migrates without turning saved capture 
     [{ "mefiStudio.audioSource.v2": "unsupported" }, "auto"],
   ]) assert.equal(vm.runInNewContext(expression, { readStore: (key) => stored[key] }), expected);
   const f = fixture({ saved: true, loaded: false });
-  f.env.useReactiveInput();
-  assert.equal(f.requests.length, 0);
-  f.env.setMusicReactive(true);
+  f.env.ensureReactiveInput();
   assert.equal(f.requests.length, 1);
+  f.env.ensureReactiveInput(); assert.equal(f.requests.length, 1, "pending restoration is not duplicated");
+  const off = fixture({ loaded: false }); off.env.ensureReactiveInput(); assert.equal(off.requests.length, 0);
+  for (const selection of ["desktop", "mic", "local"]) {
+    const resumed = fixture({ selection, saved: true, loaded: false }); resumed.env.ensureReactiveInput();
+    assert.equal(resumed.requests.length, selection === "local" ? 0 : 1);
+    if (selection !== "local") assert.equal(resumed.requests[0].kind, selection);
+  }
+  const diagnostic = fixture({ saved: true, loaded: false }); diagnostic.env.window.location = { search: "?capture=1" };
+  diagnostic.env.ensureReactiveInput(); assert.equal(diagnostic.requests.length, 0);
+  const localDiagnostic = fixture({ saved: true }); localDiagnostic.env.window.location = { search: "?capture=1" };
+  localDiagnostic.env.ensureReactiveInput(); assert.equal(localDiagnostic.env.audioStatus().source, "local"); assert.equal(localDiagnostic.requests.length, 0);
 });
 
 test("automatic and Studio sources directly follow a loaded track, while explicit desktop ignores the queue", async () => {

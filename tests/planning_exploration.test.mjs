@@ -84,3 +84,19 @@ test("failed and malformed AI replies keep evidence available and never persist 
   const malformed = await service.explore(payload);
   assert.equal(malformed.ok, false); assert.ok(malformed.references.code.length); assert.deepEqual(malformed.suggestions, []);
 });
+
+
+test("project reads include orientation, modern sources and exact file paths even without shared keywords", async (t) => {
+  const root = await fixture(t);
+  await writeFile(path.join(root, "README.md"), "# Workspace\nRun npm test to verify.\n");
+  await writeFile(path.join(root, "package.json"), JSON.stringify({ scripts: { test: "node --test" } }));
+  await writeFile(path.join(root, "src", "a.tsx"), "export const View = () => <div>New screen</div>;");
+  const result = await explorePlanningFiles("continue src/a.tsx", { root, fresh: true });
+  assert.equal(result.code[0].file, "src/a.tsx");
+  assert.ok(result.overview.some((hit) => hit.file === "README.md" && hit.snippet.includes("npm test")));
+  assert.ok(result.overview.some((hit) => hit.file === "package.json"));
+  assert.ok(result.structure.includes("src/"));
+  assert.ok(!result.structure.includes("data/"));
+  await writeFile(path.join(root, "src", "a.tsx"), "export const View = () => <div>Changed screen</div>;");
+  assert.match((await explorePlanningFiles("src/a.tsx", { root, fresh: true })).code[0].snippet, /Changed screen/);
+});

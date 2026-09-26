@@ -625,7 +625,7 @@ test("the node loop cross-fades tints, pops the hover, pulses the clash rim and 
   for (const line of [
     "tint = nodeStyles.shownTint(motion, tint, time, still);",
     "const pop = motion ? 1 + 0.05 * motion.sel : 1;",
-    "* nodeScale) * pop;",
+    "* nodeScale) * pop * (node._treeScale ?? 1);",
     "const styleReach = nodeStyles ? radius * nodeStyles.reach(state.nodeStyle ?? \"orbs\", motion) : 0;",
     "node._styleReach = marking > 0.01 ? Math.max(styleReach, radius + 4 * marking) : styleReach;",
     "const dim = Math.max(0.35, factor);",

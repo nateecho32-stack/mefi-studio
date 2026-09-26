@@ -338,6 +338,11 @@ test("with reduced motion Zen only fades the panels: no flight, the camera untou
 
 test("Zen keeps the graph frame (no layout re-seed on wake), paints the whole canvas, and a rebuild retargets a glide home", () => {
   assert.doesNotMatch(section("  function usableArea()", "  function autoFit("), /ambientZen/, "Zen no longer swaps in a full-screen frame");
-  assert.match(section("  function drawFrame(", "    syncAgentMotion("), /const clip = directed \|\| state\.ambientZen \? \{ x: 0, y: 0, w: el\.width, h: el\.height \} : graphArea;/);
+  const clip = section("  function drawFrame(", "    syncAgentMotion(").match(/const clip = ([^;]+);/)[1];
+  const graphArea = { x: 20, y: 30, w: 400, h: 300 }, base = { x: 20, y: 30, w: 600, h: 500 };
+  const region = (directed, state) => JSON.parse(JSON.stringify(vm.runInNewContext(clip, { directed, state, graphArea, el: { width: 1000, height: 800 } })));
+  assert.deepEqual(region(false, {}), graphArea);
+  assert.deepEqual(region(false, { mediaFocus: { x: 0, y: 0 }, mediaSceneBase: base }), base, "a media glide retains the full available region");
+  for (const [directed, state] of [[true, {}], [false, { ambientZen: true, mediaFocus: { x: 0, y: 0 }, mediaSceneBase: base }]]) assert.deepEqual(region(directed, state), { x: 0, y: 0, w: 1000, h: 800 });
   assert.match(source, /if \(state\.camMode === "orbit"\) \{ if \(state\.zoomTarget != null\) state\.zoomTarget = 1; else setZoom\(1\); \}/);
 });

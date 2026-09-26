@@ -166,6 +166,21 @@ test("connection waves and node lighting can each run alone or both be switched 
   assert.equal(state.audioWaves.length, 0);
 });
 
+test("tree reaction modes gate node, connection and background music without disconnecting the input", () => {
+  const { state, env, projected } = graphFixture();
+  Object.assign(state, { reactive: true, localAudio: {}, audioResponse: 1, bands: { bass: .8, mid: .6, treble: .4 } });
+  env.setAudioEffects({ waves: true, nodes: true, background: true, percussion: true });
+  const inputs = frameInputs(env);
+  for (const enabled of [false, true, false]) {
+    env.window = { MefiTreeDynamics: { musicEnabled: () => enabled } };
+    const frame = inputs();
+    assert.equal(frame.audioLinked, enabled); assert.equal(frame.audioNodes, enabled); assert.equal(frame.backgroundLinked, enabled);
+    env.drawGraphConnections(recordingContext(), projected, new Set(), frame.audioLinked, 200);
+    assert.equal(state.audioWaves.length > 0, enabled);
+    assert.equal(state.reactive, true); assert.ok(state.localAudio);
+  }
+});
+
 test("percussion is optional while sustained bass, mids, treble and waveform remain responsive", () => {
   const env = environment(), music = { ...fullMusic(), beat: 0.9, energy: 0.7 };
   const before = structuredClone(music), calm = env.visualMusicResponse(music, { percussion: false });

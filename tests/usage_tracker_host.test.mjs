@@ -234,7 +234,7 @@ test("the store read is a worker method and the project facade scopes it", () =>
 });
 
 test("every route that can report usage does: CLI JSON replies and Jev charges reach the ledger", () => {
-  assert.match(mainSource, /claude -p --output-format json --tools= --permission-mode dontAsk --no-session-persistence/, "the Claude assistant route prints its usage");
+  assert.match(mainSource, /claude -p --output-format json --strict-mcp-config --tools= --permission-mode dontAsk --no-session-persistence/, "the Claude assistant route prints usage with native tools and inherited MCP disabled");
   assert.match(mainSource, /\["--prompt-file", tmp, "--output-format", "json", "--permission-mode", "dontAsk"\]/, "the Grok assistant route prints its usage");
   assert.match(mainSource, /args\.push\("--output-format", "json", "-p"\)/, "the Antigravity assistant route prints its usage");
   assert.match(mainSource, /resolve\(cliReply\("claude", parseClaudeCliResult\(text\), text/);

@@ -382,13 +382,36 @@
     }
     for (const missing of selected.filter((key) => !(saved.skills || []).some((skill) => skill.id === key))) list.append(button("Remove unavailable skill", () => { config.agentSkills[id] = config.agentSkills[id].filter((key) => key !== missing); dirty(); refreshRows(`agent-${id}-add`); }, "ghost mini"));
     if (!(saved.skills || []).length) list.append(node("p", "muted", "No installed skills found. Add a SKILL.md folder under .agents/skills, .claude/skills, .codex/skills or .opencode/skills, then reload saved settings."));
-    panel.append(list, node("h4", "", "MCP tools"));
+    panel.append(list, node("h4", "", "Allowed Studio tools"));
+    const supportedTools = id !== "builder" || ["opencode", "claude"].includes(provider);
+    const permissions = config.agentTools?.[id] || {};
+    const setPermission = (key, value) => { config.agentTools = { ...config.agentTools, [id]: { ...config.agentTools?.[id], [key]: value } }; dirty(); };
+    for (const [key, label, detail, enabled] of [
+      ["webSearch", "Search the web", "Search queries leave this device. Answers can cite returned source links. Bing search is built in; BRAVE_SEARCH_API_KEY enables Brave.", permissions.webSearch !== false],
+      ["projectRead", "Read project files", "Read small text files within this project. Hidden files, credentials and local app data are excluded.", permissions.projectRead === true],
+    ]) {
+      const input = node("input"); input.id = `agent-${id}-tool-${key}`; input.type = "checkbox"; input.checked = enabled; input.disabled = !supportedTools;
+      input.addEventListener("change", () => setPermission(key, input.checked)); panel.append(field(label, input, detail));
+    }
+    panel.append(node("h4", "", "MCP tool allowlist"));
+    for (const tool of saved.mcpTools || []) {
+      const input = node("input"); input.dataset.mcpTool = tool.id; input.type = "checkbox"; input.checked = (permissions.mcpTools || []).includes(tool.id); input.disabled = !supportedTools;
+      input.addEventListener("change", () => {
+        const previous = config.agentTools?.[id]?.mcpTools || [];
+        const next = input.checked ? [...previous, tool.id] : previous.filter((key) => key !== tool.id);
+        if (next.length > 16) { input.checked = false; say("Choose up to sixteen MCP tools per agent.", true); return; }
+        setPermission("mcpTools", next);
+      });
+      panel.append(field(`${tool.server} · ${tool.name}`, input, tool.description));
+    }
+    for (const missing of (permissions.mcpTools || []).filter((key) => !(saved.mcpTools || []).some((tool) => tool.id === key))) panel.append(button(`Remove unavailable tool: ${missing}`, () => { setPermission("mcpTools", (config.agentTools[id].mcpTools || []).filter((key) => key !== missing)); refreshRows(`agent-${id}-add`); }, "ghost mini"));
+    panel.append(node("p", "muted", "Configure trusted stdio servers and their tools in ~/.mefi-studio/mcp.json, then reload saved settings. Selecting an MCP tool allows that server to run for this agent; it may read or change data using its own credentials."));
     if (id === "builder") {
-      const supported = ["opencode", "claude"].includes(provider), input = node("input"); input.type = "checkbox"; input.checked = config.agentBrain?.deskTool === true; input.disabled = !supported;
+      const supported = ["opencode", "claude"].includes(provider), input = node("input"); input.id = "agent-builder-desk-tool"; input.type = "checkbox"; input.checked = config.agentBrain?.deskTool === true; input.disabled = !supported;
       input.addEventListener("change", () => { config.agentBrain = { ...config.agentBrain, deskTool: input.checked }; dirty(); });
       panel.append(field("Studio desk · ask_desk", input, supported ? "Give this coding worker an MCP tool for help from the desk agent." : "Available with OpenCode and Claude Code workers."));
-      panel.append(node("p", "muted", "Other MCP servers are managed in your coding tool's own configuration."));
-    } else panel.append(node("p", "muted", "This agent makes text-only calls. Attach MCP tools to the coding worker below; selected skills guide this agent's answers."));
+      panel.append(node("p", "muted", supportedTools ? "Studio search and selected MCP tools attach to this worker. The coding CLI also has its own tools and runs with automatic approval and broad file/command access. These checkboxes limit Studio tools only; manage native tools and MCP servers in the CLI configuration." : "Studio tool attachment supports OpenCode and Claude Code. This worker uses its CLI's native search, tools and permissions; it runs with broad file/command access."));
+    } else panel.append(node("p", "muted", "Studio enforces these tool choices for every turn. File writes and shell commands are unavailable unless you explicitly select an MCP tool that provides them. Skills guide answers and never grant tool permissions."));
     return panel;
   }
   function agentRow({ id, title, detail, provider, model, effort = "", fast = false, builder = false, seat = false, setProvider, setModel, setEffort, setFast }, config, saved) {
@@ -429,7 +452,7 @@
         if (key === provider) { picker.hidden = true; trigger.setAttribute("aria-expanded", "false"); trigger.focus(); return; }
         setProvider(key); refreshRows(trigger.id); loadProviderModels(key);
       }, "agents-provider-option"); option.dataset.provider = key; option.setAttribute("aria-pressed", String(provider === key));
-      option.disabled = seat && ["codex", "grok", "antigravity"].includes(key);
+      option.disabled = !builder && ["codex", "grok", "antigravity"].includes(key);
       const words = node("span"); words.append(node("strong", "", builder && key === "opencode" ? "OpenCode" : providerNames[key]), node("small", "muted", option.disabled ? "Coding workers only" : providerNote(key, saved)));
       option.append(providerIcon(key), words); picker.append(option);
     }

@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import studioPaths from "./paths.cjs";
 import path from "node:path";
 import { isExtractionArtifact } from "./assistant.mjs";
+import agentTools from "./agent-tools.cjs";
 
 const STOPWORDS = new Set("the and for with that this from into about they them their will would should could what when where which while have has had add make use using new now out over more most some any all not but also just like work idea fix task feature build".split(/\s+/));
 
@@ -61,27 +62,11 @@ export function matchChatIdeas(chatTexts, text, { limit = 6 } = {}) {
   return results.sort((a, b) => b.score - a.score || b.at - a.at).slice(0, limit);
 }
 
-export async function webSearch(query, { limit = 5, timeoutMs = 8000 } = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+export async function webSearch(query, { limit = 5 } = {}) {
   try {
-    const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&no_redirect=1`;
-    const response = await fetch(url, { signal: controller.signal, headers: { "user-agent": "mefi-studio/0.1 reference" } });
-    if (!response.ok) return [];
-    const payload = await response.json();
-    const results = [];
-    if (payload.AbstractText && payload.AbstractURL) {
-      results.push({ title: payload.Heading ?? query, url: payload.AbstractURL, snippet: payload.AbstractText });
-    }
-    for (const topic of payload.RelatedTopics ?? []) {
-      if (results.length >= limit) break;
-      if (topic.FirstURL && topic.Text) results.push({ title: topic.Text.slice(0, 90), url: topic.FirstURL, snippet: topic.Text.slice(0, 180) });
-    }
-    return results.slice(0, limit);
+    return (await agentTools.search(String(query).slice(0, 500))).results.slice(0, limit);
   } catch {
     return [];
-  } finally {
-    clearTimeout(timer);
   }
 }
 

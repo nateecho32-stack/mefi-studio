@@ -263,6 +263,10 @@ app.whenReady().then(async () => {
   };
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1" } });
   await pinMotion();
+  if (process.env.MEFI_TREE_DYNAMICS_CAPTURE) {
+    await require("./tree-dynamics-fixture.cjs").capture({ contents, run, until, sleep, capturePage, report, root });
+    finish(); return;
+  }
   if (process.env.MEFI_NODE_VIEWS_CAPTURE) {
     await require("./node-views-fixture.cjs").capture({ window, contents, run, until, sleep, capturePage, report, root });
     finish(); return;
@@ -609,6 +613,9 @@ app.whenReady().then(async () => {
   await run(`
     window.MefiIdle.setView('2d');
     window.MefiIdle.setOrbit(false);
+    // This section isolates surface and connection reactions. Geometry now has
+    // its own independent controls, covered by the tree-dynamics suites.
+    window.MefiTreeDynamics.update({nodeMotion:0,shapeMotion:0,positionMotion:0,smoothing:.2});
     // Retain strong full-mix coverage independently of the calmer defaults.
     window.MefiIdle.setAudioResponse(1);
     window.MefiIdle.setAudioEffects({percussion:true,splitBands:false});
@@ -825,7 +832,13 @@ app.whenReady().then(async () => {
     }
   }
   assert.ok(audioPlaying.nodes.every(node=>node.audioResponse?.level>0.02), "all ordinary graph nodes respond to the connected track");
+  await run("window.__geometryBefore=window.MefiIdle.debugNodes().filter(node=>node.layoutAnchor&&Number.isFinite(node.x));window.MefiTreeDynamics.update({nodeMotion:.8,shapeMotion:.8,positionMotion:.8});window.__fixtureAudio.currentTime=3.1;await window.__fixtureAudio.play();");
+  await until("window.MefiIdle.debugNodes().some(node=>{const before=window.__geometryBefore.find(item=>item.id===node.id);return before&&Math.hypot(node.x-before.x,node.y-before.y)>1;})", "music movement controls change painted node positions");
+  const geometryMotion = await run("return window.__geometryBefore.every(before=>{const after=window.MefiIdle.debugNodes().find(node=>node.id===before.id);return after&&JSON.stringify(after.layoutAnchor)===JSON.stringify(before.layoutAnchor);});");
+  assert.equal(geometryMotion, true, "musical geometry retains node identities and saved layout anchors");
+  await run("window.__fixtureAudio.pause();window.MefiTreeDynamics.update({nodeMotion:0,shapeMotion:0,positionMotion:0});");
   report.audio = {defaults:audioDefaults,quiet:audioQuiet,lowLevel,loud,playing:audioPlaying,nextWave:audioNextWave,bassline,snare,hat,silence:audioSilence,paused:audioPaused,waveChecks,stableGeometry:true};
+  report.audio.geometryMotion = geometryMotion;
   await run(`
     window.MefiIdle.setAudioResponse(.35);
     window.MefiIdle.setAudioEffects({waves:true,nodes:true,percussion:false,background:false,splitBands:true,motion:true});
