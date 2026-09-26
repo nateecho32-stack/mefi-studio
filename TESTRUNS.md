@@ -34,6 +34,26 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-26 - Tag release Electron fixtures failed twice; same-commit branch gates passed
+
+Both executions of the v0.4.3 tag workflow on a5e2b26 passed dependency setup
+and the full check gate, then failed `npm test` in the serialized Electron
+fixture stage. Each run had five failures among 37 Electron tests: agent setup,
+companion audio, floating media, Plans layout and Unified Agents navigation.
+The Node parallel stage passed (3677 tests on the rerun); Python contracts and
+the normalized-path check passed. The identical commit passed the complete
+Windows branch workflow (36224514625) and Linux workflow (36224514622),
+including tests, audit and the headless Electron smoke. No application source
+changed between these runs.
+
+The tag workflow stopped before packaging both times. Using the repository's
+supported release publisher, a fresh `--release` portable folder was built
+without local data, zipped and uploaded with its SHA-256 checksum. GitHub
+Release v0.4.3 reports the same ZIP digest produced locally. GitHub Pages
+commit a183f1a is published and the live homepage and download page return 200
+with 0.4.3. The Electron fixture failures remain recorded as failures; this
+entry does not claim the tag workflow passed.
+
 ## 2026-09-26 - Windows CI agent-tools fixtures normalize the canonical temp root
 
 GitHub Actions run 36224195487 on commit 30e7492 completed the Windows setup,
