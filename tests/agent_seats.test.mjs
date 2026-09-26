@@ -39,30 +39,30 @@ test("a seat can run at max effort on Zen's fast tier", () => {
 });
 
 test("seats select other providers without leaking their route into the rest of the team", async () => {
-  for (const provider of ["openrouter", "zai", "opencode", "claude", "lmstudio", "custom"]) {
+  for (const provider of ["openrouter", "zai", "opencode", "claude", "codex", "grok", "antigravity", "lmstudio", "custom"]) {
     const settings = { aiProvider: "zen", aiModels: { heavy: "old-model" }, agentSeats: { companion: { provider, model: "selected-model", effort: "", fast: false } } };
     const calls = [], options = [];
     const host = vm.createContext({
       ZEN_MODEL_HEAVY: heavy, ZEN_MODEL_ROUTINE: routine, agentProfiles: profiles,
       projects: { current: () => ({ id: "project" }) }, readSettings: async () => settings,
       readAgentSettings: async () => profiles.effective(settings, "project", profiles.current()),
-      DATA_ONLY_CLIS: new Set(["claude"]), scrubOutbound: (value) => value,
-      resolveAiRoute: async (role, allowed) => { options.push(allowed); const config = profiles.current().configuration; return { ok: true, provider: config.aiRoleProviders[role], model: config.aiModelsByProvider[provider][role], cli: provider === "claude" }; },
+      DATA_ONLY_CLIS: new Set(["claude", "codex", "grok", "antigravity"]), scrubOutbound: (value) => value,
+      resolveAiRoute: async (role, allowed) => { options.push(allowed); const config = profiles.current().configuration; return { ok: true, provider: config.aiRoleProviders[role], model: config.aiModelsByProvider[provider][role], cli: ["claude", "codex", "grok", "antigravity"].includes(provider) }; },
       httpAssistantCall: async (...args) => { calls.push(args); return { ok: true }; }, cliAssistantCall: async (...args) => { calls.push(args); return { ok: true }; },
     });
     vm.runInContext(source.slice(source.indexOf("const SEAT_DEFAULTS"), source.indexOf("// ---- the Policy Lab's observation-only recorder")), host);
     assert.equal((await host.seatFetch("companion", "System", "Message")).ok, true);
     assert.equal(calls[0][0].provider, provider); assert.equal(calls[0][0].model, "selected-model");
-    assert.deepEqual([...options[0].allowCli], ["claude"]);
+    assert.deepEqual([...options[0].allowCli], ["claude", "codex", "grok", "antigravity"]);
     assert.equal(settings.aiProvider, "zen"); assert.equal(settings.aiModels.heavy, "old-model");
     assert.equal(profiles.current(), null);
   }
 });
 
-test("seat validation rejects unsupported fast mode and coding-only CLIs", () => {
+test("seat validation rejects unsupported fast mode and allows subscription CLIs", () => {
   assert.equal(profiles.validate({ agentSeats: { companion: { provider: "openrouter", model: "openai/gpt-6-fixture", effort: "high", fast: false, modelsByProvider: { zen: "gpt-6-luna" } } } }), null);
   assert.match(profiles.validate({ agentSeats: { companion: { provider: "openrouter", model: "openai/gpt-fixture", fast: true } } }), /Fast mode/);
-  assert.match(profiles.validate({ agentSeats: { companion: { provider: "codex" } } }), /text-only/);
+  for (const provider of ["codex", "grok", "antigravity"]) assert.equal(profiles.validate({ agentSeats: { companion: { provider } } }), null);
   assert.equal(seatChoice({ agentSeats: { companion: { provider: "openrouter" } } }, "companion").fast, false);
 });
 

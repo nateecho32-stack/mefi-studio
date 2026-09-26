@@ -132,6 +132,7 @@ one-line hooks; the rules live in the pure modules it composes. See
 | `planning.cjs` · `planning-service.cjs` | | Decision planning and read-only live drafting, kept apart from board work until a specification is approved. Live exploration uses the Analyzer's bounded file inventory and returns proposals without writing the plan journal. |
 | `analyzer.mjs` · `reference.mjs` | 588 · 188 | Local analysis of a file or an idea; exact context gathered before something becomes a task. |
 | `first-scan.mjs` · `first-map.mjs` · `first-run-service.mjs` · `setup-assist.mjs` | 510 · 228 · 328 · 121 | The first-run scan of the machine, the first map of a folder, the service behind the walkthrough's stops, and the setup assistant. |
+| `cli-setup.cjs` · `cli-text.cjs` | | Guided vendor installation/sign-in, single-subscription configuration, and restricted CLI text sessions for mapping, planning and agent roles. |
 | `auditor.mjs` | 224 | Local wiring and gap checks, with no network and no key. |
 
 ### Policy Lab

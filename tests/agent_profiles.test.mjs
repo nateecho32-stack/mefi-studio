@@ -7,6 +7,13 @@ import { executorHost } from "./fixtures/host_executor.mjs";
 const base = () => ({ aiProvider: "zen", aiModels: { routine: "gpt-6-luna", heavy: "gpt-6-sol" }, agentSeats: { desk: { model: "gpt-6-sol", effort: "high", fast: true } }, autopilot: { enabled: false, parallel: 3 }, zenApiKeyEncrypted: "secret", customEndpoint: "https://local.invalid" });
 const save = (settings, projectId, configuration, extra = {}) => profiles.mutate(settings, { action: "save", revision: profiles.view(settings, projectId).revision, configuration, ...extra }, { projectId, id: "team-one" });
 
+test("Antigravity model display names can be saved for seats and subtasks", () => {
+  const configuration = { executorCli: "antigravity", agentSeats: { lead: { provider: "antigravity", model: "Gemini 3.1 Pro (High)", modelsByProvider: { antigravity: "Gemini 3.1 Pro (High)" } } }, agentSubtasks: { cli: "auto", model: "Gemini 3.1 Pro (High)" } };
+  assert.equal(profiles.validate(configuration), null);
+  configuration.agentSeats.lead.model = "model & echo command";
+  assert.match(profiles.validate(configuration), /model id/);
+});
+
 test("teams inherit until configured; project copies never acquire subsequent default fields", () => {
   const settings = base();
   assert.equal(profiles.view(settings, "a").inherited, true);

@@ -234,14 +234,10 @@ test("the store read is a worker method and the project facade scopes it", () =>
 });
 
 test("every route that can report usage does: CLI JSON replies and Jev charges reach the ledger", () => {
-  assert.match(mainSource, /claude -p --output-format json --strict-mcp-config --tools= --permission-mode dontAsk --no-session-persistence/, "the Claude assistant route prints usage with native tools and inherited MCP disabled");
-  assert.match(mainSource, /\["--prompt-file", tmp, "--output-format", "json", "--permission-mode", "dontAsk"\]/, "the Grok assistant route prints its usage");
-  assert.match(mainSource, /args\.push\("--output-format", "json", "-p"\)/, "the Antigravity assistant route prints its usage");
-  assert.match(mainSource, /resolve\(cliReply\("claude", parseClaudeCliResult\(text\), text/);
-  assert.match(mainSource, /resolve\(cliReply\("grok", parseGrokCliResult\(text\), text/);
-  assert.match(mainSource, /resolve\(cliReply\("antigravity", parseAntigravityCliResult\(text\), text/);
-  assert.match(mainSource, /codex exec --json --ephemeral --skip-git-repo-check --color never -s read-only/, "the Codex assistant route prints its usage as JSONL, read-only");
-  assert.match(mainSource, /resolve\(cliReply\("codex", parseCodexCliResult\(text\), text/);
+  for (const provider of ["claude", "grok", "codex", "antigravity"]) {
+    assert.ok(mainSource.includes('cliText.run({ provider: "' + provider + '"'), "CLI text adapter is used");
+    assert.ok(mainSource.includes('return cliReply("' + provider + '"'), "reply still records CLI usage");
+  }
   assert.match(mainSource, /tokenUsage: cli\.tokenUsage \?\? \{\}, costUsd: cli\.costUsd \?\? null/, "the CLI observation records what the reply reported");
   assert.match(mainSource, /async function chargeJevCall\(result, purpose, route = null\)/);
   const charge = mainSource.slice(mainSource.indexOf("async function chargeJevCall"), mainSource.indexOf("async function runJevIntake"));

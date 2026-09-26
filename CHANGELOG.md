@@ -7,6 +7,12 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Guided CLI installation, sign-in and connection checks in Start here, including recovery at First map. A single Codex, Claude Code, Grok or Antigravity subscription can route the assistant, mapping, planning, agent seats, coding and subtasks through its own account.
+
+### Fixed
+- First map can use the selected provider and local project excerpts without OpenCode. Subscription setup clears conflicting role overrides and keeps other providers out of unrequested fallback calls.
+
 ## [0.4.3] - 2026-09-26
 
 ### Added
