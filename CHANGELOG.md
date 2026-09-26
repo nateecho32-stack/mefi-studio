@@ -7,7 +7,17 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-09-25
+
 ### Added
+- **Vibe mode** brings conversation, task creation, live work and decisions
+  into one focused workspace, with the full Build workspace a switch away.
+- **Remastered node styles** give all eight looks distinct shapes, motion,
+  wires and completion effects, with clearer previews, light-theme contrast
+  and support for reduced motion. Five styles are free; three belong to the
+  optional Void collection.
+- A 40-second product showreel with a version-matched end card and a compact
+  Discord export, using illustrative workflows and Studio's own node painters.
 - Vibe mode stays Vibe: every page opened from it (Tasks, Plans, Ideas,
   Agents, Command, Settings, the model pages, Search results and links inside
   them) opens inside Vibe's own rail instead of Build's menu, with the way
@@ -38,6 +48,8 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   summary and the Analyzer. The 300-plan cap now counts only plans in play.
 
 ### Fixed
+- Ask cards name the reason a task needs help and avoid repeatedly filing the
+  same offer. Task cards distinguish grouped cards from underlying work items.
 - **A test run that pauses for a few seconds is no longer killed as hung.**
   One unchanged CPU sample counted as the whole four-minute idle window, so
   during a busy test run (a scan every 5 s) a test waiting briefly on a file

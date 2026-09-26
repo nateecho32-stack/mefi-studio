@@ -14,6 +14,7 @@ const { spawn } = require("node:child_process");
 const { writeScore } = require("./showreel-score.cjs");
 
 const ROOT = path.resolve(__dirname, "../..");
+const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).version;
 const OUT = path.join(ROOT, "dist", "promo");
 const args = process.argv.slice(2);
 const opt = (name, fallback) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : fallback; };
@@ -61,7 +62,7 @@ app.whenReady().then(async () => {
   wc.on("console-message", (_e, d) => { if (d.level === "error" || d.level === 3) errors.push(d.message); });
   await win.loadFile(path.join(__dirname, "showreel.html"));
   const run = (code) => wc.executeJavaScript(code);
-  await run(`window.__themes = ${JSON.stringify(themes)}; window.__themeKey = ${JSON.stringify(THEME)};
+  await run(`window.__themes = ${JSON.stringify(themes)}; window.__themeKey = ${JSON.stringify(THEME)}; window.__version = ${JSON.stringify(VERSION)};
 ${sources.nodeStyles}
 ;(function () {
 ${sources.agentColors}
@@ -102,13 +103,18 @@ true`);
   const ff = spawn(FFMPEG, ["-y", "-hide_banner", "-loglevel", "error",
     "-f", "image2pipe", "-framerate", String(FPS), "-c:v", "png", "-i", "-", "-i", wav,
     "-c:v", "libx264", "-preset", "slow", "-crf", "16", "-pix_fmt", "yuv420p",
-    "-c:a", "aac", "-b:a", "256k", "-shortest", "-movflags", "+faststart", file], { stdio: ["pipe", "inherit", "inherit"] });
-  const done = new Promise((ok, fail) => ff.on("close", (code) => (code === 0 ? ok() : fail(new Error(`ffmpeg exited ${code}`)))));
+    "-c:a", "aac", "-b:a", "256k", "-shortest", "-movflags", "+faststart", file], { windowsHide: true, stdio: ["pipe", "inherit", "inherit"] });
+  const done = new Promise((ok, fail) => {
+    ff.once("error", fail);
+    ff.stdin.once("error", fail);
+    ff.once("close", (code) => (code === 0 ? ok() : fail(new Error(`ffmpeg exited ${code}`))));
+  });
+  done.catch(() => {}); // The frame loop observes the error even before its final await.
   const frames = Math.round(duration * FPS);
   const started = Date.now();
   for (let f = 0; f < frames; f += 1) {
     const png = await frame(f / FPS);
-    if (!ff.stdin.write(png)) await new Promise((r) => ff.stdin.once("drain", r));
+    if (!ff.stdin.write(png)) await Promise.race([new Promise((r) => ff.stdin.once("drain", r)), done]);
     if (f % 120 === 0) console.log(`frame ${f}/${frames} · ${((Date.now() - started) / 1000).toFixed(0)} s`);
   }
   ff.stdin.end();
@@ -120,7 +126,7 @@ true`);
   const videoKbps = Math.floor((targetBytes * 8 / duration) / 1000 - audioKbps);
   const pass = (n, extra) => new Promise((ok, fail) => spawn(FFMPEG, ["-y", "-hide_banner", "-loglevel", "error", "-i", file,
     "-c:v", "libx264", "-preset", "slow", "-b:v", `${videoKbps}k`, "-pass", String(n), "-passlogfile", path.join(OUT, "work", "share"), "-pix_fmt", "yuv420p", ...extra],
-    { stdio: "inherit" }).on("close", (code) => (code === 0 ? ok() : fail(new Error(`share pass ${n} exited ${code}`)))));
+    { windowsHide: true, stdio: "inherit" }).on("close", (code) => (code === 0 ? ok() : fail(new Error(`share pass ${n} exited ${code}`)))));
   await pass(1, ["-an", "-f", "null", "-"]);
   await pass(2, ["-c:a", "aac", "-b:a", `${audioKbps}k`, "-movflags", "+faststart", share]);
   console.log(share);

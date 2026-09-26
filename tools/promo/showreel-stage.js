@@ -769,12 +769,12 @@
       ctx.fillStyle = rgba(tint, 0.22 * (1 - i / 18)); ctx.beginPath(); ctx.arc(tx, y, 34 * (1 - i / 22), 0, TAU); ctx.fill();
     }
     node("flow-task", style, x, y, 46 + (stage === 3 ? 8 * backOut(span(lt, 2.35, 2.6)) : 0), { kind: "task", tint, active: stage === 1, selected: stage === 3, orbit: stage === 1 ? 1.8 : 0 });
-    callout(x, y, 46, { side: 1, vert: -1, length: 34, bar: 250, number: "02", title: "Theme tokens", counts: ["queued", "running", "verifying", "done"][stage], mark: stage === 3 ? "check" : "live", thought: ["waiting for a builder", "editing styles.css", "npm test · running", "merged into main"][stage] }, span(lt, 0.3, 1.0));
+    callout(x, y, 46, { side: 1, vert: -1, length: 34, bar: 250, number: "02", title: "Theme tokens", counts: ["queued", "running", "verifying", "done"][stage], mark: stage === 3 ? "check" : "live", thought: ["waiting for a builder", "editing styles.css", "npm test · running", "checks complete"][stage] }, span(lt, 0.3, 1.0));
     ["npm run check", "npm test", "npm run audit"].forEach((c, i) => {
       const cu = span(lt, 1.35 + i * 0.12, 1.55 + i * 0.12);
       if (cu > 0) text(`${cu >= 1 ? "✓" : "…"}  ${c}`, colX(2) - 150, y - 250 + i * 44, { size: 22, weight: 500, family: MONO, fill: rgba(cu >= 1 ? DONE : TH.INK, 0.9 * cu) });
     });
-    [[0.15, "thinker", "split the idea into 3 tasks", "+0:04"], [0.7, "builder", "editing renderer/styles.css, settings.js", "+2:31"], [1.2, "builder", "done · 4 files changed", "+6:48"], [1.5, "auditor", "npm test · 3,605 pass, 0 fail", "+7:02"], [2.1, "keeper", "merged into main", "+7:40"]].forEach(([at, who, what, stamp], i) => {
+    [[0.15, "thinker", "split the idea into 3 tasks", "+0:04"], [0.7, "builder", "editing renderer/styles.css, settings.js", "+2:31"], [1.2, "builder", "done · 4 files changed", "+6:48"], [1.5, "auditor", "checking the evidence", "+7:02"], [2.1, "keeper", "verified result recorded", "+7:40"]].forEach(([at, who, what, stamp], i) => {
       const lu = span(lt, at, at + 0.35);
       if (lu <= 0) return;
       const yy = 790 + i * 38;
@@ -782,15 +782,15 @@
       text(who.toUpperCase(), 420, yy, { size: 19, weight: 600, family: MONO, track: 2, fill: rgba(hex(look.AGENT_COLORS[who] ?? toHex(TH.BRIGHT)), 0.95) });
       text(what.slice(0, Math.ceil(what.length * lu)), 590, yy, { size: 19, weight: 500, family: MONO, fill: rgba(TH.INK, 0.8) });
     });
-    headline(lt, "TASK FLOW", "From idea to merged,", "with the checks in plain sight.", { at: 0 });
+    headline(lt, "TASK FLOW · ILLUSTRATED", "From idea to verified,", "with the checks in plain sight.", { at: 0 });
   }
 
   // ---- 9. the numbers, as status tiles --------------------------------------------------------
   const STATS = [
     { value: 8, label: "NODE STYLES", note: "five free, three Void" },
     { value: 11, label: "THEMES", note: "and your own palettes" },
-    { value: 3600, label: "TESTS PASSING", note: "every change is checked", plus: true },
-    { value: 0, from: 99, label: "TELEMETRY CALLS", note: "nothing phones home" },
+    { value: 3, label: "QUALITY GATES", note: "check · test · audit" },
+    { value: 0, label: "TELEMETRY CALLS", note: "no usage tracking" },
   ];
   function sceneNumbers(t) {
     const lt = t - CUTS.numbers;
@@ -817,10 +817,10 @@
 
   // ---- 10. principles, as the app's own settings --------------------------------------------------
   const ROWS = [
-    { label: "Run everything on this machine", note: "Projects, stores and history stay local", control: "on" },
+    { label: "Local project workspace", note: "Chosen AI providers receive your requests", control: "on" },
     { label: "Send usage telemetry", note: "There is none to turn on", control: "off" },
-    { label: "Sign in to an account", note: "Not needed. Open the app and go", control: "NOT NEEDED" },
-    { label: "License", note: "Open source, forever", control: "MIT" },
+    { label: "Studio account", note: "AI providers may need a key or login", control: "NOT NEEDED" },
+    { label: "License", note: "MIT-licensed source", control: "MIT" },
   ];
   function scenePrinciples(t) {
     const lt = t - CUTS.principles;
@@ -888,7 +888,7 @@
     riseText("agents you can watch work", 990, 630, span(lt, 0.85, 1.8), { size: 50, weight: 400, family: SERIF, fill: rgba(TH.INK, 0.85), stagger: 0.02 });
     ctx.fillStyle = rgba(TH.INK, 0.4); ctx.fillRect(800, 690, 980 * expoOut(span(lt, 1.2, 1.9)), 1.5);
     let x = 800;
-    ["v0.4.0", "WINDOWS", "MIT", "GITHUB.COM/NATEECHO32-STACK/MEFI-STUDIO"].forEach((item, i) => {
+    [`v${window.__version}`, "WINDOWS", "MIT", "GITHUB.COM/NATEECHO32-STACK/MEFI-STUDIO"].forEach((item, i) => {
       const o = { size: 19, weight: 600, family: MONO, track: 3, fill: rgba(i === 3 ? TH.BRIGHT : TH.INK, 0.85 * span(lt, 1.35 + i * 0.12, 1.7 + i * 0.12)) };
       text(item, x, 740, o);
       x += measure(item, o) + 44;

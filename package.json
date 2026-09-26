@@ -1,7 +1,7 @@
 {
   "name": "mefi-studio",
   "productName": "Mefi's Studio AI+",
-  "version": "0.4.0",
+  "version": "0.4.2",
   "private": true,
   "license": "MIT",
   "description": "A personal multi-project workspace with an AI companion, agent task loop, and visible work results.",
