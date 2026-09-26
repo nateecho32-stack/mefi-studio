@@ -7245,14 +7245,14 @@ span.catalog-expand { width: 16px; height: 16px; }
 .studio-history button { min-width: 32px; font-size: 18px; }
 /* Keep the three primary destinations in view at increased display scaling. */
 @media (max-height: 600px) {
-  #app-rail { padding-block: 6px; gap: 2px; }
+  #app-rail { padding-block: 3px; gap: 2px; }
   #app-rail .app-rail-brand { min-height: 34px; margin-bottom: 0; padding-block: 3px; }
   #app-rail .app-rail-brand .app-rail-text::after { display: none; }
   #app-rail .app-rail-sections { gap: 0; }
   #app-rail .app-rail-section { flex-shrink: 0; }
-  #app-rail .app-rail-head { min-height: 34px; padding-block: 2px; gap: 1px; }
-  #app-rail .app-rail-head .glyph { width: 16px; height: 16px; }
+  #app-rail .app-rail-head { min-height: 36px; padding-block: 2px; gap: 1px; }
   #app-rail :is(.app-rail-compose, .app-rail-search, .app-rail-vibe) { min-height: 28px; height: 28px; }
+  #app-rail .app-rail-vibe { margin-bottom: 0; }
   #app-rail .app-rail-search { margin-bottom: 2px; }
   #app-rail .app-rail-foot { padding-top: 4px; gap: 2px; }
   #app-rail .app-rail-foot :is(.app-rail-item, .update-pill) { min-height: 28px; height: 28px; padding-block: 2px; }
@@ -61887,6 +61887,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const api = bridge();
     const projectId = item.projectId || companion.state?.projectId || window.MefiWorkspace?.activeProjectId?.();
     if (window.MefiVibe?.mode?.() === "vibe") {
+      window.MefiCompanionHub?.close?.({ immediate: true, restore: false });
       toggleCompanion(false);
       window.MefiVibe.openNeed({ kind: item.kind === "question" ? "question" : item.kind === "approval" ? item.memberIds?.length ? "family" : "approval" : "blocked", id: item.kind === "question" ? item.id : item.taskId, projectId });
       return;

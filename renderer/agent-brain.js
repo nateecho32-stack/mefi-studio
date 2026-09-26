@@ -1903,6 +1903,7 @@
     const api = bridge();
     const projectId = item.projectId || companion.state?.projectId || window.MefiWorkspace?.activeProjectId?.();
     if (window.MefiVibe?.mode?.() === "vibe") {
+      window.MefiCompanionHub?.close?.({ immediate: true, restore: false });
       toggleCompanion(false);
       window.MefiVibe.openNeed({ kind: item.kind === "question" ? "question" : item.kind === "approval" ? item.memberIds?.length ? "family" : "approval" : "blocked", id: item.kind === "question" ? item.id : item.taskId, projectId });
       return;

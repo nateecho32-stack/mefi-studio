@@ -71,7 +71,7 @@ app.whenReady().then(async () => {
     {id:'scope',projectId,status:'open',source:'issue',title:'Keep the change focused?',detail:'The color theme can ship without changing the game rules.',at:now,context:{taskId:'ready',issueKind:'scope',suggestion:{optionId:'narrow',reason:'Your brief only asks for a new palette.'}},options:[{id:'narrow',label:'Keep the agreed scope',recommended:true},{id:'instruct',label:'Answer it in one line',text:true}]},
     {id:'confirm',projectId,status:'open',source:'chat',title:'Start the color theme task?',at:now,context:{chatConfirm:true},options:[{id:'yes',label:'Start it'},{id:'no',label:'No',dismiss:true}]},
   ];
-  const items=questions.map(q=>({id:q.id,kind:'question',title:q.title,questionId:q.id,projectId}));
+  const items=questions.map(q=>({id:q.id,kind:'question',title:q.title,questionId:q.id,actions:q.options.map(o=>({id:o.id,label:o.label,text:o.text}))}));
   responses.autonomyState={ok:true,projectId,level:'auto',elevated:Object.fromEntries(categories.map(c=>[c.id,true])),categories,decisions,todos};
   responses.learningState={ok:true,projectId,decisions:{enabled:true,scope:'blend'},models:'blend',profiles:{project:[{kind:'scope',n:9,verbs:[{verb:'narrow',share:7/9}]}],global:[]},skills:{project:[{taskType:'fix',model:'Fixture builder',wins:8,losses:2,n:10,p:.75}],global:[]}};
   Object.assign(responses.assistantState.state,{questions,decisions,todos,needsYou:{items,counts:{total:2}},ai:{keyPresent:true},messages:[{id:'offer-message',role:'assistant',at:now-6000,text:'The preview check is ready. I can also start the color theme next.',offers:[{title:'Add a color theme',target:{kind:'task',id:'ready',label:'Add a color theme'}}]},{id:'decided-message',role:'assistant',kind:'notice',taskId:'__decided_for_you__',text:'Decided for you (1). Retried the preview check.',at:now-3000}]});
@@ -154,7 +154,13 @@ app.whenReady().then(async () => {
   await until("document.querySelector('.autonomy-decision').textContent.includes('Undone')",'undo');
   await run("document.querySelector('.autonomy-todo button').click();");
   await until("!document.querySelector('.autonomy-todo')",'todo done');
-  await run("window.MefiVibe.openNeed({id:'scope',kind:'question',projectId:'workflow-project'});");
+  await run("window.MefiVibe.closeDrawers();document.getElementById('companion-orb').click();");
+  await until("window.MefiCompanionHub.isOpen()", 'companion hub');
+  await run("document.querySelector('[data-hub-section=requests]').click();");
+  await until("document.querySelector('#companion-pane-status .companion-item button')", 'companion request');
+  await run("document.querySelector('#companion-pane-status .companion-item button').click();");
+  assert.ok(await run("return !window.MefiCompanionHub.isOpen()&&!document.getElementById('vibe-layer').inert;"), 'orb action releases the hub focus lock');
+  assert.equal(await run("return window.unifiedFixture.calls().filter(c=>c.name==='assistantAnswer').length;"), 0, 'the drawer waits for the answer');
   await until("document.querySelector('.vibe-suggestion')",'suggestion');
   await capture('vibe-suggestion.png');
   await run("document.querySelector('.vibe-ask-option').click();");

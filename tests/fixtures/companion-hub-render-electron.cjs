@@ -69,7 +69,7 @@ app.whenReady().then(async () => {
   await until("hubFixture.calls().some(call=>call.key==='firstAssist')", "approved setup chain");
   assert.equal(await run("return hubFixture.calls().filter(call=>call.key==='firstScanApply').length;"), 1);
   assert.deepEqual(win.getBounds(), bounds, "only internal surfaces resize"); report.consent = true;
-  await run("window.MefiOnboarding.close();await window.MefiNav.go('command');document.getElementById('companion-orb').click();");
+  await run("window.MefiOnboarding.close();await window.MefiVibe.setMode('build');await window.MefiNav.go('command');document.getElementById('companion-orb').click();");
   await until("window.MefiCompanionHub.isOpen()", "hub open"); await capture("03-hub");
   assert.equal(await run("return document.activeElement.id;"), "agent-hub-return");
   assert.equal(await run("return document.getElementById('idle-hud').inert;"), true);

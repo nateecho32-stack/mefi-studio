@@ -5,6 +5,9 @@
 - `tests/autonomy_ui.test.mjs`: saved controls, warnings, learning scopes,
   scoped history actions and failed saves. `vibe_pipeline` also exercises
   one-line suggestions, item-bound errors and unread IDs beyond sixty replies.
+- `tests/autonomy_render.test.mjs` / `tests/fixtures/autonomy-ui-electron.cjs`:
+  isolated 1920x1080 Chromium proof of saved modes, Undo/to-dos, suggestions,
+  inline chat, elevated warnings and orb-to-drawer focus restoration.
 
 ## Permission decisions
 
