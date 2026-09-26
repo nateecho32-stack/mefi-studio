@@ -76,6 +76,7 @@ function idleStopReason({ open, tasks, now, autoBuild, approve = null, taskStart
   if (states.some((item) => item.stage === "cooling")) return "cooldown";
   if (states.some((item) => item.blockedBy === "dependencies")) return "prerequisites";
   if (states.some((item) => item.stage === "blocked")) return "review";
+  if (states.some((item) => item.stage === "deferred")) return "scheduled";
   return "empty";
 }
 

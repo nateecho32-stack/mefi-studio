@@ -34,6 +34,61 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-26 - Vibe Milestone D: task lanes, queue controls and Inspector
+
+C:/wt/vibe-a, branch codex/vibe-c-d, on C commit 8dc02e4. Tasks now switches
+between List and six live-count lanes, with questions separate from task counts.
+Queue controls pause/resume new work and choose automatic or manual worker limits.
+The Inspector saves priority, estimated minutes, acceptance checks and a local
+Defer until date. Eligibility excludes deferred tasks until expiry or release;
+dependencies and approval still apply afterward. Priority breaks ties inside
+existing worth bands, with explicit pin recency retained. Details are versioned,
+conflicting stale edits refuse, untouched legacy checks survive other edits, and
+active/checking/finished inspectors are read only. Failed saves retain drafts.
+A C follow-up also retries opening a newly created app after a busy-project
+switch refusal, without creating the folder twice.
+
+Final focused batch: 84/84 passed (new-app host/planner, Vibe panels, backlog,
+build approval and policy). Check passes (154 targets, 326 specs), audit reports
+zero errors/warnings, booklet rebuilt, and diff whitespace passes. A seeded
+hidden Electron preview passed real form submission/conflict retention and
+layout checks at 1440x900, 900x720, 600x700 and 600x700 at 150% zoom: no horizontal
+overflow or renderer errors. Desktop and narrow screenshots were inspected;
+artifacts remain outside Git under %TEMP%/mefi-vibe-d-ui. No live state was used.
+
+After reserving a quiet Electron window with the other active chats, full
+npm test completed with exit 1: parallel Node 3717 total / 3713 pass / 4 skip;
+Electron 37 total / 35 pass / 1 fail / 1 skip; serialized visibility 1/1 passed;
+occlusion 1 pass / 1 capability skip. The sole failure is unified_studio_render,
+"primary destinations stay visible at 600 / 1.5", already reproduced on the
+Milestone A baseline and in the inherited C log. Command rendering passed this
+quiet run (51.8 s). No source-fingerprint warning occurred. Python ran 248 tests
+successfully with one skip; all six normalized-path checks passed. Full log:
+%TEMP%/mefi-vibe-cd-gate.log (Node 290 s, Python 56 s). This is NOT a green full
+suite claim; the existing navigation failure remains separate from C/D.
+
+## 2026-09-26 - Vibe Milestone C continuation: intake merge and new-app recovery
+
+Isolated C:/wt/vibe-a on 8de8b58, preserving the prior sizing, plan-family and
+New app implementation. Fixed Make it one task to merge the family atomically:
+ordinary drop rejects prerequisite children. Running/checking steps and outside
+dependents refuse the merge without partial changes; dropped steps never claim
+completion. New app retries a failed first build without recreating the folder,
+reports README write failures, and rejects junctions into Studio before writing.
+Added real temporary-folder host tests, family merge tests and renderer retries.
+
+Focused Vibe, sizing, planner and delegation batch passed 61/61; the final
+new-app host/sizing/panel batch passed 25/25 after the filesystem coverage was
+added. Booklet rebuilt, check passed (154 targets / 326 specs), audit zero
+findings, and diff whitespace passed. The inherited npm-test-c.log is NOT green:
+3694 parallel Node passes / 4 skips, Electron 34 passes / 2 failures / 1 skip
+(Command capture timeout and the documented Unified Studio 600px navigation
+failure), visibility 1 pass, occlusion 1 pass / 1 skip; Python 248 and path-lock
+passed. Its final recorded exit is 1 despite the outer echo command exiting 0.
+A fresh full gate was deferred because another chat's full gate was already
+running on this desktop; the combined C/D continuation will run it after that
+process drains. No live project data or portable files were changed.
+
 ## 2026-09-26 - Shared assistant context Phase 3 focused validation
 
 Chat and desk now share decision context. Mode-aware approvals carry the

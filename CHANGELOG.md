@@ -14,6 +14,9 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   existing host actions. Refusals appear in the reply. OpenRouter and local
   companion seats also clear the outer model availability gate.
 
+- Vibe Tasks gains List/Lanes, live queue counts, pause/resume and worker limits.
+  Its Inspector saves task priority, estimates, acceptance checks and deferral
+  dates, with revision checks and the same dispatch and approval gates.
 
 ### Added
 - Mefi learns from successful owner answers, including family choices, approvals,
@@ -31,6 +34,19 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   Undo waits for a running worker and preserves later edits and daily budgets.
   Real-world leftovers become a short For you list. Task reservations keep
   work from starting until the decision and its undo evidence are saved.
+- "Mefi sizes it": **Build it** in Vibe asks whether a request is one task.
+  A short, single change goes straight onto the board; a bigger one gets one
+  call to the lead seat, which may split it into two to six steps that each
+  leave the project working. The steps are admitted under your card in the
+  same save, as its delegated slices, so your card runs last as the final
+  integration and check. A **Plan in flight** card shows how far along it
+  is; under Verify first its waiting steps are one row under Needs you and
+  start together, and **Make it one task** drops the steps that have not
+  started. No AI, a slow one or an unusable answer keeps it one card.
+- **New app** beside Vibe's project picker: name it and say what it should
+  be, and Studio makes an empty folder under Mefi Apps in your home folder,
+  starts git in it, opens it as the project and sends the description through
+  Build it as its first request.
 - Vibe has its own menus. Tasks, Plans, Ideas, Team and Settings open as
   compact panels beside the front door instead of Build's full pages: short
   rows with one or two actions, a row opens its detail, Back or Esc steps out,

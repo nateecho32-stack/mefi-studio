@@ -26,6 +26,16 @@ import {
 } from "../scripts/policy.mjs";
 
 const HOUR = 3600 * 1000;
+
+test("task priority orders one worth band while explicit pins and owner work keep precedence", () => {
+  const normal = { id: "old", createdAt: 1, priority: "normal" };
+  const high = { id: "new", createdAt: 2, priority: "high" };
+  assert.ok(baselineCompareWork(high, normal) < 0);
+  assert.ok(baselineCompareWork({ ...normal, pin: true, pinAt: 5 }, { ...high, priority: "urgent" }) < 0);
+  assert.ok(baselineCompareWork({ ...normal, pin: true, pinAt: 6 }, { ...high, pin: true, pinAt: 5 }) < 0);
+  assert.ok(baselineCompareWork({ ...normal, source: "chat", priority: "low" }, high) < 0);
+  assert.ok(baselineCompareWork(normal, { ...high, priority: undefined }) < 0, "unchanged priorities retain age order");
+});
 const task = (id, title, extra = {}) => ({ id, title, source: "a-eyes", createdAt: 1000, updatedAt: 1000, ...extra });
 
 // ---- baseline parity: the port must match main.cjs's frozen rules ----------

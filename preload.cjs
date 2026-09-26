@@ -10,6 +10,8 @@ const api = {
   projectsList: () => ipcRenderer.invoke("projects:list"),
   projectsAdd: () => ipcRenderer.invoke("projects:add"),
   projectsAddPath: (folder) => ipcRenderer.invoke("projects:add-path", { path: folder }),
+  // Vibe's New app: an empty folder with git, opened as the project (main.cjs projects:create).
+  projectsCreate: (payload) => ipcRenderer.invoke("projects:create", payload ?? {}),
   projectsSelect: (id, options) => ipcRenderer.invoke("projects:select", options ? { id, saveProgress: options.saveProgress === true } : id),
   projectsRemove: (id) => ipcRenderer.invoke("projects:remove", id),
   onProjects: (callback) => ipcRenderer.on("projects:changed", (_event, data) => callback(data)),
@@ -134,6 +136,8 @@ const api = {
   planningAssist: (payload) => ipcRenderer.invoke("planning:assist", payload ?? {}),
   planningExplore: (payload) => ipcRenderer.invoke("planning:explore", payload ?? {}),
   tasksCreate: (task) => ipcRenderer.invoke("tasks:create", task),
+  // Vibe's Build it: one card, or the owner's card split into steps (main.cjs vibeBuild).
+  vibeBuild: (payload) => ipcRenderer.invoke("vibe:build", payload ?? {}),
   tasksDependencies: (payload) => ipcRenderer.invoke("tasks:dependencies", payload ?? {}),
   tasksHistory: (payload) => ipcRenderer.invoke("tasks:history", payload ?? {}),
   tasksHandoff: (payload) => ipcRenderer.invoke("tasks:handoff", payload ?? {}),

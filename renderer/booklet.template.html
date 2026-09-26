@@ -233,7 +233,10 @@
 <section id="vibe-layer" class="vibe" aria-label="Vibe" hidden tabindex="-1">
   <div class="vibe-sky" aria-hidden="true"><i class="vibe-aurora one"></i><i class="vibe-aurora two"></i><i class="vibe-aurora three"></i></div>
   <header class="vibe-top">
-    <button id="vibe-project" class="vibe-project" type="button" title="Switch project" aria-controls="workspace-sidebar-panel"><span class="vibe-project-mark" aria-hidden="true">M+</span><span class="vibe-project-text"><small>Project</small><b id="vibe-project-name">Choose a project</b></span><svg class="glyph vibe-chev" aria-hidden="true"><use href="#g-chev"/></svg></button>
+    <div class="vibe-top-left">
+      <button id="vibe-project" class="vibe-project" type="button" title="Switch project" aria-controls="workspace-sidebar-panel"><span class="vibe-project-mark" aria-hidden="true">M+</span><span class="vibe-project-text"><small>Project</small><b id="vibe-project-name">Choose a project</b></span><svg class="glyph vibe-chev" aria-hidden="true"><use href="#g-chev"/></svg></button>
+      <button id="vibe-new-app" class="vibe-icon" type="button" data-vibe-panel="newapp" title="Start a new app from a prompt" aria-label="Start a new app"><svg class="glyph" aria-hidden="true"><use href="#g-add"/></svg></button>
+    </div>
     <div class="mode-switch" role="radiogroup" aria-label="Studio mode" data-mode="vibe">
       <i class="mode-thumb" aria-hidden="true"></i>
       <button type="button" role="radio" data-ui-mode="vibe" aria-checked="true" title="Vibe: the calm front door"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Vibe</span></button>
@@ -276,6 +279,11 @@
         <header><span class="vibe-lane-mark" aria-hidden="true"></span><h2 id="vibe-lane-building-title">Building now</h2><span id="vibe-count-building" class="vibe-count"></span></header>
         <ol id="vibe-lane-building" class="vibe-rows"></ol>
         <button class="vibe-lane-link" type="button" data-nav="command">Watch it live <span aria-hidden="true">→</span></button>
+      </article>
+      <article id="vibe-card-plan" class="vibe-lane" data-lane="plan" aria-labelledby="vibe-lane-plan-title" hidden>
+        <header><span class="vibe-lane-mark" aria-hidden="true"></span><h2 id="vibe-lane-plan-title">Plan in flight</h2><span id="vibe-count-plan" class="vibe-count"></span></header>
+        <ol id="vibe-lane-plan" class="vibe-rows"></ol>
+        <button class="vibe-lane-link" type="button" data-vibe-panel="plans">All plans <span aria-hidden="true">→</span></button>
       </article>
       <article id="vibe-card-done" class="vibe-lane" data-lane="done" aria-labelledby="vibe-lane-done-title" hidden>
         <header><span class="vibe-lane-mark" aria-hidden="true"></span><h2 id="vibe-lane-done-title">Freshly done</h2><span id="vibe-count-done" class="vibe-count"></span></header>

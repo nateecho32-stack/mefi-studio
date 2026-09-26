@@ -67,6 +67,9 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; padding: 18px 28px 0; }
 .vibe-project { justify-self: start; display: inline-flex; align-items: center; gap: 12px; min-height: 48px; max-width: 100%; padding: 6px 14px 6px 6px; border: 1px solid var(--v-edge); border-radius: 16px; background: var(--v-glass); backdrop-filter: var(--v-blur); color: var(--v-ink); cursor: pointer; transition: border-color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out); }
 .vibe-project:hover { border-color: var(--v-edge-hi); background: var(--v-glass-hi); }
+/* The project picker and, beside it, New app (a folder, git, then Build it). */
+.vibe-top-left { justify-self: start; display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
+.vibe-top-left .vibe-icon { flex: none; width: 36px; height: 36px; border-radius: 12px; }
 .vibe-project-mark { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 11px; background: linear-gradient(140deg, var(--v-accent-hi), var(--v-accent)); color: var(--ink); font: 700 12px/1 var(--font-display); letter-spacing: .02em; box-shadow: 0 6px 18px -8px var(--v-accent); }
 .vibe-project-text { display: grid; min-width: 0; text-align: left; line-height: 1.2; }
 .vibe-project-text small { color: var(--v-faint); font-size: 11px; }
@@ -324,6 +327,31 @@ button.vibe-ask-chip:hover { border-color: var(--v-edge-hi); color: var(--v-ink)
 /* Tasks, Plans, Ideas, Team and Settings open here, in the conversation's
    place and glass: compact rows, one or two actions, Full view for depth. */
 .vibe-panel { --lane: var(--gold); }
+.vibe-task-views { display: flex; gap: 6px; }
+.vibe-task-views button[aria-pressed="true"] { background: color-mix(in srgb, var(--gold) 18%, transparent); border-color: var(--gold); color: var(--v-ink); }
+.vibe-governor { display: grid; gap: 9px; padding: 12px; border: 1px solid var(--v-edge); border-radius: 14px; background: color-mix(in srgb, var(--ivory) 3%, transparent); }
+.vibe-governor-counts { color: var(--v-ink); font-size: 12px; font-weight: 600; }
+.vibe-governor-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+.vibe-worker-limit { display: grid; gap: 4px; color: var(--v-soft); font-size: 11px; }
+.vibe-worker-limit select, .vibe-inspector-form input, .vibe-inspector-form select, .vibe-inspector-form textarea { box-sizing: border-box; min-width: 0; max-width: 100%; padding: 8px; border: 1px solid var(--v-edge); border-radius: 9px; color: var(--v-ink); background: var(--bg); font: inherit; }
+.vibe-task-lanes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: start; }
+.vibe-task-lane { min-width: 0; padding: 8px; border: 1px solid var(--v-edge); border-radius: 12px; background: color-mix(in srgb, var(--ivory) 2%, transparent); }
+.vibe-lane-title { margin: 2px 4px 8px; color: var(--v-soft); font-size: 12px; font-weight: 600; }
+.vibe-task-lane .vibe-row-main { min-width: 0; }
+.vibe-task-lane .vibe-row-title { white-space: normal; overflow-wrap: anywhere; }
+.vibe-task-lane .vibe-row-meta { white-space: normal; }
+.vibe-inspector { border-top: 1px solid var(--v-edge); padding-top: 12px; }
+.vibe-inspector summary { color: var(--v-ink); font-size: 13px; cursor: pointer; }
+.vibe-inspector-form { display: grid; gap: 12px; margin-top: 12px; }
+.vibe-inspector-form .vibe-set-field { min-width: 0; }
+.vibe-inspector-form textarea { resize: vertical; }
+.vibe-inspector-form :disabled { opacity: .6; }
+@media (max-width: 600px) { .vibe-task-lanes { grid-template-columns: minmax(0, 1fr); } }
+@media (min-width: 1200px) {
+  .vibe-panel.is-lanes { width: 680px; }
+  .vibe-panel.is-lanes .vibe-task-lanes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  #vibe-layer:has(> .vibe-panel.is-lanes:not([hidden])) .vibe-stage { padding-right: 724px; }
+}
 .vibe-panel-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .vibe-panel-heading > div { min-width: 0; }
 .vibe-panel-heading h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -372,6 +400,31 @@ button.vibe-ask-chip:hover { border-color: var(--v-edge-hi); color: var(--v-ink)
 .vibe-set-toggle .vibe-set-hint { grid-column: 1 / -1; }
 .vibe-set-toggle input { width: 18px; height: 18px; margin: 0; accent-color: var(--gold); cursor: pointer; }
 .vibe-set-links { display: flex; flex-wrap: wrap; gap: 2px 16px; padding: 0 4px; }
+
+/* ---- a new app from a prompt ------------------------------------------------ */
+.vibe-newapp textarea { min-height: 92px; padding: 8px 10px; border: 1px solid var(--v-edge); border-radius: 10px; background: color-mix(in srgb, var(--bg-deep) 50%, transparent); color: var(--v-ink); font: 13.5px/1.45 var(--font-ui); resize: vertical; }
+.vibe-newapp textarea:focus { outline: none; border-color: var(--v-edge-hi); }
+.vibe-newapp .vibe-btn { justify-self: start; margin-top: 4px; }
+
+/* ---- a request split into steps ("Mefi sizes it") -------------------------- */
+/* The plan card: the request, how far along it is, and one mark per step. */
+.vibe-lane[data-lane="plan"] { --lane: var(--info); animation-delay: 25ms; }
+.vibe-steps { display: flex; flex-wrap: wrap; gap: 5px; margin: -2px 10px 8px 32px; list-style: none; }
+.vibe-step { max-width: 100%; padding: 3px 9px 3px 20px; overflow: hidden; position: relative; border: 1px solid var(--v-edge); border-radius: 999px; color: var(--v-soft); font-size: 11.5px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.vibe-step::before { content: ""; position: absolute; left: 8px; top: calc(50% - 3px); width: 6px; height: 6px; border-radius: 50%; background: var(--v-faint); }
+.vibe-step.is-done { color: var(--v-ink); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+.vibe-step.is-done::before { background: var(--good); }
+.vibe-step.is-dropped { text-decoration: line-through; opacity: .6; }
+.vibe-step.is-running { color: var(--v-ink); border-color: color-mix(in srgb, var(--live) 45%, transparent); }
+.vibe-step.is-running::before { background: var(--live); box-shadow: 0 0 6px var(--live); animation: vibe-breathe 1.8s var(--ease-in-out) infinite; }
+.vibe-step.is-checking::before { background: var(--info); }
+.vibe-step.is-approval { border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.vibe-step.is-approval::before { background: var(--warn); }
+.vibe-step.is-blocked::before { background: var(--bad); }
+/* The same steps in the decision drawer, numbered. */
+.vibe-ask-steps { display: grid; gap: 4px; margin: 0; padding: 10px 12px 10px 32px; border: 1px solid var(--v-edge); border-radius: 14px; background: color-mix(in srgb, var(--bg-deep) 45%, transparent); color: var(--v-ink); font-size: 13.5px; line-height: 1.45; }
+.vibe-ask-steps li.is-done { color: var(--v-soft); text-decoration: line-through; }
+@media (prefers-reduced-motion: reduce) { .vibe-step.is-running::before { animation: none; } }
 
 /* ---- smaller windows ------------------------------------------------------- */
 @media (max-width: 760px) {

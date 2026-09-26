@@ -79,6 +79,8 @@ const agentModels = require("./scripts/agent-models.cjs");
 const agentIssues = require("./scripts/agent-issues.cjs");
 const brains = require("./scripts/brains.cjs");
 const taskDelegation = require("./scripts/task-delegation.cjs");
+const requestSizing = require("./scripts/request-sizing.cjs");
+const newApp = require("./scripts/new-app.cjs");
 const executorResume = require("./scripts/executor-resume.cjs");
 const executorCore = require("./scripts/executor-core.cjs");
 const { createPlanningStore } = require("./scripts/planning.cjs");
@@ -11623,6 +11625,12 @@ async function dropTask({ taskId, projectId } = {}) {
 async function taskAction({ taskId, projectId, action, status, title } = {}) {
   const error = taskProjectError(projectId);
   if (error) return { ok: false, error };
+  if (action === "merge-steps") {
+    const result = await mutateBoard((board) => taskDelegation.collapseIntake(board, { parentId: taskId, jobs: autopilot.jobs, now: Date.now() }));
+    if (!result.ok) return { ok: false, error: result.error };
+    await refreshAutopilotQueue();
+    return { ok: true, backlog: await backlogStatus() };
+  }
   if (action === "delete") return deleteTask({ taskId, projectId });
   if (action === "drop") return dropTask({ taskId, projectId });
   // Stop this task's worker only: its progress is saved and the card waits
@@ -11685,7 +11693,8 @@ async function saveTaskEdits(rows) {
     const existing = new Map(board.tasks.map((task) => [task.id, task]));
     const incoming = new Set();
     const merged = [];
-    const fields = ["title", "prompt", "color", "refs", "ideas", "logs", "note", "notes", "context", "handoff", "description", "details", "files", "file"];
+    const inspectorFields = ["priority", "estimateMinutes", "acceptance", "deferUntil"];
+    const fields = ["title", "prompt", "color", "refs", "ideas", "logs", "note", "notes", "context", "handoff", "description", "details", "files", "file", ...inspectorFields];
     const equal = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
     for (const row of next.filter((task) => task?.id)) {
       if (incoming.has(row.id)) continue;
@@ -11705,7 +11714,15 @@ async function saveTaskEdits(rows) {
       const baseline = currentVersion === oldVersion ? current : current.contextHistory?.entries?.find((entry) => entry.revision === oldVersion || (!oldVersion && entry.kind === "saved"))?.snapshot;
       if (!baseline) return { ok: false, error: "A task changed while these details were open. Reload the board before saving." };
       const task = { ...current };
+      const changedField = (field) => Object.hasOwn(editable, field) && !equal(editable[field], baseline[field]);
+      if (changedField("priority") && !["low", "normal", "high", "urgent"].includes(editable.priority)) return { ok: false, error: "Choose Low, Normal, High or Urgent priority." };
+      if (changedField("estimateMinutes") && (!Number.isInteger(editable.estimateMinutes) || editable.estimateMinutes < 0 || editable.estimateMinutes > 10080)) return { ok: false, error: "Use an estimate from 0 to 10080 minutes; 0 clears it." };
+      if (changedField("deferUntil") && (!Number.isSafeInteger(editable.deferUntil) || editable.deferUntil < 0 || editable.deferUntil > 8640000000000000)) return { ok: false, error: "Choose a valid date to defer this task." };
+      if (changedField("acceptance") && (!Array.isArray(editable.acceptance) || editable.acceptance.length > 12 || editable.acceptance.some((line) => typeof line !== "string" || !line.trim() || line.length > 300))) return { ok: false, error: "Done when takes up to 12 checks, each 1 to 300 characters." };
       for (const field of fields) {
+        // Older task forms never sent these fields; an omitted field must
+        // preserve the saved inspector value, including on a stale form.
+        if (inspectorFields.includes(field) && !Object.hasOwn(editable, field)) continue;
         if (equal(editable[field], baseline[field])) continue;
         if (current.runId || ["active", "running", "awaiting_verification", "verifying"].includes(current.status)) return { ok: false, error: "This task has a worker or is being verified. Reload after it finishes before editing its details." };
         if (!equal(current[field], baseline[field]) && !equal(current[field], editable[field])) return { ok: false, error: "The same task details changed elsewhere. Reload the board to keep the newest context." };
@@ -12000,7 +12017,7 @@ async function promotableRequestsWaiting() {
 // returned as `created` with `adopted`. Refusing the ask in its favour left the
 // request unpinned in its filed band, and lost the ask whenever promotion
 // would refuse that request.
-async function assistantCreateTask({ title, prompt = "", source = "chat", focused = null, pin = false, conversation = null, splitFrom = null, splitDepth = null, details = null, origin = null, adoptRequest = false } = {}) {
+async function assistantCreateTask({ title, prompt = "", source = "chat", focused = null, pin = false, conversation = null, splitFrom = null, splitDepth = null, details = null, origin = null, adoptRequest = false, intake = null } = {}) {
   const cleanTitle = String(title ?? "").trim().slice(0, 90);
   if (!cleanTitle) return conversation ? { created: null, existing: null } : null;
   const now = Date.now();
@@ -12044,7 +12061,13 @@ async function assistantCreateTask({ title, prompt = "", source = "chat", focuse
       now, allocateId, project,
       log: "task created by the assistant",
     });
-    if (admitted.created) return { tasks: board.tasks, created: admitted.created };
+    if (admitted.created) {
+      // Vibe's sized request (vibeBuild): its steps are admitted under the new
+      // card in this same write, before any worker can claim the card whole.
+      const split = intake ? taskDelegation.admitIntake(board, { parentId: admitted.created.id, plan: intake, now }) : null;
+      if (split && !split.admitted) logLine(`[agents] request kept as one card: ${split.reason}`);
+      return { tasks: board.tasks, created: admitted.created, ...(split?.admitted ? { split: { childTaskIds: split.childTaskIds } } : {}) };
+    }
     const request = admitted.existing?.kind === "request" ? admitted.existing.item : null;
     // Only a row promotion itself could take: never one a run or a pending
     // checkpoint still holds (an older build's), which is reported instead,
@@ -12067,7 +12090,7 @@ async function assistantCreateTask({ title, prompt = "", source = "chat", focuse
   if (!created.created) return conversation ? { created: null, existing: created.existing ?? null } : null;
   // An adopted request was classified when it was filed.
   await assistantTaskAdmitted(created.created, { target, pin, classify: !created.adopted });
-  return conversation ? { created: created.created, existing: null, ...(created.adopted ? { adopted: true } : {}) } : created.created;
+  return conversation ? { created: created.created, existing: null, ...(created.adopted ? { adopted: true } : {}), ...(created.split ? { split: created.split } : {}) } : created.created;
 }
 
 // Explicit work can enter straight through the task composer, chat or a split
@@ -12322,7 +12345,7 @@ async function executeNextRequest() {
       ? `Manual worker limit reached (${autopilot.jobs.length}/${Math.max(1, autopilot.parallel)}); waiting for a worker to finish`
       : null;
     setAutopilotWaiting(
-      executorUpdateHold() || (autopilot.jobs.some((entry) => entry.settlementPending) ? pendingSave() : stop === "noproject" ? "Open a project folder to start work" : stop === "cluster" ? autopilot.clusterWaiting || "Cluster is focused on one task" : stop === "resources" ? autopilot.capacity?.reason || "waiting for machine capacity" : stop === "busy" ? "machine busy" : stop === "error" ? `Worker could not start: ${autopilot.lastError || "dispatch failed; retrying"}` : stop === "route" ? `Worker connection unavailable: ${autopilot.lastError || "check Settings & connections"}` : stop === "approval" ? "Verify first: tasks are waiting for your build approval" : stop === "cooldown" ? "tasks cooling down" : stop === "prerequisites" ? "waiting for task prerequisites" : stop === "review" ? "tasks need review before retry" : stop === "deferred" ? "waiting on live editors" : manualWait)
+      executorUpdateHold() || (autopilot.jobs.some((entry) => entry.settlementPending) ? pendingSave() : stop === "noproject" ? "Open a project folder to start work" : stop === "cluster" ? autopilot.clusterWaiting || "Cluster is focused on one task" : stop === "resources" ? autopilot.capacity?.reason || "waiting for machine capacity" : stop === "busy" ? "machine busy" : stop === "error" ? `Worker could not start: ${autopilot.lastError || "dispatch failed; retrying"}` : stop === "route" ? `Worker connection unavailable: ${autopilot.lastError || "check Settings & connections"}` : stop === "approval" ? "Verify first: tasks are waiting for your build approval" : stop === "scheduled" ? "tasks deferred until later" : stop === "cooldown" ? "tasks cooling down" : stop === "prerequisites" ? "waiting for task prerequisites" : stop === "review" ? "tasks need review before retry" : stop === "deferred" ? "waiting on live editors" : manualWait)
     );
     return stop;
   })().finally(() => {
@@ -12370,7 +12393,10 @@ function fallbackCompareWork(a, b) {
   const ap = fallbackWorkPriority(a);
   const bp = fallbackWorkPriority(b);
   if (ap !== bp) return bp - ap;
-  if (a?.pin && b?.pin) return (b.pinAt ?? 0) - (a.pinAt ?? 0);
+  if (a?.pin && b?.pin && a.pinAt !== b.pinAt) return (b.pinAt ?? 0) - (a.pinAt ?? 0);
+  const priorities = { low: 0, normal: 1, high: 2, urgent: 3 };
+  const priority = (priorities[b?.priority] ?? 1) - (priorities[a?.priority] ?? 1);
+  if (priority) return priority;
   const aAge = a?.at ?? a?.createdAt ?? a?.updatedAt ?? 0;
   const bAge = b?.at ?? b?.createdAt ?? b?.updatedAt ?? 0;
   return aAge - bAge;
@@ -12383,7 +12409,7 @@ function workPriority(item) {
   return policyBaselinePort ? policyBaselinePort.workPriority(item) : fallbackWorkPriority(item);
 }
 // One ordering across the inbox and the board: worth first, then — inside a
-// band — the oldest piece of work, so auto-filed upkeep cannot starve. Pins
+// band — the owner's priority then the oldest work. Pins
 // break their tie by recency instead.
 function compareWork(a, b) {
   return policyBaselinePort ? policyBaselinePort.compare(a, b) : fallbackCompareWork(a, b);
@@ -16896,6 +16922,47 @@ function registerIpc() {
     if (typeof folder !== "string" || !folder.trim()) return { ...projects.list(), ok: false, error: "Name the project folder to open." };
     return registerProjectFolder(path.resolve(folder.trim()));
   });
+  // Vibe's New app: an empty project folder (by default ~/Mefi Apps/<name>),
+  // git started in it, a starter README, then opened as the active project.
+  // A folder that already holds anything is refused, never reused.
+  ipcMain.handle("projects:create", async (_event, { name, about, parent } = {}) => {
+    const planned = newApp.plan({ name, about, parent: typeof parent === "string" && parent.trim() ? parent : null, home: os.homedir(), studioRoot: STUDIO_ROOT });
+    if (!planned.ok) return { ...projects.list(), ok: false, error: planned.error };
+    try {
+      // Resolve the existing ancestor before creating anything: a junction
+      // outside Studio must not turn the new app into files inside Studio.
+      const { realpath } = require("node:fs/promises");
+      const { containsPath } = require("./scripts/path-scope.cjs");
+      let ancestor = planned.folder;
+      const suffix = [];
+      while (true) {
+        try { ancestor = await realpath(ancestor); break; }
+        catch (error) {
+          if (error.code !== "ENOENT" || path.dirname(ancestor) === ancestor) throw error;
+          suffix.unshift(path.basename(ancestor)); ancestor = path.dirname(ancestor);
+        }
+      }
+      const canonicalFolder = path.join(ancestor, ...suffix);
+      const canonicalStudio = await realpath(STUDIO_ROOT);
+      if (containsPath(canonicalStudio, canonicalFolder) || containsPath(canonicalFolder, canonicalStudio)) return { ...projects.list(), ok: false, error: "A new app gets its own folder, outside Studio's own." };
+      const existing = await readdir(planned.folder).catch((error) => (error.code === "ENOENT" ? null : Promise.reject(error)));
+      if (existing?.length) return { ...projects.list(), ok: false, error: `${planned.folder} already exists and is not empty. Choose another name.` };
+      await mkdir(planned.folder, { recursive: true });
+      await writeFile(path.join(planned.folder, "README.md"), newApp.readme(planned), { flag: "wx" });
+      // Without git on this machine the folder is still a project; the
+      // builders simply start without history.
+      const { execFile } = require("node:child_process");
+      const git = await new Promise((resolve) => execFile("git", ["init", "-q"], { cwd: planned.folder, timeout: 15000, windowsHide: true }, (error) => resolve(!error)));
+      const added = await registerProjectFolder(planned.folder);
+      if (added.ok === false) return added;
+      const opened = added.selectedId === added.addedId ? added : await selectProject(added.addedId);
+      if (opened.ok === false) return { ...opened, created: true, addedId: added.addedId, folder: planned.folder };
+      assistantLog("control", `new app "${planned.name}" at ${planned.folder}${git ? "" : " (git is not available, so it starts without history)"}`);
+      return { ...projects.list(), ...opened, ok: true, addedId: added.addedId, selectedId: added.addedId, folder: planned.folder, git };
+    } catch (error) {
+      return { ...projects.list(), ok: false, error: `The app folder could not be made: ${error.message}` };
+    }
+  });
   ipcMain.handle("projects:remove", async (_event, id) => {
     try {
       const target = projects.find(id);
@@ -16944,7 +17011,9 @@ function registerIpc() {
   ipcMain.handle("planning:action", (_event, payload) => planningRequest("action", payload));
   ipcMain.handle("planning:assist", (_event, payload) => planningRequest("assist", payload));
   ipcMain.handle("planning:explore", (_event, payload) => planningRequest("explore", payload));
-  ipcMain.handle("tasks:create", async (_event, { title, prompt, projectId } = {}) => {
+  ipcMain.handle("tasks:create", (_event, payload = {}) => composerTask(payload ?? {}));
+  ipcMain.handle("vibe:build", (_event, payload = {}) => vibeBuild(payload ?? {}));
+  async function composerTask({ title, prompt, projectId, intake = null } = {}) {
     if (projectId && projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Add this task again in its intended project." };
     if (!String(title ?? "").trim()) return { ok: false, error: "Give your task a title." };
     await ensureAssistant();
@@ -16953,7 +17022,7 @@ function registerIpc() {
     // one card, not two keyed on differently clipped titles. An inbox request
     // with this brief becomes the card now, pinned as the owner's
     // (adoptRequest), instead of the ask being refused in its favour.
-    const admission = await assistantCreateTask({ title, prompt: prompt ?? title, source: "chat", pin: true, conversation: {}, origin: { kind: "composer", by: "owner" }, adoptRequest: true });
+    const admission = await assistantCreateTask({ title, prompt: prompt ?? title, source: "chat", pin: true, conversation: {}, origin: { kind: "composer", by: "owner" }, adoptRequest: true, intake });
     const task = admission?.created ?? null;
     const eyes = await getEyes();
     const tasks = await eyes.readJson(TASKS_PATH, []);
@@ -16966,8 +17035,37 @@ function registerIpc() {
       return { ok: false, error: named ? `"${String(named).slice(0, 90)}" ${where}. No new task was added.` : "An unfinished task with this brief already exists.", tasks, projectId: projects.current().id };
     }
     assistantAskForWork("you added a task");
-    return { ok: true, task: taskView(task), tasks: tasks.map(taskView), projectId: projects.current().id };
-  });
+    return { ok: true, task: taskView(task), tasks: tasks.map(taskView), projectId: projects.current().id, ...(admission.split ? { steps: admission.split.childTaskIds.length, stepIds: admission.split.childTaskIds } : {}) };
+  }
+  // "Mefi sizes it" (Vibe's box): a small ask becomes one card at once; a
+  // bigger one gets one call to the lead seat, which may split it into two to
+  // six steps admitted under the owner's card (scripts/request-sizing.cjs,
+  // task-delegation.cjs admitIntake). No model, a slow one or a reply that
+  // cannot be trusted keeps it one card: sizing never holds a request back.
+  async function vibeBuild({ prompt, title, projectId } = {}) {
+    const text = String(prompt ?? "").trim();
+    if (projectId && projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Add this again in its intended project." };
+    if (!text) return { ok: false, error: "Describe what to build." };
+    const first = requestSizing.quickSize(text);
+    let plan = null;
+    let sized = first.verdict === "one" ? "one" : "unsized";
+    if (first.verdict === "maybe") {
+      try {
+        const board = await (await getEyes()).readJson(TASKS_PATH, []);
+        const recent = board.filter((task) => task && !["done", "archived"].includes(task.status)).slice(0, 12).map((task) => task.title);
+        const ask = requestSizing.breakdownPrompt(text, { project: projects.current().name, recent });
+        const result = await seatFetch("lead", ask.system, ask.user, 2400, { timeoutMs: 60000 });
+        const parsed = result?.ok ? requestSizing.parseBreakdown(result.text) : null;
+        if (parsed?.size === "steps") { plan = parsed; sized = "steps"; }
+        else if (parsed?.size === "one") sized = "one";
+        else assistantLog("control", `sizing kept it one card: ${result?.ok ? "the reply could not be used" : assistantClip(result?.error || "no model answered", 120)}`);
+      } catch (error) {
+        logError(`sizing failed: ${error.message}`);
+      }
+    }
+    const created = await composerTask({ title: String(title ?? "").trim() || text.split(/\r?\n/)[0].slice(0, 180), prompt: text, projectId, intake: plan });
+    return { ...created, sized, ...(plan && created.ok && created.steps ? { summary: plan.summary } : {}) };
+  }
   // The committed catalog is available immediately, without a network refresh.
   ipcMain.handle("catalog:read", () => catalogDocument.read());
   ipcMain.handle("catalog:refresh", () => refreshCatalog());

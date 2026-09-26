@@ -50,14 +50,17 @@ export function baselineWorkPriority(item) {
 }
 
 // One ordering across the inbox and the board: worth first, then — inside a
-// band — the oldest piece of work. Pins break their tie by recency instead.
+// band — the owner's priority, then the oldest work. Pins use recency first.
 // main.cjs delegates here (with its inline copy as the load-failure fallback),
-// so this function must stay byte-compatible with the frozen live behavior.
+// so this function and its fallback must keep the same ordering.
 export function baselineCompareWork(a, b) {
   const ap = baselineWorkPriority(a);
   const bp = baselineWorkPriority(b);
   if (ap !== bp) return bp - ap;
-  if (a?.pin && b?.pin) return (b.pinAt ?? 0) - (a.pinAt ?? 0);
+  if (a?.pin && b?.pin && a.pinAt !== b.pinAt) return (b.pinAt ?? 0) - (a.pinAt ?? 0);
+  const priorities = { low: 0, normal: 1, high: 2, urgent: 3 };
+  const priority = (priorities[b?.priority] ?? 1) - (priorities[a?.priority] ?? 1);
+  if (priority) return priority;
   const aAge = a?.at ?? a?.createdAt ?? a?.updatedAt ?? 0;
   const bAge = b?.at ?? b?.createdAt ?? b?.updatedAt ?? 0;
   return aAge - bAge;

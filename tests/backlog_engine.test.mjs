@@ -9,6 +9,7 @@ import executorCore from "../scripts/executor-core.cjs";
 import workAdmission from "../scripts/work-admission.cjs";
 import * as assistant from "../scripts/assistant.mjs";
 import taskHandoffs from "../scripts/task-handoffs.cjs";
+import taskDelegation from "../scripts/task-delegation.cjs";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
 const section = (start, end) => {
@@ -39,7 +40,7 @@ test("backlog counts match actual dispatch states and do not double-count promot
   ];
   const snapshot = backlog.summarizeBacklog({ tasks, requests, ideas, now, ideaEligible: assistant.backlogIdeaEligible });
   // represented: inbox rows the board already carries (deliberately added to the pin).
-  assert.deepEqual(snapshot.counts, { ready: 3, running: 1, review: 1, blocked: 2, cooling: 1, done: 1, grouped: 0, waiting: 0, approval: 0, represented: 0, requests: 1, ideas: 2, eligibleIdeas: 1, ideaNotes: 1 });
+  assert.deepEqual(snapshot.counts, { ready: 3, running: 1, review: 1, blocked: 2, cooling: 1, deferred: 0, done: 1, grouped: 0, waiting: 0, approval: 0, represented: 0, requests: 1, ideas: 2, eligibleIdeas: 1, ideaNotes: 1 });
   assert.deepEqual(snapshot.next.map((item) => item.title), ["Older", "A task", "Unique request"]);
   assert.equal(snapshot.nextRetryAt, 2000);
   assert.equal(snapshot.blocked.find((item) => item.id === "verify").stage, "blocked");
@@ -195,7 +196,7 @@ function controlHost({ tasks = [], requests = [], ideas = [] } = {}) {
   const effects = [];
   const eyes = { readJson: async (key) => copy(board[key]), writeJson: async (key, value) => { board[key] = copy(value); } };
   const env = vm.createContext({
-    Date, console, backlog, taskContext, structuredClone, assistantState: state, autopilot,
+    Date, console, backlog, taskContext, taskDelegation, structuredClone, assistantState: state, autopilot,
     projects: { current: () => project, open: () => project }, projectRoot: () => project.path,
     TASKS_PATH: "tasks", REQUESTS_PATH: "requests", IDEAS_PATH: "ideas",
     getAssistant: async () => assistant, getEyes: async () => eyes, machineLagGate: null,
@@ -218,6 +219,60 @@ function controlHost({ tasks = [], requests = [], ideas = [] } = {}) {
   vm.runInContext(section("function queuedWorkCount(", "function workTitleKey("), env);
   return { env, state, autopilot, effects, board: () => copy(board) };
 }
+
+test("Inspector details persist with revision history, bounded input, and stale-write protection", async () => {
+  const h = controlHost({ tasks: [{ id: "inspect", projectId: "project-a", status: "open", title: "Export", prompt: "Export notes" }] });
+  const initial = h.env.taskView(h.board().tasks[0]);
+  const patch = { ...initial, priority: "high", estimateMinutes: 45, acceptance: ["Saved notes reopen"], deferUntil: Date.now() + 60000 };
+  assert.equal((await h.env.saveTaskEdits([patch])).ok, true);
+  const saved = h.board().tasks[0];
+  assert.equal(saved.priority, "high");
+  assert.equal(saved.estimateMinutes, 45);
+  assert.deepEqual(saved.acceptance, ["Saved notes reopen"]);
+  assert.equal(backlog.workState(saved).stage, "deferred");
+  assert.equal(taskContext.taskHistory(saved).entries[0].snapshot.deferUntil, patch.deferUntil);
+  assert.match(taskContext.buildTaskHandoff(saved), /Saved notes reopen/);
+  assert.equal((await h.env.saveTaskEdits([{ ...initial, notes: "A separate note" }])).ok, true, "an old form does not clear absent inspector fields");
+  assert.equal(h.board().tasks[0].priority, "high");
+  assert.equal((await h.env.saveTaskEdits([{ ...initial, priority: "low" }])).ok, false, "conflicting stale priority is refused");
+  const current = h.env.taskView(h.board().tasks[0]);
+  for (const bad of [{ priority: "fastest" }, { estimateMinutes: -1 }, { estimateMinutes: Infinity }, { deferUntil: -1 }, { deferUntil: "tomorrow" }, { acceptance: ["x".repeat(301)] }, { acceptance: Array(13).fill("check") }]) {
+    assert.equal((await h.env.saveTaskEdits([{ ...current, ...bad }])).ok, false, JSON.stringify(bad));
+  }
+  assert.equal((await h.env.saveTaskEdits([{ ...current, deferUntil: 0 }])).ok, true);
+  assert.equal(backlog.workState(h.board().tasks[0]).stage, "ready");
+});
+
+test("deferral expires through ordinary eligibility and never bypasses approval, dependencies or live work", () => {
+  const task = { id: "later", status: "open", deferUntil: 2000 };
+  assert.equal(backlog.workState(task, 1999).stage, "deferred");
+  assert.equal(backlog.workState(task, 2000).stage, "ready");
+  assert.equal(backlog.workState(task, 2000, { autoBuild: false }).stage, "approval");
+  assert.equal(backlog.workState({ ...task, dependsOn: ["missing"] }, 2000, { tasks: [task] }).blockedBy, "dependencies");
+  assert.equal(backlog.workState({ ...task, status: "active" }, 1000).stage, "running");
+  assert.equal(backlog.workState({ ...task, status: "awaiting_verification" }, 1000).stage, "review");
+  const summary = backlog.summarizeBacklog({ tasks: [task], now: 1000 });
+  assert.equal(summary.counts.deferred, 1); assert.equal(summary.counts.ready, 0); assert.equal(summary.nextRetryAt, 2000);
+  assert.match(summary.summary, /deferred/);
+  assert.equal(backlog.retryTask(task, 1000).deferUntil, undefined);
+});
+
+test("an unchanged legacy acceptance list does not prevent saving unrelated notes", async () => {
+  const h = controlHost({ tasks: [{ id: "legacy", status: "open", title: "Saved work", acceptance: ["x".repeat(500)] }] });
+  const current = h.env.taskView(h.board().tasks[0]);
+  assert.equal((await h.env.saveTaskEdits([{ ...current, notes: "Keep the existing checks" }])).ok, true);
+  assert.deepEqual(h.board().tasks[0].acceptance, current.acceptance);
+});
+
+test("the host merges intake steps atomically and preserves the parent's approval gate", async () => {
+  const b = { tasks: [{ id: "parent", projectId: "project-a", title: "Export", status: "open" }] };
+  taskDelegation.admitIntake(b, { parentId: "parent", plan: { steps: [1, 2].map((n) => ({ id: `s${n}`, title: `Part ${n}`, prompt: `Build ${n}`, acceptance: ["works"], dependsOn: [] })) }, now: 10 });
+  const h = controlHost({ tasks: b.tasks }); h.autopilot.autoBuild = false;
+  const result = await h.env.taskAction({ action: "merge-steps", taskId: "parent", projectId: "project-a" });
+  assert.equal(result.ok, true);
+  assert.equal(result.backlog.counts.approval, 1);
+  assert.equal(h.board().tasks.filter((task) => task.dropped).length, 2);
+});
 
 test("run backlog enables a project-local drain and admits only three oldest ideas", async () => {
   const ideas = Array.from({ length: 100 }, (_, index) => ({ id: `idea_${index}`, title: `Distinct idea ${index}`, detail: "Acceptance details", source: "manual", status: "new", createdAt: index + 1 }));

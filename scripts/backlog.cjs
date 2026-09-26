@@ -158,6 +158,10 @@ function workState(item, now = Date.now(), { tasks = null, autoBuild = true, app
   }
   if (item.status === "active" || item.status === "running") return { stage: "running", reason: "A worker holds this task" };
   if (item.autonomyPending || item.autonomyUndo) return { stage: "blocked", blockedBy: "decision", canRetry: false, reason: item.autonomyUndo ? "Undo is waiting for the current run to finish" : "Saving Mefi's decision before this task can start" };
+  const deferUntil = Number(item.deferUntil);
+  if ((!item.status || ["open", "pending", "queued"].includes(item.status)) && Number.isFinite(deferUntil) && deferUntil > now && deferUntil <= 8640000000000000) {
+    return { stage: "deferred", reason: `Deferred until ${new Date(deferUntil).toISOString()}`, retryAt: deferUntil };
+  }
   const dependency = Array.isArray(tasks) ? dependencyState(item, tasks, memo) : { dependencies: [] };
   if (dependency.stage) return dependency;
   if (item.verification?.state === "failed" || Number(item.verifyAttempts) >= 3) {
@@ -230,7 +234,7 @@ function summarizeBacklog({ tasks = [], requests = [], ideas = [], jobs = [], co
     return { ...row, ...workState(request, now, { tasks: board, autoBuild, approve, memo }) };
   });
   const all = [...taskStates, ...requestStates];
-  const counts = Object.fromEntries(["ready", "running", "review", "blocked", "cooling", "done", "grouped", "waiting", "approval", "represented"].map((stage) => [stage, all.filter((row) => row.stage === stage).length]));
+  const counts = Object.fromEntries(["ready", "running", "review", "blocked", "cooling", "deferred", "done", "grouped", "waiting", "approval", "represented"].map((stage) => [stage, all.filter((row) => row.stage === stage).length]));
   counts.requests = requestStates.filter((item) => item.stage !== "done" && item.stage !== "represented").length;
   const pendingIdeas = rows(ideas).filter((idea) => !idea.taskId && (!idea.status || ["new", "keep"].includes(idea.status)));
   counts.ideas = pendingIdeas.length;
@@ -243,12 +247,13 @@ function summarizeBacklog({ tasks = [], requests = [], ideas = [], jobs = [], co
   if (Number(parkedUntil) > now) retryTimes.push(Number(parkedUntil));
   const nextRetryAt = retryTimes.length ? Math.min(...retryTimes) : null;
   const hold = Number(parkedUntil) > now ? "Worker startup is cooling down after repeated failures" : paused ? "Paused. Current workers can finish; new work will wait." : waiting || (lastError && !counts.running ? String(lastError).slice(0, 240) : null);
-  const summary = hold || (counts.running ? `${counts.running} building · ${counts.ready} ready next` : counts.ready ? `${counts.ready} ready to work on` : counts.approval ? `${counts.approval} tasks waiting for your approval` : counts.review ? `${counts.review} finished attempts awaiting verification` : counts.eligibleIdeas ? `${counts.eligibleIdeas} ideas ready to become tasks` : counts.blocked ? `${counts.blocked} tasks need your review` : counts.waiting ? `${counts.waiting} tasks waiting for prerequisites` : counts.cooling ? `${counts.cooling} tasks waiting before retry` : "Existing work is caught up");
+  const summary = hold || (counts.running ? `${counts.running} building · ${counts.ready} ready next` : counts.ready ? `${counts.ready} ready to work on` : counts.approval ? `${counts.approval} tasks waiting for your approval` : counts.review ? `${counts.review} finished attempts awaiting verification` : counts.eligibleIdeas ? `${counts.eligibleIdeas} ideas ready to become tasks` : counts.blocked ? `${counts.blocked} tasks need your review` : counts.waiting ? `${counts.waiting} tasks waiting for prerequisites` : counts.cooling ? `${counts.cooling} tasks waiting before retry` : counts.deferred ? `${counts.deferred} tasks deferred until later` : "Existing work is caught up");
   return { counts, taskStates, next: ordered.slice(0, 8).map(({ state }) => state), blocked: all.filter((row) => row.stage === "blocked").slice(0, 40), approval: all.filter((row) => row.stage === "approval").slice(0, 40), autoBuild: autoBuild !== false, paused, draining, mode: draining ? "backlog" : "balanced", waiting: hold, summary, nextRetryAt };
 }
 
 function retryTask(task, now = Date.now()) {
   const next = { ...task, status: "open", updatedAt: now, pin: true, pinAt: now };
+  delete next.deferUntil;
   // duplicateOf goes too: Run anyway on a card waiting for its duplicate. Its
   // familyDecision stays, so the keeper does not ask about the family again.
   // ownerHold goes as well: Try again is the owner saying to go on after

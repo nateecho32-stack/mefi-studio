@@ -187,7 +187,28 @@
     const next = (Array.isArray(state.backlog?.next) ? state.backlog.next : []).filter((item) => !runningIds.has(item.id) && ["ready", "waiting", "cooling"].includes(item.stage ?? "ready")).slice(0, 2);
     // Freshly done is the last half day; older results live in the Tasks panel.
     const finished = tasks.filter((task) => done(task) && describe(task).stage !== "review" && Date.now() - stamp(task) < FRESH_MS).sort((a, b) => stamp(b) - stamp(a)).slice(0, 3);
-    return { running, checking, next, finished, ideas: freshIdeas(), plans: activePlans(), needs: needs(), gate: runState() };
+    return { running, checking, next, finished, ideas: freshIdeas(), plans: activePlans(), families: families(), needs: needs(), gate: runState() };
+  }
+  // A request Build it split into steps (main.cjs vibeBuild): the owner's card,
+  // the steps under it and where each one stands; the card itself runs last,
+  // as the final integration and check. Finished families leave the plan card
+  // for Freshly done.
+  const STEP_STATES = { done: "done", dropped: "dropped", running: "building", checking: "checking its work", approval: "waiting for your go-ahead", blocked: "stuck", waiting: "waiting its turn" };
+  function families() {
+    const tasks = scoped(state.tasks);
+    const byId = new Map(tasks.map((task) => [task.id, task]));
+    const runningIds = new Set(scoped(state.status.running).map((job) => job.taskId).filter(Boolean));
+    const stages = new Map((Array.isArray(state.backlog?.taskStates) ? state.backlog.taskStates : []).map((row) => [row.id, row]));
+    const stepState = (step) => step.dropped ? "dropped" : done(step) ? "done" : runningIds.has(step.id) ? "running"
+      : ["awaiting_verification", "verifying"].includes(step.status) ? "checking" : stages.get(step.id)?.stage === "approval" ? "approval" : stages.get(step.id)?.stage === "blocked" ? "blocked" : "waiting";
+    return tasks.filter((task) => task.delegation?.intake && Array.isArray(task.delegation.childTaskIds) && !done(task))
+      .map((parent) => {
+        const steps = parent.delegation.childTaskIds.map((id) => byId.get(id)).filter(Boolean).map((step) => ({ id: step.id, title: step.title || "A step", state: stepState(step), buildScope: step.buildScope ?? null }));
+        const finished = steps.filter((step) => ["done", "dropped"].includes(step.state)).length;
+        const final = runningIds.has(parent.id) ? "running" : ["awaiting_verification", "verifying"].includes(parent.status) ? "checking" : finished === steps.length ? "next" : "waiting";
+        return { id: parent.id, title: parent.title || "Your request", summary: parent.delegation.summary || "", steps, finished, final, updatedAt: stamp(parent) };
+      })
+      .sort((a, b) => b.updatedAt - a.updatedAt);
   }
   const FRESH_MS = 12 * 3600000;
   // Ideas nobody has looked at yet, newest first; Skip marks one read.
@@ -306,9 +327,26 @@
     for (const idea of data.ideas.slice(0, 3)) ideas.append(row({ tone: "idea", title: idea.title || idea.detail || "An idea", meta: [idea.source, idea.at ? ago(idea.at) : ""].filter(Boolean).join(" · ") || "new idea", action: { label: "Build it", run: () => void promoteIdea(idea) }, onOpen: () => openPanel("ideas", { ideaId: idea.id }) }));
     $("count-ideas").textContent = data.ideas.length > 3 ? String(data.ideas.length) : "";
 
+    // A request split into steps: where it stands, its steps as marks, and
+    // Start all while they wait for a go-ahead under Verify first.
+    const plan = $("lane-plan");
+    plan.replaceChildren();
+    for (const family of data.families.slice(0, 2)) {
+      const waiting = data.needs.find((need) => need.kind === "family" && need.id === family.id);
+      const current = family.steps.find((step) => step.state === "running") || family.steps.find((step) => step.state === "checking");
+      const meta = `${family.finished} of ${family.steps.length} steps done${current ? ` · ${STEP_STATES[current.state]}: ${current.title}` : waiting ? " · waiting for your go-ahead" : family.final === "running" ? " · final check running" : family.final === "next" ? " · final check next" : ""}`;
+      plan.append(row({ tone: waiting ? "ask" : current || family.final === "running" ? "live" : "next", title: family.title, meta, progress: family.steps.length ? family.finished / family.steps.length : undefined,
+        action: waiting ? { label: "Start all", run: () => openNeed(waiting) } : null, onOpen: () => openPanel("plans", { familyId: family.id }) }));
+      const marks = el("li", "vibe-steps");
+      marks.setAttribute("aria-label", `Steps of ${family.title}`);
+      for (const step of family.steps) { const mark = el("span", `vibe-step is-${step.state}`, step.title); mark.title = `${step.title}: ${STEP_STATES[step.state]}`; marks.append(mark); }
+      plan.append(marks);
+    }
+    $("count-plan").textContent = data.families.length > 2 ? String(data.families.length) : "";
+
     // Cards come and go with what they have to say; with none up, one calm
     // line under the box says so, unless the gate banner already speaks.
-    const shown = { needs: needCount > 0, building: building.children.length > 0, done: finished.children.length > 0, ideas: ideas.children.length > 0 };
+    const shown = { needs: needCount > 0, plan: data.families.length > 0, building: building.children.length > 0, done: finished.children.length > 0, ideas: ideas.children.length > 0 };
     for (const [key, on] of Object.entries(shown)) $(`card-${key}`).hidden = !on;
     const visible = Object.values(shown).filter(Boolean).length;
     layer.dataset.cards = visible ? "some" : "none";
@@ -332,7 +370,7 @@
   const STOPS = ["watch", "tasks", "plans", "ideas", "team", "more"];
   const PANEL_STOPS = new Set(["tasks", "plans", "ideas", "team"]);
   function dockStops(data = lanes()) {
-    return { watch: data.running.length > 0 || data.checking.length > 0, tasks: true, plans: data.plans.length > 0, ideas: data.ideas.length > 0, team: true, more: true };
+    return { watch: data.running.length > 0 || data.checking.length > 0, tasks: true, plans: data.plans.length > 0 || data.families.length > 0, ideas: data.ideas.length > 0, team: true, more: true };
   }
   function renderDock(data) {
     const stops = dockStops(data);
@@ -355,7 +393,7 @@
       projectId: projectId(), projectName: state.projects.find((item) => item.id === projectId())?.name || "",
       tasks: scoped(state.tasks), needs: data.needs, running: data.running, checking: data.checking, next: data.next,
       backlog: state.backlog && belongs(state.backlog) ? state.backlog : null, status: state.status || {}, assistant: state.assistant || {},
-      ideas: scoped(state.ideas), plans: data.plans, gate: data.gate ? { key: data.gate.key, title: data.gate.title, text: data.gate.text, label: data.gate.action?.label ?? null } : null,
+      ideas: scoped(state.ideas), plans: data.plans, families: data.families, gate: data.gate ? { key: data.gate.key, title: data.gate.title, text: data.gate.text, label: data.gate.action?.label ?? null } : null,
       companion: companion(), person: person(),
     };
   }
@@ -471,11 +509,15 @@
     if (intent === "build" && value.replace(/[^\p{L}\p{N}]/gu, "").length < 3) { feedback("Say a little more about what to build.", "warn"); return; }
     busy(true);
     if (intent === "talk") openChat();
-    feedback(intent === "build" ? "Adding it to the build queue…" : `${companion()} is thinking…`);
+    // Build it asks the host to size the request (vibeBuild): one card, or the
+    // card split into steps; an older host only knows the one card.
+    const sizing = intent === "build" && Boolean(api().vibeBuild);
+    feedback(intent === "build" ? (sizing ? "Sizing it up…" : "Adding it to the build queue…") : `${companion()} is thinking…`);
     renderChat();
     try {
+      const title = value.split("\n")[0].slice(0, 180);
       const result = intent === "build"
-        ? await api().tasksCreate({ title: value.split("\n")[0].slice(0, 180), prompt: value, projectId: id })
+        ? await (sizing ? api().vibeBuild({ title, prompt: value, projectId: id }) : api().tasksCreate({ title, prompt: value, projectId: id }))
         : await api().assistantMessage(value, id, { view: "Vibe", companion: companion() });
       if (!result || result.ok === false) throw new Error(result?.error || "That didn't go through.");
       if (projectId() !== id || draftEpoch !== epoch) return;
@@ -485,7 +527,11 @@
         // Say where it really goes: a held or paused queue, or no AI, keeps
         // it waiting, and the banner below the box has the control that frees it.
         const gate = runState()?.key;
-        feedback(gate === "held" ? "Added to the queue. Select Start agents below and it begins." : gate === "paused" ? "Added to the queue. New work is paused; Resume below to start it." : gate === "key" ? "Added to the queue. Connect an AI below so it can be built." : state.status.autoBuild === false ? "Added. It waits for your go-ahead under Needs you." : "Added. It shows under Building now as soon as an agent picks it up.", gate && gate !== "waiting" ? "warn" : "good");
+        const steps = Number(result.steps) || 0;
+        const what = steps ? `Split into ${steps} steps, then a final check.` : "Added to the queue.";
+        feedback(gate === "held" ? `${what} Select Start agents below and it begins.` : gate === "paused" ? `${what} New work is paused; Resume below to start it.` : gate === "key" ? `${what} Connect an AI below so it can be built.`
+          : state.status.autoBuild === false ? `${steps ? what : "Added."} ${steps ? "They wait" : "It waits"} for your go-ahead under Needs you.`
+          : steps ? `${what} Follow it on the plan card.` : "Added. It shows under Building now as soon as an agent picks it up.", gate && gate !== "waiting" ? "warn" : "good");
         scheduleBacklog();
         window.dispatchEvent(new CustomEvent("mefi:task-created", { detail: { taskId: result.task?.id, projectId: id } }));
       } else feedback("");
@@ -527,7 +573,15 @@
     for (const question of openQuestions()) list.push({ kind: "question", id: question.id, tone: "ask", verb: "Answer", title: question.title || "A decision", meta: question.context?.severity === "blocker" ? "blocking a task" : "decision", question });
     const backlog = state.backlog && belongs(state.backlog) ? state.backlog : null;
     const rows = (key) => (Array.isArray(backlog?.[key]) ? backlog[key] : []).filter((item) => item?.id && (item.kind ?? "task") === "task");
-    for (const item of rows("approval")) list.push({ kind: "approval", id: item.id, tone: "ask", verb: "Review", title: item.title || taskById(item.id)?.title || "A task", meta: "waiting for your go-ahead", row: item });
+    // Steps of one split request wait as one row: the family, started together.
+    const grouped = new Map();
+    for (const item of rows("approval")) {
+      const step = taskById(item.id);
+      const parentId = step?.delegatedFrom?.intake ? step.parentTaskId || step.delegatedFrom.parentTaskId : null;
+      if (parentId) { if (!grouped.has(parentId)) grouped.set(parentId, []); grouped.get(parentId).push(item); continue; }
+      list.push({ kind: "approval", id: item.id, tone: "ask", verb: "Review", title: item.title || taskById(item.id)?.title || "A task", meta: "waiting for your go-ahead", row: item });
+    }
+    for (const [parentId, items] of grouped) list.push({ kind: "family", id: parentId, tone: "ask", verb: "Review", title: taskById(parentId)?.title || "Your request", meta: `${items.length} step${items.length === 1 ? "" : "s"} waiting for your go-ahead`, rows: items });
     for (const item of rows("blocked")) list.push({ kind: "blocked", id: item.id, tone: "bad", verb: HOLD_VERBS[item.blockedBy] || "See why", title: item.title || taskById(item.id)?.title || "A task", meta: item.blockedBy === "owner" ? "stopped by you" : "stuck", row: item });
     return list;
   }
@@ -578,10 +632,42 @@
     }
     watch.textContent = "Open on the task board";
     watch.onclick = () => { closeAsk({ quiet: true }); go("tasks", { taskId: need.id, filter: "all" }); };
-    $("ask-kicker").textContent = `${need.kind === "approval" ? "Waiting for your go-ahead" : need.row?.blockedBy === "owner" ? "Stopped by you" : "Stuck"}${position}`;
+    $("ask-kicker").textContent = `${["approval", "family"].includes(need.kind) ? "Waiting for your go-ahead" : need.row?.blockedBy === "owner" ? "Stopped by you" : "Stuck"}${position}`;
     $("ask-title").textContent = need.title;
-    if (need.kind === "approval") renderApproval(body, need, task);
+    if (need.kind === "family") renderFamily(body, need);
+    else if (need.kind === "approval") renderApproval(body, need, task);
     else renderBlocked(body, need, task);
+  }
+  // A request split into steps under Verify first: its steps start together.
+  function renderFamily(body, need) {
+    const family = families().find((item) => item.id === need.id);
+    body.append(chips([chip("Verify first", "decision"), chip(`${need.rows.length} step${need.rows.length === 1 ? "" : "s"}`)]));
+    body.append(el("p", "vibe-ask-detail", "Verify first is on, so these steps wait until you start them. Your request runs last, to put the steps together and check the whole thing."));
+    if (family) {
+      const list = el("ol", "vibe-ask-steps");
+      for (const step of family.steps) { const item = el("li", `is-${step.state}`, step.title); item.title = STEP_STATES[step.state] || ""; list.append(item); }
+      body.append(list);
+    }
+    const ready = need.rows.filter((row) => typeof row.buildScope === "string" && row.buildScope && row.canApprove !== false);
+    body.append(actions([
+      { label: `Start ${ready.length === 1 ? "the step" : `all ${ready.length} steps`}`, primary: true, disabled: !ready.length, title: "Approve every waiting step as it is saved now", run: () => act(need, () => startSteps(ready), "Started. The steps build as workers free up.") },
+      { label: "Make it one task", title: "Drop the steps that have not started; the request is built as one task", run: () => act(need, () => mergeSteps(need.id), "Kept as one task. It builds as a whole.") },
+    ]));
+  }
+  // Approving each step is the same call Review makes for a single build.
+  async function startSteps(rows) {
+    let result = { ok: true };
+    for (const row of rows) {
+      result = await api().backlogControl({ action: "approve", taskId: row.id, projectId: projectId(), expectedScope: row.buildScope });
+      if (!result || result.ok === false) return result;
+    }
+    if (state.backlog) state.backlog = { ...state.backlog, approval: (state.backlog.approval || []).filter((item) => !rows.some((row) => row.id === item.id)) };
+    return result;
+  }
+  // Undo the split: the steps nobody has started are dropped, and a parent
+  // stops waiting for dropped work, so the request runs whole.
+  async function mergeSteps(parentId) {
+    return api().tasksAction({ taskId: parentId, projectId: projectId(), action: "merge-steps" });
   }
   function chips(items) {
     const holder = el("div", "vibe-ask-chips");
@@ -939,7 +1025,7 @@
   function snapshot() {
     const data = lanes();
     const stops = dockStops(data);
-    const cards = { needs: data.needs.length > 0, building: data.running.length + data.checking.length + data.next.length > 0, done: data.finished.length > 0, ideas: data.ideas.length > 0 };
+    const cards = { needs: data.needs.length > 0, plan: data.families.length > 0, building: data.running.length + data.checking.length + data.next.length > 0, done: data.finished.length > 0, ideas: data.ideas.length > 0 };
     return { mode: mode(), active: active(), gate: data.gate?.key ?? null, needs: data.needs.map(({ kind, id, title }) => ({ kind, id, title })), building: data.running.length, checking: data.checking.map((task) => task.id),
       open: state.need ? { ...state.need } : null, cards: Object.keys(cards).filter((key) => cards[key]), dock: STOPS.filter((key) => stops[key]), panel: window.MefiVibePanels?.current?.() ?? null };
   }

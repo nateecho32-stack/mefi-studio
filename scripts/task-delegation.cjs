@@ -178,4 +178,76 @@ function reconcile(board, { now = Date.now() } = {}) {
   return { recovered: additions.length, changed: additions.length > 0 };
 }
 
-module.exports = { canPlan, parsePlan, admit, reconcile };
+// "Mefi sizes it" (Vibe's box, scripts/request-sizing.cjs): the owner's own
+// card is split into steps when it is admitted, before any worker claims it.
+// The steps are the card's delegated slices, so they take every path a
+// delegated slice takes (the "Shared task assignment" brief, the prerequisite
+// gate, verification) and the card waits for them, then runs as the final
+// integration and check. They are the owner's work (origin by "owner"), pinned
+// with the card, and may wait on earlier steps. One transaction writes the
+// whole family, so there is nothing half-admitted to recover later.
+function admitIntake(board, { parentId, plan, now = Date.now() } = {}) {
+  const rejected = (reason) => ({ admitted: false, added: 0, childTaskIds: [], reason });
+  if (!object(board) || !Array.isArray(board.tasks) || typeof parentId !== "string" || !object(plan) || !Array.isArray(plan.steps)) return rejected("Invalid intake split");
+  const parent = board.tasks.find((row) => object(row) && row.id === parentId);
+  if (!parent) return rejected("The card to split is not on the board");
+  if (parent.delegation || parent.runId || parent.lease || (parent.status && parent.status !== "open")) return rejected("The card is already running or split");
+  const steps = plan.steps;
+  if (steps.length < 2 || steps.length > 6) return rejected("A split needs two to six steps");
+  const scope = buildScope(parent);
+  const ids = steps.map((step, index) => `task_intake_${digest([parent.id, scope, index, step.title]).slice(0, 24)}`);
+  if (ids.some((id) => board.tasks.some((task) => task?.id === id))) return rejected("A step with this identity is already on the board");
+  const idOf = new Map(steps.map((step, index) => [step.id, ids[index]]));
+  const lineage = { parentTaskId: parent.id, scope, intake: true, parentTitle: String(parent.title ?? "").slice(0, 160) };
+  const children = steps.map((step, index) => taskRow({
+    id: ids[index], title: step.title, prompt: step.prompt, acceptance: [...step.acceptance],
+    dependsOn: (step.dependsOn || []).map((dep) => idOf.get(dep)).filter(Boolean),
+    source: parent.source ?? "chat", parent: String(parent.title ?? "").slice(0, 90), parentTaskId: parent.id, depth: 1,
+    ...(parent.projectId != null ? { projectId: parent.projectId } : {}), ...(parent.projectPath ? { projectPath: parent.projectPath } : {}),
+    ...(parent.pin === true ? { pin: true, ...(parent.pinAt != null ? { pinAt: parent.pinAt } : {}) } : {}),
+    delegatedFrom: { ...lineage, parentPrompt: String(parent.prompt ?? "").slice(0, 24000) },
+    intakeStep: { index: index + 1, of: steps.length },
+    createdAt: now,
+  }, { now, log: `Step ${index + 1} of ${steps.length} for ${String(parent.title || "your request").slice(0, 90)}`, origin: { kind: "intake", by: "owner" } }));
+  parent.delegation = {
+    version: 1, intake: true, childTaskIds: ids, summary: String(plan.summary ?? "").slice(0, 400), scope, fromRun: `intake:${parent.id}`,
+    // The steps as admitted, for the pipeline view's titles (pipelines.cjs).
+    admissions: children.map(({ logs, delegatedFrom, ...child }) => { const { parentPrompt, ...kept } = delegatedFrom; return { ...child, delegatedFrom: kept }; }),
+    ...(parent.projectId != null ? { projectId: parent.projectId } : {}), ...(parent.projectPath ? { projectPath: parent.projectPath } : {}),
+  };
+  parent.updatedAt = now;
+  parent.logs = [...(Array.isArray(parent.logs) ? parent.logs : []), { at: now, kind: "status", text: `Split into ${children.length} steps; this card runs the final integration and check once they are verified` }].slice(-40);
+  board.tasks = [...children, ...board.tasks];
+  return { admitted: true, added: children.length, childTaskIds: ids, parent };
+}
+
+// Undo an intake split in one board transaction. Ordinary drop refuses a
+// prerequisite, so dropping the children one at a time can never undo it.
+function collapseIntake(board, { parentId, jobs = [], now = Date.now() } = {}) {
+  const parent = board.tasks.find((task) => task.id === parentId);
+  if (!parent?.delegation?.intake) return { ok: false, error: "This task is no longer split into steps." };
+  const ids = new Set(parent.delegation.childTaskIds);
+  const children = board.tasks.filter((task) => ids.has(task.id));
+  const family = [parent, ...children];
+  if (family.some((task) => task.runId || task.lease || ["active", "running", "awaiting_verification", "verifying"].includes(task.status) || jobs.some((job) => job.taskId === task.id))) {
+    return { ok: false, error: "Let the running steps and checks finish before making this one task." };
+  }
+  if (children.length !== ids.size || children.some((task) => task.parentTaskId !== parentId || task.delegatedFrom?.scope !== parent.delegation.scope)) return { ok: false, error: "The saved steps changed. Reload this project before merging them." };
+  const pending = children.filter((task) => !["done", "archived"].includes(task.status));
+  const pendingIds = new Set(pending.map((task) => task.id));
+  if (board.tasks.some((task) => task.id !== parentId && !ids.has(task.id) && !["done", "archived"].includes(task.status) && [...(task.dependsOn || []), ...(task.delegation?.childTaskIds || [])].some((id) => pendingIds.has(id)))) return { ok: false, error: "Other tasks depend on these steps. Remove their prerequisite links first." };
+  for (const task of pending) {
+    task.status = "archived";
+    task.dropped = { at: now, by: "owner" };
+    task.updatedAt = now;
+    for (const field of ["pin", "pinAt", "buildApproval", "nextRunAt"]) delete task[field];
+    task.logs = [...(task.logs || []), { at: now, kind: "status", text: "Dropped when you made the request one task" }].slice(-40);
+  }
+  delete parent.delegation;
+  delete parent.buildApproval;
+  parent.updatedAt = now;
+  parent.logs = [...(parent.logs || []), { at: now, kind: "status", text: "Made one task; completed steps are kept and unstarted steps are dropped" }].slice(-40);
+  return { ok: true, revisionKind: "edited", revisionNote: "Request made one task" };
+}
+
+module.exports = { canPlan, parsePlan, admit, admitIntake, collapseIntake, reconcile };

@@ -18,12 +18,14 @@
   const read = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
   const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = String(text); return node; };
 
-  const TITLES = { tasks: "Tasks", plans: "Plans", ideas: "Ideas", team: "Team", settings: "Settings" };
+  const TITLES = { tasks: "Tasks", plans: "Plans", ideas: "Ideas", team: "Team", settings: "Settings", newapp: "New app" };
   const EMPTY = { projectId: null, projectName: "", tasks: [], needs: [], running: [], checking: [], next: [], backlog: null, status: {}, assistant: {}, ideas: [], plans: [], gate: null, companion: "Mefi", person: "" };
-  const state = { kind: null, stack: [], data: EMPTY, busy: false, folds: { needs: true, active: true, done: false }, team: null, teamAt: 0, teamFlight: null, signature: "", noteTone: "" };
+  const state = { kind: null, stack: [], data: EMPTY, busy: false, folds: { needs: true, active: true, done: false }, team: null, teamAt: 0, teamFlight: null, signature: "", noteTone: "", draftApp: { name: "", about: "" } };
+  state.taskView = read("mefiStudio.vibe.taskView") === "lanes" ? "lanes" : "list";
+  state.inspectorDraft = null;
 
   // ---- open, close, back ---------------------------------------------------------
-  function open(kind, { data = null, taskId = null, ideaId = null, fold = null } = {}) {
+  function open(kind, { data = null, taskId = null, ideaId = null, familyId = null, fold = null } = {}) {
     if (!TITLES[kind]) return false;
     state.kind = kind;
     state.stack = [];
@@ -32,6 +34,7 @@
     if (fold) state.folds = { ...state.folds, [fold]: true };
     if (taskId) state.stack.push({ view: "task", id: taskId });
     if (ideaId) state.stack.push({ view: "idea", id: ideaId });
+    if (familyId) state.stack.push({ view: "family", id: familyId });
     aside.hidden = false;
     aside.dataset.kind = kind;
     note("");
@@ -65,6 +68,7 @@
   function escape() { if (!back()) close(); return true; }
   function update(data) {
     if (!data || aside.hidden) return;
+    if (data.projectId !== state.data.projectId) { document.activeElement?.blur?.(); state.stack = []; state.inspectorDraft = null; state.signature = ""; }
     state.data = { ...EMPTY, ...data };
     render();
   }
@@ -189,6 +193,7 @@
       case "blocked": return { tone: "bad", text: row.blockedBy === "owner" ? "stopped by you" : "stuck", key: "blocked", reason: row.reason };
       case "waiting": return { tone: "next", text: "waiting for other tasks", key: "waiting", reason: row.reason };
       case "cooling": return { tone: "next", text: "trying again soon", key: "cooling", reason: row.reason };
+      case "deferred": return { tone: "next", text: "deferred", key: "deferred", reason: row.reason };
       case "grouped": return { tone: "next", text: "part of a group", key: "grouped", reason: row.reason };
       case "ready": return { tone: "next", text: "up next", key: "ready" };
       default: return { tone: "next", text: "queued", key: "ready" };
@@ -196,6 +201,17 @@
   }
   const STAGE_ORDER = { running: 0, review: 1, ready: 2, cooling: 3, waiting: 4, grouped: 5 };
   function tasksList(body) {
+    governor(body);
+    const views = el("div", "vibe-task-views");
+    views.setAttribute("role", "group"); views.setAttribute("aria-label", "Task view");
+    for (const [key, label] of [["list", "List"], ["lanes", "Lanes"]]) {
+      const button = el("button", "vibe-btn quiet", label);
+      button.type = "button"; button.setAttribute("aria-pressed", String(state.taskView === key));
+      button.addEventListener("click", () => { state.taskView = key; try { localStorage.setItem("mefiStudio.vibe.taskView", key); } catch { /* optional preference */ } state.signature = ""; render(); });
+      views.append(button);
+    }
+    body.append(views);
+    if (state.taskView === "lanes") { taskLanes(body); return; }
     const data = state.data;
     const needs = data.needs || [];
     const needing = new Set(needs.filter((need) => need.kind !== "question").map((need) => need.id));
@@ -211,13 +227,61 @@
     fold(body, "active", "In progress", active.map(({ task, stage: now }) => row({ tone: now.tone, title: task.title || "A task", meta: now.text, onOpen: () => push({ view: "task", id: task.id }) })), { empty: "Nothing is queued or building." });
     fold(body, "done", "Done", finished.map((task) => { const now = stage(task); return row({ tone: now.tone, title: task.title || "A task", meta: `${now.text} · ${ago(stamp(task))}`, onOpen: () => push({ view: "task", id: task.id }) }); }), { empty: "Finished work lands here." });
   }
+  function governor(body) {
+    const data = state.data;
+    const gate = data.gate;
+    const box = el("section", "vibe-governor");
+    box.setAttribute("aria-label", "Queue controls");
+    const counts = (data.tasks || []).reduce((out, task) => { const key = stage(task).key; out[key] = (out[key] || 0) + 1; return out; }, {});
+    box.append(el("strong", "vibe-governor-counts", `${counts.running || 0} building · ${counts.ready || 0} ready · ${(counts.approval || 0) + (counts.blocked || 0)} need you`));
+    const reason = gate?.title || data.backlog?.waiting || data.status?.capacity?.reason;
+    if (reason) box.append(el("p", "vibe-panel-hint", reason));
+    const held = gate && ["held", "paused"].includes(gate.key);
+    const controls = el("div", "vibe-governor-controls");
+    const control = el("button", "vibe-btn quiet", gate?.key === "key" ? "Connect an AI" : held ? gate.key === "held" ? "Start agents" : "Resume" : "Pause new work");
+    control.type = "button"; control.disabled = state.busy || !api();
+    control.addEventListener("click", () => {
+      if (gate?.key === "key") { close({ quiet: true }); go("agents", { section: "setup", pane: "connections" }); return; }
+      void act(() => held ? api().assistantControl("start-work") : api().backlogControl({ action: "pause", projectId: data.projectId }), held ? "Agents resumed." : "New work paused. Running jobs finish normally.");
+    });
+    const label = el("label", "vibe-worker-limit", "Worker limit");
+    const limit = el("select"); limit.setAttribute("aria-label", "Worker limit");
+    const selected = data.status?.adaptiveParallel ? "auto" : String(data.status?.parallel || 2);
+    for (const value of ["auto", ...new Set(["1", "2", "3", "4", "6", "8", ...(selected === "auto" ? [] : [selected])])]) {
+      const option = el("option", "", value === "auto" ? "Automatic" : value); option.value = value; limit.append(option);
+    }
+    limit.value = selected; limit.disabled = state.busy || !api()?.assistantAutopilot;
+    limit.addEventListener("change", () => { const value = limit.value; void act(() => api().assistantAutopilot(value === "auto" ? { adaptiveParallel: true } : { adaptiveParallel: false, parallel: Number(value) }), "Worker limit saved. Running jobs finish normally."); });
+    label.append(limit); controls.append(control, label); box.append(controls); body.append(box);
+  }
+  function taskLanes(body) {
+    const questions = (state.data.needs || []).filter((need) => need.kind === "question");
+    if (questions.length) fold(body, "questions", "Questions", questions.map((need) => row({ tone: "ask", title: need.title, meta: need.meta, onOpen: () => vibe()?.openNeed?.({ kind: "question", id: need.id }) })));
+    const lanes = [["needs", "Needs you"], ["ready", "Ready"], ["running", "Building"], ["review", "Checking"], ["later", "Later"], ["done", "Done"]];
+    const groups = Object.fromEntries(lanes.map(([key]) => [key, []]));
+    for (const task of state.data.tasks || []) {
+      const now = stage(task);
+      const key = ["approval", "blocked"].includes(now.key) ? "needs" : ["waiting", "cooling", "deferred", "grouped"].includes(now.key) ? "later" : now.key;
+      groups[key].push({ task, now });
+    }
+    const board = el("div", "vibe-task-lanes");
+    for (const [key, title] of lanes) {
+      const lane = el("section", `vibe-task-lane is-${key}`);
+      lane.append(el("h3", "vibe-lane-title", `${title} · ${groups[key].length}`));
+      const list = el("ol", "vibe-rows");
+      for (const { task, now } of groups[key]) list.append(row({ tone: now.tone, title: task.title || "A task", meta: [now.text, task.priority && task.priority !== "normal" ? task.priority : "", task.estimateMinutes ? `${task.estimateMinutes} min estimate` : ""].filter(Boolean).join(" · "), onOpen: () => push({ view: "task", id: task.id }) }));
+      if (!groups[key].length) list.append(el("li", "vibe-empty", "Nothing here."));
+      lane.append(list); board.append(lane);
+    }
+    body.append(board);
+  }
   function push(view) { state.stack.push(view); note(""); state.signature = ""; render(); requestAnimationFrame(() => $("back")?.focus?.({ preventScroll: true })); }
   function taskDetail(body, id) {
     const data = state.data;
     const task = (data.tasks || []).find((item) => item.id === id);
     if (!task) { body.append(el("p", "vibe-panel-empty", "This task is no longer on the board.")); return; }
     const now = stage(task);
-    const need = (data.needs || []).find((item) => item.kind !== "question" && item.id === id);
+    const need = (data.needs || []).find((item) => item.kind !== "question" && (item.id === id || item.kind === "family" && item.rows?.some((row) => row.id === id)));
     heading(body, task.title || "A task", [chip(now.text, now.key === "blocked" ? "blocker" : now.key === "approval" ? "decision" : ""), el("span", "vibe-ask-when", ago(stamp(task)))]);
     if (now.reason) body.append(el("p", "vibe-ask-detail vibe-panel-reason", now.reason));
     text(body, "The brief", task.prompt && task.prompt !== task.title ? task.prompt : "");
@@ -229,7 +293,9 @@
       buttons.push({ label: "Watch it", primary: true, run: () => { close({ quiet: true }); go("command", { selected: `task:${id}` }); } });
       buttons.push({ label: "Stop", title: "Stop this worker; its progress is kept and the task waits for you", run: () => act(() => api().tasksAction({ taskId: id, projectId, action: "stop" }), "Stopped. It waits for you under Needs you.") });
     } else if (need) {
-      buttons.push({ label: need.verb, primary: true, run: () => vibe()?.openNeed?.({ kind: need.kind, id }) });
+      buttons.push({ label: need.verb, primary: true, run: () => vibe()?.openNeed?.({ kind: need.kind, id: need.id }) });
+    } else if (now.key === "deferred") {
+      buttons.push({ label: "Return to queue", primary: true, run: () => act(() => api().tasksSave([{ ...task, deferUntil: 0 }]), "Back in the queue. Normal checks and approvals still apply.") });
     } else if (now.key === "review") {
       body.append(el("p", "vibe-panel-hint", "It finished and is being checked. Nothing to do yet."));
     } else if (now.key === "done") {
@@ -240,6 +306,47 @@
     }
     if (buttons.length) body.append(actions(buttons));
     if (!isDone(task) && now.key !== "review") noteForm(body, task, now);
+    inspector(body, task, now);
+  }
+  function inspector(body, task, now) {
+    const key = `${state.data.projectId}:${task.id}`;
+    const revision = JSON.stringify([task.contextVersion, task.updatedAt, task.priority, task.estimateMinutes, task.acceptance, task.deferUntil]);
+    if (state.inspectorDraft?.key !== key || !state.inspectorDraft.dirty && state.inspectorDraft.revision !== revision) {
+      const date = Number(task.deferUntil) > 0 ? new Date(Number(task.deferUntil)) : null;
+      const localDate = date && Number.isFinite(date.getTime()) ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "";
+      const initial = { priority: ["low", "normal", "high", "urgent"].includes(task.priority) ? task.priority : "normal", estimate: String(task.estimateMinutes || ""), acceptance: Array.isArray(task.acceptance) ? task.acceptance.join("\n") : String(task.acceptance || ""), defer: localDate };
+      state.inspectorDraft = { key, revision, dirty: false, base: { ...task, projectId: state.data.projectId }, initial, ...initial };
+    }
+    const draft = state.inspectorDraft;
+    const locked = state.busy || ["running", "review", "done"].includes(now.key);
+    const details = el("details", "vibe-inspector"); details.open = state.folds.inspector === true;
+    details.addEventListener("toggle", () => { state.folds.inspector = details.open; });
+    details.append(el("summary", "", "Inspector"));
+    const form = el("form", "vibe-inspector-form");
+    const field = (label, input, name) => {
+      const holder = el("label", "vibe-set-field"); input.disabled = locked; input.setAttribute("aria-label", label); input.value = draft[name];
+      input.addEventListener("input", () => { draft[name] = input.value; draft.dirty = true; }); input.addEventListener("change", () => { draft[name] = input.value; draft.dirty = true; });
+      holder.append(el("span", "", label), input); form.append(holder); return input;
+    };
+    const priority = el("select");
+    for (const value of ["low", "normal", "high", "urgent"]) { const option = el("option", "", value[0].toUpperCase() + value.slice(1)); option.value = value; priority.append(option); }
+    field("Priority", priority, "priority");
+    const estimate = field("Estimated minutes", el("input"), "estimate"); estimate.type = "number"; estimate.min = "0"; estimate.max = "10080"; estimate.step = "1"; estimate.placeholder = "No estimate";
+    const acceptance = field("Done when", el("textarea"), "acceptance"); acceptance.rows = 4; acceptance.placeholder = "One observable check per line";
+    const defer = field("Defer until", el("input"), "defer"); defer.type = "datetime-local";
+    form.append(el("p", "vibe-panel-hint", "Priority orders similar work; a task you chose to run next still goes first. Deferral waits until this local date. Clearing it returns the task to normal checks and approvals."));
+    const save = el("button", "vibe-btn quiet", "Save details"); save.type = "submit"; save.disabled = locked || !api()?.tasksSave; form.append(save);
+    form.addEventListener("submit", (event) => {
+      event.preventDefault(); if (locked) return;
+      const estimateMinutes = draft.estimate.trim() ? Number(draft.estimate) : 0;
+      const deferUntil = draft.defer ? new Date(draft.defer).getTime() : 0;
+      const checks = draft.acceptance.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      const changed = (field) => draft[field] !== draft.initial[field];
+      if (changed("estimate") && (!Number.isInteger(estimateMinutes) || estimateMinutes < 0 || estimateMinutes > 10080) || changed("defer") && !Number.isFinite(deferUntil) || changed("acceptance") && (checks.length > 12 || checks.some((line) => line.length > 300))) { note("Check the date, estimate (0–10080 minutes), and up to 12 checks of 300 characters each.", "warn"); return; }
+      const edited = { ...draft.base, ...(changed("priority") ? { priority: draft.priority } : {}), ...(changed("estimate") ? { estimateMinutes } : {}), ...(changed("acceptance") ? { acceptance: checks } : {}), ...(changed("defer") ? { deferUntil } : {}) };
+      void act(() => api().tasksSave([edited]), "Task details saved.", { after: () => { if (state.inspectorDraft === draft) state.inspectorDraft = null; } });
+    });
+    details.append(form); body.append(details);
   }
   // A note the next attempt reads (the task's saved notes reach the worker's
   // brief). A running worker cannot be reached mid-run: its prompt is sent
@@ -287,16 +394,41 @@
   }
   function plansList(body) {
     const plans = state.data.plans || [];
-    if (!plans.length) body.append(el("p", "vibe-panel-empty", "No plans in progress. A plan helps when an idea needs a few decisions before it is built."));
-    else {
-      const list = el("ol", "vibe-rows");
-      for (const plan of plans) {
-        const meta = planMeta(plan);
-        list.append(row({ tone: meta.tone, title: plan.title || "A plan", meta: meta.text, onOpen: () => { close({ quiet: true }); go("plans", { planId: plan.id }); } }));
-      }
-      body.append(list);
-    }
+    const families = state.data.families || [];
+    if (!plans.length && !families.length) body.append(el("p", "vibe-panel-empty", "No plans in progress. A big request you build is split into steps here, and a plan helps when an idea needs a few decisions first."));
+    // Requests Build it split into steps (vibe.js families()).
+    if (families.length) fold(body, "families", "Split into steps", families.map((family) => row({ tone: familyTone(family), title: family.title, meta: familyMeta(family), onOpen: () => push({ view: "family", id: family.id }) })));
+    if (plans.length) fold(body, "plans", "Plans", plans.map((plan) => {
+      const meta = planMeta(plan);
+      return row({ tone: meta.tone, title: plan.title || "A plan", meta: meta.text, onOpen: () => { close({ quiet: true }); go("plans", { planId: plan.id }); } });
+    }));
     body.append(actions([{ label: "Plan something new", run: () => { close({ quiet: true }); go("plans", { create: true }); } }]));
+  }
+
+  // ---- a request split into steps ------------------------------------------------------
+  const STEP_WORDS = { done: "done", dropped: "dropped", running: "building", checking: "checking its work", approval: "waiting for your go-ahead", blocked: "stuck", waiting: "waiting its turn" };
+  const STEP_TONES = { done: "done", dropped: "", running: "live", checking: "check", approval: "ask", blocked: "bad", waiting: "next" };
+  const familyTone = (family) => family.steps.some((step) => step.state === "approval") ? "ask" : family.steps.some((step) => step.state === "running") || family.final === "running" ? "live" : "next";
+  const familyMeta = (family) => `${family.finished} of ${family.steps.length} steps done${family.final === "running" ? " · final check running" : family.final === "next" ? " · final check next" : ""}`;
+  function familyDetail(body, id) {
+    const family = (state.data.families || []).find((item) => item.id === id);
+    if (!family) { body.append(el("p", "vibe-panel-empty", "This request is finished or no longer on the board.")); return; }
+    heading(body, family.title, [chip(`${family.finished} of ${family.steps.length} done`, family.steps.some((step) => step.state === "approval") ? "decision" : "")]);
+    if (family.summary) body.append(el("p", "vibe-ask-detail vibe-panel-reason", family.summary));
+    const list = el("ol", "vibe-rows");
+    for (const [index, step] of family.steps.entries()) list.append(row({ tone: STEP_TONES[step.state], title: `${index + 1}. ${step.title}`, meta: STEP_WORDS[step.state], onOpen: () => push({ view: "task", id: step.id }) }));
+    list.append(row({ tone: family.final === "running" ? "live" : family.final === "checking" ? "check" : "next", title: "Then: put it together and check the whole thing", meta: family.final === "running" ? "running now" : family.final === "checking" ? "checking its work" : family.final === "next" ? "up next" : "after the last step", onOpen: () => push({ view: "task", id: family.id }) }));
+    body.append(list);
+    const need = (state.data.needs || []).find((item) => item.kind === "family" && item.id === id);
+    const unstarted = family.steps.filter((step) => ["approval", "waiting", "blocked"].includes(step.state));
+    const buttons = [];
+    if (need) buttons.push({ label: "Start all steps", primary: true, run: () => vibe()?.openNeed?.({ kind: "family", id }) });
+    if (unstarted.length) buttons.push({ label: "Make it one task", title: "Drop the steps that have not started; the request is built as one task", run: () => act(async () => {
+      let result = { ok: true };
+      for (const step of unstarted) { result = await api().tasksAction({ taskId: step.id, projectId: state.data.projectId, action: "drop" }); if (!result || result.ok === false) break; }
+      return result;
+    }, "Kept as one task. It builds as a whole.") });
+    if (buttons.length) body.append(actions(buttons));
   }
 
   // ---- ideas ------------------------------------------------------------------------
@@ -468,6 +600,78 @@
     note(on ? "Studio opens on Vibe." : "Studio opens on Watch.", "good");
   }
 
+  // ---- a new app ----------------------------------------------------------------------
+  // Vibe is for making an app from a prompt: an empty folder, git, opened as
+  // the project (main.cjs projects:create), and the description goes through
+  // Build it as the first request, sized like any other.
+  const slugOf = (value) => String(value ?? "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48).replace(/-+$/g, "");
+  function newAppForm(body) {
+    body.append(el("p", "vibe-panel-hint", "Studio makes an empty folder under Mefi Apps in your home folder, starts git in it and opens it as your project. What you describe becomes its first build."));
+    const form = el("form", "vibe-set vibe-newapp");
+    const name = el("input");
+    name.type = "text"; name.maxLength = 60; name.placeholder = "Pixel Garden"; name.autocomplete = "off"; name.value = state.draftApp.name;
+    name.setAttribute("aria-label", "The app's name");
+    name.disabled = state.busy || Boolean(state.draftApp.made);
+    const about = el("textarea");
+    about.rows = 4; about.maxLength = 600; about.value = state.draftApp.about;
+    about.disabled = state.busy;
+    about.placeholder = "A cosy 2D game where you grow pixel plants and trade them at a market.";
+    about.setAttribute("aria-label", "What the app should be");
+    const where = el("span", "vibe-set-hint", "");
+    const paintWhere = () => { const slug = slugOf(name.value); where.textContent = slug ? `Folder: Mefi Apps/${slug}` : "The folder is named after the app."; };
+    paintWhere();
+    name.addEventListener("input", () => { state.draftApp = { ...state.draftApp, name: name.value }; paintWhere(); });
+    about.addEventListener("input", () => { state.draftApp = { ...state.draftApp, about: about.value }; });
+    const nameField = el("label", "vibe-set-field");
+    nameField.append(el("span", "", "Name"), name);
+    const aboutField = el("label", "vibe-set-field");
+    aboutField.append(el("span", "", "What should it be?"), about);
+    const make = el("button", "vibe-btn primary", state.busy ? "Making it…" : state.draftApp.made?.ok === false ? "Open app and start building" : state.draftApp.made ? "Retry first build" : "Make it and start building");
+    make.type = "submit"; make.disabled = state.busy;
+    form.append(nameField, aboutField, where, make);
+    form.addEventListener("submit", (event) => { event.preventDefault(); void createApp(); });
+    body.append(form);
+  }
+  async function createApp() {
+    const name = state.draftApp.name.trim();
+    const about = state.draftApp.about.trim();
+    if (!name) { note("Give the new app a name.", "warn"); return; }
+    if (!api()?.projectsCreate) { note("New apps can be made in the desktop app.", "warn"); return; }
+    if (state.busy) return;
+    state.busy = true; state.signature = ""; render();
+    note("Making the folder…");
+    try {
+      let made = state.draftApp.made;
+      if (made?.ok === false && made.addedId) {
+        const opened = await api().projectsSelect({ id: made.addedId });
+        if (opened?.ok === false) throw new Error(opened.error || "The project could not be opened.");
+        if (!opened) throw new Error("The project could not be opened.");
+        made = { ...made, ...opened, ok: true, selectedId: made.addedId };
+      }
+      if (!made) made = await api().projectsCreate({ name, about });
+      if (made?.created && made.addedId) state.draftApp.made = made;
+      if (!made || made.ok === false) throw new Error(made?.error || "The app could not be made.");
+      state.draftApp.made = made;
+      let said = `${name} is ready and open.`;
+      if (about && api()?.vibeBuild) {
+        note("Folder ready. Sizing up the first build…");
+        const built = await api().vibeBuild({ title: `Set up ${name}`.slice(0, 90), projectId: made.selectedId || made.activeId,
+          prompt: `Start this new app in its empty project folder: ${about}\n\nSet up the project so it runs, then build a first working version of what is described.` });
+        if (!built || built.ok === false) throw new Error(`The folder is ready, but the first build could not be added: ${built?.error || "no answer"}`);
+        said = built.steps ? `${name} is ready, and its first build is split into ${built.steps} steps.` : `${name} is ready, and its first build is queued.`;
+      }
+      state.draftApp = { name: "", about: "" };
+      state.busy = false;
+      close({ quiet: true });
+      vibe()?.feedback?.(said, "good");
+      await vibe()?.refresh?.();
+    } catch (error) {
+      state.busy = false;
+      note(error?.message || "The app could not be made.", "bad");
+      state.signature = ""; render();
+    }
+  }
+
   // ---- paint ------------------------------------------------------------------------
   // Only what the open panel shows decides whether it repaints, so a push
   // storm on a big board stays cheap.
@@ -475,37 +679,41 @@
     const data = state.data;
     const need = (data.needs || []).map((item) => `${item.kind}:${item.id}:${item.title}:${item.verb}`);
     const running = (data.running || []).map((job) => `${job.taskId}:${job.phase}:${job.title}`);
-    if (state.kind === "tasks") {
-      const stages = (data.backlog?.taskStates || []).map((row) => `${row.id}:${row.stage}:${row.blockedBy || ""}`);
-      return [data.projectName, need, running, stages, (data.tasks || []).map((task) => [task.id, task.title, task.status, task.updatedAt, Boolean(task.dropped), task.verification?.state, String(task.lastRunError || "").length, String(task.notes || "").length, String(task.prompt || "").length])];
+    if (state.kind === "tasks" || top()?.view === "task") {
+      const stages = (data.backlog?.taskStates || []).map((row) => `${row.id}:${row.stage}:${row.blockedBy || ""}:${row.reason || ""}`);
+      return [data.projectId, data.projectName, need, running, stages, state.taskView, data.gate, data.status?.parallel, data.status?.adaptiveParallel, data.status?.capacity, data.backlog?.waiting, (data.tasks || []).map((task) => [task.id, task.title, task.status, task.updatedAt, task.contextVersion, task.priority, task.estimateMinutes, task.acceptance, task.deferUntil, Boolean(task.dropped), task.verification?.state, String(task.lastRunError || "").length, String(task.notes || "").length, String(task.prompt || "").length])];
     }
     if (state.kind === "ideas") return [data.projectName, (data.ideas || []).map((idea) => [idea.id, idea.title, idea.read, idea.status, idea.taskId])];
-    if (state.kind === "plans") return [data.projectName, (data.plans || []).map((plan) => [plan.id, plan.title, plan.status, plan.version])];
+    if (state.kind === "plans") return [data.projectName, need, running, (data.plans || []).map((plan) => [plan.id, plan.title, plan.status, plan.version]), (data.families || []).map((family) => [family.id, family.title, family.final, family.steps.map((step) => `${step.id}:${step.state}`)]), (data.tasks || []).length];
     if (state.kind === "team") return [data.projectName, running, data.gate, state.teamAt];
     if (state.kind === "settings") return [data.projectName, data.person, data.companion, document.documentElement.dataset.studioTheme];
+    if (state.kind === "newapp") return [data.projectName];
     return [];
   }
   function render() {
     if (aside.hidden || !state.kind) return;
     const view = top();
+    aside.classList.toggle("is-lanes", state.kind === "tasks" && !view && state.taskView === "lanes");
     // Typing in a panel is never interrupted by a push; the next one paints.
     const typing = aside.contains(document.activeElement) && /^(TEXTAREA|INPUT)$/.test(document.activeElement?.tagName || "") && document.activeElement?.type !== "checkbox";
     const signature = JSON.stringify([state.kind, state.stack, state.folds, state.busy, digest()]);
     if (signature === state.signature || typing) return;
     state.signature = signature;
     $("kicker").textContent = state.data.projectName || "Vibe";
-    $("title").textContent = view?.view === "task" ? "Task" : view?.view === "idea" ? "Idea" : TITLES[state.kind];
+    $("title").textContent = view?.view === "task" ? "Task" : view?.view === "idea" ? "Idea" : view?.view === "family" ? "Plan" : TITLES[state.kind];
     $("back").hidden = !view;
     const body = $("body");
     body.replaceChildren();
     if (view?.view === "task") taskDetail(body, view.id);
     else if (view?.view === "idea") ideaDetail(body, view.id);
+    else if (view?.view === "family") familyDetail(body, view.id);
     else if (state.kind === "tasks") tasksList(body);
     else if (state.kind === "plans") plansList(body);
     else if (state.kind === "ideas") ideasList(body);
     else if (state.kind === "team") team(body);
     else if (state.kind === "settings") settings(body);
-    $("full").hidden = false;
+    else if (state.kind === "newapp") newAppForm(body);
+    $("full").hidden = state.kind === "newapp";
     $("full").onclick = () => full();
   }
   // Full view: the Build page for the same thing, inside Vibe's rail.
@@ -513,7 +721,7 @@
     const view = top();
     const kind = state.kind;
     close({ quiet: true });
-    if (kind === "tasks") go("tasks", view?.view === "task" ? { taskId: view.id, filter: "all" } : {});
+    if (kind === "tasks" || ["task", "family"].includes(view?.view)) go("tasks", ["task", "family"].includes(view?.view) ? { taskId: view.id, filter: "all" } : {});
     else if (kind === "plans") go("plans");
     else if (kind === "ideas") go("ideas");
     else if (kind === "team") go("agents");

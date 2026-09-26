@@ -10,8 +10,8 @@ const object = (value) => value && typeof value === "object" && !Array.isArray(v
 const rows = (value) => Array.isArray(value) ? value : [];
 const text = (value) => typeof value === "string" ? value : "";
 const copy = (value) => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
-const FIELDS = ["id", "projectId", "projectPath", "projectName", "title", "prompt", "description", "details", "note", "notes", "context", "handoff", "ideaDetail", "refs", "files", "file", "ideas", "dependsOn", "delegation", "delegatedFrom", "parentTaskId", "members", "absorbedInto", "interruptedAttempt", "lastAttempt", "verification", "verificationReceiptId", "remaining", "blockers", "lastRunError", "runFailures", "verifyAttempts", "doneAt", "completionFromTaskId", "planningId", "planningSpecId", "planningTaskId", "acceptance", "logs", "source", "parent", "parentRunId", "depth", "createdAt"];
-const RESTORABLE = ["title", "prompt", "description", "details", "note", "notes", "context", "handoff", "ideaDetail", "refs", "files", "file", "dependsOn"];
+const FIELDS = ["id", "projectId", "projectPath", "projectName", "title", "prompt", "description", "details", "note", "notes", "context", "handoff", "ideaDetail", "refs", "files", "file", "ideas", "dependsOn", "delegation", "delegatedFrom", "parentTaskId", "members", "absorbedInto", "interruptedAttempt", "lastAttempt", "verification", "verificationReceiptId", "remaining", "blockers", "lastRunError", "runFailures", "verifyAttempts", "doneAt", "completionFromTaskId", "planningId", "planningSpecId", "planningTaskId", "acceptance", "priority", "estimateMinutes", "deferUntil", "logs", "source", "parent", "parentRunId", "depth", "createdAt"];
+const RESTORABLE = ["title", "prompt", "description", "details", "note", "notes", "context", "handoff", "ideaDetail", "refs", "files", "file", "dependsOn", "acceptance", "priority", "estimateMinutes", "deferUntil"];
 
 function snapshotTask(task) {
   const result = {};

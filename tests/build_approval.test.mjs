@@ -10,6 +10,17 @@ const { applyRequestAction } = ideaActions;
 const task = (id, extra = {}) => ({ id, title: `Build ${id}`, prompt: `Implement ${id} within its saved scope`, status: "open", files: [`${id}.js`], createdAt: 1, ...extra });
 const approve = (h, id) => h.env.backlogControl({ action: "approve", projectId: "fixture", taskId: id, expectedScope: backlog.buildScope(h.board().tasks.find((row) => row.id === id)) });
 
+test("deferred work cannot dispatch until its date and still requires reviewed approval", async () => {
+  const h = executorHost({ tasks: [task("later")], autoBuild: false });
+  h.edit((board) => { board.tasks[0].deferUntil = h.now() + 60000; });
+  await approve(h, "later");
+  await h.env.spawnNextJob();
+  assert.equal(h.starts.length, 0);
+  h.advance(60000);
+  assert.equal(await h.env.spawnNextJob(), "spawned");
+  assert.equal(h.starts[0].taskId, "later");
+});
+
 test("Auto build keeps existing dispatch; Verify first holds both a board task and a promoted inbox request", async () => {
   const automatic = executorHost({ tasks: [task("automatic")] });
   assert.equal(await automatic.env.spawnNextJob(), "spawned");

@@ -199,6 +199,35 @@ settings and per-model work-kind summaries for the shared controls.
   building and each seat's model, with Start, Resume or Pause. **Full view**
   opens the Build page for the same thing inside Vibe's rail. The status pill
   opens what it names, and a decision toast answers in Vibe's drawer.
+- **Build it** sizes the request (`main.cjs` `vibeBuild`,
+  `scripts/request-sizing.cjs`). A short single change is one card at once; a
+  bigger one gets one call to the lead seat, which may answer with two to six
+  steps. They are admitted under the owner's card in the same board write
+  (`task-delegation.cjs` `admitIntake`) as its delegated slices, with the
+  owner's origin, so each step gets the slice brief and the prerequisite gate,
+  and the card waits for them and runs last as the integration and check.
+  Vibe's **Plan in flight** card and the Plans panel follow the steps; under
+  Verify first the waiting steps are one row under Needs you, started together
+  with their reviewed scopes, and **Make it one task** drops the unstarted
+  steps so the card runs whole. Anything that cannot be sized keeps it one card.
+- **New app** (the + beside Vibe's project picker, `projects:create`) makes an
+  empty folder under `~/Mefi Apps` (never inside Studio's own repository),
+  starts git and a README in it, opens it as the project and sends the
+  description through Build it.
+- Vibe's **Tasks** panel switches between List and Lanes. The lanes show
+  Needs you, Ready, Building, Checking, Later and Done, with live counts;
+  questions stay above the board. Queue controls pause new work, resume agents
+  and choose Automatic capacity or a manual worker limit. Running jobs finish
+  when the limit is lowered or the queue is paused.
+- Each task's **Inspector** saves priority, estimated minutes, **Done when**
+  checks and a local **Defer until** date. Priority orders work within its
+  existing scheduling band; explicit run-next pins keep precedence. Deferred
+  tasks stay out of dispatch until the date expires or **Return to queue**
+  clears it, after which dependencies and approval still apply. Estimates are
+  planning notes, not timeouts. Acceptance checks reach the builder and changing
+  them requires fresh build approval. Running, checking and finished tasks are
+  read only. Unsaved details survive live updates and failed saves, and stale
+  conflicting edits are refused by the host.
 - Nothing you click in Vibe mode leaves it. Every other page, whether opened
   from Full view, Watch, Search, a key, the companion or a link inside
   another page, opens inside Vibe's own narrow rail instead of Build's menu:
