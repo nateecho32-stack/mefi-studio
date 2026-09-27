@@ -34,6 +34,143 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-26 - ai-offline overseer re-verification and spec-scan artifacts fix (task_b172488b3c947b88)
+
+Resumed the ai-offline overseer task after the owner re-plan decision. Inspected
+the current tree before changes: all claimed recovery fixes remain intact after
+heavy sibling editing of main.cjs — resetAssistantAiBackoff at all four recovery
+sites (key save, team save/inherit/apply, settings:set-ai-routing, auto-setup),
+the parseClaudeCliResult is_error exit guard (commit 11fcebc), and the
+scheduleAssistantAiProbe offline-probe chain.
+
+Fresh validation this run: npm.cmd run test:fast 3862 pass / 0 fail / 4 skip
+(the seven shared Analyzer/nav UI failures from the earlier handoff are resolved
+in the current tree); python tools/test_mefi_studio_offline_probe.py 12 tests OK;
+npm.cmd run audit zero findings.
+
+npm.cmd run check initially failed spec-collisions: the active canvas-transfer
+session's isolated harness (tools/logs/canvas-transfer-integration/tests/
+command_render.test.mjs, written minutes earlier) duplicated the tests/
+command_render.test.mjs basename. tools/logs/ is the git-ignored reports and
+isolated-harness home this notebook documents, and neither runner discovers it
+(Python discovery is tools/test_mefi_studio_*.py; node is tests/**/*.test.mjs),
+so its basenames cannot shadow a live spec. Fixed scripts/spec-collisions.mjs to
+skip exactly the tools/logs subtree during the walk; everything else under
+tools/ stays scanned. Added two guard cases in tests/spec_collisions.test.mjs
+(logs subtree exempt, a logs-named directory elsewhere still collides).
+Sibling harness files were not touched.
+
+After the fix: node --test tests/spec_collisions.test.mjs 6/6;
+node scripts/spec-collisions.mjs ok (343 specs); npm.cmd run check exit 0
+(165 targets, specs, css, syntax, 20 live testruns rows); npm.cmd run audit
+exit 0.
+
+ai-offline status: root cause stands — three real Claude session-limit quota
+failures (reset 23:10 America/Chicago) plus two spurious parser/exit bugs now
+fixed and committed; the selected Codex route replied ok through the real host
+CLI completion function at 20:11 this evening. Code cannot reset the provider
+quota; loading the committed fixes into the alerting Studio instance needs the
+owner's app restart.
+
+## 2026-09-26 - Built-in media browser replaces the separate window
+
+Replaced the standalone BrowserWindow and toolbar preload/page with a
+sandboxed WebContentsView attached to Studio's existing window. The bundled
+media-browser controller puts address, history, reload/stop, mute, minimize
+and close controls inside the existing media player. Website popup links
+navigate that same view. Moving, resizing, zooming and minimizing preserve
+the loaded page; source changes, close and owner reload destroy playback.
+The website has no Studio preload or Node access. Browser bounds follow the
+renderer viewport and yield to overlapping Studio UI. Video-only background,
+transparency, fade and pointer-dodge effects are paused while browsing.
+The visual music refresh remains in place, and launcher copy now says
+Browse here and explicitly describes playback inside Studio.
+
+Validation: 118 focused Node tests passed. The real Electron browser fixture
+passed both alone and in the full run, with exactly one BrowserWindow,
+X-Frame-Options DENY pages, same-view popup links, history, mute, forbidden
+URL rejection, movement, minimize/restore, overlay hiding, 1440/600 layouts,
+zoom, unchanged page-load counts and close/source-switch disposal. Render
+captures were inspected from an isolated temporary profile. The initial
+fixture exposed resize-handle clipping in the visibility probe and a
+shutdown listener touching a destroyed owner; both were corrected. Native
+capture retries are bounded to the transient UnknownVizError case.
+
+npm run build-booklet and npm run audit passed (zero findings). npm test
+passed: 3,902 Node tests passed and 6 skipped; Python ran 248 tests, OK with
+1 skip; normalized-path checks passed 6/6. The occlusion skip was capability
+gated on this desktop. npm run check stopped at an unrelated duplicate spec:
+tools/logs/canvas-transfer-integration/tests/command_render.test.mjs and
+tests/command_render.test.mjs. The actively used isolated copy was preserved.
+The remaining check components were run directly: CSS merge/no-merge,
+unused selectors, syntax and test-history gates all passed. Local logs and
+seed-only captures are in the OS temporary directory, not published.
+
+## 2026-09-26 - Isolated canvas transfer candidate: timing and pixels pass; Command integration deferred
+
+The native-font hotspot led to an isolated Electron 44.4.1 comparison using
+production callout drawing, six callouts, 1,000 synthetic DOM rows, two DOM
+invalidations per cycle, 30 cycles per run and five alternating runs after
+warmup. Median synchronous cycle: DOM canvas 4.91 ms, copied offscreen
+backbuffer 5.17 ms, directly transferred canvas 3.48 ms. Direct transfer
+reduced style recalculations from two to one; layouts remained one. The
+cycle includes final layout flush and any backbuffer copy, but excludes
+asynchronous compositor presentation. This is not a live improvement claim.
+
+All 96 candidate pixel-buffer comparisons were identical across four device
+scales, three styles, light/dark palettes and integer/fractional positions.
+Browser captures matched the direct canvas at three scale/style combinations.
+Seven isolated candidate unit tests passed for capability fallback, transfer
+identity, alpha options, resize, DPR and no-op pixel retention.
+
+The first private-overlay Command renderer integration attempt failed at
+setup: the overlay omitted scripts/brains.cjs. The copied dependency set now
+includes brains.cjs and agent-issues.cjs; overlay preparation and original
+source hash guards succeed. A sibling npm test run started before retry, so
+no second renderer test or live capture was started. Full Command integration
+remains pending. No candidate application source has been applied and no
+application gate has been rerun for this candidate. The prior completed
+full gate still covers the scroll batching change only.
+
+Reports and isolated sources: tools/logs/font-style-trial.json,
+tools/logs/benchmark-font-styles.cjs, tools/logs/canvas-transfer-candidate/,
+and tools/logs/validate-canvas-transfer-candidate.mjs. The failed setup log is
+in the OS temporary directory as mefi-canvas-candidate-command.log. Continue
+with the guarded overlay's --run only when Studio is inactive and all other
+test suites have ended; then finish validation before any live source edit.
+
+## 2026-09-26 - Visible Command probe narrows the next hotspot to canvas font updates
+
+A 30-second visible Command capture retained the loaded scroll batching
+code, with stable source/booklet hashes. drawCallout remained the largest
+named CPU sample (about 2.36 seconds). A test run appeared at one guard
+checkpoint, so this capture is not used for a clean before/after claim.
+
+A subsequent 15-second native-call probe, without the CPU sampler, stayed
+visible on Command. Eight three-second guard checkpoints observed no tests;
+source and booklet hashes were unchanged. The probe passed every native
+argument/result through, retained exceptions, and recorded only operation
+names, counts and durations. It restored all eight wrapped descriptors
+normally, removed its temporary global, and had a 20-second fallback timer.
+
+Measured elapsed totals: canvas font assignment 1,167.8 ms / 6,689 calls;
+element bounding rectangles 382.8 ms / 1,149; fillText 23.1 ms / 6,689;
+measureText 6.0 ms / 2,694. The renderer's rAF interval p95 was 16.8 ms;
+that is not Command draw FPS or GPU presentation timing. These instrumented
+measurements narrow the investigation without claiming an improvement.
+
+No production source changed and no completed application gate was rerun.
+The earlier full-gate pass still covers the scroll fix. Follow-up: isolate
+the style work reached by canvas font setters and validate any candidate's
+visual behavior before applying it; a measureText cache alone addresses
+little of the measured cost. Details and the primary Chromium source are
+in docs/performance.md.
+
+Ignored reports: tools/logs/live-20260926-2153-command*.json and
+tools/logs/live-20260926-native-callout-probe*.json. The one-off native
+collector is tools/logs/profile-native-timing-trial.mjs. A read-only final
+status check confirms the app's boot is complete and recording is stopped.
+
 ## 2026-09-26 late evening - Occlusion probe capability gate covers detected-but-unsustained throttling (task_fd15e09800325362)
 
 The rAF-silence assertion failed in the worktree (growth 17) and in an
@@ -623,76 +760,6 @@ Full logs remain local at `%TEMP%/mefi-briefer-npm-test.log`,
 server, live task-store changes or renderer rebuilds were needed for this fix.
 The owner of the concurrent Analyzer changes still needs to reconcile its
 contracts before the shared full gate can be green.
-
-## 2026-09-26 - Trace log viewer (Build): gates on a private worktree of 6e03f15
-
-Detached worktree C:\wt\build-g at 6e03f15 plus the Trace change only
-(scripts/trace.cjs, renderer/trace.js and trace.css, the trace:channels /
-trace:read host reads and the logLine and window-console rings in main.cjs,
-preload, nav.js's record and Live route, the build and fixture lists,
-tests/trace.test.mjs, docs). `npm run check` and `npm run audit` passed.
-The first `npm test` failed three host_push_batching tests: they run
-logLine's slice alone, where the new Trace ring does not exist; logLine's
-push is now guarded, and all three pass. The rerun on the commit: Node
-parallel stage 3798 tests with one file-level failure, project_preview,
-which passes solo (18/18); the Electron fixture stage passed; Python
-contracts and the normalized-path lock passed.
-
-## 2026-09-26 - Permission modes follow-up: owner-card slices build in Auto, dismissed parked asks stay dismissed
-
-Detached worktree C:\wt\assist-v at 6e03f15 plus the two fixes only
-(scripts/autonomy.cjs ownerWork, scripts/autonomy-host.cjs settled-park
-check, their tests and docs). Before the fix, on 6e03f15, the two new tests
-fail: a delegated slice of an owner card read "approval" under Auto, and a
-dismissed synthesized parked-card ask came back on the next pass (reproduced
-with a scratch fixture in both Always ask and Auto). `npm run check` and
-`npm run audit` passed. `npm test`: Node suites passed (3806 tests, 0
-failures; Electron fixtures 37 passed, 0 failed, `command_render` included
-this run), Python contracts passed (one skip), and the normalized-path lock
-passed.
-
-## 2026-09-26 - Permission modes shared integration
-
-Landed 31bc533 on main by merging each touched file against efe812c, with
-byte-checked backups and an empty index. Preserved the existing music/media,
-Command audio/performance, documentation and plan.md edits; kept both Added
-changelog entries. Rebuilt booklet.html from the combined renderer sources.
-The combined tree passes check and audit (zero findings), plus all 229
-focused permission, Vibe, companion, Command activity/audio/graph, media and
-booklet tests. Logs: C:/wt/phase4-shared-check.log,
-phase4-shared-audit.log and phase4-shared-integration.log. The preceding
-full-gate row documents the independently reproduced Command timeout.
-
-## 2026-09-26 - Permission modes final gate and baseline timeout comparison
-
-Validated the fixed source commit 3e06781 in the clean assist-g1 worktree.
-Check passes (161 targets, 338 specs), audit has zero errors or warnings,
-and the committed booklet was rebuilt. Full npm test: 3804 non-Electron
-tests passed, 4 skipped; Electron lane 36 passed, 1 skipped, 1 failed;
-exclusive visibility and occlusion checks all 3 passed. Python ran 248
-tests with 1 skip and no failures; all 6 normalized-path lock checks passed.
-
-The sole final failure is command_render's 80-second process limit: the
-fixture was terminated before writing report.json, without a renderer error.
-It repeated solo on 3e06781 and on clean pre-change main efe812c with the
-same signature. This is a reproduced baseline limitation, not a green
-full gate. The earlier Phase 4 run at 0fd96da passed Command in 59.6 seconds.
-Logs: C:/wt/phase4-final-full.log, phase4-command-solo.log and
-phase4-command-baseline.log.
-
-The initial 0fd96da run exposed two actionable renderer issues, both fixed:
-the companion fixture now explicitly enters Build when testing direct
-answers, while a new Vibe orb test verifies the hub releases its focus lock;
-compact navigation retains 18px icons and 36px buttons while fitting all
-three destinations at 600px / 150% zoom. Both companion and Home/Work tests,
-the full responsive navigation sweep, and the new autonomy renderer pass
-in the final full run. No test assertions or timeout limits were weakened.
-
-Before/after Vibe captures are exactly 1920x1080 / DPR 1, using synthetic
-bridge data: C:/wt/phase4-preview/before and C:/wt/phase4-preview/final.
-The real main-process fake-LM proof and relaunch proof remain successful
-(C:/wt/autonomy-app-EL5Bpt); final follow-ups change only renderer and docs.
-No private state, credentials or generated screenshots were added to Git.
 
 ## Read Before Any Tests
 

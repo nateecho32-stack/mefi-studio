@@ -6,6 +6,76 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-26 - Trace log viewer (Build): gates on a private worktree of 6e03f15
+
+Detached worktree C:\wt\build-g at 6e03f15 plus the Trace change only
+(scripts/trace.cjs, renderer/trace.js and trace.css, the trace:channels /
+trace:read host reads and the logLine and window-console rings in main.cjs,
+preload, nav.js's record and Live route, the build and fixture lists,
+tests/trace.test.mjs, docs). `npm run check` and `npm run audit` passed.
+The first `npm test` failed three host_push_batching tests: they run
+logLine's slice alone, where the new Trace ring does not exist; logLine's
+push is now guarded, and all three pass. The rerun on the commit: Node
+parallel stage 3798 tests with one file-level failure, project_preview,
+which passes solo (18/18); the Electron fixture stage passed; Python
+contracts and the normalized-path lock passed.
+
+## 2026-09-26 - Permission modes follow-up: owner-card slices build in Auto, dismissed parked asks stay dismissed
+
+Detached worktree C:\wt\assist-v at 6e03f15 plus the two fixes only
+(scripts/autonomy.cjs ownerWork, scripts/autonomy-host.cjs settled-park
+check, their tests and docs). Before the fix, on 6e03f15, the two new tests
+fail: a delegated slice of an owner card read "approval" under Auto, and a
+dismissed synthesized parked-card ask came back on the next pass (reproduced
+with a scratch fixture in both Always ask and Auto). `npm run check` and
+`npm run audit` passed. `npm test`: Node suites passed (3806 tests, 0
+failures; Electron fixtures 37 passed, 0 failed, `command_render` included
+this run), Python contracts passed (one skip), and the normalized-path lock
+passed.
+
+## 2026-09-26 - Permission modes shared integration
+
+Landed 31bc533 on main by merging each touched file against efe812c, with
+byte-checked backups and an empty index. Preserved the existing music/media,
+Command audio/performance, documentation and plan.md edits; kept both Added
+changelog entries. Rebuilt booklet.html from the combined renderer sources.
+The combined tree passes check and audit (zero findings), plus all 229
+focused permission, Vibe, companion, Command activity/audio/graph, media and
+booklet tests. Logs: C:/wt/phase4-shared-check.log,
+phase4-shared-audit.log and phase4-shared-integration.log. The preceding
+full-gate row documents the independently reproduced Command timeout.
+
+## 2026-09-26 - Permission modes final gate and baseline timeout comparison
+
+Validated the fixed source commit 3e06781 in the clean assist-g1 worktree.
+Check passes (161 targets, 338 specs), audit has zero errors or warnings,
+and the committed booklet was rebuilt. Full npm test: 3804 non-Electron
+tests passed, 4 skipped; Electron lane 36 passed, 1 skipped, 1 failed;
+exclusive visibility and occlusion checks all 3 passed. Python ran 248
+tests with 1 skip and no failures; all 6 normalized-path lock checks passed.
+
+The sole final failure is command_render's 80-second process limit: the
+fixture was terminated before writing report.json, without a renderer error.
+It repeated solo on 3e06781 and on clean pre-change main efe812c with the
+same signature. This is a reproduced baseline limitation, not a green
+full gate. The earlier Phase 4 run at 0fd96da passed Command in 59.6 seconds.
+Logs: C:/wt/phase4-final-full.log, phase4-command-solo.log and
+phase4-command-baseline.log.
+
+The initial 0fd96da run exposed two actionable renderer issues, both fixed:
+the companion fixture now explicitly enters Build when testing direct
+answers, while a new Vibe orb test verifies the hub releases its focus lock;
+compact navigation retains 18px icons and 36px buttons while fitting all
+three destinations at 600px / 150% zoom. Both companion and Home/Work tests,
+the full responsive navigation sweep, and the new autonomy renderer pass
+in the final full run. No test assertions or timeout limits were weakened.
+
+Before/after Vibe captures are exactly 1920x1080 / DPR 1, using synthetic
+bridge data: C:/wt/phase4-preview/before and C:/wt/phase4-preview/final.
+The real main-process fake-LM proof and relaunch proof remain successful
+(C:/wt/autonomy-app-EL5Bpt); final follow-ups change only renderer and docs.
+No private state, credentials or generated screenshots were added to Git.
+
 ## 2026-09-26 - Permission modes Phase 4 controls and isolated app proof
 
 Private assist-1, based on 79b39a0 (Phase 3 plus the completed Vibe C/D
