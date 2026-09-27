@@ -9,7 +9,7 @@
   --pink: #ff5fa2;
   overflow-x: hidden;
 }
-.home h1, .home h2, .home h3 { font-family: var(--display); letter-spacing: -.02em; font-weight: 700; }
+.home h1, .home h2, .home h3, .home h4 { font-family: var(--display); letter-spacing: -.02em; font-weight: 700; }
 .home h2 { font-size: clamp(1.9rem, 4.2vw, 3rem); line-height: 1.08; margin-bottom: .45em; }
 .home h3 { font-size: 1.16rem; letter-spacing: -.01em; }
 .home b { color: var(--ivory); font-weight: 650; }
@@ -148,7 +148,11 @@
 .home .themes + .fine { max-width: 70ch; margin: 0 auto; }
 
 /* ---- what's new ---- */
-.home .new .grid3 { margin-bottom: 24px; }
+.home .new-group { margin-bottom: 36px; }
+.home .new-group:last-of-type { margin-bottom: 28px; }
+.home .new-head { display: flex; align-items: baseline; gap: 12px; margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid var(--hairline); font-size: 1.15rem; }
+.home .new-head span { font: 600 .75rem var(--font-mono); letter-spacing: .14em; color: var(--accent); }
+.home .new .card h4 { margin: 0 0 8px; font-size: 1.05rem; line-height: 1.3; color: var(--ivory); }
 
 /* ---- privacy ---- */
 .home .trust { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--hairline); border: 1px solid var(--hairline); border-radius: 20px; overflow: hidden; }
