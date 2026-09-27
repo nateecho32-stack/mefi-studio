@@ -109,7 +109,49 @@ function roomSummary(value) {
     you: typeof value.you === "string" ? value.you : "none",
     ownerId: SNOWFLAKE.test(String(value.ownerId)) ? String(value.ownerId) : null,
     memberCount: count(value.memberCount, 1000) ?? 0,
+    policy: value.policy === "invite" ? "invite" : "request",
+    listed: value.listed === true,
+    maxMembers: count(value.maxMembers, 1000) ?? 0,
   };
+}
+
+// Free text a member typed (a message, a join note): control characters
+// other than tab and line breaks are dropped, and the length is capped.
+const text = (value, max) => (typeof value === "string" ? value.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "").slice(0, max) : "");
+
+// A room message as Studio shows it. Studio renders `text` as text only.
+function roomMessage(value) {
+  if (!object(value) || !SNOWFLAKE.test(String(value.id)) || !object(value.author) || !SNOWFLAKE.test(String(value.author.id))) return null;
+  if (typeof value.text !== "string" || !Number.isFinite(value.createdAt)) return null;
+  return {
+    id: String(value.id),
+    author: { id: String(value.author.id), name: text(value.author.name, 100), viaStudio: value.author.viaStudio === true },
+    text: text(value.text, 2000), truncated: value.truncated === true,
+    createdAt: value.createdAt, editedAt: Number.isFinite(value.editedAt) ? value.editedAt : null,
+    mentions: Array.isArray(value.mentions?.users) ? value.mentions.users.map((item) => (object(item) && SNOWFLAKE.test(String(item.id)) ? { id: String(item.id), name: text(item.name, 100) } : null)).filter(Boolean).slice(0, 50) : [],
+    attachments: Array.isArray(value.attachments) ? value.attachments.filter(object).slice(0, 10).map((item) => ({ name: text(item.name, 200) || "file", size: count(item.size, 1e12) ?? 0 })) : [],
+    replyTo: SNOWFLAKE.test(String(value.replyTo)) ? String(value.replyTo) : null,
+  };
+}
+
+function joinRequest(value) {
+  const requester = object(value) ? user(value.requester) : null;
+  if (!requester || !OPAQUE_ID.test(String(value.id)) || !OPAQUE_ID.test(String(value.roomId))) return null;
+  if (!["pending", "approved", "denied", "cancelled"].includes(value.status) || !Number.isFinite(value.createdAt)) return null;
+  return { id: value.id, roomId: value.roomId, requester, note: text(value.note, 300), status: value.status, createdAt: value.createdAt, decidedAt: Number.isFinite(value.decidedAt) ? value.decidedAt : null };
+}
+
+function roomInvite(value) {
+  const invitedBy = object(value) ? user(value.invitedBy) : null;
+  if (!invitedBy || !OPAQUE_ID.test(String(value.id)) || !OPAQUE_ID.test(String(value.roomId)) || !line(value.roomName, 80)) return null;
+  if (!["pending", "accepted", "declined", "revoked", "expired"].includes(value.status) || !Number.isFinite(value.expiresAt)) return null;
+  return { id: value.id, roomId: value.roomId, roomName: value.roomName, invitedBy, status: value.status, expiresAt: value.expiresAt };
+}
+
+// What a member may post: 1-2000 characters, not blank, and no control
+// characters other than tab and line breaks (the hub's own rule).
+function postText(value) {
+  return typeof value === "string" && value.trim() && value.length <= 2000 && !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(value) ? value : null;
 }
 
 // What Studio tells /nowplaying: a label, and a link when there is one.
@@ -348,6 +390,25 @@ function createHubClient(options = {}) {
       case "companion":
         if (OPAQUE_ID.test(String(frame.roomId)) && SNOWFLAKE.test(String(frame.from))) emit({ type: "companion", roomId: frame.roomId, from: String(frame.from), card: object(frame.card) ? frame.card : null, direct: frame.to != null, receivedAt: now() });
         return;
+      case "message":
+      case "messageUpdate": {
+        const message = roomMessage(frame.message);
+        if (OPAQUE_ID.test(String(frame.roomId)) && message) emit({ type: frame.type, roomId: frame.roomId, message });
+        return;
+      }
+      case "messageDelete":
+        if (OPAQUE_ID.test(String(frame.roomId)) && SNOWFLAKE.test(String(frame.messageId))) emit({ type: "messageDelete", roomId: frame.roomId, messageId: String(frame.messageId) });
+        return;
+      case "joinRequest": {
+        const request = joinRequest(frame.request);
+        if (request) emit({ type: "joinRequest", request });
+        return;
+      }
+      case "invite": {
+        const invite = roomInvite(frame.invite);
+        if (invite) emit({ type: "invite", invite });
+        return;
+      }
       case "hubState":
         paused = frame.paused === true;
         emit({ type: "status", status: status() });
@@ -358,7 +419,9 @@ function createHubClient(options = {}) {
         if (!entry) return;
         pending.delete(frame.nonce);
         cancel(entry.timer);
-        entry.resolve(frame.type === "ack" ? { ok: true } : { ok: false, reason: typeof frame.reason === "string" ? frame.reason : "failed", retryAfter: Number.isFinite(frame.retryAfter) ? frame.retryAfter : undefined });
+        entry.resolve(frame.type === "ack"
+          ? { ok: true, ...(SNOWFLAKE.test(String(frame.messageId)) ? { messageId: String(frame.messageId) } : {}) }
+          : { ok: false, reason: typeof frame.reason === "string" ? frame.reason : "failed", retryAfter: Number.isFinite(frame.retryAfter) ? frame.retryAfter : undefined });
         return;
       }
       case "error":
@@ -381,6 +444,38 @@ function createHubClient(options = {}) {
 
   function sendNowPlaying() {
     send(nowPlaying ? { type: "nowPlaying", track: nowPlaying } : { type: "nowPlaying", track: null });
+  }
+
+  // An HTTP call with the hub session, renewed once when the hub says it
+  // lapsed. Refusals keep the hub's own error, reason and retryAfter.
+  async function authed(method, path, body) {
+    if (!session) return { ok: false, error: state === "error" ? error : "offline" };
+    let answer = await request(method, path, body, session.token);
+    if (!answer.ok && answer.status === 401) {
+      const fresh = await openSession();
+      if (!fresh.ok) return { ok: false, error: fresh.error };
+      session = fresh.session;
+      answer = await request(method, path, body, session.token);
+    }
+    return answer;
+  }
+  const refused = (answer) => ({ ok: false, error: answer.error, ...(answer.reason ? { reason: answer.reason } : {}), ...(answer.retryAfter != null ? { retryAfter: answer.retryAfter } : {}) });
+  const bad = () => Promise.resolve({ ok: false, error: "bad-request" });
+  const id = (value) => OPAQUE_ID.test(String(value ?? ""));
+  async function simple(method, path, body) {
+    const answer = await authed(method, path, body);
+    return answer.ok ? { ok: true } : refused(answer);
+  }
+  async function one(method, path, body, key, shape) {
+    const answer = await authed(method, path, body);
+    if (!answer.ok) return refused(answer);
+    const value = shape(answer.data[key]);
+    return value ? { ok: true, [key]: value } : { ok: false, error: "failed" };
+  }
+  async function many(path, key, shape) {
+    const answer = await authed("GET", path);
+    if (!answer.ok) return refused(answer);
+    return { ok: true, [key]: Array.isArray(answer.data[key]) ? answer.data[key].map(shape).filter(Boolean) : [] };
   }
 
   return {
@@ -409,18 +504,76 @@ function createHubClient(options = {}) {
       if (token) await request("DELETE", "/v1/session", undefined, token);
       return status();
     },
+    // Listed rooms plus the member's own.
     async rooms() {
-      if (!session) return { ok: false, error: state === "error" ? error : "offline" };
-      let answer = await request("GET", "/v1/rooms", undefined, session.token);
-      if (!answer.ok && answer.status === 401) {
-        const fresh = await openSession();
-        if (!fresh.ok) return { ok: false, error: fresh.error };
-        session = fresh.session;
-        answer = await request("GET", "/v1/rooms", undefined, session.token);
-      }
-      if (!answer.ok) return { ok: false, error: answer.error };
-      const list = Array.isArray(answer.data.rooms) ? answer.data.rooms.map(roomSummary).filter(Boolean) : [];
-      return { ok: true, rooms: list };
+      const answer = await many("/v1/rooms", "rooms", roomSummary);
+      return answer.ok ? answer : { ok: false, error: answer.error };
+    },
+    // ---- Rooms, requests and invites (Friends › Rooms) -----------------------
+    // Each call checks its arguments against the protocol's shapes before it
+    // leaves, and answers { ok, ... } or the hub's { ok: false, error, reason? }.
+    createRoom(fields = {}) {
+      const name = line(fields?.name, 80);
+      if (!name || !["hangout", "cowork"].includes(fields.kind) || !["request", "invite"].includes(fields.policy) || typeof fields.listed !== "boolean") return bad();
+      return one("POST", "/v1/rooms", { kind: fields.kind, name, policy: fields.policy, listed: fields.listed }, "room", roomSummary);
+    },
+    requestJoin(roomId, note = "") {
+      if (!id(roomId) || typeof note !== "string" || note.length > 300) return bad();
+      return one("POST", `/v1/rooms/${roomId}/requests`, note.trim() ? { note: text(note, 300) } : {}, "request", joinRequest);
+    },
+    requests() { return many("/v1/requests", "requests", joinRequest); },
+    decide(requestId, decision) {
+      if (!id(requestId) || !["approve", "deny"].includes(decision)) return bad();
+      return one("POST", `/v1/requests/${requestId}/decide`, { decision }, "request", joinRequest);
+    },
+    cancelRequest(requestId) { return id(requestId) ? simple("POST", `/v1/requests/${requestId}/cancel`) : bad(); },
+    invite(roomId, userId) {
+      if (!id(roomId) || !SNOWFLAKE.test(String(userId ?? ""))) return bad();
+      return one("POST", `/v1/rooms/${roomId}/invites`, { userId: String(userId) }, "invite", roomInvite);
+    },
+    invites() { return many("/v1/invites", "invites", roomInvite); },
+    acceptInvite(inviteId) { return id(inviteId) ? one("POST", `/v1/invites/${inviteId}/accept`, undefined, "room", roomSummary) : bad(); },
+    declineInvite(inviteId) { return id(inviteId) ? simple("POST", `/v1/invites/${inviteId}/decline`) : bad(); },
+    leave(roomId) { return id(roomId) ? simple("POST", `/v1/rooms/${roomId}/leave`) : bad(); },
+    removeMember(roomId, userId) { return id(roomId) && SNOWFLAKE.test(String(userId ?? "")) ? simple("POST", `/v1/rooms/${roomId}/members/${userId}/remove`) : bad(); },
+    lock(roomId) { return id(roomId) ? one("POST", `/v1/rooms/${roomId}/lock`, undefined, "room", roomSummary) : bad(); },
+    unlock(roomId) { return id(roomId) ? one("POST", `/v1/rooms/${roomId}/unlock`, undefined, "room", roomSummary) : bad(); },
+    close(roomId) { return id(roomId) ? simple("POST", `/v1/rooms/${roomId}/close`) : bad(); },
+    async searchMembers(query) {
+      const q = typeof query === "string" ? query.trim() : "";
+      if (!q || q.length > 32 || !ONE_LINE.test(q)) return { ok: false, error: "bad-request" };
+      const answer = await authed("GET", `/v1/members/search?q=${encodeURIComponent(q)}`);
+      if (!answer.ok) return refused(answer);
+      return { ok: true, members: Array.isArray(answer.data.members) ? answer.data.members.map(user).filter(Boolean).slice(0, 10) : [] };
+    },
+    // Up to 50 messages, oldest first; `before` pages back from a message id.
+    async messages(roomId, before = null) {
+      if (!id(roomId) || (before != null && !SNOWFLAKE.test(String(before)))) return { ok: false, error: "bad-request" };
+      const answer = await authed("GET", `/v1/rooms/${roomId}/messages${before ? `?before=${before}` : ""}`);
+      if (!answer.ok) return refused(answer);
+      return { ok: true, messages: Array.isArray(answer.data.messages) ? answer.data.messages.map(roomMessage).filter(Boolean) : [], hasMore: answer.data.hasMore === true };
+    },
+    report(roomId, messageId, reason) {
+      const why = typeof reason === "string" ? reason.trim() : "";
+      if (!id(roomId) || !SNOWFLAKE.test(String(messageId ?? "")) || !why || why.length > 500) return bad();
+      return simple("POST", "/v1/reports", { roomId, messageId: String(messageId), reason: text(why, 500) });
+    },
+    // Room chat over the socket: an ack (with the Discord message id) or a
+    // nack with the hub's reason, or "timeout" after 10 s. Nothing retries
+    // on its own.
+    sendMessage(roomId, message) {
+      const body = postText(message);
+      if (!id(roomId) || !body) return Promise.resolve({ ok: false, reason: "bad-request" });
+      return withAck({ type: "send", roomId, text: body });
+    },
+    editMessage(roomId, messageId, message) {
+      const body = postText(message);
+      if (!id(roomId) || !SNOWFLAKE.test(String(messageId ?? "")) || !body) return Promise.resolve({ ok: false, reason: "bad-request" });
+      return withAck({ type: "edit", roomId, messageId: String(messageId), text: body });
+    },
+    deleteMessage(roomId, messageId) {
+      if (!id(roomId) || !SNOWFLAKE.test(String(messageId ?? ""))) return Promise.resolve({ ok: false, reason: "bad-request" });
+      return withAck({ type: "delete", roomId, messageId: String(messageId) });
     },
     subscribe(roomId) {
       if (!OPAQUE_ID.test(String(roomId))) return false;
@@ -475,5 +628,5 @@ function createHubClient(options = {}) {
 
 module.exports = {
   PROTOCOL_VERSION, HUB_URL, LISTEN_PROVIDERS, NOW_PLAYING_PROVIDERS, LISTEN_ACTIONS, BACKOFF_MS, PRESENCE_EVERY_MS, SESSION_MARGIN_MS,
-  hubAddress, configuredUrl, listenSession, nowPlayingTrack, roomSummary, createHubClient,
+  hubAddress, configuredUrl, listenSession, nowPlayingTrack, roomSummary, roomMessage, joinRequest, roomInvite, postText, createHubClient,
 };

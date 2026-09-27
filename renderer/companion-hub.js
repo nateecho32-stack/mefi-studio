@@ -243,6 +243,7 @@
     host.orb.addEventListener("pointerenter", () => { lastTouch = Date.now(); wake(); });
     scheduleAntic();
     window.MefiPcSync?.subscribe?.(() => syncBadge());
+    window.MefiRooms?.subscribe?.(() => syncBadge());
     syncBadge();
     layer.addEventListener("click", (event) => { if (event.target === layer) close(); });
     layer.addEventListener("keydown", trap);
@@ -333,8 +334,11 @@
       if (playground) el.extra.append(playground);
       el.extra.append(action("Friends & listening rooms", () => { window.MefiMusic?.openAudio?.(); window.MefiMusic?.setSource?.("link"); window.MefiMusic?.togetherHost?.()?.scrollIntoView({ block: "nearest" }); }),
         action("Connect with Discord", () => window.MefiNav?.go("community")));
-      // Friends › Your PCs (renderer/pc-sync.js) stays in the hub: Sync this
-      // PC answers in place instead of navigating away.
+      // Friends › Rooms (renderer/rooms.js) and Friends › Your PCs
+      // (renderer/pc-sync.js) stay in the hub: they answer in place instead
+      // of navigating away.
+      const rooms = window.MefiRooms?.panel?.();
+      if (rooms) el.extra.append(rooms);
       const pcs = window.MefiPcSync?.card?.();
       if (pcs) el.extra.append(pcs);
     } else {
@@ -405,17 +409,21 @@
       for (const key of ["width", "left", "top", "bottom", "maxHeight"]) host.panel.style[key] = "";
     }
   }
-  // Friends › Your PCs (renderer/pc-sync.js): work only this PC holds, commits
-  // waiting on GitHub, or a GitHub that could not be checked.
+  // The Friends badge: room invites to answer and join requests to decide
+  // (renderer/rooms.js), plus Your PCs (renderer/pc-sync.js): work only this
+  // PC holds, commits waiting on GitHub, or a GitHub that could not be checked.
   function syncBadge() {
     const friends = el.stage?.querySelector('[data-hub-section="friends"]');
     if (!friends) return;
-    const count = window.MefiPcSync?.badge?.() ?? 0;
+    const pcs = window.MefiPcSync?.badge?.() ?? 0;
+    const rooms = window.MefiRooms?.pending?.() ?? 0;
+    const count = pcs + rooms;
     let badge = friends.querySelector(".agent-hub-count");
     if (!badge) { badge = node("span", "agent-hub-count"); friends.append(badge); }
     badge.hidden = !count; badge.textContent = count > 9 ? "9+" : String(count);
     const hint = items.find(([id]) => id === "friends")[3];
-    friends.setAttribute("aria-label", count ? `Friends · ${count} to sync between your PCs` : `Friends · ${hint}`);
+    const parts = [rooms ? `${rooms} waiting in Rooms` : "", pcs ? `${pcs} to sync between your PCs` : ""].filter(Boolean);
+    friends.setAttribute("aria-label", parts.length ? `Friends · ${parts.join(", ")}` : `Friends · ${hint}`);
   }
   function update(next) {
     if (next) data = next;

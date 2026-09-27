@@ -54,13 +54,14 @@ app.whenReady().then(async () => {
     firstScanApply: { ok: true, summary: "Use the local connection." }, firstMap: { ok: true, summary: "A small project.", ideas: { added: 0 } }, firstAssist: { ok: true, advice: { summary: "Ready for our next step." } },
     assistantAnswer: { ok: true }, getAiRouting: { provider: "custom", models: {}, providerModels: {} }, cliStatus: [],
     syncStatus: { ok: true, checkedAt: 1790000000000, headline: "GitHub has 2 commits this PC has not pulled yet.", lines: ["GitHub has 2 commits this PC has not pulled yet.", "Branch wip/a-very-long-branch-name-from-another-pc on GitHub: 3 commits not on main."], pending: [{ kind: "github-branch" }], state: { repo: true, remote: true, device: "DESKTOP-FIXTURE", behind: 2 } },
-    hubFriends: friendsView(true), hubSharingSet: friendsView(false), hubPlaydate: practice, hubRooms: { ok: true, rooms: [{ id: "room_jam", name: "Friday jam" }] },
+    hubFriends: friendsView(true), hubSharingSet: friendsView(false), hubPlaydate: practice, hubRooms: { ok: true, rooms: [{ id: "room_jam", name: "Friday jam", kind: "hangout", policy: "request", listed: true, status: "active", you: "owner", ownerId: "123456789012345678", memberCount: 2, maxMembers: 25 }] },
+    hubStatus: { ok: true, status: { configured: true, linked: true, state: "ready", user: { id: "123456789012345678", name: "Mefi" }, paused: false, rooms: [] } },
     companionBond: { ok: true, changed: true, bond: "We just met · 1 pet" }, eyesRequestsAction: { ok: true, requests: [] }, assistantWorkOn: { ok: true },
     pcSetupStatus: { ok: true, ready: false, account: "fixture-owner", tools: [{ id: "git", name: "Git", installed: true, version: "2.47.1" }, { id: "gh", name: "GitHub CLI", installed: true, version: "2.63.0" }, { id: "node", name: "Node.js", installed: true, version: "24.21.0" }], project: { root: "C:/Sample/Little planet", github: "fixture-owner/little-planet", hook: true }, steps: [{ id: "install-deps", label: "Install the project's packages", why: "Not installed on this PC yet." }], notes: ["This project is on an exFAT drive. Git cannot keep separate worktrees there, so sessions end up sharing one folder. Move the project to an NTFS drive when you can."] },
     syncRun: { ok: true, checkedAt: 1790000060000, headline: "This PC matches GitHub main.", lines: ["This PC matches GitHub main.", "Pulled 2 commits from GitHub."], pending: [], state: { repo: true, remote: true, device: "DESKTOP-FIXTURE", behind: 0 } },
   };
   const preload = path.join(root, "preload.cjs");
-  fs.writeFileSync(preload, `const {contextBridge}=require('electron');const replies=${JSON.stringify(replies)},calls=[];let chatReply;const api=Object.fromEntries(Object.keys(replies).map(key=>[key,async(...args)=>{calls.push({key,args});return replies[key];}]));api.assistantMessage=(...args)=>{calls.push({key:'assistantMessage',args});return new Promise(resolve=>{chatReply=resolve;});};let syncListener=null;api.onSyncEvent=fn=>{syncListener=fn;};contextBridge.exposeInMainWorld('mefiStudio',api);contextBridge.exposeInMainWorld('hubFixture',{calls:()=>calls,pushSync:result=>syncListener?.(result),completeChat:ok=>{chatReply?.({ok,error:ok?undefined:'Try again when connected.'});chatReply=null;},setState:state=>{replies.companionState.state=state;},patch:fields=>{Object.assign(replies.companionState,fields);}});localStorage.setItem('mefiStudio.commandHome','0');localStorage.setItem('mefiStudio.motion','on');localStorage.setItem('mefiStudio.zen','0');localStorage.setItem('mefiStudio.zenReactive','0');localStorage.setItem('mefiStudio.setupHelper.seen','setup-helper-1');`);
+  fs.writeFileSync(preload, `const {contextBridge}=require('electron');const replies=${JSON.stringify(replies)},calls=[];let chatReply;const api=Object.fromEntries(Object.keys(replies).map(key=>[key,async(...args)=>{calls.push({key,args});return replies[key];}]));api.assistantMessage=(...args)=>{calls.push({key:'assistantMessage',args});return new Promise(resolve=>{chatReply=resolve;});};let syncListener=null;api.onSyncEvent=fn=>{syncListener=fn;};const roomReplies={requests:{ok:true,requests:[{id:"req_1",roomId:"room_jam",requester:{id:"223456789012345678",name:"Aksana"},note:"Can I bring snacks?",status:"pending",createdAt:1790000000000}]},invites:{ok:true,invites:[]},messages:{ok:true,hasMore:false,messages:[{id:"423456789012345678",author:{id:"223456789012345678",name:"Aksana",viaStudio:true},text:"hi <@123456789012345678>, ready for Friday?",createdAt:1790000000000,editedAt:null,mentions:[{id:"123456789012345678",name:"Mefi"}],attachments:[]}]},sendMessage:{ok:true,messageId:"523456789012345678"}};api.hubRoom=async(method,...args)=>{calls.push({key:'hubRoom',args:[method,...args]});return roomReplies[method]??{ok:true};};contextBridge.exposeInMainWorld('mefiStudio',api);contextBridge.exposeInMainWorld('hubFixture',{calls:()=>calls,pushSync:result=>syncListener?.(result),completeChat:ok=>{chatReply?.({ok,error:ok?undefined:'Try again when connected.'});chatReply=null;},setState:state=>{replies.companionState.state=state;},patch:fields=>{Object.assign(replies.companionState,fields);}});localStorage.setItem('mefiStudio.commandHome','0');localStorage.setItem('mefiStudio.motion','on');localStorage.setItem('mefiStudio.zen','0');localStorage.setItem('mefiStudio.zenReactive','0');localStorage.setItem('mefiStudio.setupHelper.seen','setup-helper-1');`);
   win = new BrowserWindow({ show: false, width: 1280, height: 900, frame: false, webPreferences: { preload, sandbox: true, contextIsolation: true, nodeIntegration: false, offscreen: true, backgroundThrottling: false } });
   const wc = win.webContents; wc.setAudioMuted(true); wc.setFrameRate(30); wc.setWindowOpenHandler(() => ({ action: "deny" }));
   wc.on("console-message", (_event, detail, legacy) => { if (detail?.level === "error" || detail === 3) report.errors.push(detail?.message || legacy); });
@@ -138,15 +139,32 @@ app.whenReady().then(async () => {
   await click("#pc-sync-run");
   await until("document.querySelector('#agent-hub .pc-sync')?.dataset.state==='clean'", "Sync this PC");
   assert.equal(await run("return window.MefiCompanionHub.isOpen() && document.getElementById('pc-sync-status').textContent;"), "This PC matches GitHub main.", "the answer lands inside the hub");
-  await until("document.querySelector('[data-hub-section=\"friends\"] .agent-hub-count')?.hidden===true", "a clean sync clears the badge");
+  // A clean sync leaves only the room request on the badge.
+  await until("document.querySelector('[data-hub-section=\"friends\"] .agent-hub-count')?.textContent==='1'", "a clean sync clears Your PCs from the badge");
+  assert.equal(await run("return document.querySelector('[data-hub-section=\"friends\"]').getAttribute('aria-label');"), "Friends · 1 waiting in Rooms");
   await capture("09-friends-synced"); report.pcs = true;
+  // Rooms loads above Your PCs; let it settle before clicking below it.
+  await until("document.getElementById('rooms')?.dataset.state==='ready' && document.getElementById('rooms-tab-requests')?.textContent==='Requests (1)'", "Rooms lists the room and its request");
   // Set up this PC opens in place and only then checks the PC.
   assert.equal(await run("return hubFixture.calls().some(call=>call.key==='pcSetupStatus');"), false, "nothing is checked until the section opens");
+  // Out of the way of the panel's "more below" arrow, which sits at the edge.
+  await run("document.querySelector('#pc-setup > summary').scrollIntoView({block:'center'});"); await sleep(150);
   await click("#pc-setup > summary");
   await until("document.getElementById('pc-setup-status')?.textContent==='A few things to finish on this PC:'", "Set up this PC checks");
   assert.equal(await run("return document.querySelectorAll('#pc-setup .pc-setup-list li').length;"), 7);
   assert.ok(await run("const el=document.querySelector('#pc-setup [data-step=\"install-deps\"]');el.scrollIntoView({block:'nearest'});const r=el.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return r.width>0&&(hit===el||el.contains(hit));"), "the setup step is clickable");
   await capture("09b-friends-setup"); report.setup = true;
+  // Friends › Rooms: the request tab counts, the room opens with its chat as
+  // text, and a message goes out through hub:room.
+  await until("document.getElementById('rooms')?.dataset.state==='ready' && document.getElementById('rooms-tab-requests')?.textContent==='Requests (1)'", "Rooms lists the room and its request");
+  await click("#rooms [data-room=\"room_jam\"] .rooms-button");
+  await until("document.querySelector('#rooms .rooms-message-text')?.textContent==='hi @Mefi, ready for Friday?'", "the room opens with its chat");
+  await run("const box=document.getElementById('rooms-compose');box.value='Yes! Snacks welcome.';");
+  await click("#rooms-send");
+  await until("hubFixture.calls().some(call=>call.key==='hubRoom'&&call.args[0]==='sendMessage')", "the message goes out");
+  assert.deepEqual(await run("return hubFixture.calls().find(call=>call.key==='hubRoom'&&call.args[0]==='sendMessage').args;"), ["sendMessage", "room_jam", "Yes! Snacks welcome."]);
+  assert.ok(await run("const el=document.getElementById('rooms-send');el.scrollIntoView({block:'nearest'});const r=el.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return r.width>0&&(hit===el||el.contains(hit));"), "Send is clickable in the hub");
+  await capture("09c-friends-rooms"); await click("#rooms-back"); report.rooms = true;
   // Friends › Playground: a friend who shares more makes the companion ask;
   // nothing is shared back until the owner answers.
   await until("document.getElementById('friends-status')?.textContent.includes(\"1 friend's companion is out\") && document.querySelector('.friends-ask')", "playground lists a friend");

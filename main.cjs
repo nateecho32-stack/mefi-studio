@@ -1832,6 +1832,20 @@ const hubRooms = () => hubCall((client) => client.rooms());
 const hubSubscribe = (roomId, on) => hubCall((client) => ({ ok: on ? client.subscribe(roomId) : client.unsubscribe(roomId) }));
 const hubListen = (payload) => hubCall((client) => client.listen(payload?.roomId, payload ?? {}));
 const hubNowPlaying = (track) => hubCall((client) => ({ ok: client.setNowPlaying(track) }));
+// Friends › Rooms (renderer/rooms.js): creating rooms, joining by request or
+// invite, deciding requests, and room chat. The renderer names a method from
+// this list and passes plain arguments; the client checks every argument
+// against the protocol again before anything leaves.
+const HUB_ROOM_METHODS = Object.freeze({
+  createRoom: 1, requestJoin: 2, requests: 0, decide: 2, cancelRequest: 1, invite: 2, invites: 0, acceptInvite: 1, declineInvite: 1,
+  leave: 1, removeMember: 2, lock: 1, unlock: 1, close: 1, searchMembers: 1, messages: 2, report: 3, sendMessage: 2, editMessage: 3, deleteMessage: 2,
+});
+function hubRoom(method, args) {
+  const arity = Object.hasOwn(HUB_ROOM_METHODS, method) ? HUB_ROOM_METHODS[method] : -1;
+  if (arity < 0 || !Array.isArray(args) || args.length > arity) return Promise.resolve({ ok: false, error: "bad-request" });
+  const plain = args.map((value) => (value == null || ["string", "number", "boolean"].includes(typeof value) ? value : typeof value === "object" && !Array.isArray(value) ? { ...value } : null));
+  return hubCall((client) => client[method](...plain));
+}
 // ---- end of the rooms hub ---------------------------------------------------
 
 // ---- Multi-PC sync: Friends › Your PCs ---------------------------------------
@@ -20001,6 +20015,8 @@ function registerIpc() {
   ipcMain.handle("hub:subscribe", async (_event, payload) => hubSubscribe(payload?.roomId, payload?.on !== false));
   ipcMain.handle("hub:listen", async (_event, payload) => hubListen(payload));
   ipcMain.handle("hub:now-playing", async (_event, payload) => hubNowPlaying(payload?.track ?? null));
+  // Friends › Rooms: one channel, HUB_ROOM_METHODS decides what it may call.
+  ipcMain.handle("hub:room", async (_event, payload) => hubRoom(String(payload?.method ?? ""), Array.isArray(payload?.args) ? payload.args : []));
   // Companion friends (the "Companion friends" block): what friends' companions
   // may see, the friends out now, and playdates.
   ipcMain.handle("hub:friends", async (_event, payload) => friendsView(payload ?? {}));

@@ -57,6 +57,7 @@ const CODE_SOURCES = [
   "together.js",
   "pc-sync.js",
   "companion-friends.js",
+  "rooms.js",
   "planning.js",
   "onboarding.js",
   "community.js",
@@ -166,6 +167,7 @@ export async function build({ root = ROOT } = {}) {
   ]);
   const mediaBrowser = await readFile(path.join(RENDERER, "media-browser.js"), "utf8");
   const companionFriends = await readFile(path.join(RENDERER, "companion-friends.js"), "utf8");
+  const roomsCode = await readFile(path.join(RENDERER, "rooms.js"), "utf8");
   const nodeVisuals = await readFile(path.join(RENDERER, "node-visuals.js"), "utf8");
   const projectMapView = await readFile(path.join(RENDERER, "project-map-view.js"), "utf8");
   const fileInputs = await readFile(path.join(RENDERER, "file-inputs.js"), "utf8");
@@ -176,7 +178,7 @@ export async function build({ root = ROOT } = {}) {
   const [setupHelper, setupHelperStyles] = await Promise.all([readFile(path.join(RENDERER, "setup-helper.js"), "utf8"), readFile(path.join(RENDERER, "setup-helper.css"), "utf8")]);
   const [traceCode, traceStyles] = await Promise.all([readFile(path.join(RENDERER, "trace.js"), "utf8"), readFile(path.join(RENDERER, "trace.css"), "utf8")]);
   const [configCode, configStyles] = await Promise.all([readFile(path.join(RENDERER, "config-dialog.js"), "utf8"), readFile(path.join(RENDERER, "config-dialog.css"), "utf8")]);
-  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, motion, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle, cameraTour, explorer, analyzer, tasks, ideas, overhead, brains, palette, configCode, eyes, traceCode, boot, startup, workspace, mediaWindow, mediaBrowser, music, together, pcSync, companionFriends, planning, onboarding, community, demoPanel, autonomyUi, companionUi, companionHub, projectMapView, agentBrain, agents, setupHelper, vibePanels, vibe, booklet];
+  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, motion, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle, cameraTour, explorer, analyzer, tasks, ideas, overhead, brains, palette, configCode, eyes, traceCode, boot, startup, workspace, mediaWindow, mediaBrowser, music, together, pcSync, companionFriends, roomsCode, planning, onboarding, community, demoPanel, autonomyUi, companionUi, companionHub, projectMapView, agentBrain, agents, setupHelper, vibePanels, vibe, booklet];
   const code = codeParts.join("\n");
   const html = template
     // "</" and "<!--" escaped: a fetched model name holding "</script>" would

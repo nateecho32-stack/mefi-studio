@@ -72,6 +72,15 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   route. Settings hides the Server Styler card until its checkout exists. The
   docs give the PowerShell headless key form and say what source and
   portable installs share.
+- **Friends › Rooms.** The room service's rooms, requests and invites in
+  Studio. Browse your rooms and the listed ones, ask to join with a note, and
+  cancel a request. Accept or decline invites. Let requesters in or decline
+  them, invite people by name, lock or close rooms you own, and make new ones.
+  Each room has its chat: plain text with @names, links never made
+  clickable, and a message that did not go through kept with the reason.
+  Waiting invites and requests are counted on the Friends badge. The hub
+  client checks every argument against the hub protocol before it leaves,
+  and main allows only a fixed list of room calls.
 - **The companion as a pet and a friend.** Its menu is six bubbles with one
   job each: Talk (with three one-tap starters), What I'm doing (the work, the
   team and recent activity together), Needs you, Suggest work (your idea to

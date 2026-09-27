@@ -201,6 +201,14 @@ const api = {
   } : null),
   hubNowPlaying: (track) => ipcRenderer.invoke("hub:now-playing", { track: track && typeof track === "object" ? { label: String(track.label ?? ""), provider: String(track.provider ?? ""), ...(typeof track.url === "string" ? { url: track.url } : {}) } : null }),
   onHubEvent: (callback) => ipcRenderer.on("hub:event", (_event, payload) => callback(payload)),
+  // Friends › Rooms (main.cjs HUB_ROOM_METHODS): a method name and plain
+  // arguments (strings, numbers, booleans, one flat object); main allows only
+  // the listed methods and the hub client checks every argument.
+  hubRoom: (method, ...args) => ipcRenderer.invoke("hub:room", {
+    method: typeof method === "string" ? method : "",
+    args: args.slice(0, 3).map((value) => (value == null || ["string", "number", "boolean"].includes(typeof value) ? value
+      : typeof value === "object" && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).filter(([, item]) => ["string", "number", "boolean"].includes(typeof item)).slice(0, 8)) : null)),
+  }),
   // Companion friends (main.cjs "Companion friends"): what friends' companions
   // may see, the friends out now and playdates. Only named fields cross.
   hubFriends: (profile) => ipcRenderer.invoke("hub:friends", { ...(typeof profile?.name === "string" ? { name: profile.name.slice(0, 40) } : {}) }),

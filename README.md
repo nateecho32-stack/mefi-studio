@@ -149,6 +149,8 @@ The full feature walkthrough, in Studio's own vocabulary with a glossary, is in 
 
 The [Void Engine Discord](https://discord.gg/xgfKc5pVxG) is where people share projects, ask for feedback and hang out while they build. Unfinished ideas are welcome. Come meet **Studio**, our new Discord bot, and help shape what it becomes.
 
+**Rooms** (Friends › Rooms, on the Void Engine room service) lists your rooms and the listed ones you can join. You can **Ask to join** with a short note, or accept or decline an invite. For rooms you own, you can let requesters in or decline them, invite people by name, lock or close the room, and make new rooms (hangout or cowork, open to requests or invite-only, listed or not). Each room has its chat, shown as plain text with @names; links are never clickable. A message that does not go through stays in the box with the reason. Invites and requests waiting for you are counted on the Friends bubble. Rooms need the room service's address in the build and a linked Discord account; until then the panel says what is missing.
+
 Every theme and node style is free in 0.4.4, including the Void collection. Discord membership is optional.
 
 Shared watch-and-listen rooms in the desktop app are still rolling out and need a configured rooms hub and Discord connection. The personal media player is available now. In-app cowork rooms and an optional **“Hey Studio”** voice popup are future ideas, not features included in 0.4.4.
