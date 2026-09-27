@@ -1367,3 +1367,83 @@ When an Elevated card exhausts its daily two-settle budget, a ledger-backed
 without refunding either retry. Studio-classified owner leftovers can reuse
 an existing explicit family decision; dropping owner work still follows its
 elevated switch. The policy is checked again after the pending ledger save.
+
+## 14. Work done outside Studio
+
+The owner also works on a project without Studio: commits by hand, another
+editor, a Claude Code or OpenCode session in the same folder. Studio used to
+reopen as if nothing had happened, so the assistant could not say what had
+changed and the queue sent workers to build cards that were already finished
+or made pointless. The pure rules are `scripts/outside-work.cjs`; the host is
+the "work done outside Studio" block in `main.cjs` (`outsideWork*`).
+
+- **The last look.** Per project, `data/projects/<id>/outside-work.json` keeps
+  one `look`: the git HEAD, branch and uncommitted paths
+  (`status --porcelain=v1 -z`) and when it was taken. It follows the folder
+  while Studio watches it: every five minutes while the window is shown
+  (`outsideWorkStartTimer`), 15 s after each run settles
+  (`outsideWorkRefreshSoon`, called from `finish`), when the folder is left for
+  another (`outsideWorkLeave`, from `adoptProject`, bounded to 3 s), and at
+  quit (`outsideWorkQuit`: HEAD by a synchronous `rev-parse` and the time). So
+  Studio's own workers' commits and edits are always inside the look. Every
+  git call passes `--no-optional-locks`, so it never takes the index lock a
+  worker needs, and withholds Studio's credentials.
+- **The report.** `loadAssistant` (a launch or a switch) starts
+  `outsideWorkScan("open")` in the background; the welcome-back digest
+  (`companion:welcome`) starts one too, at most every two minutes and never
+  while a worker is live or a settle's refresh is pending, since a worker's
+  edits in progress would read as outside work. `outsideWork.report` compares
+  the look with the folder now: commits from the look's HEAD
+  (`base..HEAD`, `--no-merges`), or by date when that HEAD is no longer an
+  ancestor (a rebase, reset or branch switch: `rewritten`); uncommitted paths
+  edited after the look (by mtime, or newly uncommitted and unreadable, like a
+  deletion); and agent sessions in the folder since then: OpenCode's store,
+  minus sessions Studio's attempts recorded, and Claude Code transcripts under
+  `~/.claude/projects/<path with non-alphanumerics as dashes>`, titled by their
+  first user line (only the first 64 KB is read). A first open with this build
+  has no look; the assistant's last heartbeat (`closedAt`) stands in, so
+  commits after it still count by date. A folder that is not a git checkout
+  still reports outside sessions.
+- **Where it goes.** A notice in the thread (`reportNotice`: the headline,
+  the first commits and sessions); the chat payload's `outside` section
+  (`chatFacts`, packed after `events` with a 2,600-character budget, and named
+  in `ASSISTANT_CHAT_SYSTEM`) while the report is under a day old or one of its
+  cards still waits for the owner; and the companion's welcome-back digest
+  (`digestPart`, greeted once per report).
+- **Every queued card is checked.** The scan stamps each queued card
+  (`candidates`: open, not grouped, not already checked against this report)
+  with `relevance: { state: "checking" }` (`checkingStamp`).
+  `backlog.workState` reads it as `deferred` / `blockedBy: "relevance-check"`,
+  so the dispatcher skips it (`idleStopReason` "checking"), for at most six
+  hours (`CHECK_HOLD_MS`) in case no check ever runs. The check
+  (`outsideWorkCheck`) waits for the owner: after the launch screen's choice or
+  with the agents running (`outsideWorkMayCheck`), kicked by the scan,
+  `startup:choose` and the foreman (`outsideWorkPending`). It is one model call
+  over up to 24 cards (`relevancePrompt`: the report and each card's title,
+  brief and files, all as data), with a 60 s budget, whose reply
+  `parseVerdicts` checks against the offered ids, the four verdicts and the
+  report's commits. Without a usable model, or for cards past the first 24,
+  `localVerdict` judges from `evidence`: files the card names that changed, and
+  commit or session subjects that share at least two of its title's words.
+- **Verdicts.** `needed` and `partial` clear the hold (`verdictStamp` state
+  `clear`); a partial card's worker, and any card the outside work touched,
+  reads `briefLine` in its prompt (`workerPrompt`'s `outside` section): what
+  changed, "build only what is still missing", and if everything is already
+  there, change nothing, run the checks and report done. `done` and `obsolete`
+  keep the card held (`state: "ask"`, `blockedBy: "relevance"`, needsYou) and
+  raise an Ask card (`question`, source `relevance`) with **Mark it done**,
+  **Drop it**, **Build it anyway** and **Leave it for review**. A local match
+  asks "may already be done", never "looks already done". The thread gets one
+  line for the whole check (`verdictNotice`).
+- **Only the owner answers.** `outsideWorkDecide` handles the Ask card's
+  options (owner only; `autonomy.canDelegate` refuses source `relevance` in
+  every mode, `delegateRetry` refuses the hold, and the decide pass skips the
+  card). Try again (`retryTask`) and Work on it (`assistantWorkOn`) also lift
+  the hold, keeping the evidence for the worker; an ask whose card no longer
+  waits on it is retired (`assistantRetireGoneAsks`). `decision-ledger` keeps
+  `relevance` among its restorable fields.
+
+Tests: `tests/outside_work.test.mjs` (the module, and how backlog, companion,
+executor-core and autonomy read its stamps) and
+`tests/outside_work_host.test.mjs` (the host block sliced into a vm against a
+real temporary git repository and a fake home).

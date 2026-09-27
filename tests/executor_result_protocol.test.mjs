@@ -157,9 +157,9 @@ test("the worker prompt teaches the owner: part of the result line", async () =>
   h.wake(); await h.pump();
   const prompt = h.starts[0].child.prompt;
   assert.ok(prompt.includes("MEFI_RESULT: done: <what you finished>; remaining: <what this task still owes, or none>; owner: <what only the owner can do, or leave it out>"));
-  assert.ok(prompt.includes("Anything only the owner can do (board changes, Studio's task store, another session's files) goes under owner:, never under remaining: or MEFI_NEXT."));
+  assert.ok(prompt.includes("A concrete human decision, missing access or physical action goes under owner:, never under remaining: or MEFI_NEXT."));
   // The cmd.exe route turns double quotes into spaces.
-  assert.match(prompt, /Use\W+owner\W+for something only the owner can do/);
+  assert.match(prompt, /Use\W+owner\W+only for a concrete human decision/);
   assert.match(prompt, /\|verify\|owner> ::/);
   assert.match(prompt, /Print the exact line MEFI_JOB_DONE as the last thing you say\.$/);
 });
@@ -250,4 +250,19 @@ test("the live map's per-run cap bounds how many asks one run raises", async () 
   await fresh.finish("task_nocap_fixture", { lines });
   await settleRaises();
   assert.deepEqual(all.map((issue) => issue.title), ["one", "two", "three"]);
+});
+
+
+test("unfinished repairs cannot be hidden under owner even with a green check or previous verification", () => {
+  const green = { command: "npm test", status: "completed", exitCode: 0, passed: true, startedAt: 100 };
+  for (const priorVerified of [false, true]) {
+    const result = verifyCompletion({ verdictOk: true, changedFiles: priorVerified ? 0 : 1, hasSession: true,
+      observedChecks: [green], priorVerified,
+      resultNote: { parts: { remaining: "none", owner: "reconcile concurrent Analyzer test failures and existing test-history archive conflict" } } });
+    assert.notEqual(result.state, "verified");
+    assert.equal(result.reason, "outstanding obligations remain");
+  }
+  const human = verifyCompletion({ verdictOk: true, changedFiles: 1, hasSession: true, observedChecks: [green],
+    resultNote: { parts: { remaining: "none", owner: "Connect the test device" } } });
+  assert.equal(human.state, "verified", "a separate human action remains in its own lane");
 });

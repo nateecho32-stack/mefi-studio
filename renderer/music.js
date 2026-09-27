@@ -1,6 +1,5 @@
-// Style & sound: Studio's color themes, node styles and layouts, the members'
-// Void collection (its own premium store, gated by MefiCommunity), the
-// local-file player, the ad-free radio decks and the Links player. A pasted
+// Style & sound: Studio's color themes, node styles and layouts (the two-tone
+// Void collection among them, free like the rest), the local-file player, the ad-free radio decks and the Links player. A pasted
 // link plays in its service's official embed (YouTube, Spotify, SoundCloud,
 // Vimeo) or, for a plain audio or video file such as a Discord attachment, in
 // a <video> element of its own; an embed's cross-origin playback state is
@@ -24,13 +23,13 @@
     ember: { name: "Ember", accent: "#dd997a", bright: "#ffc5a9", rgb: "221,153,122", bg: "#100805", panel: "#21150f", muted: "#c0ab9d" },
     aurora: { name: "Aurora", accent: "#71cbb7", bright: "#a7f3da", rgb: "113,203,183", bg: "#050d13", panel: "#101f29", muted: "#abc4c9", text: "#e7f5ee" },
     rose: { name: "Rose", accent: "#dc96af", bright: "#ffbed3", rgb: "220,150,175", bg: "#10080f", panel: "#23141e", muted: "#c6aebc", text: "#f7e5ea" },
-    // The Void collection: members of the Void Engine Discord unlock these (see
-    // scripts/community.cjs, whose SELF_UNLOCKED switch unlocks them in a fork).
-    // Each carries a second hue that the premium tier paints with.
-    void: { name: "Void", accent: "#7c6cff", bright: "#b9b0ff", accent2: "#36d1ff", rgb: "124,108,255", bg: "#030208", panel: "#0b0914", muted: "#a49fc2", text: "#ece9ff", premium: true },
-    eclipse: { name: "Eclipse", accent: "#e8a93c", bright: "#ffd98a", accent2: "#ff6a3d", rgb: "232,169,60", bg: "#040404", panel: "#111013", muted: "#b8ad98", text: "#f3ecdf", premium: true },
-    abyss: { name: "Abyss", accent: "#2fd6c3", bright: "#8ff5e8", accent2: "#7b5cff", rgb: "47,214,195", bg: "#01080b", panel: "#06151a", muted: "#9dbfc0", text: "#e2f7f4", premium: true },
-    dusk: { name: "Neon Dusk", accent: "#ff5fa2", bright: "#ffa3cb", accent2: "#3fd0ff", rgb: "255,95,162", bg: "#0a0512", panel: "#170c24", muted: "#c4a9c9", text: "#fbe9f3", premium: true },
+    // The Void collection, free like every theme: each carries a second hue
+    // (accent2) that the "duo" tier paints with, and the pickers list them
+    // under their own small heading.
+    void: { name: "Void", accent: "#7c6cff", bright: "#b9b0ff", accent2: "#36d1ff", rgb: "124,108,255", bg: "#030208", panel: "#0b0914", muted: "#a49fc2", text: "#ece9ff", collection: "void" },
+    eclipse: { name: "Eclipse", accent: "#e8a93c", bright: "#ffd98a", accent2: "#ff6a3d", rgb: "232,169,60", bg: "#040404", panel: "#111013", muted: "#b8ad98", text: "#f3ecdf", collection: "void" },
+    abyss: { name: "Abyss", accent: "#2fd6c3", bright: "#8ff5e8", accent2: "#7b5cff", rgb: "47,214,195", bg: "#01080b", panel: "#06151a", muted: "#9dbfc0", text: "#e2f7f4", collection: "void" },
+    dusk: { name: "Neon Dusk", accent: "#ff5fa2", bright: "#ffa3cb", accent2: "#3fd0ff", rgb: "255,95,162", bg: "#0a0512", panel: "#170c24", muted: "#c4a9c9", text: "#fbe9f3", collection: "void" },
   };
   const DEFAULT_THEME = "aurora";
   const NODE_STYLES = {
@@ -39,31 +38,15 @@
     minimal: { name: "Minimal", detail: "Quiet points" },
     halo: { name: "Halo", detail: "Luminous rings" },
     crystal: { name: "Crystal", detail: "Faceted gems" },
-    singularity: { name: "Singularity", detail: "A black hole with a turning disc", premium: true },
-    prism: { name: "Prism", detail: "A turning crystal that splits light", premium: true },
-    sigil: { name: "Sigil", detail: "Hex runes that assemble as it works", premium: true },
+    singularity: { name: "Singularity", detail: "A black hole with a turning disc", collection: "void" },
+    prism: { name: "Prism", detail: "A turning crystal that splits light", collection: "void" },
+    sigil: { name: "Sigil", detail: "Hex runes that assemble as it works", collection: "void" },
   };
-  // Saved preferences only ever hold free keys; a premium choice lives in its
-  // own store (PREMIUM_KEY) and shows only while the community layer allows it.
-  const isPremiumTheme = (key) => typeof key === "string" && Object.hasOwn(THEMES, key) && THEMES[key].premium === true;
-  const isFreeTheme = (key) => key === "custom" || typeof key === "string" && Object.hasOwn(THEMES, key) && THEMES[key].premium !== true;
+  // Every theme and node style is free; `collection` only groups the pickers.
+  const isTheme = (key) => key === "custom" || typeof key === "string" && Object.hasOwn(THEMES, key);
+  const isVoidTheme = (key) => typeof key === "string" && Object.hasOwn(THEMES, key) && THEMES[key].collection === "void";
   const isNodeStyle = (key) => typeof key === "string" && Object.hasOwn(NODE_STYLES, key);
-  const isPremiumNodeStyle = (key) => isNodeStyle(key) && NODE_STYLES[key].premium === true;
-  const isFreeNodeStyle = (key) => isNodeStyle(key) && NODE_STYLES[key].premium !== true;
-  function safePremium(value) {
-    const raw = value && typeof value === "object" ? value : {};
-    const choice = {};
-    if (isPremiumTheme(raw.theme)) choice.theme = raw.theme;
-    if (isPremiumNodeStyle(raw.nodeStyle)) choice.nodeStyle = raw.nodeStyle;
-    return choice;
-  }
-  // The fork sentence is community.js's, read when it is needed; this copy
-  // covers start:web and load order. tests/community_ui.test.mjs pins it to
-  // scripts/community.cjs.
-  const FORK_FALLBACK = "Members of the Void Engine Discord unlock these. Studio is MIT-licensed: fork the project and unlock it yourself, or ask an agent to do it for you.";
-  function forkCopy() {
-    try { const copy = window.MefiCommunity?.FORK_COPY; return typeof copy === "string" && copy ? copy : FORK_FALLBACK; } catch { return FORK_FALLBACK; }
-  }
+  const isVoidNodeStyle = (key) => isNodeStyle(key) && NODE_STYLES[key].collection === "void";
   const NODE_LAYOUTS = {
     constellation: { name: "Constellation", detail: "An open arrangement" },
     tree: { name: "Branches", detail: "A clear hierarchy" },
@@ -253,8 +236,8 @@
     // from before the Links tab, read once and never written again.
     const links = [...new Set([...(Array.isArray(raw.links) ? raw.links : []), ...(Array.isArray(raw.spotify) ? raw.spotify : [])]
       .map((item) => playableLink(mediaLink(item))?.url).filter(Boolean))].slice(0, 8);
-    return { theme: isFreeTheme(raw.theme) ? raw.theme : DEFAULT_THEME, customColors: safeCustomColors(raw.customColors), volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : .7, links,
-      nodeStyle: isFreeNodeStyle(raw.nodeStyle) ? raw.nodeStyle : "orbs",
+    return { theme: isTheme(raw.theme) ? raw.theme : DEFAULT_THEME, customColors: safeCustomColors(raw.customColors), volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : .7, links,
+      nodeStyle: isNodeStyle(raw.nodeStyle) ? raw.nodeStyle : "orbs",
       nodeLayout: Object.hasOwn(NODE_LAYOUTS, raw.nodeLayout) ? raw.nodeLayout : "constellation",
       station: STATION_IDS.has(raw.station) ? raw.station : null,
       // The source tab, and whether a station was sounding when Studio closed.
@@ -296,19 +279,25 @@
     if (Number.isFinite(savedVolume?.volume)) mediaVolume = Math.max(0, Math.min(1, savedVolume.volume));
     mediaMuted = savedVolume?.muted === true;
   } catch {}
-  const PREMIUM_KEY = "mefiStudio.music.premium.v1";
-  const COMMUNITY_HINT_KEY = "mefiStudio.community.v1";
-  let storedPremium;
-  try { storedPremium = JSON.parse(localStorage.getItem(PREMIUM_KEY) || "null"); } catch {}
-  // The saved premium choice, kept even while it is locked so a returning
-  // member gets it back; `effective` is what is actually on screen.
-  const premium = safePremium(storedPremium);
-  const effective = { theme: prefs.theme, nodeStyle: prefs.nodeStyle };
-  // A locked Void choice can be tried on screen, but never enters either store.
-  const previewing = { theme: false, nodeStyle: false };
+  // While the Void collection was for Discord members, a Void theme or node
+  // style was saved apart, in LEGACY_VOID_KEY. A valid choice there moves into
+  // the ordinary preferences once, and the old store goes after that write.
+  const LEGACY_VOID_KEY = "mefiStudio.music.premium.v1";
+  try {
+    const legacy = localStorage.getItem(LEGACY_VOID_KEY);
+    if (legacy != null) {
+      let saved = null;
+      try { saved = JSON.parse(legacy); } catch {}
+      const theme = isVoidTheme(saved?.theme) ? saved.theme : null;
+      const nodeStyle = isVoidNodeStyle(saved?.nodeStyle) ? saved.nodeStyle : null;
+      if (theme) prefs.theme = theme;
+      if (nodeStyle) prefs.nodeStyle = nodeStyle;
+      if (theme || nodeStyle) localStorage.setItem(STORAGE_KEY, JSON.stringify(safePreferences(prefs)));
+      localStorage.removeItem(LEGACY_VOID_KEY);
+    }
+  } catch {}
   // Search may expose configuration without changing the active look or audio.
   const settingsReveal = { custom: false, source: null };
-  const keepAfterUnlock = { theme: false, nodeStyle: false };
   // link: what the Links tab plays; handoff: the last link only its own app can
   // open; linkPlaying is real only for a plain file in Studio's own element.
   const state = { source: "local", tracks: [], selected: -1, link: null, handoff: null, linkPlaying: false, linkAutoplay: false, linkStartMs: 0, opened: false, sending: false, notice: "", error: false,
@@ -334,38 +323,7 @@
   let tuneGeneration = 0;
 
   const persist = () => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(safePreferences(prefs))); } catch {} };
-  const persistPremium = () => { try { localStorage.setItem(PREMIUM_KEY, JSON.stringify(safePremium(premium))); } catch {} };
   const event = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
-  // The one gate. MefiCommunity answers from its last status (or its boot
-  // hint); without it (start:web, or before it loads) the hint it leaves in
-  // storage decides, so a member does not flash the free theme at launch.
-  function premiumAllowed() {
-    const community = window.MefiCommunity;
-    if (community && typeof community.has === "function") {
-      try { return community.has("premium") === true; } catch { return false; }
-    }
-    let hint = null;
-    try { hint = JSON.parse(localStorage.getItem(COMMUNITY_HINT_KEY) || "null"); } catch {}
-    return hint?.premium === true && (hint.validUntil == null || Number.isFinite(hint.validUntil) && hint.validUntil > Date.now());
-  }
-  // Join, link and copy need the desktop bridge behind MefiCommunity.
-  const communityActions = () => Boolean(window.MefiCommunity) && Boolean(window.mefiStudio?.communityLink || window.mefiStudio?.communityOpen);
-  // Link needs a build with a Discord client id and an account that is not
-  // linked yet, or one Discord asks to link again; before the first status, no.
-  function communityLinkable() {
-    try {
-      const current = window.MefiCommunity?.status?.();
-      return current?.configured === true && !(current.linked === true && current.state !== "relink");
-    } catch { return false; }
-  }
-  // navigate:false (the Workspace select, and the Void tiles in this sheet)
-  // explains without leaving the view.
-  function offerUnlock(kind, key, name, navigate = true) {
-    if (typeof window.MefiCommunity?.offer === "function") {
-      try { window.MefiCommunity.offer(navigate ? { kind, key, name } : { kind, key, name, navigate: false }); return; } catch {}
-    }
-    note(`${name} is part of the Void collection. ${forkCopy()}`);
-  }
   function status() {
     const track = state.tracks[state.selected];
     const tuned = station(state.station);
@@ -378,7 +336,7 @@
       : state.source === "local" && Boolean(audio?.src) && !audio.paused && !audio.ended;
     // Links never reach the analyser: an embed is another origin and a pasted
     // file is not CORS-cleared, so the audio link listens to the desktop.
-    return { source: state.source, playing, title, track: title, theme: effective.theme, ...graphPreferences(),
+    return { source: state.source, playing, title, track: title, theme: prefs.theme, ...graphPreferences(),
       queueLength: state.tracks.length, externalPlayback: state.source === "link", supported: true,
       provider: state.source === "link" ? state.link?.providerName ?? null : null, link: state.source === "link" ? state.link?.url ?? null : null,
       station: state.station, stationName: tuned?.name || null, radioPhase: state.source === "radio" ? state.radioPhase : "idle" };
@@ -391,8 +349,10 @@
   function themeTokens(palette) {
     return { "--gold": palette.accent, "--gold-bright": palette.bright, "--gold-dim": `rgba(${palette.rgb},.32)`, "--hairline": `rgba(${channels(palette.border).join(",")},.5)`, "--hairline-strong": palette.border, "--tint-gold-1": `rgba(${palette.rgb},.06)`, "--tint-gold-2": `rgba(${palette.rgb},.09)`, "--tint-gold-3": `rgba(${palette.rgb},.14)`, "--ring": `0 0 0 3px rgba(${palette.rgb},.15)`, "--glow-gold": `0 0 14px rgba(${palette.rgb},.3)`, "--bg": palette.background, "--bg-deep": palette.background, "--cmd-bg": palette.background, "--panel-solid": palette.surface, "--panel": `rgba(${palette.surfaceRgb},.85)`, "--glass": `rgba(${palette.surfaceRgb},.76)`, "--glass-hard": `rgba(${palette.surfaceRgb},.94)`, "--glass-soft": `rgba(${palette.surfaceRgb},.7)`, "--ivory": palette.text, "--muted": palette.muted, "--dim": palette.dim, "--ink": palette.onAccent };
   }
-  const themeDetail = (key) => { const palette = resolvePalette(key, prefs.customColors); return { theme: key, tier: isPremiumTheme(key) ? "premium" : "free", ...palette, tokens: themeTokens(palette) }; };
-  // Paints a theme without deciding whether it may be shown or saved.
+  // tier "duo": a theme with a second hue of its own (the Void collection),
+  // which the stylesheets paint with (--accent-2); every other theme is "solo".
+  const themeDetail = (key) => { const palette = resolvePalette(key, prefs.customColors); return { theme: key, tier: THEMES[key]?.accent2 ? "duo" : "solo", ...palette, tokens: themeTokens(palette) }; };
+  // Paints a theme; applyTheme decides whether it is saved.
   function paintTheme(key) {
     const detail = themeDetail(key);
     const root = document.documentElement;
@@ -407,8 +367,7 @@
     root.dataset.studioThemeTier = detail.tier;
     // Shared glass surfaces adapt their edge and shadow to a light palette.
     root.dataset.studioThemeTone = luminance(detail.readingBackground) > 0.35 ? "light" : "dark";
-    effective.theme = key;
-    for (const button of [...els.themes?.children || [], ...els.premiumThemes?.children || []]) {
+    for (const button of [...els.themes?.children || [], ...els.voidThemes?.children || []]) {
       button.setAttribute("aria-pressed", String(button.dataset.theme === key));
       if (button.dataset.theme === "custom") button.style.setProperty("--swatch", prefs.customColors.accent);
     }
@@ -418,35 +377,13 @@
     }
     return detail;
   }
-  // options.navigate === false: explain a temporary preview without leaving
-  // the picker (the Workspace select also fires on every arrow key).
-  function applyTheme(theme, save = true, options) {
+  // Every theme applies and saves the same way, Void collection included.
+  function applyTheme(theme, save = true) {
     settingsReveal.custom = false;
-    if (isPremiumTheme(theme)) {
-      if (!premiumAllowed()) {
-        previewing.theme = true;
-        keepAfterUnlock.theme = save === true;
-        const detail = paintTheme(theme);
-        event("mefi-theme-change", { ...detail, preview: true });
-        offerUnlock("theme", theme, THEMES[theme].name, options?.navigate !== false);
-        return theme;
-      }
-      previewing.theme = false;
-      keepAfterUnlock.theme = false;
-      const detail = paintTheme(theme);
-      if (save && premium.theme !== theme) { premium.theme = theme; persistPremium(); }
-      event("mefi-theme-change", detail);
-      return theme;
-    }
-    const key = isFreeTheme(theme) ? theme : DEFAULT_THEME;
-    previewing.theme = false;
-    keepAfterUnlock.theme = false;
+    const key = isTheme(theme) ? theme : DEFAULT_THEME;
     prefs.theme = key;
     const detail = paintTheme(key);
-    if (save) {
-      persist();
-      if (premium.theme) { delete premium.theme; persistPremium(); }
-    }
+    if (save) persist();
     event("mefi-theme-change", detail);
     return key;
   }
@@ -463,7 +400,7 @@
   // reader shares one frozen copy.
   let paletteKey = null, paletteMemo = null;
   function themePalette() {
-    const theme = effective.theme;
+    const theme = prefs.theme;
     const custom = prefs.customColors;
     const key = theme === "custom" ? `custom|${custom.accent}|${custom.background}|${custom.surface}|${custom.text}` : theme;
     if (key !== paletteKey || !paletteMemo) {
@@ -474,107 +411,21 @@
     return paletteMemo;
   }
   // Read per node per frame by the tree rail: plain fields, no storage reads.
-  function graphPreferences() { return { nodeStyle: effective.nodeStyle, nodeLayout: prefs.nodeLayout, orbitTrails: prefs.orbitTrails, extraGlow: prefs.extraGlow }; }
+  function graphPreferences() { return { nodeStyle: prefs.nodeStyle, nodeLayout: prefs.nodeLayout, orbitTrails: prefs.orbitTrails, extraGlow: prefs.extraGlow }; }
   function syncTreePreferences(save) {
     const value = graphPreferences();
     Object.assign(document.documentElement.dataset, value);
-    for (const choice of [...els.nodeStyles?.children || [], ...els.premiumStyles?.children || []]) choice.setAttribute("aria-pressed", String(choice.dataset.nodeStyle === value.nodeStyle));
+    for (const choice of [...els.nodeStyles?.children || [], ...els.voidStyles?.children || []]) choice.setAttribute("aria-pressed", String(choice.dataset.nodeStyle === value.nodeStyle));
     for (const choice of els.nodeLayouts?.children || []) choice.setAttribute("aria-pressed", String(choice.dataset.nodeLayout === value.nodeLayout));
     if (els.orbitTrails) els.orbitTrails.checked = value.orbitTrails;
     if (els.extraGlow) els.extraGlow.checked = value.extraGlow;
     if (save) persist();
     event("mefi-tree-preferences", value);
   }
-  // options.navigate === false, as for applyTheme: the explanation comes where
-  // the style was chosen.
-  function applyNodeStyle(style, save = true, options) {
-    if (isPremiumNodeStyle(style)) {
-      if (!premiumAllowed()) {
-        previewing.nodeStyle = true;
-        keepAfterUnlock.nodeStyle = save === true;
-        effective.nodeStyle = style;
-        syncTreePreferences(false);
-        offerUnlock("nodeStyle", style, NODE_STYLES[style].name, options?.navigate !== false);
-        return style;
-      }
-      previewing.nodeStyle = false;
-      keepAfterUnlock.nodeStyle = false;
-      effective.nodeStyle = style;
-      if (save && premium.nodeStyle !== style) { premium.nodeStyle = style; persistPremium(); }
-      syncTreePreferences(false);
-      return style;
-    }
-    previewing.nodeStyle = false;
-    keepAfterUnlock.nodeStyle = false;
-    prefs.nodeStyle = isFreeNodeStyle(style) ? style : "orbs";
-    effective.nodeStyle = prefs.nodeStyle;
-    if (save && premium.nodeStyle) { delete premium.nodeStyle; persistPremium(); }
+  function applyNodeStyle(style, save = true) {
+    prefs.nodeStyle = isNodeStyle(style) ? style : "orbs";
     syncTreePreferences(save);
     return prefs.nodeStyle;
-  }
-  // Community changes re-apply a stored premium choice, or fall back to the
-  // free preferences when membership lapses. Neither path writes storage: the
-  // premium choice stays saved for when the member links again. The event's
-  // own verdict is used as given, so it cannot race MefiCommunity's status.
-  function syncPremium(allowed = premiumAllowed()) {
-    if (allowed) {
-      if (previewing.theme && keepAfterUnlock.theme) {
-        previewing.theme = false;
-        keepAfterUnlock.theme = false;
-        if (premium.theme !== effective.theme) { premium.theme = effective.theme; persistPremium(); }
-        event("mefi-theme-change", themeDetail(effective.theme));
-      } else if (!previewing.theme && premium.theme && effective.theme !== premium.theme) event("mefi-theme-change", paintTheme(premium.theme));
-      if (previewing.nodeStyle && keepAfterUnlock.nodeStyle) {
-        previewing.nodeStyle = false;
-        keepAfterUnlock.nodeStyle = false;
-        if (premium.nodeStyle !== effective.nodeStyle) { premium.nodeStyle = effective.nodeStyle; persistPremium(); }
-        syncTreePreferences(false);
-      } else if (!previewing.nodeStyle && premium.nodeStyle && effective.nodeStyle !== premium.nodeStyle) { effective.nodeStyle = premium.nodeStyle; syncTreePreferences(false); }
-    } else {
-      let revoked = false;
-      if (isPremiumTheme(effective.theme) && !previewing.theme) { applyTheme(prefs.theme, false); revoked = true; }
-      if (isPremiumNodeStyle(effective.nodeStyle) && !previewing.nodeStyle) { effective.nodeStyle = prefs.nodeStyle; syncTreePreferences(false); revoked = true; }
-      if (revoked) window.MefiToast?.("Void collection locked again; your choice is saved.", "info");
-    }
-    renderPremiumLocks(allowed);
-  }
-  function endPreview() {
-    if (previewing.theme) applyTheme(premiumAllowed() && premium.theme ? premium.theme : prefs.theme, false);
-    if (previewing.nodeStyle) applyNodeStyle(premiumAllowed() && premium.nodeStyle ? premium.nodeStyle : prefs.nodeStyle, false);
-  }
-  // A fork with SELF_UNLOCKED says so instead of thanking a membership.
-  function selfUnlocked() {
-    try { return window.MefiCommunity?.status?.()?.selfUnlocked === true; } catch { return false; }
-  }
-  // Locked choices stay clickable for a temporary preview. Only a locked
-  // picker shows the link and fork actions; a member gets one quiet line.
-  function renderPremiumLocks(allowed = premiumAllowed()) {
-    for (const [group, className, what] of [[els.premiumThemes, "music-theme-locked", "theme"], [els.premiumStyles, "music-node-locked", "node style"]]) {
-      for (const choice of group?.children || []) {
-        if (allowed) { choice.classList.remove(className); choice.removeAttribute("aria-disabled"); choice.title = ""; }
-        else { choice.classList.add(className); choice.removeAttribute("aria-disabled"); choice.title = `Preview this Void collection ${what}. Link your Discord membership to keep it.`; }
-        const badge = els.premiumBadges?.get(choice);
-        if (badge) badge.hidden = allowed;
-      }
-    }
-    const actions = communityActions();
-    const linkable = communityLinkable();
-    const manageable = typeof window.MefiCommunity?.open === "function";
-    const unlockedLine = selfUnlocked() ? "Unlocked in this build" : "Unlocked with your Void Engine membership";
-    const fork = forkCopy();
-    for (const box of els.premiumBoxes || []) {
-      box.tag.hidden = allowed;
-      box.previewNote.hidden = allowed;
-      box.fineprint.hidden = allowed;
-      if (box.fineprint.textContent !== fork) box.fineprint.textContent = fork;
-      box.actions.hidden = allowed || !actions;
-      box.desktop.hidden = allowed || actions;
-      box.link.hidden = !linkable;
-      box.member.hidden = !allowed;
-      if (box.memberText.textContent !== unlockedLine) box.memberText.textContent = unlockedLine;
-      box.manage.hidden = !manageable;
-      box.group.setAttribute("aria-describedby", allowed ? box.member.id : `${box.previewNote.id} ${box.fineprint.id}`);
-    }
   }
   function applyNodeLayout(layout, save = true) {
     prefs.nodeLayout = Object.hasOwn(NODE_LAYOUTS, layout) ? layout : "constellation";
@@ -602,11 +453,13 @@
     node.addEventListener("click", action);
     return node;
   }
-  function graphChoices(parent, kind, choices, selected, apply) {
-    const title = element("h4", "music-node-label", kind === "style" ? "Node style" : "Layout", parent);
-    title.id = `music-node-${kind}-label`;
+  // `set` names a second group of the same kind (the Void collection's styles,
+  // under their own small heading); its ids are literal at the call site.
+  function graphChoices(parent, kind, choices, selected, apply, set = { label: kind === "style" ? "Node style" : "Layout", id: `music-node-${kind}` }) {
+    const title = element("h4", "music-node-label", set.label, parent);
+    title.id = `${set.id}-label`;
     const group = element("div", "music-node-choices", null, parent);
-    group.id = `music-node-${kind}s`;
+    group.id = `${set.id}s`;
     group.setAttribute("role", "group"); group.setAttribute("aria-labelledby", title.id);
     for (const [key, option] of Object.entries(choices)) {
       const choice = button(null, `music-node-choice music-node-${kind}`, group, () => apply(key), `music-node-${kind}-${key}`);
@@ -620,74 +473,20 @@
     }
     return group;
   }
-  // The Void collection sits in its own group under the free choices, which
-  // stay exactly as they were. Locked buttons stay focusable and clickable
-  // (aria-disabled, never disabled) so a click can explain how to unlock them.
-  function premiumBox(parent, kind) {
-    const box = element("div", "music-premium", null, parent);
-    const title = element("h4", "music-node-label music-premium-heading", "Void collection", box);
-    title.id = `music-premium-${kind}-label`;
-    // A narrow sheet folds this pill to its lock; the word stays for screen readers (music.css).
-    const tag = element("span", "music-premium-tag", null, title);
-    element("span", "music-premium-tag-text", "Members", tag);
-    tag.title = "For Void Engine Discord members";
-    // The caller names the group (a literal id, which scripts/auditor.mjs can see).
-    const group = element("div", kind === "theme" ? "music-themes" : "music-node-choices", null, box);
+  // The Void collection's themes: an ordinary choice each, under a small
+  // heading of their own below the others.
+  function voidThemeChoices(parent) {
+    const title = element("h4", "music-node-label", "Void collection", parent);
+    title.id = "music-void-theme-label";
+    const group = element("div", "music-themes", null, parent);
+    group.id = "music-void-themes";
     group.setAttribute("role", "group"); group.setAttribute("aria-labelledby", title.id);
-    const previewNote = element("p", "music-fineprint", "Preview any look now. Your saved choice returns when you close the canvas preview or leave Settings; link your Discord membership to keep it.", box);
-    previewNote.id = `music-premium-${kind}-preview-note`;
-    const fineprint = element("p", "music-fineprint", forkCopy(), box);
-    fineprint.id = `music-premium-${kind}-fineprint`;
-    group.setAttribute("aria-describedby", fineprint.id);
-    const actions = element("div", "music-premium-actions", null, box);
-    button("Join the Discord", "ghost mini", actions, () => window.MefiCommunity?.join?.(), `music-premium-${kind}-join`);
-    const link = button("Link my Discord", "ghost mini", actions, () => window.MefiCommunity?.link?.(), `music-premium-${kind}-link`);
-    button("Copy agent prompt", "ghost mini", actions, () => window.MefiCommunity?.copyAgentPrompt?.(), `music-premium-${kind}-prompt`);
-    const desktop = element("p", "music-premium-desktop", "Desktop app only", box);
-    desktop.id = `music-premium-${kind}-desktop`;
-    const member = element("p", "music-premium-member", null, box);
-    member.id = `music-premium-${kind}-member`;
-    const memberText = element("span", "music-premium-member-text", "Unlocked with your Void Engine membership", member);
-    const manage = button("Manage in Settings › Community", "music-premium-manage", member, () => window.MefiCommunity?.open?.(), `music-premium-${kind}-manage`);
-    (els.premiumBoxes ||= []).push({ tag, group, previewNote, fineprint, actions, desktop, link, member, memberText, manage });
-    return group;
-  }
-  // The lock reads as a glyph; "Members" stays in the button's name for
-  // screen readers. It sits beside the name, never over the art.
-  function premiumBadge(choice, parent = choice) {
-    const badge = element("span", "music-premium-lock", null, parent);
-    element("span", "music-premium-lock-text", "Members", badge);
-    (els.premiumBadges ||= new Map()).set(choice, badge);
-  }
-  // A locked tile explains itself where it is (navigate:false): leaving for
-  // Settings would close this sheet.
-  function premiumThemeChoices(parent) {
-    const group = premiumBox(parent, "theme");
-    group.id = "music-premium-themes";
-    for (const [key, palette] of Object.entries(THEMES).filter(([key]) => isPremiumTheme(key))) {
-      const choice = button(palette.name, "music-theme music-theme-premium", group, () => applyTheme(key, true, { navigate: false }), `music-theme-${key}`);
-      choice.dataset.theme = key; choice.dataset.premium = "true";
+    for (const [key, palette] of Object.entries(THEMES).filter(([key]) => isVoidTheme(key))) {
+      const choice = button(palette.name, "music-theme music-theme-duo", group, () => applyTheme(key), `music-theme-${key}`);
+      choice.dataset.theme = key;
       // Two-tone swatch: the theme's accent ring around its second hue.
       choice.style.setProperty("--swatch", palette.accent); choice.style.setProperty("--swatch-2", palette.accent2);
-      choice.setAttribute("aria-pressed", String(effective.theme === key));
-      premiumBadge(choice);
-    }
-    return group;
-  }
-  function premiumStyleChoices(parent) {
-    const group = premiumBox(parent, "style");
-    group.id = "music-node-premium-styles";
-    for (const [key, option] of Object.entries(NODE_STYLES).filter(([key]) => isPremiumNodeStyle(key))) {
-      const choice = button(null, "music-node-choice music-node-style music-node-premium", group, () => applyNodeStyle(key, true, { navigate: false }), `music-node-style-${key}`);
-      choice.dataset.nodeStyle = key; choice.dataset.premium = "true";
-      choice.setAttribute("aria-pressed", String(effective.nodeStyle === key));
-      const preview = element("span", `music-node-preview music-preview-${key}`, null, choice);
-      preview.setAttribute("aria-hidden", "true");
-      for (let index = 0; index < 3; index += 1) element("i", null, null, preview);
-      const label = element("span", "music-premium-name", null, choice);
-      element("strong", null, option.name, label);
-      premiumBadge(choice, label);
-      element("small", null, option.detail, choice);
+      choice.setAttribute("aria-pressed", String(prefs.theme === key));
     }
     return group;
   }
@@ -1207,7 +1006,7 @@
       state.link = null; state.handoff = null; state.source = "link"; prefs.source = "link"; persist();
       els.floatingPlayer?.show({ shape: "browser", label: "Media browser" });
       els.floatingPlayer?.restore?.({ minimized: false });
-      render(); announce(); closeAudio(); els.browser.schedule?.();
+      render(); announce(); openAudio(); scheduleDropdown(); els.browser.schedule?.();
       note("Browse and play inside Studio. Use the website’s playback controls.");
       return true;
     } catch { note("The browser could not open. Try again.", true); return false; }
@@ -1432,9 +1231,22 @@
     paintLinkVolume();
     const link = state.source === "link" ? state.link : null;
     const browser = els.browser?.active ? els.browser.state : null;
+    if (els.linkStage) {
+      els.linkStage.dataset.shape = browser ? "browser" : link?.shape || "video";
+      els.linkStage.dataset.mode = els.mediaPlacement?.background ? "background" : "player";
+      els.linkStageTitle.textContent = els.mediaPlacement?.background ? "Playing behind your workspace" : els.mediaPlacement?.minimized ? "Player minimized" : "Your next video starts here";
+      els.linkStageHint.textContent = els.mediaPlacement?.background ? "Your queue stays here. Return to the player any time." : "Paste a video link above, or choose one from your queue.";
+    }
+    if (els.backgroundToggle) {
+      const candidate = browser ? mediaLink(browser.url) : link;
+      els.backgroundToggle.disabled = !playableLink(candidate) || candidate.shape === "audio";
+      els.backgroundToggle.textContent = els.mediaPlacement?.background ? "Return to player" : "Use as background";
+      els.backgroundToggle.setAttribute("aria-pressed", String(Boolean(els.mediaPlacement?.background)));
+      els.backgroundToggle.title = browser && !playableLink(candidate) ? "Open a video link to use background playback" : "Play this video behind your workspace";
+    }
     els.linkNow.hidden = !link && !browser;
     if (els.browseLink) els.browseLink.hidden = Boolean(browser);
-    if (els.linkNext) els.linkNext.hidden = Boolean(browser) || !linkQueue.length && link?.provider !== "youtube";
+    if (els.linkNext) els.linkNext.hidden = !linkQueue.length && link?.provider !== "youtube";
     if (browser) {
       els.linkNowTitle.textContent = browser.title || "Media browser";
       els.linkNowDetail.textContent = "Browsing inside Studio · use the website’s playback controls";
@@ -1616,7 +1428,8 @@
     for (const [action, label] of [["play", "Play"], ["queue", "Add to queue"], ["next", "Queue next"], ["dismiss", "Dismiss"]]) button(label, "ghost mini", clipboardActions, () => useClipboardOffer(action), `music-clipboard-${action}`);
     const dropdownBody = element("div", "music-dropdown-body", null, dropdown);
     els.dropdownBody = dropdownBody;
-    const connection = element("div", "music-connection", null, dropdownBody);
+    const connection = element("details", "music-connection", null, dropdownBody);
+    element("summary", null, "Audio connection & clipboard", connection);
     const copiedLinksLabel = element("label", "music-clipboard-toggle", null, connection);
     els.copiedLinks = element("input", null, null, copiedLinksLabel); els.copiedLinks.id = "music-copied-links"; els.copiedLinks.type = "checkbox";
     element("span", null, "Offer copied media links", copiedLinksLabel);
@@ -1630,8 +1443,8 @@
     const soundLabel = element("p", "eyebrow music-group-label", "Your listening room", main); soundLabel.id = "music-sound-label"; soundLabel.tabIndex = -1;
     const browserCard = element("div", "music-browser-card", null, main);
     const browserCopy = element("div", "music-browser-copy", null, browserCard);
-    element("strong", null, "The web, inside your player", browserCopy);
-    element("span", null, "Videos, music and live streams right here in Studio.", browserCopy);
+    element("strong", null, "Browse a website", browserCopy);
+    element("span", null, "Open a page inside this player.", browserCopy);
     button("Browse here", "ghost", browserCard, () => void openMediaBrowser(), "music-browser-launch");
     els.groups = { look: { group: settings, label: lookLabel }, sound: { group: main, label: soundLabel } };
     const tabs = element("div", "music-tabs", null, main); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Music source");
@@ -1708,8 +1521,8 @@
     els.radioVolume.addEventListener("input", () => setVolume(els.radioVolume.value));
     element("p", "music-fineprint", "Each station lists several mirrors. If one stops sending, Studio brings the next one up on a second deck and crosses over, so the music keeps playing through the handover.", els.radio);
     els.link = element("section", "music-link", null, main); els.link.id = "music-link-panel"; els.link.setAttribute("role", "tabpanel"); els.link.setAttribute("aria-labelledby", "music-link-tab");
-    element("h3", null, "One link. Your next escape.", els.link);
-    element("p", "music-subtitle", "Paste or drop a video, song, stream or website. Supported media plays here; other pages open in the mini browser.", els.link);
+    element("h3", null, "Your video space", els.link);
+    element("p", "music-subtitle", "Watch here, play in the background, or line up what’s next.", els.link);
     const linkForm = element("form", "music-link-form", null, els.link);
     els.linkInput = element("input", null, null, linkForm); els.linkInput.id = "music-link-url"; els.linkInput.type = "text"; els.linkInput.inputMode = "url"; els.linkInput.placeholder = "Paste a link or website address…"; els.linkInput.setAttribute("aria-label", "Media link");
     els.linkInput.autocomplete = "off"; els.linkInput.spellcheck = false;
@@ -1719,12 +1532,26 @@
     button("Browse here", "ghost", queueTools, () => void openMediaBrowser(els.linkInput.value.trim()), "music-link-browser");
     button("Add to queue", "ghost", queueTools, () => queueLink(els.linkInput.value), "music-link-queue-add");
     button("Queue next", "ghost", queueTools, () => queueLink(els.linkInput.value, null, true), "music-link-queue-first");
+    const linkLayout = element("div", "music-video-layout", null, els.link);
+    const watching = element("div", "music-video-watching", null, linkLayout);
+    els.linkStage = element("div", "music-video-stage", null, watching); els.linkStage.id = "music-video-stage";
+    element("span", "music-video-stage-icon", "▷", els.linkStage).setAttribute("aria-hidden", "true");
+    els.linkStageTitle = element("strong", null, "Your next video starts here", els.linkStage);
+    els.linkStageHint = element("small", null, "Paste a video link above, or choose one from your queue.", els.linkStage);
+    const presentation = element("div", "music-video-presentation", null, watching);
+    element("span", "eyebrow", "PLAYBACK", presentation);
+    els.backgroundToggle = button("Use as background", "ghost", presentation, () => {
+      const browsing = els.browser?.active;
+      if (browsing && !playLink(els.browser.state.url)) return;
+      els.floatingPlayer?.setBackground(browsing || !els.mediaPlacement?.background);
+      renderLinkNow(); scheduleDropdown();
+    }, "music-video-background");
     els.linkHandoff = element("div", "music-link-handoff", null, els.link); els.linkHandoff.id = "music-link-handoff"; els.linkHandoff.hidden = true;
-    els.recent = element("div", "music-recent", null, els.link); els.recent.setAttribute("aria-label", "Recent links");
+    els.recent = element("div", "music-recent", null, watching); els.recent.setAttribute("aria-label", "Recent links");
     // renderer/together.js fills this, above the player, with Listen together and the
     // now-playing share (both need the rooms hub).
     els.together = element("section", "music-together", null, els.link); els.together.hidden = true;
-    els.linkNow = element("div", "music-link-now", null, els.link); els.linkNow.hidden = true;
+    els.linkNow = element("div", "music-link-now", null, watching); els.linkNow.hidden = true;
     const nowCopy = element("span", "music-link-now-copy", null, els.linkNow);
     els.linkNowTitle = element("strong", null, null, nowCopy);
     els.linkNowDetail = element("small", null, null, nowCopy);
@@ -1749,6 +1576,7 @@
     els.floatingPlayer = window.MefiMediaWindow?.create({
       content: els.linkPlayer,
       settingsHost: videoSettings,
+      onPlacement: placement => { els.mediaPlacement = placement; renderLinkNow(); },
       onSettings: () => open("sound"),
       onClose: () => { unmountLink(); state.link = null; render(); announce(); },
     });
@@ -1769,14 +1597,15 @@
     searchForm.addEventListener("submit", event => { event.preventDefault(); searchYouTube(); });
     els.youtubeNotice = element("p", "music-fineprint", "Find a video, then Play. Next video follows your results or YouTube playlist.", els.youtubeExplorer); els.youtubeNotice.setAttribute("role", "status");
     els.youtubeResults = element("div", "music-youtube-results", null, els.youtubeExplorer); els.youtubeResults.id = "music-youtube-results";
-    const queue = element("section", "music-link-queue", null, els.link); queue.setAttribute("aria-label", "Video queue");
+    const queue = element("section", "music-link-queue", null, linkLayout); queue.setAttribute("aria-label", "Video queue");
     const queueHeader = element("div", "music-link-queue-header", null, queue);
     els.linkQueueHeading = element("h3", null, "Up next", queueHeader); els.linkQueueHeading.setAttribute("aria-live", "polite");
     els.linkQueueNext = button("Play next video", "ghost", queueHeader, () => playQueued(), "music-link-queue-next");
     els.linkQueueEmpty = element("p", "music-fineprint", "Your queue is empty. Add a link above or choose a YouTube result.", queue);
     els.linkQueueList = element("ol", "music-link-queue-list", null, queue); els.linkQueueList.id = "music-link-queue-list";
-    element("p", "music-fineprint", "Queued videos play first when you press Next video. YouTube, Vimeo and direct files also advance automatically when they finish. Your queue is saved across reloads.", queue);
+    element("p", "music-fineprint", "Your queue is saved. Play now, move a video to next, or remove it.", queue);
     renderLinkQueue();
+    watching.append(browserCard);
     element("p", "music-fineprint", "Video settings live here in Music & video. Background and Transparency put the video behind your work; Float video restores its controls. Keep tree in dark areas waits for a consistently darker area, then glides slowly. Fade on finish dims the video and notifies you when a task completes.", els.link);
     element("p", "music-fineprint", "Embedded players use their service’s sign-in, ads and availability rules. YouTube and Vimeo remember playback when Studio reopens within ten minutes. Set the audio link to Desktop audio and the node tree follows them.", els.link);
     els.link.addEventListener("dragover", (event) => {
@@ -1793,6 +1622,7 @@
       playLink(text);
     });
     const audioLink = element("details", "music-audio-link", null, dropdownBody);
+    dropdownBody.append(connection);
     els.audioLink = audioLink;
     audioLink.id = "music-audio-reactions";
     audioLink.setAttribute("aria-labelledby", "music-audio-heading");
@@ -1846,13 +1676,20 @@
     els.recommendation = element("div", "music-recommendation", "", ai); els.recommendation.id = "music-recommendation"; els.recommendation.setAttribute("aria-live", "polite");
     els.notice = element("p", "music-notice", "", dropdownBody); els.notice.setAttribute("role", "status");
     dropdown.addEventListener("keydown", audioKey);
+    dropdown.addEventListener("transitionend", scheduleDropdown);
+    if (typeof ResizeObserver === "function") {
+      const playerLayout = new ResizeObserver(scheduleDropdown);
+      playerLayout.observe(els.linkStage); playerLayout.observe(dropdownHeader);
+    }
     dropdown.addEventListener("pointerenter", cancelAudioHoverTimers);
     dropdown.addEventListener("pointerleave", leaveAudioHover);
     dropdown.addEventListener("pointerdown", pinAudioDropdown);
     dropdown.addEventListener("focusin", pinAudioDropdown);
     dropdown.addEventListener("focusout", (event) => {
-      if (event.relatedTarget && !dropdown.contains(event.relatedTarget) && !dropdownAnchor?.contains(event.relatedTarget) && !audioSelectContains(event.relatedTarget)) closeAudio();
+      if (event.relatedTarget && !dropdown.contains(event.relatedTarget) && !els.linkPlayer?.contains(event.relatedTarget) && !dropdownAnchor?.contains(event.relatedTarget) && !audioSelectContains(event.relatedTarget)) closeAudio();
     });
+    els.linkPlayer.addEventListener("pointerenter", cancelAudioHoverTimers);
+    els.linkPlayer.addEventListener("pointerleave", leaveAudioHover);
     const preview = element("section", "music-preview", null, els.overlay);
     preview.setAttribute("aria-labelledby", "music-preview-heading");
     const previewHeader = element("header", "music-preview-header", null, preview);
@@ -1888,12 +1725,20 @@
     const above = anchor?.height ? Math.max(0, anchor.top - 8 - edge) : 0;
     const below = height - bottom - 8 - edge;
     const flip = below < 280 && above > below && above >= 240;
-    const top = flip ? edge : Math.max(edge, Math.min(bottom + 8, height - 280));
+    const top = els.dropdown.dataset.source === "link" ? Math.max(edge, Math.min(bottom + 8, 72, height - 280))
+      : flip ? edge : Math.max(edge, Math.min(bottom + 8, height - 280));
     const panelWidth = els.dropdown.getBoundingClientRect().width;
     const right = anchor?.width ? width - anchor.right : edge;
     els.dropdown.style.top = `${Math.round(top)}px`;
     els.dropdown.style.right = `${Math.round(Math.max(edge, Math.min(right, width - panelWidth - edge)))}px`;
-    els.dropdown.style.maxHeight = `${Math.max(0, flip ? above : height - top - edge)}px`;
+    els.dropdown.style.maxHeight = `${Math.max(0, flip && els.dropdown.dataset.source !== "link" ? above : height - top - edge)}px`;
+    const stage = els.linkStage?.getBoundingClientRect?.();
+    const panel = els.dropdown.getBoundingClientRect();
+    const header = els.dropdownHeader.getBoundingClientRect();
+    els.floatingPlayer?.dock?.(els.link.hidden || !stage?.width || !stage?.height ? null : {
+      x: stage.left, y: stage.top, width: stage.width, height: stage.height,
+      clip: [Math.max(0, header.bottom - stage.top), Math.max(0, stage.right - panel.right), Math.max(0, stage.bottom - Math.min(panel.bottom, height - edge)), Math.max(0, panel.left - stage.left)],
+    });
   }
   function scheduleDropdown() {
     if (els.dropdown?.hidden !== false || dropdownFrame) return;
@@ -1901,7 +1746,7 @@
     else positionDropdown();
   }
   function audioOutside(event) {
-    if (!els.dropdown?.contains(event.target) && !dropdownAnchor?.contains(event.target) && !audioSelectContains(event.target)) closeAudio();
+    if (!els.dropdown?.contains(event.target) && !els.linkPlayer?.contains(event.target) && !dropdownAnchor?.contains(event.target) && !audioSelectContains(event.target)) closeAudio();
   }
   function audioSelectContains(target) {
     return window.MefiSelect?.owns?.(els.dropdown) && window.MefiSelect?.contains?.(target);
@@ -1966,7 +1811,8 @@
       const headerHeight = els.dropdownHeader.getBoundingClientRect().height;
       els.dropdown.scrollTop = Number.isFinite(top) && Number.isFinite(panelTop)
         ? Math.max(0, (els.dropdown.scrollTop || 0) + top - panelTop - headerHeight - 12) : 0;
-    }
+    } else els.dropdown.scrollTop = 0;
+    scheduleDropdown();
     document.addEventListener("pointerdown", audioOutside);
     document.addEventListener("keydown", audioKey, true);
     window.addEventListener("scroll", scheduleDropdown, true);
@@ -1979,6 +1825,7 @@
     if (els.dropdown?.hidden !== false) return;
     if (window.MefiSelect?.owns?.(els.dropdown)) window.MefiSelect.close();
     els.dropdown.hidden = true;
+    els.floatingPlayer?.dock?.(null);
     dropdownAnchor?.setAttribute("aria-expanded", "false");
     document.removeEventListener?.("pointerdown", audioOutside);
     document.removeEventListener?.("keydown", audioKey, true);
@@ -2051,7 +1898,7 @@
     if (unlocked && premium.nodeStyle) effective.nodeStyle = premium.nodeStyle;
     build();
     for (const id of ["idle-music-toggle", "settings-audio-open"]) bindAudioHover(document.getElementById(id));
-    window.addEventListener("blur", () => closeAudio());
+    window.addEventListener("blur", () => { if (!els.browser?.active && !els.linkPlayer?.contains(document.activeElement)) closeAudio(); });
     if (unlocked && premium.theme) event("mefi-theme-change", paintTheme(premium.theme));
     else applyTheme(prefs.theme, false);
     syncTreePreferences(false); renderPremiumLocks(unlocked); render(); renderMediaMenu();

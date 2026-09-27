@@ -877,7 +877,7 @@
       label = status.enabled === false ? "paused in Settings" : !status.configured ? "connect in Settings" : status.accountingPending ? "waiting for usage accounting" : status.lastError ? "needs attention in Settings" : status.phase === "running" ? "reviewing task intake" : status.lastSuccessAt ? "task intake ready" : "configured · awaiting first intake";
     }
     $("jev").textContent = `Jev · ${label}`;
-    $("jev").title = status?.lastError || "Jev is Studio's optional model-selection service: with a key it picks a model per task and advises on related tasks; without one, fixed defaults apply. Your work stays on the board. Set it up under Settings › Jev.";
+    $("jev").title = status?.lastError || "Jev is Studio's optional model-selection service: with a key it picks a model per task and advises on related tasks; without one, fixed defaults apply. Your work stays on the board. Set it up under Agents › Setup › Providers.";
   }
   function setMode(mode) {
     if (state.pending || state.switching) return;

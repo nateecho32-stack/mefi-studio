@@ -61,6 +61,97 @@ test("committed work (no uncommitted row) releases the hold", () => {
   assert.notEqual(decision.reason, "finished-uncommitted");
 });
 
+// The state the release above opens: a finished session whose subject
+// matches the pick and whose edits are all committed has already done the
+// work. Re-dispatching there rebuilt the same fix twice — the ai-offline
+// resolution and the briefer cliReply guard (11fcebc) each ran a second
+// session that re-verified a live fix and added nothing (A-Eyes "fix landed
+// twice" alerts). The landed-work hold (finished-committed) closes it.
+const landedSession = { id: "ses_done", title: "Fix briefer agent error in mefi-studio", finished: true };
+
+test("a finished session that already committed this subject holds the re-dispatch (finished-committed)", () => {
+  const decision = claimWork({
+    work: { title: "Fix briefer agent error in mefi-studio", prompt: "Find the root cause, fix it, and run the relevant test set before reporting back." },
+    sessions: [landedSession],
+    uncommitted: [],
+    jobs: [],
+  });
+  assert.equal(decision.action, "defer");
+  assert.equal(decision.reason, "finished-committed");
+  assert.deepEqual(decision.owners, ["ses_done"]);
+  assert.match(decision.advice, /ses_done/);
+  assert.match(decision.advice, /committed/);
+  assert.match(decision.advice, /re-dispatched/);
+  assert.equal(shouldHoldWork(decision, { source: "task" }), true);
+  assert.equal(shouldHoldWork(decision, { source: "chat" }), true, "the chat lane re-dispatched the finished briefer fix");
+});
+
+test("a finished peer still carrying uncommitted edits stays in the finished-uncommitted lane", () => {
+  const decision = claimWork({
+    work: { title: "Fix briefer agent error in mefi-studio" },
+    sessions: [landedSession],
+    uncommitted: [dirtyRow("docs/notes.md", ["ses_done"])],
+    jobs: [],
+  });
+  assert.notEqual(decision.reason, "finished-committed");
+});
+
+test("a live session on the same subject still gets adopt advice, not a hold", () => {
+  const decision = claimWork({
+    work: { title: "Fix briefer agent error in mefi-studio" },
+    sessions: [{ id: "ses_live", title: "Fix briefer agent error in mefi-studio", finished: false }],
+    uncommitted: [],
+    jobs: [],
+  });
+  assert.notEqual(decision.reason, "finished-committed");
+  assert.match(decision.advice, /already looks like it implemented this/);
+});
+
+test("a finished session on an unrelated subject never holds (no false positive)", () => {
+  const decision = claimWork({
+    work: { title: "Repaginate the booklet template" },
+    sessions: [landedSession],
+    uncommitted: [],
+    jobs: [],
+  });
+  assert.notEqual(decision.reason, "finished-committed");
+  assert.equal(shouldHoldWork(decision, { source: "task" }), false);
+});
+
+test("collision-resolution jobs still run through a finished-committed hold", () => {
+  const decision = claimWork({
+    work: { title: "Fix briefer agent error in mefi-studio", source: "collision" },
+    sessions: [landedSession],
+    uncommitted: [],
+    jobs: [],
+  });
+  assert.equal(decision.reason, "finished-committed");
+  assert.equal(shouldHoldWork(decision, { source: "collision" }), false, "the assigned cleanup crew must not be parked");
+});
+
+test("the task's own unverified-retry attempt is exempt from its own landed-session hold", () => {
+  const work = { title: "Fix the briefer role", ref: retryTask() };
+  const exempt = claimWork({
+    work,
+    sessions: [{ id: "ses_owner", title: "Fix the briefer role", finished: true }],
+    uncommitted: [],
+    jobs: [],
+  });
+  assert.notEqual(exempt.reason, "finished-committed", "the task's own failed attempt never holds its own retry");
+  const foreign = claimWork({
+    work: { title: "Fix the briefer role", ref: retryTask({ lastAttempt: { sessionId: "ses_other" } }) },
+    sessions: [{ id: "ses_owner", title: "Fix the briefer role", finished: true }],
+    uncommitted: [],
+    jobs: [],
+  });
+  assert.equal(foreign.reason, "finished-committed", "another session's landed work still holds");
+});
+
+test("main.cjs dispatch logs the finished-committed hold with the owning session", () => {
+  assert.match(main, /finished-committed/, "the dispatcher knows the landed-work hold");
+  assert.match(main, /already done: finished session/, "the skip log names the hold and the owning session");
+});
+
 test("a cleared session releases the hold even while the file is still dirty", () => {
   const decision = claimWork({
     work: { title: "Dedupe dispatch", files: ["main.cjs"] },

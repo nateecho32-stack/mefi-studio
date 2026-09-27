@@ -171,7 +171,7 @@
         <p id="workspace-work-summary" class="ws-work-summary-line" role="status" aria-live="polite"></p>
         <div id="workspace-work-list" class="ws-work-list"></div>
         <button id="workspace-show-more" class="ghost mini ws-show-more" type="button" hidden>Show more</button>
-        <div class="ws-jeV" id="workspace-jev" title="Jev is the optional model-selection service: with a key it picks a model per task; without one, fixed defaults apply. Set it up under Settings › Decision model.">Jev · checking connection</div>
+        <div class="ws-jeV" id="workspace-jev" title="Jev is the optional model-selection service: with a key it picks a model per task; without one, fixed defaults apply. Set it up under Agents › Setup › Providers.">Jev · checking connection</div>
       </aside>
       </details>
       <details id="workspace-studio-details" class="ws-home-disclosure"><summary>Studio status</summary>
@@ -180,7 +180,7 @@
       <button class="ws-dash-tile" id="workspace-dash-attention" data-tone="idle" data-target="review" type="button" title="Questions waiting for you and work to review"><span class="ws-dash-kicker">NEEDS YOU</span><strong class="ws-dash-value" id="workspace-dash-attention-value">Nothing waiting</strong><span class="ws-dash-note" id="workspace-dash-attention-note"></span></button>
       <button class="ws-dash-tile" id="workspace-dash-next" data-tone="idle" type="button" title="Show the queue"><span class="ws-dash-kicker">UP NEXT</span><strong class="ws-dash-value" id="workspace-dash-next-value">Queue is empty</strong><span class="ws-dash-note" id="workspace-dash-next-note"></span></button>
       <button class="ws-dash-tile" id="workspace-dash-machine" data-nav="explorer" data-tone="idle" type="button" title="Machine status (opens the Explorer)"><span class="ws-dash-kicker">MACHINE</span><strong class="ws-dash-value" id="workspace-dash-machine-value">Checking…</strong><span class="ws-dash-note" id="workspace-dash-machine-note"></span></button>
-      <button class="ws-dash-tile" id="workspace-dash-usage" data-tone="idle" type="button" title="Open the usage tracker in Model Lab"><span class="ws-dash-kicker">USAGE</span><strong class="ws-dash-value" id="workspace-dash-usage-value">No reading yet</strong><span class="ws-dash-note" id="workspace-dash-usage-note"></span></button>
+      <button class="ws-dash-tile" id="workspace-dash-usage" data-tone="idle" type="button" title="Open Usage: recorded calls and provider accounts"><span class="ws-dash-kicker">USAGE</span><strong class="ws-dash-value" id="workspace-dash-usage-value">No reading yet</strong><span class="ws-dash-note" id="workspace-dash-usage-note"></span></button>
     </section>
 
       </details>
@@ -391,7 +391,7 @@
   <button id="nav-command" class="home-tab" data-nav="command" data-return-label="Back to Command" title="Command view (D)"><svg class="glyph glyph-home" aria-hidden="true" focusable="false"><use href="#g-orbit"/></svg><svg class="glyph glyph-back" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span><kbd class="key">D</kbd><span class="dot live" data-badge="progress" data-badge-mode="dot" hidden></span><span class="count warn" data-badge="questions" hidden></span></button>
   <span class="tabs-sep" aria-hidden="true"></span>
   <button class="tab active" data-tab="booklet" title="Model catalog (1)"><span class="label">Model catalog</span><kbd class="key">1</kbd></button>
-  <button class="tab" data-tab="graph" title="Model Lab (2)"><span class="label">Model Lab</span><kbd class="key">2</kbd></button>
+  <button class="tab" data-tab="graph" title="Performance (2)"><span class="label">Performance</span><kbd class="key">2</kbd></button>
   <button class="tab" data-tab="eyes" title="Activity & evidence (3)"><span class="label">Activity & evidence</span><kbd class="key">3</kbd></button>
   <button class="tab" data-tab="studio" title="Settings (4 or Ctrl ,)"><span class="label">Settings</span><kbd class="key">4</kbd></button>
   <span class="spacer" aria-hidden="true"></span>
@@ -421,10 +421,10 @@
     <p id="count" class="muted"></p>
   </section>
   <section id="tab-graph" hidden>
-    <section id="model-lab" class="model-lab" aria-label="Model Lab">
-      <header class="lab-head"><div><h2 class="sr-only">Model Lab</h2><p class="muted">Compare performance, usage and context from your project's model calls.</p></div><button id="model-lab-refresh" class="ghost">Refresh measurements</button></header>
+    <section id="model-lab" class="model-lab" aria-label="Model measurements">
+      <header class="lab-head"><div><h2 class="sr-only">Model measurements</h2><p class="muted">Compare performance, usage and context from your project's model calls.</p></div><button id="model-lab-refresh" class="ghost">Refresh measurements</button></header>
       <div id="model-lab-summary" class="lab-summary"></div>
-      <div class="lab-tabs" role="tablist" aria-label="Model Lab views">
+      <div class="lab-tabs" role="tablist" aria-label="Model measurement views">
         <button id="model-lab-tab-rankings" role="tab" aria-selected="true" aria-controls="model-lab-rankings" data-lab-view="rankings">Rankings</button>
         <button id="model-lab-tab-usage" role="tab" aria-selected="false" aria-controls="model-lab-usage" tabindex="-1" data-lab-view="usage">Usage</button>
         <button id="model-lab-tab-tracker" role="tab" aria-selected="false" aria-controls="model-lab-tracker" tabindex="-1" data-lab-view="tracker">Tracker</button>
@@ -599,7 +599,7 @@
           <div class="settings-you-switches">
             <label class="switch" id="settings-companion-motion" title="Your companion floats and blinks beside the conversation. Calm and Off keep it still."><input id="workspace-motion" type="checkbox" checked><span class="track"></span><span>Let your companion move</span></label>
             <label class="switch" title="Blur what sits behind every sheet, menu and Home panel. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
-            <label class="switch" id="idle-home-switch" title="On: every launch lands on Your workspace. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Workspace on launch</span></label>
+            <label class="switch" id="idle-home-switch" title="On: every launch lands on Home. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Home on launch</span></label>
           </div>
           <p class="muted" id="idle-home-hint">When disabled, Studio opens Command view after the project chooser.</p>
           <!-- The Vibe / Build choice, switched in place (vibe.js keeps you on Settings). -->
@@ -1268,7 +1268,7 @@
       <header class="cmd-usage-head">
         <h2 id="cmd-usage-title" class="cmd-usage-title">Usage</h2>
         <button id="cmd-usage-refresh" class="ghost mini" type="button" title="Refresh usage and every connected account">Refresh</button>
-        <button id="cmd-usage-open" class="ghost mini" type="button" title="Open the full tracker in Model Lab">Details</button>
+        <button id="cmd-usage-open" class="ghost mini" type="button" title="Open the full tracker in Usage">Details</button>
       </header>
       <p id="cmd-usage-state" class="cmd-usage-state" role="status" aria-live="polite">Waiting for a reading…</p>
       <div id="cmd-usage-body" class="cmd-usage-body" hidden></div>
@@ -1873,7 +1873,7 @@
       <div id="walkthrough-build-mode" class="build-mode-control">
         <label class="switch" for="walkthrough-auto-build"><input type="checkbox" id="walkthrough-auto-build" checked disabled aria-describedby="walkthrough-build-mode-note"><span class="track"></span><span>Auto build</span></label>
         <strong id="walkthrough-build-mode-label">Loading preference…</strong>
-        <p id="walkthrough-build-mode-note">Choose how work starts. You can change this in Settings › Automation at any time.</p>
+        <p id="walkthrough-build-mode-note">Choose how work starts. You can change this in Agents › Setup › Run behavior at any time.</p>
         <p id="walkthrough-build-mode-feedback" role="status"></p>
       </div>
       <div class="walkthrough-activity" id="walkthrough-activity" hidden><div class="walkthrough-activity-track"><span id="walkthrough-activity-fill"></span></div><span id="walkthrough-activity-label"></span></div>

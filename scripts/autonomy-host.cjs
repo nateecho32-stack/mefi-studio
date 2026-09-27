@@ -244,7 +244,9 @@ function createAutonomyHost(io) {
       const questions = rows(state().questions).filter((question) => question.status === "open" && Number(cleared[question.id] ?? -1) < Number(question.at));
       for (const item of queue.items.filter((entry) => ["parked", "held"].includes(entry.kind))) {
         const task = byId.get(item.taskId);
-        if (!task || task.ownerHold || task.loopGuard?.by === "owner" || questions.some((question) => question.context?.taskId === task.id)) continue;
+        // A card waiting on the owner's word about work done outside Studio
+        // is not a failed run to re-ask about (outside-work.cjs).
+        if (!task || task.ownerHold || task.loopGuard?.by === "owner" || task.relevance?.state === "ask" || questions.some((question) => question.context?.taskId === task.id)) continue;
         // An ask about this card that was already settled or left for review
         // since it parked covers this park: raising it again would put the
         // card the owner just dismissed straight back on their list. A card
@@ -260,12 +262,19 @@ function createAutonomyHost(io) {
       for (const question of questions) {
         if (spent >= desk.LIMITS.perPass || revision !== passRevision || project() !== projectId) break;
         const task = byId.get(question.context?.taskId) ?? null;
-        if (question.context?.suggestion || question.context?.undoneFrom || task?.ownerHold) continue;
+        const repair = issues.repairQuestion(question, { now: now(), attempts: task?.runFailures ?? 0 });
+        if (repair) Object.assign(question, repair);
         const result = autonomy.sessionless(task ?? {});
+        // Earlier versions saved this blanket refusal before attempting any
+        // repair. Reconsider only that stale refusal, never an owner's Undo.
+        if (result.eligible && !question.context?.undoneFrom
+          && question.context?.suggestion?.reason === "I need recorded, named passing checks for this run before I can confirm it.") delete question.context.suggestion;
+        if (question.context?.suggestion || question.context?.undoneFrom || task?.ownerHold) continue;
         if (result.eligible) {
           question.context = { ...question.context, sessionless: true };
-          if (!result.canConfirm) { question.context.suggestion = { optionId: null, reason: "I need recorded, named passing checks for this run before I can confirm it.", at: now() }; continue; }
-          question.options = [{ id: "confirm-result", label: "Confirm the checked result", recommended: true, action: { kind: "confirm-result", taskId: task.id, runId: result.runId } }, { id: "hold", label: "Leave it for review", dismiss: true }];
+          // Missing evidence forbids confirmation, not repair. Keep ordinary
+          // retry/instruction options so Auto can obtain the missing checks.
+          if (result.canConfirm) question.options = [{ id: "confirm-result", label: "Confirm the checked result", recommended: true, action: { kind: "confirm-result", taskId: task.id, runId: result.runId } }, { id: "hold", label: "Leave it for review", dismiss: true }];
         }
         const isAccepted = autonomy.accepted(task, { tasks });
         const humanClassify = question.context?.issueKind === "owner" && ["auto", "elevated"].includes(config.level);

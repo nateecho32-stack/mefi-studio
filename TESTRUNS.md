@@ -34,6 +34,38 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-27 evening - Work done outside Studio: last look, report and relevance check
+
+New scripts/outside-work.cjs (pure) and main.cjs's "work done outside Studio"
+block. Studio keeps a per-project last look (git HEAD, branch, uncommitted
+paths, time) while it watches a folder: every five minutes with the window
+shown, 15 s after each run settles, on leaving a folder and at quit. Opening
+the folder again reports commits, uncommitted edits and Claude Code/OpenCode
+sessions since that look to the thread, the chat payload (`outside`) and the
+welcome-back digest, and holds every queued card (`relevance` stamp,
+backlog.workState `deferred`/`relevance-check`, bounded to 6 h) until one
+model call (or local file/subject matching) judges it needed, partial, done
+or obsolete. Done/obsolete cards wait on an owner-only Ask card
+(autonomy.canDelegate refuses source `relevance`). Also fixed the
+verification_drain flake: kickVerificationSettlement read the clock twice, so
+under load the settle timer was armed 999 ms instead of 1000 ms.
+
+Baseline before the change on the same tree: npm run check passed; test:fast
+had one failure, verification_drain "no supported verification command"
+(passed solo, the double clock read). tools/monitor_loop.mjs --scenario all
+matched before and after (steady/no-evidence/flaky 12/12 done, wedged 6 done
+with 12 start kills, handoffs converging to 180/180 done at 225 min in a
+300-minute run).
+
+Validation: npm run check passed; npm run audit 0 findings; lint 0 errors and
+no warnings in changed code; test:fast 3953 passed, 0 failed, 4 skipped. New
+suites: outside_work (16), outside_work_host (6, a real temporary git repo and
+a fake home) and a tasks_ui case; module_purity covers the new module.
+Full npm test on the change: Node 3993 passed, 0 failed, 6 skipped (Electron
+fixtures included), Python contracts 248 OK (1 skipped), normalized-path lock
+passed. A final npm run check and test:fast (3954 passed, 0 failed) followed
+the last edits (a refresh race fix and Vibe's stage words).
+
 ## 2026-09-27 - Whole-app bug hunt: host, tooling, renderer and design fixes
 
 Parallel review of main.cjs, preload, every host script, the build and

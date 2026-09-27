@@ -34,6 +34,52 @@ async function fixture(t, options = {}) {
   return updater;
 }
 
+test("an explicit apply tells the host to stop and save agents without counting an automatic restart", async (t) => {
+  const calls = [];
+  const updater = await fixture(t, { auto: false, actions: { restart: async (files, options) => {
+    calls.push({ files, options });
+    return { ok: true };
+  } } });
+  assert.equal((await updater.applyNow()).applied, true);
+  assert.deepEqual(calls, [{ files: ["main.cjs"], options: { counted: false, stopAgents: true } }]);
+});
+
+test("a manual apply queued behind an automatic attempt keeps its stop-and-save intent", async (t) => {
+  const entered = signal(), release = signal(), applied = signal();
+  const calls = [];
+  const updater = await fixture(t, { actions: { restart: async (_files, options) => {
+    calls.push(options);
+    if (calls.length === 1) {
+      entered.resolve();
+      await release.promise;
+      return { deferred: true, reason: "builds running" };
+    }
+    return { ok: true };
+  } }, onEvent: (event) => {
+    if (event.phase === "watching" && calls.length > 1) applied.resolve();
+  } });
+  updater.notify("main.cjs");
+  await observed(entered.promise);
+  assert.equal((await updater.applyNow()).queued, true);
+  release.resolve();
+  await observed(applied.promise);
+  assert.deepEqual(calls, [{ counted: true, stopAgents: false }, { counted: false, stopAgents: true }]);
+});
+
+test("a refused progress save retains the update for a successful manual retry", async (t) => {
+  let savesWork = false;
+  const updater = await fixture(t, { actions: { restart: async () => savesWork
+    ? { ok: true } : { ok: false, error: "Could not save agent progress: disk full" } } });
+  const refused = await updater.applyNow();
+  assert.equal(refused.ok, false);
+  assert.equal(refused.applied, false);
+  assert.equal(refused.phase, "held");
+  assert.match(refused.error, /disk full/);
+  assert.equal(updater.status().last, null);
+  savesWork = true;
+  assert.equal((await updater.applyNow()).applied, true);
+});
+
 test("a deferred restart wakes after workers save results without another edit or visible poll", async (t) => {
   const saved = signal(), applied = signal();
   const job = { finished: false, settlementPending: false };

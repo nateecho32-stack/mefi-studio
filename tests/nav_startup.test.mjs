@@ -12,6 +12,22 @@ const deferred = () => {
 };
 const settle = async () => { for (let turn = 0; turn < 12; turn += 1) await Promise.resolve(); };
 
+test("Trace uses page history in the rail but closes its dialog in the classic shell", () => {
+  const calls = [];
+  const document = { documentElement: { dataset: { shell: "rail" } } };
+  const destinations = new Map([["trace", { id: "trace", close: () => calls.push("close") }]]);
+  const env = vm.createContext({ document, get: (id) => destinations.get(id), current: () => "trace",
+    historyState: () => ({ canBack: true }), back: () => calls.push("back"),
+    vibeMode: () => false, sectionOf: () => "agents", go: (id) => calls.push(id) });
+  vm.runInContext(source.slice(source.indexOf("  const WORKSPACE_PAGES"), source.indexOf("  function syncPageInert")), env);
+  vm.runInContext(source.slice(source.indexOf("  function close(id)"), source.indexOf("  function closeAll()")), env);
+  env.close("trace");
+  assert.deepEqual(calls, ["back"]);
+  document.documentElement.dataset.shell = "classic";
+  env.close("trace");
+  assert.deepEqual(calls, ["back", "close"], "a modal closes over the current page even when section history exists");
+});
+
 function fixture(saved, { loading = false } = {}) {
   const store = new Map([["mefiStudio.resume", typeof saved === "string" ? saved : JSON.stringify(saved)]]);
   const frames = [], timers = [], calls = [], elements = new Map(), listeners = new Map();

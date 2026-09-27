@@ -88,6 +88,9 @@ function taskNeed(task, now) {
   // park: a card both held and parked must read as held, or whoever re-arms
   // parked cards (the desk) would lift the owner's own stop.
   if (isObject(task.ownerHold) || isObject(task.loopGuard) || isObject(task.autonomyBudgetHold)) return { kind: "held", at: num(task.ownerHold?.at) || num(task.loopGuard?.at) || num(task.autonomyBudgetHold?.at) || num(task.updatedAt) };
+  // Work done outside Studio looks like it already covers the card
+  // (scripts/outside-work.cjs): it waits for the owner's word, like a hold.
+  if (isObject(task.relevance) && task.relevance.state === "ask") return { kind: "held", at: num(task.relevance.at) || num(task.updatedAt) };
   if (parked && !cooling) return { kind: "parked", at: num(task.parkedAt) || num(task.lastAttempt?.at) || num(task.updatedAt) };
   if (task.needsApproval || stageName(task) === "approval") return { kind: "approval", at: num(task.updatedAt) || num(task.createdAt) };
   return null;
@@ -101,9 +104,11 @@ const atOf = (event) => num(event?.at);
 /**
  * What happened while the owner was away, from the work events and the board.
  * `needsYouIds` adds tasks the host already knows wait on the owner (an open
- * question's task, say) to the ones the board shows.
+ * question's task, say) to the ones the board shows. `outside` is the
+ * project's report of work done outside Studio (outside-work.cjs digestPart):
+ * its phrase joins the headline and its lines lead the list.
  */
-function digest({ events = [], tasks = [], since, now, needsYouIds = [] } = {}) {
+function digest({ events = [], tasks = [], since, now, needsYouIds = [], outside = null } = {}) {
   const end = clock(now);
   const from = Number.isFinite(Number(since)) && since !== null ? Number(since) : end;
   const byId = new Map(asArray(tasks).filter((task) => isObject(task) && task.id).map((task) => [String(task.id), task]));
@@ -152,15 +157,19 @@ function digest({ events = [], tasks = [], since, now, needsYouIds = [] } = {}) 
   const waiting = [...needsYou.values()];
   const awayMs = Math.max(0, end - from);
 
+  const away = isObject(outside) && clip(outside.phrase, 80) ? outside : null;
   const parts = [];
+  if (away) parts.push(clip(away.phrase, 80));
   if (done.length) parts.push(`${done.length} done`);
   if (stopped.length) parts.push(`${stopped.length} failed`);
   if (waiting.length) parts.push(`${waiting.length} need${waiting.length === 1 ? "s" : ""} you`);
   if (!parts.length && started) parts.push(`${started} agent run${started === 1 ? "" : "s"} started`);
   const headline = parts.length ? `While you were away (${formatAway(awayMs)}): ${parts.join(", ")}.` : "Nothing changed while you were away.";
 
-  // What needs the owner first, then what stopped, then what finished.
+  // What changed outside Studio first, then what needs the owner, then what
+  // stopped, then what finished.
   const all = [
+    ...asArray(away?.lines).map((line) => clip(line, LIMITS.line + 20)).filter(Boolean).slice(0, 3),
     ...waiting.map((row) => `Needs you: ${row.title}`),
     ...stopped.map((row) => `Stopped: ${row.title}`),
     ...done.map((row) => `Done: ${row.title}`),
@@ -173,6 +182,7 @@ function digest({ events = [], tasks = [], since, now, needsYouIds = [] } = {}) 
     finished: done,
     failed: stopped,
     needsYou: waiting.map(({ taskId, title }) => ({ taskId, title })),
+    ...(away ? { outside: { phrase: clip(away.phrase, 80), at: num(away.at) } } : {}),
     started,
     headline,
     lines,

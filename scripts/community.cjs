@@ -1,18 +1,14 @@
 // Mefi's Studio AI+ — community rules: when the weekly "join the Void Engine
-// Discord" card is due, when a linked account is re-checked, and what a link
-// entitles the user to (the Void collection of themes and node styles).
-//
-// The unlock is an honest soft lock. Studio is MIT-licensed, so anyone can flip
-// SELF_UNLOCKED below in their own fork and every perk unlocks without Discord;
-// the locked cards say so in FORK_COPY and offer AGENT_PROMPT for an agent to
-// do it. There is no obfuscation to defeat and none should be added.
+// Discord" card is due, when a linked account is re-checked, and what an
+// answer means for the saved link. The link is optional and unlocks nothing:
+// every theme and node style is free. Listen together and the rooms hub use
+// it (main.cjs "Rooms hub"), and it tells the card not to ask a member to join.
 //
 // Membership is read with the user's own Discord login (scripts/discord-oauth.cjs
 // does the network half), so a check never depends on a bot being online. A
-// failed check is not a revoke: the perks stay on for GRACE_MS after the last
-// good answer, and only a definite "not a member" takes them away at once.
-// Invites are never rewarded here or anywhere else (Discord's platform policy
-// forbids inducing server joins); the unlock condition is plain membership.
+// failed check changes nothing about what the link last said; only a definite
+// "not a member" does. Invites are never rewarded here or anywhere else
+// (Discord's platform policy forbids inducing server joins).
 //
 // Pure module: no Electron, no filesystem, no network. Time is injectable: a
 // function that reads the time takes `now`, falling back to the clock only when
@@ -36,28 +32,10 @@ const CLIENT_ID = "";
 const REDIRECT_PORTS = Object.freeze([53134, 53135, 53136]);
 const SCOPES = Object.freeze(["identify", "guilds.members.read"]);
 
-// THE FORK SWITCH. Set this to true in your own fork and every perk below is
-// unlocked for you, with no Discord account and no network request. This is
-// deliberate and documented (README "Community & perks", docs/community.md):
-// the Void collection is a thank-you to community members, not DRM.
-const SELF_UNLOCKED = false;
-
-// Discord role id -> extra perk names. Phase 2 (the Void Engine bot) fills this
-// for participation roles; plain membership already grants "premium".
-const ROLE_PERKS = Object.freeze({});
-
-const PERKS = Object.freeze({
-  premium: Object.freeze({ label: "Void collection", detail: "4 themes and 3 node styles" }),
-});
-
-const FORK_COPY = "Members of the Void Engine Discord unlock these. Studio is MIT-licensed: fork the project and unlock it yourself, or ask an agent to do it for you.";
-const AGENT_PROMPT = "In my fork of Mefi's Studio AI+, set SELF_UNLOCKED to true in scripts/community.cjs so the Void collection themes and node styles unlock without Discord, then run npm run check and npm test.";
-
 // ---- cadence -----------------------------------------------------------------
 
 const DAY = 86_400_000;
 const HOUR = DAY / 24;
-const GRACE_MS = 14 * DAY; // perks survive this long after the last good check
 const CHECK_EVERY_MS = 7 * DAY; // the access token lives 7 days; so does a check
 const FIRST_PROMPT_MS = 3 * DAY; // no card in the first three days after install
 const PROMPT_EVERY_MS = 7 * DAY;
@@ -116,8 +94,8 @@ function normalizeLink(raw) {
     checkedAt: time(raw.checkedAt),
     lastOkAt: time(raw.lastOkAt),
     nextCheckAt: time(raw.nextCheckAt),
-    // An unreadable state is treated as a failed check: grace still applies
-    // and the next check settles it.
+    // An unreadable state is treated as a failed check: the last answer
+    // stands and the next check settles it.
     state: LINK_STATES.includes(raw.state) ? raw.state : "offline",
     failures: count(raw.failures),
   };
@@ -138,18 +116,28 @@ function normalize(raw) {
   };
 }
 
+// ---- membership -----------------------------------------------------------------
+
+// Whether the saved link says this account is in the Void Engine server: a
+// check has answered "member" at least once, and none has said "not a member"
+// since. A failed or refused check (offline, relink) keeps the last answer. It
+// gates nothing; the weekly card uses it so a member is never asked to join.
+function isMember(link) {
+  const current = normalizeLink(link);
+  return Boolean(current) && current.state !== "not-member" && current.lastOkAt != null;
+}
+
 // ---- the weekly card ----------------------------------------------------------
 
 // Whether the card may be shown now. "At most once per session" is the
-// renderer's job; this answers only the persisted cadence. `entitled` is a
-// boolean or an entitlement object; nobody who already has the perks is asked.
+// renderer's job; this answers only the persisted cadence. A linked member is
+// never asked.
 function promptDue(options) {
-  const { state, now = Date.now(), entitled = false } = bag(options);
+  const { state, now = Date.now() } = bag(options);
   const at = clock(now);
   if (at == null) return false;
-  if (entitled === true || (object(entitled) && entitled.premium === true)) return false;
-  const { firstSeenAt, prompt } = normalize(state);
-  if (prompt.never || firstSeenAt == null) return false;
+  const { firstSeenAt, prompt, link } = normalize(state);
+  if (prompt.never || firstSeenAt == null || isMember(link)) return false;
   if (at < firstSeenAt + FIRST_PROMPT_MS) return false;
   if (prompt.lastShownAt != null) {
     const every = prompt.shown >= BACKOFF_AFTER ? BACKOFF_EVERY_MS : PROMPT_EVERY_MS;
@@ -257,8 +245,8 @@ function recordCheck(options) {
     return { ...next, roles: [], checkedAt: at, nextCheckAt: at + CHECK_EVERY_MS, state: "not-member", failures: 0 };
   }
   if (result.error === "auth") {
-    // The grant is gone (revoked, or the refresh token was refused). Perks run
-    // out with the grace period; the card offers "Link my Discord" again.
+    // The grant is gone (revoked, or the refresh token was refused). The last
+    // answer stands; Settings offers "Link my Discord" again.
     return { ...next, checkedAt: at, nextCheckAt: at + CHECK_EVERY_MS, state: "relink", failures: 0 };
   }
   // network, rate-limit and anything unrecognised: transient, back off.
@@ -270,52 +258,6 @@ function recordCheck(options) {
     state: "offline",
     failures,
   };
-}
-
-// ---- entitlement ----------------------------------------------------------------
-
-function rolePerkList(roles, rolePerks) {
-  const perks = [];
-  if (!object(rolePerks)) return perks;
-  for (const role of roles) {
-    if (!Object.hasOwn(rolePerks, role) || !Array.isArray(rolePerks[role])) continue;
-    for (const perk of rolePerks[role]) {
-      const name = text(perk, 64);
-      if (name && !perks.includes(name)) perks.push(name);
-    }
-  }
-  return perks;
-}
-
-function allPerks(rolePerks = ROLE_PERKS) {
-  const perks = Object.keys(PERKS);
-  if (!object(rolePerks)) return perks;
-  for (const list of Object.values(rolePerks)) {
-    for (const perk of Array.isArray(list) ? list : []) {
-      const name = text(perk, 64);
-      if (name && !perks.includes(name)) perks.push(name);
-    }
-  }
-  return perks;
-}
-
-// reason: self (the fork switch), member (a good check within grace), grace
-// (the last check failed or needs a relink, but the last good one is recent),
-// not-member (revoked at once), unlinked, expired (grace ran out). A "session"
-// link (no safeStorage, so nothing was persisted) is a live member link.
-function entitlement(options) {
-  const { link, now = Date.now(), selfUnlocked = SELF_UNLOCKED, rolePerks = ROLE_PERKS } = bag(options);
-  if (selfUnlocked === true) return { premium: true, perks: allPerks(rolePerks), validUntil: null, reason: "self" };
-  const current = normalizeLink(link);
-  if (!current) return { premium: false, perks: [], validUntil: null, reason: "unlinked" };
-  if (current.state === "not-member") return { premium: false, perks: [], validUntil: null, reason: "not-member" };
-  if (current.lastOkAt == null) return { premium: false, perks: [], validUntil: null, reason: "expired" };
-  const validUntil = current.lastOkAt + GRACE_MS;
-  const at = clock(now);
-  if (at == null || at >= validUntil) return { premium: false, perks: [], validUntil, reason: "expired" };
-  const perks = ["premium", ...rolePerkList(current.roles, rolePerks).filter((perk) => perk !== "premium")];
-  const reason = current.state === "ok" || current.state === "session" ? "member" : "grace";
-  return { premium: true, perks, validUntil, reason };
 }
 
 // ---- links --------------------------------------------------------------------
@@ -386,53 +328,47 @@ function authorizeUrl(options) {
 // It is built field by field from the normalised state, so tokens cannot ride
 // along even if a caller left one in the state it passed.
 function publicStatus(options) {
-  const { state, now = Date.now(), clientId, available = true, linking = false, selfUnlocked = SELF_UNLOCKED, rolePerks = ROLE_PERKS } = bag(options);
+  const { state, now = Date.now(), clientId, available = true, linking = false } = bag(options);
   const saved = normalize(state);
   const link = saved.link;
   const isAvailable = available !== false;
-  const ent = entitlement({ link, now, selfUnlocked, rolePerks });
   return {
     available: isAvailable,
     configured: typeof clientId === "string" && clientId.trim() !== "",
     linked: Boolean(link),
     linking: linking === true,
-    selfUnlocked: selfUnlocked === true,
+    member: isMember(link),
     user: link ? { id: link.userId, username: link.username, globalName: link.globalName } : null,
     roles: link ? [...link.roles] : [],
     state: link ? link.state : null,
-    entitlement: ent,
     checkedAt: link ? link.checkedAt : null,
     lastOkAt: link ? link.lastOkAt : null,
     nextCheckAt: link ? link.nextCheckAt : null,
     prompt: {
-      due: isAvailable && promptDue({ state: saved, now, entitled: ent.premium }),
+      due: isAvailable && promptDue({ state: saved, now }),
       never: saved.prompt.never,
       snoozeUntil: saved.prompt.snoozeUntil,
     },
     inviteUrl: INVITE_URL,
     serverUrl: linkTarget("server"),
-    forkCopy: FORK_COPY,
-    agentPrompt: AGENT_PROMPT,
   };
 }
 
 // Same idea as main.cjs releaseSignature: only a change a user could see
 // triggers a community:event push. The failure counter is left out, and the
-// constant copy strings need no place in it.
+// constant URLs need no place in it.
 function signature(status) {
   const source = object(status) ? status : {};
-  const ent = object(source.entitlement) ? source.entitlement : {};
   const user = object(source.user) ? source.user : null;
   const prompt = object(source.prompt) ? source.prompt : {};
   const value = (entry) => (entry === undefined ? null : entry);
   try {
     return JSON.stringify([
       source.available !== false, source.configured === true, source.linked === true,
-      source.linking === true, source.selfUnlocked === true,
+      source.linking === true, source.member === true,
       user ? [value(user.id), value(user.username), value(user.globalName)] : null,
       Array.isArray(source.roles) ? source.roles : [],
       value(source.state),
-      ent.premium === true, Array.isArray(ent.perks) ? ent.perks : [], value(ent.validUntil), value(ent.reason),
       value(source.checkedAt), value(source.lastOkAt), value(source.nextCheckAt),
       prompt.due === true, prompt.never === true, value(prompt.snoozeUntil),
     ]);
@@ -442,9 +378,9 @@ function signature(status) {
 }
 
 module.exports = {
-  GUILD_ID, INVITE_URL, CLIENT_ID, REDIRECT_PORTS, SCOPES, SELF_UNLOCKED, ROLE_PERKS, PERKS,
-  DAY, GRACE_MS, CHECK_EVERY_MS, FIRST_PROMPT_MS, PROMPT_EVERY_MS, BACKOFF_EVERY_MS, BACKOFF_AFTER, CHECK_THROTTLE_MS,
-  FORK_COPY, AGENT_PROMPT, LINK_STATES, PROMPT_ACTIONS,
-  normalize, normalizeLink, promptDue, applyPrompt, checkDue, nextCheckAfterFailure, recordCheck,
-  entitlement, allPerks, linkTarget, isAllowedDiscordUrl, pkce, authorizeUrl, publicStatus, signature,
+  GUILD_ID, INVITE_URL, CLIENT_ID, REDIRECT_PORTS, SCOPES,
+  DAY, CHECK_EVERY_MS, FIRST_PROMPT_MS, PROMPT_EVERY_MS, BACKOFF_EVERY_MS, BACKOFF_AFTER, CHECK_THROTTLE_MS,
+  LINK_STATES, PROMPT_ACTIONS,
+  normalize, normalizeLink, isMember, promptDue, applyPrompt, checkDue, nextCheckAfterFailure, recordCheck,
+  linkTarget, isAllowedDiscordUrl, pkce, authorizeUrl, publicStatus, signature,
 };

@@ -126,6 +126,10 @@ function digestGroup(task, state) {
   if (state.blockedBy === "owner") return { group: "needsYou", need: "stopped" };
   if (state.blockedBy === "loop") return { group: "needsYou", need: "hold" };
   if (state.blockedBy === "duplicate") return { group: "needsYou", need: "duplicate" };
+  // Work done outside Studio may already cover it: the owner decides. While it
+  // is only being checked it waits by itself, like a cooldown.
+  if (state.blockedBy === "relevance") return { group: "needsYou", need: "outside-work" };
+  if (state.blockedBy === "relevance-check") return { group: "cooling" };
   if (stage === "waiting" && REVIEW_STATUSES.has(task.status)) return { group: "review" };
   if (stage === "blocked" && !state.blockedBy) return { group: "needsYou", need: /^Held \(/.test(String(state.reason ?? "")) ? "held" : "parked" };
   return { group: "blocked" };
@@ -1713,7 +1717,7 @@ function parseChatEnvelope(raw) {
 // ui (what the owner is looking at) and needsYou (the list behind the
 // "N need you" badge) ride right after did: they are small, and they are
 // what the owner's own words refer to.
-const PACK_ORDER = Object.freeze(["message", "did", "ui", "needsYou", "decisionContext", "asks", "events", "board", "thread", "focus", "suggestions"]);
+const PACK_ORDER = Object.freeze(["message", "did", "ui", "needsYou", "decisionContext", "asks", "events", "outside", "board", "thread", "focus", "suggestions"]);
 // What the owner just said and what the host just did are never dropped.
 const PACK_KEEP = new Set(["message", "did"]);
 // Oldest first: these give way from the head so the newest entries stay.

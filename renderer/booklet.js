@@ -409,7 +409,7 @@
   // ---- tabs ----
   // The page header names the tab on show; nav.js repaints it on mefi:nav, and
   // this covers the launch, which restores a tab without announcing it.
-  const PAGE_TITLES = { booklet: "Model catalog", graph: "Model Lab", eyes: "Activity & evidence", studio: "Settings" };
+  const PAGE_TITLES = { booklet: "Model catalog", graph: "Performance", eyes: "Activity & evidence", studio: "Settings" };
   function showTab(name, params = {}) {
     if (name !== "studio") window.MefiMusic?.activateSettings?.(null);
     const insights = document.getElementById("model-lab-catalog");

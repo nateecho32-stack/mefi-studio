@@ -2437,8 +2437,11 @@ export function shouldHoldWork(collab, work = {}) {
   // A finished session's uncommitted edits hold every re-dispatch for
   // verification — the work is on disk but unproven, and a fresh worker
   // would duplicate it (the orbitTrails duplicate the expand-title guard
-  // does not cover). Only the assigned collision-resolution job still runs.
+  // does not cover). Its committed counterpart holds too (finished-committed):
+  // a landed fix is done work, and a fresh worker would repeat it. Only the
+  // assigned collision-resolution job still runs through either.
   if (str(collab.reason) === "finished-uncommitted") return str(work.source) !== "collision";
+  if (str(collab.reason) === "finished-committed") return str(work.source) !== "collision";
   if (str(work.source) === "collision") return false;
   if (work.pin === true || work.ref?.pin === true) return false;
   if (str(work.source) === "chat") return false;
@@ -2689,6 +2692,50 @@ export function isOwnFixRetryClaim(work, sessions = []) {
   return holders.length > 0 && holders.every((id) => id === attemptSession);
 }
 
+// Landed-work hold — the mirror of finishedClaims, closing the state its
+// release rule opens. finishedClaims holds a re-dispatch while a finished
+// session's edits are uncommitted and releases once they are committed; but
+// the commit is the work PROVING done, and the freshly released handout went
+// straight back out: the ai-offline resolution and the briefer cliReply guard
+// each landed twice (A-Eyes "fix landed twice" alerts), the second session
+// re-verifying a live fix and adding nothing. So a finished session whose
+// subject overlaps the pick — the same title-overlap test collaborate()
+// already reads as "they already built this feature" — now holds the pick
+// once its edits are all committed: a finished peer is the resolution, not a
+// peer to adopt from. Evidence-keyed like its sibling: `finished` is the
+// store's own marker, the commit side is the absence of any uncommitted row
+// naming the peer (a still-dirty peer belongs to the finished-uncommitted
+// lane), and the task's own unverified-retry exemption still runs. The hold
+// self-releases when the session folds out of the live store, and the board's
+// done-title/theme absorption catches refiled copies after that; no lease
+// file is ever written.
+export function finishedWorkClaims({ work = null, sessions = [], todos = [], uncommitted = [] } = {}) {
+  const peers = overlappingSessions(isObject(work) ? work : {}, sessions, todos);
+  if (!peers.length) return [];
+  const dirty = new Set(
+    asArray(uncommitted)
+      .filter(isObject)
+      .flatMap((row) => asArray(row?.sessions).map(str))
+      .filter(Boolean),
+  );
+  const finished = new Map();
+  for (const row of asArray(sessions)) {
+    if (!isObject(row) || row.finished !== true) continue;
+    const id = str(row?.id ?? row?.sessionId);
+    if (id) finished.set(id, row);
+  }
+  const claims = [];
+  for (const peer of peers) {
+    const id = str(peer.sessionId);
+    const row = finished.get(id);
+    if (!row) continue; // live peers get collaborate()'s adopt advice, not a hold
+    if (dirty.has(id)) continue; // still-uncommitted edits: the finished-uncommitted lane owns this
+    if (isOwnFixRetryClaim(work, [id])) continue; // the task's own failed-attempt retry
+    claims.push({ sessionId: id, title: str(row.title) || str(peer.title) });
+  }
+  return claims;
+}
+
 // Spawn-loop file claim: the same live-editor check as collaborate(), plus
 // in-memory claims from sibling executor jobs and the write-lock registry. A
 // hit is `defer` so the dispatcher skips this pick and tries the next — it
@@ -2747,6 +2794,25 @@ export function claimWork({ work = null, collisions = [], presence = [], session
       held: hardHeld.map((claim) => claim.file),
       owners,
       advice: `Finished session${owners.length === 1 ? "" : "s"} ${who} already edited ${labels.join(", ")}${extra} but the edits are still uncommitted — the task is held for verification instead of re-dispatched; it releases once that work is committed or the session is cleared.`,
+    };
+  }
+  // Committed work a finished session already owns: re-dispatching would
+  // rebuild a landed fix (each duplicate "fix landed twice" dispatch started
+  // here), so the pick waits instead of adopting finished work.
+  const landedHeld = finishedWorkClaims({ work, sessions, todos, uncommitted });
+  if (landedHeld.length) {
+    const owners = landedHeld.slice(0, 2);
+    const who = owners
+      .map((claim) => (claim.title ? `"${claim.title}" (${claim.sessionId})` : claim.sessionId))
+      .join(", ");
+    return {
+      ...collab,
+      action: "defer",
+      reason: "finished-committed",
+      files: named,
+      held: [],
+      owners: landedHeld.map((claim) => claim.sessionId).slice(0, 2),
+      advice: `Finished session${owners.length === 1 ? "" : "s"} ${who} already completed this work and the edits are committed — the pick is held instead of re-dispatched; it releases when that session folds out of the live store, and new work here must name what is still missing.`,
     };
   }
   return { ...collab, reason: collab.action, files: named, held: [] };

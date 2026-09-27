@@ -300,3 +300,46 @@ test("a mode change while saving the decision cancels the pending answer and rel
   assert.equal(f.state.decisions[0].failed, true);
   assert.equal(f.board.tasks[0].autonomyPending, undefined);
 });
+
+
+test("Auto repairs a legacy owner leftover without pretending missing sessionless checks passed", async () => {
+  const f = fixture({ kind: "owner", task: {
+    verification: { state: "failed", reason: "codex runs leave no session the verifier can read" },
+    verifyAttempts: 3, lastAttempt: { route: "codex", runId: "run1", code: 0,
+      result: { parts: { remaining: "none", owner: "reconcile concurrent Analyzer test failures and existing test-history archive conflict" } } },
+  }, reply: { optionId: "retry", confidence: 0.95, reason: "Preserve concurrent edits, repair regressions, then rerun checks." } });
+  for (const option of f.question.options) option.action.payload.ask = f.board.tasks[0].lastAttempt.result.parts.owner;
+  f.question.context.suggestion = { optionId: null, reason: "I need recorded, named passing checks for this run before I can confirm it.", at: NOW - 1 };
+  await f.host.decide();
+  assert.equal(f.question.context.issueKind, "check-failed");
+  assert.equal(f.answers.length, 1);
+  assert.equal(f.answers[0].optionId, "retry");
+  assert.equal(f.board.tasks[0].status, "open");
+  assert.equal(f.board.tasks[0].assistantRetries.length, 1);
+  assert.equal(f.state.todos.length, 0);
+  assert.ok(!f.question.options.some(option => option.id === "confirm-result"));
+});
+
+test("a saved missing-evidence refusal allows a bounded Auto verification retry", async () => {
+  const f = fixture({ kind: "verify", task: {
+    verification: { state: "failed", reason: "codex runs leave no session the verifier can read" },
+    verifyAttempts: 3, lastAttempt: { route: "codex", runId: "run1", code: 0 },
+  }, reply: { optionId: "retry", confidence: 0.95, reason: "Run the named verification commands." } });
+  f.question.context.suggestion = { optionId: null, reason: "I need recorded, named passing checks for this run before I can confirm it.", at: NOW - 1 };
+  await f.host.decide();
+  assert.equal(f.answers.length, 1);
+  assert.equal(f.answers[0].optionId, "retry");
+  assert.equal(f.board.tasks[0].assistantRetries.length, 1);
+});
+
+
+test("Auto clears agent proposals from Needs you; switching back restores the approval gate", async () => {
+  const f = fixture({ task: { origin: { kind: "request", by: "overseer" } } });
+  f.state.questions.length = 0;
+  f.settings.autonomy.elevated["agent-filed"] = true;
+  assert.equal((await f.host.notices()).counts.approval, 0);
+  await f.host.set({ level: "elevated" });
+  assert.equal((await f.host.notices()).counts.approval, 1);
+  await f.host.set({ level: "auto" });
+  assert.equal((await f.host.notices()).counts.total, 0);
+});

@@ -746,7 +746,7 @@ body.command-active .home-tab {
   color: var(--muted);
 }
 .badge.premium { color: var(--gold-bright); border-color: var(--gold-dim); }
-.badge.free, .badge.unlimited { color: var(--live); border-color: color-mix(in srgb, var(--live) 30%, transparent); }
+.badge.free, .badge.unlimited { color: var(--good); border-color: color-mix(in srgb, var(--good) 30%, transparent); }
 .badge.legacy { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 30%, transparent); }
 .badge.new { color: var(--info); border-color: rgba(157, 183, 255, 0.3); }
 .badge.trains { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
@@ -1185,8 +1185,8 @@ table#table tr:hover td { background: color-mix(in srgb, var(--gold) 4%, transpa
 .cmd-card .filed-row { display: flex; align-items: baseline; gap: 6px; margin: 2px 0; padding-left: var(--s2); border-left: 2px solid var(--gold-dim); border-radius: 0; }
 .cmd-card .filed-row .text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cmd-card .filed-row .when { flex: none; color: var(--dim); font-size: var(--fs-2xs); white-space: nowrap; }
-.cmd-card .filed-row.is-running { border-left-color: var(--gold-bright); }
-.cmd-card .filed-row.is-running .when { color: var(--gold-bright); }
+.cmd-card .filed-row.is-running { border-left-color: var(--live); }
+.cmd-card .filed-row.is-running .when { color: var(--live); }
 .cmd-card .filed-row:hover .text { color: var(--gold-bright); }
 .cmd-card .stepper-row { display: flex; align-items: center; gap: var(--s2); width: 100%; margin: 0; }
 .cmd-card .stepper-row .k { flex: none; white-space: nowrap; margin: 0; font-size: var(--fs-sm); color: var(--muted); }
@@ -2270,7 +2270,7 @@ body.command-active:has(#idle-legend-toggle[aria-expanded="true"]) #toast-host {
 }
 .toast.show { opacity: 1; translate: none; height: auto; padding-block: 10px; }
 .toast.show:not(:first-child) { margin-top: var(--s2); }
-.toast.good { border-left-color: var(--live); }
+.toast.good { border-left-color: var(--good); }
 .toast.bad  { border-left-color: var(--bad); }
 .toast.info { border-left-color: var(--info); }
 .toast.warn { border-left-color: var(--warn); }
@@ -2656,7 +2656,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 #workspace-preview-url { color: var(--ivory); font-variant-numeric: tabular-nums; }
 .ws-preview-details { margin-top: 8px; font-size: 10px; color: var(--muted); }
 .ws-preview-details pre { max-height: 90px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 10px; }
-.ws-preview-panel[data-phase="failed"] { border-color: #c1846c; }
+.ws-preview-panel[data-phase="failed"] { border-color: var(--bad); }
 .ws-preview-panel[data-phase="ready"] { border-color: var(--ws-accent); }
 .task-workflow-summary { border: 1px solid var(--hairline); border-radius: 8px; padding: 12px; margin-block: 10px; }
 .task-workflow-facts { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 12px; line-height: 1.6; }
@@ -2774,7 +2774,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
   .ws-work-tabs button span { margin-left: 0; }
 }
 .ws-work-list { overflow-y: auto; min-height: 90px; flex: 1; padding: 2px 5px 2px 2px; overscroll-behavior: contain; scroll-padding-block: 4px; }
-.ws-work-card { width: 100%; min-width: 0; display: flex; flex-direction: column; align-items: stretch; white-space: normal; text-align: left; background: var(--panel-solid); border: 1px solid var(--hairline); border-left: 3px solid #536146; border-radius: 9px; padding: 12px 13px; gap: 6px; margin-bottom: 9px; }
+.ws-work-card { width: 100%; min-width: 0; display: flex; flex-direction: column; align-items: stretch; white-space: normal; text-align: left; background: var(--panel-solid); border: 1px solid var(--hairline); border-left: 3px solid var(--hairline-strong); border-radius: 9px; padding: 12px 13px; gap: 6px; margin-bottom: 9px; }
 .ws-work-card > * { max-width: 100%; min-width: 0; }
 .ws-work-card:hover { border-top-color: var(--hairline-strong); border-right-color: var(--hairline-strong); border-bottom-color: var(--hairline-strong); background: var(--tint-gold-2); }
 .workspace .ws-work-open { display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 0; width: 100%; padding: 0; border: 0; border-radius: 3px; background: none; color: inherit; text-align: left; white-space: normal; box-shadow: none; }
@@ -2786,24 +2786,26 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .ws-work-card progress { width: 100%; height: 4px; appearance: none; border: 0; border-radius: 2px; overflow: hidden; background: color-mix(in srgb, var(--gold) 8%, var(--panel-solid)); accent-color: var(--ws-accent); }
 .ws-work-card progress::-webkit-progress-bar { background: color-mix(in srgb, var(--gold) 8%, var(--panel-solid)); }
 .ws-work-card progress::-webkit-progress-value { background: var(--ws-accent); }
-.ws-work-card[data-stage="running"] { border-left-color: var(--ws-accent); background: var(--panel-solid); }
-.ws-work-card[data-stage="running"] .ws-work-status { color: var(--ws-accent); }
-.ws-work-card[data-stage="blocked"] { border-left-color: #c1846c; }
-.ws-work-card[data-stage="blocked"] .ws-work-status { color: #e0ae96; }
-.ws-work-card[data-stage="cooling"] { border-left-color: #91a4b9; }
-.ws-work-card[data-stage="cooling"] .ws-work-status { color: #b6c7da; }
-.ws-work-card[data-stage="review"] { border-left-color: #d4b574; }
-.ws-work-card[data-stage="done"] { border-left-color: #8fae7e; }
-.ws-idea-card { border-left-color: #a49bbb; background: #1e201e; }
-.ws-idea-card .ws-work-status { color: #c4bbd6; }
+/* Status hues match Tasks, Command and Vibe: running --live, review and waiting
+   --info, blocked --bad, done --good, ideas --idea. */
+.ws-work-card[data-stage="running"] { border-left-color: var(--live); background: var(--panel-solid); }
+.ws-work-card[data-stage="running"] .ws-work-status { color: var(--live); }
+.ws-work-card[data-stage="blocked"] { border-left-color: var(--bad); }
+.ws-work-card[data-stage="blocked"] .ws-work-status { color: var(--bad); }
+.ws-work-card[data-stage="cooling"] { border-left-color: var(--info); }
+.ws-work-card[data-stage="cooling"] .ws-work-status { color: var(--info); }
+.ws-work-card[data-stage="review"] { border-left-color: var(--info); }
+.ws-work-card[data-stage="done"] { border-left-color: var(--good); }
+.ws-idea-card { border-left-color: var(--idea); background: var(--panel-solid); }
+.ws-idea-card .ws-work-status { color: var(--idea); }
 #workspace-show-more { flex-shrink: 0; margin-top: 7px; width: 100%; min-height: 33px; font-size: 11px; border-radius: 6px; }
-.ws-work-status { align-self: flex-start; font-size: 10px; line-height: 1.5; color: #c0cbb1; letter-spacing: .1px; }
-.ws-work-card.done { border-left-color: #8fae7e; }
-.ws-work-card.done .ws-work-status { color: #b9d3a6; }
-.ws-work-card.review { border-left-color: #d4b574; }
-.ws-work-card.review .ws-work-status { color: #e0c695; }
-.ws-work-card[data-status="active"], .ws-work-card[data-status="running"] { border-left-color: var(--ws-accent); background: var(--panel-solid); }
-.ws-work-card[data-status="active"] .ws-work-status, .ws-work-card[data-status="running"] .ws-work-status { color: var(--ws-accent); }
+.ws-work-status { align-self: flex-start; font-size: 10px; line-height: 1.5; color: var(--muted); letter-spacing: .1px; }
+.ws-work-card.done { border-left-color: var(--good); }
+.ws-work-card.done .ws-work-status { color: var(--good); }
+.ws-work-card.review { border-left-color: var(--info); }
+.ws-work-card.review .ws-work-status { color: var(--info); }
+.ws-work-card[data-status="active"], .ws-work-card[data-status="running"] { border-left-color: var(--live); background: var(--panel-solid); }
+.ws-work-card[data-status="active"] .ws-work-status, .ws-work-card[data-status="running"] .ws-work-status { color: var(--live); }
 .ws-work-card[data-status="blocked"], .ws-work-card[data-status="failed"] { border-left-color: var(--bad); }
 .ws-work-card[data-status="blocked"] .ws-work-status, .ws-work-card[data-status="failed"] .ws-work-status { color: var(--bad); }
 .ws-work-title { color: var(--ivory); font-size: 13px; font-weight: 550; line-height: 1.5; overflow-wrap: anywhere; }
@@ -2811,9 +2813,9 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .ws-work-card[data-stage="ready"] .ws-work-summary { -webkit-line-clamp: 1; }
 .ws-work-time { color: var(--dim); font-size: 10px; line-height: 1.5; margin-top: 3px; }
 .ws-work-empty { text-align: center; padding: 34px 15px; }
-.ws-empty-symbol { font-size: 32px; color: #829d63; }
+.ws-empty-symbol { font-size: 32px; color: var(--gold); }
 .ws-work-empty h3 { font: 600 16px/1.4 var(--font-ui); color: var(--ivory); margin: 12px 0 8px; }
-.ws-work-empty p { color: #8b997c; font-size: 11px; line-height: 1.8; }
+.ws-work-empty p { color: var(--muted); font-size: 11px; line-height: 1.8; }
 .ws-work-empty button { margin-top: 11px; font-size: 10px; }
 .ws-activity { border-top: 1px solid var(--hairline); margin-top: 14px; flex-shrink: 0; }
 .ws-activity summary { cursor: pointer; color: var(--muted); font-size: 11px; padding: 12px 0; }
@@ -3052,7 +3054,7 @@ html[data-no-blur] {
   backdrop-filter: var(--frost);
 }
 #workspace-layer .ws-dash-tile:is(:hover, :focus-visible) { background: var(--frost-tint-hover); border-color: var(--hairline-strong); }
-#workspace-layer .ws-dash-tile[data-tone="warn"] { border-color: rgba(230, 168, 90, 0.55); }
+#workspace-layer .ws-dash-tile[data-tone="warn"] { border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
 #workspace-layer .ws-dash-tile[data-tone="held"] { border-color: rgba(200, 120, 120, 0.5); }
 #workspace-layer .ws-connection { color: var(--ivory); }
 /* The conversation and Your work become the two panes they already were,
@@ -3092,11 +3094,11 @@ html[data-no-blur] {
 #task-list > .task-overview-summary strong { color: var(--ivory); font-size: 14px; }
 #task-list .task-overview-card { min-width: 0; padding: 18px; margin: 0; border: 1px solid var(--hairline-strong); border-radius: var(--r-md); background: color-mix(in srgb,var(--ivory) 3%,var(--panel-solid)); cursor: default; overflow-wrap: anywhere; }
 #task-list .task-overview-card:hover { background: color-mix(in srgb,var(--ivory) 3%,var(--panel-solid)); }
-#task-list .task-overview-card[data-stage="running"] { border-color: color-mix(in srgb,var(--gold) 55%,var(--hairline)); }
+#task-list .task-overview-card[data-stage="running"] { border-color: color-mix(in srgb,var(--live) 45%,var(--hairline)); }
 .task-overview-card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
 .task-overview-card-head .eyebrow { font-size: 9px; letter-spacing: .1em; color: var(--muted); }
 .task-overview-status { border-radius: var(--r-pill); padding: 4px 9px; font-size: 10px; font-weight: 600; line-height: 1.4; color: var(--ivory); background: color-mix(in srgb,var(--ivory) 9%,transparent); }
-.task-overview-status[data-stage="running"] { color: var(--gold-bright); background: color-mix(in srgb,var(--gold) 13%,transparent); }
+.task-overview-status[data-stage="running"] { color: var(--live); background: color-mix(in srgb,var(--live) 12%,transparent); }
 .task-overview-status[data-stage="done"] { color: var(--good); background: color-mix(in srgb,var(--good) 12%,transparent); }
 .task-overview-status[data-stage="review"] { color: var(--info); background: color-mix(in srgb, var(--info) 10%, transparent); }
 .task-overview-status[data-stage="blocked"] { color: var(--bad); background: color-mix(in srgb,var(--bad) 12%,transparent); }
@@ -3106,7 +3108,7 @@ html[data-no-blur] {
 .task-overview-progress { display: flex; gap: 3px; height: 7px; border-radius: var(--r-sm); overflow: hidden; background: var(--hairline); margin: 16px 0 9px; }
 .task-overview-segment { min-width: 0; flex-basis: 0; background: var(--hairline-strong); }
 .task-overview-segment[data-stage="done"] { background: var(--good); }
-.task-overview-segment[data-stage="running"] { background: var(--gold); }
+.task-overview-segment[data-stage="running"] { background: var(--live); }
 .task-overview-segment[data-stage="review"] { background: var(--info); }
 .task-overview-segment[data-stage="blocked"] { background: var(--bad); }
 .task-overview-counts { font-size: 11px; color: var(--muted); margin: 0 0 16px; line-height: 1.6; }
@@ -3133,12 +3135,12 @@ html[data-no-blur] {
 .task-row .src-tag[data-readiness="ready"] { color: var(--good); background: color-mix(in srgb, var(--good) 14%, var(--panel-solid)); }
 .task-row .src-tag[data-readiness="blocked"] { color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, var(--panel-solid)); }
 .task-row .src-tag[data-readiness="grouped"] { color: var(--idea); background: color-mix(in srgb, var(--idea) 14%, var(--panel-solid)); }
-.task-row .src-tag[data-readiness="running"] { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, var(--panel-solid)); }
+.task-row .src-tag[data-readiness="running"] { color: var(--live); background: color-mix(in srgb, var(--live) 14%, var(--panel-solid)); }
 .task-reference-drawer { margin-top: 28px; border-top: 1px solid var(--hairline); padding-top: 14px; }
 .task-reference-drawer summary { cursor: pointer; color: var(--muted); margin-bottom: 14px; }
 .task-readiness { border-left: 3px solid var(--gold); padding: 10px 13px; background: var(--tint-gold-1); color: var(--ivory); border-radius: 0 7px 7px 0; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
-.task-readiness[data-task-readiness="waiting"] { border-left-color: #91a9c3; color: #c8d7e8; background: #1e252b; }
-.task-readiness[data-task-readiness="blocked"] { border-left-color: #cd9274; color: #ebc2aa; background: #2a221d; }
+.task-readiness[data-task-readiness="waiting"] { border-left-color: var(--info); background: color-mix(in srgb, var(--info) 8%, var(--panel-solid)); }
+.task-readiness[data-task-readiness="blocked"] { border-left-color: var(--bad); background: color-mix(in srgb, var(--bad) 8%, var(--panel-solid)); }
 .task-context-section { margin: 13px 0; border: 1px solid var(--hairline); border-radius: 8px; padding: 0 14px; background: var(--panel-solid); }
 .task-context-section > summary { cursor: pointer; padding: 13px 0; color: var(--ivory); font-size: 13px; font-weight: 550; }
 .task-context-section > summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
@@ -3169,7 +3171,7 @@ html[data-no-blur] {
 #idle-hud .cmd-brand .monogram { margin-top: 4px; border-color: var(--cmd-edge); border-radius: var(--r-sm); background: linear-gradient(145deg, var(--cmd-raised), var(--cmd-surface)); box-shadow: inset 0 1px var(--tint-gold-2); }
 #idle-hud .cmd-brand-text { min-width: 0; gap: 0; }
 #idle-hud .cmd-brand .eyebrow { font-size: 9px; letter-spacing: .18em; color: var(--muted); }
-#idle-hud .cmd-heading { font: 600 22px/1.25 var(--font-ui); letter-spacing: -.4px; margin: 0 0 4px; color: var(--ivory); }
+#idle-hud .cmd-heading { font: 600 22px/1.25 var(--font-display); letter-spacing: var(--studio-title-tracking, -.035em); margin: 0 0 4px; color: var(--ivory); }
 #idle-hud .cmd-tele { flex-wrap: nowrap; gap: 0; overflow: hidden; }
 #idle-hud .cmd-tele .pill { font-size: 11px; min-height: 23px; padding: 1px 9px; flex: none; border: 0; border-radius: 3px; background: transparent; box-shadow: none; color: var(--muted); }
 #idle-hud .cmd-tele .pill:first-child { padding-left: 0; }
@@ -3233,8 +3235,8 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .feed-metric[data-empty="true"] strong { color: var(--muted); }
 #idle-hud .feed-metric[data-state="ready"][data-empty="false"] strong { color: var(--gold-bright); }
 #idle-hud .feed-metric[data-state="review"][data-empty="false"] strong { color: var(--info); }
-#idle-hud .feed-metric[data-state="blocked"][data-empty="false"] { border-color: color-mix(in srgb, var(--warn) 48%, var(--cmd-edge)); background: color-mix(in srgb, var(--warn) 7%, var(--cmd-surface)); }
-#idle-hud .feed-metric[data-state="blocked"][data-empty="false"] strong { color: var(--warn); }
+#idle-hud .feed-metric[data-state="blocked"][data-empty="false"] { border-color: color-mix(in srgb, var(--bad) 48%, var(--cmd-edge)); background: color-mix(in srgb, var(--bad) 7%, var(--cmd-surface)); }
+#idle-hud .feed-metric[data-state="blocked"][data-empty="false"] strong { color: var(--bad); }
 #idle-hud .feed-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: contain; padding: 2px 2px 4px; scroll-padding-block: 4px; }
 #idle-hud .feed-scroll:has(> .feed-activity[hidden]) { flex: 0 1 auto; max-height: 40%; margin-bottom: 12px; }
 #idle-hud .feed-scroll:has(> .feed-activity[hidden]) .feed-current { margin-bottom: 0; }
@@ -3900,7 +3902,7 @@ body.command-active .walkthrough-coach { right: 392px; }
 }
 .help-start { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
 /* Settings: seven compact category panes and direct control search. */
-.settings-panel { container: settings / inline-size; padding: 0; border: 0; background: transparent; }
+.settings-panel { container: settings / inline-size; padding: 0; border: 0; background: transparent; backdrop-filter: none; }
 .settings-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: var(--s4); }
 .settings-heading h2 { margin-bottom: 6px; }
 /* The page header already names Settings, so the panel's own heading is for
@@ -3973,7 +3975,7 @@ body.command-active .walkthrough-coach { right: 392px; }
 .field-scope { font-weight: 400; opacity: .75; }
 .field-hint { color: var(--dim); font-size: var(--fs-xs); line-height: 1.5; }
 .field > select, .field > input { width: 100%; max-width: 100%; box-sizing: border-box; }
-.field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: 10px; }
 .settings-help { margin-top: 2px; }
 .settings-help > summary { color: var(--dim); font-size: var(--fs-xs); cursor: pointer; }
 .settings-help > summary:hover { color: var(--muted); }
@@ -3992,7 +3994,7 @@ body.command-active .walkthrough-coach { right: 392px; }
 /* Providers: a grid of connection tiles — mark, name, kind and readiness pill, then the tile's own control. */
 .provider-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 8px; align-items: start; }
 .provider-tile { padding: 10px 12px; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--panel-solid); box-shadow: none; min-width: 0; }
-.provider-tile:has(.provider-pill[data-state="ready"]) { border-color: color-mix(in srgb, var(--live) 28%, var(--hairline)); }
+.provider-tile:has(.provider-pill[data-state="ready"]) { border-color: color-mix(in srgb, var(--good) 28%, var(--hairline)); }
 
 .provider-tile-head { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; min-width: 0; }
 .provider-mark { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--hairline-strong); background: radial-gradient(circle at 30% 25%, var(--tint-gold-3), transparent 60%), rgba(8, 8, 11, 0.6); color: var(--gold-bright); font: 700 12px/1 var(--font-display); letter-spacing: .02em; }
@@ -4004,8 +4006,8 @@ body.command-active .walkthrough-coach { right: 392px; }
 .provider-hint { flex: 1 1 160px; color: var(--muted); font-size: var(--fs-xs); line-height: 1.5; }
 .provider-pill { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px solid var(--hairline); border-radius: 999px; color: var(--muted); font-size: var(--fs-2xs); white-space: nowrap; }
 .provider-pill::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); opacity: .55; }
-.provider-pill[data-state="ready"] { color: var(--ivory); border-color: color-mix(in srgb, var(--live) 45%, transparent); }
-.provider-pill[data-state="ready"]::before { background: var(--live); opacity: 1; box-shadow: 0 0 6px var(--live-dim); }
+.provider-pill[data-state="ready"] { color: var(--ivory); border-color: color-mix(in srgb, var(--good) 45%, transparent); }
+.provider-pill[data-state="ready"]::before { background: var(--good); opacity: 1; }
 .provider-pill[data-state="missing"] { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
 .provider-pill[data-state="missing"]::before { background: var(--warn); opacity: 1; }
 .settings-nav-badge { margin-left: auto; padding: 1px 7px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--live) 40%, transparent); color: var(--live); font-size: var(--fs-2xs); font-weight: 600; white-space: nowrap; }
@@ -4077,10 +4079,9 @@ body.command-active .walkthrough-coach { right: 392px; }
 /* A jump opens a folded card at full height at once (booklet.js marks it for
    that one frame), so the scroll lands on the card as it will be. */
 .settings-card[data-settings-opening]::details-content { transition: none; }
-/* The rail shell has no tabs row above the page: the list sticks near the
-   top, and a jump lands a card just under the window's edge. */
-html[data-shell="rail"] .settings-nav { top: var(--s4); max-height: calc(100vh - 2 * var(--s4)); }
-html[data-shell="rail"] .settings-card { scroll-margin-top: var(--s4); }
+/* Keep the sticky category list and jumps below the fixed local navigation. */
+html[data-shell="rail"] .settings-nav { top: calc(var(--shell-local-h) + var(--s4)); max-height: calc(100vh - var(--shell-local-h) - 2 * var(--s4)); }
+html[data-shell="rail"] .settings-card { scroll-margin-top: calc(var(--shell-local-h) + var(--s4)); }
 /* Narrow panel: one column, and the list turns into a strip over the cards —
    Find first, then every section as a chip in one row that scrolls sideways. */
 @container settings (max-width: 720px) {
@@ -4095,11 +4096,11 @@ html[data-shell="rail"] .settings-card { scroll-margin-top: var(--s4); }
   .settings-nav-item[aria-current="true"] { box-shadow: none; }
   .settings-card { padding: 14px 16px; }
   .settings-optional { padding: 12px 16px; }
-  /* The rail shell has no tabs row above the page, so the strip can stick. */
+  /* The category strip sticks below the fixed local navigation. */
   /* Stuck, it reaches a little past the cards, so its rounded corners sit over
      the panel's empty padding rather than over a card's edge. */
-  html[data-shell="rail"] .settings-nav { position: sticky; top: 0; z-index: 2; max-height: none; margin-inline: calc(-1 * var(--s2)); padding-inline: var(--s4); border-radius: 0 0 12px 12px; background: var(--panel-solid); box-shadow: var(--shadow-1); }
-  html[data-shell="rail"] .settings-card { scroll-margin-top: 112px; }
+  html[data-shell="rail"] .settings-nav { position: sticky; top: var(--shell-local-h); z-index: 2; max-height: none; margin-inline: calc(-1 * var(--s2)); padding-inline: var(--s4); border-radius: 0 0 12px 12px; background: var(--panel-solid); box-shadow: var(--shadow-1); }
+  html[data-shell="rail"] .settings-card { scroll-margin-top: calc(var(--shell-local-h) + 112px); }
 }
 /* The classic tabs row wraps at 1250px and grows past the list's 68px offset. */
 @media (max-width: 1250px) {
@@ -4549,7 +4550,7 @@ html[data-no-blur] #idle-hud .cmd-agents-pop { background: var(--panel-solid); b
 #idle-hud .usage-pop .tracker-row[data-tone="idle"] .tracker-row-value { opacity: .75; }
 /* a failed read carries its whole reason: the row stacks and the text wraps under the name */
 #idle-hud .usage-pop .tracker-row[data-tone="error"] { grid-template-columns: 1fr; gap: 1px; }
-#idle-hud .usage-pop .tracker-row[data-tone="error"] .tracker-row-value { color: var(--warn); text-align: left; }
+#idle-hud .usage-pop .tracker-row[data-tone="error"] .tracker-row-value { color: var(--bad); text-align: left; }
 #idle-hud .usage-pop .tracker-line { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
 #idle-hud .usage-pop .tracker-line-warn { color: var(--warn); overflow-wrap: anywhere; }
 #idle-hud .usage-pop .tracker-line-idle { opacity: .8; }
@@ -4883,6 +4884,7 @@ html[data-shell="rail"] .overlay,
 html[data-shell="rail"] .planning-overlay,
 html[data-shell="rail"] .profiler-overlay,
 html[data-shell="rail"] .music-overlay { left: var(--shell-rail-w); }
+html[data-shell="rail"] #workspace-layer,
 html[data-shell="rail"] #idle-hud { top: var(--shell-local-h); }
 /* The project panel slides out of the rail's edge, not the window's. */
 html[data-shell="rail"] #workspace-sidebar-panel { left: var(--shell-rail-w); }
@@ -5830,6 +5832,7 @@ body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left
 .music-dropdown[hidden], .music-dropdown [hidden] { display: none !important; }
 .music-dropdown[data-source="radio"] { width: min(540px, calc(100vw - 24px)); }
 .music-dropdown[data-video="true"] { width: min(624px, calc(100vw - 24px)); }
+.music-dropdown[data-source="link"] { width: min(920px, calc(100vw - 24px)); }
 .music-dropdown-header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--hairline); background: var(--panel-solid); }
 .music-dropdown-header h2 { flex: 1; margin: 0; font: 600 15px/1.4 var(--font-ui); }
 .music-dropdown-header { flex-wrap: wrap; }
@@ -5842,9 +5845,9 @@ body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left
 .music-tree-visibility > summary { cursor: pointer; font-weight: 600; }
 .media-window-controls > .music-tree-visibility { grid-column: 1 / -1; }
 .music-dropdown-header button { flex: none; }
-.music-dropdown-body { min-width: 0; padding: 16px; }
-.music-dropdown .music-main { padding: 16px 0; margin-top: 14px; }
-.music-dropdown .music-group-label { display: block; margin: 0 0 12px; color: var(--gold-bright); font-size: 10px; letter-spacing: .13em; }
+.music-dropdown-body { min-width: 0; padding: 16px; container-type: inline-size; container-name: media-menu; }
+.music-dropdown .music-main { padding: 0 0 16px; margin-top: 0; }
+.music-dropdown .music-group-label { position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip-path: inset(50%); }
 .music-dropdown .music-art { display: grid; }
 .music-dropdown .music-player { padding: 16px; border: 1px solid var(--hairline-strong); border-radius: 14px; background: linear-gradient(125deg, var(--tint-gold-2), var(--bg-deep)); }
 .music-dropdown .music-tabs { width: 100%; margin: 0 0 16px; padding: 3px; border-radius: 9px; }
@@ -5873,6 +5876,54 @@ body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left
 .music-dropdown .music-link-now { padding: 14px; margin-top: 14px; border: 1px solid var(--hairline-strong); border-radius: 12px; background: var(--tint-gold-1); }
 .music-dropdown .music-station { min-height: 70px; border-radius: 12px; }
 .music-dropdown .music-tab[aria-selected="true"] { box-shadow: inset 0 -2px var(--gold); }
+.music-video-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(220px, 1fr); gap: 18px; align-items: start; margin-top: 16px; }
+.music-video-watching { min-width: 0; }
+.music-video-stage { width: 100%; min-width: 0; aspect-ratio: 16 / 9; min-height: 190px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; box-sizing: border-box; border: 1px solid var(--hairline-strong); border-radius: 12px; background: radial-gradient(ellipse at 50% 0, var(--tint-gold-3), transparent 80%), var(--bg-deep); text-align: center; overflow: hidden; }
+.music-video-stage-icon { font-size: 34px; line-height: 1; color: var(--gold-bright); }
+.music-video-stage strong { font-size: 14px; }
+.music-video-stage small { max-width: 290px; font-size: 11px; line-height: 1.6; color: var(--muted); }
+.music-video-stage[data-shape="browser"] { min-height: 340px; aspect-ratio: auto; }
+.music-video-stage[data-shape="audio"] { min-height: 104px; aspect-ratio: auto; }
+.music-video-stage[data-mode="background"] { min-height: 160px; aspect-ratio: auto; }
+.music-video-presentation { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; }
+.music-video-presentation .eyebrow { color: var(--muted); font-size: 9px; }
+.music-video-presentation button { padding: 7px 12px; font-size: 12px; border-color: var(--gold-dim); }
+.music-video-presentation button[aria-pressed="true"] { color: var(--gold-bright); background: var(--tint-gold-2); }
+.music-video-layout .music-link-queue { min-width: 0; margin: 0; padding: 14px; background: var(--tint-gold-1); border: 1px solid var(--hairline-strong); border-radius: 12px; }
+.music-video-layout .music-link-queue-header { align-items: center; margin: 0 0 12px; gap: 8px; }
+.music-video-layout .music-link-queue-header h3 { font-size: 14px; }
+.music-video-layout .music-link-queue-header button { padding: 5px 8px; font-size: 10px; }
+.music-video-layout .music-link-queue-list { max-height: 310px; margin: 0; padding: 0; gap: 8px; }
+.music-video-layout .music-link-queue-item { padding: 12px; border-color: var(--hairline); background: var(--panel-solid); }
+.music-video-layout .music-link-queue-copy strong { font-size: 12px; line-height: 1.5; }
+.music-video-layout .music-link-queue-actions { gap: 4px; }
+.music-video-layout .music-link-queue-actions button { padding: 5px 7px; font-size: 10px; }
+.music-video-layout .music-link-queue-actions button:first-child { color: var(--gold-bright); }
+.music-video-layout .music-browser-card { margin: 12px 0 0; padding: 10px 12px; background: transparent; }
+.music-video-layout .music-browser-copy strong { font-size: 11px; }
+.music-video-layout .music-browser-copy span { font-size: 10px; }
+.music-dropdown .music-connection { padding: 12px 0; margin: 0; border-top: 1px solid var(--hairline); }
+.music-connection > summary { cursor: pointer; color: var(--muted); font: 600 12px/1.5 var(--font-ui); }
+.music-connection[open] > summary { margin-bottom: 14px; color: var(--ivory); }
+.music-dropdown .music-video-settings { padding: 14px; border: 1px solid var(--hairline); border-radius: 12px; }
+.music-dropdown .music-video-settings > h3 { margin: 0 0 12px; font-size: 13px; }
+.music-dropdown .music-video-settings .media-window-controls { background: transparent; }
+.media-window[data-docked="true"] { padding: 0; border-radius: 12px; box-shadow: none; background: var(--bg-deep); }
+.media-window[data-docked="true"] .media-window-resize { display: none; }
+.media-window[data-docked="true"] #browser-move { cursor: default; }
+@container media-menu (max-width: 620px) {
+  .music-video-layout { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .music-video-watching { display: contents; }
+  .music-video-layout .music-link-queue-list { max-height: 220px; }
+  .music-video-stage { order: 0; height: 200px; min-height: 0; aspect-ratio: auto; }
+  .music-video-stage[data-shape="browser"] { height: 300px; min-height: 0; }
+  .music-video-stage[data-mode="background"] { height: 120px; }
+  .music-video-presentation { order: 1; margin: 2px 0; }
+  .music-video-layout .music-link-queue { order: 2; }
+  .music-video-layout .music-link-now { order: 3; }
+  .music-video-layout .music-recent { order: 4; }
+  .music-video-layout .music-browser-card { order: 5; }
+}
 @media (max-width: 500px) {
   .music-browser-card { flex-wrap: wrap; }
   .music-dropdown .music-player { gap: 12px; padding: 12px; }
@@ -5938,7 +5989,7 @@ body:has(#plans-overlay:not([hidden])) #idle-layer { opacity: .18; }
 .planning-head p { margin: 0; color: var(--muted); font-size: 13px; }
 .planning-notice { flex: none; min-height: 20px; margin: 0; padding: 8px 20px; color: var(--gold-bright); font-size: 13px; border-bottom: 1px solid var(--hairline); }
 .planning-notice:empty { display: none; }
-.planning-notice[data-error="true"] { color: #f6abab; }
+.planning-notice[data-error="true"] { color: var(--bad); }
 .planning-body { display: grid; grid-template-columns: 190px minmax(0, 1fr); min-height: 0; flex: 1; }
 .planning-sidebar { border-right: 1px solid var(--planning-edge); padding: 20px 12px; overflow: auto; background: var(--planning-chrome); }
 .planning-library-label { display: block; margin: 0 0 16px 6px; color: var(--muted); font-size: 10px; letter-spacing: .13em; }
@@ -5962,7 +6013,7 @@ body:has(#plans-overlay:not([hidden])) #idle-layer { opacity: .18; }
 .planning-flow-head h3 { font-size: 20px; line-height: 1.35; margin: 2px 0 0; letter-spacing: -.025em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .planning-flow-head p { margin: 0; max-width: 470px; }
 .planning-flow-badge { flex: none; max-width: 145px; border: 1px solid var(--hairline); border-radius: 20px; padding: 6px 10px; font-size: 10px; line-height: 1.5; color: var(--muted); }
-.planning-flow-badge[data-state="complete"] { color: #afdfc2; }
+.planning-flow-badge[data-state="complete"] { color: var(--good); }
 .planning-flow-rail { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; }
 .planning-flow-rail li { position: relative; display: flex; min-width: 0; }
 .planning-flow-stage { position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; width: 100%; min-height: 54px; padding: 8px; border: 1px solid var(--planning-edge); border-radius: 10px; background: var(--planning-sheen), var(--planning-inset); color: var(--muted); text-align: left; white-space: normal; transition: background .18s, border-color .18s, box-shadow .18s; }
@@ -6008,12 +6059,12 @@ body:has(#plans-overlay:not([hidden])) #idle-layer { opacity: .18; }
 .planning-map-column:not(:first-child) .planning-map-level::before { content: "↳ "; color: var(--gold-bright); }
 .planning-map-card { min-width: 0; border: 1px solid var(--planning-edge); border-radius: 10px; background: var(--planning-panel); overflow: hidden; }
 .planning-map-card[data-question-state="ready"] { border-color: var(--hairline-strong); }
-.planning-map-card[data-question-state="resolved"] { border-color: #afdfc244; }
+.planning-map-card[data-question-state="resolved"] { border-color: color-mix(in srgb, var(--good) 27%, transparent); }
 .planning-map-question { display: grid; gap: 8px; width: 100%; border: 0; border-radius: 0; padding: 13px; background: transparent; white-space: normal; text-align: left; overflow-wrap: anywhere; }
 .planning-map-question strong { font-size: 12px; line-height: 1.55; color: var(--ivory); font-weight: 500; }
 .planning-map-label, .planning-map-state, .planning-map-question small { font-size: 10px; line-height: 1.5; color: var(--muted); }
 .planning-map-question[data-question-state="ready"] .planning-map-state { color: var(--gold-bright); }
-.planning-map-question[data-question-state="resolved"] .planning-map-state { color: #afdfc2; }
+.planning-map-question[data-question-state="resolved"] .planning-map-state { color: var(--good); }
 .planning-map-question[data-active="true"] { background: var(--tint-gold-2); box-shadow: inset 3px 0 0 var(--gold); }
 .planning-map-links { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; border-top: 1px solid var(--hairline); padding: 8px 12px; color: var(--muted); font-size: 10px; }
 .planning-map-links button { border: 1px solid var(--planning-edge); border-radius: 5px; background: var(--planning-inset); color: var(--gold-bright); padding: 3px 6px; font-size: 10px; }
@@ -6023,8 +6074,8 @@ body:has(#plans-overlay:not([hidden])) #idle-layer { opacity: .18; }
 .planning-work-task span { color: var(--muted); font-size: 10px; }
 .planning-work-task[data-task-stage="running"] { border-color: var(--gold); }
 .planning-work-task[data-task-stage="running"] span, .planning-work-task[data-task-stage="review"] span { color: var(--gold-bright); }
-.planning-work-task[data-task-stage="done"] span { color: #afdfc2; }
-.planning-work-task[data-task-stage="blocked"] span { color: #f6abab; }
+.planning-work-task[data-task-stage="done"] span { color: var(--good); }
+.planning-work-task[data-task-stage="blocked"] span { color: var(--bad); }
 .planning-section { margin-bottom: 10px; padding: 6px 18px; border: 1px solid var(--planning-edge); border-radius: 12px; background: var(--planning-sheen), var(--planning-panel); backdrop-filter: var(--planning-blur); box-shadow: var(--planning-shadow); }
 .planning-section[open] { padding-bottom: 18px; border-top-color: color-mix(in srgb, var(--planning-step-accent) 30%, transparent); }
 .planning-section > summary { display: flex; align-items: center; gap: 11px; min-height: 46px; cursor: pointer; padding: 5px 0; color: var(--ivory); list-style: none; }
@@ -6059,7 +6110,7 @@ body:has(#plans-overlay:not([hidden])) #idle-layer { opacity: .18; }
 .planning-actions button { white-space: normal; }
 .planning-subtle { color: var(--muted); font-size: 12px; line-height: 1.6; }
 .planning-pill { border-radius: 100px; padding: 5px 10px; border: 1px solid var(--hairline); font-size: 12px; color: var(--gold-bright); background: var(--tint-gold-1); }
-.planning-pill[data-state="resolved"], .planning-pill[data-state="ready"] { color: #afdfc2; }
+.planning-pill[data-state="resolved"], .planning-pill[data-state="ready"] { color: var(--good); }
 .planning-card { padding: 14px; border: 1px solid var(--planning-edge); border-radius: var(--r-sm); margin: 10px 0; background: var(--planning-inset); overflow-wrap: anywhere; }
 .planning-card h4 { margin: 9px 0; font-size: 16px; line-height: 1.5; }
 .planning-card p { line-height: 1.6; }
@@ -6148,7 +6199,7 @@ body:has(#plans-overlay:not([hidden])) #idle-layer { opacity: .18; }
 .planning-compose-modes button { padding: 7px 5px; font-size: 12px; border: 1px solid transparent; border-radius: 6px; white-space: normal; }
 .planning-compose-modes button[aria-pressed="true"] { border-color: var(--planning-edge-active); background: var(--tint-gold-2); color: var(--gold-bright); }
 .planning-copilot-status { font-size: 12px; color: var(--muted); line-height: 1.6; min-height: 20px; margin: 13px 0; }
-.planning-copilot-status[data-error="true"] { color: #f6abab; }
+.planning-copilot-status[data-error="true"] { color: var(--bad); }
 .planning-copilot-status[data-active="true"] { color: var(--gold-bright); }
 .planning-copilot-status[data-active="true"]::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 8px; border-radius: 50%; background: var(--gold); animation: planning-think 1.8s infinite; }
 .planning-explore-tree { border: 1px solid var(--planning-edge); border-radius: 10px; padding: 15px 13px; background: var(--planning-inset); overflow-wrap: anywhere; }
@@ -6504,7 +6555,7 @@ html[data-no-blur] #plans-overlay { --planning-blur: none; --planning-page-blur:
 .brains-note { margin: 0; font-size: 11px; line-height: 1.65; color: var(--muted); }
 .brains-note.lead { font-size: 12px; color: var(--ivory); opacity: .88; }
 .brains-note.quiet { opacity: .8; font-size: 10.5px; }
-.brains-note.warn { color: var(--bad); }
+.brains-note.warn { color: var(--warn); }
 .brains-note.gate { color: var(--gold-bright); }
 .brains-note.caution { color: var(--warn); }
 .brains-note.problem { padding: 7px 10px; border-radius: 9px; border: 1px solid currentColor; background: color-mix(in srgb, currentColor 7%, transparent); }
@@ -6527,8 +6578,8 @@ html[data-no-blur] #plans-overlay { --planning-blur: none; --planning-page-blur:
 .brains-list h4 { margin: 0; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--gold-bright); }
 .brains-list ul { margin: 0; padding-left: 16px; display: grid; gap: 4px; }
 .brains-can li, .brains-cannot li { font-size: 11px; line-height: 1.55; color: var(--muted); }
-.brains-can li::marker { content: "✓ "; color: #afdfc2; }
-.brains-cannot li::marker { content: "✕ "; color: #f6abab; }
+.brains-can li::marker { content: "✓ "; color: var(--good); }
+.brains-cannot li::marker { content: "✕ "; color: var(--bad); }
 .brains-permission { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: start; font-size: 11px; padding: 6px 8px; border: 1px solid transparent; border-radius: 9px; cursor: pointer; }
 .brains-permission:hover { background: var(--tint-gold-1); }
 .brains-permission[data-problem="error"] { border-color: rgba(255,156,156,.35); background: rgba(255,156,156,.05); }
@@ -6569,14 +6620,14 @@ html[data-no-blur] #plans-overlay { --planning-blur: none; --planning-page-blur:
 .brains-problem { min-height: 0; margin: 0; font-size: 10.5px; line-height: 1.5; text-align: left; white-space: normal; border: 1px solid var(--hairline); border-radius: 8px; padding: 4px 8px; background: var(--bg); color: var(--muted); }
 .brains-problem[data-level="error"] { border-color: rgba(255,156,156,.35); color: var(--bad); }
 .brains-problem[data-level="warn"] { border-color: rgba(255,212,121,.4); color: var(--warn); }
-.brains-problem.ok { display: inline-flex; align-items: center; gap: 6px; border-color: rgba(175,223,194,.3); color: #afdfc2; }
+.brains-problem.ok { display: inline-flex; align-items: center; gap: 6px; border-color: color-mix(in srgb, var(--good) 30%, transparent); color: var(--good); }
 .brains-problem.ok::before { content: "✓"; font-weight: 700; }
 .brains-problem.ok:empty { display: none; }
 .brains-problem-more { color: var(--gold-bright); border-style: dashed; }
 .brains-problem:focus-visible { outline-offset: -3px; }
 .brains-problem-list[data-expanded="true"] { max-height: 40vh; }
 .brains-status { flex: 0 1 520px; margin: 0; font-size: 11px; line-height: 1.5; color: var(--muted); text-align: right; }
-.brains-status[data-tone="warn"] { color: var(--bad); }
+.brains-status[data-tone="warn"] { color: var(--warn); }
 
 /* ---- Space search -------------------------------------------------------------- */
 .brains-search { position: absolute; inset: 0; z-index: 14; display: grid; place-items: start center; padding-top: 12vh; background: rgba(0,0,0,.5); backdrop-filter: blur(3px); }
@@ -6690,7 +6741,7 @@ textarea.brains-dialog-input { min-height: 104px; resize: vertical; }
 .ask-chip { font-size: 10px; line-height: 1.5; padding: 3px 8px; border: 1px solid var(--hairline); border-radius: 20px; color: var(--muted); background: var(--bg); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ask-chip.task { color: var(--gold-bright); border-color: var(--gold); }
 button.ask-chip.task:hover { background: var(--tint-gold-2); }
-.ask-chip[data-severity="blocker"] { color: #f6abab; border-color: #f6abab55; }
+.ask-chip[data-severity="blocker"] { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 33%, transparent); }
 .ask-evidence { margin: 8px 0 0; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 8px; background: var(--bg); color: var(--muted); font-size: 10px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 76px; overflow: auto; }
 .ask-links { display: flex; justify-content: flex-end; margin-top: 8px; }
 
@@ -7092,7 +7143,7 @@ html[data-motion="off"] .companion-orb, html[data-motion="off"] .companion-orb .
 .agents-head .muted { font-size: var(--fs-sm); }
 .agents-head-actions { display: flex; align-items: center; justify-content: end; flex-wrap: wrap; gap: 8px; }
 .agents-eyebrow { font-size: var(--fs-2xs); letter-spacing: .12em; color: var(--gold-bright); }
-.agents-body { min-width: 0; min-height: 0; overflow-y: auto; padding: 12px 16px; }
+.agents-body { container: settings / inline-size; min-width: 0; min-height: 0; overflow-y: auto; padding: 12px 16px; }
 .agents-pane { display: grid; gap: 10px; min-width: 0; }
 .agents-pane[hidden], .agents-save-bar[hidden], .agents-team-toolbar[hidden] { display: none; }
 .agents-card { padding: 14px; border: 1px solid var(--hairline); border-radius: var(--r-lg); background: var(--panel-solid); min-width: 0; }
@@ -7474,7 +7525,7 @@ html[data-studio-style] .ws-work-card {
   box-shadow: var(--studio-glass-shadow); border-radius: var(--r-lg);
 }
 /* Settings' .panel is only a layout wrapper: its nav and cards carry their own glass, and it starts clear of the page header. */
-html[data-studio-style] .settings-panel { background: transparent; border: 0; box-shadow: none; }
+html[data-studio-style] .settings-panel { background: transparent; border: 0; box-shadow: none; backdrop-filter: none; }
 body:not(.appearance-settings-active) .settings-panel { padding-top: 20px; }
 #task-list .task-overview-card, #task-list .task-overview-card:hover { background: var(--studio-sheen), var(--studio-panel-bg); border-radius: var(--r-lg); }
 /* Secondary panes and rows are lightweight glass, with dividers for grouping. */
@@ -7560,7 +7611,7 @@ button, .button { font-family: var(--font-ui); }
 
 /* Settings reads as a preferences notebook. Agent cards keep technical labels,
    while their section heading shares the theme's display face. */
-html[data-shell=rail] .settings-nav { background: var(--studio-inset-bg); border-color: var(--studio-glass-edge); }
+html[data-shell=rail] .settings-nav { background: var(--studio-menu-fill); border-color: var(--studio-glass-edge); backdrop-filter: var(--studio-menu-blur); }
 html[data-studio-style] :is(.settings-find, .segmented, .eyes-mode-tabs, .lab-usage-switch, .music-tabs) { background: var(--studio-field-bg); border-color: var(--studio-glass-edge); }
 .settings-category-head h2 { font-family: var(--font-display); font-size: 28px; }
 html[data-studio-style] .settings-card { border-radius: var(--r-xl); }
@@ -7690,11 +7741,29 @@ html[data-density=compact] :is(.settings-card, .agents-card) { padding: 14px; }
 .studio-select:focus-visible, .studio-scroll-arrow:focus-visible, .studio-choice-option:focus-visible, .studio-style-choice:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
 @keyframes studio-menu-in { from { opacity: 0; translate: 0 4px; scale: .97; } to { opacity: 1; translate: 0 0; scale: 1; } }
 @media (max-width: 760px) { .studio-field { gap: 8px; } }
+/* Anchor Tools to the whole action row when its button is near the left edge. */
+@media (max-width: 600px) {
+  .sheet-actions { position: relative; }
+  .sheet-actions > .surface-tools { position: static; }
+  .sheet-actions .surface-tools-menu { max-width: min(284px, calc(100vw - var(--shell-rail-w, 0px) - 32px)); }
+}
 @media (prefers-reduced-motion: reduce) { .studio-choice-popup { animation: none; } .studio-scroll-arrow { transition: none; } }
 html[data-motion=off] .studio-choice-popup { animation: none; }
 
+/* Moving media can be white, black or patterned. Keep a reading floor under
+   text, including unboxed copy and the navigation, while glass still varies. */
+:root:has([data-media-background="true"]) {
+  --studio-panel-bg: color-mix(in srgb, var(--theme-panel-solid) calc(96% - var(--studio-glass) * 10%), transparent);
+  --studio-shell-fill: color-mix(in srgb, var(--studio-reading-bg) calc(96% - var(--studio-glass) * 8%), transparent);
+  --studio-float-fill: color-mix(in srgb, var(--theme-panel-solid) calc(98% - var(--studio-glass) * 6%), transparent);
+  --studio-page-fill: color-mix(in srgb, var(--studio-reading-bg) 82%, transparent);
+}
+body[data-media-background="true"] {
+  --muted: color-mix(in srgb, var(--ivory) 85%, var(--theme-panel-solid));
+  --dim: var(--muted);
+}
 /* Without blur, a stronger translucent tint protects reading contrast. */
-html[data-no-blur] {
+:root[data-no-blur] {
   --studio-glass-blur: none; --studio-menu-blur: none;
   --studio-panel-bg: color-mix(in srgb, var(--theme-panel-solid) 92%, transparent);
   --studio-menu-fill: color-mix(in srgb, var(--theme-panel-solid) 98%, transparent);
@@ -7711,12 +7780,18 @@ html[data-studio-theme-tone=light] {
   --studio-float-shadow: inset 0 1px var(--studio-glass-highlight), 0 12px 32px -10px rgb(0 0 0 / .14), 0 2px 8px rgb(0 0 0 / .05);
   --studio-glide: color-mix(in srgb, var(--ivory) 10%, transparent);
 }
+/* Zero glass means solid, including when a video is behind the workspace. */
+:root[data-studio-material=solid] {
+  --studio-panel-bg: var(--theme-panel-solid); --studio-menu-fill: var(--theme-panel-solid); --studio-shell-fill: var(--studio-reading-bg);
+  --studio-field-bg: var(--studio-reading-bg); --studio-inset-bg: var(--theme-panel-solid); --studio-page-fill: var(--studio-reading-bg);
+  --studio-glass-blur: none; --studio-menu-blur: none; --studio-float-fill: var(--theme-panel-solid); --studio-float-blur: none;
+}
 /* A light theme brightens what the glass shows instead of dimming it. */
 @media not (prefers-reduced-transparency: reduce) {
-  html[data-studio-theme-tone=light]:not([data-no-blur]) { --studio-float-blur: blur(calc(16px + var(--studio-glass) * 16px)) saturate(1.3) brightness(1.06); }
+  html[data-studio-theme-tone=light]:not([data-no-blur], [data-studio-material=solid]) { --studio-float-blur: blur(calc(16px + var(--studio-glass) * 16px)) saturate(1.3) brightness(1.06); }
 }
 @media (prefers-reduced-transparency: reduce) {
-  :root, html[data-no-blur] {
+  :root[data-studio-style], :root[data-no-blur] {
     --studio-panel-bg: var(--theme-panel-solid); --studio-menu-fill: var(--theme-panel-solid); --studio-shell-fill: var(--studio-reading-bg);
     --studio-field-bg: var(--studio-reading-bg); --studio-inset-bg: var(--theme-panel-solid); --studio-page-fill: var(--studio-reading-bg);
     --studio-glass-blur: none; --studio-menu-blur: none; --studio-sheen: linear-gradient(transparent, transparent);
@@ -8117,6 +8192,8 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
 @starting-style { #vibe-layer { opacity: 0; } }
 #vibe-layer[hidden] { display: none; opacity: 0; }
 html[data-no-blur] #vibe-layer { --v-blur: none; --v-glass: color-mix(in srgb, var(--panel-solid) 94%, transparent); --v-glass-hi: color-mix(in srgb, var(--gold) 7%, var(--panel-solid)); }
+body[data-media-background="true"] #vibe-layer,
+html[data-studio-material="solid"] #vibe-layer { --v-glass: var(--studio-panel-bg); --v-glass-hi: var(--studio-panel-bg); --v-blur: var(--studio-glass-blur); }
 /* The Build frame steps aside while Vibe is up; the tree stays as the sky.
    Home's section bar (Back, Forward, Home) is Build's too, and it sat over
    Vibe's own top bar, where it swallowed the Search and Settings buttons. */
@@ -8340,7 +8417,7 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-dock button[aria-pressed="true"] .glyph { color: var(--v-accent-hi); }
 
 /* ---- conversation --------------------------------------------------------- */
-.vibe-chat { position: absolute; top: 84px; right: 24px; bottom: 24px; z-index: 2; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(420px, calc(100vw - 48px)); border: 1px solid var(--v-edge); border-radius: 24px; background: color-mix(in srgb, var(--panel-solid) 78%, transparent); backdrop-filter: var(--v-blur); box-shadow: -30px 0 80px -40px rgba(0, 0, 0, .9), inset 0 1px 0 color-mix(in srgb, var(--ivory) 7%, transparent); opacity: 1; transform: none; transition: opacity var(--motion-slow) var(--ease-out), transform var(--motion-slow) var(--ease-emphasized), display var(--motion-slow) allow-discrete; }
+.vibe-chat { position: absolute; top: 84px; right: 24px; bottom: 24px; z-index: 2; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(420px, calc(100vw - 48px)); border: 1px solid var(--v-edge); border-radius: 24px; background: var(--studio-float-fill); backdrop-filter: var(--v-blur); box-shadow: -30px 0 80px -40px rgba(0, 0, 0, .9), inset 0 1px 0 color-mix(in srgb, var(--ivory) 7%, transparent); opacity: 1; transform: none; transition: opacity var(--motion-slow) var(--ease-out), transform var(--motion-slow) var(--ease-emphasized), display var(--motion-slow) allow-discrete; }
 @starting-style { .vibe-chat { opacity: 0; transform: translateX(28px); } }
 .vibe-chat[hidden] { display: none; opacity: 0; transform: translateX(28px); }
 .vibe-chat-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 12px; padding: 16px 16px 12px 20px; border-bottom: 1px solid var(--v-edge); }
@@ -8536,7 +8613,7 @@ button.vibe-ask-chip:hover { border-color: var(--v-edge-hi); color: var(--v-ink)
 html[data-ui-mode="vibe"][data-shell="rail"],
 html[data-ui-mode="vibe"][data-shell="rail"][data-rail-pinned] { --shell-rail-w: 72px; }
 html[data-ui-mode="vibe"] :is(#app-rail, #tabs, #workspace-sidebar-toggle, body > footer) { display: none !important; }
-html[data-ui-mode="vibe"] #app-local-nav { background: color-mix(in srgb, var(--bg) 95%, transparent); backdrop-filter: blur(18px) saturate(1.3); }
+html[data-ui-mode="vibe"] #app-local-nav { background: var(--studio-menu-fill); backdrop-filter: var(--studio-menu-blur); }
 
 .vibe-rail {
   position: fixed; top: 0; bottom: 0; left: 0; z-index: var(--z-shell);
@@ -8600,8 +8677,8 @@ html[data-ui-mode="vibe"] {
   --studio-float-shadow: inset 0 1px color-mix(in srgb, var(--ivory) 10%, transparent), 0 0 0 1px color-mix(in srgb, var(--gold) 14%, transparent), 0 30px 70px -30px rgb(0 0 0 / .8), 0 0 50px -26px color-mix(in srgb, var(--gold) 45%, transparent);
 }
 @media not (prefers-reduced-transparency: reduce) {
-  html[data-ui-mode="vibe"]:not([data-no-blur]) { --studio-float-fill: color-mix(in srgb, var(--theme-panel-solid) 86%, transparent); }
-  html[data-ui-mode="vibe"]:not([data-no-blur]):not([data-studio-theme-tone="light"]) { --studio-float-blur: blur(26px) saturate(1.5) brightness(.9); }
+  html[data-ui-mode="vibe"]:not([data-no-blur], [data-studio-material="solid"]):not(:has([data-media-background="true"])) { --studio-float-fill: color-mix(in srgb, var(--theme-panel-solid) 86%, transparent); }
+  html[data-ui-mode="vibe"]:not([data-no-blur], [data-studio-material="solid"]):not([data-studio-theme-tone="light"]):not(:has([data-media-background="true"])) { --studio-float-blur: blur(26px) saturate(1.5) brightness(.9); }
 }
 
 /* On Vibe's own page there is no rail, so sheets and the project panel use
@@ -8886,7 +8963,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         <p id="workspace-work-summary" class="ws-work-summary-line" role="status" aria-live="polite"></p>
         <div id="workspace-work-list" class="ws-work-list"></div>
         <button id="workspace-show-more" class="ghost mini ws-show-more" type="button" hidden>Show more</button>
-        <div class="ws-jeV" id="workspace-jev" title="Jev is the optional model-selection service: with a key it picks a model per task; without one, fixed defaults apply. Set it up under Settings › Decision model.">Jev · checking connection</div>
+        <div class="ws-jeV" id="workspace-jev" title="Jev is the optional model-selection service: with a key it picks a model per task; without one, fixed defaults apply. Set it up under Agents › Setup › Providers.">Jev · checking connection</div>
       </aside>
       </details>
       <details id="workspace-studio-details" class="ws-home-disclosure"><summary>Studio status</summary>
@@ -8895,7 +8972,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       <button class="ws-dash-tile" id="workspace-dash-attention" data-tone="idle" data-target="review" type="button" title="Questions waiting for you and work to review"><span class="ws-dash-kicker">NEEDS YOU</span><strong class="ws-dash-value" id="workspace-dash-attention-value">Nothing waiting</strong><span class="ws-dash-note" id="workspace-dash-attention-note"></span></button>
       <button class="ws-dash-tile" id="workspace-dash-next" data-tone="idle" type="button" title="Show the queue"><span class="ws-dash-kicker">UP NEXT</span><strong class="ws-dash-value" id="workspace-dash-next-value">Queue is empty</strong><span class="ws-dash-note" id="workspace-dash-next-note"></span></button>
       <button class="ws-dash-tile" id="workspace-dash-machine" data-nav="explorer" data-tone="idle" type="button" title="Machine status (opens the Explorer)"><span class="ws-dash-kicker">MACHINE</span><strong class="ws-dash-value" id="workspace-dash-machine-value">Checking…</strong><span class="ws-dash-note" id="workspace-dash-machine-note"></span></button>
-      <button class="ws-dash-tile" id="workspace-dash-usage" data-tone="idle" type="button" title="Open the usage tracker in Model Lab"><span class="ws-dash-kicker">USAGE</span><strong class="ws-dash-value" id="workspace-dash-usage-value">No reading yet</strong><span class="ws-dash-note" id="workspace-dash-usage-note"></span></button>
+      <button class="ws-dash-tile" id="workspace-dash-usage" data-tone="idle" type="button" title="Open Usage: recorded calls and provider accounts"><span class="ws-dash-kicker">USAGE</span><strong class="ws-dash-value" id="workspace-dash-usage-value">No reading yet</strong><span class="ws-dash-note" id="workspace-dash-usage-note"></span></button>
     </section>
 
       </details>
@@ -9106,7 +9183,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   <button id="nav-command" class="home-tab" data-nav="command" data-return-label="Back to Command" title="Command view (D)"><svg class="glyph glyph-home" aria-hidden="true" focusable="false"><use href="#g-orbit"/></svg><svg class="glyph glyph-back" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span><kbd class="key">D</kbd><span class="dot live" data-badge="progress" data-badge-mode="dot" hidden></span><span class="count warn" data-badge="questions" hidden></span></button>
   <span class="tabs-sep" aria-hidden="true"></span>
   <button class="tab active" data-tab="booklet" title="Model catalog (1)"><span class="label">Model catalog</span><kbd class="key">1</kbd></button>
-  <button class="tab" data-tab="graph" title="Model Lab (2)"><span class="label">Model Lab</span><kbd class="key">2</kbd></button>
+  <button class="tab" data-tab="graph" title="Performance (2)"><span class="label">Performance</span><kbd class="key">2</kbd></button>
   <button class="tab" data-tab="eyes" title="Activity & evidence (3)"><span class="label">Activity & evidence</span><kbd class="key">3</kbd></button>
   <button class="tab" data-tab="studio" title="Settings (4 or Ctrl ,)"><span class="label">Settings</span><kbd class="key">4</kbd></button>
   <span class="spacer" aria-hidden="true"></span>
@@ -9136,10 +9213,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     <p id="count" class="muted"></p>
   </section>
   <section id="tab-graph" hidden>
-    <section id="model-lab" class="model-lab" aria-label="Model Lab">
-      <header class="lab-head"><div><h2 class="sr-only">Model Lab</h2><p class="muted">Compare performance, usage and context from your project's model calls.</p></div><button id="model-lab-refresh" class="ghost">Refresh measurements</button></header>
+    <section id="model-lab" class="model-lab" aria-label="Model measurements">
+      <header class="lab-head"><div><h2 class="sr-only">Model measurements</h2><p class="muted">Compare performance, usage and context from your project's model calls.</p></div><button id="model-lab-refresh" class="ghost">Refresh measurements</button></header>
       <div id="model-lab-summary" class="lab-summary"></div>
-      <div class="lab-tabs" role="tablist" aria-label="Model Lab views">
+      <div class="lab-tabs" role="tablist" aria-label="Model measurement views">
         <button id="model-lab-tab-rankings" role="tab" aria-selected="true" aria-controls="model-lab-rankings" data-lab-view="rankings">Rankings</button>
         <button id="model-lab-tab-usage" role="tab" aria-selected="false" aria-controls="model-lab-usage" tabindex="-1" data-lab-view="usage">Usage</button>
         <button id="model-lab-tab-tracker" role="tab" aria-selected="false" aria-controls="model-lab-tracker" tabindex="-1" data-lab-view="tracker">Tracker</button>
@@ -9314,7 +9391,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
           <div class="settings-you-switches">
             <label class="switch" id="settings-companion-motion" title="Your companion floats and blinks beside the conversation. Calm and Off keep it still."><input id="workspace-motion" type="checkbox" checked><span class="track"></span><span>Let your companion move</span></label>
             <label class="switch" title="Blur what sits behind every sheet, menu and Home panel. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
-            <label class="switch" id="idle-home-switch" title="On: every launch lands on Your workspace. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Workspace on launch</span></label>
+            <label class="switch" id="idle-home-switch" title="On: every launch lands on Home. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Home on launch</span></label>
           </div>
           <p class="muted" id="idle-home-hint">When disabled, Studio opens Command view after the project chooser.</p>
           <!-- The Vibe / Build choice, switched in place (vibe.js keeps you on Settings). -->
@@ -9983,7 +10060,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       <header class="cmd-usage-head">
         <h2 id="cmd-usage-title" class="cmd-usage-title">Usage</h2>
         <button id="cmd-usage-refresh" class="ghost mini" type="button" title="Refresh usage and every connected account">Refresh</button>
-        <button id="cmd-usage-open" class="ghost mini" type="button" title="Open the full tracker in Model Lab">Details</button>
+        <button id="cmd-usage-open" class="ghost mini" type="button" title="Open the full tracker in Usage">Details</button>
       </header>
       <p id="cmd-usage-state" class="cmd-usage-state" role="status" aria-live="polite">Waiting for a reading…</p>
       <div id="cmd-usage-body" class="cmd-usage-body" hidden></div>
@@ -10588,7 +10665,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       <div id="walkthrough-build-mode" class="build-mode-control">
         <label class="switch" for="walkthrough-auto-build"><input type="checkbox" id="walkthrough-auto-build" checked disabled aria-describedby="walkthrough-build-mode-note"><span class="track"></span><span>Auto build</span></label>
         <strong id="walkthrough-build-mode-label">Loading preference…</strong>
-        <p id="walkthrough-build-mode-note">Choose how work starts. You can change this in Settings › Automation at any time.</p>
+        <p id="walkthrough-build-mode-note">Choose how work starts. You can change this in Agents › Setup › Run behavior at any time.</p>
         <p id="walkthrough-build-mode-feedback" role="status"></p>
       </div>
       <div class="walkthrough-activity" id="walkthrough-activity" hidden><div class="walkthrough-activity-track"><span id="walkthrough-activity-fill"></span></div><span id="walkthrough-activity-label"></span></div>
@@ -15020,7 +15097,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     schedule();
   }
   const resize = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
-  function placeArrow(button, direction, left, top, width, height) {
+  function arrowPosition(button, direction, left, top, width, height) {
     if (button.dataset.holding) return;
     const horizontal = direction === "left" || direction === "right";
     const fixed = horizontal ? direction === "left" ? 3 : width - 33 : direction === "up" ? 3 : height - 29;
@@ -15035,21 +15112,24 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         return hit && !hit.closest("button, a, input, textarea, select, summary, [role=button], [role=tab], [contenteditable=true]");
       });
     };
-    const point = candidates.find(clear);
-    if (point) Object.assign(button.style, { left: `${point[0]}px`, top: `${point[1]}px`, right: "auto", bottom: "auto" });
+    return candidates.find(clear);
   }
   function refresh() {
+    // Read every region before writing any hint. Interleaving visibility and
+    // geometry reads with hint updates repeats style resolution for each panel.
+    const updates = [];
     for (const [el, region] of regions) {
-      if (!el.isConnected) { region.stop(); region.hint.remove(); resize?.unobserve(el); regions.delete(el); continue; }
+      const update = { el, region, hidden: true };
+      updates.push(update);
+      if (!el.isConnected) { update.remove = true; continue; }
       const { hint, buttons } = region;
-      if (!visible(el)) { hint.hidden = true; region.stop(); continue; }
+      if (!visible(el)) continue;
       const root = el === document.scrollingElement;
       const style = getComputedStyle(el);
-      if (root && getComputedStyle(document.body).overflowY === "hidden" || !root && !/(auto|scroll)/.test(`${style.overflowX} ${style.overflowY}`)) { hint.hidden = true; region.stop(); continue; }
+      if (root && getComputedStyle(document.body).overflowY === "hidden" || !root && !/(auto|scroll)/.test(`${style.overflowX} ${style.overflowY}`)) continue;
       const height = root ? innerHeight : el.clientHeight, width = root ? innerWidth : el.clientWidth;
       const x = el.scrollWidth - width > 2, y = el.scrollHeight - height > 2;
-      hint.hidden = !x && !y;
-      if (hint.hidden) { region.stop(); if (region.addedTab) { el.removeAttribute("tabindex"); region.addedTab = false; } continue; }
+      if (!x && !y) { update.removeTab = region.addedTab; continue; }
       const bounds = root ? { left: 0, top: 0 } : el.getBoundingClientRect();
       let left = Math.max(0, bounds.left + (el.clientLeft || 0)), top = Math.max(0, bounds.top + (el.clientTop || 0));
       let right = Math.min(innerWidth, bounds.left + width), bottom = Math.min(innerHeight, bounds.top + height);
@@ -15057,14 +15137,43 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         if (!/(auto|scroll|hidden|clip)/.test(getComputedStyle(parent).overflow)) continue;
         const clip = parent.getBoundingClientRect(); left = Math.max(left, clip.left); top = Math.max(top, clip.top); right = Math.min(right, clip.right); bottom = Math.min(bottom, clip.bottom);
       }
-      if (right - left < 35 || bottom - top < 35) { hint.hidden = true; region.stop(); continue; }
-      Object.assign(hint.style, { left: `${left}px`, top: `${top}px`, width: `${right - left}px`, height: `${bottom - top}px` });
-      hint.dataset.scrollOwner = el.id || el.className || el.tagName;
+      if (right - left < 35 || bottom - top < 35) continue;
       const directions = { up: y && el.scrollTop > 1, down: y && el.scrollTop + height < el.scrollHeight - 2, left: x && el.scrollLeft > 1, right: x && el.scrollLeft + width < el.scrollWidth - 2 };
-      for (const [direction, can] of Object.entries(directions)) { buttons[direction].hidden = !can; hint.classList.toggle(`can-${direction}`, can); }
-      hint.classList.toggle("active", el.matches(":hover, :focus-within") || hint.contains(document.activeElement));
-      if (hint.classList.contains("active") || hint.classList.contains("engaged")) for (const [direction, button] of Object.entries(buttons)) if (!button.hidden) placeArrow(button, direction, left, top, right - left, bottom - top);
-      if (el.tabIndex < 0 && !el.hasAttribute("tabindex") && !el.matches("input, textarea, select, html, body")) { el.tabIndex = 0; region.addedTab = true; }
+      const active = el.matches(":hover, :focus-within") || hint.contains(document.activeElement);
+      const arrows = [];
+      if (active || hint.classList.contains("engaged")) for (const [direction, button] of Object.entries(buttons)) if (directions[direction]) {
+        const point = arrowPosition(button, direction, left, top, right - left, bottom - top);
+        if (point) arrows.push({ button, point });
+      }
+      Object.assign(update, { hidden: false, left, top, width: right - left, height: bottom - top, directions, active, arrows,
+        owner: el.id || el.className || el.tagName,
+        addTab: el.tabIndex < 0 && !el.hasAttribute("tabindex") && !el.matches("input, textarea, select, html, body") });
+    }
+    for (const update of updates) {
+      const { el, region } = update;
+      const { hint, buttons } = region;
+      if (update.remove) { region.stop(); hint.remove(); resize?.unobserve(el); regions.delete(el); continue; }
+      if (hint.hidden !== update.hidden) hint.hidden = update.hidden;
+      if (update.hidden) {
+        region.stop();
+        if (update.removeTab) { el.removeAttribute("tabindex"); region.addedTab = false; }
+        continue;
+      }
+      for (const key of ["left", "top", "width", "height"]) {
+        const value = `${update[key]}px`;
+        if (hint.style[key] !== value) hint.style[key] = value;
+      }
+      if (hint.dataset.scrollOwner !== update.owner) hint.dataset.scrollOwner = update.owner;
+      for (const [direction, can] of Object.entries(update.directions)) {
+        if (buttons[direction].hidden !== !can) buttons[direction].hidden = !can;
+        hint.classList.toggle(`can-${direction}`, can);
+      }
+      hint.classList.toggle("active", update.active);
+      for (const { button, point } of update.arrows) {
+        const style = { left: `${point[0]}px`, top: `${point[1]}px`, right: "auto", bottom: "auto" };
+        for (const [key, value] of Object.entries(style)) if (button.style[key] !== value) button.style[key] = value;
+      }
+      if (update.addTab) { el.tabIndex = 0; region.addedTab = true; }
     }
     for (const [select, control] of selects) {
       if (!select.isConnected) { control.remove(); selects.delete(select); continue; }
@@ -15239,6 +15348,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (!presets[appearance.preset]) appearance.preset = "studio";
     const root = document.documentElement;
     root.dataset.studioStyle = appearance.preset; root.dataset.density = appearance.density === "compact" ? "compact" : "comfortable";
+    root.dataset.studioMaterial = Number(appearance.glass) > 0 ? "glass" : "solid";
     root.style.setProperty("--studio-glass", String(Math.max(0, Math.min(100, Number(appearance.glass) || 0)) / 100));
     root.style.setProperty("--studio-glow", String(Math.max(0, Math.min(100, Number(appearance.glow) || 0)) / 100));
     if (save) { try { localStorage.setItem(appearanceKey, JSON.stringify(appearance)); } catch {} }
@@ -15718,7 +15828,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       keyMatch: (event) => settingsChord(event) || defaultKeyMatch("4")(event),
       glyph: "g-sliders",
       badge: null,
-      desc: "Providers, routing and coding workers; your Studio, updates and diagnostics",
+      desc: "Your name, appearance, audio, updates and diagnostics; agent setup lives under Agents",
       searchTerms: "settings connections api key login setup provider workers preferences you theme motion animations launch updates diagnostics",
       showIn: showIn({ dock: true, palette: true, help: true }),
       // A section param opens one card: go("studio", { section: "settings-updates" }).
@@ -16133,7 +16243,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     window.MefiModelLab?.show?.(view);
   }
 
-  const WORKSPACE_PAGES = new Set(["tasks", "plans", "ideas", "brains", "analyzer", "explorer", "overhead", "agent-brain", "agents"]);
+  const WORKSPACE_PAGES = new Set(["tasks", "plans", "ideas", "brains", "analyzer", "explorer", "trace", "overhead", "agent-brain", "agents"]);
   const isWorkspacePage = (dest) => document.documentElement?.dataset?.shell === "rail" && WORKSPACE_PAGES.has(dest?.id);
   function syncPageInert() {
     const page = isWorkspacePage(get(state.sheet));
@@ -16316,7 +16426,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     root?.classList.toggle("from-command", Boolean(state.returnTo));
     const back = root?.querySelector(".sheet-back");
     if (back) {
-      const label = state.returnTo === "workspace" ? "Workspace" : state.returnTo === "vibe" ? "Vibe" : "Command";
+      const label = state.returnTo === "workspace" ? "Home" : state.returnTo === "vibe" ? "Vibe" : "Command";
       back.title = `Back to ${label} (Esc)`;
       const copy = back.querySelector(".label");
       if (copy) copy.textContent = label;
@@ -16393,7 +16503,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
 
   function close(id) {
-    if (WORKSPACE_PAGES.has(id) && current() === id) {
+    if (isWorkspacePage(get(id)) && current() === id) {
       if (historyState().canBack) return back();
       // In Vibe mode these pages open from Vibe, so Back with nothing behind
       // it goes there instead of stopping on Build's section home.
@@ -30113,10 +30223,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   // One thread renderer for both surfaces (the rail console and the right-side
   // chat log): the newest bubbles, a thinking bubble while a reply is pending,
   // and the scroll pinned to the tail only while the reader already is.
-  // Every feed push repaints the chat log, and most pushes (a worker's stdout
-  // lines) change nothing the thread shows; rebuilding it anyway cost two
-  // forced layouts of the whole document per push (7.6 ms each on the live
-  // Command view), so a thread that would read the same is left alone.
+  // Keep history separate from the live thought: a thinking update must not
+  // replace every message and make the shared controls rescan all its nodes.
+  // Unchanged pushes also skip the scroll measurements (forced layouts).
   const threadPainted = new WeakMap();
   function fillThread(container, full) {
     if (!container) return;
@@ -30140,11 +30249,22 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const last = messages[messages.length - 1];
     const sameLive = Boolean(live && last?.role === "thinking" && String(last.text ?? "") === live);
     const pending = replyPending(full) && !sameLive;
-    const signature = JSON.stringify([bridge, rows, pending, pending && live]);
-    if (threadPainted.get(container) === signature && container.firstChild) return;
-    threadPainted.set(container, signature);
+    const history = JSON.stringify([bridge, rows]);
+    const previous = threadPainted.get(container);
+    const sameHistory = previous?.history === history && container.firstChild;
+    if (sameHistory && Boolean(previous.bubble) === pending && (!pending || previous.live === live)) return;
     const pinned = container.scrollTop + container.clientHeight >= container.scrollHeight - 28;
     const top = container.scrollTop;
+    if (sameHistory) {
+      let bubble = previous.bubble;
+      if (pending) {
+        if (bubble) thinkingBubble(full, bubble);
+        else { bubble = thinkingBubble(full); container.append(bubble); }
+      } else { bubble?.remove(); bubble = null; }
+      threadPainted.set(container, { history, bubble, live });
+      container.scrollTop = pinned ? container.scrollHeight : top;
+      return;
+    }
     container.textContent = "";
     if (!messages.length) {
       const empty = document.createElement("p");
@@ -30171,7 +30291,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       bubble.append(when);
       container.append(bubble);
     }
-    if (pending) container.append(thinkingBubble(full));
+    const bubble = pending ? thinkingBubble(full) : null;
+    if (bubble) container.append(bubble);
+    threadPainted.set(container, { history, bubble, live });
     container.scrollTop = pinned ? container.scrollHeight : top;
   }
 
@@ -34923,6 +35045,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   // The composer is a textarea that grows with the draft up to a few lines.
   function growArea(area) {
     if (!area) return;
+    // Chromium can size the field as part of its normal layout. Resetting its
+    // height and reading scrollHeight on every status push forces two layouts,
+    // even for an unchanged draft. Keep the old path for older web previews.
+    if (window.CSS?.supports?.("field-sizing", "content")) {
+      if (area.style.fieldSizing !== "content") Object.assign(area.style, {
+        fieldSizing: "content", height: "auto", minHeight: "38px", maxHeight: "120px", overflowY: "auto",
+      });
+      return;
+    }
     area.style.height = "auto";
     const height = Math.min(120, Math.max(38, area.scrollHeight));
     area.style.height = `${height}px`;
@@ -34940,21 +35071,23 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     return agents.some((agent) => agent?.role === "thinker" && agent.status === "running");
   }
 
-  function thinkingBubble(full) {
-    const bubble = document.createElement("div");
+  function thinkingBubble(full, bubble = document.createElement("div")) {
     bubble.className = "assistant-msg assistant thinking";
     const live = String(full?.thinking?.text ?? "").trim();
+    let line = bubble.querySelector(".thought");
     if (live) {
-      const line = document.createElement("span");
-      line.className = "thought";
-      line.textContent = live;
-      bubble.append(line);
+      if (!line) { line = document.createElement("span"); line.className = "thought"; bubble.prepend(line); }
+      if (line.textContent !== live) line.textContent = live;
+    } else line?.remove();
+    let dots = bubble.querySelector(".dots");
+    if (!dots) {
+      dots = document.createElement("span");
+      dots.className = "dots";
+      dots.append(document.createElement("i"), document.createElement("i"), document.createElement("i"));
+      bubble.append(dots);
     }
-    const dots = document.createElement("span");
-    dots.className = "dots";
-    dots.setAttribute("aria-label", live ? "the assistant is thinking" : "the assistant is replying");
-    dots.append(document.createElement("i"), document.createElement("i"), document.createElement("i"));
-    bubble.append(dots);
+    const label = live ? "the assistant is thinking" : "the assistant is replying";
+    if (dots.getAttribute("aria-label") !== label) dots.setAttribute("aria-label", label);
     return bubble;
   }
 
@@ -40278,6 +40411,34 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
   }
 
+  // Keep the interactive DOM canvases, but let their drawing contexts resolve
+  // explicit canvas fonts without synchronously updating the document's styles.
+  // Probe 2D support before the irreversible transfer; an existing DOM context
+  // or an unsupported preview retains the ordinary canvas path.
+  const drawingContexts = new WeakMap();
+  let offscreen2DSupported;
+  function createDrawingContext(canvas, options) {
+    if (!canvas?.getContext) return null;
+    if (drawingContexts.has(canvas)) return drawingContexts.get(canvas);
+    let target = canvas;
+    if (typeof canvas.transferControlToOffscreen === "function" && typeof OffscreenCanvas === "function") {
+      if (offscreen2DSupported === undefined) {
+        try {
+          const probe = new OffscreenCanvas(1, 1);
+          offscreen2DSupported = Boolean(probe.getContext("2d"));
+          probe.width = probe.height = 0;
+        } catch { offscreen2DSupported = false; }
+      }
+      if (offscreen2DSupported) {
+        try { target = canvas.transferControlToOffscreen(); }
+        catch { /* A context already acquired by an embedding host stays usable. */ }
+      }
+    }
+    const context = target.getContext("2d", options);
+    if (context) drawingContexts.set(canvas, context);
+    return context;
+  }
+
   function resize() {
     const dpr = window.devicePixelRatio || 1;
     const width = window.innerWidth;
@@ -40287,10 +40448,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const bitmapW = Math.round(width * dpr);
     const bitmapH = Math.round(height * dpr);
     const fit = (canvas, ctx) => {
-      const cleared = canvas.width !== bitmapW || canvas.height !== bitmapH;
+      const bitmap = ctx.canvas ?? canvas;
+      const cleared = bitmap.width !== bitmapW || bitmap.height !== bitmapH;
       if (cleared) {
-        canvas.width = bitmapW;
-        canvas.height = bitmapH;
+        bitmap.width = bitmapW;
+        bitmap.height = bitmapH;
       }
       canvas.style.width = width + "px";
       canvas.style.height = height + "px";
@@ -40390,10 +40552,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     el.far = document.getElementById("idle-layer-far");
     // Transparent when video supplies the sky; ordinary scenes still paint
     // the whole backdrop. Nodes retain their own full-strength paint.
-    el.farCtx = el.far?.getContext?.("2d", { alpha: true }) ?? null;
+    el.farCtx = createDrawingContext(el.far, { alpha: true });
       el.hud = document.getElementById("idle-hud");
       if (!el.canvas) return;
-      el.ctx = el.canvas.getContext("2d");
+      el.ctx = createDrawingContext(el.canvas);
       el.width = window.innerWidth;
       el.height = window.innerHeight;
     }
@@ -41198,6 +41360,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   applyTreePreferences(window.MefiMusic?.graphPreferences?.() ?? {});
 
   window.MefiIdle = {
+    // Read the actual paint target for pixel diagnostics after a canvas transfer.
+    canvasContext: (canvas) => drawingContexts.get(canvas) ?? null,
     mediaSceneArea, setMediaFocus,
     queueSettings,
     refreshQueueSettings,
@@ -43966,7 +44130,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   const needsReview = (task) => !isDone(task) && task?.status !== "active" && !waitingOnFollowUps(task) && (
     task?.status === "awaiting_verification" || task?.status === "verifying" ||
     ["unverified", "failed"].includes(task?.verification?.state) || (task?.runFailures ?? 0) >= 5 ||
-    scheduledTask(task)?.blockedBy === "loop"
+    ["loop", "relevance"].includes(scheduledTask(task)?.blockedBy)
   );
   const taskStage = (task) => isDone(task) ? "done" : needsReview(task) ? "review" : "open";
   const scheduledTask = (task) => state.backlog?.taskStates?.find((item) => item.id === task.id);
@@ -43976,7 +44140,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   // the loop count); neither is offered while a worker or checker holds it.
   const ownerHold = (task) => {
     const scheduled = scheduledTask(task);
-    if (!["loop", "duplicate", "owner"].includes(scheduled?.blockedBy)) return null;
+    if (!["loop", "duplicate", "owner", "relevance"].includes(scheduled?.blockedBy)) return null;
     return task?.runId || ["active", "running", "verifying", "awaiting_verification"].includes(task?.status) ? null : scheduled;
   };
   const matchesReadiness = (task) => state.readiness === "all" || (state.readiness === "waiting" ? ["waiting", "cooling"].includes(scheduledTask(task)?.stage) : state.readiness === "blocked" ? ["blocked", "approval"].includes(scheduledTask(task)?.stage) : scheduledTask(task)?.stage === state.readiness);
@@ -44803,15 +44967,18 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (!hold) return null;
     const loop = hold.blockedBy === "loop";
     const stopped = hold.blockedBy === "owner";
+    const outside = hold.blockedBy === "relevance";
     return {
-      label: loop ? "Try again" : stopped ? "Resume" : "Run anyway",
-      action: loop ? "try-again" : stopped ? "resume" : "run-anyway",
+      label: loop ? "Try again" : stopped ? "Resume" : outside ? "Build it anyway" : "Run anyway",
+      action: loop ? "try-again" : stopped ? "resume" : outside ? "build-anyway" : "run-anyway",
       className: "primary",
       title: loop
         ? "Release the loop guard's hold and restart its count from now. Read the last attempts first, and edit or split the brief if the same failure would repeat."
         : stopped
           ? "You stopped this task's worker. Put it back in the queue; it continues from its saved progress."
-          : "Clear the duplicate link and run this card on its own instead of waiting for the card it repeats",
+          : outside
+            ? "Work done outside Studio looks like it already covers this card. Put it back in the queue anyway; its worker is told what changed."
+            : "Clear the duplicate link and run this card on its own instead of waiting for the card it repeats",
       disabled: !window.mefiStudio?.tasksAction,
       run: () => runTaskAction(task, "retry"),
     };
@@ -45420,6 +45587,23 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       body.append(ul);
     };
     body = detailPanels.evidence;
+    // The card's check against work done outside Studio (scripts/outside-work.cjs).
+    const outside = task.relevance && typeof task.relevance === "object" ? task.relevance : null;
+    if (outside?.state && outside.state !== "closed") {
+      section("Work done outside Studio");
+      const verdict = outside.state === "checking" ? "Being checked against work done while Studio was away."
+        : outside.verdict === "done" ? "Looks already done outside Studio."
+          : outside.verdict === "obsolete" ? "May no longer be needed after work done outside Studio."
+            : outside.verdict === "partial" ? "Partly done outside Studio; its worker is told what changed."
+              : "Still needed after work done outside Studio.";
+      const line = node("p", "who", `${verdict}${outside.reason ? ` ${clipText(outside.reason, 200)}` : ""}${outside.released ? " You put it back in the queue." : ""}`);
+      body.append(line);
+      const cited = [
+        ...(Array.isArray(outside.commits) ? outside.commits : []).map((commit) => `Commit ${commit?.short ?? ""}: ${clipText(commit?.subject ?? "", 120)}`),
+        ...(Array.isArray(outside.files) && outside.files.length ? [`Changed: ${outside.files.slice(0, 6).join(", ")}`] : []),
+      ];
+      if (cited.length) entryList(cited, (text) => Object.assign(document.createElement("li"), { textContent: text }));
+    }
     if (task.lastAttempt || task.verification || task.verificationRun) {
       section("Result & completion checks");
       const attempt = task.lastAttempt ?? {};
@@ -53450,7 +53634,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       label = status.enabled === false ? "paused in Settings" : !status.configured ? "connect in Settings" : status.accountingPending ? "waiting for usage accounting" : status.lastError ? "needs attention in Settings" : status.phase === "running" ? "reviewing task intake" : status.lastSuccessAt ? "task intake ready" : "configured · awaiting first intake";
     }
     $("jev").textContent = `Jev · ${label}`;
-    $("jev").title = status?.lastError || "Jev is Studio's optional model-selection service: with a key it picks a model per task and advises on related tasks; without one, fixed defaults apply. Your work stays on the board. Set it up under Settings › Jev.";
+    $("jev").title = status?.lastError || "Jev is Studio's optional model-selection service: with a key it picks a model per task and advises on related tasks; without one, fixed defaults apply. Your work stays on the board. Set it up under Agents › Setup › Providers.";
   }
   function setMode(mode) {
     if (state.pending || state.switching) return;
@@ -53837,7 +54021,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   const finite = (value, fallback) => Number.isFinite(value) ? value : fallback;
   const distance = (point, box) => Math.hypot(Math.max(box.x - point.x, 0, point.x - box.x - box.width), Math.max(box.y - point.y, 0, point.y - box.y - box.height));
 
-  function create({ content, onClose, onSettings, settingsHost }) {
+  function create({ content, onClose, onSettings, settingsHost, onPlacement }) {
     let saved;
     try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); } catch {}
     let pinned = saved?.pinned === true;
@@ -53850,7 +54034,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     let trackDark = saved?.trackDark === true, sceneTimer = null, sceneBusy = false;
     let darkCandidate = -1, darkStreak = 0, darkCurrent = 4, darkMovedAt = 0;
     let knownTasks = null, projectId = null, taskRevision = 0;
-    let box = null, shape = "video", minimized = false, gesture = null;
+    let box = null, dockBox = null, dockDetached = false, placementStamp = "", shape = "video", minimized = false, gesture = null;
     let visible = false, hovered = false, yielded = false, awaySince = 0, lastDistance = Infinity, graceUntil = 0;
     let size = {};
     for (const key of ["video", "tall", "compact", "audio", "browser"]) {
@@ -53973,14 +54157,17 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     function visibleBox() {
       if (minimized) return { ...box, width: Math.min(box.width, 304), height: 44 };
       if (background && shape !== "browser") { const area = bounds(); return { x: area.left, y: area.top, width: area.right - area.left, height: area.bottom - area.top }; }
-      return box;
+      return dockBox || box;
     }
     function layout() {
       if (!box) return;
       box = fit(box);
       const current = visibleBox();
+      const docked = Boolean(dockBox && !minimized && !(background && shape !== "browser"));
+      root.dataset.docked = String(docked);
+      root.style.clipPath = docked && dockBox.clip ? `inset(${dockBox.clip.join("px ")}px)` : "none";
       Object.assign(root.style, { left: `${current.x}px`, top: `${current.y}px`, width: `${current.width}px`, height: `${current.height}px` });
-      for (const grip of edges) grip.hidden = minimized || background && shape !== "browser";
+      for (const grip of edges) grip.hidden = docked || minimized || background && shape !== "browser";
       paintVideo();
     }
     function persist() {
@@ -54026,6 +54213,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       for (const control of [backgroundButton, opacityInput, brightnessInput, fadeButton, darkButton]) control.disabled = browsing;
       // A backdrop must never take keyboard focus or intercept workspace clicks.
       content.inert = backdrop || minimized;
+      const placement = { background: backdrop, minimized, docked: root.dataset.docked === "true", visible };
+      const nextStamp = JSON.stringify(placement);
+      if (nextStamp !== placementStamp) { placementStamp = nextStamp; onPlacement?.(placement); }
       if (backdrop && tracking && window.mefiStudio?.mediaSceneSample && !sceneTimer) sceneTimer = window.setInterval(sampleDarkArea, 5000);
       if ((!backdrop || !tracking) && sceneTimer) { window.clearInterval(sceneTimer); sceneTimer = null; }
       if (dynamics || !backdrop || !trackDark) {
@@ -54114,6 +54304,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
     function start(event, edge = "move") {
       if (event.button !== 0 || gesture || !visible || background && shape !== "browser") return;
+      if (dockBox) { dockBox = null; dockDetached = true; layout(); }
       event.preventDefault(); event.stopPropagation();
       gesture = { edge, x: event.clientX, y: event.clientY, box: { ...box }, target: event.currentTarget, pointerId: event.pointerId };
       root.dataset.dodging = "false";
@@ -54143,6 +54334,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     function keyboard(event, edge) {
       const vectors = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
       if (!vectors[event.key] || !box || background && shape !== "browser") return;
+      if (dockBox) { dockBox = null; dockDetached = true; }
       event.preventDefault(); event.stopPropagation();
       root.dataset.dodging = "false";
       const step = event.shiftKey ? 2 : 16;
@@ -54160,7 +54352,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         box = changed(event.clientX - gesture.x, event.clientY - gesture.y, gesture.edge, gesture.box);
         layout(); return;
       }
-      if (!visible || minimized || background || shape === "browser" || event.buttons || event.pointerType && event.pointerType !== "mouse") return;
+      if (!visible || minimized || dockBox || background || shape === "browser" || event.buttons || event.pointerType && event.pointerType !== "mouse") return;
       const point = { x: event.clientX, y: event.clientY }, gap = distance(point, box), time = now();
       const approaching = gap < lastDistance; lastDistance = gap;
       // After one dodge, following the player always wins. Rearm only after
@@ -54206,7 +54398,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     });
     seedTasks();
     paintToggles();
-    return { show, hide, reveal, beginMove: start, moveKey: event => keyboard(event, "move"), minimize: () => minimize.click(), snapshot: () => ({ minimized }), restore: (value) => { if (Boolean(value?.minimized) !== minimized) minimize.click(); } };
+    return { show, hide, reveal, dock: value => { if (!value) dockDetached = false; if (value && dockDetached || JSON.stringify(value) === JSON.stringify(dockBox)) return; dockBox = value; layout(); },
+      setBackground: value => { if (Boolean(value) !== background) backgroundButton.click(); },
+      beginMove: start, moveKey: event => keyboard(event, "move"), minimize: () => minimize.click(),
+      snapshot: () => ({ minimized }), restore: (value) => { if (Boolean(value?.minimized) !== minimized) minimize.click(); } };
   }
   window.MefiMediaWindow = { create };
 })();
@@ -54338,9 +54533,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   window.MefiMediaBrowser = { create };
 })();
 
-// Style & sound: Studio's color themes, node styles and layouts, the members'
-// Void collection (its own premium store, gated by MefiCommunity), the
-// local-file player, the ad-free radio decks and the Links player. A pasted
+// Style & sound: Studio's color themes, node styles and layouts (the two-tone
+// Void collection among them, free like the rest), the local-file player, the ad-free radio decks and the Links player. A pasted
 // link plays in its service's official embed (YouTube, Spotify, SoundCloud,
 // Vimeo) or, for a plain audio or video file such as a Discord attachment, in
 // a <video> element of its own; an embed's cross-origin playback state is
@@ -54364,13 +54558,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     ember: { name: "Ember", accent: "#dd997a", bright: "#ffc5a9", rgb: "221,153,122", bg: "#100805", panel: "#21150f", muted: "#c0ab9d" },
     aurora: { name: "Aurora", accent: "#71cbb7", bright: "#a7f3da", rgb: "113,203,183", bg: "#050d13", panel: "#101f29", muted: "#abc4c9", text: "#e7f5ee" },
     rose: { name: "Rose", accent: "#dc96af", bright: "#ffbed3", rgb: "220,150,175", bg: "#10080f", panel: "#23141e", muted: "#c6aebc", text: "#f7e5ea" },
-    // The Void collection: members of the Void Engine Discord unlock these (see
-    // scripts/community.cjs, whose SELF_UNLOCKED switch unlocks them in a fork).
-    // Each carries a second hue that the premium tier paints with.
-    void: { name: "Void", accent: "#7c6cff", bright: "#b9b0ff", accent2: "#36d1ff", rgb: "124,108,255", bg: "#030208", panel: "#0b0914", muted: "#a49fc2", text: "#ece9ff", premium: true },
-    eclipse: { name: "Eclipse", accent: "#e8a93c", bright: "#ffd98a", accent2: "#ff6a3d", rgb: "232,169,60", bg: "#040404", panel: "#111013", muted: "#b8ad98", text: "#f3ecdf", premium: true },
-    abyss: { name: "Abyss", accent: "#2fd6c3", bright: "#8ff5e8", accent2: "#7b5cff", rgb: "47,214,195", bg: "#01080b", panel: "#06151a", muted: "#9dbfc0", text: "#e2f7f4", premium: true },
-    dusk: { name: "Neon Dusk", accent: "#ff5fa2", bright: "#ffa3cb", accent2: "#3fd0ff", rgb: "255,95,162", bg: "#0a0512", panel: "#170c24", muted: "#c4a9c9", text: "#fbe9f3", premium: true },
+    // The Void collection, free like every theme: each carries a second hue
+    // (accent2) that the "duo" tier paints with, and the pickers list them
+    // under their own small heading.
+    void: { name: "Void", accent: "#7c6cff", bright: "#b9b0ff", accent2: "#36d1ff", rgb: "124,108,255", bg: "#030208", panel: "#0b0914", muted: "#a49fc2", text: "#ece9ff", collection: "void" },
+    eclipse: { name: "Eclipse", accent: "#e8a93c", bright: "#ffd98a", accent2: "#ff6a3d", rgb: "232,169,60", bg: "#040404", panel: "#111013", muted: "#b8ad98", text: "#f3ecdf", collection: "void" },
+    abyss: { name: "Abyss", accent: "#2fd6c3", bright: "#8ff5e8", accent2: "#7b5cff", rgb: "47,214,195", bg: "#01080b", panel: "#06151a", muted: "#9dbfc0", text: "#e2f7f4", collection: "void" },
+    dusk: { name: "Neon Dusk", accent: "#ff5fa2", bright: "#ffa3cb", accent2: "#3fd0ff", rgb: "255,95,162", bg: "#0a0512", panel: "#170c24", muted: "#c4a9c9", text: "#fbe9f3", collection: "void" },
   };
   const DEFAULT_THEME = "aurora";
   const NODE_STYLES = {
@@ -54379,31 +54573,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     minimal: { name: "Minimal", detail: "Quiet points" },
     halo: { name: "Halo", detail: "Luminous rings" },
     crystal: { name: "Crystal", detail: "Faceted gems" },
-    singularity: { name: "Singularity", detail: "A black hole with a turning disc", premium: true },
-    prism: { name: "Prism", detail: "A turning crystal that splits light", premium: true },
-    sigil: { name: "Sigil", detail: "Hex runes that assemble as it works", premium: true },
+    singularity: { name: "Singularity", detail: "A black hole with a turning disc", collection: "void" },
+    prism: { name: "Prism", detail: "A turning crystal that splits light", collection: "void" },
+    sigil: { name: "Sigil", detail: "Hex runes that assemble as it works", collection: "void" },
   };
-  // Saved preferences only ever hold free keys; a premium choice lives in its
-  // own store (PREMIUM_KEY) and shows only while the community layer allows it.
-  const isPremiumTheme = (key) => typeof key === "string" && Object.hasOwn(THEMES, key) && THEMES[key].premium === true;
-  const isFreeTheme = (key) => key === "custom" || typeof key === "string" && Object.hasOwn(THEMES, key) && THEMES[key].premium !== true;
+  // Every theme and node style is free; `collection` only groups the pickers.
+  const isTheme = (key) => key === "custom" || typeof key === "string" && Object.hasOwn(THEMES, key);
+  const isVoidTheme = (key) => typeof key === "string" && Object.hasOwn(THEMES, key) && THEMES[key].collection === "void";
   const isNodeStyle = (key) => typeof key === "string" && Object.hasOwn(NODE_STYLES, key);
-  const isPremiumNodeStyle = (key) => isNodeStyle(key) && NODE_STYLES[key].premium === true;
-  const isFreeNodeStyle = (key) => isNodeStyle(key) && NODE_STYLES[key].premium !== true;
-  function safePremium(value) {
-    const raw = value && typeof value === "object" ? value : {};
-    const choice = {};
-    if (isPremiumTheme(raw.theme)) choice.theme = raw.theme;
-    if (isPremiumNodeStyle(raw.nodeStyle)) choice.nodeStyle = raw.nodeStyle;
-    return choice;
-  }
-  // The fork sentence is community.js's, read when it is needed; this copy
-  // covers start:web and load order. tests/community_ui.test.mjs pins it to
-  // scripts/community.cjs.
-  const FORK_FALLBACK = "Members of the Void Engine Discord unlock these. Studio is MIT-licensed: fork the project and unlock it yourself, or ask an agent to do it for you.";
-  function forkCopy() {
-    try { const copy = window.MefiCommunity?.FORK_COPY; return typeof copy === "string" && copy ? copy : FORK_FALLBACK; } catch { return FORK_FALLBACK; }
-  }
+  const isVoidNodeStyle = (key) => isNodeStyle(key) && NODE_STYLES[key].collection === "void";
   const NODE_LAYOUTS = {
     constellation: { name: "Constellation", detail: "An open arrangement" },
     tree: { name: "Branches", detail: "A clear hierarchy" },
@@ -54593,8 +54771,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     // from before the Links tab, read once and never written again.
     const links = [...new Set([...(Array.isArray(raw.links) ? raw.links : []), ...(Array.isArray(raw.spotify) ? raw.spotify : [])]
       .map((item) => playableLink(mediaLink(item))?.url).filter(Boolean))].slice(0, 8);
-    return { theme: isFreeTheme(raw.theme) ? raw.theme : DEFAULT_THEME, customColors: safeCustomColors(raw.customColors), volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : .7, links,
-      nodeStyle: isFreeNodeStyle(raw.nodeStyle) ? raw.nodeStyle : "orbs",
+    return { theme: isTheme(raw.theme) ? raw.theme : DEFAULT_THEME, customColors: safeCustomColors(raw.customColors), volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : .7, links,
+      nodeStyle: isNodeStyle(raw.nodeStyle) ? raw.nodeStyle : "orbs",
       nodeLayout: Object.hasOwn(NODE_LAYOUTS, raw.nodeLayout) ? raw.nodeLayout : "constellation",
       station: STATION_IDS.has(raw.station) ? raw.station : null,
       // The source tab, and whether a station was sounding when Studio closed.
@@ -54636,19 +54814,25 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (Number.isFinite(savedVolume?.volume)) mediaVolume = Math.max(0, Math.min(1, savedVolume.volume));
     mediaMuted = savedVolume?.muted === true;
   } catch {}
-  const PREMIUM_KEY = "mefiStudio.music.premium.v1";
-  const COMMUNITY_HINT_KEY = "mefiStudio.community.v1";
-  let storedPremium;
-  try { storedPremium = JSON.parse(localStorage.getItem(PREMIUM_KEY) || "null"); } catch {}
-  // The saved premium choice, kept even while it is locked so a returning
-  // member gets it back; `effective` is what is actually on screen.
-  const premium = safePremium(storedPremium);
-  const effective = { theme: prefs.theme, nodeStyle: prefs.nodeStyle };
-  // A locked Void choice can be tried on screen, but never enters either store.
-  const previewing = { theme: false, nodeStyle: false };
+  // While the Void collection was for Discord members, a Void theme or node
+  // style was saved apart, in LEGACY_VOID_KEY. A valid choice there moves into
+  // the ordinary preferences once, and the old store goes after that write.
+  const LEGACY_VOID_KEY = "mefiStudio.music.premium.v1";
+  try {
+    const legacy = localStorage.getItem(LEGACY_VOID_KEY);
+    if (legacy != null) {
+      let saved = null;
+      try { saved = JSON.parse(legacy); } catch {}
+      const theme = isVoidTheme(saved?.theme) ? saved.theme : null;
+      const nodeStyle = isVoidNodeStyle(saved?.nodeStyle) ? saved.nodeStyle : null;
+      if (theme) prefs.theme = theme;
+      if (nodeStyle) prefs.nodeStyle = nodeStyle;
+      if (theme || nodeStyle) localStorage.setItem(STORAGE_KEY, JSON.stringify(safePreferences(prefs)));
+      localStorage.removeItem(LEGACY_VOID_KEY);
+    }
+  } catch {}
   // Search may expose configuration without changing the active look or audio.
   const settingsReveal = { custom: false, source: null };
-  const keepAfterUnlock = { theme: false, nodeStyle: false };
   // link: what the Links tab plays; handoff: the last link only its own app can
   // open; linkPlaying is real only for a plain file in Studio's own element.
   const state = { source: "local", tracks: [], selected: -1, link: null, handoff: null, linkPlaying: false, linkAutoplay: false, linkStartMs: 0, opened: false, sending: false, notice: "", error: false,
@@ -54674,38 +54858,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   let tuneGeneration = 0;
 
   const persist = () => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(safePreferences(prefs))); } catch {} };
-  const persistPremium = () => { try { localStorage.setItem(PREMIUM_KEY, JSON.stringify(safePremium(premium))); } catch {} };
   const event = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
-  // The one gate. MefiCommunity answers from its last status (or its boot
-  // hint); without it (start:web, or before it loads) the hint it leaves in
-  // storage decides, so a member does not flash the free theme at launch.
-  function premiumAllowed() {
-    const community = window.MefiCommunity;
-    if (community && typeof community.has === "function") {
-      try { return community.has("premium") === true; } catch { return false; }
-    }
-    let hint = null;
-    try { hint = JSON.parse(localStorage.getItem(COMMUNITY_HINT_KEY) || "null"); } catch {}
-    return hint?.premium === true && (hint.validUntil == null || Number.isFinite(hint.validUntil) && hint.validUntil > Date.now());
-  }
-  // Join, link and copy need the desktop bridge behind MefiCommunity.
-  const communityActions = () => Boolean(window.MefiCommunity) && Boolean(window.mefiStudio?.communityLink || window.mefiStudio?.communityOpen);
-  // Link needs a build with a Discord client id and an account that is not
-  // linked yet, or one Discord asks to link again; before the first status, no.
-  function communityLinkable() {
-    try {
-      const current = window.MefiCommunity?.status?.();
-      return current?.configured === true && !(current.linked === true && current.state !== "relink");
-    } catch { return false; }
-  }
-  // navigate:false (the Workspace select, and the Void tiles in this sheet)
-  // explains without leaving the view.
-  function offerUnlock(kind, key, name, navigate = true) {
-    if (typeof window.MefiCommunity?.offer === "function") {
-      try { window.MefiCommunity.offer(navigate ? { kind, key, name } : { kind, key, name, navigate: false }); return; } catch {}
-    }
-    note(`${name} is part of the Void collection. ${forkCopy()}`);
-  }
   function status() {
     const track = state.tracks[state.selected];
     const tuned = station(state.station);
@@ -55547,7 +55700,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       state.link = null; state.handoff = null; state.source = "link"; prefs.source = "link"; persist();
       els.floatingPlayer?.show({ shape: "browser", label: "Media browser" });
       els.floatingPlayer?.restore?.({ minimized: false });
-      render(); announce(); closeAudio(); els.browser.schedule?.();
+      render(); announce(); openAudio(); scheduleDropdown(); els.browser.schedule?.();
       note("Browse and play inside Studio. Use the website’s playback controls.");
       return true;
     } catch { note("The browser could not open. Try again.", true); return false; }
@@ -55772,9 +55925,22 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     paintLinkVolume();
     const link = state.source === "link" ? state.link : null;
     const browser = els.browser?.active ? els.browser.state : null;
+    if (els.linkStage) {
+      els.linkStage.dataset.shape = browser ? "browser" : link?.shape || "video";
+      els.linkStage.dataset.mode = els.mediaPlacement?.background ? "background" : "player";
+      els.linkStageTitle.textContent = els.mediaPlacement?.background ? "Playing behind your workspace" : els.mediaPlacement?.minimized ? "Player minimized" : "Your next video starts here";
+      els.linkStageHint.textContent = els.mediaPlacement?.background ? "Your queue stays here. Return to the player any time." : "Paste a video link above, or choose one from your queue.";
+    }
+    if (els.backgroundToggle) {
+      const candidate = browser ? mediaLink(browser.url) : link;
+      els.backgroundToggle.disabled = !playableLink(candidate) || candidate.shape === "audio";
+      els.backgroundToggle.textContent = els.mediaPlacement?.background ? "Return to player" : "Use as background";
+      els.backgroundToggle.setAttribute("aria-pressed", String(Boolean(els.mediaPlacement?.background)));
+      els.backgroundToggle.title = browser && !playableLink(candidate) ? "Open a video link to use background playback" : "Play this video behind your workspace";
+    }
     els.linkNow.hidden = !link && !browser;
     if (els.browseLink) els.browseLink.hidden = Boolean(browser);
-    if (els.linkNext) els.linkNext.hidden = Boolean(browser) || !linkQueue.length && link?.provider !== "youtube";
+    if (els.linkNext) els.linkNext.hidden = !linkQueue.length && link?.provider !== "youtube";
     if (browser) {
       els.linkNowTitle.textContent = browser.title || "Media browser";
       els.linkNowDetail.textContent = "Browsing inside Studio · use the website’s playback controls";
@@ -55956,7 +56122,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     for (const [action, label] of [["play", "Play"], ["queue", "Add to queue"], ["next", "Queue next"], ["dismiss", "Dismiss"]]) button(label, "ghost mini", clipboardActions, () => useClipboardOffer(action), `music-clipboard-${action}`);
     const dropdownBody = element("div", "music-dropdown-body", null, dropdown);
     els.dropdownBody = dropdownBody;
-    const connection = element("div", "music-connection", null, dropdownBody);
+    const connection = element("details", "music-connection", null, dropdownBody);
+    element("summary", null, "Audio connection & clipboard", connection);
     const copiedLinksLabel = element("label", "music-clipboard-toggle", null, connection);
     els.copiedLinks = element("input", null, null, copiedLinksLabel); els.copiedLinks.id = "music-copied-links"; els.copiedLinks.type = "checkbox";
     element("span", null, "Offer copied media links", copiedLinksLabel);
@@ -55970,8 +56137,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const soundLabel = element("p", "eyebrow music-group-label", "Your listening room", main); soundLabel.id = "music-sound-label"; soundLabel.tabIndex = -1;
     const browserCard = element("div", "music-browser-card", null, main);
     const browserCopy = element("div", "music-browser-copy", null, browserCard);
-    element("strong", null, "The web, inside your player", browserCopy);
-    element("span", null, "Videos, music and live streams right here in Studio.", browserCopy);
+    element("strong", null, "Browse a website", browserCopy);
+    element("span", null, "Open a page inside this player.", browserCopy);
     button("Browse here", "ghost", browserCard, () => void openMediaBrowser(), "music-browser-launch");
     els.groups = { look: { group: settings, label: lookLabel }, sound: { group: main, label: soundLabel } };
     const tabs = element("div", "music-tabs", null, main); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Music source");
@@ -56048,8 +56215,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     els.radioVolume.addEventListener("input", () => setVolume(els.radioVolume.value));
     element("p", "music-fineprint", "Each station lists several mirrors. If one stops sending, Studio brings the next one up on a second deck and crosses over, so the music keeps playing through the handover.", els.radio);
     els.link = element("section", "music-link", null, main); els.link.id = "music-link-panel"; els.link.setAttribute("role", "tabpanel"); els.link.setAttribute("aria-labelledby", "music-link-tab");
-    element("h3", null, "One link. Your next escape.", els.link);
-    element("p", "music-subtitle", "Paste or drop a video, song, stream or website. Supported media plays here; other pages open in the mini browser.", els.link);
+    element("h3", null, "Your video space", els.link);
+    element("p", "music-subtitle", "Watch here, play in the background, or line up what’s next.", els.link);
     const linkForm = element("form", "music-link-form", null, els.link);
     els.linkInput = element("input", null, null, linkForm); els.linkInput.id = "music-link-url"; els.linkInput.type = "text"; els.linkInput.inputMode = "url"; els.linkInput.placeholder = "Paste a link or website address…"; els.linkInput.setAttribute("aria-label", "Media link");
     els.linkInput.autocomplete = "off"; els.linkInput.spellcheck = false;
@@ -56059,12 +56226,26 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     button("Browse here", "ghost", queueTools, () => void openMediaBrowser(els.linkInput.value.trim()), "music-link-browser");
     button("Add to queue", "ghost", queueTools, () => queueLink(els.linkInput.value), "music-link-queue-add");
     button("Queue next", "ghost", queueTools, () => queueLink(els.linkInput.value, null, true), "music-link-queue-first");
+    const linkLayout = element("div", "music-video-layout", null, els.link);
+    const watching = element("div", "music-video-watching", null, linkLayout);
+    els.linkStage = element("div", "music-video-stage", null, watching); els.linkStage.id = "music-video-stage";
+    element("span", "music-video-stage-icon", "▷", els.linkStage).setAttribute("aria-hidden", "true");
+    els.linkStageTitle = element("strong", null, "Your next video starts here", els.linkStage);
+    els.linkStageHint = element("small", null, "Paste a video link above, or choose one from your queue.", els.linkStage);
+    const presentation = element("div", "music-video-presentation", null, watching);
+    element("span", "eyebrow", "PLAYBACK", presentation);
+    els.backgroundToggle = button("Use as background", "ghost", presentation, () => {
+      const browsing = els.browser?.active;
+      if (browsing && !playLink(els.browser.state.url)) return;
+      els.floatingPlayer?.setBackground(browsing || !els.mediaPlacement?.background);
+      renderLinkNow(); scheduleDropdown();
+    }, "music-video-background");
     els.linkHandoff = element("div", "music-link-handoff", null, els.link); els.linkHandoff.id = "music-link-handoff"; els.linkHandoff.hidden = true;
-    els.recent = element("div", "music-recent", null, els.link); els.recent.setAttribute("aria-label", "Recent links");
+    els.recent = element("div", "music-recent", null, watching); els.recent.setAttribute("aria-label", "Recent links");
     // renderer/together.js fills this, above the player, with Listen together and the
     // now-playing share (both need the rooms hub).
     els.together = element("section", "music-together", null, els.link); els.together.hidden = true;
-    els.linkNow = element("div", "music-link-now", null, els.link); els.linkNow.hidden = true;
+    els.linkNow = element("div", "music-link-now", null, watching); els.linkNow.hidden = true;
     const nowCopy = element("span", "music-link-now-copy", null, els.linkNow);
     els.linkNowTitle = element("strong", null, null, nowCopy);
     els.linkNowDetail = element("small", null, null, nowCopy);
@@ -56089,6 +56270,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     els.floatingPlayer = window.MefiMediaWindow?.create({
       content: els.linkPlayer,
       settingsHost: videoSettings,
+      onPlacement: placement => { els.mediaPlacement = placement; renderLinkNow(); },
       onSettings: () => open("sound"),
       onClose: () => { unmountLink(); state.link = null; render(); announce(); },
     });
@@ -56109,14 +56291,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     searchForm.addEventListener("submit", event => { event.preventDefault(); searchYouTube(); });
     els.youtubeNotice = element("p", "music-fineprint", "Find a video, then Play. Next video follows your results or YouTube playlist.", els.youtubeExplorer); els.youtubeNotice.setAttribute("role", "status");
     els.youtubeResults = element("div", "music-youtube-results", null, els.youtubeExplorer); els.youtubeResults.id = "music-youtube-results";
-    const queue = element("section", "music-link-queue", null, els.link); queue.setAttribute("aria-label", "Video queue");
+    const queue = element("section", "music-link-queue", null, linkLayout); queue.setAttribute("aria-label", "Video queue");
     const queueHeader = element("div", "music-link-queue-header", null, queue);
     els.linkQueueHeading = element("h3", null, "Up next", queueHeader); els.linkQueueHeading.setAttribute("aria-live", "polite");
     els.linkQueueNext = button("Play next video", "ghost", queueHeader, () => playQueued(), "music-link-queue-next");
     els.linkQueueEmpty = element("p", "music-fineprint", "Your queue is empty. Add a link above or choose a YouTube result.", queue);
     els.linkQueueList = element("ol", "music-link-queue-list", null, queue); els.linkQueueList.id = "music-link-queue-list";
-    element("p", "music-fineprint", "Queued videos play first when you press Next video. YouTube, Vimeo and direct files also advance automatically when they finish. Your queue is saved across reloads.", queue);
+    element("p", "music-fineprint", "Your queue is saved. Play now, move a video to next, or remove it.", queue);
     renderLinkQueue();
+    watching.append(browserCard);
     element("p", "music-fineprint", "Video settings live here in Music & video. Background and Transparency put the video behind your work; Float video restores its controls. Keep tree in dark areas waits for a consistently darker area, then glides slowly. Fade on finish dims the video and notifies you when a task completes.", els.link);
     element("p", "music-fineprint", "Embedded players use their service’s sign-in, ads and availability rules. YouTube and Vimeo remember playback when Studio reopens within ten minutes. Set the audio link to Desktop audio and the node tree follows them.", els.link);
     els.link.addEventListener("dragover", (event) => {
@@ -56133,6 +56316,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       playLink(text);
     });
     const audioLink = element("details", "music-audio-link", null, dropdownBody);
+    dropdownBody.append(connection);
     els.audioLink = audioLink;
     audioLink.id = "music-audio-reactions";
     audioLink.setAttribute("aria-labelledby", "music-audio-heading");
@@ -56186,13 +56370,20 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     els.recommendation = element("div", "music-recommendation", "", ai); els.recommendation.id = "music-recommendation"; els.recommendation.setAttribute("aria-live", "polite");
     els.notice = element("p", "music-notice", "", dropdownBody); els.notice.setAttribute("role", "status");
     dropdown.addEventListener("keydown", audioKey);
+    dropdown.addEventListener("transitionend", scheduleDropdown);
+    if (typeof ResizeObserver === "function") {
+      const playerLayout = new ResizeObserver(scheduleDropdown);
+      playerLayout.observe(els.linkStage); playerLayout.observe(dropdownHeader);
+    }
     dropdown.addEventListener("pointerenter", cancelAudioHoverTimers);
     dropdown.addEventListener("pointerleave", leaveAudioHover);
     dropdown.addEventListener("pointerdown", pinAudioDropdown);
     dropdown.addEventListener("focusin", pinAudioDropdown);
     dropdown.addEventListener("focusout", (event) => {
-      if (event.relatedTarget && !dropdown.contains(event.relatedTarget) && !dropdownAnchor?.contains(event.relatedTarget) && !audioSelectContains(event.relatedTarget)) closeAudio();
+      if (event.relatedTarget && !dropdown.contains(event.relatedTarget) && !els.linkPlayer?.contains(event.relatedTarget) && !dropdownAnchor?.contains(event.relatedTarget) && !audioSelectContains(event.relatedTarget)) closeAudio();
     });
+    els.linkPlayer.addEventListener("pointerenter", cancelAudioHoverTimers);
+    els.linkPlayer.addEventListener("pointerleave", leaveAudioHover);
     const preview = element("section", "music-preview", null, els.overlay);
     preview.setAttribute("aria-labelledby", "music-preview-heading");
     const previewHeader = element("header", "music-preview-header", null, preview);
@@ -56228,12 +56419,20 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const above = anchor?.height ? Math.max(0, anchor.top - 8 - edge) : 0;
     const below = height - bottom - 8 - edge;
     const flip = below < 280 && above > below && above >= 240;
-    const top = flip ? edge : Math.max(edge, Math.min(bottom + 8, height - 280));
+    const top = els.dropdown.dataset.source === "link" ? Math.max(edge, Math.min(bottom + 8, 72, height - 280))
+      : flip ? edge : Math.max(edge, Math.min(bottom + 8, height - 280));
     const panelWidth = els.dropdown.getBoundingClientRect().width;
     const right = anchor?.width ? width - anchor.right : edge;
     els.dropdown.style.top = `${Math.round(top)}px`;
     els.dropdown.style.right = `${Math.round(Math.max(edge, Math.min(right, width - panelWidth - edge)))}px`;
-    els.dropdown.style.maxHeight = `${Math.max(0, flip ? above : height - top - edge)}px`;
+    els.dropdown.style.maxHeight = `${Math.max(0, flip && els.dropdown.dataset.source !== "link" ? above : height - top - edge)}px`;
+    const stage = els.linkStage?.getBoundingClientRect?.();
+    const panel = els.dropdown.getBoundingClientRect();
+    const header = els.dropdownHeader.getBoundingClientRect();
+    els.floatingPlayer?.dock?.(els.link.hidden || !stage?.width || !stage?.height ? null : {
+      x: stage.left, y: stage.top, width: stage.width, height: stage.height,
+      clip: [Math.max(0, header.bottom - stage.top), Math.max(0, stage.right - panel.right), Math.max(0, stage.bottom - Math.min(panel.bottom, height - edge)), Math.max(0, panel.left - stage.left)],
+    });
   }
   function scheduleDropdown() {
     if (els.dropdown?.hidden !== false || dropdownFrame) return;
@@ -56241,7 +56440,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     else positionDropdown();
   }
   function audioOutside(event) {
-    if (!els.dropdown?.contains(event.target) && !dropdownAnchor?.contains(event.target) && !audioSelectContains(event.target)) closeAudio();
+    if (!els.dropdown?.contains(event.target) && !els.linkPlayer?.contains(event.target) && !dropdownAnchor?.contains(event.target) && !audioSelectContains(event.target)) closeAudio();
   }
   function audioSelectContains(target) {
     return window.MefiSelect?.owns?.(els.dropdown) && window.MefiSelect?.contains?.(target);
@@ -56306,7 +56505,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       const headerHeight = els.dropdownHeader.getBoundingClientRect().height;
       els.dropdown.scrollTop = Number.isFinite(top) && Number.isFinite(panelTop)
         ? Math.max(0, (els.dropdown.scrollTop || 0) + top - panelTop - headerHeight - 12) : 0;
-    }
+    } else els.dropdown.scrollTop = 0;
+    scheduleDropdown();
     document.addEventListener("pointerdown", audioOutside);
     document.addEventListener("keydown", audioKey, true);
     window.addEventListener("scroll", scheduleDropdown, true);
@@ -56319,6 +56519,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (els.dropdown?.hidden !== false) return;
     if (window.MefiSelect?.owns?.(els.dropdown)) window.MefiSelect.close();
     els.dropdown.hidden = true;
+    els.floatingPlayer?.dock?.(null);
     dropdownAnchor?.setAttribute("aria-expanded", "false");
     document.removeEventListener?.("pointerdown", audioOutside);
     document.removeEventListener?.("keydown", audioKey, true);
@@ -56391,7 +56592,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (unlocked && premium.nodeStyle) effective.nodeStyle = premium.nodeStyle;
     build();
     for (const id of ["idle-music-toggle", "settings-audio-open"]) bindAudioHover(document.getElementById(id));
-    window.addEventListener("blur", () => closeAudio());
+    window.addEventListener("blur", () => { if (!els.browser?.active && !els.linkPlayer?.contains(document.activeElement)) closeAudio(); });
     if (unlocked && premium.theme) event("mefi-theme-change", paintTheme(premium.theme));
     else applyTheme(prefs.theme, false);
     syncTreePreferences(false); renderPremiumLocks(unlocked); render(); renderMediaMenu();
@@ -57137,7 +57338,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     bridge().onHubEvent?.(onHubEvent);
     window.addEventListener("mefi-music-change", () => { if (prefs.share) scheduleShare(); renderStart(); });
     window.addEventListener("mefi-community-status", () => void refreshStatus());
-    window.addEventListener("mefi-community-change", () => void refreshStatus());
     render();
     // A room or a share that was on when Studio closed comes back, like the
     // radio does; smoke and capture runs share the owner's profile and stay off.
@@ -58444,9 +58644,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     {
       title: "Connect the assistant and coding workers", short: "Connections", glyph: "g-ambience",
       copy: "The assistant helps you think and organize. Coding workers carry out tasks in your project. Their provider settings are separate, and the scan's choices are shown at the top of Agents setup.",
-      points: ["In Agents › Setup › Connections › Providers, save the key for the assistant provider you want, choose Grok, Claude Code, Codex or Antigravity with their own CLI logins, or point the custom route at your own OpenAI-compatible endpoint.", "LM Studio needs no key: keep its local server running and pick it as the provider.", "Models are saved per provider: set the model you have for each option and switching never mixes them.", "Coding workers run through OpenCode by default: on your linked plan, or on the free model the scan found. The coding tier decides what each build may cost — Free, Fast or Heavy — while Auto lets Studio pick per task. Saving an assistant key alone does not prove a worker is ready.", "Manual planning works without an AI key. Jev is optional; without it the assistant's own model, or a free model, stands in for the small routing decisions."],
+      points: ["In Agents › Setup › Providers, save the key for the assistant provider you want, choose Grok, Claude Code, Codex or Antigravity with their own CLI logins, or point the custom route at your own OpenAI-compatible endpoint.", "LM Studio needs no key: keep its local server running and pick it as the provider.", "Models are saved per provider: set the model you have for each option and switching never mixes them.", "Coding workers run through OpenCode by default: on your linked plan, or on the free model the scan found. The coding tier decides what each build may cost — Free, Fast or Heavy — while Auto lets Studio pick per task. Saving an assistant key alone does not prove a worker is ready.", "Manual planning works without an AI key. Jev is optional; without it the assistant's own model, or a free model, stands in for the small routing decisions."],
       action: "Walk me to connections", route: "studio", params: { section: "settings-assistant" },
-      station: "We are in Agents › Setup › Connections, at Providers. Save the key you want, then open Agents › Setup › Team to confirm the CLI and pick a coding tier. Nothing is sent until you choose to test it.",
+      station: "We are in Agents › Setup › Providers. Save the key you want, then open Agents › Setup › Team & models to confirm the CLI and pick a coding tier. Nothing is sent until you choose to test it.",
       note: "Connection tests and AI requests may use your provider allowance when you explicitly run them.",
       target: "#settings-assistant-heading", done: "Connections checked",
     },
@@ -59190,36 +59390,33 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   window.MefiOnboarding = { init, startup, open, close, coach, status: () => state.status, lessons: () => lessons.map((lesson) => ({ title: lesson.title, short: lesson.short, panel: lesson.panel || null })) };
 })();
 
-// The Void Engine community layer, renderer side: window.MefiCommunity is the
-// member-perk gate the Style pickers ask, the weekly "join the Discord" card
-// in the workspace, and the Settings › Community card. Every network call runs
-// in main (scripts/discord-oauth.cjs behind the community:* IPC); this file
-// only ever sees the public STATUS object, which never carries a token.
+// The Void Engine community layer, renderer side: window.MefiCommunity, the
+// weekly "join the Discord" card in the workspace, and the Settings ›
+// Community card. Every network call runs in main (scripts/discord-oauth.cjs
+// behind the community:* IPC); this file only ever sees the public STATUS
+// object, which never carries a token.
 //
-// The lock is honest and soft: scripts/community.cjs holds one documented fork
-// switch, SELF_UNLOCKED, and every locked surface says so (FORK_COPY) next to
-// a Copy agent prompt button. With no bridge (start:web, an older desktop
-// build) nothing unlocks, the card never shows and Settings says linking needs
-// the desktop app. The weekly card is quiet by construction: it waits for the
-// boot gate, any open dialog, a new or unfinished walkthrough, recent typing
-// and a hidden window, shows at most once a session, and main decides when it
-// is due at all.
+// The Discord link is optional and unlocks nothing: every theme and node
+// style is free for everyone. Listen together and the rooms hub use the link
+// (renderer/together.js follows mefi-community-status). With no bridge
+// (start:web, an older desktop build) the card never shows and Settings says
+// linking needs the desktop app. The weekly card is quiet by construction: it
+// waits for the boot gate, any open dialog, a new or unfinished walkthrough,
+// recent typing and a hidden window, shows at most once a session and never
+// to a linked member, and main decides when it is due at all.
 (function () {
   "use strict";
-  const HINT_KEY = "mefiStudio.community.v1";
-  // Duplicated from scripts/community.cjs, which the renderer cannot require;
-  // tests/community_ui.test.mjs pins both sentences to it.
-  const FORK_COPY = "Members of the Void Engine Discord unlock these. Studio is MIT-licensed: fork the project and unlock it yourself, or ask an agent to do it for you.";
-  const AGENT_PROMPT = "In my fork of Mefi's Studio AI+, set SELF_UNLOCKED to true in scripts/community.cjs so the Void collection themes and node styles unlock without Discord, then run npm run check and npm test.";
-  const PITCH = "Share what you're making, swap model setups, and hang out with other builders. Preview the Void collection now; members can keep its four themes and three node styles.";
+  // The boot hint the retired Void collection lock kept; cleared once at init.
+  const OLD_HINT_KEY = "mefiStudio.community.v1";
+  // The weekly card's title and pitch (the template carries the same words).
+  const TITLE = "Build with others in the Void Engine Discord.";
+  const PITCH = "Share what you're building, swap model setups, and listen together with other builders.";
   // A failed check retries after an hour, then six, then daily (scripts/community.cjs).
   const PRIVACY = "Linking reads your Discord id and name, and your roles and join date in the Void Engine server: when you link, about once a week (sooner after a failed check, then daily), and when you press Check now. Studio keeps them in its settings on this computer, with the sign-in encrypted in community-auth.json. Nothing about your projects is sent. Unlink revokes the sign-in and deletes both.";
-  const PERK_COPY = { premium: "Void collection — 4 themes and 3 node styles" };
-  // The Preferences theme select marks a temporary Void collection choice.
-  const LOCKED_OPTION = (name) => `${name} · preview`;
-  const PREVIEW_HINT = "Preview it now; it resets when you close the canvas preview or leave Settings.";
-  // One name for the link action on every surface (the Style pickers' Void
-  // boxes say the same); relinking after Discord asks is the same button.
+  // What the link is for, now that it unlocks nothing.
+  const USES = "Listen together uses this link to find your Void Engine rooms.";
+  // One name for the link action on every surface; relinking after Discord
+  // asks is the same button.
   const LINK_LABEL = "Link my Discord";
   const ERRORS = {
     canceled: "Linking canceled.",
@@ -59247,8 +59444,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   const now = () => Date.now();
 
   let last = null;            // the newest STATUS from main
-  let hint = readHint();      // the boot hint, until the first STATUS lands
-  let announced = null;       // the entitlement last dispatched as mefi-community-change
   let linkAnnounced = null;   // the link state last dispatched as mefi-community-status
   let rendered = [];          // [action, button] pairs from the last Settings render
   let initialized = false;
@@ -59257,12 +59452,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   let lastKeyAt = -Infinity;
   let tries = 0;
   let timer = 0;
-  let cardMode = null;        // "weekly" | "offer" while the inline card shows
+  let cardMode = null;        // "weekly" | "open" while the inline card shows
   let busy = null;            // "link" | "check" | "unlink" while a host call runs
-  let noteText = "";
-  let noteLead = "";          // an offer's first sentence; the hint after it follows the link state
-  let noteKey = "";           // the locked item the note names, marked in the showcase
-  let showcaseBuilt = false;
 
   // ---- the host ----------------------------------------------------------------
   // The only doors out. A missing method answers {ok:false} instead of throwing.
@@ -59303,53 +59494,20 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     setTimeout(fn, 0);
   }
 
-  // ---- entitlement and the boot hint ------------------------------------------
-  function readHint() {
-    try {
-      const value = JSON.parse(localStorage.getItem(HINT_KEY));
-      return { premium: value?.premium === true, validUntil: Number.isFinite(value?.validUntil) ? value.validUntil : null };
-    } catch { return { premium: false, validUntil: null }; }
-  }
-  function writeHint(entitlement) {
-    hint = { premium: entitlement.premium, validUntil: entitlement.validUntil };
-    try { localStorage.setItem(HINT_KEY, JSON.stringify(hint)); } catch {}
-  }
-  function entitlementOf(status) {
-    const value = status?.entitlement || {};
-    return {
-      premium: value.premium === true,
-      perks: Array.isArray(value.perks) ? value.perks.filter((perk) => typeof perk === "string") : [],
-      validUntil: Number.isFinite(value.validUntil) ? value.validUntil : null,
-      reason: typeof value.reason === "string" ? value.reason : null,
-    };
-  }
-  // Before the first STATUS the boot hint answers for "premium" alone, so a
-  // member's saved theme paints on launch instead of flashing the free one.
-  function has(perk) {
-    if (!desktop()) return false;
-    if (last) return entitlementOf(last).perks.includes(perk);
-    return perk === "premium" && hint.premium === true && (hint.validUntil == null || hint.validUntil > now());
-  }
+  // ---- the status ----------------------------------------------------------------
   function adopt(status) {
     if (!status || typeof status !== "object") return;
     last = status;
-    const entitlement = entitlementOf(status);
-    writeHint(entitlement);
-    const signature = JSON.stringify(entitlement);
-    if (signature !== announced) {
-      announced = signature;
-      try { window.dispatchEvent(new CustomEvent("mefi-community-change", { detail: entitlement })); } catch {}
-    }
     // Whether linking is possible here (a client id, not linked yet, or asked
-    // to link again) can change with the entitlement unchanged; the Style
-    // pickers' Link buttons follow this one.
-    const linkState = { configured: status.configured === true, linked: status.linked === true, state: typeof status.state === "string" ? status.state : null, linking: status.linking === true };
+    // to link again) and whether the account is a member. Listen together
+    // (together.js) re-reads the hub when this changes.
+    const linkState = { configured: status.configured === true, linked: status.linked === true, member: status.member === true, state: typeof status.state === "string" ? status.state : null, linking: status.linking === true };
     const linkSignature = JSON.stringify(linkState);
     if (linkSignature !== linkAnnounced) {
       linkAnnounced = linkSignature;
       try { window.dispatchEvent(new CustomEvent("mefi-community-status", { detail: linkState })); } catch {}
     }
-    if (cardMode === "weekly" && (entitlement.premium || status.prompt?.never)) hideCard();
+    if (cardMode === "weekly" && (status.member === true || status.prompt?.never)) hideCard();
     renderCard();
     renderSettings();
   }
@@ -59357,7 +59515,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 
   // ---- actions -------------------------------------------------------------------
   function desktopOnly() {
-    toast(`Linking the Void Engine Discord needs the desktop app. ${FORK_COPY}`, "info", { duration: 12000, action: { label: "Copy agent prompt", run: () => { void copyAgentPrompt(); } } });
+    toast(ERRORS.unavailable, "info");
   }
   async function join() {
     if (!bridge("communityOpen")) { desktopOnly(); return { ok: false, error: "unavailable" }; }
@@ -59373,8 +59531,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const result = await call("communityLink");
     busy = null;
     if (result.ok) {
-      const message = entitlementOf(last).premium ? "Discord linked. The Void collection is unlocked." : "Discord linked.";
-      statusLine(message); toast(message, "good");
+      statusLine("Discord linked."); toast("Discord linked.", "good");
     } else if (result.error === "not-member") {
       statusLine(ERRORS["not-member"]);
       toast("Linked, but your Discord account isn't in the Void Engine server yet.", "info", { duration: 12000, action: { label: "Join the Discord", run: () => { void join(); } } });
@@ -59410,29 +59567,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     renderSettings();
     return result;
   }
-  async function copyAgentPrompt() {
-    let ok = false;
-    try {
-      const copy = bridge("shellCopy");
-      if (copy) ok = (await copy(AGENT_PROMPT))?.ok !== false;
-      else if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) { await navigator.clipboard.writeText(AGENT_PROMPT); ok = true; }
-    } catch { ok = false; }
-    toast(ok ? "Agent prompt copied" : "Couldn't copy the agent prompt. Settings › General › Community shows it under “What the agent will change”.", ok ? "good" : "bad");
-    return ok;
-  }
-  // Opens Style & sound at the Void collection's themes, with keyboard focus on
-  // the one in use (else the first), after the sheet has claimed its focus.
-  function chooseTheme() {
-    try { window.MefiNav?.go?.("music"); } catch {}
-    later(() => {
-      try {
-        const group = document.getElementById("music-premium-themes");
-        const choice = group?.querySelector?.('[aria-pressed="true"]') ?? group?.firstElementChild;
-        choice?.focus?.({ preventScroll: true });
-        group?.scrollIntoView?.({ block: "center", behavior: noMotion() ? "auto" : "smooth" });
-      } catch {}
-    });
-  }
   function never() {
     hideCard();
     void call("communityPrompt", "never");
@@ -59448,18 +59582,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   // Opens Settings at the Community card: the section param deep-links it
   // (Settings opens and scrolls to the card itself), and the card is opened
   // and scrolled here too, for a Settings that does not read the param yet.
-  // Where Settings cannot show it, the inline card in the workspace carries
-  // the same explanation instead.
-  function open(options = {}) {
+  // Where Settings cannot show it, the inline card in the workspace stands in,
+  // else a toast that can open the invite.
+  function open() {
     init();
-    noteText = typeof options.note === "string" ? options.note : "";
-    noteLead = noteText && typeof options.lead === "string" ? options.lead : "";
-    noteKey = noteText && typeof options.key === "string" ? options.key : "";
     if (!desktop()) { desktopOnly(); return false; }
     const card = settingsCard();
     if (!card || typeof window.MefiNav?.go !== "function") {
-      if (window.MefiWorkspace?.isActive?.() && showCard("offer", noteText)) return true;
-      toast(noteText ? `${noteText} ${FORK_COPY}` : FORK_COPY, "info", { duration: 12000, action: { label: "Copy agent prompt", run: () => { void copyAgentPrompt(); } } });
+      if (window.MefiWorkspace?.isActive?.() && showCard("open")) return true;
+      toast(`${TITLE} ${PITCH}`, "info", { duration: 12000, action: { label: "Join the Discord", run: () => { void join(); } } });
       return false;
     }
     window.MefiNav.go("studio", { section: "settings-community" });
@@ -59467,40 +59598,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     renderSettings();
     later(() => { try { card.scrollIntoView?.({ block: "start", behavior: noMotion() ? "auto" : "smooth" }); } catch {} });
     return true;
-  }
-  // Explains a preview choice without moving the view: the inline card while the
-  // workspace shows, else a toast whose action opens Settings › Community. A
-  // picker that changes on a keystroke (the Workspace theme select) asks for
-  // this, so arrowing through its options never carries anyone away (WCAG 3.2.2).
-  function explain(note, lead, key) {
-    init();
-    if (!desktop()) { desktopOnly(); return false; }
-    if (window.MefiWorkspace?.isActive?.() && showCard("offer", note)) return true;
-    toast(`${lead} ${PREVIEW_HINT} ${FORK_COPY}`, "info", { duration: 12000, action: { label: "See the perks", run: () => open({ note, key, lead }) } });
-    return true;
-  }
-  // How this account could unlock the item: link (or join first), and the
-  // fork path the card shows below the note either way.
-  function unlockHint() {
-    if (last && last.configured === false) return `${PREVIEW_HINT} Build it yourself to keep it (see below).`;
-    if (last?.linked === true && last.state === "not-member") return `${PREVIEW_HINT} Join the Void Engine Discord to keep it, or build it yourself (see below).`;
-    return `${PREVIEW_HINT} Link your Discord membership to keep it, or build it yourself (see below).`;
-  }
-  // navigate:false keeps the user where they are (see explain); by default a
-  // click on a preview choice opens Settings › Community.
-  function offer(item) {
-    const { kind, key, name, navigate } = item && typeof item === "object" ? item : {};
-    const label = String(name || key || "This item");
-    const lead = kind === "nodeStyle" ? `The ${label} node style is part of the Void collection.` : `${label} is part of the Void collection.`;
-    const note = `${lead} ${unlockHint()}`;
-    const itemKey = typeof key === "string" ? key : "";
-    return navigate === false ? explain(note, lead, itemKey) : open({ note, key: itemKey, lead });
-  }
-  // The Settings note as the account stands now: linking or joining changes
-  // the hint after an offer's lead, and an unlocked collection needs no note.
-  function currentNote(entitlement) {
-    if (!noteText || entitlement.premium) return "";
-    return noteLead ? `${noteLead} ${unlockHint()}` : noteText;
   }
   function node(tag, className, text) {
     const element = document.createElement(tag);
@@ -59529,18 +59626,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const line = $("community-settings-status");
     if (line) line.textContent = text;
   }
-  function noteLine(element, text) {
-    if (!element) return;
-    element.textContent = text || "";
-    element.hidden = !text;
-  }
   function initials(name) {
     const words = String(name || "").trim().split(/[\s._-]+/).filter(Boolean);
     const letters = words.length > 1 ? words.slice(0, 2).map((word) => Array.from(word)[0]) : Array.from(words[0] || "").slice(0, 2);
     return letters.join("").toUpperCase() || "?";
-  }
-  function day(ms) {
-    try { return new Date(ms).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }); } catch { return new Date(ms).toISOString().slice(0, 10); }
   }
   function span(ms) {
     const abs = Math.abs(ms);
@@ -59556,119 +59645,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const will = next == null ? "not scheduled" : next - now() < MINUTE ? "soon" : `in ${span(next - now())}`;
     return `Last checked ${was} · next check ${will}`;
   }
-  // ---- the Void collection, drawn from the Style pickers' own catalog ----------
-  function catalog() {
-    try {
-      const value = window.MefiMusic?.premiumCatalog?.();
-      return value && Array.isArray(value.themes) && Array.isArray(value.nodeStyles) ? value : null;
-    } catch { return null; }
-  }
-  // The Preferences theme select (workspace.js) lists the Void collection in
-  // its own optgroup. Unentitled options say they preview, and stay enabled so
-  // the user can try them. Entitlement brings the plain names back. Only the
-  // labels change: the template's markup stays put.
-  function labelThemeOptions(unlocked) {
-    const select = $("workspace-accent");
-    const themes = catalog()?.themes;
-    if (!select || !themes?.length) return;
-    const names = new Map(themes.map((theme) => [theme.key, theme.name]));
-    for (const option of Array.from(select.options || [])) {
-      const name = names.get(option.value);
-      if (!name) continue;
-      const label = unlocked ? name : LOCKED_OPTION(name);
-      if (option.textContent !== label) option.textContent = label;
-    }
-  }
-  // A two-tone swatch (music.css .void-swatch): the accent ring around the second hue.
-  function swatch(theme) {
-    const dot = node("span", "void-swatch");
-    try { dot.style.setProperty("--swatch", theme.accent); dot.style.setProperty("--swatch-2", theme.accent2); } catch {}
-    return dot;
-  }
-  function swatchCluster(className) {
-    const themes = catalog()?.themes || [];
-    if (!themes.length) return null;
-    const cluster = node("span", className);
-    cluster.setAttribute("aria-hidden", "true");
-    for (const theme of themes) cluster.append(swatch(theme));
-    return cluster;
-  }
-  // The strip at the top of Settings › Community: the four themes and three
-  // node styles (the Style pickers' own preview art), built once.
-  function buildShowcase() {
-    const items = $("community-showcase-items");
-    const list = catalog();
-    if (showcaseBuilt || !items || !list) return;
-    showcaseBuilt = true;
-    const tile = (key, name, art) => {
-      const item = node("span", "community-showcase-item");
-      item.dataset.key = key;
-      const frame = node("span", "community-showcase-art");
-      frame.append(art);
-      item.append(frame, node("span", "community-showcase-name", name));
-      return item;
-    };
-    const themes = node("span", "community-showcase-group");
-    for (const theme of list.themes) themes.append(tile(theme.key, theme.name, swatch(theme)));
-    const styles = node("span", "community-showcase-group");
-    for (const style of list.nodeStyles) {
-      const art = node("span", `music-node-preview music-preview-${style.key}`);
-      for (let index = 0; index < 3; index += 1) art.append(node("i"));
-      styles.append(tile(style.key, style.name, art));
-    }
-    items.replaceChildren(themes, styles);
-  }
-  function renderShowcase(state, entitlement) {
-    buildShowcase();
-    const unlocked = entitlement.premium === true;
-    const line = $("community-showcase-state");
-    if (line) {
-      line.textContent = state === "self" ? "Unlocked in this build" : unlocked ? "Unlocked with your Void Engine membership" : "For members of the Void Engine Discord";
-      line.setAttribute("data-unlocked", String(unlocked));
-    }
-    const choose = $("community-choose");
-    if (choose) choose.hidden = !unlocked;
-    for (const item of $("community-showcase-items")?.querySelectorAll?.(".community-showcase-item") || []) {
-      if (noteKey && !unlocked && item.dataset.key === noteKey) item.dataset.current = "true";
-      else delete item.dataset.current;
-    }
-  }
-  function perkList(entitlement) {
-    const list = node("ul", "community-perks");
-    for (const perk of ["premium", ...entitlement.perks.filter((item) => item !== "premium")]) {
-      const on = entitlement.perks.includes(perk);
-      const item = node("li", "", PERK_COPY[perk] || perk);
-      const swatches = perk === "premium" ? swatchCluster("community-perk-swatches") : null;
-      if (swatches) item.append(swatches);
-      item.append(node("span", on ? "badge free" : "badge", on ? "On" : "Locked"));
-      list.append(item);
-    }
-    return list;
-  }
-  // The fork path, kept quiet: the sentence, the copy button, and the prompt
-  // itself behind a disclosure for anyone who wants to read it first.
-  function forkBlock() {
-    const block = node("div", "community-fork");
-    block.append(node("span", "community-fork-title", "Build it yourself"), node("p", "community-fork-copy", FORK_COPY));
-    const actions = node("div", "community-fork-actions");
-    const prompt = node("details", "community-prompt");
-    const code = node("pre", "community-prompt-code");
-    code.append(node("code", "", AGENT_PROMPT));
-    prompt.append(node("summary", "", "What the agent will change"), code);
-    actions.append(button("Copy agent prompt", copyAgentPrompt, { className: "ghost mini", title: "Copy a prompt that unlocks the collection in your own fork" }), prompt);
-    block.append(actions);
-    return [block];
-  }
   function view() {
     if (!desktop()) return "desktop";
     if (!last) return "loading";
     if (last.available === false) return "unavailable";
-    if (last.selfUnlocked) return "self";
     if (last.linking || busy === "link") return "linking";
     if (!last.linked) return last.configured ? "unlinked" : "not-configured";
     return ["not-member", "relink", "offline", "session"].includes(last.state) ? last.state : "ok";
   }
-  function linkedParts(state, entitlement) {
+  function linkedParts(state) {
     const user = last.user || {};
     const shown = user.globalName || user.username || "Discord account";
     const who = node("div", "community-who");
@@ -59678,18 +59663,17 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     who.append(node("span", "community-avatar", initials(shown)), names);
     const parts = [who];
     const roles = Array.isArray(last.roles) ? last.roles.length : 0;
-    if (state !== "not-member") {
+    if (last.member === true) {
       const badges = node("div", "community-badges");
       badges.append(node("span", "badge free", "Member"));
       if (roles) badges.append(node("span", "badge", `${roles} role${roles === 1 ? "" : "s"}`));
       who.append(badges);
     }
-    const until = entitlement.premium && entitlement.validUntil != null ? ` Perks stay on until ${day(entitlement.validUntil)}.` : "";
-    if (state === "offline") parts.push(node("p", "community-callout", `Couldn't reach Discord.${until || " Studio tries again soon."}`));
-    else if (state === "relink") parts.push(node("p", "community-callout", `Discord needs you to link again.${until}`));
+    if (state === "offline") parts.push(node("p", "community-callout", "Couldn't reach Discord. Studio tries again soon."));
+    else if (state === "relink") parts.push(node("p", "community-callout", "Discord needs you to link again."));
     else if (state === "not-member") parts.push(node("p", "community-callout", "Your Discord account isn't in the Void Engine server."));
     else if (state === "session") parts.push(node("p", "muted community-aside", "This link lasts until Studio closes: secure storage isn't available on this computer."));
-    parts.push(perkList(entitlement), node("p", "muted community-checked", checkedLine(last)));
+    parts.push(node("p", "muted community-aside", USES), node("p", "muted community-checked", checkedLine(last)));
     // One size per row (the small Settings buttons); the next step, if there is
     // one, is the primary, and Unlink stays a quiet secondary at the end.
     const checking = busy === "check";
@@ -59698,7 +59682,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (state === "relink") parts.push(row(button(LINK_LABEL, link, { className: "primary mini", disabled: Boolean(busy), action: "link" }), unlinkButton));
     else if (state === "not-member") parts.push(row(button("Join the Discord", join, { className: "primary mini", title: "Open the Void Engine invite in your browser" }), checkNow, unlinkButton));
     else parts.push(row(checkNow, unlinkButton));
-    if (!entitlement.premium) parts.push(...forkBlock());
     return parts;
   }
   // The button of the last render that holds keyboard focus, by action name.
@@ -59728,19 +59711,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const focused = focusedAction();
     rendered = [];
     const state = view();
-    const entitlement = entitlementOf(last);
     let parts;
-    if (state === "desktop") parts = [node("p", "", ERRORS.unavailable), node("p", "muted", PITCH), ...forkBlock()];
+    if (state === "desktop") parts = [node("p", "", ERRORS.unavailable), node("p", "muted", PITCH)];
     else if (state === "loading") parts = [node("p", "muted", "Checking your Discord link…")];
-    else if (state === "unavailable") parts = [node("p", "", "Community linking isn't available in this build."), ...forkBlock()];
-    else if (state === "self") parts = [node("p", "", "This build unlocks the Void collection itself (SELF_UNLOCKED), so it needs no Discord link."), perkList(entitlement), row(button("Join the Discord", join, { className: "ghost mini", title: "Open the Void Engine invite in your browser" }))];
+    else if (state === "unavailable") parts = [node("p", "", "Community linking isn't available in this build."), node("p", "muted", PITCH)];
     else if (state === "linking") parts = [node("p", "community-waiting", "Waiting for Discord in your browser. Approve Studio there, then come back here."), row(button("Cancel", cancelLink))];
-    else if (state === "unlinked") parts = [node("p", "", PITCH), row(button("Join the Discord", join), button(LINK_LABEL, link, { className: "primary", title: "Sign in with Discord in your browser" })), ...forkBlock()];
-    else if (state === "not-configured") parts = [node("p", "", "Discord linking isn't set up in this build yet."), node("p", "muted", PITCH), row(button("Join the Discord", join)), ...forkBlock()];
-    else parts = linkedParts(state, entitlement);
+    else if (state === "unlinked") parts = [node("p", "", PITCH), node("p", "muted community-aside", USES), row(button("Join the Discord", join), button(LINK_LABEL, link, { className: "primary", title: "Sign in with Discord in your browser" }))];
+    else if (state === "not-configured") parts = [node("p", "", "Discord linking isn't set up in this build yet."), node("p", "muted", PITCH), row(button("Join the Discord", join))];
+    else parts = linkedParts(state);
     body.replaceChildren(...parts);
-    noteLine($("community-settings-note"), currentNote(entitlement));
-    renderShowcase(state, entitlement);
     restoreFocus(focused);
   }
 
@@ -59749,13 +59728,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const linkButton = $("community-invite-link");
     if (linkButton) linkButton.hidden = last?.configured !== true || Boolean(last.linked && last.state !== "relink");
   }
-  function showCard(mode, note = "") {
+  function showCard(mode) {
     const card = $("community-invitation");
     if (!card) return false;
     cardMode = mode;
-    noteLine($("community-invite-note"), note);
-    const copy = $("community-invite-copy");
-    if (copy) copy.hidden = mode !== "offer";
     renderCard();
     try { card.classList?.toggle?.("community-enter", !noMotion()); } catch {}
     card.hidden = false;
@@ -59767,7 +59743,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     cardMode = null;
   }
   // Not now and Escape snooze the weekly card for a week; the same buttons on
-  // an offer card (a locked item was clicked) only close it.
+  // a card opened by hand (Community, where Settings cannot show) only close it.
   function dismissCard(action) {
     const mode = cardMode;
     hideCard();
@@ -59780,7 +59756,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     try { return getComputedStyle(gate).display !== "none"; } catch { return true; }
   }
   function eligible() {
-    return desktop() && !headless() && !shownThisSession && last?.available !== false && last?.prompt?.due === true && !entitlementOf(last).premium;
+    return desktop() && !headless() && !shownThisSession && last?.available !== false && last?.prompt?.due === true && last.member !== true;
   }
   function quiet() {
     if (headless() || !desktop() || booting()) return false;
@@ -59797,9 +59773,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     shownThisSession = true;
     if (window.MefiWorkspace?.isActive?.() && showCard("weekly")) { void call("communityPrompt", "shown"); return; }
     if (typeof window.MefiToast !== "function") return;
-    toast("Build with others in the Void Engine Discord. Members unlock the Void collection: four themes and three node styles.", "info", {
+    toast(`${TITLE} ${PITCH}`, "info", {
       duration: 12000,
-      action: { label: "See the perks", run: () => open() },
+      action: { label: "Open Community", run: () => open() },
     });
     void call("communityPrompt", "shown");
   }
@@ -59834,7 +59810,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     try {
       window.MefiNav?.register?.({
         id: "community",
-        label: "Void Engine Discord & perks",
+        label: "Void Engine Discord",
         short: "Community",
         kind: "action",
         layer: null,
@@ -59842,8 +59818,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         key: null,
         glyph: "g-community",
         badge: null,
-        desc: "Join the Void Engine Discord, link your account and see the members' Void collection",
-        searchTerms: "discord community void engine members perks themes node styles link unlock fork",
+        desc: "Join the Void Engine Discord and link your account for Listen together",
+        searchTerms: "discord community void engine members link rooms listen together share builds",
         showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
         run: () => open(),
       });
@@ -59852,18 +59828,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   function init() {
     if (initialized) return;
     initialized = true;
-    const fine = $("community-invite-fine");
-    if (fine) fine.textContent = FORK_COPY;
+    try { localStorage.removeItem(OLD_HINT_KEY); } catch {}
     const privacy = $("community-privacy");
     if (privacy) privacy.textContent = PRIVACY;
-    // The weekly card's emblem: the four themes' two-tone swatches.
-    const emblem = $("community-invite-swatches");
-    const swatches = emblem && catalog()?.themes;
-    if (swatches?.length) { emblem.replaceChildren(...swatches.map(swatch)); emblem.hidden = false; }
-    on("community-choose", () => chooseTheme());
     on("community-invite-join", () => { hideCard(); void join(); });
     on("community-invite-link", () => { hideCard(); void link(); });
-    on("community-invite-copy", () => { void copyAgentPrompt(); });
     on("community-invite-later", () => dismissCard("snooze"));
     on("community-invite-never", () => never());
     on("workspace-community", () => open());
@@ -59876,10 +59845,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       if ($("settings-community").open && desktop()) void refresh();
     });
     try { window.addEventListener("keydown", () => { lastKeyAt = now(); }, true); } catch {}
-    // The Workspace theme select follows the entitlement: from the boot hint
-    // now, then from every change this module (or anything else) announces.
-    labelThemeOptions(has("premium"));
-    try { window.addEventListener("mefi-community-change", (event) => labelThemeOptions(typeof event?.detail?.premium === "boolean" ? event.detail.premium : has("premium"))); } catch {}
     register();
     renderSettings();
   }
@@ -59897,21 +59862,16 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
 
   window.MefiCommunity = {
-    FORK_COPY,
-    AGENT_PROMPT,
     init,
     startup,
-    has,
     status: () => last,
     refresh,
-    offer,
     open,
     join,
     link,
     cancelLink,
     check,
     unlink,
-    copyAgentPrompt,
   };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
@@ -59979,7 +59939,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       key: "discord",
       eyebrow: "Community",
       title: "Join the Void Engine Discord",
-      text: "Share what you build, swap model setups and hang out with other builders. Members unlock the Void themes and node styles.",
+      text: "Share what you build, swap model setups and listen together with other builders.",
       link: { label: () => inviteUrl().replace(/^https?:\/\//, ""), action: "Join the Discord", glyph: "g-community", open: openInvite },
     },
   ];
@@ -60435,7 +60395,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const MODES = [
     ["ask", "Always ask", "You choose each step; Mefi suggests an answer."],
     ["accept", "Accept per task", "Accept a task once, then Mefi handles its ordinary asks."],
-    ["auto", "Auto", "Mefi handles confident choices and asks when unsure."],
+    ["auto", "Auto", "Mefi starts queued tasks, including agent proposals, and handles confident choices."],
     ["elevated", "Elevated only", "Mefi handles ordinary choices; elevated requests stay yours."],
   ];
   const SCOPE = [["blend", "This project + others"], ["project", "This project"], ["global", "All projects"]];
@@ -60482,7 +60442,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (mine === epoch && expected === project()) { if (mounts.has(root)) paint(root, mounts.get(root)); const errorNote = root.querySelector(".autonomy-note") || note; if (errorNote) { errorNote.textContent = error.message; errorNote.dataset.tone = "bad"; } }
     } finally {
       root.removeAttribute("aria-busy");
-      for (const control of root.querySelectorAll("button, input, select")) control.disabled = false;
+      for (const control of root.querySelectorAll("button, input, select")) control.disabled = control.dataset.autonomyLocked === "true";
     }
   }
   function openSettings() {
@@ -60520,6 +60480,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     for (const category of current?.categories || []) {
       const row = el("label", "autonomy-check");
       const input = el("input"); input.type = "checkbox"; input.checked = current.elevated?.[category.id] !== false;
+      if (category.id === "agent-filed" && current.level === "auto") { input.checked = false; input.disabled = true; input.dataset.autonomyLocked = "true"; }
       const words = el("span", "", category.label); words.append(el("small", "", category.blurb)); row.append(input, words);
       input.addEventListener("change", () => {
         const value = input.checked;
@@ -63017,6 +62978,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (sheetTab === "live") brainView?.resize();
     if (sheetTab === "seats") renderSeats();
     window.MefiNav?.note?.("agent-brain", { tab: sheetTab });
+    // open() claims the page before its async read; paint the loaded tab too.
+    window.MefiNav?.paintCurrent?.();
   }
 
   // The seats and the owner's two switches. Every change saves at once and
@@ -63840,7 +63803,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   ];
   const children = {
     setup: [["Team & models", "agents", { section: "setup", pane: "team" }], ["Providers", "agents", { section: "setup", pane: "connections" }], ["Routing & fallback", "agents", { section: "setup", pane: "routing" }], ["Run behavior", "agents", { section: "setup", pane: "behavior" }]],
-    live: [["Command", "command"], ["Pipelines", "agent-brain", { tab: "live" }], ["Sessions", "explorer"], ["Activity", "eyes"], ["Overhead", "overhead"]],
+    live: [["Command", "command"], ["Pipelines", "agent-brain", { tab: "live" }], ["Sessions", "explorer"], ["Activity", "eyes"], ["Trace", "trace"], ["Overhead", "overhead"]],
     workflows: [["Brain maps", "brains"], ["Playbook", "agent-brain", { tab: "playbook" }], ["Project map", "agent-brain", { tab: "map" }], ["Context", "context"]],
     models: [["Catalog", "booklet"], ["Performance", "graph"]],
     usage: [["Recorded calls", "usage", { view: "usage" }], ["Provider accounts", "usage", { view: "tracker" }]],
@@ -64617,10 +64580,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       case "running": return { tone: "live", text: "building", key: "running" };
       case "review": return { tone: "check", text: "checking its work", key: "review" };
       case "approval": return { tone: "ask", text: "waiting for your go-ahead", key: "approval" };
-      case "blocked": return { tone: "bad", text: row.blockedBy === "owner" ? "stopped by you" : "stuck", key: "blocked", reason: row.reason };
+      case "blocked": return { tone: "bad", text: row.blockedBy === "owner" ? "stopped by you" : row.blockedBy === "relevance" ? "maybe done outside Studio" : "stuck", key: "blocked", reason: row.reason };
       case "waiting": return { tone: "next", text: "waiting for other tasks", key: "waiting", reason: row.reason };
       case "cooling": return { tone: "next", text: "trying again soon", key: "cooling", reason: row.reason };
-      case "deferred": return { tone: "next", text: "deferred", key: "deferred", reason: row.reason };
+      case "deferred": return { tone: "next", text: row.blockedBy === "relevance-check" ? "checking against outside work" : "deferred", key: "deferred", reason: row.reason };
       case "grouped": return { tone: "next", text: "part of a group", key: "grouped", reason: row.reason };
       case "ready": return { tone: "next", text: "up next", key: "ready" };
       default: return { tone: "next", text: "queued", key: "ready" };
@@ -65226,11 +65189,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function paintSettings(current) {
     const vibe = current === "vibe";
     const label = document.getElementById("idle-home-label");
-    if (label) label.textContent = vibe ? "Open Vibe on launch" : "Open Workspace on launch";
+    if (label) label.textContent = vibe ? "Open Vibe on launch" : "Open Home on launch";
     const hint = document.getElementById("idle-home-hint");
     if (hint) hint.textContent = vibe ? "When disabled, Studio opens Watch, the live node tree, after the project chooser." : "When disabled, Studio opens Command view after the project chooser.";
     const toggle = document.getElementById("idle-home-switch");
-    if (toggle) toggle.title = vibe ? "On: every launch lands on Vibe. Off: Studio opens straight into Watch. The project chooser comes first either way." : "On: every launch lands on Your workspace. Off: Studio opens straight into Command view. The project chooser comes first either way.";
+    if (toggle) toggle.title = vibe ? "On: every launch lands on Vibe. Off: Studio opens straight into Watch. The project chooser comes first either way." : "On: every launch lands on Home. Off: Studio opens straight into Command view. The project chooser comes first either way.";
     const modeHint = document.getElementById("settings-mode-hint");
     if (modeHint) modeHint.textContent = vibe ? "Vibe: the calm front door, where every page opens in Vibe's rail." : "Build: the full studio, with Home, the menu and every tool.";
   }
@@ -66682,7 +66645,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // ---- tabs ----
   // The page header names the tab on show; nav.js repaints it on mefi:nav, and
   // this covers the launch, which restores a tab without announcing it.
-  const PAGE_TITLES = { booklet: "Model catalog", graph: "Model Lab", eyes: "Activity & evidence", studio: "Settings" };
+  const PAGE_TITLES = { booklet: "Model catalog", graph: "Performance", eyes: "Activity & evidence", studio: "Settings" };
   function showTab(name, params = {}) {
     if (name !== "studio") window.MefiMusic?.activateSettings?.(null);
     const insights = document.getElementById("model-lab-catalog");

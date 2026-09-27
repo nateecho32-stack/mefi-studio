@@ -298,12 +298,14 @@ app.whenReady().then(async () => {
   await run(`
     window.__commandPaintFrames=0;
     window.__railPaintFrames=0;
-    const clear=CanvasRenderingContext2D.prototype.clearRect;
-    CanvasRenderingContext2D.prototype.clearRect=function(...args){
-      if(this.canvas.id==='idle-layer')window.__commandPaintFrames++;
-      if(this.canvas.id==='tree-canvas')window.__railPaintFrames++;
-      return clear.apply(this,args);
-    };
+    for(const proto of [CanvasRenderingContext2D.prototype,globalThis.OffscreenCanvasRenderingContext2D?.prototype].filter(Boolean)){
+      const clear=proto.clearRect;
+      proto.clearRect=function(...args){
+        if(this===window.MefiIdle.canvasContext(document.getElementById('idle-layer')))window.__commandPaintFrames++;
+        if(this.canvas.id==='tree-canvas')window.__railPaintFrames++;
+        return clear.apply(this,args);
+      };
+    }
     window.MefiNav.go('workspace');
   `);
   await sleep(120);
@@ -316,15 +318,15 @@ app.whenReady().then(async () => {
     await window.MefiIdle.ready();
   `);
   const snapshot = () => run(`
-    const canvas=document.getElementById('idle-layer'), nodes=window.MefiIdle.debugNodes();
+    const canvas=document.getElementById('idle-layer'),ctx=window.MefiIdle.canvasContext(canvas),bitmap=ctx.canvas,nodes=window.MefiIdle.debugNodes();
     const task=nodes.find(node=>node.id==='task:command_render_task');
     if(!task || !Number.isFinite(task.x) || !Number.isFinite(task.y)) throw new Error('Fixture task has no projected position');
-    const scaleX=canvas.width/canvas.clientWidth, scaleY=canvas.height/canvas.clientHeight;
+    const scaleX=bitmap.width/canvas.clientWidth, scaleY=bitmap.height/canvas.clientHeight;
     const rect=task.cardRect || {x:task.x-35,y:task.y-35,w:70,h:70};
     const x=Math.max(0,Math.floor(rect.x*scaleX)),y=Math.max(0,Math.floor(rect.y*scaleY));
-    const w=Math.min(canvas.width-x,Math.ceil(rect.w*scaleX)),h=Math.min(canvas.height-y,Math.ceil(rect.h*scaleY));
+    const w=Math.min(bitmap.width-x,Math.ceil(rect.w*scaleX)),h=Math.min(bitmap.height-y,Math.ceil(rect.h*scaleY));
     if(w<=0||h<=0)throw new Error('Fixture task is outside the canvas');
-    const pixels=canvas.getContext('2d').getImageData(x,y,w,h).data;
+    const pixels=ctx.getImageData(x,y,w,h).data;
     let taskPixels=0;for(let i=0;i<pixels.length;i+=4)if(pixels[i+3]>0&&Math.max(pixels[i],pixels[i+1],pixels[i+2])>70)taskPixels++;
     return {frames:window.__commandPaintFrames,finiteNodes:nodes.filter(node=>Number.isFinite(node.x)&&Number.isFinite(node.y)).length,taskPixels,taskId:task.id};
   `);
@@ -662,11 +664,12 @@ app.whenReady().then(async () => {
     }
     window.__audioPaintPaths=[];
     window.__audioCanvasMethods={};
+    window.__audioCanvasProto=Object.getPrototypeOf(window.MefiIdle.canvasContext(document.getElementById("idle-layer")));
     for(const method of ['clearRect','beginPath','moveTo','lineTo','stroke']){
-      const base=CanvasRenderingContext2D.prototype[method];
+      const base=window.__audioCanvasProto[method];
       window.__audioCanvasMethods[method]=base;
-      CanvasRenderingContext2D.prototype[method]=function(...args){
-        if(this.canvas.id==='idle-layer'){
+      window.__audioCanvasProto[method]=function(...args){
+        if(this===window.MefiIdle.canvasContext(document.getElementById('idle-layer'))){
           if(method==='clearRect')window.__audioPaintPaths=[];
           if(method==='beginPath')window.__audioCurrentPath=[];
           if(method==='moveTo'||method==='lineTo')(window.__audioCurrentPath||=[]).push({x:args[0],y:args[1]});
@@ -679,8 +682,8 @@ app.whenReady().then(async () => {
       // Read pixels and projections in the same renderer turn after a paint.
       // A separate host-side wait can race the graph's four-second refresh.
       ${waitForGraphPaint}
-      const canvas=document.getElementById('idle-layer'),ctx=canvas.getContext('2d');
-      const scaleX=canvas.width/canvas.clientWidth,scaleY=canvas.height/canvas.clientHeight;
+      const canvas=document.getElementById('idle-layer'),ctx=window.MefiIdle.canvasContext(canvas);
+      const scaleX=ctx.canvas.width/canvas.clientWidth,scaleY=ctx.canvas.height/canvas.clientHeight;
       const waveNodes=window.MefiIdle.debugNodes().filter(node=>Number.isFinite(node.x));
       const nodes=waveNodes.filter(node=>node.kind!=='agent'&&node.kind!=='music');
       const task=nodes.find(node=>node.id==='task:command_render_task');
@@ -921,9 +924,9 @@ app.whenReady().then(async () => {
     window.MefiIdle.setMusicReactive(false);
     window.__fixtureAudio.pause();
     for(const [method,base] of Object.entries(window.__audioCaptureMethods))navigator.mediaDevices[method]=base;
-    for(const [method,base] of Object.entries(window.__audioCanvasMethods))CanvasRenderingContext2D.prototype[method]=base;
+    for(const [method,base] of Object.entries(window.__audioCanvasMethods))window.__audioCanvasProto[method]=base;
     for(const [method,base] of Object.entries(window.__audioAnalyserMethods))AnalyserNode.prototype[method]=base;
-    for(const key of ['__audioNodeSample','__audioSection','__fixtureAudio','__audioPaintPaths','__audioCurrentPath','__audioCanvasMethods','__audioAnalyserMethods','__audioInput','__audioControlSample','__audioControlSource','__audioCaptureCalls','__audioCaptureMethods'])delete window[key];
+    for(const key of ['__audioNodeSample','__audioSection','__fixtureAudio','__audioPaintPaths','__audioCurrentPath','__audioCanvasMethods','__audioCanvasProto','__audioAnalyserMethods','__audioInput','__audioControlSample','__audioControlSource','__audioCaptureCalls','__audioCaptureMethods'])delete window[key];
   `);
   await run("window.MefiNav.go('booklet');");
   const visibleRailFrames = await run("return window.__railPaintFrames;");

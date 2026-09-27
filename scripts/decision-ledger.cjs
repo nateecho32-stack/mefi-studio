@@ -2,7 +2,7 @@
 // Pure module: no Electron, no filesystem, no network, no clock reads.
 "use strict";
 
-const FIELDS = Object.freeze(["status", "nextRunAt", "lastRunError", "runId", "lease", "runFailures", "startFailures", "providerFailures", "verification", "verificationReceiptId", "verifyAttempts", "doneAt", "pin", "pinAt", "buildApproval", "loopGuard", "ownerHold", "autonomyBudgetHold", "duplicateOf", "familyDecision", "churnDecision", "decisions", "logs", "grants", "updatedAt"]);
+const FIELDS = Object.freeze(["status", "nextRunAt", "lastRunError", "runId", "lease", "runFailures", "startFailures", "providerFailures", "verification", "verificationReceiptId", "verifyAttempts", "doneAt", "pin", "pinAt", "buildApproval", "loopGuard", "ownerHold", "autonomyBudgetHold", "relevance", "duplicateOf", "familyDecision", "churnDecision", "decisions", "logs", "grants", "updatedAt"]);
 const rows = (value) => Array.isArray(value) ? value : [];
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);

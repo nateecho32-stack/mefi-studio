@@ -36,7 +36,7 @@ exports.capture = async ({ contents, run, until, sleep, capturePage, report, roo
   await sleep(300);
   const visible = await nodes();
   for (const n of visible) { const a = later.find(v => v.id === n.id); assert.ok(Math.hypot(n.x-a.x,n.y-a.y)<.1, "brightness and outlines never move the tree"); }
-  assert.equal(await run("return document.getElementById('idle-layer').getContext('2d').filter==='none'&&document.getElementById('idle-layer-far').getContext('2d').filter==='none';"), true, "brightness filters are restored before drawing labels or the next backdrop");
+  assert.equal(await run("return window.MefiIdle.canvasContext(document.getElementById('idle-layer')).filter==='none'&&window.MefiIdle.canvasContext(document.getElementById('idle-layer-far')).filter==='none';"), true, "brightness filters are restored before drawing labels or the next backdrop");
   fs.writeFileSync(path.join(root, "tree-brightness-outlines.png"), (await capturePage()).toPNG());
   const task = later.find(n => n.id === "task:command_render_task");
   for (const type of ["mouseMove", "mouseDown", "mouseUp"]) contents.sendInputEvent({ type, x: Math.round(task.x), y: Math.round(task.y), ...(type === "mouseMove" ? {} : { button: "left", clickCount: 1 }) });

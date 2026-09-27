@@ -43,9 +43,12 @@ app.whenReady().then(async () => {
   await run("window.mefiStudio=window.fixtureMediaBridge; window.MefiNav.go('command'); window.MefiMusic.openAudio(); document.getElementById('music-browser-launch').click();");
   report.phase = "welcome";
   await until(async () => await run("!document.querySelector('.music-browser').hidden && !document.getElementById('media-window').hidden"));
+  await until(async () => await run("(()=>{const a=document.getElementById('media-window').getBoundingClientRect(),b=document.getElementById('music-video-stage').getBoundingClientRect();return Math.abs(a.width-b.width)<1&&Math.abs(a.x-b.x)<1})()"));
   assert.equal(BrowserWindow.getAllWindows().length, 1);
   const view = owner.contentView.children.find(child => child.webContents && child.webContents !== owner.webContents), remote = view.webContents;
   await capture(owner.webContents, "browser-welcome.png");
+  const design = await run("(()=>{const stage=document.getElementById('music-video-stage'),queue=document.querySelector('.music-link-queue'),player=document.getElementById('media-window'),layout=document.querySelector('.music-video-layout');const box=n=>{const r=n.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,right:r.right}};return {stage:box(stage),queue:box(queue),player:box(player),watching:box(stage.parentElement),columns:getComputedStyle(layout).gridTemplateColumns,selected:[...document.querySelectorAll('.music-tab')].map(n=>[n.textContent,n.getAttribute('aria-selected')])}})()");
+  assert.ok(design.stage.right <= design.queue.x + 1, `Video and queue must not overlap: ${JSON.stringify(design)}`);
   await run(`window.MefiMusic.playLink(${JSON.stringify(`${base}/first`)})`);
   report.phase = "page visible";
   await until(async () => {

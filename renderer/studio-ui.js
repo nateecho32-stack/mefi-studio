@@ -66,7 +66,7 @@
     schedule();
   }
   const resize = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
-  function placeArrow(button, direction, left, top, width, height) {
+  function arrowPosition(button, direction, left, top, width, height) {
     if (button.dataset.holding) return;
     const horizontal = direction === "left" || direction === "right";
     const fixed = horizontal ? direction === "left" ? 3 : width - 33 : direction === "up" ? 3 : height - 29;
@@ -81,21 +81,24 @@
         return hit && !hit.closest("button, a, input, textarea, select, summary, [role=button], [role=tab], [contenteditable=true]");
       });
     };
-    const point = candidates.find(clear);
-    if (point) Object.assign(button.style, { left: `${point[0]}px`, top: `${point[1]}px`, right: "auto", bottom: "auto" });
+    return candidates.find(clear);
   }
   function refresh() {
+    // Read every region before writing any hint. Interleaving visibility and
+    // geometry reads with hint updates repeats style resolution for each panel.
+    const updates = [];
     for (const [el, region] of regions) {
-      if (!el.isConnected) { region.stop(); region.hint.remove(); resize?.unobserve(el); regions.delete(el); continue; }
+      const update = { el, region, hidden: true };
+      updates.push(update);
+      if (!el.isConnected) { update.remove = true; continue; }
       const { hint, buttons } = region;
-      if (!visible(el)) { hint.hidden = true; region.stop(); continue; }
+      if (!visible(el)) continue;
       const root = el === document.scrollingElement;
       const style = getComputedStyle(el);
-      if (root && getComputedStyle(document.body).overflowY === "hidden" || !root && !/(auto|scroll)/.test(`${style.overflowX} ${style.overflowY}`)) { hint.hidden = true; region.stop(); continue; }
+      if (root && getComputedStyle(document.body).overflowY === "hidden" || !root && !/(auto|scroll)/.test(`${style.overflowX} ${style.overflowY}`)) continue;
       const height = root ? innerHeight : el.clientHeight, width = root ? innerWidth : el.clientWidth;
       const x = el.scrollWidth - width > 2, y = el.scrollHeight - height > 2;
-      hint.hidden = !x && !y;
-      if (hint.hidden) { region.stop(); if (region.addedTab) { el.removeAttribute("tabindex"); region.addedTab = false; } continue; }
+      if (!x && !y) { update.removeTab = region.addedTab; continue; }
       const bounds = root ? { left: 0, top: 0 } : el.getBoundingClientRect();
       let left = Math.max(0, bounds.left + (el.clientLeft || 0)), top = Math.max(0, bounds.top + (el.clientTop || 0));
       let right = Math.min(innerWidth, bounds.left + width), bottom = Math.min(innerHeight, bounds.top + height);
@@ -103,14 +106,43 @@
         if (!/(auto|scroll|hidden|clip)/.test(getComputedStyle(parent).overflow)) continue;
         const clip = parent.getBoundingClientRect(); left = Math.max(left, clip.left); top = Math.max(top, clip.top); right = Math.min(right, clip.right); bottom = Math.min(bottom, clip.bottom);
       }
-      if (right - left < 35 || bottom - top < 35) { hint.hidden = true; region.stop(); continue; }
-      Object.assign(hint.style, { left: `${left}px`, top: `${top}px`, width: `${right - left}px`, height: `${bottom - top}px` });
-      hint.dataset.scrollOwner = el.id || el.className || el.tagName;
+      if (right - left < 35 || bottom - top < 35) continue;
       const directions = { up: y && el.scrollTop > 1, down: y && el.scrollTop + height < el.scrollHeight - 2, left: x && el.scrollLeft > 1, right: x && el.scrollLeft + width < el.scrollWidth - 2 };
-      for (const [direction, can] of Object.entries(directions)) { buttons[direction].hidden = !can; hint.classList.toggle(`can-${direction}`, can); }
-      hint.classList.toggle("active", el.matches(":hover, :focus-within") || hint.contains(document.activeElement));
-      if (hint.classList.contains("active") || hint.classList.contains("engaged")) for (const [direction, button] of Object.entries(buttons)) if (!button.hidden) placeArrow(button, direction, left, top, right - left, bottom - top);
-      if (el.tabIndex < 0 && !el.hasAttribute("tabindex") && !el.matches("input, textarea, select, html, body")) { el.tabIndex = 0; region.addedTab = true; }
+      const active = el.matches(":hover, :focus-within") || hint.contains(document.activeElement);
+      const arrows = [];
+      if (active || hint.classList.contains("engaged")) for (const [direction, button] of Object.entries(buttons)) if (directions[direction]) {
+        const point = arrowPosition(button, direction, left, top, right - left, bottom - top);
+        if (point) arrows.push({ button, point });
+      }
+      Object.assign(update, { hidden: false, left, top, width: right - left, height: bottom - top, directions, active, arrows,
+        owner: el.id || el.className || el.tagName,
+        addTab: el.tabIndex < 0 && !el.hasAttribute("tabindex") && !el.matches("input, textarea, select, html, body") });
+    }
+    for (const update of updates) {
+      const { el, region } = update;
+      const { hint, buttons } = region;
+      if (update.remove) { region.stop(); hint.remove(); resize?.unobserve(el); regions.delete(el); continue; }
+      if (hint.hidden !== update.hidden) hint.hidden = update.hidden;
+      if (update.hidden) {
+        region.stop();
+        if (update.removeTab) { el.removeAttribute("tabindex"); region.addedTab = false; }
+        continue;
+      }
+      for (const key of ["left", "top", "width", "height"]) {
+        const value = `${update[key]}px`;
+        if (hint.style[key] !== value) hint.style[key] = value;
+      }
+      if (hint.dataset.scrollOwner !== update.owner) hint.dataset.scrollOwner = update.owner;
+      for (const [direction, can] of Object.entries(update.directions)) {
+        if (buttons[direction].hidden !== !can) buttons[direction].hidden = !can;
+        hint.classList.toggle(`can-${direction}`, can);
+      }
+      hint.classList.toggle("active", update.active);
+      for (const { button, point } of update.arrows) {
+        const style = { left: `${point[0]}px`, top: `${point[1]}px`, right: "auto", bottom: "auto" };
+        for (const [key, value] of Object.entries(style)) if (button.style[key] !== value) button.style[key] = value;
+      }
+      if (update.addTab) { el.tabIndex = 0; region.addedTab = true; }
     }
     for (const [select, control] of selects) {
       if (!select.isConnected) { control.remove(); selects.delete(select); continue; }
@@ -285,6 +317,7 @@
     if (!presets[appearance.preset]) appearance.preset = "studio";
     const root = document.documentElement;
     root.dataset.studioStyle = appearance.preset; root.dataset.density = appearance.density === "compact" ? "compact" : "comfortable";
+    root.dataset.studioMaterial = Number(appearance.glass) > 0 ? "glass" : "solid";
     root.style.setProperty("--studio-glass", String(Math.max(0, Math.min(100, Number(appearance.glass) || 0)) / 100));
     root.style.setProperty("--studio-glow", String(Math.max(0, Math.min(100, Number(appearance.glow) || 0)) / 100));
     if (save) { try { localStorage.setItem(appearanceKey, JSON.stringify(appearance)); } catch {} }

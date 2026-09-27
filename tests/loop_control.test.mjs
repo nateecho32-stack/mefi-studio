@@ -105,6 +105,108 @@ test("a manual restart whose builds never end gives the queue back", async () =>
   assert.equal(h.exits(), 0);
 });
 
+test("Restart now stops all coding workers and saves their latest progress before relaunch", async () => {
+  const tasks = ["first", "second"].map((id) => ({ id, title: `Implement ${id}`, prompt: `Build ${id}`, files: [`${id}.js`], status: "open", createdAt: 1 }));
+  const h = executorHost({ tasks, parallel: 2 });
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 2);
+  for (const job of h.autopilot.jobs) {
+    job.sessionId = `session-${job.taskId}`;
+    job.todos = [{ content: `Verify ${job.taskId}`, status: "in_progress" }];
+    job.outputTail = [`Last action for ${job.taskId}`];
+  }
+  let releaseWrites, releaseIdle, stopped, exits = 0, helperSaves = 0;
+  const writes = new Promise((resolve) => { releaseWrites = resolve; });
+  const idle = new Promise((resolve) => { releaseIdle = resolve; });
+  const stopping = new Promise((resolve) => { stopped = resolve; });
+  const mutate = h.env.mutateBoard;
+  h.env.mutateBoard = async (fn) => { await writes; return mutate(fn); };
+  Object.assign(h.env, {
+    activeChild: null, window: null, UPDATE_GRACE_MS: 0, updater: { status: () => ({ auto: true }) },
+    assistantClearQueue: ({ abandonRunning }) => assert.equal(abandonRunning, true),
+    saveAssistant: async () => { helperSaves += 1; return { ok: true }; },
+    waitForExecutorIdle: async () => { stopped(); await idle; return !h.autopilot.jobs.length; },
+    saveResume: async () => assert.equal(h.autopilot.jobs.length, 0),
+    stopUpdateWatch() {}, stopEyesWatch() {}, stopMachineWatch() {}, stopAssistant() {}, relaunchArgs: () => ["--updated"],
+    app: { releaseSingleInstanceLock() {}, relaunch() { assert.ok(helperSaves > 0); }, exit() { exits += 1; } },
+  });
+  const schedule = h.env.setTimeout;
+  h.env.setTimeout = (fn, delay) => delay === 0 ? setTimeout(fn, delay) : schedule(fn, delay);
+  vm.runInContext(section("// A pending restart drains", "async function startUpdateWatch("), h.env);
+  const restart = h.env.applyRestart(["main.cjs"], { counted: false, stopAgents: true });
+  await stopping;
+  assert.equal(h.terminations.length, 2, "every owned coding process tree receives a stop");
+  assert.equal(h.autopilot.execute, false);
+  assert.equal(h.state.status, "paused");
+  for (const termination of h.terminations) termination.child.emit("close", 0);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(exits, 0, "process exit alone is insufficient while checkpoint writes wait");
+  assert.equal(h.autopilot.jobs.length, 2);
+  releaseWrites();
+  for (let turn = 0; h.autopilot.jobs.length && turn < 50; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(h.autopilot.jobs.length, 0);
+  releaseIdle();
+  assert.equal((await restart).ok, true);
+  assert.equal(exits, 1);
+  assert.deepEqual(h.settings().update.lastRestart.files, ["main.cjs"]);
+  assert.deepEqual(h.settings().update.restarts, [], "the owner's click is not an automatic restart loop");
+  for (const task of h.board().tasks) {
+    assert.equal(task.status, "open");
+    assert.equal(task.runProgress.pending, true);
+    assert.equal(task.runProgress.sessionId, `session-${task.id}`);
+    assert.deepEqual(task.runProgress.outputTail, [`Last action for ${task.id}`]);
+    assert.equal(task.runProgress.todos[0].content, `Verify ${task.id}`);
+    assert.equal(task.runFailures ?? 0, 0, "an update does not charge a failed coding attempt");
+  }
+});
+
+test("Restart now keeps Studio open when the helper journal cannot be saved", async () => {
+  const h = restartHost();
+  h.env.assistantState = { status: "running" };
+  h.env.CLI_MODE = false;
+  h.env.stopAllAgents = async () => { h.env.autopilot.jobs = []; return { ok: true, idle: true }; };
+  h.env.saveAssistant = async () => ({ ok: false, error: "disk full" });
+  vm.runInContext(section("async function restartStudio(", "// Retained manual-mode default"), h.env);
+  const result = await h.env.applyRestart(["main.cjs"], { stopAgents: true });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /Could not save agent progress: disk full/);
+  assert.equal(h.exits(), 0);
+});
+
+test("Restart now waits for a project switch before stopping its agents", async () => {
+  const h = restartHost();
+  h.env.projectSwitching = true;
+  h.env.stopAllAgents = async () => assert.fail("a project switch owns the stop/save operation");
+  vm.runInContext(section("async function restartStudio(", "// Retained manual-mode default"), h.env);
+  assert.equal((await h.env.applyRestart(["main.cjs"], { stopAgents: true })).deferred, true);
+  assert.equal(h.exits(), 0);
+});
+
+test("the update button with no pending changes still uses stop-and-save restart", async () => {
+  let handler, stops = 0;
+  const env = vm.createContext({
+    updater: { applyNow: async () => ({ ok: true, applied: false, phase: "watching" }), status: () => ({ phase: "watching" }) },
+    ipcMain: { handle: (_channel, fn) => { handler = fn; } },
+    restartStudio: async () => { stops += 1; return { ok: false, error: "save failed" }; },
+  });
+  vm.runInContext(section('  ipcMain.handle("update:apply",', "  // The manual restart with the agents stopped"), env);
+  const result = await handler();
+  assert.equal(stops, 1);
+  assert.equal(result.ok, false);
+  assert.equal(result.error, "save failed");
+});
+
+test("an update still saving its workers never starts a second empty restart", async () => {
+  let handler;
+  const env = vm.createContext({
+    updater: { applyNow: async () => ({ ok: true, applied: false, phase: "pending", reason: "worker saving" }), status: () => ({ phase: "pending" }) },
+    ipcMain: { handle: (_channel, fn) => { handler = fn; } },
+    restartStudio: async () => assert.fail("the pending update already owns its restart and file list"),
+  });
+  vm.runInContext(section('  ipcMain.handle("update:apply",', "  // The manual restart with the agents stopped"), env);
+  assert.equal((await handler()).phase, "pending");
+});
+
 // drainProjectGate abandons a running roster pass and lets the switch go on,
 // while the pass's body still runs scoped to the old project.
 test("a foreman pass a project switch abandoned starts no worker in the project left behind", async () => {

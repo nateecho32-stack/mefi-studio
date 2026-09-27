@@ -1,4 +1,4 @@
-// Mefi's Studio AI+ — the Discord login behind the Void collection perks.
+// Mefi's Studio AI+ — the Discord login behind the Void Engine community link.
 //
 // A network module, and deliberately not a pure one: it opens a loopback HTTP
 // server for the OAuth redirect and talks to discord.com. Everything it reaches

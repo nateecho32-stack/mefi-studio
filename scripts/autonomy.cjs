@@ -10,7 +10,7 @@ const ELEVATED = Object.freeze([
   { id: "grant", label: "Granting reach", blurb: "Letting an agent touch more than its task allows.", warn: "Automatic grants can widen access to your files and tools." },
   { id: "risk", label: "Irreversible changes", blurb: "Changes that may be difficult or impossible to undo.", warn: "Automatic risk decisions can approve destructive changes." },
   { id: "drop-owned", label: "Closing your work", blurb: "Dropping or closing a task you created." },
-  { id: "agent-filed", label: "Work agents propose", blurb: "Starting a task filed by an agent, including promoted ideas." },
+  { id: "agent-filed", label: "Work agents propose", blurb: "In Elevated only, ask before starting agent-proposed tasks. Auto starts these tasks automatically." },
   { id: "pricier-model", label: "A pricier model", blurb: "Retrying with a heavier model or a larger budget." },
   { id: "real-world", label: "Real-world to-dos", blurb: "Things only a person can do, kept in your For you list." },
 ].map(Object.freeze));
@@ -48,7 +48,7 @@ function accepted(task, { tasks = [] } = {}, visited = new Set()) {
 
 // The owner's own work: a card they created, or an actual split or delegated
 // slice of one (the same links acceptance follows). Under Auto and Elevated
-// only the owner's card builds without an approval, so its slices must too:
+// the owner's card builds without an approval, so its slices must too:
 // otherwise the parent waits on its slices and the slices wait on the owner.
 function ownerWork(task, { tasks = [] } = {}, visited = new Set()) {
   if (!task || visited.has(task.id)) return false;
@@ -65,6 +65,7 @@ function ownerWork(task, { tasks = [] } = {}, visited = new Set()) {
 function needsApproval(task, { level = DEFAULT_LEVEL, elevated = {}, tasks = [] } = {}) {
   if (accepted(task, { tasks })) return false;
   if (level === "ask" || level === "accept") return true;
+  if (level === "auto") return false;
   return elevated["agent-filed"] !== false && !ownerWork(task, { tasks });
 }
 
@@ -85,6 +86,10 @@ function classify({ question, approval, parked, task, option, action, kind } = {
 function canDelegate(question, { elevated = {}, affirmed = false, task = null, option = null } = {}) {
   if (!question || question.context?.raisedBy === "desk") return false;
   if (["chat", "chat-confirm"].includes(question.source) && !affirmed) return false;
+  // Whether work done outside Studio already covers a card (outside-work.cjs)
+  // is judged from changes Studio never watched: closing, dropping or
+  // re-running the card stays the owner's call in every mode.
+  if (question.source === "relevance") return false;
   const category = classify({ question, task, option });
   return !category || elevated[category] === false;
 }

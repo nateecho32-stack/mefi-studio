@@ -837,14 +837,19 @@ function createAgentBrain(options = {}) {
   }
 
   // What happened while the owner was away, from the recorded events and the
-  // board: built locally, so a greeting never spends a model call.
-  async function welcome({ tasks = [], needsYouIds = [], minAwayMs = 10 * 60 * 1000 } = {}) {
+  // board: built locally, so a greeting never spends a model call. `outside`
+  // (the host's report of work done outside Studio, not yet greeted) is news
+  // however short the absence was: it can land while Studio sat on another
+  // folder.
+  async function welcome({ tasks = [], needsYouIds = [], minAwayMs = 10 * 60 * 1000, outside = null } = {}) {
     const s = scope();
     await ready(s);
-    const since = Number(s.companion.lastSeenAt) || 0;
-    if (!since || now() - since < minAwayMs) return { ok: true, digest: null };
+    const seenAt = Number(s.companion.lastSeenAt) || 0;
+    const away = !seenAt || now() - seenAt < minAwayMs ? null : seenAt;
+    if (!away && !outside) return { ok: true, digest: null };
+    const since = away ?? Math.min(now(), Number(outside?.since) || seenAt || now());
     const events = await s.store.read({ since, limit: 5000 });
-    const digest = mods.companion.digest({ events, tasks, since, now: now(), needsYouIds });
+    const digest = mods.companion.digest({ events, tasks, since, now: now(), needsYouIds, outside });
     s.companion.greetingUntil = now() + LIMITS.greetingMs;
     return { ok: true, digest };
   }

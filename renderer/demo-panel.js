@@ -59,7 +59,7 @@
       key: "discord",
       eyebrow: "Community",
       title: "Join the Void Engine Discord",
-      text: "Share what you build, swap model setups and hang out with other builders. Members unlock the Void themes and node styles.",
+      text: "Share what you build, swap model setups and listen together with other builders.",
       link: { label: () => inviteUrl().replace(/^https?:\/\//, ""), action: "Join the Discord", glyph: "g-community", open: openInvite },
     },
   ];

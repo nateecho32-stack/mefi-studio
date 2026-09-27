@@ -1245,6 +1245,8 @@
     if (sheetTab === "live") brainView?.resize();
     if (sheetTab === "seats") renderSeats();
     window.MefiNav?.note?.("agent-brain", { tab: sheetTab });
+    // open() claims the page before its async read; paint the loaded tab too.
+    window.MefiNav?.paintCurrent?.();
   }
 
   // The seats and the owner's two switches. Every change saves at once and

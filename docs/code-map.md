@@ -87,6 +87,7 @@ the weight is, not to be exact.
 | --- | ---: | --- |
 | `assistant.mjs` | 6,486 | The always-on assistant's logic — every role, state normalisation, tree organisation, housekeeping and `verifyCompletion` — as functions of their inputs and an explicit `now`. |
 | `task-context.cjs` | 192 | Durable task revisions (`contextHistory`) and resumable briefs. Pure; callers persist the result under the board lock. |
+| `outside-work.cjs` | 666 | Work done outside Studio: git log/status parsing, the saved "last look", the report of commits, uncommitted edits and outside agent sessions since it, each queued card's evidence and relevance stamp (`holdState`, which `backlog.workState` reads), the model check's prompt and checked verdicts, the Ask card, and the worker's `briefLine`. Pure; the host is main.cjs's "work done outside Studio" block. See [agent-loop.md §14](agent-loop.md#14-work-done-outside-studio). |
 | `trace.cjs` | 134 | Trace's rules: bounded rings for the lines the host keeps (the studio log, the window's warnings), how a line's level and source are read, each channel's rows in one shape, and the filter/tail query. Pure; `main.cjs` `trace:channels` / `trace:read` feed and serve it. |
 | `task-attempts.cjs` | 86 | A task's attempt history (start, fallback, finish, release) grouped by `runId` from `data/executor-log.jsonl`, for the task detail's Attempts fold and the Explorer/A-Eyes "Open task" links. Pure; read-only. |
 | `task-delegation.cjs` | 224 | Splits an owned task into durable slices, and (`admitIntake`) puts a sized request's steps under the owner's card when it is admitted. Pure, and runs inside the board gateway. |
@@ -230,7 +231,7 @@ imports.
 | File | Lines | Purpose |
 | --- | ---: | --- |
 | `node-visuals.js` | 150 | `window.MefiNodeVisuals`: shared graph palette, bounded per-canvas finish and text caches, and node-rim connection endpoints. |
-| `idle.js` | 10,560 | The Command view: the 3D node constellation that is also the menu, and the same tree drawn as scenery behind Home's frosted panels. Its costs are in [performance.md](performance.md). |
+| `idle.js` | 10,560 | The Command view: the 3D node constellation that is also the menu, and the same tree drawn as scenery behind Home's frosted panels. Transfers supported drawing contexts to OffscreenCanvas; `MefiIdle.canvasContext(element)` exposes the actual paint target for diagnostics. Its costs are in [performance.md](performance.md). |
 | `node-styles.js` | 5,303 | `window.MefiNodeStyles`: the node-style painters the Command view and the tree rail share (the eight looks, their motion records, detail tiers and theme tones, and the overlay and wire hooks each style may take over). Bundled before `tree3d.js`, which with `idle.js` falls back to a plain disc when it is absent. |
 | `brains.js` | 3,777 | The brain-map editor over the data `scripts/brains.cjs` validates. |
 | `agent-brain.js` | 1,410 | `window.MefiAgentBrain`, `MefiHub` and `MefiCompanion`: the Agent brain sheet (`J`: a task's pipeline drawn from work events, the Playbook shelf, the project map, the seats), the map hub on Home, and the companion orb and panel in the menu foot. |
@@ -257,13 +258,19 @@ imports.
 | `analyzer.js` · `tracker.js` · `eyes.js` · `palette.js` · `graph.js` · `ideas.js` · `overhead.js` | 532 · 512 · 493 · 456 · 441 · 425 · 333 | Analyzer, usage tracker (Command's Usage popover and Models › Usage › Provider accounts; its host readers live in `main.cjs` from `const ACCOUNT_READ_TIMEOUT_MS` to `usageAccounts`, its parsers in `scripts/usage-tracker.cjs`), Activity and its evidence inspector, Search, Catalog insights, Ideas and Overhead. |
 | `boot.js` · `model-lab.js` · `profiler.js` · `task-groups.js` · `startup.js` · `performance-core.js` · `sidebar.js` · `stage-labels.js` | 264 · 253 · 184 · 182 · 130 · 108 · 98 · 36 | Startup readiness, Model Lab, the live profiler, read-only task grouping, the launch screen, bounded measurements, the project menu, and one vocabulary for task badges. |
 
+The bundled `media-browser.js` and `music.css` provide the browser toolbar,
+welcome page and viewport inside the existing media player.
+`scripts/media-browser.cjs` attaches a sandboxed WebContentsView to Studio's
+existing window and owns its session, navigation and sender-checked IPC.
+The main preload exposes controls only to Studio; websites have no preload.
+
 Five stylesheets are inlined, in this order, so a later one wins a tie with
 an earlier one:
 
 | File | Lines | Purpose |
 | --- | ---: | --- |
 | `styles.css` | 3,980 | The Club Blackout theme: its tokens and most surfaces. Its section order is load-bearing, as its header explains. |
-| `music.css` | 218 | The music room, plus the theme tokens that also colour Command and the boards. |
+| `music.css` | | The music room, plus the theme tokens that also colour Command and the boards. |
 | `planning.css` · `brains.css` · `profiler.css` · `agent-brain.css` | 151 · 426 · 40 · 138 | The Plans sheet, the brain-map editor, the profiler overlay, and the Agent brain surfaces (sheet, Home hub, companion). |
 
 `npm run check` runs `check-css.mjs --unused` over all five, and `--merge`
@@ -321,6 +328,10 @@ commit rewrites the JSON view as well.
   harnesses, not unit tests. `tools/monitor_loop.mjs` runs the real agent loop
   against a virtual clock, and `tools/profile_studio.mjs` replays renderer
   workloads.
+- `tools/profile_live_studio.mjs` captures bounded metrics and optional CPU
+  samples from the running Studio through a PID-checked loopback inspector.
+  `tools/profile_scroll_controls.cjs` compares scroll-control versions in an
+  isolated renderer, including geometry and behavior parity.
 
 ## Where to look when…
 

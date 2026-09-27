@@ -7,7 +7,7 @@
   const MODES = [
     ["ask", "Always ask", "You choose each step; Mefi suggests an answer."],
     ["accept", "Accept per task", "Accept a task once, then Mefi handles its ordinary asks."],
-    ["auto", "Auto", "Mefi handles confident choices and asks when unsure."],
+    ["auto", "Auto", "Mefi starts queued tasks, including agent proposals, and handles confident choices."],
     ["elevated", "Elevated only", "Mefi handles ordinary choices; elevated requests stay yours."],
   ];
   const SCOPE = [["blend", "This project + others"], ["project", "This project"], ["global", "All projects"]];
@@ -54,7 +54,7 @@
       if (mine === epoch && expected === project()) { if (mounts.has(root)) paint(root, mounts.get(root)); const errorNote = root.querySelector(".autonomy-note") || note; if (errorNote) { errorNote.textContent = error.message; errorNote.dataset.tone = "bad"; } }
     } finally {
       root.removeAttribute("aria-busy");
-      for (const control of root.querySelectorAll("button, input, select")) control.disabled = false;
+      for (const control of root.querySelectorAll("button, input, select")) control.disabled = control.dataset.autonomyLocked === "true";
     }
   }
   function openSettings() {
@@ -92,6 +92,7 @@
     for (const category of current?.categories || []) {
       const row = el("label", "autonomy-check");
       const input = el("input"); input.type = "checkbox"; input.checked = current.elevated?.[category.id] !== false;
+      if (category.id === "agent-filed" && current.level === "auto") { input.checked = false; input.disabled = true; input.dataset.autonomyLocked = "true"; }
       const words = el("span", "", category.label); words.append(el("small", "", category.blurb)); row.append(input, words);
       input.addEventListener("change", () => {
         const value = input.checked;

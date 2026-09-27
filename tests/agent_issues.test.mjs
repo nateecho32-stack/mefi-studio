@@ -6,7 +6,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ISSUE_MARK, ISSUE_KIND_IDS, ISSUE_KINDS, ISSUE_OPTIONS, ALWAYS_ASK, AUTO_ANSWERABLE, parseIssueLine, normalizeIssue, normalizePolicy,
-  collectIssues, triageIssue, questionForIssue, runFailureIssue, issuePromptLine, ownerDirected, ownerResultIssue, repeatAsk,
+  collectIssues, triageIssue, questionForIssue, runFailureIssue, issuePromptLine, ownerDirected, ownerResultIssue, repairQuestion, repeatAsk,
 } from "../scripts/agent-issues.cjs";
 
 const worker = (kind, title, extra = {}) => normalizeIssue({ kind, title, source: "worker", taskId: "task_1", taskTitle: "Add the retry banner", ...extra });
@@ -176,12 +176,12 @@ test("the open-card budget queues rather than drops", () => {
 
 // ---- the decision lane: splits carry the ask, the owner's own lane, repeats
 
-test("every answer carries what was asked, and a split also carries what the agent saw", () => {
+test("every answer carries what was asked and what the agent saw", () => {
   const question = questionForIssue(worker("scope", "the store has to be written too", { detail: "the brief only covers the view" }));
   for (const option of question.options) assert.equal(option.action.payload.ask, "the store has to be written too", option.id);
   const split = question.options.find((option) => option.id === "split");
   assert.equal(split.action.payload.detail, "the brief only covers the view");
-  assert.ok(question.options.filter((option) => option.id !== "split").every((option) => !("detail" in option.action.payload)));
+  assert.ok(question.options.every((option) => option.action.payload.detail === "the brief only covers the view"));
   // Bounded: the ask like a title, the detail at 300.
   const long = questionForIssue(worker("scope", "x".repeat(400), { detail: "y".repeat(900) }));
   assert.equal(long.options[0].action.payload.ask.length, 140);
@@ -303,7 +303,8 @@ test("an owner-directed ask filed under another kind is reclassified; a named gr
 test("the prompt line teaches the owner kind as the owner's lane", () => {
   const line = issuePromptLine();
   assert.match(line, /\|owner>/);
-  assert.match(line, /Use "owner" for something only the owner can do \(the board, Studio's task store, another session's files\); it reaches the owner once and makes no new card\./);
+  assert.match(line, /Use "owner" only for a concrete human decision, missing access or physical action/);
+  assert.match(line, /Test failures, concurrent edits and test-history archive conflicts are engineering work/);
   assert.match(line, /not a way to end the job/);
   assert.ok(!line.includes("run-failed"));
 });
@@ -438,4 +439,57 @@ test("a question the desk handed on is never settled for the owner and says who 
   assert.equal(desk.question.context.raisedBy, "desk");
   // The same blocker from a worker inside the budget is still settled.
   assert.equal(triageIssue({ kind: "blocked", title: "npm ci failed", source: "worker", taskId: "task_1", attempts: 0 }, { policy, now: HOUR }).decision, "auto");
+});
+
+
+test("routine repairs mislabeled owner keep actionable options and obey retry limits", () => {
+  const cases = [
+    ["reconcile concurrent Analyzer test failures and existing test-history archive conflict", "check-failed"],
+    ["Repair shared Analyzer and navigation regressions", "check-failed"],
+    ["Fix occlusion probe reliability", "check-failed"],
+    ["Reconcile duplicate test-history archive entry", "blocked"],
+    ["Could you resolve another session's edits?", "blocked"],
+  ];
+  for (const [title, kind] of cases) {
+    const issue = parseIssueLine(`MEFI_ASK: owner :: ${title}`);
+    assert.equal(issue.kind, kind, title);
+    assert.equal(ownerResultIssue({ owner: title }).kind, kind);
+    assert.equal(triageIssue(issue).decision, "auto");
+    const spent = triageIssue({ ...issue, attempts: 2 });
+    assert.equal(spent.decision, "ask");
+    assert.ok(spent.question.options.some(option => option.id === "retry"));
+    assert.ok(!spent.question.options.some(option => option.id === "acknowledge"));
+    assert.equal(triageIssue(issue, { policy: { auto: [] } }).decision, "ask");
+  }
+});
+
+test("repair words cannot turn a permission, risky operation or mixed human request into a retry", () => {
+  for (const title of [
+    "Approve deleting the database to repair the tests",
+    "Fix the tests after you provide an API key",
+    "Rerun the checks on an attended, unlocked desktop",
+    "Resolve the archive conflict and discard another session's edits",
+    "Connect the test device",
+    "Will you change the stored acceptance criteria?",
+  ]) assert.equal(worker("owner", title).kind, "owner", title);
+  for (const kind of ["permission", "risk"]) assert.equal(worker(kind, "Fix test failures", { permission: "write-files" }).kind, kind);
+  for (const kind of ["scope", "conflict", "capability"]) assert.equal(worker(kind, "Fix tests for a larger feature").kind, kind, "an ordinary decision retains its declared scope");
+  assert.equal(worker("owner", "Fix the tests", { permission: "write-files" }).kind, "owner");
+});
+
+test("open legacy repair asks refresh in place without reopening an owner's decision", () => {
+  const title = "reconcile concurrent Analyzer test failures and existing test-history archive conflict";
+  const old = { ...questionForIssue(worker("owner", "Choose the acceptance criteria")), id: "legacy", status: "open", at: 12 };
+  for (const option of old.options) option.action.payload.ask = title;
+  old.context.suggestion = { optionId: null, reason: "Need your help", at: 15 };
+  const next = repairQuestion(old, { now: 20 });
+  assert.equal(next.id, "legacy");
+  assert.equal(next.at, 12);
+  assert.equal(next.context.issueKind, "check-failed");
+  assert.equal(next.context.suggestion, null);
+  assert.ok(next.options.some(option => option.id === "retry"));
+  assert.ok(!next.options.some(option => option.id === "acknowledge"));
+  for (const status of ["answered", "dismissed", "expired"]) assert.equal(repairQuestion({ ...old, status }), null);
+  assert.equal(repairQuestion({ ...old, context: { ...old.context, undoneFrom: "decision" } }), null);
+  assert.equal(repairQuestion({ ...old, context: { ...old.context, raisedBy: "desk" } }), null);
 });

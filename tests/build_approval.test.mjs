@@ -227,3 +227,17 @@ test("inbox additions cannot fabricate approval for the direct request path", as
   assert.equal(board.requests[0].buildApproval, undefined);
   assert.equal(backlog.workState(board.requests[0], 100, { autoBuild: false }).stage, "approval");
 });
+
+
+test("Auto dispatches an agent-proposed repair through the real host while respecting Pause", async () => {
+  const repair = task("repair", { title: "Reconcile duplicate test-history archive entry", origin: { kind: "handoff", by: "agent" } });
+  const h = executorHost({ tasks: [repair] });
+  h.env.autonomySettings = { level: "auto", elevated: { "agent-filed": true } };
+  assert.equal((await h.env.backlogStatus()).counts.approval, 0);
+  assert.equal(await h.env.spawnNextJob(), "spawned");
+  assert.equal(h.starts[0].taskId, repair.id);
+  const paused = executorHost({ tasks: [repair], paused: true });
+  paused.env.autonomySettings = { level: "auto", elevated: { "agent-filed": true } };
+  await paused.env.spawnNextJob();
+  assert.equal(paused.starts.length, 0);
+});

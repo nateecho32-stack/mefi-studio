@@ -941,6 +941,28 @@ test("a duplicate you linked says what it waits for and Run anyway clears the li
   assert(!env.get("task-list").children.find((element) => element.dataset.overviewId === "orig").textContent.includes("Run anyway"), "the original offers nothing");
 });
 
+test("a card waiting on work done outside Studio offers Build it anyway and shows the verdict with its commits", async () => {
+  const tasks = [{ id: "outside", projectId: "p", title: "Add a dark theme toggle", status: "open",
+    relevance: { v: 1, state: "ask", verdict: "done", by: "model", reason: "The toggle commit adds exactly this", commits: [{ short: "abc1234", subject: "Add the dark theme toggle" }], files: ["src/theme.js"] } }];
+  const calls = [];
+  const env = environment({ tasks, overview: true, bridge: {
+    backlogStatus: async () => ({ ok: true, projectId: "p", taskStates: [{ id: "outside", stage: "blocked", blockedBy: "relevance", reason: "Looks already done outside Studio (The toggle commit adds exactly this). Mark it done, or choose Build it anyway." }] }),
+    tasksAction: async (payload) => { calls.push(payload); return { ok: false, error: "Held for assertion" }; },
+  } });
+  await env.api.open({ taskId: "outside" });
+  assert.equal(env.api.summary().review, 1, "a card waiting on the owner's word is in review");
+  const build = env.get("task-status-row").children.find((element) => element.dataset.taskAction === "build-anyway");
+  assert.equal(build.textContent, "Build it anyway");
+  assert.equal(build.className, "primary");
+  build.click(); await settle();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ taskId: "outside", projectId: "p", action: "retry" }], "the release goes through the host's retry path");
+  const text = descendants(env.get("task-detail")).map((element) => element.textContent).join("\n");
+  assert.match(text, /Work done outside Studio/);
+  assert.match(text, /Looks already done outside Studio\. The toggle commit adds exactly this/);
+  assert.match(text, /Commit abc1234: Add the dark theme toggle/);
+  assert.match(text, /Changed: src\/theme\.js/);
+});
+
 test("Try again and Run anyway are never offered while a worker or the checker holds the card", async () => {
   const tasks = [
     { id: "working", projectId: "p", title: "Working card", status: "active", runId: "run_1" },

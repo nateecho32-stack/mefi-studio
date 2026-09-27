@@ -77,3 +77,21 @@ test("failed saves keep the saved control value and show the failure on that con
   assert.match(root.querySelector(".autonomy-note").textContent, /Settings could not be written/);
   assert.equal(h.ui.outcome({ dispatch: { held: true, message: "Waiting for approval" } }, "Started"), "Waiting for approval");
 });
+
+
+test("Auto shows agent proposals as automatic without changing the saved Elevated-only preference", async () => {
+  const h = await fixture(), root = h.document.createElement("div");
+  h.config.categories = [{ id: "agent-filed", label: "Work agents propose", blurb: "Auto starts these tasks automatically." }];
+  h.config.elevated["agent-filed"] = true;
+  await h.ui.refresh(); h.ui.mount(root, { full: true });
+  const input = root.querySelector(".autonomy-elevated input");
+  assert.equal(input.checked, false);
+  assert.equal(input.disabled, true);
+  await root.querySelectorAll(".autonomy-mode")[3].click(); await settle();
+  const restored = root.querySelector(".autonomy-elevated input");
+  assert.equal(restored.checked, true);
+  assert.ok(!restored.disabled);
+  assert.equal(h.config.elevated["agent-filed"], true);
+  await root.querySelectorAll(".autonomy-mode")[2].click(); await settle();
+  assert.equal(root.querySelector(".autonomy-elevated input").disabled, true, "saving a mode preserves the Auto-only lock");
+});

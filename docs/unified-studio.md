@@ -12,7 +12,7 @@ shortcuts still resolve through the navigation registry.
 | --- | --- |
 | Overview | Readiness, active team, running work, decisions, start/pause controls |
 | Setup | Device connections, teams and presets, model routing, workflow behavior |
-| Live | Command, Pipelines, Sessions, Activity and Overhead |
+| Live | Command, Pipelines, Sessions, Activity, Trace and Overhead |
 | Workflows | Brain maps, Playbook, Project map and Context |
 | Models | Catalog and measured performance |
 | Usage | Recorded calls and provider account readings |
@@ -88,6 +88,10 @@ and respect reduced motion. At narrow widths, maps, pipelines and Playbook
 recipes show one working pane with a labeled return to their list.
 
 **Focus**, **Studio** and **Atmosphere** share the same controls and typography.
+Zero Glass intensity uses solid reading surfaces. With background video on,
+glass keeps a stronger tint under page text, navigation and floating menus so
+bright frames do not wash out labels. The video remains the same player while
+switching pages, themes or glass settings.
 Density, glass and glow are independent adjustments; color themes, node
 looks and existing motion preferences remain available. Full, Calm, Off and
 OS reduced motion are respected. Narrow Agents navigation uses labeled menus.

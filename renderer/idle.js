@@ -1970,10 +1970,9 @@
   // One thread renderer for both surfaces (the rail console and the right-side
   // chat log): the newest bubbles, a thinking bubble while a reply is pending,
   // and the scroll pinned to the tail only while the reader already is.
-  // Every feed push repaints the chat log, and most pushes (a worker's stdout
-  // lines) change nothing the thread shows; rebuilding it anyway cost two
-  // forced layouts of the whole document per push (7.6 ms each on the live
-  // Command view), so a thread that would read the same is left alone.
+  // Keep history separate from the live thought: a thinking update must not
+  // replace every message and make the shared controls rescan all its nodes.
+  // Unchanged pushes also skip the scroll measurements (forced layouts).
   const threadPainted = new WeakMap();
   function fillThread(container, full) {
     if (!container) return;
@@ -1997,11 +1996,22 @@
     const last = messages[messages.length - 1];
     const sameLive = Boolean(live && last?.role === "thinking" && String(last.text ?? "") === live);
     const pending = replyPending(full) && !sameLive;
-    const signature = JSON.stringify([bridge, rows, pending, pending && live]);
-    if (threadPainted.get(container) === signature && container.firstChild) return;
-    threadPainted.set(container, signature);
+    const history = JSON.stringify([bridge, rows]);
+    const previous = threadPainted.get(container);
+    const sameHistory = previous?.history === history && container.firstChild;
+    if (sameHistory && Boolean(previous.bubble) === pending && (!pending || previous.live === live)) return;
     const pinned = container.scrollTop + container.clientHeight >= container.scrollHeight - 28;
     const top = container.scrollTop;
+    if (sameHistory) {
+      let bubble = previous.bubble;
+      if (pending) {
+        if (bubble) thinkingBubble(full, bubble);
+        else { bubble = thinkingBubble(full); container.append(bubble); }
+      } else { bubble?.remove(); bubble = null; }
+      threadPainted.set(container, { history, bubble, live });
+      container.scrollTop = pinned ? container.scrollHeight : top;
+      return;
+    }
     container.textContent = "";
     if (!messages.length) {
       const empty = document.createElement("p");
@@ -2028,7 +2038,9 @@
       bubble.append(when);
       container.append(bubble);
     }
-    if (pending) container.append(thinkingBubble(full));
+    const bubble = pending ? thinkingBubble(full) : null;
+    if (bubble) container.append(bubble);
+    threadPainted.set(container, { history, bubble, live });
     container.scrollTop = pinned ? container.scrollHeight : top;
   }
 
@@ -6780,6 +6792,15 @@
   // The composer is a textarea that grows with the draft up to a few lines.
   function growArea(area) {
     if (!area) return;
+    // Chromium can size the field as part of its normal layout. Resetting its
+    // height and reading scrollHeight on every status push forces two layouts,
+    // even for an unchanged draft. Keep the old path for older web previews.
+    if (window.CSS?.supports?.("field-sizing", "content")) {
+      if (area.style.fieldSizing !== "content") Object.assign(area.style, {
+        fieldSizing: "content", height: "auto", minHeight: "38px", maxHeight: "120px", overflowY: "auto",
+      });
+      return;
+    }
     area.style.height = "auto";
     const height = Math.min(120, Math.max(38, area.scrollHeight));
     area.style.height = `${height}px`;
@@ -6797,21 +6818,23 @@
     return agents.some((agent) => agent?.role === "thinker" && agent.status === "running");
   }
 
-  function thinkingBubble(full) {
-    const bubble = document.createElement("div");
+  function thinkingBubble(full, bubble = document.createElement("div")) {
     bubble.className = "assistant-msg assistant thinking";
     const live = String(full?.thinking?.text ?? "").trim();
+    let line = bubble.querySelector(".thought");
     if (live) {
-      const line = document.createElement("span");
-      line.className = "thought";
-      line.textContent = live;
-      bubble.append(line);
+      if (!line) { line = document.createElement("span"); line.className = "thought"; bubble.prepend(line); }
+      if (line.textContent !== live) line.textContent = live;
+    } else line?.remove();
+    let dots = bubble.querySelector(".dots");
+    if (!dots) {
+      dots = document.createElement("span");
+      dots.className = "dots";
+      dots.append(document.createElement("i"), document.createElement("i"), document.createElement("i"));
+      bubble.append(dots);
     }
-    const dots = document.createElement("span");
-    dots.className = "dots";
-    dots.setAttribute("aria-label", live ? "the assistant is thinking" : "the assistant is replying");
-    dots.append(document.createElement("i"), document.createElement("i"), document.createElement("i"));
-    bubble.append(dots);
+    const label = live ? "the assistant is thinking" : "the assistant is replying";
+    if (dots.getAttribute("aria-label") !== label) dots.setAttribute("aria-label", label);
     return bubble;
   }
 
@@ -12135,6 +12158,34 @@
     }
   }
 
+  // Keep the interactive DOM canvases, but let their drawing contexts resolve
+  // explicit canvas fonts without synchronously updating the document's styles.
+  // Probe 2D support before the irreversible transfer; an existing DOM context
+  // or an unsupported preview retains the ordinary canvas path.
+  const drawingContexts = new WeakMap();
+  let offscreen2DSupported;
+  function createDrawingContext(canvas, options) {
+    if (!canvas?.getContext) return null;
+    if (drawingContexts.has(canvas)) return drawingContexts.get(canvas);
+    let target = canvas;
+    if (typeof canvas.transferControlToOffscreen === "function" && typeof OffscreenCanvas === "function") {
+      if (offscreen2DSupported === undefined) {
+        try {
+          const probe = new OffscreenCanvas(1, 1);
+          offscreen2DSupported = Boolean(probe.getContext("2d"));
+          probe.width = probe.height = 0;
+        } catch { offscreen2DSupported = false; }
+      }
+      if (offscreen2DSupported) {
+        try { target = canvas.transferControlToOffscreen(); }
+        catch { /* A context already acquired by an embedding host stays usable. */ }
+      }
+    }
+    const context = target.getContext("2d", options);
+    if (context) drawingContexts.set(canvas, context);
+    return context;
+  }
+
   function resize() {
     const dpr = window.devicePixelRatio || 1;
     const width = window.innerWidth;
@@ -12144,10 +12195,11 @@
     const bitmapW = Math.round(width * dpr);
     const bitmapH = Math.round(height * dpr);
     const fit = (canvas, ctx) => {
-      const cleared = canvas.width !== bitmapW || canvas.height !== bitmapH;
+      const bitmap = ctx.canvas ?? canvas;
+      const cleared = bitmap.width !== bitmapW || bitmap.height !== bitmapH;
       if (cleared) {
-        canvas.width = bitmapW;
-        canvas.height = bitmapH;
+        bitmap.width = bitmapW;
+        bitmap.height = bitmapH;
       }
       canvas.style.width = width + "px";
       canvas.style.height = height + "px";
@@ -12247,10 +12299,10 @@
     el.far = document.getElementById("idle-layer-far");
     // Transparent when video supplies the sky; ordinary scenes still paint
     // the whole backdrop. Nodes retain their own full-strength paint.
-    el.farCtx = el.far?.getContext?.("2d", { alpha: true }) ?? null;
+    el.farCtx = createDrawingContext(el.far, { alpha: true });
       el.hud = document.getElementById("idle-hud");
       if (!el.canvas) return;
-      el.ctx = el.canvas.getContext("2d");
+      el.ctx = createDrawingContext(el.canvas);
       el.width = window.innerWidth;
       el.height = window.innerHeight;
     }
@@ -13055,6 +13107,8 @@
   applyTreePreferences(window.MefiMusic?.graphPreferences?.() ?? {});
 
   window.MefiIdle = {
+    // Read the actual paint target for pixel diagnostics after a canvas transfer.
+    canvasContext: (canvas) => drawingContexts.get(canvas) ?? null,
     mediaSceneArea, setMediaFocus,
     queueSettings,
     refreshQueueSettings,

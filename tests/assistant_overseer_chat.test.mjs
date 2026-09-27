@@ -108,6 +108,47 @@ const envelope = (reply, actions = [], offers = []) => () => ({ ok: true, text: 
 const parked = { id: "t_park", title: "Export report", prompt: "Export the report", status: "open", runFailures: 5, lastRunError: "tests failed" };
 const ready = { id: "t_ready", title: "Search the board", prompt: "Add search", status: "open" };
 
+function useRealAiRecovery(h) {
+  h.state.ai = { online: false, failures: 2, lastError: "Session limit reached", backoffUntil: Date.now() + 60000 };
+  h.state.problems = [{ kind: "ai-offline", text: "AI offline: Session limit reached" }, { kind: "store-error", text: "Keep this warning" }];
+  h.env.assistantAiProbeAttempts = 2;
+  h.env.clearAssistantAiProbe = () => { h.effects.probesCleared = (h.effects.probesCleared ?? 0) + 1; };
+  h.env.logError = () => {};
+  vm.runInContext([
+    section("function assistantAiOk()", "function assistantAiUsable()"),
+    section("function assistantSetProblems(", "// ---- the agent pool"),
+  ].join("\n"), h.env);
+}
+
+test("a real companion reply retires the offline warning and retry state while preserving other problems", async () => {
+  const h = host({ model: envelope("The connection is working.") });
+  useRealAiRecovery(h);
+  const reply = await h.send("hello");
+  assert.equal(reply.via, "ai");
+  assert.equal(h.state.ai.online, true);
+  assert.equal(h.state.ai.failures, 0);
+  assert.equal(h.state.ai.lastError, null);
+  assert.equal(h.state.ai.backoffUntil, 0);
+  assert.ok(h.state.ai.lastOkAt > 0);
+  assert.equal(h.env.assistantAiProbeAttempts, 0);
+  assert.equal(h.effects.probesCleared, 1);
+  assert.deepEqual(plain(h.state.problems), [{ kind: "store-error", text: "Keep this warning" }]);
+});
+
+for (const call of [{ ok: false, error: "Session limit reached" }, { ok: true, text: "  " }]) {
+  test(`a ${call.ok ? "blank" : "failed"} companion reply cannot clear the offline warning`, async () => {
+    const h = host({ model: () => call });
+    useRealAiRecovery(h);
+    const problems = plain(h.state.problems);
+    await h.send("hello");
+    assert.equal(h.state.ai.online, false);
+    assert.equal(h.state.ai.failures, 3);
+    assert.ok(h.state.ai.backoffUntil > Date.now());
+    assert.equal(h.effects.probesCleared, undefined);
+    assert.deepEqual(plain(h.state.problems), problems);
+  });
+}
+
 test("a plainly asked action on a plainly named card runs, and the reply says what really happened", async () => {
   const h = host({ tasks: [ready], model: envelope("On it.", [{ kind: "work_on", taskId: "t_ready" }]) });
   const reply = await h.send('Start "Search the board"');

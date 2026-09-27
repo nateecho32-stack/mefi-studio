@@ -648,7 +648,7 @@ test("graph pushes refresh at once after a quiet window and share one trailing r
 
 // The chat log repaints on every feed push; the thread under it only rebuilds
 // (and measures its scroll, a forced layout) when what it shows changed.
-test("the chat thread rebuilds only when a bubble, its age label or the pending reply changed", () => {
+test("the chat thread rebuilds history only when a saved bubble or its age label changes", () => {
   const text = source.replace(/\r\n/g, "\n");
   const from = text.indexOf("  // Drop a just-repeated user/assistant pair.");
   const to = text.indexOf("  function commandChatActivity(", from);
@@ -678,8 +678,107 @@ test("the chat thread rebuilds only when a bubble, its age label or the pending 
   const relabelled = thread.children.slice();
   env.fillThread(thread, { ...full, pending: true });
   assert.equal(thread.children.length, 3, "a pending reply adds the thinking bubble");
-  assert.notEqual(thread.children[0], relabelled[0]);
+  assert.equal(thread.children[0], relabelled[0], "starting a reply keeps the saved bubbles");
   env.fillThread(thread, { messages: [...full.messages, { role: "assistant", text: "Done.", at: 3 }] });
   assert.equal(thread.children.length, 3);
   assert.match(thread.children[2].textContent, /^Done\./);
+});
+
+function liveThreadFixture() {
+  const text = source.replace(/\r\n/g, "\n");
+  let created = 0;
+  const env = vm.createContext({
+    window: { mefiStudio: { assistantMessage() {} } },
+    document: { createElement: (tag) => { created += 1; return new Element(tag); } },
+    state: { assistantSending: false }, agoLabel: () => "just now",
+  });
+  for (const [start, end] of [
+    ["  // Drop a just-repeated user/assistant pair.", "  function commandChatActivity("],
+    ["  function replyPending(", "  // The assistant console in the rail."],
+  ]) {
+    const from = text.indexOf(start), to = text.indexOf(end, from);
+    assert.ok(from >= 0 && to > from, `missing thread section: ${start}`);
+    vm.runInContext(text.slice(from, to), env);
+  }
+  return { env, created: () => created };
+}
+
+test("live thoughts preserve the whole history and dots without allocating new elements", (t) => {
+  const h = liveThreadFixture(), thread = new Element();
+  const full = { messages: Array.from({ length: 30 }, (_, i) => ({ role: i % 2 ? "assistant" : "user", text: `Message ${i}`, at: i + 1 })), thinking: { text: "Starting" } };
+  h.env.fillThread(thread, full);
+  const history = thread.children.slice(0, 30), bubble = thread.lastChild;
+  const thought = bubble.querySelector(".thought"), dots = bubble.querySelector(".dots");
+  const before = h.created();
+  thread.scrollTop = 40; thread.scrollHeight = 900;
+  for (let i = 0; i < 40; i += 1) {
+    h.env.fillThread(thread, { ...full, thinking: { text: `Inspecting file ${i}` } });
+    assert.ok(history.every((row, index) => thread.children[index] === row));
+    assert.equal(thread.lastChild, bubble);
+    assert.equal(bubble.querySelector(".thought"), thought);
+    assert.equal(bubble.querySelector(".dots"), dots);
+    assert.equal(thought.textContent, `Inspecting file ${i}`);
+    assert.equal(thread.scrollTop, 40, "reading older messages is not interrupted");
+  }
+  assert.equal(h.created() - before, 0);
+  assert.equal(dots.getAttribute("aria-label"), "the assistant is thinking");
+  t.diagnostic("30 saved messages, 40 live updates: 0 new elements; every saved bubble and the dots retained.");
+  Object.defineProperty(thread, "scrollHeight", { get() { throw new Error("unchanged pushes must not measure layout"); } });
+  h.env.fillThread(thread, { ...full, thinking: { text: "Inspecting file 39" } });
+});
+
+test("reply state moves between dots, live text, recorded thoughts and completion", () => {
+  const { env } = liveThreadFixture(), thread = new Element();
+  const messages = [{ role: "user", text: "Check the export", at: 1 }];
+  env.state.assistantSending = true;
+  env.fillThread(thread, { messages });
+  const first = thread.children[0], bubble = thread.lastChild, dots = bubble.querySelector(".dots");
+  assert.equal(bubble.querySelector(".thought"), null);
+  assert.equal(dots.getAttribute("aria-label"), "the assistant is replying");
+  env.fillThread(thread, { messages, thinking: { text: "  Reading the file  " } });
+  assert.equal(bubble.querySelector(".thought").textContent, "Reading the file");
+  assert.equal(bubble.children[0].className, "thought", "text precedes the dots");
+  assert.equal(bubble.querySelector(".dots"), dots);
+  env.fillThread(thread, { messages, work: [{ kind: "responder" }] });
+  assert.equal(bubble.querySelector(".thought"), null);
+  assert.equal(dots.getAttribute("aria-label"), "the assistant is replying");
+  env.state.assistantSending = false;
+  env.fillThread(thread, { messages });
+  assert.deepEqual(thread.children, [first], "completion removes only the pending bubble");
+  env.fillThread(thread, { messages, thinking: { text: "Checking" } });
+  assert.equal(thread.children.length, 2, "a subsequent reply gets its own bubble");
+  const recorded = [...messages, { role: "thinking", text: "Checking", at: 2 }];
+  env.fillThread(thread, { messages: recorded, thinking: { text: "Checking" } });
+  assert.equal(thread.children.length, 2, "a saved thought is not duplicated by a pending one");
+  assert.match(thread.lastChild.textContent, /Checkingjust now · thinking/);
+  env.fillThread(thread, { messages: [...recorded, { role: "assistant", text: "Checks passed", at: 3 }] });
+  assert.equal(thread.children.length, 3);
+  assert.match(thread.lastChild.textContent, /^Checks passed/);
+});
+
+test("thread history invalidates on project replacement, external clearing and bridge availability", () => {
+  const { env } = liveThreadFixture(), thread = new Element();
+  const full = { messages: [{ role: "user", text: "Project A", at: 1 }], thinking: { text: "Checking" } };
+  env.fillThread(thread, full);
+  env.fillThread(thread, { messages: [{ role: "user", text: "Project B", at: 2 }] });
+  assert.equal(thread.children.length, 1);
+  assert.match(thread.textContent, /^Project B/);
+  thread.textContent = "";
+  // The shared DOM double returns itself for firstChild on an empty element.
+  Object.defineProperty(thread, "firstChild", { get() { return this.children[0] ?? null; } });
+  env.fillThread(thread, full);
+  assert.equal(thread.children.length, 2);
+  thread.textContent = "";
+  env.fillThread(thread, full);
+  assert.equal(thread.children.length, 2, "a cleared container rebuilds even for the same snapshot");
+  env.fillThread(thread, {});
+  assert.match(thread.textContent, /No messages yet/);
+  env.window.mefiStudio = null;
+  env.fillThread(thread, {});
+  assert.equal(thread.textContent, "The thread lives in the desktop app.");
+  env.window.mefiStudio = { assistantMessage() {} };
+  const second = new Element();
+  env.fillThread(second, full);
+  assert.match(second.textContent, /Project A/);
+  assert.equal(thread.textContent, "The thread lives in the desktop app.", "each surface owns its own cache");
 });

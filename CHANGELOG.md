@@ -7,6 +7,19 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Work done outside Studio.** Studio now keeps a last look at each project
+  folder while it watches it, and when you open the folder again it reports
+  what changed meanwhile: commits, uncommitted edits, and Claude Code or
+  OpenCode sessions run in the folder. The thread, the chat assistant ("what
+  did I do while Studio was closed?") and the welcome-back digest all see it.
+  Every queued card is checked against that work before a worker takes it.
+  Cards that are still needed run as before; partly done ones run with their
+  worker told what changed; cards that look already done or no longer needed
+  wait in Needs you with Mark it done, Drop it or Build it anyway. Only you
+  answer those, in every permission mode. Without a model the check matches
+  files and commit subjects and only says "may already be done".
+- The verification settle timer reads the clock once, so it is always armed
+  for the moment asked for (a flaky `verification_drain` test under load).
 - Bug-hunt fixes across the host, tooling and renderer.
   **Project switches** no longer write one project's assistant state, reply
   or verification result into another. **Stop all** no longer re-runs a reply
@@ -77,6 +90,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   polling after a failed read, counts tasks awaiting verification, and both
   it and the rail re-render after a display-scale change.
 
+- Hints and docs point to where settings live now: Jev and providers under
+  **Agents › Setup › Providers**, build approval under **Agents › Setup › Run
+  behavior**. "Model Lab" leftovers read **Performance** or **Usage**, the
+  launch switch says **Open Home on launch**, and a sheet opened from Home
+  offers **Back to Home**.
 
 - A polish pass on long-untouched menus. **Search Studio** names Settings
   choices properly ("Motion › Full", "Node style › Classic orbs") instead of
@@ -88,6 +106,53 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   asks before Delete, and its graph follows the active theme. The
   **Performance profiler** shows "—" for Long tasks until a capture runs,
   marks over-budget frames and readings, and uses the standard Close button.
+
+- Command's canvases use transferred drawing contexts where supported,
+  avoiding document style updates while setting callout fonts. Resize,
+  transparency and the ordinary canvas fallback are retained.
+
+- Music & video puts the player, background toggle and saved video queue in
+  one panel. The queue sits beside playback on wide windows and below it on
+  smaller screens, with audio setup options tucked underneath.
+
+- Music & video browses web links inside its existing player, with an address
+  bar, navigation, mute, minimize and close controls. Website popup links stay
+  in that same player. The music menu adds a listening-room layout and record
+  artwork, with clearer local playback, radio and link controls.
+
+- Shared scroll controls batch geometry reads before updating their arrows,
+  reducing repeated style calculations during live activity.
+
+- Update's **Restart now** stops coding agents, saves their latest work for
+  continuation, and relaunches Studio paused instead of waiting for builds to finish.
+
+- Background video keeps a stronger reading tint under pages, navigation and
+  menus. Zero Glass intensity makes reading surfaces solid. Narrow Agent
+  routing fields and Ideas tools fit the viewport, and sticky Settings
+  categories stay below the top navigation without showing text through them.
+
+- Auto starts agent-proposed tasks without a separate approval. Routine test
+  and archive conflicts stay actionable, and missing CLI verification evidence
+  permits a bounded repair or rerun instead of an owner-only dead end.
+
+- Changing an AI route or credential releases the previous provider's retry
+  backoff. The offline warning stays until a request actually succeeds.
+
+- Chat composers use native content sizing when supported, avoiding repeated
+  height measurements during status updates and following width/font changes.
+
+- Home's controls sit below the navigation bar. Trace is available under
+  Agents > Live with a full page and Back navigation, and Pipelines, Playbook
+  and Project map update the selected navigation view after loading.
+
+- Failed assistant CLI processes no longer turn partial output into successful
+  briefs or queue requests from that output.
+
+- Assistant thinking updates retain the existing chat bubbles and text
+  selection, reducing DOM work while replies are being prepared.
+
+- Claude connection errors show the actual quota or login message instead of
+  "claude error: success". A successful AI reply also clears the offline warning.
 
 - **Trace** (Live, beside Activity): Studio's logs as channels in one viewer.
   The studio log, the assistant's log, the run ledger, OpenCode's log and

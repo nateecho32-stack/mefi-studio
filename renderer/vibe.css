@@ -39,6 +39,8 @@
 @starting-style { #vibe-layer { opacity: 0; } }
 #vibe-layer[hidden] { display: none; opacity: 0; }
 html[data-no-blur] #vibe-layer { --v-blur: none; --v-glass: color-mix(in srgb, var(--panel-solid) 94%, transparent); --v-glass-hi: color-mix(in srgb, var(--gold) 7%, var(--panel-solid)); }
+body[data-media-background="true"] #vibe-layer,
+html[data-studio-material="solid"] #vibe-layer { --v-glass: var(--studio-panel-bg); --v-glass-hi: var(--studio-panel-bg); --v-blur: var(--studio-glass-blur); }
 /* The Build frame steps aside while Vibe is up; the tree stays as the sky.
    Home's section bar (Back, Forward, Home) is Build's too, and it sat over
    Vibe's own top bar, where it swallowed the Search and Settings buttons. */
@@ -262,7 +264,7 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-dock button[aria-pressed="true"] .glyph { color: var(--v-accent-hi); }
 
 /* ---- conversation --------------------------------------------------------- */
-.vibe-chat { position: absolute; top: 84px; right: 24px; bottom: 24px; z-index: 2; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(420px, calc(100vw - 48px)); border: 1px solid var(--v-edge); border-radius: 24px; background: color-mix(in srgb, var(--panel-solid) 78%, transparent); backdrop-filter: var(--v-blur); box-shadow: -30px 0 80px -40px rgba(0, 0, 0, .9), inset 0 1px 0 color-mix(in srgb, var(--ivory) 7%, transparent); opacity: 1; transform: none; transition: opacity var(--motion-slow) var(--ease-out), transform var(--motion-slow) var(--ease-emphasized), display var(--motion-slow) allow-discrete; }
+.vibe-chat { position: absolute; top: 84px; right: 24px; bottom: 24px; z-index: 2; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(420px, calc(100vw - 48px)); border: 1px solid var(--v-edge); border-radius: 24px; background: var(--studio-float-fill); backdrop-filter: var(--v-blur); box-shadow: -30px 0 80px -40px rgba(0, 0, 0, .9), inset 0 1px 0 color-mix(in srgb, var(--ivory) 7%, transparent); opacity: 1; transform: none; transition: opacity var(--motion-slow) var(--ease-out), transform var(--motion-slow) var(--ease-emphasized), display var(--motion-slow) allow-discrete; }
 @starting-style { .vibe-chat { opacity: 0; transform: translateX(28px); } }
 .vibe-chat[hidden] { display: none; opacity: 0; transform: translateX(28px); }
 .vibe-chat-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 12px; padding: 16px 16px 12px 20px; border-bottom: 1px solid var(--v-edge); }
@@ -458,7 +460,7 @@ button.vibe-ask-chip:hover { border-color: var(--v-edge-hi); color: var(--v-ink)
 html[data-ui-mode="vibe"][data-shell="rail"],
 html[data-ui-mode="vibe"][data-shell="rail"][data-rail-pinned] { --shell-rail-w: 72px; }
 html[data-ui-mode="vibe"] :is(#app-rail, #tabs, #workspace-sidebar-toggle, body > footer) { display: none !important; }
-html[data-ui-mode="vibe"] #app-local-nav { background: color-mix(in srgb, var(--bg) 95%, transparent); backdrop-filter: blur(18px) saturate(1.3); }
+html[data-ui-mode="vibe"] #app-local-nav { background: var(--studio-menu-fill); backdrop-filter: var(--studio-menu-blur); }
 
 .vibe-rail {
   position: fixed; top: 0; bottom: 0; left: 0; z-index: var(--z-shell);
@@ -522,8 +524,8 @@ html[data-ui-mode="vibe"] {
   --studio-float-shadow: inset 0 1px color-mix(in srgb, var(--ivory) 10%, transparent), 0 0 0 1px color-mix(in srgb, var(--gold) 14%, transparent), 0 30px 70px -30px rgb(0 0 0 / .8), 0 0 50px -26px color-mix(in srgb, var(--gold) 45%, transparent);
 }
 @media not (prefers-reduced-transparency: reduce) {
-  html[data-ui-mode="vibe"]:not([data-no-blur]) { --studio-float-fill: color-mix(in srgb, var(--theme-panel-solid) 86%, transparent); }
-  html[data-ui-mode="vibe"]:not([data-no-blur]):not([data-studio-theme-tone="light"]) { --studio-float-blur: blur(26px) saturate(1.5) brightness(.9); }
+  html[data-ui-mode="vibe"]:not([data-no-blur], [data-studio-material="solid"]):not(:has([data-media-background="true"])) { --studio-float-fill: color-mix(in srgb, var(--theme-panel-solid) 86%, transparent); }
+  html[data-ui-mode="vibe"]:not([data-no-blur], [data-studio-material="solid"]):not([data-studio-theme-tone="light"]):not(:has([data-media-background="true"])) { --studio-float-blur: blur(26px) saturate(1.5) brightness(.9); }
 }
 
 /* On Vibe's own page there is no rail, so sheets and the project panel use

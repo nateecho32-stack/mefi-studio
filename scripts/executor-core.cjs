@@ -73,6 +73,7 @@ function idleStopReason({ open, tasks, now, autoBuild, approve = null, taskStart
   if (cluster?.focus) return "cluster";
   const states = (taskStart ? tasks.filter((task) => task?.id === taskStart.taskId) : open).map((item) => backlog.workState(item, now, { tasks, autoBuild, approve }));
   if (states.some((item) => item.stage === "approval")) return "approval";
+  if (states.some((item) => item.blockedBy === "relevance-check")) return "checking";
   if (states.some((item) => item.stage === "cooling")) return "cooldown";
   if (states.some((item) => item.blockedBy === "dependencies")) return "prerequisites";
   if (states.some((item) => item.stage === "blocked")) return "review";
@@ -105,7 +106,7 @@ function promptTail({ runId, taskId, depth = 0, maxDepth, maxHandoffs, nextMark,
   // The Agent Brain's step, help and report lines (agent-brain-host.cjs); they
   // ride the tail because a truncated protocol line is worse than none.
   const brainLine = protocol ? ` ${String(protocol).replace(/["\r\n]+/g, " ").trim().slice(0, 700)}` : "";
-  const tail = `${identity}${brainLine} Keep verification and board bookkeeping in the current task. Never create a child task merely to close, update, verify or confirm another card. Report evidence and actual remaining implementation scope on this attempt instead; hand off only substantive unfinished work.${handoff}${askLine}${budget} Optionally print one line "MEFI_RESULT: done: <what you finished>; remaining: <what this task still owes, or none>; owner: <what only the owner can do, or leave it out>" naming your own account of the work (one line, under 300 characters). Anything only the owner can do (board changes, Studio's task store, another session's files) goes under owner:, never under remaining: or MEFI_NEXT. Print the exact line ${doneMark} as the last thing you say.`;
+  const tail = `${identity}${brainLine} Keep verification and board bookkeeping in the current task. Never create a child task merely to close, update, verify or confirm another card. Report evidence and actual remaining implementation scope on this attempt instead; hand off only substantive unfinished work.${handoff}${askLine}${budget} Optionally print one line "MEFI_RESULT: done: <what you finished>; remaining: <what this task still owes, or none>; owner: <what only the owner can do, or leave it out>" naming your own account of the work (one line, under 300 characters). A concrete human decision, missing access or physical action goes under owner:, never under remaining: or MEFI_NEXT. Routine repairs, failing checks and concurrent-file or test-history conflicts stay under remaining: until resolved. Preserve other sessions' work and use the repository's documented test-history tools. Studio owns board updates; report the evidence and let the host reconcile the task. Print the exact line ${doneMark} as the last thing you say.`;
   return tail;
 }
 
@@ -131,6 +132,8 @@ const INSTRUCTIONS = " Work in the project folder at the current directory. Make
 function workerPrompt({ title, taskId, tasksFile, ref, resumeCheckpoint = null, sections = {}, clusterBrief = "", tail, promptMax, brief, contextPath = null }) {
   const titleBit = `${title}. `.replace(/["\r\n]+/g, " ");
   const failFlat = flat(sections.fail, 240);
+  // Work done outside Studio that touches this card (outside-work.cjs briefLine).
+  const outsideFlat = sections.outside ? flat(` ${sections.outside}`, 720) : "";
   const memoryFlat = flat(sections.memory, 480);
   const collabFlat = flat(sections.collab, 960);
   const pathsFlat = flat(sections.paths, 240);
@@ -141,7 +144,7 @@ function workerPrompt({ title, taskId, tasksFile, ref, resumeCheckpoint = null, 
   const tailFlat = tail.replace(/["\r\n]+/g, " ");
   const promptBudget = Math.max(
     240,
-    promptMax - tailFlat.length - INSTRUCTIONS.length - titleBit.length - failFlat.length - memoryFlat.length - pathsFlat.length - brainFlat.length - collabFlat.length - clusterFlat.length - resumeFlat.length - 8,
+    promptMax - tailFlat.length - INSTRUCTIONS.length - titleBit.length - failFlat.length - outsideFlat.length - memoryFlat.length - pathsFlat.length - brainFlat.length - collabFlat.length - clusterFlat.length - resumeFlat.length - 8,
   );
   // The durable brief carries prior findings and successful prerequisite
   // outputs into the next worker instead of restarting from a short title.
@@ -150,7 +153,7 @@ function workerPrompt({ title, taskId, tasksFile, ref, resumeCheckpoint = null, 
   const recovery = contextPath ? "" : `Full saved task context: read ${JSON.stringify(tasksFile)}, find task id ${JSON.stringify(taskId)}. Read that record and its members whenever the brief is excerpted or grouped; contextHistory contains earlier requirements and attempts. Do not rewrite Studio's task store from the worker.\n\n`;
   const jobPrompt = recovery + brief(Math.max(1000, promptBudget - recovery.length));
   const body = String(jobPrompt ?? "").slice(0, promptBudget);
-  const head = `${titleBit}${resumeFlat}${body}${failFlat}${memoryFlat}${pathsFlat}${brainFlat}${collabFlat}${clusterFlat}${INSTRUCTIONS}`;
+  const head = `${titleBit}${resumeFlat}${body}${outsideFlat}${failFlat}${memoryFlat}${pathsFlat}${brainFlat}${collabFlat}${clusterFlat}${INSTRUCTIONS}`;
   return { prompt: `${head}${tailFlat}`, jobPrompt, budget: promptBudget };
 }
 

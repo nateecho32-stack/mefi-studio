@@ -1573,13 +1573,26 @@ function sessionsOverlap(a, b) {
 }
 
 const SOURCE_FILE_RE = /\b([a-zA-Z0-9._-]+\.(?:js|mjs|cjs|py|lua|css|html))\b/g;
+// The families a fix ticket can share, mirroring assistant.mjs fixThemeKey
+// (fix:dup / fix:stale) so filing, promotion and compaction read one ticket
+// the same way.
 const FIX_FAMILIES = [
   ["dup", /\b(duplicat\w*|overlap\w*|collid\w*|collision\w*|redundant|same subsystem|root[- ]causes?)\b/i],
   ["stale", /\b(stale|stalled|in[- ]progress)\b/i],
 ];
 
+// The closing instruction on every briefing Fix: brief ("Find the root
+// cause, fix it, and run the relevant test set…", requestsFromBriefing)
+// names no problem. Read as problem text, its "root cause" gave every
+// briefing fix the dup family: filing refused the next unrelated alert and
+// promotion refused to promote it onto a board full of such tickets, while
+// compaction's stripped fixThemeKey admitted the same pair. assistant.mjs
+// strips the same closing (its FIX_BRIEF_CLOSING); this copy must stay
+// word-for-word with it or the two readers disagree again.
+const FIX_BRIEF_CLOSING = /\bfind the root cause, fix it\b[^.]*\.?/gi;
+
 function problemText(item = {}) {
-  return `${item.alertTitle ?? ""} ${item.title ?? ""} ${item.detail ?? ""} ${item.prompt ?? ""}`;
+  return `${item.alertTitle ?? ""} ${item.title ?? ""} ${item.detail ?? ""} ${String(item.prompt ?? "").replace(FIX_BRIEF_CLOSING, " ")}`;
 }
 
 function problemFilesOf(item = {}) {

@@ -86,6 +86,9 @@ app.whenReady().then(async () => {
   await mouse(10, 10); await sleep(1850); before = await rect();
   await run(`document.dispatchEvent(new PointerEvent('pointermove',{clientX:${before.x - 40},clientY:${before.y + 70},pointerType:'mouse'}));`);
   await sleep(260);
+  // Wait for the dodge to finish before testing a second pointer approach.
+  // A busy compositor can start the CSS transition after the fixed delay.
+  await run("await Promise.all(document.getElementById('media-window').getAnimations().map(animation=>animation.finished.catch(()=>{})));");
   after = await rect(); report.dodge = after.x !== before.x || after.y !== before.y; assert.ok(report.dodge, JSON.stringify({ before, after }));
   await run(`document.dispatchEvent(new PointerEvent('pointermove',{clientX:${after.x + after.width + 40},clientY:${after.y + 70},pointerType:'mouse'}));`);
   report.follow = JSON.stringify(await rect()) === JSON.stringify(after); assert.ok(report.follow);
@@ -129,7 +132,7 @@ app.whenReady().then(async () => {
   }
   window.setSize(1440, 900);
   await run("await window.MefiNav.go('command');"); await sleep(500);
-  report.tree = await run("const near=document.getElementById('idle-layer'),far=document.getElementById('idle-layer-far');return getComputedStyle(near).opacity==='1'&&getComputedStyle(far).opacity==='1'&&far.getContext('2d').getContextAttributes().alpha===true&&getComputedStyle(document.querySelector('main')).visibility==='hidden';");
+  report.tree = await run("const near=document.getElementById('idle-layer'),far=document.getElementById('idle-layer-far');return getComputedStyle(near).opacity==='1'&&getComputedStyle(far).opacity==='1'&&window.MefiIdle.canvasContext(far).getContextAttributes().alpha===true&&getComputedStyle(document.querySelector('main')).visibility==='hidden';");
   assert.ok(report.tree, "tree stays fully opaque above the video and inactive pages stay hidden");
   await run("const video=document.getElementById('media-window-transparency');video.value='0';video.dispatchEvent(new Event('input'));const tree=document.getElementById('media-window-tree-transparency');tree.value='40';tree.dispatchEvent(new Event('input'));const brightness=document.getElementById('media-window-brightness');brightness.value='125';brightness.dispatchEvent(new Event('input'));");
   await run("await Promise.all([document.querySelector('.music-link-player'),document.getElementById('idle-layer')].flatMap(node=>node.getAnimations()).map(animation=>animation.finished.catch(()=>{})));");
@@ -192,8 +195,32 @@ app.whenReady().then(async () => {
   await run("document.getElementById('media-window-background').click();");
   assert.equal(await run("return document.querySelector('.music-link-player').inert;"), false);
   assert.equal(report.playerLoads, 1);
+  // The redesigned panel keeps the video, background switch and queue together.
+  for (const width of [1440, 600]) {
+    window.setSize(width, 900); await sleep(250);
+    await run("window.MefiMusic.openAudio();document.getElementById('music-dropdown').scrollTop=0;"); await sleep(350);
+    const design = await run("const player=document.getElementById('media-window'),p=player.getBoundingClientRect(),s=document.getElementById('music-video-stage').getBoundingClientRect(),queue=document.getElementById('music-link-queue-list'),q=queue.getBoundingClientRect(),b=queue.querySelector('button'),r=b.getBoundingClientRect();return {docked:player.dataset.docked==='true',same:window.fixtureMedia===window.MefiMusic.linkElement().element,fits:Math.abs(p.width-s.width)<1&&Math.abs(p.x-s.x)<1,separate:p.right<=q.left+1||p.bottom<=q.top+1,queueClear:b.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)),width:innerWidth};");
+    assert.ok(design.docked&&design.same&&design.fits&&design.separate&&design.queueClear, `Integrated player and queue at ${width}px: ${JSON.stringify(design)}`);
+    await capture(`media-design-player-${width}.png`);
+    await run("document.getElementById('music-video-background').click();"); await sleep(250);
+    assert.equal(await run("const button=document.getElementById('music-video-background');return document.body.dataset.mediaBackground==='true'&&button.getAttribute('aria-pressed')==='true'&&button.textContent==='Return to player'&&document.getElementById('music-link-queue-list').children.length===3&&window.fixtureMedia===window.MefiMusic.linkElement().element;"), true);
+    await capture(`media-design-background-${width}.png`);
+    await run("document.getElementById('music-video-background').click();"); await sleep(100);
+    assert.equal(await run("return document.getElementById('media-window').dataset.docked==='true'&&document.body.dataset.mediaBackground==='false';"), true);
+    await run("window.MefiMusic.closeAudio();");
+  }
+  assert.equal(report.playerLoads, 1, "docking and background switches keep the original provider load");
   await run("document.getElementById('media-window-close').click();");
   report.closed = await run("return document.getElementById('media-window').hidden&&window.MefiMusic.linkElement()===null&&!window.fixtureMedia.isConnected;");
   assert.ok(report.closed); assert.deepEqual(report.errors, []);
+  // Capture the refreshed music and link surfaces without touching user data.
+  for (const width of [1440, 600]) {
+    window.setSize(width, 900); await sleep(180);
+    for (const source of ["local", "link"]) {
+      await run(`window.MefiMusic.openAudio();document.getElementById('music-${source}-tab').click();document.getElementById('music-dropdown').scrollTop=0;`);
+      assert.equal(await run("const menu=document.getElementById('music-dropdown');return menu.scrollWidth<=menu.clientWidth+1;"), true);
+      await capture(`music-upgrade-${source}-${width}.png`);
+    }
+  }
   finish();
 }).catch(finish);

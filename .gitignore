@@ -19,6 +19,17 @@ tools/logs/
 .env
 .env.*
 !.env.example
+# Machine credentials and accidental portable-auth exports must stay local.
+auth.json
+community-auth.json
+/settings.json
+credentials.json
+.credentials.json
+api-keys.json
+secrets.json
+.secrets/
+secrets/
+.grok/
 *.pem
 *.key
 *.log

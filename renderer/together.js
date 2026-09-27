@@ -462,7 +462,6 @@
     bridge().onHubEvent?.(onHubEvent);
     window.addEventListener("mefi-music-change", () => { if (prefs.share) scheduleShare(); renderStart(); });
     window.addEventListener("mefi-community-status", () => void refreshStatus());
-    window.addEventListener("mefi-community-change", () => void refreshStatus());
     render();
     // A room or a share that was on when Studio closed comes back, like the
     // radio does; smoke and capture runs share the owner's profile and stay off.

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { hostCapacityAlert, requestsFromBriefing } from "../scripts/eyes.mjs";
+import { alertProblem, hostCapacityAlert, requestsFromBriefing } from "../scripts/eyes.mjs";
 
 // The four alerts that were filed as "Fix:" cards on the live board while the
 // laptop sat under its memory floor: each ran into the hold it described.
@@ -29,4 +29,17 @@ test("code problems still become Fix requests, including a memory leak in a name
     "Fix: Memory pressure from the scripts/eyes.mjs row cache",
   ]);
   assert.ok(requests.every((request) => request.source === "fix"));
+});
+
+test("an earlier brief's boilerplate closing does not refuse an unrelated dup-worded alert", () => {
+  const [first] = requestsFromBriefing({
+    alerts: [{ severity: "warn", title: "Test suite fails on CI", detail: "Three suites time out.", sessionIds: ["ses_t"] }],
+  });
+  assert.equal(alertProblem(first).family, null, "fixture: the brief's closing instruction names no problem");
+  const [refiled] = requestsFromBriefing(
+    { alerts: [{ severity: "warn", title: "Duplicate session panel rows", detail: "The roster shows two rows for one session.", sessionIds: ["ses_d"] }] },
+    [structuredClone(first)]
+  );
+  assert.ok(refiled, "filing admits the unrelated alert instead of refusing it on the boilerplate dup family");
+  assert.equal(refiled.alertTitle, "Duplicate session panel rows");
 });

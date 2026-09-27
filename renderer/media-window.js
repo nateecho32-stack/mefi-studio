@@ -8,7 +8,7 @@
   const finite = (value, fallback) => Number.isFinite(value) ? value : fallback;
   const distance = (point, box) => Math.hypot(Math.max(box.x - point.x, 0, point.x - box.x - box.width), Math.max(box.y - point.y, 0, point.y - box.y - box.height));
 
-  function create({ content, onClose, onSettings, settingsHost }) {
+  function create({ content, onClose, onSettings, settingsHost, onPlacement }) {
     let saved;
     try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); } catch {}
     let pinned = saved?.pinned === true;
@@ -21,7 +21,7 @@
     let trackDark = saved?.trackDark === true, sceneTimer = null, sceneBusy = false;
     let darkCandidate = -1, darkStreak = 0, darkCurrent = 4, darkMovedAt = 0;
     let knownTasks = null, projectId = null, taskRevision = 0;
-    let box = null, shape = "video", minimized = false, gesture = null;
+    let box = null, dockBox = null, dockDetached = false, placementStamp = "", shape = "video", minimized = false, gesture = null;
     let visible = false, hovered = false, yielded = false, awaySince = 0, lastDistance = Infinity, graceUntil = 0;
     let size = {};
     for (const key of ["video", "tall", "compact", "audio", "browser"]) {
@@ -144,14 +144,17 @@
     function visibleBox() {
       if (minimized) return { ...box, width: Math.min(box.width, 304), height: 44 };
       if (background && shape !== "browser") { const area = bounds(); return { x: area.left, y: area.top, width: area.right - area.left, height: area.bottom - area.top }; }
-      return box;
+      return dockBox || box;
     }
     function layout() {
       if (!box) return;
       box = fit(box);
       const current = visibleBox();
+      const docked = Boolean(dockBox && !minimized && !(background && shape !== "browser"));
+      root.dataset.docked = String(docked);
+      root.style.clipPath = docked && dockBox.clip ? `inset(${dockBox.clip.join("px ")}px)` : "none";
       Object.assign(root.style, { left: `${current.x}px`, top: `${current.y}px`, width: `${current.width}px`, height: `${current.height}px` });
-      for (const grip of edges) grip.hidden = minimized || background && shape !== "browser";
+      for (const grip of edges) grip.hidden = docked || minimized || background && shape !== "browser";
       paintVideo();
     }
     function persist() {
@@ -197,6 +200,9 @@
       for (const control of [backgroundButton, opacityInput, brightnessInput, fadeButton, darkButton]) control.disabled = browsing;
       // A backdrop must never take keyboard focus or intercept workspace clicks.
       content.inert = backdrop || minimized;
+      const placement = { background: backdrop, minimized, docked: root.dataset.docked === "true", visible };
+      const nextStamp = JSON.stringify(placement);
+      if (nextStamp !== placementStamp) { placementStamp = nextStamp; onPlacement?.(placement); }
       if (backdrop && tracking && window.mefiStudio?.mediaSceneSample && !sceneTimer) sceneTimer = window.setInterval(sampleDarkArea, 5000);
       if ((!backdrop || !tracking) && sceneTimer) { window.clearInterval(sceneTimer); sceneTimer = null; }
       if (dynamics || !backdrop || !trackDark) {
@@ -285,6 +291,7 @@
     }
     function start(event, edge = "move") {
       if (event.button !== 0 || gesture || !visible || background && shape !== "browser") return;
+      if (dockBox) { dockBox = null; dockDetached = true; layout(); }
       event.preventDefault(); event.stopPropagation();
       gesture = { edge, x: event.clientX, y: event.clientY, box: { ...box }, target: event.currentTarget, pointerId: event.pointerId };
       root.dataset.dodging = "false";
@@ -314,6 +321,7 @@
     function keyboard(event, edge) {
       const vectors = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
       if (!vectors[event.key] || !box || background && shape !== "browser") return;
+      if (dockBox) { dockBox = null; dockDetached = true; }
       event.preventDefault(); event.stopPropagation();
       root.dataset.dodging = "false";
       const step = event.shiftKey ? 2 : 16;
@@ -331,7 +339,7 @@
         box = changed(event.clientX - gesture.x, event.clientY - gesture.y, gesture.edge, gesture.box);
         layout(); return;
       }
-      if (!visible || minimized || background || shape === "browser" || event.buttons || event.pointerType && event.pointerType !== "mouse") return;
+      if (!visible || minimized || dockBox || background || shape === "browser" || event.buttons || event.pointerType && event.pointerType !== "mouse") return;
       const point = { x: event.clientX, y: event.clientY }, gap = distance(point, box), time = now();
       const approaching = gap < lastDistance; lastDistance = gap;
       // After one dodge, following the player always wins. Rearm only after
@@ -377,7 +385,10 @@
     });
     seedTasks();
     paintToggles();
-    return { show, hide, reveal, beginMove: start, moveKey: event => keyboard(event, "move"), minimize: () => minimize.click(), snapshot: () => ({ minimized }), restore: (value) => { if (Boolean(value?.minimized) !== minimized) minimize.click(); } };
+    return { show, hide, reveal, dock: value => { if (!value) dockDetached = false; if (value && dockDetached || JSON.stringify(value) === JSON.stringify(dockBox)) return; dockBox = value; layout(); },
+      setBackground: value => { if (Boolean(value) !== background) backgroundButton.click(); },
+      beginMove: start, moveKey: event => keyboard(event, "move"), minimize: () => minimize.click(),
+      snapshot: () => ({ minimized }), restore: (value) => { if (Boolean(value?.minimized) !== minimized) minimize.click(); } };
   }
   window.MefiMediaWindow = { create };
 })();

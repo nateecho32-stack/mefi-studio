@@ -46,6 +46,8 @@ lists use bounded rows with search. Arrow keys follow the tile layout;
 Home/End jump to the first/last enabled option, Enter selects, and Escape
 returns focus. Appearance uses small preset previews, theme swatches and
 compact node/effect grids, with a shorter header in narrow windows.
+Scroll-arrow refreshes measure all regions before updating their hints,
+so live activity does not recalculate styles once per overflow panel.
 Command's View and Ambience menus, Brain map actions and Tools menus group
 related actions side by side while keeping their labels and shortcuts.
 
@@ -55,6 +57,12 @@ its writing desk, Agents uses compact technical rows, and Settings uses grouped
 preference cards. Floating menus and sticky headers have a stronger glass tint
 to keep overlapping content readable. Focus, Studio and Atmosphere adjust the
 surface depth and corners; Glass and Glow remain independent controls.
+Zero Glass intensity makes reading surfaces solid. Background video adds a
+stronger tint beneath page text, menus and navigation, including Home and
+Vibe. Appearance changes retain the playing media element. Agent settings
+respond to their panel width; narrow Tools menus fit within the action row.
+The sticky Settings categories clear the fixed local navigation and use a
+dense fill so scrolled content cannot show through their labels.
 Panel edges catch a soft highlight above a diffuse shadow. Command's toolbar
 and side panel each use one frosted outer surface, with lighter inset work
 cards, a recessed tab strip and compact status tiles. Search and task entry
@@ -76,6 +84,12 @@ desk MCP tool for OpenCode and Claude Code workers. Text-only assistant seats
 do not execute MCP tools. Other MCP servers remain in the coding CLI's own
 configuration. Changes use the existing project/default scope and Apply flow.
 
+Saving an AI route, applying an agent team, or changing a provider credential
+releases any retry backoff from the previous connection. A running service can
+then retry using the saved configuration; a paused service stays paused. The
+offline warning and last error remain until a successful AI reply confirms
+recovery. Provider quota limits still belong to the provider account.
+
 ## Permission modes
 
 The composer chip, Vibe Settings, companion Settings, Agents Overview and
@@ -87,11 +101,13 @@ Model strengths appear in Agents routing and as one line in Vibe's Team.
 
 The global `settings.autonomy` stores a mode and six elevated switches. Always
 ask computes a suggestion; Accept per task delegates worker questions only
-within an accepted scope; Auto acts at confidence 0.7 or above; Elevated only
+within an accepted scope; Auto starts queued tasks, including agent proposals,
+and resolves ordinary questions at confidence 0.7 or above; Elevated only
 uses the offered conservative recommendation when uncertain. Owner holds and
 desk escalations always stay with the owner. Grants, irreversible changes,
 closing owner-created work, agent-filed work, heavier models and human to-dos
-have individual switches, all enabled initially. Disabling the first two
+have individual switches, all enabled initially. The agent-filed switch applies
+in Elevated only; Auto includes that work without a separate go-ahead. Disabling the first two
 requires acknowledging their warning. A human to-do is filed, not performed.
 
 Build approval is checked in queue summaries, selection, claiming and the last
@@ -99,6 +115,14 @@ launch check. Accepted split and delegation children inherit their parent's
 approval within the same project. The old desk switch aliases Auto/Always ask,
 and the old new-work switch also updates the mode. Existing saved
 `autoBuild:false` preferences migrate to Always ask.
+
+Routine test failures, concurrent edits and test-history archive conflicts
+stay with Studio as repair work, even if a worker labels them owner-only.
+Open legacy repair questions regain retry options; dismissed answers and Undo
+remain respected. Missing verification evidence prevents confirmation but
+allows a bounded repair or rerun in Auto. Such unfinished repairs cannot pass
+verification by being reported under `owner:`. Workers preserve other sessions'
+edits and use the repository's documented history tools; Studio owns board updates.
 
 `assistantState.decisions` keeps 300 automatic choices with reasons, confidence
 and task snapshots. A task reservation prevents dispatch until the ledger save
@@ -137,13 +161,13 @@ settings and per-model work-kind summaries for the shared controls.
 
 | Term | Meaning |
 | --- | --- |
-| **Menu** (the rail) | New task and Search sit above four main destinations: **Home**, **Work**, **Live** and **Models**, with one local row for the current group's views. Recent tasks belong to the current project; Settings and Help stay at the foot. Help contains Start here, Shortcuts and Community. The project selector at the top opens the project panel. The registry in `renderer/nav.js` preserves existing shortcuts and destination IDs. |
+| **Menu** (the rail) | New task and Search sit above three main destinations: **Home**, **Work** and **Agents**, with one local row for the current group's views. Recent tasks belong to the current project; Settings and Help stay at the foot. Help contains Start here, Shortcuts and Community. The project selector at the top opens the project panel. The registry in `renderer/nav.js` preserves existing shortcuts and destination IDs. |
 | **Workspace** | The home screen (`H`): current task, app preview and conversation. Project queue, Studio status and setup information expand when needed. |
 | **Command view** | The 3D node tree (`D`): sessions, tasks and agents as orbs, with a right panel for Work, Assistant, Runs and Ask, and agent settings in the top toolbar. |
 | **Booklet** | Historically the single-file model catalog; today `renderer/booklet.html` is the whole app bundled into one file by `npm run build-booklet`. The **Model catalog** tab (`1`) is the part that kept the name. |
 | **Model Lab** | The previous name for Models' **Performance**, **Usage** and **Context** views. Shortcut `2` opens Performance. Usage keeps recorded calls separate from provider account readings. Catalog insights contains published benchmark charts. |
 | **Activity & evidence** (A-Eyes) | Tab `3`: a read-only view of the OpenCode session store: change feed, diffs, screenshots with pins, log tail. The "eyes worker" is the thread that reads that store. |
-| **Settings** | `4` or `Ctrl ,`: seven single-pane categories, **General**, **Appearance**, **Connections**, **Models**, **Automation**, **Audio**, **System**. Search finds individual controls and opens their category and containing disclosures. `MefiNav.go("studio", { category: "automation" })` opens a category; legacy section links such as `settings-updates` still work. |
+| **Settings** | `4` or `Ctrl ,`: four single-pane categories, **General**, **Appearance**, **Audio** and **System**. Providers, routing and run behavior moved to **Agents › Setup** (Team & models, Providers, Routing & fallback, Run behavior); the old Connections, Models and Automation links redirect there. Search finds individual controls and opens their category and containing disclosures. `MefiNav.go("studio", { category: "appearance" })` opens a category; legacy section links such as `settings-updates` still work. |
 | **Preferences** | General holds names and startup. Appearance holds themes, motion, blur, node styles and canvas effects; Audio links to the music dropdown and holds sound effects. Older Preferences and Your Studio links resolve to General. |
 | **Diagnostics** | Settings › System: speed probe, profiler, auditor, machine tools and connection log. Auditor and machine links reveal Sessions' Diagnostics panel. |
 | **Search Studio** | The palette (`Ctrl K`), once called Key commands. It finds any page, tool, Settings card, action, task, node or model by familiar terms, and groups its results by menu section. |
@@ -166,6 +190,7 @@ settings and per-model work-kind summaries for the shared controls.
 | **Delegated decision** | An answer Mefi gives for you, attributed as **Mefi decided**. A retry preserves your stop, loop guard, loop history, duplicate link and approval. Its two-per-task daily budget survives restarts. |
 | **Swarm / Cluster** | Agent mode: Swarm spreads workers across the queue, Cluster keeps them on one goal at a time. |
 | **Awaiting verification** | A finished attempt whose completion is not yet established; housekeeping checks the evidence before it becomes **Done**. |
+| **Work done outside Studio** | What changed in the open folder while Studio was closed, on another folder or hidden: commits, uncommitted edits and Claude Code or OpenCode sessions, compared with Studio's **last look** at the folder. The thread, the chat assistant and the welcome-back digest report it, and every queued card is **checked** against it before a worker takes it: still needed, partly done (its worker is told what changed), or already done / no longer needed, which waits for your answer on an Ask card. See [agent-loop.md §14](agent-loop.md#14-work-done-outside-studio). |
 | **Agent brain** | The Live view (`J`) that draws a task's **pipeline** from recorded **work events**: the head (the companion), the lead, the steps and the sub-agents; plus the **Playbook** of recipes and **project map** under Agents › Workflows. The seats live under Agents › Setup. See [roadmap-0.4.0.md](roadmap-0.4.0.md) and [agent-loop.md §13](agent-loop.md#13-the-agent-brain). |
 | **Companion** | The roaming character (named under General): click it to ask questions, create tasks, navigate, see the team and its messages, change settings, or handle its needs-you queue. It also gives a welcome-back digest and covers this project or all of them. Its default model is GPT-6 Luna on Zen at medium reasoning and fast service when Zen is connected. |
 | **Orb, callout, absorb** | Command-view vocabulary: an orb is a node, a callout is its floating card, and absorb is a finished node collapsing into its host. |
@@ -307,11 +332,12 @@ settings and per-model work-kind summaries for the shared controls.
   the denser `--studio-menu-fill`. Menus open on the spring curve with their
   rows cascading in, and one highlight glides between rows (the menu's
   `::after`, placed by `studio-ui.js` `glideTo`).
-- One **menu** down the left edge has four destinations: **Home**, **Work**,
-  **Live** and **Models**. A single local row lists the current destination's
-  views: Tasks, Plans, Ideas, Brain maps and Analyzer under Work; Command,
-  Activity, Sessions and Overhead under Live; Catalog, Performance, Usage and
-  Context under Models. **New task** and **Search** (`Ctrl K`) sit above the
+- One **menu** down the left edge has three destinations: **Home**, **Work**
+  and **Agents**. A single local row lists the current destination's views:
+  Tasks, Plans, Ideas and Analyzer under Work; Overview, Setup, Live
+  (Command, Pipelines, Sessions, Activity, Trace, Overhead), Workflows (Brain
+  maps, Playbook, Project map, Context), Models (Catalog, Performance) and
+  Usage under Agents. **New task** and **Search** (`Ctrl K`) sit above the
   destinations; **Settings** and **Help** stay at the foot. Help contains
   Start here, Shortcuts (`?`) and Community.
 - The menu stays open by default at widths of 1100px or more, with the page
@@ -364,6 +390,8 @@ settings and per-model work-kind summaries for the shared controls.
   and by source tag (`[agents]`, `[assistant]`, `[tools]`…) and followed every
   two seconds while the sheet is in view. The rules live in
   `scripts/trace.cjs`, the reads in `main.cjs` `trace:channels` / `trace:read`.
+  In the rail layout it is a full page below the navigation bar; Back returns
+  to the previous Agents view. The classic layout keeps its dialog behavior.
 - Home keeps its composer at the bottom of the window, with conversation and
   a compact progress summary scrolling above it. **Activity**
   opens a separate panel with task details and app preview controls; a running
@@ -371,6 +399,9 @@ settings and per-model work-kind summaries for the shared controls.
   the panel opens over the conversation. The navigation menu includes **New task**, a distinct
   project selector, recent tasks and a soft selection marker; pinning and
   shortcuts remain. New task restores the saved draft without submitting it.
+  Its project controls stay below the fixed navigation row at every window
+  size. The Pipelines, Playbook and Project map navigation selections update
+  after their content loads, including the compact view selectors.
   A compact project header has one global **Start agents /
   Pause / Resume** control. A **Needs you** shortcut appears when a decision
   is waiting. The task, preview and composer stay ahead of secondary panels:
@@ -520,6 +551,12 @@ proposal is left out and counted in its note.
 
 ### The assistant and the agent loop
 
+Claude connection errors retain the CLI's quota or login explanation, including
+its reported reset time. Successful AI replies clear the offline warning,
+including when the connection recovers through companion chat.
+Assistant CLI replies require a clean process exit; partial output from a
+failed process stays an error and cannot produce briefing requests.
+
 - The assistant can always be messaged and is always working: a **service loop**
   ticks every 30 seconds (every two minutes while hidden), organising the node
   tree, scanning the machine, running the Auditor every five minutes, fixing and
@@ -539,10 +576,28 @@ proposal is left out and counted in its note.
   keywords still work, and "try again", "stop the auth build" or "close the
   search task" act on the card they name. See
   [agent-loop.md §11](agent-loop.md#11-the-assistant-as-overseer).
+- **Work done outside Studio.** Studio keeps a last look at each folder (its
+  git HEAD, branch and uncommitted files) while it watches it. Open the
+  folder again after committing by hand, editing elsewhere or running Claude
+  Code or OpenCode in it, and the thread says what changed ("While Studio was
+  away (3 h): 4 commits, 12 files changed, 1 outside agent session"). The
+  assistant can answer "what did I do while Studio was closed?", and the
+  welcome-back digest leads with it. Every queued card waits while it is
+  checked against that work: a card that is still needed runs as before, a
+  partly done one runs with its worker told what changed, and one that looks
+  already done or no longer needed waits in **Needs you** with **Mark it
+  done**, **Drop it** and **Build it anyway**. The task's Evidence tab shows
+  the verdict and the commits behind it. Without a model the check matches
+  files and commit subjects and only says "may already be done". See
+  [agent-loop.md §14](agent-loop.md#14-work-done-outside-studio).
 - **Talking to the companion.** Every chat box (the companion's Ask tab,
   Home's composer, Command's chat log, the Explorer) sends the screen you are
   on and the companion's name with each message
   (`MefiCompanionUI.context()`), and the reply speaks as that name.
+  Command's chat log and rail console update live thinking text in place,
+  preserving the saved bubbles, text selection and the reader's scroll.
+  Their composers grow with the draft up to 120 px, then scroll, and follow
+  width and font changes through native sizing when the browser supports it.
   "Requests", "what needs me" and the badge are one list: the chat's
   `needsYou` is built by the same `companion.queue()` that counts "N need
   you". The model also reads the latest notices and what each reply offered.
@@ -594,6 +649,12 @@ proposal is left out and counted in its note.
   uncommitted work until it lands.
 
 ### Command center and the node tree
+
+- Command keeps its interactive canvas elements while transferring their
+  drawing contexts to OffscreenCanvas where 2D support is available. Explicit
+  canvas fonts can then resolve without a document style update. Resizing
+  follows the drawing bitmap and device scale; unsupported previews retain
+  ordinary contexts. The far layer remains transparent for background video.
 
 - **Tree brightness & outlines**, under Tree modes & movement in Appearance ›
   Layout and Music & video › Audio reactions, provides node and connecting-line
@@ -825,8 +886,30 @@ proposal is left out and counted in its note.
   **Up next** is a saved queue of up to 50 media links. **Add to queue** appends a pasted link or YouTube result without interrupting playback; **Queue next** inserts it first. Each queue row has **Play now**, **Play next** (move to the front), and **Remove**. **Next video** consumes the queue before explorer results or a provider playlist. YouTube, Vimeo and direct files also consume the next queued entry when playback ends; other embeds can be advanced manually. Repeated videos restart, and late messages from a replaced player cannot skip queued items. Reloading restores the queue without starting it; the separate ten-minute player restoration still governs current playback.
   Audio Link retains its enabled state and selected source. Reentering the node view after a reload reconnects an enabled link; capture/smoke launches stay silent, and denied or disconnected sources offer an explicit retry instead of repeatedly requesting access.
   Video settings also includes **Volume** and **Mute** for YouTube, Vimeo and direct media files. Their level and mute state persist across reloads, and provider volume updates keep the menu in sync.
-  Links nothing
-  can embed, such as a Spotify Jam or Twitch, open in their own app. The
+  Music & video's video panel places the player beside the saved **Up next**
+  queue, stacking them on narrow windows. **Use as background** sits directly
+  below the video; **Return to player** brings the same loaded player back
+  beside its queue. Opening and closing the media panel changes the player's
+  position without recreating its iframe. Audio connection and clipboard
+  options are grouped below playback. Video links viewed in the browser can
+  switch to their supported embedded player for background mode; ordinary
+  web pages keep that control disabled.
+  **Browse here** opens websites inside Studio's existing media player, with
+  an address bar, Back, Forward, reload/stop, Mute, minimize and close controls.
+  Ordinary http/https links (including ports and fragment routes) open there
+  automatically; embedded players also offer **Browse here** for their original site.
+  Opening the browser successfully replaces the current audio source. Playback
+  position is not transferred to the website. Moving, resizing or minimizing
+  the player keeps its page loaded; closing or switching sources stops it.
+  Website popup links navigate this same player. Native website content yields
+  to Studio overlays, and video background/fade effects are disabled while browsing.
+  **Open in browser** remains an explicit action for the regular system browser.
+  Sites use an isolated persistent session with no
+  Studio bridge or Node access. Camera/microphone permissions and downloads
+  are unavailable there; sign-in or protected playback may require the regular
+  browser. Spotify Jams retain their explicit Spotify handoff.
+  Local music has a record-artwork card with actual playback status, and the
+  media menu groups local music, radio and links below a built-in browser launcher. The
   booklet's CSP `frame-src` lists exactly the players `music.js` builds.
   Because a `file://` page sends no Referer, main names Studio to YouTube's
   player (`nameStudioToEmbeds`). Under the player, **Listen together**
@@ -1077,10 +1160,16 @@ are syntax-checked first, and a broken file or three restarts a minute **hold**
 the update instead of crashing. The `data/` directory is never written by the
 updater or packaging.
 
-A live restart waits for current workers to finish saving and for any project
+An automatic live restart waits for current workers to finish saving and for any project
 change to complete. New workers stay held while the update drains. Deferred
 retries keep the update status current without repeating identical toast
 notices; a changed reason or a new update can announce itself again.
+
+**Restart now** stops every coding agent, saves its latest task, checklist and
+recent output, then applies the update and relaunches Studio paused. **Resume**
+continues the saved work. The restart waits for worker saves and project changes;
+an update that fails validation or cannot save agent progress stays in the app
+with an error so it can be retried.
 
 ### Release updates
 

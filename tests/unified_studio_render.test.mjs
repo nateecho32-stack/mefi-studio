@@ -13,7 +13,9 @@ const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = path.join(studio, "node_modules", "electron", "dist", process.platform === "win32" ? "electron.exe" : process.platform === "darwin" ? "Electron.app/Contents/MacOS/Electron" : "electron");
 const canRun = existsSync(executable) && (process.platform !== "linux" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
 
-test("Unified Agents navigation, stable companion controls and scrollbar-free responsive layouts", { skip: !canRun, timeout: 180000 }, async (t) => {
+// The renderer now covers the original controls plus 111 background-video
+// states. Allow source copying/cleanup outside its separately bounded run.
+test("Unified Agents navigation, stable companion controls and scrollbar-free responsive layouts", { skip: !canRun, timeout: 420000 }, async (t) => {
   const fixture = await mkdtemp(path.join(tmpdir(), "mefi-unified-render-"));
   try {
     await mkdir(path.join(fixture, "renderer")); await mkdir(path.join(fixture, "data"));
@@ -30,7 +32,7 @@ test("Unified Agents navigation, stable companion controls and scrollbar-free re
         const killer = spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
         killer.once("error", () => child.kill());
       } else child.kill();
-    }, 150000);
+    }, 240000);
     const code = await new Promise((resolve, reject) => { child.once("error", reject); child.once("close", resolve); }).finally(() => clearTimeout(timer));
     let report;
     try { report = JSON.parse(await readFile(path.join(fixture, "report.json"), "utf8")); } catch {}
@@ -41,10 +43,13 @@ test("Unified Agents navigation, stable companion controls and scrollbar-free re
       await Promise.all(files.map((name) => copyFile(path.join(fixture, name), path.join(artifacts, name))));
       t.diagnostic(`Workflow screenshots: ${artifacts}`);
     }
-    assert.equal(code, 0, `${report?.failure || "No renderer report"}\n${output}`);
+    assert.equal(code, 0, `${report?.failure || (report?.phase ? `Renderer stopped during ${report.phase}` : "No renderer report")}\n${output}`);
     assert.deepEqual(report.errors, []); assert.deepEqual(report.networkAttempts, []); assert.deepEqual(report.processAttempts, []);
-    assert.ok(report.complete && report.draftRetained && report.noStartOnSetup && report.stableMenu);
+    assert.ok(report.complete && report.draftRetained && report.noStartOnSetup && report.stableMenu && report.navigationReachable);
     assert.equal(report.layouts.length,36);
+    assert.equal(report.backgroundLayouts.length,90);
+    assert.equal(report.backgroundVibe.length,21);
+    assert.ok(report.backgroundPlayback);
   } finally {
     assert.equal(path.dirname(fixture), path.resolve(tmpdir()));
     assert.ok(path.basename(fixture).startsWith("mefi-unified-render-"));

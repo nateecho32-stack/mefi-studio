@@ -130,13 +130,13 @@ test("moving off the menu closes it even after focusing a menu control", () => {
 });
 
 test("Escape closes the sidebar first and keeps the Work root in its section", () => {
-  const env = environment(); let sheetClosed = false;
+  const env = environment({ rail: true }); let sheetClosed = false;
   env.nav.state.sheet = "tasks";
   env.window.MefiTasks = { close: () => { sheetClosed = true; } };
   env.sidebar.open(); env.input.focus();
   env.nav.handleKey({ key: "Escape", target: env.input, preventDefault() {} });
   assert.equal(env.sidebar.isOpen(), false);
-  assert.equal(env.document.activeElement, env.toggle);
+  assert.equal(env.document.activeElement, env.brand);
   assert.equal(sheetClosed, false);
   env.nav.handleKey({ key: "Escape", target: env.toggle, preventDefault() {} });
   assert.equal(sheetClosed, false, "Escape at the Work root does not jump out of Work");

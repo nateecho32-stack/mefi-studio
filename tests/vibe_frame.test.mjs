@@ -129,12 +129,14 @@ test("leaving Command opened from a page returns to that page, still in Vibe", (
 
 test("Back on a Work page with nothing behind it returns to Vibe; Build keeps its section home", () => {
   const vibe = load();
+  vibe.nav.applyShell();
   vibe.nav.state.sheet = "tasks";
   vibe.nav.close("tasks");
   assert.equal(vibe.view(), "vibe");
   assert.deepEqual(vibe.log, ["vibe"]);
 
   const build = load({ mode: "build", view: "workspace" });
+  build.nav.applyShell();
   build.nav.state.sheet = "tasks";
   build.nav.close("tasks");
   assert.deepEqual(build.log, [], "Build's Task board is its section home, so Back stays put");

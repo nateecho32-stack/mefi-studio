@@ -294,7 +294,7 @@
       keyMatch: (event) => settingsChord(event) || defaultKeyMatch("4")(event),
       glyph: "g-sliders",
       badge: null,
-      desc: "Providers, routing and coding workers; your Studio, updates and diagnostics",
+      desc: "Your name, appearance, audio, updates and diagnostics; agent setup lives under Agents",
       searchTerms: "settings connections api key login setup provider workers preferences you theme motion animations launch updates diagnostics",
       showIn: showIn({ dock: true, palette: true, help: true }),
       // A section param opens one card: go("studio", { section: "settings-updates" }).
@@ -709,7 +709,7 @@
     window.MefiModelLab?.show?.(view);
   }
 
-  const WORKSPACE_PAGES = new Set(["tasks", "plans", "ideas", "brains", "analyzer", "explorer", "overhead", "agent-brain", "agents"]);
+  const WORKSPACE_PAGES = new Set(["tasks", "plans", "ideas", "brains", "analyzer", "explorer", "trace", "overhead", "agent-brain", "agents"]);
   const isWorkspacePage = (dest) => document.documentElement?.dataset?.shell === "rail" && WORKSPACE_PAGES.has(dest?.id);
   function syncPageInert() {
     const page = isWorkspacePage(get(state.sheet));
@@ -892,7 +892,7 @@
     root?.classList.toggle("from-command", Boolean(state.returnTo));
     const back = root?.querySelector(".sheet-back");
     if (back) {
-      const label = state.returnTo === "workspace" ? "Workspace" : state.returnTo === "vibe" ? "Vibe" : "Command";
+      const label = state.returnTo === "workspace" ? "Home" : state.returnTo === "vibe" ? "Vibe" : "Command";
       back.title = `Back to ${label} (Esc)`;
       const copy = back.querySelector(".label");
       if (copy) copy.textContent = label;
@@ -969,7 +969,7 @@
   }
 
   function close(id) {
-    if (WORKSPACE_PAGES.has(id) && current() === id) {
+    if (isWorkspacePage(get(id)) && current() === id) {
       if (historyState().canBack) return back();
       // In Vibe mode these pages open from Vibe, so Back with nothing behind
       // it goes there instead of stopping on Build's section home.

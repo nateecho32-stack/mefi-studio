@@ -267,7 +267,7 @@
 .brains-note { margin: 0; font-size: 11px; line-height: 1.65; color: var(--muted); }
 .brains-note.lead { font-size: 12px; color: var(--ivory); opacity: .88; }
 .brains-note.quiet { opacity: .8; font-size: 10.5px; }
-.brains-note.warn { color: var(--bad); }
+.brains-note.warn { color: var(--warn); }
 .brains-note.gate { color: var(--gold-bright); }
 .brains-note.caution { color: var(--warn); }
 .brains-note.problem { padding: 7px 10px; border-radius: 9px; border: 1px solid currentColor; background: color-mix(in srgb, currentColor 7%, transparent); }
@@ -290,8 +290,8 @@
 .brains-list h4 { margin: 0; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--gold-bright); }
 .brains-list ul { margin: 0; padding-left: 16px; display: grid; gap: 4px; }
 .brains-can li, .brains-cannot li { font-size: 11px; line-height: 1.55; color: var(--muted); }
-.brains-can li::marker { content: "✓ "; color: #afdfc2; }
-.brains-cannot li::marker { content: "✕ "; color: #f6abab; }
+.brains-can li::marker { content: "✓ "; color: var(--good); }
+.brains-cannot li::marker { content: "✕ "; color: var(--bad); }
 .brains-permission { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: start; font-size: 11px; padding: 6px 8px; border: 1px solid transparent; border-radius: 9px; cursor: pointer; }
 .brains-permission:hover { background: var(--tint-gold-1); }
 .brains-permission[data-problem="error"] { border-color: rgba(255,156,156,.35); background: rgba(255,156,156,.05); }
@@ -332,14 +332,14 @@
 .brains-problem { min-height: 0; margin: 0; font-size: 10.5px; line-height: 1.5; text-align: left; white-space: normal; border: 1px solid var(--hairline); border-radius: 8px; padding: 4px 8px; background: var(--bg); color: var(--muted); }
 .brains-problem[data-level="error"] { border-color: rgba(255,156,156,.35); color: var(--bad); }
 .brains-problem[data-level="warn"] { border-color: rgba(255,212,121,.4); color: var(--warn); }
-.brains-problem.ok { display: inline-flex; align-items: center; gap: 6px; border-color: rgba(175,223,194,.3); color: #afdfc2; }
+.brains-problem.ok { display: inline-flex; align-items: center; gap: 6px; border-color: color-mix(in srgb, var(--good) 30%, transparent); color: var(--good); }
 .brains-problem.ok::before { content: "✓"; font-weight: 700; }
 .brains-problem.ok:empty { display: none; }
 .brains-problem-more { color: var(--gold-bright); border-style: dashed; }
 .brains-problem:focus-visible { outline-offset: -3px; }
 .brains-problem-list[data-expanded="true"] { max-height: 40vh; }
 .brains-status { flex: 0 1 520px; margin: 0; font-size: 11px; line-height: 1.5; color: var(--muted); text-align: right; }
-.brains-status[data-tone="warn"] { color: var(--bad); }
+.brains-status[data-tone="warn"] { color: var(--warn); }
 
 /* ---- Space search -------------------------------------------------------------- */
 .brains-search { position: absolute; inset: 0; z-index: 14; display: grid; place-items: start center; padding-top: 12vh; background: rgba(0,0,0,.5); backdrop-filter: blur(3px); }
@@ -453,6 +453,6 @@ textarea.brains-dialog-input { min-height: 104px; resize: vertical; }
 .ask-chip { font-size: 10px; line-height: 1.5; padding: 3px 8px; border: 1px solid var(--hairline); border-radius: 20px; color: var(--muted); background: var(--bg); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ask-chip.task { color: var(--gold-bright); border-color: var(--gold); }
 button.ask-chip.task:hover { background: var(--tint-gold-2); }
-.ask-chip[data-severity="blocker"] { color: #f6abab; border-color: #f6abab55; }
+.ask-chip[data-severity="blocker"] { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 33%, transparent); }
 .ask-evidence { margin: 8px 0 0; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 8px; background: var(--bg); color: var(--muted); font-size: 10px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 76px; overflow: auto; }
 .ask-links { display: flex; justify-content: flex-end; margin-top: 8px; }

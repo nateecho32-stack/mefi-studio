@@ -190,10 +190,10 @@
       case "running": return { tone: "live", text: "building", key: "running" };
       case "review": return { tone: "check", text: "checking its work", key: "review" };
       case "approval": return { tone: "ask", text: "waiting for your go-ahead", key: "approval" };
-      case "blocked": return { tone: "bad", text: row.blockedBy === "owner" ? "stopped by you" : "stuck", key: "blocked", reason: row.reason };
+      case "blocked": return { tone: "bad", text: row.blockedBy === "owner" ? "stopped by you" : row.blockedBy === "relevance" ? "maybe done outside Studio" : "stuck", key: "blocked", reason: row.reason };
       case "waiting": return { tone: "next", text: "waiting for other tasks", key: "waiting", reason: row.reason };
       case "cooling": return { tone: "next", text: "trying again soon", key: "cooling", reason: row.reason };
-      case "deferred": return { tone: "next", text: "deferred", key: "deferred", reason: row.reason };
+      case "deferred": return { tone: "next", text: row.blockedBy === "relevance-check" ? "checking against outside work" : "deferred", key: "deferred", reason: row.reason };
       case "grouped": return { tone: "next", text: "part of a group", key: "grouped", reason: row.reason };
       case "ready": return { tone: "next", text: "up next", key: "ready" };
       default: return { tone: "next", text: "queued", key: "ready" };

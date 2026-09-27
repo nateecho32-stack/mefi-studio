@@ -32,8 +32,8 @@ test("each elevated switch works independently, including a heavier retry on an 
   }
   assert.equal(autonomy.route({ item: ask("check-failed"), task, option: { id: "retry-deep" } }), "owner");
   assert.equal(autonomy.classify({ task, action: { kind: "drop" } }), "drop-owned");
-  assert.equal(autonomy.needsApproval({ ...task, origin: { by: "thinker" } }), true);
-  assert.equal(autonomy.needsApproval({ ...task, origin: { by: "thinker" } }, { elevated: { "agent-filed": false } }), false);
+  assert.equal(autonomy.needsApproval({ ...task, origin: { by: "thinker" } }, { level: "elevated" }), true);
+  assert.equal(autonomy.needsApproval({ ...task, origin: { by: "thinker" } }, { level: "elevated", elevated: { "agent-filed": false } }), false);
 });
 
 test("owner holds, desk escalations, undone decisions and unaffirmed chat confirmations cannot be delegated", () => {
@@ -59,7 +59,7 @@ test("scope-bound approval passes to actual splits and delegation children, with
   assert.equal(autonomy.needsApproval(task, { level: "auto" }), false);
 });
 
-test("under Auto and Elevated only, slices and splits of the owner's own card build; an agent's handoff or request still waits", () => {
+test("Auto starts agent proposals; Elevated only can reserve them while allowing owner slices", () => {
   // The owner's card needs no approval here, so it never carries one: its
   // executor-made slices must not wait for an approval the parent never had.
   const parent = { id: "own", title: "Owner feature", status: "awaiting_verification", projectId: "p", origin: { kind: "composer", by: "owner" }, delegation: { version: 1, childTaskIds: ["slice"] } };
@@ -71,13 +71,13 @@ test("under Auto and Elevated only, slices and splits of the owner's own card bu
   for (const level of ["auto", "elevated"]) {
     assert.equal(autonomy.needsApproval(slice, { level, tasks }), false, level);
     assert.equal(autonomy.needsApproval(split, { level, tasks }), false, level);
-    assert.equal(autonomy.needsApproval(handoff, { level, tasks }), true, `${level}: a generic handoff is new work an agent filed`);
-    assert.equal(autonomy.needsApproval(filed, { level, tasks }), true, level);
+    assert.equal(autonomy.needsApproval(handoff, { level, tasks }), level !== "auto", level);
+    assert.equal(autonomy.needsApproval(filed, { level, tasks }), level !== "auto", level);
     assert.equal(backlog.workState(slice, 1, { tasks, approve: (item, options) => autonomy.needsApproval(item, { level, ...options }) }).stage, "ready", level);
   }
-  // A slice of an agent's card is still the agent's work.
+  // A slice of an agent's card is still gated in Elevated only.
   const agents = { ...parent, id: "theirs", origin: { kind: "request", by: "a-eyes" }, delegation: { version: 1, childTaskIds: ["slice2"] } };
-  assert.equal(autonomy.needsApproval({ ...slice, id: "slice2", parentTaskId: "theirs" }, { level: "auto", tasks: [agents] }), true);
+  assert.equal(autonomy.needsApproval({ ...slice, id: "slice2", parentTaskId: "theirs" }, { level: "elevated", tasks: [agents] }), true);
   // Switched off, agent-filed work builds too; Accept per task still waits for the owner's OK.
   assert.equal(autonomy.needsApproval(filed, { level: "auto", elevated: { "agent-filed": false }, tasks }), false);
   assert.equal(autonomy.needsApproval(slice, { level: "accept", tasks }), true);
@@ -99,4 +99,21 @@ test("sessionless confirmation needs exact-attempt named runner checks and no un
   assert.equal(autonomy.sessionless(task).canConfirm, true);
   for (const patch of [{ verificationRun: null }, { verificationRun: { ...task.verificationRun, key: "verify:other" } }, { remaining: ["still owed"] }, { lastAttempt: { ...task.lastAttempt, code: 1 } }]) assert.equal(autonomy.sessionless({ ...task, ...patch }).canConfirm, false);
   for (const patch of [{ exitCode: 1 }, { timedOut: true }, { relocated: true }, { unavailable: true }, { command: "" }]) assert.equal(autonomy.sessionless({ ...task, verificationRun: { ...task.verificationRun, results: [{ ...task.verificationRun.results[0], ...patch }] } }).canConfirm, false);
+});
+
+
+test("the reported repair queue is runnable in Auto even with the saved agent-filed switch on", () => {
+  const tasks = [
+    "Reconcile duplicate test-history archive entry",
+    "Fix occlusion probe reliability",
+    "Repair shared Analyzer and navigation regressions",
+    "Overseer: Fix the briefer role",
+  ].map((title, id) => ({ id: String(id), title, status: "open", origin: { by: id === 3 ? "overseer" : "agent", kind: id === 3 ? "request" : "handoff" } }));
+  for (const level of autonomy.LEVELS) {
+    const options = { level, elevated: { "agent-filed": true }, tasks };
+    for (const task of tasks) {
+      const state = backlog.workState(task, 100, { tasks, approve: (row) => autonomy.needsApproval(row, options) });
+      assert.equal(state.stage, level === "auto" ? "ready" : "approval", `${level}: ${task.title}`);
+    }
+  }
 });

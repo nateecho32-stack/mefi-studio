@@ -29,7 +29,8 @@ process.on("uncaughtException", finish); process.on("unhandledRejection", finish
 
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
-    let allowed = /^(data:|blob:|devtools:)/.test(details.url);
+    // The background check answers this embed locally with a canvas video.
+    let allowed = /^(data:|blob:|devtools:)/.test(details.url) || details.url.startsWith("https://www.youtube-nocookie.com/embed/");
     if (details.url.startsWith("file:")) { const relative = path.relative(root, fileURLToPath(details.url)); allowed = !relative.startsWith("..") && !path.isAbsolute(relative); }
     if (!allowed) report.networkAttempts.push(details.url);
     callback({ cancel: !allowed });
@@ -100,6 +101,8 @@ app.whenReady().then(async () => {
   const run = (code) => contents.executeJavaScript(`(async()=>{${code}})()`, true);
   const until = async (condition, label) => { const deadline = Date.now() + 10000; while (Date.now() < deadline) { assert.deepEqual(report.errors, [], JSON.stringify(report.errors)); if (await run(`return Boolean(${condition});`)) return; await sleep(40); } report.lastState = await run("return {route:window.MefiNav?.current?.(),focus:document.getElementById('workspace-focus-panel')?.textContent,preview:document.getElementById('workspace-preview-panel')?.textContent,task:document.getElementById('task-title')?.textContent};"); fs.writeFileSync(path.join(root, "workflow-failure.png"), (await contents.capturePage()).toPNG()); throw new Error(`Timed out: ${label}`); };
   const capture = async (name) => {
+    report.phase = name;
+    fs.writeFileSync(path.join(root, "report.json"), JSON.stringify(report, null, 2));
     await run("await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));");
     await sleep(120);
     fs.writeFileSync(path.join(root, name), (await contents.capturePage()).toPNG());
@@ -111,6 +114,36 @@ app.whenReady().then(async () => {
   // explicitly, then dispatch the hidden state separately below.
   await run("Object.defineProperty(document,'hidden',{value:false,configurable:true});document.dispatchEvent(new Event('visibilitychange'));");
   await until("window.MefiAgents && window.MefiCompanionUI?.managed()", "unified startup");
+  // Home controls must clear the fixed navigation, and each Live/Workflows
+  // destination must remain reachable and identify the view actually shown.
+  await run("window.MefiVibe.setMode('build');window.MefiVibe.closeNotes();");
+  for (const [width, height] of [[1440, 900], [600, 560]]) {
+    window.setContentSize(width, height);
+    await run("await window.MefiNav.go('workspace');");
+    await until("window.MefiWorkspace.isActive()", "Build Home");
+    for (const selector of ['#workspace-pause', '#workspace-activity-toggle', '#workspace-layer .ws-project-actions > summary']) {
+      assert.ok(await reachable(selector), `${width}: Home control is reachable: ${selector}`);
+    }
+    await capture(`navigation-home-${width}.png`);
+    await run("await window.MefiNav.go('command');document.querySelector('[data-agent-section=live]').click();");
+    const trace = await run("const button=[...document.querySelectorAll('#agents-menu-live button')].find(button=>button.textContent==='Trace');if(!button)return false;button.click();return true;");
+    assert.ok(trace, `${width}: Live menu opens Trace`);
+    await until("!document.getElementById('trace-overlay').hidden", "Trace opens");
+    await capture(`navigation-trace-${width}.png`);
+    assert.ok(await reachable('#trace-search'), `${width}: Trace search is reachable`);
+    assert.ok(await reachable('#trace-close'), `${width}: Trace Back is reachable`);
+    assert.ok(await run("return document.getElementById('trace-heading').getBoundingClientRect().top>=document.getElementById('app-local-nav').getBoundingClientRect().bottom;"), `${width}: Trace heading clears navigation`);
+    assert.equal(await run("return document.querySelector('.agents-subsection-picker').selectedOptions[0].text;"), 'Trace');
+    await run("document.getElementById('trace-close').click();");
+    assert.equal(await run("return window.MefiNav.current();"), 'command', 'Trace Back returns to its previous Agents view');
+    for (const [tab, section, label] of [['live', 'live', 'Pipelines'], ['playbook', 'workflows', 'Playbook'], ['map', 'workflows', 'Project map'], ['live', 'live', 'Pipelines']]) {
+      await run(`await window.MefiNav.go('agent-brain',{tab:${JSON.stringify(tab)}});`);
+      assert.equal(await run("return document.querySelector('.agents-section-picker').value;"), section, `${width}: ${label} section`);
+      assert.equal(await run("return document.querySelector('.agents-subsection-picker').selectedOptions[0].text;"), label, `${width}: selected view follows loaded content`);
+    }
+  }
+  report.navigationReachable = true;
+  window.setContentSize(1440, 900);
   await run("await window.MefiNav.go('agents');");
   await until("!document.getElementById('agents-overlay').hidden", "Agents overview");
   await capture("unified-overview.png");
@@ -328,6 +361,7 @@ app.whenReady().then(async () => {
     if (layout.h<=520) assert.ok(await run("const list=document.getElementById('app-rail-sections'),box=list.getBoundingClientRect();list.scrollTop=0;return [...list.querySelectorAll('.app-rail-head')].every(el=>{const r=el.getBoundingClientRect();return r.top>=box.top-1&&r.bottom<=box.bottom+1;});"),'primary destinations stay visible at '+width+' / '+zoom);
     if (zoom===1&&preset==='studio') await capture(`unified-team-${width}.png`);
   }
+  await require('./studio-background-checks.cjs')({ session, window, contents, run, until, capture, reachable, report });
   await run("window.unifiedFixture.project('second-project');");
   await until("window.MefiWorkspace.activeProjectId()==='second-project'", "project switch");
   await run("await window.MefiNav.go('agents',{section:'setup',pane:'team'});");

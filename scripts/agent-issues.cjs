@@ -131,7 +131,7 @@ const ISSUE_KINDS = {
     severity: "decision",
     ask: "policy",
     headline: (context) => `${context.subject} needs something only you can do`,
-    lead: "The agent finished what it can; the rest is yours (the board, Studio's task store, another session's files).",
+    lead: "The agent needs a specific decision, access or action from you.",
     options: ["acknowledge", "instruct", "hold"],
     recommend: "acknowledge",
   },
@@ -289,8 +289,25 @@ function ownerDirected(title, detail = null) {
 }
 
 function ownerKindFor(kind, title, detail, permission) {
+  // A worker can misfile ordinary engineering work under owner:. Recover
+  // only concrete repair requests; a named permission, risk, or human action
+  // must retain its gate even when its context mentions failing tests.
   const movable = OWNER_FROM.has(kind) || (kind === "permission" && !permission);
-  return movable && ownerDirected(title, detail) ? "owner" : kind;
+  const owner = kind === "owner" || movable && ownerDirected(title, detail);
+  if (!owner) return kind;
+  return !permission && kind !== "permission" ? repairIssueKind(title, detail) ?? "owner" : "owner";
+}
+
+function repairIssueKind(title, detail = null) {
+  const ask = clean(title, TITLE_MAX);
+  const text = `${ask} ${clean(detail, DETAIL_MAX)}`;
+  // Mixed requests still need the person: do not turn "approve deleting the
+  // database to fix the tests" or "unlock the desktop" into an ordinary retry.
+  if (/\b(?:approv\w*|authoriz\w*|permission|grant|credentials?|password|secrets?|api[- ]?key|log\s?in|sign\s?in|unlock|physical|manual|attended|purchase|pay|deploy|publish|delet\w*|discard|unstage|overwrite|drop\s+(?:the\s+)?(?:database|table))\b/i.test(text)) return null;
+  if (!/^(?:(?:can|could|will|would)\s+you\s+)?(?:please\s+)?(?:fix|repair|reconcile|resolve|integrate|rerun|re-run|retry|wait\s+for|coordinate)\b/i.test(ask)) return null;
+  if (/\b(?:tests?(?![- ]history)|checks?|verification|regressions?|npm\s+(?:run\s+\S+|test)|occlusion\s+probe)\b/i.test(ask)) return "check-failed";
+  if (/\b(?:testruns(?:\.md)?|test[- ]history|archive\s+(?:entry|conflict)|merge\s+conflicts?|concurrent\s+(?:edits|writers)|another\s+session['’]?s?\s+(?:files|edits))\b/i.test(ask)) return "blocked";
+  return null;
 }
 
 // How deep a task sits in a split chain: its own splitDepth, or, for a chain
@@ -466,7 +483,7 @@ function questionForIssue(issue, { now = Date.now(), policy = DEFAULT_POLICY } =
     const payload = { issueKind: normalized.kind, ...(normalized.taskId ? { taskId: normalized.taskId } : {}),
       ...(normalized.permission && option.verb === "grant" ? { permission: normalized.permission } : {}),
       ask: normalized.title,
-      ...(option.verb === "split" && normalized.detail ? { detail: clean(normalized.detail, 300) } : {}) };
+      ...(normalized.detail ? { detail: clean(normalized.detail, 300) } : {}) };
     return {
       id,
       label: option.verb === "grant" && normalized.permission ? `Grant ${normalized.permission} for this task`
@@ -589,7 +606,7 @@ function ownerResultIssue(parts) {
   // A worker that copies the template's "<…, or leave it out>" says nothing.
   const bare = owed.replace(/^[\s(<[{"'`*_.–—-]+/, "");
   if (!bare || /^<[^>]*>$/.test(owed) || OWNER_DENIAL.test(bare)) return null;
-  return { kind: "owner", title: owed, source: "worker" };
+  return { kind: ownerKindFor("owner", owed, null, null), title: owed, source: "worker" };
 }
 
 // ---- repeat asks --------------------------------------------------------------
@@ -677,6 +694,19 @@ function savedAsk(question) {
   return { ask: clean(ask ?? title, 240), detail: clean(pick("detail") ?? said, DETAIL_MAX), permission: pick("permission") };
 }
 
+// Upgrade an unanswered legacy owner card in place. Its identity and any
+// owner Undo remain authoritative; answered and dismissed cards stay closed.
+function repairQuestion(question, { now = Date.now(), attempts = 0 } = {}) {
+  if (question?.status !== "open" || question.source !== "issue" || question.context?.issueKind !== "owner"
+    || question.context?.undoneFrom || question.context?.raisedBy === "desk") return null;
+  const saved = savedAsk(question);
+  const kind = repairIssueKind(saved.ask, saved.detail);
+  if (!kind) return null;
+  const refreshed = questionForIssue({ ...question.context, kind, title: saved.ask, detail: saved.detail,
+    source: question.context.raisedBy, attempts }, { now });
+  return { ...question, ...refreshed, context: { ...question.context, ...refreshed.context, suggestion: null } };
+}
+
 /**
  * An earlier issue question that asks what this issue asks: the same kind,
  * raised inside the window, naming the same other cards in mostly the same
@@ -718,7 +748,7 @@ function repeatAsk(issue, questions, { now = Date.now(), windowMs = REPEAT_WINDO
 
 /** The line the worker's prompt teaches, so the protocol is discoverable. */
 function issuePromptLine() {
-  return `If something needs a decision only the owner can make, print one line "${ISSUE_MARK} <${ISSUE_KIND_IDS.filter((kind) => kind !== "run-failed").join("|")}> :: <one-line question> :: <what you saw>" and keep working on what you can. It reaches the owner as a card; it is not a way to end the job. Use "owner" for something only the owner can do (the board, Studio's task store, another session's files); it reaches the owner once and makes no new card.`;
+  return `If something needs a decision, print one line "${ISSUE_MARK} <${ISSUE_KIND_IDS.filter((kind) => kind !== "run-failed").join("|")}> :: <one-line question> :: <what you saw>" and keep working on what you can. Studio routes it under the permission mode; it is not a way to end the job. Use "owner" only for a concrete human decision, missing access or physical action. Test failures, concurrent edits and test-history archive conflicts are engineering work: preserve other sessions' edits, wait for active writers, investigate and rerun the relevant checks. Use "check-failed" or "blocked" if recovery is still needed. Studio handles its own board bookkeeping; report evidence without rewriting its task store or asking the owner to close a card.`;
 }
 
 module.exports = {
@@ -740,6 +770,7 @@ module.exports = {
   questionForIssue,
   runFailureIssue,
   ownerResultIssue,
+  repairQuestion,
   askRefs,
   repeatAsk,
   issuePromptLine,

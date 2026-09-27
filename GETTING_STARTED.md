@@ -96,10 +96,10 @@ it locally — no AI request — showing old plans and starting points in
 ### Connect one assistant and one builder
 
 A fresh install runs **auto setup** by itself on its first launch, from the
-keys, CLIs and local servers already on the machine, and Settings says what it
-chose. Open **Agents › Setup › Connections** (`4`, or `Ctrl ,` from anywhere) to
+keys, CLIs and local servers already on the machine, and Agents setup says what it
+chose. Open **Agents › Setup › Providers** to
 review that choice, press **Run auto setup** again after adding a key or CLI,
-or configure a provider there and choose its route under **Agents › Setup › Routing**. The
+or configure a provider there and choose its route under **Agents › Setup › Routing & fallback**. The
 assistant (conversation) and the builder (coding work) are separate
 capabilities: a saved key alone never proves a build can start.
 

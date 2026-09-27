@@ -127,7 +127,7 @@
   const needsReview = (task) => !isDone(task) && task?.status !== "active" && !waitingOnFollowUps(task) && (
     task?.status === "awaiting_verification" || task?.status === "verifying" ||
     ["unverified", "failed"].includes(task?.verification?.state) || (task?.runFailures ?? 0) >= 5 ||
-    scheduledTask(task)?.blockedBy === "loop"
+    ["loop", "relevance"].includes(scheduledTask(task)?.blockedBy)
   );
   const taskStage = (task) => isDone(task) ? "done" : needsReview(task) ? "review" : "open";
   const scheduledTask = (task) => state.backlog?.taskStates?.find((item) => item.id === task.id);
@@ -137,7 +137,7 @@
   // the loop count); neither is offered while a worker or checker holds it.
   const ownerHold = (task) => {
     const scheduled = scheduledTask(task);
-    if (!["loop", "duplicate", "owner"].includes(scheduled?.blockedBy)) return null;
+    if (!["loop", "duplicate", "owner", "relevance"].includes(scheduled?.blockedBy)) return null;
     return task?.runId || ["active", "running", "verifying", "awaiting_verification"].includes(task?.status) ? null : scheduled;
   };
   const matchesReadiness = (task) => state.readiness === "all" || (state.readiness === "waiting" ? ["waiting", "cooling"].includes(scheduledTask(task)?.stage) : state.readiness === "blocked" ? ["blocked", "approval"].includes(scheduledTask(task)?.stage) : scheduledTask(task)?.stage === state.readiness);
@@ -964,15 +964,18 @@
     if (!hold) return null;
     const loop = hold.blockedBy === "loop";
     const stopped = hold.blockedBy === "owner";
+    const outside = hold.blockedBy === "relevance";
     return {
-      label: loop ? "Try again" : stopped ? "Resume" : "Run anyway",
-      action: loop ? "try-again" : stopped ? "resume" : "run-anyway",
+      label: loop ? "Try again" : stopped ? "Resume" : outside ? "Build it anyway" : "Run anyway",
+      action: loop ? "try-again" : stopped ? "resume" : outside ? "build-anyway" : "run-anyway",
       className: "primary",
       title: loop
         ? "Release the loop guard's hold and restart its count from now. Read the last attempts first, and edit or split the brief if the same failure would repeat."
         : stopped
           ? "You stopped this task's worker. Put it back in the queue; it continues from its saved progress."
-          : "Clear the duplicate link and run this card on its own instead of waiting for the card it repeats",
+          : outside
+            ? "Work done outside Studio looks like it already covers this card. Put it back in the queue anyway; its worker is told what changed."
+            : "Clear the duplicate link and run this card on its own instead of waiting for the card it repeats",
       disabled: !window.mefiStudio?.tasksAction,
       run: () => runTaskAction(task, "retry"),
     };
@@ -1581,6 +1584,23 @@
       body.append(ul);
     };
     body = detailPanels.evidence;
+    // The card's check against work done outside Studio (scripts/outside-work.cjs).
+    const outside = task.relevance && typeof task.relevance === "object" ? task.relevance : null;
+    if (outside?.state && outside.state !== "closed") {
+      section("Work done outside Studio");
+      const verdict = outside.state === "checking" ? "Being checked against work done while Studio was away."
+        : outside.verdict === "done" ? "Looks already done outside Studio."
+          : outside.verdict === "obsolete" ? "May no longer be needed after work done outside Studio."
+            : outside.verdict === "partial" ? "Partly done outside Studio; its worker is told what changed."
+              : "Still needed after work done outside Studio.";
+      const line = node("p", "who", `${verdict}${outside.reason ? ` ${clipText(outside.reason, 200)}` : ""}${outside.released ? " You put it back in the queue." : ""}`);
+      body.append(line);
+      const cited = [
+        ...(Array.isArray(outside.commits) ? outside.commits : []).map((commit) => `Commit ${commit?.short ?? ""}: ${clipText(commit?.subject ?? "", 120)}`),
+        ...(Array.isArray(outside.files) && outside.files.length ? [`Changed: ${outside.files.slice(0, 6).join(", ")}`] : []),
+      ];
+      if (cited.length) entryList(cited, (text) => Object.assign(document.createElement("li"), { textContent: text }));
+    }
     if (task.lastAttempt || task.verification || task.verificationRun) {
       section("Result & completion checks");
       const attempt = task.lastAttempt ?? {};

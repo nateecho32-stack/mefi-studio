@@ -1,5 +1,212 @@
 # Agent loop and startup measurements
 
+## Command canvas transfer, September 26, 2026
+
+Following the native-font probe below, an isolated Electron 44.4.1 experiment
+compared the production callout drawing functions on three canvas backends.
+It used six callouts, 1,000 synthetic DOM rows, two DOM invalidations around
+each draw cycle, and five alternating runs after warmup. Each run contained
+30 cycles. The synchronous cycle includes the final layout flush and any
+backbuffer copy; it does not time asynchronous compositor presentation.
+
+| Median per synthetic cycle | DOM canvas | Copied offscreen backbuffer | Direct transferred canvas |
+|---|---:|---:|---:|
+| Cycle elapsed time | 4.91 ms | 5.17 ms | 3.48 ms |
+| Callout drawing | 1.65 ms | 1.62 ms | 0.17 ms |
+| Style recalculations | 2 | 1 | 1 |
+| Layouts | 1 | 1 | 1 |
+
+The copied backbuffer did not improve this workload. Transferring the DOM
+canvas with `transferControlToOffscreen()` reduced the measured cycle by
+about 29% without a per-frame copy. This supports the style-resolution lead
+under controlled invalidation, but is not a live-session speedup claim.
+
+All 96 pixel-buffer comparisons matched exactly across device scales
+1, 1.25, 1.5 and 2, light/dark palettes, three callout styles and fractional
+positions. Browser captures also matched at three scale/style combinations
+after presentation. Seven candidate unit tests passed for capability
+fallback, one-time transfer, resize, DPR changes, alpha options and retaining
+pixels on a no-op resize.
+
+An additional isolated native-call probe measured 900 font assignments per
+run: median accumulated setter time was 46.7 ms on the DOM canvas and 0.6 ms
+on the directly transferred canvas. All calls were retained, both prototype
+descriptors restored, and pixel comparisons still matched. Its separate,
+uninstrumented cycle measurements were 5.14 ms versus 3.71 ms. This supports
+the font/style explanation for the synthetic workload without attributing
+every millisecond of the earlier live sample.
+
+The implementation was applied after isolated validation: Command renderer
+passed (49.5 s), media renderer passed (33.5 s), and tree dynamics renderer
+passed (11.3 s), each run separately. A subsequent expanded media fixture
+also passed (38.4 s), retaining another session's new layout assertions.
+Source hashes were checked immediately before promotion. The seven focused
+capability/resize checks now live in `tests/command_canvas_context.test.mjs`.
+Build, check and audit passed. The full gate passed 3,913 Node tests with
+five skips, Python ran 248 tests successfully with one skip, and the six
+normalized-path checks passed. The running app reports the transferred
+context loaded and boot complete. It was idle throughout the follow-up,
+so no live after measurement has been made.
+
+Local experiment and continuation files:
+`tools/logs/benchmark-font-styles.cjs`, `tools/logs/font-style-trial.json`,
+`tools/logs/benchmark-font-native.cjs`, `tools/logs/font-style-native-trial.json`,
+`tools/logs/prepare-canvas-transfer-candidate.mjs`, and
+`tools/logs/validate-canvas-transfer-candidate.mjs`. Its original-source hash
+guard intentionally rejects the now-applied checkout. Do not rerun or
+promote the old candidate over subsequent edits.
+
+## Live Command: font assignments dominate text measurements, September 26, 2026
+
+A visible Command CPU capture with the scroll batching code loaded again
+identified `drawCallout` as the largest named CPU sample, about 2.36 seconds
+over 30 seconds. A test run briefly overlapped that capture; it is not a clean
+before/after comparison. Sampling positions within the function do not
+reliably distinguish its native canvas operations.
+
+A separate 15-second probe timed native canvas calls and element rectangle
+reads. All observations were visible Command, eight guard checkpoints found
+no tests, and the source and booklet hashes stayed unchanged:
+
+| Native operation | Calls | Accumulated elapsed time |
+|---|---:|---:|
+| Canvas font assignment | 6,689 | 1,167.8 ms |
+| Element bounding rectangle | 1,149 | 382.8 ms |
+| Canvas fillText | 6,689 | 23.1 ms |
+| Canvas measureText | 2,694 | 6.0 ms |
+
+The probe wraps calls without changing their arguments or results, counts no
+text content, and restores all eight original descriptors on cleanup, with a
+20-second self-restoration timer as a fallback. All eight restored normally.
+These are instrumented elapsed times, not CPU self time or a speedup claim.
+Renderer rAF cadence had a 16.8 ms p95; this is not Command draw FPS or GPU
+presentation timing.
+
+The next investigation is the style work reached by canvas font assignment,
+including which DOM changes make that work necessary. Chromium's
+[`WillSetFont` implementation](https://chromium.googlesource.com/chromium/src/+/acca47dc0a9e6971232cf29c4482cc410740f278/third_party/blink/renderer/modules/canvas/canvas2d/canvas_rendering_context_2d.cc)
+updates the element's style/layout tree before resolving a font. This is a
+plausible explanation, not proof that all measured setter time is style work
+in the installed Electron build. Removing repeated text measurements alone
+would address little of this sample. Any canvas or text-cache candidate
+still needs an isolated timing comparison and visual parity checks before
+being applied. No production renderer change was made from this probe.
+
+## Live session: batch scroll-control reads, September 26, 2026
+
+A 30-second CPU sample of the owner's running Vibe view attributed 825 ms
+to `getClientRects` and 422 ms to `elementsFromPoint` under the shared
+scroll-control refresh. A separate Command sample instead highlighted
+callout drawing (3,435 ms over 45 seconds); that remains a separate target.
+Both captures were local, bounded, and taken without starting test suites.
+The CPU sampler adds overhead, and IPC elapsed time includes asynchronous
+waiting, so these numbers are leads rather than application-wide speedups.
+
+`renderer/studio-ui.js` now measures every region and arrow position before
+updating hints. Unchanged visibility, coordinates and owner attributes are
+left alone. This removes repeated style resolution between adjacent regions.
+Native wheel/keyboard scrolling and pointer-hold behavior are retained.
+
+An isolated Electron 44.4.1 comparison used the actual refresh functions and
+scroll-control CSS, 16 overflowing panels, 25 content changes per run and
+five alternating pairs after warmup:
+
+| Median per refresh | Before | After |
+|---|---:|---:|
+| Style recalculations | 16.96 | 0.96 |
+| Layouts | 0.96 | 0.96 |
+| Refresh time | 0.80 ms | 0.57 ms |
+
+The same fixture asserts identical arrow placement, scroll boundaries,
+keyboard tab stops, hide/reopen, loss of overflow and detached-region cleanup.
+These are controlled component measurements, not a live before/after claim.
+
+```powershell
+node tools/profile_scroll_controls.cjs --before <old-studio-ui.js> --after renderer/studio-ui.js --output tools/logs/scroll-performance.json
+node tools/profile_live_studio.mjs --pid <running-Studio-main-PID> --seconds 30 --cpu --output tools/logs/live-performance.json
+```
+
+Use `--status` for a read-only loaded-version, visibility, focus, system idle
+time and updater check. It also reports whether Command's paint context has
+actually transferred to an OffscreenCanvas.
+The live collector requires an existing loopback Node inspector, validates
+the requested PID and this checkout's booklet path, and leaves navigation
+alone. It captures static view IDs and numeric metrics, plus optional CPU
+stacks; no task text, request payloads or screenshots. Capture windows range
+from five seconds to five minutes; only a capture it started is stopped on
+normal cleanup, and a replaced capture or renderer reload ends the sample.
+Keep reports local under ignored `tools/logs/`. Compare the same view and
+workload, with test suites stopped and the running source version confirmed.
+
+## Composer sizing follows native layout, September 26, 2026
+
+Command's chat log, rail console and assistant card no longer set textarea
+height to `auto`, read `scrollHeight`, set height and read it again on every
+assistant update. `growArea` uses supported native `field-sizing: content`
+with a 38 px minimum and 120 px maximum, configured once per composer. The
+browser follows draft, width and font changes as part of normal layout. Web
+previews without this capability retain the original JavaScript path.
+
+An isolated Electron 44.4.1 Windows comparison used the actual sizing
+functions and stylesheet with 1,000 synthetic activity rows, 40 unchanged
+status updates per run, one warmup per version and seven alternating pairs:
+
+| Measurement | Before | After |
+|---|---:|---:|
+| Explicit `scrollHeight` reads per 40 updates | 80 | 0 |
+| Median time per sizing call | 0.10 ms | below 0.01 ms |
+
+The after timing is at the timer's resolution, not a zero-cost claim. This
+isolates composer sizing; it excludes other push listeners, IPC and canvas
+work. The same real-browser harness verifies long-draft scrolling, narrowing
+the composer, font changes, hiding/reopening and clearing without another
+JavaScript resize call. Native line fitting may use fractional pixel heights
+where the prior integer `scrollHeight` sizing did not.
+
+```powershell
+node tools/profile_chat_thread.cjs --composer --before <old-idle.js> --output tools/logs/composer-performance.json
+```
+
+`tests/composer_sizing.test.mjs` pins no repeated style writes or layout reads,
+independent surfaces, missing controls and the older-browser fallback.
+
+## Live thoughts update only their bubble, September 26, 2026
+
+`fillThread` in `renderer/idle.js` now keeps the saved conversation separate
+from its pending reply. Starting, updating or clearing a live thought retains
+the saved message elements; updates reuse the thought span and animated dots.
+Unchanged pushes still skip layout measurements. Saved-message changes, age
+labels, rewritten notices, project replacement and emptied containers still
+invalidate the history. Each chat surface keeps its own cache.
+
+Measured on Windows in Electron 44.4.1, using the production thread functions,
+stylesheet and shared-controls MutationObserver in an isolated 1000x700
+offscreen window with software rendering. Thirty synthetic saved messages and
+40 changing thoughts per run, one warmup per version, then seven alternating
+pairs:
+
+| Measurement | Before | After |
+|---|---:|---:|
+| Median DOM update + observer time per thought | 1.63 ms | 0.07 ms |
+| New elements across 40 updates | 2,640 | 0 |
+| Saved message elements retained | 0/30 | 30/30 |
+
+This measures only the thread update and observer work, excluding IPC, the
+rest of the renderer and canvas painting; it is not an application frame-rate
+claim. Timings are diagnostic, not test thresholds. The same harness verifies
+identical displayed text, retained text selection, an undisturbed reader's
+scroll position and following the tail while already at the bottom.
+
+Reproduce with a saved copy of the earlier `renderer/idle.js`:
+
+```powershell
+node tools/profile_chat_thread.cjs --before <old-idle.js> --output tools/logs/chat-thread-performance.json
+```
+
+`tests/command_activity.test.mjs` also pins zero element allocation across
+40 thought updates, dots/text/completion transitions, recorded-thought
+deduplication, project replacement and per-surface cache recovery.
+
 ## Pushes cross into the page once, September 25, 2026
 
 With `contextIsolation` on, the context bridge deep-copies every value the

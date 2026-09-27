@@ -83,6 +83,20 @@ test("All eight resize grips preserve the opposite edges and obey minimum and vi
   }
 });
 
+test("The media panel docks the same frame, releases it for backgrounds, and preserves floating placement", () => {
+  const env = environment(); env.show(); const floating = env.rect();
+  const dock = { x: 150, y: 220, width: 440, height: 248, clip: [0, 0, 30, 0] };
+  env.controller.dock(dock);
+  assert.deepEqual(env.rect(), { x: 150, y: 220, width: 440, height: 248 });
+  assert.equal(env.root.dataset.docked, "true"); assert.equal(env.root.style.clipPath, "inset(0px 0px 30px 0px)");
+  env.controller.setBackground(true);
+  assert.equal(env.root.dataset.background, "true"); assert.equal(env.root.dataset.docked, "false"); assert.equal(env.content.inert, true);
+  env.controller.setBackground(false); assert.equal(env.root.dataset.docked, "true");
+  env.controller.dock(null); assert.deepEqual(env.rect(), floating);
+  assert.equal(env.frame.parent, env.content); assert.equal(env.root.style.clipPath, "none");
+  assert.equal(env.storage.get("mefiStudio.mediaWindow.v1").includes('"width":440'), false, "docking never overwrites floating dimensions");
+});
+
 test("Menus yield once to an approaching mouse and following the relocated player wins", () => {
   const env = environment(); env.show(); env.advance(1800);
   const before = env.rect(); env.pointer(before.x - 40, before.y + 80); const moved = env.rect();

@@ -4,6 +4,8 @@ const { createHash } = require("node:crypto");
 // The admission module's title key and ladder (scripts/work-admission.cjs), so
 // the counts and promotion agree on which inbox rows a card represents.
 const { titleKey: key, represented: representedOnBoard } = require("./work-admission.cjs");
+// A card's check against work done outside Studio (scripts/outside-work.cjs).
+const { holdState: relevanceHold } = require("./outside-work.cjs");
 const rows = (value) => Array.isArray(value) ? value.filter((row) => row && typeof row === "object") : [];
 
 // Approval names the saved work, not an editable status flag. Include nested
@@ -182,6 +184,14 @@ function workState(item, now = Date.now(), { tasks = null, autoBuild = true, app
     const why = String(item.ownerHold.reason ?? "").replace(/\s+/g, " ").trim().slice(0, 80).trim();
     return { stage: "blocked", blockedBy: "owner", reason: `Stopped by you${why ? ` (${why})` : ""} — say "work on it" or "try again" to resume it` };
   }
+  // Work done outside Studio: a queued card waits while it is checked against
+  // it (bounded, so a check that never runs cannot hold it for good), and
+  // after a done or obsolete verdict until the owner decides. The owner's own
+  // stop above names who holds it; Try again and Work on it release it.
+  if (queued && item.relevance && typeof item.relevance === "object") {
+    const relevance = relevanceHold(item.relevance, now);
+    if (relevance) return relevance;
+  }
   // The keeper's loop hold (assistant.mjs auditPass). The parks above name a
   // more specific cause, so they win. canRetry stays unset: Try again is the
   // release (retryTask).
@@ -260,6 +270,11 @@ function retryTask(task, now = Date.now()) {
   // ownerHold goes as well: Try again is the owner saying to go on after
   // their own stop.
   for (const name of ["runFailures", "startFailures", "providerFailures", "nextRunAt", "lastRunError", "verifyAttempts", "verification", "verificationReceiptId", "doneAt", "runId", "lease", "buildApproval", "loopGuard", "ownerHold", "autonomyBudgetHold", "duplicateOf", "dropped"]) delete next[name];
+  // An outside-work hold is lifted too, but its evidence stays so the next
+  // worker still reads what changed outside Studio.
+  if (next.relevance && typeof next.relevance === "object" && ["checking", "ask"].includes(next.relevance.state)) {
+    next.relevance = { ...next.relevance, state: "clear", released: { at: now, by: "owner" } };
+  }
   // The owner's acknowledgement for the loop guard: the ledger restarts from
   // now, so outcomes logged before this retry are never counted again.
   next.loopLedger = { v: 1, at: now, n: 0, reasons: {} };
@@ -289,6 +304,7 @@ function delegateRetry(task, now = Date.now(), { by = "desk", kind = null } = {}
   if (!task || typeof task !== "object") return { ok: false, error: "That task is no longer on the board." };
   if (task.autonomyBudgetHold) return { ok: false, held: true, error: "This task is held for your review after its automatic decision budget was spent." };
   if (task.ownerHold && typeof task.ownerHold === "object" && !Array.isArray(task.ownerHold)) return { ok: false, held: true, error: "You stopped this card, so only you can resume it." };
+  if (task.relevance?.state === "ask") return { ok: false, held: true, error: "Work done outside Studio may already cover this card, so only you can put it back in the queue." };
   if (completedTask(task) || task.status === "archived") return { ok: false, error: "This task is finished." };
   if (task.status === "active" || task.status === "running" || task.runId || task.lease) return { ok: false, error: "A worker holds this task." };
   const recent = delegatedRetries(task, now);
