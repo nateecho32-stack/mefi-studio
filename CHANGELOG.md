@@ -37,6 +37,14 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   an Undo that finished, a card with a queued undo no longer floods the
   decision history, Elevated holds a card only after two decisions applied,
   and a failed decision can't be undone.
+- **Set up this PC** (Friends › Your PCs). A checklist of what a PC needs to
+  share projects through GitHub: Git, the GitHub CLI, Node.js, a GitHub
+  sign-in (in the browser; Studio never sees a token), and for the open
+  project a GitHub remote, installed packages and a drive that can hold Git
+  worktrees. Each gap has a button that opens a visible setup window running
+  Studio's own command. **Get a project from GitHub** clones one of your own
+  repositories into a folder you pick, refuses exFAT and FAT drives, and opens
+  it.
 - **Configuration** (Ctrl Shift ,, and **All settings in one place** under
   Settings' categories): every setting Studio has, in one searchable tree
   filed under Inference & Agents, Knowledge, Files & Exec, Web & Community,

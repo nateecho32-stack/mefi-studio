@@ -56,6 +56,7 @@ app.whenReady().then(async () => {
     syncStatus: { ok: true, checkedAt: 1790000000000, headline: "GitHub has 2 commits this PC has not pulled yet.", lines: ["GitHub has 2 commits this PC has not pulled yet.", "Branch wip/a-very-long-branch-name-from-another-pc on GitHub: 3 commits not on main."], pending: [{ kind: "github-branch" }], state: { repo: true, remote: true, device: "DESKTOP-FIXTURE", behind: 2 } },
     hubFriends: friendsView(true), hubSharingSet: friendsView(false), hubPlaydate: practice, hubRooms: { ok: true, rooms: [{ id: "room_jam", name: "Friday jam" }] },
     companionBond: { ok: true, changed: true, bond: "We just met · 1 pet" }, eyesRequestsAction: { ok: true, requests: [] }, assistantWorkOn: { ok: true },
+    pcSetupStatus: { ok: true, ready: false, account: "fixture-owner", tools: [{ id: "git", name: "Git", installed: true, version: "2.47.1" }, { id: "gh", name: "GitHub CLI", installed: true, version: "2.63.0" }, { id: "node", name: "Node.js", installed: true, version: "24.21.0" }], project: { root: "C:/Sample/Little planet", github: "fixture-owner/little-planet", hook: true }, steps: [{ id: "install-deps", label: "Install the project's packages", why: "Not installed on this PC yet." }], notes: ["This project is on an exFAT drive. Git cannot keep separate worktrees there, so sessions end up sharing one folder. Move the project to an NTFS drive when you can."] },
     syncRun: { ok: true, checkedAt: 1790000060000, headline: "This PC matches GitHub main.", lines: ["This PC matches GitHub main.", "Pulled 2 commits from GitHub."], pending: [], state: { repo: true, remote: true, device: "DESKTOP-FIXTURE", behind: 0 } },
   };
   const preload = path.join(root, "preload.cjs");
@@ -139,6 +140,13 @@ app.whenReady().then(async () => {
   assert.equal(await run("return window.MefiCompanionHub.isOpen() && document.getElementById('pc-sync-status').textContent;"), "This PC matches GitHub main.", "the answer lands inside the hub");
   await until("document.querySelector('[data-hub-section=\"friends\"] .agent-hub-count')?.hidden===true", "a clean sync clears the badge");
   await capture("09-friends-synced"); report.pcs = true;
+  // Set up this PC opens in place and only then checks the PC.
+  assert.equal(await run("return hubFixture.calls().some(call=>call.key==='pcSetupStatus');"), false, "nothing is checked until the section opens");
+  await click("#pc-setup > summary");
+  await until("document.getElementById('pc-setup-status')?.textContent==='A few things to finish on this PC:'", "Set up this PC checks");
+  assert.equal(await run("return document.querySelectorAll('#pc-setup .pc-setup-list li').length;"), 7);
+  assert.ok(await run("const el=document.querySelector('#pc-setup [data-step=\"install-deps\"]');el.scrollIntoView({block:'nearest'});const r=el.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return r.width>0&&(hit===el||el.contains(hit));"), "the setup step is clickable");
+  await capture("09b-friends-setup"); report.setup = true;
   // Friends › Playground: a friend who shares more makes the companion ask;
   // nothing is shared back until the owner answers.
   await until("document.getElementById('friends-status')?.textContent.includes(\"1 friend's companion is out\") && document.querySelector('.friends-ask')", "playground lists a friend");

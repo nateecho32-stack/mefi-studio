@@ -37,7 +37,7 @@ test("companion wakes, keeps setup consent, and opens an accessible responsive a
     assert.equal(code, 0, `${report?.failure || "No report"}\n${output}`);
     assert.deepEqual(report.errors, []); assert.deepEqual(report.network, []);
     assert.ok(report.consent && report.focus && report.audio && report.layouts && report.motion);
-    assert.ok(report.particles && report.thinking && report.pcs);
+    assert.ok(report.particles && report.thinking && report.pcs && report.setup);
     assert.ok(report.playground && report.pet && report.ideas, "playground, petting and Suggest work");
   } finally {
     assert.equal(path.dirname(fixture), path.resolve(tmpdir())); assert.ok(path.basename(fixture).startsWith("mefi-companion-render-"));

@@ -160,6 +160,7 @@ GitHub is the meeting point. Each PC keeps its own clone, and the open project's
 - **The Friends bubble shows a badge** for work only this PC holds, commits waiting on GitHub, or a GitHub it could not check (a lapsed sign-in or a renamed repository). Studio looks 45 seconds after launch and every 15 minutes, and it only looks.
 - **Closing Studio asks first** when the open project has work on this PC alone. You can push and close, close anyway, or keep Studio open. Update restarts never ask.
 - **`npm run sync`** does the same from a terminal (`--rebase` to put your commits on top, `--no-check` to skip the check).
+- **Set up this PC** (inside Your PCs) checks what a new PC needs: Git, the GitHub CLI, Node.js, a GitHub sign-in, and whether the open project is on GitHub, has its packages installed, and sits on a drive that can hold Git worktrees (exFAT and FAT cannot). Each missing piece has a button that opens a visible setup window running Studio's own fixed command. You sign in to GitHub in your browser, and Studio never sees the password or token. **Get a project from GitHub** lists your own repositories, clones the one you pick into a folder you choose (never onto exFAT), and opens it.
 - **Claude Code** runs `node scripts/sync.mjs --hook` at the start of each new session (`.claude/settings.json`). The hook fetches, fast-forwards `main` when it can, and hands the report to Claude. `AGENTS.md` has the working rules.
 
 Claude Code sessions, Claude's memory and local branches stay on the PC that made them. Anything another PC needs belongs on GitHub.

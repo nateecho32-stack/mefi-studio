@@ -191,6 +191,62 @@ test("problems, a folder with no remote and a rejected call all read plainly", a
   assert.equal(other.find("pc-sync-status").textContent, "Sync could not run: IPC closed");
 });
 
+test("Set up this PC checks nothing until opened, then lists what is missing and gets a project", async () => {
+  const fake = bridge({ syncStatus: answer() });
+  const calls = [];
+  let status = {
+    ok: true, ready: false, account: null,
+    tools: [{ id: "git", name: "Git", installed: true, version: "2.47.1" }, { id: "gh", name: "GitHub CLI", installed: true, version: "2.63.0" }, { id: "node", name: "Node.js", installed: false, version: null }],
+    project: { root: "E:/code/app", github: "me/app", hook: true },
+    steps: [{ id: "install-node", label: "Install Node.js", why: "Projects install their packages with it." }, { id: "github-login", label: "Sign in to GitHub", why: "So this PC can pull and push." }],
+    notes: ["This project is on an exFAT drive. Move it."],
+  };
+  Object.assign(fake.api, {
+    pcSetupStatus: async () => { calls.push("status"); return status; },
+    pcSetupAction: async (id) => { calls.push(`action:${id}`); return { ok: true, message: "Finish in the setup window, then choose Check again." }; },
+    pcSetupRepos: async () => { calls.push("repos"); return { ok: true, repos: [{ repo: "me/app", private: true }, { repo: "me/site", private: false }] }; },
+    pcSetupClone: async (repo) => { calls.push(`clone:${repo}`); return { ok: true, folder: "C:\\code\\site" }; },
+  });
+  const card = environment(fake.api).sync.card();
+  const box = card.find("pc-setup");
+  assert.ok(box, "the card carries the section");
+  assert.deepEqual(calls, [], "nothing runs until it is opened");
+  assert.equal(card.find("pc-setup-get").disabled, true);
+  box.open = true;
+  box.listeners.toggle[0]({ type: "toggle" });
+  await flush();
+  assert.deepEqual(calls, ["status"]);
+  assert.equal(card.find("pc-setup-status").textContent, "A few things to finish on this PC:");
+  const checks = box.byClass("pc-setup-list").children.map((item) => item.textContent);
+  assert.deepEqual(checks, ["✓ Git 2.47.1", "✓ GitHub CLI 2.63.0", "• Node.js is not installed", "• Not signed in to GitHub", "✓ This project is on GitHub (me/app)", "✓ Claude Code sessions in this project sync when they start", "• This project is on an exFAT drive. Move it."]);
+  const steps = box.children.find((child) => child.children?.some((item) => item.dataset.step));
+  assert.deepEqual(steps.children.map((item) => [item.dataset.step, item.textContent]), [["install-node", "Install Node.js"], ["github-login", "Sign in to GitHub"]]);
+  assert.equal(card.find("pc-setup-get").disabled, true, "no repositories to list before a sign-in");
+  steps.children[1].click();
+  await flush();
+  assert.equal(calls.at(-1), "action:github-login");
+  assert.equal(card.find("pc-setup-status").textContent, "Finish in the setup window, then choose Check again.");
+  status = { ...status, ready: true, account: "me", steps: [], notes: [] };
+  card.find("pc-setup-check").click();
+  await flush();
+  assert.equal(card.find("pc-setup-status").textContent, "This PC is ready to share projects through GitHub.");
+  assert.equal(card.find("pc-setup-get").disabled, false);
+  card.find("pc-setup-get").click();
+  await flush();
+  const select = card.find("pc-setup-repos");
+  assert.deepEqual(select.children.map((option) => [option.value, option.textContent]), [["me/app", "me/app (private)"], ["me/site", "me/site"]]);
+  select.value = "me/site";
+  card.find("pc-setup-clone").click();
+  await flush();
+  assert.deepEqual(calls.slice(-2), ["clone:me/site", "status"]);
+  assert.match(card.find("pc-setup-status").textContent, /^This PC is ready|^Got me\/site into C:\\code\\site and opened it/);
+});
+
+test("Set up this PC is only offered where the desktop bridge has it", () => {
+  const fake = bridge({ syncStatus: answer() });
+  assert.equal(environment(fake.api).sync.card().find("pc-setup"), null);
+});
+
 test("the browser preview has no bridge, so the card says where syncing works", () => {
   const card = environment(undefined).sync.card();
   assert.equal(card.dataset.state, "unavailable");

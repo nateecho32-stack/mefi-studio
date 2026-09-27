@@ -218,6 +218,13 @@ const api = {
   syncStatus: () => ipcRenderer.invoke("sync:status"),
   syncRun: (options) => ipcRenderer.invoke("sync:run", { rebase: options?.rebase === true }),
   onSyncEvent: (callback) => ipcRenderer.on("sync:event", (_event, result) => callback(result)),
+  // Friends › Your PCs › Set up this PC (scripts/pc-setup.cjs): the renderer
+  // names an action or a repository from the account's own list, never a
+  // command, a URL or a folder.
+  pcSetupStatus: () => ipcRenderer.invoke("pc-setup:status"),
+  pcSetupAction: (action) => ipcRenderer.invoke("pc-setup:action", { action: typeof action === "string" ? action : "" }),
+  pcSetupRepos: () => ipcRenderer.invoke("pc-setup:repos"),
+  pcSetupClone: (repo) => ipcRenderer.invoke("pc-setup:clone", { repo: typeof repo === "string" ? repo : "" }),
   machineStatus: (kill) => ipcRenderer.invoke("machine:status", { kill: Boolean(kill) }),
   machineGet: () => ipcRenderer.invoke("machine:get"),
   machineSet: (prefs) => ipcRenderer.invoke("machine:set", prefs),

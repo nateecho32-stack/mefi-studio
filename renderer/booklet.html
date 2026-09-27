@@ -8382,6 +8382,12 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .pc-sync-actions[hidden] { display: none; }
 .pc-sync-run { white-space: normal; text-align: left; }
 .pc-sync-meta { font-variant-numeric: tabular-nums; }
+/* Friends › Your PCs › Set up this PC. */
+.pc-setup { border-top: 1px solid var(--hairline); padding-top: 8px; }
+.pc-setup > summary { cursor: pointer; font-size: 12px; font-weight: 600; }
+.pc-setup > :not(summary) { margin-top: 8px; }
+.pc-setup-repos { flex: 1 1 180px; min-width: 0; max-width: 100%; }
+.pc-setup-list { list-style: none; padding-left: 0; }
 .agent-hub .companion-panel.companion-in-hub { position: relative; inset: auto; width: 100%; min-height: 160px; max-height: min(510px, calc(100dvh - 290px)); flex: 0 1 auto; background: color-mix(in srgb, var(--theme-panel-solid, #131b28) 24%, transparent); backdrop-filter: blur(10px); box-shadow: none; transition: height 340ms cubic-bezier(.22,1,.36,1); }
 .companion-in-hub .companion-shell-head { display: none; }
 /* In the hub the bubbles are the menu; the panel's own tabs would repeat them. */
@@ -58841,6 +58847,110 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (typeof bridge()?.syncStatus === "function") bridge().syncStatus().then(remember, () => {});
   });
 
+  // Set up this PC (scripts/pc-setup.cjs through main's pc-setup:*): a
+  // checklist of what this PC needs to share projects through GitHub, one
+  // button per missing piece (each opens a visible setup window), and Get a
+  // project from GitHub, which clones from the account's own list into a
+  // folder main's dialog asks for. Nothing runs until the section is opened.
+  function setupSection(api) {
+    const box = node("details", "pc-setup");
+    box.id = "pc-setup";
+    const status = node("p", "muted pc-setup-status", "Checks Git, your GitHub sign-in and this project.");
+    status.id = "pc-setup-status";
+    status.setAttribute("role", "status");
+    const checks = node("ul", "pc-sync-list pc-setup-list");
+    const steps = node("div", "pc-sync-actions");
+    steps.hidden = true;
+    const again = node("button", "ghost pc-sync-run", "Check again");
+    again.type = "button";
+    again.id = "pc-setup-check";
+    const get = node("button", "ghost pc-sync-run", "Get a project from GitHub");
+    get.type = "button";
+    get.id = "pc-setup-get";
+    get.disabled = true;
+    const tools = node("div", "pc-sync-actions");
+    tools.append(again, get);
+    const picker = node("div", "pc-sync-actions pc-setup-clone");
+    picker.hidden = true;
+    const select = node("select", "pc-setup-repos");
+    select.id = "pc-setup-repos";
+    select.setAttribute("aria-label", "Your GitHub repositories");
+    const clone = node("button", "ghost pc-sync-run", "Choose a folder and get it");
+    clone.type = "button";
+    clone.id = "pc-setup-clone";
+    picker.append(select, clone);
+    box.append(node("summary", "", "Set up this PC"), status, checks, steps, tools, picker);
+    let busy = false, loaded = false, signedIn = false;
+    const line = (done, text) => node("li", "", `${done ? "✓" : "•"} ${text}`);
+    const paint = (result) => {
+      if (!result?.ok) { status.textContent = result?.error || "This PC could not be checked."; return; }
+      status.textContent = result.ready ? "This PC is ready to share projects through GitHub." : "A few things to finish on this PC:";
+      const project = result.project ?? {};
+      checks.replaceChildren(
+        ...result.tools.map((tool) => line(tool.installed, tool.installed ? `${tool.name} ${tool.version}` : `${tool.name} is not installed`)),
+        line(Boolean(result.account), result.account ? `Signed in to GitHub as ${result.account}` : "Not signed in to GitHub"),
+        ...(project.root ? [line(Boolean(project.github), project.github ? `This project is on GitHub (${project.github})` : "This project is not on GitHub")] : []),
+        ...(project.hook ? [line(true, "Claude Code sessions in this project sync when they start")] : []),
+        ...result.notes.map((text) => line(false, text)),
+      );
+      steps.replaceChildren(...result.steps.map((step) => {
+        const button = node("button", "ghost pc-sync-run", step.label);
+        button.type = "button";
+        button.dataset.step = step.id;
+        button.title = step.why;
+        button.addEventListener("click", () => { void act(step.id); });
+        return button;
+      }));
+      steps.hidden = !result.steps.length;
+      signedIn = Boolean(result.account);
+    };
+    const guard = async (label, work) => {
+      if (busy) return;
+      busy = true;
+      again.disabled = get.disabled = clone.disabled = true;
+      box.setAttribute("aria-busy", "true");
+      if (label) status.textContent = label;
+      try { await work(); } catch (error) { status.textContent = `Setup could not run: ${error?.message || error}`; }
+      busy = false;
+      again.disabled = clone.disabled = false;
+      // Listing repositories needs a GitHub sign-in this PC has shown.
+      get.disabled = !signedIn;
+      box.removeAttribute("aria-busy");
+    };
+    const check = () => guard("Checking this PC…", async () => { loaded = true; paint(await api.pcSetupStatus()); });
+    const act = (id) => guard(null, async () => {
+      const result = await api.pcSetupAction(id);
+      status.textContent = result?.ok ? result.message : result?.error || "The setup window did not open.";
+    });
+    again.addEventListener("click", () => { void check(); });
+    get.addEventListener("click", () => {
+      void guard("Listing your GitHub repositories…", async () => {
+        const result = await api.pcSetupRepos();
+        if (!result?.ok) { status.textContent = result?.error || "Your repositories could not be listed."; return; }
+        select.replaceChildren(...result.repos.map((row) => {
+          const option = node("option", "", `${row.repo}${row.private ? " (private)" : ""}`);
+          option.value = row.repo;
+          return option;
+        }));
+        select.value = result.repos[0]?.repo ?? "";
+        picker.hidden = !result.repos.length;
+        status.textContent = result.repos.length ? "Pick a repository, then choose where to put it on this PC." : "Your GitHub account has no repositories yet.";
+      });
+    });
+    clone.addEventListener("click", () => {
+      const repo = select.value;
+      if (!repo) return;
+      void guard(`Getting ${repo}… this can take a few minutes.`, async () => {
+        const result = await api.pcSetupClone(repo);
+        if (result?.canceled) { status.textContent = "No folder chosen, so nothing was downloaded."; return; }
+        status.textContent = result?.ok ? `Got ${repo} into ${result.folder} and opened it. If it has packages, install them from the checklist.` : result?.error || "The project could not be downloaded.";
+        if (result?.ok) { picker.hidden = true; paint(await api.pcSetupStatus()); }
+      });
+    });
+    box.addEventListener("toggle", () => { if (box.open && !loaded) void check(); });
+    return box;
+  }
+
   function card() {
     const root = node("section", "pc-sync");
     root.setAttribute("aria-labelledby", "pc-sync-title");
@@ -58865,6 +58975,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const note = node("p", "muted", "Sync pulls what your other PCs pushed and pushes this PC's commits after the project's check passes. It never overwrites uncommitted work or force-pushes.");
     root.append(title, status, list, actions, meta, note);
     const api = bridge();
+    if (typeof api?.pcSetupStatus === "function") root.append(setupSection(api));
     if (typeof api?.syncStatus !== "function" || typeof api?.syncRun !== "function") {
       status.textContent = "Syncing your PCs works in the desktop app.";
       actions.hidden = true;

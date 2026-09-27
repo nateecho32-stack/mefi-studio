@@ -209,9 +209,11 @@ function handleProjectIpc(channel, handler) {
 // speed readings and shell helpers are the same for every project; the
 // release and update readings, the updater's switch and a key's source are
 // the app's. update:apply, release:apply and app:restart stay gated, so a
-// restart never lands in the middle of a switch. (Declared beside the
-// wrapper so the tests that load it from here up to app.setName see it.)
-const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "styler:", "catalog:", "speed:", "shell:"];
+// restart never lands in the middle of a switch. Set up this PC (pc-setup:)
+// is the PC's own and may open a freshly cloned project, which a gated
+// handler would wait on. (Declared beside the wrapper so the tests that load
+// it from here up to app.setName see it.)
+const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:"];
 const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits", "release:status", "release:check", "update:status", "update:set", "settings:get-key"]);
 ipcMain.handle = handleProjectIpc;
 
@@ -18964,6 +18966,33 @@ function registerIpc() {
   // hub:*: both act on the open project's folder, so a switch waits for them.
   ipcMain.handle("sync:status", async () => syncProject(false));
   ipcMain.handle("sync:run", async (_event, payload) => syncProject(true, { rebase: payload?.rebase === true }));
+
+  // ---- Set up this PC (scripts/pc-setup.cjs) ------------------------------
+  // Friends › Your PCs › Set up this PC. The renderer names an action or a
+  // repository from the signed-in account's own list; the folder for a clone
+  // comes from this dialog, and the clone opens as a project here.
+  const pcSetup = require("./scripts/pc-setup.cjs").createPcSetup({
+    execFile: require("node:child_process").execFile, spawn,
+    env: () => process.env, exists: existsSync, readText: (file) => readFile(file, "utf8").catch(() => null),
+  });
+  const pcSetupRoot = () => (projects.open() ? projectRoot() : null);
+  ipcMain.handle("pc-setup:status", async () => {
+    // A tool installed since launch is only on the registry PATH.
+    await refreshProcessPath().catch(() => false);
+    return pcSetup.status(pcSetupRoot());
+  });
+  ipcMain.handle("pc-setup:action", async (_event, payload) => pcSetup.action(String(payload?.action ?? ""), { cwd: pcSetupRoot() }));
+  ipcMain.handle("pc-setup:repos", async () => pcSetup.repos());
+  ipcMain.handle("pc-setup:clone", async (_event, payload) => {
+    const repo = String(payload?.repo ?? "");
+    if (!pcSetup.isListed(repo)) return { ok: false, error: "Choose a repository from your list." };
+    const picked = await dialog.showOpenDialog(window, { title: `Choose where to put ${repo.split("/")[1]}`, properties: ["openDirectory", "createDirectory"] });
+    if (picked.canceled || !picked.filePaths?.[0]) return { ok: false, canceled: true };
+    const cloned = await pcSetup.clone(repo, picked.filePaths[0]);
+    if (!cloned.ok) return cloned;
+    const opened = await registerProjectFolder(cloned.folder);
+    return opened.ok === false ? { ok: false, folder: cloned.folder, error: `Got ${repo}, but Studio could not open it: ${opened.error}` } : { ok: true, folder: cloned.folder };
+  });
 }
 
 // Bounds a restart saved, when they still land on a display that exists.
