@@ -50,6 +50,7 @@ const CODE_SOURCES = [
   "startup.js",
   "workspace.js",
   "media-window.js",
+  "media-browser.js",
   "music.js",
   "together.js",
   "planning.js",
@@ -157,6 +158,7 @@ export async function build({ root = ROOT } = {}) {
     readFile(path.join(RENDERER, "vibe.js"), "utf8"),
     readFile(path.join(RENDERER, "vibe.css"), "utf8"),
   ]);
+  const mediaBrowser = await readFile(path.join(RENDERER, "media-browser.js"), "utf8");
   const nodeVisuals = await readFile(path.join(RENDERER, "node-visuals.js"), "utf8");
   const projectMapView = await readFile(path.join(RENDERER, "project-map-view.js"), "utf8");
   const fileInputs = await readFile(path.join(RENDERER, "file-inputs.js"), "utf8");
@@ -164,7 +166,7 @@ export async function build({ root = ROOT } = {}) {
   const autonomyUi = await readFile(path.join(RENDERER, "autonomy-ui.js"), "utf8");
   const vibePanels = await readFile(path.join(RENDERER, "vibe-panels.js"), "utf8");
   const [traceCode, traceStyles] = await Promise.all([readFile(path.join(RENDERER, "trace.js"), "utf8"), readFile(path.join(RENDERER, "trace.css"), "utf8")]);
-  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle, cameraTour, explorer, analyzer, tasks, ideas, overhead, brains, palette, eyes, traceCode, boot, startup, workspace, mediaWindow, music, together, planning, onboarding, community, demoPanel, autonomyUi, companionUi, companionHub, projectMapView, agentBrain, agents, vibePanels, vibe, booklet];
+  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle, cameraTour, explorer, analyzer, tasks, ideas, overhead, brains, palette, eyes, traceCode, boot, startup, workspace, mediaWindow, mediaBrowser, music, together, planning, onboarding, community, demoPanel, autonomyUi, companionUi, companionHub, projectMapView, agentBrain, agents, vibePanels, vibe, booklet];
   const code = codeParts.join("\n");
   const html = template
     .replace("__BOOKLET_DATA__", () => catalog.trim())

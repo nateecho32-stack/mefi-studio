@@ -48,6 +48,7 @@ export async function audit({ root = STUDIO } = {}) {
   const packageText = await readIfExists(path.join(root, "package.json"));
   const buildText = await readIfExists(path.join(root, "scripts", "build-booklet.mjs")) ?? "";
   const mainText = await readIfExists(path.join(root, "main.cjs")) ?? "";
+  const browserHost = await readIfExists(path.join(root, "scripts", "media-browser.cjs")) ?? "";
   const preloadText = await readIfExists(path.join(root, "preload.cjs")) ?? "";
   const templateText = await readIfExists(path.join(RENDERER, "booklet.template.html")) ?? "";
   const rendererFiles = ((await readdirOrNull(RENDERER)) ?? []).filter((name) => name.endsWith(".js"));
@@ -63,7 +64,7 @@ export async function audit({ root = STUDIO } = {}) {
   const invokeChannels = new Set(matchAll(preloadText, /ipcRenderer\.invoke\("([^"]+)"/g));
   const listenEvents = new Set(matchAll(preloadText, /ipcRenderer\.on\("([^"]+)"/g));
   const handledChannels = new Set(matchAll(mainText, /ipcMain\.handle\("([^"]+)"/g));
-  const sentEvents = new Set(matchAll(mainText, /send\("([^"]+)"/g));
+  const sentEvents = new Set(matchAll(`${mainText}\n${browserHost}`, /send\("([^"]+)"/g));
   for (const channel of invokeChannels) {
     if (!handledChannels.has(channel)) add("error", "ipc", `preload invokes "${channel}" but main.cjs has no handler`);
   }

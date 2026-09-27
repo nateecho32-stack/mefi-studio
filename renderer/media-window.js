@@ -24,7 +24,7 @@
     let box = null, shape = "video", minimized = false, gesture = null;
     let visible = false, hovered = false, yielded = false, awaySince = 0, lastDistance = Infinity, graceUntil = 0;
     let size = {};
-    for (const key of ["video", "tall", "compact", "audio"]) {
+    for (const key of ["video", "tall", "compact", "audio", "browser"]) {
       const value = saved?.size?.[key];
       if (value && typeof value === "object") size[key] = { width: finite(value.width, undefined), height: finite(value.height, undefined) };
     }
@@ -133,7 +133,7 @@
     function limits() {
       const area = bounds();
       const maxWidth = Math.max(1, area.right - area.left), maxHeight = Math.max(1, area.bottom - area.top);
-      return { area, maxWidth, maxHeight, minWidth: Math.min(464, maxWidth), minHeight: Math.min(shape === "tall" ? 240 : shape === "audio" ? 104 : 216, maxHeight) };
+      return { area, maxWidth, maxHeight, minWidth: Math.min(464, maxWidth), minHeight: Math.min(shape === "browser" ? 300 : shape === "tall" ? 240 : shape === "audio" ? 104 : 216, maxHeight) };
     }
     function fit(candidate) {
       const { area, maxWidth, maxHeight, minWidth, minHeight } = limits();
@@ -143,7 +143,7 @@
     }
     function visibleBox() {
       if (minimized) return { ...box, width: Math.min(box.width, 304), height: 44 };
-      if (background) { const area = bounds(); return { x: area.left, y: area.top, width: area.right - area.left, height: area.bottom - area.top }; }
+      if (background && shape !== "browser") { const area = bounds(); return { x: area.left, y: area.top, width: area.right - area.left, height: area.bottom - area.top }; }
       return box;
     }
     function layout() {
@@ -151,7 +151,7 @@
       box = fit(box);
       const current = visibleBox();
       Object.assign(root.style, { left: `${current.x}px`, top: `${current.y}px`, width: `${current.width}px`, height: `${current.height}px` });
-      for (const grip of edges) grip.hidden = minimized || background;
+      for (const grip of edges) grip.hidden = minimized || background && shape !== "browser";
       paintVideo();
     }
     function persist() {
@@ -168,7 +168,8 @@
     }
     function paintVideo() {
       if (settingsHost) settingsHost.hidden = !visible;
-      const backdrop = visible && background && !minimized;
+      const browsing = shape === "browser";
+      const backdrop = visible && background && !minimized && !browsing;
       const backdropChanged = document.body.dataset.mediaBackground !== String(backdrop);
       root.dataset.background = String(backdrop);
       document.body.dataset.mediaVisible = String(visible && !minimized);
@@ -176,8 +177,8 @@
       document.body.style.setProperty("--media-tree-opacity", String(1 - treeTransparency / 100));
       document.body.dataset.mediaView = window.MefiNav?.top?.() || window.MefiNav?.current?.() || "";
       if (backdropChanged && typeof CustomEvent === "function") window.dispatchEvent?.(new CustomEvent("mefi:media-background"));
-      content.style.opacity = String(faded ? 0.08 : (1 - transparency / 100));
-      content.style.filter = `brightness(${videoBrightness / 100})`;
+      content.style.opacity = String(browsing ? 1 : faded ? 0.08 : (1 - transparency / 100));
+      content.style.filter = browsing ? "none" : `brightness(${videoBrightness / 100})`;
       backgroundButton.setAttribute("aria-pressed", String(background));
       backgroundButton.textContent = background ? "Float video" : "Background";
       fadeButton.setAttribute("aria-pressed", String(fadeOnDone));
@@ -192,7 +193,8 @@
       treeOpacityText.textContent = `Tree transparency · ${treeTransparency}%`;
       brightnessInput.value = String(videoBrightness);
       brightnessText.textContent = `Video brightness · ${videoBrightness}%`;
-      move.disabled = background; pin.disabled = background; dodge.disabled = background;
+      move.disabled = backdrop; pin.disabled = backdrop || browsing; dodge.disabled = backdrop || browsing;
+      for (const control of [backgroundButton, opacityInput, brightnessInput, fadeButton, darkButton]) control.disabled = browsing;
       // A backdrop must never take keyboard focus or intercept workspace clicks.
       content.inert = backdrop || minimized;
       if (backdrop && tracking && window.mefiStudio?.mediaSceneSample && !sceneTimer) sceneTimer = window.setInterval(sampleDarkArea, 5000);
@@ -238,7 +240,7 @@
         if (previous && !["done", "archived", "absorbed"].includes(previous) && task.status === "done" && !task.dropped) completed.push(task);
       }
       knownTasks = next;
-      if (!visible || !fadeOnDone || !completed.length) return;
+      if (!visible || shape === "browser" || !fadeOnDone || !completed.length) return;
       faded = true; paintVideo();
       const task = completed[0];
       window.MefiToast?.(completed.length === 1 ? `Task finished: ${task.title || "Untitled task"}` : `${completed.length} tasks finished`, "good", {
@@ -260,7 +262,7 @@
       const nextShape = link.shape || "video";
       if (!box || nextShape !== shape) {
         shape = nextShape;
-        const defaults = shape === "tall" ? { width: 540, height: 368 } : shape === "compact" ? { width: 540, height: 216 } : shape === "audio" ? { width: 540, height: 104 } : { width: 600, height: 264 };
+        const defaults = shape === "browser" ? { width: 760, height: 520 } : shape === "tall" ? { width: 540, height: 368 } : shape === "compact" ? { width: 540, height: 216 } : shape === "audio" ? { width: 540, height: 104 } : { width: 600, height: 264 };
         const preferred = size[shape];
         box = fit({ ...defaults, width: finite(preferred?.width, defaults.width), height: finite(preferred?.height, defaults.height), x: box?.x, y: box?.y });
         const area = bounds();
@@ -279,10 +281,10 @@
     function reveal() {
       if (minimized) minimize.click();
       graceUntil = now() + 1600;
-      (background ? backgroundButton : move).focus({ preventScroll: true });
+      (background && shape !== "browser" ? backgroundButton : move).focus({ preventScroll: true });
     }
     function start(event, edge = "move") {
-      if (event.button !== 0 || gesture || !visible || background) return;
+      if (event.button !== 0 || gesture || !visible || background && shape !== "browser") return;
       event.preventDefault(); event.stopPropagation();
       gesture = { edge, x: event.clientX, y: event.clientY, box: { ...box }, target: event.currentTarget, pointerId: event.pointerId };
       root.dataset.dodging = "false";
@@ -311,7 +313,7 @@
     }
     function keyboard(event, edge) {
       const vectors = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
-      if (!vectors[event.key] || !box || background) return;
+      if (!vectors[event.key] || !box || background && shape !== "browser") return;
       event.preventDefault(); event.stopPropagation();
       root.dataset.dodging = "false";
       const step = event.shiftKey ? 2 : 16;
@@ -329,7 +331,7 @@
         box = changed(event.clientX - gesture.x, event.clientY - gesture.y, gesture.edge, gesture.box);
         layout(); return;
       }
-      if (!visible || minimized || background || event.buttons || event.pointerType && event.pointerType !== "mouse") return;
+      if (!visible || minimized || background || shape === "browser" || event.buttons || event.pointerType && event.pointerType !== "mouse") return;
       const point = { x: event.clientX, y: event.clientY }, gap = distance(point, box), time = now();
       const approaching = gap < lastDistance; lastDistance = gap;
       // After one dodge, following the player always wins. Rearm only after
@@ -375,7 +377,7 @@
     });
     seedTasks();
     paintToggles();
-    return { show, hide, reveal, snapshot: () => ({ minimized }), restore: (value) => { if (Boolean(value?.minimized) !== minimized) minimize.click(); } };
+    return { show, hide, reveal, beginMove: start, moveKey: event => keyboard(event, "move"), minimize: () => minimize.click(), snapshot: () => ({ minimized }), restore: (value) => { if (Boolean(value?.minimized) !== minimized) minimize.click(); } };
   }
   window.MefiMediaWindow = { create };
 })();

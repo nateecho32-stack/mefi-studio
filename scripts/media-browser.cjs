@@ -1,87 +1,81 @@
 "use strict";
 
-const path = require("node:path");
-const { pathToFileURL } = require("node:url");
-
 function browserURL(raw) {
   if (typeof raw !== "string" || !raw.trim() || raw.length > 8192 || /[\u0000-\u0020\u007f]/.test(raw.trim())) return null;
   let text = raw.trim();
-  if (!/^[a-z][a-z\d+.-]*:/i.test(text)) text = `https://${text}`;
+  if (!/^[a-z][a-z\d+.-]*:/i.test(text) || /^[\w.-]+:\d+(?:[/?#]|$)/.test(text)) text = `https://${text}`;
   try {
     const url = new URL(text);
     return /^https?:$/.test(url.protocol) && !url.username && !url.password ? url.href : null;
   } catch { return null; }
 }
 
-// Only the local toolbar has a bridge. Sites live in a separate sandboxed
-// WebContentsView, with their own session and no Studio preload or IPC access.
-function createMediaBrowser({ electron, getWindow, root }) {
-  const { BrowserWindow, WebContentsView, session, shell } = electron;
-  const page = path.join(root, "renderer", "media-browser.html");
-  const pageURL = pathToFileURL(page).href;
+// Websites are child views of Studio, never new windows. Only Studio's main
+// frame can control this sandboxed view; websites have no preload or Node.
+function createMediaBrowser({ electron, getWindow }) {
+  const { WebContentsView, session, shell } = electron;
   let current = null, browserSession = null;
-  const trusted = (event, contents) => Boolean(contents && !contents.isDestroyed() && event.sender === contents && event.senderFrame === contents.mainFrame);
-  const state = (entry) => {
+  const trusted = event => {
+    const owner = getWindow();
+    return Boolean(owner && !owner.isDestroyed() && event.sender === owner.webContents && event.senderFrame === owner.webContents.mainFrame);
+  };
+  const state = entry => {
     const contents = entry.view.webContents;
     return { url: entry.url, title: contents.getTitle() || "Media browser", loading: contents.isLoading(),
       back: contents.navigationHistory.canGoBack(), forward: contents.navigationHistory.canGoForward(),
-      pinned: entry.pinned, muted: contents.isAudioMuted(), error: entry.error };
+      muted: contents.isAudioMuted(), error: entry.error };
   };
-  const publish = (entry) => {
-    if (current !== entry || entry.window.isDestroyed() || entry.view.webContents.isDestroyed()) return;
-    entry.window.webContents.send("media-browser:state", state(entry));
+  const publish = entry => {
+    if (current !== entry || entry.owner.isDestroyed() || entry.view.webContents.isDestroyed()) return;
+    entry.owner.webContents.send("media-browser:state", state(entry));
   };
+  function close() {
+    const entry = current;
+    if (!entry) return;
+    current = null;
+    entry.owner.removeListener("closed", close);
+    if (!entry.owner.isDestroyed()) {
+      entry.owner.webContents.removeListener("did-start-navigation", entry.onNavigate);
+      entry.owner.contentView.removeChildView(entry.view);
+    }
+    if (!entry.view.webContents.isDestroyed()) entry.view.webContents.close();
+  }
   function navigate(entry, raw) {
     const url = browserURL(raw);
     if (!url) return { ok: false, error: "Enter an http or https web address." };
     entry.url = url; entry.error = "";
-    entry.view.setVisible(true);
+    entry.view.setVisible(entry.visible);
     void entry.view.webContents.loadURL(url).catch(error => {
       if (error.code === "ERR_ABORTED" || current !== entry || entry.url !== url) return;
       entry.error = "This page could not load. Try Reload or Open in browser."; publish(entry);
     });
-    publish(entry);
-    return { ok: true };
+    publish(entry); return { ok: true, state: state(entry) };
   }
   function create() {
     if (!browserSession) {
       browserSession = session.fromPartition("persist:mefi-media-browser");
-      browserSession.setPermissionRequestHandler((_contents, permission, callback) => callback(permission === "fullscreen"));
-      browserSession.setPermissionCheckHandler((_contents, permission) => permission === "fullscreen");
+      browserSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+      browserSession.setPermissionCheckHandler(() => false);
       browserSession.on("will-download", event => {
         event.preventDefault();
         if (current) { current.error = "To download this file, use Open in browser."; publish(current); }
       });
     }
-    const popup = new BrowserWindow({ width: 960, height: 680, minWidth: 480, minHeight: 360, show: false,
-      title: "Media browser · Mefi's Studio AI+", backgroundColor: "#10191d", autoHideMenuBar: true,
-      webPreferences: { preload: path.join(root, "scripts", "media-browser-preload.cjs"), sandbox: true, contextIsolation: true, nodeIntegration: false, webviewTag: false } });
+    const owner = getWindow();
     const view = new WebContentsView({ webPreferences: { session: browserSession, sandbox: true, contextIsolation: true,
       nodeIntegration: false, webviewTag: false, webSecurity: true, allowRunningInsecureContent: false } });
-    const entry = { window: popup, view, url: "", error: "", pinned: false };
+    const entry = { owner, view, url: "", error: "", visible: false };
     current = entry;
-    popup.contentView.addChildView(view); view.setVisible(false);
-    const resize = () => { const [width, height] = popup.getContentSize(); view.setBounds({ x: 0, y: 112, width, height: Math.max(0, height - 112) }); };
-    resize(); popup.on("resize", resize);
-    popup.on("always-on-top-changed", (_event, pinned) => { entry.pinned = pinned; publish(entry); });
-    popup.on("closed", () => {
-      if (current === entry) current = null;
-      // Child views are not destroyed with a BrowserWindow automatically.
-      if (!view.webContents.isDestroyed()) view.webContents.close();
-    });
-    popup.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-    popup.webContents.on("will-navigate", event => event.preventDefault());
-    popup.webContents.on("will-redirect", event => event.preventDefault());
-    popup.webContents.on("did-finish-load", () => publish(entry));
+    view.setVisible(false); owner.contentView.addChildView(view);
+    owner.on("closed", close);
+    entry.onNavigate = (_event, _url, _inPlace, isMainFrame) => { if (isMainFrame) close(); };
+    owner.webContents.on("did-start-navigation", entry.onNavigate);
     const contents = view.webContents;
     const guard = (event, legacyURL) => {
       if (!browserURL(event.url ?? legacyURL)) { event.preventDefault(); entry.error = "This link needs another app. Use Open in browser."; publish(entry); }
     };
-    contents.on("will-navigate", guard);
-    contents.on("will-redirect", guard);
-    contents.on("will-frame-navigate", guard);
+    for (const name of ["will-navigate", "will-redirect", "will-frame-navigate"]) contents.on(name, guard);
     contents.setWindowOpenHandler(({ url }) => {
-      // Finish denying the new window before navigating the existing view.
       if (browserURL(url)) queueMicrotask(() => { if (current === entry) navigate(entry, url); });
       return { action: "deny" };
     });
@@ -93,40 +87,47 @@ function createMediaBrowser({ electron, getWindow, root }) {
       if (main && code !== -3) { entry.error = "This page could not load. Try Reload or Open in browser."; publish(entry); }
     });
     contents.on("render-process-gone", () => { entry.error = "The page stopped responding. Reload to try again."; publish(entry); });
-    const keys = (event, input) => {
-      if (input.type !== "keyDown") return;
-      if ((input.control || input.meta) && input.key.toLowerCase() === "l") {
-        event.preventDefault(); popup.webContents.focus(); popup.webContents.send("media-browser:focus-address");
+    contents.on("before-input-event", (event, input) => {
+      if (input.type === "keyDown" && (input.control || input.meta) && input.key.toLowerCase() === "l") {
+        event.preventDefault(); owner.webContents.focus(); owner.webContents.send("media-browser:focus-address");
       }
-    };
-    contents.on("before-input-event", keys); popup.webContents.on("before-input-event", keys);
-    void popup.loadFile(page).then(() => { if (!popup.isDestroyed()) popup.show(); }).catch(() => { if (!popup.isDestroyed()) popup.close(); });
+    });
     return entry;
   }
+  function layout(entry, payload) {
+    const box = payload.bounds;
+    if (!payload.visible || !box || ![box.x, box.y, box.width, box.height].every(Number.isFinite) || box.width < 1 || box.height < 1) {
+      entry.visible = false; entry.view.setVisible(false); return;
+    }
+    const [width, height] = entry.owner.getContentSize(), zoom = entry.owner.webContents.getZoomFactor();
+    const x = Math.max(0, Math.min(width, Math.round(box.x * zoom)));
+    const y = Math.max(0, Math.min(height, Math.round(box.y * zoom)));
+    const right = Math.max(x, Math.min(width, Math.round((box.x + box.width) * zoom)));
+    const bottom = Math.max(y, Math.min(height, Math.round((box.y + box.height) * zoom)));
+    entry.visible = right > x && bottom > y;
+    entry.view.setBounds({ x, y, width: right - x, height: bottom - y });
+    entry.view.setVisible(entry.visible && Boolean(entry.url));
+  }
   async function open(event, raw = "") {
-    const owner = getWindow();
-    if (!owner || owner.isDestroyed() || !trusted(event, owner.webContents)) return { ok: false, error: "Open media from Studio." };
+    if (!trusted(event)) return { ok: false, error: "Open media from Studio." };
     if (raw !== "" && !browserURL(raw)) return { ok: false, error: "Enter an http or https web address." };
     const entry = current || create();
-    if (entry.window.isMinimized()) entry.window.restore();
-    entry.window.show(); entry.window.focus();
-    return raw ? navigate(entry, raw) : { ok: true };
+    return raw ? navigate(entry, raw) : { ok: true, state: state(entry) };
   }
   async function command(event, payload = {}) {
+    if (!trusted(event)) return { ok: false, error: "Media browser controls are unavailable." };
+    if (payload?.action === "close") { close(); return { ok: true }; }
     const entry = current;
-    if (!entry || !trusted(event, entry.window.webContents) || event.senderFrame.url !== pageURL) return { ok: false, error: "Media browser controls are unavailable." };
-    const contents = entry.view.webContents;
-    const history = contents.navigationHistory;
+    if (!entry) return { ok: false, error: "Open the media browser first." };
+    const contents = entry.view.webContents, history = contents.navigationHistory;
     switch (payload?.action) {
       case "state": return { ok: true, state: state(entry) };
+      case "layout": layout(entry, payload); return { ok: true };
       case "navigate": return navigate(entry, payload.url);
       case "back": if (history.canGoBack()) history.goBack(); break;
       case "forward": if (history.canGoForward()) history.goForward(); break;
-      case "reload": if (entry.url) { entry.error = ""; return navigate(entry, entry.url); } break;
+      case "reload": if (entry.url) return navigate(entry, entry.url); break;
       case "stop": contents.stop(); break;
-      // Keep the requested/event state: on Windows the native getter can
-      // report false even after Electron emits always-on-top-changed(true).
-      case "pin": entry.pinned = !entry.pinned; entry.window.setAlwaysOnTop(entry.pinned); break;
       case "mute": contents.setAudioMuted(!contents.isAudioMuted()); break;
       case "external": {
         const url = browserURL(entry.url);
@@ -136,9 +137,8 @@ function createMediaBrowser({ electron, getWindow, root }) {
       }
       default: return { ok: false, error: "Unknown media browser action." };
     }
-    publish(entry); return { ok: true };
+    publish(entry); return { ok: true, state: state(entry) };
   }
-  const close = () => { if (current && !current.window.isDestroyed()) current.window.close(); };
   return { open, command, close };
 }
 

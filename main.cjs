@@ -17861,7 +17861,7 @@ function registerIpc() {
   ipcMain.handle("media:scene-sample", require("./scripts/media-scene.cjs").createSceneSampler(() => window));
   ipcMain.handle("media:youtube-search", require("./scripts/youtube-explorer.cjs").createYouTubeExplorer(() => window));
   ipcMain.handle("media:clipboard-link", require("./scripts/media-clipboard.cjs").createMediaClipboardReader(() => window, clipboard));
-  const mediaBrowser = require("./scripts/media-browser.cjs").createMediaBrowser({ electron, getWindow: () => window, root: STUDIO_ROOT });
+  const mediaBrowser = require("./scripts/media-browser.cjs").createMediaBrowser({ electron, getWindow: () => window });
   ipcMain.handle("media-browser:open", mediaBrowser.open);
   ipcMain.handle("media-browser:command", mediaBrowser.command);
   app.on("will-quit", mediaBrowser.close);
