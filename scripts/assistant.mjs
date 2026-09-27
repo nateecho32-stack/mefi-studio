@@ -5933,7 +5933,11 @@ function executorLine(executor, readiness = null) {
       .filter(([key]) => num(counts[key], 0) > 0).map(([key, label]) => `${num(counts[key], 0)} ${label}`);
     if (holds.length) lines.push(`Other saved work: ${holds.join("; ")}.`);
   } else if (num(source.queued, 0)) lines.push(`${plural(num(source.queued), "work item")} queued; detailed readiness is unavailable.`);
-  if (readiness?.paused || source.enabled === false) lines.push(`New workers are paused${running.length ? "; current workers can finish" : ""}.`);
+  // A loop that is off or held back names itself first (the launch hold, the
+  // owner's pause, a cooldown, an update, a stuck scheduler, no project).
+  const loop = isObject(source.loop) && ["no-project", "held", "paused", "parked", "draining", "stuck"].includes(str(source.loop.state)) ? source.loop : null;
+  if (loop) lines.push(`${clip(str(loop.headline), 120)}: ${clip(str(loop.reason), 240)}`.replace(/: $/, "."));
+  else if (readiness?.paused || source.enabled === false) lines.push(`New workers are paused${running.length ? "; current workers can finish" : ""}.`);
   else if (machineManaged && source.capacity?.canStart === false) {
     // The structured hold class decides the remedy the reply names: a memory
     // hold clears by finishing or compacting existing work (freeing RAM), not
@@ -6968,6 +6972,12 @@ export function buildFacts({ sessions = null, todos = null, collisions = null, p
               memoryWarning: clip(str(executor.capacity.resources.memoryWarning), 180) || null } : null,
           } : null,
           lastAsk: str(executor.lastAsk) || null,
+          // The host's one answer to "are agents working, and why not"
+          // (scripts/loop-status.cjs): the launch hold included, which
+          // `enabled` alone never showed.
+          held: executor.held === true,
+          loop: isObject(executor.loop) ? { state: clip(str(executor.loop.state), 20), on: executor.loop.on !== false,
+            headline: clip(str(executor.loop.headline), 120), reason: clip(str(executor.loop.reason), 300) } : null,
           running: asArray(executor.running)
             .filter(isObject)
             .map((job) => ({ title: clip(str(job.title), 60), minutes: Math.round(num(job.minutes, 0)) })),

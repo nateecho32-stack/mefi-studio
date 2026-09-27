@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import backlog from "../scripts/backlog.cjs";
 import ideaActions from "../scripts/idea-actions.cjs";
 import { executorHost } from "./fixtures/host_executor.mjs";
@@ -73,6 +74,40 @@ test("approval is tied to identity, requirements, files, dependencies and nested
     { refs: [{ kind: "file", detail: "other.js" }] }, { members: [{ id: "member", prompt: "Expanded member" }] },
     { requirements: ["New requirement"] }, { remaining: ["New delegated work"] }, { acceptanceCriteria: ["Changed check"] },
   ]) assert.equal(backlog.hasBuildApproval({ ...original, ...patch }), false, JSON.stringify(patch));
+});
+
+test("a reference gather landing after approval keeps it; web rows and owner rows still count as scope", () => {
+  const fresh = task("gathered");
+  const approved = { ...fresh, buildApproval: { version: 1, scope: backlog.buildScope(fresh), approvedAt: 12 } };
+  const gathered = [
+    { kind: "file", title: "gathered.js", detail: "work tree", auto: true },
+    { kind: "session", title: "Earlier chat", detail: "s1", auto: true },
+    { kind: "context", title: "Start with gathered.js", detail: "Picked from local matches", auto: true },
+  ];
+  // The card had no refs when it was approved; the gather adds only analyzer rows.
+  assert.equal(backlog.hasBuildApproval({ ...approved, refs: gathered }), true);
+  // A named Start keyed on the scope survives the same gather.
+  assert.equal(backlog.buildScope({ ...fresh, refs: gathered.slice(0, 1) }), backlog.buildScope(fresh));
+  // Outside links and anything the owner wrote are still reviewed scope.
+  assert.equal(backlog.hasBuildApproval({ ...approved, refs: [...gathered, { kind: "web", title: "A page", detail: "https://example.com", auto: true }] }), false);
+  assert.equal(backlog.hasBuildApproval({ ...approved, refs: [{ kind: "file", title: "owner.js", detail: "work tree" }] }), false);
+  // A card approved with an owner ref keeps it in scope; gathered rows beside it do not count.
+  const withOwnerRef = task("mixed", { refs: [{ kind: "file", title: "owner.js" }] });
+  const mixed = { ...withOwnerRef, buildApproval: { version: 1, scope: backlog.buildScope(withOwnerRef), approvedAt: 12 } };
+  assert.equal(backlog.hasBuildApproval({ ...mixed, refs: [...withOwnerRef.refs, ...gathered] }), true);
+  assert.equal(backlog.hasBuildApproval({ ...mixed, refs: gathered }), false);
+});
+
+test("approvals saved before gathered refs were stamped still match", () => {
+  // Rows written before the auto stamp hash as they always did, including an
+  // explicit empty list, so no stored approval is cancelled by the change.
+  const canonical = (value) => Array.isArray(value) ? value.map(canonical) : value && typeof value === "object"
+    ? Object.fromEntries(Object.keys(value).sort().map((name) => [name, canonical(value[name])])) : value;
+  for (const refs of [[], [{ kind: "file", title: "old.js", detail: "work tree" }], [{ kind: "web", title: "Old page", detail: "https://example.com" }]]) {
+    const saved = task("legacy", { refs });
+    const legacy = Object.fromEntries(["id", "title", "prompt", "refs", "files"].map((name) => [name, saved[name]]));
+    assert.equal(backlog.buildScope(saved), createHash("sha256").update(JSON.stringify(canonical(legacy))).digest("hex"), JSON.stringify(refs));
+  }
 });
 
 test("approved scope survives restart but approval never resumes Pause", async () => {
@@ -171,6 +206,23 @@ test("saved mode persists, existing installations default on, and a failed save 
   assert.equal(h.autopilot.autoBuild, false);
   await h.env.executeNextRequest();
   assert.equal(h.starts.length, 0);
+});
+
+test("the old Auto build switch keeps a permission mode it cannot name", async () => {
+  // [saved level, Auto build choice, level afterwards]
+  for (const [level, autoBuild, expected] of [
+    ["elevated", true, "elevated"], ["auto", true, "auto"], ["accept", true, "auto"], ["ask", true, "auto"],
+    ["elevated", false, "ask"], ["auto", false, "ask"], ["accept", false, "accept"], ["ask", false, "ask"],
+  ]) {
+    const h = executorHost({ savedSettings: { autonomy: { level } } });
+    await h.env.setAutopilot({ autoBuild });
+    assert.equal(h.settings().autonomy.level, expected, `${level} + autoBuild ${autoBuild}`);
+    assert.equal(h.settings().ui.autopilot.autoBuild, autoBuild);
+  }
+  // The permission host's own echo never rewrites the mode it just saved.
+  const h = executorHost({ savedSettings: { autonomy: { level: "elevated" } } });
+  await h.env.setAutopilot({ autoBuild: true }, "autonomy");
+  assert.equal(h.settings().autonomy.level, "elevated");
 });
 
 test("a newer off choice supersedes a pending save that would enable Auto build", async () => {

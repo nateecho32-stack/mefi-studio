@@ -53,6 +53,7 @@ const { createProjects } = require("./scripts/projects.cjs");
 const { createAssistantPush } = require("./scripts/assistant-push.cjs");
 const backlog = require("./scripts/backlog.cjs");
 const autonomy = require("./scripts/autonomy.cjs");
+const { loopStatus } = require("./scripts/loop-status.cjs");
 const { createAutonomyHost } = require("./scripts/autonomy-host.cjs");
 const decisionLedger = require("./scripts/decision-ledger.cjs");
 const decisionMemory = require("./scripts/decision-memory.cjs");
@@ -7222,7 +7223,8 @@ async function assistantThinkerFacts(now, assistant) {
     const eyes = await getEyes();
     const [tasks, requests] = await Promise.all([eyes.readJson(TASKS_PATH, []), eyes.readJson(REQUESTS_PATH, [])]);
     const readiness = backlog.summarizeBacklog({ tasks, requests, jobs, now, compare: compareWork, autoBuild: autopilot.autoBuild, approve: autopilot.approve,
-      paused: facts.executor.held || !autopilot.execute, waiting: autopilot.waiting, lastError: autopilot.lastError, parkedUntil: autopilot.parkedUntil });
+      paused: facts.executor.held || !autopilot.execute, waiting: autopilot.waiting, lastError: autopilot.lastError, parkedUntil: autopilot.parkedUntil,
+      loop: typeof autopilotLoop === "function" ? autopilotLoop() : null });
     // The dispatcher's order with what ranks each row (pin, source, origin), so
     // thinkPlan picks in that order and sees when the owner's choice leads.
     const rows = new Map([requests, tasks].flatMap((list) => (Array.isArray(list) ? list : [])).filter((row) => row?.id).map((row) => [row.id, row]));
@@ -8378,7 +8380,7 @@ async function lunaContextPointer(text, references) {
   if (!Number.isInteger(answer?.index) || answer.index < 0 || answer.index >= files.length) return null;
   const why = String(answer.why ?? "").replace(/[\r\n]+/g, " ").trim().slice(0, 180);
   // The model that actually answered: a keyless Zen seat rode another route.
-  return { kind: "context", title: `Start with ${files[answer.index]}`, detail: why || `Selected from local code matches by ${result.model || chosen.model || chosen.provider}.` };
+  return { kind: "context", title: `Start with ${files[answer.index]}`, detail: why || `Selected from local code matches by ${result.model || chosen.model || chosen.provider}.`, auto: true };
 }
 
 async function attachTaskContextPointer(taskId, pointer) {
@@ -8397,9 +8399,10 @@ async function attachTaskRefs(taskId, references) {
     if (!task) return { ok: false };
     task.refs = [
       ...(task.refs ?? []),
-      ...(references.files ?? []).slice(0, 6).map((file) => ({ kind: "file", title: file, detail: "work tree" })),
-      ...(references.sessions ?? []).slice(0, 4).map((session) => ({ kind: "session", title: session.title, detail: session.id })),
-      ...(references.web ?? []).slice(0, 4).map((hit) => ({ kind: "web", title: hit.title, detail: hit.url })),
+      // auto: gathered, not written by the owner (backlog.cjs buildScope).
+      ...(references.files ?? []).slice(0, 6).map((file) => ({ kind: "file", title: file, detail: "work tree", auto: true })),
+      ...(references.sessions ?? []).slice(0, 4).map((session) => ({ kind: "session", title: session.title, detail: session.id, auto: true })),
+      ...(references.web ?? []).slice(0, 4).map((hit) => ({ kind: "web", title: hit.title, detail: hit.url, auto: true })),
     ].slice(-40);
     task.logs = [
       ...(task.logs ?? []),
@@ -8583,6 +8586,21 @@ let sessionBeatTimer = null;
 let sessionEnded = false; // the user closed the window; nothing re-records until it returns
 let sessionWritten = ""; // the record this process last wrote, to skip idle rewrites
 let startupResumed = null; // what this launch resumed, reported by startup:state
+let startupLastSession = null; // the record the last session left, read once at launch
+
+// "When Studio opens" (settings.ui.launchAgents): "resume" starts the agents
+// on a project whose last session ended with them running, "start" always
+// starts them, "off" always waits for Start agents. The launch screen makes
+// the matching button its default; both buttons still do what they say.
+const LAUNCH_AGENTS = Object.freeze(["resume", "start", "off"]);
+function launchAgentsInfo(settings) {
+  const saved = settings?.ui?.launchAgents;
+  const last = startupLastSession && typeof startupLastSession === "object" ? startupLastSession : null;
+  return {
+    choice: LAUNCH_AGENTS.includes(saved) ? saved : "resume",
+    last: last?.projectId ? { projectId: last.projectId, agents: last.agents === true } : null,
+  };
+}
 
 // Beside settings.json in the user's own data folder, resolved on first use:
 // nothing here runs at load time.
@@ -9350,11 +9368,10 @@ async function assistantPause() {
   clearAssistantAiProbe();
   autopilot.clusterCancel?.("Work paused");
   // Dispatch returns early while paused, so an old wait reason would stand
-  // for the whole pause (foreman text, facts, the renderers' status).
-  if (autopilot.waiting) {
-    autopilot.waiting = null;
-    emitAutopilot();
-  }
+  // for the whole pause (foreman text, facts, the renderers' status). The
+  // loop status reads the pause too, so every pause is sent.
+  autopilot.waiting = null;
+  if (typeof emitAutopilot === "function") emitAutopilot();
   overseerManualUntil = 0;
   assistantState.nextTickAt = 0;
   assistantClearQueue({ text: "dropped · paused" });
@@ -9370,6 +9387,7 @@ async function assistantResume() {
   assistantState.status = "running";
   applyKeepAwake();
   assistantLog("control", "assistant resumed");
+  if (typeof emitAutopilot === "function") emitAutopilot();
   assistantPump();
   await saveAssistant({ force: true });
   if (assistantLoop) assistantSchedule(0);
@@ -9540,6 +9558,8 @@ async function assistantMessageFacts(now, query = "") {
   try {
     raw.executor = {
       enabled: autopilot.execute !== false,
+      held: autopilot.held === true,
+      loop: typeof autopilotLoop === "function" ? autopilotLoop() : null,
       queued: Math.max(0, Math.floor(Number(autopilot.queueDepth) || 0)),
       waiting: autopilot.waiting ?? null,
       parallel: Math.max(1, Math.floor(Number(autopilot.parallel) || 1)),
@@ -9556,7 +9576,8 @@ async function assistantMessageFacts(now, query = "") {
     if (Array.isArray(raw.tasks) && Array.isArray(raw.requests)) {
       readiness = backlog.summarizeBacklog({ tasks: raw.tasks, requests: raw.requests, jobs: (autopilot.jobs ?? []).filter((job) => !job.finished), now, compare: compareWork,
         autoBuild: autopilot.autoBuild, approve: autopilot.approve,
-        paused: assistantState.status === "paused" || !autopilot.execute, waiting: autopilot.waiting, lastError: autopilot.lastError, parkedUntil: autopilot.parkedUntil });
+        paused: assistantState.status === "paused" || !autopilot.execute, waiting: autopilot.waiting, lastError: autopilot.lastError, parkedUntil: autopilot.parkedUntil,
+        loop: typeof autopilotLoop === "function" ? autopilotLoop() : null });
       const readyTasks = readiness.taskStates.filter((task) => task.stage === "ready").length;
       raw.backlog = { counts: { ...readiness.counts, readyTasks, readyRequests: readiness.counts.ready - readyTasks }, paused: readiness.paused,
         waiting: readiness.waiting, next: readiness.next.slice(0, 3), totalTasks: raw.tasks.length, totalRequests: raw.requests.length };
@@ -11277,9 +11298,13 @@ async function brainsActivate(id, { applyGates = true } = {}) {
   const moved = [];
   if (applyGates) {
     const gates = brainGates(map);
+    // Only a gate the confirm list showed as moving is applied: a map whose
+    // approval gate already matches used to rewrite the permission mode
+    // anyway, and report it as moved.
+    const moving = new Set((plan?.moves ?? []).map((change) => change.key));
     try {
-      if (gates.approveBeforeBuild !== null) { await setAutopilot({ autoBuild: !gates.approveBeforeBuild }); moved.push(brains.GATES.approveBeforeBuild.label); }
-      if (gates.dispatch !== null) { await setAutopilot({ execute: gates.dispatch }); moved.push(brains.GATES.dispatch.label); }
+      if (gates.approveBeforeBuild !== null && moving.has("approveBeforeBuild")) { await setAutopilot({ autoBuild: !gates.approveBeforeBuild }); moved.push(brains.GATES.approveBeforeBuild.label); }
+      if (gates.dispatch !== null && moving.has("dispatch")) { await setAutopilot({ execute: gates.dispatch }); moved.push(brains.GATES.dispatch.label); }
       if (gates.parallel && gates.parallel !== chosenParallel()) { await setAutopilot({ parallel: gates.parallel }); moved.push(brains.GATES.parallel.label); }
       if (gates.briefing !== null) { await assistantSetPrefs({ proactive: gates.briefing }); moved.push(brains.GATES.briefing.label); }
       if (gates.jev !== null || gates.modelChoice !== null) {
@@ -12750,6 +12775,8 @@ function autopilotStatus() {
     foreman: foremanStatus(),
     parkedUntil: autopilot.parkedUntil,
     history: autopilot.history,
+    // Every surface's run state (Home, Vibe, Command, Agents, the tray).
+    loop: typeof autopilotLoop === "function" ? autopilotLoop() : null,
   };
 }
 
@@ -12831,7 +12858,8 @@ async function readBacklogStatus() {
   const snapshot = backlog.summarizeBacklog({ ...board, jobs: autopilot.jobs, compare: compareWork, ideaEligible: assistant.backlogIdeaEligible,
     autoBuild: autopilot.autoBuild, approve: autopilot.approve,
     paused: assistantState.status === "paused" || !autopilot.execute,
-    draining: Boolean(assistantState.prefs?.backlogMode), waiting: autopilot.waiting, lastError: autopilot.lastError, parkedUntil: autopilot.parkedUntil });
+    draining: Boolean(assistantState.prefs?.backlogMode), waiting: autopilot.waiting, lastError: autopilot.lastError, parkedUntil: autopilot.parkedUntil,
+    loop: typeof autopilotLoop === "function" ? autopilotLoop() : null });
   return { ok: true, projectId: projects.current().id, ...snapshot };
 }
 
@@ -13289,6 +13317,7 @@ function conflictsWithLiveFix(eyes, item) {
 async function refreshAutopilotQueue(eyes = null, rows = null) {
   if (Array.isArray(rows?.requests) && Array.isArray(rows?.tasks)) {
     autopilot.queueDepth = queuedWorkCount(rows.requests, rows.tasks);
+    adoptBoardCounts(rows.tasks);
     return;
   }
   try {
@@ -13296,9 +13325,54 @@ async function refreshAutopilotQueue(eyes = null, rows = null) {
     const requests = await reader.readJson(REQUESTS_PATH, []);
     const tasks = await reader.readJson(TASKS_PATH, []);
     autopilot.queueDepth = queuedWorkCount(requests, tasks);
+    adoptBoardCounts(tasks);
   } catch {
     // Keep the last known depth; a store read blip must not zero the kick.
   }
+}
+
+// The board's ready, approval and blocked cards, as dispatch sees them, for
+// the loop status (scripts/loop-status.cjs). Cached here, where the board is
+// already read, so autopilotStatus stays synchronous.
+function boardCounts(tasks) {
+  const board = Array.isArray(tasks) ? tasks.filter((task) => task && typeof task === "object") : [];
+  const counts = { ready: 0, approval: 0, blocked: 0 };
+  const now = Date.now();
+  for (const task of board) {
+    const stage = backlog.workState(task, now, { tasks: board, autoBuild: autopilot.autoBuild, approve: autopilot.approve }).stage;
+    if (Object.hasOwn(counts, stage)) counts[stage] += 1;
+  }
+  return counts;
+}
+
+// A changed count can change the answer ("2 tasks need your OK"), so it is sent.
+function adoptBoardCounts(tasks) {
+  const next = boardCounts(tasks);
+  const changed = JSON.stringify(next) !== JSON.stringify(autopilot.queueCounts ?? null);
+  autopilot.queueCounts = next;
+  if (changed) emitAutopilot();
+}
+
+// The whole loop in one answer: the Agents switch, why work is or is not
+// starting, and the one control that changes that. Sent with every status.
+function autopilotLoop() {
+  const running = autopilot.jobs.filter((entry) => !entry.finished).length;
+  const foremanStuck = typeof pool !== "undefined" && [...pool.running.values()].some((entry) => entry.role === "foreman" && entry.timedOut);
+  return loopStatus({
+    project: typeof projects?.open === "function" ? Boolean(projects.open()) : true,
+    held: autopilot.held === true,
+    assistantPaused: assistantState?.status === "paused",
+    execute: autopilot.execute !== false,
+    parkedUntil: autopilot.parkedUntil,
+    lastError: autopilot.lastError,
+    updateHold: typeof executorUpdateHold === "function" ? executorUpdateHold() : null,
+    foremanStuck,
+    running,
+    waiting: autopilot.waiting,
+    counts: autopilot.queueCounts ?? null,
+    level: autonomySettings?.level,
+    aiConnected: assistantState?.ai ? assistantState.ai.keyPresent !== false : null,
+  });
 }
 
 // The queue drains on dispatch, so a fix that already ran is invisible to a
@@ -13876,7 +13950,7 @@ async function executeNextRequest() {
       ? `Manual worker limit reached (${autopilot.jobs.length}/${Math.max(1, autopilot.parallel)}); waiting for a worker to finish`
       : null;
     setAutopilotWaiting(
-      executorUpdateHold() || (autopilot.jobs.some((entry) => entry.settlementPending) ? pendingSave() : stop === "noproject" ? "Open a project folder to start work" : stop === "cluster" ? autopilot.clusterWaiting || "Cluster is focused on one task" : stop === "resources" ? autopilot.capacity?.reason || "waiting for machine capacity" : stop === "busy" ? "machine busy" : stop === "error" ? `Worker could not start: ${autopilot.lastError || "dispatch failed; retrying"}` : stop === "route" ? `Worker connection unavailable: ${autopilot.lastError || "check Settings & connections"}` : stop === "approval" ? "Verify first: tasks are waiting for your build approval" : stop === "scheduled" ? "tasks deferred until later" : stop === "checking" ? "checking queued tasks against work done outside Studio" : stop === "cooldown" ? "tasks cooling down" : stop === "prerequisites" ? "waiting for task prerequisites" : stop === "review" ? "tasks need review before retry" : stop === "deferred" ? "waiting on live editors" : manualWait)
+      executorUpdateHold() || (autopilot.jobs.some((entry) => entry.settlementPending) ? pendingSave() : stop === "noproject" ? "Open a project folder to start work" : stop === "cluster" ? autopilot.clusterWaiting || "Cluster is focused on one task" : stop === "resources" ? autopilot.capacity?.reason || "waiting for machine capacity" : stop === "busy" ? "machine busy" : stop === "error" ? `Worker could not start: ${autopilot.lastError || "dispatch failed; retrying"}` : stop === "route" ? `Worker connection unavailable: ${autopilot.lastError || "check Settings & connections"}` : stop === "approval" ? "Verify first: tasks are waiting for your build approval" : stop === "scheduled" ? "tasks deferred until later" : stop === "checking" ? "checking queued tasks against work done outside Studio" : stop === "cooldown" ? "tasks cooling down" : stop === "prerequisites" ? "waiting for task prerequisites" : stop === "review" ? "tasks need review before retry" : stop === "deferred" ? "waiting on live editors" : stop === "freecap" ? "The free coding model runs one task at a time; the next starts when this one finishes" : manualWait)
     );
     return stop;
   })().finally(() => {
@@ -14049,7 +14123,12 @@ async function mutateBoard(mutator) {
       // instead of discarding it. No other per-row kind is honoured.
       const kinds = patch.revisionKinds && typeof patch.revisionKinds === "object" ? patch.revisionKinds : null;
       const tasks = (patch.tasks ?? board.tasks).map((task) => {
-        if (task?.buildApproval && !backlog.hasBuildApproval(task)) delete task.buildApproval;
+        if (task?.buildApproval && !backlog.hasBuildApproval(task)) {
+          // Say why the card is back under review instead of dropping the
+          // approval silently.
+          delete task.buildApproval;
+          task.logs = [...(Array.isArray(task.logs) ? task.logs : []), { at: now, kind: "status", text: "Approval cleared: the brief changed after you approved it. Review it and approve again." }].slice(-40);
+        }
         const prior = previous.get(task?.id);
         const history = task?.contextHistory;
         const rowKind = kinds && typeof task?.id === "string" && Object.hasOwn(kinds, task.id) && kinds[task.id] === "compacted" ? "compacted" : kind;
@@ -14449,11 +14528,12 @@ async function heavierRetryOnOffer() {
 //   "route"      no executor route (CLI or provider) is available;
 //   "cluster"    Cluster mode is focused and waiting on its own workers;
 //   "noproject"  no project folder is open;
+//   "freecap"    a free route's single slot is taken;
 //   "approval" / "cooldown" / "prerequisites" / "review"  nothing is ready,
 //                and that is why;
 //   "empty"      nothing to start (no work, paused, held, a full pool, a
-//                free route's single slot taken, a build approval withdrawn
-//                after the claim, or a launch that failed).
+//                build approval withdrawn after the claim, or a launch that
+//                failed).
 async function spawnNextJob(options) {
   if (typeof agentProfiles !== "undefined" && !agentProfiles.current()) {
     const snapshot = agentProfiles.capture(await readSettings(), projects.current().id);
@@ -14797,7 +14877,8 @@ async function spawnNextJob(options) {
   // A free-tier builder answers one request at a time (a second concurrent
   // call queued for minutes in probes): with a free route, one worker is the
   // whole pool whatever the manual or adaptive limit says.
-  if (runRoute.parallelCap && autopilot.jobs.length >= runRoute.parallelCap) return "empty";
+  // Its own stop, so the wait says why instead of reading "nothing ready".
+  if (runRoute.parallelCap && autopilot.jobs.length >= runRoute.parallelCap) return "freecap";
   const selectedScope = backlog.buildScope(job.ref);
   // Choose a worker model only after the task is known and before ownership
   // changes. CLI-owned accounts retain their configured/default models.
@@ -17262,7 +17343,16 @@ async function setAutopilot(prefs = {}, source = null) {
     await updateSettings((settings) => {
       autoBuild = buildRevision !== null && buildRevision === setAutopilot.buildRevision ? prefs.autoBuild : autopilot.autoBuild !== false;
       if (buildRevision !== null && buildRevision === setAutopilot.buildRevision && source !== "boot" && source !== "autonomy") {
-        settings.autonomy = { ...autonomy.migrate(settings), level: autoBuild ? "auto" : "ask" };
+        // The old Auto build switch (brain maps, older renderers) speaks in
+        // the permission mode's terms without losing a mode it cannot name:
+        // on lifts only Always ask / Accept per task to Auto, and off lowers
+        // only Auto / Elevated to Always ask. It used to write auto or ask
+        // outright, so Elevated became Auto and Accept became Always ask. The
+        // permission mode alone decides approval (autonomy.cjs needsApproval);
+        // autoBuild is its derived echo.
+        const current = autonomy.migrate(settings);
+        const holds = ["ask", "accept"].includes(current.level);
+        settings.autonomy = { ...current, level: autoBuild ? (holds ? "auto" : current.level) : (holds ? current.level : "ask") };
       }
       settings.ui = {
         ...(settings.ui ?? {}),
@@ -18815,7 +18905,8 @@ function registerIpc() {
   // screen; `held` is what the Start agents controls key on; `resumed` names
   // the folder this launch reopened on its own, so the gate can say so
   // instead of asking a question it has already answered.
-  ipcMain.handle("startup:state", () => ({ ...projects.list(), interactive: !SMOKE && !CAPTURE && !CLI_MODE, chosen: startupChosen, resumed: startupResumed, held: autopilot.held === true, started: assistantLoop }));
+  ipcMain.handle("startup:state", async () => ({ ...projects.list(), interactive: !SMOKE && !CAPTURE && !CLI_MODE, chosen: startupChosen, resumed: startupResumed, held: autopilot.held === true, started: assistantLoop,
+    launch: launchAgentsInfo(await readSettings().catch(() => ({}))) }));
   ipcMain.handle("startup:choose", async (_event, payload) => {
     const id = typeof payload?.id === "string" && payload.id ? payload.id : null;
     let result = projects.list();
@@ -21096,6 +21187,9 @@ app.whenReady().then(() => {
   // A self-update relaunch inherits the old process env, so the PATH read
   // starts before anything probes a CLI; the pills and auto setup share it.
   if (!SMOKE && !CAPTURE) void refreshProcessPath();
+  // Read before the session beat can rewrite it: the launch screen's default
+  // follows what the last session left (launchAgentsInfo).
+  startupLastSession = SMOKE || CAPTURE || CLI_MODE ? null : readSessionRecord();
   startupResumed = startupResume();
   if (startupResumed) {
     startupChosen = true;

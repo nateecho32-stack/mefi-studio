@@ -223,9 +223,30 @@
   // What is holding every agent back, read from the same two switches (and
   // the launch hold) Build's Home reads, with the one control that clears it.
   // Null when nothing is: then Vibe runs on its own.
+  // The host's one answer (status.loop, scripts/loop-status.cjs) is read
+  // first. Only states that hold the agents back get the banner; tasks that
+  // need an OK or a review already show under Needs you.
+  const LOOP_PILLS = { held: "Waiting for you", paused: "Paused", parked: "Cooling down", draining: "Updating", stuck: "Stuck", waiting: "Waiting", setup: "No AI connected", "no-project": "No project" };
+  const LOOP_KEYS = { held: "held", paused: "paused", setup: "key" };
+  function loopAction(action) {
+    if (!action) return null;
+    const run = {
+      start: startWork,
+      "connect-ai": () => go("agents", { section: "setup", pane: "connections" }),
+      "open-project": () => window.MefiSidebar?.open?.({ focus: true }),
+      restart: () => api()?.appRestart?.({ stopAgents: true }),
+      review: () => openPanel("tasks", { fold: "needs" }),
+    }[action.id];
+    return run ? { label: action.label, run } : null;
+  }
   function runState() {
     if (!api()) return null;
     const status = state.status || {}, assistant = state.assistant || {};
+    const loop = status.loop;
+    if (loop && typeof loop === "object" && typeof loop.state === "string") {
+      if (!Object.hasOwn(LOOP_PILLS, loop.state)) return null;
+      return { key: LOOP_KEYS[loop.state] || loop.state, tone: loop.tone === "held" ? "held" : loop.tone === "quiet" ? "quiet" : "warn", pill: LOOP_PILLS[loop.state], title: loop.headline, text: loop.reason, action: loopAction(loop.action) };
+    }
     const running = scoped(status.running).length;
     const start = { label: "Start agents", run: startWork };
     if (status.held === true && !running) return { key: "held", tone: "warn", pill: "Waiting for you", title: "Agents are off until you start them.", text: "Anything you build waits in the queue until then.", action: start };

@@ -9874,8 +9874,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
             <label class="switch" id="settings-companion-motion" title="Your companion floats and blinks beside the conversation. Calm and Off keep it still."><input id="workspace-motion" type="checkbox" checked><span class="track"></span><span>Let your companion move</span></label>
             <label class="switch" title="Blur what sits behind every sheet, menu and Home panel. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
             <label class="switch" id="idle-home-switch" title="On: every launch lands on Home. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Home on launch</span></label>
+            <label class="switch" title="On: after five minutes without input, Studio switches to Command view. Off: it stays on the page you left open."><input type="checkbox" id="idle-command-idle"><span class="track"></span><span>Show Command view after 5 quiet minutes</span></label>
           </div>
           <p class="muted" id="idle-home-hint">When disabled, Studio opens Command view after the project chooser.</p>
+          <!-- settings.ui.launchAgents (main.cjs launchAgentsInfo); the launch screen's default button follows it. -->
+          <label class="field"><span class="field-label">When Studio opens</span><select id="launch-agents" aria-describedby="launch-agents-hint"><option value="resume">Resume what I had</option><option value="start">Start agents</option><option value="off">Keep agents off</option></select><span class="field-hint" id="launch-agents-hint">Resume starts agents on a project where they were running when you closed Studio. The launch screen still offers both choices.</span></label>
           <!-- The Vibe / Build choice, switched in place (vibe.js keeps you on Settings). -->
           <div class="settings-mode-row" id="settings-mode">
             <span class="settings-mode-text"><b>Studio mode</b><span id="settings-mode-hint">Vibe is the calm front door. Build is the full studio.</span></span>
@@ -14850,6 +14853,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     // An inbox request a board card already carries (backlog.summarizeBacklog).
     represented: "On the board",
     cooling: "Retry scheduled",
+    // Held until a set time, or while it is checked against work done outside
+    // Studio (backlog.workState). It used to fall through as a bare "deferred".
+    deferred: "Scheduled for later",
     planning: "Planning",
     done: "Done", completed: "Done", archived: "Archived",
     unknown: "Unknown",
@@ -32397,6 +32403,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
 
   function newWorkStatus() {
+    // The host's Agents switch (status.loop.on, scripts/loop-status.cjs) folds
+    // the launch hold, the assistant's pause and the executor stop into one
+    // answer; older hosts are read from the two switches.
+    const loop = state.assistant?.loop;
+    if (loop && typeof loop.on === "boolean") return { known: true, enabled: loop.on };
     const full = assistantFull();
     const known = Boolean(full?.status) && typeof state.assistant?.execute === "boolean";
     return { known, enabled: known && full.status !== "paused" && state.assistant.execute !== false };
@@ -35660,7 +35671,17 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 
     let dot = "off";
     let text = "…";
+    let title = null;
+    // A loop that is off or held back says so first, the launch hold included
+    // (it used to read "auto · 5m" here while nothing could start).
+    const loop = assistant?.loop && typeof assistant.loop.state === "string" ? assistant.loop : null;
+    const loopStop = loop && !jobs.length && !activeAgent?.cluster && !["running", "starting", "idle"].includes(loop.state) ? loop : null;
     if (!bridge) text = "desktop only";
+    else if (loopStop) {
+      dot = loopStop.on === false || ["parked", "stuck", "no-project"].includes(loopStop.state) ? "bad" : "warm";
+      text = `${loopStop.headline.charAt(0).toLowerCase()}${loopStop.headline.slice(1)}`;
+      title = [loopStop.headline, loopStop.reason].filter(Boolean).join(". ");
+    }
     else if (preparingCount) {
       dot = "running";
       text = buildingCount ? `${buildingCount} building · ${preparingCount} preparing` : "task preparation";
@@ -35696,7 +35717,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       text = foreman?.text ? `assistant · ${foreman.text.replace(/^foreman (?:done|running) · /, "")}` : `auto · ${assistant.minutes ?? 5}m`;
     }
     if (el.feedDot) el.feedDot.dataset.state = dot;
-    if (el.feedState) { el.feedState.textContent = text; el.feedState.title = text; }
+    if (el.feedState) { el.feedState.textContent = text; el.feedState.title = title || text; }
 
     const workSignature = JSON.stringify(jobs.length
       ? jobs.map((job) => { const detail = commandJobDetail(job, state.nodes); return [job.id, job.taskId, job.sessionId, job.startedAt, job.phase, detail.title, detail.stage, detail.progress]; })
@@ -41434,12 +41455,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (state.camMode === "orbit") autoFit(); // a new window still shows every node
   }
 
+  // Opening Command by itself after five quiet minutes is a choice now
+  // (settings.ui.idleCommand, off by default): taking over whatever page was
+  // open, unasked, made the studio hard to find your way around.
   function armIdleTimer() {
     if (state.timers.idle) clearInterval(state.timers.idle);
     state.timers.idle = setInterval(() => {
       if (state.active) { checkAmbientZen(); return; }
       if (document.hidden) return; // a hidden window never idles into Command: no capture, bells or fetch work off-screen
-      if (Date.now() - state.lastInput > IDLE_MS) enter();
+      if (state.idleEnter === true && Date.now() - state.lastInput > IDLE_MS) enter();
     }, 1000);
   }
 
@@ -42273,7 +42297,18 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       wakeAmbientZen();
       if (document.hidden) return;
       if (state.active) tick();
-      else if (Date.now() - state.lastInput > IDLE_MS) enter();
+      else if (state.idleEnter === true && Date.now() - state.lastInput > IDLE_MS) enter();
+    });
+    el.idleCommand = document.getElementById("idle-command-idle");
+    read("prefsGet").then((result) => {
+      state.idleEnter = result?.ok === true && result.prefs?.idleCommand === true;
+      if (el.idleCommand) el.idleCommand.checked = state.idleEnter;
+    });
+    el.idleCommand?.addEventListener("change", () => {
+      state.idleEnter = el.idleCommand.checked;
+      state.lastInput = Date.now();
+      window.mefiStudio?.prefsSet?.({ idleCommand: state.idleEnter });
+      window.MefiToast?.(state.idleEnter ? "Command view opens after 5 quiet minutes" : "Command view opens only when you choose it", "info");
     });
   }
 
@@ -45167,15 +45202,20 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const passing = results.filter((result) => result.ok === true).length;
     const earlier = Boolean(run?.key && task?.lastAttempt?.runId) && !String(run.key).split(":").includes(String(task.lastAttempt.runId));
     const allPassed = run?.state === "passed" && results.length > 0 && passing === results.length;
-    const action = job ? job.stopping?.reason || (phase === "preparing" ? (live.clusterAgents || []).find((agent) => agent.taskId === task.id && agent.status === "running")?.step || "Preparing task context" : phase === "finishing" ? "Worker reported completion; waiting for its process to finish" : job.currentStep || job.activity || "Waiting for the first worker update") : missingWorker ? "Task has a saved worker assignment; waiting for current worker status" : checking ? "Worker finished; checking the result" : handedOn ? "Worker finished and handed work on; waiting for those follow-ups" : finished ? task.verification?.state === "verified" ? "Completion verified" : task.verification?.state === "manual" ? "Completion confirmed by you" : "Finished task; inspect the recorded evidence" : failedCheck ? allPassed && !earlier ? "Its checks passed, but the result was not accepted; review why" : "The last completion check failed; review its evidence" : ["blocked", "approval", "waiting", "cooling"].includes(scheduled?.stage) ? "Waiting before work can start" : "Ready for a worker";
+    const action = job ? job.stopping?.reason || (phase === "preparing" ? (live.clusterAgents || []).find((agent) => agent.taskId === task.id && agent.status === "running")?.step || "Preparing task context" : phase === "finishing" ? "Worker reported completion; waiting for its process to finish" : job.currentStep || job.activity || "Waiting for the first worker update") : missingWorker ? "Task has a saved worker assignment; waiting for current worker status" : checking ? "Worker finished; checking the result" : handedOn ? "Worker finished and handed work on; waiting for those follow-ups" : finished ? task.verification?.state === "verified" ? "Completion verified" : task.verification?.state === "manual" ? "Completion confirmed by you" : "Finished task; inspect the recorded evidence" : failedCheck ? allPassed && !earlier ? "Its checks passed, but the result was not accepted; review why" : "The last completion check failed; review its evidence" : ["blocked", "approval", "waiting", "cooling", "deferred"].includes(scheduled?.stage) ? "Waiting before work can start" : "Ready for a worker";
     const stamp = job && Math.max(Number(job.lastOutputAt) || 0, Number(job.stepUpdatedAt) || 0);
     const since = stamp || Number(job?.startedAt);
     const seconds = Number.isFinite(since) && since > 0 ? Math.max(0, Math.floor((now - since) / 1000)) : null;
     const age = seconds === null ? "" : seconds < 60 ? `${seconds}s` : seconds < 3600 ? `${Math.floor(seconds / 60)}m` : `${Math.floor(seconds / 3600)}h`;
     const activityAge = job ? seconds === null ? "No activity time recorded" : stamp ? `Updated ${age} ago` : `No output yet · ${age} elapsed` : "";
     const checks = run?.state ? `${results.length ? `${passing}/${results.length} recorded checks passed${allPassed ? "" : ` · ${run.state}`}` : `Checks: ${run.state}`}${earlier ? " · from an earlier attempt" : ""}` : task?.verification?.state === "verified" ? `Verified: ${task.verification.reason || "completion accepted"}` : task?.verification?.state === "manual" ? "Confirmed by you; no automatic check recorded" : "No completion checks recorded";
-    const blocker = question?.question || question?.title || (!finished && ["blocked", "approval", "waiting", "cooling"].includes(scheduled?.stage) ? scheduled.reason : "") || (handedOn && task.handoffState?.state === "blocked" ? task.handoffState.reason : "") || (!finished && task?.verification?.state === "failed" ? task.verification.reason : "") || "";
-    const nextAction = finished ? "Open the app, view checks, or request a change." : missingWorker ? "Inspect Live or refresh task status before starting another attempt." : checking ? "Wait for completion checks, or view their evidence." : handedOn ? "Review its follow-up cards; this one settles by itself when they do." : job ? "Watch this worker in Live; stop it to save progress." : failedCheck ? "View checks, then resolve the failure before retrying." : scheduled?.stage === "cooling" ? "Wait for the scheduled retry, or choose Retry now." : scheduled?.blockedBy === "owner" ? "Resume this task from its saved progress." : blocker ? scheduled?.stage === "approval" ? "Review the brief and approve this build." : "Resolve the blocker before starting this task." : paused ? "Task ready; agents paused. Start this task to continue." : "Start this task when you are ready.";
+    // A ready card nothing will start says why: the host's loop answer
+    // (status.loop) names the launch hold, a pause, a cooldown or a full
+    // machine, instead of "Start this task when you are ready".
+    const loop = live.loop && typeof live.loop === "object" && typeof live.loop.state === "string" ? live.loop : null;
+    const loopHold = !finished && !job && stage === "ready" && loop && !["idle", "starting"].includes(loop.state) && !(loop.state === "running" && !loop.reason) ? loop : null;
+    const blocker = question?.question || question?.title || (!finished && ["blocked", "approval", "waiting", "cooling", "deferred"].includes(scheduled?.stage) ? scheduled.reason : "") || (handedOn && task.handoffState?.state === "blocked" ? task.handoffState.reason : "") || (!finished && task?.verification?.state === "failed" ? task.verification.reason : "") || (loopHold ? loopHold.reason || loopHold.headline : "") || "";
+    const nextAction = finished ? "Open the app, view checks, or request a change." : missingWorker ? "Inspect Live or refresh task status before starting another attempt." : checking ? "Wait for completion checks, or view their evidence." : handedOn ? "Review its follow-up cards; this one settles by itself when they do." : job ? "Watch this worker in Live; stop it to save progress." : failedCheck ? "View checks, then resolve the failure before retrying." : scheduled?.stage === "cooling" ? "Wait for the scheduled retry, or choose Retry now." : scheduled?.blockedBy === "owner" ? "Resume this task from its saved progress." : blocker ? scheduled?.stage === "approval" ? "Review the brief and approve this build." : "Resolve the blocker before starting this task." : loopHold ? loopHold.action ? `${loopHold.action.label} to continue.` : "It starts on its own once this clears." : paused ? "Task ready; agents paused. Start this task to continue." : "Start this task when you are ready.";
     return { stage, label, worker: job?.route || job?.cli || (job ? "Coding worker" : missingWorker ? "Current worker status unavailable" : "No worker running"), action, activityAge, checks, blocker, nextAction };
   }
   const relTime = (ts) => {
@@ -45418,10 +45458,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     li.append(dot, text, actions);
     // The brief rides under the title in the Done view — the same digest the
     // detail pane shows, so the list answers "what got done" at a glance.
-    if (isDone(task) || needsReview(task) || ["blocked", "approval", "waiting", "cooling"].includes(scheduled?.stage)) {
+    if (isDone(task) || needsReview(task) || ["blocked", "approval", "waiting", "cooling", "deferred"].includes(scheduled?.stage)) {
       const brief = document.createElement("div");
       brief.className = "who done-brief";
-      brief.textContent = scheduled?.stage === "cooling" ? `${scheduled.reason}. ${retryDescription(scheduled.retryAt)}` : ["blocked", "approval", "waiting"].includes(scheduled?.stage) ? scheduled.reason : describe(task).summary;
+      brief.textContent = scheduled?.stage === "cooling" ? `${scheduled.reason}. ${retryDescription(scheduled.retryAt)}` : ["blocked", "approval", "waiting", "deferred"].includes(scheduled?.stage) ? scheduled.reason : describe(task).summary;
       brief.title = task.prompt ?? task.title;
       li.append(brief);
     }
@@ -46767,9 +46807,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         ...task,
         refs: [
           ...(task.refs ?? []),
-          ...(result.references.files ?? []).slice(0, 6).map((file) => ({ kind: "file", title: file, detail: "work tree" })),
-          ...(result.references.sessions ?? []).slice(0, 4).map((session) => ({ kind: "session", title: session.title, detail: session.id })),
-          ...(result.references.web ?? []).slice(0, 4).map((hit) => ({ kind: "web", title: hit.title, detail: hit.url })),
+          // auto: gathered, so an approved card keeps its approval (web rows
+          // still count as scope; scripts/backlog.cjs buildScope).
+          ...(result.references.files ?? []).slice(0, 6).map((file) => ({ kind: "file", title: file, detail: "work tree", auto: true })),
+          ...(result.references.sessions ?? []).slice(0, 4).map((session) => ({ kind: "session", title: session.title, detail: session.id, auto: true })),
+          ...(result.references.web ?? []).slice(0, 4).map((hit) => ({ kind: "web", title: hit.title, detail: hit.url, auto: true })),
         ].slice(-40),
         logs: [...(task.logs ?? []), { at: Date.now(), kind: "reference", text: `gathered ${result.references.code.length} code hits, ${result.references.sessions.length} sessions, ${result.references.chats.length} chats` }],
         updatedAt: Date.now(),
@@ -53892,7 +53934,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   const $ = (id) => document.getElementById("boot-" + id);
   const api = () => window.mefiStudio;
   const available = () => Boolean(api()?.startupState && api()?.startupChoose && api()?.startupBegin);
-  const state = { projects: [], selectedId: null, busy: false };
+  const state = { projects: [], selectedId: null, busy: false, launch: null };
 
   function node(tag, className, textContent) {
     const element = document.createElement(tag);
@@ -53900,10 +53942,22 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (textContent !== undefined) element.textContent = textContent;
     return element;
   }
+  // "When Studio opens" (main.cjs launchAgentsInfo): whether the selected
+  // project opens with its agents running. It only picks the default button;
+  // both buttons still do exactly what they say.
+  function startsAgents() {
+    const launch = state.launch;
+    if (!launch || !state.selectedId) return false;
+    return launch.choice === "start" || (launch.choice === "resume" && launch.last?.agents === true && launch.last.projectId === state.selectedId);
+  }
   function note(text, error = false) {
     const target = $("choose-note");
     if (!target) return;
-    target.textContent = text || (state.selectedId ? "Agents stay off until you start them." : "You can add a folder later from the sidebar.");
+    const why = !state.selectedId ? "You can add a folder later from the sidebar."
+      : !startsAgents() ? "Agents stay off until you start them."
+      : state.launch.choice === "start" ? "Agents start when the studio opens. Change this in Settings › General."
+      : "Agents were running here when you left, so they start again.";
+    target.textContent = text || why;
     target.classList.toggle("error", Boolean(error));
   }
   // The host's answer names the selection: a folder it just opened, a folder
@@ -53934,8 +53988,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       row.addEventListener("click", () => { if (state.busy) return; state.selectedId = project.id; render(); note(""); focusSelected(); });
       list.append(row);
     }
-    if ($("open")) $("open").textContent = state.selectedId ? "Open studio" : "Continue without a project";
-    if ($("open-start")) $("open-start").hidden = !state.selectedId;
+    const start = startsAgents();
+    if ($("open")) { $("open").textContent = state.selectedId ? start ? "Open with agents off" : "Open studio" : "Continue without a project"; $("open").className = start ? "ghost" : "primary"; }
+    if ($("open-start")) { $("open-start").hidden = !state.selectedId; $("open-start").className = start ? "primary" : "ghost"; }
+    // The default leads.
+    const lead = $(start ? "open-start" : "open");
+    if (lead?.parentElement && lead.parentElement.firstElementChild !== lead) lead.parentElement.prepend(lead);
   }
   function setBusy(busy, label) {
     state.busy = busy;
@@ -53976,6 +54034,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       return { projectId: state.selectedId, startAgents: false, changed: false, resumed: info.resumed };
     }
     if (info.chosen === true) return null;
+    state.launch = info.launch && typeof info.launch === "object" ? info.launch : null;
     adopt({ projects: info.projects, activeId: info.activeId });
     render();
     note("");
@@ -54760,7 +54819,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const action = assistant.action;
     const waiting = state.backlog?.waiting || state.status.waiting;
     const narration = working ? `${workerPhase(running[0])}: ${running[0].title || "your task"} · ${workerStep(running[0])}${running.length > 1 ? ` · ${running.length} jobs running` : ""}.` : paused ? "New work is paused. Any running jobs will finish normally." : state.pending ? state.mode === "work" ? "Creating task…" : "Waiting for a reply…" : waiting ? (typeof waiting === "string" ? waiting : waiting.text || waiting.reason || "Work is queued and waiting for an available worker.") : state.backlog?.draining && state.backlog?.next?.length ? `Up next: ${state.backlog.next[0].title}.` : reviewing ? "Open Review to check finished work and resolve blockers." : action?.text && !["idle", "listening"].includes(action.text) ? action.text : "Ask a question or create a task for this project.";
-    $("narration").textContent = held && !working ? "Select Start agents to begin. Your tasks and ideas are saved." : !working && !paused && workersOff ? "Coding workers are off. Select Work through backlog to start queued work." : narration;
+    // While nothing runs, a stopped or waiting loop explains itself here.
+    const loop = state.status.loop;
+    const loopNote = loop && !working && !["idle", "running", "starting"].includes(loop.state) ? [loop.headline, loop.reason].filter(Boolean).join(". ") : "";
+    $("narration").textContent = loopNote || (held && !working ? "Select Start agents to begin. Your tasks and ideas are saved." : !working && !paused && workersOff ? "Coding workers are off. Select Resume to start queued work." : narration);
     $("companion-track").dataset.station = working ? "make" : reviewing ? "review" : "listen";
     $("companion-track").classList.toggle("busy", working || state.pending);
     renderDashboard();
@@ -54776,10 +54838,18 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       $("activity-count").textContent = logs.length || "";
     }
   }
-  // The real run state, read from the two switches the backend actually has:
-  // the assistant service (paused / running) and work admission (execute).
-  // Every surface that says "paused" now says it from here.
+  // The real run state. The host sends one answer for every surface
+  // (status.loop, scripts/loop-status.cjs): the Agents switch, why work is or
+  // is not starting, and the control that changes it. A host without it is
+  // read from the two switches it has: the assistant service (paused /
+  // running) and work admission (execute).
+  const LOOP_TONES = { warn: "warn", held: "held", quiet: "idle", busy: "busy", ok: "ok" };
   function runState() {
+    const loop = state.status.loop;
+    if (api() && loop && typeof loop === "object" && typeof loop.state === "string") {
+      const launchHold = loop.state === "held";
+      return { held: loop.on === false && !launchHold, launchHold, label: loop.headline, note: loop.reason || loop.headline, running: state.status.running || [], tone: LOOP_TONES[loop.tone] || "idle", loop };
+    }
     const assistant = state.assistant;
     const assistantPaused = assistant.status === "paused" || assistant.prefs?.paused === true;
     const admissionOff = state.status.execute === false;
@@ -55217,6 +55287,21 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       }
       catch (error) { feedback(error.message, true); } finally { controls(); }
     });
+    // "When Studio opens" (settings.ui.launchAgents): the host keeps it, and
+    // the launch screen's default button follows it (main.cjs launchAgentsInfo).
+    const launchAgents = document.getElementById("launch-agents");
+    if (launchAgents) {
+      Promise.resolve(api()?.prefsGet?.()).then((result) => {
+        if (["resume", "start", "off"].includes(result?.prefs?.launchAgents)) launchAgents.value = result.prefs.launchAgents;
+      }).catch(() => {});
+      launchAgents.addEventListener("change", async () => {
+        try {
+          const result = await api()?.prefsSet?.({ launchAgents: launchAgents.value });
+          if (!result?.ok) throw new Error(result?.error || "The launch choice could not be saved.");
+          feedback(launchAgents.value === "start" ? "Agents will start when Studio opens." : launchAgents.value === "off" ? "Agents will stay off until you start them." : "Agents will start again where they were running when you closed Studio.");
+        } catch (error) { feedback(error.message, true); }
+      });
+    }
     for (const [id, key, fallback] of [["person-name", "person", ""], ["agent-name", "companion", "Mefi"], ["accent", "accent", "aurora"]]) {
       $(id).value = storage.get(key, fallback);
       $(id).addEventListener("input", () => {
@@ -62948,11 +63033,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   "use strict";
   const api = () => window.mefiStudio;
   const project = () => window.MefiWorkspace?.activeProjectId?.() || current?.projectId || null;
+  // Each line says what happens to a new task, since that is what decides
+  // whether agents start (scripts/autonomy.cjs needsApproval).
   const MODES = [
-    ["ask", "Always ask", "You choose each step; Mefi suggests an answer."],
-    ["accept", "Accept per task", "Accept a task once, then Mefi handles its ordinary asks."],
-    ["auto", "Auto", "Mefi starts queued tasks, including agent proposals, and handles confident choices."],
-    ["elevated", "Elevated only", "Mefi handles ordinary choices; elevated requests stay yours."],
+    ["ask", "Always ask", "Every new task, yours too, waits for your OK. You choose each step; Mefi suggests an answer."],
+    ["accept", "Accept per task", "Every new task waits for your OK once. After that, Mefi handles its ordinary asks."],
+    ["auto", "Auto", "Tasks start on their own, agent proposals included. Mefi handles confident choices."],
+    ["elevated", "Elevated only", "Your tasks start on their own; tasks agents propose wait for your OK. Elevated requests stay yours."],
   ];
   const SCOPE = [["blend", "This project + others"], ["project", "This project"], ["global", "All projects"]];
   let current = null, learned = null, flight = null, epoch = 0;
@@ -66745,6 +66832,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (full) liveAssistant = full;
     if (status && typeof status.enabled === "boolean") Object.assign(queue, { known: true, enabled: status.enabled, autoBuild: status.autoBuild !== false, parallel: status.parallel || 1, adaptiveParallel: status.adaptiveParallel !== false, mode: status.mode === "cluster" ? "cluster" : "swarm" });
     if (full?.status) Object.assign(queue, { newWorkKnown: true, newWork: full.status !== "paused", proactive: full.prefs?.proactive !== false });
+    // The host's Agents switch (status.loop.on) also counts the launch hold and
+    // a stopped executor, which the assistant's own status never showed: this
+    // switch used to read On while nothing could start.
+    const loop = (status ?? liveStatus)?.loop;
+    if (loop && typeof loop.on === "boolean") Object.assign(queue, { newWorkKnown: true, newWork: loop.on });
     queueVersion++; publishQueue(); paintOverview();
   }
   async function refreshQueue(force = false) {
@@ -68922,7 +69014,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const label = el("label", "vibe-worker-limit", "Worker limit");
     const limit = el("select"); limit.setAttribute("aria-label", "Worker limit");
     const selected = data.status?.adaptiveParallel ? "auto" : String(data.status?.parallel || 2);
-    for (const value of ["auto", ...new Set(["1", "2", "3", "4", "6", "8", ...(selected === "auto" ? [] : [selected])])]) {
+    // Only limits the host honours: it caps build workers at 3
+    // (EXECUTOR_PARALLEL_CAP in main.cjs), so 4, 6 and 8 were clamped silently.
+    for (const value of ["auto", ...new Set(["1", "2", "3", ...(selected === "auto" ? [] : [selected])])]) {
       const option = el("option", "", value === "auto" ? "Automatic" : value); option.value = value; limit.append(option);
     }
     limit.value = selected; limit.disabled = state.busy || !api()?.assistantAutopilot;
@@ -69656,9 +69750,30 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // What is holding every agent back, read from the same two switches (and
   // the launch hold) Build's Home reads, with the one control that clears it.
   // Null when nothing is: then Vibe runs on its own.
+  // The host's one answer (status.loop, scripts/loop-status.cjs) is read
+  // first. Only states that hold the agents back get the banner; tasks that
+  // need an OK or a review already show under Needs you.
+  const LOOP_PILLS = { held: "Waiting for you", paused: "Paused", parked: "Cooling down", draining: "Updating", stuck: "Stuck", waiting: "Waiting", setup: "No AI connected", "no-project": "No project" };
+  const LOOP_KEYS = { held: "held", paused: "paused", setup: "key" };
+  function loopAction(action) {
+    if (!action) return null;
+    const run = {
+      start: startWork,
+      "connect-ai": () => go("agents", { section: "setup", pane: "connections" }),
+      "open-project": () => window.MefiSidebar?.open?.({ focus: true }),
+      restart: () => api()?.appRestart?.({ stopAgents: true }),
+      review: () => openPanel("tasks", { fold: "needs" }),
+    }[action.id];
+    return run ? { label: action.label, run } : null;
+  }
   function runState() {
     if (!api()) return null;
     const status = state.status || {}, assistant = state.assistant || {};
+    const loop = status.loop;
+    if (loop && typeof loop === "object" && typeof loop.state === "string") {
+      if (!Object.hasOwn(LOOP_PILLS, loop.state)) return null;
+      return { key: LOOP_KEYS[loop.state] || loop.state, tone: loop.tone === "held" ? "held" : loop.tone === "quiet" ? "quiet" : "warn", pill: LOOP_PILLS[loop.state], title: loop.headline, text: loop.reason, action: loopAction(loop.action) };
+    }
     const running = scoped(status.running).length;
     const start = { label: "Start agents", run: startWork };
     if (status.held === true && !running) return { key: "held", tone: "warn", pill: "Waiting for you", title: "Agents are off until you start them.", text: "Anything you build waits in the queue until then.", action: start };

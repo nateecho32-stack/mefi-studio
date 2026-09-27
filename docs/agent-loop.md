@@ -647,7 +647,25 @@ collections its mutation returned (`refreshAutopilotQueue(eyes, result)`).
   `startup:begin` → `releaseStartupHold` in main.cjs) so the loop may
   dispatch ("Open and start agents"). A launch that resumed an interrupted
   session (main.cjs `startupResume`) never holds in the first place, so the
-  agents that were running come back with it.
+  agents that were running come back with it. **When Studio opens**
+  (`settings.ui.launchAgents`: resume, start or off; main.cjs
+  `launchAgentsInfo`, read by `renderer/startup.js`) picks which launch
+  button is the default. With resume, a project whose last session record
+  (`session.json`, read once at launch as `startupLastSession`) ended with
+  agents running defaults to "Open and start agents".
+- **The loop status** (`scripts/loop-status.cjs`, `autopilotLoop` in
+  main.cjs) is the one answer to "are agents working, and why not". It is
+  sent as `loop` on every `assistant:status` push and in the chat facts
+  (`facts.executor.loop`), and passed to `summarizeBacklog`, which leads its
+  summary with a loop hold. The first gate that applies wins: no project →
+  launch hold → pause or stopped executor (`on: false`) → breaker cooldown →
+  update drain → a foreman that timed out and still holds its slot → running →
+  ready but waiting → approvals → cards needing review → no AI connected →
+  idle. Board counts (ready, approval, blocked) are cached by
+  `refreshAutopilotQueue` (`boardCounts`), and a changed count re-sends the
+  status. Home `runState`, Vibe `runState`, Command `newWorkStatus` and its
+  header, Agents `adoptQueue` and `MefiTasks.workflowSummary` read it first
+  and keep their older derivations only for a host without it.
 - `renderer/explorer.js`, `init()` — the proactive toggle (`#proactive-mode`,
   a service preference), and the subscriptions to checkpoint, briefing and
   request pushes (`onCheckpoints`, `onBriefing`, `onRequests`).

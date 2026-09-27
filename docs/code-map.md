@@ -24,6 +24,10 @@
   weighted Beta records and per-task model skill summaries.
 - `scripts/model-performance.cjs`: observations retain project identity; cached
   snapshots and `taskSkills` support a project filter.
+- `scripts/loop-status.cjs`: pure; folds the host's switches and board counts
+  into one `{ state, on, headline, reason, action }` answer, sent as
+  `status.loop` on every `assistant:status` push (`main.cjs` `autopilotLoop`)
+  and read by Home, Vibe, Command, Agents, the task page and the chat facts.
 - `scripts/autonomy.cjs`: pure mode table, elevated categories, approval inheritance
   (`accepted`) and the owner's-work lineage the Auto gate follows (`ownerWork`),
   settings migration and exact-attempt sessionless check eligibility.

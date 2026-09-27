@@ -7,6 +7,46 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Agents say why they are not working.** The host now sends one answer
+  (`scripts/loop-status.cjs`) with every status push. It covers whether
+  agents are on, what is holding work back, and the one control that clears
+  it. It names the launch hold, a pause, a stopped executor, a worker-start
+  cooldown, an update drain, a stuck scheduler, no open project, tasks
+  waiting for your OK (and which permission mode holds them), and tasks that
+  need review. Home, Vibe, the Command header, the Agents switches, the task
+  page and the chat assistant all read it, instead of five separate
+  re-derivations that disagreed. The worst case was "Allow new work"
+  reading On while nothing could start. A ready task that will not start
+  says why instead of "Start this task when you are ready". A task that
+  shares its title with a running worker says it is waiting for that worker.
+  The free coding model's one-at-a-time limit now shows as the reason
+  instead of "nothing ready".
+- **Approvals are no longer cancelled silently.** Approving a new task before
+  its automatic references finished gathering used to drop the approval
+  without a word. Gathered file, session and context references (now stamped
+  `auto`) no longer count as reviewed scope, while web references and anything
+  you or a planner wrote still do. Existing approvals hash exactly as before.
+  An approval that is cleared because the brief really changed now says so in
+  the task's log.
+- **Permission modes keep their meaning.** The old Auto build switch (brain
+  maps, older screens) used to overwrite the permission mode with Auto or
+  Always ask, so Elevated became Auto and Accept per task became Always ask.
+  It now only moves Always ask and Accept per task up to Auto, or Auto and
+  Elevated down to Always ask. Activating a brain map changes the permission
+  mode and New work only when its confirm list shows them moving. Each mode's
+  description now says what happens to a new task, for example "Every new
+  task, yours too, waits for your OK".
+- **When Studio opens.** A new setting in Settings › General › Profile &
+  startup: **Resume what I had** (default), **Start agents** or **Keep agents
+  off**. The launch screen's default button follows it. With Resume, a
+  project whose agents were running when you closed Studio opens with them
+  running; **Open with agents off** is still one click away.
+- **No more surprise jump to Command view.** After five quiet minutes Studio
+  used to switch to Command view by itself. That is now a switch, **Show
+  Command view after 5 quiet minutes**, and it is off by default.
+- Vibe's worker limit offers only what the host honours (1, 2, 3 or
+  Automatic). 4, 6 and 8 used to be clamped to 3 silently. The "deferred"
+  stage reads **Scheduled for later** and shows its reason on the board.
 - **Friends across PCs.** With the rooms hub's companion relay, companions on
   different PCs and Discord accounts meet in an open room and play;
   `docs/friends-setup.md` sets up the hub and each PC, and

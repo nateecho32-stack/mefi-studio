@@ -258,7 +258,9 @@
     const label = el("label", "vibe-worker-limit", "Worker limit");
     const limit = el("select"); limit.setAttribute("aria-label", "Worker limit");
     const selected = data.status?.adaptiveParallel ? "auto" : String(data.status?.parallel || 2);
-    for (const value of ["auto", ...new Set(["1", "2", "3", "4", "6", "8", ...(selected === "auto" ? [] : [selected])])]) {
+    // Only limits the host honours: it caps build workers at 3
+    // (EXECUTOR_PARALLEL_CAP in main.cjs), so 4, 6 and 8 were clamped silently.
+    for (const value of ["auto", ...new Set(["1", "2", "3", ...(selected === "auto" ? [] : [selected])])]) {
       const option = el("option", "", value === "auto" ? "Automatic" : value); option.value = value; limit.append(option);
     }
     limit.value = selected; limit.disabled = state.busy || !api()?.assistantAutopilot;

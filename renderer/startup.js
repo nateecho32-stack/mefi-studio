@@ -11,7 +11,7 @@
   const $ = (id) => document.getElementById("boot-" + id);
   const api = () => window.mefiStudio;
   const available = () => Boolean(api()?.startupState && api()?.startupChoose && api()?.startupBegin);
-  const state = { projects: [], selectedId: null, busy: false };
+  const state = { projects: [], selectedId: null, busy: false, launch: null };
 
   function node(tag, className, textContent) {
     const element = document.createElement(tag);
@@ -19,10 +19,22 @@
     if (textContent !== undefined) element.textContent = textContent;
     return element;
   }
+  // "When Studio opens" (main.cjs launchAgentsInfo): whether the selected
+  // project opens with its agents running. It only picks the default button;
+  // both buttons still do exactly what they say.
+  function startsAgents() {
+    const launch = state.launch;
+    if (!launch || !state.selectedId) return false;
+    return launch.choice === "start" || (launch.choice === "resume" && launch.last?.agents === true && launch.last.projectId === state.selectedId);
+  }
   function note(text, error = false) {
     const target = $("choose-note");
     if (!target) return;
-    target.textContent = text || (state.selectedId ? "Agents stay off until you start them." : "You can add a folder later from the sidebar.");
+    const why = !state.selectedId ? "You can add a folder later from the sidebar."
+      : !startsAgents() ? "Agents stay off until you start them."
+      : state.launch.choice === "start" ? "Agents start when the studio opens. Change this in Settings › General."
+      : "Agents were running here when you left, so they start again.";
+    target.textContent = text || why;
     target.classList.toggle("error", Boolean(error));
   }
   // The host's answer names the selection: a folder it just opened, a folder
@@ -53,8 +65,12 @@
       row.addEventListener("click", () => { if (state.busy) return; state.selectedId = project.id; render(); note(""); focusSelected(); });
       list.append(row);
     }
-    if ($("open")) $("open").textContent = state.selectedId ? "Open studio" : "Continue without a project";
-    if ($("open-start")) $("open-start").hidden = !state.selectedId;
+    const start = startsAgents();
+    if ($("open")) { $("open").textContent = state.selectedId ? start ? "Open with agents off" : "Open studio" : "Continue without a project"; $("open").className = start ? "ghost" : "primary"; }
+    if ($("open-start")) { $("open-start").hidden = !state.selectedId; $("open-start").className = start ? "primary" : "ghost"; }
+    // The default leads.
+    const lead = $(start ? "open-start" : "open");
+    if (lead?.parentElement && lead.parentElement.firstElementChild !== lead) lead.parentElement.prepend(lead);
   }
   function setBusy(busy, label) {
     state.busy = busy;
@@ -95,6 +111,7 @@
       return { projectId: state.selectedId, startAgents: false, changed: false, resumed: info.resumed };
     }
     if (info.chosen === true) return null;
+    state.launch = info.launch && typeof info.launch === "object" ? info.launch : null;
     adopt({ projects: info.projects, activeId: info.activeId });
     render();
     note("");

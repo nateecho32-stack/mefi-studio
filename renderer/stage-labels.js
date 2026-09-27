@@ -15,6 +15,9 @@
     // An inbox request a board card already carries (backlog.summarizeBacklog).
     represented: "On the board",
     cooling: "Retry scheduled",
+    // Held until a set time, or while it is checked against work done outside
+    // Studio (backlog.workState). It used to fall through as a bare "deferred".
+    deferred: "Scheduled for later",
     planning: "Planning",
     done: "Done", completed: "Done", archived: "Archived",
     unknown: "Unknown",

@@ -4,11 +4,13 @@
   "use strict";
   const api = () => window.mefiStudio;
   const project = () => window.MefiWorkspace?.activeProjectId?.() || current?.projectId || null;
+  // Each line says what happens to a new task, since that is what decides
+  // whether agents start (scripts/autonomy.cjs needsApproval).
   const MODES = [
-    ["ask", "Always ask", "You choose each step; Mefi suggests an answer."],
-    ["accept", "Accept per task", "Accept a task once, then Mefi handles its ordinary asks."],
-    ["auto", "Auto", "Mefi starts queued tasks, including agent proposals, and handles confident choices."],
-    ["elevated", "Elevated only", "Mefi handles ordinary choices; elevated requests stay yours."],
+    ["ask", "Always ask", "Every new task, yours too, waits for your OK. You choose each step; Mefi suggests an answer."],
+    ["accept", "Accept per task", "Every new task waits for your OK once. After that, Mefi handles its ordinary asks."],
+    ["auto", "Auto", "Tasks start on their own, agent proposals included. Mefi handles confident choices."],
+    ["elevated", "Elevated only", "Your tasks start on their own; tasks agents propose wait for your OK. Elevated requests stay yours."],
   ];
   const SCOPE = [["blend", "This project + others"], ["project", "This project"], ["global", "All projects"]];
   let current = null, learned = null, flight = null, epoch = 0;

@@ -3326,6 +3326,11 @@
   }
 
   function newWorkStatus() {
+    // The host's Agents switch (status.loop.on, scripts/loop-status.cjs) folds
+    // the launch hold, the assistant's pause and the executor stop into one
+    // answer; older hosts are read from the two switches.
+    const loop = state.assistant?.loop;
+    if (loop && typeof loop.on === "boolean") return { known: true, enabled: loop.on };
     const full = assistantFull();
     const known = Boolean(full?.status) && typeof state.assistant?.execute === "boolean";
     return { known, enabled: known && full.status !== "paused" && state.assistant.execute !== false };
@@ -6589,7 +6594,17 @@
 
     let dot = "off";
     let text = "…";
+    let title = null;
+    // A loop that is off or held back says so first, the launch hold included
+    // (it used to read "auto · 5m" here while nothing could start).
+    const loop = assistant?.loop && typeof assistant.loop.state === "string" ? assistant.loop : null;
+    const loopStop = loop && !jobs.length && !activeAgent?.cluster && !["running", "starting", "idle"].includes(loop.state) ? loop : null;
     if (!bridge) text = "desktop only";
+    else if (loopStop) {
+      dot = loopStop.on === false || ["parked", "stuck", "no-project"].includes(loopStop.state) ? "bad" : "warm";
+      text = `${loopStop.headline.charAt(0).toLowerCase()}${loopStop.headline.slice(1)}`;
+      title = [loopStop.headline, loopStop.reason].filter(Boolean).join(". ");
+    }
     else if (preparingCount) {
       dot = "running";
       text = buildingCount ? `${buildingCount} building · ${preparingCount} preparing` : "task preparation";
@@ -6625,7 +6640,7 @@
       text = foreman?.text ? `assistant · ${foreman.text.replace(/^foreman (?:done|running) · /, "")}` : `auto · ${assistant.minutes ?? 5}m`;
     }
     if (el.feedDot) el.feedDot.dataset.state = dot;
-    if (el.feedState) { el.feedState.textContent = text; el.feedState.title = text; }
+    if (el.feedState) { el.feedState.textContent = text; el.feedState.title = title || text; }
 
     const workSignature = JSON.stringify(jobs.length
       ? jobs.map((job) => { const detail = commandJobDetail(job, state.nodes); return [job.id, job.taskId, job.sessionId, job.startedAt, job.phase, detail.title, detail.stage, detail.progress]; })
@@ -12363,12 +12378,15 @@
     if (state.camMode === "orbit") autoFit(); // a new window still shows every node
   }
 
+  // Opening Command by itself after five quiet minutes is a choice now
+  // (settings.ui.idleCommand, off by default): taking over whatever page was
+  // open, unasked, made the studio hard to find your way around.
   function armIdleTimer() {
     if (state.timers.idle) clearInterval(state.timers.idle);
     state.timers.idle = setInterval(() => {
       if (state.active) { checkAmbientZen(); return; }
       if (document.hidden) return; // a hidden window never idles into Command: no capture, bells or fetch work off-screen
-      if (Date.now() - state.lastInput > IDLE_MS) enter();
+      if (state.idleEnter === true && Date.now() - state.lastInput > IDLE_MS) enter();
     }, 1000);
   }
 
@@ -13202,7 +13220,18 @@
       wakeAmbientZen();
       if (document.hidden) return;
       if (state.active) tick();
-      else if (Date.now() - state.lastInput > IDLE_MS) enter();
+      else if (state.idleEnter === true && Date.now() - state.lastInput > IDLE_MS) enter();
+    });
+    el.idleCommand = document.getElementById("idle-command-idle");
+    read("prefsGet").then((result) => {
+      state.idleEnter = result?.ok === true && result.prefs?.idleCommand === true;
+      if (el.idleCommand) el.idleCommand.checked = state.idleEnter;
+    });
+    el.idleCommand?.addEventListener("change", () => {
+      state.idleEnter = el.idleCommand.checked;
+      state.lastInput = Date.now();
+      window.mefiStudio?.prefsSet?.({ idleCommand: state.idleEnter });
+      window.MefiToast?.(state.idleEnter ? "Command view opens after 5 quiet minutes" : "Command view opens only when you choose it", "info");
     });
   }
 

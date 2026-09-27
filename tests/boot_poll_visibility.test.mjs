@@ -562,8 +562,8 @@ test("idle.js Command timers: the refresh tick and idle auto-enter both bail whi
   assert.ok(arm, "the idle auto-enter timer must exist");
   assert.match(
     arm[0],
-    /if \(document\.hidden\) return;[\s\S]*?if \(Date\.now\(\) - state\.lastInput > IDLE_MS\) enter\(\);/,
-    "a hidden window must never idle into Command"
+    /if \(document\.hidden\) return;[\s\S]*?if \(state\.idleEnter === true && Date\.now\(\) - state\.lastInput > IDLE_MS\) enter\(\);/,
+    "a hidden window must never idle into Command, and only the owner's switch lets it"
   );
   const visibility = source.match(/document\.addEventListener\("visibilitychange", \(\) => \{([\s\S]*?)\n    \}\);/);
   assert.ok(visibility, "Command must handle visibility changes");
@@ -1016,7 +1016,9 @@ test("idle.js through the real tick and auto-enter timer: hidden silence under r
   const IDLE_MS = 5 * 60 * 1000;
   let enters = 0;
   let zenChecks = 0;
-  const idleState = { timers: {}, active: false, lastInput: 0 };
+  // The owner turned "Show Command view after 5 quiet minutes" on; off (the
+  // default) is checked at the end.
+  const idleState = { timers: {}, active: false, lastInput: 0, idleEnter: true };
   const arm = compile(
     await extractFn("idle.js", /function armIdleTimer\(\) \{[\s\S]*?\n  \}/, "the idle auto-enter arm"),
     {
@@ -1047,6 +1049,10 @@ test("idle.js through the real tick and auto-enter timer: hidden silence under r
   clock.advance(60000);
   assert.equal(enters, 1, "the timer keeps firing but never re-enters once active");
   assert.ok(zenChecks > 0, "active Command uses its ambient Zen check instead of re-entering");
+  // Switched off, a long quiet stretch leaves the open page alone.
+  idleState.active = false; idleState.idleEnter = false; idleState.lastInput = clock.now;
+  clock.advance(IDLE_MS * 3);
+  assert.equal(enters, 1, "with the switch off, Studio never idles into Command");
   const idleSource = await readFile(path.join(STUDIO, "renderer", "idle.js"), "utf8");
   assert.equal((idleSource.match(/^\s*armIdleTimer\(\);/gm) || []).length, 1, "the auto-enter timer is armed exactly once, so nothing can stack");
 });

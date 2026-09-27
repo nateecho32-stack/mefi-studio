@@ -296,7 +296,12 @@ settings and per-model work-kind summaries for the shared controls.
 - Vibe can run on its own. When something holds every agent back, a banner
   under the box names it and carries its fix: **Start agents** after a launch
   that left them off (the launch screen's plain Open), **Resume** when new
-  work is paused, **Connect an AI** when none is connected. **Build it** says
+  work is paused, **Try now** during a worker-start cooldown, **Restart
+  Studio** when the scheduler is stuck, **Open a project** with none open,
+  **Connect an AI** when none is connected. The banner, Home's Service tile,
+  the Command header and each ready task read the same loop status
+  (`scripts/loop-status.cjs`), so they never disagree about whether agents
+  are on. **Build it** says
   when its task will wait for that. Needs you lists only what cannot move
   without you, one row each: decisions, builds waiting for your go-ahead under
   the permission settings (the drawer shows the brief, approves its reviewed

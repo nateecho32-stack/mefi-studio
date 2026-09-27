@@ -737,7 +737,10 @@
     const action = assistant.action;
     const waiting = state.backlog?.waiting || state.status.waiting;
     const narration = working ? `${workerPhase(running[0])}: ${running[0].title || "your task"} · ${workerStep(running[0])}${running.length > 1 ? ` · ${running.length} jobs running` : ""}.` : paused ? "New work is paused. Any running jobs will finish normally." : state.pending ? state.mode === "work" ? "Creating task…" : "Waiting for a reply…" : waiting ? (typeof waiting === "string" ? waiting : waiting.text || waiting.reason || "Work is queued and waiting for an available worker.") : state.backlog?.draining && state.backlog?.next?.length ? `Up next: ${state.backlog.next[0].title}.` : reviewing ? "Open Review to check finished work and resolve blockers." : action?.text && !["idle", "listening"].includes(action.text) ? action.text : "Ask a question or create a task for this project.";
-    $("narration").textContent = held && !working ? "Select Start agents to begin. Your tasks and ideas are saved." : !working && !paused && workersOff ? "Coding workers are off. Select Work through backlog to start queued work." : narration;
+    // While nothing runs, a stopped or waiting loop explains itself here.
+    const loop = state.status.loop;
+    const loopNote = loop && !working && !["idle", "running", "starting"].includes(loop.state) ? [loop.headline, loop.reason].filter(Boolean).join(". ") : "";
+    $("narration").textContent = loopNote || (held && !working ? "Select Start agents to begin. Your tasks and ideas are saved." : !working && !paused && workersOff ? "Coding workers are off. Select Resume to start queued work." : narration);
     $("companion-track").dataset.station = working ? "make" : reviewing ? "review" : "listen";
     $("companion-track").classList.toggle("busy", working || state.pending);
     renderDashboard();
@@ -753,10 +756,18 @@
       $("activity-count").textContent = logs.length || "";
     }
   }
-  // The real run state, read from the two switches the backend actually has:
-  // the assistant service (paused / running) and work admission (execute).
-  // Every surface that says "paused" now says it from here.
+  // The real run state. The host sends one answer for every surface
+  // (status.loop, scripts/loop-status.cjs): the Agents switch, why work is or
+  // is not starting, and the control that changes it. A host without it is
+  // read from the two switches it has: the assistant service (paused /
+  // running) and work admission (execute).
+  const LOOP_TONES = { warn: "warn", held: "held", quiet: "idle", busy: "busy", ok: "ok" };
   function runState() {
+    const loop = state.status.loop;
+    if (api() && loop && typeof loop === "object" && typeof loop.state === "string") {
+      const launchHold = loop.state === "held";
+      return { held: loop.on === false && !launchHold, launchHold, label: loop.headline, note: loop.reason || loop.headline, running: state.status.running || [], tone: LOOP_TONES[loop.tone] || "idle", loop };
+    }
     const assistant = state.assistant;
     const assistantPaused = assistant.status === "paused" || assistant.prefs?.paused === true;
     const admissionOff = state.status.execute === false;
@@ -1194,6 +1205,21 @@
       }
       catch (error) { feedback(error.message, true); } finally { controls(); }
     });
+    // "When Studio opens" (settings.ui.launchAgents): the host keeps it, and
+    // the launch screen's default button follows it (main.cjs launchAgentsInfo).
+    const launchAgents = document.getElementById("launch-agents");
+    if (launchAgents) {
+      Promise.resolve(api()?.prefsGet?.()).then((result) => {
+        if (["resume", "start", "off"].includes(result?.prefs?.launchAgents)) launchAgents.value = result.prefs.launchAgents;
+      }).catch(() => {});
+      launchAgents.addEventListener("change", async () => {
+        try {
+          const result = await api()?.prefsSet?.({ launchAgents: launchAgents.value });
+          if (!result?.ok) throw new Error(result?.error || "The launch choice could not be saved.");
+          feedback(launchAgents.value === "start" ? "Agents will start when Studio opens." : launchAgents.value === "off" ? "Agents will stay off until you start them." : "Agents will start again where they were running when you closed Studio.");
+        } catch (error) { feedback(error.message, true); }
+      });
+    }
     for (const [id, key, fallback] of [["person-name", "person", ""], ["agent-name", "companion", "Mefi"], ["accent", "accent", "aurora"]]) {
       $(id).value = storage.get(key, fallback);
       $(id).addEventListener("input", () => {

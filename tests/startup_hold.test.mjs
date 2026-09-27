@@ -107,16 +107,19 @@ test("the autopilot pass, the foreman ask and the executor fill all wait on the 
 });
 
 test("Resume while held releases the service first, then resumes as before", async () => {
-  let released = 0, pumps = 0; const scheduled = [];
+  let released = 0, pumps = 0; const scheduled = [], emitted = [];
   const autopilot = { held: true };
   const env = host(section("async function assistantResume()", "// ---- 24/7:"), {
     autopilot, assistantState: { status: "paused" }, assistantLoop: true,
     releaseStartupHold: async () => { released += 1; autopilot.held = false; },
     applyKeepAwake() {}, assistantLog() {}, assistantPump() { pumps += 1; }, saveAssistant: async () => {}, assistantSchedule: (ms) => scheduled.push(ms),
+    // The loop status reads the pause, so a resume sends it at once.
+    emitAutopilot() { emitted.push(env.assistantState.status); },
   });
   await env.assistantResume();
   assert.equal(released, 1);
   assert.equal(env.assistantState.status, "running");
+  assert.deepEqual(emitted, ["running"], "the resumed state is sent to every surface");
   assert.equal(pumps, 1); assert.deepEqual(scheduled, [0]);
   await env.assistantResume();
   assert.equal(released, 1, "an ordinary resume never touches the hold again");

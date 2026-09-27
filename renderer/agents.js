@@ -26,6 +26,11 @@
     if (full) liveAssistant = full;
     if (status && typeof status.enabled === "boolean") Object.assign(queue, { known: true, enabled: status.enabled, autoBuild: status.autoBuild !== false, parallel: status.parallel || 1, adaptiveParallel: status.adaptiveParallel !== false, mode: status.mode === "cluster" ? "cluster" : "swarm" });
     if (full?.status) Object.assign(queue, { newWorkKnown: true, newWork: full.status !== "paused", proactive: full.prefs?.proactive !== false });
+    // The host's Agents switch (status.loop.on) also counts the launch hold and
+    // a stopped executor, which the assistant's own status never showed: this
+    // switch used to read On while nothing could start.
+    const loop = (status ?? liveStatus)?.loop;
+    if (loop && typeof loop.on === "boolean") Object.assign(queue, { newWorkKnown: true, newWork: loop.on });
     queueVersion++; publishQueue(); paintOverview();
   }
   async function refreshQueue(force = false) {

@@ -114,6 +114,38 @@ test("picking another project and Open and start agents chooses it and asks for 
   assert.deepEqual(calls.at(-1), ["begin"]);
 });
 
+test("When Studio opens picks the default button; both buttons still do what they say", async () => {
+  // Resume: the project whose last session ended with agents running opens
+  // with them by default. Another project keeps the plain default.
+  const resume = bridge({ startupState: async () => ({ ok: true, interactive: true, chosen: false, projects: [projectA, projectB], activeId: projectB.id, launch: { choice: "resume", last: { projectId: projectB.id, agents: true } } }) });
+  const env = environment(resume.api);
+  const choice = env.startup.choose();
+  await flush();
+  assert.equal(env.get("boot-open-start").className, "primary");
+  assert.equal(env.get("boot-open").className, "ghost");
+  assert.equal(env.get("boot-open").textContent, "Open with agents off");
+  assert.match(env.get("boot-choose-note").textContent, /were running here when you left/);
+  await env.rows()[0].click();
+  assert.equal(env.get("boot-open").className, "primary", "a project whose agents were not running keeps Open studio first");
+  assert.equal(env.get("boot-open").textContent, "Open studio");
+  assert.match(env.get("boot-choose-note").textContent, /Agents stay off/);
+  await env.rows()[1].click();
+  // The owner's explicit "agents off" still wins over the default.
+  await env.get("boot-open").click();
+  await flush();
+  assert.deepEqual(plain(await choice), { projectId: projectB.id, startAgents: false, changed: false });
+  assert.equal(resume.calls.some(([name]) => name === "begin"), false);
+
+  // Start: every project defaults to starting its agents. Off: never.
+  for (const [launch, primary] of [[{ choice: "start", last: null }, "boot-open-start"], [{ choice: "off", last: { projectId: projectB.id, agents: true } }, "boot-open"], [null, "boot-open"]]) {
+    const { api } = bridge({ startupState: async () => ({ ok: true, interactive: true, chosen: false, projects: [projectA, projectB], activeId: projectB.id, launch }) });
+    const screen = environment(api);
+    screen.startup.choose();
+    await flush();
+    assert.equal(screen.get(primary).className, "primary", JSON.stringify(launch));
+  }
+});
+
 test("project radios keep one Tab stop and retain focus when selection changes", async () => {
   const { api, calls } = bridge();
   const env = environment(api);

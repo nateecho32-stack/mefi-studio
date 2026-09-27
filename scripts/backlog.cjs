@@ -11,10 +11,32 @@ const rows = (value) => Array.isArray(value) ? value.filter((row) => row && type
 // Approval names the saved work, not an editable status flag. Include nested
 // obligations and references; claim timestamps and run telemetry are not scope.
 const BUILD_SCOPE_FIELDS = ["id", "projectId", "projectPath", "title", "prompt", "description", "details", "note", "notes", "context", "handoff", "ideaDetail", "refs", "files", "file", "ideas", "dependsOn", "members", "remaining", "blockers", "acceptance", "acceptanceCriteria", "requirements", "constraints", "scope", "sessions", "problemFiles", "source", "parent", "parentRunId", "fromRun", "handoffId", "depth", "planningId", "planningSpecId", "planningTaskId"];
+// A reference gather stamps what it attaches with auto: true (main.cjs
+// attachTaskRefs and the Luna context pointer, the task page's Gather). Its
+// file, session and context rows only name paths and sessions the local
+// analyzer found, so they are not scope: a gather that lands after the owner
+// approved used to cancel the approval (and a named Start) without a word.
+// Web rows carry outside titles and links, so they stay scope even when
+// gathered, and so does every row the owner or a planner wrote. Rows saved
+// before the stamp existed have no auto flag and hash exactly as they did.
+const UNSCOPED_REF_KINDS = new Set(["file", "session", "context"]);
+const gatheredRef = (ref) => Boolean(ref && ref.auto === true && UNSCOPED_REF_KINDS.has(ref.kind));
 function buildScope(item) {
   const canonical = (value) => Array.isArray(value) ? value.map(canonical) : value && typeof value === "object"
     ? Object.fromEntries(Object.keys(value).sort().map((name) => [name, canonical(value[name])])) : value;
-  const scope = Object.fromEntries(BUILD_SCOPE_FIELDS.filter((name) => item?.[name] !== undefined).map((name) => [name, item[name]]));
+  const scope = {};
+  for (const name of BUILD_SCOPE_FIELDS) {
+    if (item?.[name] === undefined) continue;
+    if (name === "refs" && Array.isArray(item.refs)) {
+      const kept = item.refs.filter((ref) => !gatheredRef(ref));
+      // Only gathered rows: the card hashes as if it had none, the way it
+      // did before the gather landed.
+      if (kept.length < item.refs.length && !kept.length) continue;
+      scope.refs = kept;
+      continue;
+    }
+    scope[name] = item[name];
+  }
   return createHash("sha256").update(JSON.stringify(canonical(scope))).digest("hex");
 }
 
@@ -211,11 +233,26 @@ function workState(item, now = Date.now(), { tasks = null, autoBuild = true, app
   return { stage: "ready", reason: item.pin ? "You chose this to go next" : "Ready for an available worker", ...dependency };
 }
 
-function summarizeBacklog({ tasks = [], requests = [], ideas = [], jobs = [], compare, ideaEligible, now = Date.now(), paused = false, draining = false, waiting = null, lastError = null, parkedUntil = 0, autoBuild = true, approve = null } = {}) {
+// The loop states that stop or hold every card (scripts/loop-status.cjs). When
+// the host passes its loop answer, the summary leads with it, so a launch hold
+// no longer reads "3 ready to work on" while nothing can start.
+const LOOP_HOLDS = new Set(["no-project", "held", "paused", "parked", "draining", "stuck"]);
+
+function summarizeBacklog({ tasks = [], requests = [], ideas = [], jobs = [], compare, ideaEligible, now = Date.now(), paused = false, draining = false, waiting = null, lastError = null, parkedUntil = 0, autoBuild = true, approve = null, loop = null } = {}) {
   const board = rows(tasks);
   const memo = boardMemo(board);
   const heldIds = new Set(rows(jobs).map((job) => job.taskId).filter(Boolean));
-  const taskStates = board.map((task) => ({ id: task.id, kind: "task", title: String(task.title ?? "Untitled task"), dependencies: dependencyState(task, board, memo).dependencies, ...(heldIds.has(task.id) ? { stage: "running", reason: "A worker is building this task" } : workState(task, now, { tasks: board, autoBuild, approve, memo })) }));
+  // Dispatch never starts a card whose title key a live run already carries
+  // (executor-core.cjs selectCandidates). Such a card used to read "Ready"
+  // with no reason while it could not start; it now says what it waits for.
+  const liveTitles = new Map(rows(jobs).filter((job) => !job.finished && job.title).map((job) => [key(job.title), job]).filter(([titleKey]) => titleKey));
+  const sameWork = (task, state) => {
+    const titleKey = state.stage === "ready" ? key(task.title) : "";
+    const live = titleKey ? liveTitles.get(titleKey) : null;
+    if (!live || live.taskId === task.id) return state;
+    return { stage: "waiting", blockedBy: "same-work", canRetry: false, reason: `Waiting for the running worker on "${String(live.title).slice(0, 90)}", which has the same title` };
+  };
+  const taskStates = board.map((task) => ({ id: task.id, kind: "task", title: String(task.title ?? "Untitled task"), dependencies: dependencyState(task, board, memo).dependencies, ...(heldIds.has(task.id) ? { stage: "running", reason: "A worker is building this task" } : sameWork(task, workState(task, now, { tasks: board, autoBuild, approve, memo }))) }));
   const represented = new Set(board.filter((task) => task.status !== "archived").map((task) => key(task.title)).filter(Boolean));
   const uniqueRequests = rows(requests).filter((request) => {
     const titleKey = key(request.title || request.prompt);
@@ -257,7 +294,8 @@ function summarizeBacklog({ tasks = [], requests = [], ideas = [], jobs = [], co
   const retryTimes = all.map((row) => row.retryAt).filter(Number.isFinite);
   if (Number(parkedUntil) > now) retryTimes.push(Number(parkedUntil));
   const nextRetryAt = retryTimes.length ? Math.min(...retryTimes) : null;
-  const hold = Number(parkedUntil) > now ? "Worker startup is cooling down after repeated failures" : paused ? "Paused. Current workers can finish; new work will wait." : waiting || (lastError && !counts.running ? String(lastError).slice(0, 240) : null);
+  const loopHold = loop && typeof loop === "object" && LOOP_HOLDS.has(loop.state) ? [loop.headline, loop.reason].filter(Boolean).join(". ").slice(0, 400) : null;
+  const hold = loopHold || (Number(parkedUntil) > now ? "Worker startup is cooling down after repeated failures" : paused ? "Paused. Current workers can finish; new work will wait." : waiting || (lastError && !counts.running ? String(lastError).slice(0, 240) : null));
   const summary = hold || (counts.running ? `${counts.running} building · ${counts.ready} ready next` : counts.ready ? `${counts.ready} ready to work on` : counts.approval ? `${counts.approval} tasks waiting for your approval` : counts.review ? `${counts.review} finished attempts awaiting verification` : counts.eligibleIdeas ? `${counts.eligibleIdeas} ideas ready to become tasks` : counts.blocked ? `${counts.blocked} tasks need your review` : counts.waiting ? `${counts.waiting} tasks waiting for prerequisites` : counts.cooling ? `${counts.cooling} tasks waiting before retry` : counts.deferred ? `${counts.deferred} tasks deferred until later` : "Existing work is caught up");
   return { counts, taskStates, next: ordered.slice(0, 8).map(({ state }) => state), blocked: all.filter((row) => row.stage === "blocked").slice(0, 40), approval: all.filter((row) => row.stage === "approval").slice(0, 40), autoBuild: autoBuild !== false, paused, draining, mode: draining ? "backlog" : "balanced", waiting: hold, summary, nextRetryAt };
 }

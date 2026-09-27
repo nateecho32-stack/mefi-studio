@@ -198,15 +198,20 @@
     const passing = results.filter((result) => result.ok === true).length;
     const earlier = Boolean(run?.key && task?.lastAttempt?.runId) && !String(run.key).split(":").includes(String(task.lastAttempt.runId));
     const allPassed = run?.state === "passed" && results.length > 0 && passing === results.length;
-    const action = job ? job.stopping?.reason || (phase === "preparing" ? (live.clusterAgents || []).find((agent) => agent.taskId === task.id && agent.status === "running")?.step || "Preparing task context" : phase === "finishing" ? "Worker reported completion; waiting for its process to finish" : job.currentStep || job.activity || "Waiting for the first worker update") : missingWorker ? "Task has a saved worker assignment; waiting for current worker status" : checking ? "Worker finished; checking the result" : handedOn ? "Worker finished and handed work on; waiting for those follow-ups" : finished ? task.verification?.state === "verified" ? "Completion verified" : task.verification?.state === "manual" ? "Completion confirmed by you" : "Finished task; inspect the recorded evidence" : failedCheck ? allPassed && !earlier ? "Its checks passed, but the result was not accepted; review why" : "The last completion check failed; review its evidence" : ["blocked", "approval", "waiting", "cooling"].includes(scheduled?.stage) ? "Waiting before work can start" : "Ready for a worker";
+    const action = job ? job.stopping?.reason || (phase === "preparing" ? (live.clusterAgents || []).find((agent) => agent.taskId === task.id && agent.status === "running")?.step || "Preparing task context" : phase === "finishing" ? "Worker reported completion; waiting for its process to finish" : job.currentStep || job.activity || "Waiting for the first worker update") : missingWorker ? "Task has a saved worker assignment; waiting for current worker status" : checking ? "Worker finished; checking the result" : handedOn ? "Worker finished and handed work on; waiting for those follow-ups" : finished ? task.verification?.state === "verified" ? "Completion verified" : task.verification?.state === "manual" ? "Completion confirmed by you" : "Finished task; inspect the recorded evidence" : failedCheck ? allPassed && !earlier ? "Its checks passed, but the result was not accepted; review why" : "The last completion check failed; review its evidence" : ["blocked", "approval", "waiting", "cooling", "deferred"].includes(scheduled?.stage) ? "Waiting before work can start" : "Ready for a worker";
     const stamp = job && Math.max(Number(job.lastOutputAt) || 0, Number(job.stepUpdatedAt) || 0);
     const since = stamp || Number(job?.startedAt);
     const seconds = Number.isFinite(since) && since > 0 ? Math.max(0, Math.floor((now - since) / 1000)) : null;
     const age = seconds === null ? "" : seconds < 60 ? `${seconds}s` : seconds < 3600 ? `${Math.floor(seconds / 60)}m` : `${Math.floor(seconds / 3600)}h`;
     const activityAge = job ? seconds === null ? "No activity time recorded" : stamp ? `Updated ${age} ago` : `No output yet · ${age} elapsed` : "";
     const checks = run?.state ? `${results.length ? `${passing}/${results.length} recorded checks passed${allPassed ? "" : ` · ${run.state}`}` : `Checks: ${run.state}`}${earlier ? " · from an earlier attempt" : ""}` : task?.verification?.state === "verified" ? `Verified: ${task.verification.reason || "completion accepted"}` : task?.verification?.state === "manual" ? "Confirmed by you; no automatic check recorded" : "No completion checks recorded";
-    const blocker = question?.question || question?.title || (!finished && ["blocked", "approval", "waiting", "cooling"].includes(scheduled?.stage) ? scheduled.reason : "") || (handedOn && task.handoffState?.state === "blocked" ? task.handoffState.reason : "") || (!finished && task?.verification?.state === "failed" ? task.verification.reason : "") || "";
-    const nextAction = finished ? "Open the app, view checks, or request a change." : missingWorker ? "Inspect Live or refresh task status before starting another attempt." : checking ? "Wait for completion checks, or view their evidence." : handedOn ? "Review its follow-up cards; this one settles by itself when they do." : job ? "Watch this worker in Live; stop it to save progress." : failedCheck ? "View checks, then resolve the failure before retrying." : scheduled?.stage === "cooling" ? "Wait for the scheduled retry, or choose Retry now." : scheduled?.blockedBy === "owner" ? "Resume this task from its saved progress." : blocker ? scheduled?.stage === "approval" ? "Review the brief and approve this build." : "Resolve the blocker before starting this task." : paused ? "Task ready; agents paused. Start this task to continue." : "Start this task when you are ready.";
+    // A ready card nothing will start says why: the host's loop answer
+    // (status.loop) names the launch hold, a pause, a cooldown or a full
+    // machine, instead of "Start this task when you are ready".
+    const loop = live.loop && typeof live.loop === "object" && typeof live.loop.state === "string" ? live.loop : null;
+    const loopHold = !finished && !job && stage === "ready" && loop && !["idle", "starting"].includes(loop.state) && !(loop.state === "running" && !loop.reason) ? loop : null;
+    const blocker = question?.question || question?.title || (!finished && ["blocked", "approval", "waiting", "cooling", "deferred"].includes(scheduled?.stage) ? scheduled.reason : "") || (handedOn && task.handoffState?.state === "blocked" ? task.handoffState.reason : "") || (!finished && task?.verification?.state === "failed" ? task.verification.reason : "") || (loopHold ? loopHold.reason || loopHold.headline : "") || "";
+    const nextAction = finished ? "Open the app, view checks, or request a change." : missingWorker ? "Inspect Live or refresh task status before starting another attempt." : checking ? "Wait for completion checks, or view their evidence." : handedOn ? "Review its follow-up cards; this one settles by itself when they do." : job ? "Watch this worker in Live; stop it to save progress." : failedCheck ? "View checks, then resolve the failure before retrying." : scheduled?.stage === "cooling" ? "Wait for the scheduled retry, or choose Retry now." : scheduled?.blockedBy === "owner" ? "Resume this task from its saved progress." : blocker ? scheduled?.stage === "approval" ? "Review the brief and approve this build." : "Resolve the blocker before starting this task." : loopHold ? loopHold.action ? `${loopHold.action.label} to continue.` : "It starts on its own once this clears." : paused ? "Task ready; agents paused. Start this task to continue." : "Start this task when you are ready.";
     return { stage, label, worker: job?.route || job?.cli || (job ? "Coding worker" : missingWorker ? "Current worker status unavailable" : "No worker running"), action, activityAge, checks, blocker, nextAction };
   }
   const relTime = (ts) => {
@@ -449,10 +454,10 @@
     li.append(dot, text, actions);
     // The brief rides under the title in the Done view — the same digest the
     // detail pane shows, so the list answers "what got done" at a glance.
-    if (isDone(task) || needsReview(task) || ["blocked", "approval", "waiting", "cooling"].includes(scheduled?.stage)) {
+    if (isDone(task) || needsReview(task) || ["blocked", "approval", "waiting", "cooling", "deferred"].includes(scheduled?.stage)) {
       const brief = document.createElement("div");
       brief.className = "who done-brief";
-      brief.textContent = scheduled?.stage === "cooling" ? `${scheduled.reason}. ${retryDescription(scheduled.retryAt)}` : ["blocked", "approval", "waiting"].includes(scheduled?.stage) ? scheduled.reason : describe(task).summary;
+      brief.textContent = scheduled?.stage === "cooling" ? `${scheduled.reason}. ${retryDescription(scheduled.retryAt)}` : ["blocked", "approval", "waiting", "deferred"].includes(scheduled?.stage) ? scheduled.reason : describe(task).summary;
       brief.title = task.prompt ?? task.title;
       li.append(brief);
     }
@@ -1798,9 +1803,11 @@
         ...task,
         refs: [
           ...(task.refs ?? []),
-          ...(result.references.files ?? []).slice(0, 6).map((file) => ({ kind: "file", title: file, detail: "work tree" })),
-          ...(result.references.sessions ?? []).slice(0, 4).map((session) => ({ kind: "session", title: session.title, detail: session.id })),
-          ...(result.references.web ?? []).slice(0, 4).map((hit) => ({ kind: "web", title: hit.title, detail: hit.url })),
+          // auto: gathered, so an approved card keeps its approval (web rows
+          // still count as scope; scripts/backlog.cjs buildScope).
+          ...(result.references.files ?? []).slice(0, 6).map((file) => ({ kind: "file", title: file, detail: "work tree", auto: true })),
+          ...(result.references.sessions ?? []).slice(0, 4).map((session) => ({ kind: "session", title: session.title, detail: session.id, auto: true })),
+          ...(result.references.web ?? []).slice(0, 4).map((hit) => ({ kind: "web", title: hit.title, detail: hit.url, auto: true })),
         ].slice(-40),
         logs: [...(task.logs ?? []), { at: Date.now(), kind: "reference", text: `gathered ${result.references.code.length} code hits, ${result.references.sessions.length} sessions, ${result.references.chats.length} chats` }],
         updatedAt: Date.now(),
