@@ -1,6 +1,22 @@
-# What's new in 0.4.3
+# What's new in 0.4.4
 
-[Download 0.4.3](../../download.html) for Windows or read the [release notes](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.3).
+[Download 0.4.4](../../download.html) for Windows or read the [release notes](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.4).
+
+## Released in 0.4.4
+
+- **One subscription runs everything:** Start here can install Codex, Claude Code, Grok or Antigravity, sign you in and check the connection. **Use for the whole studio** then routes chat, mapping, planning, agents and coding through that one account.
+- **Work done outside Studio:** when you reopen a project, Studio reports the commits, edits and Claude Code or OpenCode sessions from while it was closed. Queued cards are checked against that work before a worker takes them.
+- **Mefi sizes it:** **Build it** in Vibe decides whether a request is one task or two to six steps. Each step leaves the project working, and a **Plan in flight** card shows progress. **Make it one task** undoes the split.
+- **New app:** name an app and describe it. Studio makes the folder under Mefi Apps, starts git, opens it and sends the description as the first request.
+- **Permission modes:** choose Always ask, Accept per task, Auto or Elevated only. Automatic decisions have a Why and an Undo, and Mefi learns from your answers. Learning can be turned off or forgotten.
+- **The desk can handle asks:** with it on, your companion settles routine questions and says what it chose and why. Permission and risky asks always wait for you.
+- **Your PCs:** Friends › Your PCs shows whether this PC matches the project's default branch on GitHub and lists anything that has not reached it. **Sync this PC** pulls and pushes without force.
+- **Vibe menus:** Tasks, Plans, Ideas, Team and Settings open as compact panels inside Vibe, with **Full view** for the Build page.
+- **Media:** the player and saved queue share one panel, websites open inside the player with **Browse here**, and local music gets record artwork.
+- **Trace:** Studio's logs as channels in one viewer, under Agents › Live.
+- **Updates and fixes:** **Restart now** saves your agents' work before relaunching, plus a whole-app bug hunt and a lighter Command view.
+
+Studio stores project records and settings locally. Connected AI providers and coding tools may receive prompts and project context according to your configuration. Discord linking is optional.
 
 ## Released in 0.4.3
 

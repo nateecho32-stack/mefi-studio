@@ -1,48 +1,331 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mefi's Studio AI+ 0.4.3 — Ideas into verified work</title>
-<meta name="description" content="Meet Mefi's Studio AI+ 0.4.3: flexible media, dynamic live-tree controls, project-aware planning and per-agent tools. A local-first Windows workspace for visible AI-assisted work.">
-<meta property="og:title" content="Mefi's Studio AI+ 0.4.3 — Ideas into verified work"><meta property="og:description" content="Media queue. Dynamic tree. Per-agent tools. Download 0.4.3 for Windows and watch the Studio showreel."><meta property="og:type" content="website"><meta property="og:image" content="https://nateecho32-stack.github.io/mefi-studio/media/mefi-studio-v0.4.2-poster.jpg"><meta property="og:url" content="https://nateecho32-stack.github.io/mefi-studio/"><meta property="og:image:alt" content="Mefi's Studio AI+ 0.4.3 — agents you can watch work"><meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#f0f0e8">
-<link rel="icon" href="assets/favicon.ico"><link rel="stylesheet" href="assets/site.css"><link rel="stylesheet" href="assets/launch.css"></head>
-<body class="launch"><a class="skip-link" href="#main">Skip to content</a>
-<header class="nav"><div class="container nav-inner"><a class="brand" href="index.html"><img src="assets/icon-256.png" width="30" height="30" alt="">Mefi's Studio AI+</a><nav class="nav-links" aria-label="Site"><a href="#showcase">Watch</a><a href="download.html">Download</a><a href="wiki/">Wiki</a><a href="https://discord.gg/xgfKc5pVxG">Discord</a><a href="https://github.com/nateecho32-stack/mefi-studio">GitHub ↗</a></nav></div></header>
-<main id="main">
-<section class="launch-hero container">
-  <div class="eyebrow">VERSION 0.4.3 · LOCAL-FIRST · WINDOWS</div>
-  <h1>Your idea.<br>A whole studio.</h1>
-  <p class="launch-lede">Turn ideas into tasks. Watch coding agents work.<br>Review the results, with you in control.</p>
-  <div class="hero-actions"><a class="btn btn-primary" href="download.html">Download 0.4.3 for Windows →</a><a class="btn" href="#showcase">Watch the 40-second showreel</a></div>
-  <p class="release-hint" data-latest-hint>Portable Windows app · <a href="https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.3">0.4.3 release notes</a></p>
-  <div class="hero-mark" aria-hidden="true"><span>PLAN</span><span>MAP</span><span>BUILD</span><b>M+</b><span>CHECK</span><span>LEARN</span><span>SHIP</span></div>
-</section>
-<section id="showcase" class="container showcase">
-  <div class="eyebrow">STUDIO IN MOTION</div>
-  <h2>See the work take shape.</h2>
-  <p>From the first idea to a verified result, follow the visual language of Studio: live agents, distinctive node styles, themes and a workflow you can inspect.</p>
-  <video controls playsinline preload="metadata" poster="media/mefi-studio-v0.4.2-poster.jpg" aria-label="Mefi's Studio AI+ 0.4.2 showreel, 40 seconds" aria-describedby="showreel-note">
-    <source src="media/mefi-studio-v0.4.2-discord.mp4" type="video/mp4">
-    <a href="media/mefi-studio-v0.4.2-discord.mp4">Download the showreel</a>.
-  </video>
-  <p class="preview-note" id="showreel-note">A 40-second illustrated overview using sample tasks and Studio's own node artwork. Includes music; playback starts when you press Play.</p>
-  <div class="hero-actions"><a class="btn btn-primary" href="media/mefi-studio-v0.4.2-discord.mp4" download>Download the Discord video · 9.99 MB</a><a class="btn" href="media/social-posts.md">Get the announcement copy</a></div>
-  <details class="showreel-transcript"><summary>Read the showreel overview</summary><p>An idea becomes a task. Agents appear in the live tree as work moves through queued, running, verifying and done. Eight node styles and eleven themes let you shape the workspace. Studio uses check, test and audit gates for its own releases, stores project records locally and has no usage telemetry. Your chosen AI providers receive requests. No Studio account is required.</p></details>
-</section>
-<section class="container launch-features" id="whats-new">
-  <div class="eyebrow">WHAT'S NEW IN 0.4.3</div>
-  <h2>More control over how work takes shape.</h2>
-  <div class="feature-cards">
-    <article><span>01 / MEDIA</span><h3>Keep playback moving</h3><p>Queue copied links and YouTube results, browse with the built-in explorer, and restore playback, volume and tree placement.</p></article>
-    <article><span>02 / TREE</span><h3>Shape the live view</h3><p>Choose music and video movement, ring, wave or spiral layouts, and tune position, brightness, outlines and transparency.</p></article>
-    <article><span>03 / PLANNING</span><h3>Bring in project files</h3><p>Drop text and code into Home, Vibe and Plans. Drafts and plan progress stay with each project, and planning reads fresh project context.</p></article>
-    <article><span>04 / AGENTS</span><h3>Choose tools by role</h3><p>Set web search, project reads and MCP tools for each agent role, including supported OpenCode and Claude workers.</p></article>
-    <article><span>05 / ZEN</span><h3>Tour the tree</h3><p>Park at the right edge of Command view for a slow tree tour, then move, click or type to return to the live controls.</p></article>
-    <article><span>06 / LOCAL</span><h3>Keep your preferences</h3><p>Playback and display settings persist locally; local style unlocks remain separate from release defaults.</p></article>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mefi's Studio AI+ — Say it. Watch it get built.</title>
+<meta name="description" content="A free Windows studio where AI coding agents build your ideas while you watch. Talk it over, hit Build it, then put on a video or hang out with friends while every step shows up live and every result gets checked.">
+<meta property="og:title" content="Mefi's Studio AI+ — Say it. Watch it get built.">
+<meta property="og:description" content="Hand your idea to a team of coding agents, watch them work as a living tree, and put something on while they build. Free and open source for Windows.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://nateecho32-stack.github.io/mefi-studio/">
+<meta property="og:image" content="https://nateecho32-stack.github.io/mefi-studio/assets/shots/og.jpg">
+<meta property="og:image:alt" content="Studio's Command view: a tree of agents at work over a playing video, with the Live work panel on the right">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#050d13">
+<link rel="icon" href="assets/favicon.ico">
+<link rel="stylesheet" href="assets/site.css">
+<link rel="stylesheet" href="assets/home.css">
+</head>
+<body class="home">
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="nav">
+  <div class="container nav-inner">
+    <a class="brand" href="index.html"><img src="assets/icon-256.png" width="30" height="30" alt="">Mefi's Studio AI+</a>
+    <nav class="nav-links" aria-label="Site">
+      <a href="#how">How it works</a>
+      <a href="#media">Media</a>
+      <a href="#friends">Friends</a>
+      <a href="#new">What's new</a>
+      <a href="wiki/">Wiki</a>
+      <a href="https://github.com/nateecho32-stack/mefi-studio" rel="noopener">GitHub ↗</a>
+      <a class="nav-cta" href="download.html">Download</a>
+    </nav>
   </div>
-  <p class="release-hint"><a href="https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.3">Read the 0.4.3 release notes →</a> · <a href="wiki/#/whats-new">Explore the update in the wiki</a></p>
+</header>
+
+<main id="main">
+
+<!-- HERO -->
+<section class="hero">
+  <canvas class="hero-sky" aria-hidden="true"></canvas>
+  <div class="container hero-copy">
+    <a class="pill" href="#new"><b>New</b> 0.4.4 · one subscription runs the whole studio →</a>
+    <h1>Say it.<br><span class="grad">Watch it get built.</span></h1>
+    <p class="lede">Mefi's Studio turns your ideas into tasks and hands them to AI coding agents. You watch every step as a living tree. Put a video on or hang out with friends while they work, then come back to finished work that has been checked.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary btn-lg" href="download.html">Download for Windows</a>
+      <a class="btn btn-lg" href="#how">See how it works</a>
+    </div>
+    <p class="fine">Free and open source (MIT) · Portable, no installer · No account</p>
+    <p class="fine" data-latest-hint></p>
+  </div>
+  <div class="container hero-shot">
+    <figure class="frame frame-hero">
+      <img src="assets/shots/vibe.webp" width="2400" height="1500" alt="Vibe mode: a box that asks what's next for the Notes app, with Needs you, Building now, Freshly done and Fresh ideas cards below it" fetchpriority="high">
+    </figure>
+    <div class="float-chip chip-a" aria-hidden="true"><i class="dot live"></i>2 agents building</div>
+    <div class="float-chip chip-b" aria-hidden="true"><i class="dot warn"></i>1 decision needs you</div>
+    <div class="float-chip chip-c" aria-hidden="true"><i class="dot info"></i>Now playing · lo-fi mix</div>
+  </div>
 </section>
-<section class="container launch-bottom">
-  <div class="eyebrow">READY WHEN YOU ARE</div><h2>Start with your next idea.</h2>
-  <p>Download the portable Windows app, extract the folder and open <strong>Mefi Studio AI+.exe</strong>. No Node.js installation or Studio account required.</p>
-  <div class="hero-actions"><a class="btn btn-primary" href="download.html">Get Studio 0.4.3</a><a class="btn" href="wiki/#/getting-started">First-launch guide</a><a class="btn" href="https://discord.gg/xgfKc5pVxG">Join the community</a></div>
+
+<!-- WORKS WITH -->
+<section class="works-with" aria-labelledby="works-with-title">
+  <div class="container">
+    <p id="works-with-title" class="eyebrow center">Works with the coding agents and models you already use</p>
+    <ul class="logo-row">
+      <li>Claude Code</li><li>OpenCode</li><li>Codex</li><li>Grok</li><li>Antigravity</li><li>OpenRouter</li><li>LM Studio</li><li>z.ai</li><li>Any OpenAI-compatible API</li>
+    </ul>
+  </div>
 </section>
-</main><footer><div class="container foot-inner"><p>© 2026 MefiMaxi · MIT License</p><div class="foot-links"><a href="wiki/">Wiki</a><a href="community.html">Community</a><a href="https://github.com/nateecho32-stack/mefi-studio/blob/main/CHANGELOG.md">Full changelog</a><a href="https://github.com/nateecho32-stack/mefi-studio">Source</a></div></div></footer><script src="assets/site.js"></script></body></html>
+
+<!-- HOW IT WORKS -->
+<section id="how" class="section">
+  <div class="container">
+    <div class="section-intro">
+      <p class="eyebrow">How it works</p>
+      <h2>From one sentence to checked work.</h2>
+      <p>You describe what you want. Studio plans it, builds it and checks it, and shows you every step along the way.</p>
+    </div>
+    <ol class="steps4">
+      <li><span class="n">01</span><h3>Say it</h3><p>Type an idea, a fix or a question. <b>Talk it over</b> to think it through with Mefi, or press <b>Build it</b> to put it on the board. Drop files in for context.</p></li>
+      <li><span class="n">02</span><h3>Mefi sizes it</h3><p>A small change goes straight to a builder. A bigger one is split into two to six steps. Each step leaves your project working, and your original request runs last to tie them together.</p></li>
+      <li><span class="n">03</span><h3>Agents build it</h3><p>Coding agents pick up the work in your project folder. Each one shows up in the tree, flies to its task and tells you what it's doing.</p></li>
+      <li><span class="n">04</span><h3>It gets checked</h3><p>Finished work waits in <b>Review</b> with its evidence until the checks pass or you confirm it. Here, "done" means verified.</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- VIBE -->
+<section class="section feat">
+  <div class="container split">
+    <div class="copy">
+      <p class="eyebrow">Vibe mode</p>
+      <h2>One calm screen for everything that matters.</h2>
+      <p>Vibe puts the conversation, new work, live progress and your decisions in one place. Cards appear only when they have something to tell you, so a quiet project stays quiet.</p>
+      <ul class="ticks">
+        <li><b>Needs you</b>: questions, approvals and stuck tasks, each answered in place</li>
+        <li><b>Building now</b>: what every agent is doing, with live progress</li>
+        <li><b>Freshly done</b> and <b>Fresh ideas</b>: what finished, and what's worth building next</li>
+        <li><b>New app</b>: name it, describe it, and Studio makes the folder, starts git and begins building</li>
+      </ul>
+      <p class="aside">Want every control? Switch to <b>Build</b> for the full workspace. Studio remembers which mode you like.</p>
+    </div>
+    <figure class="frame"><img src="assets/shots/vibe-void.webp" width="2400" height="1500" loading="lazy" alt="Vibe mode in the violet Void theme"></figure>
+  </div>
+</section>
+
+<!-- COMMAND -->
+<section class="section feat">
+  <div class="container split reverse">
+    <div class="copy">
+      <p class="eyebrow">Command view</p>
+      <h2>Watch your agents work, live.</h2>
+      <p>Every session, task and agent is a node in a living tree. Builders orbit your assistant, fly to the task they're working on and report back in speech bubbles. The side panel keeps score: what's ready, what's verifying, what's waiting on you.</p>
+      <ul class="ticks">
+        <li>Several builders at once, each on its own task</li>
+        <li>Progress from the agent's own step list, not guesswork</li>
+        <li>Click any node for its details, history and evidence</li>
+        <li>Park the mouse at the edge for a slow Zen tour of the tree</li>
+      </ul>
+    </div>
+    <figure class="frame"><img src="assets/shots/command.webp" width="2400" height="1500" loading="lazy" alt="Command view: tasks and builders drawn as a connected tree, with the Live work panel listing two running tasks and three working agents"></figure>
+  </div>
+</section>
+
+<!-- MEDIA -->
+<section id="media" class="section media">
+  <div class="container">
+    <div class="section-intro wide">
+      <p class="eyebrow">While you wait</p>
+      <h2>Put something on while they code.</h2>
+      <p>Agents take a few minutes. Studio has a media player built in, so you can watch, listen or browse without leaving the app, and it tells you when the work is done.</p>
+    </div>
+    <figure class="frame frame-wide">
+      <img src="assets/shots/watch-bg.webp" width="2400" height="1500" loading="lazy" alt="A video playing as the background of Command view, with the agent tree and Live work panel drawn on top of it">
+      <figcaption>Use a video as the backdrop. The tree stays readable on top, and the video fades when a task finishes.</figcaption>
+    </figure>
+    <div class="grid3">
+      <article class="card"><h3>YouTube and more</h3><p>Play YouTube, Vimeo, SoundCloud, Spotify, Discord attachments or plain video and audio links in a floating player that stays put as you move around.</p></article>
+      <article class="card"><h3>Up next</h3><p>Search YouTube in the built-in explorer and build a queue. <b>Next video</b> plays what you queued first, and videos advance on their own.</p></article>
+      <article class="card"><h3>Behind the tree</h3><p>Make any video your background. Set its brightness and the tree's transparency, and let the tree drift toward the darker parts of the frame.</p></article>
+      <article class="card"><h3>Fade on finish</h3><p>When a task finishes, the video fades and Studio tells you. One click brings it back.</p></article>
+      <article class="card"><h3>Browse inside the player</h3><p><b>Browse here</b> opens websites in the same player, with an address bar, back and forward. Copy a link anywhere and Studio offers to play or queue it.</p></article>
+      <article class="card"><h3>Music moves the tree</h3><p>Play your own music or ad-free radio. Turn on the audio link and the tree speeds up, sways and pulses with the beat.</p></article>
+    </div>
+  </div>
+</section>
+
+<!-- FRIENDS -->
+<section id="friends" class="section friends">
+  <div class="container">
+    <div class="section-intro wide">
+      <p class="eyebrow">Friends &amp; linking</p>
+      <h2>Build together. Hang out while it builds.</h2>
+      <p>Tap Mefi, the glowing companion, and open <b>Friends</b>. From there you can link up with the Void Engine community, listen in sync with friends and keep every PC you work from on the same page.</p>
+    </div>
+
+    <div class="friends-grid">
+      <article class="fcard fcard-media">
+        <div class="fcard-copy">
+          <span class="tag tag-soon">Rolling out</span>
+          <h3>Listen and watch together</h3>
+          <p>Pick one of your rooms and play a link for everyone in it. Everyone listening along in Studio hears it at the same point, and the room's Discord thread gets a note. Whoever put it on steers it; everyone else chooses <b>Listen along</b>.</p>
+          <p class="small">Also <b>Share what I'm playing</b>, so friends can check <code>/nowplaying</code> on Discord. It's off unless you turn it on.</p>
+        </div>
+        <img src="assets/shots/listen-panel.webp" width="1252" height="636" loading="lazy" alt="The Listen together section: connected to the Late-night builders room, Nova is playing Work in Motion, with Stop listening along and a Share what I'm playing switch">
+      </article>
+
+      <article class="fcard fcard-media">
+        <div class="fcard-copy">
+          <span class="tag tag-live">New in 0.4.4</span>
+          <h3>Your PCs, linked through GitHub</h3>
+          <p>Work from a desktop, a laptop and a spare PC without losing track. <b>Your PCs</b> says whether this PC matches GitHub and lists anything that hasn't reached it yet. <b>Sync this PC</b> pulls and pushes safely. It never force-pushes or overwrites work you haven't committed.</p>
+        </div>
+        <img src="assets/shots/friends-panel.webp" width="1840" height="1240" loading="lazy" alt="Mefi's bubble menu open on Friends: Connect with Discord, Friends and listening rooms, and a Your PCs card that says This PC matches GitHub, with a Sync this PC button">
+      </article>
+
+      <article class="fcard">
+        <span class="tag tag-soon">Rolling out</span>
+        <h3>Link your Discord</h3>
+        <p>Join the <b>Void Engine</b> Discord to share what you've built, trade model setups and chat while your agents work. Linking your account unlocks the Void collection: four extra themes and three node styles.</p>
+        <p class="small">Linking is optional and only talks to discord.com. It reads your Discord id, username and server roles, and nothing about your projects.</p>
+      </article>
+
+      <article class="fcard roadmap">
+        <span class="tag tag-next">On the roadmap</span>
+        <h3>What's coming to rooms</h3>
+        <ul class="ticks">
+          <li><b>Room chat in Studio</b>: rooms you join by invite, backed by Discord and shown inside the app</li>
+          <li><b>Cowork rooms</b>: share a project with friends while your agents coordinate so they don't collide</li>
+          <li><b>Capacity pools</b>: lend spare agent capacity to a room, under a shared cap</li>
+        </ul>
+      </article>
+    </div>
+    <div class="cta-row center">
+      <a class="btn btn-primary" href="https://discord.gg/xgfKc5pVxG" rel="noopener">Join the Void Engine Discord</a>
+      <a class="btn" href="community.html">Community &amp; perks</a>
+    </div>
+  </div>
+</section>
+
+<!-- CONTROL -->
+<section class="section feat">
+  <div class="container split">
+    <div class="copy">
+      <p class="eyebrow">You stay in charge</p>
+      <h2>Agents ask. You decide in one click.</h2>
+      <p>When an agent hits a real choice, it asks you, explains why and suggests an answer. Pick an option, or type your own words, and the work carries on.</p>
+      <ul class="ticks">
+        <li>Four permission modes: <b>Always ask</b>, <b>Accept per task</b>, <b>Auto</b> and <b>Elevated only</b></li>
+        <li>Every automatic decision comes with a <b>Why</b> and an <b>Undo</b></li>
+        <li>Mefi learns from your answers, and you can make it forget</li>
+        <li>Risky or permission-level calls always wait for you</li>
+      </ul>
+    </div>
+    <figure class="frame"><img src="assets/shots/needs-you.webp" width="2400" height="1500" loading="lazy" alt="A decision drawer beside Vibe mode: Should the empty state also appear when a search has no matches? The recommended option is One component for both"></figure>
+  </div>
+</section>
+
+<!-- BRAIN / MAP -->
+<section class="section">
+  <div class="container">
+    <div class="section-intro wide">
+      <p class="eyebrow">Under the hood</p>
+      <h2>See the plan, not just the result.</h2>
+      <p>Studio shows how each task is broken down, which parts of your project it touches and how it went last time.</p>
+    </div>
+    <div class="duo">
+      <figure class="frame"><img src="assets/shots/brain.webp" width="2400" height="1500" loading="lazy" alt="Agent Brain: Mefi at the head, a lead agent, and steps Read the brief, Map the files, Build empty state and Add keyboard action, then Run the checks and Verify the result"><figcaption><b>Agent Brain</b>: each task's pipeline, with sub-agents working their steps and reports climbing back up.</figcaption></figure>
+      <figure class="frame"><img src="assets/shots/map.webp" width="2400" height="1500" loading="lazy" alt="Explore the project: the project's systems (Search, Editor, Checks, Design, Export, Library) as tiles, with working and changed filters"><figcaption><b>Project map</b>: your code as systems, parts and files, lit up where agents are working.</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<!-- MAKE IT YOURS -->
+<section class="section">
+  <div class="container">
+    <div class="section-intro wide">
+      <p class="eyebrow">Make it yours</p>
+      <h2>Eleven themes. Eight node styles.</h2>
+      <p>Pick colours, node looks, layouts and glass. Every theme restyles the whole app, from the menus to the tree.</p>
+    </div>
+    <ul class="themes">
+      <li><img src="assets/shots/thumb-command-abyss.webp" width="960" height="681" loading="lazy" alt=""><span>Abyss · Prism</span></li>
+      <li><img src="assets/shots/thumb-command-dusk.webp" width="960" height="681" loading="lazy" alt=""><span>Neon Dusk · Sigil</span></li>
+      <li><img src="assets/shots/thumb-command-eclipse.webp" width="960" height="681" loading="lazy" alt=""><span>Eclipse · Halo</span></li>
+      <li><img src="assets/shots/thumb-command-ember.webp" width="960" height="681" loading="lazy" alt=""><span>Ember · Soft glass</span></li>
+      <li><img src="assets/shots/thumb-command-midnight.webp" width="960" height="681" loading="lazy" alt=""><span>Midnight · Minimal</span></li>
+      <li><img src="assets/shots/thumb-command-gold.webp" width="960" height="681" loading="lazy" alt=""><span>Studio gold · Classic orbs</span></li>
+    </ul>
+    <p class="fine center">Seven themes, custom colours and five node styles are free. Void, Eclipse, Abyss and Neon Dusk, plus Singularity, Prism and Sigil, form the Void collection for Void Engine members. It's MIT-licensed, so you can also unlock them in your own fork.</p>
+  </div>
+</section>
+
+<!-- WHAT'S NEW -->
+<section id="new" class="section new">
+  <div class="container">
+    <div class="section-intro wide">
+      <p class="eyebrow">New in 0.4.4</p>
+      <h2>The biggest update yet.</h2>
+    </div>
+    <div class="grid3">
+      <article class="card"><span class="k">Setup</span><h3>One subscription runs everything</h3><p>Sign in to Codex, Claude Code, Grok or Antigravity during setup. Studio can install the CLI for you, check the connection and send chat, planning, agents and coding through that one account.</p></article>
+      <article class="card"><span class="k">Awareness</span><h3>It notices work done outside Studio</h3><p>Reopen a project and Studio reports the commits, edits and Claude Code or OpenCode sessions from while it was closed. It then checks queued tasks against them, so nothing gets built twice.</p></article>
+      <article class="card"><span class="k">Planning</span><h3>Mefi sizes every request</h3><p><b>Build it</b> decides whether a request is one task or several steps, and a <b>Plan in flight</b> card shows how far along it is. <b>Make it one task</b> undoes the split.</p></article>
+      <article class="card"><span class="k">Control</span><h3>Permission modes that learn</h3><p>Choose how much agents can do alone. Automatic answers have a Why and an Undo, and Mefi picks up your preferences as you answer.</p></article>
+      <article class="card"><span class="k">Friends</span><h3>Your PCs stay in sync</h3><p>Friends › Your PCs keeps every machine you work from matched to GitHub, with a safe <b>Sync this PC</b>.</p></article>
+      <article class="card"><span class="k">Media</span><h3>A better player</h3><p>Player and queue in one panel, websites that open inside the player, record artwork for local music and a new listening-room layout.</p></article>
+      <article class="card"><span class="k">Vibe</span><h3>Vibe gets its own menus</h3><p>Tasks, Plans, Ideas, Team and Settings open as compact panels inside Vibe. Send finished work back with <b>Ask for a change</b>.</p></article>
+      <article class="card"><span class="k">Desk</span><h3>Let Mefi handle the small asks</h3><p>Turn it on and your companion settles routine questions for you, then says what it chose and why. Anything risky still waits for you.</p></article>
+      <article class="card"><span class="k">Speed</span><h3>Lighter and steadier</h3><p>A calmer Command view that rests between frames, a whole-app bug hunt, a Trace viewer for Studio's logs, and updates that save your agents' work before they restart.</p></article>
+    </div>
+    <p class="fine center"><a href="https://github.com/nateecho32-stack/mefi-studio/blob/main/CHANGELOG.md">Read the full changelog →</a></p>
+  </div>
+</section>
+
+<!-- PRIVACY -->
+<section class="section privacy">
+  <div class="container">
+    <div class="trust">
+      <div><h3>Local-first</h3><p>Tasks, conversations, plans and settings stay on your PC, inside the project you chose.</p></div>
+      <div><h3>No account, no telemetry</h3><p>Studio has no sign-up and doesn't track how you use it.</p></div>
+      <div><h3>Keys stay locked</h3><p>API keys are encrypted with the Windows keystore. The app only ever sees "saved" or "not saved".</p></div>
+      <div><h3>Your AI, your choice</h3><p>Use a CLI login, an API key or a local model. Only the providers you connect receive your prompts and project context.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="section faq">
+  <div class="container narrow">
+    <p class="eyebrow center">Questions</p>
+    <h2 class="center">Good to know</h2>
+    <details><summary>Is it free?</summary><p>Yes. Mefi's Studio AI+ is open source under the MIT license. You pay only for the AI you connect, and a local model or a subscription you already have works too.</p></details>
+    <details><summary>What do I need?</summary><p>Windows 10 or 11. Download the portable app, extract the folder and open <b>Mefi Studio AI+.exe</b>. No installer or Node.js needed. To build, you need a coding agent (Claude Code, OpenCode, Codex, Grok or Antigravity). Setup can install and sign in to one for you.</p></details>
+    <details><summary>Will agents change my files without asking?</summary><p>Agents run real commands in the project folder you pick. You choose how much they do alone: <b>Always ask</b> approves each step, and <b>Auto</b> lets routine work run. Nothing starts until you open a project and turn the agents on.</p></details>
+    <details><summary>Does my code leave my computer?</summary><p>Only to the AI providers and coding tools you connect, when they work on a task. Studio itself has no servers, no account and no telemetry.</p></details>
+    <details><summary>Can I watch YouTube in it?</summary><p>Yes. The built-in player handles YouTube, Vimeo, SoundCloud, Spotify and plain media links. It floats over your work, can become the background, and fades when a task finishes.</p></details>
+    <details><summary>Mac or Linux?</summary><p>Studio is built and tested on Windows. It's open source, and other platforms are untested.</p></details>
+  </div>
+</section>
+
+<!-- FINAL CTA -->
+<section class="section final">
+  <div class="container final-inner">
+    <img src="assets/icon-256.png" width="72" height="72" alt="">
+    <h2>What will you build first?</h2>
+    <p>Download Studio, open a project folder and describe your first idea.</p>
+    <div class="cta-row center">
+      <a class="btn btn-primary btn-lg" href="download.html">Download for Windows</a>
+      <a class="btn btn-lg" href="wiki/#/getting-started">First-launch guide</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<dialog class="lightbox" aria-label="Screenshot"><img alt=""><button type="button" class="lightbox-close" aria-label="Close">×</button></dialog>
+
+<footer>
+  <div class="container foot-inner">
+    <p>© 2026 MefiMaxi · MIT License · Screenshots use sample data.</p>
+    <div class="foot-links"><a href="download.html">Download</a><a href="wiki/">Wiki</a><a href="community.html">Community</a><a href="https://discord.gg/xgfKc5pVxG" rel="noopener">Discord</a><a href="https://github.com/nateecho32-stack/mefi-studio/blob/main/CHANGELOG.md">Changelog</a><a href="https://github.com/nateecho32-stack/mefi-studio" rel="noopener">Source</a></div>
+  </div>
+</footer>
+<script src="assets/site.js"></script>
+<script src="assets/home.js"></script>
+</body>
+</html>

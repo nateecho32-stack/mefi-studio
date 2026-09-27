@@ -36,16 +36,16 @@
       <div class="container release">
         <div class="release-card" id="release" aria-live="polite">
           <span class="badge live">Published release</span>
-          <div class="version" style="margin-top:10px">v0.4.3</div>
-          <p class="muted">Media queues, dynamic tree controls, file-aware planning and per-agent tools.</p>
+          <div class="version" style="margin-top:10px">v0.4.4</div>
+          <p class="muted">One subscription runs the whole studio, Mefi sizes every request, permission modes that learn, and Your PCs sync.</p>
           <dl>
             <dt>Platform</dt><dd>Windows 10/11, x64, portable</dd>
-            <dt>File</dt><dd>Mefi-Studio-AI+-v0.4.3-win32-x64.zip</dd>
-            <dt>Checksum</dt><dd><a href="https://github.com/nateecho32-stack/mefi-studio/releases/download/v0.4.3/Mefi-Studio-AI%2B-v0.4.3-win32-x64.zip.sha256" rel="noopener">Download SHA-256</a></dd>
+            <dt>File</dt><dd>Mefi-Studio-AI+-v0.4.4-win32-x64.zip</dd>
+            <dt>Checksum</dt><dd><a href="https://github.com/nateecho32-stack/mefi-studio/releases/download/v0.4.4/Mefi-Studio-AI%2B-v0.4.4-win32-x64.zip.sha256" rel="noopener">Download SHA-256</a></dd>
           </dl>
           <div class="release-actions">
-            <a class="btn btn-primary" href="https://github.com/nateecho32-stack/mefi-studio/releases/download/v0.4.3/Mefi-Studio-AI%2B-v0.4.3-win32-x64.zip" rel="noopener">Download v0.4.3 for Windows</a>
-            <a class="btn" href="https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.3" rel="noopener">Release notes</a>
+            <a class="btn btn-primary" href="https://github.com/nateecho32-stack/mefi-studio/releases/download/v0.4.4/Mefi-Studio-AI%2B-v0.4.4-win32-x64.zip" rel="noopener">Download v0.4.4 for Windows</a>
+            <a class="btn" href="https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.4" rel="noopener">Release notes</a>
           </div>
         </div>
         <div class="release-side">
@@ -53,7 +53,7 @@
             <h3>Requirements</h3>
             <ul class="checklist">
               <li><strong>Windows 10 or 11.</strong> Saved keys are protected by the Windows keystore (DPAPI). Other platforms are untested.</li>
-              <li><strong>A builder CLI to build (optional).</strong> <code>opencode</code> is preferred; <code>claude</code>, <code>codex</code>, <code>grok</code> and <code>agy</code> are detected too. Without one, Studio still plans, chats and browses the catalog.</li>
+              <li><strong>A coding agent to build.</strong> Claude Code, OpenCode, Codex, Grok or Antigravity. Setup can install one and sign you in. Without one, Studio still plans, chats and browses the catalog.</li>
               <li><strong>An API key or a local model (optional)</strong> for the companion: z.ai, OpenCode Go, a CLI login, LM Studio or any OpenAI-compatible endpoint.</li>
               <li><strong>Node 24 and npm</strong> only for a source install, <strong>Git</strong> only to clone, <strong>Python 3</strong> on PATH as <code>python</code> only for <code>npm test</code>.</li>
             </ul>
@@ -89,8 +89,8 @@
           <p class="muted">Every release ships a <code>.sha256</code> file next to the zip. Studio's own updater checks it before installing; you can do the same by hand in PowerShell from the folder you downloaded into. The two hashes must match exactly.</p>
         </div>
         <div>
-<pre><code>Get-FileHash ".\<span data-asset-name>Mefi-Studio-AI+-v0.4.3-win32-x64.zip</span>" -Algorithm SHA256
-Get-Content ".\<span data-asset-name>Mefi-Studio-AI+-v0.4.3-win32-x64.zip</span>.sha256"</code></pre>
+<pre><code>Get-FileHash ".\<span data-asset-name>Mefi-Studio-AI+-v0.4.4-win32-x64.zip</span>" -Algorithm SHA256
+Get-Content ".\<span data-asset-name>Mefi-Studio-AI+-v0.4.4-win32-x64.zip</span>.sha256"</code></pre>
         </div>
       </div>
     </section>
@@ -121,9 +121,9 @@ npm run package          # refresh a portable build in dist/</code></pre>
       <div class="container">
         <div class="section-head">
           <div class="eyebrow">Release or source?</div>
-          <h2>0.4.3 is ready to download</h2>
-          <p>The published build adds a persistent media queue and YouTube explorer, customizable music and video tree movement, file-aware planning, and per-agent web search, project reads and MCP tools. It also includes the Agent Brain, project map and floating media features introduced in earlier releases.</p>
-          <p><a href="wiki/#/whats-new">What's new in 0.4.3 →</a></p>
+          <h2>0.4.4 is ready to download</h2>
+          <p>0.4.4 adds guided CLI setup, so one Codex, Claude Code, Grok or Antigravity subscription can run the whole studio. It also notices work done outside Studio, splits bigger requests into steps, adds four permission modes with Why and Undo, and keeps your PCs in sync through GitHub. The media player, Vibe mode, Agent Brain and project map from earlier releases are all included.</p>
+          <p><a href="wiki/#/whats-new">What's new in 0.4.4 →</a></p>
         </div>
       </div>
     </section>
@@ -192,9 +192,9 @@ npm run package          # refresh a portable build in dist/</code></pre>
         box.innerHTML = publishedRelease;
         const note = document.createElement("p");
         note.className = "dim";
-        note.textContent = "The latest-release lookup is unavailable. The published 0.4.3 download and release notes above remain available.";
+        note.textContent = "The latest-release lookup is unavailable. The published 0.4.4 download and release notes above remain available.";
         box.append(note);
-        fillAssetNames("Mefi-Studio-AI+-v0.4.3-win32-x64.zip");
+        fillAssetNames("Mefi-Studio-AI+-v0.4.4-win32-x64.zip");
       }
 
       function renderRelease(rel) {
