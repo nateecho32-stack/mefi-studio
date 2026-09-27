@@ -95,13 +95,19 @@ test("a launched child's lines split across chunks, CRLF included, and an unendi
   assert.ok(lines[4].startsWith("y".repeat(4000)) && lines[4].endsWith("(61536 more characters)"), "the partial line was held to 64 KiB before the log clipped it");
 });
 
-function pushHost() {
+function pushHost({ smoke = false } = {}) {
   const time = clock(), sent = [];
-  let active = { id: "a" };
-  const window = { isDestroyed: () => false, webContents: { send: (channel, payload) => sent.push({ channel, payload }) } };
-  const context = vm.createContext({ ...time, window, projects: { current: () => active, active: () => active } });
+  let active = { id: "a" }, hidden = false, minimized = false;
+  const window = { isDestroyed: () => false, isMinimized: () => minimized, isVisible: () => !hidden, webContents: { send: (channel, payload) => sent.push({ channel, payload }) } };
+  const context = vm.createContext({ ...time, window, SMOKE: smoke, CAPTURE: false, projects: { current: () => active, active: () => active } });
   vm.runInContext(section("function send(channel, payload) {", "// registerIpc installs"), context);
-  return { context, time, sent, switchTo: (id) => { active = { id }; } };
+  return {
+    context, time, sent,
+    switchTo: (id) => { active = { id }; },
+    hide: () => { hidden = true; },
+    minimize: () => { minimized = true; },
+    show: () => { hidden = false; minimized = false; context.flushHeldPushes(); },
+  };
 }
 
 test("board pushes: the first goes at once, a burst shares one trailing push of the newest list", () => {
@@ -130,6 +136,67 @@ test("a board list held for one project is dropped when the owner switches to an
   assert.deepEqual(sent.map((item) => item.payload), [["a1"]]);
   context.send("eyes:tasks", ["b1"]);
   assert.deepEqual(sent.at(-1).payload, ["b1"]);
+});
+
+test("a hidden window keeps only the newest board lists and machine status, and gets them when shown", () => {
+  const { context, time, sent, hide, show } = pushHost();
+  hide();
+  context.send("eyes:tasks", ["t1"]);
+  context.send("machine:status", { n: 1 });
+  context.send("eyes:tasks", ["t2"]);
+  context.send("eyes:requests", ["r1"]);
+  context.send("machine:status", { n: 2 });
+  context.send("eyes:assistant", { state: {} });
+  context.send("studio:log", ["line"]);
+  assert.deepEqual(sent.map((item) => item.channel), ["eyes:assistant", "studio:log"], "event channels still go out");
+  assert.equal(time.pending(), 0, "a held list starts no trailing timer");
+  show();
+  assert.deepEqual(sent.slice(2), [
+    { channel: "eyes:tasks", payload: ["t2"] },
+    { channel: "eyes:requests", payload: ["r1"] },
+    { channel: "machine:status", payload: { n: 2 } },
+  ]);
+  show();
+  assert.equal(sent.length, 5, "a second show has nothing left to send");
+  context.send("eyes:tasks", ["t3"]);
+  assert.equal(sent.length, 5, "the flushed list opened a coalescing window");
+  time.advance(250);
+  assert.deepEqual(sent.at(-1), { channel: "eyes:tasks", payload: ["t3"] });
+});
+
+test("a minimized window is held too, and a trailing board push that lands after hiding waits", () => {
+  const { context, time, sent, minimize, show } = pushHost();
+  context.send("eyes:tasks", ["v1"]);
+  context.send("eyes:tasks", ["v2"]);
+  minimize();
+  time.advance(250);
+  assert.deepEqual(sent.map((item) => item.payload), [["v1"]]);
+  show();
+  assert.deepEqual(sent.at(-1), { channel: "eyes:tasks", payload: ["v2"] });
+});
+
+test("a board list held for one project is dropped when the owner switches before the window shows", () => {
+  const { context, sent, hide, show, switchTo } = pushHost();
+  hide();
+  context.send("eyes:tasks", ["a1"]);
+  context.send("machine:status", { n: 1 });
+  switchTo("b");
+  show();
+  assert.deepEqual(sent, [{ channel: "machine:status", payload: { n: 1 } }]);
+});
+
+test("harness windows are never shown, so their pushes are never held", () => {
+  const { context, sent, hide } = pushHost({ smoke: true });
+  hide();
+  context.send("eyes:tasks", ["s1"]);
+  context.send("machine:status", { n: 1 });
+  assert.deepEqual(sent.map((item) => item.channel), ["eyes:tasks", "machine:status"]);
+});
+
+test("the studio window sends held pushes when it is shown or restored", () => {
+  const create = section("function createWindow() {", "// Screenshot tour:");
+  assert.match(create, /window\.on\("show", flushHeldPushes\)/);
+  assert.match(create, /window\.on\("restore", flushHeldPushes\)/);
 });
 
 test("overlapping queue-status asks share one board read; a later ask reads again", async () => {

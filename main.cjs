@@ -16357,11 +16357,43 @@ function updateSettings(mutate) {
 
 function send(channel, payload) {
   if (projects.current().id !== projects.active().id && (channel.startsWith("eyes:") || channel === "assistant:status")) return;
+  if (holdWhileHidden(channel, payload)) return;
   if (BOARD_PUSH_CHANNELS.has(channel)) {
     pushBoardList(channel, payload);
     return;
   }
   if (window && !window.isDestroyed()) window.webContents.send(channel, payload);
+}
+
+// A window parked in the tray or minimized shows none of these snapshots, yet
+// every push still cost the renderer a rebuild (a board push is every card,
+// up to four a second per list while agents work). While a real window is
+// hidden only the newest of each is kept, and showing the window sends them.
+// Harness windows (smoke boots, capture) are never shown and are not held.
+// Assistant pushes are not held: listeners act on their events, not just on
+// the state they carry.
+const heldPushes = new Map(); // channel -> { payload, projectId }
+let flushingHeld = false;
+
+function holdWhileHidden(channel, payload) {
+  if (flushingHeld || SMOKE || CAPTURE || !HELD_WHILE_HIDDEN.has(channel)) return false;
+  if (!window || window.isDestroyed() || (!window.isMinimized() && window.isVisible())) return false;
+  heldPushes.delete(channel); // re-inserted, so the flush follows push order
+  heldPushes.set(channel, { payload, projectId: BOARD_PUSH_CHANNELS.has(channel) ? projects.active().id : null });
+  return true;
+}
+
+function flushHeldPushes() {
+  const held = [...heldPushes];
+  heldPushes.clear();
+  flushingHeld = true;
+  try {
+    // A list held for one project is dropped if the owner switched since; the
+    // switch sent (and held) the new project's own lists.
+    for (const [channel, { payload, projectId }] of held) if (projectId === null || projectId === projects.active().id) send(channel, payload);
+  } finally {
+    flushingHeld = false;
+  }
 }
 
 // Board pushes carry whole lists (eyes:tasks is every card on the board), and
@@ -16373,9 +16405,12 @@ function send(channel, payload) {
 // to another before it goes out; the switch sends its own lists.
 const BOARD_PUSH_MS = 250;
 const BOARD_PUSH_CHANNELS = new Set(["eyes:tasks", "eyes:requests", "eyes:ideas"]);
+const HELD_WHILE_HIDDEN = new Set([...BOARD_PUSH_CHANNELS, "machine:status"]);
 const boardPushes = new Map(); // channel -> { timer, pending: { payload, projectId } | null }
 
 function pushBoardList(channel, payload) {
+  // The trailing push can land after the window was hidden.
+  if (holdWhileHidden(channel, payload)) return;
   const projectId = projects.active().id;
   const slot = boardPushes.get(channel);
   if (slot) {
@@ -19172,6 +19207,10 @@ function createWindow() {
   });
   // Otherwise closing is a quit, which asks first when work is only on this PC.
   window.on("close", (event) => syncWindowClose(event));
+  // Board lists and machine status held while the window was hidden
+  // (holdWhileHidden) go out as it comes back.
+  window.on("show", flushHeldPushes);
+  window.on("restore", flushHeldPushes);
   window.on("closed", () => (window = null));
 }
 
