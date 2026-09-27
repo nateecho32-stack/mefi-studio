@@ -61,6 +61,31 @@
 // page actually paints. Retries cannot mask the failures this probe exists
 // to catch: a throttled regression never answers via frames, and a wedged
 // page answers via nothing (sentinel), on every sample.
+// The occluded measure gets its own capability guard: a desktop can flip
+// document.hidden under the cover (or stall frames just long enough to look
+// occluded) without its throttling actually holding, and the strict rAF
+// -silence assert would then hard-fail on an environment gap every run. When
+// the measure catches rAF still advancing, the fixture corroborates whose
+// fault that is before failing: the probe page holding focus explains live
+// frames outright (the foreground window is exempt from occlusion
+// throttling), and so does a page that reads visible again at measure end
+// under a still-shown cover — the tracker un-marked occlusion mid-measure
+// (observed live on an actively used desktop whose Win32 foreground churned
+// between apps), and a page cannot flip its own document.hidden back.
+// Otherwise a blank control window is given the same visible→covered
+// transition as the booklet — shown inactive above the cover, proven to
+// paint, then dropped below it — because a window born under the cover never
+// receives that transition and can stay painting on a desktop that properly
+// throttles the transitioned booklet (observed live: growth 38 beside a
+// growth-0 booklet). A trivial data-URL page cannot opt out of occlusion
+// throttling, so a control window that also keeps painting proves the
+// desktop's tracker engaged without holding (recorded as `occlusionUnstable`,
+// clean exit, test skips with the explicit cause), while a control window
+// that stays silent with its counter proven alive once raised proves the
+// booklet page itself defeats throttling and the strict failure stands, now
+// with the control evidence attached. An errored or never-painting control
+// run is inconclusive and changes nothing: the original strict asserts still
+// apply.
 
 const { app, BrowserWindow, screen } = require("electron");
 const assert = require("node:assert/strict");
@@ -250,6 +275,7 @@ async function finish(error) {
   else if (report.windowLost) console.log(`Probe window destroyed externally (test will skip): ${report.windowLost.reason} — trigger: ${report.windowLost.trigger}`);
   else if (report.coverLost) console.log(`Cover window destroyed externally (test will skip): ${report.coverLost.reason} — trigger: ${report.coverLost.trigger}`);
   else if (report.occlusionUnsupported) console.log(`Occlusion capability absent on this desktop (test will skip): ${report.occlusionUnsupported.reason}`);
+  else if (report.occlusionUnstable) console.log(`Occlusion detected but not sustained on this desktop (test will skip): ${report.occlusionUnstable.cause}`);
   else console.log("Occlusion probe fixture passed");
   process.exitCode = failure ? 1 : 0;
   app.quit();
@@ -585,6 +611,162 @@ app.whenReady().then(async () => {
     }
     return proxy;
   }
+  // The occluded-measure capability guard (see the header comment): rAF
+  // advancing under a detected occlusion violates the silence contract, but
+  // the verdict needs to know whose fault it is before that contract fails a
+  // run. Returns { capabilityGap, regression?, record } — capabilityGap means
+  // the desktop did not sustain occlusion throttling (record `occlusionUnstable`
+  // and skip), regression means only the booklet page kept painting while a
+  // blank control under the same cover stayed silent (fail, with the control
+  // evidence attached), and neither means inconclusive: the strict asserts
+  // stand unchanged.
+  async function corroborateOcclusionSilence() {
+    const previousPhase = currentPhase;
+    currentPhase = "occluded-corroboration";
+    const record = {
+      reason: "occlusion was detected but frame silence did not hold during the measure",
+      detection: report.occluded.detection,
+      rafGrowth: report.occluded.rafGrowth,
+      pageState: report.occluded.state,
+      coverIntact: !cover.isDestroyed(),
+      coverVisible: !cover.isDestroyed() && cover.isVisible(),
+      coverAlwaysOnTop: !cover.isDestroyed() && cover.isAlwaysOnTop(),
+      windowState: { visible: window.isVisible(), minimized: window.isMinimized() },
+      timelineTail: Array.isArray(report.occlusionTimeline) ? report.occlusionTimeline.slice(-8) : null,
+    };
+    try {
+      record.foreground = await snapshotForeground();
+      if (!record.coverIntact || !record.coverVisible) {
+        // The cover died or was hidden without its "closed" event landing in
+        // time (or at all): an uncovered probe legitimately resumes painting,
+        // which is the recovery this fixture itself proves. Interference.
+        record.cause = "the cover window was no longer shown at measure time";
+        return { capabilityGap: true, record };
+      }
+      if (record.pageState?.focused === true) {
+        // Chromium exempts the foreground window from occlusion throttling,
+        // so a probe page holding focus mid-measure explains live frames
+        // without any app fault (a taskbar click on the probe, a focus steal
+        // gone sideways). Environment, not regression.
+        record.cause = "the probe page held focus at measure time and the foreground window is exempt from occlusion throttling";
+        return { capabilityGap: true, record };
+      }
+      if (record.pageState?.hidden !== true) {
+        // Occlusion was detected via the hidden signal, yet the page read
+        // visible again at measure end while the cover was still shown: the
+        // tracker un-marked occlusion mid-measure (observed live on an
+        // actively used desktop whose Win32 foreground churned between apps).
+        // A page cannot flip its own document.hidden back, so this is desktop
+        // state churn, never the page defeating throttling. Environment.
+        record.cause = "the occlusion tracker un-marked the still-covered window mid-measure (page read visible under a shown cover)";
+        return { capabilityGap: true, record };
+      }
+      // Blank control window given the same visible→covered transition as
+      // the booklet: a window born under the cover never receives that
+      // transition, and this desktop was observed to leave such a window
+      // painting (growth 38 in 3s) while the properly transitioned booklet
+      // read growth 0 — so a born-covered control cannot discriminate. The
+      // twin is therefore shown inactive above the cover first (screen-saver
+      // level, never focused, so it cannot take the foreground exemption),
+      // proven to paint, then dropped below the cover into the same
+      // covered-by-topmost state the booklet is in. A trivial data-URL page
+      // cannot opt out of occlusion throttling, so its behavior there
+      // separates a desktop whose tracker will not hold from a booklet page
+      // that defeats throttling.
+      const control = {};
+      record.control = control;
+      let twin = null;
+      try {
+        twin = new BrowserWindow({
+          x: probeLeft + 40,
+          y: probeTop + 40,
+          width: 320,
+          height: 200,
+          show: false,
+          skipTaskbar: true,
+          frame: false,
+          backgroundColor: "#101014",
+          webPreferences: {
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: true,
+            backgroundThrottling: true,
+          },
+        });
+        await twin.loadURL("data:text/html,<title>occlusion control</title><body style=\"background:#101014\"></body>");
+        await twin.webContents.executeJavaScript("window.__rafTicks = 0; window.__rafLoop = () => { window.__rafTicks += 1; requestAnimationFrame(window.__rafLoop); }; requestAnimationFrame(window.__rafLoop); true;", true);
+        twin.setAlwaysOnTop(true, "screen-saver");
+        twin.showInactive();
+        // Prove the control actually paints while visible above the cover;
+        // a control that never started cannot prove anything later.
+        const startDeadline = Date.now() + 5000;
+        let startTicks = -1;
+        while (Date.now() < startDeadline && !twin.isDestroyed()) {
+          startTicks = await twin.webContents.executeJavaScript("window.__rafTicks|0", true);
+          if (startTicks >= 3) break;
+          await pause(200);
+        }
+        control.visibleTicks = startTicks;
+        control.paintedWhileVisible = startTicks >= 3;
+        if (!control.paintedWhileVisible) {
+          record.cause = "the blank control window never painted while visible above the cover, so the control run is inconclusive";
+          return { capabilityGap: false, record };
+        }
+        // Drop the twin under the cover (out of the topmost band, directly
+        // below it) and wait for the same occlusion signals the booklet waits
+        // for — hidden flip or frame stall — before measuring.
+        twin.setAlwaysOnTop(false);
+        twin.moveTop();
+        const engageDeadline = Date.now() + 8000;
+        let lastTicks = startTicks;
+        let lastChange = Date.now();
+        let engaged = false;
+        while (Date.now() < engageDeadline && !twin.isDestroyed()) {
+          const state = await twin.webContents.executeJavaScript("({ hidden: document.hidden, ticks: window.__rafTicks|0 })", true);
+          if (state.hidden || (state.ticks === lastTicks && Date.now() - lastChange >= 1500)) { engaged = true; control.engagement = state.hidden ? "document.hidden" : "raf-silence"; break; }
+          if (state.ticks !== lastTicks) { lastTicks = state.ticks; lastChange = Date.now(); }
+          await pause(200);
+        }
+        control.engaged = engaged;
+        control.coveredBefore = { ticks: lastTicks };
+        await pause(3000);
+        const coveredAfter = await twin.webContents.executeJavaScript("({ ticks: window.__rafTicks|0, hidden: document.hidden })", true);
+        control.coveredAfter = coveredAfter;
+        control.coveredGrowth = coveredAfter.ticks - lastTicks;
+        // Prove the counter itself runs: raise the twin above the cover for a
+        // bounded moment. A silent-but-broken counter would otherwise fake the
+        // regression verdict. Raising a 320x200 window leaves the booklet
+        // covered everywhere else, and its growth was already measured.
+        twin.setAlwaysOnTop(true, "screen-saver");
+        twin.moveTop();
+        const raiseDeadline = Date.now() + 5000;
+        while (Date.now() < raiseDeadline && !twin.isDestroyed()) {
+          const raised = await twin.webContents.executeJavaScript("window.__rafTicks|0", true);
+          if (raised > coveredAfter.ticks) { control.raisedGrowth = raised - coveredAfter.ticks; break; }
+          await pause(200);
+        }
+        control.counterProvenWhenRaised = Boolean(control.raisedGrowth);
+        if (control.coveredGrowth > 0) {
+          record.cause = `the blank control window also kept painting under the same cover (growth=${control.coveredGrowth} in 3s), so this desktop detects occlusion without sustaining frame throttling`;
+          return { capabilityGap: true, record };
+        }
+        if (control.counterProvenWhenRaised) {
+          record.cause = `the blank control window stayed silent under the same cover while the booklet kept painting`;
+          return { regression: true, record };
+        }
+        record.cause = "the blank control window stayed silent but its own counter never advanced when raised, so the control run is inconclusive";
+        return { capabilityGap: false, record };
+      } catch (controlError) {
+        control.error = String((controlError && controlError.message) || controlError);
+        record.cause = `the blank control run errored (${control.error})`;
+        return { capabilityGap: false, record };
+      } finally {
+        if (twin && !twin.isDestroyed()) twin.destroy();
+      }
+    } finally {
+      currentPhase = previousPhase;
+    }
+  }
   if (!occluded) {
     // Some desktops never engage Chromium's native occlusion tracker at all:
     // the cover is shown focused, the probe window stays visible (never
@@ -631,6 +813,23 @@ app.whenReady().then(async () => {
   report.occluded.rafAfter = await run("return window.__rafTicks|0;");
   report.occluded.rafGrowth = report.occluded.rafAfter - report.occluded.rafBefore;
   report.occluded.state = await run("return { hidden: document.hidden, visibility: document.visibilityState, focused: document.hasFocus() };");
+  // rAF advancing under a detected occlusion needs a verdict before it can
+  // fail the run: corroborate whether the desktop's throttling failed to hold
+  // (capability gap → occlusionUnstable record, clean exit, skip) or the
+  // booklet page itself defeats throttling (regression → explicit failure
+  // with the control evidence). Inconclusive corroboration falls through to
+  // the unchanged strict asserts below.
+  if (report.occluded.rafGrowth > 0) {
+    const verdict = await corroborateOcclusionSilence();
+    if (verdict.capabilityGap) {
+      report.occlusionUnstable = verdict.record;
+      return finish();
+    }
+    report.occluded.silenceCorroboration = verdict.record;
+    if (verdict.regression) {
+      throw new Error(`rAF must stay silent while occluded (growth=${report.occluded.rafGrowth}) and the blank control window under the same cover stayed silent (growth=${verdict.record.control?.coveredGrowth}, counter proven alive when raised), so the booklet page itself defeats occlusion throttling: ${JSON.stringify(verdict.record)}`);
+    }
+  }
   report.occluded.probeSamples = await sampleProbe();
   report.occluded.probe = bestSample(report.occluded.probeSamples);
   report.occluded.worker = await run("return window.__workerProbe();");

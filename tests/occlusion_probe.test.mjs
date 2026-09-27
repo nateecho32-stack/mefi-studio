@@ -25,6 +25,18 @@
 // sign-off on that contract change is still pending) — and those results are
 // asserted as proxy results while the test pins that `occluded` was never
 // claimed from them.
+// The measured twin of the capability gate: some desktops detect occlusion
+// (document.hidden flips, or frames stall just long enough) without the
+// throttling actually holding, so the 3s measure catches rAF still advancing.
+// The fixture then corroborates whose fault that is — the probe page holding
+// the foreground exemption, the tracker un-marking the still-covered window
+// mid-measure, or a blank control window given the same visible→covered
+// transition also keeping painting — and reports `occlusionUnstable` when the
+// desktop itself would not sustain throttling. This test skips with that
+// explicit cause, the same information-not-regression treatment as
+// `occlusionUnsupported`, while a silent control window keeps the strict
+// failure (the booklet page itself defeating throttling remains a hard app
+// regression with the control evidence attached).
 //
 // Run: node --test tests/occlusion_probe.test.mjs
 
@@ -148,6 +160,27 @@ test("an occluded booklet window's worker/MessageChannel channel answers while r
     assert.equal(report.occlusionProxy, undefined, "the visibility proxy must stay unused when native occlusion is observed");
 
     assert.equal(report.occluded.windowState.minimized, false, "occlusion must be coverage, not minimize");
+
+    // Capability gate, the measured twin of occlusionUnsupported: occlusion
+    // was detected, but the 3s measure caught rAF still advancing and the
+    // fixture corroborated the desktop — the probe page held the foreground
+    // exemption, the tracker un-marked the still-covered window mid-measure
+    // (a page cannot flip its own document.hidden back), the cover was no
+    // longer shown, or a blank control window under the same cover kept
+    // painting too. A tracker that engages without holding is an environment
+    // capability, so this skips with the explicit cause; a control window
+    // that stayed silent never reaches this path and keeps the strict
+    // app-regression failure below.
+    if (report.occlusionUnstable) {
+      const unstable = report.occlusionUnstable;
+      assert.ok(unstable.cause, "the unstable-occlusion record must name its cause");
+      assert.ok(unstable.detection, "the unstable-occlusion record must carry the detection evidence it measured against");
+      assert.equal(report.occluded.windowState.minimized, false, "the unstable path must still prove coverage was not minimize");
+      t.diagnostic(`occlusion detected but not sustained: ${unstable.cause}; detection=${JSON.stringify(unstable.detection)}, rAF growth=${unstable.rafGrowth}, page=${JSON.stringify(unstable.pageState)}, control=${JSON.stringify(unstable.control ?? null)}, cover shown=${unstable.coverVisible}, onTop=${unstable.coverAlwaysOnTop}, win32 foreground=${JSON.stringify(unstable.foreground)}, timeline tail=${JSON.stringify(unstable.timelineTail)}`);
+      t.skip(`this desktop detected occlusion but did not sustain frame throttling under the cover (${unstable.cause})`);
+      return;
+    }
+
     assert.equal(report.occluded.rafGrowth, 0, `rAF must stay silent while occluded (growth=${report.occluded.rafGrowth})`);
     assert.ok(Array.isArray(report.occluded.probeSamples) && report.occluded.probeSamples.length >= 1, "fixture must report every occluded probe sample");
     for (const [index, sample] of report.occluded.probeSamples.entries()) {
