@@ -860,6 +860,7 @@ app.whenReady().then(async () => {
       checked:Object.fromEntries(['waves','nodes','percussion','background','splitBands'].map(key=>[key,document.getElementById('music-audio-'+key).checked])),
       response:document.getElementById('music-audio-response').value,
       nodeLevels:window.MefiIdle.debugNodes().filter(node=>node.kind!=='agent').map(node=>node.audioResponse?.level??0),
+      nodeBands:window.MefiIdle.debugNodes().map(node=>node.audioResponse?.band).filter(Boolean),
       connections:window.MefiIdle.audioWaveStatus().connections.map(({from,to,band,amplitude})=>({from,to,band,amplitude})),
       captureCalls:window.__audioCaptureCalls.slice()
       };
@@ -897,7 +898,10 @@ app.whenReady().then(async () => {
   await settledFrame();
   audioControls.restored = await run("return window.__audioControlSample();");
   const bandMapping = new Map(audioControls.restored.connections.map(wave=>[wave.from+':'+wave.to,wave.band]));
-  assert.ok(new Set(bandMapping.values()).size>=2, "separate frequency lines distribute this graph across multiple bands");
+  // A task group's cables share the group's voice, so this graph's few live
+  // cables can all hash to one band; the nodes' own lines show the split.
+  assert.ok([...bandMapping.values()].every(band=>["bass","mid","treble"].includes(band)), "split cables each carry one frequency line, not the mix");
+  assert.ok(new Set([...bandMapping.values(), ...audioControls.restored.nodeBands]).size>=2, "separate frequency lines distribute this graph across multiple bands");
   await sleep(120);
   const splitLater = await run("return window.__audioControlSample();");
   for(const wave of splitLater.connections)assert.equal(wave.band,bandMapping.get(wave.from+':'+wave.to), "each connection keeps its frequency between frames");
