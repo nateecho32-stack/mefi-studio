@@ -29,6 +29,9 @@
     if (seconds < 86400) return `${Math.round(seconds / 3600)}h`;
     return `${Math.round(seconds / 86400)}d`;
   };
+  const plural = (count, one, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
+  // A theme token as a canvas colour: the pins follow the active theme.
+  const token = (name, fallback) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 
   function status(text, isError) {
     els.status.textContent = text;
@@ -44,11 +47,11 @@
   function renderSessions() {
     fillSelect(els.session, [
       ["", "All sessions"],
-      ...state.sessions.map((session) => [session.id, `${session.title || session.id} · ${session.agent ?? "?"} · ${session.model?.id ?? "?"}`]),
+      ...state.sessions.map((session) => [session.id, [session.title || session.id, session.agent, session.model?.id].filter(Boolean).join(" · ")]),
     ]);
     els.session.value = state.sessionId ?? "";
     const agents = [...new Set(state.sessions.map((session) => session.agent).filter(Boolean))].sort();
-    fillSelect(els.agent, [["", "all agents"], ...agents.map((agent) => [agent, agent])]);
+    fillSelect(els.agent, [["", "All agents"], ...agents.map((agent) => [agent, agent])]);
     els.agent.value = state.agent ?? "";
   }
 
@@ -68,7 +71,7 @@
     const files = new Set(items.map((change) => change.file).filter(Boolean)).size;
     const session = state.sessionId ? state.sessions.find((item) => item.id === state.sessionId) : null;
     const cost = session ? ` · session cost $${Number(session.cost ?? 0).toFixed(3)}` : "";
-    els.summary.textContent = `${items.length} changes · ${files} files · +${additions}/-${deletions}${cost}`;
+    els.summary.textContent = `${plural(items.length, "change")} · ${plural(files, "file")} · +${additions} / −${deletions}${cost}`;
   }
 
   const GLYPHS = { edit: "✎", write: "✎", patch: "⚑", bash: "⌘", read: "◇", grep: "◌", glob: "◌", websearch: "☍", webfetch: "☍", task: "◆" };
@@ -85,8 +88,10 @@
     els.feed.textContent = "";
     if (!items.length) {
       const empty = document.createElement("li");
-      empty.className = "muted";
-      empty.textContent = "No edits found for this filter yet.";
+      empty.className = "muted eyes-empty";
+      empty.textContent = !state.sessions.length
+        ? "No agent sessions yet. Edits appear here as coding agents work."
+        : state.changes.length ? "No edits match these filters. Try All agents or All time." : "No edits recorded for this session yet.";
       els.feed.append(empty);
       return;
     }
@@ -194,18 +199,21 @@
     if (els.reveal) els.reveal.disabled = !hasFile;
     if (els.copy) els.copy.disabled = !hasFile;
     if (!change) {
-      els.inspector.innerHTML = '<span class="k muted">no selection</span>';
+      const hint = document.createElement("span");
+      hint.className = "muted eyes-inspector-empty";
+      hint.textContent = "Select a change in the feed to see its file, agent, model and task.";
+      els.inspector.append(hint);
       return;
     }
     const session = state.sessions.find((item) => item.id === change.sessionId);
     const rows = [
-      ["file", change.file ?? "(unknown)"],
-      ["tool", change.tool],
-      ["lines", `+${change.additions} / -${change.deletions}`],
-      ["agent", session?.agent ?? "?"],
-      ["model", session?.model.id ?? "?"],
-      ["session", session?.title ?? change.sessionId],
-      ["when", new Date(change.time).toLocaleString()],
+      ["File", change.file ?? "Unknown"],
+      ["Tool", change.tool],
+      ["Lines", `+${change.additions} / −${change.deletions}`],
+      ["Agent", session?.agent ?? "Unknown"],
+      ["Model", session?.model?.id ?? "Unknown"],
+      ["Session", session?.title ?? change.sessionId],
+      ["When", `${new Date(change.time).toLocaleString()} · ${ago(change.time)} ago`],
     ];
     for (const [key, value] of rows) {
       const k = document.createElement("span");
@@ -219,7 +227,7 @@
     if (owner?.taskId) {
       const k = document.createElement("span");
       k.className = "k";
-      k.textContent = "task";
+      k.textContent = "Task";
       const open = document.createElement("button");
       open.className = "ghost mini";
       open.textContent = "Open task";
@@ -230,7 +238,7 @@
   }
 
   function renderPngSelect() {
-    fillSelect(els.pngSelect, [["", "newest evidence…"], ...state.pngs.map((png) => [png.path, `${png.name} · ${ago(png.mtime)} ago`])]);
+    fillSelect(els.pngSelect, [["", state.pngs.length ? "Newest evidence…" : "No screenshots yet"], ...state.pngs.map((png) => [png.path, `${png.name} · ${ago(png.mtime)} ago`])]);
     if (state.png) els.pngSelect.value = state.png;
   }
 
@@ -286,45 +294,69 @@
     pinCanvasCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     pinCanvasCtx.clearRect(0, 0, width, height);
     const pins = currentPins();
+    const fill = token("--gold", "#71cbb7");
+    const ink = token("--ink", "#000");
     pinCanvasCtx.font = "600 11px system-ui";
-    pins.forEach((pin, index) => {
+    pinCanvasCtx.textAlign = "center";
+    pinCanvasCtx.textBaseline = "middle";
+    const marks = state.pendingPin ? [...pins, { ...state.pendingPin, pending: true }] : pins;
+    marks.forEach((pin, index) => {
       const x = pin.x * width;
       const y = pin.y * height;
       pinCanvasCtx.beginPath();
-      pinCanvasCtx.arc(x, y, 9, 0, Math.PI * 2);
-      pinCanvasCtx.fillStyle = "rgba(201, 168, 106, 0.92)";
+      pinCanvasCtx.arc(x, y, 10, 0, Math.PI * 2);
+      pinCanvasCtx.globalAlpha = pin.pending ? 0.55 : 0.95;
+      pinCanvasCtx.fillStyle = fill;
       pinCanvasCtx.fill();
-      pinCanvasCtx.strokeStyle = "#050507";
+      pinCanvasCtx.globalAlpha = 1;
+      pinCanvasCtx.strokeStyle = "rgba(0, 0, 0, 0.7)";
       pinCanvasCtx.lineWidth = 2;
       pinCanvasCtx.stroke();
-      pinCanvasCtx.fillStyle = "#171307";
-      pinCanvasCtx.fillText(String(index + 1), x - 3.5, y + 4);
+      pinCanvasCtx.fillStyle = ink;
+      pinCanvasCtx.fillText(String(index + 1), x, y + 0.5);
     });
+  }
+
+  function removePin(index) {
+    const next = currentPins().filter((_, i) => i !== index);
+    if (state.png) state.pins[state.png] = next;
+    if (!next.length && state.png) delete state.pins[state.png];
+    savePins();
+    renderPinList();
+    drawPins();
+    els.pinsList.querySelector("button")?.focus();
   }
 
   function renderPinList() {
     els.pinsList.textContent = "";
     const pins = currentPins();
+    if (els.pinHint) els.pinHint.hidden = Boolean(pins.length || state.pendingPin);
     pins.forEach((pin, index) => {
       const li = document.createElement("li");
-      li.textContent = `${index + 1}. ${pin.note || "(no note)"} · ${Math.round(pin.x * 100)}%,${Math.round(pin.y * 100)}%`;
-      li.title = "click to remove";
-      li.style.cursor = "pointer";
-      li.addEventListener("click", () => {
-        const next = pins.filter((_, i) => i !== index);
-        if (state.png) state.pins[state.png] = next;
-        if (!next.length && state.png) delete state.pins[state.png];
-        savePins();
-        renderPinList();
-        drawPins();
-      });
+      li.className = "eyes-pin";
+      const number = document.createElement("span");
+      number.className = "eyes-pin-number";
+      number.textContent = String(index + 1);
+      const note = document.createElement("span");
+      note.className = "eyes-pin-note";
+      note.textContent = pin.note || "No note";
+      if (!pin.note) note.classList.add("muted");
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "ghost mini eyes-pin-remove";
+      remove.textContent = "Remove";
+      remove.setAttribute("aria-label", `Remove pin ${index + 1}${pin.note ? `: ${pin.note}` : ""}`);
+      remove.addEventListener("click", () => removePin(index));
+      li.append(number, note, remove);
       els.pinsList.append(li);
     });
     if (state.pendingPin) {
       const li = document.createElement("li");
+      li.className = "eyes-pin eyes-pin-pending";
       const input = document.createElement("input");
       input.type = "text";
-      input.placeholder = "note for pin " + (pins.length + 1) + " · Enter saves";
+      input.placeholder = `Note for pin ${pins.length + 1} · Enter saves, Esc cancels`;
+      input.setAttribute("aria-label", `Note for pin ${pins.length + 1}`);
       input.style.width = "100%";
       input.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
@@ -336,8 +368,13 @@
           drawPins();
         }
         if (event.key === "Escape") {
+          // Cancels this pin only; the sheet stays open.
+          event.preventDefault();
+          event.stopPropagation();
           state.pendingPin = null;
           renderPinList();
+          drawPins();
+          els.png?.focus?.();
         }
       });
       li.append(input);
@@ -377,7 +414,7 @@
     if (els.tab?.hidden) return;
     if (!window.mefiStudio?.eyesLog) return;
     const result = await window.mefiStudio.eyesLog(220);
-    els.log.textContent = result.ok ? result.text : `log unavailable: ${result.error}`;
+    els.log.textContent = result.ok ? (result.text || "The Studio log is empty so far.") : `Log unavailable: ${result.error}`;
     els.log.scrollTop = els.log.scrollHeight;
   }
 
@@ -386,7 +423,7 @@
   let refreshSeq = 0;
   async function refresh({ keepSelection = true } = {}) {
     if (!window.mefiStudio?.eyesState) {
-      status("Desktop mode only — run npm start inside mefi-studio to read live sessions.", true);
+      status("Activity reads live agent sessions in the Studio desktop app.");
       return;
     }
     const seq = ++refreshSeq;
@@ -394,7 +431,7 @@
     const result = await window.mefiStudio.eyesState(state.sessionId);
     if (seq !== refreshSeq) return;
     if (!result.ok) {
-      status(`OpenCode store unavailable: ${result.error}`, true);
+      status(`Couldn't read the OpenCode session store: ${result.error}`, true);
       return;
     }
     state.sessions = result.sessions;
@@ -414,7 +451,7 @@
     renderPngSelect();
     if (!state.png && state.pngs.length) loadPng(state.pngs[0].path);
     const edits = visibleChanges().length;
-    status(`${state.sessions.length} sessions · ${edits} changes shown · live`);
+    status(`Live · ${plural(state.sessions.length, "session")} · ${plural(edits, "change")} shown`);
   }
 
   function wire() {
@@ -469,7 +506,7 @@
       const change = findChange(state.changeId);
       if (!change?.file) return;
       await window.mefiStudio?.shellCopy?.(change.file);
-      status(`copied ${base(change.file)} path to clipboard`);
+      status(`Copied the path of ${base(change.file)}`);
     });
     els.refresh.addEventListener("click", () => refresh());
     els.pngSelect.addEventListener("change", () => loadPng(els.pngSelect.value || null));
@@ -508,12 +545,13 @@
       const inspectorPanel = document.getElementById("eyes-inspector-panel");
       if (inspectorPanel?.hidden) inspectorToggle?.click();
       renderPinList();
+      drawPins();
     });
     window.addEventListener("resize", () => requestAnimationFrame(drawPins));
     window.addEventListener("mefi:restore-png", (event) => {
       if (event.detail?.path) {
         loadPng(event.detail.path);
-        status(`visual state restored from checkpoint: ${base(event.detail.path)}`);
+        status(`Restored ${base(event.detail.path)} from a checkpoint`);
       }
     });
     // Registered here, not at the end of init(): init() is async, and a deep link
@@ -561,6 +599,7 @@
       pinsLayer: "eyes-pins-layer",
       inspector: "eyes-inspector",
       pinsList: "eyes-pins",
+      pinHint: "eyes-pin-hint",
     })) {
       els[key] = document.getElementById(id);
     }
@@ -579,7 +618,7 @@
       if (els.tab?.hidden) state.dirty = true;
       else refresh({ keepSelection: true });
     });
-    window.mefiStudio?.onEyesError?.((message) => status(`poll error: ${message}`, true));
+    window.mefiStudio?.onEyesError?.((message) => status(`Activity update failed: ${message}`, true));
   }
 
   window.MefiEyes = { init, state };

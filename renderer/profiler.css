@@ -13,6 +13,11 @@
 .profiler-metrics > div { padding: 14px; border: 1px solid var(--hairline); background: var(--tint-gold-1); border-radius: 10px; }
 .profiler-metrics span { display: block; color: var(--muted); font-size: 11px; margin-bottom: 7px; }
 .profiler-metrics strong { font-size: 23px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.profiler-metrics > .is-warn { border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 7%, transparent); }
+.profiler-metrics > .is-warn strong { color: var(--warn); }
+.profiler-metrics > .is-bad { border-color: color-mix(in srgb, var(--bad) 50%, transparent); background: color-mix(in srgb, var(--bad) 8%, transparent); }
+.profiler-metrics > .is-bad strong { color: var(--bad); }
+.profiler-table td.profiler-empty, .profiler-incidents li.profiler-empty { font-family: var(--font-ui); color: var(--muted); text-align: left; padding-block: 16px; }
 .profiler-section { border-top: 1px solid var(--hairline); padding-top: 18px; margin-top: 20px; min-width: 0; }
 .profiler-section h3 { margin: 0 0 8px; font-size: 15px; font-weight: 600; }
 .profiler-section h3 span { font-weight: 400; font-size: 11px; color: var(--muted); margin-left: 8px; }

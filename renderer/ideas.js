@@ -60,11 +60,26 @@
     } catch (error) { if (projectId === state.projectId) window.MefiToast?.(error.message, "bad"); return false; }
   }
 
+  const STATUS_LABELS = { new: "New", keep: "Kept", accepted: "Task made", done: "Done" };
   function statusTag(idea) {
     const tag = document.createElement("span");
     tag.className = `src-tag ${idea.status === "done" ? "improver" : idea.status === "accepted" ? "" : idea.status === "keep" ? "collision" : ""}`;
-    tag.textContent = String(idea.status || "new").toUpperCase();
+    const status = String(idea.status || "new");
+    tag.textContent = STATUS_LABELS[status] ?? status.charAt(0).toUpperCase() + status.slice(1);
     return tag;
+  }
+
+  // The graph paints with the active theme's tokens, so it matches every
+  // theme instead of the original gold-on-black.
+  function palette() {
+    const root = document.documentElement;
+    const css = root && typeof getComputedStyle === "function" ? getComputedStyle(root) : null;
+    const read = (name, fallback) => css?.getPropertyValue(name)?.trim() || fallback;
+    return {
+      bg: read("--bg-deep", "#05060a"), accent: read("--gold", "#71cbb7"), bright: read("--gold-bright", "#a7f3da"),
+      hairline: read("--hairline", "rgba(120,140,140,0.4)"), ivory: read("--ivory", "#e7f5ee"), dim: read("--dim", "#7c8a8c"),
+      good: read("--good", "#afdfc2"), info: read("--info", "#9db7ff"), warn: read("--warn", "#ffd479"), live: read("--live", "#57ff9a"),
+    };
   }
 
   function renderList() {
@@ -74,7 +89,7 @@
     if (!filtered.length) {
       const li = document.createElement("li");
       li.className = "muted";
-      li.textContent = state.clusterFilter ? `No ideas tagged "${state.clusterFilter}".` : "No ideas yet — press Scan chats.";
+      li.textContent = state.clusterFilter ? `No ideas tagged "${state.clusterFilter}". Select the tag again to show every idea.` : "No ideas yet. Choose Tools › Scan chats to collect them from recent conversations.";
       el.list.append(li);
       return;
     }
@@ -130,8 +145,21 @@
       el.detail.append(hint);
       return;
     }
+    // Title, where it came from and its state, then the full text.
+    if (idea.title && idea.title !== idea.detail) {
+      const heading = document.createElement("h4");
+      heading.className = "idea-detail-title";
+      heading.textContent = idea.title;
+      el.detail.append(heading);
+    }
+    const meta = document.createElement("p");
+    meta.className = "idea-detail-meta";
+    const at = idea.at == null || idea.at === "" ? NaN : new Date(idea.at).getTime();
+    meta.append(statusTag(idea), document.createTextNode(` ${[idea.source ? `From ${idea.source}` : "", Number.isFinite(at) ? new Date(at).toLocaleString() : ""].filter(Boolean).join(" · ")}`));
+    el.detail.append(meta);
     const title = document.createElement("p");
-    title.textContent = idea.detail;
+    title.className = "idea-detail-text";
+    title.textContent = idea.detail ?? idea.title ?? "";
     el.detail.append(title);
     const tags = document.createElement("div");
     tags.className = "keyword-row";
@@ -199,7 +227,8 @@
       save();
       renderDetail();
     });
-    action("Delete", () => {
+    action("Delete", async () => {
+      if (typeof window.MefiConfirm === "function" && !(await window.MefiConfirm(`Delete the idea "${String(idea.title ?? idea.detail ?? "").slice(0, 60)}"? This cannot be undone.`, { label: "Delete" }))) return;
       if (window.mefiStudio?.ideasAction) { act("delete", { ideaId: idea.id }); return; }
       state.ideas = state.ideas.filter((item) => item.id !== idea.id);
       state.selected = null;
@@ -254,8 +283,16 @@
     const ctx = el.canvas.getContext("2d");
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = "#05060a";
+    const colors = palette();
+    ctx.fillStyle = colors.bg;
     ctx.fillRect(0, 0, width, height);
+    if (!state.ideas.length) {
+      ctx.fillStyle = colors.dim;
+      ctx.font = "12px system-ui";
+      ctx.textAlign = "center";
+      ctx.fillText("Ideas that share a tag gather into clusters here once you scan some chats.", width / 2, height / 2);
+      ctx.textAlign = "left";
+    }
 
     const clusters = cluster();
     const positions = new Map();
@@ -267,7 +304,7 @@
       const cy = height / 2 + Math.sin(clusterAngle) * clusterRadius * 0.8;
       ctx.beginPath();
       ctx.arc(cx, cy, 26 + group.length * 2.4, 0, Math.PI * 2);
-      ctx.strokeStyle = "rgba(201,168,106,0.18)";
+      ctx.strokeStyle = colors.hairline;
       ctx.lineWidth = 1;
       ctx.stroke();
       group.forEach((idea, ideaIndex) => {
@@ -285,11 +322,13 @@
         const sibling = state.ideas.find((other) => other.id !== idea.id && (other.tags ?? []).includes(tag));
         const target = sibling ? positions.get(sibling.id) : null;
         if (target) {
-          ctx.strokeStyle = "rgba(157,183,255,0.10)";
+          ctx.strokeStyle = colors.info;
+          ctx.globalAlpha = 0.16;
           ctx.beginPath();
           ctx.moveTo(home.x, home.y);
           ctx.lineTo(target.x, target.y);
           ctx.stroke();
+          ctx.globalAlpha = 1;
         }
       }
     }
@@ -297,7 +336,7 @@
       const point = positions.get(idea.id);
       if (!point) continue;
       const selected = idea.id === state.selected;
-      const colour = idea.status === "done" ? "#57ff9a" : idea.status === "accepted" ? "#9db7ff" : idea.status === "keep" ? "#ffd479" : idea.read ? "#9a8f7d" : "#e6c98d";
+      const colour = idea.status === "done" ? colors.good : idea.status === "accepted" ? colors.info : idea.status === "keep" ? colors.warn : idea.read ? colors.dim : colors.bright;
       ctx.beginPath();
       ctx.arc(point.x, point.y, selected ? 7 : idea.read ? 4 : 5.5, 0, Math.PI * 2);
       ctx.fillStyle = colour;
@@ -305,17 +344,19 @@
       if (selected) {
         ctx.beginPath();
         ctx.arc(point.x, point.y, 11, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(236,229,216,0.8)";
+        ctx.strokeStyle = colors.ivory;
         ctx.stroke();
       }
       if (!idea.read) {
         ctx.beginPath();
         ctx.arc(point.x, point.y, 9, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(87,255,154,0.5)";
+        ctx.strokeStyle = colors.accent;
+        ctx.globalAlpha = 0.6;
         ctx.stroke();
+        ctx.globalAlpha = 1;
       }
-      ctx.fillStyle = "rgba(236,229,216,0.72)";
-      ctx.font = "10px system-ui";
+      ctx.fillStyle = selected ? colors.ivory : colors.dim;
+      ctx.font = selected ? "600 11px system-ui" : "10px system-ui";
       // Shortened at a word where one is near, and marked as shortened.
       const name = String(idea.title ?? idea.detail ?? "");
       const cut = name.length > 22 ? `${(name.slice(0, 21).replace(/\s+\S*$/, "") || name.slice(0, 21)).trimEnd()}…` : name;
@@ -339,10 +380,10 @@
   }
 
   async function scan(ai) {
-    el.status.textContent = ai ? "AI review…" : "scanning chats…";
+    el.status.textContent = ai ? "Reviewing ideas with AI…" : "Scanning recent chats for ideas…";
     const result = await window.mefiStudio?.ideasScan?.(ai);
     if (!result?.ok) {
-      el.status.textContent = result?.error ?? "scan failed";
+      el.status.textContent = result?.error ?? (ai ? "The AI review didn't finish. Check the AI connection and try again." : "The chat scan didn't finish. Try again.");
       return;
     }
     state.ideas = result.ideas ?? state.ideas;
@@ -351,7 +392,7 @@
     drawGraph();
     // The pass writes its own summary line (ideas added, what the AI review
     // compacted); the composed fallback only covers older main processes.
-    el.status.textContent = result.text || `+${result.added} ideas · ${result.scanned} lines considered${result.aiError ? ` · ${result.aiError}` : ""}`;
+    el.status.textContent = result.text || `${result.added} new idea${result.added === 1 ? "" : "s"} · ${result.scanned} lines considered${result.aiError ? ` · ${result.aiError}` : ""}`;
     if (result.added) window.MefiToast?.(`${result.added} new idea${result.added === 1 ? "" : "s"} captured`, "good");
   }
 
