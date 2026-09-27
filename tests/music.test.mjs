@@ -1033,363 +1033,34 @@ test("A mirror that fails while connecting says so, instead of claiming a stream
 });
 
 // ---- The Void collection: members' themes and node styles ----
-const FORK_COPY = "Members of the Void Engine Discord unlock these. Studio is MIT-licensed: fork the project and unlock it yourself, or ask an agent to do it for you.";
-const PREMIUM_THEMES = ["void", "eclipse", "abyss", "dusk"];
-const PREMIUM_STYLES = ["singularity", "prism", "sigil"];
-const premiumStore = (env) => JSON.parse(env.storage.get("mefiStudio.music.premium.v1") ?? "null");
+const VOID_THEMES = ["void", "eclipse", "abyss", "dusk"];
+const VOID_STYLES = ["singularity", "prism", "sigil"];
 const musicWrites = (env) => env.writes.filter(([key]) => key === "mefiStudio.music.v1").map(([, value]) => JSON.parse(value));
-const lastEvent = (env, type) => env.events.filter((event) => event.type === type).at(-1)?.detail;
-const eventCount = (env, type) => env.events.filter((event) => event.type === type).length;
-const member = (allowed = () => true, offers = []) => ({ has: (perk) => perk === "premium" && allowed(), offer: (item) => offers.push({ ...item }) });
 
-test("Saved preferences keep only free keys; the premium store keeps only premium keys", () => {
-  for (const theme of PREMIUM_THEMES) assert.equal(helpers.safePreferences({ theme }).theme, "aurora", theme);
-  for (const nodeStyle of PREMIUM_STYLES) assert.equal(helpers.safePreferences({ nodeStyle }).nodeStyle, "orbs", nodeStyle);
-  const scope = vm.createContext({ URL });
-  vm.runInContext(`${source.slice(source.indexOf("  const THEMES"), source.indexOf("  let stored;"))}\nthis.api = {safePremium, resolvePalette};`, scope);
-  assert.deepEqual({ ...scope.api.safePremium({ theme: "void", nodeStyle: "prism", extra: 1 }) }, { theme: "void", nodeStyle: "prism" });
-  for (const bad of [null, "void", { theme: "rose", nodeStyle: "orbs" }, { theme: "__proto__", nodeStyle: "constructor" }]) assert.deepEqual({ ...scope.api.safePremium(bad) }, {}, JSON.stringify(bad));
-  for (const theme of PREMIUM_THEMES) {
-    const palette = scope.api.resolvePalette(theme);
-    assert.match(palette.accent2, /^#[0-9a-f]{6}$/i, `${theme} carries its second hue`);
-    assert.ok(helpers.contrast(palette.text, palette.surface) >= 4.5, `${theme} text stays readable`);
-  }
-});
-
-test("An unlinked premium theme previews live without saving and offers the unlock", () => {
-  const offers = [];
-  const env = environment({ saved: { theme: "rose" }, community: member(() => false, offers) });
-  const themeEvents = eventCount(env, "mefi-theme-change");
-  assert.equal(env.music.applyTheme("void"), "void");
-  assert.equal(env.music.status().theme, "void");
-  assert.equal(env.music.themePalette().theme, "void");
-  assert.equal(env.document.documentElement.dataset.studioTheme, "void");
-  assert.equal(env.document.documentElement.dataset.studioThemeTier, "premium");
-  assert.equal(env.styles.get("--accent-2"), "#36d1ff");
-  assert.equal(eventCount(env, "mefi-theme-change"), themeEvents + 1);
-  assert.equal(lastEvent(env, "mefi-theme-change").theme, "void");
-  assert.equal(lastEvent(env, "mefi-theme-change").preview, true, "Workspace can distinguish a temporary look");
-  assert.deepEqual(offers, [{ kind: "theme", key: "void", name: "Void" }]);
-  assert.deepEqual(env.writes, [], "a preview writes neither the free nor premium preference");
-  assert.equal(premiumStore(env), null);
-  const locked = env.ids.get("music-theme-void");
-  assert.equal(locked.attrs["aria-disabled"], undefined, "a previewable choice is enabled");
-  assert.equal(locked.disabled, false);
-  assert.equal(locked.attrs["aria-pressed"], "true");
-  assert.match(locked.textContent, /Members$/);
-  env.ids.get("music-theme-eclipse").click();
-  assert.equal(offers.length, 2, "choosing another look updates the preview and explains it");
-  assert.equal(env.music.status().theme, "eclipse");
-  assert.deepEqual(env.writes, []);
-  env.music.open(); env.music.close();
-  assert.equal(env.music.status().theme, "rose", "closing the sheet restores the saved theme");
-  assert.equal(env.document.documentElement.dataset.studioThemeTier, "free");
-  assert.deepEqual(env.writes, [], "closing the preview also writes nothing");
-  const box = env.ids.get("music-premium-themes").parentElement;
-  const free = box.parentElement.children.find((child) => child.className === "music-themes");
-  assert.deepEqual(free.children.map((choice) => choice.dataset.theme), ["gold", "midnight", "forest", "violet", "ember", "aurora", "rose", "custom"], "the free grid is unchanged");
-  assert.deepEqual(env.ids.get("music-premium-themes").children.map((choice) => choice.dataset.theme), PREMIUM_THEMES);
-  assert.ok(env.ids.get("music-premium-themes").children.every((choice) => choice.dataset.premium === "true"));
-  assert.equal(env.ids.get("music-premium-theme-preview-note").hidden, false);
-  assert.match(env.ids.get("music-premium-theme-preview-note").textContent, /Preview any look now/);
-  assert.ok(env.ids.get("music-premium-themes").attrs["aria-describedby"].split(" ").includes("music-premium-theme-preview-note"));
-  assert.match(locked.title, /Preview this Void collection theme/);
-  assert.equal(env.ids.get("music-premium-theme-fineprint").textContent, FORK_COPY);
-});
-
-test("A member's premium theme applies with its second hue and is saved only in the premium store", () => {
-  let offers = 0;
-  const env = environment({ saved: { theme: "forest" }, community: { has: (perk) => perk === "premium", offer: () => { offers += 1; } } });
-  assert.equal(env.ids.get("music-theme-void").attrs["aria-disabled"], undefined);
+test("The Void collection is free: its themes and styles apply and save like any other", () => {
+  const env = environment({ saved: { theme: "forest", nodeStyle: "glass" } });
+  assert.deepEqual(env.ids.get("music-void-themes").children.map((choice) => choice.dataset.theme), VOID_THEMES);
+  assert.deepEqual(env.ids.get("music-void-styles").children.map((choice) => choice.dataset.nodeStyle), VOID_STYLES);
+  assert.deepEqual(env.ids.get("music-node-styles").children.map((choice) => choice.dataset.nodeStyle), ["orbs", "glass", "minimal", "halo", "crystal"], "the other styles keep their own group");
   env.ids.get("music-theme-void").click();
   assert.equal(env.music.status().theme, "void");
   assert.equal(env.music.themePalette().theme, "void");
-  assert.equal(env.document.documentElement.dataset.studioTheme, "void");
-  assert.equal(env.document.documentElement.dataset.studioThemeTier, "premium");
-  assert.equal(env.styles.get("--accent-2"), "#36d1ff");
-  assert.equal(env.styles.get("--accent-2-rgb"), "54,209,255");
-  assert.equal(env.styles.get("--studio-accent-rgb"), "124,108,255");
-  const detail = lastEvent(env, "mefi-theme-change");
-  assert.equal(detail.theme, "void"); assert.equal(detail.tier, "premium"); assert.equal(detail.accent2, "#36d1ff");
   assert.equal(env.ids.get("music-theme-void").attrs["aria-pressed"], "true");
-  assert.deepEqual(premiumStore(env), { theme: "void" });
-  assert.deepEqual(musicWrites(env), [], "the free preferences are untouched");
-  assert.equal(offers, 0);
-  env.music.applyTheme("abyss");
-  assert.deepEqual(premiumStore(env), { theme: "abyss" });
-  env.music.applyTheme("violet");
-  assert.equal(env.music.status().theme, "violet");
-  assert.equal(env.document.documentElement.dataset.studioThemeTier, "free");
-  assert.deepEqual(premiumStore(env), {}, "a free choice clears the premium theme");
-  assert.equal(env.ids.get("music-theme-abyss").attrs["aria-pressed"], "false");
-  env.music.applyCustomColors({ accent: "#22bbaa" });
-  assert.equal(env.music.status().theme, "custom");
-  const saved = musicWrites(env);
-  assert.ok(saved.length >= 2);
-  assert.ok(saved.every((value) => !PREMIUM_THEMES.includes(value.theme) && !PREMIUM_STYLES.includes(value.nodeStyle)), "mefiStudio.music.v1 never holds a premium key");
-  assert.equal(saved.at(-1).theme, "custom");
-});
-
-test("Premium node styles follow the same gate, and graphPreferences reports the style on screen", () => {
-  let allowed = false;
-  const offers = [];
-  const env = environment({ saved: { nodeStyle: "glass" }, community: member(() => allowed, offers) });
-  const treeEvents = eventCount(env, "mefi-tree-preferences");
-  assert.equal(env.music.applyNodeStyle("prism"), "prism");
-  assert.equal(env.music.graphPreferences().nodeStyle, "prism");
-  assert.equal(env.document.documentElement.dataset.nodeStyle, "prism");
-  assert.equal(eventCount(env, "mefi-tree-preferences"), treeEvents + 1, "the tree receives the preview style");
-  assert.equal(lastEvent(env, "mefi-tree-preferences").nodeStyle, "prism");
-  assert.deepEqual(offers, [{ kind: "nodeStyle", key: "prism", name: "Prism" }]);
-  assert.deepEqual(env.writes, []);
-  assert.equal(premiumStore(env), null);
-  for (const style of PREMIUM_STYLES) {
-    const choice = env.ids.get(`music-node-style-${style}`);
-    assert.equal(choice.attrs["aria-disabled"], undefined, "Void styles can be previewed");
-    assert.equal(choice.children[0].attrs["aria-hidden"], "true");
-    assert.equal(choice.children[0].className, `music-node-preview music-preview-${style}`);
-  }
-  assert.equal(env.ids.get("music-node-style-prism").attrs["aria-pressed"], "true");
-  assert.equal(env.ids.get("music-premium-style-preview-note").hidden, false);
-  assert.ok(env.ids.get("music-node-premium-styles").attrs["aria-describedby"].split(" ").includes("music-premium-style-preview-note"));
-  assert.deepEqual(env.ids.get("music-node-styles").children.map((choice) => choice.dataset.nodeStyle), ["orbs", "glass", "minimal", "halo", "crystal"], "the free cards are unchanged");
-  allowed = true;
-  env.emit("mefi-community-change", { premium: true, perks: ["premium"], validUntil: null, reason: "member" });
-  assert.equal(env.ids.get("music-node-style-prism").attrs["aria-disabled"], undefined);
-  assert.deepEqual(premiumStore(env), { nodeStyle: "prism" }, "linking commits the style on screen");
+  assert.equal(musicWrites(env).at(-1).theme, "void", "a Void theme saves with the other preferences");
   env.ids.get("music-node-style-prism").click();
   assert.equal(env.music.graphPreferences().nodeStyle, "prism");
-  assert.equal(env.music.status().nodeStyle, "prism");
-  assert.equal(env.document.documentElement.dataset.nodeStyle, "prism");
-  assert.equal(lastEvent(env, "mefi-tree-preferences").nodeStyle, "prism");
   assert.equal(env.ids.get("music-node-style-prism").attrs["aria-pressed"], "true");
   assert.equal(env.ids.get("music-node-style-glass").attrs["aria-pressed"], "false");
-  assert.deepEqual(premiumStore(env), { nodeStyle: "prism" });
-  env.music.applyNodeLayout("tree");
-  assert.deepEqual({ ...env.music.graphPreferences() }, { nodeStyle: "prism", nodeLayout: "tree", orbitTrails: false, extraGlow: false });
-  assert.equal(musicWrites(env).at(-1).nodeStyle, "glass", "the saved free style stays the fallback");
-  env.music.applyNodeStyle("halo");
-  assert.equal(env.music.graphPreferences().nodeStyle, "halo");
-  assert.deepEqual(premiumStore(env), {}, "a free style clears the premium one");
-  assert.ok(musicWrites(env).every((value) => !PREMIUM_STYLES.includes(value.nodeStyle) && !PREMIUM_THEMES.includes(value.theme)));
+  assert.equal(musicWrites(env).at(-1).nodeStyle, "prism");
+  for (const theme of VOID_THEMES) assert.equal(helpers.safePreferences({ theme }).theme, theme, theme);
+  for (const nodeStyle of VOID_STYLES) assert.equal(helpers.safePreferences({ nodeStyle }).nodeStyle, nodeStyle, nodeStyle);
 });
 
-test("Unlinked previews end on close or when navigation leaves Style & sound, without changing saved choices", () => {
-  const saved = { theme: "forest", nodeStyle: "glass" };
-  const env = environment({ saved, community: member(() => false) });
-  const before = env.storage.get("mefiStudio.music.v1");
-  env.music.applyTheme("abyss");
-  env.music.applyNodeStyle("sigil");
+test("A Void choice saved apart while the collection was for members moves into the preferences", () => {
+  const env = environment({ saved: { theme: "forest", nodeStyle: "glass" }, premiumSaved: { theme: "abyss", nodeStyle: "sigil" } });
   assert.equal(env.music.status().theme, "abyss");
   assert.equal(env.music.graphPreferences().nodeStyle, "sigil");
-  assert.equal(env.storage.get("mefiStudio.music.v1"), before);
-  assert.equal(premiumStore(env), null);
-  assert.deepEqual(env.writes, []);
-
-  env.emit("mefi:nav", { action: "open", id: "studio" });
-  env.emit("mefi:nav", { action: "open", id: "music" });
-  env.emit("mefi:nav", { action: "open", id: "appearancePreview" });
-  for (const id of ["help", "palette", "profiler"]) {
-    env.emit("mefi:nav", { action: "open", id });
-    env.emit("mefi:nav", { action: "close", id });
-  }
-  assert.equal(env.music.status().theme, "abyss", "moving between Settings and Style & sound keeps the preview");
-  assert.equal(env.music.graphPreferences().nodeStyle, "sigil");
-  env.emit("mefi:nav", { action: "open", id: "workspace" });
-  assert.equal(env.music.status().theme, "forest");
-  assert.equal(env.music.graphPreferences().nodeStyle, "glass");
-  assert.equal(env.document.documentElement.dataset.studioThemeTier, "free");
-  assert.equal(lastEvent(env, "mefi-theme-change").preview, undefined);
-
-  env.music.open();
-  env.ids.get("music-theme-dusk").click();
-  env.ids.get("music-node-style-singularity").click();
-  env.music.close();
-  assert.equal(env.music.status().theme, "forest", "closing the sheet ends a theme preview");
-  assert.equal(env.music.graphPreferences().nodeStyle, "glass", "closing the sheet ends a node style preview");
-  assert.deepEqual(env.writes, [], "neither preview lifecycle writes preferences");
-  const restarted = environment({ saved: JSON.parse(env.storage.get("mefiStudio.music.v1")) });
-  assert.equal(restarted.music.status().theme, "forest");
-  assert.equal(restarted.music.graphPreferences().nodeStyle, "glass");
-});
-
-test("A linked non-member still previews, and a premium event commits both previews for the next launch", () => {
-  let allowed = false;
-  const community = { has: (perk) => perk === "premium" && allowed, offer() {}, status: () => ({ configured: true, linked: true, state: allowed ? "ok" : "not-member" }) };
-  const env = environment({ saved: { theme: "rose", nodeStyle: "halo" }, community });
-  env.music.applyTheme("eclipse");
-  env.music.applyNodeStyle("prism");
-  env.emit("mefi-community-change", { premium: false, perks: [], validUntil: null, reason: "not-member" });
-  assert.equal(env.music.status().theme, "eclipse", "link alone does not end the preview");
-  assert.equal(env.music.graphPreferences().nodeStyle, "prism");
-  assert.equal(premiumStore(env), null, "link alone does not save premium choices");
-  assert.deepEqual(env.writes, []);
-
-  allowed = true;
-  env.emit("mefi-community-change", { premium: true, perks: ["premium"], validUntil: null, reason: "member" });
-  assert.deepEqual(premiumStore(env), { theme: "eclipse", nodeStyle: "prism" });
-  assert.equal(lastEvent(env, "mefi-theme-change").preview, undefined, "the theme becomes a saved choice");
-  assert.deepEqual(musicWrites(env), [], "the saved free fallbacks stay separate");
-  env.music.open(); env.music.close();
-  assert.equal(env.music.status().theme, "eclipse", "committed themes survive closing the sheet");
-  assert.equal(env.music.graphPreferences().nodeStyle, "prism");
-  const restarted = environment({ saved: { theme: "rose", nodeStyle: "halo" }, premiumSaved: premiumStore(env), hint: { premium: true, validUntil: null } });
-  assert.equal(restarted.music.status().theme, "eclipse");
-  assert.equal(restarted.music.graphPreferences().nodeStyle, "prism");
-});
-
-test("an explicitly unsaved preview remains temporary when Discord membership arrives", () => {
-  let allowed = false;
-  const env = environment({ saved: { theme: "rose", nodeStyle: "halo" }, premiumSaved: { theme: "eclipse", nodeStyle: "sigil" }, community: member(() => allowed) });
-  env.music.applyTheme("void", false, { navigate: false });
-  env.music.applyNodeStyle("prism", false, { navigate: false });
-  assert.equal(env.music.status().theme, "void");
-  assert.equal(env.music.graphPreferences().nodeStyle, "prism");
-  allowed = true;
-  env.emit("mefi-community-change", { premium: true, perks: ["premium"], validUntil: null, reason: "member" });
-  assert.equal(env.music.status().theme, "void", "the live preview need not disappear at unlock");
-  assert.equal(env.music.graphPreferences().nodeStyle, "prism");
-  assert.deepEqual(premiumStore(env), { theme: "eclipse", nodeStyle: "sigil" }, "unsaved previews do not replace earlier premium choices");
-  assert.deepEqual(env.writes, []);
-  env.music.open(); env.music.close();
-  assert.equal(env.music.status().theme, "eclipse", "closing restores the saved member choice");
-  assert.equal(env.music.graphPreferences().nodeStyle, "sigil");
-  assert.deepEqual(env.writes, []);
-});
-
-test("A member's premium choices return at launch from the boot hint, without MefiCommunity and without writes", () => {
-  const env = environment({ saved: { theme: "rose", nodeStyle: "halo" }, premiumSaved: { theme: "abyss", nodeStyle: "sigil" }, hint: { premium: true, validUntil: Date.now() + 86400000 } });
-  assert.equal(env.music.status().theme, "abyss");
-  assert.equal(env.music.graphPreferences().nodeStyle, "sigil");
-  assert.equal(env.document.documentElement.dataset.studioThemeTier, "premium");
-  assert.ok(env.events.filter((event) => event.type === "mefi-theme-change").every((event) => event.detail.theme === "abyss"), "no flash of the free theme");
-  const tree = env.events.filter((event) => event.type === "mefi-tree-preferences");
-  assert.equal(tree.length, 1); assert.equal(tree[0].detail.nodeStyle, "sigil");
-  assert.deepEqual(env.writes, [], "restoring a premium choice writes nothing");
-  assert.equal(env.ids.get("music-theme-abyss").attrs["aria-disabled"], undefined);
-  // A member sees one quiet line where the fork path and its buttons would be.
-  assert.equal(env.ids.get("music-premium-theme-member").hidden, false);
-  assert.equal(env.ids.get("music-premium-theme-member").textContent, "Unlocked with your Void Engine membershipManage in Settings › Community");
-  assert.equal(env.ids.get("music-premium-theme-manage").hidden, true, "no Settings link without MefiCommunity to open it");
-  for (const part of ["fineprint", "desktop"]) assert.equal(env.ids.get(`music-premium-theme-${part}`).hidden, true, part);
-  assert.equal(env.ids.get("music-premium-theme-join").parentElement.hidden, true);
-  const expired = environment({ saved: { theme: "rose", nodeStyle: "halo" }, premiumSaved: { theme: "abyss", nodeStyle: "sigil" }, hint: { premium: true, validUntil: 1 } });
-  assert.equal(expired.music.status().theme, "rose");
-  assert.equal(expired.music.graphPreferences().nodeStyle, "halo");
-  assert.deepEqual(expired.writes, []);
-  assert.deepEqual(premiumStore(expired), { theme: "abyss", nodeStyle: "sigil" }, "an expired hint keeps the saved choice");
-  const self = environment({ premiumSaved: { theme: "dusk" }, hint: { premium: true, validUntil: null } });
-  assert.equal(self.music.status().theme, "dusk", "a hint with no end date (a self-unlocked fork) stays open");
-  const junk = environment({ premiumSaved: { theme: "rose", nodeStyle: "__proto__" }, hint: { premium: true, validUntil: null } });
-  assert.equal(junk.music.status().theme, "aurora");
-  assert.equal(junk.music.graphPreferences().nodeStyle, "orbs");
-  const none = environment({ premiumSaved: { theme: "void" } });
-  assert.equal(none.music.status().theme, "aurora", "no hint, no community: a saved premium choice stays dormant");
-  assert.equal(none.music.applyTheme("void"), "void", "the same theme can be previewed");
-  assert.deepEqual(none.writes, [], "previewing does not rewrite the dormant choice");
-  none.music.open(); none.music.close();
-  assert.equal(none.music.status().theme, "aurora");
-  assert.match(none.ids.get("music-premium-theme-fineprint").textContent, /fork the project and unlock it yourself/);
-});
-
-test("A lapsed membership falls back to the free choices without writing, toasts once, and a relink restores them", () => {
-  let allowed = true;
-  const env = environment({ saved: { theme: "forest", nodeStyle: "crystal" }, premiumSaved: { theme: "dusk", nodeStyle: "singularity" }, community: member(() => allowed) });
-  assert.equal(env.music.status().theme, "dusk");
-  assert.equal(env.music.graphPreferences().nodeStyle, "singularity");
-  allowed = false;
-  env.emit("mefi-community-change", { premium: false, perks: [], validUntil: null, reason: "not-member" });
-  assert.equal(env.music.status().theme, "forest");
-  assert.equal(env.music.graphPreferences().nodeStyle, "crystal");
-  assert.equal(env.document.documentElement.dataset.studioThemeTier, "free");
-  assert.equal(lastEvent(env, "mefi-theme-change").theme, "forest");
-  assert.equal(lastEvent(env, "mefi-tree-preferences").nodeStyle, "crystal");
-  assert.deepEqual(env.toasts, [["Void collection locked again; your choice is saved.", "info"]]);
-  assert.deepEqual(env.writes, [], "revoking writes nothing");
-  assert.deepEqual(premiumStore(env), { theme: "dusk", nodeStyle: "singularity" });
-  assert.equal(env.ids.get("music-theme-dusk").attrs["aria-disabled"], undefined, "lapsed members may preview again");
-  assert.equal(env.ids.get("music-node-style-singularity").attrs["aria-disabled"], undefined);
-  env.emit("mefi-community-change", { premium: false, perks: [], validUntil: null, reason: "not-member" });
-  assert.equal(env.toasts.length, 1, "nothing premium was showing, so nothing to say");
-  allowed = true;
-  env.emit("mefi-community-change", { premium: true, perks: ["premium"], validUntil: null, reason: "member" });
-  assert.equal(env.music.status().theme, "dusk");
-  assert.equal(env.music.graphPreferences().nodeStyle, "singularity");
-  assert.deepEqual(env.writes, []);
-  assert.equal(env.toasts.length, 1);
-});
-
-test("A community event is taken at its word, so a status that lags behind it cannot pop an unlock offer", () => {
-  const offers = [];
-  const env = environment({ premiumSaved: { theme: "eclipse", nodeStyle: "prism" }, community: member(() => false, offers) });
-  assert.equal(env.music.status().theme, "aurora");
-  env.emit("mefi-community-change", { premium: true, perks: ["premium"], validUntil: null, reason: "member" });
-  assert.equal(env.music.status().theme, "eclipse");
-  assert.equal(env.music.graphPreferences().nodeStyle, "prism");
-  assert.equal(lastEvent(env, "mefi-theme-change").tier, "premium");
-  assert.deepEqual(offers, []);
-  assert.deepEqual(env.writes, []);
-});
-
-test("Premium pickers offer Join, Link and Copy agent prompt through MefiCommunity when the desktop bridge is there", () => {
-  const calls = [];
-  const community = { has: () => false, offer() {}, status: () => ({ configured: true, linked: false, state: null }), join: () => calls.push("join"), link: () => calls.push("link"), copyAgentPrompt: () => calls.push("prompt") };
-  const env = environment({ community, bridge: { communityLink: () => {}, communityOpen: () => {} } });
-  for (const kind of ["theme", "style"]) {
-    assert.equal(env.ids.get(`music-premium-${kind}-desktop`).hidden, true);
-    assert.equal(env.ids.get(`music-premium-${kind}-join`).parentElement.hidden, false);
-    assert.deepEqual(env.ids.get(`music-premium-${kind}-join`).parentElement.children.map((choice) => choice.textContent), ["Join the Discord", "Link my Discord", "Copy agent prompt"]);
-    for (const action of ["join", "link", "prompt"]) env.ids.get(`music-premium-${kind}-${action}`).click();
-  }
-  assert.deepEqual(calls, ["join", "link", "prompt", "join", "link", "prompt"]);
-  const web = environment({ community });
-  assert.equal(web.ids.get("music-premium-style-desktop").hidden, false, "start:web has no bridge to link with");
-  assert.equal(web.ids.get("music-premium-style-desktop").textContent, "Desktop app only");
-});
-
-test("Link my Discord shows only where linking can happen, and follows community status changes", () => {
-  let current = { configured: false, linked: false, state: null };
-  const community = { has: () => false, offer() {}, status: () => current, join() {}, link() {}, copyAgentPrompt() {} };
-  const env = environment({ community, bridge: { communityLink: () => {}, communityOpen: () => {} } });
-  const linkHidden = () => ["theme", "style"].map((kind) => env.ids.get(`music-premium-${kind}-link`).hidden);
-  assert.deepEqual(linkHidden(), [true, true], "a build without a Discord client id (the shipped CLIENT_ID is empty) offers no Link");
-  for (const kind of ["theme", "style"]) {
-    assert.equal(env.ids.get(`music-premium-${kind}-join`).parentElement.hidden, false, "Join and the fork path stay");
-    assert.equal(env.ids.get(`music-premium-${kind}-join`).hidden, false);
-    assert.equal(env.ids.get(`music-premium-${kind}-prompt`).hidden, false);
-  }
-  current = { configured: true, linked: false, state: null };
-  env.emit("mefi-community-status", { configured: true, linked: false, state: null, linking: false });
-  assert.deepEqual(linkHidden(), [false, false], "a status change re-renders the buttons without an entitlement change");
-  current = { configured: true, linked: true, state: "not-member" };
-  env.emit("mefi-community-status", {});
-  assert.deepEqual(linkHidden(), [true, true], "an account already linked is not linked again");
-  current = { configured: true, linked: true, state: "relink" };
-  env.emit("mefi-community-status", {});
-  assert.deepEqual(linkHidden(), [false, false], "unless Discord asks for a new link");
-  const early = environment({ community: { ...community, status: () => null }, bridge: { communityLink: () => {}, communityOpen: () => {} } });
-  assert.equal(early.ids.get("music-premium-theme-link").hidden, true, "no Link before the first status");
-  const throwing = environment({ community: { ...community, status: () => { throw new Error("boom"); } }, bridge: { communityLink: () => {} } });
-  assert.equal(throwing.ids.get("music-premium-style-link").hidden, true);
-});
-
-test("Previewed Void choices explain in place: the Workspace select and the sheet's own tiles pass navigate:false", () => {
-  const offers = [];
-  const env = environment({ saved: { theme: "rose", nodeStyle: "glass" }, community: member(() => false, offers) });
-  assert.equal(env.music.applyTheme("dusk", true, { navigate: false }), "dusk");
-  assert.equal(lastEvent(env, "mefi-theme-change").theme, "dusk");
-  assert.equal(lastEvent(env, "mefi-theme-change").preview, true);
-  assert.deepEqual(offers, [{ kind: "theme", key: "dusk", name: "Neon Dusk", navigate: false }]);
-  env.ids.get("music-theme-dusk").click();
-  assert.deepEqual(offers.at(-1), { kind: "theme", key: "dusk", name: "Neon Dusk", navigate: false }, "a Void tile explains itself without closing Style & sound");
-  env.ids.get("music-node-style-prism").click();
-  assert.deepEqual(offers.at(-1), { kind: "nodeStyle", key: "prism", name: "Prism", navigate: false }, "so does a Void node style");
-  assert.equal(env.music.graphPreferences().nodeStyle, "prism", "the preview reaches the tree");
-  assert.equal(env.music.applyNodeStyle("sigil", true, { navigate: false }), "sigil", "applyNodeStyle takes applyTheme's options");
-  assert.deepEqual(offers.at(-1), { kind: "nodeStyle", key: "sigil", name: "Sigil", navigate: false });
-  env.music.applyNodeStyle("singularity");
-  assert.deepEqual(offers.at(-1), { kind: "nodeStyle", key: "singularity", name: "Singularity" }, "a caller that passes no options still offers Settings › Community");
-  assert.deepEqual(env.writes, []);
+  assert.equal(env.storage.get("mefiStudio.music.premium.v1") ?? null, null, "the old store is cleared");
 });
 
 test("Appearance holds only visual controls; the audio dropdown owns every player and its setup", () => {
@@ -1403,7 +1074,7 @@ test("Appearance holds only visual controls; the audio dropdown owns every playe
   assert.equal(sound.attrs["aria-labelledby"], "music-sound-label");
   const node = env.ids.get("music-node-heading").parentElement;
   const after = (id) => node.children[node.children.indexOf(env.ids.get(id)) + 1];
-  assert.equal(after("music-node-styles"), env.ids.get("music-node-premium-styles").parentElement, "the Void styles sit right under the free ones");
+  assert.equal(after("music-node-styles"), env.ids.get("music-void-style-label"), "the Void styles sit right under the others");
   assert.equal(env.ids.get("music-node-layouts").parentElement.dataset.appearancePanel, "layout", "arrangements have their own section");
   const dropdown = env.ids.get("music-dropdown");
   for (const id of ["music-sound", "music-audio-source", "music-audio-toggle", "music-audio-response", "music-recommend", "music-link-url", "music-files"]) {
@@ -1414,7 +1085,6 @@ test("Appearance holds only visual controls; the audio dropdown owns every playe
   assert.equal(sound.children[2], env.ids.get("music-local-tab").parentElement, "the source tabs follow the mini browser launcher");
   env.music.open(); env.frames();
   assert.equal(dropdown.hidden, true, "Appearance never opens the media menu");
-  assert.equal(env.ids.get("music-premium-theme-label").children[0].textContent, "Members", "a narrow sheet folds the pill to its lock; the word stays");
 });
 
 test("The audio dropdown stays beneath its opener, dismisses without stopping playback and restores keyboard focus", async () => {
@@ -1602,56 +1272,18 @@ test("Audio setting option menus keep their owner open and consume Escape before
   assert.equal(expanded, false, "closing the parent cannot leave an orphan settings popup");
 });
 
-test("A member's Void boxes trade the fork path for one quiet line with a Settings link; the lock marks go with the lock", () => {
-  let premium = true;
-  let current = { configured: true, linked: true, state: "ok", selfUnlocked: false };
-  const opened = [];
-  const community = { has: () => premium, offer() {}, status: () => current, open: () => opened.push("open"), join() {}, link() {}, copyAgentPrompt() {}, FORK_COPY: "The fork sentence, as community.js has it." };
-  const env = environment({ community, bridge: { communityLink: () => {}, communityOpen: () => {} } });
-  for (const kind of ["theme", "style"]) {
-    const part = (name) => env.ids.get(`music-premium-${kind}-${name}`);
-    assert.equal(part("member").hidden, false, kind);
-    assert.equal(part("member").children[0].textContent, "Unlocked with your Void Engine membership");
-    assert.equal(part("manage").hidden, false);
-    assert.equal(part("manage").textContent, "Manage in Settings › Community");
-    for (const name of ["fineprint", "desktop"]) assert.equal(part(name).hidden, true, `${kind} ${name}`);
-    assert.equal(part("join").parentElement.hidden, true, "no Join, Link or Copy for a member");
-    assert.equal(part("label").children[0].hidden, true, "no Members tag");
-    assert.equal(env.ids.get(kind === "theme" ? "music-premium-themes" : "music-node-premium-styles").attrs["aria-describedby"], part("member").id);
-  }
-  assert.equal(env.ids.get("music-theme-void").children[0].hidden, true, "no lock on a member's theme");
-  assert.equal(env.ids.get("music-node-style-prism").children[1].children[1].hidden, true, "nor on a node style's name row");
-  env.ids.get("music-premium-style-manage").click();
-  assert.deepEqual(opened, ["open"]);
-
-  current = { ...current, selfUnlocked: true };
-  env.emit("mefi-community-status", {});
-  assert.equal(env.ids.get("music-premium-theme-member").children[0].textContent, "Unlocked in this build", "a SELF_UNLOCKED fork says so");
-
-  premium = false;
-  env.emit("mefi-community-change", { premium: false, perks: [], validUntil: null, reason: "not-member" });
-  assert.equal(env.ids.get("music-premium-theme-member").hidden, true);
-  assert.equal(env.ids.get("music-premium-theme-fineprint").hidden, false);
-  assert.equal(env.ids.get("music-premium-theme-fineprint").textContent, "The fork sentence, as community.js has it.", "read from MefiCommunity, not a copy");
-  assert.equal(env.ids.get("music-premium-theme-join").parentElement.hidden, false);
-  assert.equal(env.ids.get("music-theme-void").children[0].hidden, false, "the lock comes back");
-  assert.equal(env.ids.get("music-node-style-prism").children[1].children[1].hidden, false);
-  assert.match(env.ids.get("music-theme-void").title, /Preview this Void collection theme.*Discord membership/, "the pointer's tooltip explains the preview");
-});
-
-test("MefiMusic exports what other modules read: isNodeStyle for the tree painters and the catalog for Community", () => {
+test("MefiMusic exports what other modules read: isNodeStyle for the tree painters and the Void catalog", () => {
   const env = environment();
   for (const name of ["isPremiumTheme", "isPremiumNodeStyle", "premiumAllowed", "premiumChoice"]) assert.equal(env.music[name], undefined, name);
   assert.equal(env.music.isNodeStyle("prism"), true);
   assert.equal(env.music.isNodeStyle("orbs"), true);
   assert.equal(env.music.isNodeStyle("__proto__"), false);
   const catalog = env.music.premiumCatalog();
-  assert.deepEqual([...catalog.themes.map((theme) => theme.key)], PREMIUM_THEMES);
-  assert.deepEqual([...catalog.nodeStyles.map((style) => style.key)], PREMIUM_STYLES);
+  assert.deepEqual([...catalog.themes.map((theme) => theme.key)], VOID_THEMES);
+  assert.deepEqual([...catalog.nodeStyles.map((style) => style.key)], VOID_STYLES);
   assert.ok(catalog.themes.every((theme) => /^#[0-9a-f]{6}$/i.test(theme.accent) && /^#[0-9a-f]{6}$/i.test(theme.accent2)), "both hues of every two-tone swatch");
-  assert.match(source.slice(0, 400), /^\/\/ Style & sound: Studio's color themes, node styles and layouts, the members'\r?\n\/\/ Void collection/);
+  assert.match(source.slice(0, 400), /^\/\/ Style & sound: Studio's color themes, node styles and layouts \(the two-tone\r?\n\/\/ Void collection among them, free like the rest\)/);
 });
-
 
 test("Settings mounts appearance controls while the players stay in the dropdown", () => {
   const env = environment({ preview: true });
@@ -1687,22 +1319,21 @@ test("the optional canvas preview restores mounted appearance controls and focus
   assert.ok(env.lifecycle.includes("release:appearancePreview"));
 });
 
-test("locked selections in Settings appear on the canvas but leave saved choices intact", () => {
-  const env = environment({ preview: true, saved: { theme: "forest", nodeStyle: "glass" }, community: member(() => false) });
+test("Void selections in Settings stay on the canvas and are saved", () => {
+  const env = environment({ preview: true, saved: { theme: "forest", nodeStyle: "glass" } });
   env.document.getElementById = (id) => env.ids.get(id) ?? null;
   const hosts = { look: env.document.createElement("section"), sound: env.document.createElement("section"), effects: env.document.createElement("section") };
   env.music.mountSettings(hosts);
   env.ids.get("music-theme-abyss").click();
   env.ids.get("music-node-style-prism").click();
-  assert.equal(env.music.status().theme, "abyss");
-  assert.equal(env.music.graphPreferences().nodeStyle, "prism");
   env.ids.get("settings-canvas-preview").click();
   assert.equal(env.music.status().theme, "abyss", "opening the canvas keeps the chosen look visible");
   assert.equal(env.music.graphPreferences().nodeStyle, "prism");
   env.music.close();
-  assert.equal(env.music.status().theme, "forest");
-  assert.equal(env.music.graphPreferences().nodeStyle, "glass");
-  assert.deepEqual(env.writes, [], "neither the Settings picker nor the canvas saves a locked choice");
+  assert.equal(env.music.status().theme, "abyss", "closing keeps it too");
+  assert.equal(env.music.graphPreferences().nodeStyle, "prism");
+  assert.equal(musicWrites(env).at(-1).theme, "abyss");
+  assert.equal(musicWrites(env).at(-1).nodeStyle, "prism");
 });
 
 test("canvas preview owns its registered navigation layer before Settings has mounted", () => {

@@ -3737,46 +3737,22 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
 .walkthrough-invitation .community-invite-copy > strong { font-size: var(--fs-md); }
 .community-invitation .community-pitch { color: color-mix(in srgb, var(--ivory) 80%, var(--muted)); }
 .walkthrough-invitation .community-note { color: var(--gold-bright); font-weight: 600; }
-.walkthrough-invitation .community-fine { margin-top: var(--s1); font-size: var(--fs-2xs); }
 .community-invite-actions { justify-content: flex-end; }
 /* Not now and Don't show again: quiet text buttons set apart by space, which
    still reads right when they wrap under the main two. */
 .community-invite-dismiss { display: inline-flex; align-items: center; gap: 2px; margin-left: var(--s2); }
 .community-invitation .community-quiet { border-color: transparent; background: none; color: var(--muted); }
 .community-invitation .community-quiet:hover { color: var(--ivory); background: var(--tint-gold-2); border-color: transparent; transform: none; box-shadow: none; }
-/* Short windows fold the invitation's paragraphs away; the pitch, the fork
-   path and a locked item's note stay (the honest-lock guard-rail keeps them in
-   view, and "unlock these" needs the pitch before it). */
+/* Short windows fold the invitation's paragraphs away; the pitch and the note
+   stay. */
 @media (max-height: 1000px) and (min-width: 961px) {
-  .community-invitation > div > :is(.community-pitch, .community-fine, .community-note) { display: block; }
+  .community-invitation > div > :is(.community-pitch, .community-note) { display: block; }
 }
 @media (max-width: 650px) {
   .community-emblem { display: none; }
   .community-invite-actions { justify-content: flex-start; }
 }
-/* Settings › Community: a showcase strip, then the link state, the quiet fork
-   path and the privacy note. */
-.community-showcase { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3) var(--s5); margin: 2px 0 var(--s3); padding: var(--s3) var(--s4); border: 1px solid transparent; border-radius: var(--r-sm); background: radial-gradient(110% 150% at 0 0, rgba(var(--void-a), 0.13), transparent 55%) padding-box, radial-gradient(80% 140% at 100% 100%, rgba(var(--void-b), 0.08), transparent 60%) padding-box, linear-gradient(var(--panel-solid), var(--panel-solid)) padding-box, linear-gradient(115deg, rgba(var(--void-a), 0.6), rgba(var(--void-b), 0.32) 42%, var(--hairline) 78%) border-box; }
-/* The copy column: kicker, title, the unlock state and, for a member, the way in. */
-.community-showcase-copy { flex: 1 1 200px; min-width: 0; display: grid; justify-items: start; gap: 2px; }
-.community-showcase-kicker { color: var(--gold); font-size: var(--fs-2xs); font-weight: 650; letter-spacing: var(--track-eyebrow); text-transform: uppercase; }
-.community-showcase-copy > strong { color: var(--ivory); font: 600 var(--fs-lg)/1.35 var(--font-display); }
-.community-showcase-state { display: inline-flex; align-items: center; gap: 7px; margin-top: 2px; color: var(--muted); font-size: var(--fs-xs); }
-.community-showcase-state::before { content: ""; flex: none; width: 10px; height: 10px; background: currentColor; -webkit-mask: var(--glyph-lock) center / contain no-repeat; mask: var(--glyph-lock) center / contain no-repeat; }
-.community-showcase-state[data-unlocked="true"] { color: var(--ivory); }
-.community-showcase-state[data-unlocked="true"]::before { width: 12px; height: 12px; background: var(--gold-bright); -webkit-mask-image: var(--glyph-check); mask-image: var(--glyph-check); }
-.community-showcase-items { display: flex; flex-wrap: wrap; align-items: stretch; gap: var(--s2) var(--s3); }
-.community-showcase-items:empty { display: none; }
-.community-showcase-group { display: flex; gap: 2px; }
-.community-showcase-group + .community-showcase-group { padding-left: var(--s3); border-left: 1px solid var(--hairline); }
-.community-showcase-item { display: grid; justify-items: center; gap: 2px; width: 66px; padding: var(--s1) 1px 6px; border-radius: var(--r-xs); }
-.community-showcase-item[data-current="true"] { background: rgba(var(--void-a), 0.12); box-shadow: inset 0 0 0 1px rgba(var(--void-a), 0.6); }
-.community-showcase-item[data-current="true"] .community-showcase-name { color: var(--ivory); }
-.community-showcase-art { display: grid; place-items: center; width: 100%; height: 41px; }
-.community-showcase-art > .music-node-preview { width: 100%; margin: 0; }
-.community-showcase .void-swatch { width: 24px; height: 24px; }
-.community-showcase-name { color: var(--muted); font-size: var(--fs-2xs); line-height: 1.3; white-space: nowrap; }
-.community-choose { margin-top: var(--s2); }
+/* Settings › Community: the link state, then the privacy note. */
 #settings-community .community-note { margin: 0 0 var(--s3); padding: 9px var(--s3) 9px 13px; border-left: 2px solid var(--gold-bright); border-radius: 0 var(--r-xs) var(--r-xs) 0; background: var(--tint-gold-2); color: var(--ivory); font-size: var(--fs-sm); line-height: 1.55; }
 #community-settings-body > p { margin: 0 0 var(--s2); max-width: 78ch; line-height: 1.6; }
 .community-who { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); margin: 2px 0 var(--s3); font-size: var(--fs-sm); }
@@ -3787,11 +3763,7 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
 /* Link trouble (offline, relink, not a member) spans the card like the note above. */
 #community-settings-body > .community-callout { max-width: none; margin: 0 0 10px; padding: var(--s2) var(--s3); border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--hairline)); border-radius: var(--r-xs); background: color-mix(in srgb, var(--warn) 6%, transparent); color: var(--ivory); font-size: var(--fs-sm); }
 #community-settings-body > .community-aside { font-size: var(--fs-xs); }
-.community-perks { margin: 0; padding: 0; list-style: none; border-bottom: 1px solid var(--hairline); }
-.community-perks li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: var(--s2) 0; border-top: 1px solid var(--hairline); color: var(--ivory); font-size: var(--fs-sm); }
 /* Side by side, not stacked, so each swatch keeps both of its hues in view. */
-.community-perk-swatches { display: inline-flex; gap: 5px; margin-left: auto; }
-.community-perk-swatches > .void-swatch { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16); }
 #community-settings-body > .community-checked { margin: var(--s2) 0 2px; font-size: var(--fs-xs); }
 /* Check now and Unlink are ghost mini; Unlink is the quiet one until pointed at. */
 #community-settings-body .community-unlink { color: var(--muted); border-color: transparent; }
@@ -3802,23 +3774,9 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
   .community-waiting::before { animation: community-waiting 1.6s ease-in-out infinite; }
 }
 @keyframes community-waiting { 50% { opacity: 0.3; } }
-.community-fork { margin: var(--s3) 0 0; padding: var(--s3) 14px; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: rgba(8, 8, 11, 0.28); container-type: inline-size; }
-.community-fork-title { display: block; margin: 0 0 var(--s1); color: var(--ivory); font-size: var(--fs-xs); font-weight: 600; }
-.community-fork-copy { margin: 0 0 var(--s2); max-width: 78ch; color: var(--muted); font-size: var(--fs-xs); line-height: 1.6; }
 /* Copy agent prompt, and beside it the disclosure that shows what it copies. */
-.community-fork-actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--s2) var(--s3); }
-.community-prompt { flex: 1 1 260px; min-width: 0; }
-.community-prompt > summary { display: inline-flex; align-items: center; gap: 7px; min-height: var(--ctl-h-sm); color: var(--muted); font-size: var(--fs-xs); cursor: pointer; list-style: none; }
-.community-prompt > summary::-webkit-details-marker { display: none; }
-.community-prompt > summary::before { content: ""; width: 0; height: 0; border-left: 5px solid currentColor; border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: transform var(--dur-2) var(--ease); }
-.community-prompt[open] > summary::before { transform: rotate(90deg); }
-.community-prompt > summary:hover { color: var(--ivory); }
 .community-prompt-code { margin: var(--s1) 0 0; padding: var(--s2) var(--s3); border: 1px solid var(--hairline); border-radius: var(--r-xs); background: rgba(0, 0, 0, 0.35); color: var(--ivory); font: var(--fs-xs)/1.6 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
 .community-prompt-code > code { padding: 0; border: 0; border-radius: 0; background: none; color: inherit; font: inherit; }
-/* A narrow card gives the disclosure its own row, so the prompt opens full width. */
-@container (max-width: 640px) {
-  .community-prompt { flex-basis: 100%; }
-}
 /* The privacy note: smaller, muted, in a readable measure. */
 #community-privacy { max-width: 70ch; margin: var(--s3) 0 0; color: var(--muted); font-size: var(--fs-xs); line-height: 1.6; }
 /* Busy Settings › Community buttons stay focusable (aria-disabled, not

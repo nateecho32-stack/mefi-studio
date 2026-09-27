@@ -4,13 +4,14 @@ import test from "node:test";
 import community from "../scripts/community.cjs";
 
 // scripts/community.cjs decides when the weekly Discord card is due, when a
-// linked account is re-checked and what the link unlocks. Every function takes
+// linked account is re-checked and whether the link says "member". The link
+// unlocks nothing: every theme and node style is free. Every function takes
 // `now`, so nothing here reads the clock or waits.
 
 const {
-  DAY, GRACE_MS, CHECK_EVERY_MS, FIRST_PROMPT_MS, PROMPT_EVERY_MS, BACKOFF_EVERY_MS, BACKOFF_AFTER,
-  GUILD_ID, INVITE_URL, SCOPES, FORK_COPY, AGENT_PROMPT,
-  normalize, promptDue, applyPrompt, checkDue, nextCheckAfterFailure, recordCheck, entitlement,
+  DAY, CHECK_EVERY_MS, FIRST_PROMPT_MS, PROMPT_EVERY_MS, BACKOFF_EVERY_MS, BACKOFF_AFTER,
+  GUILD_ID, INVITE_URL, SCOPES,
+  normalize, isMember, promptDue, applyPrompt, checkDue, nextCheckAfterFailure, recordCheck,
   linkTarget, isAllowedDiscordUrl, pkce, authorizeUrl, publicStatus, signature,
 } = community;
 
@@ -29,19 +30,17 @@ test("the constants match the shared contract", () => {
   assert.equal(community.CLIENT_ID, "");
   assert.deepEqual([...community.REDIRECT_PORTS], [53134, 53135, 53136]);
   assert.deepEqual([...SCOPES], ["identify", "guilds.members.read"]);
-  assert.equal(community.SELF_UNLOCKED, false, "the shipped app must not unlock itself; forks flip this");
-  assert.deepEqual(community.ROLE_PERKS, {});
-  assert.deepEqual(community.PERKS, { premium: { label: "Void collection", detail: "4 themes and 3 node styles" } });
+  assert.deepEqual([...community.LINK_STATES], ["ok", "not-member", "relink", "offline", "session"]);
   assert.equal(DAY, 86_400_000);
-  assert.equal(GRACE_MS, 14 * DAY);
   assert.equal(CHECK_EVERY_MS, 7 * DAY);
   assert.equal(FIRST_PROMPT_MS, 3 * DAY);
   assert.equal(PROMPT_EVERY_MS, 7 * DAY);
   assert.equal(BACKOFF_EVERY_MS, 30 * DAY);
   assert.equal(BACKOFF_AFTER, 4);
   assert.equal(community.CHECK_THROTTLE_MS, 60_000);
-  assert.equal(FORK_COPY, "Members of the Void Engine Discord unlock these. Studio is MIT-licensed: fork the project and unlock it yourself, or ask an agent to do it for you.");
-  assert.equal(AGENT_PROMPT, "In my fork of Mefi's Studio AI+, set SELF_UNLOCKED to true in scripts/community.cjs so the Void collection themes and node styles unlock without Discord, then run npm run check and npm test.");
+  for (const gone of ["SELF_UNLOCKED", "ROLE_PERKS", "PERKS", "FORK_COPY", "AGENT_PROMPT", "GRACE_MS", "entitlement", "allPerks"]) {
+    assert.ok(!(gone in community), `${gone} went with the premium gate: the Void collection is free`);
+  }
 });
 
 test("normalize tolerates garbage and keeps only the contract's fields", () => {
@@ -73,7 +72,7 @@ test("normalize tolerates garbage and keeps only the contract's fields", () => {
 
 test("every exported function takes a garbage options bag, null included, without throwing", () => {
   // A `= {}` default covers undefined only; null used to reach the destructuring.
-  const calls = { promptDue, applyPrompt, checkDue, nextCheckAfterFailure, recordCheck, entitlement, authorizeUrl, publicStatus };
+  const calls = { promptDue, applyPrompt, checkDue, nextCheckAfterFailure, recordCheck, authorizeUrl, publicStatus };
   for (const [name, fn] of Object.entries(calls)) {
     for (const bad of [undefined, null, 0, "x", [], true]) {
       assert.doesNotThrow(() => fn(bad), `${name}(${JSON.stringify(bad)})`);
@@ -85,31 +84,34 @@ test("every exported function takes a garbage options bag, null included, withou
   assert.deepEqual(applyPrompt(null), normalize(null));
   assert.equal(checkDue(null), false);
   assert.equal(recordCheck(null), null);
-  assert.deepEqual(entitlement(null), { premium: false, perks: [], validUntil: null, reason: "unlinked" });
+  assert.equal(isMember(null), false);
   assert.equal(publicStatus(null).linked, false);
   assert.ok(Number.isFinite(nextCheckAfterFailure(null)));
 });
 
-test("promptDue: first-run grace, weekly cadence, snooze, back-off, never and entitled", () => {
+test("promptDue: first-run quiet period, weekly cadence, snooze, back-off, never and member", () => {
   const rows = [
-    ["never seen yet", state({ firstSeenAt: null }), T0 + 10 * DAY, false, false],
-    ["inside the first three days", state(), T0 + FIRST_PROMPT_MS - 1, false, false],
-    ["exactly three days in", state(), T0 + FIRST_PROMPT_MS, false, true],
-    ["shown six days ago", state({ lastShownAt: T0 + 3 * DAY, shown: 1 }), T0 + 9 * DAY, false, false],
-    ["shown a week ago", state({ lastShownAt: T0 + 3 * DAY, shown: 1 }), T0 + 10 * DAY, false, true],
-    ["a week but still snoozed", state({ lastShownAt: T0 + 3 * DAY, shown: 1, snoozeUntil: T0 + 12 * DAY }), T0 + 10 * DAY, false, false],
-    ["snooze has run out", state({ lastShownAt: T0 + 3 * DAY, shown: 1, snoozeUntil: T0 + 12 * DAY }), T0 + 12 * DAY, false, true],
-    ["three ignored showings: still weekly", state({ lastShownAt: T0 + 3 * DAY, shown: BACKOFF_AFTER - 1 }), T0 + 10 * DAY, false, true],
-    ["four ignored showings: a week is too soon", state({ lastShownAt: T0 + 3 * DAY, shown: BACKOFF_AFTER }), T0 + 10 * DAY, false, false],
-    ["four ignored showings: thirty days", state({ lastShownAt: T0 + 3 * DAY, shown: BACKOFF_AFTER }), T0 + 33 * DAY, false, true],
-    ["never", state({ never: true }), T0 + 100 * DAY, false, false],
-    ["entitled (boolean)", state(), T0 + 100 * DAY, true, false],
-    ["entitled (object)", state(), T0 + 100 * DAY, { premium: true }, false],
-    ["an object without premium is not entitled", state(), T0 + 100 * DAY, { premium: false }, true],
+    ["never seen yet", state({ firstSeenAt: null }), T0 + 10 * DAY, false],
+    ["inside the first three days", state(), T0 + FIRST_PROMPT_MS - 1, false],
+    ["exactly three days in", state(), T0 + FIRST_PROMPT_MS, true],
+    ["shown six days ago", state({ lastShownAt: T0 + 3 * DAY, shown: 1 }), T0 + 9 * DAY, false],
+    ["shown a week ago", state({ lastShownAt: T0 + 3 * DAY, shown: 1 }), T0 + 10 * DAY, true],
+    ["a week but still snoozed", state({ lastShownAt: T0 + 3 * DAY, shown: 1, snoozeUntil: T0 + 12 * DAY }), T0 + 10 * DAY, false],
+    ["snooze has run out", state({ lastShownAt: T0 + 3 * DAY, shown: 1, snoozeUntil: T0 + 12 * DAY }), T0 + 12 * DAY, true],
+    ["three ignored showings: still weekly", state({ lastShownAt: T0 + 3 * DAY, shown: BACKOFF_AFTER - 1 }), T0 + 10 * DAY, true],
+    ["four ignored showings: a week is too soon", state({ lastShownAt: T0 + 3 * DAY, shown: BACKOFF_AFTER }), T0 + 10 * DAY, false],
+    ["four ignored showings: thirty days", state({ lastShownAt: T0 + 3 * DAY, shown: BACKOFF_AFTER }), T0 + 33 * DAY, true],
+    ["never", state({ never: true }), T0 + 100 * DAY, false],
+    ["a linked member", state({ link: link() }), T0 + 100 * DAY, false],
+    ["a member whose last check failed", state({ link: link({ state: "offline" }) }), T0 + 100 * DAY, false],
+    ["a member who must relink", state({ link: link({ state: "relink" }) }), T0 + 100 * DAY, false],
+    ["linked, not a member", state({ link: link({ state: "not-member" }) }), T0 + 100 * DAY, true],
+    ["linked, never answered member", state({ link: link({ lastOkAt: null, state: "offline" }) }), T0 + 100 * DAY, true],
   ];
-  for (const [name, saved, now, entitled, expected] of rows) {
-    assert.equal(promptDue({ state: saved, now, entitled }), expected, name);
+  for (const [name, saved, now, expected] of rows) {
+    assert.equal(promptDue({ state: saved, now }), expected, name);
   }
+  assert.equal(promptDue({ state: state(), now: T0 + 100 * DAY, entitled: true }), true, "the old entitled flag is ignored");
   assert.equal(promptDue({ state: state(), now: "later" }), false, "a garbage clock never shows the card");
   assert.equal(promptDue(), false);
   assert.equal(promptDue({ state: null, now: T0 }), false);
@@ -205,7 +207,7 @@ test("recordCheck folds each kind of answer into the link", () => {
 
   const auth = recordCheck({ link: before, now, result: { ok: false, error: "auth" } });
   assert.equal(auth.state, "relink");
-  assert.deepEqual(auth.roles, ["900"], "roles stay until grace runs out");
+  assert.deepEqual(auth.roles, ["900"], "roles stay: the last answer stands");
   assert.equal(auth.lastOkAt, before.lastOkAt);
 
   const offline = recordCheck({ link: before, now, result: { ok: false, error: "network" } });
@@ -237,33 +239,15 @@ test("recordCheck folds each kind of answer into the link", () => {
   assert.equal(recordCheck(), null);
 });
 
-test("entitlement: self, unlinked, member, grace boundary, not-member, expired, role perks", () => {
-  const selfish = entitlement({ link: null, now: T0, selfUnlocked: true });
-  assert.deepEqual(selfish, { premium: true, perks: ["premium"], validUntil: null, reason: "self" });
-  assert.deepEqual(entitlement({ link: null, now: T0, selfUnlocked: true, rolePerks: { 9: ["halo"] } }).perks, ["premium", "halo"],
-    "the fork switch unlocks every perk, role perks included");
-
-  assert.deepEqual(entitlement({ link: null, now: T0 }), { premium: false, perks: [], validUntil: null, reason: "unlinked" });
-  assert.deepEqual(entitlement({ link: "junk", now: T0 }).reason, "unlinked");
-  assert.deepEqual(entitlement({ link: link(), now: T0 + DAY }), { premium: true, perks: ["premium"], validUntil: T0 + GRACE_MS, reason: "member" });
-  assert.equal(entitlement({ link: link({ state: "session" }), now: T0 + DAY }).reason, "member");
-  assert.deepEqual(entitlement({ link: link({ state: "offline" }), now: T0 + 10 * DAY }),
-    { premium: true, perks: ["premium"], validUntil: T0 + GRACE_MS, reason: "grace" });
-  assert.equal(entitlement({ link: link({ state: "relink" }), now: T0 + 10 * DAY }).reason, "grace", "a refused grant keeps perks until grace ends");
-  assert.equal(entitlement({ link: link({ state: "offline" }), now: T0 + GRACE_MS - 1 }).premium, true, "one millisecond inside grace");
-  assert.deepEqual(entitlement({ link: link({ state: "offline" }), now: T0 + GRACE_MS }),
-    { premium: false, perks: [], validUntil: T0 + GRACE_MS, reason: "expired" }, "exactly GRACE_MS is expired");
-  assert.equal(entitlement({ link: link(), now: T0 + GRACE_MS }).reason, "expired", "even an ok link must be re-checked within grace");
-  assert.deepEqual(entitlement({ link: link({ state: "not-member" }), now: T0 + 1 }),
-    { premium: false, perks: [], validUntil: null, reason: "not-member" }, "leaving the server revokes at once");
-  assert.equal(entitlement({ link: link({ lastOkAt: null }), now: T0 }).reason, "expired");
-  assert.equal(entitlement({ link: link(), now: "now" }).premium, false, "a garbage clock grants nothing");
-
-  const rolePerks = { 900: ["halo", "premium"], 901: ["halo", "aurora"], 902: "not-a-list" };
-  assert.deepEqual(entitlement({ link: link({ roles: ["900", "901", "902", "999", "__proto__", "constructor", "toString"] }), now: T0, rolePerks }).perks,
-    ["premium", "halo", "aurora"], "role perks merge after premium without duplicates, and inherited keys are not roles");
-  assert.deepEqual(entitlement({ link: link({ roles: ["901"] }), now: T0 + GRACE_MS, rolePerks }).perks, [], "no perks once expired");
-  assert.deepEqual(entitlement({ link: link({ roles: ["901"] }), now: T0 }).perks, ["premium"], "the shipped ROLE_PERKS is empty");
+test("isMember: an answered member stays one until a definite not-member", () => {
+  assert.equal(isMember(link()), true);
+  assert.equal(isMember(link({ state: "session" })), true);
+  assert.equal(isMember(link({ state: "offline", checkedAt: T0 + 60 * DAY })), true, "a failed check keeps the last answer, with no grace period");
+  assert.equal(isMember(link({ state: "relink" })), true, "a refused grant keeps the last answer");
+  assert.equal(isMember(link({ state: "not-member" })), false, "leaving the server ends it at once");
+  assert.equal(isMember(link({ lastOkAt: null })), false, "no check has ever said member");
+  assert.equal(isMember(link({ state: "haunted" })), true, "an unreadable state is a failed check");
+  for (const garbage of [null, undefined, "junk", 1, [], { userId: "" }]) assert.equal(isMember(garbage), false, JSON.stringify(garbage));
 });
 
 test("linkTarget maps names to hard-coded URLs only", () => {
@@ -334,16 +318,15 @@ test("publicStatus has the STATUS shape and never carries a token", () => {
   };
   const status = publicStatus({ state: saved, now, clientId: "123" });
   assert.deepEqual(Object.keys(status), [
-    "available", "configured", "linked", "linking", "selfUnlocked", "user", "roles", "state", "entitlement",
-    "checkedAt", "lastOkAt", "nextCheckAt", "prompt", "inviteUrl", "serverUrl", "forkCopy", "agentPrompt",
+    "available", "configured", "linked", "linking", "member", "user", "roles", "state",
+    "checkedAt", "lastOkAt", "nextCheckAt", "prompt", "inviteUrl", "serverUrl",
   ]);
   assert.deepEqual(status, {
-    available: true, configured: true, linked: true, linking: false, selfUnlocked: false,
+    available: true, configured: true, linked: true, linking: false, member: true,
     user: { id: "111", username: "mefi", globalName: "Mefi" }, roles: ["900"], state: "ok",
-    entitlement: { premium: true, perks: ["premium"], validUntil: T0 + GRACE_MS, reason: "member" },
     checkedAt: T0, lastOkAt: T0, nextCheckAt: T0 + CHECK_EVERY_MS,
     prompt: { due: false, never: false, snoozeUntil: null },
-    inviteUrl: INVITE_URL, serverUrl: `https://discord.com/channels/${GUILD_ID}`, forkCopy: FORK_COPY, agentPrompt: AGENT_PROMPT,
+    inviteUrl: INVITE_URL, serverUrl: `https://discord.com/channels/${GUILD_ID}`,
   });
   const json = JSON.stringify(status);
   assert.ok(!/secret/i.test(json), "no token value survives");
@@ -357,11 +340,15 @@ test("publicStatus has the STATUS shape and never carries a token", () => {
   assert.equal(unlinked.user, null);
   assert.deepEqual(unlinked.roles, []);
   assert.equal(unlinked.state, null);
-  assert.equal(unlinked.entitlement.reason, "unlinked");
+  assert.equal(unlinked.member, false);
   assert.equal(unlinked.prompt.due, false, "no firstSeenAt yet, so no card");
   assert.equal(publicStatus({ state: state(), now: T0 + FIRST_PROMPT_MS }).prompt.due, true);
   assert.equal(publicStatus({ state: state(), now: T0 + FIRST_PROMPT_MS, available: false }).prompt.due, false);
-  assert.equal(publicStatus({ state: state(), now: T0 + FIRST_PROMPT_MS, selfUnlocked: true }).prompt.due, false, "self-unlocked is entitled");
+  assert.equal(publicStatus({ state: state(), now: T0 + FIRST_PROMPT_MS, selfUnlocked: true }).prompt.due, true, "no self-unlock switch silences the card");
+  const outsider = publicStatus({ state: state({ link: link({ state: "not-member", roles: [] }) }), now: T0 + FIRST_PROMPT_MS });
+  assert.equal(outsider.member, false);
+  assert.equal(outsider.prompt.due, true, "a linked non-member still sees the card");
+  assert.equal(publicStatus({ state: state({ link: link({ state: "offline" }) }), now: T0 + FIRST_PROMPT_MS }).member, true);
   assert.equal(publicStatus({ state: state(), now: T0, linking: true, clientId: " " }).linking, true);
   assert.equal(publicStatus({ state: state(), now: T0, clientId: " " }).configured, false);
   assert.doesNotThrow(() => publicStatus());
@@ -371,10 +358,10 @@ test("signature moves on visible changes only", () => {
   const now = T0 + DAY;
   const base = publicStatus({ state: state({ link: link() }), now, clientId: "1" });
   assert.equal(signature(base), signature(structuredClone(base)));
-  assert.equal(signature(base), signature({ ...base, forkCopy: "other", agentPrompt: "other", inviteUrl: "x" }), "constant copy is not a change");
+  assert.equal(signature(base), signature({ ...base, inviteUrl: "x", serverUrl: "y" }), "the constant URLs are not a change");
   for (const change of [
     { linked: false }, { linking: true }, { state: "offline" }, { roles: ["1", "2"] },
-    { entitlement: { ...base.entitlement, premium: false } }, { entitlement: { ...base.entitlement, validUntil: 1 } },
+    { member: false }, { available: false }, { configured: false }, { lastOkAt: 1 },
     { prompt: { ...base.prompt, due: true } }, { user: { ...base.user, username: "renamed" } }, { nextCheckAt: 5 },
   ]) {
     assert.notEqual(signature({ ...base, ...change }), signature(base), JSON.stringify(change));

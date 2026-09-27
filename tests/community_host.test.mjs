@@ -17,7 +17,7 @@ function section(start, end) {
   assert.ok(from >= 0 && to > from, `host section exists: ${start}`);
   return source.slice(from, to);
 }
-const block = section("// ---- Discord community link: the Void collection perks", "// ---- end of the Discord community link");
+const block = section("// ---- Discord community link: the Void Engine server", "// ---- end of the Discord community link");
 // The handlers sit at the end of registerIpc, one line each.
 const handlers = (() => {
   const from = source.indexOf("  // ---- Community ----");
@@ -30,7 +30,7 @@ const handlers = (() => {
   return lines.join("\n");
 })();
 
-const { DAY, GRACE_MS, CHECK_EVERY_MS, FIRST_PROMPT_MS, CHECK_THROTTLE_MS, GUILD_ID, INVITE_URL } = community;
+const { DAY, CHECK_EVERY_MS, FIRST_PROMPT_MS, CHECK_THROTTLE_MS, GUILD_ID, INVITE_URL } = community;
 const HOUR = DAY / 24;
 const T0 = 1_800_000_000_000;
 const CLIENT = "1234567890123456789";
@@ -179,31 +179,19 @@ test("status stamps firstSeenAt once and the card waits out the first three days
   assert.equal(h.calls.length, 0, "the card cadence never reaches the network");
 });
 
-test("a machine-local style unlock survives community saves and a fresh host", async () => {
-  const h = host({ settings: { localStyleUnlock: true }, env: {} });
+test("community saves leave other settings alone, and the status carries membership, not an unlock", async () => {
+  // Every theme and node style is free, so a leftover unlock field in
+  // settings.json means nothing; community writes still keep it as they found it.
+  const h = host({ settings: { localStyleUnlock: true, theme: "void" }, env: {} });
   const first = (await h.invoke("community:status")).status;
   assert.equal(first.linked, false);
-  assert.equal(first.selfUnlocked, true);
-  assert.deepEqual(first.entitlement, { premium: true, perks: ["premium"], validUntil: null, reason: "self" });
+  assert.equal(first.member, false);
+  for (const gone of ["selfUnlocked", "entitlement", "forkCopy", "agentPrompt"]) assert.ok(!(gone in first), `${gone} is gone from the status`);
   await h.invoke("community:prompt", { action: "never" });
   await h.invoke("community:unlink");
-  assert.equal(h.settings.localStyleUnlock, true, "community normalization preserves the machine setting");
-  const restarted = host({ settings: h.settings, env: {} });
-  restarted.advance(365 * DAY);
-  const status = (await restarted.invoke("community:status")).status;
-  assert.deepEqual(status.entitlement, first.entitlement, "a new host keeps the unlock without an expiry");
-  assert.equal(status.prompt.due, false);
-  assert.equal(h.calls.length + restarted.calls.length, 0, "no Discord request is needed");
-});
-
-test("local style unlock is opt-in and keeps the fork switch working", async () => {
-  for (const value of [undefined, false, "true", 1, null]) {
-    const status = (await host({ settings: { localStyleUnlock: value }, env: {} }).invoke("community:status")).status;
-    assert.equal(status.entitlement.premium, false, `only boolean true opts in: ${value}`);
-    assert.equal(status.selfUnlocked, false);
-  }
-  const fork = host({ rules: { ...community, SELF_UNLOCKED: true } });
-  assert.equal((await fork.invoke("community:status")).status.entitlement.premium, true);
+  assert.equal(h.settings.localStyleUnlock, true, "community normalization touches settings.community only");
+  assert.equal(h.settings.theme, "void");
+  assert.equal(h.calls.length, 0, "no Discord request is needed");
 });
 
 test("community:prompt accepts exactly the rules module's PROMPT_ACTIONS", async () => {
@@ -228,7 +216,7 @@ test("linking keeps the link in settings, the refresh token encrypted apart, and
   assert.equal(reply.status.linking, false);
   assert.equal(reply.status.state, "ok");
   assert.deepEqual(reply.status.user, { id: "42", username: "mefi", globalName: "Mefi" });
-  assert.deepEqual(reply.status.entitlement, { premium: true, perks: ["premium"], validUntil: T0 + GRACE_MS, reason: "member" });
+  assert.equal(reply.status.member, true);
 
   const [authorize] = h.calls;
   assert.equal(authorize.options.clientId, CLIENT);
@@ -249,7 +237,7 @@ test("linking keeps the link in settings, the refresh token encrypted apart, and
   assert.ok(!h.logs.join("\n").includes("rt-1"));
 });
 
-test("a login that is not a member still links, locked, so Check now can notice a join", async () => {
+test("a login that is not a member still links, not a member, so Check now can notice a join", async () => {
   const h = host({
     oauth: {
       authorize: async () => ({ ok: false, error: "not-member", tokens: { accessToken: "at-1", refreshToken: "rt-1", expiresAt: T0 + DAY }, user: { id: "42", username: "mefi", globalName: null } }),
@@ -259,8 +247,8 @@ test("a login that is not a member still links, locked, so Check now can notice 
   assert.equal(reply.ok, false);
   assert.equal(reply.error, "not-member");
   assert.equal(reply.status.linked, true);
-  assert.equal(reply.status.entitlement.premium, false);
-  assert.equal(reply.status.entitlement.reason, "not-member");
+  assert.equal(reply.status.member, false);
+  assert.equal(reply.status.state, "not-member");
   assert.equal(h.savedRefresh(), "rt-1");
   assert.equal(h.count("revoke"), 0, "a not-member login is kept, not handed back");
 });
@@ -324,35 +312,34 @@ test("the watcher reaches Discord only when a check is due, and saves the rotate
   assert.equal(h.count("fetchMember"), 1, "checked: not due again for a week");
 });
 
-test("a failed check keeps the perks through the grace period; not-member takes them at once", async () => {
+test("a failed or refused check keeps the last answer; not-member ends membership at once", async () => {
   const h = linkedHost();
   h.member.answer = "network";
   h.at(T0 + CHECK_EVERY_MS + DAY);
   const offline = await h.tick();
   assert.equal(offline.state, "offline");
-  assert.equal(offline.entitlement.premium, true);
-  assert.equal(offline.entitlement.reason, "grace");
+  assert.equal(offline.member, true, "a failed check changes nothing about what the link last said");
   assert.equal(offline.nextCheckAt, T0 + CHECK_EVERY_MS + DAY + HOUR, "retries after an hour");
 
-  h.at(T0 + GRACE_MS);
-  const expired = await h.tick();
-  assert.equal(expired.entitlement.premium, false);
-  assert.equal(expired.entitlement.reason, "expired");
-  assert.equal(h.sent.at(-1).payload.entitlement.premium, false, "the renderer is told when grace runs out");
+  h.at(T0 + 30 * DAY);
+  const later = await h.tick();
+  assert.equal(later.member, true, "there is no grace period to run out");
+  assert.equal(later.prompt.due, false, "a member is never asked to join");
 
   const gone = linkedHost();
   gone.member.answer = "not-member";
   gone.at(T0 + CHECK_EVERY_MS);
-  const revoked = await gone.tick();
-  assert.equal(revoked.entitlement.premium, false);
-  assert.equal(revoked.entitlement.reason, "not-member");
-  assert.deepEqual(revoked.roles, []);
+  const left = await gone.tick();
+  assert.equal(left.member, false);
+  assert.equal(left.state, "not-member");
+  assert.deepEqual(left.roles, []);
+  assert.equal(gone.sent.at(-1).payload.member, false, "the renderer is told");
 
   const refused = linkedHost({ oauth: { refresh: async () => ({ ok: false, error: "auth" }) } });
   refused.at(T0 + CHECK_EVERY_MS);
   const relink = await refused.tick();
   assert.equal(relink.state, "relink");
-  assert.equal(relink.entitlement.reason, "grace", "a refused grant lasts until grace runs out");
+  assert.equal(relink.member, true, "a refused grant keeps the last answer");
   assert.equal(refused.count("fetchMember"), 0);
 });
 
@@ -368,7 +355,7 @@ test("unlink revokes at Discord, then deletes the link, the auth file and the to
   assert.equal(h.settings.community.link, null);
   assert.equal(h.run("communityTokens"), null);
   assert.equal(reply.status.linked, false);
-  assert.equal(reply.status.entitlement.reason, "unlinked");
+  assert.equal(reply.status.member, false);
   assert.equal(h.settings.community.firstSeenAt, T0, "the card cadence survives an unlink");
 });
 
@@ -475,7 +462,7 @@ test("without a keystore the link lives for this session only", async () => {
   assert.equal(reply.ok, true);
   assert.equal(reply.status.linked, true);
   assert.equal(reply.status.state, "session");
-  assert.equal(reply.status.entitlement.reason, "member");
+  assert.equal(reply.status.member, true);
   assert.equal(h.disk.has(AUTH_FILE), false, "nothing is written");
   assert.equal(h.settings.community.link, null, "settings.json keeps the cadence only");
   h.advance(CHECK_THROTTLE_MS);
@@ -659,7 +646,7 @@ test("without the rules module the feature reports itself unavailable", async ()
   const status = await h.invoke("community:status");
   assert.equal(status.ok, true);
   assert.equal(status.status.available, false);
-  assert.equal(status.status.entitlement.premium, false);
+  assert.equal(status.status.member, false);
   assert.equal(status.status.prompt.due, false);
   for (const name of ["community:link", "community:link-cancel", "community:check", "community:unlink"]) {
     const reply = await h.invoke(name);

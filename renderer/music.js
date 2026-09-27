@@ -1355,9 +1355,9 @@
     element("h3", null, "Color theme", themeSection);
     els.themes = element("div", "music-themes", null, themeSection);
     els.themes.setAttribute("role", "group"); els.themes.setAttribute("aria-label", "Color theme");
-    for (const [key, palette] of [...Object.entries(THEMES).filter(([key]) => isFreeTheme(key)), ["custom", { name: "Custom palette", bright: prefs.customColors.accent }]]) {
+    for (const [key, palette] of [...Object.entries(THEMES).filter(([key]) => !isVoidTheme(key)), ["custom", { name: "Custom palette", bright: prefs.customColors.accent }]]) {
       const choice = button(palette.name, "music-theme", els.themes, () => applyTheme(key));
-      choice.dataset.theme = key; choice.style.setProperty("--swatch", palette.bright); choice.setAttribute("aria-pressed", String(effective.theme === key));
+      choice.dataset.theme = key; choice.style.setProperty("--swatch", palette.bright); choice.setAttribute("aria-pressed", String(prefs.theme === key));
     }
     els.customPalette = element("fieldset", "music-custom-palette", null, themeSection); els.customPalette.id = "music-custom-palette";
     element("legend", null, "Your colors", els.customPalette);
@@ -1378,15 +1378,15 @@
       els.customInputs[key] = { picker, hex };
     }
     button("Reset custom colors", "ghost music-custom-reset", els.customPalette, () => applyCustomColors(CUSTOM_DEFAULTS), "music-custom-reset");
-    els.premiumThemes = premiumThemeChoices(themeSection);
+    els.voidThemes = voidThemeChoices(themeSection);
     element("p", "music-fineprint", "Colors are separate from node style and layout.", themeSection);
     const nodeSection = element("section", "music-node-settings", null, settings);
     nodeSection.dataset.appearancePanel = "nodes";
     nodeSection.setAttribute("aria-labelledby", "music-node-heading");
     const nodeHeading = element("h3", null, "Node tree", nodeSection); nodeHeading.id = "music-node-heading";
     element("p", "music-node-intro", "Give your work a different shape. Changes appear on the live tree.", nodeSection);
-    els.nodeStyles = graphChoices(nodeSection, "style", Object.fromEntries(Object.entries(NODE_STYLES).filter(([key]) => isFreeNodeStyle(key))), effective.nodeStyle, applyNodeStyle);
-    els.premiumStyles = premiumStyleChoices(nodeSection);
+    els.nodeStyles = graphChoices(nodeSection, "style", Object.fromEntries(Object.entries(NODE_STYLES).filter(([key]) => !isVoidNodeStyle(key))), prefs.nodeStyle, applyNodeStyle);
+    els.voidStyles = graphChoices(nodeSection, "style", Object.fromEntries(Object.entries(NODE_STYLES).filter(([key]) => isVoidNodeStyle(key))), prefs.nodeStyle, applyNodeStyle, { label: "Void collection", id: "music-void-style" });
     const layoutSection = element("section", "music-section", null, settings);
     layoutSection.dataset.appearancePanel = "layout";
     element("h3", null, "Arrange the tree", layoutSection);
@@ -1892,16 +1892,11 @@
     const lastLink = prefs.source === "link" ? playableLink(mediaLink(prefs.links[0])) : null;
     if (lastLink) { state.link = lastLink; state.source = "link"; }
     else if (prefs.source === "radio") state.source = "radio";
-    // A member's premium choice is painted straight away, in place of the free
-    // one rather than after it, and nothing is written back.
-    const unlocked = premiumAllowed();
-    if (unlocked && premium.nodeStyle) effective.nodeStyle = premium.nodeStyle;
     build();
     for (const id of ["idle-music-toggle", "settings-audio-open"]) bindAudioHover(document.getElementById(id));
     window.addEventListener("blur", () => { if (!els.browser?.active && !els.linkPlayer?.contains(document.activeElement)) closeAudio(); });
-    if (unlocked && premium.theme) event("mefi-theme-change", paintTheme(premium.theme));
-    else applyTheme(prefs.theme, false);
-    syncTreePreferences(false); renderPremiumLocks(unlocked); render(); renderMediaMenu();
+    applyTheme(prefs.theme, false);
+    syncTreePreferences(false); render(); renderMediaMenu();
     if (lastLink) els.linkInput.value = lastLink.url;
     // A station that was sounding when Studio closed is tuned again. Smoke and
     // capture runs share the owner's profile, so they stay silent.
@@ -1920,9 +1915,6 @@
     }, true);
     window.addEventListener("mefi-tree-view", (event) => syncTreeView(event.detail?.view));
     window.addEventListener("mefi-audio-change", (event) => renderAudioLink(event.detail));
-    window.addEventListener("mefi-community-change", (event) => syncPremium(typeof event?.detail?.premium === "boolean" ? event.detail.premium : premiumAllowed()));
-    // Linking can become possible or moot with the entitlement unchanged.
-    window.addEventListener("mefi-community-status", () => renderPremiumLocks());
     // Settings can preview a Void look without opening the canvas. Auxiliary
     // overlays leave Settings underneath, so only a page change ends it.
     window.addEventListener("mefi:nav", (event) => {
@@ -1933,7 +1925,6 @@
       if (["studio", "music", "appearancePreview"].includes(id)) return;
       const kind = window.MefiNav?.get?.(id)?.kind;
       if (kind === "overlay" || kind === "action") return;
-      endPreview();
       activateSettings(null);
     });
     if (typeof window.ResizeObserver === "function") {
@@ -1986,7 +1977,6 @@
       if (previewFrame) window.cancelAnimationFrame?.(previewFrame);
       previewFrame = 0;
       window.MefiIdle?.setSettingsPreview?.(null, { keepActive: keepTree });
-      if (!keepLook) endPreview();
     }
   }
   function dismissAppearance() {
@@ -2086,14 +2076,14 @@
     }
     move(els.groups.look.group, hosts.look);
     mountAppearanceSidebar();
-    renderPremiumLocks(); render();
+    render();
   }
   function activateSettings(category) {
     const active = category === "appearance" && document.getElementById("tab-studio")?.hidden === false && Boolean(els.settingsStage) && !state.opened;
     setSettingsAppearance(active);
     if (category !== "appearance" && settingsReveal.custom) {
       settingsReveal.custom = false;
-      if (els.customPalette) els.customPalette.hidden = effective.theme !== "custom";
+      if (els.customPalette) els.customPalette.hidden = prefs.theme !== "custom";
     }
     if (category !== "audio" && settingsReveal.source) { settingsReveal.source = null; renderSourcePanels(); }
   }
@@ -2137,12 +2127,10 @@
     els.sheet.setAttribute("aria-modal", "false");
     if (restoreWorkspace) window.MefiWorkspace.exit();
     document.body.classList.add("music-preview-active");
-    renderPremiumLocks();
     render(); syncTreeView(); els.sheet.focus(); schedulePreview();
   }
   function close() {
     if (!els.overlay || els.overlay.hidden) return;
-    endPreview();
     state.opened = false; els.overlay.hidden = true;
     if (previewFrame) window.cancelAnimationFrame?.(previewFrame);
     previewFrame = 0;
@@ -2160,7 +2148,7 @@
   window.MefiMusic = { init, open, openPreview, openAudio, closeAudio, toggleAudio, mountSettings, activateSettings, revealSettingsTarget, settingsAppearanceActive: () => settingsAppearance, leaveSettingsAppearance: (options) => setSettingsAppearance(false, options), close, status, graphPreferences, applyNodeStyle, applyNodeLayout, applyNodeEffects, getAudioElement: () => { init(); return activeDeck(); }, tune, stopRadio,
     stations: () => STATIONS.map((item) => ({ id: item.id, name: item.name, detail: item.detail, origin: item.origin, mirrors: item.mirrors.length })), setRecommender: (fn) => { recommender = typeof fn === "function" ? fn : null; render(); }, addFiles, setSource, applyTheme, applyCustomColors,
     // The free palettes as swatches, and the one on screen (Vibe's settings panel).
-    themes: () => Object.entries(THEMES).filter(([, theme]) => theme.premium !== true).map(([key, theme]) => ({ key, name: theme.name, accent: theme.accent, bright: theme.bright, bg: theme.bg, panel: theme.panel })), theme: () => effective.theme,
+    themes: () => Object.entries(THEMES).filter(([, theme]) => theme.premium !== true).map(([key, theme]) => ({ key, name: theme.name, accent: theme.accent, bright: theme.bright, bg: theme.bg, panel: theme.panel })), theme: () => prefs.theme,
     // Links from anywhere in Studio (a chat, a mirrored Discord room): linkInfo
     // says whether and how a link plays, without touching the player.
     playLink, loadSpotify: (raw) => playLink(raw),
@@ -2173,8 +2161,8 @@
     // isNodeStyle is for the tree painters; the catalog feeds Settings › Community.
     isNodeStyle,
     premiumCatalog: () => ({
-      themes: Object.entries(THEMES).filter(([key]) => isPremiumTheme(key)).map(([key, theme]) => ({ key, name: theme.name, accent: theme.accent, bright: theme.bright, accent2: theme.accent2 })),
-      nodeStyles: Object.entries(NODE_STYLES).filter(([key]) => isPremiumNodeStyle(key)).map(([key, style]) => ({ key, name: style.name, detail: style.detail })),
+      themes: Object.entries(THEMES).filter(([key]) => isVoidTheme(key)).map(([key, theme]) => ({ key, name: theme.name, accent: theme.accent, bright: theme.bright, accent2: theme.accent2 })),
+      nodeStyles: Object.entries(NODE_STYLES).filter(([key]) => isVoidNodeStyle(key)).map(([key, style]) => ({ key, name: style.name, detail: style.detail })),
     }) };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();

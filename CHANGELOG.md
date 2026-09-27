@@ -9,6 +9,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [0.4.4] - 2026-09-27
 
+- **The Void collection is free.** Its four themes and three node styles sit
+  beside the others in Appearance and save like any other choice. Linking
+  Discord is still optional and only joins you to the community.
+- Studio no longer stops at launch on a leftover theme-lock call in the
+  music module.
 - **Work done outside Studio.** Studio now keeps a last look at each project
   folder while it watches it, and when you open the folder again it reports
   what changed meanwhile: commits, uncommitted edits, and Claude Code or

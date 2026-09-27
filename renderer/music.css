@@ -106,12 +106,6 @@ body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + var(--m
 }
 /* The group frames itself in the collection's own two hues (Void's violet and
    cyan) until a member theme is on, then in that theme's pair. */
-.music-premium { --void-a: 124,108,255; --void-b: 54,209,255; margin-top: 16px; padding: 11px 11px 12px; border: 1px solid transparent; border-radius: 12px; background: radial-gradient(120% 90% at 0 0, rgba(var(--void-a), .09), transparent 60%) padding-box, radial-gradient(90% 80% at 100% 100%, rgba(var(--void-b), .06), transparent 65%) padding-box, linear-gradient(var(--panel-solid), var(--panel-solid)) padding-box, linear-gradient(125deg, rgba(var(--void-a), .55), rgba(var(--void-b), .3) 45%, var(--hairline) 80%) border-box; }
-:root[data-studio-theme-tier="premium"] .music-premium { --void-a: var(--studio-accent-rgb); --void-b: var(--accent-2-rgb); }
-.music-premium > .music-premium-heading { display: flex; align-items: center; gap: 8px; margin: 0 0 9px; color: var(--ivory); }
-.music-premium-tag { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; padding: 1px 8px 1px 7px; border: 1px solid rgba(var(--void-a), .45); border-radius: var(--r-pill); background: rgba(var(--void-a), .1); color: var(--ivory); font: 650 var(--fs-2xs)/1.4 var(--font-ui); letter-spacing: .08em; }
-.music-premium-tag::before { content: ""; flex: none; width: 9px; height: 9px; background: currentColor; -webkit-mask: var(--glyph-lock) center / contain no-repeat; mask: var(--glyph-lock) center / contain no-repeat; }
-.music-premium > .music-fineprint { margin-top: 11px; }
 /* Two-tone swatch: the theme's accent (--swatch) and its second hue (--swatch-2)
    split on the diagonal inside a hairline ring, the free dots' size and halo.
    The 1.2px blend at the seam is the anti-aliasing a hard stop lacks. */
@@ -121,24 +115,11 @@ body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + var(--m
    says why, and the title tooltip explains it on hover. */
 .music-premium-lock { flex: none; display: inline-grid; place-items: center; width: 18px; height: 18px; margin-left: auto; border: 1px solid var(--hairline); border-radius: 50%; background: var(--bg-deep); color: var(--muted); transition: color var(--motion-press) var(--ease), border-color var(--motion-press) var(--ease); }
 .music-premium-lock::before { content: ""; width: 9px; height: 9px; background: currentColor; -webkit-mask: var(--glyph-lock) center / contain no-repeat; mask: var(--glyph-lock) center / contain no-repeat; }
-.music-premium-lock-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 :is(.music-theme-locked, .music-node-locked):is(:hover, :focus-visible) .music-premium-lock { color: var(--ivory); border-color: rgba(var(--void-a), .7); }
 .music-theme-locked:hover { background: rgba(var(--void-a), .07); }
-.music-premium-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.music-premium-name > strong { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.music-premium-name > .music-premium-lock { width: 16px; height: 16px; }
-.music-premium-name > .music-premium-lock::before { width: 8px; height: 8px; }
 /* The buttons are ghost mini; the sheet's smaller type keeps all three on one line. */
-.music-premium-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.music-premium-actions button { font-size: var(--fs-xs); }
-.music-premium-desktop { margin: 10px 0 0; color: var(--muted); font: 600 var(--fs-xs)/1.4 var(--font-ui); }
 /* A member sees one quiet line where the fork path would be. */
-.music-premium-member { display: grid; grid-template-columns: 12px minmax(0, 1fr); align-items: center; gap: 2px 6px; margin: 11px 0 0; color: var(--muted); font: var(--fs-xs)/1.5 var(--font-ui); }
-.music-premium-member::before { content: ""; width: 12px; height: 12px; background: var(--gold-bright); -webkit-mask: var(--glyph-check) center / contain no-repeat; mask: var(--glyph-check) center / contain no-repeat; }
-.music-premium-member-text { min-width: 0; }
 /* The Settings link sits under the line, aligned with its text. */
-.music-overlay .music-premium-manage { grid-column: 2; justify-self: start; min-height: 0; margin: 0; padding: 2px 0; border: 0; border-radius: 3px; background: none; color: var(--gold-bright); font: 600 var(--fs-xs)/1.5 var(--font-ui); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--gold-bright) 40%, transparent); text-underline-offset: 3px; }
-.music-overlay .music-premium-manage:hover { background: none; transform: none; box-shadow: none; text-decoration-color: currentColor; }
 .music-mood-label { display: grid; gap: 9px; color: var(--muted); font-size: 12px; }
 .music-mood-label textarea { resize: vertical; min-height: 84px; width: 100%; font: 12px/1.5 var(--font-ui); }
 .music-ai > button { margin-top: 10px; width: 100%; padding-inline: 10px; font-size: 12px; white-space: normal; }
@@ -625,10 +606,6 @@ body.music-preview-active #idle-hud { display: none !important; }
 @container music-sheet (min-width: 600px) {
   .music-themes { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
-@container music-sheet (max-width: 380px) {
-  .music-premium-tag { width: 18px; height: 18px; padding: 0; justify-content: center; gap: 0; }
-  .music-premium-tag-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-}
 
 /* Appearance lives in Settings; the canvas preview is optional. */
 .settings-media { min-width: 0; }
@@ -693,8 +670,6 @@ body.appearance-settings-active .settings-media .music-node-choice { min-height:
 body.appearance-settings-active .music-node-preview { height: 36px; margin-bottom: 0; }
 body.appearance-settings-active .music-node-choice strong { font-size: 10px; white-space: normal; }
 body.appearance-settings-active .music-node-choice small { display: block; font-size: 10px; line-height: 1.4; }
-body.appearance-settings-active .music-premium { padding: 10px; margin-top: 12px; }
-body.appearance-settings-active .music-premium-actions { flex-wrap: wrap; }
 body.appearance-settings-active .settings-card { padding: 12px; scroll-margin-top: 120px; }
 body.appearance-settings-active .studio-style-choices { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 body.appearance-settings-active .studio-style-choice { padding: 8px 6px; gap: 5px; }

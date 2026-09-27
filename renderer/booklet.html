@@ -3747,46 +3747,22 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
 .walkthrough-invitation .community-invite-copy > strong { font-size: var(--fs-md); }
 .community-invitation .community-pitch { color: color-mix(in srgb, var(--ivory) 80%, var(--muted)); }
 .walkthrough-invitation .community-note { color: var(--gold-bright); font-weight: 600; }
-.walkthrough-invitation .community-fine { margin-top: var(--s1); font-size: var(--fs-2xs); }
 .community-invite-actions { justify-content: flex-end; }
 /* Not now and Don't show again: quiet text buttons set apart by space, which
    still reads right when they wrap under the main two. */
 .community-invite-dismiss { display: inline-flex; align-items: center; gap: 2px; margin-left: var(--s2); }
 .community-invitation .community-quiet { border-color: transparent; background: none; color: var(--muted); }
 .community-invitation .community-quiet:hover { color: var(--ivory); background: var(--tint-gold-2); border-color: transparent; transform: none; box-shadow: none; }
-/* Short windows fold the invitation's paragraphs away; the pitch, the fork
-   path and a locked item's note stay (the honest-lock guard-rail keeps them in
-   view, and "unlock these" needs the pitch before it). */
+/* Short windows fold the invitation's paragraphs away; the pitch and the note
+   stay. */
 @media (max-height: 1000px) and (min-width: 961px) {
-  .community-invitation > div > :is(.community-pitch, .community-fine, .community-note) { display: block; }
+  .community-invitation > div > :is(.community-pitch, .community-note) { display: block; }
 }
 @media (max-width: 650px) {
   .community-emblem { display: none; }
   .community-invite-actions { justify-content: flex-start; }
 }
-/* Settings › Community: a showcase strip, then the link state, the quiet fork
-   path and the privacy note. */
-.community-showcase { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3) var(--s5); margin: 2px 0 var(--s3); padding: var(--s3) var(--s4); border: 1px solid transparent; border-radius: var(--r-sm); background: radial-gradient(110% 150% at 0 0, rgba(var(--void-a), 0.13), transparent 55%) padding-box, radial-gradient(80% 140% at 100% 100%, rgba(var(--void-b), 0.08), transparent 60%) padding-box, linear-gradient(var(--panel-solid), var(--panel-solid)) padding-box, linear-gradient(115deg, rgba(var(--void-a), 0.6), rgba(var(--void-b), 0.32) 42%, var(--hairline) 78%) border-box; }
-/* The copy column: kicker, title, the unlock state and, for a member, the way in. */
-.community-showcase-copy { flex: 1 1 200px; min-width: 0; display: grid; justify-items: start; gap: 2px; }
-.community-showcase-kicker { color: var(--gold); font-size: var(--fs-2xs); font-weight: 650; letter-spacing: var(--track-eyebrow); text-transform: uppercase; }
-.community-showcase-copy > strong { color: var(--ivory); font: 600 var(--fs-lg)/1.35 var(--font-display); }
-.community-showcase-state { display: inline-flex; align-items: center; gap: 7px; margin-top: 2px; color: var(--muted); font-size: var(--fs-xs); }
-.community-showcase-state::before { content: ""; flex: none; width: 10px; height: 10px; background: currentColor; -webkit-mask: var(--glyph-lock) center / contain no-repeat; mask: var(--glyph-lock) center / contain no-repeat; }
-.community-showcase-state[data-unlocked="true"] { color: var(--ivory); }
-.community-showcase-state[data-unlocked="true"]::before { width: 12px; height: 12px; background: var(--gold-bright); -webkit-mask-image: var(--glyph-check); mask-image: var(--glyph-check); }
-.community-showcase-items { display: flex; flex-wrap: wrap; align-items: stretch; gap: var(--s2) var(--s3); }
-.community-showcase-items:empty { display: none; }
-.community-showcase-group { display: flex; gap: 2px; }
-.community-showcase-group + .community-showcase-group { padding-left: var(--s3); border-left: 1px solid var(--hairline); }
-.community-showcase-item { display: grid; justify-items: center; gap: 2px; width: 66px; padding: var(--s1) 1px 6px; border-radius: var(--r-xs); }
-.community-showcase-item[data-current="true"] { background: rgba(var(--void-a), 0.12); box-shadow: inset 0 0 0 1px rgba(var(--void-a), 0.6); }
-.community-showcase-item[data-current="true"] .community-showcase-name { color: var(--ivory); }
-.community-showcase-art { display: grid; place-items: center; width: 100%; height: 41px; }
-.community-showcase-art > .music-node-preview { width: 100%; margin: 0; }
-.community-showcase .void-swatch { width: 24px; height: 24px; }
-.community-showcase-name { color: var(--muted); font-size: var(--fs-2xs); line-height: 1.3; white-space: nowrap; }
-.community-choose { margin-top: var(--s2); }
+/* Settings › Community: the link state, then the privacy note. */
 #settings-community .community-note { margin: 0 0 var(--s3); padding: 9px var(--s3) 9px 13px; border-left: 2px solid var(--gold-bright); border-radius: 0 var(--r-xs) var(--r-xs) 0; background: var(--tint-gold-2); color: var(--ivory); font-size: var(--fs-sm); line-height: 1.55; }
 #community-settings-body > p { margin: 0 0 var(--s2); max-width: 78ch; line-height: 1.6; }
 .community-who { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); margin: 2px 0 var(--s3); font-size: var(--fs-sm); }
@@ -3797,11 +3773,7 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
 /* Link trouble (offline, relink, not a member) spans the card like the note above. */
 #community-settings-body > .community-callout { max-width: none; margin: 0 0 10px; padding: var(--s2) var(--s3); border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--hairline)); border-radius: var(--r-xs); background: color-mix(in srgb, var(--warn) 6%, transparent); color: var(--ivory); font-size: var(--fs-sm); }
 #community-settings-body > .community-aside { font-size: var(--fs-xs); }
-.community-perks { margin: 0; padding: 0; list-style: none; border-bottom: 1px solid var(--hairline); }
-.community-perks li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: var(--s2) 0; border-top: 1px solid var(--hairline); color: var(--ivory); font-size: var(--fs-sm); }
 /* Side by side, not stacked, so each swatch keeps both of its hues in view. */
-.community-perk-swatches { display: inline-flex; gap: 5px; margin-left: auto; }
-.community-perk-swatches > .void-swatch { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16); }
 #community-settings-body > .community-checked { margin: var(--s2) 0 2px; font-size: var(--fs-xs); }
 /* Check now and Unlink are ghost mini; Unlink is the quiet one until pointed at. */
 #community-settings-body .community-unlink { color: var(--muted); border-color: transparent; }
@@ -3812,23 +3784,9 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
   .community-waiting::before { animation: community-waiting 1.6s ease-in-out infinite; }
 }
 @keyframes community-waiting { 50% { opacity: 0.3; } }
-.community-fork { margin: var(--s3) 0 0; padding: var(--s3) 14px; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: rgba(8, 8, 11, 0.28); container-type: inline-size; }
-.community-fork-title { display: block; margin: 0 0 var(--s1); color: var(--ivory); font-size: var(--fs-xs); font-weight: 600; }
-.community-fork-copy { margin: 0 0 var(--s2); max-width: 78ch; color: var(--muted); font-size: var(--fs-xs); line-height: 1.6; }
 /* Copy agent prompt, and beside it the disclosure that shows what it copies. */
-.community-fork-actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--s2) var(--s3); }
-.community-prompt { flex: 1 1 260px; min-width: 0; }
-.community-prompt > summary { display: inline-flex; align-items: center; gap: 7px; min-height: var(--ctl-h-sm); color: var(--muted); font-size: var(--fs-xs); cursor: pointer; list-style: none; }
-.community-prompt > summary::-webkit-details-marker { display: none; }
-.community-prompt > summary::before { content: ""; width: 0; height: 0; border-left: 5px solid currentColor; border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: transform var(--dur-2) var(--ease); }
-.community-prompt[open] > summary::before { transform: rotate(90deg); }
-.community-prompt > summary:hover { color: var(--ivory); }
 .community-prompt-code { margin: var(--s1) 0 0; padding: var(--s2) var(--s3); border: 1px solid var(--hairline); border-radius: var(--r-xs); background: rgba(0, 0, 0, 0.35); color: var(--ivory); font: var(--fs-xs)/1.6 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
 .community-prompt-code > code { padding: 0; border: 0; border-radius: 0; background: none; color: inherit; font: inherit; }
-/* A narrow card gives the disclosure its own row, so the prompt opens full width. */
-@container (max-width: 640px) {
-  .community-prompt { flex-basis: 100%; }
-}
 /* The privacy note: smaller, muted, in a readable measure. */
 #community-privacy { max-width: 70ch; margin: var(--s3) 0 0; color: var(--muted); font-size: var(--fs-xs); line-height: 1.6; }
 /* Busy Settings › Community buttons stay focusable (aria-disabled, not
@@ -5205,12 +5163,6 @@ body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + var(--m
 }
 /* The group frames itself in the collection's own two hues (Void's violet and
    cyan) until a member theme is on, then in that theme's pair. */
-.music-premium { --void-a: 124,108,255; --void-b: 54,209,255; margin-top: 16px; padding: 11px 11px 12px; border: 1px solid transparent; border-radius: 12px; background: radial-gradient(120% 90% at 0 0, rgba(var(--void-a), .09), transparent 60%) padding-box, radial-gradient(90% 80% at 100% 100%, rgba(var(--void-b), .06), transparent 65%) padding-box, linear-gradient(var(--panel-solid), var(--panel-solid)) padding-box, linear-gradient(125deg, rgba(var(--void-a), .55), rgba(var(--void-b), .3) 45%, var(--hairline) 80%) border-box; }
-:root[data-studio-theme-tier="premium"] .music-premium { --void-a: var(--studio-accent-rgb); --void-b: var(--accent-2-rgb); }
-.music-premium > .music-premium-heading { display: flex; align-items: center; gap: 8px; margin: 0 0 9px; color: var(--ivory); }
-.music-premium-tag { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; padding: 1px 8px 1px 7px; border: 1px solid rgba(var(--void-a), .45); border-radius: var(--r-pill); background: rgba(var(--void-a), .1); color: var(--ivory); font: 650 var(--fs-2xs)/1.4 var(--font-ui); letter-spacing: .08em; }
-.music-premium-tag::before { content: ""; flex: none; width: 9px; height: 9px; background: currentColor; -webkit-mask: var(--glyph-lock) center / contain no-repeat; mask: var(--glyph-lock) center / contain no-repeat; }
-.music-premium > .music-fineprint { margin-top: 11px; }
 /* Two-tone swatch: the theme's accent (--swatch) and its second hue (--swatch-2)
    split on the diagonal inside a hairline ring, the free dots' size and halo.
    The 1.2px blend at the seam is the anti-aliasing a hard stop lacks. */
@@ -5220,24 +5172,11 @@ body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + var(--m
    says why, and the title tooltip explains it on hover. */
 .music-premium-lock { flex: none; display: inline-grid; place-items: center; width: 18px; height: 18px; margin-left: auto; border: 1px solid var(--hairline); border-radius: 50%; background: var(--bg-deep); color: var(--muted); transition: color var(--motion-press) var(--ease), border-color var(--motion-press) var(--ease); }
 .music-premium-lock::before { content: ""; width: 9px; height: 9px; background: currentColor; -webkit-mask: var(--glyph-lock) center / contain no-repeat; mask: var(--glyph-lock) center / contain no-repeat; }
-.music-premium-lock-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 :is(.music-theme-locked, .music-node-locked):is(:hover, :focus-visible) .music-premium-lock { color: var(--ivory); border-color: rgba(var(--void-a), .7); }
 .music-theme-locked:hover { background: rgba(var(--void-a), .07); }
-.music-premium-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.music-premium-name > strong { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.music-premium-name > .music-premium-lock { width: 16px; height: 16px; }
-.music-premium-name > .music-premium-lock::before { width: 8px; height: 8px; }
 /* The buttons are ghost mini; the sheet's smaller type keeps all three on one line. */
-.music-premium-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.music-premium-actions button { font-size: var(--fs-xs); }
-.music-premium-desktop { margin: 10px 0 0; color: var(--muted); font: 600 var(--fs-xs)/1.4 var(--font-ui); }
 /* A member sees one quiet line where the fork path would be. */
-.music-premium-member { display: grid; grid-template-columns: 12px minmax(0, 1fr); align-items: center; gap: 2px 6px; margin: 11px 0 0; color: var(--muted); font: var(--fs-xs)/1.5 var(--font-ui); }
-.music-premium-member::before { content: ""; width: 12px; height: 12px; background: var(--gold-bright); -webkit-mask: var(--glyph-check) center / contain no-repeat; mask: var(--glyph-check) center / contain no-repeat; }
-.music-premium-member-text { min-width: 0; }
 /* The Settings link sits under the line, aligned with its text. */
-.music-overlay .music-premium-manage { grid-column: 2; justify-self: start; min-height: 0; margin: 0; padding: 2px 0; border: 0; border-radius: 3px; background: none; color: var(--gold-bright); font: 600 var(--fs-xs)/1.5 var(--font-ui); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--gold-bright) 40%, transparent); text-underline-offset: 3px; }
-.music-overlay .music-premium-manage:hover { background: none; transform: none; box-shadow: none; text-decoration-color: currentColor; }
 .music-mood-label { display: grid; gap: 9px; color: var(--muted); font-size: 12px; }
 .music-mood-label textarea { resize: vertical; min-height: 84px; width: 100%; font: 12px/1.5 var(--font-ui); }
 .music-ai > button { margin-top: 10px; width: 100%; padding-inline: 10px; font-size: 12px; white-space: normal; }
@@ -5724,10 +5663,6 @@ body.music-preview-active #idle-hud { display: none !important; }
 @container music-sheet (min-width: 600px) {
   .music-themes { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
-@container music-sheet (max-width: 380px) {
-  .music-premium-tag { width: 18px; height: 18px; padding: 0; justify-content: center; gap: 0; }
-  .music-premium-tag-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-}
 
 /* Appearance lives in Settings; the canvas preview is optional. */
 .settings-media { min-width: 0; }
@@ -5792,8 +5727,6 @@ body.appearance-settings-active .settings-media .music-node-choice { min-height:
 body.appearance-settings-active .music-node-preview { height: 36px; margin-bottom: 0; }
 body.appearance-settings-active .music-node-choice strong { font-size: 10px; white-space: normal; }
 body.appearance-settings-active .music-node-choice small { display: block; font-size: 10px; line-height: 1.4; }
-body.appearance-settings-active .music-premium { padding: 10px; margin-top: 12px; }
-body.appearance-settings-active .music-premium-actions { flex-wrap: wrap; }
 body.appearance-settings-active .settings-card { padding: 12px; scroll-margin-top: 120px; }
 body.appearance-settings-active .studio-style-choices { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 body.appearance-settings-active .studio-style-choice { padding: 8px 6px; gap: 5px; }
@@ -8907,7 +8840,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         <button class="ghost ws-settings" data-nav="studio" title="Settings (4): connections, your Studio, updates"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg><span class="label">Settings</span></button>
         <button class="ghost ws-settings" data-nav="music" title="Appearance (U)"><svg class="glyph" aria-hidden="true"><use href="#g-style"/></svg><span class="label">Style</span></button>
         <button class="ghost ws-settings" data-nav="onboarding" title="Start here: the walkthrough"><svg class="glyph" aria-hidden="true"><use href="#g-flag"/></svg><span class="label">Start here</span></button>
-        <button class="ghost ws-settings" id="workspace-community" type="button" title="Void Engine Discord: community and member perks"><svg class="glyph" aria-hidden="true"><use href="#g-community"/></svg><span class="label">Community</span></button>
+        <button class="ghost ws-settings" id="workspace-community" type="button" title="Void Engine Discord: community and listening rooms"><svg class="glyph" aria-hidden="true"><use href="#g-community"/></svg><span class="label">Community</span></button>
       </div>
       <span class="ws-local-note"><i></i> Local-first. Your work stays on this machine.</span>
     </div>
@@ -8978,7 +8911,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       </details>
       <details id="workspace-help-details" class="ws-home-disclosure"><summary>Getting started &amp; community</summary>
         <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">Set up your project</strong><p>Connect your tools, add a project, and create your first task.</p><div id="walkthrough-invite-steps" class="walkthrough-setup" role="status" aria-label="Setup progress"></div><div class="walkthrough-bar mini" id="walkthrough-invite-bar" role="progressbar" aria-label="Setup progress" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="walkthrough-invite-bar-fill"></span></div></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start here</button><button id="walkthrough-invite-walk" class="ghost" type="button" title="Keep the guide in the corner while it walks the menus with you">Walk me through it</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this invitation; Start here stays at the foot of the menu">Not now</button></div></section>
-    <section class="walkthrough-invitation community-invitation" id="community-invitation" aria-labelledby="community-invite-title" hidden><span class="community-emblem" id="community-invite-swatches" aria-hidden="true" hidden></span><div class="community-invite-copy"><strong id="community-invite-title">Build with others in the Void Engine Discord</strong><p class="community-pitch">Share what you're making, swap model setups, and hang out with other builders. Members unlock the Void collection: four themes and three node styles.</p><p class="community-note" id="community-invite-note" hidden></p><p class="community-fine" id="community-invite-fine">Members of the Void Engine Discord unlock these. Studio is MIT-licensed: fork the project and unlock it yourself, or ask an agent to do it for you.</p></div><div class="walkthrough-invite-actions community-invite-actions"><button id="community-invite-join" class="primary" type="button" title="Open the Void Engine invite in your browser">Join the Discord</button><button id="community-invite-link" class="ghost" type="button" title="Sign in with Discord in your browser to unlock member perks">Link my Discord</button><button id="community-invite-copy" class="ghost mini" type="button" title="Copy a prompt that unlocks the collection in your own fork" hidden>Copy agent prompt</button><span class="community-invite-dismiss"><button id="community-invite-later" class="ghost mini community-quiet" type="button" title="Hide this for a week">Not now</button><button id="community-invite-never" class="ghost mini community-quiet" type="button" title="Settings › Community keeps the link">Don't show again</button></span></div></section>
+    <section class="walkthrough-invitation community-invitation" id="community-invitation" aria-labelledby="community-invite-title" hidden><span class="community-emblem" id="community-invite-swatches" aria-hidden="true" hidden></span><div class="community-invite-copy"><strong id="community-invite-title">Build with others in the Void Engine Discord</strong><p class="community-pitch">Share what you're making, swap model setups, and hang out with other builders.</p><p class="community-note" id="community-invite-note" hidden></p></div><div class="walkthrough-invite-actions community-invite-actions"><button id="community-invite-join" class="primary" type="button" title="Open the Void Engine invite in your browser">Join the Discord</button><button id="community-invite-link" class="ghost" type="button" title="Sign in with Discord in your browser to link your account">Link my Discord</button><button id="community-invite-copy" class="ghost mini" type="button" title="Copy a prompt that unlocks the collection in your own fork" hidden>Copy agent prompt</button><span class="community-invite-dismiss"><button id="community-invite-later" class="ghost mini community-quiet" type="button" title="Hide this for a week">Not now</button><button id="community-invite-never" class="ghost mini community-quiet" type="button" title="Settings › Community keeps the link">Don't show again</button></span></div></section>
 
       </details>
     </div>
@@ -9376,7 +9309,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
           <div class="settings-you-fields">
             <label class="field"><span class="field-label">Your name</span><input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?" autocomplete="off"></label>
             <label class="field"><span class="field-label">Companion name</span><input id="workspace-agent-name" type="text" maxlength="30" placeholder="Mefi" autocomplete="off"></label>
-            <div class="field settings-you-theme"><label class="field-label" for="workspace-accent">Studio theme</label><div class="settings-you-row"><select id="workspace-accent"><option value="aurora">Aurora</option><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option><option value="rose">Rose</option><option value="custom">Custom colors</option><optgroup label="Void collection · Discord members"><option value="void">Void</option><option value="eclipse">Eclipse</option><option value="abyss">Abyss</option><option value="dusk">Neon Dusk</option></optgroup></select><button type="button" class="ghost mini" data-settings-nav="music" title="Themes, custom colors and node styles in Appearance">Appearance settings <span aria-hidden="true">↗</span></button></div></div>
+            <div class="field settings-you-theme"><label class="field-label" for="workspace-accent">Studio theme</label><div class="settings-you-row"><select id="workspace-accent"><option value="aurora">Aurora</option><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option><option value="rose">Rose</option><option value="custom">Custom colors</option><optgroup label="Void collection"><option value="void">Void</option><option value="eclipse">Eclipse</option><option value="abyss">Abyss</option><option value="dusk">Neon Dusk</option></optgroup></select><button type="button" class="ghost mini" data-settings-nav="music" title="Themes, custom colors and node styles in Appearance">Appearance settings <span aria-hidden="true">↗</span></button></div></div>
           </div>
           <div class="field settings-you-motion">
             <span class="field-label" id="settings-motion-label">Motion</span>
@@ -9400,8 +9333,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
             <div class="mode-switch" role="radiogroup" aria-label="Studio mode" data-mode="vibe" data-mode-stay><i class="mode-thumb" aria-hidden="true"></i><button type="button" role="radio" data-ui-mode="vibe" aria-checked="true" title="Vibe: the calm front door"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Vibe</span></button><button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button></div>
           </div>
         </details>
-<details class="settings-optional settings-card" id="settings-community"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-community"/></svg></span><span class="settings-summary-text"><b>Community</b><span>Discord membership and the Void theme collection</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
-          <section class="community-showcase" id="community-showcase" aria-labelledby="community-showcase-title"><div class="community-showcase-copy"><span class="community-showcase-kicker">Void collection</span><strong id="community-showcase-title">Four themes, three node styles</strong><span class="community-showcase-state" id="community-showcase-state" data-unlocked="false">For members of the Void Engine Discord</span><button type="button" class="primary mini community-choose" id="community-choose" title="Open Appearance at the Void collection" hidden>Choose a Void theme</button></div><div class="community-showcase-items" id="community-showcase-items" aria-hidden="true"></div></section>
+<details class="settings-optional settings-card" id="settings-community"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-community"/></svg></span><span class="settings-summary-text"><b>Community</b><span>Your link to the Void Engine Discord</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
+          
           <p class="community-note" id="community-settings-note" role="status" hidden></p>
           <div id="community-settings-body"><p class="muted">Checking your Discord link…</p></div>
           <p class="settings-status" id="community-settings-status" role="status"></p>
@@ -54871,7 +54804,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       : state.source === "local" && Boolean(audio?.src) && !audio.paused && !audio.ended;
     // Links never reach the analyser: an embed is another origin and a pasted
     // file is not CORS-cleared, so the audio link listens to the desktop.
-    return { source: state.source, playing, title, track: title, theme: effective.theme, ...graphPreferences(),
+    return { source: state.source, playing, title, track: title, theme: prefs.theme, ...graphPreferences(),
       queueLength: state.tracks.length, externalPlayback: state.source === "link", supported: true,
       provider: state.source === "link" ? state.link?.providerName ?? null : null, link: state.source === "link" ? state.link?.url ?? null : null,
       station: state.station, stationName: tuned?.name || null, radioPhase: state.source === "radio" ? state.radioPhase : "idle" };
@@ -54884,8 +54817,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   function themeTokens(palette) {
     return { "--gold": palette.accent, "--gold-bright": palette.bright, "--gold-dim": `rgba(${palette.rgb},.32)`, "--hairline": `rgba(${channels(palette.border).join(",")},.5)`, "--hairline-strong": palette.border, "--tint-gold-1": `rgba(${palette.rgb},.06)`, "--tint-gold-2": `rgba(${palette.rgb},.09)`, "--tint-gold-3": `rgba(${palette.rgb},.14)`, "--ring": `0 0 0 3px rgba(${palette.rgb},.15)`, "--glow-gold": `0 0 14px rgba(${palette.rgb},.3)`, "--bg": palette.background, "--bg-deep": palette.background, "--cmd-bg": palette.background, "--panel-solid": palette.surface, "--panel": `rgba(${palette.surfaceRgb},.85)`, "--glass": `rgba(${palette.surfaceRgb},.76)`, "--glass-hard": `rgba(${palette.surfaceRgb},.94)`, "--glass-soft": `rgba(${palette.surfaceRgb},.7)`, "--ivory": palette.text, "--muted": palette.muted, "--dim": palette.dim, "--ink": palette.onAccent };
   }
-  const themeDetail = (key) => { const palette = resolvePalette(key, prefs.customColors); return { theme: key, tier: isPremiumTheme(key) ? "premium" : "free", ...palette, tokens: themeTokens(palette) }; };
-  // Paints a theme without deciding whether it may be shown or saved.
+  // tier "duo": a theme with a second hue of its own (the Void collection),
+  // which the stylesheets paint with (--accent-2); every other theme is "solo".
+  const themeDetail = (key) => { const palette = resolvePalette(key, prefs.customColors); return { theme: key, tier: THEMES[key]?.accent2 ? "duo" : "solo", ...palette, tokens: themeTokens(palette) }; };
+  // Paints a theme; applyTheme decides whether it is saved.
   function paintTheme(key) {
     const detail = themeDetail(key);
     const root = document.documentElement;
@@ -54900,8 +54835,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     root.dataset.studioThemeTier = detail.tier;
     // Shared glass surfaces adapt their edge and shadow to a light palette.
     root.dataset.studioThemeTone = luminance(detail.readingBackground) > 0.35 ? "light" : "dark";
-    effective.theme = key;
-    for (const button of [...els.themes?.children || [], ...els.premiumThemes?.children || []]) {
+    for (const button of [...els.themes?.children || [], ...els.voidThemes?.children || []]) {
       button.setAttribute("aria-pressed", String(button.dataset.theme === key));
       if (button.dataset.theme === "custom") button.style.setProperty("--swatch", prefs.customColors.accent);
     }
@@ -54911,35 +54845,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
     return detail;
   }
-  // options.navigate === false: explain a temporary preview without leaving
-  // the picker (the Workspace select also fires on every arrow key).
-  function applyTheme(theme, save = true, options) {
+  // Every theme applies and saves the same way, Void collection included.
+  function applyTheme(theme, save = true) {
     settingsReveal.custom = false;
-    if (isPremiumTheme(theme)) {
-      if (!premiumAllowed()) {
-        previewing.theme = true;
-        keepAfterUnlock.theme = save === true;
-        const detail = paintTheme(theme);
-        event("mefi-theme-change", { ...detail, preview: true });
-        offerUnlock("theme", theme, THEMES[theme].name, options?.navigate !== false);
-        return theme;
-      }
-      previewing.theme = false;
-      keepAfterUnlock.theme = false;
-      const detail = paintTheme(theme);
-      if (save && premium.theme !== theme) { premium.theme = theme; persistPremium(); }
-      event("mefi-theme-change", detail);
-      return theme;
-    }
-    const key = isFreeTheme(theme) ? theme : DEFAULT_THEME;
-    previewing.theme = false;
-    keepAfterUnlock.theme = false;
+    const key = isTheme(theme) ? theme : DEFAULT_THEME;
     prefs.theme = key;
     const detail = paintTheme(key);
-    if (save) {
-      persist();
-      if (premium.theme) { delete premium.theme; persistPremium(); }
-    }
+    if (save) persist();
     event("mefi-theme-change", detail);
     return key;
   }
@@ -54956,7 +54868,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   // reader shares one frozen copy.
   let paletteKey = null, paletteMemo = null;
   function themePalette() {
-    const theme = effective.theme;
+    const theme = prefs.theme;
     const custom = prefs.customColors;
     const key = theme === "custom" ? `custom|${custom.accent}|${custom.background}|${custom.surface}|${custom.text}` : theme;
     if (key !== paletteKey || !paletteMemo) {
@@ -54967,107 +54879,21 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     return paletteMemo;
   }
   // Read per node per frame by the tree rail: plain fields, no storage reads.
-  function graphPreferences() { return { nodeStyle: effective.nodeStyle, nodeLayout: prefs.nodeLayout, orbitTrails: prefs.orbitTrails, extraGlow: prefs.extraGlow }; }
+  function graphPreferences() { return { nodeStyle: prefs.nodeStyle, nodeLayout: prefs.nodeLayout, orbitTrails: prefs.orbitTrails, extraGlow: prefs.extraGlow }; }
   function syncTreePreferences(save) {
     const value = graphPreferences();
     Object.assign(document.documentElement.dataset, value);
-    for (const choice of [...els.nodeStyles?.children || [], ...els.premiumStyles?.children || []]) choice.setAttribute("aria-pressed", String(choice.dataset.nodeStyle === value.nodeStyle));
+    for (const choice of [...els.nodeStyles?.children || [], ...els.voidStyles?.children || []]) choice.setAttribute("aria-pressed", String(choice.dataset.nodeStyle === value.nodeStyle));
     for (const choice of els.nodeLayouts?.children || []) choice.setAttribute("aria-pressed", String(choice.dataset.nodeLayout === value.nodeLayout));
     if (els.orbitTrails) els.orbitTrails.checked = value.orbitTrails;
     if (els.extraGlow) els.extraGlow.checked = value.extraGlow;
     if (save) persist();
     event("mefi-tree-preferences", value);
   }
-  // options.navigate === false, as for applyTheme: the explanation comes where
-  // the style was chosen.
-  function applyNodeStyle(style, save = true, options) {
-    if (isPremiumNodeStyle(style)) {
-      if (!premiumAllowed()) {
-        previewing.nodeStyle = true;
-        keepAfterUnlock.nodeStyle = save === true;
-        effective.nodeStyle = style;
-        syncTreePreferences(false);
-        offerUnlock("nodeStyle", style, NODE_STYLES[style].name, options?.navigate !== false);
-        return style;
-      }
-      previewing.nodeStyle = false;
-      keepAfterUnlock.nodeStyle = false;
-      effective.nodeStyle = style;
-      if (save && premium.nodeStyle !== style) { premium.nodeStyle = style; persistPremium(); }
-      syncTreePreferences(false);
-      return style;
-    }
-    previewing.nodeStyle = false;
-    keepAfterUnlock.nodeStyle = false;
-    prefs.nodeStyle = isFreeNodeStyle(style) ? style : "orbs";
-    effective.nodeStyle = prefs.nodeStyle;
-    if (save && premium.nodeStyle) { delete premium.nodeStyle; persistPremium(); }
+  function applyNodeStyle(style, save = true) {
+    prefs.nodeStyle = isNodeStyle(style) ? style : "orbs";
     syncTreePreferences(save);
     return prefs.nodeStyle;
-  }
-  // Community changes re-apply a stored premium choice, or fall back to the
-  // free preferences when membership lapses. Neither path writes storage: the
-  // premium choice stays saved for when the member links again. The event's
-  // own verdict is used as given, so it cannot race MefiCommunity's status.
-  function syncPremium(allowed = premiumAllowed()) {
-    if (allowed) {
-      if (previewing.theme && keepAfterUnlock.theme) {
-        previewing.theme = false;
-        keepAfterUnlock.theme = false;
-        if (premium.theme !== effective.theme) { premium.theme = effective.theme; persistPremium(); }
-        event("mefi-theme-change", themeDetail(effective.theme));
-      } else if (!previewing.theme && premium.theme && effective.theme !== premium.theme) event("mefi-theme-change", paintTheme(premium.theme));
-      if (previewing.nodeStyle && keepAfterUnlock.nodeStyle) {
-        previewing.nodeStyle = false;
-        keepAfterUnlock.nodeStyle = false;
-        if (premium.nodeStyle !== effective.nodeStyle) { premium.nodeStyle = effective.nodeStyle; persistPremium(); }
-        syncTreePreferences(false);
-      } else if (!previewing.nodeStyle && premium.nodeStyle && effective.nodeStyle !== premium.nodeStyle) { effective.nodeStyle = premium.nodeStyle; syncTreePreferences(false); }
-    } else {
-      let revoked = false;
-      if (isPremiumTheme(effective.theme) && !previewing.theme) { applyTheme(prefs.theme, false); revoked = true; }
-      if (isPremiumNodeStyle(effective.nodeStyle) && !previewing.nodeStyle) { effective.nodeStyle = prefs.nodeStyle; syncTreePreferences(false); revoked = true; }
-      if (revoked) window.MefiToast?.("Void collection locked again; your choice is saved.", "info");
-    }
-    renderPremiumLocks(allowed);
-  }
-  function endPreview() {
-    if (previewing.theme) applyTheme(premiumAllowed() && premium.theme ? premium.theme : prefs.theme, false);
-    if (previewing.nodeStyle) applyNodeStyle(premiumAllowed() && premium.nodeStyle ? premium.nodeStyle : prefs.nodeStyle, false);
-  }
-  // A fork with SELF_UNLOCKED says so instead of thanking a membership.
-  function selfUnlocked() {
-    try { return window.MefiCommunity?.status?.()?.selfUnlocked === true; } catch { return false; }
-  }
-  // Locked choices stay clickable for a temporary preview. Only a locked
-  // picker shows the link and fork actions; a member gets one quiet line.
-  function renderPremiumLocks(allowed = premiumAllowed()) {
-    for (const [group, className, what] of [[els.premiumThemes, "music-theme-locked", "theme"], [els.premiumStyles, "music-node-locked", "node style"]]) {
-      for (const choice of group?.children || []) {
-        if (allowed) { choice.classList.remove(className); choice.removeAttribute("aria-disabled"); choice.title = ""; }
-        else { choice.classList.add(className); choice.removeAttribute("aria-disabled"); choice.title = `Preview this Void collection ${what}. Link your Discord membership to keep it.`; }
-        const badge = els.premiumBadges?.get(choice);
-        if (badge) badge.hidden = allowed;
-      }
-    }
-    const actions = communityActions();
-    const linkable = communityLinkable();
-    const manageable = typeof window.MefiCommunity?.open === "function";
-    const unlockedLine = selfUnlocked() ? "Unlocked in this build" : "Unlocked with your Void Engine membership";
-    const fork = forkCopy();
-    for (const box of els.premiumBoxes || []) {
-      box.tag.hidden = allowed;
-      box.previewNote.hidden = allowed;
-      box.fineprint.hidden = allowed;
-      if (box.fineprint.textContent !== fork) box.fineprint.textContent = fork;
-      box.actions.hidden = allowed || !actions;
-      box.desktop.hidden = allowed || actions;
-      box.link.hidden = !linkable;
-      box.member.hidden = !allowed;
-      if (box.memberText.textContent !== unlockedLine) box.memberText.textContent = unlockedLine;
-      box.manage.hidden = !manageable;
-      box.group.setAttribute("aria-describedby", allowed ? box.member.id : `${box.previewNote.id} ${box.fineprint.id}`);
-    }
   }
   function applyNodeLayout(layout, save = true) {
     prefs.nodeLayout = Object.hasOwn(NODE_LAYOUTS, layout) ? layout : "constellation";
@@ -55095,11 +54921,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     node.addEventListener("click", action);
     return node;
   }
-  function graphChoices(parent, kind, choices, selected, apply) {
-    const title = element("h4", "music-node-label", kind === "style" ? "Node style" : "Layout", parent);
-    title.id = `music-node-${kind}-label`;
+  // `set` names a second group of the same kind (the Void collection's styles,
+  // under their own small heading); its ids are literal at the call site.
+  function graphChoices(parent, kind, choices, selected, apply, set = { label: kind === "style" ? "Node style" : "Layout", id: `music-node-${kind}` }) {
+    const title = element("h4", "music-node-label", set.label, parent);
+    title.id = `${set.id}-label`;
     const group = element("div", "music-node-choices", null, parent);
-    group.id = `music-node-${kind}s`;
+    group.id = `${set.id}s`;
     group.setAttribute("role", "group"); group.setAttribute("aria-labelledby", title.id);
     for (const [key, option] of Object.entries(choices)) {
       const choice = button(null, `music-node-choice music-node-${kind}`, group, () => apply(key), `music-node-${kind}-${key}`);
@@ -55113,74 +54941,20 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
     return group;
   }
-  // The Void collection sits in its own group under the free choices, which
-  // stay exactly as they were. Locked buttons stay focusable and clickable
-  // (aria-disabled, never disabled) so a click can explain how to unlock them.
-  function premiumBox(parent, kind) {
-    const box = element("div", "music-premium", null, parent);
-    const title = element("h4", "music-node-label music-premium-heading", "Void collection", box);
-    title.id = `music-premium-${kind}-label`;
-    // A narrow sheet folds this pill to its lock; the word stays for screen readers (music.css).
-    const tag = element("span", "music-premium-tag", null, title);
-    element("span", "music-premium-tag-text", "Members", tag);
-    tag.title = "For Void Engine Discord members";
-    // The caller names the group (a literal id, which scripts/auditor.mjs can see).
-    const group = element("div", kind === "theme" ? "music-themes" : "music-node-choices", null, box);
+  // The Void collection's themes: an ordinary choice each, under a small
+  // heading of their own below the others.
+  function voidThemeChoices(parent) {
+    const title = element("h4", "music-node-label", "Void collection", parent);
+    title.id = "music-void-theme-label";
+    const group = element("div", "music-themes", null, parent);
+    group.id = "music-void-themes";
     group.setAttribute("role", "group"); group.setAttribute("aria-labelledby", title.id);
-    const previewNote = element("p", "music-fineprint", "Preview any look now. Your saved choice returns when you close the canvas preview or leave Settings; link your Discord membership to keep it.", box);
-    previewNote.id = `music-premium-${kind}-preview-note`;
-    const fineprint = element("p", "music-fineprint", forkCopy(), box);
-    fineprint.id = `music-premium-${kind}-fineprint`;
-    group.setAttribute("aria-describedby", fineprint.id);
-    const actions = element("div", "music-premium-actions", null, box);
-    button("Join the Discord", "ghost mini", actions, () => window.MefiCommunity?.join?.(), `music-premium-${kind}-join`);
-    const link = button("Link my Discord", "ghost mini", actions, () => window.MefiCommunity?.link?.(), `music-premium-${kind}-link`);
-    button("Copy agent prompt", "ghost mini", actions, () => window.MefiCommunity?.copyAgentPrompt?.(), `music-premium-${kind}-prompt`);
-    const desktop = element("p", "music-premium-desktop", "Desktop app only", box);
-    desktop.id = `music-premium-${kind}-desktop`;
-    const member = element("p", "music-premium-member", null, box);
-    member.id = `music-premium-${kind}-member`;
-    const memberText = element("span", "music-premium-member-text", "Unlocked with your Void Engine membership", member);
-    const manage = button("Manage in Settings › Community", "music-premium-manage", member, () => window.MefiCommunity?.open?.(), `music-premium-${kind}-manage`);
-    (els.premiumBoxes ||= []).push({ tag, group, previewNote, fineprint, actions, desktop, link, member, memberText, manage });
-    return group;
-  }
-  // The lock reads as a glyph; "Members" stays in the button's name for
-  // screen readers. It sits beside the name, never over the art.
-  function premiumBadge(choice, parent = choice) {
-    const badge = element("span", "music-premium-lock", null, parent);
-    element("span", "music-premium-lock-text", "Members", badge);
-    (els.premiumBadges ||= new Map()).set(choice, badge);
-  }
-  // A locked tile explains itself where it is (navigate:false): leaving for
-  // Settings would close this sheet.
-  function premiumThemeChoices(parent) {
-    const group = premiumBox(parent, "theme");
-    group.id = "music-premium-themes";
-    for (const [key, palette] of Object.entries(THEMES).filter(([key]) => isPremiumTheme(key))) {
-      const choice = button(palette.name, "music-theme music-theme-premium", group, () => applyTheme(key, true, { navigate: false }), `music-theme-${key}`);
-      choice.dataset.theme = key; choice.dataset.premium = "true";
+    for (const [key, palette] of Object.entries(THEMES).filter(([key]) => isVoidTheme(key))) {
+      const choice = button(palette.name, "music-theme music-theme-duo", group, () => applyTheme(key), `music-theme-${key}`);
+      choice.dataset.theme = key;
       // Two-tone swatch: the theme's accent ring around its second hue.
       choice.style.setProperty("--swatch", palette.accent); choice.style.setProperty("--swatch-2", palette.accent2);
-      choice.setAttribute("aria-pressed", String(effective.theme === key));
-      premiumBadge(choice);
-    }
-    return group;
-  }
-  function premiumStyleChoices(parent) {
-    const group = premiumBox(parent, "style");
-    group.id = "music-node-premium-styles";
-    for (const [key, option] of Object.entries(NODE_STYLES).filter(([key]) => isPremiumNodeStyle(key))) {
-      const choice = button(null, "music-node-choice music-node-style music-node-premium", group, () => applyNodeStyle(key, true, { navigate: false }), `music-node-style-${key}`);
-      choice.dataset.nodeStyle = key; choice.dataset.premium = "true";
-      choice.setAttribute("aria-pressed", String(effective.nodeStyle === key));
-      const preview = element("span", `music-node-preview music-preview-${key}`, null, choice);
-      preview.setAttribute("aria-hidden", "true");
-      for (let index = 0; index < 3; index += 1) element("i", null, null, preview);
-      const label = element("span", "music-premium-name", null, choice);
-      element("strong", null, option.name, label);
-      premiumBadge(choice, label);
-      element("small", null, option.detail, choice);
+      choice.setAttribute("aria-pressed", String(prefs.theme === key));
     }
     return group;
   }
@@ -56049,9 +55823,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     element("h3", null, "Color theme", themeSection);
     els.themes = element("div", "music-themes", null, themeSection);
     els.themes.setAttribute("role", "group"); els.themes.setAttribute("aria-label", "Color theme");
-    for (const [key, palette] of [...Object.entries(THEMES).filter(([key]) => isFreeTheme(key)), ["custom", { name: "Custom palette", bright: prefs.customColors.accent }]]) {
+    for (const [key, palette] of [...Object.entries(THEMES).filter(([key]) => !isVoidTheme(key)), ["custom", { name: "Custom palette", bright: prefs.customColors.accent }]]) {
       const choice = button(palette.name, "music-theme", els.themes, () => applyTheme(key));
-      choice.dataset.theme = key; choice.style.setProperty("--swatch", palette.bright); choice.setAttribute("aria-pressed", String(effective.theme === key));
+      choice.dataset.theme = key; choice.style.setProperty("--swatch", palette.bright); choice.setAttribute("aria-pressed", String(prefs.theme === key));
     }
     els.customPalette = element("fieldset", "music-custom-palette", null, themeSection); els.customPalette.id = "music-custom-palette";
     element("legend", null, "Your colors", els.customPalette);
@@ -56072,15 +55846,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       els.customInputs[key] = { picker, hex };
     }
     button("Reset custom colors", "ghost music-custom-reset", els.customPalette, () => applyCustomColors(CUSTOM_DEFAULTS), "music-custom-reset");
-    els.premiumThemes = premiumThemeChoices(themeSection);
+    els.voidThemes = voidThemeChoices(themeSection);
     element("p", "music-fineprint", "Colors are separate from node style and layout.", themeSection);
     const nodeSection = element("section", "music-node-settings", null, settings);
     nodeSection.dataset.appearancePanel = "nodes";
     nodeSection.setAttribute("aria-labelledby", "music-node-heading");
     const nodeHeading = element("h3", null, "Node tree", nodeSection); nodeHeading.id = "music-node-heading";
     element("p", "music-node-intro", "Give your work a different shape. Changes appear on the live tree.", nodeSection);
-    els.nodeStyles = graphChoices(nodeSection, "style", Object.fromEntries(Object.entries(NODE_STYLES).filter(([key]) => isFreeNodeStyle(key))), effective.nodeStyle, applyNodeStyle);
-    els.premiumStyles = premiumStyleChoices(nodeSection);
+    els.nodeStyles = graphChoices(nodeSection, "style", Object.fromEntries(Object.entries(NODE_STYLES).filter(([key]) => !isVoidNodeStyle(key))), prefs.nodeStyle, applyNodeStyle);
+    els.voidStyles = graphChoices(nodeSection, "style", Object.fromEntries(Object.entries(NODE_STYLES).filter(([key]) => isVoidNodeStyle(key))), prefs.nodeStyle, applyNodeStyle, { label: "Void collection", id: "music-void-style" });
     const layoutSection = element("section", "music-section", null, settings);
     layoutSection.dataset.appearancePanel = "layout";
     element("h3", null, "Arrange the tree", layoutSection);
@@ -56586,16 +56360,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const lastLink = prefs.source === "link" ? playableLink(mediaLink(prefs.links[0])) : null;
     if (lastLink) { state.link = lastLink; state.source = "link"; }
     else if (prefs.source === "radio") state.source = "radio";
-    // A member's premium choice is painted straight away, in place of the free
-    // one rather than after it, and nothing is written back.
-    const unlocked = premiumAllowed();
-    if (unlocked && premium.nodeStyle) effective.nodeStyle = premium.nodeStyle;
     build();
     for (const id of ["idle-music-toggle", "settings-audio-open"]) bindAudioHover(document.getElementById(id));
     window.addEventListener("blur", () => { if (!els.browser?.active && !els.linkPlayer?.contains(document.activeElement)) closeAudio(); });
-    if (unlocked && premium.theme) event("mefi-theme-change", paintTheme(premium.theme));
-    else applyTheme(prefs.theme, false);
-    syncTreePreferences(false); renderPremiumLocks(unlocked); render(); renderMediaMenu();
+    applyTheme(prefs.theme, false);
+    syncTreePreferences(false); render(); renderMediaMenu();
     if (lastLink) els.linkInput.value = lastLink.url;
     // A station that was sounding when Studio closed is tuned again. Smoke and
     // capture runs share the owner's profile, so they stay silent.
@@ -56614,9 +56383,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }, true);
     window.addEventListener("mefi-tree-view", (event) => syncTreeView(event.detail?.view));
     window.addEventListener("mefi-audio-change", (event) => renderAudioLink(event.detail));
-    window.addEventListener("mefi-community-change", (event) => syncPremium(typeof event?.detail?.premium === "boolean" ? event.detail.premium : premiumAllowed()));
-    // Linking can become possible or moot with the entitlement unchanged.
-    window.addEventListener("mefi-community-status", () => renderPremiumLocks());
     // Settings can preview a Void look without opening the canvas. Auxiliary
     // overlays leave Settings underneath, so only a page change ends it.
     window.addEventListener("mefi:nav", (event) => {
@@ -56627,7 +56393,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       if (["studio", "music", "appearancePreview"].includes(id)) return;
       const kind = window.MefiNav?.get?.(id)?.kind;
       if (kind === "overlay" || kind === "action") return;
-      endPreview();
       activateSettings(null);
     });
     if (typeof window.ResizeObserver === "function") {
@@ -56680,7 +56445,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       if (previewFrame) window.cancelAnimationFrame?.(previewFrame);
       previewFrame = 0;
       window.MefiIdle?.setSettingsPreview?.(null, { keepActive: keepTree });
-      if (!keepLook) endPreview();
     }
   }
   function dismissAppearance() {
@@ -56780,14 +56544,14 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
     move(els.groups.look.group, hosts.look);
     mountAppearanceSidebar();
-    renderPremiumLocks(); render();
+    render();
   }
   function activateSettings(category) {
     const active = category === "appearance" && document.getElementById("tab-studio")?.hidden === false && Boolean(els.settingsStage) && !state.opened;
     setSettingsAppearance(active);
     if (category !== "appearance" && settingsReveal.custom) {
       settingsReveal.custom = false;
-      if (els.customPalette) els.customPalette.hidden = effective.theme !== "custom";
+      if (els.customPalette) els.customPalette.hidden = prefs.theme !== "custom";
     }
     if (category !== "audio" && settingsReveal.source) { settingsReveal.source = null; renderSourcePanels(); }
   }
@@ -56831,12 +56595,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     els.sheet.setAttribute("aria-modal", "false");
     if (restoreWorkspace) window.MefiWorkspace.exit();
     document.body.classList.add("music-preview-active");
-    renderPremiumLocks();
     render(); syncTreeView(); els.sheet.focus(); schedulePreview();
   }
   function close() {
     if (!els.overlay || els.overlay.hidden) return;
-    endPreview();
     state.opened = false; els.overlay.hidden = true;
     if (previewFrame) window.cancelAnimationFrame?.(previewFrame);
     previewFrame = 0;
@@ -56854,7 +56616,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   window.MefiMusic = { init, open, openPreview, openAudio, closeAudio, toggleAudio, mountSettings, activateSettings, revealSettingsTarget, settingsAppearanceActive: () => settingsAppearance, leaveSettingsAppearance: (options) => setSettingsAppearance(false, options), close, status, graphPreferences, applyNodeStyle, applyNodeLayout, applyNodeEffects, getAudioElement: () => { init(); return activeDeck(); }, tune, stopRadio,
     stations: () => STATIONS.map((item) => ({ id: item.id, name: item.name, detail: item.detail, origin: item.origin, mirrors: item.mirrors.length })), setRecommender: (fn) => { recommender = typeof fn === "function" ? fn : null; render(); }, addFiles, setSource, applyTheme, applyCustomColors,
     // The free palettes as swatches, and the one on screen (Vibe's settings panel).
-    themes: () => Object.entries(THEMES).filter(([, theme]) => theme.premium !== true).map(([key, theme]) => ({ key, name: theme.name, accent: theme.accent, bright: theme.bright, bg: theme.bg, panel: theme.panel })), theme: () => effective.theme,
+    themes: () => Object.entries(THEMES).filter(([, theme]) => theme.premium !== true).map(([key, theme]) => ({ key, name: theme.name, accent: theme.accent, bright: theme.bright, bg: theme.bg, panel: theme.panel })), theme: () => prefs.theme,
     // Links from anywhere in Studio (a chat, a mirrored Discord room): linkInfo
     // says whether and how a link plays, without touching the player.
     playLink, loadSpotify: (raw) => playLink(raw),
@@ -56867,8 +56629,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     // isNodeStyle is for the tree painters; the catalog feeds Settings › Community.
     isNodeStyle,
     premiumCatalog: () => ({
-      themes: Object.entries(THEMES).filter(([key]) => isPremiumTheme(key)).map(([key, theme]) => ({ key, name: theme.name, accent: theme.accent, bright: theme.bright, accent2: theme.accent2 })),
-      nodeStyles: Object.entries(NODE_STYLES).filter(([key]) => isPremiumNodeStyle(key)).map(([key, style]) => ({ key, name: style.name, detail: style.detail })),
+      themes: Object.entries(THEMES).filter(([key]) => isVoidTheme(key)).map(([key, theme]) => ({ key, name: theme.name, accent: theme.accent, bright: theme.bright, accent2: theme.accent2 })),
+      nodeStyles: Object.entries(NODE_STYLES).filter(([key]) => isVoidNodeStyle(key)).map(([key, style]) => ({ key, name: style.name, detail: style.detail })),
     }) };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();

@@ -1,45 +1,33 @@
 // renderer/community.js in a vm with a fake DOM, bridge, storage and clock:
-// the member-perk gate (window.MefiCommunity), the boot hint, the weekly
-// Discord card's quiet gates and buttons, Settings › Community and the
-// palette action. The DOM elements the module looks up are built from the
+// window.MefiCommunity, the retired boot hint's cleanup, the weekly Discord
+// card's quiet gates and buttons, Settings › Community and the palette
+// action. The link unlocks nothing: every theme and node style is free. The DOM elements the module looks up are built from the
 // real template, so a renamed id fails here instead of in the app.
 import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
-import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
 
 const source = await readFile(new URL("../renderer/community.js", import.meta.url), "utf8");
 const musicSource = await readFile(new URL("../renderer/music.js", import.meta.url), "utf8");
-const workspaceSource = await readFile(new URL("../renderer/workspace.js", import.meta.url), "utf8");
 const template = await readFile(new URL("../renderer/booklet.template.html", import.meta.url), "utf8");
 const buildSource = await readFile(new URL("../scripts/build-booklet.mjs", import.meta.url), "utf8");
 const onboardingSource = await readFile(new URL("../renderer/onboarding.js", import.meta.url), "utf8");
 const booklet = await readFile(new URL("../renderer/booklet.js", import.meta.url), "utf8");
 
-const FORK = "Members of the Void Engine Discord unlock these. Studio is MIT-licensed: fork the project and unlock it yourself, or ask an agent to do it for you.";
-const AGENT = "In my fork of Mefi's Studio AI+, set SELF_UNLOCKED to true in scripts/community.cjs so the Void collection themes and node styles unlock without Discord, then run npm run check and npm test.";
+// The boot hint the retired Void collection lock kept; init deletes it.
 const HINT_KEY = "mefiStudio.community.v1";
-// The preview and save hint for a configured, unlinked build.
-const PREVIEW_HINT = "Preview it now; it resets when you close the canvas preview or leave Settings.";
-const LINK_HINT = `${PREVIEW_HINT} Link your Discord membership to keep it, or build it yourself (see below).`;
+// The weekly card's pitch and what the link is for (renderer/community.js).
+const PITCH = "Share what you're building, swap model setups, and listen together with other builders.";
+const USES = "Listen together uses this link to find your Void Engine rooms.";
 const PRIVACY = "Linking reads your Discord id and name, and your roles and join date in the Void Engine server: when you link, about once a week (sooner after a failed check, then daily), and when you press Check now. Studio keeps them in its settings on this computer, with the sign-in encrypted in community-auth.json. Nothing about your projects is sent. Unlink revokes the sign-in and deletes both.";
-// What music.js's MefiMusic.premiumCatalog() hands the Community card.
-const CATALOG = {
-  themes: [
-    { key: "void", name: "Void", accent: "#7c6cff", bright: "#b9b0ff", accent2: "#36d1ff" },
-    { key: "eclipse", name: "Eclipse", accent: "#e8a93c", bright: "#ffd98a", accent2: "#ff6a3d" },
-    { key: "abyss", name: "Abyss", accent: "#2fd6c3", bright: "#8ff5e8", accent2: "#7b5cff" },
-    { key: "dusk", name: "Neon Dusk", accent: "#ff5fa2", bright: "#ffa3cb", accent2: "#3fd0ff" },
-  ],
-  nodeStyles: [
-    { key: "singularity", name: "Singularity", detail: "A black hole with a turning disc" },
-    { key: "prism", name: "Prism", detail: "A turning crystal that splits light" },
-    { key: "sigil", name: "Sigil", detail: "Hex runes that assemble as it works" },
-  ],
-};
+// The Void collection's node styles, as music.js declares them and
+// docs/community.md lists them.
+const VOID_NODE_STYLES = [
+  { key: "singularity", name: "Singularity", detail: "A black hole with a turning disc" },
+  { key: "prism", name: "Prism", detail: "A turning crystal that splits light" },
+  { key: "sigil", name: "Sigil", detail: "Hex runes that assemble as it works" },
+];
 const MINUTE = 60000, HOUR = 60 * MINUTE, DAY = 24 * HOUR;
 const T0 = Date.UTC(2026, 8, 22, 12, 0, 0);
 
@@ -91,20 +79,17 @@ class Element {
 
 function status(overrides = {}) {
   return {
-    available: true, configured: true, linked: false, linking: false, selfUnlocked: false,
+    available: true, configured: true, linked: false, linking: false, member: false,
     user: null, roles: [], state: null,
-    entitlement: { premium: false, perks: [], validUntil: null, reason: "unlinked" },
     checkedAt: null, lastOkAt: null, nextCheckAt: null,
     prompt: { due: false, never: false, snoozeUntil: null },
     inviteUrl: "https://discord.gg/xgfKc5pVxG", serverUrl: "https://discord.com/channels/1345380333302059129",
-    forkCopy: FORK, agentPrompt: AGENT,
     ...overrides,
   };
 }
 const due = (overrides = {}) => status({ prompt: { due: true, never: false, snoozeUntil: null }, ...overrides });
 const member = (overrides = {}) => status({
-  linked: true, state: "ok", user: { id: "42", username: "nova_builder", globalName: "Nova Builder" }, roles: ["111", "222"],
-  entitlement: { premium: true, perks: ["premium"], validUntil: T0 + 14 * DAY, reason: "member" },
+  linked: true, member: true, state: "ok", user: { id: "42", username: "nova_builder", globalName: "Nova Builder" }, roles: ["111", "222"],
   checkedAt: T0 - 2 * HOUR, lastOkAt: T0 - 2 * HOUR, nextCheckAt: T0 + 6 * DAY,
   ...overrides,
 });
@@ -130,14 +115,12 @@ function fakeBridge(initial = status(), overrides = {}) {
     },
     communityOpen: async (target) => { calls.push(["open", target]); return reply(); },
     onCommunityEvent: (fn) => { listeners.push(fn); },
-    shellCopy: async (text) => { calls.push(["copy", text]); return { ok: true }; },
     ...overrides,
   };
 }
 
-// music: a MefiMusic stand-in (the catalog); prepare(elements): runs on the
-// fake DOM before the module does, e.g. to give the theme select its options.
-function environment({ bridge = null, storage = new Map(), search = "", workspace = true, guide = "complete", noMotion = false, missing = [], music = null, prepare = null } = {}) {
+// prepare(elements): runs on the fake DOM before the module does.
+function environment({ bridge = null, storage = new Map(), search = "", workspace = true, guide = "complete", noMotion = false, missing = [], prepare = null } = {}) {
   focused = null;
   const clock = { now: T0 };
   class FakeDate extends Date {
@@ -192,7 +175,6 @@ function environment({ bridge = null, storage = new Map(), search = "", workspac
     MefiWorkspace: { isActive: () => workspace },
     MefiToast: (message, kind, options) => { toasts.push({ message, kind, options }); return { dismiss() {} }; },
     MefiBoot: { pollStart: (key, fn, ms) => { polls.push({ key, fn, ms }); return key; } },
-    ...(music ? { MefiMusic: music } : {}),
     addEventListener: listen(windowListeners),
     dispatchEvent: (event) => { events.push(event); return true; },
   };
@@ -202,7 +184,7 @@ function environment({ bridge = null, storage = new Map(), search = "", workspac
     window, document, console, URLSearchParams, CustomEvent, Date: FakeDate,
     setTimeout: setTimer, clearTimeout: clearTimer,
     getComputedStyle: (element) => ({ display: element.hidden ? "none" : "block" }),
-    localStorage: { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, String(value)) },
+    localStorage: { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, String(value)), removeItem: (key) => storage.delete(key) },
   });
   vm.runInContext(source, context);
   return {
@@ -221,32 +203,22 @@ function environment({ bridge = null, storage = new Map(), search = "", workspac
 const card = (env) => env.el("community-invitation");
 const body = (env) => env.el("community-settings-body");
 
-test("the fork sentence and agent prompt are exact, and match scripts/community.cjs when it exists", () => {
+test("MefiCommunity is the link surface only: no unlock gate, previews, fork copy or agent prompt", () => {
   const env = environment();
-  assert.equal(env.api.FORK_COPY, FORK);
-  assert.equal(env.api.AGENT_PROMPT, AGENT);
-  assert.ok(template.includes(FORK), "the weekly card's fine print carries the fork sentence");
-  assert.equal(env.el("community-invite-fine").textContent, FORK);
-  // music.js reads MefiCommunity.FORK_COPY; its fallback for start:web and load order is the same sentence.
-  assert.ok(musicSource.includes(`const FORK_FALLBACK = ${JSON.stringify(FORK)};`), "music.js's fallback fork sentence");
-  assert.match(musicSource, /window\.MefiCommunity\?\.FORK_COPY/);
-  const rules = new URL("../scripts/community.cjs", import.meta.url);
-  if (existsSync(rules)) {
-    const community = createRequire(import.meta.url)(fileURLToPath(rules));
-    assert.equal(community.FORK_COPY, FORK, "the renderer copy is a duplicate of the rules module's");
-    assert.equal(community.AGENT_PROMPT, AGENT);
-  }
+  assert.deepEqual(Object.keys(env.api).sort(), ["cancelLink", "check", "init", "join", "link", "open", "refresh", "startup", "status", "unlink"]);
+  for (const gone of ["has", "offer", "FORK_COPY", "AGENT_PROMPT", "copyAgentPrompt"]) assert.equal(env.api[gone], undefined, gone);
+  assert.doesNotMatch(source, /mefi-community-change|entitlement|SELF_UNLOCKED|premiumCatalog/, "nothing in the renderer gates the Void collection");
 });
 
-test("the stub catalog's node styles are music.js's, and docs/community.md lists each one as written", async () => {
-  // NODE_STYLES as music.js declares it; premiumCatalog() hands out its premium rows as { key, name, detail }.
+test("the Void collection's node styles are music.js's, and docs/community.md lists each one as written", async () => {
   const literal = musicSource.match(/const NODE_STYLES = (\{[\s\S]*?\n {2}\});/);
   assert.ok(literal, "music.js declares NODE_STYLES");
   const styles = vm.runInNewContext(`(${literal[1]})`);
-  const premium = Object.entries(styles).filter(([, style]) => style.premium === true).map(([key, style]) => ({ key, name: style.name, detail: style.detail }));
-  assert.deepEqual(CATALOG.nodeStyles, premium, "the stub is a copy of what premiumCatalog() hands the Community card");
+  const collection = Object.entries(styles).filter(([, style]) => style.collection === "void").map(([key, style]) => ({ key, name: style.name, detail: style.detail }));
+  assert.deepEqual(VOID_NODE_STYLES, collection);
+  assert.ok(Object.values(styles).every((style) => !("premium" in style)), "no node style is premium any more");
   const docs = await readFile(new URL("../docs/community.md", import.meta.url), "utf8");
-  for (const style of CATALOG.nodeStyles) assert.ok(docs.includes(`| **${style.name}** | \`${style.key}\` | ${style.detail} |`), `docs/community.md's row for ${style.key}`);
+  for (const style of VOID_NODE_STYLES) assert.ok(docs.includes(`| **${style.name}** | \`${style.key}\` | ${style.detail} |`), `docs/community.md's row for ${style.key}`);
 });
 
 test("every id the module looks up exists in the template", () => {
@@ -259,7 +231,7 @@ test("every id the module looks up exists in the template", () => {
   assert.ok(template.includes('id="settings-category-general"'), "the Community card has a Settings category");
   assert.ok(template.indexOf('id="settings-community"') > template.indexOf('id="settings-category-general"'), "Community follows the General category heading");
   assert.ok(template.indexOf('id="community-invitation"') > template.indexOf('id="walkthrough-invitation"'), "the weekly card follows the walkthrough invitation");
-  assert.match(template, /<optgroup label="Void collection · Discord members"><option value="void">Void<\/option><option value="eclipse">Eclipse<\/option><option value="abyss">Abyss<\/option><option value="dusk">Neon Dusk<\/option><\/optgroup>/);
+  assert.match(template, /<optgroup label="Void collection[^"]*"><option value="void">Void<\/option><option value="eclipse">Eclipse<\/option><option value="abyss">Abyss<\/option><option value="dusk">Neon Dusk<\/option><\/optgroup>/);
 });
 
 test("registration: bundled after music and onboarding, before booklet, and started from the boot callback", () => {
@@ -274,17 +246,16 @@ test("registration: bundled after music and onboarding, before booklet, and star
   assert.ok(booklet.indexOf("window.MefiCommunity?.startup?.()") > booklet.indexOf("window.MefiOnboarding?.startup?.({ automatic: true })"));
 });
 
-test("no bridge: nothing unlocks, the card never shows and Settings says linking needs the desktop app", async () => {
+test("no bridge: the card never shows and Settings says linking needs the desktop app", async () => {
   const storage = new Map([[HINT_KEY, JSON.stringify({ premium: true, validUntil: null })]]);
   const env = environment({ storage });
-  assert.equal(env.api.has("premium"), false, "a leftover hint unlocks nothing without the desktop bridge");
   await env.boot();
   await env.advance(HOUR);
   assert.equal(card(env).hidden, true);
   assert.equal(env.events.length, 0);
   assert.equal(env.polls.length, 0);
   assert.match(body(env).textContent, /needs the desktop app/);
-  assert.ok(body(env).textContent.includes(FORK));
+  assert.ok(body(env).textContent.includes(PITCH));
   assert.equal(env.api.open(), false);
   assert.deepEqual(env.routes, []);
   assert.match(env.toasts.at(-1).message, /needs the desktop app/);
@@ -292,49 +263,38 @@ test("no bridge: nothing unlocks, the card never shows and Settings says linking
   assert.equal(env.api.status(), null);
 });
 
-test("the boot hint answers has('premium') before the first status, and every status rewrites it", async () => {
-  const storage = new Map([[HINT_KEY, JSON.stringify({ premium: true, validUntil: T0 + DAY })]]);
+test("init deletes the retired boot hint, and no status dispatches mefi-community-change", async () => {
+  const storage = new Map([[HINT_KEY, JSON.stringify({ premium: true, validUntil: T0 + DAY })], ["other.key", "kept"]]);
   const bridge = fakeBridge(status());
   const env = environment({ bridge, storage });
-  assert.equal(env.api.has("premium"), true, "a member's theme paints on launch");
-  assert.equal(env.api.has("other"), false, "the hint covers premium alone");
-  const stale = environment({ bridge: fakeBridge(), storage: new Map([[HINT_KEY, JSON.stringify({ premium: true, validUntil: T0 - 1 })]]) });
-  assert.equal(stale.api.has("premium"), false, "an expired hint unlocks nothing");
-  const garbage = environment({ bridge: fakeBridge(), storage: new Map([[HINT_KEY, "{not json"]]) });
-  assert.equal(garbage.api.has("premium"), false);
-
+  assert.equal(storage.has(HINT_KEY), false, "the old Void collection hint is gone at init");
+  assert.equal(storage.get("other.key"), "kept");
   await env.boot();
-  const changes = () => env.events.filter((event) => event.type === "mefi-community-change");
-  assert.equal(env.api.has("premium"), false, "the first status replaces the hint");
-  assert.deepEqual(JSON.parse(storage.get(HINT_KEY)), { premium: false, validUntil: null });
-  assert.equal(changes().length, 1, "one mefi-community-change after the first status");
-  assert.deepEqual({ ...changes()[0].detail }, { premium: false, perks: [], validUntil: null, reason: "unlinked" });
-
   bridge.push(member());
-  assert.equal(env.api.has("premium"), true);
-  assert.deepEqual(JSON.parse(storage.get(HINT_KEY)), { premium: true, validUntil: T0 + 14 * DAY });
-  assert.equal(changes().length, 2);
-  assert.equal(changes()[1].detail.reason, "member");
-  bridge.push(member({ checkedAt: T0 }));
-  assert.equal(changes().length, 2, "an unchanged entitlement dispatches nothing");
-  bridge.push(member({ state: "not-member", roles: [], entitlement: { premium: false, perks: [], validUntil: null, reason: "not-member" } }));
-  assert.equal(env.api.has("premium"), false);
-  assert.equal(changes().length, 3);
+  bridge.push(member({ state: "not-member", member: false, roles: [] }));
+  assert.equal(storage.has(HINT_KEY), false, "no status writes it back");
+  assert.equal(env.events.filter((event) => event.type === "mefi-community-change").length, 0);
+  assert.doesNotThrow(() => environment({ bridge: fakeBridge(), storage: new Map([[HINT_KEY, "{not json"]]) }));
 });
 
-test("mefi-community-status follows whether linking is possible, even with the entitlement unchanged", async () => {
+test("mefi-community-status follows whether linking is possible and whether the account is a member", async () => {
   const bridge = fakeBridge(status({ configured: false }));
   const env = environment({ bridge });
   await env.boot();
   const updates = () => env.events.filter((event) => event.type === "mefi-community-status").map((event) => ({ ...event.detail }));
-  assert.deepEqual(updates(), [{ configured: false, linked: false, state: null, linking: false }], "one after the first status");
+  assert.deepEqual(updates(), [{ configured: false, linked: false, member: false, state: null, linking: false }], "one after the first status");
   bridge.push(status({ configured: false, prompt: { due: true, never: false, snoozeUntil: null } }));
   assert.equal(updates().length, 1, "a change that does not touch linking dispatches nothing");
-  const expired = { premium: false, perks: [], validUntil: T0 - DAY, reason: "expired" };
-  bridge.push(member({ state: "offline", entitlement: expired }));
-  bridge.push(member({ state: "relink", entitlement: expired }));
-  assert.deepEqual(updates().at(-1), { configured: true, linked: true, state: "relink", linking: false });
-  assert.equal(env.events.filter((event) => event.type === "mefi-community-change").length, 2, "the entitlement itself did not change between offline and relink");
+  bridge.push(member());
+  assert.deepEqual(updates().at(-1), { configured: true, linked: true, member: true, state: "ok", linking: false });
+  bridge.push(member({ checkedAt: T0 }));
+  assert.equal(updates().length, 2, "a new check time alone dispatches nothing");
+  bridge.push(member({ state: "offline" }));
+  bridge.push(member({ state: "relink" }));
+  assert.deepEqual(updates().at(-1), { configured: true, linked: true, member: true, state: "relink", linking: false });
+  bridge.push(member({ state: "not-member", member: false, roles: [] }));
+  assert.deepEqual(updates().at(-1), { configured: true, linked: true, member: false, state: "not-member", linking: false });
+  assert.equal(updates().length, 5);
 });
 
 test("the weekly card shows once when due and every quiet gate holds, and records it", async () => {
@@ -345,8 +305,10 @@ test("the weekly card shows once when due and every quiet gate holds, and record
   assert.deepEqual(bridge.calls.filter(([name]) => name === "prompt"), [["prompt", "shown"]]);
   assert.match(template, /<strong id="community-invite-title">Build with others in the Void Engine Discord<\/strong>/);
   assert.equal(env.el("community-invite-link").hidden, false);
-  assert.equal(env.el("community-invite-copy").hidden, true, "the weekly card keeps to its four buttons");
-  assert.equal(env.el("community-invite-note").hidden, true);
+  for (const id of ["community-invite-copy", "community-invite-note"]) {
+    assert.equal(templateElement(id)?.hidden ?? true, true, `#${id} never shows: the weekly card keeps to its four buttons`);
+    assert.ok(!LOOKED_UP.includes(id), `community.js no longer reaches #${id}`);
+  }
   assert.ok(card(env).classList.contains("community-enter"));
   assert.equal(env.polls[0].key, "community.prompt");
   assert.equal(env.polls[0].ms, 6 * HOUR);
@@ -370,11 +332,14 @@ test("the card waits until it is due, and never for a member", async () => {
   bridge.push(due());
   await env.advance(4000);
   assert.equal(card(env).hidden, false, "a pushed due status schedules the card");
+  bridge.push(member({ prompt: { due: true, never: false, snoozeUntil: null } }));
+  assert.equal(card(env).hidden, true, "linking as a member puts the weekly card away");
 
-  const entitled = environment({ bridge: fakeBridge(due({ entitlement: { premium: true, perks: ["premium"], validUntil: null, reason: "self" } })) });
-  await entitled.boot();
-  await entitled.advance(HOUR);
-  assert.equal(card(entitled).hidden, true);
+  const linked = environment({ bridge: fakeBridge(member({ prompt: { due: true, never: false, snoozeUntil: null } })) });
+  await linked.boot();
+  await linked.advance(HOUR);
+  assert.equal(card(linked).hidden, true);
+  assert.equal(linked.toasts.length, 0);
 });
 
 test("capture and smoke launches never show the card or read the status", async () => {
@@ -475,7 +440,7 @@ test("outside the workspace the card is a toast whose action opens Settings › 
   assert.match(shown.message, /Void Engine Discord/);
   assert.equal(shown.kind, "info");
   assert.equal(shown.options.duration, 12000);
-  assert.equal(shown.options.action.label, "See the perks");
+  assert.equal(shown.options.action.label, "Open Community");
   assert.deepEqual(bridge.calls.filter(([name]) => name === "prompt"), [["prompt", "shown"]]);
   shown.options.action.run();
   assert.deepEqual(env.routes, ["studio"]);
@@ -487,7 +452,8 @@ test("the palette action is a palette-only action that opens Settings › Commun
   const entry = env.registered.find((dest) => dest.id === "community");
   assert.ok(entry, "registered with MefiNav");
   assert.equal(entry.kind, "action");
-  assert.equal(entry.label, "Void Engine Discord & perks");
+  assert.equal(entry.label, "Void Engine Discord");
+  assert.doesNotMatch(`${entry.desc} ${entry.searchTerms}`, /perk|unlock|premium/i);
   assert.equal(entry.showIn.palette, true);
   for (const place of ["tools", "dock", "tabs", "help", "footer"]) assert.equal(entry.showIn[place], false, `stays out of ${place}`);
   entry.run();
@@ -498,70 +464,6 @@ test("the palette action is a palette-only action that opens Settings › Commun
   env.el("workspace-community").click();
   assert.deepEqual(env.routes, ["studio"], "the sidebar Community button opens the same card");
   assert.deepEqual(env.visits.at(-1).params, { section: "settings-community" });
-});
-
-test("offer() opens Settings › Community with a note naming the preview item, or the inline card", async () => {
-  const env = environment({ bridge: fakeBridge() });
-  await env.boot();
-  assert.equal(env.api.offer({ kind: "nodeStyle", key: "prism", name: "Prism" }), true);
-  assert.deepEqual(env.routes, ["studio"]);
-  const settings = env.el("settings-community");
-  assert.equal(settings.open, true);
-  assert.equal(env.el("community-settings-note").hidden, false);
-  assert.equal(env.el("community-settings-note").textContent, `The Prism node style is part of the Void collection. ${LINK_HINT}`);
-  await env.advance(0);
-  assert.equal(settings.scrolled, 1);
-  assert.ok(body(env).textContent.includes(FORK));
-  assert.deepEqual(body(env).labels(), ["Join the Discord", "Link my Discord", "Copy agent prompt"]);
-  env.api.open();
-  assert.equal(env.el("community-settings-note").hidden, true, "a plain open clears the note");
-
-  const bridge = fakeBridge();
-  const inline = environment({ bridge, missing: ["settings-community"] });
-  await inline.boot();
-  inline.api.offer({ kind: "theme", key: "dusk", name: "Neon Dusk" });
-  assert.equal(card(inline).hidden, false);
-  assert.equal(inline.el("community-invite-note").textContent, `Neon Dusk is part of the Void collection. ${LINK_HINT}`);
-  assert.equal(inline.el("community-invite-copy").hidden, false);
-  bridge.calls.length = 0;
-  inline.el("community-invite-later").click();
-  await inline.settle();
-  assert.equal(card(inline).hidden, true);
-  assert.deepEqual(bridge.calls, [], "closing an offer card is not a weekly snooze");
-});
-
-test("offer({ navigate: false }) explains in place: the inline card or a toast, never a route change", async () => {
-  // The Preferences theme select fires on every arrow key; it must not navigate (WCAG 3.2.2).
-  assert.match(workspaceSource, /MefiMusic(?:\?\.|\.)applyTheme(?:\?\.)?\([^\n]*, true, \{ navigate: false \}\)/, "workspace.js asks for the in-place explanation");
-
-  const env = environment({ bridge: fakeBridge() });
-  await env.boot();
-  assert.equal(env.api.offer({ kind: "theme", key: "void", name: "Void", navigate: false }), true);
-  assert.deepEqual(env.routes, [], "no navigation");
-  assert.equal(env.el("settings-community").open, false);
-  assert.equal(card(env).hidden, false, "the workspace's inline card explains it");
-  assert.equal(env.el("community-invite-note").textContent, `Void is part of the Void collection. ${LINK_HINT}`);
-  assert.equal(env.el("community-invite-copy").hidden, false, "with the Copy agent prompt button");
-  env.api.offer({ kind: "theme", key: "dusk", name: "Neon Dusk", navigate: false });
-  assert.deepEqual(env.routes, [], "stepping on through the list stays put");
-  assert.equal(env.el("community-invite-note").textContent, `Neon Dusk is part of the Void collection. ${LINK_HINT}`);
-
-  const away = environment({ bridge: fakeBridge(), workspace: false });
-  await away.boot();
-  away.api.offer({ kind: "theme", key: "abyss", name: "Abyss", navigate: false });
-  assert.deepEqual(away.routes, []);
-  const shown = away.toasts.at(-1);
-  assert.equal(shown.message, `Abyss is part of the Void collection. ${PREVIEW_HINT} ${FORK}`);
-  assert.equal(shown.options.action.label, "See the perks");
-  shown.options.action.run();
-  assert.deepEqual(away.routes, ["studio"], "only the toast's own action opens Settings");
-  assert.equal(away.el("community-settings-note").textContent, `Abyss is part of the Void collection. ${LINK_HINT}`);
-
-  const web = environment();
-  assert.equal(web.api.offer({ kind: "theme", key: "void", name: "Void", navigate: false }), false);
-  assert.deepEqual(web.routes, []);
-  assert.match(web.toasts.at(-1).message, /needs the desktop app/);
-  assert.doesNotThrow(() => web.api.offer(null));
 });
 
 test("Settings › Community keeps keyboard focus on the pressed control across rebuilds", async () => {
@@ -599,7 +501,7 @@ test("Settings › Community keeps keyboard focus on the pressed control across 
   body(env).button("Unlink").focus();
   body(env).button("Unlink").click();
   await env.settle();
-  assert.deepEqual(body(env).labels(), ["Join the Discord", "Link my Discord", "Copy agent prompt"]);
+  assert.deepEqual(body(env).labels(), ["Join the Discord", "Link my Discord"]);
   assert.equal(env.document.activeElement, body(env).button("Join the Discord"));
 });
 
@@ -611,12 +513,12 @@ test("Settings › Community renders each link state with plain text", async () 
   assert.match(text, /^NB/, "an initials avatar, no remote image");
   assert.ok(text.includes("@<img src=x>"), "names stay text");
   assert.match(text, /Member2 roles/);
-  assert.match(text, /Void collection — 4 themes and 3 node stylesOn/);
+  assert.ok(text.includes(USES), "the card says what the link is for");
   assert.match(text, /Last checked 2 hours ago · next check in 6 days/);
+  assert.doesNotMatch(text, /perk|unlock|premium|Void collection/i, "the link unlocks nothing");
   assert.deepEqual(body(env).labels(), ["Check now", "Unlink"]);
   assert.equal(body(env).button("Check now").className, "ghost mini", "one size for the row");
   assert.equal(body(env).button("Unlink").className, "ghost mini community-unlink", "Unlink is the quiet secondary");
-  assert.equal(text.includes(FORK), false, "a member is not pitched the fork");
   // Guard-rail 2: what is read, when (a failed check retries sooner), where it is kept, and how to unlink.
   assert.equal(env.el("community-privacy").textContent, PRIVACY);
   assert.ok(template.includes(`<p class="muted" id="community-privacy">${PRIVACY}</p>`), "the template carries the same line before the script runs");
@@ -628,23 +530,30 @@ test("Settings › Community renders each link state with plain text", async () 
   await env.settle();
   assert.deepEqual(bridge.calls, [["check"], ["unlink"]]);
 
-  bridge.push(member({ state: "offline", entitlement: { premium: true, perks: ["premium"], validUntil: T0 + 10 * DAY, reason: "grace" } }));
-  assert.match(body(env).textContent, /Couldn't reach Discord\. Perks stay on until /);
-  bridge.push(member({ state: "relink", entitlement: { premium: true, perks: ["premium"], validUntil: T0 + 3 * DAY, reason: "grace" } }));
+  bridge.push(member({ state: "offline" }));
+  assert.match(body(env).textContent, /Couldn't reach Discord\. Studio tries again soon\./);
+  assert.match(body(env).textContent, /Member2 roles/, "a failed check keeps the last answer");
+  bridge.push(member({ state: "relink" }));
+  assert.match(body(env).textContent, /Discord needs you to link again\./);
   assert.equal(body(env).button("Link my Discord").className, "primary mini", "the next step leads the row, at the row's size, under the one link label");
   assert.equal(body(env).labels().includes("Link again"), false);
-  bridge.push(member({ state: "not-member", roles: [], entitlement: { premium: false, perks: [], validUntil: null, reason: "not-member" } }));
+  bridge.push(member({ state: "not-member", member: false, roles: [] }));
   assert.match(body(env).textContent, /Your Discord account isn't in the Void Engine server\./);
-  assert.deepEqual(body(env).labels().slice(0, 3), ["Join the Discord", "Check now", "Unlink"]);
+  assert.doesNotMatch(body(env).textContent, /Member/, "no member badge");
+  assert.deepEqual(body(env).labels(), ["Join the Discord", "Check now", "Unlink"]);
   assert.equal(body(env).button("Join the Discord").className, "primary mini");
-  assert.match(body(env).textContent, /LockedLast checked/);
-  assert.ok(body(env).textContent.includes(FORK), "a locked account keeps the fork path");
+  bridge.push(member({ state: "session" }));
+  assert.match(body(env).textContent, /This link lasts until Studio closes/);
   bridge.push(status({ configured: false }));
   assert.match(body(env).textContent, /Discord linking isn't set up in this build yet\./);
-  assert.deepEqual(body(env).labels(), ["Join the Discord", "Copy agent prompt"]);
-  bridge.push(status({ selfUnlocked: true, entitlement: { premium: true, perks: ["premium"], validUntil: null, reason: "self" } }));
-  assert.match(body(env).textContent, /This build unlocks the Void collection itself \(SELF_UNLOCKED\), so it needs no Discord link\./);
-  assert.equal(body(env).button("Join the Discord").className, "ghost mini", "joining is optional here");
+  assert.deepEqual(body(env).labels(), ["Join the Discord"]);
+  bridge.push(status());
+  assert.ok(body(env).textContent.includes(PITCH) && body(env).textContent.includes(USES));
+  assert.deepEqual(body(env).labels(), ["Join the Discord", "Link my Discord"]);
+  assert.equal(body(env).button("Link my Discord").className, "primary");
+  bridge.push(status({ available: false }));
+  assert.match(body(env).textContent, /Community linking isn't available in this build\./);
+  assert.deepEqual(body(env).labels(), []);
   bridge.push(status({ linking: true }));
   bridge.calls.length = 0;
   body(env).button("Cancel").click();
@@ -652,7 +561,7 @@ test("Settings › Community renders each link state with plain text", async () 
   assert.deepEqual(bridge.calls, [["link-cancel"]]);
 });
 
-test("a throttled check, a failed link and the agent prompt report through the status line and toasts", async () => {
+test("a throttled check, a failed link, a not-member link and a good link report through the status line and toasts", async () => {
   const bridge = fakeBridge(member(), {
     communityCheck: async () => ({ ok: false, error: "throttled", status: member() }),
     communityLink: async () => ({ ok: false, error: "port-busy", status: status() }),
@@ -664,10 +573,23 @@ test("a throttled check, a failed link and the agent prompt report through the s
   await env.api.link();
   assert.match(env.el("community-settings-status").textContent, /local sign-in port/);
   assert.equal(env.toasts.at(-1).kind, "bad");
-  assert.equal(await env.api.copyAgentPrompt(), true);
-  assert.deepEqual(bridge.calls.at(-1), ["copy", AGENT]);
-  assert.equal(env.toasts.at(-1).kind, "good");
-  assert.equal(env.toasts.at(-1).message, "Agent prompt copied");
+
+  const outsider = environment({ bridge: fakeBridge(status(), { communityLink: async () => ({ ok: false, error: "not-member", status: member({ state: "not-member", member: false, roles: [] }) }) }) });
+  await outsider.boot();
+  await outsider.api.link();
+  assert.equal(outsider.el("community-settings-status").textContent, "Your Discord account isn't in the Void Engine server yet. Join, then choose Check now.");
+  const offer = outsider.toasts.at(-1);
+  assert.equal(offer.kind, "info");
+  assert.equal(offer.options.action.label, "Join the Discord");
+  offer.options.action.run();
+  await outsider.settle();
+  assert.deepEqual(outsider.bridge.calls.slice(-2), [["open", "invite"], ["prompt", "joined"]]);
+
+  const good = environment({ bridge: fakeBridge(status()) });
+  await good.boot();
+  assert.equal((await good.api.link()).ok, true);
+  assert.equal(good.el("community-settings-status").textContent, "Discord linked.");
+  assert.deepEqual({ message: good.toasts.at(-1).message, kind: good.toasts.at(-1).kind }, { message: "Discord linked.", kind: "good" });
 });
 
 test("link() waits out any running call; busy, storage and a dropped check read in plain words", async () => {
@@ -696,37 +618,6 @@ test("link() waits out any running call; busy, storage and a dropped check read 
   assert.equal(failing.el("community-settings-status").textContent, "Studio couldn't finish deleting its saved sign-in. Try Unlink again.");
 });
 
-test("a preview item's note follows the account: the keep hint changes with the link state and goes once the collection unlocks", async () => {
-  const bridge = fakeBridge(status());
-  const env = environment({ bridge });
-  await env.boot();
-  env.api.offer({ kind: "theme", key: "eclipse", name: "Eclipse" });
-  const note = env.el("community-settings-note");
-  assert.equal(note.textContent, `Eclipse is part of the Void collection. ${LINK_HINT}`);
-  bridge.push(member({ state: "not-member", roles: [], entitlement: { premium: false, perks: [], validUntil: null, reason: "not-member" } }));
-  assert.equal(note.textContent, `Eclipse is part of the Void collection. ${PREVIEW_HINT} Join the Void Engine Discord to keep it, or build it yourself (see below).`);
-  bridge.push(member());
-  assert.equal(note.hidden, true, "a member needs no unlock note");
-});
-
-test("the Preferences theme select marks temporary Void collection options, keeps them enabled and restores them on unlock", async () => {
-  const LABELS = [["aurora", "Aurora"], ["gold", "Studio gold"], ["sage", "Forest"], ["custom", "Custom colors"], ["void", "Void"], ["eclipse", "Eclipse"], ["abyss", "Abyss"], ["dusk", "Neon Dusk"]];
-  const withOptions = (elements) => { elements.get("workspace-accent").options = LABELS.map(([value, textContent]) => ({ value, textContent, disabled: false })); };
-  const labels = (env) => env.el("workspace-accent").options.map((option) => option.textContent);
-  const env = environment({ bridge: fakeBridge(status()), music: { premiumCatalog: () => CATALOG }, prepare: withOptions });
-  assert.deepEqual(labels(env), ["Aurora", "Studio gold", "Forest", "Custom colors", "Void · preview", "Eclipse · preview", "Abyss · preview", "Neon Dusk · preview"]);
-  assert.ok(env.el("workspace-accent").options.every((option) => option.disabled === false), "preview options stay choosable");
-  env.fireWindow("mefi-community-change", { detail: { premium: true, perks: ["premium"], validUntil: null, reason: "member" } });
-  assert.deepEqual(labels(env).slice(4), ["Void", "Eclipse", "Abyss", "Neon Dusk"], "unlocking restores the template's names");
-  env.fireWindow("mefi-community-change", { detail: { premium: false, perks: [], validUntil: null, reason: "not-member" } });
-  assert.deepEqual(labels(env).slice(4), ["Void · preview", "Eclipse · preview", "Abyss · preview", "Neon Dusk · preview"]);
-  assert.doesNotMatch(workspaceSource, /· preview/, "workspace.js is not touched for this");
-
-  const hinted = environment({ bridge: fakeBridge(member()), music: { premiumCatalog: () => CATALOG }, prepare: withOptions, storage: new Map([[HINT_KEY, JSON.stringify({ premium: true, validUntil: null })]]) });
-  assert.deepEqual(labels(hinted).slice(4), ["Void", "Eclipse", "Abyss", "Neon Dusk"], "a member's boot hint shows the plain names at launch");
-  assert.doesNotThrow(() => environment({ bridge: fakeBridge(), prepare: withOptions }), "no catalog, no relabel");
-});
-
 test("Community has its own glyph: the sprite symbol, the sidebar button, the settings card and the palette entry", () => {
   assert.match(template, /<symbol id="g-community" viewBox="0 0 16 16">/);
   assert.match(template, /id="workspace-community"[^>]*><svg class="glyph" aria-hidden="true"><use href="#g-community"\/>/);
@@ -736,34 +627,3 @@ test("Community has its own glyph: the sprite symbol, the sidebar button, the se
   assert.equal(env.registered.find((dest) => dest.id === "community").glyph, "g-community");
 });
 
-test("the showcase names the unlock state, and a member's Choose a Void theme opens Style & sound at the collection", async () => {
-  const pressed = new Element("button");
-  pressed.setAttribute("aria-pressed", "true");
-  const group = new Element("div", "music-premium-themes");
-  group.firstElementChild = new Element("button");
-  group.querySelector = (selector) => selector === '[aria-pressed="true"]' ? pressed : null;
-  const bridge = fakeBridge(status());
-  const env = environment({ bridge, music: { premiumCatalog: () => CATALOG }, prepare: (elements) => elements.set("music-premium-themes", group) });
-  await env.boot();
-  const state = env.el("community-showcase-state");
-  assert.equal(state.textContent, "For members of the Void Engine Discord");
-  assert.equal(state.getAttribute("data-unlocked"), "false");
-  assert.equal(env.el("community-choose").hidden, true, "only a member is offered the themes");
-  const [themes, styles] = env.el("community-showcase-items").children;
-  assert.deepEqual(themes.children.map((item) => item.textContent), ["Void", "Eclipse", "Abyss", "Neon Dusk"]);
-  assert.deepEqual(styles.children.map((item) => item.textContent), ["Singularity", "Prism", "Sigil"]);
-  assert.equal(themes.children[0].children[0].children[0].className, "void-swatch", "the two-tone swatch");
-
-  bridge.push(member());
-  assert.equal(state.textContent, "Unlocked with your Void Engine membership");
-  assert.equal(state.getAttribute("data-unlocked"), "true");
-  assert.equal(env.el("community-choose").hidden, false);
-  env.el("community-choose").click();
-  assert.deepEqual(env.routes, ["music"]);
-  await env.advance(0);
-  assert.equal(env.document.activeElement, pressed, "keyboard focus lands on the theme in use");
-  assert.equal(group.scrolled, 1);
-
-  bridge.push(status({ selfUnlocked: true, entitlement: { premium: true, perks: ["premium"], validUntil: null, reason: "self" } }));
-  assert.equal(state.textContent, "Unlocked in this build");
-});
