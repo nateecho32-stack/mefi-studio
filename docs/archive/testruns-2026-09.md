@@ -6,6 +6,33 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-26 - Scroll-control follow-up verifies the completed shared full gate
+
+The later shared-checkout npm test run in %TEMP%/mefi-media-full.log completed
+at 21:03:24 with all three gate legs passing. Read the actual summaries and
+the unified-renderer result rather than launching duplicate heavy tests
+while the owner was using Studio. The scroll source predates that run and
+both the generated booklet and running app contain the batching change.
+The earlier interrupted mefi-live run remains recorded as incomplete.
+
+Verified results: CPU 3,861 pass / 4 skip; desktop lane 38 pass / 1 skip,
+including Unified Agents navigation and scroll controls (80.07 seconds);
+eyes toggle 1 pass; occlusion 1 pass / 1 capability skip. Total Node:
+3,901 pass / 6 skip / 0 fail. Python: 248 tests OK, 1 skipped.
+Normalized-path lock: 6/6. This closes the deferred full-gate follow-up for
+the scroll change; no production sources changed during this follow-up.
+
+A read-only status check found visible Command with the new code loaded.
+The window then became hidden before a bounded 30-second capture and stayed
+hidden for all six observations, so no visible frames were recorded and
+this sample cannot establish a live improvement or a callout-drawing cost.
+An accompanying guard observed no tests at eight checkpoints and unchanged
+hashes for studio-ui.js, idle.js and booklet.html. A final status check
+confirmed boot complete, updater watching and profiler recording stopped.
+No UI navigation or forced restart occurred. Reports remain ignored under
+tools/logs/live-20260926-command-scroll-loaded*.json and the heartbeat
+status reports. Command callout attribution awaits an active visible sample.
+
 ## 2026-09-26 - AI link alert re-verified against the saved fixes (task_59ca346c1f3bdb46)
 
 Continuation run for the A-Eyes "AI link failing repeatedly" alert after the

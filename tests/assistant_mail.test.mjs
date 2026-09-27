@@ -44,6 +44,32 @@ test("builders and the assistant can write; a repeated unread note refreshes rat
   assert.equal(note.at, NOW + 5 * MINUTE, "the repeat moved the clock, not the count");
 });
 
+// The queue handout spam: the compactor hands the foreman the same "N work
+// item(s) ready" note every pass, the foreman reads it each start, and the
+// read copy no longer matched the unread-duplicate check — seven identical
+// handouts in eleven minutes, each a fresh row and a drawn packet. A repeat
+// of a note the seat already heard is dropped whole inside the window.
+test("a handout the recipient already read is not re-broadcast inside the window", () => {
+  const handout = '2 work item(s) ready · next "Fix: ai link" — yours to hand out';
+  let state = assistant.sendMail(assistant.emptyState(NOW), { from: "compactor", to: "foreman", text: handout }, NOW);
+  state = assistant.readMail(state, "foreman", NOW + MINUTE).state;
+  const heardAt = state.mail[0].readAt;
+  for (let i = 2; i <= 8; i += 1) {
+    const next = assistant.sendMail(state, { from: "compactor", to: "foreman", text: handout }, NOW + i * MINUTE);
+    assert.equal(next, state, `repeat ${i} is dropped whole: same state, no new row, no clock churn`);
+  }
+  assert.equal(state.mail.length, 1);
+  assert.equal(state.mail[0].readAt, heardAt, "the read stamp stands; the note does not pull the foreman due again");
+  // A changed handout — a different count or next pick — is new information and goes out.
+  const changed = assistant.sendMail(state, { from: "compactor", to: "foreman", text: "3 work item(s) ready — yours to hand out" }, NOW + 9 * MINUTE);
+  assert.equal(changed.mail.length, 2, "a different handout is delivered");
+  assert.equal(changed.mail.at(-1).text, "3 work item(s) ready — yours to hand out");
+  // Once the window has passed, the same handout may be sent again.
+  const later = assistant.sendMail(state, { from: "compactor", to: "foreman", text: handout }, NOW + assistant.MAIL_REBROADCAST_MS + 2 * MINUTE);
+  assert.equal(later.mail.length, 2, "after the window the same note is delivered again");
+  assert.equal(later.mail.at(-1).readAt, 0, "the fresh copy is unread");
+});
+
 test("an inbox is bounded per recipient and the box overall", () => {
   let state = assistant.emptyState(NOW);
   for (let i = 0; i < assistant.MAIL_UNREAD_PER_ROLE + 3; i += 1) state = assistant.sendMail(state, { from: "watcher", to: "keeper", text: `note ${i}` }, NOW + i);
@@ -166,6 +192,22 @@ test("host: assistantDeliverMail sends at most three of a job's notes under its 
   assert.equal(sent, 3, "three go out; the junk ones do not count against it");
   assert.deepEqual(env.assistantState.mail.map((row) => `${row.from}→${row.to}`), ["auditor→foreman", "auditor→machine", "auditor→keeper"]);
   assert.equal(vm.runInContext('assistantDeliverMail("auditor", "not a list")', env), 0);
+});
+
+// The queue handout loop rode the host half too: every compactor pass called
+// assistantSendMail with the unchanged handout, and each call pushed a packet
+// because a fresh row had landed. A suppressed repeat returns the same state,
+// so the host reports the note as not sent and draws nothing.
+test("host: a repeat of a heard note is refused whole — no packet, no state change", () => {
+  const { env, pushed } = mailHost();
+  const text = "2 work item(s) ready — yours to hand out";
+  assert.equal(vm.runInContext(`assistantSendMail("compactor", "foreman", "${text}")`, env), true);
+  vm.runInContext('assistantTakeMail("foreman")', env);
+  const before = env.assistantState;
+  assert.equal(vm.runInContext(`assistantSendMail("compactor", "foreman", "${text}")`, env), false, "the repeat is reported as not sent");
+  assert.equal(env.assistantState, before, "the state object is unchanged");
+  assert.equal(env.assistantState.mail.length, 1);
+  assert.equal(pushed.length, 2, "no packet for the repeat: one send, one read");
 });
 
 test("host: assistantTakeMail hands a starting job its unread notes once and pushes the read, not a log row", () => {

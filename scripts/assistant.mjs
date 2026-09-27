@@ -1617,6 +1617,15 @@ export const MAIL_CAP = 48;
 export const MAIL_UNREAD_PER_ROLE = 6;
 const MAIL_TEXT_MAX = 200;
 const MAIL_WINDOW_MS = 60 * MINUTE;
+// How long a note the recipient already heard shades a repeat of itself.
+// A cadence job that hands work to another seat (the compactor tells the
+// foreman what is ready every pass) repeats the identical note for as long
+// as the shape holds, and once the copy was read the unread-duplicate check
+// below stopped matching: seven identical handouts in eleven minutes, each
+// a fresh row, a pushed packet and a chatter line. Inside this window the
+// repeat is dropped whole, so the state comes back unchanged and the host
+// pushes nothing; after it, the same note may go out again.
+export const MAIL_REBROADCAST_MS = 15 * MINUTE;
 // Senders: every roster seat, the builders and the assistant hub itself.
 // Recipients: roster seats only — mail is addressed to something that runs.
 export const MAIL_SENDERS = [...INTEL_ROLES, "assistant"];
@@ -1644,10 +1653,13 @@ function normalizeMail(raw) {
 
 // One note from one agent to another. Returns the new state, or the same
 // state when the note is not deliverable (unknown sender or recipient, an
-// empty text, an agent writing to itself). The same unread note twice only
-// refreshes its clock; a recipient already holding MAIL_UNREAD_PER_ROLE unread
-// notes drops its oldest one, so an inbox never grows past what one job can
-// read. Read mail ages out of the box after MAIL_WINDOW_MS.
+// empty text, an agent writing to itself) or is a repeat of a note the
+// recipient already heard within MAIL_REBROADCAST_MS — a suppressed repeat
+// changes nothing, so no packet is drawn and no chatter row counted. The
+// same unread note twice only refreshes its clock; a recipient already
+// holding MAIL_UNREAD_PER_ROLE unread notes drops its oldest one, so an
+// inbox never grows past what one job can read. Read mail ages out of the
+// box after MAIL_WINDOW_MS.
 export function sendMail(state, note, now = Date.now()) {
   const current = isObject(state) ? state : emptyState(now);
   const source = isObject(note) ? note : {};
@@ -1658,6 +1670,9 @@ export function sendMail(state, note, now = Date.now()) {
   if (duplicate) {
     return { ...current, mail: normalizeMail(rows.map((entry) => (entry === duplicate ? { ...entry, at: row.at, facts: row.facts } : entry))) };
   }
+  const heard = rows.find((entry) => entry.readAt > 0 && entry.from === row.from && entry.to === row.to && entry.text === row.text
+    && now - Math.max(entry.readAt, entry.at) <= MAIL_REBROADCAST_MS);
+  if (heard) return current;
   const unread = rows.filter((entry) => entry.to === row.to && !entry.readAt);
   const drop = unread.length >= MAIL_UNREAD_PER_ROLE ? new Set(unread.slice(0, unread.length - MAIL_UNREAD_PER_ROLE + 1).map((entry) => entry.id)) : null;
   return { ...current, mail: normalizeMail([...(drop ? rows.filter((entry) => !drop.has(entry.id)) : rows), row]) };

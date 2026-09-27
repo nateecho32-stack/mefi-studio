@@ -34,6 +34,10 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-27 morning - Handout rebroadcast dedupe: a heard note is not re-sent; AI-link retirement re-verified (task_plan_mujom5h3_0, run_1790505348418_7)
+
+Grouped A-Eyes alerts "Compactor rebroadcasts finished work item" (task_6e3c0afebf8489ff) and "Queue handout broadcast spam" (task_9645fd821b9d03bc). Member 1 is the stale work broadcast loop the sibling session already retired: inspected HEAD before touching anything and adopted 6f1ef62 as it stands (assistant.mjs aiLinkTicket/aiLinkHealthy/aiLinkResolved, the compact()/tidy() ai-block absorb, the resolvedAiLinkWork promotion guard); all four board.test.mjs retirement tests green and the live data/eyes-assistant.json read read-only confirms the loop is over (ai online true, failures 0, backoffUntil 0, requests 0), so no further piece was owed there. Member 2's general spam had a second half the retirement did not cover: sendMail only deduped identical UNREAD notes, so once the foreman read a handout (it reads its inbox every start) the compactor's next identical "N work item(s) ready — yours to hand out" landed as a fresh row, packet and chatter line every pass — the seven handouts in eleven minutes that kept coming after the briefer's rebuke. Fix: assistant.mjs exports MAIL_REBROADCAST_MS (15 min) and sendMail now returns the state unchanged for a repeat of the same note from the same seat while a read copy sits within that window, so host assistantSendMail reports it unsent and pushes nothing; changed handouts (a different count or next pick) and repeats after the window still go out, and the unread-refresh path is untouched. Tests: new module and host cases in tests/assistant_mail.test.mjs; node --test tests/assistant_mail.test.mjs tests/board.test.mjs tests/briefing_fix_requests.test.mjs 57 pass / 0 fail; node --test tests/request_dedupe tests/task_delegation tests/task_grouping_cleanup tests/idea_backlog tests/task_history tests/work_admission_host tests/request_admission tests/board_growth tests/assistant_loop tests/role_provider_isolation 137 pass / 0 fail; python tools/test_mefi_studio_assistant.py 66 OK; npm run check ok (165 targets); npm test all gates pass; npm run audit 0 errors / 0 warnings. Sibling work-tree hunks preserved untouched.
+
 ## 2026-09-27 - Errors-rising alert verified: one transient foreman entry, link repair holds (task_79329b8c68060082, run_1790504647068_6)
 
 Follow-up verification for the A-Eyes "Errors rising after AI-link fix" alert (overseer logged error entries rising 0→10 after ses_f1f897 finished normally). Root cause stands as triaged by the sibling sessions in this family: during the quota window the pre-restart instance's AI-gated roles (briefer cadence, thinker, probes) each ended in error and appended a log row — two of the failures were the spurious "claude error: success" misparse and the rest real session-limit quota — so the burst tracked the old code plus the provider quota, not the builder session's work; the 02:39Z restart loaded the committed fixes (cliReply exit guard 11fcebc, parseClaudeCliResult is_error surfacing, resetAssistantAiBackoff at the four route-change sites, scheduleAssistantAiProbe chain) and the queue-stall side of the noise was retired by 6f1ef62. The live data/eyes-assistant.json read read-only this run confirms the repair still holds: ai online true, keyPresent true, failures 0, backoffUntil 0, lastError null, lastOkAt 2026-09-27T10:29Z, problems empty, digest.logErrors reset to [] by the clean 10:12Z audit, overseer score 100/health good, briefer error null at 129 runs; the log carries exactly one error row, the transient 10:10Z foreman "10 queued, nothing running" dispatch-congestion line that cleared itself by the next review. No code change was needed this run; the two in-flight work-tree hunks owned by sibling cards (assistant.mjs verifyCompletion deferral parsing, usage-tracker.cjs parser detail text) were preserved untouched. Narrow validation: node --test tests/briefer_cli_failure.test.mjs tests/assistant_overseer_chat.test.mjs tests/role_provider_isolation.test.mjs tests/usage_tracker_host.test.mjs 80 pass / 0 fail; python tools/test_mefi_studio_assistant.py 66 tests OK; python tools/test_mefi_studio_offline_probe.py 12 tests OK; npm run check ok (165 targets, 20 live rows); npm run audit 0 errors / 0 warnings.
@@ -376,33 +380,6 @@ scratch copy exercised the control machinery end to end (engaged via
 document.hidden, coveredGrowth 0, counter proven when raised) and was
 removed afterwards. No production sources changed; the worktree's unrelated
 shared edits were untouched.
-
-## 2026-09-26 - Scroll-control follow-up verifies the completed shared full gate
-
-The later shared-checkout npm test run in %TEMP%/mefi-media-full.log completed
-at 21:03:24 with all three gate legs passing. Read the actual summaries and
-the unified-renderer result rather than launching duplicate heavy tests
-while the owner was using Studio. The scroll source predates that run and
-both the generated booklet and running app contain the batching change.
-The earlier interrupted mefi-live run remains recorded as incomplete.
-
-Verified results: CPU 3,861 pass / 4 skip; desktop lane 38 pass / 1 skip,
-including Unified Agents navigation and scroll controls (80.07 seconds);
-eyes toggle 1 pass; occlusion 1 pass / 1 capability skip. Total Node:
-3,901 pass / 6 skip / 0 fail. Python: 248 tests OK, 1 skipped.
-Normalized-path lock: 6/6. This closes the deferred full-gate follow-up for
-the scroll change; no production sources changed during this follow-up.
-
-A read-only status check found visible Command with the new code loaded.
-The window then became hidden before a bounded 30-second capture and stayed
-hidden for all six observations, so no visible frames were recorded and
-this sample cannot establish a live improvement or a callout-drawing cost.
-An accompanying guard observed no tests at eight checkpoints and unchanged
-hashes for studio-ui.js, idle.js and booklet.html. A final status check
-confirmed boot complete, updater watching and profiler recording stopped.
-No UI navigation or forced restart occurred. Reports remain ignored under
-tools/logs/live-20260926-command-scroll-loaded*.json and the heartbeat
-status reports. Command callout attribution awaits an active visible sample.
 
 ## Read Before Any Tests
 
