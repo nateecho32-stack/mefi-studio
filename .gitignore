@@ -34,8 +34,11 @@ desktop.ini
 .vscode/
 *.lnk
 
-# Local-only Claude Code config (preview launch.json) and the untracked site
-.claude/
+# Local-only Claude Code config (preview launch.json, worktrees, personal
+# settings) and the untracked site. The shared SessionStart sync hook in
+# .claude/settings.json is tracked so every PC runs it.
+.claude/*
+!.claude/settings.json
 website/
 
 # Editor swap and merge leftovers

@@ -1786,6 +1786,31 @@ const hubListen = (payload) => hubCall((client) => client.listen(payload?.roomId
 const hubNowPlaying = (track) => hubCall((client) => ({ ok: client.setNowPlaying(track) }));
 // ---- end of the rooms hub ---------------------------------------------------
 
+// ---- Multi-PC sync: Friends › Your PCs ---------------------------------------
+// scripts/sync.mjs keeps the open project's checkout in step with its default
+// branch on GitHub, so work pushed from one PC is waiting on the next.
+// sync:status fetches and looks, and never moves a branch; sync:run also
+// fast-forwards and pushes the default branch, in the directions that cannot
+// lose work. One sync runs at a time: a look asked for during one shares its
+// answer when both are for the same folder, and anything else waits its turn.
+// Git gets its own arguments, no shell and no terminal prompt.
+let syncFlight = null;
+async function syncProject(push) {
+  const root = projectRoot();
+  while (syncFlight) {
+    const flight = syncFlight;
+    const result = await flight.promise;
+    if (!push && flight.root === root) return result;
+  }
+  const promise = loadModule("scripts/sync.mjs")
+    .then((sync) => sync.sync(root, { pull: push, push }))
+    .catch((error) => ({ ok: false, headline: `Sync could not run: ${error?.message || error}`, lines: [], pending: [], actions: [], problems: [{ kind: "error" }] }))
+    .finally(() => { if (syncFlight?.promise === promise) syncFlight = null; });
+  syncFlight = { root, promise };
+  return promise;
+}
+// ---- end of multi-PC sync -----------------------------------------------------
+
 // `explicit` is the owner asking (Work on it): a finished inbox row never
 // stands in for it, only unfinished work does.
 async function queueRequests(additions, { automaticGrowth = false, explicit = false } = {}) {
@@ -18395,6 +18420,12 @@ function registerIpc() {
   ipcMain.handle("hub:subscribe", async (_event, payload) => hubSubscribe(payload?.roomId, payload?.on !== false));
   ipcMain.handle("hub:listen", async (_event, payload) => hubListen(payload));
   ipcMain.handle("hub:now-playing", async (_event, payload) => hubNowPlaying(payload?.track ?? null));
+
+  // ---- Multi-PC sync ------------------------------------------------------
+  // Friends › Your PCs (the "Multi-PC sync" block). Project-gated, unlike
+  // hub:*: both act on the open project's folder, so a switch waits for them.
+  ipcMain.handle("sync:status", async () => syncProject(false));
+  ipcMain.handle("sync:run", async () => syncProject(true));
 }
 
 // Bounds a restart saved, when they still land on a display that exists.

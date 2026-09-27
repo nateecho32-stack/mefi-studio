@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/sync.mjs --hook",
+            "timeout": 45
+          }
+        ]
+      }
+    ]
+  }
+}

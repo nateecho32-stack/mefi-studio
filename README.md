@@ -149,6 +149,16 @@ The **Void Engine Discord** (<https://discord.gg/xgfKc5pVxG>) is where people sh
 
 A build whose Discord application id is not set yet offers only **Join** and the fork path. [docs/community.md](docs/community.md) covers the whole flow, what is stored where, and the maintainer's setup.
 
+## Working from several PCs
+
+GitHub is the meeting point. Each PC keeps its own clone, and the open project's default branch on GitHub is the one shared state.
+
+- **Friends › Your PCs** in the companion hub says whether this PC matches GitHub and lists anything that has not reached it yet: uncommitted files, unpushed commits, stashes, worktrees with changes, and branches that are not on `main`. Opening it only looks. **Sync this PC** pulls what your other PCs pushed and pushes this PC's commits on the default branch. It never overwrites uncommitted work, merges diverged histories or force-pushes.
+- **`npm run sync`** does the same from a terminal.
+- **Claude Code** runs `node scripts/sync.mjs --hook` at the start of each new session (`.claude/settings.json`). The hook fetches, fast-forwards `main` when it can, and hands the report to Claude. `AGENTS.md` has the working rules.
+
+Claude Code sessions, Claude's memory and local branches stay on the PC that made them. Anything another PC needs belongs on GitHub.
+
 ## Tests and checks
 
 ```powershell

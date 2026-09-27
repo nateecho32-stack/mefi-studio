@@ -39,6 +39,8 @@ app.whenReady().then(async () => {
     firstScan: { ok: true, plan: { ok: true, opencode: { installed: true, version: "1.0" }, providers: { linked: ["Local"], free: { count: 0 } }, explorer: { model: "local/explorer" } } },
     firstScanApply: { ok: true, summary: "Use the local connection." }, firstMap: { ok: true, summary: "A small project.", ideas: { added: 0 } }, firstAssist: { ok: true, advice: { summary: "Ready for our next step." } },
     assistantAnswer: { ok: true }, getAiRouting: { provider: "custom", models: {}, providerModels: {} }, cliStatus: [],
+    syncStatus: { ok: true, checkedAt: 1790000000000, headline: "GitHub has 2 commits this PC has not pulled yet.", lines: ["GitHub has 2 commits this PC has not pulled yet.", "Branch wip/a-very-long-branch-name-from-another-pc on GitHub: 3 commits not on main."], pending: [{ kind: "github-branch" }], state: { repo: true, remote: true, device: "DESKTOP-FIXTURE", behind: 2 } },
+    syncRun: { ok: true, checkedAt: 1790000060000, headline: "This PC matches GitHub main.", lines: ["This PC matches GitHub main.", "Pulled 2 commits from GitHub."], pending: [], state: { repo: true, remote: true, device: "DESKTOP-FIXTURE", behind: 0 } },
   };
   const preload = path.join(root, "preload.cjs");
   fs.writeFileSync(preload, `const {contextBridge}=require('electron');const replies=${JSON.stringify(replies)},calls=[];let chatReply;const api=Object.fromEntries(Object.keys(replies).map(key=>[key,async(...args)=>{calls.push({key,args});return replies[key];}]));api.assistantMessage=(...args)=>{calls.push({key:'assistantMessage',args});return new Promise(resolve=>{chatReply=resolve;});};contextBridge.exposeInMainWorld('mefiStudio',api);contextBridge.exposeInMainWorld('hubFixture',{calls:()=>calls,completeChat:ok=>{chatReply?.({ok,error:ok?undefined:'Try again when connected.'});chatReply=null;},setState:state=>{replies.companionState.state=state;}});localStorage.setItem('mefiStudio.commandHome','0');localStorage.setItem('mefiStudio.motion','on');localStorage.setItem('mefiStudio.zen','0');localStorage.setItem('mefiStudio.zenReactive','0');`);
@@ -101,6 +103,14 @@ app.whenReady().then(async () => {
   assert.equal(await run("return document.querySelector('.agent-hub-avatar').dataset.mood;"), "thinking", "reported agent work also animates");
   await run("hubFixture.setState('resting');await window.MefiCompanion.refresh();");
   assert.equal(await run("return document.querySelector('.agent-hub-avatar .agent-reaction')?.textContent;"), "^_^"); report.thinking = true;
+  await escape(); await click('[data-hub-section="friends"]');
+  await until("document.querySelector('#agent-hub .pc-sync')?.dataset.state==='pending'", "Friends › Your PCs looks");
+  assert.deepEqual(await run("return hubFixture.calls().filter(call=>call.key.startsWith('sync')).map(call=>call.key);"), ["syncStatus"], "opening Friends only looks");
+  await capture("08-friends-pcs");
+  await click("#pc-sync-run");
+  await until("document.querySelector('#agent-hub .pc-sync')?.dataset.state==='clean'", "Sync this PC");
+  assert.equal(await run("return window.MefiCompanionHub.isOpen() && document.getElementById('pc-sync-status').textContent;"), "This PC matches GitHub main.", "the answer lands inside the hub");
+  await capture("09-friends-synced"); report.pcs = true;
   await escape(); await click('[data-hub-section="settings"]');
   await click('[data-companion-setting="look"] + button');
   await until("document.querySelector('.studio-choice-popup')", "owned select");
@@ -128,7 +138,11 @@ app.whenReady().then(async () => {
     assert.ok(await run("return [...document.querySelectorAll('.agent-hub-node, .agent-hub-center')].every(el=>{const r=el.getBoundingClientRect();return r.width>0&&r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1;});"), `bubble bounds at ${width}/${zoom}`);
     await click('[data-hub-section="ask"]'); await sleep(450);
     assert.ok(await run("const el=document.querySelector('#companion-pane-ask textarea');el.scrollIntoView({block:'nearest'});const r=el.getBoundingClientRect();return r.width>0&&r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1;"), "chat stays reachable");
-    await escape();
+    await escape(); await run("if(!window.MefiCompanionHub.isOpen())window.MefiCompanionHub.open();window.MefiCompanionHub.back();"); await sleep(300);
+    await click('[data-hub-section="friends"]'); await until("document.getElementById('pc-sync-run')", `Friends at ${width}/${zoom}`); await sleep(450);
+    assert.ok(await run("const el=document.getElementById('pc-sync-run');el.scrollIntoView({block:'nearest'});await new Promise(r=>requestAnimationFrame(r));const r=el.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);const card=document.querySelector('#agent-hub .pc-sync').getBoundingClientRect();return r.width>0&&r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1&&(hit===el||el.contains(hit))&&card.left>=0&&card.right<=innerWidth+1;"), `Sync this PC reachable at ${width}/${zoom}`);
+    await capture(`10-friends-${width}-${zoom}`);
+    await run("window.MefiCompanionHub.back();"); await sleep(200);
   }
   report.layouts = true;
   await finish();

@@ -188,6 +188,10 @@ const api = {
   } : null),
   hubNowPlaying: (track) => ipcRenderer.invoke("hub:now-playing", { track: track && typeof track === "object" ? { label: String(track.label ?? ""), provider: String(track.provider ?? ""), ...(typeof track.url === "string" ? { url: track.url } : {}) } : null }),
   onHubEvent: (callback) => ipcRenderer.on("hub:event", (_event, payload) => callback(payload)),
+  // Friends › Your PCs (main.cjs "Multi-PC sync"): the open project against
+  // its default branch on GitHub. No payload; main picks the folder.
+  syncStatus: () => ipcRenderer.invoke("sync:status"),
+  syncRun: () => ipcRenderer.invoke("sync:run"),
   machineStatus: (kill) => ipcRenderer.invoke("machine:status", { kill: Boolean(kill) }),
   machineGet: () => ipcRenderer.invoke("machine:get"),
   machineSet: (prefs) => ipcRenderer.invoke("machine:set", prefs),
