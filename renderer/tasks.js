@@ -466,6 +466,9 @@
       focusNarrowDetail();
     });
     li.addEventListener("keydown", (event) => {
+      // Keys bubbling from the row's own buttons (Mark done, Reopen) belong
+      // to those buttons: preventing them here selected the row instead.
+      if (event.target !== li) return;
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
         li.click();
@@ -1715,7 +1718,8 @@
     group("PNG evidence", out, result.pngs ?? [], (png) => {
       const li = document.createElement("li");
       const img = document.createElement("img");
-      img.src = encodeURI("file:///" + png.path.replace(/\\/g, "/"));
+      // encodeURI keeps # and ?, which would cut a path like C#\... short.
+      img.src = encodeURI("file:///" + png.path.replace(/\\/g, "/")).replace(/#/g, "%23").replace(/\?/g, "%3F");
       img.alt = png.name;
       img.style.maxWidth = "100%";
       img.style.borderRadius = "8px";

@@ -8,6 +8,11 @@
 // treats this pass as covering everything discoverTargets finds, so a new
 // script or renderer file cannot slip out of the gate.
 //
+// renderer/*.js is the one exception to Node's rule: those files never load
+// as modules. build-booklet inlines them into one classic <script>, so they
+// compile as classic scripts. Checked as modules, a stray export or top-level
+// await passed the gate and then broke the whole booklet script block.
+//
 // Module source needs vm.SourceTextModule, which Node keeps behind
 // --experimental-vm-modules. Launched without it, the script relaunches
 // itself once with the flag; if Node refuses the flag it falls back to a
@@ -59,6 +64,7 @@ export function formatFor(file) {
   const ext = extname(file);
   if (ext === ".cjs") return "commonjs";
   if (ext === ".mjs") return "module";
+  if (ext === ".js" && /(^|[\\/])renderer[\\/][^\\/]+$/.test(file)) return "classic";
   let dir = dirname(resolve(file));
   for (;;) {
     if (existsSync(join(dir, "package.json"))) {
@@ -78,6 +84,7 @@ function compile(file, source, format) {
   // CommonJS wrapper compiles a function body, so blank it in place.
   const code = source.replace(/^\uFEFF/, "").replace(/^#!/, "//");
   if (format === "module") new vm.SourceTextModule(code, { identifier: file });
+  else if (format === "classic") new vm.Script(code, { filename: file });
   else vm.compileFunction(code, CJS_PARAMS, { filename: file });
 }
 
@@ -189,7 +196,12 @@ export async function main(argv = process.argv.slice(2)) {
   if (pkgIdx !== -1 && argv[pkgIdx + 1]) packageRoot = resolve(argv[pkgIdx + 1]);
   const explicit = argv.filter((arg, index) => !arg.startsWith("--") && argv[index - 1] !== "--package");
   const files = explicit.length ? explicit : discoverTargets(packageRoot);
-  const needsModules = files.some((file) => formatFor(resolve(packageRoot, file)) !== "commonjs");
+  const moduleFormat = (file) => ["module", "detect"].includes(formatFor(resolve(packageRoot, file)));
+  const needsModules = files.some(moduleFormat);
+  // Without vm modules only module sources need a `node --check` process:
+  // CommonJS and classic renderer scripts still compile in-process, since
+  // node --check would read a renderer .js as a module.
+  const fallback = async () => [...checkFiles(packageRoot, files.filter((file) => !moduleFormat(file))), ...await checkWithNode(packageRoot, files.filter(moduleFormat))];
   let mode = "in-process";
   let failures;
   if (!needsModules || vmModulesAvailable()) {
@@ -198,10 +210,10 @@ export async function main(argv = process.argv.slice(2)) {
     const child = spawnSync(process.execPath, [...VM_MODULE_FLAGS, fileURLToPath(import.meta.url), ...argv], { stdio: "inherit", env: { ...process.env, [RELAUNCHED]: "1" } });
     if (!child.error && typeof child.status === "number") return child.status;
     mode = "node --check";
-    failures = await checkWithNode(packageRoot, files);
+    failures = await fallback();
   } else {
     mode = "node --check";
-    failures = await checkWithNode(packageRoot, files);
+    failures = await fallback();
   }
   for (const { file, error } of failures) console.error(describeError(file, error));
   if (failures.length) {

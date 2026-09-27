@@ -217,6 +217,11 @@ async function mergeBack(worktree) {
   // queue); git's own index.lock serializes against other processes, and a
   // lock race retries. Every terminal state except success KEEPS the branch,
   // so no run outcome is ever silently dropped.
+  // A merge already in progress in the shared tree belongs to someone else (a
+  // person or another session resolving conflicts): never merge into it, and
+  // never let the abort below reset their staged resolution.
+  const mergeInProgress = async () => (await runGit(worktree.root, ["rev-parse", "-q", "--verify", "MERGE_HEAD"])).code === 0;
+  if (await mergeInProgress()) return { merged: false, reason: "the shared tree has a merge in progress" };
   for (const delay of [0, 250, 1500]) {
     if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
     const merged = await runGit(worktree.root, ["merge", "--no-edit", worktree.branch]);
@@ -231,10 +236,13 @@ async function mergeBack(worktree) {
       await runGit(worktree.root, ["branch", "-d", worktree.branch]);
       return { merged: true, upToDate: /already up to date/i.test(merged.stdout) };
     }
-    await runGit(worktree.root, ["merge", "--abort"]); // no-op when no merge started
+    // Only this call's own half-done merge is aborted (checked above that none
+    // was in progress before it).
+    if (await mergeInProgress()) await runGit(worktree.root, ["merge", "--abort"]);
     if (/index\.lock/i.test(merged.stderr)) continue;
     const lines = merged.stderr.trim().split(/\r?\n/).filter((line) => line.trim());
-    return { merged: false, reason: lines[0] || (CONFLICT.test(merged.stderr) ? "merge conflict" : "merge failed") };
+    // Git reports CONFLICT lines on stdout, not stderr.
+    return { merged: false, reason: lines[0] || (CONFLICT.test(`${merged.stdout}\n${merged.stderr}`) ? "merge conflict" : "merge failed") };
   }
   return { merged: false, reason: "index.lock stayed busy through retries" };
 }

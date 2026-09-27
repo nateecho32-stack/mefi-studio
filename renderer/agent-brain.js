@@ -1951,7 +1951,9 @@
     companion.bubble.textContent = text;
     besideOrb(companion.bubble);
     companion.bubble.hidden = false;
-    setTimeout(() => { if (companion.bubble) companion.bubble.hidden = true; }, 12000);
+    // One hide timer: a leftover one from the previous bubble hid this one early.
+    clearTimeout(companion.bubbleTimer);
+    companion.bubbleTimer = setTimeout(() => { if (companion.bubble) companion.bubble.hidden = true; }, 12000);
   }
 
   window.MefiCompanion = { open: () => toggleCompanion(true), close: () => toggleCompanion(false), refresh: () => refreshCompanion(true), state: () => companion.state };

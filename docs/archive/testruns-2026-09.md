@@ -6,6 +6,43 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-26 late evening - Occlusion probe capability gate covers detected-but-unsustained throttling (task_fd15e09800325362)
+
+The rAF-silence assertion failed in the worktree (growth 17) and in an
+isolated HEAD host/booklet (growth 23), so the failure predated every current
+edit. Investigating desktop capability detection first, as dispatched,
+confirmed an environment cause: the same fixture passed strictly (growth 0)
+between failures, and every failing measure showed occlusion detected via
+document.hidden and then the page reading visible again under a still-shown,
+still-topmost cover while Win32 foreground churned (Edge, later Discord with
+idleMs 0) - the tracker un-marks covered windows mid-measure on an actively
+used desktop, and a page cannot flip its own document.hidden back.
+
+tests/fixtures/occlusion-probe-electron.cjs now corroborates before failing
+when the occluded measure catches rAF advancing: the probe page holding focus
+(foreground exemption), the cover no longer shown, the page reading visible
+again (tracker un-marked), and otherwise a blank control window given the
+same visible-to-covered transition - shown inactive above the cover, proven
+painting, then dropped below it, because a window born under the cover never
+receives the transition and was observed painting (growth 38 in 3s) beside a
+properly throttled growth-0 booklet. A control that also keeps painting
+records occlusionUnstable and exits cleanly; a control that stays silent with
+its counter proven alive once raised keeps the strict failure as a real
+page-defeats-throttling regression with the evidence attached; errored or
+never-painting controls are inconclusive and change nothing.
+tests/occlusion_probe.test.mjs skips on the new record with the explicit
+cause, the same information-not-regression treatment as occlusionUnsupported.
+
+Validation: node --test tests/occlusion_probe.test.mjs passed strictly first
+(occlusion via document.hidden, growth 0), then a live unstable episode
+skipped cleanly with the record showing growth 9, the page visible
+mid-measure, cover shown and on top and itself holding Win32 foreground - the
+same signature as the reported growth 17/23 failures. A forced-corroboration
+scratch copy exercised the control machinery end to end (engaged via
+document.hidden, coveredGrowth 0, counter proven when raised) and was
+removed afterwards. No production sources changed; the worktree's unrelated
+shared edits were untouched.
+
 ## 2026-09-26 - Scroll-control follow-up verifies the completed shared full gate
 
 The later shared-checkout npm test run in %TEMP%/mefi-media-full.log completed

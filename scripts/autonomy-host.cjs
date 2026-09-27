@@ -252,7 +252,7 @@ function createAutonomyHost(io) {
         const settled = rows(state().questions).some((question) => question.context?.taskId === task.id && ["answered", "dismissed"].includes(question.status)
           && Number(question.answer?.at ?? question.at) >= Number(item.at));
         if (settled) continue;
-        const kind = Number(task.verifyAttempts) >= 3 ? "verify" : "run-failed";
+        const kind = Number(task.verifyAttempts) >= 3 || task.verification?.state === "failed" ? "verify" : "run-failed";
         const question = io.question(issues.questionForIssue({ kind, source: "host", taskId: task.id, taskTitle: task.title, title: item.title, attempts: task.runFailures ?? 0 }, { now: now() }));
         if (question) questions.push(question);
       }

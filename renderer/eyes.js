@@ -243,7 +243,8 @@
   }
 
   function imageUrl(filePath) {
-    return encodeURI("file:///" + filePath.replace(/\\/g, "/"));
+    // encodeURI keeps # and ?, which would cut a path like C#\... short.
+    return encodeURI("file:///" + filePath.replace(/\\/g, "/")).replace(/#/g, "%23").replace(/\?/g, "%3F");
   }
 
   function loadPng(filePath) {

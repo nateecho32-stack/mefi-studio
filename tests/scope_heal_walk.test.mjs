@@ -75,7 +75,7 @@ test("the heal locator walks each root once, remembers misses, and serves settle
   const root = await tree(t, ["src/moved/board.js", "src/panel.js"]);
   const walks = [];
   const env = vm.createContext({
-    Map, Set, Date, statSync, projectRoot: () => root,
+    Map, Set, Date, statSync, path, projectRoot: () => root,
     findBasenamesUnderRoot: async (walkRoot, bases) => { walks.push([walkRoot, [...bases].sort()]); return new Map([...bases].filter((base) => base === "board.js").map((base) => [base, path.join(root, "src/moved/board.js")])); },
   });
   vm.runInContext(`${section("const SCOPE_HEAL_INTERVAL_MS", "async function healBoardFileScopes(")}\nthis.scopeMisses = scopeMisses;`, env);
@@ -88,6 +88,10 @@ test("the heal locator walks each root once, remembers misses, and serves settle
   const { exists, locate } = await env.staleScopeLocator(tasks, now);
   assert.deepEqual(walks, [[root, ["board.js", "notes.lua"]]], "one walk for every missing name under the root");
   assert.equal(exists(path.join(root, "src/panel.js")), true);
+  // Delegated subtasks keep project-relative paths: checked against the
+  // process cwd they all read as missing and were re-anchored by basename.
+  assert.equal(exists("src/panel.js", tasks[0]), true, "a project-relative path is checked under its task's root");
+  assert.equal(exists("src/panel.js", { projectPath: path.join(root, "src") }), false, "the task's own root is the base");
   assert.equal(locate("board.js", tasks[0]), path.join(root, "src/moved/board.js"));
   assert.equal(locate("notes.lua", tasks[1]), null);
   assert.equal(locate("unwalked.js", tasks[1]), null, "a name no walk covered is not found");

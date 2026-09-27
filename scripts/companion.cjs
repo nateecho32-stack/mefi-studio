@@ -81,7 +81,9 @@ function taskNeed(task, now) {
   }
   if (!isQueued(task)) return null;
   const cooling = num(task.nextRunAt) > now;
-  const parked = num(task.parkedAt) > 0 || num(task.verifyAttempts) >= PARK_VERIFY_ATTEMPTS || num(task.runFailures) >= PARK_RUN_FAILURES;
+  // A failed verdict parks the card after any attempt (backlog.workState and
+  // the assistant read it the same way), not only after the third.
+  const parked = num(task.parkedAt) > 0 || num(task.verifyAttempts) >= PARK_VERIFY_ATTEMPTS || num(task.runFailures) >= PARK_RUN_FAILURES || task.verification?.state === "failed";
   // A hold (the owner's stop, or the keeper's loop hold) is listed before a
   // park: a card both held and parked must read as held, or whoever re-arms
   // parked cards (the desk) would lift the owner's own stop.
@@ -128,7 +130,7 @@ function digest({ events = [], tasks = [], since, now, needsYouIds = [] } = {}) 
   for (const task of byId.values()) {
     const id = String(task.id);
     if (failed.has(id) || finished.has(id) || !isQueued(task) || num(task.nextRunAt) > end) continue;
-    if (num(task.verifyAttempts) < PARK_VERIFY_ATTEMPTS) continue;
+    if (num(task.verifyAttempts) < PARK_VERIFY_ATTEMPTS && task.verification?.state !== "failed") continue;
     const at = Math.max(num(task.parkedAt), num(task.lastAttempt?.at));
     if (at >= from && at > 0) failed.set(id, { taskId: id, title: titleOf(id), at });
   }

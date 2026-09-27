@@ -5634,7 +5634,9 @@ const INTENT_RULES = [
   // the keeper's tidy knows nothing about the queue at all. Both directions
   // match ("clean the queue" and "the queue is a mess"), and a statement
   // counts as a request for action here because that is what the pass is for.
-  ["compact", /(?=.*\b(?:queue|backlog|inbox|requests?)\b)(?=.*\b(?:clear|clean|tidy|compact\w*|dedupe|drain|empty|purge|prune|shrink|trim|sort|fix|mess|stuck|bloated)\b)/],
+  // Anchored: an unanchored pair of `.*` lookaheads retries from every
+  // position, quadratic on a long message in the main process.
+  ["compact", /^(?=.*\b(?:queue|backlog|inbox|requests?)\b)(?=.*\b(?:clear|clean|tidy|compact\w*|dedupe|drain|empty|purge|prune|shrink|trim|sort|fix|mess|stuck|bloated)\b)/],
   ["tidy", /\b(clean|cleanup|cleaning|tidy|tidying|clear|prune|archive)\b/],
   ["fix", /\b(fix|fixes|fixing|repair|problems?|broken|heal)\b/],
   ["organize", /\b(organi[sz]\w*|tree|fold|layout)\b/],
@@ -6558,7 +6560,6 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
         // Small talk: greet, report the lay of the land, offer real next work.
         lines.push("Hello.");
         lines.push(compactStatus({ sessions, collisions, tasks, ideas }));
-        if (focusLine) lines.push(focusLine);
         const picks = suggestWork({ ...source, now });
         lines.push(
           picks.length
@@ -6826,9 +6827,13 @@ export function buildFacts({ sessions = null, todos = null, collisions = null, p
           }))
           .filter((row) => row.file)
       : null,
+    // Live cards first: the store keeps archived rows, and a bare first-40 cut
+    // hid open work behind them from replies, picks and counts.
     tasks: Array.isArray(tasks)
-      ? tasks
-          .filter(isObject)
+      ? [
+          ...tasks.filter((task) => isObject(task) && !["done", "archived"].includes(task.status)),
+          ...tasks.filter((task) => isObject(task) && ["done", "archived"].includes(task.status)),
+        ]
           .slice(0, 40)
           .map((task) => ({
             id: str(task.id),

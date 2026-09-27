@@ -1252,6 +1252,24 @@ export function filePresence({ dbPath = DEFAULT_DB, windowMs = ACTIVE_EDIT_MS, s
 // git status --porcelain=v1. Deleted paths are the opposite of this signal
 // (HEAD still has them); keep modified/added/untracked so a feature that
 // only exists in the working tree is not treated as already in HEAD.
+//
+// Git C-quotes a path holding spaces, quotes, backslashes or non-ASCII bytes
+// ("caf\303\251.js": octal escapes are UTF-8 bytes), and quotes each side of a
+// rename on its own, so a rename is split before either side is unquoted.
+const GIT_C_ESCAPES = { a: 7, b: 8, t: 9, n: 10, v: 11, f: 12, r: 13 };
+export function unquoteGitPath(field) {
+  const text = String(field ?? "");
+  if (!(text.length > 1 && text.startsWith('"') && text.endsWith('"'))) return text;
+  const bytes = [];
+  for (const [token, escaped] of text.slice(1, -1).matchAll(/\\([0-7]{1,3}|[\s\S])|[^\\]+/g)) {
+    if (escaped === undefined) bytes.push(...Buffer.from(token, "utf8"));
+    else if (/^[0-7]/.test(escaped)) bytes.push(parseInt(escaped, 8) & 0xff);
+    else bytes.push(GIT_C_ESCAPES[escaped] ?? escaped.charCodeAt(0));
+  }
+  return Buffer.from(bytes).toString("utf8");
+}
+const RENAME_FIELDS = /^("(?:[^"\\]|\\.)*"|.*?) -> ("(?:[^"\\]|\\.)*"|.*)$/;
+
 export function parsePorcelain(text) {
   const rows = [];
   for (const raw of String(text ?? "").split(/\r?\n/)) {
@@ -1259,15 +1277,14 @@ export function parsePorcelain(text) {
     if (line.length < 4 || line[2] !== " ") continue;
     const index = line[0];
     const worktree = line[1];
-    let rest = line.slice(3);
-    if (rest.startsWith('"') && rest.endsWith('"')) rest = rest.slice(1, -1).replace(/\\"/g, '"');
+    const rest = line.slice(3);
     let orig = null;
-    let filePath = rest;
+    let filePath = unquoteGitPath(rest);
     const renamed = index === "R" || index === "C" || worktree === "R" || worktree === "C";
-    const arrow = rest.indexOf(" -> ");
-    if (renamed && arrow >= 0) {
-      orig = rest.slice(0, arrow);
-      filePath = rest.slice(arrow + 4);
+    const pair = renamed ? RENAME_FIELDS.exec(rest) : null;
+    if (pair) {
+      orig = unquoteGitPath(pair[1]);
+      filePath = unquoteGitPath(pair[2]);
     }
     const untracked = index === "?" && worktree === "?";
     const deleted = (index === "D" || worktree === "D") && !untracked;
@@ -1336,7 +1353,10 @@ export async function commitEvidence({ root, hash, paths = [], run = runGit } = 
   }
   try {
     const scope = (Array.isArray(paths) ? paths : []).filter((value) => typeof value === "string" && value.trim());
-    const status = await run("git", ["-C", root, "status", "--porcelain=v1", ...(scope.length ? ["--", ...scope] : [])], { encoding: "utf8", timeout: 8000, windowsHide: true });
+    // Pathspecs match case-sensitively even where the filesystem is not: on
+    // Windows a scope spelled in another case matched nothing and read clean.
+    const pathspec = (value) => (process.platform === "win32" ? `:(icase)${value}` : value);
+    const status = await run("git", ["-C", root, "status", "--porcelain=v1", ...(scope.length ? ["--", ...scope.map(pathspec)] : [])], { encoding: "utf8", timeout: 8000, windowsHide: true });
     if (!status || status.status !== 0) return { hash: resolved, clean: null, error: "path status could not be read" };
     return { hash: resolved, clean: String(status.stdout ?? "").trim().length === 0 };
   } catch (error) {
@@ -1370,7 +1390,10 @@ export function uncommittedOnly({ porcelain = "", sessions = [], changes = [], r
     const file = joinRoot(root, row.path);
     const holders = uniqueIds(
       sessionFiles
-        .filter((hit) => samePath(hit.file, file) || samePath(hit.file, row.path))
+        // The suffix match is for a session's relative path only: an absolute
+        // one elsewhere (a worker's worktree copy, another project with the
+        // same layout) must not be credited with this tree's dirty file.
+        .filter((hit) => samePath(hit.file, file) || (!/^([a-zA-Z]:)?[\\/]/.test(String(hit.file)) && samePath(hit.file, row.path)))
         .map((hit) => hit.sessionId)
     );
     if (!holders.length) continue;

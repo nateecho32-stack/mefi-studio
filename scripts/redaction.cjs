@@ -50,7 +50,9 @@ const LINUX_HOME = /(?<![\w.-])\/home\/[^\\/\r\n"'<>|?*\s]+/g;
 
 const PRIVATE_KEY = /-----BEGIN [\s\S]*?PRIVATE KEY-----[\s\S]*?(?:-----END [\s\S]*?PRIVATE KEY-----|$)/g;
 const KEY_SHAPES = /\b(?:sk-[a-zA-Z0-9_-]{16,}|gh[pousr]_[a-zA-Z0-9_]{16,}|AKIA[A-Z0-9]{16})\b/g;
-const ASSIGNED_SECRET = /((?:password|secret|token|api[_-]?key|authorization)["']?\s*[=:]\s*)(?:["'][^"'\r\n]*["']|[^\s,;}]+)/gi;
+// An auth scheme word is kept and the credential after it masked:
+// "Authorization: Bearer <token>" used to mask only the word Bearer.
+const ASSIGNED_SECRET = /((?:password|secret|token|api[_-]?key|authorization)["']?\s*[=:]\s*(?:(?:bearer|basic|token)\s+)?)(?:["'][^"'\r\n]*["']|[^\s,;}]+)/gi;
 const URL_BASIC_AUTH = /(https?:\/\/)[^\s/@]+:[^\s/@]+@/gi;
 
 /** Replace credential-shaped text. Shared by both exports. */

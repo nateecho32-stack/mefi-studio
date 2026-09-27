@@ -2776,7 +2776,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .ws-work-list { overflow-y: auto; min-height: 90px; flex: 1; padding: 2px 5px 2px 2px; overscroll-behavior: contain; scroll-padding-block: 4px; }
 .ws-work-card { width: 100%; min-width: 0; display: flex; flex-direction: column; align-items: stretch; white-space: normal; text-align: left; background: var(--panel-solid); border: 1px solid var(--hairline); border-left: 3px solid #536146; border-radius: 9px; padding: 12px 13px; gap: 6px; margin-bottom: 9px; }
 .ws-work-card > * { max-width: 100%; min-width: 0; }
-.ws-work-card:hover { border-color: var(--hairline-strong); background: var(--tint-gold-2); }
+.ws-work-card:hover { border-top-color: var(--hairline-strong); border-right-color: var(--hairline-strong); border-bottom-color: var(--hairline-strong); background: var(--tint-gold-2); }
 .workspace .ws-work-open { display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 0; width: 100%; padding: 0; border: 0; border-radius: 3px; background: none; color: inherit; text-align: left; white-space: normal; box-shadow: none; }
 .ws-work-open > * { min-width: 0; max-width: 100%; }
 .workspace .ws-work-open:hover { background: none; color: inherit; }
@@ -4132,14 +4132,16 @@ html[data-shell="rail"] .settings-card { scroll-margin-top: var(--s4); }
    plain boxes on the page. */
 .settings-control input[type="checkbox"][role="switch"] {
   appearance: none; position: relative; width: 34px; height: 18px; margin: 0;
-  border: 1px solid var(--hairline); border-radius: var(--r-sm); background: #1a1a20; cursor: pointer;
+  border: 1px solid var(--hairline-strong); border-radius: var(--r-sm); background: color-mix(in srgb, var(--ivory) 10%, transparent); cursor: pointer;
   transition: background var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease);
 }
 .settings-control input[type="checkbox"][role="switch"]::after {
   content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%;
   background: var(--muted); transition: transform var(--dur-2) var(--ease), background var(--dur-2) var(--ease);
 }
-.settings-control input[type="checkbox"][role="switch"]:checked { background: rgba(201, 168, 106, 0.22); border-color: var(--gold-dim); }
+/* The .switch track's own theme-aware colours: the fixed gold-theme RGB and
+   near-black off track read wrong in every other theme. */
+.settings-control input[type="checkbox"][role="switch"]:checked { background: color-mix(in srgb, var(--gold) 24%, transparent); border-color: var(--gold-dim); }
 .settings-control input[type="checkbox"][role="switch"]:checked::after { transform: translateX(16px); background: var(--gold-bright); }
 .settings-control input[type="checkbox"][role="switch"]:disabled { opacity: .55; cursor: default; }
 .settings-control input[type="checkbox"][role="switch"]:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 3px; }
@@ -4978,8 +4980,6 @@ body.command-zen :is(#app-rail, #app-local-nav) { opacity: 0; pointer-events: no
 .workspace .ws-compose-bottom > span { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; color: var(--muted); }
 .workspace .ws-compose-bottom button { font-size: 12px; padding-inline: 12px; }
 .workspace .ws-compose-bottom .primary { border-radius: 10px; font-weight: 600; }
-#workspace-layer .primary { background: var(--ivory); border-color: transparent; color: var(--on-ivory); box-shadow: none; }
-#workspace-layer .primary:not(:disabled, [aria-disabled="true"]):is(:hover, :focus-visible) { background: color-mix(in srgb, var(--ivory) 88%, #ffffff); box-shadow: none; }
 .workspace .ghost { border-color: #ffffff16; box-shadow: none; }
 .workspace .ws-feedback-row { order: 1; flex-wrap: wrap; min-width: 0; padding-bottom: 8px; }
 .workspace .ws-feedback { min-width: 0; flex: 1 1 200px; white-space: normal; }
@@ -5072,11 +5072,8 @@ html[data-shell="rail"] body:has(#workspace-layer:not([hidden])):not(:has(.works
   .workspace .ws-compose-top { gap: 8px; }
   .workspace .ws-thread:has(.ws-welcome) { height: auto; }
 }
-/* Primary actions: Home's ivory button on every grey surface. The Command
-   view keeps the theme's accent fill, and a destructive primary stays red.
-   The id in :not() outranks music.css's themed and premium .primary fills. */
-.primary:not(#idle-hud *, .danger) { background: var(--ivory); border-color: transparent; color: var(--on-ivory); box-shadow: none; filter: none; }
-.primary:not(#idle-hud *, .danger):not(:disabled, [aria-disabled="true"]):is(:hover, :focus-visible) { background: color-mix(in srgb, var(--ivory) 88%, #ffffff); box-shadow: none; }
+/* Primary actions are styled in studio-ui.css, which loads after this sheet
+   with the same selectors (the ivory fills that stood here never applied). */
 @media print {
   #app-rail, #app-local-nav { display: none; }
   html[data-shell="rail"] body { padding-left: 0; padding-top: 0; }
@@ -7463,10 +7460,18 @@ html[data-studio-style] :is(.sheet, .explorer-sheet, .brains-sheet, .agent-brain
   background: var(--studio-wash), var(--studio-sheen), var(--studio-panel-bg);
   border-color: var(--studio-glass-edge); box-shadow: var(--studio-glass-shadow); backdrop-filter: var(--studio-glass-blur);
 }
-html[data-studio-style] :is(.panel, .card, .plan-strip, .settings-card, .agents-card, .agents-model-row, .task-overview-card, .lab-usage-card, .tracker-section, .ws-workflow, .ws-work-card, .ws-idea-card, .ws-backlog, .ws-dash-tile) {
+html[data-studio-style] :is(.panel, .card, .plan-strip, .settings-card, .agents-card, .agents-model-row, .task-overview-card, .lab-usage-card, .tracker-section, .ws-workflow, .ws-idea-card, .ws-backlog, .ws-dash-tile) {
   background: var(--studio-sheen), var(--studio-panel-bg);
   border-color: var(--studio-glass-edge); box-shadow: var(--studio-glass-shadow);
   border-radius: var(--r-lg);
+}
+/* Home work cards take the same glass on three edges only: the left edge is
+   their status stripe, set per stage in styles.css, which a whole-border
+   glass colour here outranked on every card. */
+html[data-studio-style] .ws-work-card {
+  background: var(--studio-sheen), var(--studio-panel-bg);
+  border-top-color: var(--studio-glass-edge); border-right-color: var(--studio-glass-edge); border-bottom-color: var(--studio-glass-edge);
+  box-shadow: var(--studio-glass-shadow); border-radius: var(--r-lg);
 }
 /* Settings' .panel is only a layout wrapper: its nav and cards carry their own glass, and it starts clear of the page header. */
 html[data-studio-style] .settings-panel { background: transparent; border: 0; box-shadow: none; }
@@ -7486,7 +7491,7 @@ html[data-studio-style] .sheet-head.plain { background: transparent; backdrop-fi
 html[data-studio-style] table#table th { background: var(--studio-menu-fill); backdrop-filter: var(--studio-menu-blur); }
 
 /* Floating menus are readable over both the scene and another page of text. */
-html[data-studio-style] :is(.pop, .palette-sheet, .studio-choice-popup, .surface-tools-menu, .studio-more-links, .studio-more > .tools-cluster, .brains-menu, .brains-search-panel, .brains-dialog-panel, .brains-shortcuts-panel, .music-dropdown, .companion-panel, .companion-bubble, .tree-tip, .tip, .profiler-hud, .toast, .legend-list, .feed-drop),
+html[data-studio-style] :is(.pop, .palette-sheet, .studio-choice-popup, .surface-tools-menu, .studio-more-links, .studio-more > .tools-cluster, .brains-menu, .brains-search-panel, .brains-dialog-panel, .brains-shortcuts-panel, .music-dropdown, .companion-panel, .companion-bubble, .tree-tip, .tip, .profiler-hud, .toast, .legend-list, .feed-drop, .autonomy-popover),
 #app-help-menu, .agents-nav-subsections, .workspace .ws-project-actions > div {
   background: var(--studio-wash), var(--studio-sheen), var(--studio-float-fill);
   border-color: var(--studio-glass-edge); backdrop-filter: var(--studio-float-blur);
@@ -7519,7 +7524,9 @@ html[data-studio-style] :is(input[type=text], input[type=search], input[type=pas
   background: var(--studio-field-bg); color: var(--ivory); border-color: var(--studio-glass-edge);
 }
 html[data-studio-style] :is(input, textarea)::placeholder { color: var(--muted); opacity: 1; }
-html[data-studio-style] :is(input, textarea, select, .studio-select):focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+/* One focus indicator: the outline replaces the base --ring shadow here,
+   which otherwise drew a second ring inside it. */
+html[data-studio-style] :is(input, textarea, select, .studio-select):focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; box-shadow: none; }
 /* Native fallback options cannot blur their system-owned popup. */
 select option, select optgroup { background: var(--theme-panel-solid); color: var(--ivory); }
 button, .button { font-family: var(--font-ui); }
@@ -7851,15 +7858,17 @@ html[data-studio-style] .catalog-model { border-radius: var(--r-lg); }
 .file-drop-active { outline: 2px solid var(--gold); outline-offset: 2px; }
 
 /* Shared permission controls: compact in the composer, complete in Settings. */
-.autonomy-control { position: relative; color: var(--text, #e6eaf1); font: inherit; min-width: 0; }
+/* Theme tokens, not one theme's colours: --text was never defined, so the
+   controls fell back to near-white text on light themes too. */
+.autonomy-control { position: relative; color: var(--ivory); font: inherit; min-width: 0; }
 .autonomy-control h3, .autonomy-history h3, .autonomy-skills h3 { margin: 8px 0 14px; font-size: 15px; }
 .autonomy-button { border: 1px solid rgba(170,190,210,.2); border-radius: 10px; padding: 8px 12px; background: rgba(110,140,180,.09); color: inherit; font: inherit; cursor: pointer; }
 .autonomy-button:hover, .autonomy-button[aria-checked="true"], .autonomy-button[aria-pressed="true"] { background: rgba(110,175,210,.2); border-color: rgba(130,200,230,.55); }
-.autonomy-button:focus-visible { outline: 2px solid #8ecbdf; outline-offset: 2px; }
+.autonomy-button:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
 .autonomy-button:disabled { opacity: .5; cursor: default; }
 .autonomy-chip { white-space: nowrap; border-radius: 20px; }
 .autonomy-chip::after { content: " ▾"; opacity: .6; }
-.autonomy-popover { position: absolute; z-index: 20; bottom: calc(100% + 10px); left: 0; width: min(340px, 80vw); padding: 10px; border-radius: 16px; border: 1px solid rgba(180,205,230,.25); background: #17242e; box-shadow: 0 16px 60px #0008; display: grid; gap: 6px; }
+.autonomy-popover { position: absolute; z-index: 20; bottom: calc(100% + 10px); left: 0; width: min(340px, 80vw); padding: 10px; border-radius: 16px; border: 1px solid var(--hairline-strong); background: var(--panel-solid); box-shadow: 0 16px 60px #0008; display: grid; gap: 6px; }
 .autonomy-popover[hidden] { display: none; }
 .autonomy-mode { text-align: left; display: block; width: 100%; }
 .autonomy-mode small, .autonomy-check small { display: block; margin-top: 4px; font-size: 11px; line-height: 1.4; opacity: .7; font-weight: 400; }
@@ -7873,7 +7882,7 @@ html[data-studio-style] .catalog-model { border-radius: var(--r-lg); }
 .autonomy-check { display: flex; align-items: flex-start; gap: 9px; margin: 12px 0; font-size: 13px; }
 .autonomy-check input { margin-top: 3px; accent-color: #9cd7da; }
 .autonomy-field { display: grid; grid-template-columns: 1fr; gap: 6px; margin: 12px 0; font-size: 12px; }
-.autonomy-field select { min-width: 0; width: 100%; padding: 8px; border-radius: 8px; color: inherit; background: #17242e; border: 1px solid #aac4d233; }
+.autonomy-field select { min-width: 0; width: 100%; padding: 8px; border-radius: 8px; color: inherit; background: var(--panel-solid); border: 1px solid var(--hairline-strong); }
 .autonomy-warning { margin: 9px 0; padding: 12px; border-radius: 12px; background: #7c412333; border: 1px solid #d3936044; font-size: 12px; }
 .autonomy-warning button { margin: 4px; }
 .autonomy-tabs { display: flex; gap: 5px; margin: 10px 0; }
@@ -7886,7 +7895,7 @@ html[data-studio-style] .catalog-model { border-radius: var(--r-lg); }
 .autonomy-skills table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .autonomy-skills th, .autonomy-skills td { text-align: left; padding: 8px; border-bottom: 1px solid #aac4d222; overflow-wrap: anywhere; }
 .autonomy-settings-dialog { width: min(560px, 92vw); max-height: 85vh; overflow-y: auto; background: #17242e; color: #e6eaf1; border: 1px solid #aac4d244; border-radius: 18px; padding: 22px; }
-.autonomy-settings-dialog::backdrop { background: #07101b99; backdrop-filter: blur(8px); }
+.autonomy-settings-dialog::backdrop { background: var(--scrim); backdrop-filter: var(--scrim-blur); }
 
 /* A little light, a trailing wisp, and expressions made of floating text. */
 .agent-creature { display: block; width: 100%; height: 100%; overflow: visible; color: var(--gold-bright); pointer-events: none; }
@@ -18512,6 +18521,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     return scores.unknown;
   }
 
+  // Fetched catalog text (names, vendors, endpoint labels) is escaped before
+  // it reaches innerHTML.
+  const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[c]);
+
   function privacyLabel(model) {
     if (!model.privacy) return "unknown";
     if (model.privacy.training) return "trains on data";
@@ -18817,17 +18830,17 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       .map((m) => {
         const cap = m.usage?.monthlyCapUSD;
         return `<tr>
-          <td><b>${m.name}</b>${m.onRoster ? "" : " <span class='muted'>(not on roster)</span>"}</td>
-          <td>${m.vendor}</td>
+          <td><b>${esc(m.name)}</b>${m.onRoster ? "" : " <span class='muted'>(not on roster)</span>"}</td>
+          <td>${esc(m.vendor)}</td>
           <td class="num">${fmt.money(m.typicalCostUSD)}</td>
-          <td class="num">${m.quality?.index ?? "—"}</td>
+          <td class="num">${esc(m.quality?.index ?? "—")}</td>
           <td class="num">${fmt.int(reqH5(m) === Infinity ? "unlimited" : reqH5(m))}</td>
           <td class="num">${fmt.pool(cap)}</td>
           <td class="num">${fmt.ctx(m.limits?.context)}</td>
           <td class="num">${fmt.money(m.pricing?.default?.input)}</td>
           <td class="num">${fmt.money(m.pricing?.default?.output)}</td>
           <td>${privacyLabel(m)}</td>
-          <td>${m.endpoint?.label ?? "—"}</td>
+          <td>${esc(m.endpoint?.label ?? "—")}</td>
         </tr>`;
       })
       .join("");
@@ -18840,9 +18853,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       .slice(0, 6)
       .map(
         (entry, index) => `<li>
-          <div class="rank-head"><span>${index + 1}. <b>${entry.model.name}</b></span><b>${Math.round(entry.score * 100)}</b></div>
+          <div class="rank-head"><span>${index + 1}. <b>${esc(entry.model.name)}</b></span><b>${Math.round(entry.score * 100)}</b></div>
           <div class="meter"><i style="width:${Math.round(entry.score * 100)}%"></i></div>
-          <div class="why">${entry.why}</div>
+          <div class="why">${esc(entry.why)}</div>
         </li>`
       )
       .join("");
@@ -18856,7 +18869,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const rankEl = document.getElementById("rank");
     const tableBody = document.getElementById("table-body");
 
-    taskSelect.innerHTML = doc.taskPresets.map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
+    taskSelect.innerHTML = doc.taskPresets.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("");
 
     let points = [];
     let tableSort = { key: "quality", dir: -1 };
@@ -18895,7 +18908,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       }
       const m = hit.model;
       const measured = speeds[m.id]?.tokensPerSecond;
-      tip.innerHTML = `<b>${m.name}</b><br>${m.vendor} · ${fmt.money(m.typicalCostUSD)}/req · AA ${m.quality.index}${m.quality.indexVersion ? " " + m.quality.indexVersion : ""}<br>${fmt.int(reqH5(m) === Infinity ? "unlimited" : reqH5(m))} req/5h · ${fmt.ctx(m.limits?.context)} ctx<br>${privacyLabel(m)}${measured ? `<br>measured ${measured} t/s on your machine` : ""}`;
+      tip.innerHTML = `<b>${esc(m.name)}</b><br>${esc(m.vendor)} · ${fmt.money(m.typicalCostUSD)}/req · AA ${esc(m.quality.index)}${m.quality.indexVersion ? " " + esc(m.quality.indexVersion) : ""}<br>${fmt.int(reqH5(m) === Infinity ? "unlimited" : reqH5(m))} req/5h · ${fmt.ctx(m.limits?.context)} ctx<br>${privacyLabel(m)}${measured ? `<br>measured ${measured} t/s on your machine` : ""}`;
       tip.style.left = Math.min(window.innerWidth - 300, event.clientX + 14) + "px";
       tip.style.top = event.clientY + 12 + "px";
       tip.hidden = false;
@@ -19205,6 +19218,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     $("context-budget").addEventListener("change", previewContext);
     window.addEventListener("mefi:project-changed", () => {
       state.contextRead += 1; state.taskRead += 1; state.read += 1; state.at = 0; state.tasks = []; state.snapshot = null; state.types.clear();
+      // A read cut off by this switch no longer owns the button (its finally
+      // checks the token just bumped), so it is released here.
+      $("refresh").disabled = false;
       $("task-type").value = "";
       $("context-task").value = ""; $("context-sections").replaceChildren();
       if (!document.getElementById("tab-graph")?.hidden) { refresh(); if (state.view === "context") show("context"); }
@@ -20025,7 +20041,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       state.read += 1;
       state.at = 0;
       state.report = null;
-      refresh({ force: true, probe: false });
+      // A read already under way belongs to the old project and is dropped by
+      // the token bump above; refresh would hand that read back instead of
+      // starting one, so read again once it settles.
+      const again = () => refresh({ force: true, probe: false });
+      if (state.pending) state.pending.then(again, again);
+      else again();
     });
   }
 
@@ -30223,6 +30244,14 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const questions = railQuestions(full);
     const open = questions.filter((question) => question.status === "open");
     const closed = questions.filter((question) => question.status !== "open").slice(-5);
+    // renderFeed repaints this list several times a second while a worker
+    // streams; a half-typed answer, its chosen option and focus survive it.
+    const drafts = new Map();
+    for (const input of el.askList.querySelectorAll?.(".ask-card .ask-custom input") ?? []) {
+      const id = input.closest?.(".ask-card")?.dataset.questionId;
+      const focused = input === document.activeElement;
+      if (id && (input.value || input.dataset.option || focused)) drafts.set(id, { value: input.value, option: input.dataset.option || "", placeholder: input.placeholder, focused, start: input.selectionStart, end: input.selectionEnd });
+    }
     el.askList.textContent = "";
     if (!questions.length) {
       const empty = document.createElement("li");
@@ -30241,12 +30270,24 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       el.askList.append(divider);
     }
     for (const question of closed) el.askList.append(askCard(question));
+    for (const card of drafts.size ? el.askList.querySelectorAll?.(".ask-card") ?? [] : []) {
+      const draft = drafts.get(card.dataset.questionId);
+      const input = draft && card.querySelector(".ask-custom input");
+      if (!input) continue;
+      input.value = draft.value;
+      if (draft.option) { input.dataset.option = draft.option; input.placeholder = draft.placeholder; }
+      if (draft.focused) {
+        input.focus({ preventScroll: true });
+        try { input.setSelectionRange(draft.start ?? draft.value.length, draft.end ?? draft.value.length); } catch {}
+      }
+    }
     if (el.askState) el.askState.textContent = open.length ? `${open.length} waiting` : questions.length ? "All answered" : "Nothing waiting";
   }
 
   function askCard(question) {
     const card = document.createElement("li");
     card.className = "ask-card";
+    if (question.id) card.dataset.questionId = question.id;
     card.dataset.kind = question.kind === "suggestion" ? "suggestion" : "question";
     card.dataset.status = question.status ?? "open";
     const head = document.createElement("div");
@@ -30333,11 +30374,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
           desc.textContent = option.description;
           button.append(desc);
         }
-        button.addEventListener("click", () => { if (option.text || option.action?.action === "instruct") { selectedTextOption = option.id; input.placeholder = "Your one-line answer…"; input.focus(); } else void answerQuestion(question.id, option.id, null, button); });
+        button.addEventListener("click", () => { if (option.text || option.action?.action === "instruct") { input.dataset.option = option.id; input.placeholder = "Your one-line answer…"; input.focus(); } else void answerQuestion(question.id, option.id, null, button); });
         options.append(button);
       }
       card.append(options);
-      let selectedTextOption = null;
+      // The chosen text option rides on the input, so renderAsks can carry
+      // it across a repaint with the draft.
       const custom = document.createElement("form");
       custom.className = "ask-custom";
       const input = document.createElement("input");
@@ -30352,7 +30394,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       custom.addEventListener("submit", (event) => {
         event.preventDefault();
         const text = input.value.trim();
-        if (text) void answerQuestion(question.id, selectedTextOption, text, send);
+        if (text) void answerQuestion(question.id, input.dataset.option || null, text, send);
       });
       card.append(custom);
       // Whether a decision reaches you at all is a node in the live brain
@@ -34781,7 +34823,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const path = state.pngs[Math.floor(Math.random() * state.pngs.length)];
     const image = document.createElement("img");
     image.className = "idle-pop";
-    image.src = encodeURI("file:///" + path.replace(/\\/g, "/"));
+    // encodeURI keeps # and ?, which would cut a path like C#\... short.
+    image.src = encodeURI("file:///" + path.replace(/\\/g, "/")).replace(/#/g, "%23").replace(/\?/g, "%3F");
     image.style.setProperty("--x", `${(10 + Math.random() * 62).toFixed(2)}%`);
     image.style.setProperty("--y", `${(12 + Math.random() * 58).toFixed(2)}%`);
     image.style.setProperty("--tilt", `${(Math.random() * 10 - 5).toFixed(1)}deg`);
@@ -43431,6 +43474,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       focusNarrowDetail();
     });
     li.addEventListener("keydown", (event) => {
+      // Keys bubbling from the row's own buttons (Mark done, Reopen) belong
+      // to those buttons: preventing them here selected the row instead.
+      if (event.target !== li) return;
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
         li.click();
@@ -44680,7 +44726,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     group("PNG evidence", out, result.pngs ?? [], (png) => {
       const li = document.createElement("li");
       const img = document.createElement("img");
-      img.src = encodeURI("file:///" + png.path.replace(/\\/g, "/"));
+      // encodeURI keeps # and ?, which would cut a path like C#\... short.
+      img.src = encodeURI("file:///" + png.path.replace(/\\/g, "/")).replace(/#/g, "%23").replace(/\?/g, "%3F");
       img.alt = png.name;
       img.style.maxWidth = "100%";
       img.style.borderRadius = "8px";
@@ -45060,7 +45107,17 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     value && typeof value === "object" && typeof value.preventDefault !== "function" ? value : {};
 
   function save() {
-    window.mefiStudio?.ideasSave?.(state.ideas);
+    // A refused or failed save (ideas from another project, a store error)
+    // says so and reloads, rather than leaving edits on screen that never
+    // landed or an unhandled rejection.
+    const projectId = state.projectId;
+    const failed = (message) => {
+      if (projectId !== state.projectId) return;
+      window.MefiToast?.(message || "Couldn't save the idea.", "bad");
+      void load();
+    };
+    Promise.resolve(window.mefiStudio?.ideasSave?.(state.ideas))
+      .then((result) => { if (result?.ok === false) failed(result.error); }, (error) => failed(error?.message));
     updateBadge();
     renderList();
     drawGraph();
@@ -50661,7 +50718,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
 
   function imageUrl(filePath) {
-    return encodeURI("file:///" + filePath.replace(/\\/g, "/"));
+    // encodeURI keeps # and ?, which would cut a path like C#\... short.
+    return encodeURI("file:///" + filePath.replace(/\\/g, "/")).replace(/#/g, "%23").replace(/\?/g, "%3F");
   }
 
   function loadPng(filePath) {
@@ -51084,7 +51142,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
   async function read() {
     if (!api()?.traceRead) { status("Trace reads Studio's logs in the desktop app."); return; }
-    if (state.reading) return state.reading;
+    // A channel or filter change mid-read reads once more afterwards: the
+    // in-flight request carries the old settings and its result is dropped.
+    if (state.reading) { state.again = true; return state.reading; }
+    // The reset rides a chained finally, which always runs after this
+    // assignment: an in-body finally ran first when traceRead threw before its
+    // first await, and the settled promise then stood in for every read.
     state.reading = (async () => {
       try {
         const result = await api().traceRead({ channel: state.channel, tail: state.tail, text: state.text, problems: state.problems, level: state.level, sources: state.sources.length ? state.sources : null });
@@ -51093,8 +51156,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         render();
       } catch (error) {
         status(error?.message || "The log could not be read.", "bad");
-      } finally { state.reading = null; }
-    })();
+      }
+    })().finally(() => {
+      state.reading = null;
+      if (state.again) { state.again = false; void read(); }
+    });
     return state.reading;
   }
   function schedule() {
@@ -62792,7 +62858,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     companion.bubble.textContent = text;
     besideOrb(companion.bubble);
     companion.bubble.hidden = false;
-    setTimeout(() => { if (companion.bubble) companion.bubble.hidden = true; }, 12000);
+    // One hide timer: a leftover one from the previous bubble hid this one early.
+    clearTimeout(companion.bubbleTimer);
+    companion.bubbleTimer = setTimeout(() => { if (companion.bubble) companion.bubble.hidden = true; }, 12000);
   }
 
   window.MefiCompanion = { open: () => toggleCompanion(true), close: () => toggleCompanion(false), refresh: () => refreshCompanion(true), state: () => companion.state };
@@ -65515,12 +65583,16 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     els.banner.hidden = false;
   }
 
+  // Catalog text is fetched (models.dev names, roster ids), so every data
+  // field is escaped before it reaches innerHTML.
+  const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[c]);
+
   function badgeHtml(model) {
     const badges = [];
     if (model.usage?.unlimited) badges.push('<span class="badge free">free ∞</span>');
     else if (model.pricing?.default?.input === 0) badges.push('<span class="badge free">free</span>');
     if (model.usage?.monthlyCapUSD === 15) badges.push('<span class="badge premium">$15 pool</span>');
-    if (model.usage?.promo) badges.push(`<span class="badge new">${model.usage.promo}</span>`);
+    if (model.usage?.promo) badges.push(`<span class="badge new">${esc(model.usage.promo)}</span>`);
     if (model.legacy) badges.push('<span class="badge legacy">legacy</span>');
     if (model.experimental) badges.push('<span class="badge new">experimental</span>');
     if (model.privacy?.training) badges.push('<span class="badge trains">trains</span>');
@@ -65530,7 +65602,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
 
   function statHtml(key, value, sub) {
-    return `<div class="stat"><div class="k">${key}</div><div class="v">${value}</div><div class="s">${sub ?? ""}</div></div>`;
+    return `<div class="stat"><div class="k">${esc(key)}</div><div class="v">${esc(value)}</div><div class="s">${esc(sub)}</div></div>`;
   }
 
   function cardHtml(model) {
@@ -65540,21 +65612,21 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const pool = model.usage?.monthlyCapUSD === "unlimited" ? "∞" : model.usage?.monthlyCapUSD != null ? "$" + model.usage.monthlyCapUSD + "/mo" : "—";
     const variantRows = (model.variants ?? [])
       .map(
-        (v) => `<tr><td>${v.condition}</td><td class="num">${fmt.money(v.input)}</td><td class="num">${fmt.money(v.output)}</td><td class="num">${v.cacheRead != null ? fmt.money(v.cacheRead) : "—"}</td></tr>`
+        (v) => `<tr><td>${esc(v.condition)}</td><td class="num">${fmt.money(v.input)}</td><td class="num">${fmt.money(v.output)}</td><td class="num">${v.cacheRead != null ? fmt.money(v.cacheRead) : "—"}</td></tr>`
       )
       .join("");
-    const benchmarks = (model.quality?.benchmarks ?? []).map((b) => `<li>${b}</li>`).join("");
-    const modalities = model.capabilities?.modalities?.input?.join(" + ") ?? "—";
-    return `<article class="card catalog-row" data-id="${model.id}">
+    const benchmarks = (model.quality?.benchmarks ?? []).map((b) => `<li>${esc(b)}</li>`).join("");
+    const modalities = esc(model.capabilities?.modalities?.input?.join(" + ") ?? "—");
+    return `<article class="card catalog-row" data-id="${esc(model.id)}">
       <details class="catalog-model"><summary class="catalog-summary">
       <div class="card-head">
-        <div><h3>${model.name}</h3><div class="vendor">${model.vendor} · opencode-go/${model.id}</div></div>
+        <div><h3>${esc(model.name)}</h3><div class="vendor">${esc(model.vendor)} · opencode-go/${esc(model.id)}</div></div>
         <div class="badges">${badgeHtml(model)}</div>
       </div>
-      <div class="catalog-metrics"><span><small>Cost / request</small><b>${fmt.money(model.typicalCostUSD)}</b></span><span><small>Quality</small><b>${model.quality?.index ?? "—"}</b></span><span><small>Context</small><b>${fmt.ctx(model.limits?.context)}</b></span></div>
+      <div class="catalog-metrics"><span><small>Cost / request</small><b>${fmt.money(model.typicalCostUSD)}</b></span><span><small>Quality</small><b>${esc(model.quality?.index ?? "—")}</b></span><span><small>Context</small><b>${fmt.ctx(model.limits?.context)}</b></span></div>
       <span class="catalog-expand" aria-hidden="true">⌄</span></summary>
       <div class="catalog-body">
-      <p class="verdict">${model.verdict ?? "No curated verdict yet."}</p>
+      <p class="verdict">${esc(model.verdict ?? "No curated verdict yet.")}</p>
       <div class="stat-grid">
         ${statHtml("$ / request", fmt.money(model.typicalCostUSD), "typical mix")}
         ${statHtml("Quality", model.quality?.index ?? "—", model.quality?.declared === "AA" ? `AA II ${model.quality.indexVersion ?? ""}`.trim() : "unmeasured")}
@@ -65564,8 +65636,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         ${statHtml("$/1M", price ? fmt.money(price.input) + " in" : "—", price ? fmt.money(price.output) + " out" : "")}
       </div>
       <div class="use-avoid">
-        ${(model.useFor ?? []).map((u) => `<span>${u}</span>`).join("")}
-        ${(model.avoidFor ?? []).map((a) => `<span class="avoid">${a}</span>`).join("")}
+        ${(model.useFor ?? []).map((u) => `<span>${esc(u)}</span>`).join("")}
+        ${(model.avoidFor ?? []).map((a) => `<span class="avoid">${esc(a)}</span>`).join("")}
       </div>
       <details>
         <summary>All specifications</summary>
@@ -65573,12 +65645,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
           <tr><th>standard price</th><td class="num">${price ? fmt.money(price.input) + " in / " + fmt.money(price.output) + " out / " + fmt.money(price.cacheRead) + " cached" : "—"}</td></tr>
           ${variantRows ? `<tr><th>variants</th><td class="num"><table class="detail"><tr><th>condition</th><th class="num">in</th><th class="num">out</th><th class="num">cached</th></tr>${variantRows}</table></td></tr>` : ""}
           <tr><th>requests</th><td>${requests ? `5h ${fmt.int(requests.h5)} · week ${fmt.int(requests.week)} · month ${fmt.int(requests.month)}` : "—"}</td></tr>
-          <tr><th>privacy</th><td>${privacyLabel(model)}${model.privacy?.note ? " — " + model.privacy.note : ""}</td></tr>
+          <tr><th>privacy</th><td>${esc(privacyLabel(model))}${model.privacy?.note ? " — " + esc(model.privacy.note) : ""}</td></tr>
           <tr><th>input</th><td>${modalities}</td></tr>
-          <tr><th>endpoint</th><td>${model.endpoint ? model.endpoint.label + " · " + model.endpoint.sdk : "—"}</td></tr>
+          <tr><th>endpoint</th><td>${model.endpoint ? esc(model.endpoint.label) + " · " + esc(model.endpoint.sdk) : "—"}</td></tr>
           <tr><th>tools / reasoning</th><td>${model.capabilities?.toolCall === false ? "no" : "yes"} / ${model.capabilities?.reasoning === false ? "no" : "yes"}</td></tr>
           ${benchmarks ? `<tr><th>benchmarks</th><td><ul>${benchmarks}</ul></td></tr>` : ""}
-          <tr><th>released</th><td>${model.releaseDate ?? "—"}${model.knowledge ? " · knowledge " + model.knowledge : ""}</td></tr>
+          <tr><th>released</th><td>${esc(model.releaseDate ?? "—")}${model.knowledge ? " · knowledge " + esc(model.knowledge) : ""}</td></tr>
           ${state.speeds[model.id] ? `<tr><th>measured</th><td>${state.speeds[model.id].tokensPerSecond ?? "—"} t/s · ${new Date(state.speeds[model.id].measuredAt).toLocaleString()} · measured on your machine</td></tr>` : ""}
         </table>
       </details>

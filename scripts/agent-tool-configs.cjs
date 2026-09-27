@@ -7,7 +7,10 @@ const { SAFE_PATH } = require("./desk-server.cjs");
 const tools = require("./agent-tools.cjs");
 async function prepare({ root, settings, desk, script, dir = os.tmpdir(), node = process.execPath }) {
   const folder = await fs.mkdtemp(path.join(dir, "mefi-tools-"));
-  if (!SAFE_PATH.test(folder)) { await fs.rmdir(folder); throw new Error("Studio tools need a temporary path without shell metacharacters or spaces."); }
+  // A temp path with a space or shell metacharacter (C:\Users\John Smith\...)
+  // cannot carry the attachment. Throwing failed every dispatch's prompt
+  // build; like desk-server's writeRunConfigs, run without it instead.
+  if (!SAFE_PATH.test(folder)) { await fs.rmdir(folder); return null; }
   const files = { folder, opencode: path.join(folder, "opencode.json"), claude: path.join(folder, "claude.json") };
   try {
     const config = path.join(folder, "policy.json");

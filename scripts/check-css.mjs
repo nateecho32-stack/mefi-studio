@@ -50,7 +50,9 @@ function parseNodes(css, from = 0, to = css.length) {
       if (c === "{") depth++;
       else if (c === "}") { depth--; if (depth === 0) break; }
     }
-    if (depth !== 0) break;
+    // An unclosed brace used to end the parse quietly, so every rule after it
+    // vanished from the unused and cascade gates, which then passed.
+    if (depth !== 0) throw new Error("unbalanced '{' at offset " + brace);
     const header = css.slice(headerStart, brace).trim();
     if (!header) throw new Error("empty selector header parsed at offset " + brace);
     nodes.push({ header, start: headerStart, braceStart: brace, end: j + 1, isAt: header.startsWith("@") });

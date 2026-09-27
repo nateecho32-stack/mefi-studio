@@ -7,6 +7,31 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- Bug-hunt fixes across the host, tooling and renderer.
+  **Project switches** no longer write one project's assistant state, reply
+  or verification result into another. **Stop all** no longer re-runs a reply
+  that finished anyway, and one Ask answer can't apply twice. **Torn store
+  files** with multi-field records are salvaged instead of reset. **Updates**:
+  the Update button can't start a second download, "Updated to vX" is no
+  longer re-announced on every restart, installed apps receive the new model
+  catalog, and release zips carry no local data. MCP servers
+  configured as `npx` (a `.cmd` shim) start on Windows. **Privacy**: tool
+  transcripts and scout payloads are redacted before JSON-escaping, and
+  `Authorization: Bearer` tokens are masked. **Work tracking**: hung LÖVE test
+  runs are recognised on Windows again; board file refs schedule their focused
+  tests; delegated tasks' relative file scopes keep their files; quoted and
+  non-ASCII git paths are read correctly; a worker's worktree edits are no
+  longer blamed on the main tree; evidence scopes match file names in any
+  case on Windows. **Screens**: a typed Ask answer survives the rail
+  repainting; Enter on a task row's Mark done marks it done; evidence images
+  under `#` or `?` folders load; Trace, Usage and Model Lab recover after a
+  mid-read switch; model catalog text is escaped; Home work cards show their
+  status stripe again; Settings switches and the autonomy controls follow the
+  theme; focused fields show one focus ring. Only one LÖVE launcher run can
+  be open at a time, and stopping Server Styler during setup is a stop, not
+  an "install failed". `check-syntax` now checks renderer files as the classic
+  scripts the booklet runs them as.
+
 - A polish pass on long-untouched menus. **Search Studio** names Settings
   choices properly ("Motion › Full", "Node style › Classic orbs") instead of
   running their words together. **Analyzer** never leaves Findings or

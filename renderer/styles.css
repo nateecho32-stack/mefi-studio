@@ -2766,7 +2766,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .ws-work-list { overflow-y: auto; min-height: 90px; flex: 1; padding: 2px 5px 2px 2px; overscroll-behavior: contain; scroll-padding-block: 4px; }
 .ws-work-card { width: 100%; min-width: 0; display: flex; flex-direction: column; align-items: stretch; white-space: normal; text-align: left; background: var(--panel-solid); border: 1px solid var(--hairline); border-left: 3px solid #536146; border-radius: 9px; padding: 12px 13px; gap: 6px; margin-bottom: 9px; }
 .ws-work-card > * { max-width: 100%; min-width: 0; }
-.ws-work-card:hover { border-color: var(--hairline-strong); background: var(--tint-gold-2); }
+.ws-work-card:hover { border-top-color: var(--hairline-strong); border-right-color: var(--hairline-strong); border-bottom-color: var(--hairline-strong); background: var(--tint-gold-2); }
 .workspace .ws-work-open { display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 0; width: 100%; padding: 0; border: 0; border-radius: 3px; background: none; color: inherit; text-align: left; white-space: normal; box-shadow: none; }
 .ws-work-open > * { min-width: 0; max-width: 100%; }
 .workspace .ws-work-open:hover { background: none; color: inherit; }
@@ -4122,14 +4122,16 @@ html[data-shell="rail"] .settings-card { scroll-margin-top: var(--s4); }
    plain boxes on the page. */
 .settings-control input[type="checkbox"][role="switch"] {
   appearance: none; position: relative; width: 34px; height: 18px; margin: 0;
-  border: 1px solid var(--hairline); border-radius: var(--r-sm); background: #1a1a20; cursor: pointer;
+  border: 1px solid var(--hairline-strong); border-radius: var(--r-sm); background: color-mix(in srgb, var(--ivory) 10%, transparent); cursor: pointer;
   transition: background var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease);
 }
 .settings-control input[type="checkbox"][role="switch"]::after {
   content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%;
   background: var(--muted); transition: transform var(--dur-2) var(--ease), background var(--dur-2) var(--ease);
 }
-.settings-control input[type="checkbox"][role="switch"]:checked { background: rgba(201, 168, 106, 0.22); border-color: var(--gold-dim); }
+/* The .switch track's own theme-aware colours: the fixed gold-theme RGB and
+   near-black off track read wrong in every other theme. */
+.settings-control input[type="checkbox"][role="switch"]:checked { background: color-mix(in srgb, var(--gold) 24%, transparent); border-color: var(--gold-dim); }
 .settings-control input[type="checkbox"][role="switch"]:checked::after { transform: translateX(16px); background: var(--gold-bright); }
 .settings-control input[type="checkbox"][role="switch"]:disabled { opacity: .55; cursor: default; }
 .settings-control input[type="checkbox"][role="switch"]:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 3px; }
@@ -4968,8 +4970,6 @@ body.command-zen :is(#app-rail, #app-local-nav) { opacity: 0; pointer-events: no
 .workspace .ws-compose-bottom > span { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; color: var(--muted); }
 .workspace .ws-compose-bottom button { font-size: 12px; padding-inline: 12px; }
 .workspace .ws-compose-bottom .primary { border-radius: 10px; font-weight: 600; }
-#workspace-layer .primary { background: var(--ivory); border-color: transparent; color: var(--on-ivory); box-shadow: none; }
-#workspace-layer .primary:not(:disabled, [aria-disabled="true"]):is(:hover, :focus-visible) { background: color-mix(in srgb, var(--ivory) 88%, #ffffff); box-shadow: none; }
 .workspace .ghost { border-color: #ffffff16; box-shadow: none; }
 .workspace .ws-feedback-row { order: 1; flex-wrap: wrap; min-width: 0; padding-bottom: 8px; }
 .workspace .ws-feedback { min-width: 0; flex: 1 1 200px; white-space: normal; }
@@ -5062,11 +5062,8 @@ html[data-shell="rail"] body:has(#workspace-layer:not([hidden])):not(:has(.works
   .workspace .ws-compose-top { gap: 8px; }
   .workspace .ws-thread:has(.ws-welcome) { height: auto; }
 }
-/* Primary actions: Home's ivory button on every grey surface. The Command
-   view keeps the theme's accent fill, and a destructive primary stays red.
-   The id in :not() outranks music.css's themed and premium .primary fills. */
-.primary:not(#idle-hud *, .danger) { background: var(--ivory); border-color: transparent; color: var(--on-ivory); box-shadow: none; filter: none; }
-.primary:not(#idle-hud *, .danger):not(:disabled, [aria-disabled="true"]):is(:hover, :focus-visible) { background: color-mix(in srgb, var(--ivory) 88%, #ffffff); box-shadow: none; }
+/* Primary actions are styled in studio-ui.css, which loads after this sheet
+   with the same selectors (the ivory fills that stood here never applied). */
 @media print {
   #app-rail, #app-local-nav { display: none; }
   html[data-shell="rail"] body { padding-left: 0; padding-top: 0; }

@@ -63,7 +63,7 @@ function createDeskServer({ handle, token = crypto.randomBytes(24).toString("hex
 
   async function start() {
     if (listening) return listening;
-    listening = new Promise((resolve, reject) => {
+    const attempt = new Promise((resolve, reject) => {
       server = http.createServer(onRequest);
       server.on("error", reject);
       server.listen(0, host, () => {
@@ -71,6 +71,13 @@ function createDeskServer({ handle, token = crypto.randomBytes(24).toString("hex
         resolve({ url: `http://${host}:${server.address().port}/desk`, token });
       });
     });
+    // A failed listen is forgotten, so the next start tries again instead of
+    // handing back the same rejection until stop().
+    listening = attempt.catch((error) => {
+      if (listening === guarded) { listening = null; server = null; }
+      throw error;
+    });
+    const guarded = listening;
     return listening;
   }
 

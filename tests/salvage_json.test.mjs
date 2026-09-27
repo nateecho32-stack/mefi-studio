@@ -78,3 +78,15 @@ test("writePins lands atomically and reaps only stale tmp siblings", async () =>
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("a torn array of multi-field records cuts at a top-level element boundary", () => {
+  // Commas inside each record (and its nested arrays) are not element
+  // boundaries: depth counts both bracket kinds.
+  const records = [{ id: "a", title: "x", logs: [1, 2, 3], refs: { k: 1, j: 2 } }, { id: "b", title: "y", logs: [4, 5] }, { id: "c", title: "z", logs: [6] }];
+  const full = JSON.stringify(records, null, 2);
+  for (const cut of [5, 15, 25, 40]) {
+    const got = salvage(full.slice(0, full.length - cut), []);
+    assert.deepEqual(got?.map((row) => row.id), ["a", "b"], `cut ${cut}`);
+  }
+  assert.deepEqual(salvage('{"a":[1,2],"b":{"c":1},"d":[3,', {}), { a: [1, 2], b: { c: 1 } });
+});

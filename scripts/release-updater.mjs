@@ -311,7 +311,7 @@ async function* walkFiles(root, prefix = "") {
 // CRC ride in a data descriptor (general purpose bit 3), and the central
 // directory closes the archive. `rootName` wraps every entry in one top-level
 // folder, which is how a portable release zip carries "Mefi Studio AI+/".
-export async function zipDirectory(sourceDir, zipPath, { rootName = path.basename(sourceDir) } = {}) {
+export async function zipDirectory(sourceDir, zipPath, { rootName = path.basename(sourceDir), include = null } = {}) {
   const info = await stat(sourceDir);
   if (!info.isDirectory()) throw new Error(`not a directory: ${sourceDir}`);
   await mkdir(path.dirname(zipPath), { recursive: true });
@@ -328,6 +328,7 @@ export async function zipDirectory(sourceDir, zipPath, { rootName = path.basenam
   const central = [];
   try {
     for await (const rel of walkFiles(sourceDir)) {
+      if (typeof include === "function" && !include(String(rel).replace(/\\/g, "/"))) continue;
       const full = path.join(sourceDir, rel);
       const fileInfo = await stat(full);
       if (!fileInfo.isFile()) continue;
@@ -581,6 +582,12 @@ export function buildApplyScript({ sourceRoot, installRoot, exePath, pid, versio
     `$copyArgs = @(('"' + $source + '"'), ('"' + $target + '"'), '/E', '/R:5', '/W:2', '/XD', ('"' + $skip + '"'), '/NFL', '/NDL', '/NJH', '/NJS', '/NP')`,
     `$copy = Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\\robocopy.exe') -ArgumentList $copyArgs -Wait -PassThru -WindowStyle Hidden`,
     "Log ('robocopy exit ' + $copy.ExitCode)",
+    // The data exclusion above also skipped the two tracked catalog files the
+    // release ships; without this the host kept the first install's catalog
+    // while the new booklet baked in the new one. User state stays excluded.
+    `$catalogArgs = @(('"' + $skip + '"'), ('"' + (Join-Path $target 'resources\\app\\data') + '"'), 'curated.json', 'models.json', '/R:5', '/W:2', '/NFL', '/NDL', '/NJH', '/NJS', '/NP')`,
+    `$catalog = Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\\robocopy.exe') -ArgumentList $catalogArgs -Wait -PassThru -WindowStyle Hidden`,
+    "Log ('catalog robocopy exit ' + $catalog.ExitCode)",
     "Start-Sleep -Milliseconds 600",
     "Log ('relaunching ' + $exe)",
     version

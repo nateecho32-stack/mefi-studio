@@ -34,6 +34,38 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-27 - Whole-app bug hunt: host, tooling, renderer and design fixes
+
+Parallel review of main.cjs, preload, every host script, the build and
+release tooling, tools/ verifiers and the renderer found about 60 defects that
+were confirmed by reading the code and, for most, reproduced. They were fixed in one
+commit built in a separate clone on origin/main. Highlights: project switches no longer write another
+project's assistant state, reply or verification result; Stop all closes a
+continuation whose work finished; salvageJson counts both bracket kinds;
+release apply cannot run twice and --released is dropped on relaunch; tool
+transcripts are scrubbed before JSON escaping and Bearer tokens are masked;
+merge-back never aborts a merge it did not start; PowerShell CIM dates parse,
+so hung tests are detected; git porcelain paths are unquoted; MCP .cmd shims
+start on Windows; check-syntax compiles renderer files as classic scripts;
+release zips exclude local data; Home work cards show their stripe again.
+The CLI completion tree-kill and stdin fixes were superseded by
+scripts/cli-text.cjs (bc18748), which already does both.
+
+Validation on the rebased commit: npm run check passed, npm run audit returned 0
+findings, and lint had 0 errors with no new warnings in changed files. The previously red
+suites (role_provider_isolation, briefer_cli_failure, assistant_issue_host,
+usage_tracker, usage_tracker_host) passed, 103/103, and the updater Python
+contracts passed. Full npm test on the same change over bc18748: Node 3888
+passed, 4 skipped, and 9 failed, all nine being the known-red tests db15d74 fixed; they also fail
+on untouched aef5dfe. Electron stage: 37 passed, 1 skipped, and 1 failed: Unified
+Agents "keyboard scrolling remains native", which passed solo in 26 s (the
+known load-sensitive fixture). An earlier full run on aef5dfe had the tree-dynamics
+render fixture as its one Electron failure, and it also passed solo. Python contracts:
+the only failure was the known-red updater contract fixed by db15d74. New
+regression tests are porcelain_paths plus additions to salvage_json,
+outbound_privacy, verification_command_quoting, scope_heal_walk and
+check_syntax.
+
 ## 2026-09-27 morning - Handout rebroadcast dedupe: a heard note is not re-sent; AI-link retirement re-verified (task_plan_mujom5h3_0, run_1790505348418_7)
 
 Grouped A-Eyes alerts "Compactor rebroadcasts finished work item" (task_6e3c0afebf8489ff) and "Queue handout broadcast spam" (task_9645fd821b9d03bc). Member 1 is the stale work broadcast loop the sibling session already retired: inspected HEAD before touching anything and adopted 6f1ef62 as it stands (assistant.mjs aiLinkTicket/aiLinkHealthy/aiLinkResolved, the compact()/tidy() ai-block absorb, the resolvedAiLinkWork promotion guard); all four board.test.mjs retirement tests green and the live data/eyes-assistant.json read read-only confirms the loop is over (ai online true, failures 0, backoffUntil 0, requests 0), so no further piece was owed there. Member 2's general spam had a second half the retirement did not cover: sendMail only deduped identical UNREAD notes, so once the foreman read a handout (it reads its inbox every start) the compactor's next identical "N work item(s) ready — yours to hand out" landed as a fresh row, packet and chatter line every pass — the seven handouts in eleven minutes that kept coming after the briefer's rebuke. Fix: assistant.mjs exports MAIL_REBROADCAST_MS (15 min) and sendMail now returns the state unchanged for a repeat of the same note from the same seat while a read copy sits within that window, so host assistantSendMail reports it unsent and pushes nothing; changed handouts (a different count or next pick) and repeats after the window still go out, and the unread-refresh path is untouched. Tests: new module and host cases in tests/assistant_mail.test.mjs; node --test tests/assistant_mail.test.mjs tests/board.test.mjs tests/briefing_fix_requests.test.mjs 57 pass / 0 fail; node --test tests/request_dedupe tests/task_delegation tests/task_grouping_cleanup tests/idea_backlog tests/task_history tests/work_admission_host tests/request_admission tests/board_growth tests/assistant_loop tests/role_provider_isolation 137 pass / 0 fail; python tools/test_mefi_studio_assistant.py 66 OK; npm run check ok (165 targets); npm test all gates pass; npm run audit 0 errors / 0 warnings. Sibling work-tree hunks preserved untouched.
@@ -343,43 +375,6 @@ Ignored reports: tools/logs/live-20260926-2153-command*.json and
 tools/logs/live-20260926-native-callout-probe*.json. The one-off native
 collector is tools/logs/profile-native-timing-trial.mjs. A read-only final
 status check confirms the app's boot is complete and recording is stopped.
-
-## 2026-09-26 late evening - Occlusion probe capability gate covers detected-but-unsustained throttling (task_fd15e09800325362)
-
-The rAF-silence assertion failed in the worktree (growth 17) and in an
-isolated HEAD host/booklet (growth 23), so the failure predated every current
-edit. Investigating desktop capability detection first, as dispatched,
-confirmed an environment cause: the same fixture passed strictly (growth 0)
-between failures, and every failing measure showed occlusion detected via
-document.hidden and then the page reading visible again under a still-shown,
-still-topmost cover while Win32 foreground churned (Edge, later Discord with
-idleMs 0) - the tracker un-marks covered windows mid-measure on an actively
-used desktop, and a page cannot flip its own document.hidden back.
-
-tests/fixtures/occlusion-probe-electron.cjs now corroborates before failing
-when the occluded measure catches rAF advancing: the probe page holding focus
-(foreground exemption), the cover no longer shown, the page reading visible
-again (tracker un-marked), and otherwise a blank control window given the
-same visible-to-covered transition - shown inactive above the cover, proven
-painting, then dropped below it, because a window born under the cover never
-receives the transition and was observed painting (growth 38 in 3s) beside a
-properly throttled growth-0 booklet. A control that also keeps painting
-records occlusionUnstable and exits cleanly; a control that stays silent with
-its counter proven alive once raised keeps the strict failure as a real
-page-defeats-throttling regression with the evidence attached; errored or
-never-painting controls are inconclusive and change nothing.
-tests/occlusion_probe.test.mjs skips on the new record with the explicit
-cause, the same information-not-regression treatment as occlusionUnsupported.
-
-Validation: node --test tests/occlusion_probe.test.mjs passed strictly first
-(occlusion via document.hidden, growth 0), then a live unstable episode
-skipped cleanly with the record showing growth 9, the page visible
-mid-measure, cover shown and on top and itself holding Win32 foreground - the
-same signature as the reported growth 17/23 failures. A forced-corroboration
-scratch copy exercised the control machinery end to end (engaged via
-document.hidden, coveredGrowth 0, counter proven when raised) and was
-removed afterwards. No production sources changed; the worktree's unrelated
-shared edits were untouched.
 
 ## Read Before Any Tests
 

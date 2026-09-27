@@ -13,7 +13,17 @@
     value && typeof value === "object" && typeof value.preventDefault !== "function" ? value : {};
 
   function save() {
-    window.mefiStudio?.ideasSave?.(state.ideas);
+    // A refused or failed save (ideas from another project, a store error)
+    // says so and reloads, rather than leaving edits on screen that never
+    // landed or an unhandled rejection.
+    const projectId = state.projectId;
+    const failed = (message) => {
+      if (projectId !== state.projectId) return;
+      window.MefiToast?.(message || "Couldn't save the idea.", "bad");
+      void load();
+    };
+    Promise.resolve(window.mefiStudio?.ideasSave?.(state.ideas))
+      .then((result) => { if (result?.ok === false) failed(result.error); }, (error) => failed(error?.message));
     updateBadge();
     renderList();
     drawGraph();

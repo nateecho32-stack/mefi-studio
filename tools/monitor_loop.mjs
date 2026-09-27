@@ -439,6 +439,14 @@ const options = {
   firstOutputMs: number("--first-output", FIRST_OUTPUT_MS, { min: 0, max: 900000 }),
   mode: value("--mode", "swarm"),
 };
+// Checked before the simulation, not after it: a separator-aware containment
+// test, since a bare prefix let "mefi-studio-evil/x.json" through.
+const jsonPath = value("--json", null);
+const output = jsonPath ? path.resolve(jsonPath) : null;
+if (output) {
+  const inside = path.relative(studio, output);
+  if (!inside || inside.startsWith("..") || path.isAbsolute(inside)) throw new Error("--json must stay inside the repository");
+}
 const results = [];
 for (const scenario of chosen) {
   const result = await watch({ ...options, scenario });
@@ -446,10 +454,7 @@ for (const scenario of chosen) {
   console.log(report(result, { trace: flag("--trace") }));
   console.log("");
 }
-const jsonPath = value("--json", null);
-if (jsonPath) {
-  const output = path.resolve(jsonPath);
-  if (!output.startsWith(studio)) throw new Error("--json must stay inside the repository");
+if (output) {
   await mkdir(path.dirname(output), { recursive: true });
   await writeFile(output, `${JSON.stringify(results.length === 1 ? results[0] : results, null, 2)}\n`);
   console.log(`Record: ${path.relative(studio, output)}`);
