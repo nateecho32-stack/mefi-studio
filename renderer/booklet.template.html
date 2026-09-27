@@ -635,6 +635,7 @@
           <div class="setup-state-item"><span class="setup-state-label">Builders</span><span id="setup-builders" data-state="unknown">checking…</span></div>
         </div>
         <p class="settings-status" id="auto-setup-status" role="status">Not run yet.</p>
+        <button class="ghost" type="button" id="settings-guided-cli">Install a coding tool or use one subscription for Studio</button>
         </section>
 <section class="settings-group settings-card" id="settings-assistant" aria-labelledby="settings-assistant-heading">
         <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-key"/></svg></span><div><h3 id="settings-assistant-heading">Providers</h3><p class="muted">Open a provider to configure its connection. Keys are encrypted on this machine.</p></div></div>
@@ -1875,6 +1876,23 @@
         <p id="walkthrough-build-mode-feedback" role="status"></p>
       </div>
       <div class="walkthrough-activity" id="walkthrough-activity" hidden><div class="walkthrough-activity-track"><span id="walkthrough-activity-fill"></span></div><span id="walkthrough-activity-label"></span></div>
+      <div id="walkthrough-cli-setup" class="walkthrough-panel" hidden>
+        <h3>Use the account you already have</h3>
+        <p>One supported subscription can handle chat, mapping, planning and coding. Choose your tool, sign in with its own window, then check the connection. Your account's model access and usage limits apply.</p>
+        <label for="walkthrough-cli-choice">Your coding tool</label>
+        <select id="walkthrough-cli-choice"><option value="codex">Codex</option><option value="claude">Claude Code</option><option value="grok">Grok</option><option value="antigravity">Antigravity</option><option value="opencode">OpenCode (free models or linked providers)</option></select>
+        <p id="walkthrough-cli-detail" class="muted"></p>
+        <div class="walkthrough-panel-actions">
+          <button class="ghost" id="walkthrough-cli-install" type="button">Install and sign in</button>
+          <button class="ghost" id="walkthrough-cli-login" type="button">Sign in</button>
+          <button class="ghost" id="walkthrough-cli-check" type="button">Check connection</button>
+          <button class="primary" id="walkthrough-cli-use" type="button">Use for the whole studio</button>
+          <button class="ghost mini" id="walkthrough-cli-refresh" type="button">Refresh installed tools</button>
+          <button class="ghost mini" id="walkthrough-cli-docs" type="button">Setup instructions</button>
+        </div>
+        <p class="muted">Install opens a setup window and downloads the selected tool. Node.js is installed if an npm tool needs it. Check connection sends a small test using your account's allowance. Passwords stay in the provider's sign-in window.</p>
+        <p id="walkthrough-cli-status" role="status" aria-live="polite"></p>
+      </div>
       <div id="walkthrough-scan" class="walkthrough-panel" hidden>
         <div class="walkthrough-panel-actions"><button class="primary" id="walkthrough-scan-run" type="button">Run the first scan</button><button class="ghost" id="walkthrough-scan-apply" type="button" hidden>Use this setup</button><label class="walkthrough-panel-option" for="walkthrough-scan-allow-free"><input type="checkbox" id="walkthrough-scan-allow-free" checked><span>Allow free models (their free tier may use prompts to improve the model)</span></label></div>
         <p id="walkthrough-scan-status" class="muted" role="status">Not run yet. The scan asks OpenCode what it has: its version, linked provider names, models and agents. It sends no prompt and saves nothing until you choose Use this setup.</p>
@@ -1883,7 +1901,7 @@
       </div>
       <div id="walkthrough-map" class="walkthrough-panel" hidden>
         <div class="walkthrough-panel-actions"><button class="primary" id="walkthrough-map-run" type="button">Map this project</button><button class="ghost" id="walkthrough-map-cancel" type="button" hidden>Cancel</button></div>
-        <p id="walkthrough-map-status" class="muted" role="status">Not mapped yet. A read-only explorer reads the selected folder, writes its map as a todo list you can watch in the tree, and saves its suggested first tasks as ideas. Nothing is built.</p>
+        <p id="walkthrough-map-status" class="muted" role="status">Not mapped yet. Your selected provider uses a read-only project scan to map the folder and suggest first tasks. Suggestions are saved as ideas for you to review. Nothing is built.</p>
         <ul id="walkthrough-map-steps" class="walkthrough-notes"></ul>
         <pre id="walkthrough-map-tail" class="walkthrough-textTail" hidden></pre>
         <ul id="walkthrough-map-facts" class="walkthrough-facts"></ul>

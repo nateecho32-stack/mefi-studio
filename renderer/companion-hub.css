@@ -49,6 +49,15 @@
 .agent-guide-details > summary { color: var(--muted); cursor: pointer; font-size: 12px; }
 html[data-shell=rail] .overlay .walkthrough-sheet[data-agent-step], .overlay .walkthrough-sheet[data-agent-step] { width: min(660px, calc(100vw - var(--shell-rail-w, 0px) - 32px)); transition: width 420ms cubic-bezier(.22,1,.36,1); }
 html[data-shell=rail] .overlay .walkthrough-sheet[data-agent-step="2"], .overlay .walkthrough-sheet[data-agent-step="2"] { width: min(740px, calc(100vw - var(--shell-rail-w, 0px) - 32px)); }
+#walkthrough-cli-choice { max-width: 100%; }
+@media (max-width: 650px) {
+  html[data-shell=rail] #walkthrough-overlay { left: 0; }
+  html[data-shell=rail] #walkthrough-overlay .walkthrough-sheet[data-agent-step] { width: calc(100vw - 24px); padding: 14px; }
+  #walkthrough-overlay .walkthrough-steps { flex-wrap: nowrap; overflow-x: auto; padding: 8px 0; }
+  #walkthrough-overlay .walkthrough-step { flex: 0 0 auto; }
+  #walkthrough-overlay .agent-guide-greeting { padding: 4px 8px; margin: 4px 0; }
+  #walkthrough-overlay .agent-guide-greeting .agent-play { width: 40px; height: 40px; }
+}
 .walkthrough-coach[data-agent-step] { transition: width 420ms cubic-bezier(.22,1,.36,1), right 420ms cubic-bezier(.22,1,.36,1); width: min(365px, calc(100vw - 36px)); }
 .walkthrough-coach[data-agent-step="3"] { width: min(405px, calc(100vw - 36px)); }
 .walkthrough-coach .agent-guide-greeting { padding: 2px 8px; gap: 8px; margin: 0; border: 0; background: transparent; }

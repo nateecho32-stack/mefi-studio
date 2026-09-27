@@ -64,6 +64,9 @@ class MefiStudioRoutingTests(unittest.TestCase):
         # The builder command lines live in the pure executor core since
         # spawnNextJob was split (cliInvocation); spawnNextJob spawns them.
         cls.core = (STUDIO / "scripts" / "executor-core.cjs").read_text(encoding="utf-8")
+        # Reply (text) calls for the CLI routes live in scripts/cli-text.cjs;
+        # the *Completion functions in main.cjs delegate to cliText.run.
+        cls.cli_text = (STUDIO / "scripts" / "cli-text.cjs").read_text(encoding="utf-8")
         cls.client = (STUDIO / "scripts" / "decision-client.mjs").read_text(encoding="utf-8")
         cls.preload = (STUDIO / "preload.cjs").read_text(encoding="utf-8")
         cls.template = (STUDIO / "renderer" / "booklet.template.html").read_text(encoding="utf-8")
@@ -277,7 +280,10 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertNotIn('"--prompt-file"', spawn, "prompt-file is the chat completion path; builders need tools")
         self.assertNotIn('"--prompt-file"', self.core, "prompt-file is the chat completion path; builders need tools")
         complete = _function_body(self.main, "grokCompletion")
-        self.assertIn("--prompt-file", complete, "assistant replies stay single-turn")
+        self.assertIn('cliText.run({ provider: "grok"', complete)
+        self.assertIn('args.push("--prompt-file", prompt)', self.cli_text, "assistant replies stay single-turn")
+        self.assertIn('"--max-turns", "1"', self.cli_text)
+        self.assertIn('"--tools="', self.cli_text)
         self.assertIn('chosenCli === "grok"', _function_body(self.main, "executorRunEnv"))
         self.assertIn('id="executor-cli"', self.template)
         self.assertIn('id="executor-model"', self.template)
@@ -287,11 +293,13 @@ class MefiStudioRoutingTests(unittest.TestCase):
         # stdin (never cmd's command line), no tools for reply requests.
         complete = _function_body(self.main, "claudeCompletion")
         self.assertTrue(complete, "claudeCompletion must exist")
-        self.assertIn('"cmd.exe"', complete, "the npm shim is reached through cmd.exe like opencode run")
-        self.assertIn("claude -p --output-format json", complete, "the JSON reply carries the tokens the usage tracker records")
-        self.assertIn("--tools=", complete, "a reply request cannot touch the repo")
-        self.assertIn("--no-session-persistence", complete)
-        self.assertIn("child.stdin?.write", complete, "the prompt rides stdin, never the command line")
+        self.assertIn('cliText.run({ provider: "claude"', complete)
+        self.assertIn('spawnImpl("cmd.exe", buildWindowsCmdArgs(command, args)', self.cli_text, "the npm shim is reached through cmd.exe like opencode run")
+        self.assertIn('"-p", "--output-format", "json"', self.cli_text, "the JSON reply carries the tokens the usage tracker records")
+        self.assertIn('"--tools="', self.cli_text, "a reply request cannot touch the repo")
+        self.assertIn('"--no-session-persistence"', self.cli_text)
+        self.assertIn("child.stdin.end(`${system}\\n\\n${user}`)", self.cli_text, "the prompt rides stdin, never the command line")
+        self.assertIn('mkdtemp(path.join(tempRoot, "mefi-text-"))', self.cli_text, "text calls never run in the project directory")
         body = _function_body(self.main, "resolveAiRoute")
         self.assertIn('provider === "claude"', body, "the router returns the CLI route without a key")
         self.assertRegex(self.main, r'AI_PROVIDERS = \["auto", "zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "antigravity",.*"lmstudio", "custom"\]')
@@ -302,7 +310,12 @@ class MefiStudioRoutingTests(unittest.TestCase):
         cli = _function_body(self.main, "cliAssistantCall")
         self.assertIn("cliAssistantCall(route, system, user, maxTokens", fetch)
         self.assertIn("claudeCompletion(system, user, route.model)", cli)
-        self.assertIn('const DATA_ONLY_CLIS = new Set(["claude"])', self.main, "only the CLI spawned with --tools= may answer data-only calls")
+        # Only CLIs whose reply path runs outside the project with native
+        # action tools off may answer data-only calls: every text CLI in
+        # cli-text.cjs, and no other.
+        self.assertIn('const DATA_ONLY_CLIS = new Set(["claude", "codex", "grok", "antigravity"])', self.main)
+        self.assertIn('const PROVIDERS = ["claude", "codex", "grok", "antigravity"]', self.cli_text)
+        self.assertIn("cli-text.cjs isolates", self.main, "the widened set cites why it is safe")
         # Builders: same subscription login, agentic print mode, prompt on stdin.
         spawn = _function_body(self.main, "spawnNextJob")
         self.assertIn('cli === "claude"', self.core)
@@ -321,10 +334,12 @@ class MefiStudioRoutingTests(unittest.TestCase):
         # replies, and JSONL events so the usage tracker records the tokens.
         complete = _function_body(self.main, "codexCompletion")
         self.assertTrue(complete, "codexCompletion must exist")
-        self.assertIn("codex exec --json --ephemeral --skip-git-repo-check --color never -s read-only", complete)
-        self.assertIn('spawn("cmd.exe"', complete, "the npm install is a .cmd shim")
-        self.assertIn("child.stdin?.write", complete, "the prompt rides stdin, never the command line")
-        self.assertIn('cliReply("codex", parseCodexCliResult(text), text', complete)
+        self.assertIn('cliText.run({ provider: "codex"', complete)
+        self.assertIn('"exec", "--json", "--ephemeral"', self.cli_text)
+        self.assertIn('"--skip-git-repo-check", "--color", "never", "-s", "read-only"', self.cli_text)
+        self.assertIn('...selected, "-"]', self.cli_text, "the prompt rides stdin, never the command line")
+        self.assertIn('spawnImpl("cmd.exe"', self.cli_text, "the npm install is a .cmd shim")
+        self.assertIn('cliReply("codex", parseCodexCliResult(result.stdout), result.stdout', complete)
         body = _function_body(self.main, "resolveAiRoute")
         self.assertIn('provider === "codex"', body)
         cli = _function_body(self.main, "cliAssistantCall")
@@ -379,12 +394,17 @@ class MefiStudioRoutingTests(unittest.TestCase):
         # Antigravity CLI (`agy`) as a keyless route: a direct spawn (a Go
         # binary, not a cmd shim), the prompt on stdin, and every flag before
         # `-p` because `-p` first makes agy silently ignore --model.
+        # Replies go through cli-text.cjs: a temporary no-tools agent that must
+        # confirm itself in its init event before the prompt goes over stdin.
         complete = _function_body(self.main, "antigravityCompletion")
         self.assertTrue(complete, "antigravityCompletion must exist")
-        self.assertIn('spawn("agy", args', complete)
-        self.assertIn('args.push("--output-format", "json", "-p")', complete, "all flags precede -p; JSON carries the tokens the usage tracker records")
-        self.assertNotIn("--dangerously-skip-permissions", complete, "a reply request cannot auto-approve tools")
-        self.assertIn("child.stdin?.write", complete, "the prompt rides stdin, never the command line")
+        self.assertIn('cliText.run({ provider: "antigravity"', complete)
+        self.assertIn('provider === "antigravity" ? "agy"', self.cli_text)
+        self.assertIn('"--agent", "mefi-text", "--input-format", "stream-json", "--output-format", "stream-json"', self.cli_text, "stream JSON carries the tokens the usage tracker records")
+        self.assertIn("tools: []", self.cli_text)
+        self.assertIn('event.init?.agent !== "mefi-text"', self.cli_text, "no prompt until the no-tools agent is confirmed")
+        self.assertNotIn("--dangerously-skip-permissions", self.cli_text, "a reply request cannot auto-approve tools")
+        self.assertIn("child.stdin.end(JSON.stringify({ event: \"user\"", self.cli_text, "the prompt rides stdin, never the command line")
         body = _function_body(self.main, "resolveAiRoute")
         self.assertIn('provider === "antigravity"', body)
         cli = _function_body(self.main, "cliAssistantCall")

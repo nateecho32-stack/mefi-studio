@@ -47,6 +47,7 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   dates, with revision checks and the same dispatch and approval gates.
 
 ### Added
+- Guided CLI installation, sign-in and connection checks in Start here, including recovery at First map. A single Codex, Claude Code, Grok or Antigravity subscription can route the assistant, mapping, planning, agent seats, coding and subtasks through its own account.
 - Multi-PC sync. **Friends › Your PCs** shows whether this PC matches the open project's default branch on GitHub and lists work that has not reached it. **Sync this PC** pulls and pushes that branch without force. `npm run sync` does the same from a terminal, and a Claude Code SessionStart hook fetches, fast-forwards and reports at the start of each new session.
 - Mefi learns from successful owner answers, including family choices, approvals,
   offers and chat. Recent choices count more, corrections count double, and
@@ -99,6 +100,7 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   new happens to them.
 
 ### Fixed
+- First map can use the selected provider and local project excerpts without OpenCode. Subscription setup clears conflicting role overrides and keeps other providers out of unrequested fallback calls.
 - Coding CLIs installed while Studio is open no longer show "not found" until a
   full quit and relaunch. On Windows, the CLI status pills, auto setup and each
   launch (including a self-update restart, which inherits the old environment)

@@ -44,6 +44,7 @@ test("Agent setup provider, model, skills and MCP selections persist without sta
     assert.equal(code, 0, `${report?.failure || "No renderer report"}\n${output}`);
     assert.deepEqual(report.errors, []); assert.deepEqual(report.networkAttempts, []); assert.deepEqual(report.processAttempts, []);
     assert.ok(report.complete && report.draftRetained && report.noStartOnSetup && report.stableMenu);
+    assert.equal(report.guidedSetup, true);
     assert.equal(report.layouts.length,12);
   } finally {
     assert.equal(path.dirname(fixture), path.resolve(tmpdir()));

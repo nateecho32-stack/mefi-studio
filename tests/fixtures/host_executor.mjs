@@ -100,6 +100,7 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
     measureWorkerLag: async () => 0, machineLagGate: null,
     getEyes: async () => eyes, getAssistant: async () => env.assistantModule,
     getAnalyzer: async () => ({ verifyIdea: async (text, options) => { contextCalls.push({ text, ...options }); return { hits: [] }; } }),
+    DATA_ONLY_CLIS: new Set(["claude", "codex", "grok", "antigravity"]),
     resolveAiRoute: async (role, options) => { routeCalls.push({ role, ...options }); return { ok: true, provider: "fixture-http", model: "fixture-model" }; },
     httpAssistantCall: async (route, system, user, maxTokens, options) => {
       supportCalls.push({ route: copy(route), system, user, maxTokens, ...options });

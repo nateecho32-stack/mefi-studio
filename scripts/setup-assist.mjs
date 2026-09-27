@@ -23,10 +23,15 @@ export function remainingStops(progress = {}) {
 function factLines({ firstRun, project, report, map }) {
   const lines = [];
   const cli = firstRun?.opencode ?? {};
-  lines.push(`OpenCode: ${cli.installed ? `${cli.version ?? "installed"}${cli.supported === false ? " (older than the supported 1.x line)" : ""}` : "not installed"}.`);
-  const linked = list(firstRun?.providers?.linked);
-  lines.push(`Providers linked in OpenCode: ${linked.length ? linked.join(", ") : "none"}; free models available: ${firstRun?.providers?.freeCount ?? 0}.`);
-  lines.push(`Explorer: ${firstRun?.explorer?.model ?? "OpenCode's default model"} (${firstRun?.explorer?.free ? "free" : "linked account"}). Builder: ${firstRun?.builder?.model ?? "OpenCode's default model"} (${firstRun?.builder?.free ? "free, one at a time" : "linked account"}). Judge: ${firstRun?.judge?.kind ?? "fixed"}.`);
+  if (firstRun?.explorer?.transport === "assistant") {
+    lines.push(`Selected subscription: ${firstRun.explorer.provider}. Mapping, assistant, planning, agent roles and coding use this account. OpenCode is optional; no additional provider key is required.`);
+    lines.push(`Explorer model: ${firstRun.explorer.model || "provider default"}. Builder: ${firstRun.builder?.cli || firstRun.explorer.provider}, model ${firstRun.builder?.model || "provider default"}. Judge: ${firstRun.judge?.kind || "assistant"}.`);
+  } else {
+    lines.push(`OpenCode: ${cli.installed ? `${cli.version ?? "installed"}${cli.supported === false ? " (older than the supported 1.x line)" : ""}` : "not installed"}.`);
+    const linked = list(firstRun?.providers?.linked);
+    lines.push(`Providers linked in OpenCode: ${linked.length ? linked.join(", ") : "none"}; free models available: ${firstRun?.providers?.freeCount ?? 0}.`);
+    lines.push(`Explorer: ${firstRun?.explorer?.model ?? "OpenCode's default model"} (${firstRun?.explorer?.free ? "free" : "linked account"}). Builder: ${firstRun?.builder?.model ?? "OpenCode's default model"} (${firstRun?.builder?.free ? "free, one at a time" : "linked account"}). Judge: ${firstRun?.judge?.kind ?? "fixed"}.`);
+  }
   for (const warning of list(firstRun?.warnings).slice(0, 4)) lines.push(`Warning: ${clip(warning, 240)}`);
   if (!project) lines.push("Project: none selected yet.");
   else {
@@ -96,8 +101,9 @@ export function parseSetupAdvice(text) {
 export function staticSetupAdvice({ firstRun = null, project = null, map = null, progress = {} } = {}) {
   const remaining = new Set(remainingStops(progress));
   const stops = {};
-  const explorer = firstRun?.explorer?.model ?? "OpenCode's default model";
-  const builder = firstRun?.builder?.model ?? "OpenCode's default model";
+  const fallbackModel = firstRun?.opencode?.installed ? "OpenCode's default model" : "your selected provider";
+  const explorer = firstRun?.explorer?.model || firstRun?.explorer?.provider || fallbackModel;
+  const builder = firstRun?.builder?.model || firstRun?.builder?.cli || fallbackModel;
   if (remaining.has("workspace")) stops.workspace = project ? `"${clip(project.name, 80)}" is selected. Check its name above the conversation before adding work.` : "Add the folder you want to work on with + in Projects, then select it. Start with a small project whose changes you can inspect.";
   if (remaining.has("map")) stops.map = project ? `Map "${clip(project.name, 80)}" with ${explorer}: it reads only, writes its map as a todo list in the tree, and saves first tasks as ideas.` : "Once a folder is selected, map it: the explorer reads only and saves its suggestions as ideas.";
   if (remaining.has("connections")) stops.connections = `Builders run on ${builder}${firstRun?.builder?.free ? " (free tier: one worker at a time, prompts may be used to improve the model)" : ""}. ${firstRun?.judge?.kind === "jev" ? "Jev picks models per task." : firstRun?.judge?.kind === "assistant" ? "Your assistant model stands in for Jev on routing decisions." : firstRun?.judge?.kind === "opencode-free" ? "A free model stands in for Jev on batch intake only; save a Jev or assistant key for per-task routing." : "Save a Jev or assistant key to enable task-aware routing."} ${list(firstRun?.warnings).length ? `Warning: ${clip(firstRun.warnings[0], 200)}` : ""}`.trim();

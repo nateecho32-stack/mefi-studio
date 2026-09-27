@@ -76,6 +76,8 @@ const agentAddons = require("./scripts/agent-addons.cjs");
 const agentTools = require("./scripts/agent-tools.cjs");
 const agentToolConfigs = require("./scripts/agent-tool-configs.cjs");
 const agentModels = require("./scripts/agent-models.cjs");
+const cliSetup = require("./scripts/cli-setup.cjs");
+const cliText = require("./scripts/cli-text.cjs");
 const agentIssues = require("./scripts/agent-issues.cjs");
 const brains = require("./scripts/brains.cjs");
 const taskDelegation = require("./scripts/task-delegation.cjs");
@@ -2517,10 +2519,9 @@ function zenEndpoint(model) {
 }
 
 // Planning, brain drafts and the analyzer read are data-only: a CLI's own
-// tools must never turn a discussion into a change. Claude Code is spawned
-// with --tools= (no tools at all), so it may answer them; every other CLI
-// keeps its tools and stays out.
-const DATA_ONLY_CLIS = new Set(["claude"]);
+// tools must never turn a discussion into a change. cli-text.cjs isolates
+// these providers from the project and disables their native action tools.
+const DATA_ONLY_CLIS = new Set(["claude", "codex", "grok", "antigravity"]);
 
 // The builder's model is saved per CLI for the same reason: switching builders
 // must not carry one CLI's model id into another.
@@ -2645,7 +2646,8 @@ function firstLaunchNeedsSetup(settings = {}) {
 // each choice so the controls in Settings stay the source of truth.
 function planAutoSetup({ settings = {}, keys = {}, clis = [], local = {} } = {}) {
   const installed = (id) => clis.some((cli) => cli.id === id && cli.installed === true);
-  const provider = keys.zai ? "zai"
+  const preferred = ["grok", "claude", "codex", "antigravity"].includes(settings.aiProvider) && installed(settings.aiProvider) ? settings.aiProvider : null;
+  const provider = preferred || (keys.zai ? "zai"
     : keys.opencode ? "opencode"
       : keys.openrouter ? "openrouter"
       : installed("grok") ? "grok"
@@ -2654,16 +2656,17 @@ function planAutoSetup({ settings = {}, keys = {}, clis = [], local = {} } = {})
             : installed("antigravity") ? "antigravity"
               : local.lmstudio ? "lmstudio"
                 : local.custom ? "custom"
-                  : null;
+                  : null);
   if (!provider) {
     return { ok: false, error: "Nothing to set up yet - save a z.ai, OpenCode Go, OpenRouter or custom key, install a coding CLI, or start LM Studio, then run auto setup again." };
   }
   const currentProvider = typeof settings.aiProvider === "string" ? settings.aiProvider : "auto";
   const currentSelection = settings.modelSelection === "fixed" ? "fixed" : "jev";
   const currentBuilder = ["grok", "claude", "codex", "antigravity"].includes(settings.executorCli) ? settings.executorCli : "opencode";
-  const jevReady = Boolean(keys.gateway || keys.jev || keys.zen || keys.openrouter);
+  const subscription = ["grok", "claude", "codex", "antigravity"].includes(provider);
+  const jevReady = !subscription && Boolean(keys.gateway || keys.jev || keys.zen || keys.openrouter);
   const modelSelection = jevReady ? "jev" : "fixed";
-  const builder = installed("opencode") ? "opencode" : installed("grok") ? "grok" : installed("claude") ? "claude" : installed("codex") ? "codex" : installed("antigravity") ? "antigravity" : null;
+  const builder = subscription ? provider : installed("opencode") ? "opencode" : installed("grok") ? "grok" : installed("claude") ? "claude" : installed("codex") ? "codex" : installed("antigravity") ? "antigravity" : null;
   const changes = {};
   if (currentProvider !== provider) changes.provider = provider;
   if (currentSelection !== modelSelection) changes.modelSelection = modelSelection;
@@ -2687,19 +2690,19 @@ function planAutoSetup({ settings = {}, keys = {}, clis = [], local = {} } = {})
   if (provider === "zai") notes.push("z.ai key found: the assistant uses your z.ai plan.");
   else if (provider === "opencode") notes.push("OpenCode Go key found: the assistant bills OpenCode Go.");
   else if (provider === "openrouter") notes.push("OpenRouter key found: the assistant uses the free models router by default; a saved model may have charges.");
-  else if (provider === "grok") notes.push("No assistant key saved: the assistant answers through the Grok CLI's own login.");
-  else if (provider === "claude") notes.push("No assistant key saved: the assistant answers through the Claude Code CLI's own subscription login.");
-  else if (provider === "codex") notes.push("No assistant key saved: the assistant answers through the Codex CLI's own ChatGPT login.");
-  else if (provider === "antigravity") notes.push("No assistant key saved: the assistant answers through the Antigravity CLI's own Google account login.");
+  else if (provider === "grok") notes.push("The assistant answers through the Grok CLI's own login.");
+  else if (provider === "claude") notes.push("The assistant answers through the Claude Code CLI's own subscription login.");
+  else if (provider === "codex") notes.push("The assistant answers through the Codex CLI's own ChatGPT login.");
+  else if (provider === "antigravity") notes.push("The assistant answers through the Antigravity CLI's own Google account login.");
   else if (provider === "lmstudio") notes.push("No key saved: LM Studio is reachable on this machine, so the assistant answers from the local server.");
   else notes.push("No key saved: the saved custom endpoint answers for the assistant.");
   if (jevReady) notes.push("Jev key found: task-aware model selection is on.");
-  else notes.push("No Jev key: fixed model defaults. Save a Jev key and run auto setup again to enable Jev selection.");
+  else notes.push("No Jev key required: use this provider's model defaults. You can choose its available models per role in Team setup.");
   if (builder === "opencode") notes.push("OpenCode CLI found: builders run through it.");
-  else if (builder === "grok") notes.push("OpenCode CLI not found; Grok CLI found: builders run through Grok.");
-  else if (builder === "claude") notes.push("OpenCode CLI not found; Claude Code CLI found: builders run through Claude Code.");
-  else if (builder === "codex") notes.push("OpenCode CLI not found; Codex CLI found: builders run through Codex.");
-  else if (builder === "antigravity") notes.push("OpenCode CLI not found; Antigravity CLI found: builders run through Antigravity.");
+  else if (builder === "grok") notes.push("Grok CLI found: builders run through Grok.");
+  else if (builder === "claude") notes.push("Claude Code CLI found: builders run through Claude Code.");
+  else if (builder === "codex") notes.push("Codex CLI found: builders run through Codex.");
+  else if (builder === "antigravity") notes.push("Antigravity CLI found: builders run through Antigravity.");
   else notes.push("No builder CLI detected: install OpenCode, Grok, Claude Code, Codex or Antigravity before queuing build work.");
   if (changes.autoFallback === false) notes.push("Provider fallback turned off: the auto order has no second usable provider.");
   return { ok: true, changes, active: { provider, modelSelection, executorCli: builder ?? currentBuilder }, notes };
@@ -3804,40 +3807,10 @@ function cliReply(name, parsed, text, { code, err, model }) {
 // payload in via --prompt-file (the text can carry quotes and JSON, which no
 // command line should have to quote), one JSON object out on stdout. Auth
 // rides the CLI's own login, so no key is stored or read.
-async function grokCompletion(system, user, model, { timeoutMs = 180000 } = {}) {
-  const tmp = path.join(app.getPath("temp"), `mefi-grok-${Date.now()}-${crypto.randomBytes(3).toString("hex")}.txt`);
-  try {
-    await writeFile(tmp, `${system}\n\n${user}`, "utf8");
-    const args = ["--prompt-file", tmp, "--output-format", "json", "--permission-mode", "dontAsk"];
-    if (model) args.push("-m", model);
-    return await new Promise((resolve) => {
-      const child = spawn("grok", args, { cwd: projectRoot(), windowsHide: true });
-      let text = "";
-      let err = "";
-      const timer = setTimeout(() => {
-        try {
-          child.kill();
-        } catch {}
-        resolve({ ok: false, error: "grok cli timed out" });
-      }, timeoutMs);
-      child.stdout?.on("data", (chunk) => (text += chunk));
-      child.stderr?.on("data", (chunk) => (err += chunk));
-      child.on("error", (error) => {
-        clearTimeout(timer);
-        resolve({ ok: false, error: `grok spawn failed: ${error.message}` });
-      });
-      child.on("close", (code) => {
-        clearTimeout(timer);
-        resolve(cliReply("grok", parseGrokCliResult(text), text, { code, err, model }));
-      });
-    });
-  } catch (error) {
-    return { ok: false, error: `grok call failed: ${error.message}` };
-  } finally {
-    try {
-      await rm(tmp, { force: true });
-    } catch {}
-  }
+async function grokCompletion(system, user, model, { timeoutMs = 180000, onSpawn } = {}) {
+  const result = await cliText.run({ provider: "grok", system, user, model: model || "", timeoutMs, onSpawn });
+  if (result.error) return { ok: false, error: result.error };
+  return cliReply("grok", parseGrokCliResult(result.stdout), result.stdout, { code: result.code, err: result.stderr, model });
 }
 
 // Model ids travel through cmd.exe for the Claude CLI, so they are held to the
@@ -3852,34 +3825,10 @@ function cliModelArg(value) {
 // line, and --tools= keeps a reply request from touching the repo. The npm
 // install is a .cmd shim, so the CLI is reached through cmd.exe like opencode
 // run is. Auth is the CLI's own login, so no key is stored or read.
-async function claudeCompletion(system, user, model, { timeoutMs = 180000 } = {}) {
-  const selected = cliModelArg(model);
-  const command = `claude -p --output-format json --strict-mcp-config --tools= --permission-mode dontAsk --no-session-persistence${selected ? ` --model ${selected}` : ""}`;
-  return await new Promise((resolve) => {
-    const child = spawn("cmd.exe", ["/d", "/s", "/c", command], { cwd: projectRoot(), windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
-    let text = "";
-    let err = "";
-    const timer = setTimeout(() => {
-      try {
-        child.kill();
-      } catch {}
-      resolve({ ok: false, error: "claude cli timed out" });
-    }, timeoutMs);
-    child.stdout?.on("data", (chunk) => (text += chunk));
-    child.stderr?.on("data", (chunk) => (err += chunk));
-    child.on("error", (error) => {
-      clearTimeout(timer);
-      resolve({ ok: false, error: `claude spawn failed: ${error.message}` });
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      resolve(cliReply("claude", parseClaudeCliResult(text), text, { code, err, model }));
-    });
-    try {
-      child.stdin?.write(`${system}\n\n${user}`);
-      child.stdin?.end();
-    } catch {}
-  });
+async function claudeCompletion(system, user, model, { timeoutMs = 180000, onSpawn } = {}) {
+  const result = await cliText.run({ provider: "claude", system, user, model: model || "", timeoutMs, onSpawn });
+  if (result.error) return { ok: false, error: result.error };
+  return cliReply("claude", parseClaudeCliResult(result.stdout), result.stdout, { code: result.code, err: result.stderr, model });
 }
 
 // The Codex CLI as an assistant route: one headless `codex exec` turn on the
@@ -3890,34 +3839,10 @@ async function claudeCompletion(system, user, model, { timeoutMs = 180000 } = {}
 // reads: the agent message plus the turn's token usage. The npm install is a
 // .cmd shim, so the CLI is reached through cmd.exe like claude is. Auth is
 // the CLI's own login, so no key is stored or read.
-async function codexCompletion(system, user, model, { timeoutMs = 180000 } = {}) {
-  const selected = cliModelArg(model);
-  const command = `codex exec --json --ephemeral --skip-git-repo-check --color never -s read-only${selected ? ` -m ${selected}` : ""} -`;
-  return await new Promise((resolve) => {
-    const child = spawn("cmd.exe", ["/d", "/s", "/c", command], { cwd: projectRoot(), windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
-    let text = "";
-    let err = "";
-    const timer = setTimeout(() => {
-      try {
-        child.kill();
-      } catch {}
-      resolve({ ok: false, error: "codex cli timed out" });
-    }, timeoutMs);
-    child.stdout?.on("data", (chunk) => (text += chunk));
-    child.stderr?.on("data", (chunk) => (err += chunk));
-    child.on("error", (error) => {
-      clearTimeout(timer);
-      resolve({ ok: false, error: `codex spawn failed: ${error.message}` });
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      resolve(cliReply("codex", parseCodexCliResult(text), text, { code, err, model }));
-    });
-    try {
-      child.stdin?.write(`${system}\n\n${user}`);
-      child.stdin?.end();
-    } catch {}
-  });
+async function codexCompletion(system, user, model, { timeoutMs = 180000, onSpawn } = {}) {
+  const result = await cliText.run({ provider: "codex", system, user, model: model || "", timeoutMs, onSpawn });
+  if (result.error) return { ok: false, error: result.error };
+  return cliReply("codex", parseCodexCliResult(result.stdout), result.stdout, { code: result.code, err: result.stderr, model });
 }
 
 // Antigravity CLI (`agy`) model names are display strings with spaces and
@@ -3931,42 +3856,12 @@ function agyModelArg(value) {
 }
 
 // The Antigravity CLI as an assistant route: one headless single-turn call on
-// the owner's Google account login. Two CLI quirks shape the command: every
-// flag precedes `-p` (with `-p` first agy silently ignores --model), and the
-// prompt rides stdin so no command line has to quote it. No permission bypass:
-// a reply request should not touch the repo, and a tool that needs approval is
-// soft-denied while the answer still comes back. `agy` is a single Go binary,
-// so it spawns directly like grok does.
-async function antigravityCompletion(system, user, model, { timeoutMs = 180000 } = {}) {
-  const selected = agyModelArg(model);
-  const args = [];
-  if (selected) args.push("--model", selected);
-  args.push("--output-format", "json", "-p");
-  return await new Promise((resolve) => {
-    const child = spawn("agy", args, { cwd: projectRoot(), windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
-    let text = "";
-    let err = "";
-    const timer = setTimeout(() => {
-      try {
-        child.kill();
-      } catch {}
-      resolve({ ok: false, error: "antigravity cli timed out" });
-    }, timeoutMs);
-    child.stdout?.on("data", (chunk) => (text += chunk));
-    child.stderr?.on("data", (chunk) => (err += chunk));
-    child.on("error", (error) => {
-      clearTimeout(timer);
-      resolve({ ok: false, error: `antigravity spawn failed: ${error.message}` });
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      resolve(cliReply("antigravity", parseAntigravityCliResult(text), text, { code, err, model }));
-    });
-    try {
-      child.stdin?.write(`${system}\n\n${user}`);
-      child.stdin?.end();
-    } catch {}
-  });
+// the owner's Google account login. cli-text.cjs negotiates a no-tools main
+// agent through the stream protocol before sending the prompt on stdin.
+async function antigravityCompletion(system, user, model, { timeoutMs = 180000, onSpawn } = {}) {
+  const result = await cliText.run({ provider: "antigravity", system, user, model: model || "", timeoutMs, onSpawn });
+  if (result.error) return { ok: false, error: result.error };
+  return cliReply("antigravity", parseAntigravityCliResult(result.stdout), result.stdout, { code: result.code, err: result.stderr, model });
 }
 
 // The Studio-managed OpenCode provider: GLM 5.3 / 5.3 Flash on the owner's
@@ -4156,6 +4051,7 @@ function opencodeGoLogin() {
 async function executorRunEnv({ cliOverride = null } = {}) {
   const settings = await (typeof readAgentSettings === "function" ? readAgentSettings() : readSettings());
   const chosenCli = ["opencode", "grok", "claude", "codex", "antigravity"].includes(cliOverride) ? cliOverride : settings.executorCli;
+  const singleAccount = settings.aiAutoFallback === false && settings.aiAutoProviders?.length === 1 && settings.aiAutoProviders[0] === chosenCli;
   const tier = normalizeExecutorTier(settings.executorTier);
   // A CLI builder's model: the tier's model when a tier is chosen (Free with
   // no free model is refused rather than billed), otherwise the pinned
@@ -4169,6 +4065,7 @@ async function executorRunEnv({ cliOverride = null } = {}) {
   // The opencode half: the default runner, with the mefi-zai provider when a
   // z.ai key is saved. Computed once and reused as the CLI fallback route.
   const opencodeRoute = async () => {
+    if (singleAccount && chosenCli !== "opencode") return { error: `Reconnect ${chosenCli} in Agents setup. This team uses that account only; no other provider was started.` };
     const provider = AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
     // A coding tier other than Auto pins the model for every OpenCode run:
     // Free rides the free model one worker at a time and never a billed
@@ -4258,6 +4155,7 @@ async function executorRunEnv({ cliOverride = null } = {}) {
     if (buildModel.error) return { error: buildModel.error };
     const opencode = await opencodeRoute();
     if (!(await grokCliAvailable())) {
+      if (singleAccount) return opencode;
       // The chosen runner is not on the machine: do not park the builders —
       // take the opencode route and say so on the feed.
       logLine("[autopilot] grok CLI not found — builders fall back to opencode run");
@@ -4272,6 +4170,7 @@ async function executorRunEnv({ cliOverride = null } = {}) {
     if (buildModel.error) return { error: buildModel.error };
     const opencode = await opencodeRoute();
     if (!(await claudeCliAvailable())) {
+      if (singleAccount) return opencode;
       logLine("[autopilot] claude CLI not found — builders fall back to opencode run");
       pushAutopilotHistory("fallback", "claude CLI not found — builders on opencode");
       if (!opencode.error) opencode.via += " · claude missing";
@@ -4284,6 +4183,7 @@ async function executorRunEnv({ cliOverride = null } = {}) {
     if (buildModel.error) return { error: buildModel.error };
     const opencode = await opencodeRoute();
     if (!(await codexCliAvailable())) {
+      if (singleAccount) return opencode;
       logLine("[autopilot] codex CLI not found — builders fall back to opencode run");
       pushAutopilotHistory("fallback", "codex CLI not found — builders on opencode");
       if (!opencode.error) opencode.via += " · codex missing";
@@ -4296,6 +4196,7 @@ async function executorRunEnv({ cliOverride = null } = {}) {
     if (buildModel.error) return { error: buildModel.error };
     const opencode = await opencodeRoute();
     if (!(await antigravityCliAvailable())) {
+      if (singleAccount) return opencode;
       logLine("[autopilot] antigravity CLI not found — builders fall back to opencode run");
       pushAutopilotHistory("fallback", "antigravity CLI not found — builders on opencode");
       if (!opencode.error) opencode.via += " · antigravity missing";
@@ -4373,6 +4274,8 @@ async function cliAssistantCall(route, system, user, maxTokens, { role = "routin
       return cli;
     }
   }
+  const settings = await (typeof readAgentSettings === "function" ? readAgentSettings() : readSettings());
+  if (!autoFallbackEnabled(settings)) return cli;
   const http = await resolveAiRoute(role, { allowCli: false });
   if (!http.ok) return cli;
   const retried = await httpAssistantCall(http, system, user, maxTokens, { taskType, source, role });
@@ -11164,7 +11067,7 @@ const agentBrain = (() => {
       },
       logLine: (line) => logLine(line),
       seatFetch: (seat, system, user, maxTokens) => seatFetch(seat, system, user, maxTokens),
-      // The head is the heavy role, data only (DATA_ONLY_CLIS: Claude Code with no tools).
+      // The head is the heavy role, with native action tools disabled.
       headFetch: (system, user, maxTokens) => assistantFetch(system, user, maxTokens, { role: "heavy", taskType: "pipeline-draft", allowCli: DATA_ONLY_CLIS }),
       raiseIssue: (raw) => assistantRaiseIssue(raw),
       askForWork: (reason) => assistantAskForWork(reason),
@@ -11198,7 +11101,7 @@ function seatChoice(settings, seat) {
   const saved = settings?.agentSeats?.[seat];
   const base = SEAT_DEFAULTS[seat] ?? SEAT_DEFAULTS.lead;
   const effort = saved?.effort === "" || SEAT_EFFORTS.includes(saved?.effort) ? saved.effort : base.effort;
-  const provider = ["auto", "zai", "opencode", "zen", "openrouter", "claude", "lmstudio", "custom"].includes(saved?.provider) ? saved.provider : base.provider;
+  const provider = ["auto", "zai", "opencode", "zen", "openrouter", "claude", "codex", "grok", "antigravity", "lmstudio", "custom"].includes(saved?.provider) ? saved.provider : base.provider;
   const model = typeof saved?.model === "string" ? saved.model.trim() : provider === "zen" ? base.model : "";
   const fast = provider === "zen" && (typeof saved?.fast === "boolean" ? saved.fast : base.fast);
   return { provider, model, effort, fast };
@@ -11559,7 +11462,7 @@ function planningService() {
         // turn discussion into production changes, so only a tool-less CLI
         // (Claude Code with --tools=) may answer; the rest stay on HTTP.
         const route = await resolveAiRoute(kind === "spec" ? "heavy" : "routine", { allowCli: DATA_ONLY_CLIS });
-        if (!route.ok) return { ok: false, error: "AI planning needs a saved z.ai, OpenCode Go or OpenCode Zen key, or Claude Code, in Settings & connections. You can create questions, record decisions, and write the specification manually." };
+        if (!route.ok) return { ok: false, error: "Connect and check your provider in Agents setup. Codex, Claude Code, Grok or Antigravity can handle planning through their own login. You can create questions, record decisions, and write the specification manually." };
         return (route.cli ? cliAssistantCall : httpAssistantCall)(route, system, user, kind === "spec" ? 7000 : 2500, { taskType: `planning-${kind}`, source: "planning", role: kind === "spec" ? "heavy" : "routine" });
       },
       gatherContext: async ({ plan, questionId, useWeb }) => {
@@ -12859,7 +12762,7 @@ async function prepareClusterJob(job, entry, tasks) {
       if (current()) references = await analyzer.verifyIdea(`${job.title}\n${job.prompt}`, { root: entry.projectPath });
     } catch (error) { references = { unavailable: String(error.message ?? error).slice(0, 160) }; }
     let route;
-    try { if (current()) route = await resolveAiRoute("routine", { allowCli: false }); }
+    try { if (current()) route = await resolveAiRoute("routine", { allowCli: DATA_ONLY_CLIS }); }
     catch (error) { route = { ok: false, error: String(error.message ?? error) }; }
     const context = taskContext.buildTaskHandoff(job.ref, { tasks, maxChars: 10000 });
     const reports = await Promise.all(agents.map(async (agent) => {
@@ -12879,7 +12782,7 @@ async function prepareClusterJob(job, entry, tasks) {
           agent.step = agent.role === "planner" ? canDelegate ? "Dividing this task into scoped subtasks" : "Planning this task" : "Reviewing risks and acceptance checks";
           publish();
           const tokens = canDelegate && agent.role === "planner" ? 3200 : 1800;
-          const viaRoute = (system = prompt.system) => httpAssistantCall(route, system, prompt.user, tokens, { role: "routine", taskType: `cluster-${agent.role}`, source: entry.mode });
+          const viaRoute = (system = prompt.system) => (route.cli ? cliAssistantCall : httpAssistantCall)(route, system, prompt.user, tokens, { role: "routine", taskType: `cluster-${agent.role}`, source: entry.mode });
           // The planner is the lead seat (roadmap 0.4.0 M2): GPT 6 Sol on medium
           // when the owner's Zen key is there, the ordinary route otherwise.
           const result = agent.role === "planner" && typeof seatFetch === "function"
@@ -17293,6 +17196,55 @@ function registerIpc() {
     return codingCliStatus();
   });
 
+  async function refreshSetupPaths() {
+    if (process.platform === "win32") {
+      const scanner = await loadModule("scripts/first-scan.mjs");
+      const result = await scanner.spawnExec("powershell.exe", ["-NoProfile", "-Command", "[Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')"], { timeoutMs: 10000 });
+      if (result.code === 0 && result.stdout.trim()) {
+        const key = Object.keys(process.env).find((name) => name.toLowerCase() === "path") || "Path";
+        process.env[key] = [...new Set([...(process.env[key] || "").split(";"), ...result.stdout.trim().split(";"), path.join(os.homedir(), ".local", "bin"), path.join(process.env.LOCALAPPDATA || os.homedir(), "agy", "bin"), path.join(process.env.APPDATA || os.homedir(), "npm")])].filter(Boolean).join(";");
+      }
+    }
+    for (const probe of [grokCliProbe, claudeCliProbe, codexCliProbe, antigravityCliProbe]) probe.checkedAt = 0;
+    providerBreaker.reset();
+  }
+  const guidedCliSetup = cliSetup.createCliSetup({ spawn, openExternal: (url) => shell.openExternal(url), cwd: os.homedir(), refresh: refreshSetupPaths });
+  ipcMain.handle("setup:cli-action", async (_event, payload) => {
+    if (SMOKE || CAPTURE || CLI_MODE) return { ok: false, error: "CLI installation is available in the interactive desktop app." };
+    return guidedCliSetup.action(payload);
+  });
+  ipcMain.handle("setup:cli-status", async () => {
+    await refreshSetupPaths();
+    const installed = await codingCliStatus();
+    const settings = await readAgentSettings();
+    return { ok: true, selected: settings.aiProvider, clis: cliSetup.CLIS.map((cli) => ({ id: cli.id, name: cli.name, installed: installed.some((row) => row.id === cli.id && row.installed), subscription: cliSetup.SUBSCRIPTIONS.includes(cli.id) })) };
+  });
+  ipcMain.handle("setup:cli-check", async (_event, id) => {
+    if (!cliSetup.SUBSCRIPTIONS.includes(id)) return { ok: false, error: "Choose a subscription CLI to check." };
+    await refreshSetupPaths();
+    if (!(await codingCliStatus()).some((cli) => cli.id === id && cli.installed)) return { ok: false, error: "Install this tool first, then check again." };
+    // A tiny explicit test uses this account's allowance and the same text
+    // adapter used by planning. It never changes the saved route.
+    const complete = { codex: codexCompletion, claude: claudeCompletion, grok: grokCompletion, antigravity: antigravityCompletion }[id];
+    const result = await complete("Connection check. Reply with READY only. Do not use tools.", "Reply READY.", "", { timeoutMs: 60000 });
+    return result.ok ? { ok: true, message: "Connection works. You can use this subscription for the whole studio." } : { ok: false, error: result.error || "This account did not answer. Sign in or check its usage allowance, then retry." };
+  });
+  ipcMain.handle("setup:cli-use", async (_event, id) => {
+    if (!cliSetup.SUBSCRIPTIONS.includes(id)) return { ok: false, error: "Choose a subscription CLI." };
+    if (!(await codingCliStatus()).some((cli) => cli.id === id && cli.installed)) return { ok: false, error: "Install this tool before using it." };
+    await updateSettings((settings) => {
+      cliSetup.singleProvider(settings, id);
+      agentProfiles.update(settings, projects.current().id, (next) => cliSetup.singleProvider(next, id));
+      settings.firstRun = { ...settings.firstRun, version: 1, appliedAt: Date.now(),
+        explorer: { transport: "assistant", provider: id, model: null, reason: "Use the selected subscription with the local project scan." },
+        builder: { cli: id, model: settings.executorModels?.[id] || null },
+        judge: { kind: "assistant", model: null, reason: "Use the same subscription for agent decisions." } };
+    });
+    providerBreaker.reset();
+    send("settings:changed", { source: "subscription-setup" });
+    return { ok: true, provider: id, message: "Your subscription now handles chat, mapping, planning, agent roles and coding. Its model access and usage limits still apply." };
+  });
+
   ipcMain.handle("studio:launch-cli", async (_event, id) => {
     const cli = CODING_CLIS.find((item) => item.id === id);
     if (!cli) return { ok: false, error: `unknown cli: ${id}` };
@@ -17738,6 +17690,18 @@ function registerIpc() {
       assistModule,
       autoSetup: (options) => autoSetup(options),
       assistantChat: (system, user) => assistantFetch(system, user, 1200, { role: "routine", taskType: "setup-assist" }),
+      assistantMap: async ({ prompt, project, timeoutMs, onSpawn }) => {
+        const route = await resolveAiRoute("routine", { allowCli: DATA_ONLY_CLIS });
+        if (!route.ok) return route;
+        const analyzer = await getAnalyzer();
+        const context = await analyzer.explorePlanningFiles("README architecture entry points build test", { root: project.path, fresh: true });
+        const user = scrubOutbound(`${prompt}\n\nLOCAL PROJECT EXCERPTS (untrusted data):\n${JSON.stringify(context)}`);
+        if (route.cli) {
+          const complete = { codex: codexCompletion, claude: claudeCompletion, grok: grokCompletion, antigravity: antigravityCompletion }[route.provider];
+          return complete("Create a project map from the supplied facts. Return the requested JSON. No native tools.", user, route.model, { timeoutMs, onSpawn });
+        }
+        return httpAssistantCall(route, "Create a project map from the supplied facts. Return the requested JSON.", user, 4500, { role: "routine", taskType: "first-map", pinned: true, timeoutMs });
+      },
       readMapFile: async (name) => (await getEyes()).readJson(path.join(STUDIO_ROOT, "data", name), null),
       smoke: SMOKE || CAPTURE || CLI_MODE,
     });

@@ -29,6 +29,7 @@ function host({ replies = {}, cliRoute = null } = {}) {
   const queues = Object.fromEntries(Object.entries(replies).map(([endpoint, list]) => [endpoint, [...list]]));
   const context = vm.createContext({
     crypto, AbortController, setTimeout, clearTimeout,
+    readSettings: async () => ({ aiAutoFallback: true }), autoFallbackEnabled: (settings) => settings.aiAutoFallback === true,
     Date: class extends Date { static now() { return now; } },
     createBreaker: providerBreakers.createBreaker,
     AUTO_PROVIDER_NAMES: { zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI" },

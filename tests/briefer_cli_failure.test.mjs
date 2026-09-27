@@ -7,6 +7,7 @@ import vm from "node:vm";
 
 const require = createRequire(import.meta.url);
 const { parseClaudeCliResult } = require("../scripts/usage-tracker.cjs");
+const cliText = require("../scripts/cli-text.cjs");
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
 function section(start, end) {
   const from = source.indexOf(start), to = source.indexOf(end, from + start.length);
@@ -16,24 +17,28 @@ function section(start, end) {
 
 function host(replies) {
   let queued = 0;
+  const spawn = () => {
+    const reply = replies.shift();
+    assert.ok(reply, "no unexpected paid-call attempt");
+    const child = new EventEmitter();
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    child.stdin = { on() {}, write() {}, end() {
+      queueMicrotask(() => {
+        child.stdout.emit("data", reply.stdout);
+        child.stderr.emit("data", reply.stderr || "");
+        child.emit("close", reply.code);
+      });
+    } };
+    return child;
+  };
   const context = vm.createContext({
     Date, setTimeout, clearTimeout, parseClaudeCliResult,
     projectRoot: () => "fixture-project",
-    spawn() {
-      const reply = replies.shift();
-      assert.ok(reply, "no unexpected paid-call attempt");
-      const child = new EventEmitter();
-      child.stdout = new EventEmitter();
-      child.stderr = new EventEmitter();
-      child.stdin = { on() {}, write() {}, end() {
-        queueMicrotask(() => {
-          child.stdout.emit("data", reply.stdout);
-          child.stderr.emit("data", reply.stderr || "");
-          child.emit("close", reply.code);
-        });
-      } };
-      return child;
-    },
+    spawn,
+    // claudeCompletion reaches the CLI through scripts/cli-text.cjs; the real
+    // module runs here against the same fake child.
+    cliText: { run: (options) => cliText.run({ ...options, spawnImpl: spawn, platform: "linux" }) },
     assistantState: { prefs: {}, ai: { online: true, failures: 0, lastError: null, backoffUntil: 0 }, problems: [] },
     assistantCache: {}, assistantModule: null, assistantAiProbeAttempts: 0,
     clearAssistantAiProbe() {}, logError() {}, assistantLog() {},
