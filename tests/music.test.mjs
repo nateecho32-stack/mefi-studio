@@ -650,7 +650,7 @@ test("Audio reactions start gently and provide independent accessible checkboxes
   }
   const response = env.ids.get("music-audio-response");
   assert.ok(response.attrs["aria-label"]);
-  assert.match(env.ids.get(response.attrs["aria-describedby"]).textContent, /0%.*without changing playback volume/);
+  assert.match(env.ids.get(response.attrs["aria-describedby"]).textContent, /0%.*without changing the volume/);
 });
 
 test("Audio reaction choices restore from the host and follow external status updates without changing capture", () => {
@@ -916,7 +916,9 @@ test("A station that was on when Studio closed plays again on the next launch; S
   const relaunched = environment({ saved }); await flush();
   assert.equal(relaunched.audios.length, 1, "a relaunch tunes on deck A; there is nothing to cross over from");
   assert.equal(relaunched.audio.src, mirror("dronezone"));
-  assert.equal(relaunched.audio.volume, .7);
+  assert.equal(relaunched.audio.volume, 0, "a station resumed at launch starts silent instead of at full volume");
+  relaunched.advance(1200); assert.ok(relaunched.audio.volume > 0 && relaunched.audio.volume < .7, "and rises");
+  relaunched.advance(1400); assert.equal(relaunched.audio.volume, .7, "to the saved level");
   assert.equal(relaunched.music.status().source, "radio");
   assert.equal(relaunched.music.status().playing, true);
   assert.equal(relaunched.ids.get("music-radio-panel").hidden, false, "the radio tab is the one showing");
@@ -1569,14 +1571,14 @@ test("Show links masks pasted URLs and hides queue and clipboard URLs without ch
   show.click();
   assert.equal(show.attrs["aria-pressed"], "false"); assert.equal(input.type, "password");
   assert.equal(env.ids.get("music-link-queue-list").children[0].children[0].children[1].hidden, true);
-  assert.equal(env.ids.get("music-clipboard-offer").children[1].hidden, true);
+  assert.equal(env.ids.get("music-clipboard-offer").children[0].children[1].hidden, true);
   assert.equal(env.music.linkElement().element, player);
   const restored = environment({ menuSaved: JSON.parse(env.storage.get("mefiStudio.mediaMenu.v1")) });
   assert.equal(restored.ids.get("music-link-url").type, "password");
   show.click();
   assert.equal(input.type, "text"); assert.equal(input.value, "https://example.com/pasted.mp4");
   assert.equal(env.ids.get("music-link-queue-list").children[0].children[0].children[1].hidden, false);
-  assert.equal(env.ids.get("music-clipboard-offer").children[1].hidden, false);
+  assert.equal(env.ids.get("music-clipboard-offer").children[0].children[1].hidden, false);
 });
 
 test("Audio setting option menus keep their owner open and consume Escape before the media dropdown", () => {
@@ -2109,12 +2111,12 @@ test("queued end events advance once, ignore stale or foreign frames and restart
 test("queue validates persisted entries, bounds storage and keeps manual queue ahead of explorer results", async () => {
   const env = environment({ queueSaved: [{ url: "javascript:alert(1)" }, { url: "https://www.twitch.tv/example" }, { url: "https://example.com/queued.mp4", title: "Queued" }], bridge: { youtubeSearch: async () => ({ ok: true, results: [{ id: YT, title: "First" }, { id: "M7lc1UVf-VE", title: "Second" }] }) } });
   assert.equal(env.ids.get("music-link-queue-list").children.length, 1);
-  env.ids.get("music-youtube-query").value = "music"; env.ids.get("music-youtube-search").click(); await flush();
+  env.ids.get("music-link-url").value = "music"; env.ids.get("music-link-load").click(); await flush();
   const results = env.ids.get("music-youtube-results");
-  results.children[0].children[1].click(); results.children[1].children[2].click();
+  results.children[0].children[0].click(); results.children[1].children[1].click();
   assert.equal(env.ids.get("music-link-queue-list").children.length, 2);
   env.ids.get("music-link-next").click(); assert.equal(env.music.linkElement().url, "https://example.com/queued.mp4");
-  results.children[0].children[3].click();
+  results.children[0].children[2].click();
   assert.match(JSON.parse(env.storage.get("mefiStudio.mediaQueue.v1"))[0].url, new RegExp(YT));
   env.ids.get("music-link-url").value = "https://example.com/repeat.mp4";
   for (let index = 0; index < 55; index++) env.ids.get("music-link-queue-add").click();
@@ -2132,8 +2134,13 @@ test("video volume and mute control YouTube, Vimeo and native files and survive 
   restored.music.playLink(`https://www.youtube.com/watch?v=${YT}`); frame = restored.music.linkElement().element;
   restored.message({ source: frame.contentWindow, origin: "https://www.youtube-nocookie.com", data: { event: "onReady" } });
   assert.equal(frame.messages.at(-2)[0].args[0], 35); assert.equal(frame.messages.at(-1)[0].func, "mute");
-  restored.message({ source: frame.contentWindow, origin: "https://www.youtube-nocookie.com", data: { event: "infoDelivery", info: { volume: 60, muted: false } } });
-  assert.equal(restored.ids.get("music-link-volume").value, "60"); assert.equal(restored.ids.get("music-link-mute").attrs["aria-pressed"], "false");
+  const report = (info) => restored.message({ source: frame.contentWindow, origin: "https://www.youtube-nocookie.com", data: { event: "infoDelivery", info } });
+  report({ volume: 100, muted: false });
+  assert.equal(restored.ids.get("music-link-volume").value, "35", "the player's old level is an echo, never saved over yours");
+  assert.equal(JSON.parse(restored.storage.get("mefiStudio.mediaVolume.v1") || "{\"volume\":0.35}").volume, .35);
+  report({ volume: 35, muted: true });
+  report({ volume: 60, muted: false });
+  assert.equal(restored.ids.get("music-link-volume").value, "60", "once it agrees, a change made in YouTube is kept"); assert.equal(restored.ids.get("music-link-mute").attrs["aria-pressed"], "false");
   env.music.playLink("https://vimeo.com/12345678"); frame = env.music.linkElement().element;
   env.ids.get("music-link-volume").value = "20"; env.ids.get("music-link-volume").dispatch("input");
   assert.deepEqual(frame.messages.at(-2)[0], { method: "setVolume", value: .2 });
@@ -2144,9 +2151,14 @@ test("video volume and mute control YouTube, Vimeo and native files and survive 
 
 test("YouTube explorer plays results, advances to the next result and supports playlist Next", async () => {
   const env = environment({ bridge: { youtubeSearch: async query => { assert.equal(query, "quiet music"); return { ok: true, results: [{ id: YT, title: "First", channel: "One" }, { id: "M7lc1UVf-VE", title: "Second" }] }; } } });
-  env.ids.get("music-youtube-query").value = "quiet music"; env.ids.get("music-youtube-search").click(); await flush();
+  const field = env.ids.get("music-link-url"); field.value = "quiet music"; field.dispatch("input");
+  assert.equal(env.ids.get("music-link-load").textContent, "Search", "words in the one field search");
+  env.ids.get("music-link-load").click(); await flush();
   const results = env.ids.get("music-youtube-results"); assert.equal(results.children.length, 2);
-  results.children[0].children[1].click(); assert.match(env.music.linkElement().url, new RegExp(YT));
+  assert.match(results.children[0].children[0].children[0].children[0].src, new RegExp(`i\\.ytimg\\.com/vi/${YT}/`), "each result shows its thumbnail");
+  results.children[0].children[0].click(); assert.match(env.music.linkElement().url, new RegExp(YT));
+  field.value = "youtu.be/M7lc1UVf-VE"; field.dispatch("input");
+  assert.equal(env.ids.get("music-link-load").textContent, "Play", "a link typed without https:// still plays");
   env.ids.get("music-link-next").click(); assert.match(env.music.linkElement().url, /M7lc1UVf-VE/);
   env.music.playLink(`https://www.youtube.com/watch?v=${YT}&list=PLabcdefghijk`);
   const frame = env.music.linkElement().element; env.ids.get("music-link-next").click();

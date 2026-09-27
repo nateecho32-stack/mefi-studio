@@ -236,3 +236,102 @@ test("Shared video modes start sampling, pass the tree footprint, and reject old
   assert.equal(d.preferences().videoTarget, "dark"); assert.equal(env.intervals.size, 1);
   env.controller.hide(); assert.equal(d.status().available, false); assert.equal(env.intervals.size, 0);
 });
+
+test("A background whose picture stays still dims for the tree and brightens again when it moves", async () => {
+  const env = environment(); const requests = [];
+  let next = [];
+  env.window.mefiStudio.mediaSceneSample = async rect => { requests.push(rect); return next.shift() ?? { ok: false }; };
+  env.route("command");
+  env.show(); env.ids.get("media-window-background").click();
+  const dim = () => env.content.style["--media-still-dim"];
+  assert.equal(dim(), "0"); assert.equal(env.root.dataset.still, "false");
+  assert.equal(env.intervals.size, 1, "Command with a background video watches for a still picture");
+  const sample = [...env.intervals.values()][0];
+  const reading = (motion, light = .7) => ({ ok: true, scores: [.5, .5, .5, .5, .5, .5, .5, .5, .5], light, ...(motion === null ? {} : { motion }) });
+  next = [reading(null), reading(.0002), reading(.0004)];
+  await sample(); await sample(); assert.equal(dim(), "0", "one quiet look is not enough");
+  assert.deepEqual({ ...requests[0] }, { x: 16, y: 16, w: 1408, h: 868 }, "the whole background area is watched");
+  await sample();
+  assert.equal(env.root.dataset.still, "true"); assert.equal(dim(), "0.72", "a bright still picture dims well down");
+  assert.equal(env.controller.stillStatus().reason, "still");
+  assert.match(env.ids.get("media-window-still-note").textContent, /stayed still/);
+  next = [reading(.3)]; await sample();
+  assert.equal(dim(), "0.72", "the look across the dimming itself is not motion");
+  next = [reading(.0002)]; await sample(); assert.equal(dim(), "0.72", "a dimmed still picture stays dimmed");
+  next = [reading(.02)]; await sample();
+  assert.equal(dim(), "0", "motion seen through the dim brightens the picture again");
+  assert.equal(env.root.dataset.still, "false");
+
+  env.controller.playback({ playing: false });
+  assert.equal(env.controller.stillStatus().reason, "paused"); assert.equal(dim(), "0.72");
+  assert.equal(env.intervals.size, 0, "a paused video needs no looking at");
+  env.controller.playback({ playing: true });
+  assert.equal(dim(), "0"); assert.equal(env.intervals.size, 1);
+
+  env.ids.get("media-window-still").click();
+  env.controller.playback({ playing: false });
+  assert.equal(dim(), "0", "switched off, nothing dims");
+  assert.equal(JSON.parse(env.storage.get("mefiStudio.mediaWindow.v1")).stillDim, false);
+  const restored = environment(JSON.parse(env.storage.get("mefiStudio.mediaWindow.v1"))); restored.show();
+  assert.equal(restored.ids.get("media-window-still").attrs["aria-pressed"], "false");
+  env.ids.get("media-window-still").click(); assert.equal(dim(), "0.72");
+  env.ids.get("media-window-background").click();
+  assert.equal(dim(), "0", "a floating player is never dimmed");
+
+  const audio = environment(); audio.route("command");
+  audio.show("audio"); audio.ids.get("media-window-background").click();
+  assert.equal(audio.controller.stillStatus().reason, "audio"); assert.equal(audio.content.style["--media-still-dim"], "0.55", "an unmeasured picture dims to a middle level");
+  assert.equal(audio.intervals.size, 0, "a player with no picture is dimmed without sampling");
+  const menus = environment(); menus.window.mefiStudio.mediaSceneSample = async () => ({ ok: true, scores: [] });
+  menus.show(); menus.ids.get("media-window-background").click();
+  assert.equal(menus.intervals.size, 0, "Settings and other pages are never sampled for stillness");
+});
+
+test("The floating player steps aside for the open menu and returns to its chosen place", () => {
+  const env = environment(); env.show(); const home = env.rect();
+  const menu = { x: 800, y: 100, width: 620, height: 780 };
+  const clear = (a, b) => a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y;
+  env.controller.avoid(menu);
+  const aside = env.rect();
+  assert.ok(clear(aside, menu), JSON.stringify({ aside, menu })); assert.equal(aside.y, home.y, "it slides sideways first");
+  env.ids.get("media-window-pin").click();
+  assert.equal(JSON.parse(env.storage.get("mefiStudio.mediaWindow.v1")).x, 1, "stepping aside is never saved as the place");
+  env.controller.avoid(menu); assert.deepEqual(env.rect(), aside, "repeated positioning keeps it still");
+  env.controller.avoid(null); assert.deepEqual(env.rect(), home);
+  env.controller.avoid(menu); const moved = env.rect();
+  env.begin("move", moved.x + 20, moved.y + 10); env.pointer(moved.x - 30, moved.y - 40, { buttons: 1 }); env.finish();
+  const chosen = env.rect();
+  env.controller.avoid(null); assert.deepEqual(env.rect(), chosen, "a deliberate move while the menu is open is kept");
+  env.ids.get("media-window-background").click(); env.controller.avoid(menu);
+  assert.equal(env.root.dataset.background, "true", "a background is never moved");
+});
+
+test("Still-picture detection rejects stale captures and needs consecutive comparable samples", async () => {
+  const env = environment(); env.route("command");
+  let resolve;
+  env.window.mefiStudio.mediaSceneSample = () => new Promise(done => { resolve = done; });
+  env.controller.show({ url: "first.mp4", shape: "video", label: "First" });
+  env.ids.get("media-window-background").click();
+  const sample = [...env.intervals.values()][0];
+  const reading = { ok: true, light: .7, motion: .001, scores: Array(9).fill(.7) };
+  const accept = async (result = reading) => { const pending = sample(); resolve(result); await pending; };
+  await accept(); await accept();
+  const pending = sample();
+  env.controller.show({ url: "second.mp4", shape: "video", label: "Second" });
+  resolve(reading); await pending;
+  assert.equal(env.controller.stillStatus().light, null, "a replaced video's pending capture is discarded");
+  await accept(); await accept();
+  await accept({ ...reading, motion: undefined });
+  await accept();
+  assert.equal(env.controller.stillStatus().still, false, "a missing baseline breaks the still streak");
+  await accept(); assert.equal(env.controller.stillStatus().still, true);
+  env.controller.playback({ playing: false });
+  env.controller.playback({ playing: true });
+  assert.equal(env.controller.stillStatus().reason, "", "resuming clears the pre-pause still verdict");
+  const restarting = sample();
+  env.controller.playback({ playing: false });
+  env.controller.playback({ playing: true });
+  resolve(reading); await restarting;
+  await accept(); await accept();
+  assert.equal(env.controller.stillStatus().still, false, "a capture spanning a restart cannot seed the new streak");
+});

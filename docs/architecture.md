@@ -805,20 +805,35 @@ proposal is left out and counted in its note.
   SoundCloud or Vimeo link in that service's embed, and a plain audio or
   video file (a Discord attachment, say) in its own `<video>`. The player lives
   in a borderless floating window across Studio, keeping the same playing frame
-  while you navigate. **Video settings** inside Music & video holds **Pin**, **Move aside**, minimize and close without covering the provider’s controls or settings;
+  while you navigate. Its title bar has a drag grip, title (opens Music & video),
+  minimize and close. A minimized player remains as a small restorable strip.
+  **Video settings** inside Music & video holds **Pin in place** and **Move aside for the pointer** without covering the provider’s controls or settings;
   drag its grip or any edge to move or resize it. The grip and bottom-right
   resize control also accept arrow keys, with Shift for fine steps. In deeper
   menus, Move aside glides out of the pointer's way once; following it, hovering
   or focusing it keeps it still. Pin and reduced motion also prevent dodging.
   Geometry and toggles are remembered locally; automatic moves are temporary.
-  **Background** puts the video behind the workspace without intercepting clicks;
+  Opening the music menu temporarily moves the player beside it when space
+  permits; on narrow screens the menu stays above the player. Closing the menu
+  restores the chosen position unless the player was deliberately moved.
+  **Studio background** puts the video behind the workspace without intercepting clicks;
   the node tree keeps full-strength nodes and labels over the video, with separate brightness and transparency controls, and
   inactive pages stay hidden beneath Command.
-  **Float video** brings back the interactive provider player. **Video transparency** and **Tree transparency** independently control the video and Command canvases, keeping menus readable. Zero transparency means full opacity. **Video brightness** ranges from 25–150% and defaults to 100%, replacing the old fixed 55% dimming; inactive workspace page styles cannot override the tree slider. These values are saved with media settings. Controls disappear with the media menu and stay hidden in Zen. **Keep tree in dark areas** is a shortcut for the shared video reaction mode. It samples broad on-screen regions every five seconds, requires two consistent improvements and the configured region hold, then smoothly moves the tree. Sampling pauses during menus, manual camera interaction and Zen. No screenshots are saved or transmitted. **Fade on finish**
+  Switching **Studio background** off brings back the interactive provider player. **Video transparency** and **Tree transparency** independently control the video and Command canvases, keeping menus readable. Zero transparency means full opacity. **Video brightness** ranges from 25–150% and defaults to 100%; inactive workspace page styles cannot override the tree slider. These values are saved with media settings. Settings disappear with the menu and the title bar stays hidden in Zen.
+  **Dim a still picture**, enabled by default, adds a gentle theme-colored shade
+  to paused or pictureless backgrounds and videos whose picture stays still.
+  Two consecutive comparisons of a coarse scene grid confirm stillness, normally
+  within 15 seconds. Motion returns the video to its chosen brightness; the
+  note below the switch explains the current state. Sampling runs only on tree
+  views with the media menu closed. Captures are analyzed locally in memory;
+  only brightness and motion numbers reach the renderer, never image data.
+  **Keep tree in dark areas** is a shortcut for the shared video reaction mode. It samples broad on-screen regions every five seconds, requires two consistent improvements and the configured region hold, then smoothly moves the tree. Tree-placement sampling pauses during menus, manual camera interaction and Zen. No screenshots are saved or transmitted. **Fade on finish**
   dims the media when a known task newly reaches Done, with a notification to
   **View result** or **Restore video**. Historical, dropped and merely awaiting
   verification tasks do not trigger it. Restore video also remains in the panel.
-  **Show player** restores a minimized window, and closing it stops playback.
+  **Now playing** and Video settings appear first in Links, followed by adding
+  links, search, Up next and Listen together. **Stop** closes the current player
+  and stops playback; **Show player** restores a minimized window.
   An open player returns after Studio closes or reloads if it was present in
   the last ten minutes, retaining geometry, background/transparency preferences
   and minimized state. Explicitly closing the player or switching sources clears

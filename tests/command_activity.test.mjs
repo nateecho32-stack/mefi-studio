@@ -680,3 +680,32 @@ test("the chat thread rebuilds only when a bubble, its age label or the pending 
   assert.equal(thread.children.length, 3);
   assert.match(thread.children[2].textContent, /^Done\./);
 });
+
+test("the activity feed keeps unchanged rows and remakes only the entry that changed", () => {
+  const env = environment();
+  const rows = () => [...env.el.feedList.children];
+  const paint = () => { env.state.feedDirty = true; env.renderFeed(); };
+  env.state.feed = [{ id: "b", kind: "log", text: "second", at: 1 }, { id: "a", kind: "log", text: "first", at: 1 }];
+  paint();
+  const [second, first] = rows();
+  assert.equal(rows().length, 2);
+  // A new entry is one insertion at the top; the rows below are the same nodes.
+  env.state.feed.unshift({ id: "c", kind: "log", text: "third", at: 1 });
+  paint();
+  assert.deepEqual(rows().slice(1), [second, first]);
+  assert.match(rows()[0].textContent, /third/);
+  // A folded repeat rewrites its own row only.
+  env.state.feed[0].count = 2;
+  paint();
+  assert.match(rows()[0].textContent, /third ×2/);
+  assert.deepEqual(rows().slice(1), [second, first]);
+  // Nothing changed: nothing is rebuilt.
+  const before = rows();
+  paint();
+  assert.deepEqual(rows(), before);
+  // Entries past the cap leave with their rows.
+  env.state.feed.length = 1;
+  paint();
+  assert.equal(rows().length, 1);
+  assert.match(rows()[0].textContent, /third ×2/);
+});

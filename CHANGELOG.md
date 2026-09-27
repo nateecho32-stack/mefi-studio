@@ -81,6 +81,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   Undo waits for a running worker and preserves later edits and daily budgets.
   Real-world leftovers become a short For you list. Task reservations keep
   work from starting until the decision and its undo evidence are saved.
+- Music & video puts Now playing and video settings first, with clearer switches
+  and a Stop action. The floating player has a title bar and a restorable
+  minimized strip, and keeps the music menu reachable. Still or paused video
+  backgrounds dim automatically so the node tree stays readable; moving video
+  returns to its chosen brightness. This can be disabled in Video settings.
 - "Mefi sizes it": **Build it** in Vibe asks whether a request is one task.
   A short, single change goes straight onto the board; a bigger one gets one
   call to the lead seat, which may split it into two to six steps that each

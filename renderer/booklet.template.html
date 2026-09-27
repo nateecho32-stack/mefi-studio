@@ -2,8 +2,8 @@
 <html lang="en" data-starting>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; script-src 'self' 'unsafe-inline'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' file: data: blob:; connect-src 'self' file:; media-src 'self' file: data: blob: https:; frame-src https://open.spotify.com https://www.youtube-nocookie.com https://player.vimeo.com https://w.soundcloud.com;">
-<!-- media-src takes any https file for the Links tab (the radio hosts and Discord attachments among them); frame-src lists only the players music.js builds URLs for. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; script-src 'self' 'unsafe-inline'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' file: data: blob: https://i.ytimg.com; connect-src 'self' file:; media-src 'self' file: data: blob: https:; frame-src https://open.spotify.com https://www.youtube-nocookie.com https://player.vimeo.com https://w.soundcloud.com;">
+<!-- media-src takes any https file for the Links tab (the radio hosts and Discord attachments among them); frame-src lists only the players music.js builds URLs for; img-src adds YouTube's thumbnail host for search results. -->
 <!-- SomaFM refuses stream requests that carry a Referer, and <audio> has no referrerpolicy attribute. -->
 <meta name="referrer" content="no-referrer">
 <title>Mefi's Studio AI+ · Your workspace</title>

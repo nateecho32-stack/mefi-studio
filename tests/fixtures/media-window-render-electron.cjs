@@ -70,7 +70,9 @@ app.whenReady().then(async () => {
   await embedded.executeJavaScript("document.querySelector('#menu button').click()");
   await sleep(100);
   assert.equal(await run("return window.fixtureQuality;"), 1, "provider settings menu remains usable");
-  await run("document.querySelectorAll('#toast-host .toast-dismiss').forEach(button=>button.click());window.MefiMusic.openAudio();document.getElementById('media-window-move').scrollIntoView({block:'nearest'});"); await sleep(450);
+  await run("document.querySelectorAll('#toast-host .toast-dismiss').forEach(button=>button.click());window.MefiMusic.closeAudio();"); await sleep(450);
+  assert.equal(await run("return document.getElementById('media-window').contains(document.getElementById('media-window-move'));"), true, "the drag handle stays in the player's own title bar");
+  before = await rect();
   const handle = await run("const n=document.getElementById('media-window-move'),r=n.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.outerHTML?.slice(0,400)};");
   await mouse(handle.x, handle.y); await mouse(handle.x, handle.y, "mouseDown"); await mouse(handle.x - 160, handle.y - 100); await mouse(handle.x - 160, handle.y - 100, "mouseUp");
   let after = await rect(); report.drag = Math.abs(after.x - (before.x - 160)) < 2 && Math.abs(after.y - (before.y - 100)) < 2; assert.ok(report.drag, JSON.stringify({ before, after, handle }));
@@ -80,6 +82,7 @@ app.whenReady().then(async () => {
   await mouse(before.x + before.width + 59, before.y + before.height + 31); await mouse(before.x + before.width + 59, before.y + before.height + 31, "mouseUp");
   after = await rect(); report.resize = Math.abs(after.width - before.width - 64) < 2 && Math.abs(after.height - before.height - 36) < 2; assert.ok(report.resize, JSON.stringify({ before, after }));
   await run("document.getElementById('media-window-minimize').click();"); report.minimize = (await rect()).height === 44;
+  assert.equal(await run("const n=document.getElementById('media-window-minimize'),r=n.getBoundingClientRect();return getComputedStyle(document.getElementById('media-window')).visibility==='visible'&&n.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));"), true, "the minimized strip retains a reachable restore button");
   await run("document.getElementById('music-link-show').click();window.MefiNav.go('workspace');");
   assert.equal(await run("return window.fixtureMedia===window.MefiMusic.linkElement().element&&!document.getElementById('media-window').hidden;"), true);
   await run("window.MefiNav.go('studio',{category:'general'});document.activeElement.blur();document.documentElement.dataset.motion='on';");
@@ -183,7 +186,7 @@ app.whenReady().then(async () => {
     assert.ok(treeControls.mode==='hybrid'&&treeControls.shared==='hybrid'&&treeControls.scroll<=treeControls.width+1&&treeControls.clear, `tree modes are synchronized and reachable at ${width}px: ${JSON.stringify(treeControls)}`);
     await run("window.MefiMusic.closeAudio();");
   }
-  await run("window.MefiMusic.openAudio();const brightness=document.getElementById('media-tree-nodeBrightness');brightness.closest('details').open=true;brightness.value='1.5';brightness.dispatchEvent(new Event('input'));const lines=document.getElementById('media-tree-lineBrightness');lines.value='.5';lines.dispatchEvent(new Event('input'));const outlines=document.getElementById('media-tree-outlines');outlines.checked=true;outlines.dispatchEvent(new Event('change'));brightness.scrollIntoView({block:'center'});");
+  await run("window.MefiMusic.openAudio();const brightness=document.getElementById('media-tree-nodeBrightness');for(let fold=brightness.closest('details');fold;fold=fold.parentElement.closest('details'))fold.open=true;brightness.value='1.5';brightness.dispatchEvent(new Event('input'));const lines=document.getElementById('media-tree-lineBrightness');lines.value='.5';lines.dispatchEvent(new Event('input'));const outlines=document.getElementById('media-tree-outlines');outlines.checked=true;outlines.dispatchEvent(new Event('change'));brightness.scrollIntoView({block:'center'});");
   await sleep(250);
   assert.equal(await run("const input=document.getElementById('media-tree-nodeBrightness'),r=input.getBoundingClientRect(),panel=input.closest('details');return document.getElementById('appearance-tree-nodeBrightness').value==='1.5'&&document.getElementById('audio-tree-lineBrightness').value==='0.5'&&window.MefiTreeDynamics.preferences().outlines&&panel.scrollWidth<=panel.clientWidth+1&&input===document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)&&window.fixtureMedia===window.MefiMusic.linkElement().element;"), true, "brightness and outline controls synchronize across menus and remain reachable at 600px without reloading playback");
   await capture("media-tree-brightness-controls.png");

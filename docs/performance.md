@@ -1,5 +1,66 @@
 # Agent loop and startup measurements
 
+## Command over a video background stops restyling the page, September 26, 2026
+
+The owner's everyday scene: Command in Zen, a YouTube link as the Studio
+background (`data-media-background`), desktop audio driving the tree, 18
+nodes in the Singularity style, five agents running. Measured on the live
+packaged app (1536×938 at 125 %) through the main process's inspector:
+`contentTracing` for the per-thread split, `webContents.debugger` for the
+renderer CPU profile, and `MefiProfiler` for frames and spans.
+
+Before, the renderer's main thread was 65 % busy and 42 % of it was
+`Document::recalcStyle`, not JavaScript. The causes, heaviest first:
+
+- **The page under Command kept rendering.** With a video background `main`
+  is only `visibility: hidden`, so Settings' node-style previews ran their
+  CSS animations at 60 Hz (about 1000 style invalidations a second), and
+  every forced layout re-laid out the hidden Settings page. Section 17 of
+  `styles.css` now sets `content-visibility: hidden` on `main`,
+  `header.page-head` and `#tabs` while Command covers them (after its fade;
+  Appearance and the music preview still float the page over Command).
+- **`studio-ui.js` restyled on every DOM insertion.** Its MutationObserver
+  read `getComputedStyle` for each added element, forcing a style recalc per
+  feed or roster rebuild: single 300 to 470 ms tasks. Added nodes are now
+  tracked on the throttled refresh (rows replaced before then are never
+  measured; selects are still enhanced at once), regions inside the covered
+  page are skipped by selector instead of measured, and `hidden`, `title`,
+  box and owner are written only when they change.
+- **Same-value writes re-ran the page's `:has()` rules.** An unchanged
+  `hidden` still invalidates, and the page has 75 `:has()` rules, several on
+  `body`. The rail badges, the music toggle, `bumpHud`'s `dim` removal and
+  `nav.js` `paintBadges` now write only on change.
+- **Rail lists rebuilt whole.** The activity feed keeps its rows by entry id
+  (a streamed line remakes the newest row only, pinned in
+  `tests/command_activity.test.mjs`), the agent roster remakes one row at a
+  time, and the Ask cards are left alone when the questions read the same
+  (a rebuild also wiped a half-typed answer).
+- **The empty far canvas was cleared every frame** over the video. It is
+  cleared only when the last frame left something on it.
+
+Live, same scene, 10 s windows (the scene is live, so treat these as
+indicative):
+
+| | Before | After |
+|---|---:|---:|
+| Frame rate (`MefiProfiler`) | 34 fps | 58 fps |
+| p95 frame interval | 83 ms | 17 ms |
+| Frame gaps ≥ 50 ms | 39 | 4 |
+| Long tasks ≥ 50 ms | 46 | 2 |
+| `command.frame` mean | 3.3 ms | 1.7 ms |
+| DOM mutation records per 5 s | 5302 | 460 |
+| Renderer main thread busy (trace) | 65 % | 31 % |
+| `Document::recalcStyle` per 6 s | 2520 ms | 343 ms |
+
+Command's frame gate now holds the display's rate because frames stay cheap,
+so the GPU process presents about 60 frames a second instead of 34 and its
+CPU rose accordingly (about 80 % to 110 % of a core). Per frame it is about
+144 cached radial-gradient fills and 214 arcs (the Singularity halos, extra
+glow and orbit trails; no shadows, filters or blend modes). Cutting that is
+a visible trade-off and was left for the owner. Still open: `agents.js`
+repaints `#agents-work-hub` twice a second while its sheet is closed, and
+the companion orb's SVG and `box-shadow` animations run on the main thread.
+
 ## Pushes cross into the page once, September 25, 2026
 
 With `contextIsolation` on, the context bridge deep-copies every value the

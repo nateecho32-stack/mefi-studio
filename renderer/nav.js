@@ -1121,32 +1121,39 @@
 
   // ---- badges ------------------------------------------------------------
 
+  // Badges repaint on every push, several a second while agents run. Only
+  // what changed is written: an unchanged `hidden`, class or text still
+  // queues a mutation and re-runs the page's :has() rules.
   function paintBadges(root) {
     const scope = root ?? document;
+    const hide = (element, hidden) => { if (element.hidden !== hidden) element.hidden = hidden; };
+    const text = (element, value) => { if (element.textContent !== value) element.textContent = value; };
+    const flag = (element, name, on) => { if (element.classList.contains(name) !== on) element.classList.toggle(name, on); };
     for (const element of scope.querySelectorAll("[data-badge]")) {
       const key = element.dataset.badge;
       const value = badges[key];
       if (element.dataset.badgeMode === "dot") {
-        element.hidden = !value || value === "free";
+        hide(element, !value || value === "free");
         continue;
       }
       if (element.dataset.badgeMode === "tone") {
         // green while the service runs, amber when it wants attention, grey paused
-        element.hidden = !value;
-        element.classList.toggle("live", value === "ok" || value === "busy");
-        element.classList.toggle("warn", value === "warn" || value === "offline");
-        element.title = value ? `assistant · ${value}` : "";
+        hide(element, !value);
+        flag(element, "live", value === "ok" || value === "busy");
+        flag(element, "warn", value === "warn" || value === "offline");
+        const title = value ? `assistant · ${value}` : "";
+        if (element.title !== title) element.title = title;
         continue;
       }
       if (key === "machine") {
-        element.textContent = value === "exclusive" ? "excl" : value === "busy" ? "busy" : "";
-        element.classList.toggle("warn", value === "busy");
-        element.classList.toggle("bad", value === "exclusive");
-        element.hidden = !(value === "busy" || value === "exclusive");
+        text(element, value === "exclusive" ? "excl" : value === "busy" ? "busy" : "");
+        flag(element, "warn", value === "busy");
+        flag(element, "bad", value === "exclusive");
+        hide(element, !(value === "busy" || value === "exclusive"));
         continue;
       }
-      element.textContent = String(value ?? 0);
-      element.hidden = !(Number(value) > 0);
+      text(element, String(value ?? 0));
+      hide(element, !(Number(value) > 0));
     }
   }
 

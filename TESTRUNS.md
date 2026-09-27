@@ -52,6 +52,148 @@ Electron frame captures of 13 menu transitions at 1920x1080: the worst
 frame gap for opening a task detail fell from 133 ms to 67 ms, and
 Configuration's category switch now holds 33 ms.
 
+## 2026-09-26 - Push readiness validation interrupted by concurrent music edits
+
+Before validation, main matched origin/main. The renderer booklet rebuild,
+npm run check and npm run audit passed (zero audit findings); npm run lint
+passed with zero errors and 72 warnings. Full npm test completed with exit 1:
+Node CPU stage 3825 tests, 3821 passed, 4 skipped, no failures; Electron
+fixtures failed with renderer startup errors including toggleLink not defined.
+The runner detected source changes during the Electron stage. renderer/music.js
+was rewritten during the run, so this is not a stable-tree regression verdict
+or approval to publish the current files. Both exclusive Electron stages passed
+(3 tests); Python passed all 248 tests; all six normalized-path checks passed.
+No commit or push was made. A quiet-tree rebuild and validation are required
+once the concurrent music edits finish. The unrelated game plan.md stays local.
+Full output is in the OS temporary mefi-push-validation-20260926.log; lint output
+is in mefi-push-lint-20260926.log. Live stores and portable data were untouched.
+
+## 2026-09-26 - c655647 solo Command and committed companion panel follow-up
+
+After the other chats released the Electron lane, preflight found no running
+full suites, unittest processes or Electron fixtures. In the clean, unchanged
+C:/wt/assist-g0 checkout at c655647dd5fea2024cc72dbb6f26be35b4c76b96,
+`node --test tests/command_render.test.mjs` passed 1/1 in 57.6 seconds with
+its normal 80-second child kill bound. This supports the documented load
+flake diagnosis for the preceding full run's Command timeout; no source or
+timeout was changed. The previously reproduced Unified Studio navigation
+assertion at 600px/150% remains the outstanding rendering failure.
+
+The isolated synthetic companion panel verifier then rebuilt this exact
+commit's renderer and passed at 1440x900 and 600x700 (7.4 seconds). It
+verified owner/held/parked labels, project name, Clear list placement and
+reachability, confirmation before the bridge call, exactly one clear call,
+and the empty state. Both screenshots were visually inspected. No renderer
+errors, network attempts or child-process attempts were recorded, and no
+live data was used. The checkout remained clean at the same commit.
+Logs: OS temporary mefi-owner-command-solo.log and
+mefi-owner-panel-committed.log; panel report/captures in
+mefi-owner-panel-vXgCJM. This focused follow-up does not replace the recorded
+full npm-test result with a claimed all-green run.
+
+## 2026-09-26 - Music mode polish: static backgrounds, player chrome and menu validation
+
+Completed the existing music-menu pass in the shared checkout. The player now
+has a draggable title bar and a reachable minimized strip, steps aside for the
+music menu, and stays below it when a narrow viewport has no spare room. Links
+puts Now playing, Stop and video settings first. Static, paused and pictureless
+backgrounds dim without reducing tree opacity or changing saved brightness.
+The local scene sampler compares finer brightness cells so motion within a
+mostly stationary video is not mistaken for album art; pending results are
+discarded after playback/source/paint changes.
+
+Focused music/media tests: 116/116 passed. A seeded offscreen Electron preview
+using the real scene sampler and local still/moving MP4 files verified automatic
+still dimming (0.72 scrim), moving video at full chosen brightness (0 scrim),
+pause dimming, a visible minimized Restore control, and a reachable Stop button
+with the floating video under a 600x780 music menu. Captures were visually
+inspected. This preview used synthetic project/task data and isolated profiles.
+The media-window Electron fixture passed solo (48.6 s) and in the full suite
+(33.2 s), including provider hit testing, drag/resize, restoration, volume,
+queue, hover, clipboard offers, tree visibility, Zen and a single iframe load.
+An earlier fixture failure exposed clipped provider corners; removing that
+clipping fixed it. Its drag check now uses the player's title bar and it also
+checks the minimized Restore button. Earlier full attempts were stopped while
+these fixes were being made; the final completed run below supersedes them.
+
+Final gates: booklet rebuilt; npm run check passed; npm run audit returned no
+findings. Full npm test completed all legs: Node parallel stage 3718 tests,
+3714 passed, 4 skipped, 0 failures; Electron stage 37 tests, 35 passed, 1 skipped,
+1 failure; both serialized files passed (3 tests). Python: 248 tests passed.
+Normalized-path lock: all 6 checks passed. No source-fingerprint warning occurred
+in this final run. The sole failure was unified_studio_render's existing
+"primary destinations stay visible at 600 / 1.5" assertion, already reproduced
+on clean HEAD in the earlier Command performance and Vibe validation rows.
+The music, media and real painted tree suites passed. Full npm test therefore
+exited 1; this is not recorded as a green full gate.
+
+Local-only evidence: tools/logs/music-polish-full-test.log,
+music-polish-unit.log, music-polish-media-render.log, music-polish-check.log,
+music-polish-audit.log and the music-polish/ preview and integration captures.
+
+## 2026-09-26 - Committed owner-ask and desk safeguards gate on c655647
+
+Full post-commit validation ran in the clean, unchanged C:/wt/assist-g0
+checkout at c655647dd5fea2024cc72dbb6f26be35b4c76b96, which is also landed on
+shared main. `npm run check` passed; `npm run audit` returned zero findings.
+`npm test` completed all legs and exited 1 only for two previously reproduced
+Electron fixture failures:
+
+- Node CPU stage: 3710 tests, 3706 passed, 4 skipped, 0 failed (99 s).
+- Electron stage: 37 tests, 34 passed, 1 skipped, 2 failed (312 s).
+  command_render reached its 80-second child kill bound with no report;
+  unified_studio_render failed `primary destinations stay visible at 600 / 1.5`.
+  Both failures had been reproduced in the Phase 0 recovery before this final
+  commit; the navigation failure is also documented on the earlier baseline.
+- Exclusive Electron stages: 3 tests passed, no failures or skips.
+- Python: 248 tests, 1 skipped, no failures (99 s).
+- Normalized-path lock: all 6 checks passed.
+
+The companion panel proof recorded in the preceding continuation row passed
+at 1440x900 and 600x700. The committed agent-brain.js, agent-brain.css,
+companion-ui.js and agents.js were compared against that proof's copied
+sources and match (line endings normalized). The final commit includes the
+reverse-order and task-reference-in-detail regressions and the hidden Agents
+paint guard. The full gate is not green: no renderer failure was suppressed.
+Logs are in the OS temporary directory as mefi-owner-final-check.log,
+mefi-owner-final-audit.log and mefi-owner-final-npm-test.log. Another chat's
+full suite began during the Python leg; no additional solo rendering rerun
+was launched into that contention. Live stores and portable data were untouched.
+
+## 2026-09-26 - Owner ask folding continuation and companion panel proof
+
+On the shared 8de8b58 working tree with the owner-ask folding and companion
+changes still uncommitted, the focused agent_issues, agents_overview_paint
+and assistant_issue_host suites passed 65/65 (0 failures, 0 skips). The new
+checks cover reversed arrival order, the separate npm-check request, and
+references to either ask's own task or another task in either detail.
+The matching rule remains shared content words divided by the larger word
+set, at least 0.4, only for owner asks with no task references.
+
+A temporary offscreen Electron verifier rebuilt a copied renderer and used
+only a synthetic bridge and sample queue. It passed at 1440x900 and 600x700:
+owner/held/parked labels and project names, Clear list after all rows and
+reachable, first-click confirmation, one bridge call on confirmation, and
+no clear control on an empty list. Both captures were visually inspected.
+There were no renderer errors, network attempts or child-process attempts.
+Artifacts are local in the OS temporary mefi-owner-panel-wITATv directory;
+no live data was opened or changed. This is focused pre-commit evidence;
+the full gate on the combined commit is still pending.
+
+## 2026-09-26 - Command video-background performance pass: gates, one pre-existing Electron failure
+
+Uncommitted tree with the Command performance pass (renderer/studio-ui.js,
+styles.css section 17, nav.js paintBadges, idle.js rail lists and far layer,
+docs/performance.md) plus other sessions' uncommitted work. `npm run check`
+and `npm run audit` passed. `npm test`: Node parallel stage 3689 tests, 0
+failures; Python contracts and the normalized-path lock passed; the Electron
+fixture stage failed two files. `command_render` timed out in the stage and
+passed solo (78 s). `unified_studio_render` fails "primary destinations stay
+visible at 600 / 1.5" solo as well, and fails identically on a clean detached
+worktree of 06b5d7d with the booklet rebuilt from HEAD, so it predates this
+pass; it matches the "Unified Agents navigation" failure recorded for the
+v0.4.3 tag workflow.
+
 ## 2026-09-26 - Trace log viewer (Build): gates on a private worktree of 6e03f15
 
 Detached worktree C:\wt\build-g at 6e03f15 plus the Trace change only

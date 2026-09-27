@@ -9,7 +9,20 @@
   const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
   const quiet = () => ["off", "calm"].includes(document.documentElement.dataset.motion) || document.body.classList.contains("no-motion") || matchMedia("(prefers-reduced-motion: reduce)").matches;
   const visible = (el) => el.isConnected && !el.closest("[hidden], [inert]") && el.getClientRects().length > 0;
-  const labelOf = (el) => el.getAttribute("aria-label") || (el.id && [...(el.labels || [])].find((label) => label.htmlFor === el.id)?.textContent?.trim()) || labelTitle(el.closest("label")) || el.title || "Options";
+  const findLabel = (el) => el.getAttribute("aria-label") || (el.id && [...(el.labels || [])].find((label) => label.htmlFor === el.id)?.textContent?.trim()) || labelTitle(el.closest("label")) || el.title || "Options";
+  // A select's label rarely changes, and `labels` is a document-wide lookup:
+  // each refresh reads it again at most every two seconds per select.
+  const labelCache = new WeakMap();
+  const labelOf = (el) => {
+    const at = performance.now(), cached = labelCache.get(el);
+    if (cached && at - cached.at < 2000) return cached.label;
+    const label = findLabel(el);
+    labelCache.set(el, { label, at });
+    return label;
+  };
+  // Writes only on change: an unchanged `hidden` or `title` still queues a
+  // mutation record and a style invalidation on every refresh.
+  const setHidden = (el, hidden) => { if (el.hidden !== hidden) el.hidden = hidden; };
   // Checked in priority order: one combined selector would return the wrapper span (title plus its help text) before the <b> title inside it.
   const labelTitle = (label) => [".field-label", ".grow", "b, strong", ":scope > span"].map((selector) => label?.querySelector(selector)?.textContent?.trim()).find(Boolean);
   function layer() {
@@ -63,7 +76,35 @@
     hint.addEventListener("pointerenter", () => hint.classList.add("engaged"));
     hint.addEventListener("pointerleave", () => hint.classList.remove("engaged"));
     layer().append(hint); regions.set(el, region); resize?.observe(el);
-    schedule();
+    if (!flushing) schedule();
+  }
+  // Nodes added by DOM churn (a feed or roster rebuilt a few times a second)
+  // are tracked on the next throttled refresh instead of at once: reading
+  // each new element's overflow forced a style recalculation per rebuild,
+  // and rows replaced before then are never measured at all. Selects are
+  // still enhanced at once, so a native picker never shows for a moment.
+  const pendingScan = new Set();
+  let flushing = false;
+  function flushScans() {
+    if (!pendingScan.size) return;
+    const roots = [...pendingScan];
+    pendingScan.clear();
+    flushing = true;
+    try { for (const root of roots) if (root.isConnected) scan(root, true, false); }
+    finally { flushing = false; }
+  }
+  function queueScan(added) {
+    if (added.tagName === "SELECT") enhanceSelect(added);
+    else for (const select of added.getElementsByTagName("select")) if (!select.closest("#studio-floats, script, style, svg")) enhanceSelect(select);
+    pendingScan.add(added);
+  }
+  // The page Command covers is skipped (content-visibility: hidden, styles.css
+  // section 17): it cannot show a hint, and measuring inside it would force
+  // the skipped layout back. A selector match, not a computed-style read,
+  // which would itself force a style recalculation on every refresh.
+  const COVERED = "body.command-active:not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head, #tabs)";
+  function skippedRoots() {
+    return document.body.classList.contains("command-active") ? [...document.querySelectorAll(COVERED)] : [];
   }
   const resize = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
   function placeArrow(button, direction, left, top, width, height) {
@@ -85,16 +126,18 @@
     if (point) Object.assign(button.style, { left: `${point[0]}px`, top: `${point[1]}px`, right: "auto", bottom: "auto" });
   }
   function refresh() {
+    flushScans();
+    const skipped = skippedRoots();
     for (const [el, region] of regions) {
       if (!el.isConnected) { region.stop(); region.hint.remove(); resize?.unobserve(el); regions.delete(el); continue; }
       const { hint, buttons } = region;
-      if (!visible(el)) { hint.hidden = true; region.stop(); continue; }
+      if (skipped.length && skipped.some((root) => root.contains(el)) || !visible(el)) { setHidden(hint, true); region.stop(); continue; }
       const root = el === document.scrollingElement;
       const style = getComputedStyle(el);
-      if (root && getComputedStyle(document.body).overflowY === "hidden" || !root && !/(auto|scroll)/.test(`${style.overflowX} ${style.overflowY}`)) { hint.hidden = true; region.stop(); continue; }
+      if (root && getComputedStyle(document.body).overflowY === "hidden" || !root && !/(auto|scroll)/.test(`${style.overflowX} ${style.overflowY}`)) { setHidden(hint, true); region.stop(); continue; }
       const height = root ? innerHeight : el.clientHeight, width = root ? innerWidth : el.clientWidth;
       const x = el.scrollWidth - width > 2, y = el.scrollHeight - height > 2;
-      hint.hidden = !x && !y;
+      setHidden(hint, !x && !y);
       if (hint.hidden) { region.stop(); if (region.addedTab) { el.removeAttribute("tabindex"); region.addedTab = false; } continue; }
       const bounds = root ? { left: 0, top: 0 } : el.getBoundingClientRect();
       let left = Math.max(0, bounds.left + (el.clientLeft || 0)), top = Math.max(0, bounds.top + (el.clientTop || 0));
@@ -103,11 +146,13 @@
         if (!/(auto|scroll|hidden|clip)/.test(getComputedStyle(parent).overflow)) continue;
         const clip = parent.getBoundingClientRect(); left = Math.max(left, clip.left); top = Math.max(top, clip.top); right = Math.min(right, clip.right); bottom = Math.min(bottom, clip.bottom);
       }
-      if (right - left < 35 || bottom - top < 35) { hint.hidden = true; region.stop(); continue; }
-      Object.assign(hint.style, { left: `${left}px`, top: `${top}px`, width: `${right - left}px`, height: `${bottom - top}px` });
-      hint.dataset.scrollOwner = el.id || el.className || el.tagName;
+      if (right - left < 35 || bottom - top < 35) { setHidden(hint, true); region.stop(); continue; }
+      const box = `${left},${top},${right - left},${bottom - top}`;
+      if (region.box !== box) { region.box = box; Object.assign(hint.style, { left: `${left}px`, top: `${top}px`, width: `${right - left}px`, height: `${bottom - top}px` }); }
+      const owner = el.id || el.className || el.tagName;
+      if (hint.dataset.scrollOwner !== owner) hint.dataset.scrollOwner = owner;
       const directions = { up: y && el.scrollTop > 1, down: y && el.scrollTop + height < el.scrollHeight - 2, left: x && el.scrollLeft > 1, right: x && el.scrollLeft + width < el.scrollWidth - 2 };
-      for (const [direction, can] of Object.entries(directions)) { buttons[direction].hidden = !can; hint.classList.toggle(`can-${direction}`, can); }
+      for (const [direction, can] of Object.entries(directions)) { setHidden(buttons[direction], !can); hint.classList.toggle(`can-${direction}`, can); }
       hint.classList.toggle("active", el.matches(":hover, :focus-within") || hint.contains(document.activeElement));
       if (hint.classList.contains("active") || hint.classList.contains("engaged")) for (const [direction, button] of Object.entries(buttons)) if (!button.hidden) placeArrow(button, direction, left, top, right - left, bottom - top);
       if (el.tabIndex < 0 && !el.hasAttribute("tabindex") && !el.matches("input, textarea, select, html, body")) { el.tabIndex = 0; region.addedTab = true; }
@@ -118,23 +163,25 @@
     }
     positionPopup();
   }
-  function scan(root = document, later = false) {
+  function scan(root = document, later = false, reschedule = true) {
     if (root.nodeType === 1) { track(root); if (root.matches("select")) enhanceSelect(root); }
     for (const el of root.querySelectorAll?.("*") || []) {
       if (el.closest("#studio-floats, script, style, svg")) continue;
       track(el);
       if (el.tagName === "SELECT") enhanceSelect(el);
     }
+    if (!reschedule) return;
     if (later) scheduleSoon(); else schedule();
   }
   function syncSelect(select, button) {
     const title = Array.from(select.selectedOptions || []).map((option) => option.textContent).join(", ") || "Choose…";
     if (button.firstChild.textContent !== title) button.firstChild.textContent = title;
     if (button.disabled !== select.disabled) button.disabled = select.disabled;
-    button.hidden = select.hidden || select.classList.contains("segmented-source");
+    setHidden(button, select.hidden || select.classList.contains("segmented-source"));
     const label = labelOf(select);
     if (button.getAttribute("aria-label") !== label) button.setAttribute("aria-label", label);
-    button.title = select.title || "";
+    const tip = select.title || "";
+    if (button.title !== tip) button.title = tip;
   }
   function closeSelect(focus = false) {
     if (!popup) return;
@@ -380,7 +427,7 @@
       for (const record of records) {
         if (record.target.closest?.("#studio-floats, .studio-select")) continue;
         changed = true;
-        for (const added of record.addedNodes) if (added.nodeType === 1 && !added.closest("#studio-floats")) scan(added, true);
+        for (const added of record.addedNodes) if (added.nodeType === 1 && !added.closest("#studio-floats")) queueScan(added);
       }
       if (changed) scheduleSoon();
     });

@@ -338,6 +338,26 @@ test("frequency voices stay attached to nodes across reordering and all bands af
   }
 });
 
+test("a task group and its members share one frequency voice, cables included", () => {
+  const env = environment();
+  const groups = Array.from({ length: 6 }, (_, index) => {
+    const parent = { id: `task:plan-${index}`, kind: index % 2 ? "task-group" : "task", taskGroup: { id: `plan-${index}`, members: [] } };
+    const members = Array.from({ length: 5 }, (_, member) => ({ id: `task:plan-${index}-${member}`, kind: "task", groupParentId: parent.id }));
+    return { parent, members };
+  });
+  const bands = new Set();
+  for (const { parent, members } of groups) {
+    const voice = env.nodeAudioResponse(parent, {}, true).band;
+    bands.add(voice);
+    for (const member of members) {
+      assert.equal(env.nodeAudioResponse(member, {}, true).band, voice, `${member.id} follows its group`);
+      assert.equal(env.connectionAudioBand(parent.id, member.id, member), voice, "the group's cables carry the same band");
+    }
+    assert.equal(env.connectionAudioBand("session", parent.id, parent), voice);
+  }
+  assert.ok(bands.size > 1, "different groups still spread across the spectrum");
+});
+
 test("silence and disabled/reduced-motion response stay dark; sensitivity is bounded and saved", () => {
   const state = {}, env = environment(state), node = { id: "music", kind: "music" };
   const loud = { bass: 1, mid: 1, treble: 1, beat: 1, energy: 1 };

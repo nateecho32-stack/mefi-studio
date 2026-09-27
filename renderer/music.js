@@ -310,7 +310,7 @@
   const keepAfterUnlock = { theme: false, nodeStyle: false };
   // link: what the Links tab plays; handoff: the last link only its own app can
   // open; linkPlaying is real only for a plain file in Studio's own element.
-  const state = { source: "local", tracks: [], selected: -1, link: null, handoff: null, linkPlaying: false, linkAutoplay: false, linkStartMs: 0, opened: false, sending: false, notice: "", error: false,
+  const state = { source: "local", tracks: [], selected: -1, link: null, handoff: null, linkPlaying: false, linkAutoplay: false, linkFadeIn: false, linkStartMs: 0, opened: false, sending: false, notice: "", error: false,
     station: null, mirror: 0, deck: "a", radioPhase: "idle", radioNote: "" };
   const els = {};
   let audio = null;
@@ -382,10 +382,89 @@
       provider: state.source === "link" ? state.link?.providerName ?? null : null, link: state.source === "link" ? state.link?.url ?? null : null,
       station: state.station, stationName: tuned?.name || null, radioPhase: state.source === "radio" ? state.radioPhase : "idle" };
   }
-  const announce = () => event("mefi-music-change", status());
+  const announce = () => { renderDropdownStatus(); event("mefi-music-change", status()); };
+  // The header's one line: what is playing, from where.
+  function renderDropdownStatus() {
+    if (!els.dropdownStatus) return;
+    const current = status();
+    const tuned = station(state.station);
+    const text = state.source === "radio" ? state.radioPhase === "connecting" && tuned ? `Connecting to ${tuned.name}…` : current.playing && tuned ? `Radio · ${tuned.name}` : "Nothing playing"
+      : state.source === "link" ? state.link ? `${state.link.providerName} · ${state.link.label}` : "Nothing playing"
+      : state.tracks[state.selected] ? `${current.playing ? "Playing" : "Paused"} · ${current.title}` : "Nothing playing";
+    if (els.dropdownStatus.textContent !== text) els.dropdownStatus.textContent = text;
+    els.dropdownStatus.dataset.live = String(Boolean(current.playing || state.source === "link" && state.link && linkIsPlaying()));
+  }
+  // A slider's fill is painted from its value, so every range reads alike.
+  function fillRange(input) {
+    if (!input?.style?.setProperty) return;
+    const min = Number(input.min) || 0, max = Number(input.max) || 1, value = Number(input.value);
+    const ratio = max > min && Number.isFinite(value) ? Math.max(0, Math.min(1, (value - min) / (max - min))) : 0;
+    input.style.setProperty("--fill", `${Math.round(ratio * 1000) / 10}%`);
+  }
+  const percent = (value) => `${Math.round(Math.max(0, Math.min(1, Number(value) || 0)) * 100)}%`;
+  function stepStation(step) {
+    const index = STATIONS.findIndex((item) => item.id === state.station);
+    const next = STATIONS[(Math.max(0, index) + (index < 0 && step > 0 ? 0 : step) + STATIONS.length) % STATIONS.length];
+    if (next) tune(next.id);
+  }
+  // Play and pause for every player Studio can steer: its own <video>, and
+  // YouTube or Vimeo through their player messages.
+  function linkIsPlaying() {
+    if (!state.link || state.source !== "link") return false;
+    return state.link.kind === "media" ? state.linkPlaying : Boolean(linkPlayback?.playing);
+  }
+  function toggleLink() {
+    const link = state.link;
+    if (!link || state.source !== "link") return;
+    if (!els.linkFrame) { state.linkAutoplay = true; mountLink(); render(); return; }
+    const playing = linkIsPlaying();
+    if (link.kind === "media") {
+      if (playing) els.linkFrame.pause?.();
+      else { try { Promise.resolve(els.linkFrame.play?.()).catch(() => {}); } catch {} }
+      return;
+    }
+    if (link.provider === "youtube") sendLinkMessage({ event: "command", func: playing ? "pauseVideo" : "playVideo", args: [], id: "studio-media", channel: "widget" });
+    else if (link.provider === "vimeo") sendLinkMessage({ method: playing ? "pause" : "play" });
+    else return;
+    // The player confirms shortly; the button answers the click now.
+    if (linkPlayback) { linkPlayback.playing = !playing; linkPlayback.observed = true; }
+    els.floatingPlayer?.playback?.({ playing: !playing });
+    renderLinkNow(); renderDropdownStatus();
+  }
+  // One field for finding and loading: a link plays, words search YouTube. A
+  // link typed without https:// (www.youtube.com/…, youtu.be/…) still counts.
+  function finderLink(value) {
+    const text = String(value ?? "").trim();
+    return mediaLink(text) || (/^[\w-]+(\.[\w-]+)+\/\S*$/i.test(text) ? mediaLink(`https://${text}`) : null);
+  }
+  function finderIntent() {
+    const value = els.linkInput?.value.trim() || "";
+    if (!value) return "empty";
+    if (finderLink(value)) return "link";
+    return window.mefiStudio?.youtubeSearch && !/^[a-z][\w+.-]*:/i.test(value) ? "search" : "invalid";
+  }
+  function renderFinder() {
+    if (!els.linkGo) return;
+    const intent = finderIntent();
+    const label = youtubeSearching ? "Searching…" : intent === "search" ? "Search" : "Play";
+    if (els.linkGo.textContent !== label) els.linkGo.textContent = label;
+    els.linkGo.disabled = youtubeSearching;
+    els.linkQueueTools.hidden = intent !== "link" || !playableLink(finderLink(els.linkInput.value));
+  }
+  function submitFinder() {
+    const intent = finderIntent();
+    if (intent === "empty") { els.linkInput.focus(); return; }
+    if (intent === "search") { void searchYouTube(els.linkInput.value.trim()); return; }
+    playLink(finderLink(els.linkInput.value)?.url || els.linkInput.value);
+    renderFinder();
+  }
+  let noticeTimer = 0;
   function note(text, error = false) {
     state.notice = String(text || ""); state.error = error;
     if (els.notice) { els.notice.textContent = state.notice; els.notice.dataset.error = String(error); }
+    window.clearTimeout?.(noticeTimer); noticeTimer = 0;
+    // Confirmations clear themselves; a problem stays until the next action.
+    if (state.notice && !error && typeof window.setTimeout === "function") noticeTimer = window.setTimeout(() => { noticeTimer = 0; if (!state.error) note(""); }, 7000);
   }
   function themeTokens(palette) {
     return { "--gold": palette.accent, "--gold-bright": palette.bright, "--gold-dim": `rgba(${palette.rgb},.32)`, "--hairline": `rgba(${channels(palette.border).join(",")},.5)`, "--hairline-strong": palette.border, "--tint-gold-1": `rgba(${palette.rgb},.06)`, "--tint-gold-2": `rgba(${palette.rgb},.09)`, "--tint-gold-3": `rgba(${palette.rgb},.14)`, "--ring": `0 0 0 3px rgba(${palette.rgb},.15)`, "--glow-gold": `0 0 14px rgba(${palette.rgb},.3)`, "--bg": palette.background, "--bg-deep": palette.background, "--cmd-bg": palette.background, "--panel-solid": palette.surface, "--panel": `rgba(${palette.surfaceRgb},.85)`, "--glass": `rgba(${palette.surfaceRgb},.76)`, "--glass-hard": `rgba(${palette.surfaceRgb},.94)`, "--glass-soft": `rgba(${palette.surfaceRgb},.7)`, "--ivory": palette.text, "--muted": palette.muted, "--dim": palette.dim, "--ink": palette.onAccent };
@@ -779,6 +858,20 @@
       stopDeck(outgoing);
     }, FADE_STEP_MS);
   }
+  // A station resumed at launch rises from silence instead of starting at
+  // full volume; like a crossfade, it reads the master every step.
+  let riseNext = false;
+  function riseIn(deck, ms = FADE_MS * 2) {
+    finishFade();
+    deck.volume = 0;
+    const started = window.performance.now();
+    fadeTimer = window.setInterval(() => {
+      const ratio = Math.min(1, (window.performance.now() - started) / ms);
+      deck.volume = prefs.volume * ratio * ratio;
+      if (ratio < 1) return;
+      window.clearInterval(fadeTimer); fadeTimer = 0;
+    }, FADE_STEP_MS);
+  }
   function stopDeck(deck) {
     if (!deck) return;
     deck.pause();
@@ -786,7 +879,7 @@
     try { deck.load(); } catch {}
     deck.volume = 0;
   }
-  function tune(id, mirrorIndex = 0, viaFailover = false) {
+  function tune(id, mirrorIndex = 0, viaFailover = false, rise = false) {
     init();
     const tuned = station(id);
     if (!tuned) { note("That station is not on the list.", true); return false; }
@@ -814,11 +907,11 @@
     state.mirror = mirrorIndex;
     state.radioPhase = "connecting";
     pendingDeck = target;
-    if (!viaFailover) state.radioNote = "";
+    if (!viaFailover) { state.radioNote = ""; riseNext = rise; }
     prefs.station = id; prefs.source = "radio"; prefs.radioOn = true; persist();
     unmountLink();
     target.crossOrigin = "anonymous";
-    target.volume = live ? 0 : prefs.volume;
+    target.volume = live || riseNext ? 0 : prefs.volume;
     target.src = url;
     try { target.load(); } catch {}
     const settle = () => {
@@ -827,7 +920,8 @@
       pendingDeck = null;
       state.deck = target === deckB ? "b" : "a";
       state.radioPhase = "playing";
-      fadeTo(target, outgoing); renderRadio(); announce();
+      if (riseNext && !outgoing) { riseNext = false; riseIn(target); } else fadeTo(target, outgoing);
+      renderRadio(); announce();
     };
     const refused = (error) => {
       if (generation !== tuneGeneration) return;
@@ -855,6 +949,7 @@
     state.deck = "a";
     state.radioPhase = "idle";
     audio.volume = prefs.volume;
+    riseNext = false;
     prefs.radioOn = false; persist();
   }
   function setVolume(value) {
@@ -866,6 +961,7 @@
     persist();
     if (els.volume) els.volume.value = String(prefs.volume);
     if (els.radioVolume) els.radioVolume.value = String(prefs.volume);
+    paintVolume();
   }
   function setSource(source) {
     settingsReveal.source = null;
@@ -896,26 +992,32 @@
     unmountLink();
     els.floatingPlayer?.show(link);
     const autoplay = state.linkAutoplay;
+    // A player resumed after a restart comes up from silence (rampLink).
+    const fadeIn = autoplay && state.linkFadeIn;
     // Listen together joins a session part-way through: the offset rides the
     // embed's own start parameter where it has one, and a file seeks once
     // its length is known.
     const startSeconds = Math.floor(state.linkStartMs / 1000);
-    linkPlayback = { startMs: state.linkStartMs, playing: autoplay, url: link.url, observed: false, savedAt: 0 };
-    mediaVolumeApplied = false;
-    state.linkAutoplay = false; state.linkStartMs = 0;
+    linkPlayback = { startMs: state.linkStartMs, playing: autoplay, url: link.url, observed: false, savedAt: 0, fadeIn };
+    mediaVolumeApplied = false; volumeSync = null;
+    state.linkAutoplay = false; state.linkStartMs = 0; state.linkFadeIn = false;
     if (link.kind === "media") {
       const player = element("video", "music-link-frame music-link-media", null, els.linkPlayer);
       player.dataset.url = link.url; player.dataset.shape = link.shape;
       player.controls = true; player.preload = "metadata"; player.playsInline = true;
       player.title = link.label;
-      player.volume = mediaVolume; player.muted = mediaMuted;
-      const sync = () => { if (els.linkFrame !== player) return; state.linkPlaying = !player.paused && !player.ended; renderLinkNow(); announce(); };
+      player.volume = fadeIn ? 0 : mediaVolume; player.muted = mediaMuted;
+      const sync = () => { if (els.linkFrame !== player) return; state.linkPlaying = !player.paused && !player.ended; els.floatingPlayer?.playback?.({ playing: state.linkPlaying }); renderLinkNow(); announce(); };
       for (const name of ["play", "playing", "pause", "ended"]) player.addEventListener(name, sync);
+      if (fadeIn) player.addEventListener("playing", function rise() { player.removeEventListener?.("playing", rise); if (els.linkFrame === player) rampLink(); });
       player.addEventListener("ended", () => { if (els.linkFrame === player) playQueued(); });
-      player.addEventListener("volumechange", () => { if (els.linkFrame === player && Number.isFinite(player.volume)) { mediaVolume = player.volume; mediaMuted = Boolean(player.muted); prefs.volume = player.volume; persist(); saveLinkVolume(); paintLinkVolume(); } });
+      // The file's own controls set the video volume only; the music and
+      // radio volume is separate. Studio's own fade is not a choice.
+      player.addEventListener("volumechange", () => { if (els.linkFrame === player && !linkRamp && Number.isFinite(player.volume)) { mediaVolume = player.volume; mediaMuted = Boolean(player.muted); saveLinkVolume(); paintLinkVolume(); } });
       player.addEventListener("error", () => {
         if (els.linkFrame !== player) return;
         state.linkPlaying = false;
+        els.floatingPlayer?.playback?.({ playing: false });
         note(link.provider === "discord" ? "Discord could not send that file. Attachment links expire; copy a fresh one from Discord." : "That file could not be played. The link may have expired, or the format is not supported.", true);
         announce();
       });
@@ -925,8 +1027,9 @@
       }
       player.src = link.url;
       els.linkFrame = player;
+      els.floatingPlayer?.playback?.({ playing: autoplay });
       if (autoplay && typeof player.play === "function") {
-        try { Promise.resolve(player.play()).catch(() => {}); } catch {}
+        try { Promise.resolve(player.play()).catch(sync); } catch { sync(); }
       }
       rememberLink();
       return;
@@ -936,6 +1039,9 @@
     let src = link.embed;
     if (startSeconds > 0 && link.provider === "youtube") src = `${src.replace(/&start=\d+/, "")}&start=${startSeconds}`;
     if (autoplay && link.autoplay) src = `${src}${src.includes("?") ? link.autoplay : `?${link.autoplay.slice(1)}`}`;
+    // Resumed, the player starts muted and rampLink raises it once it is ready.
+    if (fadeIn && link.provider === "youtube") src = `${src}&mute=1`;
+    if (fadeIn && link.provider === "vimeo") src = `${src}&muted=1`;
     if (startSeconds > 0 && link.provider === "vimeo") src = `${src}#t=${startSeconds}s`;
     frame.src = src;
     frame.title = `${link.label} player`;
@@ -945,6 +1051,8 @@
     // may see the origin, and main.cjs names Studio to YouTube's.
     frame.referrerPolicy = "strict-origin-when-cross-origin";
     els.linkFrame = frame;
+    // Until the player reports, a link that was asked to play counts as playing.
+    els.floatingPlayer?.playback?.({ playing: autoplay });
     const subscribe = () => {
       if (els.linkFrame !== frame) return;
       if (link.provider === "youtube") sendLinkMessage({ event: "listening", id: "studio-media", channel: "widget" });
@@ -966,9 +1074,29 @@
     if (!els.linkVolume) return;
     els.linkVolumeControls.hidden = !state.link || state.source !== "link" || !(state.link.kind === "media" || ["youtube", "vimeo"].includes(state.link.provider));
     els.linkVolume.value = String(Math.round(mediaVolume * 100));
-    els.linkVolumeLabel.textContent = `Volume · ${Math.round(mediaVolume * 100)}%`;
+    fillRange(els.linkVolume);
+    els.linkVolumeValue.textContent = mediaMuted ? "Muted" : percent(mediaVolume);
     els.linkMute.textContent = mediaMuted ? "Unmute" : "Mute";
     els.linkMute.setAttribute("aria-pressed", String(mediaMuted));
+    els.linkMute.dataset.muted = String(mediaMuted || mediaVolume === 0);
+  }
+  // YouTube and Vimeo keep reporting their own volume for a moment after
+  // Studio sets it. Until a report agrees, a report is an echo of the old
+  // level, never a choice: taking it saved the service's default (often 100%)
+  // over yours, and the next restart came up louder.
+  let volumeSync = null;
+  function armVolumeSync(ms = 4000) { volumeSync = { volume: Math.round(mediaVolume * 100), muted: mediaMuted, until: Date.now() + ms, resent: false }; }
+  function acceptPlayerVolume(volume, muted) {
+    if (linkRamp) return false;
+    if (volumeSync) {
+      const agrees = (volume === null || Math.abs(volume - volumeSync.volume) <= 1) && (muted === null || muted === volumeSync.muted);
+      if (agrees) { volumeSync = null; return false; }
+      if (Date.now() < volumeSync.until) return false;
+      // Still disagreeing after the wait: say it once more, then believe it.
+      if (!volumeSync.resent) { applyLinkVolume(); if (volumeSync) volumeSync.resent = true; return false; }
+      volumeSync = null;
+    }
+    return true;
   }
   function applyLinkVolume() {
     const frame = els.linkFrame;
@@ -977,12 +1105,41 @@
     if (state.link?.provider === "youtube") {
       sendLinkMessage({ event: "command", func: "setVolume", args: [Math.round(mediaVolume * 100)], id: "studio-media", channel: "widget" });
       sendLinkMessage({ event: "command", func: mediaMuted ? "mute" : "unMute", args: [], id: "studio-media", channel: "widget" });
+      armVolumeSync();
     }
     if (state.link?.provider === "vimeo") {
       sendLinkMessage({ method: "setVolume", value: mediaVolume });
       sendLinkMessage({ method: "setMuted", value: mediaMuted });
+      armVolumeSync();
     }
     paintLinkVolume();
+  }
+  // A player resumed after a restart rises from silence to the saved level
+  // over a moment, instead of starting at full volume.
+  let linkRamp = 0;
+  function rampLink(ms = 1800) {
+    window.clearInterval?.(linkRamp); linkRamp = 0;
+    const frame = els.linkFrame, link = state.link;
+    if (!frame || !link) return;
+    if (mediaMuted || typeof window.setInterval !== "function") { applyLinkVolume(); return; }
+    const started = window.performance?.now?.() ?? Date.now();
+    const level = (value) => {
+      if (link.kind === "media") { frame.muted = false; frame.volume = value; }
+      else if (link.provider === "youtube") sendLinkMessage({ event: "command", func: "setVolume", args: [Math.round(value * 100)], id: "studio-media", channel: "widget" });
+      else if (link.provider === "vimeo") sendLinkMessage({ method: "setVolume", value: Math.round(value * 100) / 100 });
+    };
+    level(0);
+    if (link.provider === "youtube") sendLinkMessage({ event: "command", func: "unMute", args: [], id: "studio-media", channel: "widget" });
+    if (link.provider === "vimeo") sendLinkMessage({ method: "setMuted", value: false });
+    linkRamp = window.setInterval(() => {
+      if (els.linkFrame !== frame) { window.clearInterval(linkRamp); linkRamp = 0; return; }
+      const ratio = Math.min(1, ((window.performance?.now?.() ?? Date.now()) - started) / ms);
+      // Squared: loudness is heard on a curve, so the rise sounds even.
+      level(mediaVolume * ratio * ratio);
+      if (ratio < 1) return;
+      window.clearInterval(linkRamp); linkRamp = 0;
+      applyLinkVolume();
+    }, 120);
   }
   function saveLinkQueue() {
     try { localStorage.setItem(LINK_QUEUE_KEY, JSON.stringify(linkQueue)); } catch {}
@@ -1038,34 +1195,49 @@
     if (state.link?.provider === "youtube" && new URL(state.link.url).searchParams.has("list")) {
       sendLinkMessage({ event: "command", func: "nextVideo", args: [], id: "studio-media", channel: "widget" }); return;
     }
-    els.youtubeExplorer.open = true; els.youtubeQuery.focus();
-    els.youtubeNotice.textContent = "Search and play a result below. Next video follows that list, or your YouTube playlist.";
+    els.linkInput.focus();
+    els.youtubeNotice.textContent = "Search YouTube above; Next video then follows the results, or your YouTube playlist.";
     scheduleDropdown();
   }
-  async function searchYouTube() {
+  // Results are rows you can play with one click: thumbnail, title, channel
+  // and length, with + to queue and ↑ to play next.
+  async function searchYouTube(query = els.linkInput?.value.trim() || "") {
     if (youtubeSearching) return;
-    const query = els.youtubeQuery.value.trim();
-    if (!query) { els.youtubeQuery.focus(); return; }
-    if (!window.mefiStudio?.youtubeSearch) { els.youtubeNotice.textContent = "Restart Studio to enable YouTube search."; return; }
-    youtubeSearching = true; els.youtubeSearch.disabled = true;
-    els.youtubeNotice.textContent = "Searching YouTube…";
+    if (!query) { els.linkInput.focus(); return; }
+    if (!window.mefiStudio?.youtubeSearch) { els.youtubeNotice.textContent = "Restart Studio to search YouTube, or paste a link."; return; }
+    youtubeSearching = true; renderFinder();
+    els.youtubeNotice.textContent = `Searching YouTube for “${query.slice(0, 60)}”…`;
     try {
       const response = await window.mefiStudio.youtubeSearch(query);
       if (!response?.ok) throw new Error(response?.error || "YouTube search is unavailable.");
       youtubeResults = (response.results || []).filter(item => item && /^[\w-]{11}$/.test(item.id)).slice(0, 20).map(item => ({ ...item, url: `https://www.youtube.com/watch?v=${item.id}` }));
-      els.youtubeResults.textContent = "";
-      for (const item of youtubeResults) {
-        const card = element("article", "music-youtube-result", null, els.youtubeResults);
-        const copy = element("span", null, null, card);
-        element("strong", null, item.title, copy);
-        element("small", null, [item.channel, item.duration].filter(Boolean).join(" · "), copy);
-        button("Play", "ghost", card, () => playLink(item.url, { label: item.title })).setAttribute("aria-label", `Play ${item.title}`);
-        button("Add to queue", "ghost", card, () => queueLink(item.url, item.title)).setAttribute("aria-label", `Add ${item.title} to queue`);
-        button("Queue next", "ghost", card, () => queueLink(item.url, item.title, true)).setAttribute("aria-label", `Queue ${item.title} next`);
-      }
-      els.youtubeNotice.textContent = youtubeResults.length ? `${youtubeResults.length} videos · Next video follows these results.` : "No videos found. Try another search.";
+      renderYouTubeResults();
+      els.youtubeNotice.textContent = youtubeResults.length ? `${youtubeResults.length} videos · click one to play` : "No videos found. Try other words.";
     } catch (error) { els.youtubeNotice.textContent = error?.message || "YouTube search is unavailable."; }
-    finally { youtubeSearching = false; els.youtubeSearch.disabled = false; scheduleDropdown(); }
+    finally { youtubeSearching = false; renderFinder(); scheduleDropdown(); }
+  }
+  function renderYouTubeResults() {
+    if (!els.youtubeResults) return;
+    els.youtubeResults.textContent = "";
+    const current = linkPlayback?.url || state.link?.url;
+    for (const item of youtubeResults) {
+      const row = element("article", "music-youtube-result", null, els.youtubeResults);
+      const main = button("", "music-result-main", row, () => playLink(item.url, { label: item.title }));
+      main.setAttribute("aria-label", `Play ${item.title}`); main.title = item.title;
+      row.dataset.current = String(current === item.url);
+      const thumb = element("span", "music-result-thumb", null, main);
+      const image = element("img", null, null, thumb); image.alt = ""; image.loading = "lazy"; image.decoding = "async";
+      image.src = `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`;
+      if (item.duration) element("span", "music-result-time", item.duration, thumb);
+      const copy = element("span", "music-result-copy", null, main);
+      element("strong", null, item.title, copy);
+      if (item.channel) element("small", null, item.channel, copy);
+      const queueButton = button("Add to queue", "music-icon-button music-icon-add", row, () => queueLink(item.url, item.title));
+      queueButton.title = "Add to queue"; queueButton.setAttribute("aria-label", `Add ${item.title} to queue`);
+      const nextButton = button("Play next", "music-icon-button music-icon-up", row, () => queueLink(item.url, item.title, true));
+      nextButton.title = "Play next"; nextButton.setAttribute("aria-label", `Play ${item.title} next`);
+    }
+    els.youtubeResults.hidden = !youtubeResults.length;
   }
   function linkMessage(event) {
     const frame = els.linkFrame;
@@ -1076,14 +1248,17 @@
     if (!message || typeof message !== "object") return;
     let seconds, playing, ended = false;
     if (state.link?.provider === "youtube") {
-      if (message.event === "onReady") { applyLinkVolume(); mediaVolumeApplied = true; return; }
+      const settle = () => { if (linkPlayback.fadeIn) { linkPlayback.fadeIn = false; armVolumeSync(6000); rampLink(); } else applyLinkVolume(); mediaVolumeApplied = true; };
+      if (message.event === "onReady") { settle(); return; }
       if (!["infoDelivery", "initialDelivery", "onStateChange"].includes(message.event)) return;
       if (linkWatchTimer) window.clearInterval(linkWatchTimer);
       linkWatchTimer = null;
       if (message.event === "initialDelivery") sendLinkMessage({ event: "command", func: "addEventListener", args: ["onStateChange"], id: "studio-media", channel: "widget" });
       const info = message.info;
-      if (!mediaVolumeApplied) { applyLinkVolume(); mediaVolumeApplied = true; }
-      else if (info && typeof info === "object" && (Number.isFinite(info.volume) || typeof info.muted === "boolean")) {
+      if (!mediaVolumeApplied) settle();
+      else if (info && typeof info === "object" && (Number.isFinite(info.volume) || typeof info.muted === "boolean")
+        && acceptPlayerVolume(Number.isFinite(info.volume) ? info.volume : null, typeof info.muted === "boolean" ? info.muted : null)) {
+        // A change made in YouTube's own controls.
         if (Number.isFinite(info.volume)) mediaVolume = Math.max(0, Math.min(1, info.volume / 100));
         if (typeof info.muted === "boolean") mediaMuted = info.muted;
         saveLinkVolume(); paintLinkVolume();
@@ -1102,12 +1277,15 @@
     } else if (state.link?.provider === "vimeo") {
       if (message.event === "ready") {
         for (const value of ["timeupdate", "play", "pause", "ended", "volumechange"]) sendLinkMessage({ method: "addEventListener", value });
-        applyLinkVolume();
+        if (linkPlayback.fadeIn) { linkPlayback.fadeIn = false; armVolumeSync(6000); rampLink(); } else applyLinkVolume();
         return;
       }
       if (message.event === "volumechange") {
-        if (Number.isFinite(message.data?.volume)) mediaVolume = Math.max(0, Math.min(1, message.data.volume));
-        if (typeof message.data?.muted === "boolean") mediaMuted = message.data.muted;
+        const volume = Number.isFinite(message.data?.volume) ? Math.round(message.data.volume * 100) : null;
+        const muted = typeof message.data?.muted === "boolean" ? message.data.muted : null;
+        if (!acceptPlayerVolume(volume, muted)) return;
+        if (volume !== null) mediaVolume = Math.max(0, Math.min(1, volume / 100));
+        if (muted !== null) mediaMuted = muted;
         saveLinkVolume(); paintLinkVolume(); return;
       }
       if (!["timeupdate", "play", "pause", "ended"].includes(message.event)) return;
@@ -1118,7 +1296,10 @@
     } else return;
     // Initial, unstarted metadata must not erase a restored seek before playback.
     if (Number.isFinite(seconds) && seconds >= 0 && (seconds > 0 || linkPlayback.observed || playing !== undefined)) linkPlayback.startMs = Math.min(seconds * 1000, 86_400_000);
-    if (playing !== undefined) { linkPlayback.playing = playing; linkPlayback.observed = true; }
+    if (playing !== undefined && (playing !== linkPlayback.playing || !linkPlayback.observed)) {
+      linkPlayback.playing = playing; linkPlayback.observed = true;
+      els.floatingPlayer?.playback?.({ playing }); renderLinkNow(); renderDropdownStatus();
+    }
     if (Date.now() - linkPlayback.savedAt >= 1000 || playing === false) rememberLink();
     if (ended && linkPlayback.queueStarted) { linkPlayback.queueStarted = false; playQueued(); }
   }
@@ -1138,7 +1319,7 @@
   }
   function restoreRecentLink(saved) {
     if (!saved || !Number.isFinite(saved.at) || saved.at > Date.now() || Date.now() - saved.at > LINK_RESUME_MS || els.linkFrame) return;
-    if (playLink(saved.url, { autoplay: saved.autoplay === true, startMs: Number(saved.startMs) || 0 })) {
+    if (playLink(saved.url, { autoplay: saved.autoplay === true, startMs: Number(saved.startMs) || 0, fadeIn: true })) {
       els.floatingPlayer?.restore?.(saved.window);
       rememberLink();
     }
@@ -1157,10 +1338,16 @@
     if (frame.tagName === "video" || frame.tagName === "VIDEO") { try { frame.pause?.(); frame.removeAttribute("src"); frame.load?.(); } catch {} }
     frame.remove();
   }
+  // Stop from the menu does what the player's own close does.
+  function stopLink() {
+    if (els.floatingPlayer?.close) els.floatingPlayer.close();
+    else { unmountLink(); state.link = null; render(); announce(); }
+    els.linkInput?.focus?.({ preventScroll: true });
+  }
   // The one door for every link, from the Links field, a recent chip, a drop,
   // or another part of Studio (MefiMusic.playLink). Returns true when the link
   // is now the playing source; a hand-off leaves whatever is playing alone.
-  function playLink(raw, { autoplay = true, startMs = 0, label = null } = {}) {
+  function playLink(raw, { autoplay = true, startMs = 0, label = null, fadeIn = false } = {}) {
     init();
     const link = mediaLink(raw);
     if (link && typeof label === "string" && label.trim()) link.label = label.trim().slice(0, 160);
@@ -1176,14 +1363,14 @@
     state.handoff = null;
     if (state.link?.url !== link.url) unmountLink();
     state.link = link;
-    state.linkAutoplay = autoplay;
+    state.linkAutoplay = autoplay; state.linkFadeIn = fadeIn === true;
     state.linkStartMs = Number.isFinite(startMs) && startMs > 0 ? Math.min(startMs, 86_400_000) : 0;
     prefs.links = [link.url, ...prefs.links.filter((url) => url !== link.url)].slice(0, 8);
     persist();
     setSource("link");
     // Choosing the link that is already loaded plays it rather than reloading.
     if (autoplay && link.kind === "media" && els.linkFrame?.paused && typeof els.linkFrame.play === "function") { try { Promise.resolve(els.linkFrame.play()).catch(() => {}); } catch {} }
-    state.linkAutoplay = false; state.linkStartMs = 0;
+    state.linkAutoplay = false; state.linkStartMs = 0; state.linkFadeIn = false;
     if (els.linkInput) els.linkInput.value = link.url;
     note(link.kind === "media" ? `${link.label} is loaded in the floating player.` : `${link.providerName} is ready in the floating player; availability depends on ${link.providerName}.`);
     return true;
@@ -1272,19 +1459,32 @@
   function renderTransport() {
     if (!initialized || !els.play) return;
     const current = state.tracks[state.selected];
-    els.trackTitle.textContent = current?.title || "Your own soundtrack";
-    els.trackSub.textContent = current ? `Track ${state.selected + 1} of ${state.tracks.length} · Local audio` : "Add music from your computer to get started.";
-    els.play.textContent = !audio.paused && state.source === "local" ? "Pause" : "Play";
-    els.play.setAttribute("aria-label", !audio.paused && state.source === "local" ? "Pause local music" : "Play local music");
+    const playing = !audio.paused && state.source === "local";
+    els.trackTitle.textContent = current?.title || "Nothing playing";
+    els.trackSub.textContent = current ? `Track ${state.selected + 1} of ${state.tracks.length}` : "Add audio files from your computer below.";
+    els.play.textContent = playing ? "Pause" : "Play";
+    els.play.setAttribute("aria-label", playing ? "Pause local music" : "Play local music");
+    els.play.dataset.state = playing ? "playing" : "paused";
+    if (els.localCard) els.localCard.dataset.playing = String(playing);
     els.previous.disabled = !current;
     els.next.disabled = !current;
     const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
     els.seek.disabled = !duration || state.source !== "local";
     els.seek.max = String(duration || 1);
     if (document.activeElement !== els.seek) els.seek.value = String(Number.isFinite(audio.currentTime) ? audio.currentTime : 0);
+    fillRange(els.seek);
     els.elapsed.textContent = timeLabel(audio.currentTime);
     els.duration.textContent = timeLabel(duration);
-    els.volume.value = String(audio.volume);
+    // The slider shows the chosen level, not a fade passing through it.
+    paintVolume();
+  }
+  function paintVolume() {
+    for (const [input, value] of [[els.volume, els.volumeValue], [els.radioVolume, els.radioVolumeValue]]) {
+      if (!input) continue;
+      if (document.activeElement !== input) input.value = String(prefs.volume);
+      fillRange(input);
+      if (value && value.textContent !== percent(prefs.volume)) value.textContent = percent(prefs.volume);
+    }
   }
   function renderQueue() {
     if (!els.queue) return;
@@ -1311,7 +1511,6 @@
     els.linkTab.setAttribute("aria-selected", String(shownSource === "link"));
     for (const [source, tab] of [["local", els.localTab], ["radio", els.radioTab], ["link", els.linkTab]]) tab.tabIndex = source === shownSource ? 0 : -1;
     els.dropdown.dataset.source = shownSource;
-    els.dropdown.dataset.video = String(shownSource === "link" && state.link?.shape === "video");
     scheduleDropdown();
     if (els.sourcePreview) {
       const names = { local: "Local music", radio: "Radio", link: "Links" };
@@ -1322,7 +1521,7 @@
   function render() {
     if (!initialized) return;
     renderSourcePanels();
-    renderTransport(); renderQueue(); renderRadio(); renderAudioLink(); renderLinks();
+    renderTransport(); renderQueue(); renderRadio(); renderAudioLink(); renderLinks(); renderFinder(); renderDropdownStatus();
     els.recommend.disabled = state.sending || !(recommender || window.mefiStudio?.musicRecommend);
     els.recommend.textContent = state.sending ? "Finding a direction…" : "Ask for recommendations";
     els.aiHint.textContent = recommender || window.mefiStudio?.musicRecommend ? "Uses Studio’s configured assistant. Recommendations appear here." : "Music recommendations need Studio’s assistant connection.";
@@ -1392,6 +1591,7 @@
       recent.dataset.provider = item.provider;
       if (state.source === "link" && state.link?.url === url) recent.setAttribute("aria-current", "true");
     }
+    if (els.recentBlock) els.recentBlock.hidden = !els.recent.children.length;
     const handoff = state.handoff;
     els.linkHandoff.hidden = !handoff;
     els.linkHandoff.textContent = "";
@@ -1410,11 +1610,30 @@
     if (!els.linkNow) return;
     paintLinkVolume();
     const link = state.source === "link" ? state.link : null;
-    els.linkNow.hidden = !link;
+    els.linkNow.dataset.empty = String(!link);
+    els.linkNow.dataset.provider = link?.provider || "";
     if (els.linkNext) els.linkNext.hidden = !linkQueue.length && link?.provider !== "youtube";
-    if (!link) return;
+    // Studio steers its own <video>, YouTube and Vimeo; Spotify and
+    // SoundCloud keep play and pause inside their player.
+    const steerable = Boolean(link && (link.kind === "media" || ["youtube", "vimeo"].includes(link.provider)));
+    const playing = linkIsPlaying();
+    els.linkToggle.hidden = !steerable;
+    els.linkToggle.textContent = playing ? "Pause" : "Play";
+    els.linkToggle.dataset.state = playing ? "playing" : "paused";
+    els.linkToggle.setAttribute("aria-label", playing ? "Pause the video" : "Play the video");
+    els.linkNow.dataset.playing = String(playing);
+    els.linkNowEyebrow.textContent = link ? link.providerName : "Video & links";
+    Array.from(els.youtubeResults?.children || []).forEach((row, index) => { row.dataset.current = String(Boolean(link) && youtubeResults[index]?.url === (linkPlayback?.url || link?.url)); });
+    if (!link) {
+      els.linkNowTitle.textContent = "Nothing playing";
+      els.linkNowDetail.textContent = "Search YouTube or paste a link below.";
+      return;
+    }
     els.linkNowTitle.textContent = link.label;
-    els.linkNowDetail.textContent = link.kind === "media" ? `${state.linkPlaying ? "Playing in Studio" : "Studio's player"}${mediaMenu.showLinks ? ` · from ${link.host}` : ""}` : `${link.providerName} player · playback settings are inside the video`;
+    const where = mediaMenu.showLinks && link.host ? ` · ${link.host}` : "";
+    els.linkNowDetail.textContent = !steerable ? `Play and pause inside the ${link.providerName} player`
+      : link.kind === "media" ? `${playing ? "Playing" : "Paused"} in Studio${where}`
+      : linkPlayback?.observed ? (playing ? "Playing" : "Paused") : "Loading the player…";
   }
   function renderRadio() {
     if (!els.radioState) return;
@@ -1429,7 +1648,16 @@
     els.radioState.textContent = state.radioNote ? `${label} — ${state.radioNote}` : label;
     els.radioState.dataset.phase = phase;
     if (els.radioStop) els.radioStop.disabled = !(state.source === "radio" && phase !== "idle");
-    if (els.radioVolume && document.activeElement !== els.radioVolume) els.radioVolume.value = String(prefs.volume);
+    // One round button: Stop while a station sounds, Play to bring the last one back.
+    const sounding = ["connecting", "playing", "buffering"].includes(phase);
+    if (els.radioTitle) els.radioTitle.textContent = tuned ? tuned.name : "Pick a station";
+    if (els.radioCard) { els.radioCard.dataset.phase = phase; els.radioCard.dataset.playing = String(phase === "playing"); }
+    if (els.radioPlay) {
+      els.radioStop.hidden = !sounding; els.radioPlay.hidden = sounding;
+      els.radioPlay.disabled = !tuned;
+      els.radioPlay.setAttribute("aria-label", tuned ? `Play ${tuned.name}` : "Pick a station below");
+    }
+    paintVolume();
     for (const [id, node] of Object.entries(els.stationButtons || {})) {
       const current = state.source === "radio" && id === state.station;
       node.setAttribute("aria-pressed", String(current));
@@ -1448,8 +1676,11 @@
     els.audioSource.value = status?.selection || "auto";
     els.audioSource.disabled = !window.MefiIdle?.setAudioSource;
     els.audioResponse.value = String(status?.response ?? .35);
+    fillRange(els.audioResponse);
     els.audioResponse.disabled = !window.MefiIdle?.setAudioResponse;
     els.audioResponseValue.textContent = `${Math.round((status?.response ?? .35) * 100)}%`;
+    const tone = connected ? "on" : status?.error ? "error" : status?.pending ? "pending" : "off";
+    if (els.audioState.dataset.tone !== tone) els.audioState.dataset.tone = tone;
     for (const [key, effect] of Object.entries(AUDIO_EFFECTS)) {
       els.audioEffects[key].checked = status?.effects?.[key] ?? effect.enabled;
       els.audioEffects[key].disabled = !window.MefiIdle?.setAudioEffects;
@@ -1485,6 +1716,13 @@
           else window.open(url, "_blank", "noopener,noreferrer");
         });
         search.title = "Search Spotify in your browser, then paste a track or playlist link here";
+        // Find it here: the Links panel opens over whatever is playing, which
+        // keeps playing until a result is chosen.
+        if (window.mefiStudio?.youtubeSearch) button("Find on YouTube", "ghost music-suggestion-search", card, () => {
+          settingsReveal.source = "link"; renderSourcePanels();
+          els.linkInput.value = query; renderFinder(); void searchYouTube(query);
+          els.dropdown.scrollTop = 0;
+        });
       }
       els.recommendation.dataset.error = "false";
     } catch (error) {
@@ -1575,39 +1813,63 @@
     const dropdown = element("section", "music-dropdown", null, document.body);
     els.dropdown = dropdown; dropdown.id = "music-dropdown"; dropdown.hidden = true; dropdown.tabIndex = -1;
     dropdown.setAttribute("role", "dialog"); dropdown.setAttribute("aria-modal", "false"); dropdown.setAttribute("aria-labelledby", "music-dropdown-heading");
+    // Header: the menu's name, one line on what is playing, and two quiet tools.
     const dropdownHeader = element("header", "music-dropdown-header", null, dropdown);
     els.dropdownHeader = dropdownHeader;
-    const dropdownTitle = element("h2", null, "Music & video", dropdownHeader); dropdownTitle.id = "music-dropdown-heading";
-    els.showLinks = button("Show links", "ghost mini", dropdownHeader, () => { mediaMenu.showLinks = !mediaMenu.showLinks; saveMediaMenu(); renderMediaMenu(); }, "music-show-links");
-    els.showLinks.title = "Show or hide URLs in the media menu";
-    button("Close", "ghost mini", dropdownHeader, () => closeAudio({ focus: true }), "music-dropdown-close");
+    const headingCopy = element("div", "music-dropdown-heading", null, dropdownHeader);
+    const dropdownTitle = element("h2", null, "Music & video", headingCopy); dropdownTitle.id = "music-dropdown-heading";
+    els.dropdownStatus = element("p", "music-dropdown-status", "Nothing playing", headingCopy);
+    els.showLinks = button("Show links", "music-icon-button music-icon-eye", dropdownHeader, () => { mediaMenu.showLinks = !mediaMenu.showLinks; saveMediaMenu(); renderMediaMenu(); }, "music-show-links");
+    els.showLinks.title = "Show or hide link addresses, for example while streaming";
+    els.showLinks.setAttribute("aria-label", "Show link addresses");
+    const closeButton = button("Close", "music-icon-button music-icon-close", dropdownHeader, () => closeAudio({ focus: true }), "music-dropdown-close");
+    closeButton.title = "Close"; closeButton.setAttribute("aria-label", "Close Music & video");
     els.clipboardOffer = element("section", "music-clipboard-offer", null, dropdownHeader); els.clipboardOffer.id = "music-clipboard-offer"; els.clipboardOffer.hidden = true;
-    els.clipboardTitle = element("strong", null, "", els.clipboardOffer); els.clipboardTitle.setAttribute("role", "status");
-    els.clipboardUrl = element("small", null, "", els.clipboardOffer);
+    const clipboardCopy = element("span", "music-clipboard-copy", null, els.clipboardOffer);
+    els.clipboardTitle = element("strong", null, "", clipboardCopy); els.clipboardTitle.setAttribute("role", "status");
+    els.clipboardUrl = element("small", null, "", clipboardCopy);
     const clipboardActions = element("div", "music-link-tools", null, els.clipboardOffer);
-    for (const [action, label] of [["play", "Play"], ["queue", "Add to queue"], ["next", "Queue next"], ["dismiss", "Dismiss"]]) button(label, "ghost mini", clipboardActions, () => useClipboardOffer(action), `music-clipboard-${action}`);
+    for (const [action, label, className] of [["play", "Play", "primary mini"], ["queue", "Add to queue", "ghost mini"], ["next", "Play next", "ghost mini"], ["dismiss", "Dismiss", "music-icon-button music-icon-close"]]) {
+      const offer = button(label, className, clipboardActions, () => useClipboardOffer(action), `music-clipboard-${action}`);
+      if (action === "dismiss") { offer.title = "Dismiss"; offer.setAttribute("aria-label", "Dismiss the copied link"); }
+    }
     const dropdownBody = element("div", "music-dropdown-body", null, dropdown);
     els.dropdownBody = dropdownBody;
-    const connection = element("div", "music-connection", null, dropdownBody);
-    const copiedLinksLabel = element("label", "music-clipboard-toggle", null, connection);
-    els.copiedLinks = element("input", null, null, copiedLinksLabel); els.copiedLinks.id = "music-copied-links"; els.copiedLinks.type = "checkbox";
-    element("span", null, "Offer copied media links", copiedLinksLabel);
-    els.copiedLinks.addEventListener("change", () => {
-      mediaMenu.copiedLinks = els.copiedLinks.checked; saveMediaMenu();
-      clipboardOffer = null; renderClipboardOffer();
-      if (mediaMenu.copiedLinks) { lastClipboardUrl = null; startClipboardChecks(); } else stopClipboardChecks();
-    });
+    // What the last action did, where it is seen: under the header.
+    els.notice = element("p", "music-notice", "", dropdownBody); els.notice.setAttribute("role", "status");
+    // The tree's ear: whether it is listening, and to what.
+    const connection = element("section", "music-connection", null, dropdownBody);
+    connection.setAttribute("aria-label", "Node tree audio link");
+    const connectionHead = element("div", "music-connection-head", null, connection);
+    els.audioState = element("p", "music-audio-state", "Audio link off", connectionHead); els.audioState.id = "music-audio-state"; els.audioState.setAttribute("role", "status");
+    els.audioToggle = button("Connect audio", "music-connect", connectionHead, () => {
+      const status = window.MefiIdle?.audioStatus?.();
+      window.MefiIdle?.setMusicReactive?.(!audioLinkEnabled(status));
+      renderAudioLink();
+    }, "music-audio-toggle");
+    const audioControls = element("div", "music-audio-controls", null, connection);
+    const sourceLabel = element("label", null, null, audioControls);
+    element("span", null, "Tree listens to", sourceLabel);
+    els.audioSource = element("select", null, null, sourceLabel); els.audioSource.id = "music-audio-source";
+    for (const [value, title] of [["auto", "Auto · local or desktop"], ["local", "Local player"], ["desktop", "Desktop audio / Spotify"], ["mic", "Microphone"]]) {
+      const option = element("option", null, title, els.audioSource); option.value = value;
+    }
+    els.audioSource.addEventListener("change", () => { window.MefiIdle?.setAudioSource?.(els.audioSource.value); renderAudioLink(); });
+    els.audioHint = element("p", "music-fineprint", "", connection); els.audioHint.id = "music-audio-hint";
+    els.audioSource.setAttribute("aria-describedby", els.audioHint.id);
     const main = element("section", "music-main", null, dropdownBody);
     main.id = "music-sound"; main.setAttribute("aria-labelledby", "music-sound-label");
     const soundLabel = element("p", "eyebrow music-group-label", "Sound", main); soundLabel.id = "music-sound-label"; soundLabel.tabIndex = -1;
     els.groups = { look: { group: settings, label: lookLabel }, sound: { group: main, label: soundLabel } };
     const tabs = element("div", "music-tabs", null, main); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Music source");
-    els.localTab = button("Local music", "music-tab", tabs, () => setSource("local"), "music-local-tab");
-    els.radioTab = button("Ad-free radio", "music-tab", tabs, () => setSource("radio"), "music-radio-tab");
-    els.linkTab = button("YouTube / links", "music-tab", tabs, () => setSource("link"), "music-link-tab");
+    els.localTab = button("Music files", "music-tab", tabs, () => setSource("local"), "music-local-tab");
+    els.radioTab = button("Radio", "music-tab", tabs, () => setSource("radio"), "music-radio-tab");
+    els.linkTab = button("Video & links", "music-tab", tabs, () => setSource("link"), "music-link-tab");
+    els.localTab.title = "Audio files from your computer";
+    els.radioTab.title = "Ad-free, listener-funded radio";
     els.linkTab.title = "YouTube, Spotify, SoundCloud, Vimeo and audio or video file links";
     const tabFor = (source) => source === "local" ? els.localTab : source === "radio" ? els.radioTab : els.linkTab;
-    for (const [tab, panelId] of [[els.localTab, "music-local-panel"], [els.radioTab, "music-radio-panel"], [els.linkTab, "music-link-panel"]]) { tab.setAttribute("role", "tab"); tab.setAttribute("aria-controls", panelId); }
+    for (const [tab, panelId, source] of [[els.localTab, "music-local-panel", "local"], [els.radioTab, "music-radio-panel", "radio"], [els.linkTab, "music-link-panel", "link"]]) { tab.setAttribute("role", "tab"); tab.setAttribute("aria-controls", panelId); tab.dataset.source = source; }
     tabs.addEventListener("keydown", (event) => {
       if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
       event.preventDefault();
@@ -1618,122 +1880,150 @@
       setSource(source); tabFor(source).focus();
     });
     els.sourcePreview = element("p", "music-fineprint", null, main); els.sourcePreview.id = "music-source-preview"; els.sourcePreview.hidden = true; els.sourcePreview.setAttribute("role", "status");
+    // Every source opens with the same player card: artwork, what is playing,
+    // then its transport and volume. What to choose from follows below it.
+    const card = (parent, kind) => {
+      const node = element("div", "music-player", null, parent); node.dataset.kind = kind;
+      const art = element("div", "music-art", null, node); art.setAttribute("aria-hidden", "true");
+      const now = element("div", "music-now", null, node);
+      const controls = element("div", "music-controls", null, node);
+      return { node, art, now, controls, transport: element("div", "music-transport", null, controls) };
+    };
+    const volume = (parent, label, id, max = "1", step = ".01") => {
+      const row = element("label", "music-volume", null, parent);
+      element("span", "music-volume-icon", null, row).setAttribute("aria-hidden", "true");
+      const input = element("input", null, null, row); input.type = "range"; input.min = "0"; input.max = max; input.step = step; input.setAttribute("aria-label", label);
+      if (id) input.id = id;
+      const value = element("output", "music-volume-value", "", row);
+      return { row, input, value };
+    };
     els.local = element("section", "music-local", null, main); els.local.id = "music-local-panel"; els.local.setAttribute("role", "tabpanel"); els.local.setAttribute("aria-labelledby", "music-local-tab");
-    const player = element("div", "music-player", null, els.local);
-    const art = element("div", "music-art", "♫", player); art.setAttribute("aria-hidden", "true");
-    const track = element("div", "music-now", null, player);
-    element("span", "eyebrow", "Now playing", track);
-    els.trackTitle = element("h3", "music-title", null, track);
-    els.trackSub = element("p", "music-subtitle", null, track);
-    const transport = element("div", "music-transport", null, track);
-    els.previous = button("Previous", "ghost", transport, () => audio.currentTime > 3 ? (audio.currentTime = 0) : move(-1), "music-previous");
-    els.play = button("Play", "primary", transport, () => state.source !== "local" || audio.paused ? void play() : audio.pause(), "music-play");
-    els.next = button("Next", "ghost", transport, () => move(1), "music-next");
-    const timeline = element("div", "music-timeline", null, els.local);
+    const localCard = card(els.local, "local"); els.localCard = localCard.node;
+    element("span", "eyebrow", "Your music", localCard.now);
+    els.trackTitle = element("h3", "music-title", null, localCard.now);
+    els.trackSub = element("p", "music-subtitle", null, localCard.now);
+    els.previous = button("Previous", "music-icon-button music-icon-prev", localCard.transport, () => audio.currentTime > 3 ? (audio.currentTime = 0) : move(-1), "music-previous");
+    els.play = button("Play", "music-play-button", localCard.transport, () => state.source !== "local" || audio.paused ? void play() : audio.pause(), "music-play");
+    els.next = button("Next", "music-icon-button music-icon-next", localCard.transport, () => move(1), "music-next");
+    ({ input: els.volume, value: els.volumeValue } = volume(localCard.controls, "Music volume"));
+    els.volume.addEventListener("input", () => setVolume(els.volume.value));
+    const timeline = element("div", "music-timeline", null, localCard.node);
     els.elapsed = element("span", null, "0:00", timeline);
     els.seek = element("input", null, null, timeline); els.seek.id = "music-seek"; els.seek.type = "range"; els.seek.min = "0"; els.seek.step = ".1"; els.seek.setAttribute("aria-label", "Playback position");
     els.seek.addEventListener("input", () => { if (Number.isFinite(audio.duration)) audio.currentTime = Number(els.seek.value); renderTransport(); });
     els.duration = element("span", null, "0:00", timeline);
-    const utilities = element("div", "music-utilities", null, els.local);
-    button("Add audio files", "ghost", utilities, () => els.files.click(), "music-add-files");
-    els.files = element("input", null, null, utilities); els.files.id = "music-files"; els.files.type = "file"; els.files.multiple = true; els.files.accept = "audio/*,.mp3,.wav,.flac,.m4a,.ogg,.aac,.opus,.webm"; els.files.hidden = true;
-    els.files.addEventListener("change", () => { addFiles(els.files.files); els.files.value = ""; });
-    const volumeLabel = element("label", "music-volume", "Volume", utilities);
-    els.volume = element("input", null, null, volumeLabel); els.volume.type = "range"; els.volume.min = "0"; els.volume.max = "1"; els.volume.step = ".01"; els.volume.setAttribute("aria-label", "Music volume");
-    els.volume.addEventListener("input", () => setVolume(els.volume.value));
-    const queueHead = element("div", "music-queue-heading", null, els.local);
+    const library = element("section", "music-library", null, els.local);
+    const queueHead = element("div", "music-list-heading", null, library);
     element("h3", null, "Your queue", queueHead); els.queueCount = element("span", "music-count", "0", queueHead);
-    els.queue = element("ol", "music-queue", null, els.local); els.queue.id = "music-queue";
-    element("p", "music-fineprint", "Local playback needs no account. Reselect your files after restarting Studio.", els.local);
+    button("Add files", "ghost mini music-add", queueHead, () => els.files.click(), "music-add-files").title = "Choose audio files, or drop them on this panel";
+    els.files = element("input", null, null, library); els.files.id = "music-files"; els.files.type = "file"; els.files.multiple = true; els.files.accept = "audio/*,.mp3,.wav,.flac,.m4a,.ogg,.aac,.opus,.webm"; els.files.hidden = true;
+    els.files.addEventListener("change", () => { addFiles(els.files.files); els.files.value = ""; });
+    els.queue = element("ol", "music-queue", null, library); els.queue.id = "music-queue";
+    element("p", "music-fineprint", "Files play straight from your computer and need choosing again after a restart. Drop them anywhere on this panel.", library);
     els.local.addEventListener("dragover", (event) => { event.preventDefault(); els.local.classList.add("drag-over"); });
     els.local.addEventListener("dragleave", () => els.local.classList.remove("drag-over"));
     els.local.addEventListener("drop", (event) => { event.preventDefault(); els.local.classList.remove("drag-over"); addFiles(event.dataTransfer?.files); });
     els.radio = element("section", "music-radio", null, main); els.radio.id = "music-radio-panel"; els.radio.setAttribute("role", "tabpanel"); els.radio.setAttribute("aria-labelledby", "music-radio-tab");
-    element("h3", null, "Ad-free radio", els.radio);
-    element("p", "music-subtitle", "Listener-funded stations that carry no advertising, so there is nothing to skip. These play through Studio’s own player, which means the node tree reacts to them.", els.radio);
-    els.radioState = element("p", "music-radio-state", "No station tuned", els.radio);
+    const radioCard = card(els.radio, "radio"); els.radioCard = radioCard.node;
+    element("span", "eyebrow", "Ad-free radio", radioCard.now);
+    els.radioTitle = element("h3", "music-title", "Pick a station", radioCard.now);
+    els.radioState = element("p", "music-radio-state", "No station tuned", radioCard.now);
     els.radioState.id = "music-radio-state"; els.radioState.setAttribute("role", "status");
+    els.radioPrevious = button("Previous station", "music-icon-button music-icon-prev", radioCard.transport, () => stepStation(-1), "music-radio-previous");
+    els.radioPlay = button("Play", "music-play-button", radioCard.transport, () => { if (station(state.station)) tune(state.station); }, "music-radio-play");
+    els.radioStop = button("Stop radio", "music-play-button", radioCard.transport, () => { stopRadio(); render(); announce(); }, "music-radio-stop");
+    els.radioStop.dataset.state = "playing"; els.radioStop.disabled = true;
+    els.radioNext = button("Next station", "music-icon-button music-icon-next", radioCard.transport, () => stepStation(1), "music-radio-next");
+    ({ input: els.radioVolume, value: els.radioVolumeValue } = volume(radioCard.controls, "Radio volume", "music-radio-volume"));
+    els.radioVolume.value = String(prefs.volume);
+    els.radioVolume.addEventListener("input", () => setVolume(els.radioVolume.value));
+    const stationsHead = element("div", "music-list-heading", null, els.radio);
+    element("h3", null, "Stations", stationsHead);
+    element("span", "music-list-note", "No ads · listener-funded", stationsHead);
     const stationList = element("div", "music-stations", null, els.radio);
     stationList.setAttribute("role", "group"); stationList.setAttribute("aria-label", "Stations");
     els.stationButtons = {};
     for (const item of STATIONS) {
-      const card = button("", "music-station", stationList, () => tune(item.id), `music-station-${item.id}`);
-      const copy = element("span", "music-station-copy", null, card);
+      const choice = button("", "music-station", stationList, () => tune(item.id), `music-station-${item.id}`);
+      const copy = element("span", "music-station-copy", null, choice);
       element("strong", null, item.name, copy);
       element("small", null, `${item.detail} · ${item.origin}`, copy);
-      card.setAttribute("aria-pressed", "false");
-      card.title = `${item.name} — ${item.mirrors.length} mirror${item.mirrors.length === 1 ? "" : "s"}`;
-      els.stationButtons[item.id] = card;
+      choice.setAttribute("aria-pressed", "false");
+      choice.title = `${item.name} — ${item.mirrors.length} mirror${item.mirrors.length === 1 ? "" : "s"}`;
+      els.stationButtons[item.id] = choice;
     }
-    const radioControls = element("div", "music-radio-controls", null, els.radio);
-    els.radioStop = button("Stop radio", "ghost", radioControls, () => { stopRadio(); render(); announce(); }, "music-radio-stop");
-    els.radioStop.disabled = true;
-    const radioVolumeLabel = element("label", "music-volume", "Volume", radioControls);
-    els.radioVolume = element("input", null, null, radioVolumeLabel); els.radioVolume.id = "music-radio-volume"; els.radioVolume.type = "range"; els.radioVolume.min = "0"; els.radioVolume.max = "1"; els.radioVolume.step = ".01"; els.radioVolume.setAttribute("aria-label", "Radio volume");
-    els.radioVolume.value = String(prefs.volume);
-    els.radioVolume.addEventListener("input", () => setVolume(els.radioVolume.value));
-    element("p", "music-fineprint", "Each station lists several mirrors. If one stops sending, Studio brings the next one up on a second deck and crosses over, so the music keeps playing through the handover.", els.radio);
+    element("p", "music-fineprint", "If a stream drops, Studio switches to a backup mirror and crosses over, so the music keeps going.", els.radio);
     els.link = element("section", "music-link", null, main); els.link.id = "music-link-panel"; els.link.setAttribute("role", "tabpanel"); els.link.setAttribute("aria-labelledby", "music-link-tab");
-    element("h3", null, "Play a link", els.link);
-    element("p", "music-subtitle", "Paste or drop a YouTube, Spotify, SoundCloud or Vimeo link, or a link to an audio or video file. Discord attachments work too.", els.link);
-    const linkForm = element("form", "music-link-form", null, els.link);
-    els.linkInput = element("input", null, null, linkForm); els.linkInput.id = "music-link-url"; els.linkInput.type = "text"; els.linkInput.inputMode = "url"; els.linkInput.placeholder = "https://youtu.be/… or https://open.spotify.com/…"; els.linkInput.setAttribute("aria-label", "Media link");
-    els.linkInput.autocomplete = "off"; els.linkInput.spellcheck = false;
-    button("Play", "primary", linkForm, () => playLink(els.linkInput.value), "music-link-load");
-    linkForm.addEventListener("submit", (event) => { event.preventDefault(); playLink(els.linkInput.value); });
-    const queueTools = element("div", "music-link-tools", null, els.link);
-    button("Add to queue", "ghost", queueTools, () => queueLink(els.linkInput.value), "music-link-queue-add");
-    button("Queue next", "ghost", queueTools, () => queueLink(els.linkInput.value, null, true), "music-link-queue-first");
-    els.linkHandoff = element("div", "music-link-handoff", null, els.link); els.linkHandoff.id = "music-link-handoff"; els.linkHandoff.hidden = true;
-    els.recent = element("div", "music-recent", null, els.link); els.recent.setAttribute("aria-label", "Recent links");
-    // renderer/together.js fills this, above the player, with Listen together and the
-    // now-playing share (both need the rooms hub).
-    els.together = element("section", "music-together", null, els.link); els.together.hidden = true;
-    els.linkNow = element("div", "music-link-now", null, els.link); els.linkNow.hidden = true;
-    const nowCopy = element("span", "music-link-now-copy", null, els.linkNow);
-    els.linkNowTitle = element("strong", null, null, nowCopy);
-    els.linkNowDetail = element("small", null, null, nowCopy);
-    const nowTools = element("span", "music-link-tools", null, els.linkNow);
-    button("Show player", "ghost", nowTools, () => { mountLink(); els.floatingPlayer?.reveal(); }, "music-link-show");
-    els.linkNext = button("Next video", "ghost", nowTools, nextVideo, "music-link-next");
-    button("Copy link", "ghost", nowTools, () => state.link && copyLink(state.link.url), "music-link-copy").title = "Copy the link to share it in Discord";
-    button("Open ↗", "ghost", nowTools, () => state.link && openLink(state.link.url), "music-link-open").title = "Open the original page";
-    els.linkPlayer = element("div", "music-link-player", null, els.link);
-    const videoSettings = element("section", "music-video-settings", null, els.link);
-    element("h3", null, "Video settings", videoSettings);
-    els.linkVolumeControls = element("div", "music-link-volume", null, videoSettings);
-    const linkVolumeLabel = element("label", null, null, els.linkVolumeControls);
-    els.linkVolumeLabel = element("span", null, "Volume", linkVolumeLabel);
-    els.linkVolume = element("input", null, null, linkVolumeLabel); els.linkVolume.id = "music-link-volume";
-    els.linkVolume.type = "range"; els.linkVolume.min = "0"; els.linkVolume.max = "100"; els.linkVolume.step = "1";
-    els.linkVolume.setAttribute("aria-label", "Video volume");
+    const linkCard = card(els.link, "link");
+    els.linkNow = linkCard.node; els.linkArt = linkCard.art;
+    const nowCopy = element("span", "music-link-now-copy", null, linkCard.now);
+    els.linkNowEyebrow = element("span", "eyebrow", "Video & links", nowCopy);
+    els.linkNowTitle = element("strong", "music-title", null, nowCopy);
+    els.linkNowDetail = element("small", "music-subtitle", null, nowCopy);
+    els.linkToggle = button("Play", "music-play-button", linkCard.transport, toggleLink, "music-link-toggle");
+    els.linkNext = button("Next video", "music-icon-button music-icon-next", linkCard.transport, nextVideo, "music-link-next");
+    els.linkVolumeControls = element("div", "music-link-volume", null, linkCard.controls);
+    els.linkMute = button("Mute", "music-icon-button music-icon-speaker", els.linkVolumeControls, () => { mediaMuted = !mediaMuted; saveLinkVolume(); applyLinkVolume(); }, "music-link-mute");
+    ({ input: els.linkVolume, value: els.linkVolumeValue } = volume(els.linkVolumeControls, "Video volume", "music-link-volume", "100", "1"));
     els.linkVolume.addEventListener("input", () => { mediaVolume = Math.max(0, Math.min(1, (Number(els.linkVolume.value) || 0) / 100)); if (mediaVolume > 0) mediaMuted = false; saveLinkVolume(); applyLinkVolume(); });
-    els.linkMute = button("Mute", "ghost", els.linkVolumeControls, () => { mediaMuted = !mediaMuted; saveLinkVolume(); applyLinkVolume(); }, "music-link-mute");
+    const nowTools = element("div", "music-link-tools music-link-actions", null, linkCard.node);
+    els.linkPlace = element("span", "music-link-place", null, nowTools);
+    button("Show player", "ghost mini", nowTools, () => { mountLink(); els.floatingPlayer?.reveal(); }, "music-link-show");
+    button("Copy link", "ghost mini", nowTools, () => state.link && copyLink(state.link.url), "music-link-copy").title = "Copy the link to share it in Discord";
+    button("Open ↗", "ghost mini", nowTools, () => state.link && openLink(state.link.url), "music-link-open").title = "Open the original page";
+    button("Stop", "ghost mini music-link-stop", nowTools, stopLink, "music-link-stop").title = "Stop playback and close the player";
+    els.linkPlayer = element("div", "music-link-player", null, els.link);
+    // How the picture shows: the everyday switch stays on the card, the finer
+    // settings fold away under Picture.
+    els.videoSettings = element("details", "music-video-settings music-fold", null, els.link);
+    element("summary", null, "Picture & background", els.videoSettings);
+    const videoBody = element("div", "music-fold-body", null, els.videoSettings);
     els.floatingPlayer = window.MefiMediaWindow?.create({
       content: els.linkPlayer,
-      settingsHost: videoSettings,
+      settingsHost: els.videoSettings,
+      controlsHost: videoBody,
+      quickHost: els.linkPlace,
       onSettings: () => open("sound"),
       onClose: () => { unmountLink(); state.link = null; render(); announce(); },
     });
-    els.youtubeExplorer = element("details", "music-youtube-explorer", null, els.link);
-    element("summary", null, "Explore YouTube", els.youtubeExplorer);
-    const searchForm = element("form", "music-link-form", null, els.youtubeExplorer);
-    els.youtubeQuery = element("input", null, null, searchForm); els.youtubeQuery.id = "music-youtube-query";
-    els.youtubeQuery.type = "search"; els.youtubeQuery.maxLength = 160; els.youtubeQuery.placeholder = "Search YouTube videos"; els.youtubeQuery.setAttribute("aria-label", "Search YouTube");
-    els.youtubeSearch = button("Search", "ghost", searchForm, searchYouTube, "music-youtube-search");
-    searchForm.addEventListener("submit", event => { event.preventDefault(); searchYouTube(); });
-    els.youtubeNotice = element("p", "music-fineprint", "Find a video, then Play. Next video follows your results or YouTube playlist.", els.youtubeExplorer); els.youtubeNotice.setAttribute("role", "status");
-    els.youtubeResults = element("div", "music-youtube-results", null, els.youtubeExplorer); els.youtubeResults.id = "music-youtube-results";
+    // Find or paste: one field. A link plays; words search YouTube.
+    const finder = element("section", "music-finder", null, els.link);
+    const linkForm = element("form", "music-link-form music-omnibox", null, finder);
+    els.linkInput = element("input", null, null, linkForm); els.linkInput.id = "music-link-url"; els.linkInput.type = "text"; els.linkInput.placeholder = "Search YouTube or paste a link"; els.linkInput.setAttribute("aria-label", "Search YouTube or paste a media link");
+    els.linkInput.autocomplete = "off"; els.linkInput.spellcheck = false; els.linkInput.maxLength = 2048;
+    els.linkGo = button("Play", "primary", linkForm, submitFinder, "music-link-load");
+    linkForm.addEventListener("submit", (event) => { event.preventDefault(); submitFinder(); });
+    els.linkInput.addEventListener("input", renderFinder);
+    els.linkQueueTools = element("div", "music-link-tools", null, finder);
+    button("Add to queue", "ghost mini", els.linkQueueTools, () => queueLink(finderLink(els.linkInput.value)?.url || els.linkInput.value), "music-link-queue-add");
+    button("Play next", "ghost mini", els.linkQueueTools, () => queueLink(finderLink(els.linkInput.value)?.url || els.linkInput.value, null, true), "music-link-queue-first");
+    els.linkHandoff = element("div", "music-link-handoff", null, finder); els.linkHandoff.id = "music-link-handoff"; els.linkHandoff.hidden = true;
+    els.youtubeNotice = element("p", "music-fineprint music-finder-note", "", finder); els.youtubeNotice.setAttribute("role", "status");
+    els.youtubeResults = element("div", "music-youtube-results", null, finder); els.youtubeResults.id = "music-youtube-results";
+    els.recentBlock = element("div", "music-recent-block", null, finder);
+    element("span", "music-list-note", "Recent", els.recentBlock);
+    els.recent = element("div", "music-recent", null, els.recentBlock); els.recent.setAttribute("aria-label", "Recent links");
     const queue = element("section", "music-link-queue", null, els.link); queue.setAttribute("aria-label", "Video queue");
-    const queueHeader = element("div", "music-link-queue-header", null, queue);
+    const queueHeader = element("div", "music-list-heading", null, queue);
     els.linkQueueHeading = element("h3", null, "Up next", queueHeader); els.linkQueueHeading.setAttribute("aria-live", "polite");
-    els.linkQueueNext = button("Play next video", "ghost", queueHeader, () => playQueued(), "music-link-queue-next");
-    els.linkQueueEmpty = element("p", "music-fineprint", "Your queue is empty. Add a link above or choose a YouTube result.", queue);
+    els.linkQueueNext = button("Play next video", "ghost mini", queueHeader, () => playQueued(), "music-link-queue-next");
+    els.linkQueueEmpty = element("p", "music-fineprint", "Nothing queued. Add a search result with + or paste a link and choose Add to queue.", queue);
     els.linkQueueList = element("ol", "music-link-queue-list", null, queue); els.linkQueueList.id = "music-link-queue-list";
-    element("p", "music-fineprint", "Queued videos play first when you press Next video. YouTube, Vimeo and direct files also advance automatically when they finish. Your queue is saved across reloads.", queue);
     renderLinkQueue();
-    element("p", "music-fineprint", "Video settings live here in Music & video. Background and Transparency put the video behind your work; Float video restores its controls. Keep tree in dark areas waits for a consistently darker area, then glides slowly. Fade on finish dims the video and notifies you when a task completes.", els.link);
-    element("p", "music-fineprint", "Embedded players use their service’s sign-in, ads and availability rules. YouTube and Vimeo remember playback when Studio reopens within ten minutes. Set the audio link to Desktop audio and the node tree follows them.", els.link);
+    // renderer/together.js fills this with Listen together and the now-playing
+    // share (both need the rooms hub).
+    els.together = element("section", "music-together", null, els.link); els.together.hidden = true;
+    const linkFooter = element("div", "music-link-footer", null, els.link);
+    const copiedLinksLabel = element("label", "music-clipboard-toggle", null, linkFooter);
+    els.copiedLinks = element("input", null, null, copiedLinksLabel); els.copiedLinks.id = "music-copied-links"; els.copiedLinks.type = "checkbox";
+    element("span", null, "Offer links I copy", copiedLinksLabel);
+    copiedLinksLabel.title = "While this menu is open, a media link on your clipboard appears at the top with Play and Add to queue";
+    els.copiedLinks.addEventListener("change", () => {
+      mediaMenu.copiedLinks = els.copiedLinks.checked; saveMediaMenu();
+      clipboardOffer = null; renderClipboardOffer();
+      if (mediaMenu.copiedLinks) { lastClipboardUrl = null; startClipboardChecks(); } else stopClipboardChecks();
+    });
+    element("p", "music-fineprint", "Queued videos move on by themselves when one ends. YouTube and Vimeo pick up where they left off if Studio reopens within ten minutes. For the tree to follow a video, set the tree to Desktop audio.", linkFooter);
     els.link.addEventListener("dragover", (event) => {
       const types = Array.from(event.dataTransfer?.types || []);
       if (!types.includes("text/uri-list") && !types.includes("text/plain")) return;
@@ -1747,37 +2037,23 @@
       event.preventDefault();
       playLink(text);
     });
-    const audioLink = element("details", "music-audio-link", null, dropdownBody);
+    // Less often needed: how the tree reacts, and music ideas.
+    const audioLink = element("details", "music-audio-link music-fold", null, dropdownBody);
     els.audioLink = audioLink;
     audioLink.id = "music-audio-reactions";
     audioLink.setAttribute("aria-labelledby", "music-audio-heading");
-    const audioHeading = element("summary", null, "Audio reactions", audioLink); audioHeading.id = "music-audio-heading";
-    window.MefiTreeDynamics?.mount(audioLink, "audio");
-    element("p", "music-fineprint", "Gentle waves, node glow and tree motion follow quiet or loud music. Add drum accents or background glow when you want more movement.", audioLink);
-    const audioControls = element("div", "music-audio-controls", null, connection);
-    const sourceLabel = element("label", null, "Listen to", audioControls);
-    els.audioSource = element("select", null, null, sourceLabel); els.audioSource.id = "music-audio-source";
-    for (const [value, title] of [["auto", "Auto · local or desktop"], ["local", "Local player"], ["desktop", "Desktop audio / Spotify"], ["mic", "Microphone"]]) {
-      const option = element("option", null, title, els.audioSource); option.value = value;
-    }
-    els.audioSource.addEventListener("change", () => { window.MefiIdle?.setAudioSource?.(els.audioSource.value); renderAudioLink(); });
-    els.audioToggle = button("Connect audio", "ghost", audioControls, () => {
-      const status = window.MefiIdle?.audioStatus?.();
-      window.MefiIdle?.setMusicReactive?.(!audioLinkEnabled(status));
-      renderAudioLink();
-    }, "music-audio-toggle");
-    els.audioState = element("p", "music-audio-state", "Audio link off", connection); els.audioState.id = "music-audio-state"; els.audioState.setAttribute("role", "status");
-    els.audioHint = element("p", "music-fineprint", "", connection); els.audioHint.id = "music-audio-hint";
-    els.audioSource.setAttribute("aria-describedby", els.audioHint.id);
-    const responseLabel = element("label", "music-audio-response", "Response", audioLink);
+    const audioHeading = element("summary", null, "Tree reactions", audioLink); audioHeading.id = "music-audio-heading";
+    const audioBody = element("div", "music-fold-body", null, audioLink);
+    const responseLabel = element("label", "music-audio-response", null, audioBody);
+    element("span", null, "Response", responseLabel);
     els.audioResponse = element("input", null, null, responseLabel); els.audioResponse.id = "music-audio-response";
     els.audioResponse.type = "range"; els.audioResponse.min = "0"; els.audioResponse.max = "2"; els.audioResponse.step = "0.05";
     els.audioResponseValue = element("output", null, "35%", responseLabel); els.audioResponseValue.setAttribute("for", els.audioResponse.id);
     els.audioResponse.addEventListener("input", () => { window.MefiIdle?.setAudioResponse?.(Number(els.audioResponse.value)); renderAudioLink(); });
-    const responseHint = element("p", "music-fineprint", "Starts gently at 35%. Lower to 0% to settle the effects without changing playback volume.", audioLink); responseHint.id = "music-audio-response-hint";
+    const responseHint = element("p", "music-fineprint", "How strongly the tree moves with the sound. 0% settles it without changing the volume.", audioBody); responseHint.id = "music-audio-response-hint";
     els.audioResponse.setAttribute("aria-label", "Audio response strength"); els.audioResponse.setAttribute("aria-describedby", responseHint.id);
-    const audioEffectsHeading = element("h4", "music-node-label", "Reactions", audioLink); audioEffectsHeading.id = "music-audio-effects-label";
-    const audioEffects = element("div", "music-effects music-audio-effects", null, audioLink); audioEffects.setAttribute("role", "group"); audioEffects.setAttribute("aria-labelledby", audioEffectsHeading.id);
+    const audioEffectsHeading = element("h4", "music-node-label", "Reactions", audioBody); audioEffectsHeading.id = "music-audio-effects-label";
+    const audioEffects = element("div", "music-effects music-audio-effects", null, audioBody); audioEffects.setAttribute("role", "group"); audioEffects.setAttribute("aria-labelledby", audioEffectsHeading.id);
     els.audioEffects = {};
     for (const [key, effect] of Object.entries(AUDIO_EFFECTS)) {
       const id = `music-audio-${key}`;
@@ -1790,16 +2066,18 @@
       input.addEventListener("change", () => { window.MefiIdle?.setAudioEffects?.({ [key]: input.checked }); renderAudioLink(); });
       els.audioEffects[key] = input;
     }
-    const aside = element("details", "music-side", null, dropdownBody);
+    window.MefiTreeDynamics?.mount(audioBody, "audio");
+    const aside = element("details", "music-side music-fold", null, dropdownBody);
     els.recommendations = aside;
-    element("summary", null, "Music recommendations", aside);
-    const ai = element("section", "music-section music-ai", null, aside);
+    element("summary", null, "Music ideas", aside);
+    const ai = element("section", "music-section music-ai music-fold-body", null, aside);
     const moodLabel = element("label", "music-mood-label", "What are you in the mood for?", ai);
     els.mood = element("textarea", null, null, moodLabel); els.mood.id = "music-mood"; els.mood.rows = 3; els.mood.maxLength = 600; els.mood.placeholder = "Warm ambient, no vocals, a little energy…";
     els.recommend = button("Ask for recommendations", "ghost", ai, () => void recommend(), "music-recommend");
     els.aiHint = element("p", "music-fineprint", null, ai);
     els.recommendation = element("div", "music-recommendation", "", ai); els.recommendation.id = "music-recommendation"; els.recommendation.setAttribute("aria-live", "polite");
-    els.notice = element("p", "music-notice", "", dropdownBody); els.notice.setAttribute("role", "status");
+    // Every slider shows how full it is; the fill follows the value.
+    dropdown.addEventListener("input", (event) => { if (event.target?.type === "range") fillRange(event.target); });
     dropdown.addEventListener("keydown", audioKey);
     dropdown.addEventListener("pointerenter", cancelAudioHoverTimers);
     dropdown.addEventListener("pointerleave", leaveAudioHover);
@@ -1849,6 +2127,8 @@
     els.dropdown.style.top = `${Math.round(top)}px`;
     els.dropdown.style.right = `${Math.round(Math.max(edge, Math.min(right, width - panelWidth - edge)))}px`;
     els.dropdown.style.maxHeight = `${Math.max(0, flip ? above : height - top - edge)}px`;
+    // A floating player never sits on top of the menu that controls it.
+    els.floatingPlayer?.avoid?.(els.dropdown.getBoundingClientRect());
   }
   function scheduleDropdown() {
     if (els.dropdown?.hidden !== false || dropdownFrame) return;
@@ -1910,18 +2190,9 @@
     els.dropdown.hidden = false;
     mountLink(); render(); positionDropdown();
     startClipboardChecks();
-    if (hover) {
-      // Bring the current source's controls back into view, even if the last
-      // visit ended down in the queue or recommendations. Only this panel scrolls.
-      const current = state.source === "link" && state.link
-        ? (els.linkVolumeControls.hidden ? els.linkNow : els.linkVolumeControls.parentElement)
-        : state.source === "radio" ? els.radioVolume.parentElement.parentElement : els.local;
-      const top = current?.getBoundingClientRect?.().top;
-      const panelTop = els.dropdown.getBoundingClientRect().top;
-      const headerHeight = els.dropdownHeader.getBoundingClientRect().height;
-      els.dropdown.scrollTop = Number.isFinite(top) && Number.isFinite(panelTop)
-        ? Math.max(0, (els.dropdown.scrollTop || 0) + top - panelTop - headerHeight - 12) : 0;
-    }
+    // Every opening starts at the top, where the source tabs, what is playing
+    // and its settings are, even if the last visit ended down in the queue.
+    els.dropdown.scrollTop = 0;
     document.addEventListener("pointerdown", audioOutside);
     document.addEventListener("keydown", audioKey, true);
     window.addEventListener("scroll", scheduleDropdown, true);
@@ -1934,6 +2205,7 @@
     if (els.dropdown?.hidden !== false) return;
     if (window.MefiSelect?.owns?.(els.dropdown)) window.MefiSelect.close();
     els.dropdown.hidden = true;
+    els.floatingPlayer?.avoid?.(null);
     dropdownAnchor?.setAttribute("aria-expanded", "false");
     document.removeEventListener?.("pointerdown", audioOutside);
     document.removeEventListener?.("keydown", audioKey, true);
@@ -2014,7 +2286,7 @@
     // A station that was sounding when Studio closed is tuned again. Smoke and
     // capture runs share the owner's profile, so they stay silent.
     const headless = /[?&](?:smoke|capture)=1(?:&|$)/.test(String(window.location?.search || ""));
-    if (state.source === "radio" && prefs.radioOn && station(state.station) && !headless) tune(state.station);
+    if (state.source === "radio" && prefs.radioOn && station(state.station) && !headless) tune(state.station, 0, false, true);
     if (!headless && recentLink) Promise.resolve(window.MefiBoot?.ready?.()).then(() => restoreRecentLink(recentLink)).catch(() => {});
     window.addEventListener("resize", () => { schedulePreview(); scheduleDropdown(); });
     // Capture the complete dismissal gesture before the tree or rail sees it.
