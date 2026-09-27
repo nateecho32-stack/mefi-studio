@@ -88,6 +88,10 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   new happens to them.
 
 ### Fixed
+- Coding CLIs installed while Studio is open no longer show "not found" until a
+  full quit and relaunch. On Windows, the CLI status pills, auto setup and each
+  launch (including a self-update restart, which inherits the old environment)
+  re-read PATH from the registry before looking the tools up.
 - A Vibe card whose count was empty (Freshly done, or Building now with
   nothing running) pushed its title to the far edge of the card.
 - An answer the desk gave for you counted as yours: the card said "You

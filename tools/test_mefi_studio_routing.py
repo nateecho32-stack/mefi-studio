@@ -488,7 +488,11 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertTrue(status, "codingCliStatus must exist — auto setup and the CLI panel share it")
         self.assertIn('"where.exe"', status, "detection resolves the installed path")
         self.assertIn("installed: false", status, "a missing CLI reports cleanly")
-        self.assertIn('ipcMain.handle("studio:cli-status", () => codingCliStatus())', self.main)
+        self.assertRegex(
+            self.main,
+            r'ipcMain\.handle\("studio:cli-status", async \(\) => \{\s*await refreshProcessPath\(\);\s*return codingCliStatus\(\);',
+            "a CLI installed since launch is found without a restart",
+        )
         launch = re.search(r'ipcMain\.handle\("studio:launch-cli"(.*?)\}\);', self.main, re.S)
         self.assertIsNotNone(launch)
         self.assertIn("detached: true", launch.group(1), "interactive CLIs outlive the launcher")

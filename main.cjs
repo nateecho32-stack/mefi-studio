@@ -4087,6 +4087,46 @@ function antigravityCliAvailable() {
   });
 }
 
+// Entries of `incoming` that `current` lacks, compared the way Windows
+// resolves them: without case or a trailing separator.
+function newPathEntries(current, incoming) {
+  const key = (entry) => String(entry ?? "").trim().replace(/[\\/]+$/, "").toLowerCase();
+  const seen = new Set(String(current ?? "").split(";").map(key));
+  return incoming.filter((entry) => {
+    const id = key(entry);
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
+// A CLI installed after launch lands on the registry PATH, not on the copy
+// this process inherited (nor on a self-update relaunch, which inherits that
+// same env), so where.exe keeps answering "not found" until a full quit. On
+// Windows this re-reads the Machine + User PATH (one PowerShell read) plus the
+// per-user folders the CLI installers use, and appends what is new without
+// touching existing entries. Concurrent callers share one read. Only a PATH
+// that grew drops the cached CLI probes, and it never touches the provider
+// breaker: the pills call this on every settings change.
+let processPathRefresh = null;
+function refreshProcessPath() {
+  if (process.platform !== "win32") return Promise.resolve(false);
+  processPathRefresh ??= (async () => {
+    const scanner = await loadModule("scripts/first-scan.mjs");
+    const result = await scanner.spawnExec("powershell.exe", ["-NoProfile", "-Command", "[Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')"], { timeoutMs: 10000 });
+    if (result.code !== 0 || !result.stdout.trim()) return false;
+    const key = Object.keys(process.env).find((name) => name.toLowerCase() === "path") || "Path";
+    const current = process.env[key] || "";
+    const added = newPathEntries(current, [...result.stdout.trim().split(";"), path.join(os.homedir(), ".local", "bin"), path.join(process.env.LOCALAPPDATA || os.homedir(), "agy", "bin"), path.join(process.env.APPDATA || os.homedir(), "npm")]);
+    if (!added.length) return false;
+    process.env[key] = [current.replace(/;+$/, ""), ...added].filter(Boolean).join(";");
+    for (const probe of [grokCliProbe, claudeCliProbe, codexCliProbe, antigravityCliProbe]) probe.checkedAt = 0;
+    logLine(`[setup] PATH refreshed: ${added.length} new entr${added.length === 1 ? "y" : "ies"} from the registry`);
+    return true;
+  })().catch(() => false).finally(() => { processPathRefresh = null; });
+  return processPathRefresh;
+}
+
 // Whether OpenCode itself holds an OpenCode Go login, asked the way the first
 // scan asks: `opencode auth list` names providers and credential kinds and
 // never prints a secret. Only a saved credential counts: OPENCODE_API_KEY
@@ -17247,7 +17287,11 @@ function registerIpc() {
     );
   }
 
-  ipcMain.handle("studio:cli-status", () => codingCliStatus());
+  // A CLI installed since launch shows up without a restart (refreshProcessPath).
+  ipcMain.handle("studio:cli-status", async () => {
+    await refreshProcessPath();
+    return codingCliStatus();
+  });
 
   ipcMain.handle("studio:launch-cli", async (_event, id) => {
     const cli = CODING_CLIS.find((item) => item.id === id);
@@ -17725,6 +17769,7 @@ function registerIpc() {
       zen: Boolean(decryptKey(settings, "zenApiKeyEncrypted")),
       openrouter: Boolean(decryptKey(settings, "openrouterApiKeyEncrypted")),
     };
+    await refreshProcessPath();
     const clis = await codingCliStatus();
     const local = { custom: Boolean(keys.custom && normalizeCompatEndpoint(settings.customEndpoint)), lmstudio: false };
     if (!keys.zai && !keys.opencode && !local.custom && !clis.some((cli) => cli.installed && ["grok", "claude", "codex", "antigravity"].includes(cli.id))) {
@@ -19068,6 +19113,10 @@ app.whenReady().then(() => {
   // relaunch within the resume window reopens that folder without the
   // question, and agents that were running come back with it. A deliberate
   // quit left a marker, so it lands on the launch screen as before.
+  //
+  // A self-update relaunch inherits the old process env, so the PATH read
+  // starts before anything probes a CLI; the pills and auto setup share it.
+  if (!SMOKE && !CAPTURE) void refreshProcessPath();
   startupResumed = startupResume();
   if (startupResumed) {
     startupChosen = true;
