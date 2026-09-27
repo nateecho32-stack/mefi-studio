@@ -34,6 +34,10 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-26 - Media-browser booklet inlining verified and fixture line landed (task_b5026aa2c68858d0, run_1790480592972_8)
+
+Verified the media-browser inlining this task owes. The build wiring was already committed at 962078: scripts/build-booklet.mjs reads renderer/media-browser.js into CODE_SOURCES and codeParts (after media-window.js, before music.js), and renderer/booklet.sources.json lists renderer/media-browser.js among its 46 segments. The work-tree booklet.html inlines the source verbatim exactly once with zero external script refs, and npm.cmd run build-booklet rebuilt cleanly (39 models). The missing piece was test coverage: HEAD's tests/booklet_build.test.mjs INLINE_SCRIPTS omitted media-browser.js, so a fixture build at HEAD died ENOENT; landed the one-line fixture addition as 08c677c. Narrow validation: node --test tests/booklet_build.test.mjs 4/4 pass; node --test --test-name-pattern browser tests/music.test.mjs 3/3 pass. The committed renderer/booklet.html predates the media-browser work (last rebuilt at 436a5a4) and stays uncommitted in the work tree because it folds sibling sessions' in-flight renderer edits; the sessions landing those edits owe the rebuild+commit.
+
 ## 2026-09-26 - Briefer fix commit re-verified landed: cliReply guard and tests green (task_c61c1cb49e01e552, run_1790480422178_7)
 
 Verified the already-landed briefer fix commit 11fcebc (Guard the briefer against failed CLI exits) in the current work tree for task task_c61c1cb49e01e552. The cliReply exit-code guard is intact in main.cjs (committed, no work-tree drift; the many modified files belong to sibling sessions), and tests/briefer_cli_failure.test.mjs is committed unchanged. Narrow validation this run: node --test tests/briefer_cli_failure.test.mjs 7/7 pass; node --test tests/usage_tracker_host.test.mjs 23/23 pass (shared cliReply/parse coverage green alongside sibling usage-tracker edits). No new commit needed: the fix and its tests are already in history at 11fcebc.
@@ -692,47 +696,6 @@ blobs (eight saved values, zero matches; zero staged matches). Three pattern
 hits were existing synthetic redaction-test PEM markers. No credentials
 were copied to the repository and nothing was committed or pushed. Full
 application gates were not rerun for this ignore-rule/audit-only change.
-
-## 2026-09-26 - Chat thread performance: retain history during live thoughts
-
-Windows, Node 24, Electron 44.4.1. `renderer/idle.js` separates its saved
-thread signature from the pending reply and updates the thought span and dots
-in place. Existing local Analyzer, usage tracker and assistant edits were
-preserved. No live app state or providers were used by the new benchmark.
-
-PASS: `node --test tests/command_activity.test.mjs tests/command_visuals.test.mjs`
-(78/78), `node --check tools/profile_chat_thread.cjs`, `npm run build-booklet`,
-`npm run check`, `npm run audit` (zero findings), and `git diff --check`.
-
-The isolated Electron comparison (`tools/profile_chat_thread.cjs`, production
-thread functions, CSS and shared-controls observer, 30 synthetic messages,
-40 updates, seven alternating pairs after warmup) measured median update cost
-1.63 ms -> 0.07 ms and 2,640 -> 0 new elements per 40 updates. Identical text,
-retained selection, reader scroll and tail-follow assertions passed. These
-are thread-path measurements, not whole-app frame-rate claims. Numeric report:
-`tools/logs/chat-thread-performance.json` (ignored).
-
-Full `npm test` exited 1: CPU-only Node stage 3820 pass / 5 fail / 4 skipped;
-Electron stage 35 pass / 2 fail / 1 skipped; serialized eyes-toggle 1/1;
-occlusion 1 pass / 1 capability skip. Both real Command rendering and both
-performance-profiler tests passed. Python: 248 tests OK (1 skipped).
-Normalized-path checks: 6/6.
-
-All five CPU-only failures are existing Analyzer UI expectations against local
-copy changes (`Present`/`Missing`, `Findings · Idea`, and nonblank empty/pending
-panels). An isolated copy containing only `analyzer_ui.test.mjs`, `analyzer.js`
-and the template reproduced 11 pass / 5 fail without any performance source.
-Replacing only that isolated Analyzer source with `HEAD:renderer/analyzer.js`
-gave 16/16. Those unrelated local edits and tests were left intact.
-
-The Electron failures were Plans' backdrop-pixel assertion and Unified Studio's
-native keyboard-scroll assertion. A sequential solo retry of
-`tests/planning_render.test.mjs` and `tests/unified_studio_render.test.mjs`
-passed 2/2 (33.7 s and 55.3 s) without source changes. The original full run
-remains recorded as failed; no clean full-gate claim.
-
-Complete logs are in `%TEMP%/mefi-thread-{focused,build,check,audit,full-test,render-retry}.log`;
-Analyzer isolation logs are `%TEMP%/mefi-thread-{local-analyzer-only,head-analyzer-only}.log`.
 
 ## Read Before Any Tests
 

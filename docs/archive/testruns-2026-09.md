@@ -6,6 +6,47 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-26 - Chat thread performance: retain history during live thoughts
+
+Windows, Node 24, Electron 44.4.1. `renderer/idle.js` separates its saved
+thread signature from the pending reply and updates the thought span and dots
+in place. Existing local Analyzer, usage tracker and assistant edits were
+preserved. No live app state or providers were used by the new benchmark.
+
+PASS: `node --test tests/command_activity.test.mjs tests/command_visuals.test.mjs`
+(78/78), `node --check tools/profile_chat_thread.cjs`, `npm run build-booklet`,
+`npm run check`, `npm run audit` (zero findings), and `git diff --check`.
+
+The isolated Electron comparison (`tools/profile_chat_thread.cjs`, production
+thread functions, CSS and shared-controls observer, 30 synthetic messages,
+40 updates, seven alternating pairs after warmup) measured median update cost
+1.63 ms -> 0.07 ms and 2,640 -> 0 new elements per 40 updates. Identical text,
+retained selection, reader scroll and tail-follow assertions passed. These
+are thread-path measurements, not whole-app frame-rate claims. Numeric report:
+`tools/logs/chat-thread-performance.json` (ignored).
+
+Full `npm test` exited 1: CPU-only Node stage 3820 pass / 5 fail / 4 skipped;
+Electron stage 35 pass / 2 fail / 1 skipped; serialized eyes-toggle 1/1;
+occlusion 1 pass / 1 capability skip. Both real Command rendering and both
+performance-profiler tests passed. Python: 248 tests OK (1 skipped).
+Normalized-path checks: 6/6.
+
+All five CPU-only failures are existing Analyzer UI expectations against local
+copy changes (`Present`/`Missing`, `Findings · Idea`, and nonblank empty/pending
+panels). An isolated copy containing only `analyzer_ui.test.mjs`, `analyzer.js`
+and the template reproduced 11 pass / 5 fail without any performance source.
+Replacing only that isolated Analyzer source with `HEAD:renderer/analyzer.js`
+gave 16/16. Those unrelated local edits and tests were left intact.
+
+The Electron failures were Plans' backdrop-pixel assertion and Unified Studio's
+native keyboard-scroll assertion. A sequential solo retry of
+`tests/planning_render.test.mjs` and `tests/unified_studio_render.test.mjs`
+passed 2/2 (33.7 s and 55.3 s) without source changes. The original full run
+remains recorded as failed; no clean full-gate claim.
+
+Complete logs are in `%TEMP%/mefi-thread-{focused,build,check,audit,full-test,render-retry}.log`;
+Analyzer isolation logs are `%TEMP%/mefi-thread-{local-analyzer-only,head-analyzer-only}.log`.
+
 ## 2026-09-26 - Briefer CLI failure boundary and recovery (task_f9e52aa317ae8c28)
 
 Read the saved run and briefer error without changing Studio data. The saved
