@@ -43,7 +43,7 @@ app.whenReady().then(async () => {
     syncRun: { ok: true, checkedAt: 1790000060000, headline: "This PC matches GitHub main.", lines: ["This PC matches GitHub main.", "Pulled 2 commits from GitHub."], pending: [], state: { repo: true, remote: true, device: "DESKTOP-FIXTURE", behind: 0 } },
   };
   const preload = path.join(root, "preload.cjs");
-  fs.writeFileSync(preload, `const {contextBridge}=require('electron');const replies=${JSON.stringify(replies)},calls=[];let chatReply;const api=Object.fromEntries(Object.keys(replies).map(key=>[key,async(...args)=>{calls.push({key,args});return replies[key];}]));api.assistantMessage=(...args)=>{calls.push({key:'assistantMessage',args});return new Promise(resolve=>{chatReply=resolve;});};contextBridge.exposeInMainWorld('mefiStudio',api);contextBridge.exposeInMainWorld('hubFixture',{calls:()=>calls,completeChat:ok=>{chatReply?.({ok,error:ok?undefined:'Try again when connected.'});chatReply=null;},setState:state=>{replies.companionState.state=state;}});localStorage.setItem('mefiStudio.commandHome','0');localStorage.setItem('mefiStudio.motion','on');localStorage.setItem('mefiStudio.zen','0');localStorage.setItem('mefiStudio.zenReactive','0');`);
+  fs.writeFileSync(preload, `const {contextBridge}=require('electron');const replies=${JSON.stringify(replies)},calls=[];let chatReply;const api=Object.fromEntries(Object.keys(replies).map(key=>[key,async(...args)=>{calls.push({key,args});return replies[key];}]));api.assistantMessage=(...args)=>{calls.push({key:'assistantMessage',args});return new Promise(resolve=>{chatReply=resolve;});};let syncListener=null;api.onSyncEvent=fn=>{syncListener=fn;};contextBridge.exposeInMainWorld('mefiStudio',api);contextBridge.exposeInMainWorld('hubFixture',{calls:()=>calls,pushSync:result=>syncListener?.(result),completeChat:ok=>{chatReply?.({ok,error:ok?undefined:'Try again when connected.'});chatReply=null;},setState:state=>{replies.companionState.state=state;}});localStorage.setItem('mefiStudio.commandHome','0');localStorage.setItem('mefiStudio.motion','on');localStorage.setItem('mefiStudio.zen','0');localStorage.setItem('mefiStudio.zenReactive','0');`);
   win = new BrowserWindow({ show: false, width: 1280, height: 900, frame: false, webPreferences: { preload, sandbox: true, contextIsolation: true, nodeIntegration: false, offscreen: true, backgroundThrottling: false } });
   const wc = win.webContents; wc.setAudioMuted(true); wc.setFrameRate(30); wc.setWindowOpenHandler(() => ({ action: "deny" }));
   wc.on("console-message", (_event, detail, legacy) => { if (detail?.level === "error" || detail === 3) report.errors.push(detail?.message || legacy); });
@@ -103,13 +103,22 @@ app.whenReady().then(async () => {
   assert.equal(await run("return document.querySelector('.agent-hub-avatar').dataset.mood;"), "thinking", "reported agent work also animates");
   await run("hubFixture.setState('resting');await window.MefiCompanion.refresh();");
   assert.equal(await run("return document.querySelector('.agent-hub-avatar .agent-reaction')?.textContent;"), "^_^"); report.thinking = true;
-  await escape(); await click('[data-hub-section="friends"]');
+  await escape();
+  // A background look (sync:event) badges the Friends bubble before it is opened.
+  await run("hubFixture.pushSync({ ok: true, risk: 2, pending: [{ kind: 'unpushed' }, { kind: 'uncommitted' }], state: { repo: true, remote: true, behind: 0 } });");
+  await until("document.querySelector('[data-hub-section=\"friends\"] .agent-hub-count')?.textContent==='2'", "background look badges Friends");
+  assert.match(await run("return document.querySelector('[data-hub-section=\"friends\"]').getAttribute('aria-label');"), /2 to sync between your PCs/);
+  await capture("07b-friends-badge");
+  await click('[data-hub-section="friends"]');
   await until("document.querySelector('#agent-hub .pc-sync')?.dataset.state==='pending'", "Friends › Your PCs looks");
-  assert.deepEqual(await run("return hubFixture.calls().filter(call=>call.key.startsWith('sync')).map(call=>call.key);"), ["syncStatus"], "opening Friends only looks");
+  // Looks only: the card's own and the project-switch look at startup, never a sync.
+  const looks = await run("return hubFixture.calls().filter(call=>call.key.startsWith('sync')).map(call=>call.key);");
+  assert.ok(looks.length >= 1 && looks.every((key) => key === "syncStatus"), `opening Friends only looks: ${looks}`);
   await capture("08-friends-pcs");
   await click("#pc-sync-run");
   await until("document.querySelector('#agent-hub .pc-sync')?.dataset.state==='clean'", "Sync this PC");
   assert.equal(await run("return window.MefiCompanionHub.isOpen() && document.getElementById('pc-sync-status').textContent;"), "This PC matches GitHub main.", "the answer lands inside the hub");
+  await until("document.querySelector('[data-hub-section=\"friends\"] .agent-hub-count')?.hidden===true", "a clean sync clears the badge");
   await capture("09-friends-synced"); report.pcs = true;
   await escape(); await click('[data-hub-section="settings"]');
   await click('[data-companion-setting="look"] + button');

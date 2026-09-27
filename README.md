@@ -155,8 +155,11 @@ A build whose Discord application id is not set yet offers only **Join** and the
 
 GitHub is the meeting point. Each PC keeps its own clone, and the open project's default branch on GitHub is the one shared state.
 
-- **Friends › Your PCs** in the companion hub says whether this PC matches GitHub and lists anything that has not reached it yet: uncommitted files, unpushed commits, stashes, worktrees with changes, and branches that are not on `main`. Opening it only looks. **Sync this PC** pulls what your other PCs pushed and pushes this PC's commits on the default branch. It never overwrites uncommitted work, merges diverged histories or force-pushes.
-- **`npm run sync`** does the same from a terminal.
+- **Friends › Your PCs** in the companion hub says whether this PC matches GitHub and lists anything that has not reached it yet: uncommitted files, unpushed commits, stashes, worktrees with changes, and branches that are not on `main`. Opening it only looks. **Sync this PC** pulls what your other PCs pushed and pushes this PC's commits on the default branch, but only after the project's own `npm run check` passes. It never overwrites uncommitted work, merges diverged histories or force-pushes.
+- **Put my commits on top of GitHub's** appears when this PC and GitHub both moved and nothing is uncommitted. It rebases this PC's commits onto GitHub's, then checks and pushes. On a conflict it changes nothing and names the files.
+- **The Friends bubble shows a badge** for work only this PC holds, commits waiting on GitHub, or a GitHub it could not check (a lapsed sign-in or a renamed repository). Studio looks 45 seconds after launch and every 15 minutes, and it only looks.
+- **Closing Studio asks first** when the open project has work on this PC alone. You can push and close, close anyway, or keep Studio open. Update restarts never ask.
+- **`npm run sync`** does the same from a terminal (`--rebase` to put your commits on top, `--no-check` to skip the check).
 - **Claude Code** runs `node scripts/sync.mjs --hook` at the start of each new session (`.claude/settings.json`). The hook fetches, fast-forwards `main` when it can, and hands the report to Claude. `AGENTS.md` has the working rules.
 
 Claude Code sessions, Claude's memory and local branches stay on the PC that made them. Anything another PC needs belongs on GitHub.

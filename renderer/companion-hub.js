@@ -174,6 +174,8 @@
     const audio = button("Audio link", () => navigate(() => window.MefiMusic?.openAudio?.()), "ghost mini"); audio.id = "agent-hub-audio";
     foot.append(status, audio, node("kbd", "", "Esc")); shell.append(head, layout, foot); layer.append(shell); document.body.append(layer);
     Object.assign(el, { layer, shell, stage, center, avatar, title, detail, extra, back, status, audio });
+    window.MefiPcSync?.subscribe?.(() => syncBadge());
+    syncBadge();
     layer.addEventListener("click", (event) => { if (event.target === layer) close(); });
     layer.addEventListener("keydown", trap);
     // Capture while this modal owns the keyboard; nested selects/confirmations
@@ -283,6 +285,18 @@
       for (const key of ["width", "left", "top", "bottom", "maxHeight"]) host.panel.style[key] = "";
     }
   }
+  // Friends › Your PCs (renderer/pc-sync.js): work only this PC holds, commits
+  // waiting on GitHub, or a GitHub that could not be checked.
+  function syncBadge() {
+    const friends = el.stage?.querySelector('[data-hub-section="friends"]');
+    if (!friends) return;
+    const count = window.MefiPcSync?.badge?.() ?? 0;
+    let badge = friends.querySelector(".agent-hub-count");
+    if (!badge) { badge = node("span", "agent-hub-count"); friends.append(badge); }
+    badge.hidden = !count; badge.textContent = count > 9 ? "9+" : String(count);
+    const hint = items.find(([id]) => id === "friends")[3];
+    friends.setAttribute("aria-label", count ? `Friends · ${count} to sync between your PCs` : `Friends · ${hint}`);
+  }
   function update(next) {
     if (next) data = next;
     if (!el.layer || !data) return;
@@ -292,6 +306,7 @@
     if (!badge) { badge = node("span", "agent-hub-count"); requests.append(badge); }
     badge.hidden = !count; badge.textContent = count > 9 ? "9+" : String(count);
     requests.setAttribute("aria-label", `Requests · ${count} waiting for you`);
+    syncBadge();
     const svg = host.orb.querySelector(".companion-face")?.innerHTML, look = host.orb.dataset.look || "wisp";
     if (svg && el.avatar.dataset.look !== look) { el.avatar.innerHTML = svg; el.avatar.querySelector(".agent-reactions")?.replaceChildren(); el.avatar.dataset.look = look; }
     syncMood();

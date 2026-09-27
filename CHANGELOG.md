@@ -37,6 +37,16 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   add to every prompt in tokens. They reach every prompt the agent's skills
   reach and ride its team like its skills.
 
+- Multi-PC sync holds up better. **Sync this PC** and `npm run sync` push
+  only after the project's own `npm run check` passes. **Put my commits on
+  top of GitHub's** rebases diverged work when nothing is uncommitted, and
+  changes nothing on a conflict. The **Friends bubble badges** work this PC
+  alone holds, from a look 45 seconds after launch and every 15 minutes.
+  **Closing Studio asks first** when the open project has such work. A fetch
+  that fails for a reason other than the network (a lapsed sign-in, a renamed
+  repository) is now shown as a problem instead of passing as offline. A Git
+  `merge.autoStash` or `rebase.autoStash` setting can no longer move live
+  edits during a sync.
 - Bug-hunt fixes across the host, tooling and renderer.
   **Project switches** no longer write one project's assistant state, reply
   or verification result into another. **Stop all** no longer re-runs a reply

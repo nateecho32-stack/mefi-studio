@@ -705,7 +705,7 @@ async function reloadKeepingPlace({ ignoreCache = false } = {}) {
 function applicationMenu() {
   return Menu.buildFromTemplate([
     // Quit the way the tray's Quit does, so closing does not park in the tray.
-    { label: "File", submenu: [{ label: "Quit", accelerator: "CmdOrCtrl+Q", click: () => { app.isQuitting = true; app.quit(); } }] },
+    { label: "File", submenu: [{ label: "Quit", accelerator: "CmdOrCtrl+Q", click: () => requestQuit() }] },
     { role: "editMenu" },
     {
       label: "View",
@@ -1827,12 +1827,24 @@ const hubNowPlaying = (track) => hubCall((client) => ({ ok: client.setNowPlaying
 // scripts/sync.mjs keeps the open project's checkout in step with its default
 // branch on GitHub, so work pushed from one PC is waiting on the next.
 // sync:status fetches and looks, and never moves a branch; sync:run also
-// fast-forwards and pushes the default branch, in the directions that cannot
-// lose work. One sync runs at a time: a look asked for during one shares its
-// answer when both are for the same folder, and anything else waits its turn.
-// Git gets its own arguments, no shell and no terminal prompt.
+// fast-forwards, runs the project's own `npm run check`, and pushes the default
+// branch only when that passes (with { rebase: true } it first puts this PC's
+// commits on top of GitHub's). One sync runs at a time: a look asked for during
+// one shares its answer when both are for the same folder, and anything else
+// waits its turn. Every answer goes out as sync:event, which the Friends badge
+// counts. A look runs 45 s after launch and every 15 minutes; it fetches and
+// never pulls or pushes. Every quit the owner starts (File › Quit, the tray's
+// Quit, closing the window when Studio does not live in the tray) comes through
+// requestQuit: when the open project holds work no other PC has, Studio asks
+// first. Updates and restarts call app.exit and never ask. Git gets its own
+// arguments, no shell and no terminal prompt.
+const SYNC_WATCH_FIRST_MS = 45 * 1000;
+const SYNC_WATCH_EVERY_MS = 15 * 60 * 1000;
+const SYNC_QUIT_LOOK_MS = 3000;
 let syncFlight = null;
-async function syncProject(push) {
+let syncWatch = null;
+let syncQuit = "idle";
+async function syncProject(push, { rebase = false } = {}) {
   const root = projectRoot();
   while (syncFlight) {
     const flight = syncFlight;
@@ -1840,11 +1852,78 @@ async function syncProject(push) {
     if (!push && flight.root === root) return result;
   }
   const promise = loadModule("scripts/sync.mjs")
-    .then((sync) => sync.sync(root, { pull: push, push }))
-    .catch((error) => ({ ok: false, headline: `Sync could not run: ${error?.message || error}`, lines: [], pending: [], actions: [], problems: [{ kind: "error" }] }))
+    .then(async (sync) => sync.sync(root, { pull: push, push, rebase: push && rebase === true, check: push ? await sync.projectCheck(root) : null }))
+    .catch((error) => ({ ok: false, headline: `Sync could not run: ${error?.message || error}`, lines: [], pending: [], actions: [], problems: [{ kind: "error" }], risk: 0 }))
+    .then((result) => { send("sync:event", result); return result; })
     .finally(() => { if (syncFlight?.promise === promise) syncFlight = null; });
   syncFlight = { root, promise };
   return promise;
+}
+
+function startSyncWatch() {
+  if (syncWatch || SMOKE || CAPTURE || CLI_MODE) return;
+  const tick = () => { if (!projectSwitching && projectRoot()) syncProject(false).catch(() => {}); };
+  syncWatch = { first: setTimeout(tick, SYNC_WATCH_FIRST_MS), timer: setInterval(tick, SYNC_WATCH_EVERY_MS) };
+  syncWatch.first.unref?.();
+  syncWatch.timer.unref?.();
+}
+
+function stopSyncWatch() {
+  if (syncWatch) { clearTimeout(syncWatch.first); clearInterval(syncWatch.timer); }
+  syncWatch = null;
+}
+
+// What only this PC holds in the open project, read without the network.
+// Null when it cannot tell in time; Studio then closes without asking.
+async function syncQuitLook() {
+  const root = projectRoot();
+  if (!root) return null;
+  const sync = await loadModule("scripts/sync.mjs");
+  let timer;
+  const late = new Promise((resolve) => { timer = setTimeout(() => resolve(null), SYNC_QUIT_LOOK_MS); timer.unref?.(); });
+  const look = sync.inspect(root).then((state) => ({ state, risk: sync.atRisk(sync.pending(state)) }));
+  return Promise.race([look, late]).finally(() => clearTimeout(timer));
+}
+
+// Resolves true to close, false to keep Studio open.
+async function syncQuitAsk(parent) {
+  const look = await syncQuitLook().catch(() => null);
+  if (!look?.state?.repo || !look.state.remote || !look.risk.length) return true;
+  const { state, risk } = look;
+  const canPush = state.branch === state.main && state.ahead > 0;
+  const buttons = canPush ? ["Push and close", "Close anyway", "Keep Studio open"] : ["Close anyway", "Keep Studio open"];
+  const options = (message, detail, list, defaultId) => ({ type: "warning", title: "Work only on this PC", message, detail, buttons: list, defaultId, cancelId: list.length - 1, noLink: true });
+  const show = (box) => (parent ? dialog.showMessageBox(parent, box) : dialog.showMessageBox(box));
+  const answer = await show(options(
+    "Some work in this project is only on this PC.",
+    [...risk.map((item) => `• ${item.text}`), "", canPush
+      ? "Push and close runs the project's check, then sends this PC's commits to GitHub. Uncommitted files stay on this PC either way."
+      : "Commit it and sync from Friends › Your PCs (or ask Mefi) so your other PCs get it."].join("\n"),
+    buttons, 0));
+  const choice = buttons[answer.response];
+  if (choice !== "Push and close") return choice === "Close anyway";
+  const result = await syncProject(true);
+  if (result.actions?.some((item) => item.kind === "pushed")) return true;
+  const retry = await show(options("The push did not go through.", [result.headline, ...(result.lines ?? []).slice(1)].join("\n"), ["Close anyway", "Keep Studio open"], 1));
+  return retry.response === 0;
+}
+
+function requestQuit() {
+  if (syncQuit === "asking") return;
+  if (syncQuit === "decided" || SMOKE || CAPTURE || CLI_MODE) { app.isQuitting = true; app.quit(); return; }
+  syncQuit = "asking";
+  const parent = window && !window.isDestroyed() && window.isVisible() ? window : null;
+  syncQuitAsk(parent).catch(() => true).then((close) => {
+    syncQuit = close ? "decided" : "idle";
+    if (close) { app.isQuitting = true; app.quit(); }
+  });
+}
+
+// Closing the window is a quit unless Studio lives in the tray.
+function syncWindowClose(event) {
+  if (app.isQuitting || syncQuit === "decided" || (tray && assistantState?.prefs?.background)) return;
+  event.preventDefault();
+  requestQuit();
 }
 // ---- end of multi-PC sync -----------------------------------------------------
 
@@ -8107,10 +8186,7 @@ function refreshTray() {
         { type: "separator" },
         {
           label: "Quit",
-          click: () => {
-            app.isQuitting = true;
-            app.quit();
-          },
+          click: () => requestQuit(),
         },
       ])
     );
@@ -18634,7 +18710,7 @@ function registerIpc() {
   // Friends › Your PCs (the "Multi-PC sync" block). Project-gated, unlike
   // hub:*: both act on the open project's folder, so a switch waits for them.
   ipcMain.handle("sync:status", async () => syncProject(false));
-  ipcMain.handle("sync:run", async () => syncProject(true));
+  ipcMain.handle("sync:run", async (_event, payload) => syncProject(true, { rebase: payload?.rebase === true }));
 }
 
 // Bounds a restart saved, when they still land on a display that exists.
@@ -18812,6 +18888,8 @@ function createWindow() {
     event.preventDefault();
     window.hide();
   });
+  // Otherwise closing is a quit, which asks first when work is only on this PC.
+  window.on("close", (event) => syncWindowClose(event));
   window.on("closed", () => (window = null));
 }
 
@@ -19246,6 +19324,8 @@ app.whenReady().then(() => {
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => startReleaseWatch(), 6000);
   // Its first look is 15 s in; nothing reaches Discord unless a link exists.
   if (!SMOKE && !CAPTURE && !CLI_MODE) startCommunityWatch();
+  // Friends › Your PCs badge: a fetch-only look 45 s in, then every 15 minutes.
+  if (!SMOKE && !CAPTURE && !CLI_MODE) startSyncWatch();
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRestart().catch(() => {}));
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRelease().catch(() => {}));
   // The assistant service runs on its own clock, renderer or not; the smoke

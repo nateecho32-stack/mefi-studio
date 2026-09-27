@@ -200,9 +200,12 @@ const api = {
   hubNowPlaying: (track) => ipcRenderer.invoke("hub:now-playing", { track: track && typeof track === "object" ? { label: String(track.label ?? ""), provider: String(track.provider ?? ""), ...(typeof track.url === "string" ? { url: track.url } : {}) } : null }),
   onHubEvent: (callback) => ipcRenderer.on("hub:event", (_event, payload) => callback(payload)),
   // Friends › Your PCs (main.cjs "Multi-PC sync"): the open project against
-  // its default branch on GitHub. No payload; main picks the folder.
+  // its default branch on GitHub. Main picks the folder; the renderer can only
+  // ask for a rebase onto GitHub's commits. onSyncEvent carries every answer,
+  // including the background look behind the Friends badge.
   syncStatus: () => ipcRenderer.invoke("sync:status"),
-  syncRun: () => ipcRenderer.invoke("sync:run"),
+  syncRun: (options) => ipcRenderer.invoke("sync:run", { rebase: options?.rebase === true }),
+  onSyncEvent: (callback) => ipcRenderer.on("sync:event", (_event, result) => callback(result)),
   machineStatus: (kill) => ipcRenderer.invoke("machine:status", { kill: Boolean(kill) }),
   machineGet: () => ipcRenderer.invoke("machine:get"),
   machineSet: (prefs) => ipcRenderer.invoke("machine:set", prefs),
