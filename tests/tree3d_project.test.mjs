@@ -136,3 +136,71 @@ test("a project switch reloads the rail from the new folder and ready() awaits i
   assert.ok(!ids.includes("a1"), "the previous folder's session left the rail");
   assert.equal(tree.activeSession(), null, "a selection from the old folder is dropped");
 });
+
+// A reload still waiting on the old folder's store must not land over the
+// switch: the switch asks for a fresh read (never joining the shared one in
+// flight) and a superseded load's answer is dropped.
+test("a project switch reads fresh and a superseded load's late answer is dropped", async () => {
+  const canvas = element("tree-canvas");
+  const gradient = { addColorStop() {} };
+  canvas.getContext = () => new Proxy({}, {
+    get: (target, prop) => (prop in target ? target[prop] : () => gradient),
+    set: (target, prop, value) => { target[prop] = value; return true; },
+  });
+  const rail = element("tree-rail");
+  const registry = { "tree-canvas": canvas, "tree-rail": rail, "tree-stats": element("tree-stats") };
+  const listeners = {};
+  const updatedAt = Date.now();
+  const answers = [];
+  const reads = [];
+  const eyesState = () => new Promise((resolve) => answers.push(resolve));
+  globalThis.window = {
+    addEventListener(type, fn) { (listeners[type] ??= []).push(fn); },
+    removeEventListener() {},
+    dispatchEvent(event) { for (const fn of listeners[event.type] ?? []) fn(event); return true; },
+    matchMedia: () => ({ matches: false }),
+    // The shared-read seam boot.js provides: the options reach it untouched.
+    MefiBoot: { read: (method, options) => { reads.push({ method, fresh: options?.fresh === true }); return window.mefiStudio[method](); } },
+    mefiStudio: {
+      eyesState,
+      assistantState: async () => ({ ok: false }),
+      onCheckpoints: () => {}, onEyesActivity: () => {}, onAssistant: () => {},
+      eyesCheckpointsRead: async () => ({ checkpoints: {} }),
+    },
+  };
+  globalThis.document = {
+    hidden: false,
+    body: { classList: { contains: () => false } },
+    getElementById: (id) => registry[id] ?? null,
+    createElement: () => element(null),
+  };
+  globalThis.CustomEvent = class CustomEvent { constructor(type, options) { this.type = type; this.detail = options?.detail; } };
+  globalThis.localStorage = { getItem: () => null, setItem: () => {} };
+  globalThis.requestAnimationFrame = () => 0;
+
+  await import(new URL("../renderer/tree3d.js?stale-load-test", import.meta.url).href);
+  const tree = globalThis.window.MefiTree;
+  const initializing = tree.init();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  answers.shift()({ ok: true, sessions: [{ id: "a1", title: "Alpha", timeUpdated: updatedAt }], todos: [] });
+  await initializing;
+  window.dispatchEvent(new CustomEvent("mefi:project-changed", { detail: { projectId: "project-a" } }));
+  assert.ok(tree.snapshot().nodes.some((node) => node.id === "a1"));
+
+  // An organize tick reloads the old folder; its read is slow.
+  const stale = tree.reload();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(reads.at(-1).fresh, false, "an ordinary reload may join a shared read");
+  window.dispatchEvent(new CustomEvent("mefi:project-changed", { detail: { projectId: "project-b" } }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual({ ...reads.at(-1) }, { method: "eyesState", fresh: true }, "the switch never joins the old folder's read");
+  const switched = tree.ready();
+  answers.pop()({ ok: true, sessions: [{ id: "b1", title: "Beta", timeUpdated: updatedAt }], todos: [] });
+  await switched;
+  // The old folder's answer arrives last.
+  answers.pop()({ ok: true, sessions: [{ id: "a-late", title: "Alpha late", timeUpdated: updatedAt }], todos: [] });
+  await stale;
+  const ids = tree.snapshot().nodes.map((node) => node.id);
+  assert.ok(ids.includes("b1"), "the new folder stays on the rail");
+  assert.ok(!ids.includes("a-late"), "the superseded load's answer is dropped");
+});

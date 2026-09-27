@@ -6,6 +6,105 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-26 - Built-in media browser replaces the separate window
+
+Replaced the standalone BrowserWindow and toolbar preload/page with a
+sandboxed WebContentsView attached to Studio's existing window. The bundled
+media-browser controller puts address, history, reload/stop, mute, minimize
+and close controls inside the existing media player. Website popup links
+navigate that same view. Moving, resizing, zooming and minimizing preserve
+the loaded page; source changes, close and owner reload destroy playback.
+The website has no Studio preload or Node access. Browser bounds follow the
+renderer viewport and yield to overlapping Studio UI. Video-only background,
+transparency, fade and pointer-dodge effects are paused while browsing.
+The visual music refresh remains in place, and launcher copy now says
+Browse here and explicitly describes playback inside Studio.
+
+Validation: 118 focused Node tests passed. The real Electron browser fixture
+passed both alone and in the full run, with exactly one BrowserWindow,
+X-Frame-Options DENY pages, same-view popup links, history, mute, forbidden
+URL rejection, movement, minimize/restore, overlay hiding, 1440/600 layouts,
+zoom, unchanged page-load counts and close/source-switch disposal. Render
+captures were inspected from an isolated temporary profile. The initial
+fixture exposed resize-handle clipping in the visibility probe and a
+shutdown listener touching a destroyed owner; both were corrected. Native
+capture retries are bounded to the transient UnknownVizError case.
+
+npm run build-booklet and npm run audit passed (zero findings). npm test
+passed: 3,902 Node tests passed and 6 skipped; Python ran 248 tests, OK with
+1 skip; normalized-path checks passed 6/6. The occlusion skip was capability
+gated on this desktop. npm run check stopped at an unrelated duplicate spec:
+tools/logs/canvas-transfer-integration/tests/command_render.test.mjs and
+tests/command_render.test.mjs. The actively used isolated copy was preserved.
+The remaining check components were run directly: CSS merge/no-merge,
+unused selectors, syntax and test-history gates all passed. Local logs and
+seed-only captures are in the OS temporary directory, not published.
+
+## 2026-09-26 - Isolated canvas transfer candidate: timing and pixels pass; Command integration deferred
+
+The native-font hotspot led to an isolated Electron 44.4.1 comparison using
+production callout drawing, six callouts, 1,000 synthetic DOM rows, two DOM
+invalidations per cycle, 30 cycles per run and five alternating runs after
+warmup. Median synchronous cycle: DOM canvas 4.91 ms, copied offscreen
+backbuffer 5.17 ms, directly transferred canvas 3.48 ms. Direct transfer
+reduced style recalculations from two to one; layouts remained one. The
+cycle includes final layout flush and any backbuffer copy, but excludes
+asynchronous compositor presentation. This is not a live improvement claim.
+
+All 96 candidate pixel-buffer comparisons were identical across four device
+scales, three styles, light/dark palettes and integer/fractional positions.
+Browser captures matched the direct canvas at three scale/style combinations.
+Seven isolated candidate unit tests passed for capability fallback, transfer
+identity, alpha options, resize, DPR and no-op pixel retention.
+
+The first private-overlay Command renderer integration attempt failed at
+setup: the overlay omitted scripts/brains.cjs. The copied dependency set now
+includes brains.cjs and agent-issues.cjs; overlay preparation and original
+source hash guards succeed. A sibling npm test run started before retry, so
+no second renderer test or live capture was started. Full Command integration
+remains pending. No candidate application source has been applied and no
+application gate has been rerun for this candidate. The prior completed
+full gate still covers the scroll batching change only.
+
+Reports and isolated sources: tools/logs/font-style-trial.json,
+tools/logs/benchmark-font-styles.cjs, tools/logs/canvas-transfer-candidate/,
+and tools/logs/validate-canvas-transfer-candidate.mjs. The failed setup log is
+in the OS temporary directory as mefi-canvas-candidate-command.log. Continue
+with the guarded overlay's --run only when Studio is inactive and all other
+test suites have ended; then finish validation before any live source edit.
+
+## 2026-09-26 - Visible Command probe narrows the next hotspot to canvas font updates
+
+A 30-second visible Command capture retained the loaded scroll batching
+code, with stable source/booklet hashes. drawCallout remained the largest
+named CPU sample (about 2.36 seconds). A test run appeared at one guard
+checkpoint, so this capture is not used for a clean before/after claim.
+
+A subsequent 15-second native-call probe, without the CPU sampler, stayed
+visible on Command. Eight three-second guard checkpoints observed no tests;
+source and booklet hashes were unchanged. The probe passed every native
+argument/result through, retained exceptions, and recorded only operation
+names, counts and durations. It restored all eight wrapped descriptors
+normally, removed its temporary global, and had a 20-second fallback timer.
+
+Measured elapsed totals: canvas font assignment 1,167.8 ms / 6,689 calls;
+element bounding rectangles 382.8 ms / 1,149; fillText 23.1 ms / 6,689;
+measureText 6.0 ms / 2,694. The renderer's rAF interval p95 was 16.8 ms;
+that is not Command draw FPS or GPU presentation timing. These instrumented
+measurements narrow the investigation without claiming an improvement.
+
+No production source changed and no completed application gate was rerun.
+The earlier full-gate pass still covers the scroll fix. Follow-up: isolate
+the style work reached by canvas font setters and validate any candidate's
+visual behavior before applying it; a measureText cache alone addresses
+little of the measured cost. Details and the primary Chromium source are
+in docs/performance.md.
+
+Ignored reports: tools/logs/live-20260926-2153-command*.json and
+tools/logs/live-20260926-native-callout-probe*.json. The one-off native
+collector is tools/logs/profile-native-timing-trial.mjs. A read-only final
+status check confirms the app's boot is complete and recording is stopped.
+
 ## 2026-09-26 late evening - Occlusion probe capability gate covers detected-but-unsustained throttling (task_fd15e09800325362)
 
 The rAF-silence assertion failed in the worktree (growth 17) and in an

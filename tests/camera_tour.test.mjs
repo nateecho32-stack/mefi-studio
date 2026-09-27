@@ -209,3 +209,64 @@ test("a vanished node reframes the remaining tree, a sparse tree still flies, an
   const shot = empty.step({ dt: 1 / 60, view: "3d", angle: 0, pitch: 0, zoom: 1, camera: { x: 0, y: 0, z: 0 }, nodes: () => [], position: () => null });
   assert.ok(Number.isFinite(shot.zoom), "an empty tree pulls back wide instead of failing");
 });
+
+test("a paused overview gives way to new branches and grows back once they leave", () => {
+  const viewport = { w: 900, h: 560 };
+  const base = [{ x: -300, y: -150 }, { x: 320, y: 160 }], wide = [...base, { x: -500, y: -200 }, { x: 520, y: 240 }];
+  const inside = (points, shot) => points.every((p) => Math.abs(p.x * shot.scale + shot.x) <= viewport.w / 2 - 32 + 1e-6 && Math.abs(p.y * shot.scale + shot.y) <= viewport.h / 2 - 32 + 1e-6);
+  for (const still of [false, true]) {
+    const overview = load().createOverview();
+    let shot;
+    for (let i = 0; i < 600; i += 1) shot = overview.step({ points: base, viewport, dt: 1 / 60, moving: true });
+    const paused = shot.scale;
+    // Spin pauses (or reduced motion starts) and a session's tasks arrive.
+    for (let i = 0; i < 60; i += 1) {
+      shot = overview.step({ points: wide, viewport, dt: 1 / 60, moving: false, still });
+      assert.ok(inside(wide, shot), "new work fits on its first frame");
+    }
+    assert.ok(shot.scale < paused * 0.7, `the lens gave way (${shot.scale.toFixed(3)} of ${paused.toFixed(3)})`);
+    let worstStep = 0;
+    for (let i = 0; i < (still ? 1 : 600); i += 1) {
+      const previous = shot.scale;
+      shot = overview.step({ points: base, viewport, dt: 1 / 60, moving: false, still });
+      assert.ok(shot.scale >= previous - 1e-12 && inside(base, shot));
+      worstStep = Math.max(worstStep, shot.scale - previous);
+    }
+    assert.ok(Math.abs(shot.scale - paused) < 1e-3, `${still ? "reduced motion" : "paused"}: the lens grew back to ${shot.scale.toFixed(3)} of ${paused.toFixed(3)}`);
+    if (!still) assert.ok(worstStep < 0.02, `growing back eases (largest step ${worstStep.toFixed(4)})`);
+  }
+});
+
+test("framing projects each trial zoom through one shot, and a flat map fits by its extremes exactly", () => {
+  const [w, h] = [1440, 900];
+  const nodes = Array.from({ length: 150 }, (_, i) => ({
+    id: `n${i}`, kind: i % 5 ? "task" : "session", parentId: i % 5 ? `n${i - i % 5}` : null,
+    x: 140 + (i % 13 - 6) * 85 + Math.cos(i) * 30, y: -80 + (Math.floor(i / 13) - 5) * 60,
+    z: (Math.floor(i / 7) - 10) * 45 + Math.sin(i) * 50, running: i === 8,
+  }));
+  const flights = {};
+  // "flat" flies the flat projection without telling the director, so every
+  // point is checked; the 2D projection ignores the tilt and turn it adds.
+  for (const [label, view] of [["2d", "2d"], ["flat", "2d"], ["3d", "3d"]]) {
+    const state = { view, angle: 0, fit: Math.min(w / 700, h / 460), overviewScale: 0.85, camera: { x: -140, y: 80, z: 0 }, zoom: 1, pitch: 0 };
+    const env = vm.createContext({ state, Math, centerX: () => w / 2, centerY: () => h / 2 });
+    vm.runInContext(projectionSource, env);
+    let calls = 0, worstCalls = 0, worstShots = 0;
+    const shots = new Set();
+    const project = (point, shot) => { calls += 1; shots.add(shot); return env.project(point, shot); };
+    const director = load().create({ seed: 42 });
+    const path = [];
+    for (let frame = 0; frame < 60 * 30; frame += 1) {
+      calls = 0; shots.clear();
+      const shot = director.step({ ...state, view: label, dt: 1 / 30, nodes: () => nodes, viewport: { x: 0, y: 0, w, h }, project });
+      worstCalls = Math.max(worstCalls, calls); worstShots = Math.max(worstShots, shots.size);
+      state.camera = { x: shot.x, y: shot.y, z: shot.z };
+      state.zoom = shot.zoom; state.pitch = shot.pitch; state.angle += shot.spin;
+      path.push([shot.x, shot.y, shot.z, shot.zoom]);
+    }
+    assert.ok(worstShots <= 11, `${label}: at most one shot per trial zoom (${worstShots})`);
+    flights[label] = { path, worstCalls };
+  }
+  assert.ok(flights["2d"].worstCalls <= 44, `a flat map projects its four extremes per trial (${flights["2d"].worstCalls})`);
+  assert.deepEqual(flights.flat.path, flights["2d"].path, "the extremes decide the fit exactly as every point does");
+});

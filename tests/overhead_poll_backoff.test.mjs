@@ -10,10 +10,12 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 
 const source = await readFile(new URL("../renderer/overhead.js", import.meta.url), "utf8");
+const taskGroupsSource = await readFile(new URL("../renderer/task-groups.js", import.meta.url), "utf8");
 
-function environment({ motion = false } = {}) {
+function environment({ motion = false, taskGroups = false } = {}) {
   const timers = new Map(), frames = new Map(), elements = new Map(), navigations = [], documentListeners = {};
-  let timerId = 0, frameId = 0, fetches = 0, paints = 0, labelReads = 0;
+  let timerId = 0, frameId = 0, fetches = 0, paints = 0, labelReads = 0, failures = 0;
+  const mediaQueries = [];
   const writes = [];
   let tasks = [{ id: "task-1", title: "Overhead poll backoff", prompt: "", status: "open", color: "#57ff9a" }];
   let painted = [], rectangles = [];
@@ -40,20 +42,28 @@ function environment({ motion = false } = {}) {
   const window = {
     devicePixelRatio: 1,
     addEventListener() {},
+    matchMedia: (query) => {
+      const entry = { query, matches: false, listeners: [], addEventListener(type, callback, options) { entry.listeners.push({ type, callback, once: options?.once === true }); } };
+      mediaQueries.push(entry);
+      return entry;
+    },
     MefiNav: { noMotion: () => !motion, claim() {}, release() {}, go: (tab, options) => navigations.push([tab, { ...options }]) },
     // Fresh objects on every read, as the real snapshot and IPC answers are.
     MefiTree: { snapshot: () => ({ nodes: [{ id: "session-1", kind: "session", get label() { labelReads += 1; return "overhead poll backoff"; }, x: 0, y: 0, z: 0, r: 4, state: "active" }], edges: [] }) },
-    mefiStudio: { tasksList: async () => { fetches += 1; return { tasks: structuredClone(tasks) }; }, onTasks() {} },
+    mefiStudio: { tasksList: async () => { fetches += 1; if (failures > 0) { failures -= 1; throw new Error("tasks read refused"); } return { tasks: structuredClone(tasks) }; }, onTasks() {} },
   };
-  vm.runInContext(source, vm.createContext({
+  const context = vm.createContext({
     window, document, console,
     setTimeout: (fn, ms) => { timers.set(++timerId, { fn, ms }); return timerId; },
     clearTimeout: (id) => timers.delete(id),
     requestAnimationFrame: (fn) => { frames.set(++frameId, fn); return frameId; },
     cancelAnimationFrame: (id) => frames.delete(id),
-  }));
+  });
+  if (taskGroups) vm.runInContext(taskGroupsSource, context);
+  vm.runInContext(source, context);
   return {
-    window, document, get, navigations, writes, frames,
+    window, document, get, navigations, writes, frames, mediaQueries,
+    failReads: (count) => { failures = count; },
     fetches: () => fetches, paints: () => paints, labelReads: () => labelReads,
     setTasks: (next) => { tasks = next; },
     pendingFrames: () => frames.size,
@@ -173,4 +183,51 @@ test("task anchors are matched once per load, and the focused box draws without 
   env.frame(6000);
   assert.ok(env.labelReads() > reads, "a new load matches again against its fresh nodes");
   assert.equal(env.writes.some(([key, value]) => key === "shadowBlur" && value > 0), false, "no shadow pass for the focused box");
+});
+
+test("a refused task read keeps the sheet and its last state, and polling retries at the slowest cadence", async () => {
+  const env = environment();
+  env.failReads(1);
+  await env.window.MefiOverhead.open();
+  assert.equal(env.pendingFrames(), 1, "a refused first read still opens and draws the sheet");
+  assert.equal(env.poll().ms, 60000, "the retry waits out the longest backoff");
+  await env.poll().run();
+  assert.equal(env.get("overhead-legend").children.length, 1, "the retry loads the board");
+  assert.equal(env.poll().ms, 15000);
+  env.failReads(1);
+  await env.poll().run();
+  assert.equal(env.poll().ms, 60000, "a rejected poll reschedules instead of ending the loop");
+  assert.equal(env.get("overhead-legend").children.length, 1, "the previous board stays on the sheet");
+  await env.poll().run();
+  assert.equal(env.fetches(), 4);
+});
+
+test("tasks awaiting verification are live work in the Overhead legend and boxes", async () => {
+  for (const taskGroups of [false, true]) {
+    const env = environment({ taskGroups });
+    if (taskGroups) assert.equal(typeof env.window.MefiTaskGroups.isLiveTask, "function", "task-groups.js exports the shared predicate");
+    env.setTasks([
+      { id: "verify", title: "Waiting on its verifier", status: "awaiting_verification" },
+      { id: "done", title: "Finished", status: "done" },
+    ]);
+    await env.window.MefiOverhead.open();
+    const legend = env.get("overhead-legend").children;
+    assert.equal(legend.length, 1);
+    assert.equal(legend[0].children[0].dataset.overheadTask, "verify");
+    env.frame(16);
+    assert.equal(env.rectangles().length, 1, "its box is drawn too");
+  }
+});
+
+test("a monitor move re-sizes the open sheet's bitmap and re-arms the resolution watch", async () => {
+  const env = environment();
+  await env.window.MefiOverhead.open();
+  const armed = env.mediaQueries.filter((entry) => entry.query === "(resolution: 1dppx)" && entry.listeners.length);
+  assert.equal(armed.length, 1);
+  assert.equal(armed[0].listeners[0].once, true);
+  const canvas = env.get("overhead-canvas");
+  env.window.devicePixelRatio = 2;
+  armed[0].listeners[0].callback();
+  assert.equal(canvas.width, 770 * 2, "the backing store follows the new ratio");
+  assert.equal(env.mediaQueries.filter((entry) => entry.query === "(resolution: 2dppx)" && entry.listeners.length).length, 1);
 });

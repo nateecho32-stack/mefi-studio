@@ -54,7 +54,7 @@ test("the toolbar groups Agents settings, Camera, View and Sound beside Leave", 
     "idle-exit",
   ], "Agents | Fit · Overview/Follow · Spin | View ▾ | Music · Ambience | Leave");
   assert.equal((toolbar.match(/<span class="tools-sep" aria-hidden="true"><\/span>/g) ?? []).length, 4, "one separator between each pair of clusters");
-  assert.match(button(toolbar, "idle-exit"), /aria-label="Leave Command"/);
+  assert.match(button(toolbar, "idle-exit"), /aria-label="Close Command view"/, "every sheet and overlay exit is labelled Close");
   // The quick agent-mode switch is pinned by command-render-electron.cjs: it
   // stays inside .cmd-tools (it is not a duplicate to tidy away).
   assert.ok(toolbar.includes('<select id="idle-feed-agent-mode"'));

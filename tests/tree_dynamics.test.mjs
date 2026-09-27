@@ -152,3 +152,79 @@ test("media and Appearance brightness controls synchronize, disable sliders and 
   assert.equal(slider.disabled, false); assert.equal(slider.value, "1");
   assert.equal(d.preferences().mode, "hybrid"); assert.equal(d.preferences().width, .5);
 });
+
+test("taking the camera eases the live shape back to the anchors, while reduced motion lets go at once", () => {
+  const nodes = graph(); const { d } = setup(); d.update({ shape: "ring", smoothing: 2 });
+  const shaped = settled(d, nodes);
+  const gap = (result, i) => Math.hypot(result[i].p.x - nodes[i].p.x, result[i].p.y - nodes[i].p.y);
+  const widest = nodes.reduce((best, _, i) => gap(shaped, i) > gap(shaped, best) ? i : best, 0);
+  assert.ok(gap(shaped, widest) > 100, "the ring moved a node well away from its anchor");
+  let frame = structuredClone(nodes);
+  assert.equal(d.apply(frame, area, { dt: .016, interactive: true }), true, "letting go keeps the frame loop running");
+  assert.ok(gap(frame, widest) > gap(shaped, widest) * .98, `first interactive frame keeps the shape (${gap(frame, widest).toFixed(1)} of ${gap(shaped, widest).toFixed(1)}px)`);
+  let previous = gap(frame, widest), frames = 1;
+  for (; frames < 2000; frames += 1) {
+    frame = structuredClone(nodes);
+    const moving = d.apply(frame, area, { dt: .05, interactive: true });
+    assert.ok(gap(frame, widest) <= previous + 1e-9, "the release never reverses");
+    assert.ok(previous - gap(frame, widest) < 30, "no frame jumps across the scene");
+    previous = gap(frame, widest);
+    if (!moving) break;
+  }
+  assert.ok(frames > 30 && frames < 2000, `the release eases over ${frames} frames`);
+  assert.deepEqual(coords(frame), coords(nodes), "a settled release leaves the anchors untouched");
+  assert.deepEqual(coords(settled(d, nodes)).map(p => p.map(Math.round)), coords(shaped).map(p => p.map(Math.round)), "leaving interactive mode eases back into the shape");
+  const reduced = setup().d; reduced.update({ shape: "ring" }); settled(reduced, nodes);
+  frame = structuredClone(nodes);
+  assert.equal(reduced.apply(frame, area, { dt: .016, interactive: true, still: true }), false);
+  assert.deepEqual(coords(frame), coords(nodes), "reduced motion releases in one frame");
+});
+
+test("workers ride their host's offset and never renumber the shape's slots", () => {
+  const tasks = graph(8); const { d } = setup(); d.update({ shape: "ring" });
+  const before = settled(d, tasks);
+  const worker = { node: { id: "agent-a", kind: "agent", hostId: "node-3" }, p: { x: 500, y: 150, k: 1 } };
+  const tethered = { node: { id: "agent-b", kind: "agent", targetNode: { id: "node-6" } }, p: { x: 230, y: 250, k: 1 } };
+  const after = settled(d, [...tasks, worker, tethered]);
+  assert.deepEqual(coords(after.slice(0, 8)), coords(before), "launching workers moves no task slot");
+  for (const [index, host] of [[8, 3], [9, 6]]) {
+    const raw = [worker, tethered][index - 8].p;
+    assert.ok(Math.abs(after[index].p.x - raw.x - (before[host].p.x - tasks[host].p.x)) < 1e-6);
+    assert.ok(Math.abs(after[index].p.y - raw.y - (before[host].p.y - tasks[host].p.y)) < 1e-6);
+  }
+  assert.deepEqual(coords(settled(d, tasks)), coords(before), "retiring them moves no task slot either");
+  const orphan = [{ node: { id: "agent-z", kind: "agent", hostId: "gone" }, p: { x: 333, y: 222, k: 1 } }];
+  assert.deepEqual(coords(settled(d, [...tasks, ...orphan]).slice(8)), coords(orphan), "a worker without a host stays unshaped");
+});
+
+test("a leaving node keeps its last offset through its absorb flight", () => {
+  const tasks = graph(8); const { d } = setup(); d.update({ shape: "ring" });
+  const shaped = settled(d, tasks);
+  const offset = { x: shaped[5].p.x - tasks[5].p.x, y: shaped[5].p.y - tasks[5].p.y };
+  assert.ok(Math.hypot(offset.x, offset.y) > 20);
+  for (const flight of [{ x: 640, y: 140 }, { x: 560, y: 200 }]) {
+    const frame = structuredClone(tasks);
+    frame[5].node.dying = true; frame[5].p = { ...frame[5].p, ...flight };
+    d.apply(frame, area, { dt: .016, time: 1300 });
+    assert.ok(Math.abs(frame[5].p.x - flight.x - offset.x) < 1e-6 && Math.abs(frame[5].p.y - flight.y - offset.y) < 1e-6, "the flight is not pulled onto a slot");
+  }
+});
+
+test("a leaving node trades its offset for its host's as it flies home, so it lands on the host as drawn", () => {
+  const tasks = graph(8); const { d } = setup(); d.update({ shape: "ring" });
+  const shaped = settled(d, tasks);
+  const offsetOf = (index) => ({ x: shaped[index].p.x - tasks[index].p.x, y: shaped[index].p.y - tasks[index].p.y });
+  const own = offsetOf(5);
+  for (const e of [0, 0.5, 1]) {
+    const frame = structuredClone(tasks);
+    const flight = { x: tasks[5].p.x + (tasks[2].p.x - tasks[5].p.x) * e, y: tasks[5].p.y + (tasks[2].p.y - tasks[5].p.y) * e };
+    frame[5].node.dying = true; frame[5].p = { ...frame[5].p, ...flight }; frame[5].flight = { hostId: "node-2", e };
+    d.apply(frame, area, { dt: .016, time: 1300 });
+    // The host eases in the same frame (one fewer live node), so home is
+    // the host's offset as this frame draws it.
+    const home = { x: frame[2].p.x - tasks[2].p.x, y: frame[2].p.y - tasks[2].p.y };
+    const expected = { x: flight.x + own.x * (1 - e) + home.x * e, y: flight.y + own.y * (1 - e) + home.y * e };
+    assert.ok(Math.hypot(frame[5].p.x - expected.x, frame[5].p.y - expected.y) < 1e-6, `at ${e} of the flight`);
+    if (e === 1) assert.ok(Math.hypot(frame[5].p.x - frame[2].p.x, frame[5].p.y - frame[2].p.y) < 1e-6, "it ends on the host where the host is drawn");
+  }
+});

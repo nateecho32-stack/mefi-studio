@@ -76,7 +76,9 @@
     if (style === "minimal") {
       circle(ctx, 0, 0, active || selected ? 0.68 : 0.5); ctx.fillStyle = tint; ctx.fill();
     } else if (style === "crystal" || style === "prism") {
-      const shape = window.MefiTree?.voidShapes;
+      // The Void shapes live in node-styles.js (the rail stopped re-exporting
+      // them), so the prism rim is read from there.
+      const shape = window.MefiNodeStyles?.shapes;
       const path = () => { if (style === "prism" && shape) { ctx.beginPath(); shape.trace(ctx, shape.prismRim); } else polygon(ctx, 1); };
       path(); ctx.fillStyle = paint.deep; ctx.fill(); ctx.fillStyle = paint.glass; ctx.fill();
       ctx.save(); ctx.clip();

@@ -65,6 +65,57 @@ the only failure was the known-red updater contract fixed by db15d74. New
 regression tests are porcelain_paths plus additions to salvage_json,
 outbound_privacy, verification_command_quoting, scope_heal_walk and
 check_syntax.
+## 2026-09-27 afternoon - Node tree follow-up: resize re-seed, rest sleep, touch, band spill
+
+Second node-tree pass over the items the first one left open, all in
+renderer/idle.js plus tree-dynamics.js, the template's exit label and tests.
+A resize now waits 150 ms of animation time for the frame to hold still and
+re-seeds under the view the layout was first seeded in (angle, pitch, zoom,
+camera): a 2 px resize after a 90° spin or at zoom 2.4 moves anchors about
+0.5 world units instead of re-laying the tree out (measured on a 3-session,
+15-task tree in both views). A resting Command books its next frame on a
+timer and wakeFrames() cuts it short. The fit keeps its measured reach while
+a layout holds. drawFrame projects saved anchors once (free: 1 projection per
+node per frame, down from 2; Overview 2, down from 3). Music frames reuse
+per-frame band views and blended tints, keep per-node memos in WeakMaps, and
+the nebula, bokeh and firefly skies use unit-space gradients per canvas and
+tint (Chromium pixel parity: max 1 level, washes exact). A leaving node's
+live-shape offset blends into its host's over the flight. Touch and pen
+reuse the mouse handlers, with a two-finger pinch. The music spectrum
+measures a band more than 40 dB under the loudest one against that floor: in
+the real AnalyserNode fixture the snare-only section's kick cue fell from
+0.645 to 0.005, hat from 0.877 to 0.001 and bass from 0.295 to 0.026 (mid
+0.805), and the existing quiet-hat case at 36 dB still reads in full.
+
+Results: `npm run check` ok; `npm run audit` 0 errors, 0 warnings; `npm test`
+Node 3,976 tests, 3,970 pass, 5 skipped, 1 fail (occlusion_probe:
+"MessageChannel round trip too slow: 283ms" under the parallel load; passes
+solo, 2/2); Python 248 OK, 1 skipped; normalized-path lock 6/6.
+
+## 2026-09-27 - Node tree pass: wires past the hub, live layout, lifecycle, interaction and frame cost
+
+Five read-only audits of the Command node tree (graph building, layout and
+camera, render cost, interaction and accessibility, rail/Overhead/shared
+painters) were verified against the source and fixed in renderer/idle.js,
+tree3d.js, tree-dynamics.js, camera-tour.js, overhead.js, task-groups.js,
+node-visuals.js, agent-brain.js and one line of main.cjs (the run id on
+autopilot status rows, which keys a builder's orb for its whole run). The
+largest: Command indexed `projected` (which drops the hub) with state.nodes
+edge indices, so every wire past the hub went to the wrong node and the
+branch parents the layouts use were wrong; `frameEdges` remaps them per
+graph. New suite tests/command_node_tree.test.mjs (12 tests); new or
+extended tests in tree3d_performance, tree3d_project, tree3d_keyboard,
+overhead_poll_backoff, node_visuals, tree_dynamics and camera_tour; the
+command_activity markers and tools/test_mefi_studio_tree_keyboard.py pins
+follow the new source. Rebuilt renderer/booklet.html.
+
+Results on one tree: `npm run check` ok; `npm run audit` 0 errors, 0
+warnings; `npm test` passes (Node 3,971 tests, 3,966 pass, 5 skipped, 0
+fail; Python 248 OK, 1 skipped; normalized-path lock 6/6). Before the pass,
+`command_render` had failed once under load on its midrange-drum assertion
+(mid 0.743 against bass 0.535 x 1.4) and once on its 80 s kill bound while
+five audits ran; it passed in this run.
+
 
 ## 2026-09-27 morning - Handout rebroadcast dedupe: a heard note is not re-sent; AI-link retirement re-verified (task_plan_mujom5h3_0, run_1790505348418_7)
 
@@ -276,105 +327,6 @@ fixed and committed; the selected Codex route replied ok through the real host
 CLI completion function at 20:11 this evening. Code cannot reset the provider
 quota; loading the committed fixes into the alerting Studio instance needs the
 owner's app restart.
-
-## 2026-09-26 - Built-in media browser replaces the separate window
-
-Replaced the standalone BrowserWindow and toolbar preload/page with a
-sandboxed WebContentsView attached to Studio's existing window. The bundled
-media-browser controller puts address, history, reload/stop, mute, minimize
-and close controls inside the existing media player. Website popup links
-navigate that same view. Moving, resizing, zooming and minimizing preserve
-the loaded page; source changes, close and owner reload destroy playback.
-The website has no Studio preload or Node access. Browser bounds follow the
-renderer viewport and yield to overlapping Studio UI. Video-only background,
-transparency, fade and pointer-dodge effects are paused while browsing.
-The visual music refresh remains in place, and launcher copy now says
-Browse here and explicitly describes playback inside Studio.
-
-Validation: 118 focused Node tests passed. The real Electron browser fixture
-passed both alone and in the full run, with exactly one BrowserWindow,
-X-Frame-Options DENY pages, same-view popup links, history, mute, forbidden
-URL rejection, movement, minimize/restore, overlay hiding, 1440/600 layouts,
-zoom, unchanged page-load counts and close/source-switch disposal. Render
-captures were inspected from an isolated temporary profile. The initial
-fixture exposed resize-handle clipping in the visibility probe and a
-shutdown listener touching a destroyed owner; both were corrected. Native
-capture retries are bounded to the transient UnknownVizError case.
-
-npm run build-booklet and npm run audit passed (zero findings). npm test
-passed: 3,902 Node tests passed and 6 skipped; Python ran 248 tests, OK with
-1 skip; normalized-path checks passed 6/6. The occlusion skip was capability
-gated on this desktop. npm run check stopped at an unrelated duplicate spec:
-tools/logs/canvas-transfer-integration/tests/command_render.test.mjs and
-tests/command_render.test.mjs. The actively used isolated copy was preserved.
-The remaining check components were run directly: CSS merge/no-merge,
-unused selectors, syntax and test-history gates all passed. Local logs and
-seed-only captures are in the OS temporary directory, not published.
-
-## 2026-09-26 - Isolated canvas transfer candidate: timing and pixels pass; Command integration deferred
-
-The native-font hotspot led to an isolated Electron 44.4.1 comparison using
-production callout drawing, six callouts, 1,000 synthetic DOM rows, two DOM
-invalidations per cycle, 30 cycles per run and five alternating runs after
-warmup. Median synchronous cycle: DOM canvas 4.91 ms, copied offscreen
-backbuffer 5.17 ms, directly transferred canvas 3.48 ms. Direct transfer
-reduced style recalculations from two to one; layouts remained one. The
-cycle includes final layout flush and any backbuffer copy, but excludes
-asynchronous compositor presentation. This is not a live improvement claim.
-
-All 96 candidate pixel-buffer comparisons were identical across four device
-scales, three styles, light/dark palettes and integer/fractional positions.
-Browser captures matched the direct canvas at three scale/style combinations.
-Seven isolated candidate unit tests passed for capability fallback, transfer
-identity, alpha options, resize, DPR and no-op pixel retention.
-
-The first private-overlay Command renderer integration attempt failed at
-setup: the overlay omitted scripts/brains.cjs. The copied dependency set now
-includes brains.cjs and agent-issues.cjs; overlay preparation and original
-source hash guards succeed. A sibling npm test run started before retry, so
-no second renderer test or live capture was started. Full Command integration
-remains pending. No candidate application source has been applied and no
-application gate has been rerun for this candidate. The prior completed
-full gate still covers the scroll batching change only.
-
-Reports and isolated sources: tools/logs/font-style-trial.json,
-tools/logs/benchmark-font-styles.cjs, tools/logs/canvas-transfer-candidate/,
-and tools/logs/validate-canvas-transfer-candidate.mjs. The failed setup log is
-in the OS temporary directory as mefi-canvas-candidate-command.log. Continue
-with the guarded overlay's --run only when Studio is inactive and all other
-test suites have ended; then finish validation before any live source edit.
-
-## 2026-09-26 - Visible Command probe narrows the next hotspot to canvas font updates
-
-A 30-second visible Command capture retained the loaded scroll batching
-code, with stable source/booklet hashes. drawCallout remained the largest
-named CPU sample (about 2.36 seconds). A test run appeared at one guard
-checkpoint, so this capture is not used for a clean before/after claim.
-
-A subsequent 15-second native-call probe, without the CPU sampler, stayed
-visible on Command. Eight three-second guard checkpoints observed no tests;
-source and booklet hashes were unchanged. The probe passed every native
-argument/result through, retained exceptions, and recorded only operation
-names, counts and durations. It restored all eight wrapped descriptors
-normally, removed its temporary global, and had a 20-second fallback timer.
-
-Measured elapsed totals: canvas font assignment 1,167.8 ms / 6,689 calls;
-element bounding rectangles 382.8 ms / 1,149; fillText 23.1 ms / 6,689;
-measureText 6.0 ms / 2,694. The renderer's rAF interval p95 was 16.8 ms;
-that is not Command draw FPS or GPU presentation timing. These instrumented
-measurements narrow the investigation without claiming an improvement.
-
-No production source changed and no completed application gate was rerun.
-The earlier full-gate pass still covers the scroll fix. Follow-up: isolate
-the style work reached by canvas font setters and validate any candidate's
-visual behavior before applying it; a measureText cache alone addresses
-little of the measured cost. Details and the primary Chromium source are
-in docs/performance.md.
-
-Ignored reports: tools/logs/live-20260926-2153-command*.json and
-tools/logs/live-20260926-native-callout-probe*.json. The one-off native
-collector is tools/logs/profile-native-timing-trial.mjs. A read-only final
-status check confirms the app's boot is complete and recording is stopped.
 
 ## Read Before Any Tests
 

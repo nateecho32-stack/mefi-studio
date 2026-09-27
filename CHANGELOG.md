@@ -31,6 +31,52 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   be open at a time, and stopping Server Styler during setup is a stop, not
   an "install failed". `check-syntax` now checks renderer files as the classic
   scripts the booklet runs them as.
+- A pass over the node tree. **Wires**: Command drew every connection past
+  the (hidden) assistant hub to the wrong node and dropped the last one, and
+  the Branches/Terraces layouts spaced by the same wrong parents; wires and
+  branch parents now follow the drawn nodes. **Layout**: live additions in 3D
+  Overview no longer shrink the tree step by step; crowded trees (90+ nodes)
+  share the room instead of stacking overflow nodes on one point; a resize
+  waits until the window holds still and then re-lays the tree out under the
+  view it was first laid out in, so a turned or zoomed tree keeps its shape
+  instead of jumping; Fit keeps the reach it measured while the layout holds,
+  so work arriving far out no longer shrinks a settled tree when a panel
+  moves; the paused Overview grows back
+  after work leaves; the Overview's drift folds away when you click a node or
+  Follow; live shapes ease back on interaction instead of snapping, and
+  workers or finishing nodes no longer reshuffle ring slots, and a finishing
+  node lands on its host where the shape draws it. **Graph**: a
+  builder keeps one orb for its whole run (no second pop when its session is
+  found); a project switch no longer flies the old project's tasks into the
+  new hub or pops its whole backlog; stale task and store reads that land
+  after a switch are dropped; the assistant's own chores no longer take the
+  owner's twelve task slots; finished tasks stop reserving layout slots;
+  session progress counts every todo, not only the drawn ones; the rail and
+  Command stay in step after each rail rebuild; a job matches its session the
+  way Work on it does, and agents can fly to approved-plan groups.
+  **Interaction**: the wheel and a two-finger pinch zoom toward the pointer;
+  touch and pen drag, tap and focus like the mouse; a click lands on the node
+  as it is after a rebuild; arrow keys stay with the card while it has focus;
+  hover follows a spinning tree; double-clicking a
+  callout opens it; arrow keys reach task groups and skip sunk work; the rail
+  picks the nearest node; a finished task's card offers only Open in Tasks and
+  Done can't send twice; the card keeps focus, notes and open folds across
+  pushes and updates when its node changes; card rows are keyboard links;
+  screen readers hear one line per selection instead of whole cards; the exit
+  button is labelled Close like every other. **Music**: a band far below the
+  loudest one (spill, such as a snare's click in the bass) is no longer
+  scaled up into a hit of its own, so drum cues stop firing on each other.
+  **Cost**: a resting Command sleeps between its ten frames a second instead
+  of waking on every display refresh; music frames stop allocating per wire
+  and node; the nebula, bokeh and firefly skies reuse their gradients; each
+  node is projected once less per frame; long callout titles no longer flush the text cache every frame,
+  the label grid is built once per frame, a frame that throws no longer
+  leaves the canvas clipped, the rail stops animating under Vibe and skips
+  rebuilds when a push changes nothing, stars and backdrop colours are
+  cached, and the Zen tour fits with far fewer projections. Overhead keeps
+  polling after a failed read, counts tasks awaiting verification, and both
+  it and the rail re-render after a display-scale change.
+
 
 - A polish pass on long-untouched menus. **Search Studio** names Settings
   choices properly ("Motion › Full", "Node style › Classic orbs") instead of
