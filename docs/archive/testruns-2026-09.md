@@ -6,6 +6,101 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-26 - Fix Home and Trace layout and agent-brain navigation selections
+
+Windows, Node 24, Electron 44.4.1. Fixes from the exploration: Home's fixed
+layer now leaves room for the navigation row; Trace joins Agents > Live and
+the rail's full-page layout; Pipelines/Playbook/Project map repaint their
+navigation after async loading. Page Back uses section history only in the
+rail shell; classic dialogs, including Trace, close over the current page.
+Regenerated `renderer/booklet.html`, updated architecture/changelog, and
+preserved concurrent edits and local data. No credentials or screenshots
+were added to Git, and this session did not commit or push.
+
+PASS: `npm run build-booklet`, `npm run check`, `npm run audit` (zero findings),
+and `git diff --check`. Focused `node --test tests/nav_startup.test.mjs
+tests/trace.test.mjs tests/activity_navigation.test.mjs` passed 18/18,
+including rail Back versus classic dialog Close.
+
+The full run's expanded `unified_studio_render.test.mjs` passed in 53.8 s:
+Home Pause/Activity/More hit targets, Trace menu access/title/search/Back,
+correct Pipelines/Playbook/Project map selectors at 1440x900 and 600x560, plus
+the existing controls and 36 responsive layout combinations. The Electron
+stage passed 37 tests with one existing opt-in skip; eyes visibility-toggle
+passed 1/1. Python passed 248 tests (one skip), and all six normalized-path
+lock checks passed.
+
+Overall `npm test` exited 1. CPU stage: 3823 pass / 5 fail / 4 skipped. The
+five failures are the existing `analyzer_ui.test.mjs` copy/empty-state
+expectations already documented by the chat-thread performance row; this
+change does not edit Analyzer. Exclusive occlusion: 1 pass / 1 fail because
+rAF continued under the cover (growth 17). The runner detected concurrent
+source edits during that stage. A solo `node --test tests/occlusion_probe.test.mjs`
+retry still failed the same assertion (growth 12); it remains unresolved and
+is not relabeled as a skip or pass.
+
+The first expanded Unified Studio run hit the old 180 s outer guard and
+recorded the previously documented native keyboard-scroll assertion failure.
+Its new navigation checks passed and exported screenshots. The following
+full run passed the entire fixture. Increased only its outer guard to 300 s
+to leave room for source snapshotting and cleanup around the unchanged
+150 s renderer-process deadline. The first run's directory is named `before`,
+but copying overlapped implementation: its screenshots contain the fixes,
+so it is not a before-change baseline. The preceding exploration supplies
+the failing layout evidence.
+
+Logs: ignored `tools/logs/navigation-fixes-{build,check,audit,focused,full-test,
+occlusion-retry,before}.log`. Local report and screenshots:
+`tools/logs/navigation-fixes-20260926/`.
+
+## 2026-09-26 - Studio exploration, USB CLI verification and credential exclusions
+
+Windows, Electron 44.4.1. Exploratory audit only: no application source fixes.
+Existing concurrent application changes and live user data were preserved.
+This session changed `.gitignore` to exclude credential files at any folder
+depth, secret directories, and root machine settings. Test scripts, screenshots,
+and the detailed report remain in ignored `tools/logs/explore-20260926/`.
+
+The disposable real-Electron tour captured 54 states before its 200-second
+outer timeout. The follow-up interaction tour completed in 145.6 seconds with
+42 captures, 40 successful checkpoints, and two recorded failures: a real
+Home Activity control obstruction, and a post-save probe error caused by
+calling `planningList()` without the required project ID. Manual plan saving
+and resumption were visible. No renderer console errors were recorded.
+The harness intercepts external requests and worker launches; its recorded
+model-catalog and Grok usage-probe attempts were blocked. Its top-level `ok`
+flag does not aggregate the custom per-scenario failures; no all-pass claim.
+
+Confirmed UI findings: Home controls are covered by the top navigation;
+Trace is absent from the Live menu and lacks the page inset; Pipelines,
+Playbook and Project map retain the previous view in the navigation selectors.
+Coverage includes Vibe panels and the main Build destinations at 1440x900
+and 600x560, task creation/detail tabs, plan stages, searches, menus, profiler,
+provider setup and accounts, and settings sections. External integrations
+and complete AI build workflows were not validated by the isolated UI tour.
+
+Earlier `python tools/verify_workspace.py` failed its stale Build-default-home
+assumption against current Vibe onboarding. `node --test
+tests/command_render.test.mjs` timed out during concurrent Electron activity
+and remains inconclusive. A final optional interaction follow-up stalled
+before renderer startup and its owned process was stopped after about two
+minutes without captures. Native live-app capture/coordinate control was
+unavailable, although accessibility text was readable.
+
+USB CLI checks used the F: binaries directly: Codex, OpenCode with gpt-5.5,
+and Antigravity each returned OK to a minimal request in a temporary directory.
+Claude reported a saved login but the live app showed its quota limit; Grok
+reported missing authentication. OpenCode's listed gpt-5.4-mini was rejected
+for the ChatGPT login before the successful gpt-5.5 retry. CLI success on the
+current PC does not establish portable authentication on another PC.
+
+PASS: credential exclusion checks, `git diff --check -- .gitignore`, and
+local secret comparison across 656 tracked/nonignored files and 653 Git index
+blobs (eight saved values, zero matches; zero staged matches). Three pattern
+hits were existing synthetic redaction-test PEM markers. No credentials
+were copied to the repository and nothing was committed or pushed. Full
+application gates were not rerun for this ignore-rule/audit-only change.
+
 ## 2026-09-26 - Chat thread performance: retain history during live thoughts
 
 Windows, Node 24, Electron 44.4.1. `renderer/idle.js` separates its saved

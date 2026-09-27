@@ -34,6 +34,53 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-27 early morning - ai-offline resolved: live instance healthy, recovery chain re-verified (task_dc3cbe4e9796268a, run_1790480854175_9)
+
+Verified the ai-offline issue end to end from the running Studio instance. The live data/eyes-assistant.json shows the AI back online: ai.online true, keyPresent true, model glm-5.3-flash (zai/jev team route for project_d453f6fb00cc5e2d), failures 0, backoffUntil 0, problems empty, lastOkAt 2026-09-27T04:27Z - i.e. the provider recovered after the 23:10 America/Chicago quota reset and the app's 02:39Z restart had already loaded the committed recovery fixes (cliReply exit guard 11fcebc, resetAssistantAiBackoff at all four route-change sites, the scheduleAssistantAiProbe offline-probe chain in main.cjs, and planOfflineProbe/offlineProbeDelayMs in scripts/assistant.mjs - all intact; the sibling work-tree diff on scripts/assistant.mjs touches only focusedTestsForTask/verifyCompletion, not the offline path). brains.js, boot.js and the other pinned renderer refs are the pipeline editor and UI shell - not part of the offline chain. Narrow validation this run: python tools/test_mefi_studio_offline_probe.py 12 tests OK; node --test tests/assistant_overseer_chat.test.mjs tests/role_provider_isolation.test.mjs tests/usage_tracker_host.test.mjs 73 pass / 0 fail. No code change was needed; the issue stands resolved and no owner action remains beyond watching that the warning stays clear.
+
+## 2026-09-26 - Canvas candidate passes isolated renderer checks; expanded media retry pending
+
+Ran candidate fixtures sequentially with separate private renderer overlays,
+a fake host bridge and temporary user data. Studio was visible but the
+system had been idle almost six minutes before testing; no other suite was
+active at each launch. No user app navigation, prompts or state changes.
+
+- Command renderer: 1 pass, 0 failures, 49.5 s. Drawing, finite positions,
+  menus, audio visuals and exit/reentry assertions passed.
+- Media renderer: 1 pass, 0 failures, 33.5 s. Transparency, movement,
+  background and navigation assertions passed.
+- Tree dynamics renderer: 1 pass, 0 failures, 11.3 s. Shape, music and video
+  controls retained their graph anchors.
+- A separate isolated native-font probe measured 900 assignments per run:
+  median accumulated setter elapsed time 46.7 ms (DOM) versus 0.6 ms
+  (direct transfer), with equal call counts and both descriptors restored.
+  Uninstrumented synthetic cycles were 5.14 ms versus 3.71 ms, style passes
+  two versus one, layouts one for both. All 96 pixel-buffer comparisons
+  and browser captures matched. No live speedup claim.
+
+The native experiment finished at 22:48:16 Chicago; a sibling media test
+started at 22:48:35, after this run. Another session added media layout
+assertions after our isolated media pass, and started a full npm test gate.
+The guarded candidate rejected that changed fixture. Regenerated the
+candidate preserving the new assertions; idle.js, Command fixture and tree
+fixture hashes are unchanged. Private overlay preparation passes. The
+expanded media fixture must still be retried solo before promotion. No
+candidate application source is applied, and no application gate has been
+run for it. Existing scroll gates are not repeated.
+
+Logs: tools/logs/canvas-transfer-command-integration.log,
+canvas-transfer-media-integration.log, canvas-transfer-tree-integration.log,
+and font-style-native-trial.json (all under tools/logs). The pre-rebase
+manifest is canvas-transfer-validated-manifest-20260926-2248.json. Current
+manifest is canvas-transfer-candidate/manifest.json. Resume with
+node tools/logs/validate-canvas-transfer-candidate.mjs --suite media_window_render --run
+when tests clear and Studio is inactive, then validate hashes before applying.
+
+The live status helper now also reports transferred-context state, window
+focus and system idle seconds. Its PID/booklet validation and read-only
+status path succeeded: existing app remains on the DOM context, recording
+false, with 601 seconds of system idle time. No live capture was started.
+
 ## 2026-09-26 - Media-browser booklet inlining verified and fixture line landed (task_b5026aa2c68858d0, run_1790480592972_8)
 
 Verified the media-browser inlining this task owes. The build wiring was already committed at 962078: scripts/build-booklet.mjs reads renderer/media-browser.js into CODE_SOURCES and codeParts (after media-window.js, before music.js), and renderer/booklet.sources.json lists renderer/media-browser.js among its 46 segments. The work-tree booklet.html inlines the source verbatim exactly once with zero external script refs, and npm.cmd run build-booklet rebuilt cleanly (39 models). The missing piece was test coverage: HEAD's tests/booklet_build.test.mjs INLINE_SCRIPTS omitted media-browser.js, so a fixture build at HEAD died ENOENT; landed the one-line fixture addition as 08c677c. Narrow validation: node --test tests/booklet_build.test.mjs 4/4 pass; node --test --test-name-pattern browser tests/music.test.mjs 3/3 pass. The committed renderer/booklet.html predates the media-browser work (last rebuilt at 436a5a4) and stays uncommitted in the work tree because it folds sibling sessions' in-flight renderer edits; the sessions landing those edits owe the rebuild+commit.
@@ -601,101 +648,6 @@ composer measurement, not an end-to-end startup or frame-rate claim.
 
 A separate dropdown-label snapshot experiment was discarded because its
 real Electron comparison was slower than native label lookup.
-
-## 2026-09-26 - Fix Home and Trace layout and agent-brain navigation selections
-
-Windows, Node 24, Electron 44.4.1. Fixes from the exploration: Home's fixed
-layer now leaves room for the navigation row; Trace joins Agents > Live and
-the rail's full-page layout; Pipelines/Playbook/Project map repaint their
-navigation after async loading. Page Back uses section history only in the
-rail shell; classic dialogs, including Trace, close over the current page.
-Regenerated `renderer/booklet.html`, updated architecture/changelog, and
-preserved concurrent edits and local data. No credentials or screenshots
-were added to Git, and this session did not commit or push.
-
-PASS: `npm run build-booklet`, `npm run check`, `npm run audit` (zero findings),
-and `git diff --check`. Focused `node --test tests/nav_startup.test.mjs
-tests/trace.test.mjs tests/activity_navigation.test.mjs` passed 18/18,
-including rail Back versus classic dialog Close.
-
-The full run's expanded `unified_studio_render.test.mjs` passed in 53.8 s:
-Home Pause/Activity/More hit targets, Trace menu access/title/search/Back,
-correct Pipelines/Playbook/Project map selectors at 1440x900 and 600x560, plus
-the existing controls and 36 responsive layout combinations. The Electron
-stage passed 37 tests with one existing opt-in skip; eyes visibility-toggle
-passed 1/1. Python passed 248 tests (one skip), and all six normalized-path
-lock checks passed.
-
-Overall `npm test` exited 1. CPU stage: 3823 pass / 5 fail / 4 skipped. The
-five failures are the existing `analyzer_ui.test.mjs` copy/empty-state
-expectations already documented by the chat-thread performance row; this
-change does not edit Analyzer. Exclusive occlusion: 1 pass / 1 fail because
-rAF continued under the cover (growth 17). The runner detected concurrent
-source edits during that stage. A solo `node --test tests/occlusion_probe.test.mjs`
-retry still failed the same assertion (growth 12); it remains unresolved and
-is not relabeled as a skip or pass.
-
-The first expanded Unified Studio run hit the old 180 s outer guard and
-recorded the previously documented native keyboard-scroll assertion failure.
-Its new navigation checks passed and exported screenshots. The following
-full run passed the entire fixture. Increased only its outer guard to 300 s
-to leave room for source snapshotting and cleanup around the unchanged
-150 s renderer-process deadline. The first run's directory is named `before`,
-but copying overlapped implementation: its screenshots contain the fixes,
-so it is not a before-change baseline. The preceding exploration supplies
-the failing layout evidence.
-
-Logs: ignored `tools/logs/navigation-fixes-{build,check,audit,focused,full-test,
-occlusion-retry,before}.log`. Local report and screenshots:
-`tools/logs/navigation-fixes-20260926/`.
-
-## 2026-09-26 - Studio exploration, USB CLI verification and credential exclusions
-
-Windows, Electron 44.4.1. Exploratory audit only: no application source fixes.
-Existing concurrent application changes and live user data were preserved.
-This session changed `.gitignore` to exclude credential files at any folder
-depth, secret directories, and root machine settings. Test scripts, screenshots,
-and the detailed report remain in ignored `tools/logs/explore-20260926/`.
-
-The disposable real-Electron tour captured 54 states before its 200-second
-outer timeout. The follow-up interaction tour completed in 145.6 seconds with
-42 captures, 40 successful checkpoints, and two recorded failures: a real
-Home Activity control obstruction, and a post-save probe error caused by
-calling `planningList()` without the required project ID. Manual plan saving
-and resumption were visible. No renderer console errors were recorded.
-The harness intercepts external requests and worker launches; its recorded
-model-catalog and Grok usage-probe attempts were blocked. Its top-level `ok`
-flag does not aggregate the custom per-scenario failures; no all-pass claim.
-
-Confirmed UI findings: Home controls are covered by the top navigation;
-Trace is absent from the Live menu and lacks the page inset; Pipelines,
-Playbook and Project map retain the previous view in the navigation selectors.
-Coverage includes Vibe panels and the main Build destinations at 1440x900
-and 600x560, task creation/detail tabs, plan stages, searches, menus, profiler,
-provider setup and accounts, and settings sections. External integrations
-and complete AI build workflows were not validated by the isolated UI tour.
-
-Earlier `python tools/verify_workspace.py` failed its stale Build-default-home
-assumption against current Vibe onboarding. `node --test
-tests/command_render.test.mjs` timed out during concurrent Electron activity
-and remains inconclusive. A final optional interaction follow-up stalled
-before renderer startup and its owned process was stopped after about two
-minutes without captures. Native live-app capture/coordinate control was
-unavailable, although accessibility text was readable.
-
-USB CLI checks used the F: binaries directly: Codex, OpenCode with gpt-5.5,
-and Antigravity each returned OK to a minimal request in a temporary directory.
-Claude reported a saved login but the live app showed its quota limit; Grok
-reported missing authentication. OpenCode's listed gpt-5.4-mini was rejected
-for the ChatGPT login before the successful gpt-5.5 retry. CLI success on the
-current PC does not establish portable authentication on another PC.
-
-PASS: credential exclusion checks, `git diff --check -- .gitignore`, and
-local secret comparison across 656 tracked/nonignored files and 653 Git index
-blobs (eight saved values, zero matches; zero staged matches). Three pattern
-hits were existing synthetic redaction-test PEM markers. No credentials
-were copied to the repository and nothing was committed or pushed. Full
-application gates were not rerun for this ignore-rule/audit-only change.
 
 ## Read Before Any Tests
 
