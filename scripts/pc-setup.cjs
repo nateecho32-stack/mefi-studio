@@ -71,6 +71,8 @@ function createPcSetup({ execFile, spawn, platform = process.platform, env = () 
       resolve({ ok: !error, code: error?.code ?? 0, stdout: String(stdout ?? ""), stderr: String(stderr ?? "") });
     });
   });
+  // The folder rules of the PC being set up, not of whatever runs this module.
+  const paths = platform === "win32" ? path.win32 : path.posix;
   const running = new Set();
   let listed = new Set();
 
@@ -90,8 +92,8 @@ function createPcSetup({ execFile, spawn, platform = process.platform, env = () 
       const top = await run("git", ["rev-parse", "--show-toplevel"], { cwd: root });
       project.repo = top.ok;
       if (top.ok) project.github = githubRemote((await run("git", ["remote", "get-url", "origin"], { cwd: root })).stdout);
-      project.needsInstall = exists(path.join(root, "package.json")) && !exists(path.join(root, "node_modules"));
-      project.hook = /scripts\/sync\.mjs --hook/.test(String(await readText(path.join(root, ".claude", "settings.json")) ?? ""));
+      project.needsInstall = exists(paths.join(root, "package.json")) && !exists(paths.join(root, "node_modules"));
+      project.hook = /scripts\/sync\.mjs --hook/.test(String(await readText(paths.join(root, ".claude", "settings.json")) ?? ""));
       if (platform === "win32" && /^[A-Za-z]:/.test(root)) {
         project.filesystem = filesystemOf((await run("fsutil", ["fsinfo", "volumeinfo", `${root.slice(0, 2)}\\`])).stdout);
         project.weakDrive = WEAK_FILESYSTEMS.has(String(project.filesystem ?? "").toUpperCase());
@@ -142,8 +144,8 @@ function createPcSetup({ execFile, spawn, platform = process.platform, env = () 
   // parent comes from main's folder dialog, never from the renderer.
   async function clone(repo, parent) {
     if (!REPO.test(String(repo ?? "")) || !listed.has(repo)) return { ok: false, error: "Choose a repository from your list." };
-    if (typeof parent !== "string" || !path.isAbsolute(parent)) return { ok: false, error: "Choose a folder for the project." };
-    const target = path.join(parent, repo.split("/")[1]);
+    if (typeof parent !== "string" || !paths.isAbsolute(parent)) return { ok: false, error: "Choose a folder for the project." };
+    const target = paths.join(parent, repo.split("/")[1]);
     if (exists(target)) return { ok: false, error: `${target} already exists. Choose another folder.` };
     if (platform === "win32" && /^[A-Za-z]:/.test(parent)) {
       const filesystem = filesystemOf((await run("fsutil", ["fsinfo", "volumeinfo", `${parent.slice(0, 2)}\\`])).stdout);
