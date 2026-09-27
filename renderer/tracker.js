@@ -809,7 +809,12 @@
       state.read += 1;
       state.at = 0;
       state.report = null;
-      refresh({ force: true, probe: false });
+      // A read already under way belongs to the old project and is dropped by
+      // the token bump above; refresh would hand that read back instead of
+      // starting one, so read again once it settles.
+      const again = () => refresh({ force: true, probe: false });
+      if (state.pending) state.pending.then(again, again);
+      else again();
     });
   }
 

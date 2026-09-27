@@ -5,7 +5,7 @@
 // Vimeo) or, for a plain audio or video file such as a Discord attachment, in
 // a <video> element of its own; an embed's cross-origin playback state is
 // deliberately not guessed. Links no embed can play (a Spotify Jam, Twitch,
-// any other page) are handed to their own app or the browser.
+// any other page) can open in the player's built-in browser.
 (() => {
   "use strict";
   const STORAGE_KEY = "mefiStudio.music.v1";
@@ -179,20 +179,21 @@
   const DISCORD_CDN = ["cdn.discordapp.com", "media.discordapp.net"];
   // Any pasted link, as what Studio can do with it: "embed" (an official
   // player in an iframe), "media" (a plain file in Studio's own <video>) or
-  // "external" (a page only its own app or the browser can open). Only https,
-  // with no credentials or port; every embed URL is rebuilt from validated
-  // ids, never copied from the paste.
+  // "external" (a page for the mini browser). Embeds require https with no
+  // credentials or port; their URLs are rebuilt from validated service ids.
   function mediaLink(raw) {
-    const value = String(raw ?? "").trim();
-    if (!value || value.length > 2048) return null;
+    let value = String(raw ?? "").trim();
+    if (!value || value.length > 8192 || /[\u0000-\u0020\u007f]/.test(value)) return null;
+    if (/^[\w.-]+\.[a-z]{2,}(?:[/:?#]|$)/i.test(value)) value = `https://${value}`;
     const spotify = spotifyLink(value);
     if (spotify) return spotify;
     let url;
     try { url = new URL(value); } catch { return null; }
-    if (url.protocol !== "https:" || url.username || url.password || url.port) return null;
+    if (!/^https?:$/.test(url.protocol) || url.username || url.password) return null;
     const host = url.hostname.toLowerCase().replace(/^(?:www|m)\./, "");
     const path = url.pathname;
-    const external = (provider, providerName, label, extra = {}) => ({ provider, providerName, kind: "external", url: url.href.replace(/#.*$/, ""), label, short: label, ...extra });
+    const external = (provider, providerName, label, extra = {}) => ({ provider, providerName, kind: "external", url: url.href, label, short: label, ...extra });
+    if (url.protocol !== "https:" || url.port) return external("web", host, host);
     if (["youtube.com", "music.youtube.com", "youtube-nocookie.com", "youtu.be"].includes(host)) {
       let id = null;
       if (host === "youtu.be") id = path.slice(1).replace(/\/$/, "");
@@ -368,12 +369,12 @@
   function status() {
     const track = state.tracks[state.selected];
     const tuned = station(state.station);
-    const title = state.source === "link" ? state.link ? state.link.label : "Paste a link"
+    const title = state.source === "link" ? els.browser?.active ? els.browser.state.title || "Media browser" : state.link ? state.link.label : "Paste a link"
       : state.source === "radio" ? tuned ? tuned.name : "Choose a station"
       : track?.title || "Choose your music";
     const deck = activeDeck();
     const playing = state.source === "radio" ? (state.radioPhase === "playing" || state.radioPhase === "buffering") && Boolean(deck?.src) && !deck.paused
-      : state.source === "link" ? state.link?.kind === "media" && state.linkPlaying
+      : state.source === "link" ? Boolean(state.link?.kind === "media" && state.linkPlaying)
       : state.source === "local" && Boolean(audio?.src) && !audio.paused && !audio.ended;
     // Links never reach the analyser: an embed is another origin and a pasted
     // file is not CORS-cleared, so the audio link listens to the desktop.
@@ -446,7 +447,7 @@
   function renderFinder() {
     if (!els.linkGo) return;
     const intent = finderIntent();
-    const label = youtubeSearching ? "Searching…" : intent === "search" ? "Search" : "Play";
+    const label = youtubeSearching ? "Searching…" : intent === "search" ? "Search" : intent === "link" && !playableLink(finderLink(els.linkInput.value)) ? "Open" : "Play";
     if (els.linkGo.textContent !== label) els.linkGo.textContent = label;
     els.linkGo.disabled = youtubeSearching;
     els.linkQueueTools.hidden = intent !== "link" || !playableLink(finderLink(els.linkInput.value));
@@ -1324,7 +1325,9 @@
       rememberLink();
     }
   }
-  function unmountLink() {
+  let browserRequest = 0;
+  function unmountLink({ keepBrowser = false } = {}) {
+    if (!keepBrowser) { browserRequest++; els.browser?.close(); }
     if (linkResumeTimer) window.clearInterval(linkResumeTimer);
     linkResumeTimer = null;
     if (linkWatchTimer) window.clearInterval(linkWatchTimer);
@@ -1351,13 +1354,14 @@
     init();
     const link = mediaLink(raw);
     if (link && typeof label === "string" && label.trim()) link.label = label.trim().slice(0, 160);
-    if (!link) { note("That doesn't look like a link. Paste a YouTube, Spotify, SoundCloud or Vimeo link, or a link to an audio or video file.", true); return false; }
+    if (!link) { note("Enter a web address, a media link or an audio/video file URL.", true); return false; }
     if (!playableLink(link)) {
       state.handoff = link;
       if (els.linkInput) els.linkInput.value = link.url;
       settingsReveal.source = "link";
       render();
-      note(handoffNote(link), link.provider === "web");
+      if (!link.jam && window.mefiStudio?.mediaBrowserOpen) { void openMediaBrowser(link.url); return true; }
+      note(handoffNote(link));
       return false;
     }
     state.handoff = null;
@@ -1377,9 +1381,23 @@
   }
   function handoffNote(link) {
     if (link.jam) return "Spotify only lets its own app join a Jam. Open it in Spotify below: listening remotely needs Premium there, joining in person does not.";
-    if (link.provider === "twitch") return "Twitch only plays inside its own site from a desktop app. Open the stream below.";
-    if (link.provider === "web") return `Studio can't play ${link.label} here. It plays YouTube, Spotify, SoundCloud and Vimeo links and audio or video files.`;
-    return `${link.label} opens in ${link.providerName}. Open it below.`;
+    return `${link.label} can open in the mini browser. Some services require your regular browser for sign-in or protected playback.`;
+  }
+  async function openMediaBrowser(raw = "") {
+    if (!els.browser || !window.mefiStudio?.mediaBrowserOpen) { note("The built-in browser is available in the Studio desktop app.", true); return false; }
+    const request = ++browserRequest;
+    try {
+      const result = await els.browser.open(raw);
+      if (request !== browserRequest) return false;
+      if (!result?.ok) { note(result?.error || "The browser could not open.", true); return false; }
+      stopRadio(); audio.pause(); unmountLink({ keepBrowser: true });
+      state.link = null; state.handoff = null; state.source = "link"; prefs.source = "link"; persist();
+      els.floatingPlayer?.show({ shape: "browser", label: "Media browser" });
+      els.floatingPlayer?.restore?.({ minimized: false });
+      render(); announce(); closeAudio(); els.browser.schedule?.();
+      note("Browse and play inside Studio. Use the website’s playback controls.");
+      return true;
+    } catch { note("The browser could not open. Try again.", true); return false; }
   }
   function openLink(url) {
     if (!window.mefiStudio?.openExternal) { note("Opening links needs the Studio desktop app.", true); return; }
@@ -1598,6 +1616,7 @@
     if (handoff) {
       element("strong", null, handoff.label, els.linkHandoff);
       element("p", null, handoffNote(handoff), els.linkHandoff);
+      button("Browse here", "ghost", els.linkHandoff, () => void openMediaBrowser(handoff.url), "music-link-handoff-browser");
       const open = button(handoff.jam ? "Open the Jam in Spotify ↗" : `Open in ${handoff.provider === "web" ? "your browser" : handoff.providerName} ↗`, "primary", els.linkHandoff, () => openLink(handoff.url), "music-link-handoff-open");
       open.title = mediaMenu.showLinks ? handoff.url : "";
       if (handoff.jam) element("small", null, "Tip: choose Desktop audio under Listen to and the node tree follows the Jam.", els.linkHandoff);
@@ -1610,9 +1629,11 @@
     if (!els.linkNow) return;
     paintLinkVolume();
     const link = state.source === "link" ? state.link : null;
-    els.linkNow.dataset.empty = String(!link);
-    els.linkNow.dataset.provider = link?.provider || "";
-    if (els.linkNext) els.linkNext.hidden = !linkQueue.length && link?.provider !== "youtube";
+    const browser = els.browser?.active ? els.browser.state : null;
+    els.linkNow.dataset.empty = String(!link && !browser);
+    els.linkNow.dataset.provider = browser ? "browser" : link?.provider || "";
+    if (els.browseLink) els.browseLink.hidden = !link;
+    if (els.linkNext) els.linkNext.hidden = Boolean(browser) || !linkQueue.length && link?.provider !== "youtube";
     // Studio steers its own <video>, YouTube and Vimeo; Spotify and
     // SoundCloud keep play and pause inside their player.
     const steerable = Boolean(link && (link.kind === "media" || ["youtube", "vimeo"].includes(link.provider)));
@@ -1622,8 +1643,13 @@
     els.linkToggle.dataset.state = playing ? "playing" : "paused";
     els.linkToggle.setAttribute("aria-label", playing ? "Pause the video" : "Play the video");
     els.linkNow.dataset.playing = String(playing);
-    els.linkNowEyebrow.textContent = link ? link.providerName : "Video & links";
+    els.linkNowEyebrow.textContent = browser ? "Mini browser" : link ? link.providerName : "Video & links";
     Array.from(els.youtubeResults?.children || []).forEach((row, index) => { row.dataset.current = String(Boolean(link) && youtubeResults[index]?.url === (linkPlayback?.url || link?.url)); });
+    if (browser) {
+      els.linkNowTitle.textContent = browser.title || "Media browser";
+      els.linkNowDetail.textContent = "Browsing inside Studio · use the website’s playback controls";
+      return;
+    }
     if (!link) {
       els.linkNowTitle.textContent = "Nothing playing";
       els.linkNowDetail.textContent = "Search YouTube or paste a link below.";
@@ -1859,7 +1885,12 @@
     els.audioSource.setAttribute("aria-describedby", els.audioHint.id);
     const main = element("section", "music-main", null, dropdownBody);
     main.id = "music-sound"; main.setAttribute("aria-labelledby", "music-sound-label");
-    const soundLabel = element("p", "eyebrow music-group-label", "Sound", main); soundLabel.id = "music-sound-label"; soundLabel.tabIndex = -1;
+    const soundLabel = element("p", "eyebrow music-group-label", "Your listening room", main); soundLabel.id = "music-sound-label"; soundLabel.tabIndex = -1;
+    const browserCard = element("div", "music-browser-card", null, main);
+    const browserCopy = element("div", "music-browser-copy", null, browserCard);
+    element("strong", null, "The web, inside your player", browserCopy);
+    element("span", null, "Videos, music and live streams right here in Studio.", browserCopy);
+    button("Browse here", "ghost", browserCard, () => void openMediaBrowser(), "music-browser-launch");
     els.groups = { look: { group: settings, label: lookLabel }, sound: { group: main, label: soundLabel } };
     const tabs = element("div", "music-tabs", null, main); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Music source");
     els.localTab = button("Music files", "music-tab", tabs, () => setSource("local"), "music-local-tab");
@@ -1867,7 +1898,7 @@
     els.linkTab = button("Video & links", "music-tab", tabs, () => setSource("link"), "music-link-tab");
     els.localTab.title = "Audio files from your computer";
     els.radioTab.title = "Ad-free, listener-funded radio";
-    els.linkTab.title = "YouTube, Spotify, SoundCloud, Vimeo and audio or video file links";
+    els.linkTab.title = "YouTube, Spotify, SoundCloud, Vimeo, audio or video files, or any website in the mini browser";
     const tabFor = (source) => source === "local" ? els.localTab : source === "radio" ? els.radioTab : els.linkTab;
     for (const [tab, panelId, source] of [[els.localTab, "music-local-panel", "local"], [els.radioTab, "music-radio-panel", "radio"], [els.linkTab, "music-link-panel", "link"]]) { tab.setAttribute("role", "tab"); tab.setAttribute("aria-controls", panelId); tab.dataset.source = source; }
     tabs.addEventListener("keydown", (event) => {
@@ -1969,8 +2000,11 @@
     const nowTools = element("div", "music-link-tools music-link-actions", null, linkCard.node);
     els.linkPlace = element("span", "music-link-place", null, nowTools);
     button("Show player", "ghost mini", nowTools, () => { mountLink(); els.floatingPlayer?.reveal(); }, "music-link-show");
-    button("Copy link", "ghost mini", nowTools, () => state.link && copyLink(state.link.url), "music-link-copy").title = "Copy the link to share it in Discord";
-    button("Open ↗", "ghost mini", nowTools, () => state.link && openLink(state.link.url), "music-link-open").title = "Open the original page";
+    els.browseLink = button("Browse here", "ghost mini", nowTools, () => state.link && void openMediaBrowser(state.link.url), "music-link-popout");
+    els.browseLink.title = "Browse the original site inside this player";
+    const shownUrl = () => els.browser?.active ? els.browser.state.url : state.link?.url;
+    button("Copy link", "ghost mini", nowTools, () => { const url = shownUrl(); if (url) copyLink(url); }, "music-link-copy").title = "Copy the link to share it in Discord";
+    button("Open ↗", "ghost mini", nowTools, () => { const url = shownUrl(); if (url) openLink(url); }, "music-link-open").title = "Open the original page in your regular browser";
     button("Stop", "ghost mini music-link-stop", nowTools, stopLink, "music-link-stop").title = "Stop playback and close the player";
     els.linkPlayer = element("div", "music-link-player", null, els.link);
     // How the picture shows: the everyday switch stays on the card, the finer
@@ -1985,6 +2019,14 @@
       quickHost: els.linkPlace,
       onSettings: () => open("sound"),
       onClose: () => { unmountLink(); state.link = null; render(); announce(); },
+    });
+    els.browser = window.MefiMediaBrowser?.create({
+      host: els.linkPlayer,
+      onMove: (event) => els.floatingPlayer?.beginMove(event),
+      onMoveKey: (event) => els.floatingPlayer?.moveKey(event),
+      onMinimize: () => els.floatingPlayer?.minimize(),
+      onClose: () => { unmountLink(); state.link = null; render(); announce(); },
+      onChange: () => renderLinkNow(),
     });
     // Find or paste: one field. A link plays; words search YouTube.
     const finder = element("section", "music-finder", null, els.link);

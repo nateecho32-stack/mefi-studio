@@ -95,9 +95,10 @@ that fails. Each also runs on its own:
 - `npm run check:css:unused` (`scripts/check-css.mjs --unused`) — every class
   a renderer stylesheet styles still appears in the renderer's markup,
   scripts or other stylesheets.
-- `node scripts/check-syntax.mjs` — compiles every `scripts/` and
-  `renderer/` source the way Node would load it, in one process, without
-  running it. It has no npm script of its own.
+- `node scripts/check-syntax.mjs` — compiles every `scripts/` source the way
+  Node would load it, and every `renderer/*.js` as the classic script the
+  booklet inlines it as (so a stray `export` or top-level `await` fails), in
+  one process, without running it. It has no npm script of its own.
 - `npm run check:testruns` (`scripts/check-testruns.mjs`) — the structural
   gate for `TESTRUNS.md`: duplicate row headings, rows out of order in the
   live region, and OneDrive conflict copies.

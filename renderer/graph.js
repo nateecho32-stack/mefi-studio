@@ -36,6 +36,10 @@
     return scores.unknown;
   }
 
+  // Fetched catalog text (names, vendors, endpoint labels) is escaped before
+  // it reaches innerHTML.
+  const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[c]);
+
   function privacyLabel(model) {
     if (!model.privacy) return "unknown";
     if (model.privacy.training) return "trains on data";
@@ -341,17 +345,17 @@
       .map((m) => {
         const cap = m.usage?.monthlyCapUSD;
         return `<tr>
-          <td><b>${m.name}</b>${m.onRoster ? "" : " <span class='muted'>(not on roster)</span>"}</td>
-          <td>${m.vendor}</td>
+          <td><b>${esc(m.name)}</b>${m.onRoster ? "" : " <span class='muted'>(not on roster)</span>"}</td>
+          <td>${esc(m.vendor)}</td>
           <td class="num">${fmt.money(m.typicalCostUSD)}</td>
-          <td class="num">${m.quality?.index ?? "—"}</td>
+          <td class="num">${esc(m.quality?.index ?? "—")}</td>
           <td class="num">${fmt.int(reqH5(m) === Infinity ? "unlimited" : reqH5(m))}</td>
           <td class="num">${fmt.pool(cap)}</td>
           <td class="num">${fmt.ctx(m.limits?.context)}</td>
           <td class="num">${fmt.money(m.pricing?.default?.input)}</td>
           <td class="num">${fmt.money(m.pricing?.default?.output)}</td>
           <td>${privacyLabel(m)}</td>
-          <td>${m.endpoint?.label ?? "—"}</td>
+          <td>${esc(m.endpoint?.label ?? "—")}</td>
         </tr>`;
       })
       .join("");
@@ -364,9 +368,9 @@
       .slice(0, 6)
       .map(
         (entry, index) => `<li>
-          <div class="rank-head"><span>${index + 1}. <b>${entry.model.name}</b></span><b>${Math.round(entry.score * 100)}</b></div>
+          <div class="rank-head"><span>${index + 1}. <b>${esc(entry.model.name)}</b></span><b>${Math.round(entry.score * 100)}</b></div>
           <div class="meter"><i style="width:${Math.round(entry.score * 100)}%"></i></div>
-          <div class="why">${entry.why}</div>
+          <div class="why">${esc(entry.why)}</div>
         </li>`
       )
       .join("");
@@ -380,7 +384,7 @@
     const rankEl = document.getElementById("rank");
     const tableBody = document.getElementById("table-body");
 
-    taskSelect.innerHTML = doc.taskPresets.map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
+    taskSelect.innerHTML = doc.taskPresets.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("");
 
     let points = [];
     let tableSort = { key: "quality", dir: -1 };
@@ -419,7 +423,7 @@
       }
       const m = hit.model;
       const measured = speeds[m.id]?.tokensPerSecond;
-      tip.innerHTML = `<b>${m.name}</b><br>${m.vendor} · ${fmt.money(m.typicalCostUSD)}/req · AA ${m.quality.index}${m.quality.indexVersion ? " " + m.quality.indexVersion : ""}<br>${fmt.int(reqH5(m) === Infinity ? "unlimited" : reqH5(m))} req/5h · ${fmt.ctx(m.limits?.context)} ctx<br>${privacyLabel(m)}${measured ? `<br>measured ${measured} t/s on your machine` : ""}`;
+      tip.innerHTML = `<b>${esc(m.name)}</b><br>${esc(m.vendor)} · ${fmt.money(m.typicalCostUSD)}/req · AA ${esc(m.quality.index)}${m.quality.indexVersion ? " " + esc(m.quality.indexVersion) : ""}<br>${fmt.int(reqH5(m) === Infinity ? "unlimited" : reqH5(m))} req/5h · ${fmt.ctx(m.limits?.context)} ctx<br>${privacyLabel(m)}${measured ? `<br>measured ${measured} t/s on your machine` : ""}`;
       tip.style.left = Math.min(window.innerWidth - 300, event.clientX + 14) + "px";
       tip.style.top = event.clientY + 12 + "px";
       tip.hidden = false;

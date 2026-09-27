@@ -10,6 +10,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import decisionLedger from "./decision-ledger.cjs";
+import agentIssues from "./agent-issues.cjs";
 import { fileURLToPath } from "node:url";
 import { dependencyIds } from "./backlog.cjs";
 import workAdmission from "./work-admission.cjs";
@@ -1616,6 +1617,15 @@ export const MAIL_CAP = 48;
 export const MAIL_UNREAD_PER_ROLE = 6;
 const MAIL_TEXT_MAX = 200;
 const MAIL_WINDOW_MS = 60 * MINUTE;
+// How long a note the recipient already heard shades a repeat of itself.
+// A cadence job that hands work to another seat (the compactor tells the
+// foreman what is ready every pass) repeats the identical note for as long
+// as the shape holds, and once the copy was read the unread-duplicate check
+// below stopped matching: seven identical handouts in eleven minutes, each
+// a fresh row, a pushed packet and a chatter line. Inside this window the
+// repeat is dropped whole, so the state comes back unchanged and the host
+// pushes nothing; after it, the same note may go out again.
+export const MAIL_REBROADCAST_MS = 15 * MINUTE;
 // Senders: every roster seat, the builders and the assistant hub itself.
 // Recipients: roster seats only — mail is addressed to something that runs.
 export const MAIL_SENDERS = [...INTEL_ROLES, "assistant"];
@@ -1643,10 +1653,13 @@ function normalizeMail(raw) {
 
 // One note from one agent to another. Returns the new state, or the same
 // state when the note is not deliverable (unknown sender or recipient, an
-// empty text, an agent writing to itself). The same unread note twice only
-// refreshes its clock; a recipient already holding MAIL_UNREAD_PER_ROLE unread
-// notes drops its oldest one, so an inbox never grows past what one job can
-// read. Read mail ages out of the box after MAIL_WINDOW_MS.
+// empty text, an agent writing to itself) or is a repeat of a note the
+// recipient already heard within MAIL_REBROADCAST_MS — a suppressed repeat
+// changes nothing, so no packet is drawn and no chatter row counted. The
+// same unread note twice only refreshes its clock; a recipient already
+// holding MAIL_UNREAD_PER_ROLE unread notes drops its oldest one, so an
+// inbox never grows past what one job can read. Read mail ages out of the
+// box after MAIL_WINDOW_MS.
 export function sendMail(state, note, now = Date.now()) {
   const current = isObject(state) ? state : emptyState(now);
   const source = isObject(note) ? note : {};
@@ -1657,6 +1670,9 @@ export function sendMail(state, note, now = Date.now()) {
   if (duplicate) {
     return { ...current, mail: normalizeMail(rows.map((entry) => (entry === duplicate ? { ...entry, at: row.at, facts: row.facts } : entry))) };
   }
+  const heard = rows.find((entry) => entry.readAt > 0 && entry.from === row.from && entry.to === row.to && entry.text === row.text
+    && now - Math.max(entry.readAt, entry.at) <= MAIL_REBROADCAST_MS);
+  if (heard) return current;
   const unread = rows.filter((entry) => entry.to === row.to && !entry.readAt);
   const drop = unread.length >= MAIL_UNREAD_PER_ROLE ? new Set(unread.slice(0, unread.length - MAIL_UNREAD_PER_ROLE + 1).map((entry) => entry.id)) : null;
   return { ...current, mail: normalizeMail([...(drop ? rows.filter((entry) => !drop.has(entry.id)) : rows), row]) };
@@ -2072,7 +2088,7 @@ function mergeCollisionRequest(winner, other) {
   return { ...winner, files, file: winner.file || files[0] || other.file, sessions, owner };
 }
 
-function tidyRequests(requests, { now, collisions, audit, duplicates }, report) {
+function tidyRequests(requests, { now, collisions, audit, duplicates, ai }, report) {
   const findings = isObject(audit) && Array.isArray(audit.findings) ? audit.findings.map((finding) => str(finding?.message)).filter(Boolean) : null;
   // A grouped collision's representative file is the newest one; leftover
   // per-file alerts still count as live if they share a file or the same
@@ -2084,6 +2100,7 @@ function tidyRequests(requests, { now, collisions, audit, duplicates }, report) 
   const dirtyDupes = isObject(duplicates) && Array.isArray(duplicates.findings)
     ? new Set(duplicates.findings.map((row) => (isObject(row) ? row.file : row)).filter((file) => typeof file === "string"))
     : null;
+  const linkHealthy = aiLinkHealthy(ai, now);
   const cutoff = now - TIDY_LIMITS.autoRequestDays * DAY;
   const protectedRequest = (request) => !isObject(request) || hasHandoffLineage(request) || hasDelegation(request) || hasPendingContinuation(request) || request.source === "chat" || !AUTO_SOURCES.has(request.source) || request.status === "running" || request.status === "verifying";
   let removed = 0;
@@ -2093,6 +2110,7 @@ function tidyRequests(requests, { now, collisions, audit, duplicates }, report) 
     if (request.source === "audit" && findings && !findings.some((message) => prompt.includes(message))) return false;
     if (request.source === "collision" && live && !collisionRequestLive(request, live)) return false;
     if (request.source === "duplicate" && scannedDupes && scannedDupes.has(request.file) && dirtyDupes && !dirtyDupes.has(request.file)) return false;
+    if (linkHealthy && aiLinkTicket(request)) return false;
     // Aged from when it was last filed: a lost claim put back in the inbox
     // (requeuedAt) gets a fresh window to be promoted, as in housekeeping.
     const at = filedAt(request);
@@ -2801,6 +2819,37 @@ function isFixTicket(item) {
   return /^fix\s*:/i.test(str(item?.title));
 }
 
+// A fix ticket about the assistant's own AI link ("AI link failing, backoff
+// escalating", "ai-offline unresolved over an hour") names a condition the
+// host can re-check for free: the store's ai block is the live state the
+// filing pass never sees, because the briefer cannot refile while the link is
+// down — a healthy link is the resolution, not a fresher filing. Without this
+// the ticket sits unclaimed in the handout queue until the stale clock, and
+// every compactor pass re-broadcasts it as the next pick: the stale work
+// broadcast loop. Title/alertTitle only, and briefing-filed rows only, so a
+// chat ask never drops just because the link recovered. ("Errors rising after
+// an AI link fix" names a symptom that outlives the link; it rides the stale
+// clock like every other ticket.)
+const AI_LINK_TICKET_RE = /\bai[\s_-]*(?:link|gateway|connection)\b|\bai[\s_-]*offline\b|\bbackoff\b/i;
+export function aiLinkTicket(item) {
+  if (str(item?.source) !== "fix" || !str(item?.alertTitle)) return false;
+  return AI_LINK_TICKET_RE.test(`${str(item?.alertTitle)} ${str(item?.title)}`);
+}
+
+// Healthy means: a key is present, the link last ran online, it has not
+// stacked consecutive failures, and no backoff window is still open. Anything
+// unknown (no state, an older store) keeps the ticket — the purge must never
+// be braver than the evidence.
+export function aiLinkHealthy(ai, now = Date.now()) {
+  const state = isObject(ai) ? ai : null;
+  if (!state || state.keyPresent === false) return false;
+  if (state.online !== true) return false;
+  if (num(state.failures, 0) >= 2) return false;
+  return num(state.backoffUntil, 0) <= now;
+}
+
+export const aiLinkResolved = (item, ai, now = Date.now()) => aiLinkTicket(item) && aiLinkHealthy(ai, now);
+
 // The family alone is too broad to authorize a delete: every "duplicate"
 // ticket on the board would collapse into one job even when they aim at
 // different files. The named targets scope the family — two tickets share a
@@ -3176,7 +3225,7 @@ export function groupTasks({ tasks = [], ideas = [], groups = [], now = Date.now
 // promoted instead of dying in the pass that requeued it.
 const filedAt = (request) => Math.max(num(request?.at, 0), num(request?.requeuedAt, 0));
 
-export function compact({ requests = [], tasks = [], ideas = [], collisions = null, now = Date.now(), limits = {}, taskGroups = null, allocateId = null, promoteIdeas = true } = {}) {
+export function compact({ requests = [], tasks = [], ideas = [], collisions = null, now = Date.now(), limits = {}, taskGroups = null, allocateId = null, promoteIdeas = true, ai = null } = {}) {
   const rules = { ...COMPACT_LIMITS, ...(isObject(limits) ? limits : {}) };
   const inRequests = asArray(requests).filter(isObject);
   const inTasks = asArray(tasks).filter(isObject);
@@ -3694,6 +3743,21 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
     report.resolved = before - outRequests.length;
   }
 
+  // Resolved self-alerts: when the caller hands us the assistant's own ai
+  // block, an unclaimed briefing fix ticket about the AI link is a snapshot
+  // of an outage the store says is over. Promotion holds the same ticket out
+  // (its done cousins stand on the board), so nothing else ever retires it:
+  // it stayed runnable, and every pass handed the same dead job to the
+  // foreman. A claim in flight is never touched.
+  if (aiLinkHealthy(ai, now)) {
+    const before = outRequests.length;
+    outRequests = outRequests.filter((request) => {
+      if (request.status === "running" || request.status === "verifying" || hasHandoffLineage(request) || hasDelegation(request) || hasPendingContinuation(request)) return true;
+      return !aiLinkTicket(request);
+    });
+    report.resolved += before - outRequests.length;
+  }
+
   // 6. The review. Auto-filed requests expire: the pass that wrote one
   //    re-checks every tick and files it again while the problem is still
   //    there, so an unclaimed one this old is a snapshot that moved on. The
@@ -4072,7 +4136,10 @@ export function verificationJobKey(taskId = null, attemptKey = null) {
 export function focusedTestsForTask(task = null, resultNote = null) {
   const candidates = [];
   const source = isObject(task) ? task : {};
-  candidates.push(...asArray(source.files), source.file, ...asArray(source.refs));
+  // Board tasks store refs as rows (`{ kind: "file", title: <path> }`), as
+  // workFiles reads them; plain string refs are kept as they are.
+  const refPath = (ref) => (!isObject(ref) ? ref : (str(ref.kind) && str(ref.kind) !== "file" ? "" : ref.file || ref.path || ref.title));
+  candidates.push(...asArray(source.files), source.file, ...asArray(source.refs).map(refPath));
   // The path keeps its case: it becomes the command, and a lowercased path
   // names no file on a case-sensitive filesystem. Only the dedupe folds case.
   const ran = str(isObject(resultNote) ? resultNote.parts?.ran : "");
@@ -4178,6 +4245,27 @@ const noRemainingWork = (text) => {
   const rest = (head[2] ?? "").trim().replace(/[.!\s]+$/, "");
   return !rest || noRemainingScopeTail.test(rest);
 };
+
+// A deferral names its owner as OTHER live work: "owed by sibling sessions",
+// "other sessions own that rebuild", "owned by the parent task". The
+// triple-landed media-browser fix came from the opposite reading: a finished
+// card's honest note ("committed booklet.html is stale …, owed by sibling
+// sessions landing their renderer edits") was counted as an outstanding
+// obligation of that card, the verifier reopened it, and a third session
+// rebuilt the same booklet byte-identical. A deferral is not work THIS card
+// owes. The reading is narrow: an imperative aimed at this card ("fix the
+// stale booklet owed by other sessions") and a leftover with no attribution
+// at all still bind, and the positive-evidence gates below are untouched, so
+// this prose alone never verifies anything.
+const OTHER_WORK_OWNER = String.raw`(?:the\s+)?(?:sibling|other|another|parallel|concurrent|later|parent)\s+(?:sessions?(?:'s)?|cards?(?:'s)?|tasks?(?:'s)?|workers?|runs?|agents?|attempts?|edits?|work|lanes?)\b`;
+const OWED_BY_OTHER_WORK = new RegExp(String.raw`\b(?:owed|owned|held|landed|handled|tracked|carried|due|covered|claimed|left)\s+(?:by|to|with|for)\s+${OTHER_WORK_OWNER}`, "i");
+const OTHER_WORK_OWNS = new RegExp(String.raw`\b${OTHER_WORK_OWNER}\s+(?:own|owns|handle|handles|land|lands|landing|cover|covers|carry|carries|owe|owes|track|tracks)\b`, "i");
+const ACTION_FIRST_REMAINING = /^\s*(?:please\s+)?(?:fix|update|add|write|rebuild|rerun|run|test|verify|land|commit|recommit|revert|refactor|remove|delete|finish|complete|document|port|backport|rebase)\b/i;
+const deferredToOtherWork = (text) => {
+  const body = str(text);
+  if (!body || ACTION_FIRST_REMAINING.test(body)) return false;
+  return OWED_BY_OTHER_WORK.test(body) || OTHER_WORK_OWNS.test(body);
+};
 const namesCheck = (text) => !/^(?:none|nothing|n\/a|not (?:run|tested)|skipped|unavailable|pending|passed|ok|done)[.!\s]*$/i.test(text)
   && !/\b(?:not run|not tested|did not run|didn't run|could not run|couldn't run|unable to run|skipped)\b/i.test(text);
 
@@ -4254,6 +4342,8 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerCh
   const parts = (resultNote && isObject(resultNote) ? resultNote.parts : null) ?? {};
   const namedChecks = checkReports(parts).some(namesCheck);
   const remainingText = str(parts.remaining);
+  const ownerIssue = agentIssues.ownerResultIssue(parts);
+  const repairOutstanding = Boolean(ownerIssue && ownerIssue.kind !== "owner");
   const remainingKey = (value) => str(value).toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
   // The attempt handed its leftover scope on as follow-up cards (handedOff:
   // this run's recorded hand-offs) and every one has settled, finished or
@@ -4269,7 +4359,7 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerCh
   const allHandedOnSettled = handedOn > 0 && asArray(remaining).length === 0 && asArray(resolvedHandoffs).length >= handedOn
     && proseItems <= handedOn && !/\bowner\b/i.test(remainingText);
   const handedOffAndFinished = remainingKey(remainingText) && (allHandedOnSettled || asArray(resolvedHandoffs).some((title) => remainingKey(title) === remainingKey(remainingText)));
-  const outstanding = (remainingText.length > 0 && !noRemainingWork(remainingText) && !handedOffAndFinished) || asArray(remaining).length > 0;
+  const outstanding = repairOutstanding || (remainingText.length > 0 && !noRemainingWork(remainingText) && !handedOffAndFinished && !deferredToOtherWork(remainingText)) || asArray(remaining).length > 0;
   // A done+verified retry re-checks work that already verified once: a
   // faithful scoped-check rerun changes 0 files by design, so the attempt's
   // own fresh green recorded checks discharge the changed-file obligation.
@@ -4298,7 +4388,7 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerCh
   const totalChanges = Math.max(0, Number(changedFiles) || 0);
   const ledgerOwed = Math.max(0, Number(ledgerChanges) || 0);
   const ledger = Math.min(ledgerOwed, totalChanges);
-  const rerunDischarges = priorVerified === true && outstanding && (totalChanges === 0 || (ledgerOwed > 0 && ledgerOwed === totalChanges)) && observedSummary.passed > 0 && asArray(remaining).length === 0;
+  const rerunDischarges = !repairOutstanding && priorVerified === true && outstanding && (totalChanges === 0 || (ledgerOwed > 0 && ledgerOwed === totalChanges)) && observedSummary.passed > 0 && asArray(remaining).length === 0;
   // The runner's commit observation resolves the claimed abbreviation to a
   // real commit and reports the scoped path status. A claim the runner could
   // not match — unknown hash, git failure, no observation — is not evidence.
@@ -4666,13 +4756,13 @@ function tidyNodeFolders(folders, { sessions, tasks, now, staleHours }, report) 
 // Housekeeping over the data files. Conservative: a collection that was not
 // handed in (null, not an array/object) comes back as its empty fallback and is
 // NOT reported as changed; manual requests and non-done tasks are never touched.
-export function tidy({ tasks, ideas, requests, checkpoints, nodeFolders = null, sessions = null, collisions = null, audit = null, duplicates = null, now = Date.now(), prefs = {} } = {}) {
+export function tidy({ tasks, ideas, requests, checkpoints, nodeFolders = null, sessions = null, collisions = null, audit = null, duplicates = null, ai = null, now = Date.now(), prefs = {} } = {}) {
   const rules = normalizePrefs({ ...DEFAULT_PREFS, ...(isObject(prefs) ? prefs : {}) });
   const report = { tasksArchived: 0, ideasPruned: 0, requestsCleared: 0, checkpointsDropped: 0, foldersCleaned: 0, text: "" };
   const out = {
     tasks: Array.isArray(tasks) ? tidyTasks(tasks, now, rules.tidyDoneAfterHours, report) : [],
     ideas: Array.isArray(ideas) ? tidyIdeas(ideas, now, report) : [],
-    requests: Array.isArray(requests) ? tidyRequests(requests, { now, collisions, audit, duplicates }, report) : [],
+    requests: Array.isArray(requests) ? tidyRequests(requests, { now, collisions, audit, duplicates, ai }, report) : [],
     checkpoints: isObject(checkpoints) ? tidyCheckpoints(checkpoints, sessions, now, report) : {},
     nodeFolders: isObject(nodeFolders) ? tidyNodeFolders(nodeFolders, { sessions, tasks, now, staleHours: rules.tidyDoneAfterHours }, report) : {},
   };
@@ -5544,7 +5634,9 @@ const INTENT_RULES = [
   // the keeper's tidy knows nothing about the queue at all. Both directions
   // match ("clean the queue" and "the queue is a mess"), and a statement
   // counts as a request for action here because that is what the pass is for.
-  ["compact", /(?=.*\b(?:queue|backlog|inbox|requests?)\b)(?=.*\b(?:clear|clean|tidy|compact\w*|dedupe|drain|empty|purge|prune|shrink|trim|sort|fix|mess|stuck|bloated)\b)/],
+  // Anchored: an unanchored pair of `.*` lookaheads retries from every
+  // position, quadratic on a long message in the main process.
+  ["compact", /^(?=.*\b(?:queue|backlog|inbox|requests?)\b)(?=.*\b(?:clear|clean|tidy|compact\w*|dedupe|drain|empty|purge|prune|shrink|trim|sort|fix|mess|stuck|bloated)\b)/],
   ["tidy", /\b(clean|cleanup|cleaning|tidy|tidying|clear|prune|archive)\b/],
   ["fix", /\b(fix|fixes|fixing|repair|problems?|broken|heal)\b/],
   ["organize", /\b(organi[sz]\w*|tree|fold|layout)\b/],
@@ -6468,7 +6560,6 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
         // Small talk: greet, report the lay of the land, offer real next work.
         lines.push("Hello.");
         lines.push(compactStatus({ sessions, collisions, tasks, ideas }));
-        if (focusLine) lines.push(focusLine);
         const picks = suggestWork({ ...source, now });
         lines.push(
           picks.length
@@ -6736,9 +6827,13 @@ export function buildFacts({ sessions = null, todos = null, collisions = null, p
           }))
           .filter((row) => row.file)
       : null,
+    // Live cards first: the store keeps archived rows, and a bare first-40 cut
+    // hid open work behind them from replies, picks and counts.
     tasks: Array.isArray(tasks)
-      ? tasks
-          .filter(isObject)
+      ? [
+          ...tasks.filter((task) => isObject(task) && !["done", "archived"].includes(task.status)),
+          ...tasks.filter((task) => isObject(task) && ["done", "archived"].includes(task.status)),
+        ]
           .slice(0, 40)
           .map((task) => ({
             id: str(task.id),

@@ -1702,6 +1702,9 @@ def verify(source, output, baseline=False, interactive=False, palette_only=False
         env.update(HOME=str(profile), USERPROFILE=str(profile), APPDATA=str(profile / "AppData/Roaming"), LOCALAPPDATA=str(profile / "AppData/Local"), MEFI_STUDIO_BOARD_DB=str(profile / "board.db"), MEFI_STUDIO_REPO=str(project), MEFI_STUDIO_GAME_ROOT=str(temporary / "absent-game"))
         for name in ("APPDATA", "LOCALAPPDATA"):
             Path(env[name]).mkdir(parents=True)
+        # The output folder persists between runs: an Electron that exits 0
+        # without writing a report must not pass on the previous run's.
+        (destination / "report.json").unlink(missing_ok=True)
         with (destination / "electron.log").open("w", encoding="utf-8") as log:
             process = subprocess.Popen([str(electron), ".", "--smoke"], cwd=app_root, env=env, stdout=log, stderr=log)
             try:

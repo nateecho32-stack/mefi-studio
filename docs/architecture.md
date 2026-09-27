@@ -1,5 +1,13 @@
 # How Studio is put together
 
+First-time setup can install a missing coding CLI, open its sign-in and check
+its connection. A single Codex, Claude Code, Grok or Antigravity subscription
+can serve the assistant, first map, planning, agent roles and coding workers.
+First map offers connection recovery in place and can use the local project
+scan through the selected provider without OpenCode. See
+[Guided CLI setup](cli-setup.md) for configuration scope, account limits and
+the text-session controls.
+
 Home and Vibe composers accept dropped text/code files and an **Add files**
 picker. Plans supports the same imports in the outcome, interview answer,
 evidence and specification fields. Contents are inserted as labelled, editable

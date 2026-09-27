@@ -40,7 +40,12 @@
   }
   async function read() {
     if (!api()?.traceRead) { status("Trace reads Studio's logs in the desktop app."); return; }
-    if (state.reading) return state.reading;
+    // A channel or filter change mid-read reads once more afterwards: the
+    // in-flight request carries the old settings and its result is dropped.
+    if (state.reading) { state.again = true; return state.reading; }
+    // The reset rides a chained finally, which always runs after this
+    // assignment: an in-body finally ran first when traceRead threw before its
+    // first await, and the settled promise then stood in for every read.
     state.reading = (async () => {
       try {
         const result = await api().traceRead({ channel: state.channel, tail: state.tail, text: state.text, problems: state.problems, level: state.level, sources: state.sources.length ? state.sources : null });
@@ -49,8 +54,11 @@
         render();
       } catch (error) {
         status(error?.message || "The log could not be read.", "bad");
-      } finally { state.reading = null; }
-    })();
+      }
+    })().finally(() => {
+      state.reading = null;
+      if (state.again) { state.again = false; void read(); }
+    });
     return state.reading;
   }
   function schedule() {

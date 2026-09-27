@@ -136,7 +136,7 @@ test("list rows pin their visible label text and row-label title on the row-labe
   const fileEnv = environment({ analyzerRun: async () => ({ ok: true, projectId: "alpha", result: fileResult }) });
   await fileEnv.analyzer.file("fixture.js");
   const references = rowsAfterHeading(fileEnv.get("findings"), "Referenced paths");
-  assert.deepEqual(references.rows.map((key) => key.text), ["exists", "MISSING"], "each row shows its visible label text");
+  assert.deepEqual(references.rows.map((key) => key.text), ["Present", "Missing"], "each row shows its visible label text");
   assert.deepEqual(
     references.rows.map((key) => key.title),
     ["present in the work tree", "not found in the work tree"],
@@ -185,7 +185,8 @@ test("project changes clear old findings and drafts before rejecting old scan re
   env.project("alpha"); env.get("idea").value = "Alpha draft";
   env.project("beta");
   assert.equal(env.get("idea").value, "");
-  assert.equal(env.get("findings").textContent, "");
+  assert.match(env.get("findings").textContent, /Reading the project's files/);
+  assert.doesNotMatch(env.get("findings").textContent, /Alpha/);
   assert.equal(env.get("project-ai").disabled, true);
   second.resolve({ ok: true, projectId: "beta", result: report("beta", "Beta") }); await flush();
   first.resolve({ ok: true, projectId: "alpha", result: report("alpha", "Stale Alpha") }); await flush();
@@ -220,7 +221,7 @@ test("a later idea analysis wins over an earlier file analysis in the same proje
   const env = environment({ analyzerRun: async (kind) => kind === "file" ? old.promise : { ok: true, projectId: "alpha", result: idea("Current idea") } });
   env.analyzer.file("old.js"); await env.analyzer.idea("Current idea");
   old.resolve({ ok: true, projectId: "alpha", result: file("old.js") }); await flush();
-  assert.equal(env.get("title").textContent, "Findings · idea");
+  assert.equal(env.get("title").textContent, "Findings · Idea");
   assert.match(env.get("findings").textContent, /Current idea/);
 });
 
@@ -233,7 +234,7 @@ test("native file selection is fenced by both a project change and a newer analy
     await flush();
     pick.resolve({ ok: true, path: "old-project.js" }); await flush();
     assert.equal(env.calls.filter((entry) => entry.kind === "file").length, 0);
-    assert.match(env.get("title").textContent, next === "project" ? /Project/ : /Findings · idea/);
+    assert.match(env.get("title").textContent, next === "project" ? /Project/ : /Findings · Idea/);
   }
 });
 
@@ -266,7 +267,8 @@ test("scan failures are visible and retryable; old evidence and project AI remai
   env.window.mefiStudio.analyzerRun = async () => { throw new Error("Folder unavailable"); };
   await env.analyzer.project();
   assert.match(env.get("status").textContent, /Folder unavailable/);
-  assert.equal(env.get("findings").textContent, "");
+  assert.match(env.get("findings").textContent, /Choose Analyze project/);
+  assert.doesNotMatch(env.get("findings").textContent, /Reading|Alpha|old plan/);
   assert.equal(env.get("project-ai").disabled, true);
   assert.equal(env.get("project").disabled, false);
 });

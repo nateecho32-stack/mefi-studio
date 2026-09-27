@@ -173,12 +173,16 @@
     els.banner.hidden = false;
   }
 
+  // Catalog text is fetched (models.dev names, roster ids), so every data
+  // field is escaped before it reaches innerHTML.
+  const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[c]);
+
   function badgeHtml(model) {
     const badges = [];
     if (model.usage?.unlimited) badges.push('<span class="badge free">free ∞</span>');
     else if (model.pricing?.default?.input === 0) badges.push('<span class="badge free">free</span>');
     if (model.usage?.monthlyCapUSD === 15) badges.push('<span class="badge premium">$15 pool</span>');
-    if (model.usage?.promo) badges.push(`<span class="badge new">${model.usage.promo}</span>`);
+    if (model.usage?.promo) badges.push(`<span class="badge new">${esc(model.usage.promo)}</span>`);
     if (model.legacy) badges.push('<span class="badge legacy">legacy</span>');
     if (model.experimental) badges.push('<span class="badge new">experimental</span>');
     if (model.privacy?.training) badges.push('<span class="badge trains">trains</span>');
@@ -188,7 +192,7 @@
   }
 
   function statHtml(key, value, sub) {
-    return `<div class="stat"><div class="k">${key}</div><div class="v">${value}</div><div class="s">${sub ?? ""}</div></div>`;
+    return `<div class="stat"><div class="k">${esc(key)}</div><div class="v">${esc(value)}</div><div class="s">${esc(sub)}</div></div>`;
   }
 
   function cardHtml(model) {
@@ -198,21 +202,21 @@
     const pool = model.usage?.monthlyCapUSD === "unlimited" ? "∞" : model.usage?.monthlyCapUSD != null ? "$" + model.usage.monthlyCapUSD + "/mo" : "—";
     const variantRows = (model.variants ?? [])
       .map(
-        (v) => `<tr><td>${v.condition}</td><td class="num">${fmt.money(v.input)}</td><td class="num">${fmt.money(v.output)}</td><td class="num">${v.cacheRead != null ? fmt.money(v.cacheRead) : "—"}</td></tr>`
+        (v) => `<tr><td>${esc(v.condition)}</td><td class="num">${fmt.money(v.input)}</td><td class="num">${fmt.money(v.output)}</td><td class="num">${v.cacheRead != null ? fmt.money(v.cacheRead) : "—"}</td></tr>`
       )
       .join("");
-    const benchmarks = (model.quality?.benchmarks ?? []).map((b) => `<li>${b}</li>`).join("");
-    const modalities = model.capabilities?.modalities?.input?.join(" + ") ?? "—";
-    return `<article class="card catalog-row" data-id="${model.id}">
+    const benchmarks = (model.quality?.benchmarks ?? []).map((b) => `<li>${esc(b)}</li>`).join("");
+    const modalities = esc(model.capabilities?.modalities?.input?.join(" + ") ?? "—");
+    return `<article class="card catalog-row" data-id="${esc(model.id)}">
       <details class="catalog-model"><summary class="catalog-summary">
       <div class="card-head">
-        <div><h3>${model.name}</h3><div class="vendor">${model.vendor} · opencode-go/${model.id}</div></div>
+        <div><h3>${esc(model.name)}</h3><div class="vendor">${esc(model.vendor)} · opencode-go/${esc(model.id)}</div></div>
         <div class="badges">${badgeHtml(model)}</div>
       </div>
-      <div class="catalog-metrics"><span><small>Cost / request</small><b>${fmt.money(model.typicalCostUSD)}</b></span><span><small>Quality</small><b>${model.quality?.index ?? "—"}</b></span><span><small>Context</small><b>${fmt.ctx(model.limits?.context)}</b></span></div>
+      <div class="catalog-metrics"><span><small>Cost / request</small><b>${fmt.money(model.typicalCostUSD)}</b></span><span><small>Quality</small><b>${esc(model.quality?.index ?? "—")}</b></span><span><small>Context</small><b>${fmt.ctx(model.limits?.context)}</b></span></div>
       <span class="catalog-expand" aria-hidden="true">⌄</span></summary>
       <div class="catalog-body">
-      <p class="verdict">${model.verdict ?? "No curated verdict yet."}</p>
+      <p class="verdict">${esc(model.verdict ?? "No curated verdict yet.")}</p>
       <div class="stat-grid">
         ${statHtml("$ / request", fmt.money(model.typicalCostUSD), "typical mix")}
         ${statHtml("Quality", model.quality?.index ?? "—", model.quality?.declared === "AA" ? `AA II ${model.quality.indexVersion ?? ""}`.trim() : "unmeasured")}
@@ -222,8 +226,8 @@
         ${statHtml("$/1M", price ? fmt.money(price.input) + " in" : "—", price ? fmt.money(price.output) + " out" : "")}
       </div>
       <div class="use-avoid">
-        ${(model.useFor ?? []).map((u) => `<span>${u}</span>`).join("")}
-        ${(model.avoidFor ?? []).map((a) => `<span class="avoid">${a}</span>`).join("")}
+        ${(model.useFor ?? []).map((u) => `<span>${esc(u)}</span>`).join("")}
+        ${(model.avoidFor ?? []).map((a) => `<span class="avoid">${esc(a)}</span>`).join("")}
       </div>
       <details>
         <summary>All specifications</summary>
@@ -231,12 +235,12 @@
           <tr><th>standard price</th><td class="num">${price ? fmt.money(price.input) + " in / " + fmt.money(price.output) + " out / " + fmt.money(price.cacheRead) + " cached" : "—"}</td></tr>
           ${variantRows ? `<tr><th>variants</th><td class="num"><table class="detail"><tr><th>condition</th><th class="num">in</th><th class="num">out</th><th class="num">cached</th></tr>${variantRows}</table></td></tr>` : ""}
           <tr><th>requests</th><td>${requests ? `5h ${fmt.int(requests.h5)} · week ${fmt.int(requests.week)} · month ${fmt.int(requests.month)}` : "—"}</td></tr>
-          <tr><th>privacy</th><td>${privacyLabel(model)}${model.privacy?.note ? " — " + model.privacy.note : ""}</td></tr>
+          <tr><th>privacy</th><td>${esc(privacyLabel(model))}${model.privacy?.note ? " — " + esc(model.privacy.note) : ""}</td></tr>
           <tr><th>input</th><td>${modalities}</td></tr>
-          <tr><th>endpoint</th><td>${model.endpoint ? model.endpoint.label + " · " + model.endpoint.sdk : "—"}</td></tr>
+          <tr><th>endpoint</th><td>${model.endpoint ? esc(model.endpoint.label) + " · " + esc(model.endpoint.sdk) : "—"}</td></tr>
           <tr><th>tools / reasoning</th><td>${model.capabilities?.toolCall === false ? "no" : "yes"} / ${model.capabilities?.reasoning === false ? "no" : "yes"}</td></tr>
           ${benchmarks ? `<tr><th>benchmarks</th><td><ul>${benchmarks}</ul></td></tr>` : ""}
-          <tr><th>released</th><td>${model.releaseDate ?? "—"}${model.knowledge ? " · knowledge " + model.knowledge : ""}</td></tr>
+          <tr><th>released</th><td>${esc(model.releaseDate ?? "—")}${model.knowledge ? " · knowledge " + esc(model.knowledge) : ""}</td></tr>
           ${state.speeds[model.id] ? `<tr><th>measured</th><td>${state.speeds[model.id].tokensPerSecond ?? "—"} t/s · ${new Date(state.speeds[model.id].measuredAt).toLocaleString()} · measured on your machine</td></tr>` : ""}
         </table>
       </details>
@@ -475,20 +479,27 @@
     const id = SETTINGS_CATEGORIES[key] ? `settings-category-${key}` : SETTINGS_ALIASES[key] ?? `settings-${key}`;
     return document.getElementById(id) ? id : null;
   }
+  // A choice button's textContent runs its parts together ("Fullevery
+  // animation", "VoidMembers", "Classic orbsLuminous circles"): name it by its
+  // title element, or by its own words without the <small> detail and the lock
+  // badge, and prefix the group it belongs to ("Motion › Full").
+  function settingsButtonLabel(control) {
+    const named = control.querySelector?.("strong, b");
+    const nodes = Array.from(control.childNodes ?? []);
+    const own = named?.textContent || (nodes.length
+      ? nodes.filter((node) => node.nodeType === 3 || !(node.tagName === "SMALL" || node.classList?.contains?.("music-premium-lock") || node.getAttribute?.("aria-hidden") === "true")).map((node) => node.textContent ?? "").join(" ")
+      : control.textContent);
+    const group = control.closest?.("[role=group][aria-labelledby]");
+    const heading = group ? document.getElementById?.(group.getAttribute("aria-labelledby")) : null;
+    const title = heading ? Array.from(heading.childNodes ?? []).filter((node) => node.nodeType === 3).map((node) => node.textContent).join(" ").trim() || heading.textContent : "";
+    const text = String(own ?? "").replace(/\s+/g, " ").trim();
+    return title && text ? `${title.replace(/\s+/g, " ").trim()} › ${text}` : text;
+  }
   function settingsControlLabel(control) {
     const label = control.closest?.("label") ?? document.querySelector?.(`label[for="${control.id}"]`);
     const named = label?.querySelector?.(".field-label, b, strong, .grow");
     const parts = label ? Array.from(label.children ?? []).filter((node) => !["INPUT", "SELECT", "TEXTAREA", "SMALL"].includes(node.tagName)).map((node) => node.textContent ?? "").join(" ") : "";
-    return String(control.getAttribute?.("aria-label") || named?.textContent || parts || (control.tagName === "BUTTON" ? buttonName(control) : "") || control.getAttribute?.("title") || "").replace(/\s+/g, " ").trim();
-  }
-  // A choice button names itself in bold and explains itself in small print
-  // ("<b>Full</b><small>every animation</small>"): its bold part is its name,
-  // and a button without one reads its pieces apart, not run together.
-  function buttonName(control) {
-    const bold = control.querySelector?.("b, strong");
-    if (bold?.textContent?.trim()) return bold.textContent;
-    const pieces = Array.from(control.childNodes ?? []).map((node) => node.textContent ?? "").filter((text) => text.trim());
-    return pieces.length ? pieces.join(" ") : control.textContent ?? "";
+    return String(control.getAttribute?.("aria-label") || named?.textContent || parts || (control.tagName === "BUTTON" ? settingsButtonLabel(control) : "") || control.getAttribute?.("title") || "").replace(/\s+/g, " ").trim();
   }
   function settingsEntries() {
     const entries = [];

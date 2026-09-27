@@ -37,6 +37,42 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   add to every prompt in tokens. They reach every prompt the agent's skills
   reach and ride its team like its skills.
 
+- Bug-hunt fixes across the host, tooling and renderer.
+  **Project switches** no longer write one project's assistant state, reply
+  or verification result into another. **Stop all** no longer re-runs a reply
+  that finished anyway, and one Ask answer can't apply twice. **Torn store
+  files** with multi-field records are salvaged instead of reset. **Updates**:
+  the Update button can't start a second download, "Updated to vX" is no
+  longer re-announced on every restart, installed apps receive the new model
+  catalog, and release zips carry no local data. MCP servers
+  configured as `npx` (a `.cmd` shim) start on Windows. **Privacy**: tool
+  transcripts and scout payloads are redacted before JSON-escaping, and
+  `Authorization: Bearer` tokens are masked. **Work tracking**: hung LÖVE test
+  runs are recognised on Windows again; board file refs schedule their focused
+  tests; delegated tasks' relative file scopes keep their files; quoted and
+  non-ASCII git paths are read correctly; a worker's worktree edits are no
+  longer blamed on the main tree; evidence scopes match file names in any
+  case on Windows. **Screens**: a typed Ask answer survives the rail
+  repainting; Enter on a task row's Mark done marks it done; evidence images
+  under `#` or `?` folders load; Trace, Usage and Model Lab recover after a
+  mid-read switch; model catalog text is escaped; Home work cards show their
+  status stripe again; Settings switches and the autonomy controls follow the
+  theme; focused fields show one focus ring. Only one LÖVE launcher run can
+  be open at a time, and stopping Server Styler during setup is a stop, not
+  an "install failed". `check-syntax` now checks renderer files as the classic
+  scripts the booklet runs them as.
+
+- A polish pass on long-untouched menus. **Search Studio** names Settings
+  choices properly ("Motion › Full", "Node style › Classic orbs") instead of
+  running their words together. **Analyzer** never leaves Findings or
+  Evidence blank, uses sentence-case tags and real plurals. **Activity &
+  evidence** has readable filters and inspector labels, theme-coloured pins
+  and a keyboard-reachable Remove per pin (a click on a pin row no longer
+  deletes it). **Feature ideas** shows each idea's title, source and state,
+  asks before Delete, and its graph follows the active theme. The
+  **Performance profiler** shows "—" for Long tasks until a capture runs,
+  marks over-budget frames and readings, and uses the standard Close button.
+
 - **Trace** (Live, beside Activity): Studio's logs as channels in one viewer.
   The studio log, the assistant's log, the run ledger, OpenCode's log and
   the window's own warnings, each with its size and problem count; search,
@@ -66,6 +102,8 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   dates, with revision checks and the same dispatch and approval gates.
 
 ### Added
+- Guided CLI installation, sign-in and connection checks in Start here, including recovery at First map. A single Codex, Claude Code, Grok or Antigravity subscription can route the assistant, mapping, planning, agent seats, coding and subtasks through its own account.
+- Multi-PC sync. **Friends › Your PCs** shows whether this PC matches the open project's default branch on GitHub and lists work that has not reached it. **Sync this PC** pulls and pushes that branch without force. `npm run sync` does the same from a terminal, and a Claude Code SessionStart hook fetches, fast-forwards and reports at the start of each new session.
 - Mefi learns from successful owner answers, including family choices, approvals,
   offers and chat. Recent choices count more, corrections count double, and
   learning can be disabled or forgotten by project or across projects. Auto
@@ -122,6 +160,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   new happens to them.
 
 ### Fixed
+- First map can use the selected provider and local project excerpts without OpenCode. Subscription setup clears conflicting role overrides and keeps other providers out of unrequested fallback calls.
+- Coding CLIs installed while Studio is open no longer show "not found" until a
+  full quit and relaunch. On Windows, the CLI status pills, auto setup and each
+  launch (including a self-update restart, which inherits the old environment)
+  re-read PATH from the registry before looking the tools up.
 - A Vibe card whose count was empty (Freshly done, or Building now with
   nothing running) pushed its title to the far edge of the card.
 - An answer the desk gave for you counted as yours: the card said "You

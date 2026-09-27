@@ -34,13 +34,15 @@ const GOOD = {
   "preload.cjs": "module.exports = 1;\n",
   "scripts/a.mjs": "import path from 'node:path';\nexport const a = path.sep;\n",
   "scripts/b.cjs": "with ({}) {}\nmodule.exports = 2;\n",
-  "renderer/x.js": "await Promise.resolve();\nexport {};\n",
+  // The booklet inlines renderer files into one classic script: sloppy code
+  // such as with() is fine there, and export or top-level await is not.
+  "renderer/x.js": "(function () { with ({}) {} window.x = 1; })();\n",
   "renderer/notes.txt": "not a source file\n",
 };
 const BAD = {
   "scripts/broken.mjs": "export const = 1;\n",
   "scripts/bad.cjs": "const = 1;\n",
-  "renderer/bad.js": "with ({}) {}\n",
+  "renderer/bad.js": "export const leaked = 1;\n",
 };
 
 test("discoverTargets lists the entry, preload and every script and renderer source once, in order", () => {
@@ -52,14 +54,16 @@ test("discoverTargets lists the entry, preload and every script and renderer sou
   }
 });
 
-test("formatFor follows the extension, then the nearest package type", () => {
+test("formatFor follows the extension, then the nearest package type; renderer scripts are classic", () => {
   const moduleRoot = fixture(GOOD);
   const plainRoot = fixture(GOOD, { type: null });
   try {
     assert.equal(formatFor(join(moduleRoot, "main.cjs")), "commonjs");
     assert.equal(formatFor(join(moduleRoot, "scripts/a.mjs")), "module");
-    assert.equal(formatFor(join(moduleRoot, "renderer/x.js")), "module");
-    assert.equal(formatFor(join(plainRoot, "renderer/x.js")), "detect");
+    assert.equal(formatFor(join(moduleRoot, "renderer/x.js")), "classic", "inlined into the booklet, never loaded as a module");
+    assert.equal(formatFor(join(plainRoot, "renderer/x.js")), "classic");
+    assert.equal(formatFor(join(moduleRoot, "x.js")), "module");
+    assert.equal(formatFor(join(plainRoot, "x.js")), "detect");
   } finally {
     rmSync(moduleRoot, { recursive: true, force: true });
     rmSync(plainRoot, { recursive: true, force: true });
@@ -79,9 +83,13 @@ test("module sources are checked in-process when vm modules are available, other
   const root = fixture({ ...GOOD, ...BAD });
   try {
     assert.equal(checkSource("a.mjs", GOOD["scripts/a.mjs"], "module"), null);
-    assert.equal(checkSource("x.js", GOOD["renderer/x.js"], "module"), null);
-    assert.equal(checkSource("bad.js", BAD["renderer/bad.js"], "module")?.name, "SyntaxError", "a with statement is invalid module code");
-    assert.equal(checkSource("x.js", GOOD["renderer/x.js"], "detect"), null, "an untyped package tries module syntax after CommonJS");
+    const moduleOnly = "await Promise.resolve();\nexport {};\n";
+    assert.equal(checkSource("x.js", moduleOnly, "module"), null);
+    assert.equal(checkSource("bad.js", "with ({}) {}\n", "module")?.name, "SyntaxError", "a with statement is invalid module code");
+    assert.equal(checkSource("x.js", moduleOnly, "detect"), null, "an untyped package tries module syntax after CommonJS");
+    assert.equal(checkSource("x.js", GOOD["renderer/x.js"], "classic"), null, "sloppy classic code passes");
+    assert.equal(checkSource("bad.js", BAD["renderer/bad.js"], "classic")?.name, "SyntaxError", "export would break the inlined booklet script");
+    assert.equal(checkSource("bad.js", "await Promise.resolve();\n", "classic")?.name, "SyntaxError", "so would top-level await");
     const failures = checkFiles(root).map((entry) => entry.file);
     assert.deepEqual(failures, ["scripts/bad.cjs", "scripts/broken.mjs", "renderer/bad.js"]);
   } finally {
@@ -110,9 +118,11 @@ test("the command line relaunches with vm modules, passes a clean package and na
 test("the node --check fallback pool reaches the same verdicts", async () => {
   const root = fixture({ ...GOOD, ...BAD });
   try {
-    const files = discoverTargets(root);
+    // Renderer scripts never go to node --check (it would read them as
+    // modules); main compiles them in-process as classic scripts.
+    const files = discoverTargets(root).filter((file) => !file.startsWith("renderer/"));
     const failures = await checkWithNode(root, files, 3);
-    assert.deepEqual(failures.map((entry) => entry.file).sort(), ["renderer/bad.js", "scripts/bad.cjs", "scripts/broken.mjs"]);
+    assert.deepEqual(failures.map((entry) => entry.file).sort(), ["scripts/bad.cjs", "scripts/broken.mjs"]);
     assert.ok(failures.every((entry) => entry.error.name === "SyntaxError" && entry.error.message.includes("SyntaxError")));
     assert.deepEqual(await checkWithNode(root, files.filter((file) => !(file in BAD)), 2), []);
   } finally {

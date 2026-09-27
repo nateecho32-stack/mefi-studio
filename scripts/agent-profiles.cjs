@@ -12,6 +12,7 @@ const CLIS = Object.freeze(["opencode", "grok", "claude", "codex", "antigravity"
 const EFFORTS = Object.freeze(["minimal", "low", "medium", "high", "xhigh", "max"]);
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const record = (value) => value && typeof value === "object" && !Array.isArray(value);
+const validModel = (value, provider) => typeof value === "string" && (provider === "antigravity" ? /^[A-Za-z0-9 ._()/:-]{0,120}$/ : /^[A-Za-z0-9._:/-]{0,120}$/).test(value);
 function extract(settings = {}) {
   return Object.fromEntries(FIELDS.filter((key) => settings[key] !== undefined).map((key) => [key, clone(settings[key])]));
 }
@@ -54,18 +55,17 @@ function validate(configuration) {
   for (const [seat, choice] of Object.entries(configuration.agentSeats || {})) {
     if (!["lead", "desk", "companion", "scout", "overseer"].includes(seat) || !record(choice)) return "Unknown agent seat.";
     if (choice.provider !== undefined && !PROVIDERS.includes(choice.provider)) return "Unknown seat provider.";
-    if (["grok", "codex", "antigravity"].includes(choice.provider)) return "This coding CLI cannot make text-only seat calls. Choose it for the coding worker instead.";
     if (choice.effort && !EFFORTS.includes(choice.effort)) return "Unknown seat effort.";
     if (choice.fast !== undefined && typeof choice.fast !== "boolean") return "Fast mode must be on or off.";
-    if (choice.model !== undefined && (typeof choice.model !== "string" || !/^[A-Za-z0-9._:/-]{0,120}$/.test(choice.model))) return "Invalid seat model id.";
-    if (choice.modelsByProvider !== undefined && (!record(choice.modelsByProvider) || Object.entries(choice.modelsByProvider).some(([provider, model]) => !PROVIDERS.includes(provider) || typeof model !== "string" || !/^[A-Za-z0-9._:/-]{0,120}$/.test(model)))) return "Invalid saved seat models.";
+    if (choice.model !== undefined && !validModel(choice.model, choice.provider)) return "Invalid seat model id.";
+    if (choice.modelsByProvider !== undefined && (!record(choice.modelsByProvider) || Object.entries(choice.modelsByProvider).some(([provider, model]) => !PROVIDERS.includes(provider) || !validModel(model, provider)))) return "Invalid saved seat models.";
     if (choice.fast && !capabilities(choice.provider || "zen", choice.model || "gpt-6-sol").fast) return "Fast mode is unavailable for this seat model.";
     if (choice.effort && choice.provider !== "auto" && !capabilities(choice.provider || "zen", choice.model || "gpt-6-sol").efforts.includes(choice.effort)) return "Reasoning effort is unavailable for this seat model.";
   }
   if (configuration.agentSubtasks !== undefined) {
     const choice = configuration.agentSubtasks;
     if (!record(choice) || !["auto", ...CLIS].includes(choice.cli ?? "auto")) return "Unknown subtask builder.";
-    if (choice.model !== undefined && (typeof choice.model !== "string" || !/^[A-Za-z0-9._:/-]{0,120}$/.test(choice.model))) return "Invalid subtask model id.";
+    if (choice.model !== undefined && !validModel(choice.model, choice.cli === "auto" ? configuration.executorCli : choice.cli)) return "Invalid subtask model id.";
   }
   for (const [key, enabled] of Object.entries(configuration.agentBrain || {})) if (!["deskTool", "nestedDelegation", "headDrafts", "contextScout", "deskResolves"].includes(key) || typeof enabled !== "boolean") return "Unknown delegation switch.";
   if (configuration.agentSkills !== undefined) { const error = addons.validate(configuration.agentSkills); if (error) return error; }

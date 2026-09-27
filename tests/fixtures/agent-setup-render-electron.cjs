@@ -64,9 +64,15 @@ app.whenReady().then(async () => {
   responses.agentsState.mcpTools = [{ id: "docs/search", server: "docs", name: "search", description: "Search fixture documentation" }];
   responses.openrouterModels.models.push(...Array.from({ length: 30 }, (_, index) => ({ id: "fixture/model-" + index, name: "Other model " + index })));
   responses.assistantStatus.status.enabled = true;
+  responses.cliSetupStatus = { ok: true, selected: "codex", clis: ["codex", "claude", "grok", "antigravity", "opencode"].map(id => ({ id, name: id === "codex" ? "Codex" : id, installed: false })) };
+  responses.firstRunStatus = { ok: true, firstRun: null };
   const preload = path.join(root, "unified-preload.cjs");
   fs.writeFileSync(preload, `const {contextBridge}=require('electron');const responses=${JSON.stringify(responses)};const listeners={},calls=[];
     const bridge=Object.fromEntries(Object.keys(responses).map(key=>[key,async()=>responses[key]]));
+    bridge.cliSetupAction=async payload=>{calls.push({name:'cliSetupAction',value:payload});responses.cliSetupStatus.clis.find(cli=>cli.id===payload.id).installed=true;return {ok:true,message:'Finish signing in, then check the connection.'};};
+    bridge.cliSetupCheck=async id=>{calls.push({name:'cliSetupCheck',value:id});return {ok:true,message:'Connection works. You can use this subscription for the whole studio.'};};
+    bridge.cliSetupUse=async id=>{calls.push({name:'cliSetupUse',value:id});return {ok:true};};
+    bridge.firstMap=async()=>{calls.push({name:'firstMap'});return {ok:true,summary:'The selected subscription mapped your project.',map:{summary:'A fixture project.'},ideas:{added:1}};};
     for(const name of ['onTasks','onProjects','onAssistantStatus','onAssistant','onProjectPreview'])bridge[name]=fn=>{(listeners[name]??=[]).push(fn);return()=>{};};
     for(const name of ['tasksCreate','assistantChat'])bridge[name]=async value=>{calls.push({name,value});return {ok:true};};
     bridge.prefsSet=async patch=>({ok:true,prefs:Object.assign(responses.prefsGet.prefs,patch)});
@@ -180,5 +186,27 @@ app.whenReady().then(async () => {
     assert.ok(await reachable('#agent-companion-provider')); assert.ok(await reachable('#agent-companion-add'));
     if(zoom===1) { await run("document.getElementById('agents-body').scrollTop=0;"); await capture('agent-team-'+width+'.png'); }
   }
+  window.setContentSize(1100,720); contents.setZoomFactor(1);
+  await run("document.getElementById('settings-guided-cli').click();");
+  await until("!document.getElementById('walkthrough-cli-setup').hidden", "Guided tool setup");
+  assert.equal(await run("return window.unifiedFixture.calls().some(c=>c.name.startsWith('cliSetup'));"), false, "opening never installs or calls a provider");
+  assert.ok(await reachable('#walkthrough-cli-install'));
+  await capture('guided-cli-install.png');
+  await click('#walkthrough-cli-install'); await click('#walkthrough-cli-refresh');
+  await until("!document.getElementById('walkthrough-cli-check').disabled", "Installed CLI detected");
+  await click('#walkthrough-cli-check');
+  await until("!document.getElementById('walkthrough-cli-use').disabled", "Signed-in CLI checked");
+  await capture('guided-cli-ready.png');
+  await click('#walkthrough-cli-use');
+  await until("document.getElementById('walkthrough-map-status').textContent.includes('Folder mapped')", "Subscription map without OpenCode");
+  assert.ok(await run("return window.unifiedFixture.calls().some(c=>c.name==='cliSetupUse'&&c.value==='codex');"));
+  window.setContentSize(600,600); contents.setZoomFactor(1.25);
+  await until("Math.abs(innerWidth-480)<=2", "Compact walkthrough");
+  // studio-ui.js keeps the native select as a hidden 1px source; people use
+  // its owned dropdown button, so that is what must stay reachable.
+  assert.ok(await reachable(await run("return document.getElementById('walkthrough-cli-choice-choice')?'#walkthrough-cli-choice-choice':'#walkthrough-cli-choice';")));
+  assert.ok(await reachable('#walkthrough-cli-login'));
+  assert.equal(await run("return document.documentElement.scrollWidth>innerWidth+1;"), false);
+  await capture('guided-cli-compact.png'); report.guidedSetup=true;
   assert.deepEqual(report.errors,[]); report.complete=true; finish();
 }).catch(finish);

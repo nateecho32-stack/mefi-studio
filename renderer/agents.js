@@ -487,7 +487,8 @@
     const custom = node("input", "agents-custom-model"); custom.type = "text"; custom.maxLength = 120; custom.placeholder = "provider/model-id"; custom.setAttribute("aria-label", `${id} custom model ID`); custom.hidden = true;
     select.addEventListener("change", () => { if (select.value === "__custom") { custom.hidden = false; custom.value = model; custom.focus(); } else { setModel(select.value); refreshRows(`agent-${id}-provider`); } });
     const applyModel = () => {
-      const value = custom.value.trim(); if (!/^[A-Za-z0-9._:/-]{0,120}$/.test(value)) { custom.setCustomValidity("Use a model ID with letters, numbers, dots, slashes, colons, underscores or hyphens."); custom.reportValidity(); return; }
+      const value = custom.value.trim(); const valid = provider === "antigravity" ? /^[A-Za-z0-9 ._()/:-]{0,120}$/ : /^[A-Za-z0-9._:/-]{0,120}$/;
+      if (!valid.test(value)) { custom.setCustomValidity("Use a model ID from this provider. Antigravity names can also contain spaces and parentheses."); custom.reportValidity(); return; }
       custom.setCustomValidity(""); setModel(value); refreshRows(`agent-${id}-provider`);
     };
     custom.addEventListener("change", applyModel); custom.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); applyModel(); } if (event.key === "Escape") { event.stopPropagation(); custom.hidden = true; select.value = model; window.MefiSelect?.refresh?.(); } });
@@ -513,8 +514,8 @@
         if (key === provider) { picker.hidden = true; trigger.setAttribute("aria-expanded", "false"); trigger.focus(); return; }
         setProvider(key); refreshRows(trigger.id); loadProviderModels(key);
       }, "agents-provider-option"); option.dataset.provider = key; option.setAttribute("aria-pressed", String(provider === key));
-      option.disabled = !builder && ["codex", "grok", "antigravity"].includes(key);
-      const words = node("span"); words.append(node("strong", "", builder && key === "opencode" ? "OpenCode" : providerNames[key]), node("small", "muted", option.disabled ? "Coding workers only" : providerNote(key, saved)));
+      option.disabled = false;
+      const words = node("span"); words.append(node("strong", "", builder && key === "opencode" ? "OpenCode" : providerNames[key]), node("small", "muted", providerNote(key, saved)));
       option.append(providerIcon(key), words); picker.append(option);
     }
     picker.append(button("Manage connections →", () => go("agents", { section: "setup", pane: "connections" }), "ghost mini"));

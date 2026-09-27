@@ -36,7 +36,13 @@ export function scanSpecs(packageRoot, specDirs = SPEC_DIRS) {
         } catch {
           continue;
         }
-        if (stats.isDirectory()) pending.push(abs);
+        // tools/logs/ is the git-ignored home for reports and isolated harness
+        // copies (TESTRUNS documents it); nothing there is discovered by either
+        // runner, so its basenames cannot shadow a live spec.
+        if (stats.isDirectory()) {
+          if (`${dir}/${abs.slice(dirAbs.length + 1).split("\\").join("/")}` === "tools/logs") continue;
+          pending.push(abs);
+        }
         else if (isSpecFile(name)) specs.push({ rel, name, base: name.replace(/\.[^.]+$/, "").toLowerCase() });
       }
     }

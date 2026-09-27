@@ -52,8 +52,10 @@ const CODE_SOURCES = [
   "startup.js",
   "workspace.js",
   "media-window.js",
+  "media-browser.js",
   "music.js",
   "together.js",
+  "pc-sync.js",
   "planning.js",
   "onboarding.js",
   "community.js",
@@ -103,7 +105,7 @@ export async function build({ root = ROOT } = {}) {
   const catalog = await readFile(path.join(root, "data", "models.json"), "utf8");
   const parsed = JSON.parse(catalog);
 
-  const [styles, musicStyles, planningStyles, brainStyles, taskGroups, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, idle, cameraTour, explorer, analyzer, tasks, ideas, overhead, brains, palette, eyes, boot, startup, workspace, mediaWindow, music, together, planning, onboarding, community, demoPanel, agentBrain, booklet] = await Promise.all([
+  const [styles, musicStyles, planningStyles, brainStyles, taskGroups, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, idle, cameraTour, explorer, analyzer, tasks, ideas, overhead, brains, palette, eyes, boot, startup, workspace, mediaWindow, music, together, pcSync, planning, onboarding, community, demoPanel, agentBrain, booklet] = await Promise.all([
     readFile(path.join(RENDERER, "styles.css"), "utf8"),
     readFile(path.join(RENDERER, "music.css"), "utf8"),
     readFile(path.join(RENDERER, "planning.css"), "utf8"),
@@ -132,6 +134,7 @@ export async function build({ root = ROOT } = {}) {
     readFile(path.join(RENDERER, "media-window.js"), "utf8"),
     readFile(path.join(RENDERER, "music.js"), "utf8"),
     readFile(path.join(RENDERER, "together.js"), "utf8"),
+    readFile(path.join(RENDERER, "pc-sync.js"), "utf8"),
     readFile(path.join(RENDERER, "planning.js"), "utf8"),
     readFile(path.join(RENDERER, "onboarding.js"), "utf8"),
     readFile(path.join(RENDERER, "community.js"), "utf8"),
@@ -159,6 +162,7 @@ export async function build({ root = ROOT } = {}) {
     readFile(path.join(RENDERER, "vibe.js"), "utf8"),
     readFile(path.join(RENDERER, "vibe.css"), "utf8"),
   ]);
+  const mediaBrowser = await readFile(path.join(RENDERER, "media-browser.js"), "utf8");
   const nodeVisuals = await readFile(path.join(RENDERER, "node-visuals.js"), "utf8");
   const projectMapView = await readFile(path.join(RENDERER, "project-map-view.js"), "utf8");
   const fileInputs = await readFile(path.join(RENDERER, "file-inputs.js"), "utf8");
@@ -168,10 +172,13 @@ export async function build({ root = ROOT } = {}) {
   const vibePanels = await readFile(path.join(RENDERER, "vibe-panels.js"), "utf8");
   const [traceCode, traceStyles] = await Promise.all([readFile(path.join(RENDERER, "trace.js"), "utf8"), readFile(path.join(RENDERER, "trace.css"), "utf8")]);
   const [configCode, configStyles] = await Promise.all([readFile(path.join(RENDERER, "config-dialog.js"), "utf8"), readFile(path.join(RENDERER, "config-dialog.css"), "utf8")]);
-  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, motion, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle, cameraTour, explorer, analyzer, tasks, ideas, overhead, brains, palette, configCode, eyes, traceCode, boot, startup, workspace, mediaWindow, music, together, planning, onboarding, community, demoPanel, autonomyUi, companionUi, companionHub, projectMapView, agentBrain, agents, vibePanels, vibe, booklet];
+  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, motion, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle, cameraTour, explorer, analyzer, tasks, ideas, overhead, brains, palette, configCode, eyes, traceCode, boot, startup, workspace, mediaWindow, mediaBrowser, music, together, pcSync, planning, onboarding, community, demoPanel, autonomyUi, companionUi, companionHub, projectMapView, agentBrain, agents, vibePanels, vibe, booklet];
   const code = codeParts.join("\n");
   const html = template
-    .replace("__BOOKLET_DATA__", () => catalog.trim())
+    // "</" and "<!--" escaped: a fetched model name holding "</script>" would
+    // otherwise end the data block and run as renderer script. JSON.parse
+    // reads < back as "<"; a plain "<= 200K" is left as it was.
+    .replace("__BOOKLET_DATA__", () => catalog.trim().replace(/<(?=\/|!--)/g, "\\u003c"))
     .replace("__BOOKLET_STYLES__", () => `${styles}\n${musicStyles}\n${planningStyles}\n${brainStyles}\n${profilerStyles}\n${traceStyles}\n${configStyles}\n${agentBrainStyles}\n${agentsStyles}\n${companionStyles}\n${studioUiStyles}\n${companionHubStyles}\n${vibeStyles}`)
     .replace("__BOOKLET_CODE__", () => code);
 

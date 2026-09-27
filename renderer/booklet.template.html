@@ -509,12 +509,12 @@
             <button id="eyes-view-evidence" class="ghost eyes-narrow" type="button">View evidence →</button>
           </div>
           <div class="row">
-            <select id="eyes-agent" title="Filter by agent"><option value="">all agents</option></select>
-            <select id="eyes-window" title="Time window">
-              <option value="">all time</option>
-              <option value="900000">last 15m</option>
-              <option value="3600000">last 1h</option>
-              <option value="86400000">last 24h</option>
+            <select id="eyes-agent" title="Filter by agent" aria-label="Agent"><option value="">All agents</option></select>
+            <select id="eyes-window" title="Time window" aria-label="Time window">
+              <option value="">All time</option>
+              <option value="900000">Last 15 minutes</option>
+              <option value="3600000">Last hour</option>
+              <option value="86400000">Last 24 hours</option>
             </select>
           </div>
           <ul class="feed" id="eyes-feed"></ul>
@@ -536,14 +536,14 @@
           </div>
           <div class="viewer">
             <div id="eyes-mode-png">
-              <p class="muted" id="eyes-png-empty">No PNG selected yet. Newest evidence from tools/logs appears here; click the image to drop a pin.</p>
+              <p class="muted" id="eyes-png-empty">No screenshot selected. The newest image in tools/logs opens here on its own; you can also choose Open… or drop a PNG. Click an image to pin a note to it.</p>
               <div class="png-wrap">
                 <img id="eyes-png" alt="Selected evidence PNG" hidden>
                 <canvas id="eyes-pins-layer"></canvas>
               </div>
             </div>
             <div id="eyes-mode-diff" hidden><div class="diff-view" id="eyes-diff">Select a change in the feed to see its diff.</div></div>
-            <div id="eyes-mode-log" hidden><pre class="log" id="eyes-log">log tail</pre></div>
+            <div id="eyes-mode-log" hidden><pre class="log" id="eyes-log">The latest Studio log lines appear here and refresh every few seconds.</pre></div>
           </div>
         </div>
       </div>
@@ -556,7 +556,7 @@
             <button id="eyes-copy" class="ghost" disabled>Copy path</button>
           </div>
           <h2 class="mt">Pins</h2>
-          <p class="muted" id="eyes-pin-hint">Click the PNG to drop a pin.</p>
+          <p class="muted" id="eyes-pin-hint">Click a spot on the image to pin a note there.</p>
           <ul class="pin-list" id="eyes-pins"></ul>
         </div>
       </div>
@@ -637,6 +637,7 @@
           <div class="setup-state-item"><span class="setup-state-label">Builders</span><span id="setup-builders" data-state="unknown">checking…</span></div>
         </div>
         <p class="settings-status" id="auto-setup-status" role="status">Not run yet.</p>
+        <button class="ghost" type="button" id="settings-guided-cli">Install a coding tool or use one subscription for Studio</button>
         </section>
 <section class="settings-group settings-card" id="settings-assistant" aria-labelledby="settings-assistant-heading">
         <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-key"/></svg></span><div><h3 id="settings-assistant-heading">Providers</h3><p class="muted">Open a provider to configure its connection. Keys are encrypted on this machine.</p></div></div>
@@ -1636,7 +1637,7 @@
   <div class="profiler-sheet sheet" role="dialog" aria-modal="true" aria-labelledby="profiler-heading" tabindex="-1">
     <header class="profiler-head">
       <div class="sheet-title"><div class="eyebrow">Settings · Diagnostics</div><h2 id="profiler-heading">Performance profiler</h2><p id="profiler-status" role="status">Ready to record</p></div>
-      <button id="profiler-close" class="ghost" title="Close (Esc)">Close <kbd>Esc</kbd></button>
+      <button id="profiler-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
     </header>
     <div class="profiler-body">
       <div class="profiler-controls">
@@ -1764,11 +1765,11 @@
       </aside>
       <section class="explorer-col">
         <h3 id="analyzer-title">Findings</h3>
-        <div id="analyzer-findings"><p class="muted">Open a project for a local overview, or analyze a file or idea here.</p></div>
+        <div id="analyzer-findings"><p class="muted analyzer-empty">Open a project for a local overview, or analyze a file or idea here.</p></div>
       </section>
       <aside class="explorer-col">
         <h3>Evidence &amp; limits</h3>
-        <ul id="analyzer-evidence" class="pin-list"></ul>
+        <ul id="analyzer-evidence" class="pin-list"><li class="muted analyzer-empty">The evidence behind each finding, and anything the scan could not inspect, appears here.</li></ul>
         <div id="analyzer-ai-out"></div>
       </aside>
     </div>
@@ -1892,6 +1893,23 @@
         <p id="walkthrough-build-mode-feedback" role="status"></p>
       </div>
       <div class="walkthrough-activity" id="walkthrough-activity" hidden><div class="walkthrough-activity-track"><span id="walkthrough-activity-fill"></span></div><span id="walkthrough-activity-label"></span></div>
+      <div id="walkthrough-cli-setup" class="walkthrough-panel" hidden>
+        <h3>Use the account you already have</h3>
+        <p>One supported subscription can handle chat, mapping, planning and coding. Choose your tool, sign in with its own window, then check the connection. Your account's model access and usage limits apply.</p>
+        <label for="walkthrough-cli-choice">Your coding tool</label>
+        <select id="walkthrough-cli-choice"><option value="codex">Codex</option><option value="claude">Claude Code</option><option value="grok">Grok</option><option value="antigravity">Antigravity</option><option value="opencode">OpenCode (free models or linked providers)</option></select>
+        <p id="walkthrough-cli-detail" class="muted"></p>
+        <div class="walkthrough-panel-actions">
+          <button class="ghost" id="walkthrough-cli-install" type="button">Install and sign in</button>
+          <button class="ghost" id="walkthrough-cli-login" type="button">Sign in</button>
+          <button class="ghost" id="walkthrough-cli-check" type="button">Check connection</button>
+          <button class="primary" id="walkthrough-cli-use" type="button">Use for the whole studio</button>
+          <button class="ghost mini" id="walkthrough-cli-refresh" type="button">Refresh installed tools</button>
+          <button class="ghost mini" id="walkthrough-cli-docs" type="button">Setup instructions</button>
+        </div>
+        <p class="muted">Install opens a setup window and downloads the selected tool. Node.js is installed if an npm tool needs it. Check connection sends a small test using your account's allowance. Passwords stay in the provider's sign-in window.</p>
+        <p id="walkthrough-cli-status" role="status" aria-live="polite"></p>
+      </div>
       <div id="walkthrough-scan" class="walkthrough-panel" hidden>
         <div class="walkthrough-panel-actions"><button class="primary" id="walkthrough-scan-run" type="button">Run the first scan</button><button class="ghost" id="walkthrough-scan-apply" type="button" hidden>Use this setup</button><label class="walkthrough-panel-option" for="walkthrough-scan-allow-free"><input type="checkbox" id="walkthrough-scan-allow-free" checked><span>Allow free models (their free tier may use prompts to improve the model)</span></label></div>
         <p id="walkthrough-scan-status" class="muted" role="status">Not run yet. The scan asks OpenCode what it has: its version, linked provider names, models and agents. It sends no prompt and saves nothing until you choose Use this setup.</p>
@@ -1900,7 +1918,7 @@
       </div>
       <div id="walkthrough-map" class="walkthrough-panel" hidden>
         <div class="walkthrough-panel-actions"><button class="primary" id="walkthrough-map-run" type="button">Map this project</button><button class="ghost" id="walkthrough-map-cancel" type="button" hidden>Cancel</button></div>
-        <p id="walkthrough-map-status" class="muted" role="status">Not mapped yet. A read-only explorer reads the selected folder, writes its map as a todo list you can watch in the tree, and saves its suggested first tasks as ideas. Nothing is built.</p>
+        <p id="walkthrough-map-status" class="muted" role="status">Not mapped yet. Your selected provider uses a read-only project scan to map the folder and suggest first tasks. Suggestions are saved as ideas for you to review. Nothing is built.</p>
         <ul id="walkthrough-map-steps" class="walkthrough-notes"></ul>
         <pre id="walkthrough-map-tail" class="walkthrough-textTail" hidden></pre>
         <ul id="walkthrough-map-facts" class="walkthrough-facts"></ul>

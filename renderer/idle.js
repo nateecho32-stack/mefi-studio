@@ -2299,6 +2299,14 @@
     const signature = JSON.stringify([open, closed, [...open, ...closed].map((question) => agoLabel(question.at))]);
     if (!force && signature === asksPainted && el.askList.firstChild) return;
     asksPainted = signature;
+    // renderFeed repaints this list several times a second while a worker
+    // streams; a half-typed answer, its chosen option and focus survive it.
+    const drafts = new Map();
+    for (const input of el.askList.querySelectorAll?.(".ask-card .ask-custom input") ?? []) {
+      const id = input.closest?.(".ask-card")?.dataset.questionId;
+      const focused = input === document.activeElement;
+      if (id && (input.value || input.dataset.option || focused)) drafts.set(id, { value: input.value, option: input.dataset.option || "", placeholder: input.placeholder, focused, start: input.selectionStart, end: input.selectionEnd });
+    }
     el.askList.textContent = "";
     if (!questions.length) {
       const empty = document.createElement("li");
@@ -2317,12 +2325,24 @@
       el.askList.append(divider);
     }
     for (const question of closed) el.askList.append(askCard(question));
+    for (const card of drafts.size ? el.askList.querySelectorAll?.(".ask-card") ?? [] : []) {
+      const draft = drafts.get(card.dataset.questionId);
+      const input = draft && card.querySelector(".ask-custom input");
+      if (!input) continue;
+      input.value = draft.value;
+      if (draft.option) { input.dataset.option = draft.option; input.placeholder = draft.placeholder; }
+      if (draft.focused) {
+        input.focus({ preventScroll: true });
+        try { input.setSelectionRange(draft.start ?? draft.value.length, draft.end ?? draft.value.length); } catch {}
+      }
+    }
     if (el.askState) el.askState.textContent = open.length ? `${open.length} waiting` : questions.length ? "All answered" : "Nothing waiting";
   }
 
   function askCard(question) {
     const card = document.createElement("li");
     card.className = "ask-card";
+    if (question.id) card.dataset.questionId = question.id;
     card.dataset.kind = question.kind === "suggestion" ? "suggestion" : "question";
     card.dataset.status = question.status ?? "open";
     const head = document.createElement("div");
@@ -2409,11 +2429,12 @@
           desc.textContent = option.description;
           button.append(desc);
         }
-        button.addEventListener("click", () => { if (option.text || option.action?.action === "instruct") { selectedTextOption = option.id; input.placeholder = "Your one-line answer…"; input.focus(); } else void answerQuestion(question.id, option.id, null, button); });
+        button.addEventListener("click", () => { if (option.text || option.action?.action === "instruct") { input.dataset.option = option.id; input.placeholder = "Your one-line answer…"; input.focus(); } else void answerQuestion(question.id, option.id, null, button); });
         options.append(button);
       }
       card.append(options);
-      let selectedTextOption = null;
+      // The chosen text option rides on the input, so renderAsks can carry
+      // it across a repaint with the draft.
       const custom = document.createElement("form");
       custom.className = "ask-custom";
       const input = document.createElement("input");
@@ -2428,7 +2449,7 @@
       custom.addEventListener("submit", (event) => {
         event.preventDefault();
         const text = input.value.trim();
-        if (text) void answerQuestion(question.id, selectedTextOption, text, send);
+        if (text) void answerQuestion(question.id, input.dataset.option || null, text, send);
       });
       card.append(custom);
       // Whether a decision reaches you at all is a node in the live brain
@@ -6952,7 +6973,8 @@
     const path = state.pngs[Math.floor(Math.random() * state.pngs.length)];
     const image = document.createElement("img");
     image.className = "idle-pop";
-    image.src = encodeURI("file:///" + path.replace(/\\/g, "/"));
+    // encodeURI keeps # and ?, which would cut a path like C#\... short.
+    image.src = encodeURI("file:///" + path.replace(/\\/g, "/")).replace(/#/g, "%23").replace(/\?/g, "%3F");
     image.style.setProperty("--x", `${(10 + Math.random() * 62).toFixed(2)}%`);
     image.style.setProperty("--y", `${(12 + Math.random() * 58).toFixed(2)}%`);
     image.style.setProperty("--tilt", `${(Math.random() * 10 - 5).toFixed(1)}deg`);

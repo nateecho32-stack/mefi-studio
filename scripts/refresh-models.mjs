@@ -344,6 +344,9 @@ export async function refreshCatalog({
   };
 
   if (checkOnly) {
+    // A failed fetch falls back to the committed roster, whose hash always
+    // matches: that is no evidence the live roster is unchanged.
+    if (!offline && !rosterOk) throw new Error("roster check failed: the live roster could not be fetched");
     const saved = await readCommitted();
     if (saved.rosterHash !== document.rosterHash) {
       throw new Error(`roster changed:\n  catalog  ${saved.rosterHash}\n  live     ${document.rosterHash}`);

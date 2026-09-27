@@ -395,7 +395,9 @@ function createAgentBrain(options = {}) {
     }
     if (s.map) {
       try {
-        const related = mods.projectMap.relatedFor(s.map, { text: `${task.title ?? ""} ${task.prompt ?? ""}`, files: Array.isArray(task.files) ? task.files : [] });
+        // The root lets absolute task paths (collision and uncommitted asks
+        // carry them) count; without it relatedFor drops every one.
+        const related = mods.projectMap.relatedFor(s.map, { text: `${task.title ?? ""} ${task.prompt ?? ""}`, files: Array.isArray(task.files) ? task.files : [], root: projectRoot() ?? "" });
         const line = mods.projectMap.briefLine(related);
         if (line) brief.push(cap(line, 180));
       } catch (error) {

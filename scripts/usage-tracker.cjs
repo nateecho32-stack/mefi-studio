@@ -601,10 +601,17 @@ function parseClaudeCliResult(stdout) {
   } : parsed.usage;
   const errors = Array.isArray(parsed.errors) ? parsed.errors.map((entry) => text(entry, 160)).filter(Boolean) : [];
   const failed = parsed.is_error === true || parsed.subtype !== "success";
+  // Quota/auth failures can use subtype "success" with is_error true;
+  // their actionable message lives in result rather than errors[].
+  const detail = errors[0] || text(parsed.result, 200);
+  const subtype = text(parsed.subtype, 60);
+  const error = subtype && subtype !== "success"
+    ? `${subtype}${detail ? `: ${detail}` : ""}`
+    : detail || "Claude reported an error";
   return {
     ok: !failed && typeof parsed.result === "string",
     text: typeof parsed.result === "string" ? parsed.result : "",
-    error: failed ? `${text(parsed.subtype, 60) || "error"}${errors.length ? `: ${errors[0]}` : ""}` : null,
+    error: failed ? error : null,
     model: models.length === 1 ? text(models[0], 120) : null,
     tokenUsage: cliTokenUsage(summed, { cacheRead: ["cache_read_input_tokens"], cacheWrite: ["cache_creation_input_tokens"] }),
     costUsd: null,

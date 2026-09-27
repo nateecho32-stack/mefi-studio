@@ -26,6 +26,7 @@
     "check": "node scripts/check-targets.mjs && node scripts/spec-collisions.mjs && node scripts/check-css.mjs --merge && node scripts/check-css.mjs --unused && node scripts/check-syntax.mjs && node scripts/check-testruns.mjs",
     "reconcile-board": "node scripts/reconcile-board.mjs",
     "policy-lab": "node scripts/policy-lab.mjs",
+    "sync": "node scripts/sync.mjs",
     "jev:status": "electron . --jev-status",
     "jev:models": "electron . --jev-models",
     "jev:probe": "electron . --jev-probe",

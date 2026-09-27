@@ -139,7 +139,7 @@
 
   const items = [
     ["ask", "Talk to me", "g-help", "Ask, plan, or make a task"],
-    ["friends", "Friends", "g-orbit", "Connect and listen together"],
+    ["friends", "Friends", "g-orbit", "Your PCs, rooms and listening"],
     ["requests", "Requests", "g-tasks", "Decisions waiting for you"],
     ["notices", "Notifications", "g-ideas", "What happened in your studio"],
     ["settings", "Settings", "g-ambience", "Make this space yours"],
@@ -260,6 +260,10 @@
         action("Connect with Discord", () => window.MefiNav?.go("community")),
         action("Friends & listening rooms", () => { window.MefiMusic?.openAudio?.(); window.MefiMusic?.setSource?.("link"); window.MefiMusic?.togetherHost?.()?.scrollIntoView({ block: "nearest" }); }),
         node("p", "ab-quiet", "Choose Connect or Join in the room controls when you're ready."));
+      // Friends › Your PCs (renderer/pc-sync.js) stays in the hub: Sync this
+      // PC answers in place instead of navigating away.
+      const pcs = window.MefiPcSync?.card?.();
+      if (pcs) el.extra.append(pcs);
     } else {
       el.extra.append(node("p", "muted", "A few useful things, close at hand."),
         action("Walk me through setup", () => window.MefiOnboarding?.open?.()),

@@ -17,6 +17,13 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
 
 const cli = (id, installed) => ({ id, name: id, installed, source: installed ? `C:\\bin\\${id}.exe` : null });
 
+for (const provider of ["codex", "claude", "grok", "antigravity"]) test(`auto setup keeps the chosen ${provider} subscription even when other providers exist`, () => {
+  const plan = planAutoSetup({ settings: { aiProvider: provider, executorCli: "opencode" }, keys: { zai: true, zen: true }, clis: [cli(provider, true), cli("opencode", true)] });
+  assert.equal(plan.active.provider, provider);
+  assert.equal(plan.active.executorCli, provider);
+  assert.equal(plan.active.modelSelection, "fixed");
+});
+
 test("auto setup prefers the saved z.ai key and explains every choice", () => {
   const plan = planAutoSetup({
     settings: {},

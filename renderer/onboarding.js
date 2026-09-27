@@ -25,7 +25,7 @@
   const lessons = [
     {
       title: "Link an AI and scan this computer", short: "Scan", glyph: "g-ambience", panel: "scan",
-      copy: "Before anything is read or built, find out what this computer already has: the OpenCode command line, the providers linked in it, the free models it can reach, and the keys saved in Studio. The AI chosen here helps with the rest of this setup.",
+      copy: "Start with the account you already use. Codex, Claude Code, Grok or Antigravity can power your studio through its own login. Install a missing tool here, or scan for OpenCode's linked and free models.",
       points: ["The scan asks OpenCode for its version, its linked provider names, its model list and its agents. It never opens the credential store, never sends a prompt and never changes OpenCode's own configuration.", "Free models cost nothing and are used first for exploring; paid plans you have linked are kept for building. Free-tier models may use prompts to improve the model, so keep confidential work on a paid model.", "Nothing is saved until you choose Use this setup and continue. From there the guide maps your selected folder and asks the linked AI to plan the remaining stops. You can run this scan again from Start here, or Auto setup from Agents setup, after linking a provider."],
       action: null, note: "Run the first scan reads OpenCode's own answers. Use this setup and continue saves the choices shown (no key), maps the selected folder, and asks the linked AI what to do next.",
       done: "Setup saved",
@@ -42,7 +42,7 @@
     {
       title: "Map the folder", short: "First map", glyph: "g-explorer", panel: "map",
       copy: "Let a read-only explorer lay out the node tree for the selected folder: what the project is, where its parts live, how it is checked, and what small work could start first.",
-      points: ["The explorer runs OpenCode's built-in plan agent on the model the scan chose (a free one when available). It reads and searches; it cannot edit files or run commands.", "As it works it writes its map as a todo list, which appears as nodes under its session in the tree. Its suggested first tasks are saved as ideas in Your work — nothing is admitted or built.", "Free models answer one request at a time and can take a few minutes on a large folder. Cancel at any point; a cancelled map saves nothing."],
+      points: ["Your selected provider maps a bounded local inventory and project excerpts without native editing tools. OpenCode's built-in plan explorer is also available when its scan has selected a model.", "Suggested first tasks are saved as ideas in Your work. OpenCode sessions also show a live todo list in the tree.", "Mapping uses your selected account's allowance. It can take a few minutes. Cancel at any point; a cancelled map saves nothing."],
       action: null, note: "Map this project starts one explorer session in the selected folder. Ideas can be promoted to tasks later, one by one.",
       waitFor: "mefi:first-map", done: "Folder mapped",
     },
@@ -129,6 +129,10 @@
   const mapSteps = [];
   let assistResult = null;
   let assistBusy = false;
+  let cliSetupState = null;
+  let cliSetupLoading = false;
+  let cliSetupBusy = false;
+  const checkedClis = new Set();
   function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} }
   function node(tag, className, text) {
     const element = document.createElement(tag);
@@ -234,6 +238,7 @@
     if (!scanBusy && !mapBusy && !assistBusy) setActivity(false);
     renderScan();
     renderMap();
+    renderCliSetup();
     renderAssist();
     renderInvitation();
   }
@@ -255,8 +260,62 @@
     try { target.classList?.[error ? "add" : "remove"]?.("error"); } catch {}
   }
   const allowFree = () => $("scan-allow-free")?.checked !== false;
+  function renderCliSetup() {
+    const panel = $("cli-setup");
+    if (!panel) return;
+    panel.hidden = ![SCAN, MAP].includes(state.step);
+    if (panel.hidden) return;
+    if (!cliSetupState && !cliSetupLoading) void refreshCliSetup();
+    const id = $("cli-choice")?.value || "codex";
+    const cli = cliSetupState?.clis?.find((item) => item.id === id);
+    const busy = cliSetupBusy || scanBusy || mapBusy;
+    if ($("cli-choice")) $("cli-choice").disabled = busy;
+    for (const action of ["install", "login", "check", "use", "refresh", "docs"]) if ($(`cli-${action}`)) $(`cli-${action}`).disabled = busy;
+    if ($("cli-install")) $("cli-install").textContent = cli?.installed ? "Update and sign in" : "Install and sign in";
+    if ($("cli-login")) $("cli-login").disabled = busy || !cli?.installed;
+    if ($("cli-check")) { $("cli-check").disabled = busy || !cli?.installed; $("cli-check").textContent = id === "opencode" ? "Scan OpenCode" : "Check connection"; }
+    if ($("cli-use")) { $("cli-use").textContent = id === "opencode" ? "Use scanned setup" : "Use for the whole studio"; $("cli-use").disabled = busy || !cli?.installed || (id === "opencode" ? !scanResult?.plan?.ok : !checkedClis.has(id)); }
+    if ($("cli-detail")) $("cli-detail").textContent = !cli ? "Checking installed tools…" : id === "opencode" ? `${cli.installed ? "Installed." : "Not installed yet."} After sign-in, choose Scan OpenCode to discover its models, then Use scanned setup.` : checkedClis.has(id) ? `${cli.name} answered the connection check. Ready to use.` : `${cli.installed ? "Installed" : "Not installed yet"}. ${cli.installed ? "Sign in if needed, then choose Check connection." : "Choose Install and sign in to get started."}`;
+  }
+  async function refreshCliSetup() {
+    if (cliSetupLoading) return;
+    const fn = hostApi("cliSetupStatus");
+    if (!fn) { cliSetupState = { clis: [] }; setPanelStatus("cli-status", "Guided installation is available in the desktop app."); return; }
+    cliSetupLoading = true;
+    try {
+      const result = await fn();
+      if (!result?.ok) throw new Error(result?.error || "Could not check installed tools.");
+      const first = !cliSetupState;
+      cliSetupState = result;
+      if (first && $("cli-choice")) $("cli-choice").value = result.clis?.find((cli) => cli.id === result.selected && cli.installed)?.id || result.clis?.find((cli) => cli.installed)?.id || "codex";
+    } catch (error) { cliSetupState = { clis: [] }; setPanelStatus("cli-status", error.message, true); }
+    finally { cliSetupLoading = false; renderCliSetup(); }
+  }
+  async function cliSetupAction(action) {
+    if (cliSetupBusy || mapBusy || scanBusy) return;
+    const id = $("cli-choice")?.value || "codex";
+    if (id === "opencode" && action === "check") { await runScan(); return; }
+    if (id === "opencode" && action === "use") { await applyScan(); return; }
+    const fn = hostApi(action === "use" ? "cliSetupUse" : action === "check" ? "cliSetupCheck" : "cliSetupAction");
+    if (!fn) { setPanelStatus("cli-status", "Open the desktop app to set up a coding tool."); return; }
+    cliSetupBusy = true; renderCliSetup();
+    setPanelStatus("cli-status", action === "check" ? "Checking your connection… this can take up to a minute." : action === "use" ? "Connecting the studio to your subscription…" : "Opening setup…");
+    try {
+      const result = await fn(["use", "check"].includes(action) ? id : { id, action });
+      if (!result?.ok) { if (action === "check") checkedClis.delete(id); throw new Error(result?.error || "Setup did not finish. Try again."); }
+      if (action === "check") checkedClis.add(id);
+      if (action === "install" || action === "login") checkedClis.delete(id);
+      setPanelStatus("cli-status", result.message || "Setup instructions opened.");
+      if (action === "use") {
+        state.done[SCAN] = true; save(); scanResult = null; scanSynced = true;
+        if (projectReady()) { move(MAP); void runMap(); } else move(WORKSPACE);
+      }
+    } catch (error) { setPanelStatus("cli-status", error.message, true); }
+    finally { cliSetupBusy = false; renderCliSetup(); }
+  }
   function scanFacts(plan, auto = null) {
     if (!plan) return [];
+    if (["codex", "claude", "grok", "antigravity"].includes(auto?.active?.provider)) return [auto.summary, "Choose this tool above to check its login and use it for the whole studio. OpenCode is optional."];
     const facts = [];
     const cli = plan.opencode || {};
     facts.push(cli.installed ? `OpenCode ${cli.version || "(version unknown)"} found${cli.path ? ` at ${cli.path}` : ""}${cli.supported === false ? " — older than the supported 1.x line" : ""}.` : "OpenCode is not installed on this computer.");
@@ -276,6 +335,7 @@
   }
   function scanNotes(plan, auto = null) {
     if (!plan) return [];
+    if (["codex", "claude", "grok", "antigravity"].includes(auto?.active?.provider)) return ["Every agent can use models available to this account. Choose provider defaults or save models per role in Agents setup."];
     return [
       ...(plan.warnings || []).map((text) => `Warning: ${text}`),
       ...(plan.nextSteps || []).map((text) => `Next: ${text}`),
@@ -288,7 +348,7 @@
     if (!panel) return;
     panel.hidden = state.step !== SCAN;
     if ($("scan-run")) $("scan-run").disabled = scanBusy;
-    if ($("scan-apply")) { $("scan-apply").hidden = !(scanResult?.ok && scanResult.plan); $("scan-apply").disabled = scanBusy; }
+    if ($("scan-apply")) { $("scan-apply").hidden = !(scanResult?.ok && scanResult.plan); $("scan-apply").disabled = scanBusy || cliSetupBusy || !(scanResult?.plan?.ok || scanResult?.autoSetup?.ok); }
     const plan = scanResult?.ok ? scanResult.plan : null;
     $("scan-facts")?.replaceChildren(...scanFacts(plan, scanResult?.autoSetup).map((text) => node("li", "", text)));
     $("scan-notes")?.replaceChildren(...scanNotes(plan, scanResult?.autoSetup).map((text) => node("li", "", text)));
@@ -304,11 +364,11 @@
       if (!status?.firstRun) {
         // A fresh install's first launch ran auto setup by itself; the scan
         // adds OpenCode's free explorer and builder on top of that route.
-        if (status?.autoSetup?.summary && !scanResult) setPanelStatus("scan-status", `Auto setup ran on first launch: ${status.autoSetup.summary} Run the scan to add OpenCode's free explorer and builder.`);
+        if (status?.autoSetup?.summary && !scanResult) setPanelStatus("scan-status", `Auto setup ran on first launch: ${status.autoSetup.summary} Choose your tool above to check its connection and finish setup.`);
         return;
       }
       if (!state.done[SCAN]) { state.done[SCAN] = true; save(); }
-      if (!scanResult) setPanelStatus("scan-status", `Setup saved${status.firstRun.appliedAt ? ` on ${new Date(status.firstRun.appliedAt).toLocaleDateString()}` : ""}: explorer ${status.firstRun.explorer?.model || "OpenCode default"}, builder ${status.firstRun.builder?.model || "OpenCode default"}, judge ${status.firstRun.judge?.kind || "fixed"}. Run the scan again after linking a provider.`);
+      if (!scanResult) setPanelStatus("scan-status", status.firstRun.explorer?.transport === "assistant" ? `Setup saved: ${status.firstRun.explorer.provider} handles your map, assistant and builders. You can use the map step now.` : `Setup saved${status.firstRun.appliedAt ? ` on ${new Date(status.firstRun.appliedAt).toLocaleDateString()}` : ""}: explorer ${status.firstRun.explorer?.model || "selected provider"}, builder ${status.firstRun.builder?.model || "selected provider"}, judge ${status.firstRun.judge?.kind || "fixed"}.`);
       render();
     }).catch(() => {});
   }
@@ -321,7 +381,7 @@
     const fn = hostApi("firstScan");
     if (!fn) { if (!automatic) setPanelStatus("scan-status", "The first scan runs in the desktop app. In this preview nothing is read.", true); return; }
     if (scanBusy) return;
-    scanBusy = true; scanStarted = true; scanResult = null; renderScan();
+    scanBusy = true; scanStarted = true; scanResult = null; renderScan(); renderCliSetup();
     setActivity(true, { label: "Scanning · asking OpenCode what it has (about ten seconds)", fraction: 0 });
     setPanelStatus("scan-status", "Scanning… asking OpenCode for its version, linked providers, models and agents.");
     try {
@@ -329,18 +389,19 @@
       scanResult = result;
       if (!result?.ok) setPanelStatus("scan-status", result?.error || "The scan did not finish.", true);
       else if (result.plan?.ok) setPanelStatus("scan-status", "Scan complete. Review the facts below, then choose Use this setup and continue: it saves these choices (no key), maps your selected folder and asks the linked AI what to do next.");
-      else if (result.autoSetup?.ok) setPanelStatus("scan-status", `Scan complete. OpenCode is not usable yet, but auto setup found a working route: ${result.autoSetup.summary} Choose Use this setup to save it; install OpenCode later for the free explorer.`);
-      else setPanelStatus("scan-status", "Scan complete, but OpenCode is not usable yet. Follow the next steps below, then scan again.", true);
+      else if (result.autoSetup?.ok) setPanelStatus("scan-status", `Scan complete. ${result.autoSetup.summary} Choose your installed tool above to use that subscription throughout the studio, including your first map.`);
+      else setPanelStatus("scan-status", "Let's connect your first tool. Choose one above, then Install and sign in. You can also continue the tour and connect it later.");
     } catch (error) {
       setPanelStatus("scan-status", error?.message || "The scan failed.", true);
     } finally {
-      scanBusy = false; setActivity(false); renderScan();
+      scanBusy = false; setActivity(false); renderScan(); renderCliSetup();
+      if ($("cli-choice")?.value === "opencode") setPanelStatus("cli-status", $("scan-status")?.textContent || "Scan finished.", !scanResult?.ok);
     }
   }
   async function applyScan() {
     const fn = hostApi("firstScanApply");
     if (!fn || !scanResult?.ok) { setPanelStatus("scan-status", "Run the scan first.", true); return; }
-    scanBusy = true; renderScan();
+    scanBusy = true; renderScan(); renderCliSetup();
     try {
       const result = await fn({ prefs: { allowFreeTraining: allowFree() } });
       if (!result?.ok) { setPanelStatus("scan-status", result?.error || "The setup could not be saved.", true); return; }
@@ -381,7 +442,7 @@
   function mapAdvice(result) {
     const reason = result?.reason;
     if (reason === "free-tier-refused") return `${result.error} Choose a paid model in Settings, then map again.`;
-    if (reason === "no-scan" || reason === "no-explorer" || reason === "no-opencode") return `${result.error} Go back to the Scan stop.`;
+    if (reason === "no-scan" || reason === "no-explorer" || reason === "no-opencode") return "Connect a tool right here to make your first map. Choose an existing subscription, or Install and sign in above. You can continue the tour while you set it up.";
     if (reason === "timeout") return `${result.error}`;
     if (reason === "unparsable") return `${result.error} Map again; a second pass usually answers in the requested shape.`;
     if (reason === "busy") return result.error;
@@ -394,7 +455,7 @@
     if (mapBusy) return;
     mapBusy = true; mapResult = null; mapSteps.length = 0; mapStartedAt = Date.now(); renderMap();
     setActivity(true, { label: automatic ? "Mapping the folder you selected · the explorer is reading it" : "Mapping · the explorer is reading the folder" });
-    setPanelStatus("map-status", `${automatic ? "The linked AI is mapping the folder you selected. " : ""}The explorer is reading the folder; its todo list appears in the tree as it goes.`);
+    setPanelStatus("map-status", `${automatic ? "The linked AI is mapping the folder you selected. " : ""}Your provider is preparing the map from the project scan. Suggestions will appear below.`);
     try {
       const result = await fn({});
       mapResult = result;
@@ -660,6 +721,7 @@
       renderBuildMode();
     });
     window.addEventListener("mefi:build-mode", renderBuildMode);
+    document.getElementById("settings-guided-cli")?.addEventListener("click", () => { open(); move(SCAN); });
     window.addEventListener("mefi:project-changed", projectChanged);
     window.addEventListener("mefi:connection-saved", () => tickStop(CONNECT));
     window.addEventListener("mefi:task-created", () => tickStop(CREATE));
@@ -683,6 +745,11 @@
     $("invite-walk")?.addEventListener("click", () => coach(state.status === "new" ? 0 : state.step));
     $("scan-run")?.addEventListener("click", () => { void runScan(); });
     $("scan-apply")?.addEventListener("click", () => { void applyScan(); });
+    $("cli-choice")?.addEventListener("change", () => { setPanelStatus("cli-status", ""); renderCliSetup(); });
+    $("cli-refresh")?.addEventListener("click", () => { void refreshCliSetup(); });
+    for (const action of ["install", "login", "check", "use", "docs"]) $("cli-" + action)?.addEventListener("click", () => {
+      void cliSetupAction(action);
+    });
     $("map-run")?.addEventListener("click", () => { void runMap(); });
     $("map-cancel")?.addEventListener("click", () => cancelMap());
     $("assist-run")?.addEventListener("click", () => { void runAssist(); });

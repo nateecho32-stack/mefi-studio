@@ -109,6 +109,11 @@ function environment({ menuSaved = null, queueSaved = null, mediaVolumeSaved = n
       ...(community ? { MefiCommunity: community } : {}),
     },
   });
+  context.window.MefiMediaBrowser = { create: () => ({
+    active: false, state: {},
+    async open(url) { const result = await context.window.mefiStudio.mediaBrowserOpen(url); if (result?.ok) { this.active = true; this.state = result.state || { url, title: "Media browser" }; } return result; },
+    close() { this.active = false; },
+  }) };
   vm.runInContext(source, context);
   const music = context.window.MefiMusic;
   music.init();
@@ -1408,7 +1413,7 @@ test("Appearance holds only visual controls; the audio dropdown owns every playe
     assert.equal(sheet.contains(env.ids.get(id)), false, id);
   }
   assert.equal(dropdown.hidden, true);
-  assert.equal(sound.children[1], env.ids.get("music-local-tab").parentElement, "the player's source tabs open the Sound group");
+  assert.equal(sound.children[2], env.ids.get("music-local-tab").parentElement, "the source tabs follow the mini browser launcher");
   env.music.open(); env.frames();
   assert.equal(dropdown.hidden, true, "Appearance never opens the media menu");
   assert.equal(env.ids.get("music-premium-theme-label").children[0].textContent, "Members", "a narrow sheet folds the pill to its lock; the word stays");
@@ -1902,10 +1907,39 @@ test("Pasted links become official embeds, plain files or hand-offs, and nothing
   assert.equal(helpers.mediaLink("https://soundcloud.com/forss").kind, "external");
   const page = helpers.mediaLink("https://evil.test/playlist/not-spotify");
   assert.equal(page.kind, "external"); assert.equal(page.provider, "web"); assert.equal(helpers.playableLink(page), null);
-  for (const bad of ["", "not a link", `http://www.youtube.com/watch?v=${YT}`, `https://user@youtube.com/watch?v=${YT}`, `https://www.youtube.com:444/watch?v=${YT}`,
-    "https://www.youtube.com/watch?v=short", "javascript:alert(1)", "data:audio/mp3;base64,AAAA", "file:///C:/music/song.mp3", "blob:private", `https://youtu.be/${YT}/extra`, `https://x.test/${"a".repeat(2100)}.mp3`]) {
+  for (const url of [`http://www.youtube.com/watch?v=${YT}`, `https://www.youtube.com:444/watch?v=${YT}`, "https://example.com/#listen", "example.com/radio"]) assert.equal(helpers.mediaLink(url).kind, "external");
+  assert.equal(helpers.mediaLink("https://example.com/#listen").url, "https://example.com/#listen");
+  for (const bad of ["", "not a link", `https://user@youtube.com/watch?v=${YT}`,
+    "https://www.youtube.com/watch?v=short", "javascript:alert(1)", "data:audio/mp3;base64,AAAA", "file:///C:/music/song.mp3", "blob:private", `https://youtu.be/${YT}/extra`, `https://x.test/${"a".repeat(8200)}.mp3`]) {
     assert.equal(helpers.mediaLink(bad), null, bad);
   }
+});
+
+test("Web links open the mini browser and stop Studio audio only after a successful handoff", async () => {
+  const requests = []; let resolve;
+  const env = environment({ bridge: { mediaBrowserOpen: url => { requests.push(url); return new Promise(done => { resolve = done; }); } } });
+  await env.music.tune("groovesalad"); await flush();
+  assert.equal(env.music.status().playing, true);
+  assert.equal(env.music.playLink("https://example.com/live#player"), true);
+  assert.deepEqual(requests, ["https://example.com/live#player"]);
+  assert.equal(env.music.status().playing, true);
+  resolve({ ok: false, error: "Unavailable" }); await flush();
+  assert.equal(env.music.status().playing, true);
+  assert.match(noticeOf(env).textContent, /Unavailable/);
+  env.ids.get("music-link-handoff-browser").click(); resolve({ ok: true }); await flush();
+  assert.equal(env.music.status().playing, false);
+});
+
+test("Opening the built-in browser replaces music; browsing an embed stops its old frame", async () => {
+  const requests = [];
+  const env = environment({ bridge: { mediaBrowserOpen: async url => { requests.push(url); return { ok: true }; } } });
+  await env.music.tune("groovesalad"); await flush();
+  env.ids.get("music-browser-launch").click(); await flush();
+  assert.equal(env.music.status().playing, false); assert.deepEqual(requests, [""]);
+  env.music.playLink(`https://youtu.be/${YT}`); assert.equal(linkFrames(env).length, 1);
+  env.ids.get("music-link-popout").click(); await flush();
+  assert.equal(linkFrames(env).length, 0); assert.equal(env.music.status().playing, false);
+  assert.equal(requests[1], `https://www.youtube.com/watch?v=${YT}`);
 });
 
 test("Every player the Links tab can build is one the booklet's CSP frames", async () => {
@@ -1983,7 +2017,7 @@ test("A Spotify Jam is handed to Spotify and the radio keeps playing", async () 
   assert.deepEqual(JSON.parse(env.storage.get("mefiStudio.music.v1")).links, [], "a Jam is not saved as a playable link");
   assert.deepEqual({ ...env.music.linkInfo(jam) }, { provider: "spotify", providerName: "Spotify", kind: "external", label: "Spotify Jam", url: jam, playable: false });
   assert.equal(env.music.playLink("https://evil.test/playlist/not-spotify"), false);
-  assert.equal(noticeOf(env).dataset.error, "true", "a page Studio cannot play is refused visibly");
+  assert.equal(noticeOf(env).dataset.error, "false", "ordinary pages offer the browser without claiming a playback failure");
   assert.equal(env.music.linkInfo("nonsense"), null);
 });
 

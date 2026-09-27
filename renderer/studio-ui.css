@@ -161,10 +161,18 @@ html[data-studio-style] :is(.sheet, .explorer-sheet, .brains-sheet, .agent-brain
   background: var(--studio-wash), var(--studio-sheen), var(--studio-panel-bg);
   border-color: var(--studio-glass-edge); box-shadow: var(--studio-glass-shadow); backdrop-filter: var(--studio-glass-blur);
 }
-html[data-studio-style] :is(.panel, .card, .plan-strip, .settings-card, .agents-card, .agents-model-row, .task-overview-card, .lab-usage-card, .tracker-section, .ws-workflow, .ws-work-card, .ws-idea-card, .ws-backlog, .ws-dash-tile) {
+html[data-studio-style] :is(.panel, .card, .plan-strip, .settings-card, .agents-card, .agents-model-row, .task-overview-card, .lab-usage-card, .tracker-section, .ws-workflow, .ws-idea-card, .ws-backlog, .ws-dash-tile) {
   background: var(--studio-sheen), var(--studio-panel-bg);
   border-color: var(--studio-glass-edge); box-shadow: var(--studio-glass-shadow);
   border-radius: var(--r-lg);
+}
+/* Home work cards take the same glass on three edges only: the left edge is
+   their status stripe, set per stage in styles.css, which a whole-border
+   glass colour here outranked on every card. */
+html[data-studio-style] .ws-work-card {
+  background: var(--studio-sheen), var(--studio-panel-bg);
+  border-top-color: var(--studio-glass-edge); border-right-color: var(--studio-glass-edge); border-bottom-color: var(--studio-glass-edge);
+  box-shadow: var(--studio-glass-shadow); border-radius: var(--r-lg);
 }
 /* Settings' .panel is only a layout wrapper: its nav and cards carry their own glass, and it starts clear of the page header. */
 html[data-studio-style] .settings-panel { background: transparent; border: 0; box-shadow: none; }
@@ -184,7 +192,7 @@ html[data-studio-style] .sheet-head.plain { background: transparent; backdrop-fi
 html[data-studio-style] table#table th { background: var(--studio-menu-fill); backdrop-filter: var(--studio-menu-blur); }
 
 /* Floating menus are readable over both the scene and another page of text. */
-html[data-studio-style] :is(.pop, .palette-sheet, .studio-choice-popup, .surface-tools-menu, .studio-more-links, .studio-more > .tools-cluster, .brains-menu, .brains-search-panel, .brains-dialog-panel, .brains-shortcuts-panel, .music-dropdown, .companion-panel, .companion-bubble, .tree-tip, .tip, .profiler-hud, .toast, .legend-list, .feed-drop),
+html[data-studio-style] :is(.pop, .palette-sheet, .studio-choice-popup, .surface-tools-menu, .studio-more-links, .studio-more > .tools-cluster, .brains-menu, .brains-search-panel, .brains-dialog-panel, .brains-shortcuts-panel, .music-dropdown, .companion-panel, .companion-bubble, .tree-tip, .tip, .profiler-hud, .toast, .legend-list, .feed-drop, .autonomy-popover),
 #app-help-menu, .agents-nav-subsections, .workspace .ws-project-actions > div {
   background: var(--studio-wash), var(--studio-sheen), var(--studio-float-fill);
   border-color: var(--studio-glass-edge); backdrop-filter: var(--studio-float-blur);
@@ -217,7 +225,9 @@ html[data-studio-style] :is(input[type=text], input[type=search], input[type=pas
   background: var(--studio-field-bg); color: var(--ivory); border-color: var(--studio-glass-edge);
 }
 html[data-studio-style] :is(input, textarea)::placeholder { color: var(--muted); opacity: 1; }
-html[data-studio-style] :is(input, textarea, select, .studio-select):focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+/* One focus indicator: the outline replaces the base --ring shadow here,
+   which otherwise drew a second ring inside it. */
+html[data-studio-style] :is(input, textarea, select, .studio-select):focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; box-shadow: none; }
 /* Native fallback options cannot blur their system-owned popup. */
 select option, select optgroup { background: var(--theme-panel-solid); color: var(--ivory); }
 button, .button { font-family: var(--font-ui); }
@@ -549,15 +559,17 @@ html[data-studio-style] .catalog-model { border-radius: var(--r-lg); }
 .file-drop-active { outline: 2px solid var(--gold); outline-offset: 2px; }
 
 /* Shared permission controls: compact in the composer, complete in Settings. */
-.autonomy-control { position: relative; color: var(--text, #e6eaf1); font: inherit; min-width: 0; }
+/* Theme tokens, not one theme's colours: --text was never defined, so the
+   controls fell back to near-white text on light themes too. */
+.autonomy-control { position: relative; color: var(--ivory); font: inherit; min-width: 0; }
 .autonomy-control h3, .autonomy-history h3, .autonomy-skills h3 { margin: 8px 0 14px; font-size: 15px; }
 .autonomy-button { border: 1px solid rgba(170,190,210,.2); border-radius: 10px; padding: 8px 12px; background: rgba(110,140,180,.09); color: inherit; font: inherit; cursor: pointer; }
 .autonomy-button:hover, .autonomy-button[aria-checked="true"], .autonomy-button[aria-pressed="true"] { background: rgba(110,175,210,.2); border-color: rgba(130,200,230,.55); }
-.autonomy-button:focus-visible { outline: 2px solid #8ecbdf; outline-offset: 2px; }
+.autonomy-button:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
 .autonomy-button:disabled { opacity: .5; cursor: default; }
 .autonomy-chip { white-space: nowrap; border-radius: 20px; }
 .autonomy-chip::after { content: " ▾"; opacity: .6; }
-.autonomy-popover { position: absolute; z-index: 20; bottom: calc(100% + 10px); left: 0; width: min(340px, 80vw); padding: 10px; border-radius: 16px; border: 1px solid rgba(180,205,230,.25); background: #17242e; box-shadow: 0 16px 60px #0008; display: grid; gap: 6px; }
+.autonomy-popover { position: absolute; z-index: 20; bottom: calc(100% + 10px); left: 0; width: min(340px, 80vw); padding: 10px; border-radius: 16px; border: 1px solid var(--hairline-strong); background: var(--panel-solid); box-shadow: 0 16px 60px #0008; display: grid; gap: 6px; }
 .autonomy-popover[hidden] { display: none; }
 .autonomy-mode { text-align: left; display: block; width: 100%; }
 .autonomy-mode small, .autonomy-check small { display: block; margin-top: 4px; font-size: 11px; line-height: 1.4; opacity: .7; font-weight: 400; }
@@ -571,7 +583,7 @@ html[data-studio-style] .catalog-model { border-radius: var(--r-lg); }
 .autonomy-check { display: flex; align-items: flex-start; gap: 9px; margin: 12px 0; font-size: 13px; }
 .autonomy-check input { margin-top: 3px; accent-color: #9cd7da; }
 .autonomy-field { display: grid; grid-template-columns: 1fr; gap: 6px; margin: 12px 0; font-size: 12px; }
-.autonomy-field select { min-width: 0; width: 100%; padding: 8px; border-radius: 8px; color: inherit; background: #17242e; border: 1px solid #aac4d233; }
+.autonomy-field select { min-width: 0; width: 100%; padding: 8px; border-radius: 8px; color: inherit; background: var(--panel-solid); border: 1px solid var(--hairline-strong); }
 .autonomy-warning { margin: 9px 0; padding: 12px; border-radius: 12px; background: #7c412333; border: 1px solid #d3936044; font-size: 12px; }
 .autonomy-warning button { margin: 4px; }
 .autonomy-tabs { display: flex; gap: 5px; margin: 10px 0; }
@@ -584,4 +596,4 @@ html[data-studio-style] .catalog-model { border-radius: var(--r-lg); }
 .autonomy-skills table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .autonomy-skills th, .autonomy-skills td { text-align: left; padding: 8px; border-bottom: 1px solid #aac4d222; overflow-wrap: anywhere; }
 .autonomy-settings-dialog { width: min(560px, 92vw); max-height: 85vh; overflow-y: auto; background: #17242e; color: #e6eaf1; border: 1px solid #aac4d244; border-radius: 18px; padding: 22px; }
-.autonomy-settings-dialog::backdrop { background: #07101b99; backdrop-filter: blur(8px); }
+.autonomy-settings-dialog::backdrop { background: var(--scrim); backdrop-filter: var(--scrim-blur); }

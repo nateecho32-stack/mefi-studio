@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
+import { planOfflineProbe } from "../scripts/assistant.mjs";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
 const handlerSource = source.slice(
@@ -25,23 +26,70 @@ const EXECUTOR_TIERS = ["auto", "free", "fast", "heavy"];
 
 function host(initial = {}) {
   const state = { settings: structuredClone(initial), writes: 0, resets: 0 };
+  const ai = { keyPresent: true, online: false, failures: 5, backoffUntil: Date.now() + 3600000, lastError: "Claude quota exhausted" };
+  const problems = [{ kind: "ai-offline", text: ai.lastError }];
   const handlers = new Map();
   const context = vm.createContext({
     readSettings: async () => structuredClone(state.settings),
     writeSettings: async (next) => { state.settings = structuredClone(next); state.writes += 1; },
     settingsDisk: { queue: Promise.resolve() },
     providerBreaker: { reset() { state.resets += 1; } },
+    assistantState: { ai, problems }, assistantAiProbeAttempts: 3,
+    clearAssistantAiProbe() { state.clearedProbes = (state.clearedProbes || 0) + 1; },
     AI_PROVIDERS, AI_AUTO_PROVIDERS, EXECUTOR_CLIS, EXECUTOR_TIERS,
     OPENCODE_MODEL_ID: /^[^\s/]+\/.+$/,
     ZAI_MODEL_ROUTINE: "glm-5.3-flash",
     ipcMain: { handle: (channel, fn) => handlers.set(channel, fn) },
   });
-  vm.runInContext(`${handlerSource}\n${queueSource}`, context);
+  const recoveryStart = source.indexOf("function resetAssistantAiBackoff()");
+  assert.ok(recoveryStart >= 0, "the real recovery helper must be found");
+  const recovery = source.slice(recoveryStart, source.indexOf("function assistantAiOk()", recoveryStart));
+  vm.runInContext(`${recovery}\n${handlerSource}\n${queueSource}`, context);
   return {
-    state,
+    state, ai, problems, context, handlers,
     apply: (patch) => handlers.get("settings:set-ai-routing")({}, patch),
     settings: () => state.settings,
   };
+}
+
+test("a saved provider change releases the old quota backoff without claiming recovery", async () => {
+  const h = host({ aiProvider: "claude" });
+  assert.equal(planOfflineProbe(h.ai), null);
+  assert.equal((await h.apply({ provider: "codex" })).ok, true);
+  assert.equal(h.ai.failures, 0);
+  assert.equal(h.ai.backoffUntil, 0);
+  assert.equal(h.context.assistantAiProbeAttempts, 0);
+  assert.equal(h.state.clearedProbes, 1);
+  assert.equal(h.ai.online, false, "only an actual successful call proves recovery");
+  assert.equal(h.ai.lastError, "Claude quota exhausted");
+  assert.equal(h.problems.length, 1, "the warning stays until a successful reply");
+  assert.ok(planOfflineProbe(h.ai), "the normal loop can now schedule a recovery probe");
+});
+
+test("a refused provider change preserves the existing quota backoff", async () => {
+  const h = host({ aiProvider: "claude" });
+  const before = structuredClone(h.ai);
+  assert.equal((await h.apply({ provider: "invalid" })).ok, false);
+  assert.deepEqual(h.ai, before);
+  assert.equal(h.state.clearedProbes, undefined);
+});
+
+for (const action of ["save", "inherit", "apply", "preset-save"]) {
+  test(`agent team ${action} only releases backoff when it applies configuration`, async () => {
+    const h = host();
+    Object.assign(h.context, {
+      projects: { active: () => ({ id: "project" }) },
+      crypto: { randomUUID: () => "fixture" },
+      agentProfiles: { mutate: () => ({ ok: true, revision: 2 }) },
+      agentsView: async () => ({ ok: true }), send() {},
+    });
+    h.context.assistantState.status = "paused";
+    vm.runInContext(source.slice(source.indexOf("async function saveAgentTeam("), source.indexOf('ipcMain.handle("agents:save"')), h.context);
+    await h.context.saveAgentTeam({ projectId: "project", action }, ["apply", "preset-save"].includes(action));
+    assert.equal(h.ai.failures, action === "preset-save" ? 5 : 0);
+    assert.equal(h.context.assistantState.status, "paused", "saving configuration cannot resume the service");
+    assert.equal(h.ai.online, false);
+  });
 }
 
 const base = () => ({

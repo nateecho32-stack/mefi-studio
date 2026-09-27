@@ -45,6 +45,7 @@ function host(settings, responses = [okReply()], { clis = [], claudeReply = null
     ZEN_MODEL_ROUTINE: "routine-zen", ZEN_MODEL_HEAVY: "heavy-zen",
     OPENROUTER_ENDPOINT: "https://openrouter.invalid/api/v1/chat/completions", OPENROUTER_MODEL: "openrouter/free",
     claudeCompletion: async (system, user, model) => { cliCalls.push({ system, user, model }); return claudeReply ?? { ok: true, text: "Planned on Claude Code", model: model || "claude-default" }; },
+    ...Object.fromEntries(["codex", "grok", "antigravity"].map((provider) => [provider + "Completion", async (system, user, model) => { cliCalls.push({ system, user, model, provider }); return { ok: true, text: "Planned", model: model || provider + "-default" }; }])),
     readSettings: async () => structuredClone(settings), decryptKey: (value, key) => value[key] ? `fixture-${key}` : null,
     applyModelRouting: async (route) => route,
     assistantState: { ai: {} }, assistantSessionId: async () => "fixture-session",
@@ -105,24 +106,12 @@ test("OpenRouter planning uses its own key, free router default and saved model 
   assert.deepEqual(h.observations.map((row) => row.provider), ["openrouter", "openrouter"]);
 });
 
-test("planning with Grok selected uses saved HTTP credentials and never invokes a CLI", async () => {
-  const h = host({ aiProvider: "grok", zaiApiKeyEncrypted: "fixture" });
-  const result = await h.complete("spec");
-  assert.equal(result.ok, true);
-  assert.equal(h.calls[0].endpoint, "https://zai.invalid");
-  assert.equal(h.calls[0].body.tools, undefined);
-  const unconfigured = host({ aiProvider: "grok" });
-  assert.match((await unconfigured.complete("question")).error, /saved z.ai, OpenCode Go or OpenCode Zen key, or Claude Code/);
-  assert.equal(unconfigured.calls.length, 0);
-  assert.equal(unconfigured.observations.length, 0);
-});
-
-test("planning with Antigravity selected keeps planning on the saved HTTP key, never the agy CLI", async () => {
-  const h = host({ aiProvider: "antigravity", zaiApiKeyEncrypted: "fixture" });
-  const result = await h.complete("spec");
-  assert.equal(result.ok, true);
-  assert.equal(h.calls[0].endpoint, "https://zai.invalid");
-  assert.equal(h.calls[0].body.tools, undefined);
+for (const provider of ["codex", "grok", "antigravity"]) test(provider + " alone handles routine and heavy planning without an API key", async () => {
+  const h = host({ aiProvider: provider, aiModelsByProvider: { [provider]: { routine: "small", heavy: "large" } } });
+  assert.equal((await h.complete("question")).ok, true);
+  assert.equal((await h.complete("spec")).ok, true);
+  assert.deepEqual(h.cliCalls.map((call) => [call.provider, call.model]), [[provider, "small"], [provider, "large"]]);
+  assert.equal(h.calls.length, 0);
 });
 
 test("models are scoped per provider without leaking across routes", async () => {
@@ -233,22 +222,30 @@ test("a role with no usable provider of its own follows the main pick", async ()
   assert.deepEqual(h.calls.map((call) => [call.endpoint, call.body.model]), [["https://zai.invalid", "routine-zai"], ["https://zai.invalid", "heavy-zai"]]);
 });
 
-test("a role on a CLI that keeps its tools still plans over HTTP", async () => {
+test("a Codex role plans through the text CLI without billing a saved HTTP key", async () => {
   const h = host({ aiProvider: "zai", zaiApiKeyEncrypted: "fixture", aiRoleProviders: { heavy: "codex" } }, undefined, { clis: ["codex", "claude"] });
   const result = await h.complete("spec");
   assert.equal(result.ok, true);
-  assert.equal(h.cliCalls.length, 0);
-  assert.equal(h.calls[0].endpoint, "https://zai.invalid");
+  assert.equal(h.cliCalls.length, 1);
+  assert.equal(h.calls.length, 0);
 });
 
-test("a failed Claude Code plan falls back once to the keyed HTTP routes", async () => {
-  const h = host({ aiProvider: "claude", zaiApiKeyEncrypted: "fixture", aiModelsByProvider: { claude: { heavy: "claude-opus-5-5" } } }, undefined,
+test("a failed Claude Code plan uses HTTP only when fallback is enabled", async () => {
+  const h = host({ aiProvider: "claude", aiAutoFallback: true, zaiApiKeyEncrypted: "fixture", aiModelsByProvider: { claude: { heavy: "claude-opus-5-5" } } }, undefined,
     { clis: ["claude"], claudeReply: { ok: false, error: "claude error: overloaded" } });
   const result = await h.complete("spec");
   assert.equal(result.ok, true);
   assert.equal(h.cliCalls.length, 1);
   assert.deepEqual(h.calls.map((call) => [call.endpoint, call.body.model]), [["https://zai.invalid", "heavy-zai"]]);
   assert.deepEqual(h.observations.map((row) => [row.provider, row.status]), [["claude", "error"], ["zai", "ok"]]);
+});
+
+test("a subscription failure does not silently spend another provider's saved key", async () => {
+  const h = host({ aiProvider: "claude", aiAutoFallback: false, zaiApiKeyEncrypted: "fixture" }, undefined,
+    { claudeReply: { ok: false, error: "Sign in again" } });
+  assert.equal((await h.complete("spec")).ok, false);
+  assert.equal(h.cliCalls.length, 1);
+  assert.equal(h.calls.length, 0);
 });
 
 test("OpenCode Zen sends the rest of its catalog to chat completions", async () => {
@@ -259,7 +256,7 @@ test("OpenCode Zen sends the rest of its catalog to chat completions", async () 
   assert.equal(h.calls[0].body.reasoning_effort, "low");
   assert.equal(h.calls[0].options.headers["x-opencode-session"], undefined, "the Go session header stays on the Go route");
   const missing = host({ aiProvider: "zen" });
-  assert.match((await missing.complete("question")).error, /saved z.ai, OpenCode Go or OpenCode Zen key, or Claude Code/);
+  assert.match((await missing.complete("question")).error, /Connect and check your provider/);
   assert.equal(missing.calls.length, 0);
 });
 

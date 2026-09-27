@@ -19,6 +19,7 @@
   let initialized = false;
 
   const base = (file) => (file ? file.split(/[\\/]/).pop() : "(unknown)");
+  const plural = (count, one, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
   // #analyzer-open binds straight to open(), so arg 0 can be a click Event.
   const optionsOf = (value) =>
     value && typeof value === "object" && typeof value.preventDefault !== "function" ? value : {};
@@ -42,6 +43,31 @@
     return block;
   }
 
+  // Findings and Evidence are never left blank: before a run, while one reads,
+  // and after one is cancelled or fails, each column says what belongs there.
+  const PENDING = {
+    project: "Reading the project's files and old plans…",
+    file: "Reading the file…",
+    idea: "Comparing the idea with the project's files…",
+    picker: "Waiting for a file…",
+  };
+  function emptyState(kind) {
+    if (!els.findings || !els.evidence) return;
+    const note = document.createElement("p");
+    note.className = "muted analyzer-empty";
+    note.textContent = PENDING[kind]
+      ?? (!window.mefiStudio?.analyzerRun ? "Analysis runs in the desktop app, where Studio can read your project folder."
+        : !state.projectId ? "Open a project folder to see its languages, entry points, old plans and starting points. You can also analyze a single file or an idea."
+          : "Choose Analyze project, pick a file, or describe an idea to see findings here.");
+    els.findings.textContent = "";
+    els.findings.append(note);
+    const row = document.createElement("li");
+    row.className = "muted analyzer-empty";
+    row.textContent = PENDING[kind] ? "Evidence appears as the read finishes." : "The evidence behind each finding, and anything the scan could not inspect, appears here.";
+    els.evidence.textContent = "";
+    els.evidence.append(row);
+  }
+
   function list(parent, heading, items, emptyText) {
     const title = document.createElement("h4");
     title.textContent = heading;
@@ -50,7 +76,7 @@
     if (!items.length) {
       const li = document.createElement("li");
       li.className = "muted";
-      li.textContent = emptyText ?? "none";
+      li.textContent = emptyText ?? "None found";
       ul.append(li);
     }
     for (const item of items) {
@@ -87,13 +113,15 @@
     parent.append(wrap);
     const legend = document.createElement("p");
     legend.className = "eyes-status";
-    legend.textContent = `${composition.lines} lines · ${composition.codePercent}% code · ${composition.commentPercent}% comments`;
+    legend.textContent = `${plural(composition.lines, "line")} · ${composition.codePercent}% code · ${composition.commentPercent}% comments`;
     parent.append(legend);
   }
 
+  const sentence = (text) => { const value = String(text ?? ""); return value.charAt(0).toUpperCase() + value.slice(1); };
+
   function renderFile(result) {
     for (const finding of result.findings) {
-      card(els.findings, finding.kind.toUpperCase(), finding.kind === "markers" ? "collision" : finding.kind === "references" ? "improver" : "", finding.text);
+      card(els.findings, sentence(finding.kind), finding.kind === "markers" ? "collision" : finding.kind === "references" ? "improver" : "", finding.text);
     }
     compositionBar(els.findings, result.composition);
     if (result.outline.length) {
@@ -101,16 +129,16 @@
         els.findings,
         "Outline",
         result.outline.slice(0, 14).map((entry) => ({ label: `L${entry.line}`, value: entry.label })),
-        "no outline entries"
+        "No outline entries"
       );
-      if (result.outline.length > 14) card(els.findings, "OUTLINE", "improver", `…and ${result.outline.length - 14} more entries`);
+      if (result.outline.length > 14) card(els.findings, "Outline", "improver", `…and ${plural(result.outline.length - 14, "more entry", "more entries")}`);
     }
     if (result.markers.length) {
       list(
         els.findings,
         "Markers",
         result.markers.slice(0, 10).map((marker) => ({ label: `${marker.level} L${marker.line}`, value: marker.text })),
-        "clean"
+        "Clean"
       );
     }
     const missing = result.references.filter((reference) => !reference.found);
@@ -118,35 +146,44 @@
       els.findings,
       "Referenced paths",
       result.references.slice(0, 12).map((reference) => ({
-        label: reference.found ? "exists" : "MISSING",
+        label: reference.found ? "Present" : "Missing",
         value: reference.ref,
         title: reference.found ? "present in the work tree" : "not found in the work tree",
       })),
-      "no path references"
+      "No path references"
     );
     for (const reference of missing.slice(0, 8)) {
       const row = document.createElement("li");
       row.className = "muted";
-      row.textContent = `missing: ${reference.ref}`;
+      row.textContent = `Missing: ${reference.ref}`;
       els.evidence.append(row);
     }
+    if (result.references.length && !missing.length) {
+      const row = document.createElement("li");
+      row.textContent = result.references.length === 1 ? "The referenced path exists in the work tree." : `All ${result.references.length} referenced paths exist in the work tree.`;
+      els.evidence.append(row);
+    }
+    const limit = document.createElement("li");
+    limit.textContent = "Local read of this file only. Nothing was run.";
+    els.evidence.append(limit);
   }
 
   function renderIdea(result) {
     const verdictClass = result.verdict === "new" ? "improver" : result.verdict === "related work exists" ? "collision" : "fix";
-    card(els.findings, "VERDICT", verdictClass, `${result.verdict} · ${result.coverage}% keyword coverage across ${result.files.length} file(s), ${result.scanned} scanned`);
+    card(els.findings, "Verdict", verdictClass, `${sentence(result.verdict)} · ${result.coverage}% keyword coverage across ${plural(result.files.length, "file")}, ${result.scanned} scanned`);
     const chips = document.createElement("div");
     chips.className = "keyword-row";
     for (const keyword of result.keywords) {
       const chip = document.createElement("span");
       chip.className = `chip ${result.keywordHits[keyword] ? "on" : ""}`;
-      chip.textContent = `${keyword} ${result.keywordHits[keyword] ? `·${result.keywordHits[keyword]}` : "· 0"}`;
+      chip.textContent = `${keyword} · ${result.keywordHits[keyword] || 0}`;
+      chip.title = result.keywordHits[keyword] ? `${plural(result.keywordHits[keyword], "match", "matches")} in the project` : "Not found in the project";
       chips.append(chip);
     }
     els.findings.append(chips);
-    for (const suggestion of result.suggestions) card(els.findings, "NEXT", "", suggestion);
+    for (const suggestion of result.suggestions) card(els.findings, "Next step", "", suggestion);
     for (const reference of result.references.slice(0, 8)) {
-      card(els.findings, reference.found ? "REF OK" : "REF MISSING", reference.found ? "" : "fix", reference.ref);
+      card(els.findings, reference.found ? "Present" : "Missing", reference.found ? "" : "fix", reference.ref);
     }
     if (result.hits.length) {
       list(
@@ -157,12 +194,12 @@
           value: hit.snippet,
           title: `${hit.keyword} · ${hit.file}`,
         })),
-        "no hits"
+        "No matches"
       );
     } else {
       const li = document.createElement("li");
       li.className = "muted";
-      li.textContent = "No evidence hits — every keyword is new ground.";
+      li.textContent = "No matches in the project. Every keyword is new ground.";
       els.evidence.append(li);
     }
   }
@@ -182,15 +219,15 @@
     const inventory = result.inventory || {};
     const plans = result.plans || [];
     const summary = result.summary || {};
-    card(els.findings, "PROJECT", "improver", `${inventory.files || 0} files · ${inventory.sourceFiles || 0} source files · ${inventory.testFiles || 0} test files · ${inventory.documents || 0} documents`);
-    card(els.findings, "PLAN CHECK", "", `${plans.length} old plan(s) · ${summary.claimedComplete || 0} completion claim(s) · ${summary.missingReferences || 0} missing path(s). Related code and existing paths are evidence to review; they do not prove a plan is complete.`);
+    card(els.findings, "Project", "improver", `${plural(inventory.files || 0, "file")} · ${plural(inventory.sourceFiles || 0, "source file")} · ${plural(inventory.testFiles || 0, "test file")} · ${plural(inventory.documents || 0, "document")}`);
+    card(els.findings, "Plan check", "", `${plural(plans.length, "old plan")} · ${plural(summary.claimedComplete || 0, "completion claim")} · ${plural(summary.missingReferences || 0, "missing path")}. Related code and existing paths are evidence to review; they do not prove a plan is complete.`);
 
     const heading = document.createElement("h4");
     heading.textContent = "Starting points";
     els.findings.append(heading);
     for (const point of result.startingPoints || []) {
       const block = document.createElement("section");
-      card(block, "NEXT", "improver", point.title);
+      card(block, "Next step", "improver", point.title);
       const reason = document.createElement("p");
       reason.textContent = point.reason;
       block.append(reason);
@@ -210,8 +247,8 @@
       block.append(prepare);
       els.findings.append(block);
     }
-    if (!result.startingPoints?.length) card(els.findings, "NEXT", "", "Describe the outcome you want in the idea box to explore a starting point.");
-    list(els.findings, "Languages", (inventory.languages || []).map((language) => `${language.name} · ${language.count} files`), "No source languages discovered.");
+    if (!result.startingPoints?.length) card(els.findings, "Next step", "", "Describe the outcome you want under Idea to explore a starting point.");
+    list(els.findings, "Languages", (inventory.languages || []).map((language) => `${language.name} · ${plural(language.count, "file")}`), "No source languages discovered.");
     list(els.findings, "Entry points", inventory.entryPoints || [], "No entry points discovered.");
     list(els.findings, "Checks discovered — not run", (inventory.checks || []).map((check) => `${check.name}: ${check.command}`), "No automated checks discovered.");
 
@@ -258,7 +295,7 @@
       }
       els.findings.append(details);
     }
-    if (!plans.length) card(els.findings, "PLANS", "", "No old plans were found in the scanned documents or this project's saved Studio plans.");
+    if (!plans.length) card(els.findings, "Plans", "", "No old plans were found in the scanned documents or this project's saved Studio plans.");
     for (const limitation of result.limitations || []) {
       const row = document.createElement("li");
       row.textContent = limitation;
@@ -277,8 +314,8 @@
     const heading = document.createElement("h4");
     heading.textContent = "AI deep read";
     els.aiOut.append(heading);
-    if (typeof ai.summary === "string" && ai.summary) card(els.aiOut, "SUMMARY", "improver", ai.summary);
-    for (const [key, tag] of [["features", "FEATURE"], ["ideas", "IDEA"], ["content", "CONTENT"], ["gaps", "GAP"]]) {
+    if (typeof ai.summary === "string" && ai.summary) card(els.aiOut, "Summary", "improver", ai.summary);
+    for (const [key, tag] of [["features", "Feature"], ["ideas", "Idea"], ["content", "Content"], ["gaps", "Gap"]]) {
       for (const item of (Array.isArray(ai[key]) ? ai[key] : []).filter((entry) => typeof entry === "string").slice(0, 6)) card(els.aiOut, tag, key === "gaps" ? "fix" : "", item);
     }
   }
@@ -291,13 +328,12 @@
     if (els.projectAi) els.projectAi.disabled = !state.projectResult || state.aiPending || !window.mefiStudio?.analyzerAi;
   }
 
-  function clearResult() {
+  function clearResult(kind) {
     state.result = null;
     state.ai = null;
-    els.findings.textContent = "";
-    els.evidence.textContent = "";
     els.aiOut.textContent = "";
     els.title.textContent = "Findings";
+    emptyState(kind);
   }
 
   // Every intent owns one sequence, including the time spent in a native picker.
@@ -307,7 +343,7 @@
     state.aiRequest += 1;
     state.pending = kind;
     state.aiPending = false;
-    clearResult();
+    clearResult(kind);
     controls();
     return { request: state.request, epoch: state.epoch, projectId: state.projectId };
   }
@@ -321,6 +357,8 @@
   function finish(token) {
     if (!current(token)) return;
     state.pending = null;
+    // A cancelled picker or a failed read leaves no result: drop the "Reading…" note.
+    if (!state.result) emptyState();
     controls();
   }
 
@@ -355,15 +393,15 @@
       state.projectResult = result;
       els.title.textContent = `Project · ${result.name}`;
       renderProject(result);
-      status(`Project scan complete · ${(result.plans || []).length} old plan(s) · ${(result.startingPoints || []).length} starting point(s) · checks not run`);
+      status(`Project scan complete · ${plural((result.plans || []).length, "old plan")} · ${plural((result.startingPoints || []).length, "starting point")} · checks not run`);
     } else if (result.kind === "file") {
       els.title.textContent = `Findings · ${result.name}`;
       renderFile(result);
-      status(`analyzed ${result.name} · ${result.language} · ${result.composition.lines} lines`);
+      status(`Analyzed ${result.name} · ${result.language} · ${plural(result.composition.lines, "line")}`);
     } else {
-      els.title.textContent = "Findings · idea";
+      els.title.textContent = "Findings · Idea";
       renderIdea(result);
-      status(`idea compared · ${result.verdict} · ${result.coverage}% keyword coverage`);
+      status(`Idea compared · ${result.verdict} · ${result.coverage}% keyword coverage`);
     }
     controls();
   }
@@ -378,7 +416,7 @@
     if (!filePath || !window.mefiStudio?.analyzerRun) return;
     if (pickerToken && !current(pickerToken)) return;
     const token = pickerToken || begin("file");
-    status(`reading ${base(filePath)}…`);
+    status(`Reading ${base(filePath)}…`);
     try {
       const response = await window.mefiStudio.analyzerRun("file", { path: filePath, projectId: token.projectId || undefined });
       if (!current(token, response)) return;
@@ -396,7 +434,7 @@
   async function runIdea(text) {
     if (!text || !window.mefiStudio?.analyzerRun) return;
     const token = begin("idea");
-    status("verifying idea against the work tree…");
+    status("Comparing the idea with the project's files…");
     try {
       const response = await window.mefiStudio.analyzerRun("idea", { text, projectId: token.projectId || undefined });
       if (!current(token, response)) return;
@@ -446,7 +484,7 @@
       state.pending = null;
       state.aiPending = false;
       clearResult();
-      status("Open a project folder to analyse it.");
+      status("Open a project folder to analyze it.");
       controls();
       return;
     }

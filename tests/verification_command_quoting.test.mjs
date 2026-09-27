@@ -61,3 +61,8 @@ test("a reported test path keeps its case, and one test is scheduled once whatev
   const commands = focusedTestsForTask({ files: ["tests/Physics.test.mjs"] }, { parts: { ran: "node --test /home/Dev/Game/tests/Physics.test.mjs, tests/physics.test.mjs" } });
   assert.deepEqual(commands, ['node --test "tests/Physics.test.mjs"', 'node --test "/home/Dev/Game/tests/Physics.test.mjs"']);
 });
+
+test("board-shaped file refs name the task's tests; other ref kinds do not", () => {
+  const commands = focusedTestsForTask({ refs: [{ kind: "file", title: "tests/physics.test.mjs", detail: "work tree" }, { kind: "web", title: "tests/other.test.mjs" }, { path: "tools/test_mefi_studio_probe.py" }] }, null);
+  assert.deepEqual(commands, ['node --test "tests/physics.test.mjs"', 'python -m unittest discover -s "tools" -p "test_mefi_studio_probe.py"']);
+});

@@ -271,6 +271,9 @@
     $("context-budget").addEventListener("change", previewContext);
     window.addEventListener("mefi:project-changed", () => {
       state.contextRead += 1; state.taskRead += 1; state.read += 1; state.at = 0; state.tasks = []; state.snapshot = null; state.types.clear();
+      // A read cut off by this switch no longer owns the button (its finally
+      // checks the token just bumped), so it is released here.
+      $("refresh").disabled = false;
       $("task-type").value = "";
       $("context-task").value = ""; $("context-sections").replaceChildren();
       if (!document.getElementById("tab-graph")?.hidden) { refresh(); if (state.view === "context") show("context"); }

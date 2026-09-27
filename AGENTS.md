@@ -19,3 +19,24 @@ Longer-form docs live under `docs/`; superseded ones under `docs/archive/`.
   user state, settings, API keys, databases, screenshots, or migration backups.
 - Preserve the package/app names so existing Electron settings remain usable.
 - Game tests must run through the game repository's documented pipeline.
+
+## Working across PCs
+
+The owner works on this repository from three PCs. GitHub `main` is the only
+state they share. Local branches, worktrees, stashes, uncommitted files,
+Claude Code sessions and Claude's memory stay on the PC that made them.
+
+- A new Claude Code session runs `node scripts/sync.mjs --hook` (the
+  SessionStart hook in `.claude/settings.json`). It fetches, fast-forwards
+  `main` when it can, and reports what is not on GitHub `main` yet. Act on
+  that report before starting new work.
+- Land finished work on `main`, then run `npm run sync`. It fetches,
+  fast-forwards or pushes `main`, and lists what is left. Never force-push
+  `main`, and never leave finished work only on one PC.
+- Park unfinished work that another PC may need on a pushed `wip/<topic>`
+  branch. Its commit message should say what is missing and which tests fail.
+- Other sessions may be working in the same checkout. Check `git status` and
+  the running sessions before switching branches, stashing or resetting.
+  Isolated work belongs in a separate worktree or clone.
+- Studio shows the same report under Friends › Your PCs
+  (`renderer/pc-sync.js`, main's `sync:*` channels).

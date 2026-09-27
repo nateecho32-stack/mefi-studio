@@ -29,7 +29,30 @@ const RUN_OK = [
 ].join("\n") + "\n";
 const RUN_REFUSED = JSON.stringify({ type: "error", sessionID: "ses_x", error: { name: "APIError", data: { message: "Error from provider (Console): OpenCode's free tier can only be used from within OpenCode", statusCode: 403 } } }) + "\n";
 
-function harness({ settings = {}, exec, projectOpen = true, ideas = [], analyze = async () => ({ inventory: { files: 3 } }), assistant = { ok: false }, smoke = false, autoSetup = null, admitIdeas = null } = {}) {
+for (const provider of ["codex", "claude", "grok", "antigravity"]) test(`${provider} maps without an OpenCode install, model or scan`, async () => {
+  const calls = [];
+  const h = harness({ settings: { aiProvider: provider }, assistant: { ok: true, provider }, assistantMap: async (request) => { calls.push(request); return { ok: true, text: JSON.stringify(MAP_REPLY) }; } });
+  const result = await h.service.map();
+  assert.equal(result.ok, true);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].prompt, /Use only the supplied local inventory/);
+  assert.equal(h.state.calls.length, 0, "OpenCode is never launched");
+  assert.equal(h.state.ideas.length, 1);
+  assert.equal(h.state.writes.length, 0, "mapping changes no route settings");
+});
+
+test("cancelling a subscription map drops the late answer and its ideas", async () => {
+  let finish, started;
+  const ready = new Promise((resolve) => { started = resolve; });
+  const h = harness({ settings: { aiProvider: "codex" }, assistant: { ok: true }, assistantMap: () => { started(); return new Promise((resolve) => { finish = resolve; }); } });
+  const pending = h.service.map(); await ready;
+  assert.equal((await h.service.map()).reason, "busy");
+  h.service.cancel(); finish({ ok: true, text: JSON.stringify(MAP_REPLY) });
+  assert.equal((await pending).reason, "cancelled");
+  assert.equal(h.state.ideas.length, 0); assert.equal(h.state.mapFiles.length, 0);
+});
+
+function harness({ settings = {}, exec, projectOpen = true, ideas = [], analyze = async () => ({ inventory: { files: 3 } }), assistant = { ok: false }, smoke = false, autoSetup = null, admitIdeas = null, assistantMap = null } = {}) {
   const state = { settings: structuredClone(settings), writes: [], ideas: structuredClone(ideas), ideaWrites: [], mapFiles: [], sent: [], progress: [], logs: [], calls: [] };
   const scanOutputs = {
     "where opencode": "C:\\Users\\me\\AppData\\Roaming\\npm\\opencode\n", "opencode --version": "1.18.31\n", "opencode auth list": AUTH,
@@ -47,7 +70,7 @@ function harness({ settings = {}, exec, projectOpen = true, ideas = [], analyze 
     writeSettings: async (next) => { state.settings = structuredClone(next); state.writes.push(structuredClone(next)); },
     decryptKey: (settings, field) => (settings?.[field] ? "secret" : null),
     assistantRoute: async () => assistant,
-    autoSetup,
+    autoSetup, assistantMap,
     projects: { current: () => ({ id: "project_1", name: "probe", path: "C:\\probe" }), open: () => projectOpen },
     analyzeProject: analyze,
     runEnv: () => ({ OPENCODE_CONFIG_CONTENT: '{"snapshot":false}' }),
@@ -134,7 +157,7 @@ test("map refuses to run without a project, a scan, an explorer, or while anothe
   const bare = harness({ settings: { firstRun: { explorer: { model: null, reason: "No free model and no linked provider." }, providers: { paid: [] } } } });
   const refused = await bare.service.map();
   assert.equal(refused.reason, "no-explorer");
-  assert.match(refused.error, /No free model/);
+  assert.match(refused.error, /Choose an existing subscription/);
   const missing = harness({ settings: { firstRun: { explorer: { model: "opencode/x-free" }, providers: { paid: [] }, opencode: { installed: false } } } });
   assert.equal((await missing.service.map()).reason, "no-opencode");
   const smoke = harness({ smoke: true });
@@ -222,7 +245,7 @@ test("map reports a free-tier refusal, a timeout, a start failure and an unparsa
   const timed = harness({ exec: run({ code: null, stdout: event("step_start") + "\n", stderr: "", timedOut: true, error: "timed out" }), settings: { firstRun: { explorer: { model: "opencode/nemotron-3.5-lightning-free" }, providers: { paid: [] } } } });
   assert.equal((await timed.service.map()).reason, "timeout");
   const dead = harness({ exec: run({ code: null, stdout: "", stderr: "", timedOut: false, error: "spawn opencode ENOENT" }), settings: { firstRun: { explorer: { model: "opencode/nemotron-3.5-lightning-free" }, providers: { paid: [] } } } });
-  assert.match((await dead.service.map()).error, /could not start/);
+  assert.match((await dead.service.map()).error, /could not finish/);
   const prose = harness({ exec: run({ code: 0, stdout: event("text", { text: "I could not map this folder." }) + "\n", stderr: "", timedOut: false, error: null }), settings: { firstRun: { explorer: { model: "opencode/nemotron-3.5-lightning-free" }, providers: { paid: [] } } } });
   const unparsable = await prose.service.map();
   assert.equal(unparsable.reason, "unparsable");

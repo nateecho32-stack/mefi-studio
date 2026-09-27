@@ -12,6 +12,7 @@ import {
   mergeIdeas,
   isExtractionArtifact,
   housekeepingSweep,
+  tidy,
   ownershipFence,
   fixThemeKey,
   planThemeKey,
@@ -427,6 +428,59 @@ test("housekeepingSweep: claimed copies win title collapse; two claims both stay
   assert.ok(out.tasks.some((t) => t.id === "claimed"), "claimed copy wins");
   assert.ok(!out.tasks.some((t) => t.id === "unclaimed"), "unclaimed duplicate dropped");
   assert.ok(out.tasks.some((t) => t.id === "claimA") && out.tasks.some((t) => t.id === "claimB"), "two live attempts both stay");
+});
+
+// ---- resolved AI-link tickets leave the handout queue -------------------------
+
+const aiLinkRequest = (extra = {}) => ({
+  id: "r_link",
+  title: "Fix: AI link failing, backoff escalating",
+  prompt: "A-Eyes critical alert: AI link failing, backoff escalating. 5 consecutive failures, backoff now 48m. Sessions: unknown. Find the root cause, fix it, and run the relevant test set before reporting back.",
+  alertTitle: "AI link failing, backoff escalating",
+  sessions: [],
+  source: "fix",
+  at: Date.now() - 9 * HOUR,
+  ...extra,
+});
+const HEALTHY_AI = { keyPresent: true, online: true, failures: 0, backoffUntil: 0 };
+const DOWN_AI = { keyPresent: true, online: false, failures: 5, backoffUntil: Date.now() + 48 * 60000 };
+
+test("compactor purges a resolved AI-link fix ticket from the handout queue", () => {
+  const now = Date.now();
+  const other = { id: "r_dup", title: "Fix: media-browser inline duplicated", source: "fix", alertTitle: "Duplicate media-browser.js inline", at: now - HOUR };
+  const out = compact({ requests: [aiLinkRequest(), other], tasks: [], ideas: [], collisions: null, now, ai: HEALTHY_AI });
+  assert.ok(!out.requests.some((request) => request.id === "r_link"), "the stale AI-link ticket is gone");
+  assert.ok(out.requests.some((request) => request.id === "r_dup"), "unrelated fix tickets stay");
+  assert.ok(out.report.resolved >= 1, `the report names the resolution: ${JSON.stringify(out.report)}`);
+  assert.equal(out.report.reviewed?.next ?? null, "Fix: media-browser inline duplicated", "the next pick stops naming the dead job");
+});
+
+test("compactor keeps the AI-link ticket while the link is actually down, unknown, or claimed", () => {
+  const now = Date.now();
+  for (const ai of [DOWN_AI, null, { keyPresent: true, online: true, failures: 3, backoffUntil: 0 }, { keyPresent: false, online: true, failures: 0, backoffUntil: 0 }]) {
+    const out = compact({ requests: [aiLinkRequest()], tasks: [], ideas: [], collisions: null, now, ai });
+    assert.equal(out.requests.length, 1, `no healthy evidence, no purge (ai=${JSON.stringify(ai)})`);
+  }
+  const claimed = compact({
+    requests: [aiLinkRequest({ status: "running", runId: "run_1" })],
+    tasks: [], ideas: [], collisions: null, now, ai: HEALTHY_AI,
+  });
+  assert.equal(claimed.requests.length, 1, "a claim in flight is never touched");
+});
+
+test("compactor never purges a chat ask because the link recovered", () => {
+  const now = Date.now();
+  const chat = { id: "r_chat", title: "Fix the AI link retry table", prompt: "the backoff looks wrong", source: "chat", at: now - HOUR };
+  const out = compact({ requests: [chat], tasks: [], ideas: [], collisions: null, now, ai: HEALTHY_AI });
+  assert.deepEqual(out.requests.map((request) => request.id), ["r_chat"]);
+});
+
+test("tidy drops a resolved AI-link ticket and keeps it while the link is down", () => {
+  const now = Date.now();
+  const healthy = tidy({ requests: [aiLinkRequest()], tasks: [], ideas: [], now, ai: HEALTHY_AI });
+  assert.deepEqual(healthy.requests, [], "tidy purges the resolved ticket too");
+  const down = tidy({ requests: [aiLinkRequest()], tasks: [], ideas: [], now, ai: DOWN_AI });
+  assert.equal(down.requests.length, 1, "an outage is still real work");
 });
 
 // ---- identity helpers --------------------------------------------------------

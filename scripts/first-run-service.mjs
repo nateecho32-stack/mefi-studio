@@ -25,7 +25,7 @@ export function createFirstRunService(deps = {}) {
   const {
     scanner, mapper, judge, readSettings, writeSettings, decryptKey = () => null, assistantRoute = async () => ({ ok: false }),
     projects, analyzeProject = async () => null, runEnv = () => ({}), readIdeas = async () => [], writeIdeas = async () => {}, admitIdeas = null,
-    writeMapFile = async () => {}, readMapFile = async () => null, assistModule = null, assistantChat = null, autoSetup = null, send = () => {}, progress = () => {}, log = () => {},
+    writeMapFile = async () => {}, readMapFile = async () => null, assistModule = null, assistantChat = null, assistantMap = null, autoSetup = null, send = () => {}, progress = () => {}, log = () => {},
     exec = scanner?.spawnExec, env = process.env, platform = process.platform, now = Date.now, smoke = false, mapTimeoutMs = MAP_TIMEOUT_MS,
   } = deps;
   for (const [name, value] of Object.entries({ scanner, mapper, judge, readSettings, writeSettings, projects })) {
@@ -151,14 +151,21 @@ export function createFirstRunService(deps = {}) {
     // the machine has (saved keys, installed CLIs, a local server), so a
     // machine without OpenCode still leaves this step configured.
     const auto = await autoPlan({ apply: true });
+    const subscription = auto?.active?.provider || settings.aiProvider;
+    if (["codex", "claude", "grok", "antigravity"].includes(subscription)) {
+      firstRun.explorer = { transport: "assistant", provider: subscription, model: null, free: false, reason: "Uses the selected subscription and local project scan." };
+      firstRun.builder = { cli: subscription, model: settings.executorModels?.[subscription] || null, free: false, reason: "Uses the same subscription." };
+      firstRun.judge = { kind: "assistant", model: null, reason: "Uses the same subscription for agent decisions." };
+      await updateSettings((next) => { next.firstRun = firstRun; });
+    }
     if (auto?.applied === true) applied.push("autoSetup");
     const notes = [];
     if (auto?.ok) notes.push(`Auto setup: ${auto.summary}`);
     else if (auto?.error && !plan.ok) notes.push(`Auto setup: ${auto.error}`);
-    if (firstRun.builder.model) notes.push("The free builder model is saved: choose the Free coding tier in Settings to run it one worker at a time (Auto keeps it as OpenCode's pinned model when the z.ai plan is not in use).");
-    if (plan.judge.kind === "assistant" || plan.judge.kind === "opencode-free") notes.push("The stand-in judge is saved; routing and intake use it once the judge route is wired (until then fixed defaults apply).");
+    if (firstRun.builder.free && firstRun.builder.model) notes.push("The free builder model is saved: choose the Free coding tier in Settings to run it one worker at a time (Auto keeps it as OpenCode's pinned model when the z.ai plan is not in use).");
+    if (firstRun.explorer.transport !== "assistant" && (plan.judge.kind === "assistant" || plan.judge.kind === "opencode-free")) notes.push("The stand-in judge is saved; routing and intake use it once the judge route is wired (until then fixed defaults apply).");
     log(`[first-run] applied: ${applied.join(", ")}`);
-    const summary = plan.ok || !auto?.ok
+    const summary = firstRun.explorer.transport === "assistant" ? `${subscription} handles mapping, guidance and coding with its own login.` : plan.ok || !auto?.ok
       ? `Explorer ${firstRun.explorer.model ?? "OpenCode default"}, builder ${firstRun.builder.model ?? "OpenCode default"}, judge ${firstRun.judge.kind}.`
       : `OpenCode is not usable yet; ${auto.summary}`;
     return { ok: true, firstRun, plan, applied, notes, summary, autoSetup: auto };
@@ -182,19 +189,27 @@ export function createFirstRunService(deps = {}) {
     if (!projects.open?.()) return { ok: false, reason: "no-project", error: "Open a project folder before mapping it." };
     const project = projects.current();
     if (projectId && projectId !== project.id) return { ok: false, reason: "project-changed", error: "The selected project changed. Reload and map again." };
+    // Reserve before any asynchronous reads so two clicks cannot start two maps.
+    Object.assign(mapping, { running: true, projectId: project.id, startedAt: now(), step: "reading the local project scan", tools: 0, child: null, cancelled: false });
+    try { return await mapProject(project); }
+    finally { Object.assign(mapping, { running: false, child: null, step: null }); }
+  }
+
+  async function mapProject(project) {
     const settings = await readSettings();
     const plan = settings?.firstRun ?? lastScan?.plan ?? null;
     const explorer = plan?.explorer ?? null;
-    if (!explorer) return { ok: false, reason: "no-scan", error: "Run the first scan first so the map knows which model to use." };
+    const useAssistant = typeof assistantMap === "function" && (explorer?.transport === "assistant" || ["claude", "codex", "grok", "antigravity"].includes(settings.aiProvider) || !explorer?.model && !plan?.providers?.paid?.length) && await routeOk();
+    if (!explorer && !useAssistant) return { ok: false, reason: "no-scan", error: "Choose a tool below, sign in and check its connection to start your map." };
     const paid = Array.isArray(plan?.providers?.paid) ? plan.providers.paid : [];
-    if (!explorer.model && !paid.length) return { ok: false, reason: "no-explorer", error: explorer.reason || "No explorer model is available: link a provider or allow a free model." };
-    if (plan?.opencode && plan.opencode.installed === false) return { ok: false, reason: "no-opencode", error: "OpenCode is not installed on this machine." };
-    const model = typeof explorer.model === "string" && scanner.MODEL_ID.test(explorer.model) ? explorer.model : null;
+    if (!useAssistant && !explorer.model && !paid.length) return { ok: false, reason: "no-explorer", error: "Choose an existing subscription or install a tool below, then sign in and retry your map." };
+    if (!useAssistant && plan?.opencode && plan.opencode.installed === false) return { ok: false, reason: "no-opencode", error: "Choose a connected tool below to map this project." };
+    const model = useAssistant ? null : typeof explorer.model === "string" && scanner.MODEL_ID.test(explorer.model) ? explorer.model : null;
     let report = null;
     try { report = await analyzeProject(); } catch (error) { log(`[first-run] analyzer unavailable for the map: ${errorText(error)}`); }
-    const prompt = mapper.buildFirstMapPrompt({ project: { name: project.name, path: project.path }, report, model });
+    const prompt = mapper.buildFirstMapPrompt({ project: { name: project.name, path: project.path }, report, model, suppliedContext: useAssistant });
     const args = ["run", "--format", "json", "--agent", "plan", ...(model ? ["--model", model] : []), "--title", MAP_TITLE, "--dir", project.path];
-    Object.assign(mapping, { running: true, projectId: project.id, startedAt: now(), step: "starting OpenCode", tools: 0, child: null, cancelled: false });
+    mapping.step = useAssistant ? "mapping with your selected provider" : "starting OpenCode";
     const texts = [];
     let buffer = "";
     let lastProgress = 0;
@@ -214,12 +229,16 @@ export function createFirstRunService(deps = {}) {
       if (now() - lastProgress >= PROGRESS_INTERVAL_MS) { lastProgress = now(); emit("running"); }
     };
     emit("start", { model, agent: "plan" });
-    log(`[first-run] map: ${project.name} on ${model ?? "OpenCode default"} (plan agent)`);
+    log(`[first-run] map: ${project.name} on ${useAssistant ? "selected assistant provider" : model ?? "OpenCode default"}`);
     let result;
+    let assistantReply = null;
     try {
-      result = await exec("opencode", args, {
+      if (useAssistant) {
+        if (!mapping.cancelled) assistantReply = await assistantMap({ prompt, project, report, timeoutMs: mapTimeoutMs, onSpawn: (child) => { mapping.child = child; if (mapping.cancelled) scanner.killTree(child, platform); } });
+        result = { code: assistantReply?.ok ? 0 : 1, stdout: "", error: assistantReply?.error };
+      } else if (!mapping.cancelled) result = await exec("opencode", args, {
         input: prompt, timeoutMs: mapTimeoutMs, env: { ...env, ...runEnv() }, cwd: project.path, platform,
-        onSpawn: (child) => { mapping.child = child; },
+        onSpawn: (child) => { mapping.child = child; if (mapping.cancelled) scanner.killTree(child, platform); },
         onData: (chunk) => { buffer = consumeEvents(buffer + chunk, onEvent); },
       });
     } catch (error) {
@@ -227,7 +246,7 @@ export function createFirstRunService(deps = {}) {
     }
     consumeEvents(buffer + "\n", onEvent);
     const elapsedMs = now() - mapping.startedAt;
-    const events = judge.parseRunEvents(result?.stdout ?? "");
+    const events = useAssistant ? { texts: assistantReply?.ok ? [assistantReply.text] : [], errors: [], sessionId: null, tokens: assistantReply?.tokenUsage ?? null, cost: assistantReply?.cost ?? null } : judge.parseRunEvents(result?.stdout ?? "");
     const finish = (payload) => {
       Object.assign(mapping, { running: false, child: null, step: null });
       lastMaps.set(project.id, { at: now(), ok: payload.ok === true, reason: payload.reason ?? null, summary: payload.summary ?? payload.error ?? null, model });
@@ -236,7 +255,8 @@ export function createFirstRunService(deps = {}) {
     };
     if (mapping.cancelled) return finish({ ok: false, reason: "cancelled", error: "The map was cancelled." });
     if (result?.timedOut) return finish({ ok: false, reason: "timeout", error: `The explorer did not finish within ${Math.round(mapTimeoutMs / 60000)} minutes; try a smaller folder or a paid model.` });
-    if (result?.error && !result?.stdout) return finish({ ok: false, reason: "spawn-failed", error: `OpenCode could not start: ${clip(result.error, 200)}` });
+    if (result?.error && !result?.stdout) return finish({ ok: false, reason: useAssistant ? "connection" : "spawn-failed", error: `The selected tool could not finish: ${clip(result.error, 200)} Use Sign in or Check connection below, then retry.` });
+    if (projects.current().id !== project.id) return finish({ ok: false, reason: "project-changed", error: "The project changed while mapping. Nothing was saved; map the selected folder again." });
     const joined = events.texts.join("\n");
     if (events.errors.length && !joined.trim()) {
       const first = events.errors[0];

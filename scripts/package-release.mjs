@@ -89,9 +89,11 @@ if (!skipBuild) {
 }
 
 const roots = await portableRoots();
-const portable = roots.find((root) => path.basename(path.dirname(root)).includes(version.raw)) ?? roots[0];
+// Exact version prefix, no fallback: `.includes("0.4.1")` matched a 0.4.10
+// folder, and the newest folder of any version was zipped as this release.
+const portable = roots.find((root) => path.basename(path.dirname(root)).startsWith(`mefi-studio-${version.raw.replace(/[^a-zA-Z0-9.-]/g, "-")}-`));
 if (!portable) {
-  console.error("no packaged release folder under dist/releases — run without --skip-build");
+  console.error(`no packaged release folder for ${version.raw} under dist/releases — run without --skip-build`);
   process.exit(1);
 }
 console.log(`portable folder: ${path.relative(STUDIO, portable)}`);
@@ -100,7 +102,13 @@ const zipName = releaseAssetName(version.raw, { platform: DEFAULT_PLATFORM, arch
 const zipPath = path.join(STUDIO, "dist", "releases", zipName);
 const checksumPath = `${zipPath}.sha256`;
 await rm(zipPath, { force: true });
-const zipped = await zipDirectory(portable, zipPath, { rootName: PORTABLE_NAME });
+// A release folder that was ever launched holds that session's board and
+// settings under resources/app/data; only the two tracked catalogs ship.
+const SHIPPED_DATA = new Set(["curated.json", "models.json"]);
+const zipped = await zipDirectory(portable, zipPath, {
+  rootName: PORTABLE_NAME,
+  include: (rel) => !rel.startsWith("resources/app/data/") || SHIPPED_DATA.has(rel.slice("resources/app/data/".length)),
+});
 const digest = await sha256File(zipPath);
 await writeFile(checksumPath, `${digest}  ${zipName}\n`);
 console.log(`release zip: ${path.relative(STUDIO, zipPath)} (${zipped.entries} files)`);

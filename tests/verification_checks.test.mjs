@@ -104,6 +104,31 @@ test("owner-side remaining notes are handoffs, not outstanding obligations", () 
   assert.equal(verifyCompletion({ ...claim, resultNote: { parts: { done: "work landed", remaining: "none in repo scope (bookkeeping: owner)" } } }).reason, "outstanding obligations remain");
 });
 
+test("remaining prose owed by other work is a deferral, not this card's obligation", () => {
+  // The triple-landed media-browser fix: a finished card's honest remaining
+  // note attributed the stale committed booklet to sibling sessions, the
+  // verifier read it as an outstanding obligation, reopened the card, and a
+  // third session rebuilt the same booklet byte-identical.
+  const claim = { verdictOk: true, hasSession: true, changedFiles: 2, observedChecks: [check()], resultNote: { parts: { done: "landed missing fixture line + TESTRUNS row, tests 4/4+3/3", remaining: "committed booklet.html is stale (predates 436a5a4+), owed by sibling sessions landing their renderer edits" } } };
+  const verdict = verifyCompletion(claim);
+  assert.notEqual(verdict.reason, "outstanding obligations remain");
+  assert.equal(verdict.state, "verified", "the deferral leaves the positive-evidence gates in charge");
+  for (const remaining of [
+    "the committed booklet is stale — owned by the parent task",
+    "booklet refresh; other sessions own that rebuild",
+    "another session handles the committed copy",
+    "the doc pass is tracked to other cards",
+  ]) {
+    const shape = verifyCompletion({ ...claim, resultNote: { parts: { done: "work landed", remaining } } });
+    assert.notEqual(shape.reason, "outstanding obligations remain", remaining);
+  }
+  // The reading stays narrow: an imperative aimed at this card, and a
+  // leftover with no attribution at all, still bind.
+  assert.equal(verifyCompletion({ ...claim, resultNote: { parts: { done: "work landed", remaining: "fix the stale booklet owed by other sessions" } } }).reason, "outstanding obligations remain");
+  assert.equal(verifyCompletion({ ...claim, resultNote: { parts: { done: "work landed", remaining: "committed booklet.html is stale (predates 436a5a4+)" } } }).reason, "outstanding obligations remain");
+  assert.equal(verifyCompletion({ ...claim, remaining: ["regression test"], resultNote: { parts: { done: "x", remaining: "owed by sibling sessions" } } }).reason, "outstanding obligations remain", "a tracked remaining list still binds");
+});
+
 test("done+verified retries with 0 changed files discharge on a green scoped-check rerun", () => {
   // The documented collision-delegate loop shapes: verification-only
   // attempts whose scoped checks re-ran green over already-landed work, with

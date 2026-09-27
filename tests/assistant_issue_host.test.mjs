@@ -271,8 +271,8 @@ test("a split with no note briefs the new card with the ask itself", async () =>
   const [card] = h.created;
   assert.equal(card.title, "Follow-up: Add the retry banner");
   assert.equal(card.prompt, "the retry store has to be written too — the brief only covers the view\n\n"
-    + "Split out of \"Add the retry banner\" (task_1) by the owner: build only this. If it turns out to be something only the owner can do "
-    + "(the board, Studio's task store, another session's files), put it under owner: in MEFI_RESULT and finish; do not ask to split it again.");
+    + "Split out of \"Add the retry banner\" (task_1) by the owner: build only this. Keep routine repairs, failing checks and concurrent-file conflicts in remaining: until resolved. "
+    + "Preserve other sessions' work; Studio handles board bookkeeping. Reserve owner: for a concrete human decision, missing access or physical action; do not ask to split it again.");
   // The decision says what it was about, and the log line keeps its wording.
   const task = h.board.tasks.find((row) => row.id === "task_1");
   assert.equal(task.decisions.at(-1).choice, "split");

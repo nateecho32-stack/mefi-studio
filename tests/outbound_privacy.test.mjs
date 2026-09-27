@@ -89,3 +89,9 @@ test("safeExcerpt has exactly one definition", async () => {
   assert.ok(!/function safeExcerpt\s*\(/.test(analyzer), "analyzer.mjs must import it, not redefine it");
   assert.match(analyzer, /import \{ safeExcerpt \} from "\.\/redaction\.cjs";/);
 });
+
+test("an authorization scheme keeps its word and loses its credential", () => {
+  assert.equal(scrubOutbound("Authorization: Bearer abcdefSECRETTOKEN"), "Authorization: Bearer [redacted]");
+  assert.equal(scrubOutbound("authorization=Basic dXNlcjpwYXNz"), "authorization=Basic [redacted]");
+  assert.equal(scrubOutbound("token=abc123"), "token=[redacted]");
+});

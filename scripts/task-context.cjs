@@ -278,10 +278,10 @@ function resolveStaleFileScope(task, { exists = null, locate = null } = {}) {
   const resolved = new Map();
   const healed = [], missing = [];
   for (const entry of paths) {
-    if (exists(entry)) { resolved.set(entry, entry); continue; }
+    if (exists(entry, task)) { resolved.set(entry, entry); continue; }
     const base = entry.split(/[\\/]/).pop();
     const found = typeof locate === "function" ? locate(base, task) : null;
-    if (found && found !== entry && exists(found)) {
+    if (found && found !== entry && exists(found, task)) {
       resolved.set(entry, found);
       healed.push({ from: entry, to: found });
     } else {

@@ -9,6 +9,22 @@ const flushUntil = async (predicate) => {
   for (let turn = 0; turn < 200 && !predicate(); turn += 1) await Promise.resolve();
   assert.ok(predicate(), "the awaited host boundary must be reached");
 };
+
+for (const provider of ["codex", "claude", "grok", "antigravity"]) test(`cluster advisors use a lone ${provider} subscription`, async () => {
+  const h = executorHost({ mode: "cluster", tasks: [task("subscription")] });
+  h.env.resolveAiRoute = async (_role, options) => {
+    assert.ok(options.allowCli.has(provider));
+    return { ok: true, cli: true, provider, model: "" };
+  };
+  const calls = [];
+  h.env.cliAssistantCall = async (route, _system, _user, _tokens, options) => { calls.push({ provider: route.provider, taskType: options.taskType }); return { ok: true, text: "Subscription advisory findings." }; };
+  h.env.httpAssistantCall = async () => assert.fail("a subscription team must not need an API key");
+  h.wake(); await h.pump();
+  assert.equal(calls.length, 2);
+  assert.ok(calls.every((call) => call.provider === provider));
+  assert.equal(h.starts.length, 1);
+  assert.match(h.starts[0].child.prompt, /Subscription advisory findings/);
+});
 function holdSupport(h) {
   const pending = [];
   const complete = h.env.httpAssistantCall;
@@ -102,7 +118,7 @@ test("cluster runs two task-focused advisors in parallel and hands both findings
   assert.deepEqual(h.supportJobs.map((row) => row.role).sort(), ["cluster-planner", "cluster-reviewer"]);
   assert.ok(h.supportJobs.every((row) => row.ai === true));
   assert.ok(h.supportJobs.every((row) => row.targets.some((target) => target.kind === "task" && target.id.includes("focus"))));
-  assert.ok(h.routeCalls.every((row) => row.allowCli === false), "advisory agents cannot fall through to a coding CLI");
+  assert.ok(h.routeCalls.every((row) => row.allowCli === h.env.DATA_ONLY_CLIS), "advisory agents allow only restricted text CLI sessions");
   assert.ok(h.contextCalls.every((row) => row.root === h.env.projectRoot()));
   assert.ok(h.supportCalls.every((row) => row.user.includes(task("focus").prompt)));
   held.release(); await pumping;

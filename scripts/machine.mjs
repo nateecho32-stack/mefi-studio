@@ -453,7 +453,7 @@ export async function processSnapshot({ powershell = "powershell", ps = "ps", ta
             parentPid: row.ParentProcessId,
             name: row.Name,
             commandLine: row.CommandLine ?? "",
-            startedAt: Date.parse(String(row.CreationDate ?? "")),
+            startedAt: cimDate(row.CreationDate),
             cpuMs: Math.round(((row.KernelModeTime ?? 0) + (row.UserModeTime ?? 0)) / 10000),
             memMB: Math.round((row.WorkingSetSize ?? 0) / (1024 * 1024)),
           }))
@@ -484,6 +484,19 @@ const cpuProgress = new Map();
 // module's own by default, a caller's Map in tests, or null for the one-sample
 // reading (an unchanged sample counts as the whole window), which the
 // --classify-fixture contract pins.
+// Windows PowerShell 5.1 ConvertTo-Json writes CIM dates as "/Date(ms)/",
+// which Date.parse reads as NaN (so no age, and a progress ledger reset on
+// every scan because NaN !== NaN). An ISO string still parses.
+function cimDate(value) {
+  const text = String(value ?? "");
+  const match = /^\/Date\((-?\d+)(?:[+-]\d+)?\)\/$/.exec(text);
+  return match ? Number(match[1]) : Date.parse(text);
+}
+
+// The same process across scans: POSIX start times come from whole-second
+// etimes, so they wobble by up to a second between scans.
+const sameStart = (a, b) => (Number.isFinite(a) && Number.isFinite(b) ? Math.abs(a - b) <= 2000 : !Number.isFinite(a) && !Number.isFinite(b));
+
 export function classify({ processes = [], previousCpu = new Map(), now = Date.now(), limits = {}, parentAlive = isPidAlive, progress = cpuProgress } = {}) {
   const options = { ...CLASSIFY_DEFAULTS, ...limits };
   const verdicts = [];
@@ -498,7 +511,7 @@ export function classify({ processes = [], previousCpu = new Map(), now = Date.n
       const key = String(row.pid);
       present.add(key);
       let entry = progress.get(key);
-      if (!entry || entry.cpuMs !== row.cpuMs || entry.startedAt !== row.startedAt) {
+      if (!entry || entry.cpuMs !== row.cpuMs || !sameStart(entry.startedAt, row.startedAt)) {
         entry = { cpuMs: row.cpuMs, since: now, startedAt: row.startedAt };
         progress.set(key, entry);
       }

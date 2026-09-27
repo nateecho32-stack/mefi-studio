@@ -68,6 +68,37 @@ test("a directive-named contract without a discovery shim is an orphan", () => {
   }
 });
 
+test("spec-like files under the git-ignored tools/logs/ artifacts tree are not collisions", () => {
+  const root = makeFixturePackage([
+    "tests/command_render.test.mjs",
+    "tools/logs/canvas-transfer-integration/tests/command_render.test.mjs",
+    "tools/logs/canvas-transfer-integration/scripts/brains.cjs",
+    "tools/logs/archive/test_mefi_studio_eyes.py",
+  ]);
+  try {
+    const { duplicates, orphans, missing } = scanSpecs(root);
+    assert.deepEqual(duplicates, []);
+    assert.deepEqual(orphans, []);
+    assert.deepEqual(missing, []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a logs-named directory elsewhere under tools/ is still scanned", () => {
+  const root = makeFixturePackage([
+    "tools/test_mefi_studio_eyes.py",
+    "tools/other-logs/test_mefi_studio_eyes.py",
+  ]);
+  try {
+    const { duplicates } = scanSpecs(root);
+    assert.equal(duplicates.length, 1);
+    assert.equal(duplicates[0].base, "test_mefi_studio_eyes");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("main exits 1 and prints findings on a dirty tree, 0 on a clean one", () => {
   const dirty = makeFixturePackage([
     "tools/test_mefi_studio_a.py",

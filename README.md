@@ -75,6 +75,8 @@ npm start
 
 1. **Choose a project** on the launch screen, then **Open studio** (agents stay off) or **Open and start agents**. Nothing runs before you choose. If a crash or a restart interrupted work in the last ten minutes, Studio skips the question, reopens that folder and restarts the agents that were running; closing the studio yourself always brings the question back.
 2. **Follow the walkthrough.** *Start here* opens on the first launch with seven short stops: scan, workspace, first map, connections, create, monitor, review. Each stop's **Walk with me** opens the real menu and highlights the control. It remembers your place.
+
+   At Scan or First map, choose an existing Codex, Claude Code, Grok or Antigravity login, or **Install and sign in**. **Check connection**, then **Use for the whole studio** routes mapping, chat, planning, agents and coding through that account. OpenCode and additional provider keys are optional. See [guided CLI setup](docs/cli-setup.md) for installation and account limits.
 3. **Check the connection.** A fresh install runs **auto setup** by itself on the first launch, from the keys, CLIs and local servers already on the machine, and **Settings › Connections** says what it chose. Press **Run auto setup** again after adding a key or CLI, or configure a provider there. No key yet? The catalog, manual planning and saved work all work without one.
 4. **Give one clear task** and watch it move from *Ready* to *Working* to *Review*.
 
@@ -148,6 +150,16 @@ The **Void Engine Discord** (<https://discord.gg/xgfKc5pVxG>) is where people sh
 - **Or fork it.** Studio is MIT-licensed and the lock is honest. In your fork, set `SELF_UNLOCKED = true` in `scripts/community.cjs` and everything unlocks without Discord. Every locked item has a **Copy agent prompt** button that asks your coding agent to make that change.
 
 A build whose Discord application id is not set yet offers only **Join** and the fork path. [docs/community.md](docs/community.md) covers the whole flow, what is stored where, and the maintainer's setup.
+
+## Working from several PCs
+
+GitHub is the meeting point. Each PC keeps its own clone, and the open project's default branch on GitHub is the one shared state.
+
+- **Friends › Your PCs** in the companion hub says whether this PC matches GitHub and lists anything that has not reached it yet: uncommitted files, unpushed commits, stashes, worktrees with changes, and branches that are not on `main`. Opening it only looks. **Sync this PC** pulls what your other PCs pushed and pushes this PC's commits on the default branch. It never overwrites uncommitted work, merges diverged histories or force-pushes.
+- **`npm run sync`** does the same from a terminal.
+- **Claude Code** runs `node scripts/sync.mjs --hook` at the start of each new session (`.claude/settings.json`). The hook fetches, fast-forwards `main` when it can, and hands the report to Claude. `AGENTS.md` has the working rules.
+
+Claude Code sessions, Claude's memory and local branches stay on the PC that made them. Anything another PC needs belongs on GitHub.
 
 ## Tests and checks
 

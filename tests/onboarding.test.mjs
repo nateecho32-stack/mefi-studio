@@ -424,6 +424,57 @@ function bridge(overrides = {}) {
   return { host, calls };
 }
 
+test("guided subscription setup detects without installing, recovers from login failure and starts mapping", async () => {
+  const actions = []; let connected = false;
+  const { host, calls } = bridge({
+    cliSetupStatus: async () => ({ ok: true, selected: "codex", clis: [{ id: "codex", name: "Codex", installed: true }] }),
+    cliSetupCheck: async (id) => { actions.push(["check", id]); return connected ? { ok: true, message: "Ready" } : { ok: false, error: "Sign in and retry." }; },
+    cliSetupUse: async (id) => { actions.push(["use", id]); return { ok: true }; },
+    cliSetupAction: async (payload) => { actions.push([payload.action, payload.id]); return { ok: true, launched: true }; },
+  });
+  const env = environment(new Map(), { host }); env.guide.open(); await env.settle();
+  assert.deepEqual(actions, [], "opening setup only detects tools");
+  assert.equal(env.el("cli-use").disabled, true);
+  env.el("steps").children[MAP].click();
+  env.get("workspace-project-name").textContent = "My project";
+  assert.equal(env.el("cli-setup").hidden, false);
+  env.el("cli-check").click(); await env.settle();
+  assert.match(env.el("cli-status").textContent, /Sign in/);
+  assert.equal(env.el("cli-use").disabled, true);
+  env.el("cli-login").click(); await env.settle();
+  connected = true;
+  env.el("cli-check").click(); await env.settle();
+  assert.equal(env.el("cli-use").disabled, false);
+  env.el("cli-use").click(); await env.settle();
+  assert.deepEqual(actions, [["check", "codex"], ["login", "codex"], ["check", "codex"], ["use", "codex"]]);
+  assert.ok(calls.some((call) => call[0] === "map"));
+  assert.ok(!calls.some((call) => call[0] === "scan"), "subscription setup never requires OpenCode");
+  assert.equal(JSON.parse(env.storage.get(KEY)).done[SCAN], true);
+});
+
+test("guided OpenCode scan and apply are reachable from First map", async () => {
+  const { host, calls } = bridge({ cliSetupStatus: async () => ({ ok: true, selected: "opencode", clis: [{ id: "opencode", name: "OpenCode", installed: true }] }) });
+  const env = environment(new Map(), { host }); env.guide.open(); await env.settle();
+  env.el("steps").children[MAP].click();
+  env.get("workspace-project-name").textContent = "My project";
+  assert.equal(env.el("cli-use").disabled, true);
+  env.el("cli-check").click(); await env.settle();
+  assert.equal(env.el("cli-use").disabled, false);
+  assert.match(env.el("cli-status").textContent, /Scan complete/);
+  env.el("cli-use").click(); await env.settle();
+  assert.ok(calls.some((call) => call[0] === "apply"));
+  assert.ok(calls.some((call) => call[0] === "map"));
+});
+
+test("Connections opens the tool setup even when the guide was left at Review", async () => {
+  const env = environment(); env.guide.open();
+  env.el("steps").children[REVIEW].click(); env.guide.close();
+  env.get("settings-guided-cli").click();
+  assert.equal(env.el("overlay").hidden, false);
+  assert.equal(env.el("cli-setup").hidden, false);
+  assert.equal(JSON.parse(env.storage.get(KEY)).step, SCAN);
+});
+
 test("the scan stop reads OpenCode only on an explicit press, shows the facts, and saves nothing until Use this setup", async () => {
   const { host, calls } = bridge();
   const env = environment(new Map(), { host }); env.guide.open();
@@ -463,7 +514,7 @@ test("a setup saved earlier (or from Settings) ticks the scan stop off from the 
   const env = environment(new Map(), { host }); env.guide.open();
   await env.settle();
   assert.equal(JSON.parse(env.storage.get(KEY)).done[SCAN], true);
-  assert.match(env.el("scan-status").textContent, /Setup saved on .*explorer opencode\/mimo-v2\.5-free, builder OpenCode default, judge jev/);
+  assert.match(env.el("scan-status").textContent, /Setup saved on .*explorer opencode\/mimo-v2\.5-free, builder selected provider, judge jev/);
 });
 
 test("a failed scan or a refused apply keeps the stop open and honest", async () => {
@@ -478,7 +529,7 @@ test("a failed scan or a refused apply keeps the stop open and honest", async ()
   const blocked = environment(new Map(), { host: unusable.host }); blocked.guide.open();
   blocked.el("scan-run").click();
   await blocked.settle();
-  assert.match(blocked.el("scan-status").textContent, /not usable yet/);
+  assert.match(blocked.el("scan-status").textContent, /Install and sign in/);
   assert.match(blocked.el("scan-facts").children[0].textContent, /not installed/);
 });
 
@@ -517,7 +568,7 @@ test("the map stop needs a selected project, streams the explorer's steps and ti
 test("a refused, cancelled or unparsable map explains what to do and leaves the stop unticked", async () => {
   const cases = [
     [{ ok: false, reason: "free-tier-refused", error: "The free tier refused this run." }, /refused this run\. Choose a paid model in Settings/],
-    [{ ok: false, reason: "no-scan", error: "Run the first scan first." }, /Go back to the Scan stop/],
+    [{ ok: false, reason: "no-scan", error: "Run the first scan first." }, /Connect a tool right here/],
     [{ ok: false, reason: "unparsable", error: "The explorer's reply contained no JSON object." }, /Map again; a second pass/],
     [{ ok: false, reason: "cancelled", error: "The map was cancelled." }, /was cancelled/],
   ];
@@ -690,7 +741,7 @@ test("a machine without OpenCode is still configured: the scan shows auto setup'
   await env.settle();
   env.el("scan-run").click();
   await env.settle();
-  assert.match(env.el("scan-status").textContent, /auto setup found a working route: Assistant on Claude Code CLI/);
+  assert.match(env.el("scan-status").textContent, /Assistant on Claude Code CLI/);
   const facts = env.el("scan-facts").children.map((item) => item.textContent);
   assert.match(facts[0], /OpenCode is not installed/);
   assert.match(facts[facts.length - 1], /^Auto setup: Assistant on Claude Code CLI/);
@@ -709,6 +760,6 @@ test("a first launch that already ran auto setup is reported at the scan stop be
   const { host } = bridge({ firstRunStatus: async () => ({ ok: true, firstRun: null, autoSetup: { at: 1, automatic: true, summary: "Assistant on z.ai GLM, fixed model defaults, builders on OpenCode." } }) });
   const env = environment(new Map(), { host }); env.guide.open();
   await env.settle();
-  assert.match(env.el("scan-status").textContent, /Auto setup ran on first launch: Assistant on z\.ai GLM.*Run the scan/);
+  assert.match(env.el("scan-status").textContent, /Auto setup ran on first launch: Assistant on z\.ai GLM.*Choose your tool/);
   assert.equal(JSON.parse(env.storage.get(KEY)).done[SCAN], false, "auto setup alone does not complete the scan stop");
 });
