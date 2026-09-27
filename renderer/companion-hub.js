@@ -8,8 +8,12 @@
   const name = () => { try { return localStorage.getItem("mefiStudio.workspace.companion")?.trim() || "Mefi"; } catch { return "Mefi"; } };
   const hub = { open: false, closing: false, section: null, locked: new Map(), returnFocus: null, timer: 0 };
   const el = {};
-  let host, data, bootPhase, audioFrame = 0, audioAt = 0, energy = 0, wakeTimer = 0, reactionIndex = 0, chatThinking = false;
+  let host, data, bootPhase, audioFrame = 0, audioAt = 0, energy = 0, wakeTimer = 0, reactionIndex = 0, chatThinking = false, anticTimer = 0, lastTouch = Date.now();
   const plays = new WeakMap();
+  // How it carries itself (Settings › Personality): faces or a plain check,
+  // and whether it plays on its own while nothing needs it.
+  const prefs = { personality: "balanced", expressions: true, antics: false };
+  const pick = (list) => list[Math.floor(Math.random() * list.length)];
   // No shared SVG IDs: each light can appear in the launch box, rail and hub.
   const face = () => '<svg class="agent-creature" viewBox="0 0 80 80" aria-hidden="true" focusable="false"><g class="agent-body"><circle class="agent-aura" cx="40" cy="44" r="25"/><path class="agent-vapor" d="M27 52C15 44 22 30 39 31c15 1 22-8 21-17-1 12-7 15-16 19"/><path class="agent-vapor agent-vapor-fine" d="M49 55c12-5 15-16 8-22M23 40c-3 10 3 17 12 17"/><circle class="agent-glow" cx="40" cy="44" r="15"/><circle class="agent-core" cx="40" cy="44" r="8.5"/><circle class="agent-heart" cx="38" cy="42" r="3.5"/><g class="agent-orbit"><circle class="agent-mote" cx="20" cy="41" r="1.5"/><circle class="agent-mote" cx="57" cy="53" r="1.1"/><circle class="agent-mote" cx="49" cy="25" r=".8"/></g></g><text class="agent-thought" x="40" y="21" text-anchor="middle"><tspan>.</tspan><tspan>.</tspan><tspan>.</tspan></text><g class="agent-reactions"/></svg>';
 
@@ -33,10 +37,13 @@
     const motion = !still() && Boolean(target.animate), effects = target.querySelector(".agent-reactions");
     const playback = { animations: [], timer: 0 }; plays.set(target, playback);
     const animate = (item, frames, options) => playback.animations.push(item.animate(frames, options));
-    if (effects) {
-      const words = expression || (target.closest('[data-mood="thinking"]') ? "..." : ["^_^", ":)", ":D", "<3"][reactionIndex++ % 4]);
+    // Without faces (Straight work) a finished reply is a plain check and
+    // everything else is only the little hop; "..." still says it is thinking.
+    const plain = !prefs.expressions && expression !== "..." && !target.closest('[data-mood="thinking"]');
+    if (effects && !(plain && expression !== "^_^")) {
+      const words = plain ? "✓" : expression || (target.closest('[data-mood="thinking"]') ? "..." : ["^_^", ":)", ":D", "<3"][reactionIndex++ % 4]);
       const smile = spark("text", "agent-reaction", { x: 40, y: 23, "text-anchor": "middle" }, words); effects.append(smile);
-      if (motion) {
+      if (motion && !plain) {
         animate(smile, [{ opacity: 0, transform: "translate(-3px,14px) scale(.4)", easing: "cubic-bezier(.22,1,.36,1)" }, { opacity: 1, transform: "translate(0,0) scale(1.08)", offset: .2 }, { opacity: 1, transform: "translate(2px,-2px) scale(1)", offset: .72 }, { opacity: 0, transform: "translate(5px,-9px) scale(.9)" }], { duration: 1750, easing: "linear", fill: "both" });
         // Replace a burst on repeated taps, so particles never accumulate.
         for (const [i, [x, y]] of [[-25, -8], [-16, -25], [15, -23], [26, -7], [18, 14], [-19, 13]].entries()) {
@@ -53,15 +60,68 @@
     const mood = chatThinking || data?.state?.state === "working" ? "thinking" : "idle";
     const target = hub.open ? el.avatar : host?.orb;
     const finished = target?.dataset.mood === "thinking" && mood === "idle";
-    for (const item of [host?.orb, el.avatar]) if (item) { if (item.dataset.mood !== mood) clearPlay(item.querySelector("svg")); item.dataset.mood = mood; }
-    if (el.status && data) el.status.textContent = chatThinking ? "Thinking with you…" : data.state?.state === "working" ? "Agents are working · run controls in Quick actions" : data.status || "Ready when you are";
+    for (const item of [host?.orb, el.avatar]) {
+      if (!item) continue;
+      // A dozing orb sleeps on through quiet refreshes; work or a touch wakes it.
+      const next = item === host?.orb && item.dataset.mood === "sleepy" && mood === "idle" ? "sleepy" : mood;
+      if (item.dataset.mood !== next) clearPlay(item.querySelector("svg"));
+      item.dataset.mood = next;
+    }
+    if (el.status && data) el.status.textContent = chatThinking ? "Thinking with you…" : data.state?.state === "working" ? "Agents are working · see What I'm doing" : data.status || "Ready when you are";
     if (finished && celebrate && data?.state?.state !== "needs-you") play(target?.querySelector("svg"), "^_^");
   }
   function thinking(active, { celebrate = true } = {}) {
     chatThinking = Boolean(active); syncMood(celebrate);
   }
+
+  // Petting: stroke it back and forth a few times and it leans in, hearts
+  // rise, and the bond remembers (one pet per few seconds, host-side).
+  function pet(svg) {
+    lastTouch = Date.now(); wake();
+    play(svg, prefs.expressions ? pick(["<3", "~♡", "^w^", "♡"]) : null);
+    window.mefiStudio?.companionBond?.("pet").then((result) => { if (result?.bond && el.bond) el.bond.textContent = result.bond; }).catch(() => {});
+  }
+  function pettable(control, svgOf) {
+    let lastX = null, direction = 0, strokes = 0, strokeAt = 0;
+    control.addEventListener("pointermove", (event) => {
+      if (event.buttons) { lastX = null; return; }
+      // A busy frame folds several moves into one event; a stroke is in them.
+      const moves = event.getCoalescedEvents?.() || [];
+      for (const move of moves.length ? moves : [event]) {
+        if (lastX == null) { lastX = move.clientX; continue; }
+        const delta = move.clientX - lastX;
+        if (Math.abs(delta) < 4) continue;
+        lastX = move.clientX;
+        const now = performance.now();
+        if (now - strokeAt > 700) strokes = 0;
+        if (Math.sign(delta) !== direction) { direction = Math.sign(delta); strokes += 1; strokeAt = now; }
+        if (strokes >= 4) { strokes = 0; pet(svgOf()); break; }
+      }
+    });
+    control.addEventListener("pointerleave", () => { lastX = null; strokes = 0; });
+  }
+  // Idle play (Settings › Idle play): now and then, while nothing needs it
+  // and the owner is not using it, the orb does something small on its own.
+  // After a long quiet spell it dozes until touched.
+  function wake() { if (host?.orb?.dataset.mood === "sleepy") { host.orb.dataset.mood = "idle"; syncMood(false); } }
+  function scheduleAntic() {
+    clearTimeout(anticTimer);
+    anticTimer = setTimeout(() => {
+      const orb = host?.orb, svg = orb?.querySelector(".agent-creature");
+      const resting = !chatThinking && ["resting", undefined].includes(data?.state?.state);
+      if (prefs.antics && svg && !still() && !document.hidden && !hub.open && orb.getClientRects().length && orb.dataset.mood !== "thinking") {
+        if (resting && Date.now() - lastTouch > 10 * 60 * 1000) { orb.dataset.mood = "sleepy"; play(svg, "zzz"); }
+        else {
+          const sound = window.MefiIdle?.audioStatus?.();
+          play(svg, sound?.listening ? "♪" : pick(["~", "o_o", "^^", "?", "✦"]));
+        }
+      }
+      scheduleAntic();
+    }, 35000 + Math.random() * 45000);
+  }
   function character(label) {
     const control = button("", () => play(control.querySelector("svg")), "agent-play");
+    pettable(control, () => control.querySelector("svg"));
     control.innerHTML = face(); control.setAttribute("aria-label", label); control.title = "Say hello · move your pointer to play";
     control.addEventListener("pointermove", (event) => {
       if (still()) return;
@@ -137,13 +197,15 @@
     });
   }
 
+  // Six bubbles, one job each: talk, see what it is doing, answer what waits,
+  // trade ideas for work, meet friends, and shape how it behaves.
   const items = [
-    ["ask", "Talk to me", "g-help", "Ask, plan, or make a task"],
-    ["friends", "Friends", "g-orbit", "Your PCs, rooms and listening"],
-    ["requests", "Requests", "g-tasks", "Decisions waiting for you"],
-    ["notices", "Notifications", "g-ideas", "What happened in your studio"],
-    ["settings", "Settings", "g-ambience", "Make this space yours"],
-    ["quick", "Quick actions", "g-command", "Setup, team, and audio"],
+    ["ask", "Talk", "g-help", "Chat, plan, or make a task"],
+    ["now", "What I'm doing", "g-command", "Work in progress and what just happened"],
+    ["requests", "Needs you", "g-tasks", "Decisions waiting for you"],
+    ["ideas", "Suggest work", "g-ideas", "Give me an idea, or take one of mine"],
+    ["friends", "Friends", "g-orbit", "Playdates, sharing, rooms and your PCs"],
+    ["settings", "Personality", "g-ambience", "How I behave, and settings"],
   ];
   function icon(glyph) { const span = node("span", "agent-hub-icon"); span.innerHTML = `<svg class="glyph" aria-hidden="true"><use href="#${glyph}"/></svg>`; return span; }
   function attach(value) {
@@ -171,9 +233,15 @@
     const extra = node("div", "agent-hub-extra"); detail.append(back, extra); layout.append(stage, detail);
     const foot = node("footer", "agent-hub-foot");
     const status = node("span", "", "Your work keeps its current run settings."); status.id = "agent-hub-status";
+    const bond = node("span", "agent-hub-bond"); bond.id = "agent-hub-bond";
     const audio = button("Audio link", () => navigate(() => window.MefiMusic?.openAudio?.()), "ghost mini"); audio.id = "agent-hub-audio";
-    foot.append(status, audio, node("kbd", "", "Esc")); shell.append(head, layout, foot); layer.append(shell); document.body.append(layer);
-    Object.assign(el, { layer, shell, stage, center, avatar, title, detail, extra, back, status, audio });
+    foot.append(status, bond, audio, node("kbd", "", "Esc")); shell.append(head, layout, foot); layer.append(shell); document.body.append(layer);
+    Object.assign(el, { layer, shell, stage, center, avatar, title, detail, extra, back, status, audio, bond });
+    // A pet in the hub or on the orb; any touch on the orb wakes a dozing one.
+    pettable(center, () => avatar.querySelector("svg"));
+    pettable(host.orb, () => host.orb.querySelector(".agent-creature"));
+    host.orb.addEventListener("pointerenter", () => { lastTouch = Date.now(); wake(); });
+    scheduleAntic();
     window.MefiPcSync?.subscribe?.(() => syncBadge());
     syncBadge();
     layer.addEventListener("click", (event) => { if (event.target === layer) close(); });
@@ -209,6 +277,7 @@
     if (!host || window.MefiBoot?.isActive?.() || otherDialog()) return false;
     if (hub.open) { if (hub.closing) { clearTimeout(hub.timer); hub.closing = false; el.layer.classList.remove("leaving"); } return true; }
     host.toggle(false); window.MefiCompanionUI?.freeze(); window.MefiSelect?.close();
+    lastTouch = Date.now(); wake();
     hub.returnFocus = document.activeElement; hub.open = true; hub.closing = false;
     el.layer.hidden = false; el.layer.classList.remove("leaving"); el.title.textContent = `A moment with ${name()}`;
     host.orb.setAttribute("aria-expanded", "true"); host.orb.setAttribute("aria-controls", "agent-hub");
@@ -252,29 +321,80 @@
     if (!section) { if (previous && hub.open) el.stage.querySelector(`[data-hub-section="${previous}"]`)?.focus({ preventScroll: true }); return; }
     const titles = Object.fromEntries(items.map(([id, label]) => [id, label]));
     const title = node("h3", "", titles[section]); title.tabIndex = -1; el.extra.append(title);
-    const panelTab = { ask: "ask", requests: "status", notices: "activity", settings: "settings" }[section];
+    const panelTab = { ask: "ask", requests: "status", now: "now", settings: "settings" }[section];
     if (panelTab) {
       el.detail.append(host.panel); host.panel.inert = false; host.panel.classList.add("companion-in-hub"); host.panel.setAttribute("role", "region");
       host.toggle(true, { hub: true }); window.MefiCompanionUI?.showTab(panelTab);
       if (section === "settings") el.extra.append(action("Open app settings", () => window.MefiNav?.go("studio", { category: "general" })));
     } else if (section === "friends") {
-      el.extra.append(node("p", "muted", "Make a little room for your friends. Link your community account, then join a room to listen together."),
-        action("Connect with Discord", () => window.MefiNav?.go("community")),
-        action("Friends & listening rooms", () => { window.MefiMusic?.openAudio?.(); window.MefiMusic?.setSource?.("link"); window.MefiMusic?.togetherHost?.()?.scrollIntoView({ block: "nearest" }); }),
-        node("p", "ab-quiet", "Choose Connect or Join in the room controls when you're ready."));
+      // Friends › Playground (renderer/companion-friends.js): friends'
+      // companions, playdates and what yours may share, answered in place.
+      const playground = window.MefiCompanionFriends?.card?.({ name: name(), face: (look) => lookFace(look) });
+      if (playground) el.extra.append(playground);
+      el.extra.append(action("Friends & listening rooms", () => { window.MefiMusic?.openAudio?.(); window.MefiMusic?.setSource?.("link"); window.MefiMusic?.togetherHost?.()?.scrollIntoView({ block: "nearest" }); }),
+        action("Connect with Discord", () => window.MefiNav?.go("community")));
       // Friends › Your PCs (renderer/pc-sync.js) stays in the hub: Sync this
       // PC answers in place instead of navigating away.
       const pcs = window.MefiPcSync?.card?.();
       if (pcs) el.extra.append(pcs);
     } else {
-      el.extra.append(node("p", "muted", "A few useful things, close at hand."),
-        action("Walk me through setup", () => window.MefiOnboarding?.open?.()),
-        action("Team & connections", () => window.MefiNav?.go("agents", { section: "setup", pane: "team" })),
-        action("Audio & music", () => window.MefiMusic?.openAudio?.()),
-        action("Appearance", () => window.MefiNav?.go("studio", { category: "appearance" })),
-        action("Run & pause controls", () => { window.MefiCompanion?.open?.(); window.MefiCompanionUI?.showTab("settings"); }));
+      el.extra.append(...ideas());
     }
     title.focus({ preventScroll: true }); resize();
+  }
+  // A companion face for a look: the wisp is this file's own light, the
+  // others the menu foot's drawings (MefiCompanion.face).
+  function lookFace(look) { return look === "wisp" || !window.MefiCompanion?.face ? face() : window.MefiCompanion.face(look); }
+
+  // Suggest work: the owner's idea goes to the inbox as their own request
+  // (the same add the inbox uses), and the companion offers its next picks
+  // from the backlog, each one Work on it away. Nothing starts on its own.
+  function ideas() {
+    const api = window.mefiStudio;
+    const projectId = () => window.MefiWorkspace?.activeProjectId?.() ?? null;
+    const form = node("form", "agent-hub-suggest");
+    const field = node("textarea"); field.rows = 3; field.maxLength = 4000; field.id = "agent-hub-suggest-text";
+    field.placeholder = "An idea, a fix, something you'd like made…"; field.setAttribute("aria-label", "Suggest work for your companion");
+    const send = node("button", "primary mini", "Suggest it"); send.type = "submit";
+    const said = node("p", "ab-quiet"); said.setAttribute("role", "status");
+    form.append(node("p", "muted", "Tell me what you'd like worked on. It goes to the inbox; I'll size it up before anything starts."), field, send, said);
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const text = field.value.trim();
+      if (!text || send.disabled) return;
+      send.disabled = true; said.textContent = "Adding it…";
+      let result;
+      try { result = await api?.eyesRequestsAction?.({ action: "add", projectId: projectId(), requests: [{ prompt: text, source: "manual" }] }); } catch (error) { result = { ok: false, error: error?.message }; }
+      send.disabled = false;
+      if (result?.ok === false || !result) { said.textContent = result?.error || "That could not be added. Try again."; return; }
+      field.value = ""; said.textContent = "Added to the inbox. Thank you!";
+      play(el.avatar.querySelector("svg"), "^_^");
+    });
+    const picks = node("section", "agent-hub-picks"); picks.setAttribute("aria-labelledby", "agent-hub-picks-title");
+    const heading = node("h4", "", "My picks for next"); heading.id = "agent-hub-picks-title";
+    const list = node("div", "agent-hub-pick-list"); list.append(node("p", "ab-quiet", "Looking at the board…"));
+    picks.append(heading, list);
+    Promise.resolve(api?.backlogStatus?.()).then((status) => {
+      // Only work that can go next: not what is running, held, cooling or waiting.
+      const next = (status?.next || []).filter((row) => row?.id && ["ready", "approval"].includes(row.stage)).slice(0, 4);
+      list.replaceChildren();
+      if (!next.length) list.append(node("p", "ab-quiet", status?.summary || "Nothing is waiting to be picked up."));
+      for (const row of next) {
+        const item = node("article", "companion-item");
+        const go = node("button", "ghost mini", "Work on it"); go.type = "button";
+        go.addEventListener("click", async () => {
+          go.disabled = true;
+          const result = await api?.assistantWorkOn?.({ kind: "task", id: row.id, label: String(row.title || "").slice(0, 80), projectId: projectId() }).catch((error) => ({ ok: false, error: error?.message }));
+          if (result?.ok === false) { window.MefiToast?.(result.error || "That could not start.", "warn"); go.disabled = false; return; }
+          go.textContent = "On it"; play(el.avatar.querySelector("svg"), "^_^");
+        });
+        item.append(node("strong", "", row.title || "Untitled task"), node("span", "ab-quiet", row.reason || ""), go);
+        list.append(item);
+      }
+      resize();
+    }).catch(() => { list.replaceChildren(node("p", "ab-quiet", "The board could not be read just now.")); });
+    const askMore = action("Ask me for more ideas", () => { window.MefiCompanion?.open?.(); window.MefiCompanionUI?.showTab("ask"); const input = document.querySelector("#companion-pane-ask textarea"); if (input) { input.value = "What should we work on next? Give me a few ideas."; input.focus(); } });
+    return [form, picks, askMore];
   }
   function resize() {
     if (!hub.open) return;
@@ -299,6 +419,13 @@
   }
   function update(next) {
     if (next) data = next;
+    if (data?.state) {
+      prefs.personality = data.state.personality || "balanced";
+      prefs.expressions = data.state.expressions !== false;
+      prefs.antics = data.state.antics === true;
+      if (!prefs.antics) wake();
+      if (el.bond && data.state.bond) el.bond.textContent = data.state.bond;
+    }
     if (!el.layer || !data) return;
     const count = data.state?.queue?.counts?.total ?? data.state?.queue?.items?.length ?? 0;
     const requests = el.stage.querySelector('[data-hub-section="requests"]');

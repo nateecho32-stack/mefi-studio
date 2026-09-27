@@ -1799,7 +1799,9 @@ function hubInstance() {
     hubClient = hubModule.createHubClient({
       url: hubModule.configuredUrl(process.env),
       getAccessToken: hubAccessToken,
-      onEvent: (event) => send("hub:event", event),
+      // Companion cards go through the "Companion friends" block, which reads
+      // them before the renderer sees one; everything else passes straight on.
+      onEvent: (event) => (typeof friendsHear === "function" ? friendsHear(event) : send("hub:event", event)),
       log: (line) => logLine(line),
     });
   }
@@ -1931,6 +1933,238 @@ function syncWindowClose(event) {
   requestQuit();
 }
 // ---- end of multi-PC sync -----------------------------------------------------
+
+// ---- Companion friends: playdates in rooms -------------------------------------
+// scripts/companion-friends.cjs decides what the companion may tell a friend's
+// companion. This block keeps the owner's sharing rules (settings.json's
+// companionSharing for the saved ones, memory for this session's), builds each
+// card from Studio's own state, sends it through the rooms hub only when the
+// hub carries companions, keeps the friends' cards it hears, and logs every
+// card it sent so the owner can see exactly what left. Nothing is sent before
+// the owner joins a room, and a friend's card is data: read, clipped, shown.
+const companionFriends = optionalHelper("./scripts/companion-friends.cjs", () => require("./scripts/companion-friends.cjs"), null);
+const FRIENDS_SENT_KEPT = 30;
+const FRIENDS_RESEND_MS = 5 * 60 * 1000;
+// The practice buddy plays on this PC only, so the owner can see a playdate
+// (and what their own card shows) before any friend is online.
+const PRACTICE_BUDDY = Object.freeze({ v: 1, level: "status", look: "fox", mood: "happy", name: "Pip", personality: "playful", status: Object.freeze({ state: "working", running: 1, doneToday: 2 }) });
+const friendsState = { session: { rules: [], hold: null, dismissed: [] }, heard: new Map(), presence: new Map(), sent: [], last: new Map(), met: new Set(), name: "", timer: null, force: false };
+
+async function friendsSharing() {
+  return companionFriends.normalizeSharing((await readSettings().catch(() => ({})))?.companionSharing);
+}
+
+// Studio's own facts for a card. Each level reads only its own fields
+// (cardFor), so gathering them all here shares nothing by itself.
+async function friendsFacts() {
+  const tasks = await getEyes().then((eyes) => eyes.readJson(TASKS_PATH, [])).catch(() => []);
+  const live = (Array.isArray(tasks) ? tasks : []).filter((task) => task && !task.archived);
+  const titles = new Map(live.map((task) => [task.id, task.title]));
+  const jobs = autopilot.jobs.filter((entry) => !entry.finished);
+  const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+  const done = live.filter((task) => task.status === "done" && Number(task.doneAt) >= midnight.getTime()).sort((a, b) => Number(b.doneAt) - Number(a.doneAt));
+  let profile = null;
+  try { profile = agentBrain ? await agentBrain.companionState({ questions: assistantState?.questions ?? [], tasks: [], running: jobs.length, project: null }) : null; } catch {}
+  const waiting = Number(profile?.queue?.counts?.total) || 0;
+  const state = jobs.length ? "working" : waiting ? "waiting" : "resting";
+  return {
+    look: profile?.look ?? "wisp", personality: profile?.personality ?? "balanced", name: friendsState.name,
+    mood: profile?.state === "greeting" ? "happy" : state === "working" ? "thinking" : state === "waiting" ? "curious" : "idle",
+    state, running: jobs.length, doneToday: done.length, project: projects.current().name ?? "",
+    runningTitles: jobs.map((job) => titles.get(job.taskId)).filter(Boolean), doneTitles: done.map((task) => task.title),
+  };
+}
+
+// The level this owner's card has towards one friend in one room: their own
+// level when the hub delivers to one member, else the room's broadcast level.
+function friendsSentLevel({ sharing, roomId, userId, direct }) {
+  const session = friendsState.session;
+  const own = companionFriends.resolve({ sharing, session, roomId, userId }).level;
+  return direct ? own : companionFriends.lower(own, companionFriends.broadcastLevel({ sharing, session, roomId }));
+}
+
+function friendsSend(client, roomId, card, to, force) {
+  const key = `${roomId}|${to ?? "*"}`;
+  const sig = JSON.stringify(card);
+  const prev = friendsState.last.get(key);
+  // Null takes back an earlier card; with none out there, there is nothing to take back.
+  if (card == null && (!prev || prev.sig === "null")) return;
+  if (!force && prev && prev.sig === sig && Date.now() - prev.at < FRIENDS_RESEND_MS) return;
+  if (!client.sendCompanion(roomId, card, to)) return;
+  friendsState.last.set(key, { sig, at: Date.now() });
+  if (prev?.sig === sig) return;
+  friendsState.sent.push({ at: Date.now(), roomId, to: to ?? null, level: card?.level ?? "none", summary: companionFriends.cardSummary(card) });
+  if (friendsState.sent.length > FRIENDS_SENT_KEPT) friendsState.sent.splice(0, friendsState.sent.length - FRIENDS_SENT_KEPT);
+}
+
+// Tells every subscribed room what the owner allows: one card for the room
+// (lowered for any friend allowed less), and a card of their own for each
+// friend allowed more, only when the hub can deliver to one member.
+async function friendsPublish({ force = false } = {}) {
+  if (!companionFriends || !hubClient) return;
+  const status = hubClient.status();
+  if (status.state !== "ready" || !status.companions || !status.rooms.length) return;
+  const sharing = await friendsSharing();
+  const session = friendsState.session;
+  const facts = await friendsFacts();
+  for (const roomId of status.rooms) {
+    const level = companionFriends.broadcastLevel({ sharing, session, roomId });
+    friendsSend(hubClient, roomId, companionFriends.cardFor(level, facts), null, force);
+    if (!status.companionDirect) continue;
+    for (const userId of friendsState.heard.get(roomId)?.keys() ?? []) {
+      const own = companionFriends.resolve({ sharing, session, roomId, userId }).level;
+      // A friend allowed more gets their own card; one whose card was raised
+      // before and is no longer gets null, which returns them to the room's.
+      if (companionFriends.rank(own) > companionFriends.rank(level)) friendsSend(hubClient, roomId, companionFriends.cardFor(own, facts), userId, force);
+      else friendsSend(hubClient, roomId, null, userId, force);
+    }
+  }
+}
+
+function friendsSoon(ms = 1500, { force = false } = {}) {
+  clearTimeout(friendsState.timer);
+  friendsState.force = friendsState.force || force;
+  friendsState.timer = setTimeout(() => {
+    const again = friendsState.force;
+    friendsState.timer = null; friendsState.force = false;
+    friendsPublish({ force: again }).catch((error) => logLine(`[friends] publish failed: ${error?.message ?? error}`));
+  }, ms);
+  friendsState.timer.unref?.();
+}
+
+// The hub relays cards as they are sent, so someone who arrives later has not
+// heard this companion's: a newcomer in a room's presence sends it again.
+function friendsPresence(event) {
+  const seen = friendsState.presence.get(event.roomId) ?? new Set();
+  const now = new Set((Array.isArray(event.inStudio) ? event.inStudio : []).map(String));
+  const newcomer = [...now].some((id) => !seen.has(id));
+  friendsState.presence.set(event.roomId, now);
+  friendsSoon(1500, { force: newcomer });
+}
+
+// Every hub event passes here. A companion card is read and kept per room and
+// friend (a card sent to this member alone wins over the room's), and the
+// renderer gets the read card only.
+function friendsHear(event) {
+  if (event?.type !== "companion" || !companionFriends) {
+    send("hub:event", event);
+    if (event?.type === "status" && event.status?.state === "off") { friendsState.heard.clear(); friendsState.last.clear(); friendsState.presence.clear(); }
+    if (event?.type === "status" && event.status?.state === "ready") friendsSoon(1500, { force: true });
+    if (event?.type === "presence" && companionFriends) friendsPresence(event);
+    return;
+  }
+  if (event.from === hubClient?.status?.().user?.id) return;
+  const card = event.card ? companionFriends.readCard(event.card) : null;
+  const room = friendsState.heard.get(event.roomId) ?? new Map();
+  const entry = room.get(event.from) ?? { broadcast: null, direct: null, at: 0 };
+  const fresh = !room.has(event.from);
+  if (event.direct) entry.direct = card;
+  else { entry.broadcast = card; if (!card) entry.direct = null; }
+  entry.at = Number(event.receivedAt) || Date.now();
+  if (entry.broadcast || entry.direct) room.set(event.from, entry); else room.delete(event.from);
+  if (room.size) friendsState.heard.set(event.roomId, room); else friendsState.heard.delete(event.roomId);
+  send("hub:event", { type: "companion", roomId: event.roomId, from: event.from, card: entry.direct ?? entry.broadcast ?? null, at: entry.at });
+  // Someone new may be allowed more than the room: give them their card.
+  if (fresh && card) friendsSoon(400);
+}
+
+// hub:friends — everything Friends shows: the hub's reach, the rules, what a
+// friend sees by default, the friends out now (with what each was sent and
+// whether to ask about sharing back), and the log of cards sent.
+async function friendsView(payload = {}) {
+  if (!companionFriends) return { ok: false, error: "Companion friends are missing from this install." };
+  if (typeof payload?.name === "string") friendsState.name = payload.name.replace(/\s+/g, " ").trim().slice(0, 40);
+  const status = await hubStatus();
+  const sharing = await friendsSharing();
+  const session = friendsState.session;
+  const facts = await friendsFacts();
+  const everyone = companionFriends.resolve({ sharing, session });
+  const preview = companionFriends.cardFor(everyone.level, facts);
+  const friends = [];
+  for (const [roomId, room] of friendsState.heard) {
+    for (const [userId, entry] of room) {
+      const card = entry.direct ?? entry.broadcast;
+      if (!card) continue;
+      const own = companionFriends.resolve({ sharing, session, roomId, userId });
+      const sent = friendsSentLevel({ sharing, roomId, userId, direct: status.companionDirect });
+      friends.push({ roomId, userId, card, at: entry.at, level: own.level, why: own.why, sent, ask: companionFriends.consentAsk({ mine: companionFriends.cardFor(sent, facts), theirs: card, friendId: userId, dismissed: session.dismissed }) });
+    }
+  }
+  return {
+    ok: true,
+    hub: { configured: Boolean(status.configured), linked: Boolean(status.linked), state: status.state, error: status.error ?? null, companions: Boolean(status.companions), companionDirect: Boolean(status.companionDirect), rooms: status.rooms ?? [] },
+    sharing: { everyone: sharing.everyone, rules: [...sharing.rules, ...session.rules], hold: session.hold },
+    levels: companionFriends.LEVELS.map((id) => ({ id, ...companionFriends.LEVEL_INFO[id] })),
+    never: [...companionFriends.NEVER_SHARED],
+    preview: { level: everyone.level, why: everyone.why, card: preview, summary: companionFriends.cardSummary(preview) },
+    friends,
+    sent: friendsState.sent.slice(-12).reverse(),
+  };
+}
+
+// hub:sharing-set — one change at a time: the level for everyone (saved), a
+// hold for this session, a rule for a room or friend (this session or
+// always, level null removes it), or Not now on a friend's ask.
+async function friendsSharingSet(payload = {}) {
+  if (!companionFriends) return { ok: false, error: "Companion friends are missing from this install." };
+  const value = payload && typeof payload === "object" ? payload : {};
+  if (value.everyone !== undefined) {
+    if (!companionFriends.LEVELS.includes(value.everyone)) return { ok: false, error: "Choose one of the sharing levels." };
+    await updateSettings((settings) => { settings.companionSharing = { ...companionFriends.normalizeSharing(settings.companionSharing), everyone: value.everyone }; });
+  }
+  if (value.hold !== undefined) {
+    if (value.hold !== null && !companionFriends.HOLDS.includes(value.hold)) return { ok: false, error: "A hold is either just play or stay home." };
+    friendsState.session = companionFriends.normalizeSession({ ...friendsState.session, hold: value.hold });
+  }
+  if (value.rule !== undefined) {
+    const duration = value.duration === "session" ? "session" : "always";
+    let failure = null;
+    if (duration === "session") {
+      const result = companionFriends.setRule({ sharing: {}, session: friendsState.session, rule: value.rule, duration, now: Date.now() });
+      if (!result.ok) failure = result.error; else friendsState.session = result.session;
+    } else {
+      await updateSettings((settings) => {
+        const result = companionFriends.setRule({ sharing: settings.companionSharing, session: {}, rule: value.rule, duration, now: Date.now() });
+        if (!result.ok) { failure = result.error; return false; }
+        settings.companionSharing = result.sharing;
+      });
+    }
+    if (failure) return { ok: false, error: failure };
+  }
+  if (typeof value.dismiss === "string") friendsState.session = companionFriends.normalizeSession({ ...friendsState.session, dismissed: [...friendsState.session.dismissed, value.dismiss] });
+  friendsSoon(200);
+  return friendsView(value);
+}
+
+// hub:playdate — a scene with a friend out in a room, or with the practice
+// buddy. The scene comes from the card this owner sent that friend and the
+// card the friend sent, so it shows nothing more than they could see.
+async function friendsPlaydate(payload = {}) {
+  if (!companionFriends) return { ok: false, error: "Companion friends are missing from this install." };
+  const sharing = await friendsSharing();
+  const facts = await friendsFacts();
+  const bucket = Math.floor(Date.now() / 60000);
+  let me, friend, ids, key;
+  if (payload?.practice === true) {
+    me = companionFriends.cardFor(companionFriends.resolve({ sharing, session: friendsState.session }).level, facts);
+    friend = PRACTICE_BUDDY; ids = ["me", "practice"]; key = "practice";
+  } else {
+    const roomId = String(payload?.roomId ?? ""), userId = String(payload?.userId ?? "");
+    const entry = friendsState.heard.get(roomId)?.get(userId);
+    friend = entry?.direct ?? entry?.broadcast ?? null;
+    if (!friend) return { ok: false, error: "That friend's companion has gone home." };
+    const status = hubClient?.status?.() ?? {};
+    me = companionFriends.cardFor(friendsSentLevel({ sharing, roomId, userId, direct: status.companionDirect }), facts);
+    ids = [status.user?.id ?? "me", userId]; key = `${roomId}|${userId}`;
+  }
+  if (!me) return { ok: false, error: "Your companion is staying home. Choose Play only or more to play." };
+  const scene = companionFriends.playdate({ me, friend, ids, seed: companionFriends.seedFor(ids[0], ids[1], bucket), music: payload?.music === true, met: friendsState.met.has(key) });
+  if (!scene.ok) return scene;
+  friendsState.met.add(key);
+  if (agentBrain) agentBrain.companionBond({ event: "playdate" }).catch(() => {});
+  return { ...scene, practice: payload?.practice === true };
+}
+// ---- end of companion friends ----------------------------------------------------
 
 // `explicit` is the owner asking (Work on it): a finished inbox row never
 // stands in for it, only unfinished work does.
@@ -2522,6 +2756,7 @@ const ASSISTANT_CHAT_SYSTEM = [
   "You are the owner's studio companion. When ui.companion is given it is your name: speak as it, in the first person — warm, quick and direct, like a teammate who has been watching the whole project with them. Lead with the answer, then the one most useful next step; match the owner's tone; never sound like a form or a log. ui.view tells you which screen they are on: use it when they say here, this or this screen.",
   "When the owner says requests, asks, what needs me, the badge, the list or what is waiting, they mean needsYou: answer from its total and its titles, and never say nothing is waiting while needsYou is not empty. The inbox (new work not yet on the board) is separate: call it the inbox, never requests. When you list things the owner could act on, put up to four of them in offers, each with its taskId when it has one.",
   "When the owner answers your list with all, all of them, both, each or every one, they mean every item you just offered: act on each of them (work_on or retry) and say what you started, instead of asking them to pick one. Thread entries that begin with (update) are notices the owner already saw, and offered lists what that reply offered.",
+  "ui.personality is the manner the owner chose for you. focused: straight work — the shortest accurate answer, no greetings, small talk, exclamation marks or faces. balanced (also when it is missing): the warm teammate described above. playful: friendly and expressive — a little warmth and play, the odd light joke or a small text face like ^_^, still leading with the answer. It changes only how you say things, never what you do, what you claim or which actions you take.",
 ].join(" ");
 
 // OpenCode Go requires a stable x-opencode-session so requests route and cache
@@ -9354,7 +9589,11 @@ async function assistantMessage(raw, options = {}) {
   const text = String(raw ?? "").trim();
   if (!text) return { ok: false, error: "empty" };
   await ensureAssistant();
-  const ui = assistantUiContext(options?.context);
+  // The manner the owner chose for their companion rides every chat box's
+  // message the same way (companion-pet.cjs; the model reads ui.personality).
+  const manner = typeof agentBrain !== "undefined" && agentBrain?.companionManner ? await agentBrain.companionManner().catch(() => null) : null;
+  const seen = assistantUiContext(options?.context);
+  const ui = seen || manner ? { ...(seen ?? {}), ...(manner ? { personality: manner } : {}) } : null;
   const user = { id: assistantMessageId(), projectId: projects.current().id, at: Date.now(), role: "user", text: text.slice(0, 16000), via: "local", intent: "chat", ...(ui ? { ui } : {}) };
   assistantState.messages.push(user);
   assistantTrim(assistantState.messages, assistantCaps().messages);
@@ -18712,6 +18951,13 @@ function registerIpc() {
   ipcMain.handle("hub:subscribe", async (_event, payload) => hubSubscribe(payload?.roomId, payload?.on !== false));
   ipcMain.handle("hub:listen", async (_event, payload) => hubListen(payload));
   ipcMain.handle("hub:now-playing", async (_event, payload) => hubNowPlaying(payload?.track ?? null));
+  // Companion friends (the "Companion friends" block): what friends' companions
+  // may see, the friends out now, and playdates.
+  ipcMain.handle("hub:friends", async (_event, payload) => friendsView(payload ?? {}));
+  ipcMain.handle("hub:sharing-set", async (_event, payload) => friendsSharingSet(payload ?? {}));
+  ipcMain.handle("hub:playdate", async (_event, payload) => friendsPlaydate(payload ?? {}));
+  // A pet or a playdate for the companion's bond (agent-brain-host companionBond).
+  ipcMain.handle("companion:bond", async (_event, payload) => (agentBrain ? agentBrain.companionBond({ event: payload?.event }) : { ok: false, error: "The companion is unavailable." }));
 
   // ---- Multi-PC sync ------------------------------------------------------
   // Friends › Your PCs (the "Multi-PC sync" block). Project-gated, unlike

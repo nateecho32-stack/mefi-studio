@@ -167,7 +167,7 @@ settings and per-model work-kind summaries for the shared controls.
 | **Swarm / Cluster** | Agent mode: Swarm spreads workers across the queue, Cluster keeps them on one goal at a time. |
 | **Awaiting verification** | A finished attempt whose completion is not yet established; housekeeping checks the evidence before it becomes **Done**. |
 | **Agent brain** | The Live view (`J`) that draws a task's **pipeline** from recorded **work events**: the head (the companion), the lead, the steps and the sub-agents; plus the **Playbook** of recipes and **project map** under Agents › Workflows. The seats live under Agents › Setup. See [roadmap-0.4.0.md](roadmap-0.4.0.md) and [agent-loop.md §13](agent-loop.md#13-the-agent-brain). |
-| **Companion** | The roaming character (named under General): click it to ask questions, create tasks, navigate, see the team and its messages, change settings, or handle its needs-you queue. It also gives a welcome-back digest and covers this project or all of them. Its default model is GPT-6 Luna on Zen at medium reasoning and fast service when Zen is connected. |
+| **Companion** | The roaming character (named under General): click it to talk, see what it and the team are doing, handle its needs-you queue, suggest work or take its picks, meet friends' companions, or set its personality (Straight work, Balanced, Friendly & expressive). It also gives a welcome-back digest, can be petted, and covers this project or all of them. Its default model is GPT-6 Luna on Zen at medium reasoning and fast service when Zen is connected. |
 | **Orb, callout, absorb** | Command-view vocabulary: an orb is a node, a callout is its floating card, and absorb is a finished node collapsing into its host. |
 | **Node style / `MefiNodeStyles`** | How a node is drawn: one of eight looks (five free, three in the Void collection), painted on both the Command view and the tree rail by `renderer/node-styles.js`. Each look owns its body and may take over the agent ring, hub dress, work orbit, arrival, selection, wires, pulses and landing; per-node motion records keep every node animating, and reduced motion freezes each look to a still pose. |
 | **Ruins Runner** | The author's LÖVE game, an optional external project Studio can launch. A fresh clone works without it. |
@@ -278,12 +278,51 @@ settings and per-model work-kind summaries for the shared controls.
   there reads **Open Vibe on launch** (off opens Watch).
 - Click the companion or press **Escape** on a workspace page to open its
   compact bubble menu over the current view. The center returns to Studio;
-  the surrounding bubbles open conversation, friends and listening rooms,
-  requests, notifications, settings and quick actions. Escape first closes a
+  six bubbles each do one job: **Talk** (chat, with What are you doing? /
+  What's next? / Recap today one tap away), **What I'm doing** (what is being
+  built, the team and what they told each other, and recent activity),
+  **Needs you** (the queue, with its count), **Suggest work**, **Friends** and
+  **Personality** (how it behaves, run controls, what it has learned, and the
+  shortcuts Quick actions used to hold). Inside the menu the bubbles are the
+  navigation, so the panel's own tabs are hidden. Escape first closes a
   nested picker or returns from a bubble, then closes the menu. Opening the
-  menu keeps agents on their current run settings; Quick actions exposes the
-  existing run/pause controls. The bubbles follow an already connected audio
-  link, respect motion and transparency preferences, and never start capture.
+  menu keeps agents on their current run settings. The bubbles follow an
+  already connected audio link, respect motion and transparency preferences,
+  and never start capture.
+- **Suggest work** takes the owner's idea into the inbox as their own request
+  (the inbox's own add), and lists the companion's next picks from the backlog,
+  each one **Work on it** away. Nothing starts on its own.
+- **Personality** is Straight work, Balanced (the default) or Friendly &
+  expressive (`scripts/companion-pet.cjs`). Choosing one sets its switches:
+  little faces and reactions, idle play, roaming. Each switch can be changed
+  afterwards, and the owner's own choice wins over a later preset. Every chat
+  box's message carries it as `ui.personality`, so replies are terse, warm or
+  playful; it never changes what the companion may do. Without faces a
+  finished reply shows a plain check. With idle play on, the orb does
+  something small now and then while nothing needs it, and dozes after ten
+  quiet minutes until touched. Stroking it back and forth is a pet: hearts
+  rise and the bond (days together, pets, playdates) remembers, one pet per
+  few seconds.
+- **Friends › Playground** (`renderer/companion-friends.js`, main's
+  "Companion friends" block, `scripts/companion-friends.cjs`): like the toys
+  that linked up, companions in the same room meet and play short scripted
+  playdates, and **Practice with Pip** plays one on this PC with nothing sent.
+  What a companion tells friends is a small fixed card, and nothing about the
+  owner or their work leaves until they allow it. Levels: Stay home, Play only
+  (look, mood and games; the default), Say hi (name and personality), Status
+  (working or resting and counts, no titles) and Work titles (the project and
+  a few task titles, scrubbed of anything secret-looking). Rules are for
+  everyone, a room or a friend, for this session or always; the most specific
+  wins, and **This session** can hold everything at Just play or Stay home. A
+  room hears the lowest level of anyone who might be in it; a friend allowed
+  more gets their own card only from a hub that delivers to one member. When a
+  friend's companion shares more, the companion asks whether to share the same
+  back (For this session / Always / Not now) and never shares on its own.
+  Keys, tokens, paths, links, chats, decisions and settings never leave at any
+  level. **What was sent** lists every card that left. A friend's card is read,
+  clipped and shown as text, never sent to a model. Playdates need the rooms
+  hub to relay `companion` frames (see [community.md](community.md)); until it
+  does, Friends says so and Pip is there to practice.
 - The same glowing wisp wakes in the launch box, responds to pointer play with
   floating ASCII expressions and a few sparks, and accompanies the first-run
   guide. During setup, a pending chat reply or reported agent work, little lights
@@ -563,15 +602,17 @@ proposal is left out and counted in its note.
   keywords still work, and "try again", "stop the auth build" or "close the
   search task" act on the card they name. See
   [agent-loop.md §11](agent-loop.md#11-the-assistant-as-overseer).
-- **Talking to the companion.** Every chat box (the companion's Ask tab,
+- **Talking to the companion.** Every chat box (the companion's Talk tab,
   Home's composer, Command's chat log, the Explorer) sends the screen you are
   on and the companion's name with each message
-  (`MefiCompanionUI.context()`), and the reply speaks as that name.
+  (`MefiCompanionUI.context()`), and the reply speaks as that name. The host
+  adds the owner's chosen personality (`ui.personality`), which changes the
+  manner of the reply and nothing else.
   "Requests", "what needs me" and the badge are one list: the chat's
   `needsYou` is built by the same `companion.queue()` that counts "N need
   you". The model also reads the latest notices and what each reply offered.
   After a reply that offered several cards, "all of them" or "both" starts
-  every offered card and only those. The Ask tab shows the last reply's
+  every offered card and only those. The Talk tab shows the last reply's
   offers as one-tap buttons (plus All of them) and refreshes when a reply or
   notice lands.
 - **Work on it** makes a node the assistant's next piece of work — pinned to

@@ -7646,7 +7646,7 @@ html[data-motion=off] .agents-model-row { transition: none; }
 .companion-message-user { margin-left: 24px !important; }
 .companion-message-assistant { margin-right: 24px !important; }
 .companion-message-notice { opacity: .8; font-size: 12px; }
-.companion-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.companion-chips, .companion-starters { display: flex; flex-wrap: wrap; gap: 6px; }
 .companion-chips[hidden] { display: none; }
 .companion-chip { max-width: 100%; border-radius: 999px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .companion-menu-pane textarea { width: 100%; box-sizing: border-box; resize: vertical; min-height: 70px; max-height: 180px; }
@@ -8384,8 +8384,82 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .pc-sync-meta { font-variant-numeric: tabular-nums; }
 .agent-hub .companion-panel.companion-in-hub { position: relative; inset: auto; width: 100%; min-height: 160px; max-height: min(510px, calc(100dvh - 290px)); flex: 0 1 auto; background: color-mix(in srgb, var(--theme-panel-solid, #131b28) 24%, transparent); backdrop-filter: blur(10px); box-shadow: none; transition: height 340ms cubic-bezier(.22,1,.36,1); }
 .companion-in-hub .companion-shell-head { display: none; }
-.companion-in-hub .companion-tabs { flex-wrap: wrap; }
-.companion-in-hub .companion-tabs button { min-width: 45px; }
+/* In the hub the bubbles are the menu; the panel's own tabs would repeat them. */
+.companion-in-hub .companion-tabs { display: none; }
+.companion-heading { margin: 14px 0 0; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.companion-heading:first-child { margin-top: 0; }
+.companion-starters .companion-chip { font-size: 11px; }
+/* Suggest work. */
+.agent-hub-suggest { display: grid; gap: 8px; }
+.agent-hub-suggest textarea { width: 100%; box-sizing: border-box; resize: vertical; min-height: 64px; max-height: 160px; }
+.agent-hub-suggest button { justify-self: start; }
+.agent-hub-picks { display: grid; gap: 8px; }
+.agent-hub-picks h4, .friends-title { margin: 4px 0 0; font-size: 13px; font-weight: 600; }
+.agent-hub-pick-list { display: grid; gap: 8px; }
+.agent-hub-pick-list .companion-item { display: grid; gap: 4px; margin: 0; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 12px; }
+.agent-hub-pick-list .companion-item button { justify-self: start; }
+.agent-hub-bond { font-variant-numeric: tabular-nums; opacity: .8; }
+.agent-hub-bond:empty { display: none; }
+/* A dozing companion (Idle play): dimmer, smaller, slower, until touched. */
+.companion-orb[data-mood=sleepy] .agent-body { opacity: .5; scale: .88; }
+.companion-orb[data-mood=sleepy] .agent-glow { animation-duration: 9s; }
+/* Friends › Playground (renderer/companion-friends.js). */
+.friends-card { display: grid; gap: 10px; padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 14px; }
+.friends-stage { position: relative; display: flex; align-items: flex-end; gap: 10px; min-height: 128px; padding: 34px 10px 8px; border-radius: 12px; background: radial-gradient(ellipse at 50% 110%, color-mix(in srgb, var(--gold) 9%, transparent), transparent 70%); overflow: hidden; }
+.friends-link { flex: 1 1 24px; min-width: 16px; height: 2px; align-self: center; margin-top: 18px; border-radius: 2px; background: repeating-linear-gradient(90deg, var(--gold-bright) 0 6px, transparent 6px 12px); opacity: .2; }
+.friends-stage[data-playing] .friends-link { opacity: .9; animation: friends-beam .9s linear infinite; }
+.friends-actor { position: relative; display: grid; justify-items: center; gap: 2px; width: 70px; flex: none; }
+.friends-face, .friends-mini { display: block; width: 52px; height: 52px; color: var(--gold-bright); }
+.friends-mini { width: 22px; height: 22px; flex: none; }
+.friends-face > svg, .friends-mini > svg { display: block; width: 100%; height: 100%; }
+/* The wisp is a small light inside a large canvas; lift it to the others' size. */
+.friends-face > .agent-creature { scale: 1.45; }
+.friends-actor[data-side=friend] .friends-face, .friends-mini { filter: hue-rotate(var(--friends-hue, 150deg)); }
+.friends-actor[data-practice] { opacity: .75; }
+.friends-actor[data-mood=sleepy] .friends-face { opacity: .55; }
+:is(.friends-face, .friends-mini) .c-body { fill: color-mix(in srgb, var(--gold) 12%, transparent); stroke: currentColor; }
+:is(.friends-face, .friends-mini) .c-eye { fill: currentColor; }
+:is(.friends-face, .friends-mini) :is(.c-line, .c-ring, .c-flame) { fill: none; stroke: currentColor; }
+.friends-name { max-width: 100%; font-size: 10px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.friends-say { position: absolute; bottom: calc(100% - 22px); left: 50%; translate: -50% 0; width: max-content; max-width: 150px; padding: 5px 8px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--panel-solid); font-size: 10px; line-height: 1.35; white-space: normal; z-index: 1; }
+.friends-actor[data-side=me] .friends-say { left: 0; translate: 0 0; }
+.friends-actor[data-side=friend] .friends-say { left: auto; right: 0; translate: 0 0; }
+.friends-say:empty, .friends-emote:empty { display: none; }
+.friends-emote { position: absolute; top: 4px; right: 2px; color: var(--gold-bright); font: 600 12px ui-monospace, Consolas, monospace; animation: friends-rise 1.3s ease-out both; }
+.friends-actor[data-act] .friends-face { animation: .9s cubic-bezier(.22,1,.36,1) both; }
+.friends-actor[data-act=wave] .friends-face { animation-name: friends-wave; }
+.friends-actor[data-act=bounce] .friends-face, .friends-actor[data-act=trade] .friends-face { animation-name: friends-bounce; }
+.friends-actor[data-act=cheer] .friends-face { animation-name: friends-bounce; animation-iteration-count: 2; }
+.friends-actor[data-act=spin] .friends-face { animation-name: friends-spin; }
+.friends-actor[data-act=dance] .friends-face { animation-name: friends-wave; animation-iteration-count: 3; animation-duration: .5s; }
+.friends-actor[data-act=think] .friends-face { rotate: -8deg; transition: rotate 300ms ease; }
+.friends-actor[data-act=hide] .friends-face { opacity: .12; transition: opacity 400ms ease; }
+.friends-actor[data-act=nap] .friends-face { opacity: .55; scale: .9; transition: opacity 400ms ease, scale 400ms ease; }
+.friends-actor[data-side=me]:is([data-act=highfive], [data-act=race], [data-act=peek]) .friends-face { animation-name: friends-toward-right; }
+.friends-actor[data-side=friend]:is([data-act=highfive], [data-act=race], [data-act=peek]) .friends-face { animation-name: friends-toward-left; }
+.friends-lines { margin: 0; padding-left: 18px; font-size: 11px; line-height: 1.6; max-height: 150px; overflow-y: auto; }
+.friends-lines:empty, .friends-rules:empty { display: none; }
+.friends-practice, .friends-play { justify-self: start; }
+.friends-list { display: grid; gap: 8px; }
+.friends-friend { display: grid; gap: 6px; margin: 0; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 12px; }
+.friends-friend-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.friends-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; border-left: 3px solid var(--gold-bright); border-radius: 8px; background: color-mix(in srgb, var(--gold) 6%, transparent); }
+.friends-ask p { flex: 1 0 100%; }
+.friends-rule { display: grid; gap: 2px; }
+.friends-field { grid-template-columns: minmax(0, 1fr) auto; margin: 0; padding: 6px 0; }
+.friends-session { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.friends-sharing, .friends-log { border-top: 1px solid var(--hairline); padding-top: 8px; }
+.friends-sharing > summary, .friends-log > summary { cursor: pointer; font-size: 12px; }
+.friends-sharing[open], .friends-log[open] { display: grid; gap: 8px; }
+.friends-subhead { margin: 6px 0 0; font-size: 11px; font-weight: 600; }
+.friends-never, .friends-rules, .friends-sent { margin: 0; padding-left: 18px; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+@keyframes friends-beam { to { background-position: 12px 0; } }
+@keyframes friends-rise { from { opacity: 0; translate: 0 6px; } 30% { opacity: 1; } to { opacity: 0; translate: 3px -14px; } }
+@keyframes friends-wave { 0%,100% { rotate: 0deg; } 25% { rotate: -12deg; } 75% { rotate: 12deg; } }
+@keyframes friends-bounce { 0%,100% { translate: 0 0; } 40% { translate: 0 -12px; } 70% { translate: 0 2px; } }
+@keyframes friends-spin { to { rotate: 360deg; } }
+@keyframes friends-toward-right { 0%,100% { translate: 0 0; } 45% { translate: 22px -4px; } }
+@keyframes friends-toward-left { 0%,100% { translate: 0 0; } 45% { translate: -22px -4px; } }
 .agent-hub-foot { display: flex; align-items: center; justify-content: center; gap: 14px; color: var(--muted); font-size: 10px; margin-top: 4px; max-width: 100%; flex-wrap: wrap; }
 .agent-hub-foot > span { max-width: 260px; }
 .agent-hub-foot button { border-radius: 20px; font-size: 10px; }
@@ -58852,6 +58926,271 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   window.MefiPcSync = { card, badge, subscribe, last: () => last };
 })();
 
+// Friends › Playground: friends' companions out in your rooms, playdates with
+// them (or with Pip, the practice buddy that never leaves this PC), and what
+// your own companion may tell them. The rules, the cards and the scenes all
+// come from main's "Companion friends" block (scripts/companion-friends.cjs);
+// this file lays them out, plays the scripted scenes and sends the owner's
+// choices. A friend's card arrives already read and is only shown as text.
+// renderer/companion-hub.js mounts it in the Friends section.
+(function () {
+  "use strict";
+  const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
+  const button = (text, run, cls = "ghost mini") => { const el = node("button", cls, text); el.type = "button"; el.addEventListener("click", run); return el; };
+  const still = () => window.MefiNav?.noMotion?.() || ["off", "calm"].includes(document.documentElement.dataset.motion) || document.body.classList.contains("ws-still") || document.body.classList.contains("no-motion") || matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const LOOK_WORDS = { wisp: "wisp", fox: "fox", owl: "owl", cat: "cat", person: "companion" };
+  const STATE_WORDS = { working: "Working", resting: "Resting", waiting: "Waiting on their person" };
+  // Friends get their own tint, so two wisps side by side read as two.
+  const HUES = ["150deg", "250deg", "320deg", "40deg", "200deg"];
+  const roomNames = new Map();
+  let live = null, listening = false;
+
+  const friendName = (card) => card?.name || `A friend's ${LOOK_WORDS[card?.look] || "companion"}`;
+  const roomName = (id) => roomNames.get(id) || "a room";
+
+  function actor(face, look, label, side, hue) {
+    const root = node("div", "friends-actor"); root.dataset.side = side;
+    if (hue) root.style.setProperty("--friends-hue", hue);
+    const body = node("span", "friends-face"); body.innerHTML = face(look); body.setAttribute("aria-hidden", "true");
+    const say = node("span", "friends-say"), emote = node("span", "friends-emote");
+    say.setAttribute("aria-hidden", "true"); emote.setAttribute("aria-hidden", "true");
+    root.append(say, emote, body, node("span", "friends-name", label));
+    return root;
+  }
+
+  function sharedLines(card) {
+    const lines = [];
+    if (card.personality) lines.push({ focused: "Straight work", balanced: "Balanced", playful: "Friendly & expressive" }[card.personality]);
+    if (card.status) lines.push(`${STATE_WORDS[card.status.state] || "Resting"} · ${card.status.running} running · ${card.status.doneToday} done today`);
+    if (card.work?.project) lines.push(`Project: ${card.work.project}`);
+    for (const title of card.work?.running || []) lines.push(`Working on: ${title}`);
+    for (const title of card.work?.done || []) lines.push(`Finished: ${title}`);
+    return lines;
+  }
+
+  function card({ name = "Mefi", face = () => "" } = {}) {
+    const api = window.mefiStudio;
+    const root = node("section", "friends-card"); root.setAttribute("aria-labelledby", "friends-title");
+    const title = node("h4", "friends-title", "Playground"); title.id = "friends-title";
+    const status = node("p", "muted"); status.id = "friends-status"; status.setAttribute("role", "status");
+    root.append(title, status);
+    if (typeof api?.hubFriends !== "function" || typeof api?.hubPlaydate !== "function") {
+      status.textContent = "Playdates work in the desktop app.";
+      root.dataset.state = "unavailable";
+      return root;
+    }
+    const stage = node("div", "friends-stage"); stage.id = "friends-stage";
+    const said = node("ol", "friends-lines"); said.setAttribute("aria-label", "What the companions said"); said.setAttribute("aria-live", "polite");
+    const preview = node("p", "ab-quiet"); preview.id = "friends-preview";
+    const practice = button("Practice with Pip", () => play({ practice: true }), "ghost mini friends-practice"); practice.id = "friends-practice";
+    const list = node("div", "friends-list");
+    const sharing = node("details", "friends-sharing"); sharing.append(node("summary", "", `What ${name} may share`));
+    const log = node("details", "friends-log"); log.append(node("summary", "", "What was sent"));
+    root.append(stage, said, preview, practice, list, sharing, log);
+    const state = { view: null, playing: false, stale: false, name };
+    live = { root, reload: () => load() };
+
+    const set = async (change) => {
+      root.setAttribute("aria-busy", "true");
+      let view;
+      try { view = await api.hubSharingSet({ ...change, name }); } catch (error) { view = { ok: false, error: error?.message }; }
+      root.removeAttribute("aria-busy");
+      if (!view?.ok) { status.textContent = view?.error || "That could not be saved."; return; }
+      state.view = view; paint();
+    };
+    const levelSelect = (label, value, choices, onChange) => {
+      const row = node("label", "studio-field friends-field");
+      const pickEl = node("select"); pickEl.setAttribute("aria-label", label);
+      for (const [id, text] of choices) { const option = node("option", "", text); option.value = id; pickEl.append(option); }
+      pickEl.value = value;
+      pickEl.addEventListener("change", () => onChange(pickEl.value));
+      row.append(node("span", "", label), pickEl);
+      return row;
+    };
+    const levels = () => (state.view?.levels || []).map((level) => [level.id, level.label]);
+    const levelLabel = (id) => state.view?.levels?.find((level) => level.id === id)?.label || id;
+    // A room or friend rule: a level, or back to the default; this session
+    // only when the box is ticked. Default clears both kinds.
+    const ruleRow = (label, scope, target, ruleLabel) => {
+      const rules = state.view.sharing.rules.filter((rule) => rule.scope === scope && rule.target === target);
+      const current = rules.find((rule) => rule.duration === "session") || rules[0] || null;
+      const wrap = node("div", "friends-rule");
+      const session = node("input"); session.type = "checkbox"; session.checked = current?.duration === "session";
+      const sessionLabel = node("label", "friends-session"); sessionLabel.append(session, node("span", "", "This session only"));
+      const pickRow = levelSelect(label, current?.level || "", [["", "Same as everyone"], ...levels()], async (value) => {
+        if (!value) { for (const duration of ["session", "always"]) await set({ rule: { scope, target, level: null, label: ruleLabel }, duration }); return; }
+        await set({ rule: { scope, target, level: value, label: ruleLabel }, duration: session.checked ? "session" : "always" });
+      });
+      session.addEventListener("change", async () => { if (current) { await set({ rule: { scope, target, level: null, label: ruleLabel }, duration: current.duration }); await set({ rule: { scope, target, level: current.level, label: ruleLabel }, duration: session.checked ? "session" : "always" }); } });
+      wrap.append(pickRow, sessionLabel);
+      return wrap;
+    };
+
+    function paintStage(friend = null, friendLook = null) {
+      const me = actor(face, window.MefiCompanion?.state?.()?.look || "wisp", name, "me");
+      me.id = "friends-me";
+      const link = node("span", "friends-link"); link.setAttribute("aria-hidden", "true");
+      const others = friend ? [friend] : (state.view?.friends || []).slice(0, 4).map((row) => ({ look: row.card.look, label: friendName(row.card), mood: row.card.mood }));
+      if (!others.length) others.push({ look: "fox", label: "Pip · practice", practice: true });
+      stage.replaceChildren(me, link, ...others.map((row, index) => {
+        const el = actor(face, row.look || friendLook || "wisp", row.label, "friend", HUES[index % HUES.length]);
+        el.dataset.mood = row.mood || "idle";
+        if (row.practice) el.dataset.practice = "true";
+        return el;
+      }));
+    }
+
+    function paintStatus() {
+      const view = state.view, hub = view.hub;
+      const out = view.friends.length;
+      status.textContent = !hub.configured ? "Friends' companions meet through the rooms hub, which this build does not have yet. Pip is here to practice."
+        : !hub.linked ? "Link Discord under Community to meet friends' companions. Pip, the practice buddy, is always here."
+        : hub.state !== "ready" ? "Join a room under Friends & listening rooms, and friends' companions can visit."
+        : !hub.companions ? "This rooms hub does not carry companions yet, so friends cannot visit. Pip is here to practice."
+        : out ? `${out} friend${out === 1 ? "'s companion is" : "s' companions are"} out in your rooms.`
+        : "No friends' companions are out in your rooms right now.";
+      preview.textContent = `Friends see: ${view.preview.summary} (${levelLabel(view.preview.level)} · ${view.preview.why}).`;
+    }
+
+    function paintFriends() {
+      const view = state.view;
+      list.replaceChildren(...view.friends.map((row, index) => {
+        const item = node("article", "companion-item friends-friend");
+        item.dataset.friend = row.userId;
+        const head = node("div", "friends-friend-head");
+        const small = node("span", "friends-mini"); small.innerHTML = face(row.card.look); small.style.setProperty("--friends-hue", HUES[index % HUES.length]); small.setAttribute("aria-hidden", "true");
+        head.append(small, node("strong", "", friendName(row.card)), node("span", "ab-quiet", `in ${roomName(row.roomId)}`));
+        item.append(head);
+        for (const line of sharedLines(row.card)) item.append(node("p", "ab-quiet", line));
+        if (row.ask) {
+          const ask = node("div", "friends-ask"); ask.setAttribute("role", "group"); ask.setAttribute("aria-label", "Share back?");
+          const label = friendName(row.card);
+          ask.append(node("p", "", row.ask.text),
+            button("For this session", () => set({ rule: { scope: "friend", target: row.userId, level: row.ask.level, label }, duration: "session" }), "primary mini"),
+            button(`Always with ${label}`, () => set({ rule: { scope: "friend", target: row.userId, level: row.ask.level, label }, duration: "always" })),
+            button("Not now", () => set({ dismiss: row.userId })));
+          item.append(ask);
+        }
+        item.append(node("p", "ab-quiet", `You share ${levelLabel(row.sent)}${row.sent !== row.level ? ` (allowed ${levelLabel(row.level)}; this hub reaches the whole room only)` : ""} · ${row.why}`));
+        item.append(ruleRow(`What ${name} shares with them`, "friend", row.userId, friendName(row.card)));
+        item.append(button(`Play with ${friendName(row.card)}`, () => play({ roomId: row.roomId, userId: row.userId }), "ghost mini friends-play"));
+        return item;
+      }));
+    }
+
+    function paintSharing() {
+      const view = state.view;
+      const summary = sharing.querySelector("summary");
+      const says = node("p", "ab-quiet", view.levels.find((level) => level.id === view.sharing.everyone)?.says || "");
+      const rows = [summary, node("p", "muted", "Nothing about you or your work leaves until you allow it. The most specific rule wins: a friend, then a room, then everyone.")];
+      rows.push(levelSelect("Everyone, by default", view.sharing.everyone, levels(), (value) => set({ everyone: value })), says);
+      rows.push(levelSelect("This session", view.sharing.hold || "", [["", "Use my rules"], ["play", "Just play for now"], ["none", "Stay home for now"]], (value) => set({ hold: value || null })));
+      for (const roomId of view.hub.rooms) rows.push(ruleRow(`In ${roomName(roomId)}`, "room", roomId, roomName(roomId)));
+      const out = new Set(view.friends.map((row) => row.userId));
+      const saved = view.sharing.rules.filter((rule) => !(rule.scope === "friend" && out.has(rule.target)) && !(rule.scope === "room" && view.hub.rooms.includes(rule.target)));
+      if (saved.length) {
+        const ul = node("ul", "friends-rules");
+        for (const rule of saved) {
+          const li = node("li", "", `${rule.scope === "room" ? "Room" : "Friend"} ${rule.label}: ${levelLabel(rule.level)}${rule.duration === "session" ? " (this session)" : ""} `);
+          li.append(button("Remove", () => set({ rule: { scope: rule.scope, target: rule.target, level: null, label: rule.label }, duration: rule.duration })));
+          ul.append(li);
+        }
+        rows.push(node("h5", "friends-subhead", "Other rules"), ul);
+      }
+      const never = node("ul", "friends-never");
+      for (const line of view.never) never.append(node("li", "", line));
+      rows.push(node("h5", "friends-subhead", "Never shared, at any level"), never);
+      sharing.replaceChildren(...rows);
+    }
+
+    function paintLog() {
+      const rows = [log.querySelector("summary")];
+      if (!state.view.sent.length) rows.push(node("p", "ab-quiet", "Nothing has been sent this session."));
+      else {
+        const ul = node("ul", "friends-sent");
+        for (const row of state.view.sent) {
+          const to = row.to ? friendName(state.view.friends.find((friend) => friend.userId === row.to)?.card) : `everyone in ${roomName(row.roomId)}`;
+          ul.append(node("li", "", `${new Date(row.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} · to ${to} · ${row.level === "none" ? "went home" : row.summary}`));
+        }
+        rows.push(ul);
+      }
+      log.replaceChildren(...rows);
+    }
+
+    function paint() {
+      if (!state.view) return;
+      root.dataset.state = state.view.friends.length ? "friends" : "quiet";
+      paintStatus();
+      if (!state.playing) paintStage();
+      paintFriends(); paintSharing(); paintLog();
+      window.MefiCompanionHub?.resize?.();
+    }
+
+    async function load() {
+      if (!root.isConnected && state.view) { if (live?.root === root) live = null; return; }
+      // Never repaint under a control the owner is using, or mid-scene.
+      if (state.playing || root.contains(document.activeElement) && document.activeElement.matches("select, input")) { state.stale = true; return; }
+      let view;
+      try { view = await api.hubFriends({ name }); } catch (error) { view = { ok: false, error: error?.message }; }
+      if (!view?.ok) { status.textContent = view?.error || "Friends could not be read."; return; }
+      state.view = view; state.stale = false;
+      if (view.hub.state === "ready" && view.hub.rooms.some((id) => !roomNames.has(id)) && typeof api.hubRooms === "function") {
+        Promise.resolve(api.hubRooms()).then((result) => { for (const room of result?.rooms || []) roomNames.set(room.id, room.name); if (root.isConnected) paint(); }).catch(() => {});
+      }
+      paint();
+    }
+
+    // A scene plays beat by beat; with motion off the whole script shows at once.
+    async function play(target) {
+      if (state.playing) return;
+      let scene;
+      try { scene = await api.hubPlaydate({ ...target, music: Boolean(window.MefiIdle?.audioStatus?.()?.listening) }); } catch (error) { scene = { ok: false, error: error?.message }; }
+      if (!scene?.ok) { status.textContent = scene?.error || "That playdate could not start."; return; }
+      state.playing = true; stage.dataset.playing = "true";
+      const label = scene.practice ? "Pip · practice" : friendName(scene.friend);
+      paintStage({ look: scene.friend.look, label, mood: scene.friend.mood, practice: scene.practice }, scene.friend.look);
+      said.replaceChildren();
+      const me = stage.querySelector('[data-side="me"]'), friend = stage.querySelector('[data-side="friend"]');
+      const names = { me: name, friend: scene.practice ? "Pip" : friendName(scene.friend), both: "Both" };
+      try {
+        for (const beat of scene.beats) {
+          const actors = beat.who === "both" ? [me, friend] : [beat.who === "me" ? me : friend];
+          for (const el of [me, friend]) { el.removeAttribute("data-act"); el.querySelector(".friends-say").textContent = ""; el.querySelector(".friends-emote").textContent = ""; }
+          for (const el of actors) {
+            el.dataset.act = beat.act;
+            if (beat.say && beat.who !== "both") el.querySelector(".friends-say").textContent = beat.say;
+            if (beat.emote) el.querySelector(".friends-emote").textContent = beat.emote;
+          }
+          if (beat.say || beat.emote) said.append(node("li", "", `${names[beat.who]}: ${[beat.say, beat.emote].filter(Boolean).join(" ")}`));
+          if (!still()) await wait(1500);
+        }
+        if (!still()) await wait(600);
+      } finally {
+        state.playing = false; delete stage.dataset.playing;
+        for (const el of [me, friend]) { el.removeAttribute("data-act"); el.querySelector(".friends-say").textContent = ""; el.querySelector(".friends-emote").textContent = ""; }
+        window.MefiCompanion?.refresh?.();
+        if (state.stale) load(); else paintStage();
+      }
+    }
+
+    if (!listening && typeof api.onHubEvent === "function") {
+      listening = true;
+      let timer = 0;
+      api.onHubEvent((event) => {
+        if (!["companion", "status", "presence", "membership"].includes(event?.type) || !live?.root?.isConnected) return;
+        clearTimeout(timer); timer = setTimeout(() => live?.reload(), 300);
+      });
+    }
+    status.textContent = "Looking for friends…";
+    paintStage();
+    load();
+    return root;
+  }
+
+  window.MefiCompanionFriends = { card };
+})();
+
 // Project-local decisions and reviewed task handoffs. Mefi interviews you here
 // and organizes what you say. Live drafting is optional, and nothing it writes
 // becomes your answer, your decision, or your approval without your action.
@@ -62277,6 +62616,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const el = button(label, () => { const input = panes.ask?.querySelector("textarea"); if (!input || chatBusy) return; input.value = message; sendConversation(); });
     el.classList.add("companion-chip"); el.title = message; return el;
   };
+  // scripts/companion-pet.cjs's personalities, as the owner reads them
+  // (tests/companion_ui.test.mjs keeps the two in step).
+  const PERSONALITIES = [
+    ["focused", "Straight work", "Short, plain answers. No small talk, faces or wandering."],
+    ["balanced", "Balanced", "Warm and to the point. Reacts when things happen."],
+    ["playful", "Friendly & expressive", "Chatty and playful: little faces, idle play and celebrations."],
+  ];
   let conversationTimer = 0;
   const inside = (rect, x, y, margin = 14) => x >= rect.left - margin && x <= rect.right + margin && y >= rect.top - margin && y <= rect.bottom + margin;
   const editing = () => host?.panel.contains(document.activeElement) && document.activeElement?.matches("input:not([type=checkbox]):not([type=range]), textarea, [contenteditable=true]");
@@ -62310,7 +62656,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (!host || host.panel.hidden) return;
     if (host.panel.classList.contains("companion-in-hub")) { window.MefiCompanionHub?.resize(); return; }
     const box = host.orb.getBoundingClientRect(), panel = host.panel;
-    const width = Math.min(innerWidth - 24, tab === "status" ? 370 : tab === "activity" ? 430 : 460);
+    const width = Math.min(innerWidth - 24, tab === "status" ? 370 : tab === "now" ? 430 : 460);
     panel.style.width = `${width}px`;
     const content = panel.querySelector(".companion-content");
     const cap = Math.max(180, innerHeight - 32), head = panel.querySelector(".companion-shell-head").offsetHeight + panel.querySelector(".companion-tabs").offsetHeight + 44;
@@ -62344,14 +62690,19 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     control.addEventListener("change", async () => { control.disabled = true; try { await save(control.type === "checkbox" ? control.checked : control.value); } catch (error) { window.MefiToast?.(error.message, "bad"); } finally { control.disabled = false; render(latest); } });
     row.append(words, control); panes.settings.append(row); fields[key] = control;
   }
+  // Tab names from before the menu was tidied still open their new home.
+  const TAB_ALIASES = { team: "now", activity: "now", learned: "settings" };
   function selectTab(value) {
+    value = TAB_ALIASES[value] || value;
+    if (!panes[value]) value = "ask";
     tab = value;
     for (const [key, pane] of Object.entries(panes)) pane.hidden = key !== value;
     for (const control of host.panel.querySelectorAll("[data-companion-tab]")) { control.setAttribute("aria-selected", String(control.dataset.companionTab === value)); control.tabIndex = control.dataset.companionTab === value ? 0 : -1; }
     if (value === "ask") refreshConversation();
-    if (value === "team") refreshTeam();
+    if (value === "now") refreshNow();
     render(latest); requestAnimationFrame(position);
   }
+  function heading(text) { panes.settings.append(node("h4", "companion-heading", text)); }
   async function refreshConversation() {
     const thread = panes.ask?.querySelector(".companion-thread");
     if (!thread || !window.mefiStudio?.assistantState) return;
@@ -62362,7 +62713,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     thread.replaceChildren();
     const messages = (result.state?.messages || []).filter((item) => ["user", "assistant"].includes(item.role)).slice(-10);
     const name = companionName();
-    if (!messages.length) thread.append(node("p", "muted", `Hi, I'm ${name}. Ask me about this project, or tell me what task to create.`));
+    const hello = { focused: `${name}. Ask about this project, or describe a task.`, playful: `Hi hi, I'm ${name}! ^_^ What are we making today?` }[latest?.state?.personality] || `Hi, I'm ${name}. Ask me about this project, or tell me what task to create.`;
+    if (!messages.length) thread.append(node("p", "muted", hello));
     for (const item of messages) {
       const row = node("p", `companion-message companion-message-${item.role}${item.kind === "notice" ? " companion-message-notice" : ""}`);
       row.append(node("strong", "", item.role === "user" ? "You" : name), document.createTextNode(` ${String(item.text || "").slice(0, 1200)}`));
@@ -62398,20 +62750,24 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     } catch (error) { status.textContent = error.message; }
     finally { chatBusy = false; window.MefiCompanionHub?.thinking(false, { celebrate: answered }); send.disabled = false; input.disabled = false; if (!host.panel.hidden && !panes.ask.hidden) input.focus(); }
   }
-  async function refreshTeam() {
-    const pane = panes.team;
-    if (!pane || !window.mefiStudio?.assistantState) return;
+  // What I'm doing: the work being built, the team and what they said to each
+  // other (read when the tab opens), then recent activity (kept live by render).
+  let nowRead = 0;
+  async function refreshNow() {
+    const live = panes.now?.querySelector(".companion-now-live");
+    if (!live || !window.mefiStudio?.assistantState) return;
+    const read = ++nowRead;
     const [full, status] = await Promise.all([window.mefiStudio.assistantState().catch(() => null), Promise.resolve(window.mefiStudio.assistantStatus?.()).catch(() => null)]);
-    pane.replaceChildren(node("p", "muted", "Current agents, work and messages shared between them."));
+    if (read !== nowRead) return;
     const state = full?.state || {}, agents = state.agents || [], jobs = status?.status?.running || [];
+    const parts = [node("h3", "", jobs.length ? `Building now · ${jobs.length}` : "Building now")];
+    parts.push(...(jobs.length ? jobs.slice(0, 8).map((job) => node("p", "companion-item", job.title || job.taskId || "Task in progress")) : [node("p", "muted", "Nothing is being built right now.")]));
     const roster = node("div", "companion-team-list");
     for (const agent of agents) roster.append(node("p", "companion-item", `${agent.role || "agent"} · ${agent.status || "idle"}${agent.step ? ` · ${agent.step}` : ""}`));
-    if (!agents.length) roster.append(node("p", "muted", "No agents reported yet."));
-    pane.append(roster);
-    if (jobs.length) pane.append(node("h3", "", "Building now"), ...jobs.slice(0, 8).map((job) => node("p", "companion-item", job.title || job.taskId || "Task in progress")));
-    const mail = (state.mail || []).slice(-8).reverse();
-    if (mail.length) pane.append(node("h3", "", "Agent messages"), ...mail.map((item) => node("p", "companion-item", `${item.from || "agent"} → ${item.to || "team"}: ${item.text || ""}`)));
-    pane.append(button("Open live agent work", () => { host.toggle(false); window.MefiNav?.go("agents", { section: "live" }); }));
+    if (agents.length) parts.push(node("h3", "", "The team"), roster);
+    const mail = (state.mail || []).slice(-6).reverse();
+    if (mail.length) parts.push(node("h3", "", "What they told each other"), ...mail.map((item) => node("p", "companion-item", `${item.from || "agent"} → ${item.to || "team"}: ${item.text || ""}`)));
+    live.replaceChildren(...parts);
     requestAnimationFrame(position);
   }
   function attach(options) {
@@ -62426,7 +62782,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     title.append(name, status); head.append(title, button("×", () => { if (window.MefiCompanionHub?.isOpen()) window.MefiCompanionHub.back(); else { host.toggle(false); orb.focus({ preventScroll: true }); } })); head.lastChild.setAttribute("aria-label", "Close assistant menu");
     const tabs = node("div", "companion-tabs"); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Assistant menu");
     const content = node("div", "companion-content"); content.id = "companion-content";
-    for (const [key, label] of [["ask", "Ask"], ["status", "Status"], ["team", "Team"], ["activity", "Activity"], ["learned", "Learned"], ["settings", "Settings"]]) {
+    for (const [key, label] of [["ask", "Talk"], ["status", "Needs you"], ["now", "Now"], ["settings", "Settings"]]) {
       const control = button(label, () => selectTab(key)); control.dataset.companionTab = key; control.id = `companion-tab-${key}`; control.setAttribute("role", "tab"); control.setAttribute("aria-controls", `companion-pane-${key}`);
       control.addEventListener("keydown", (event) => { if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return; event.preventDefault(); event.stopPropagation(); const all = Array.from(tabs.children), at = all.indexOf(control); const next = event.key === "Home" ? 0 : event.key === "End" ? all.length - 1 : (at + (event.key === "ArrowLeft" ? -1 : 1) + all.length) % all.length; all[next].click(); all[next].focus(); }); tabs.append(control);
       const pane = node("div", "companion-menu-pane"); pane.id = `companion-pane-${key}`; pane.setAttribute("role", "tabpanel"); pane.setAttribute("aria-labelledby", control.id); pane.hidden = key !== tab; content.append(pane); panes[key] = pane;
@@ -62440,11 +62796,17 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const actions = node("div", "companion-ask-actions");
     actions.append(button("Create a task", () => { input.value = "Create a task: "; input.focus(); }), button("Send", sendConversation)); actions.lastChild.dataset.send = "true";
     const chatStatus = node("p", "ab-quiet"); chatStatus.setAttribute("role", "status");
-    panes.ask.append(thread, input, actions, chatStatus);
+    // Three questions worth one tap, whatever the thread holds.
+    const starters = node("div", "companion-starters");
+    starters.append(chip("What are you doing?", "What are you doing right now?"), chip("What's next?", "What should we work on next?"), chip("Recap today", "Recap what happened today."));
+    panes.ask.append(thread, starters, input, actions, chatStatus);
     const places = node("div", "companion-places");
     for (const [label, route, options] of [["Tasks", "tasks"], ["Agents", "agents"], ["Live", "command"], ["Project map", "agent-brain", { tab: "map" }], ["Settings", "studio"]]) places.append(button(label, () => { host.toggle(false); window.MefiNav?.go(route, options); }));
     const location = node("p", "ab-quiet"); location.dataset.companionLocation = "true";
-    panes.ask.append(location, node("p", "ab-quiet", "You can ask me to open a view, create a task, or explain what the team is doing."), places);
+    panes.ask.append(location, places);
+    const nowLive = node("div", "companion-now-live"); nowLive.setAttribute("aria-live", "polite");
+    const nowActivity = node("div", "companion-now-activity");
+    panes.now.append(nowLive, node("h3", "", "Recently"), nowActivity, button("Open live agent work", () => { host.toggle(false); window.MefiNav?.go("agents", { section: "live" }); }));
     // Replies that land later, and the notices the team posts, appear while
     // the Ask tab is open instead of on its next visit.
     window.mefiStudio?.onAssistant?.(() => {
@@ -62453,16 +62815,32 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       conversationTimer = setTimeout(refreshConversation, 250);
     });
     const growth = node("span", "companion-growth"); growth.setAttribute("aria-hidden", "true"); for (let i = 0; i < 3; i++) growth.append(node("i")); orb.append(growth);
+    // Settings, top to bottom: who it is, how it works, what it has learned,
+    // and the shortcuts Quick actions used to hold.
+    heading("Personality");
+    addField("personality", "Personality", PERSONALITIES.map(([value, text]) => [value, text]), (value) => preference({ personality: value }));
+    const says = node("p", "ab-quiet"); says.id = "companion-personality-says"; panes.settings.append(says);
+    addField("look", "Companion look", [["wisp", "Wisp"], ["fox", "Fox"], ["owl", "Owl"], ["cat", "Cat"], ["person", "Person"]], (value) => preference({ look: value }));
+    addField("expressions", "Little faces and reactions", null, (value) => preference({ expressions: value }));
+    addField("antics", "Idle play while you work", null, (value) => preference({ antics: value }));
+    addField("bubbles", "Show speech bubbles", null, (value) => preference({ bubbles: value }));
+    addField("roaming", "Roam around the studio", null, (value) => preference({ roaming: value }));
+    addField("pinned", "Pin companion position", null, (value) => preference({ pinned: value, anchor: anchor() }));
+    addField("growth", "Show project growth", null, (value) => preference({ growth: value }));
+    addField("scope", "Project reach", [["project", "Current project"], ["all", "All projects"]], (value) => preference({ scope: value }));
+    const bond = node("p", "ab-quiet"); bond.id = "companion-bond"; panes.settings.append(bond);
+    heading("Work");
     for (const [key, label] of [["newWork", "Allow new work"], ["enabled", "Run the queue"], ["proactive", "Proactive suggestions"]]) addField(key, label, null, (value) => window.MefiAgentControls?.set(key, value));
     const permissions = document.createElement("div"); permissions.id = "companion-autonomy";
     panes.settings.append(permissions); window.MefiAutonomy?.mount(permissions, { full: true });
-    addField("roaming", "Roam around the studio", null, (value) => preference({ roaming: value }));
-    addField("pinned", "Pin companion position", null, (value) => preference({ pinned: value, anchor: anchor() }));
-    addField("bubbles", "Show speech bubbles", null, (value) => preference({ bubbles: value }));
-    addField("growth", "Show project growth", null, (value) => preference({ growth: value }));
-    addField("look", "Companion look", [["wisp", "Wisp"], ["fox", "Fox"], ["owl", "Owl"], ["cat", "Cat"], ["person", "Person"]], (value) => preference({ look: value }));
-    addField("scope", "Project reach", [["project", "Current project"], ["all", "All projects"]], (value) => preference({ scope: value }));
-    panes.settings.append(button("Open full Agents setup", () => { host.toggle(false); window.MefiNav?.go("agents", { section: "setup", pane: "team" }); }), button("Studio styling", () => { host.toggle(false); window.MefiNav?.go("studio", { category: "appearance" }); }));
+    heading("What I've learned");
+    const learned = node("div", "companion-learned"); panes.settings.append(learned);
+    heading("Shortcuts");
+    const shortcuts = node("div", "companion-places");
+    for (const [label, run] of [["Walk me through setup", () => window.MefiOnboarding?.open?.()], ["Team & connections", () => window.MefiNav?.go("agents", { section: "setup", pane: "team" })], ["Audio & music", () => window.MefiMusic?.openAudio?.()], ["Studio styling", () => window.MefiNav?.go("studio", { category: "appearance" })]]) {
+      shortcuts.append(button(label, () => { window.MefiCompanionHub?.close?.({ immediate: true, restore: false }); host.toggle(false); run(); }));
+    }
+    panes.settings.append(shortcuts);
     orb.addEventListener("pointerdown", startDrag);
     orb.addEventListener("click", (event) => { if (dragged) { event.preventDefault(); event.stopImmediatePropagation(); dragged = false; } }, true);
     document.addEventListener("pointermove", (event) => {
@@ -62566,9 +62944,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     for (const [key, control] of Object.entries(fields)) {
       if (control.disabled || control === document.activeElement && control.type !== "checkbox") continue;
       const value = ["newWork", "enabled", "proactive"].includes(key) ? window.MefiAgentControls?.snapshot()?.[key] : state[key];
-      if (control.type === "checkbox") control.checked = ["roaming", "bubbles", "growth"].includes(key) ? value !== false : value === true;
-      else control.value = value || (key === "look" ? "wisp" : "project");
+      if (control.type === "checkbox") control.checked = ["roaming", "bubbles", "growth", "expressions"].includes(key) ? value !== false : value === true;
+      else control.value = value || ({ look: "wisp", personality: "balanced" }[key] ?? "project");
     }
+    const personality = PERSONALITIES.find(([value]) => value === (state.personality || "balanced"));
+    const says = document.getElementById("companion-personality-says");
+    if (says && personality && says.textContent !== personality[2]) says.textContent = personality[2];
+    const bond = document.getElementById("companion-bond");
+    if (bond) bond.textContent = state.bond ? `${data.name || companionName()} · ${state.bond}` : "";
     const statusItems = [];
     if (data.digest) statusItems.push({ id: "digest", kind: "digest", ...data.digest });
     const waiting = state.queue?.items || [];
@@ -62583,9 +62966,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       return data.queueItem(item);
     });
     const activity = (state.activity || []).map((event, index) => ({ ...event, id: event.id || `${event.at}:${index}` }));
-    keyed(panes.activity, activity.length ? activity : [{ id: "empty", text: "Project activity will appear here as work happens." }], (event) => { const box = node("div", "companion-item"); box.append(node("strong", "", event.text || event.title || String(event.kind || "Activity").replaceAll(".", " "))); if (event.at) box.append(node("span", "ab-quiet", new Date(event.at).toLocaleTimeString())); return box; });
+    keyed(panes.now.querySelector(".companion-now-activity"), activity.length ? activity.slice(0, 12) : [{ id: "empty", text: "Project activity will appear here as work happens." }], (event) => { const box = node("div", "companion-item"); box.append(node("strong", "", event.text || event.title || String(event.kind || "Activity").replaceAll(".", " "))); if (event.at) box.append(node("span", "ab-quiet", new Date(event.at).toLocaleTimeString())); return box; });
     const learned = [{ id: "project", text: `${state.projectName || "This project"} · ${learning.systems || 0} mapped systems` }, { id: "workflows", text: `${learning.verifiedRecipes || 0} workflows with verified success` }, ...(state.preferences || []).map((text, index) => ({ id: `preference:${index}`, text })), ...(state.studioPreferences || []).map((text, index) => ({ id: `studio-preference:${index}`, text: `Studio observation: ${text}` })), { id: "explanation", text: "The three companion lights mark project knowledge, verified workflows, and learned preferences. Observations stay suggestions; they never change permissions or answer for you." }];
-    keyed(panes.learned, learned, (item) => node("p", item.id === "explanation" ? "ab-quiet" : "companion-item", item.text));
+    keyed(panes.settings.querySelector(".companion-learned"), learned, (item) => node("p", item.id === "explanation" ? "ab-quiet" : "companion-item", item.text));
     if (!host.panel.hidden) requestAnimationFrame(position);
   }
   function opened(open, options = {}) {
@@ -62610,8 +62993,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const name = () => { try { return localStorage.getItem("mefiStudio.workspace.companion")?.trim() || "Mefi"; } catch { return "Mefi"; } };
   const hub = { open: false, closing: false, section: null, locked: new Map(), returnFocus: null, timer: 0 };
   const el = {};
-  let host, data, bootPhase, audioFrame = 0, audioAt = 0, energy = 0, wakeTimer = 0, reactionIndex = 0, chatThinking = false;
+  let host, data, bootPhase, audioFrame = 0, audioAt = 0, energy = 0, wakeTimer = 0, reactionIndex = 0, chatThinking = false, anticTimer = 0, lastTouch = Date.now();
   const plays = new WeakMap();
+  // How it carries itself (Settings › Personality): faces or a plain check,
+  // and whether it plays on its own while nothing needs it.
+  const prefs = { personality: "balanced", expressions: true, antics: false };
+  const pick = (list) => list[Math.floor(Math.random() * list.length)];
   // No shared SVG IDs: each light can appear in the launch box, rail and hub.
   const face = () => '<svg class="agent-creature" viewBox="0 0 80 80" aria-hidden="true" focusable="false"><g class="agent-body"><circle class="agent-aura" cx="40" cy="44" r="25"/><path class="agent-vapor" d="M27 52C15 44 22 30 39 31c15 1 22-8 21-17-1 12-7 15-16 19"/><path class="agent-vapor agent-vapor-fine" d="M49 55c12-5 15-16 8-22M23 40c-3 10 3 17 12 17"/><circle class="agent-glow" cx="40" cy="44" r="15"/><circle class="agent-core" cx="40" cy="44" r="8.5"/><circle class="agent-heart" cx="38" cy="42" r="3.5"/><g class="agent-orbit"><circle class="agent-mote" cx="20" cy="41" r="1.5"/><circle class="agent-mote" cx="57" cy="53" r="1.1"/><circle class="agent-mote" cx="49" cy="25" r=".8"/></g></g><text class="agent-thought" x="40" y="21" text-anchor="middle"><tspan>.</tspan><tspan>.</tspan><tspan>.</tspan></text><g class="agent-reactions"/></svg>';
 
@@ -62635,10 +63022,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const motion = !still() && Boolean(target.animate), effects = target.querySelector(".agent-reactions");
     const playback = { animations: [], timer: 0 }; plays.set(target, playback);
     const animate = (item, frames, options) => playback.animations.push(item.animate(frames, options));
-    if (effects) {
-      const words = expression || (target.closest('[data-mood="thinking"]') ? "..." : ["^_^", ":)", ":D", "<3"][reactionIndex++ % 4]);
+    // Without faces (Straight work) a finished reply is a plain check and
+    // everything else is only the little hop; "..." still says it is thinking.
+    const plain = !prefs.expressions && expression !== "..." && !target.closest('[data-mood="thinking"]');
+    if (effects && !(plain && expression !== "^_^")) {
+      const words = plain ? "✓" : expression || (target.closest('[data-mood="thinking"]') ? "..." : ["^_^", ":)", ":D", "<3"][reactionIndex++ % 4]);
       const smile = spark("text", "agent-reaction", { x: 40, y: 23, "text-anchor": "middle" }, words); effects.append(smile);
-      if (motion) {
+      if (motion && !plain) {
         animate(smile, [{ opacity: 0, transform: "translate(-3px,14px) scale(.4)", easing: "cubic-bezier(.22,1,.36,1)" }, { opacity: 1, transform: "translate(0,0) scale(1.08)", offset: .2 }, { opacity: 1, transform: "translate(2px,-2px) scale(1)", offset: .72 }, { opacity: 0, transform: "translate(5px,-9px) scale(.9)" }], { duration: 1750, easing: "linear", fill: "both" });
         // Replace a burst on repeated taps, so particles never accumulate.
         for (const [i, [x, y]] of [[-25, -8], [-16, -25], [15, -23], [26, -7], [18, 14], [-19, 13]].entries()) {
@@ -62655,15 +63045,68 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const mood = chatThinking || data?.state?.state === "working" ? "thinking" : "idle";
     const target = hub.open ? el.avatar : host?.orb;
     const finished = target?.dataset.mood === "thinking" && mood === "idle";
-    for (const item of [host?.orb, el.avatar]) if (item) { if (item.dataset.mood !== mood) clearPlay(item.querySelector("svg")); item.dataset.mood = mood; }
-    if (el.status && data) el.status.textContent = chatThinking ? "Thinking with you…" : data.state?.state === "working" ? "Agents are working · run controls in Quick actions" : data.status || "Ready when you are";
+    for (const item of [host?.orb, el.avatar]) {
+      if (!item) continue;
+      // A dozing orb sleeps on through quiet refreshes; work or a touch wakes it.
+      const next = item === host?.orb && item.dataset.mood === "sleepy" && mood === "idle" ? "sleepy" : mood;
+      if (item.dataset.mood !== next) clearPlay(item.querySelector("svg"));
+      item.dataset.mood = next;
+    }
+    if (el.status && data) el.status.textContent = chatThinking ? "Thinking with you…" : data.state?.state === "working" ? "Agents are working · see What I'm doing" : data.status || "Ready when you are";
     if (finished && celebrate && data?.state?.state !== "needs-you") play(target?.querySelector("svg"), "^_^");
   }
   function thinking(active, { celebrate = true } = {}) {
     chatThinking = Boolean(active); syncMood(celebrate);
   }
+
+  // Petting: stroke it back and forth a few times and it leans in, hearts
+  // rise, and the bond remembers (one pet per few seconds, host-side).
+  function pet(svg) {
+    lastTouch = Date.now(); wake();
+    play(svg, prefs.expressions ? pick(["<3", "~♡", "^w^", "♡"]) : null);
+    window.mefiStudio?.companionBond?.("pet").then((result) => { if (result?.bond && el.bond) el.bond.textContent = result.bond; }).catch(() => {});
+  }
+  function pettable(control, svgOf) {
+    let lastX = null, direction = 0, strokes = 0, strokeAt = 0;
+    control.addEventListener("pointermove", (event) => {
+      if (event.buttons) { lastX = null; return; }
+      // A busy frame folds several moves into one event; a stroke is in them.
+      const moves = event.getCoalescedEvents?.() || [];
+      for (const move of moves.length ? moves : [event]) {
+        if (lastX == null) { lastX = move.clientX; continue; }
+        const delta = move.clientX - lastX;
+        if (Math.abs(delta) < 4) continue;
+        lastX = move.clientX;
+        const now = performance.now();
+        if (now - strokeAt > 700) strokes = 0;
+        if (Math.sign(delta) !== direction) { direction = Math.sign(delta); strokes += 1; strokeAt = now; }
+        if (strokes >= 4) { strokes = 0; pet(svgOf()); break; }
+      }
+    });
+    control.addEventListener("pointerleave", () => { lastX = null; strokes = 0; });
+  }
+  // Idle play (Settings › Idle play): now and then, while nothing needs it
+  // and the owner is not using it, the orb does something small on its own.
+  // After a long quiet spell it dozes until touched.
+  function wake() { if (host?.orb?.dataset.mood === "sleepy") { host.orb.dataset.mood = "idle"; syncMood(false); } }
+  function scheduleAntic() {
+    clearTimeout(anticTimer);
+    anticTimer = setTimeout(() => {
+      const orb = host?.orb, svg = orb?.querySelector(".agent-creature");
+      const resting = !chatThinking && ["resting", undefined].includes(data?.state?.state);
+      if (prefs.antics && svg && !still() && !document.hidden && !hub.open && orb.getClientRects().length && orb.dataset.mood !== "thinking") {
+        if (resting && Date.now() - lastTouch > 10 * 60 * 1000) { orb.dataset.mood = "sleepy"; play(svg, "zzz"); }
+        else {
+          const sound = window.MefiIdle?.audioStatus?.();
+          play(svg, sound?.listening ? "♪" : pick(["~", "o_o", "^^", "?", "✦"]));
+        }
+      }
+      scheduleAntic();
+    }, 35000 + Math.random() * 45000);
+  }
   function character(label) {
     const control = button("", () => play(control.querySelector("svg")), "agent-play");
+    pettable(control, () => control.querySelector("svg"));
     control.innerHTML = face(); control.setAttribute("aria-label", label); control.title = "Say hello · move your pointer to play";
     control.addEventListener("pointermove", (event) => {
       if (still()) return;
@@ -62739,13 +63182,15 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     });
   }
 
+  // Six bubbles, one job each: talk, see what it is doing, answer what waits,
+  // trade ideas for work, meet friends, and shape how it behaves.
   const items = [
-    ["ask", "Talk to me", "g-help", "Ask, plan, or make a task"],
-    ["friends", "Friends", "g-orbit", "Your PCs, rooms and listening"],
-    ["requests", "Requests", "g-tasks", "Decisions waiting for you"],
-    ["notices", "Notifications", "g-ideas", "What happened in your studio"],
-    ["settings", "Settings", "g-ambience", "Make this space yours"],
-    ["quick", "Quick actions", "g-command", "Setup, team, and audio"],
+    ["ask", "Talk", "g-help", "Chat, plan, or make a task"],
+    ["now", "What I'm doing", "g-command", "Work in progress and what just happened"],
+    ["requests", "Needs you", "g-tasks", "Decisions waiting for you"],
+    ["ideas", "Suggest work", "g-ideas", "Give me an idea, or take one of mine"],
+    ["friends", "Friends", "g-orbit", "Playdates, sharing, rooms and your PCs"],
+    ["settings", "Personality", "g-ambience", "How I behave, and settings"],
   ];
   function icon(glyph) { const span = node("span", "agent-hub-icon"); span.innerHTML = `<svg class="glyph" aria-hidden="true"><use href="#${glyph}"/></svg>`; return span; }
   function attach(value) {
@@ -62773,9 +63218,15 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const extra = node("div", "agent-hub-extra"); detail.append(back, extra); layout.append(stage, detail);
     const foot = node("footer", "agent-hub-foot");
     const status = node("span", "", "Your work keeps its current run settings."); status.id = "agent-hub-status";
+    const bond = node("span", "agent-hub-bond"); bond.id = "agent-hub-bond";
     const audio = button("Audio link", () => navigate(() => window.MefiMusic?.openAudio?.()), "ghost mini"); audio.id = "agent-hub-audio";
-    foot.append(status, audio, node("kbd", "", "Esc")); shell.append(head, layout, foot); layer.append(shell); document.body.append(layer);
-    Object.assign(el, { layer, shell, stage, center, avatar, title, detail, extra, back, status, audio });
+    foot.append(status, bond, audio, node("kbd", "", "Esc")); shell.append(head, layout, foot); layer.append(shell); document.body.append(layer);
+    Object.assign(el, { layer, shell, stage, center, avatar, title, detail, extra, back, status, audio, bond });
+    // A pet in the hub or on the orb; any touch on the orb wakes a dozing one.
+    pettable(center, () => avatar.querySelector("svg"));
+    pettable(host.orb, () => host.orb.querySelector(".agent-creature"));
+    host.orb.addEventListener("pointerenter", () => { lastTouch = Date.now(); wake(); });
+    scheduleAntic();
     window.MefiPcSync?.subscribe?.(() => syncBadge());
     syncBadge();
     layer.addEventListener("click", (event) => { if (event.target === layer) close(); });
@@ -62811,6 +63262,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (!host || window.MefiBoot?.isActive?.() || otherDialog()) return false;
     if (hub.open) { if (hub.closing) { clearTimeout(hub.timer); hub.closing = false; el.layer.classList.remove("leaving"); } return true; }
     host.toggle(false); window.MefiCompanionUI?.freeze(); window.MefiSelect?.close();
+    lastTouch = Date.now(); wake();
     hub.returnFocus = document.activeElement; hub.open = true; hub.closing = false;
     el.layer.hidden = false; el.layer.classList.remove("leaving"); el.title.textContent = `A moment with ${name()}`;
     host.orb.setAttribute("aria-expanded", "true"); host.orb.setAttribute("aria-controls", "agent-hub");
@@ -62854,29 +63306,80 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (!section) { if (previous && hub.open) el.stage.querySelector(`[data-hub-section="${previous}"]`)?.focus({ preventScroll: true }); return; }
     const titles = Object.fromEntries(items.map(([id, label]) => [id, label]));
     const title = node("h3", "", titles[section]); title.tabIndex = -1; el.extra.append(title);
-    const panelTab = { ask: "ask", requests: "status", notices: "activity", settings: "settings" }[section];
+    const panelTab = { ask: "ask", requests: "status", now: "now", settings: "settings" }[section];
     if (panelTab) {
       el.detail.append(host.panel); host.panel.inert = false; host.panel.classList.add("companion-in-hub"); host.panel.setAttribute("role", "region");
       host.toggle(true, { hub: true }); window.MefiCompanionUI?.showTab(panelTab);
       if (section === "settings") el.extra.append(action("Open app settings", () => window.MefiNav?.go("studio", { category: "general" })));
     } else if (section === "friends") {
-      el.extra.append(node("p", "muted", "Make a little room for your friends. Link your community account, then join a room to listen together."),
-        action("Connect with Discord", () => window.MefiNav?.go("community")),
-        action("Friends & listening rooms", () => { window.MefiMusic?.openAudio?.(); window.MefiMusic?.setSource?.("link"); window.MefiMusic?.togetherHost?.()?.scrollIntoView({ block: "nearest" }); }),
-        node("p", "ab-quiet", "Choose Connect or Join in the room controls when you're ready."));
+      // Friends › Playground (renderer/companion-friends.js): friends'
+      // companions, playdates and what yours may share, answered in place.
+      const playground = window.MefiCompanionFriends?.card?.({ name: name(), face: (look) => lookFace(look) });
+      if (playground) el.extra.append(playground);
+      el.extra.append(action("Friends & listening rooms", () => { window.MefiMusic?.openAudio?.(); window.MefiMusic?.setSource?.("link"); window.MefiMusic?.togetherHost?.()?.scrollIntoView({ block: "nearest" }); }),
+        action("Connect with Discord", () => window.MefiNav?.go("community")));
       // Friends › Your PCs (renderer/pc-sync.js) stays in the hub: Sync this
       // PC answers in place instead of navigating away.
       const pcs = window.MefiPcSync?.card?.();
       if (pcs) el.extra.append(pcs);
     } else {
-      el.extra.append(node("p", "muted", "A few useful things, close at hand."),
-        action("Walk me through setup", () => window.MefiOnboarding?.open?.()),
-        action("Team & connections", () => window.MefiNav?.go("agents", { section: "setup", pane: "team" })),
-        action("Audio & music", () => window.MefiMusic?.openAudio?.()),
-        action("Appearance", () => window.MefiNav?.go("studio", { category: "appearance" })),
-        action("Run & pause controls", () => { window.MefiCompanion?.open?.(); window.MefiCompanionUI?.showTab("settings"); }));
+      el.extra.append(...ideas());
     }
     title.focus({ preventScroll: true }); resize();
+  }
+  // A companion face for a look: the wisp is this file's own light, the
+  // others the menu foot's drawings (MefiCompanion.face).
+  function lookFace(look) { return look === "wisp" || !window.MefiCompanion?.face ? face() : window.MefiCompanion.face(look); }
+
+  // Suggest work: the owner's idea goes to the inbox as their own request
+  // (the same add the inbox uses), and the companion offers its next picks
+  // from the backlog, each one Work on it away. Nothing starts on its own.
+  function ideas() {
+    const api = window.mefiStudio;
+    const projectId = () => window.MefiWorkspace?.activeProjectId?.() ?? null;
+    const form = node("form", "agent-hub-suggest");
+    const field = node("textarea"); field.rows = 3; field.maxLength = 4000; field.id = "agent-hub-suggest-text";
+    field.placeholder = "An idea, a fix, something you'd like made…"; field.setAttribute("aria-label", "Suggest work for your companion");
+    const send = node("button", "primary mini", "Suggest it"); send.type = "submit";
+    const said = node("p", "ab-quiet"); said.setAttribute("role", "status");
+    form.append(node("p", "muted", "Tell me what you'd like worked on. It goes to the inbox; I'll size it up before anything starts."), field, send, said);
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const text = field.value.trim();
+      if (!text || send.disabled) return;
+      send.disabled = true; said.textContent = "Adding it…";
+      let result;
+      try { result = await api?.eyesRequestsAction?.({ action: "add", projectId: projectId(), requests: [{ prompt: text, source: "manual" }] }); } catch (error) { result = { ok: false, error: error?.message }; }
+      send.disabled = false;
+      if (result?.ok === false || !result) { said.textContent = result?.error || "That could not be added. Try again."; return; }
+      field.value = ""; said.textContent = "Added to the inbox. Thank you!";
+      play(el.avatar.querySelector("svg"), "^_^");
+    });
+    const picks = node("section", "agent-hub-picks"); picks.setAttribute("aria-labelledby", "agent-hub-picks-title");
+    const heading = node("h4", "", "My picks for next"); heading.id = "agent-hub-picks-title";
+    const list = node("div", "agent-hub-pick-list"); list.append(node("p", "ab-quiet", "Looking at the board…"));
+    picks.append(heading, list);
+    Promise.resolve(api?.backlogStatus?.()).then((status) => {
+      // Only work that can go next: not what is running, held, cooling or waiting.
+      const next = (status?.next || []).filter((row) => row?.id && ["ready", "approval"].includes(row.stage)).slice(0, 4);
+      list.replaceChildren();
+      if (!next.length) list.append(node("p", "ab-quiet", status?.summary || "Nothing is waiting to be picked up."));
+      for (const row of next) {
+        const item = node("article", "companion-item");
+        const go = node("button", "ghost mini", "Work on it"); go.type = "button";
+        go.addEventListener("click", async () => {
+          go.disabled = true;
+          const result = await api?.assistantWorkOn?.({ kind: "task", id: row.id, label: String(row.title || "").slice(0, 80), projectId: projectId() }).catch((error) => ({ ok: false, error: error?.message }));
+          if (result?.ok === false) { window.MefiToast?.(result.error || "That could not start.", "warn"); go.disabled = false; return; }
+          go.textContent = "On it"; play(el.avatar.querySelector("svg"), "^_^");
+        });
+        item.append(node("strong", "", row.title || "Untitled task"), node("span", "ab-quiet", row.reason || ""), go);
+        list.append(item);
+      }
+      resize();
+    }).catch(() => { list.replaceChildren(node("p", "ab-quiet", "The board could not be read just now.")); });
+    const askMore = action("Ask me for more ideas", () => { window.MefiCompanion?.open?.(); window.MefiCompanionUI?.showTab("ask"); const input = document.querySelector("#companion-pane-ask textarea"); if (input) { input.value = "What should we work on next? Give me a few ideas."; input.focus(); } });
+    return [form, picks, askMore];
   }
   function resize() {
     if (!hub.open) return;
@@ -62901,6 +63404,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   function update(next) {
     if (next) data = next;
+    if (data?.state) {
+      prefs.personality = data.state.personality || "balanced";
+      prefs.expressions = data.state.expressions !== false;
+      prefs.antics = data.state.antics === true;
+      if (!prefs.antics) wake();
+      if (el.bond && data.state.bond) el.bond.textContent = data.state.bond;
+    }
     if (!el.layer || !data) return;
     const count = data.state?.queue?.counts?.total ?? data.state?.queue?.items?.length ?? 0;
     const requests = el.stage.querySelector('[data-hub-section="requests"]');
@@ -65379,7 +65889,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     companion.bubbleTimer = setTimeout(() => { if (companion.bubble) companion.bubble.hidden = true; }, 12000);
   }
 
-  window.MefiCompanion = { open: () => toggleCompanion(true), close: () => toggleCompanion(false), refresh: () => refreshCompanion(true), state: () => companion.state };
+  // face(look): the drawing for a look, so Friends can draw friends' companions.
+  window.MefiCompanion = { open: () => toggleCompanion(true), close: () => toggleCompanion(false), refresh: () => refreshCompanion(true), state: () => companion.state, face: (look) => lookSvg(LOOKS.includes(look) ? look : "wisp") };
 
   // ---- live wiring --------------------------------------------------------------------
 

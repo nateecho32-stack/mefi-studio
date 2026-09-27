@@ -1954,7 +1954,8 @@
     companion.bubbleTimer = setTimeout(() => { if (companion.bubble) companion.bubble.hidden = true; }, 12000);
   }
 
-  window.MefiCompanion = { open: () => toggleCompanion(true), close: () => toggleCompanion(false), refresh: () => refreshCompanion(true), state: () => companion.state };
+  // face(look): the drawing for a look, so Friends can draw friends' companions.
+  window.MefiCompanion = { open: () => toggleCompanion(true), close: () => toggleCompanion(false), refresh: () => refreshCompanion(true), state: () => companion.state, face: (look) => lookSvg(LOOKS.includes(look) ? look : "wisp") };
 
   // ---- live wiring --------------------------------------------------------------------
 

@@ -7,6 +7,21 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **The companion as a pet and a friend.** Its menu is six bubbles with one
+  job each: Talk (with three one-tap starters), What I'm doing (the work, the
+  team and recent activity together), Needs you, Suggest work (your idea to
+  the inbox, or one of its next picks with Work on it), Friends and
+  Personality. **Personality** is Straight work, Balanced or Friendly &
+  expressive: it sets faces, idle play and roaming, and chat replies follow
+  its manner without doing anything differently. Stroke it to pet it; it
+  remembers days together, pets and playdates, and with idle play on it
+  fidgets and dozes. **Friends › Playground** lets companions in the same room
+  meet and play short scripted playdates, like toys that linked up, with a
+  practice buddy on this PC. Nothing about you or your work is shared until you
+  allow it, for everyone, a room or a friend, this session or always; a friend
+  sharing more makes it ask, and What was sent lists every card that left.
+  Playdates with friends need the rooms hub to relay `companion` frames
+  (docs/community.md).
 - Second bug-hunt pass over the newest features. **Guided CLI setup** opens
   its terminal again (a detached PowerShell never ran its script), and the
   **release updater**'s install helper now actually runs after Studio exits.

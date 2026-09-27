@@ -168,8 +168,8 @@ app.whenReady().then(async () => {
   report.noStartOnSetup = await run("return !window.unifiedFixture.calls().some(call=>['assistantControl','assistantAutopilot'].includes(call.name));"); assert.ok(report.noStartOnSetup);
   await run("window.MefiCompanion.open();");
   assert.ok(await run("return window.MefiCompanionUI.tab()==='ask' && !document.getElementById('companion-pane-ask').hidden && !!document.querySelector('#companion-pane-ask textarea');"));
-  await run("document.querySelector('[data-companion-tab=team]').click();");
-  await until("!document.getElementById('companion-pane-team').hidden", "companion team hub");
+  await run("document.querySelector('[data-companion-tab=now]').click();");
+  await until("!document.getElementById('companion-pane-now').hidden && document.querySelector('#companion-pane-now .companion-now-activity .companion-item')", "companion what-I'm-doing view");
   await run("document.querySelector('[data-companion-tab=settings]').click();");
   await until("!document.getElementById('companion-panel').hidden", "assistant settings");
   report.stableMenu = await run("const field=document.querySelector('[data-companion-setting=roaming]');field.focus();window.unifiedFixture.update();await window.MefiCompanion.refresh();return field===document.activeElement&&field.isConnected;"); assert.ok(report.stableMenu);
