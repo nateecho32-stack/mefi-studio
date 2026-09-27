@@ -78,8 +78,6 @@ const api = {
   cliSetupAction: (payload) => ipcRenderer.invoke("setup:cli-action", payload),
   cliSetupCheck: (id) => ipcRenderer.invoke("setup:cli-check", id),
   cliSetupUse: (id) => ipcRenderer.invoke("setup:cli-use", id),
-  // A guided setup window closed and PATH was re-read (main.cjs guidedCliSetup).
-  onCliSetupClosed: (callback) => ipcRenderer.on("setup:cli-closed", (_event, data) => callback(data)),
   launchCli: (id) => ipcRenderer.invoke("studio:launch-cli", id),
   testZai: () => ipcRenderer.invoke("studio:test-zai"),
   speedProbe: (modelId) => ipcRenderer.invoke("speed:probe", { modelId }),
@@ -100,9 +98,6 @@ const api = {
   // Trace: Studio's logs as channels (main.cjs trace:channels / trace:read).
   traceChannels: () => ipcRenderer.invoke("trace:channels"),
   traceRead: (payload) => ipcRenderer.invoke("trace:read", payload ?? {}),
-  // Configuration's interface scale (main.cjs ui:zoom).
-  uiZoom: (payload) => ipcRenderer.invoke("ui:zoom", payload ?? {}),
-  uiZoomGet: () => ipcRenderer.invoke("ui:zoom-get"),
   eyesPinsRead: () => ipcRenderer.invoke("eyes:pins-read"),
   eyesPinsWrite: (pins) => ipcRenderer.invoke("eyes:pins-write", pins),
   eyesWatch: (running) => ipcRenderer.invoke("eyes:watch", { running }),
@@ -201,32 +196,10 @@ const api = {
   } : null),
   hubNowPlaying: (track) => ipcRenderer.invoke("hub:now-playing", { track: track && typeof track === "object" ? { label: String(track.label ?? ""), provider: String(track.provider ?? ""), ...(typeof track.url === "string" ? { url: track.url } : {}) } : null }),
   onHubEvent: (callback) => ipcRenderer.on("hub:event", (_event, payload) => callback(payload)),
-  // Companion friends (main.cjs "Companion friends"): what friends' companions
-  // may see, the friends out now and playdates. Only named fields cross.
-  hubFriends: (profile) => ipcRenderer.invoke("hub:friends", { ...(typeof profile?.name === "string" ? { name: profile.name.slice(0, 40) } : {}) }),
-  hubSharingSet: (change) => ipcRenderer.invoke("hub:sharing-set", change && typeof change === "object" ? {
-    ...(typeof change.everyone === "string" ? { everyone: change.everyone } : {}),
-    ...(change.hold === null || typeof change.hold === "string" ? { hold: change.hold } : {}),
-    ...(change.rule && typeof change.rule === "object" ? { rule: { scope: String(change.rule.scope ?? ""), target: change.rule.target == null ? null : String(change.rule.target), level: change.rule.level == null ? null : String(change.rule.level), label: String(change.rule.label ?? "").slice(0, 80) } } : {}),
-    ...(change.duration === "session" || change.duration === "always" ? { duration: change.duration } : {}),
-    ...(typeof change.dismiss === "string" ? { dismiss: change.dismiss } : {}),
-    ...(typeof change.name === "string" ? { name: change.name.slice(0, 40) } : {}),
-  } : {}),
-  hubPlaydate: (target) => ipcRenderer.invoke("hub:playdate", target && typeof target === "object" ? { practice: target.practice === true, music: target.music === true, roomId: typeof target.roomId === "string" ? target.roomId : null, userId: typeof target.userId === "string" ? target.userId : null } : {}),
   // Friends › Your PCs (main.cjs "Multi-PC sync"): the open project against
-  // its default branch on GitHub. Main picks the folder; the renderer can only
-  // ask for a rebase onto GitHub's commits. onSyncEvent carries every answer,
-  // including the background look behind the Friends badge.
+  // its default branch on GitHub. No payload; main picks the folder.
   syncStatus: () => ipcRenderer.invoke("sync:status"),
-  syncRun: (options) => ipcRenderer.invoke("sync:run", { rebase: options?.rebase === true }),
-  onSyncEvent: (callback) => ipcRenderer.on("sync:event", (_event, result) => callback(result)),
-  // Friends › Your PCs › Set up this PC (scripts/pc-setup.cjs): the renderer
-  // names an action or a repository from the account's own list, never a
-  // command, a URL or a folder.
-  pcSetupStatus: () => ipcRenderer.invoke("pc-setup:status"),
-  pcSetupAction: (action) => ipcRenderer.invoke("pc-setup:action", { action: typeof action === "string" ? action : "" }),
-  pcSetupRepos: () => ipcRenderer.invoke("pc-setup:repos"),
-  pcSetupClone: (repo) => ipcRenderer.invoke("pc-setup:clone", { repo: typeof repo === "string" ? repo : "" }),
+  syncRun: () => ipcRenderer.invoke("sync:run"),
   machineStatus: (kill) => ipcRenderer.invoke("machine:status", { kill: Boolean(kill) }),
   machineGet: () => ipcRenderer.invoke("machine:get"),
   machineSet: (prefs) => ipcRenderer.invoke("machine:set", prefs),
@@ -286,8 +259,7 @@ const api = {
   companionWelcome: () => ipcRenderer.invoke("companion:welcome"),
   companionClear: () => ipcRenderer.invoke("companion:clear"),
   companionSeen: (reason) => ipcRenderer.invoke("companion:seen", { reason: String(reason ?? "active").slice(0, 40) }),
-  companionPrefs: (prefs) => ipcRenderer.invoke("companion:prefs", prefs && typeof prefs === "object" ? { ...(typeof prefs.look === "string" ? { look: prefs.look } : {}), ...(typeof prefs.scope === "string" ? { scope: prefs.scope } : {}), ...(typeof prefs.personality === "string" ? { personality: prefs.personality } : {}), ...Object.fromEntries(["roaming", "pinned", "bubbles", "growth", "expressions", "antics"].filter((key) => typeof prefs[key] === "boolean").map((key) => [key, prefs[key]])), ...(prefs.anchor && typeof prefs.anchor === "object" ? { anchor: { x: prefs.anchor.x, y: prefs.anchor.y } } : {}) } : {}),
-  companionBond: (event) => ipcRenderer.invoke("companion:bond", { event: event === "pet" || event === "playdate" ? event : null }),
+  companionPrefs: (prefs) => ipcRenderer.invoke("companion:prefs", prefs && typeof prefs === "object" ? { ...(typeof prefs.look === "string" ? { look: prefs.look } : {}), ...(typeof prefs.scope === "string" ? { scope: prefs.scope } : {}), ...Object.fromEntries(["roaming", "pinned", "bubbles", "growth"].filter((key) => typeof prefs[key] === "boolean").map((key) => [key, prefs[key]])), ...(prefs.anchor && typeof prefs.anchor === "object" ? { anchor: { x: prefs.anchor.x, y: prefs.anchor.y } } : {}) } : {}),
   onBrainEvent: (callback) => ipcRenderer.on("brain:event", (_event, payload) => callback(payload)),
   onBrainUpdate: (callback) => ipcRenderer.on("brain:update", (_event, payload) => callback(payload)),
   onCompanionWelcome: (callback) => ipcRenderer.on("companion:welcome", (_event, payload) => callback(payload)),

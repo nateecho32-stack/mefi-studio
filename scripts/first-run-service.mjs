@@ -72,10 +72,6 @@ export function createFirstRunService(deps = {}) {
       ok: true,
       firstRun: settings?.firstRun ?? null,
       autoSetup: settings?.autoSetup ?? null,
-      // The assistant route in force, so the guide can say whether a
-      // subscription tool (check its login above) or a key or local server
-      // (scan and use the setup) finishes the first launch's auto setup.
-      aiProvider: typeof settings?.aiProvider === "string" ? settings.aiProvider : null,
       scanned: Boolean(lastScan),
       scanAt: lastScan?.at ?? null,
       mapping: { running: mapping.running, projectId: mapping.projectId, startedAt: mapping.startedAt, step: mapping.step, tools: mapping.tools },
@@ -116,10 +112,7 @@ export function createFirstRunService(deps = {}) {
     const chosen = { ...prefsFrom(settings, prefs), assistantRoute: lastScan.prefs.assistantRoute };
     const plan = scanner.planFirstRun({ scan: lastScan.scan, keys: keysOf(settings), prefs: chosen });
     const modelId = (value) => (typeof value === "string" && scanner.MODEL_ID.test(value) ? value : null);
-    // The host may run one mutation twice (Studio defaults, then the open
-    // project's own team), so each change is reported once.
     const applied = [];
-    const mark = (name) => { if (!applied.includes(name)) applied.push(name); };
     const firstRun = {
       version: FIRST_RUN_VERSION,
       scanAt: lastScan.at,
@@ -135,23 +128,23 @@ export function createFirstRunService(deps = {}) {
     };
     await updateSettings((next) => {
       next.firstRun = firstRun;
-      mark("firstRun");
+      applied.push("firstRun");
       if (plan.ok && (!next.executorCli || next.executorCli === "opencode")) {
-        if (next.executorCli !== "opencode") mark("executorCli");
+        if (next.executorCli !== "opencode") applied.push("executorCli");
         next.executorCli = "opencode";
       }
       const models = next.executorModels && typeof next.executorModels === "object" ? { ...next.executorModels } : {};
       if (firstRun.builder.model) {
-        if (models.opencode !== firstRun.builder.model) mark("executorModels.opencode");
+        if (models.opencode !== firstRun.builder.model) applied.push("executorModels.opencode");
         models.opencode = firstRun.builder.model;
       } else if (models.opencode) {
         delete models.opencode;
-        mark("executorModels.opencode");
+        applied.push("executorModels.opencode");
       }
       next.executorModels = models;
       if (plan.judge.kind === "jev" && next.modelSelection !== "jev") {
         next.modelSelection = "jev";
-        mark("modelSelection");
+        applied.push("modelSelection");
       }
     });
     // Auto setup reconciles the assistant route and the builder CLI with what
@@ -165,18 +158,16 @@ export function createFirstRunService(deps = {}) {
       firstRun.judge = { kind: "assistant", model: null, reason: "Uses the same subscription for agent decisions." };
       await updateSettings((next) => { next.firstRun = firstRun; });
     }
-    if (auto?.applied === true) mark("autoSetup");
+    if (auto?.applied === true) applied.push("autoSetup");
     const notes = [];
     if (auto?.ok) notes.push(`Auto setup: ${auto.summary}`);
     else if (auto?.error && !plan.ok) notes.push(`Auto setup: ${auto.error}`);
     if (firstRun.builder.free && firstRun.builder.model) notes.push("The free builder model is saved: choose the Free coding tier in Settings to run it one worker at a time (Auto keeps it as OpenCode's pinned model when the z.ai plan is not in use).");
     if (firstRun.explorer.transport !== "assistant" && (plan.judge.kind === "assistant" || plan.judge.kind === "opencode-free")) notes.push("The stand-in judge is saved; routing and intake use it once the judge route is wired (until then fixed defaults apply).");
     log(`[first-run] applied: ${applied.join(", ")}`);
-    // Without OpenCode the route auto setup found is the whole setup; a
-    // missing optional tool is not news worth leading with.
     const summary = firstRun.explorer.transport === "assistant" ? `${subscription} handles mapping, guidance and coding with its own login.` : plan.ok || !auto?.ok
       ? `Explorer ${firstRun.explorer.model ?? "OpenCode default"}, builder ${firstRun.builder.model ?? "OpenCode default"}, judge ${firstRun.judge.kind}.`
-      : plan.opencode.installed ? `OpenCode is not usable yet; ${auto.summary}` : auto.summary;
+      : `OpenCode is not usable yet; ${auto.summary}`;
     return { ok: true, firstRun, plan, applied, notes, summary, autoSetup: auto };
   }
 
@@ -209,11 +200,10 @@ export function createFirstRunService(deps = {}) {
     const plan = settings?.firstRun ?? lastScan?.plan ?? null;
     const explorer = plan?.explorer ?? null;
     const useAssistant = typeof assistantMap === "function" && (explorer?.transport === "assistant" || ["claude", "codex", "grok", "antigravity"].includes(settings.aiProvider) || !explorer?.model && !plan?.providers?.paid?.length) && await routeOk();
-    // The guide's tool panel sits above the map's status line.
-    if (!explorer && !useAssistant) return { ok: false, reason: "no-scan", error: "Connect an AI above to start your map: sign in to a tool and check its connection, or save an API key or choose a local model server." };
+    if (!explorer && !useAssistant) return { ok: false, reason: "no-scan", error: "Choose a tool below, sign in and check its connection to start your map." };
     const paid = Array.isArray(plan?.providers?.paid) ? plan.providers.paid : [];
-    if (!useAssistant && !explorer.model && !paid.length) return { ok: false, reason: "no-explorer", error: "Choose an existing subscription or install a tool above and sign in, or save an API key or choose a local model server, then retry your map." };
-    if (!useAssistant && plan?.opencode && plan.opencode.installed === false) return { ok: false, reason: "no-opencode", error: "Choose a connected tool above, or save an API key or choose a local model server, to map this project." };
+    if (!useAssistant && !explorer.model && !paid.length) return { ok: false, reason: "no-explorer", error: "Choose an existing subscription or install a tool below, then sign in and retry your map." };
+    if (!useAssistant && plan?.opencode && plan.opencode.installed === false) return { ok: false, reason: "no-opencode", error: "Choose a connected tool below to map this project." };
     const model = useAssistant ? null : typeof explorer.model === "string" && scanner.MODEL_ID.test(explorer.model) ? explorer.model : null;
     let report = null;
     try { report = await analyzeProject(); } catch (error) { log(`[first-run] analyzer unavailable for the map: ${errorText(error)}`); }
@@ -265,7 +255,7 @@ export function createFirstRunService(deps = {}) {
     };
     if (mapping.cancelled) return finish({ ok: false, reason: "cancelled", error: "The map was cancelled." });
     if (result?.timedOut) return finish({ ok: false, reason: "timeout", error: `The explorer did not finish within ${Math.round(mapTimeoutMs / 60000)} minutes; try a smaller folder or a paid model.` });
-    if (result?.error && !result?.stdout) return finish({ ok: false, reason: useAssistant ? "connection" : "spawn-failed", error: `The selected tool could not finish: ${clip(result.error, 200)} Use Sign in or Check connection above, then retry.` });
+    if (result?.error && !result?.stdout) return finish({ ok: false, reason: useAssistant ? "connection" : "spawn-failed", error: `The selected tool could not finish: ${clip(result.error, 200)} Use Sign in or Check connection below, then retry.` });
     if (projects.current().id !== project.id) return finish({ ok: false, reason: "project-changed", error: "The project changed while mapping. Nothing was saved; map the selected folder again." });
     const joined = events.texts.join("\n");
     if (events.errors.length && !joined.trim()) {
@@ -305,7 +295,7 @@ export function createFirstRunService(deps = {}) {
   }
 
   // The AI linked at the Scan stop plans the rest of the setup: the assistant's
-  // chat model when its route is usable, otherwise the explorer model
+  // chat model when the scan made it the judge, otherwise the explorer model
   // through `opencode run`; with neither, the same advice is written from the
   // facts alone (setup-assist.mjs). Advice is text for the person: nothing is
   // saved and no work starts.
@@ -324,13 +314,12 @@ export function createFirstRunService(deps = {}) {
       let map = project ? lastMapDetail.get(project.id) ?? null : null;
       if (project && !map) { try { map = (await readMapFile(MAP_FILE))?.map ?? null; } catch {} }
       const facts = { firstRun, project: project ? { name: project.name, path: project.path } : null, report, map, progress: marks };
+      const judgeKind = firstRun.judge?.kind ?? null;
       const explorerModel = typeof firstRun.explorer?.model === "string" && scanner.MODEL_ID.test(firstRun.explorer.model) ? firstRun.explorer.model : null;
       let via = "static";
       let model = null;
       let reply = null;
-      // A usable assistant route answers whatever the judge is: an OpenRouter
-      // or Zen key makes Jev the judge and is also the assistant's own route.
-      if (typeof assistantChat === "function" && await routeOk()) {
+      if (judgeKind === "assistant" && typeof assistantChat === "function") {
         via = "assistant";
         const prompt = assistModule.buildSetupAdvicePrompt(facts);
         try { reply = await assistantChat(prompt.system, prompt.user); } catch (error) { reply = { ok: false, error: errorText(error) }; }

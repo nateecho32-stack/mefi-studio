@@ -85,19 +85,11 @@ tools are denied by the host even if a model asks for them.
 
 ## Coding workers
 
-OpenCode, Claude Code and Codex receive a per-run MCP attachment exposing
-Studio search, project reads and selected MCP tools; OpenCode and Claude Code
-also take the optional desk tool. OpenCode reads its config file through
-`OPENCODE_CONFIG` and Claude Code through `--mcp-config`; Codex has no
-per-run config file flag, so the server is passed as `-c mcp_servers.*`
-overrides (TOML literal strings, quoted for `cmd.exe`). Those overrides are
-on Codex's command line, which other processes can list, so a server whose
-environment names a credential (the desk's token) is never passed there, and
-the log names any server left out. A temp folder whose path holds a space or
-an apostrophe works for all three. Temporary configurations are cleaned up
-when the attempt ends or is canceled. Grok and Antigravity have no per-run MCP
-flag and retain their own native tool and search configuration; Studio does
-not inject its tool bridge into them.
+OpenCode and Claude Code receive a per-run MCP attachment exposing Studio
+search, project reads and selected MCP tools alongside the optional desk tool.
+Temporary configurations are cleaned up when the attempt ends or is canceled.
+Other coding CLIs retain their own native tool and search configuration; Studio
+does not inject its tool bridge into them.
 
 **The Studio checkboxes do not restrict native coding CLI tools.** Existing
 workers run with automatic approvals and broad command/file access. Configure

@@ -115,22 +115,18 @@ Hover briefly over the companion to open its menu. Leaving its avatar,
 panel and connecting margin closes it after about 280 ms. Nested dropdowns
 belong to that interaction area; keyboard use and active text editing keep
 it open. Touch/click activation, Escape and outside dismissal also work.
-Talk, Needs you, Now and Settings resize one stable panel, so live updates do
-not replace focused controls or unfinished answers. Now joins what used to be
-Team and Activity; Settings holds Personality, the work controls, what it has
-learned and a row of shortcuts. The older tab names still open their new
-home (`showTab("team")` opens Now).
+Ask, Status, Team, Activity, Learned and Settings resize one stable panel, so live
+updates do not replace focused controls or unfinished answers.
 
 The companion can roam along unobstructed edges, return to its dock, or be
 dragged and pinned. It pauses when approached or used, honors reduced motion,
 and suspends animation while hidden. Its settings reuse the same admission,
-queue and proactive controls as Agents. Personality, look, faces, idle play,
-bubbles, project reach, position and the bond persist in the app-wide
-`companion.json`.
+queue and proactive controls as Agents. Look, bubbles, project reach and
+position preferences persist locally.
 
 Three small lights mark evidence-backed project growth: mapped systems,
-workflows with verified success, and observed owner preferences. Settings ›
-What I've learned explains these sources. Growth never enables behavior, changes permission or
+workflows with verified success, and observed owner preferences. Learned
+explains these sources. Growth never enables behavior, changes permission or
 answers a question for the owner. The actionable needs-you queue and
 welcome-back digest remain available.
 

@@ -182,7 +182,7 @@ const ISSUE_OPTIONS = {
   },
   "retry-deep": {
     label: "Try again with a heavier model",
-    description: "The next attempt runs on this builder's Heavy-tier model, then routing goes back to normal.",
+    description: "The next dispatch is routed as deep work, so a stronger model is picked for it.",
     verb: "retry-deep",
   },
   instruct: {
@@ -409,9 +409,8 @@ function normalizePolicy(raw = {}) {
  * the user gets a card. A kind in ALWAYS_ASK is never auto, whatever the map
  * says, and neither is anything past the attempt budget — the point of the
  * budget is that a loop stops asking the same retry of itself forever.
- * `heavier` is passed on to questionForIssue.
  */
-function triageIssue(issue, { policy = DEFAULT_POLICY, openAsks = 0, now = Date.now(), heavier = true } = {}) {
+function triageIssue(issue, { policy = DEFAULT_POLICY, openAsks = 0, now = Date.now() } = {}) {
   const normalized = normalizeIssue(issue, { now });
   if (!normalized) return { ok: false, reason: "empty-issue" };
   const rules = normalizePolicy(policy);
@@ -437,18 +436,12 @@ function triageIssue(issue, { policy = DEFAULT_POLICY, openAsks = 0, now = Date.
     // Over the open-card budget the question still gets built; the host queues
     // it rather than dropping it, so nothing an agent asked is ever lost.
     queued: openAsks >= rules.maxOpenAsks,
-    question: questionForIssue(normalized, { now, policy: rules, heavier }),
+    question: questionForIssue(normalized, { now, policy: rules }),
   };
 }
 
-/**
- * The Ask card for an issue: about the task, with options that act on it.
- * `heavier` is the host's word on whether a heavier model exists for the
- * builders as they are set up (main.cjs heavierRetryOnOffer); without one,
- * "Try again with a heavier model" re-ran the same model, so it is not
- * offered, let alone recommended.
- */
-function questionForIssue(issue, { now = Date.now(), policy = DEFAULT_POLICY, heavier = true } = {}) {
+/** The Ask card for an issue: about the task, with options that act on it. */
+function questionForIssue(issue, { now = Date.now(), policy = DEFAULT_POLICY } = {}) {
   const normalized = normalizeIssue(issue, { now });
   if (!normalized) return null;
   const kind = ISSUE_KINDS[normalized.kind];
@@ -474,7 +467,7 @@ function questionForIssue(issue, { now = Date.now(), policy = DEFAULT_POLICY, he
     evidence.trim(),
   ].filter(Boolean).join(" ");
   const detail = splitNote ? `${said.slice(0, 399 - splitNote.length)} ${splitNote}` : said.slice(0, 400);
-  const offered = kind.options.filter((id) => !(noSplit && id === "split") && !(heavier === false && id === "retry-deep"));
+  const offered = kind.options.filter((id) => !(noSplit && id === "split"));
   // A task that has already failed and been retried is not helped by the same
   // retry again: that is the answer the executor (or the assistant) already
   // gave. Recommend a real change instead — a heavier model where it is on
@@ -482,7 +475,7 @@ function questionForIssue(issue, { now = Date.now(), policy = DEFAULT_POLICY, he
   const retried = normalized.attempts >= 2;
   const recommend = retried && kind.recommend === "retry"
     ? offered.includes("retry-deep") ? "retry-deep" : offered.includes("instruct") ? "instruct" : kind.recommend
-    : offered.includes(kind.recommend) ? kind.recommend : offered.find((id) => id !== "hold") ?? kind.recommend;
+    : kind.recommend;
   const options = offered.map((id) => {
     const option = ISSUE_OPTIONS[id];
     // Every answer carries what was asked, so the decision written on the

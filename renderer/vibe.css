@@ -216,24 +216,6 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-lane-link span { display: inline-block; transition: transform var(--motion-base) var(--ease-spring); }
 .vibe-lane-link:hover { color: var(--lane); }
 .vibe-lane-link:hover span { transform: translateX(4px); }
-/* Rows are rebuilt on every paint (vibe.js, vibe-panels.js). MefiMotion
-   (renderer/motion.js) marks the ones that were already there data-kept, so
-   they keep still instead of replaying their rise, and glides them if they
-   moved; a new one rises, cascading by --i. A row that left fades where it
-   was, over its old card, so the host holds its ghosts. */
-.vibe-lanes, .vibe-panel-body { position: relative; }
-/* A ghost is a still picture of what left (renderer/motion.js, every menu that
-   uses it): nothing inside replays an entrance or eases a hover as it fades. */
-.motion-ghost, .motion-ghost * { animation: none !important; transition: none !important; }
-/* A side panel lays itself out alone: a menu repaint never reflows the page. */
-.vibe-chat, .config-sheet { contain: layout style; }
-.vibe-row { animation-delay: calc(var(--i, 0) * var(--motion-step, 26ms)); }
-.vibe-steps { animation: vibe-rise var(--motion-base) var(--ease-out) both; animation-delay: calc(var(--i, 0) * var(--motion-step, 26ms)); }
-:is(.vibe-row, .vibe-steps, .vibe-msg)[data-kept] { animation: none; }
-.vibe-row-main { transition: scale var(--motion-instant) var(--ease-out); }
-.vibe-row-main:active { scale: .985; }
-.vibe-row-action { transition: background var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), scale var(--motion-instant) var(--ease-out); }
-.vibe-row-action:active { scale: .95; }
 /* With nothing to show, one calm line; with cards up, the hero steps back so
    the box and the cards sit higher. */
 .vibe-quiet { margin: 26px 0 0; color: var(--v-faint); font-size: 13.5px; text-align: center; animation: vibe-rise var(--motion-base) var(--ease-out) both; }
@@ -264,27 +246,21 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-last-open { flex: none; padding: 5px 10px; border-radius: 9px; background: color-mix(in srgb, var(--ivory) 7%, transparent); color: var(--v-ink); font-size: 12px; font-weight: 600; }
 
 /* ---- dock ----------------------------------------------------------------- */
-.vibe-dock { --stop-w: 76px; --stop-gap: 4px; grid-row: 2; grid-column: 1; align-self: end; justify-self: center; position: relative; z-index: 1; display: flex; gap: var(--stop-gap); margin: 0 0 22px; padding: 6px; border: 1px solid var(--v-edge); border-radius: 22px; background: var(--v-glass-hi); backdrop-filter: var(--v-blur); box-shadow: 0 24px 50px -28px rgba(0, 0, 0, .95), inset 0 1px 0 color-mix(in srgb, var(--ivory) 7%, transparent); animation: vibe-dock-in var(--motion-spring) var(--ease-spring) 200ms both; }
+.vibe-dock { grid-row: 2; grid-column: 1; align-self: end; justify-self: center; position: relative; z-index: 1; display: flex; gap: 4px; margin: 0 0 22px; padding: 6px; border: 1px solid var(--v-edge); border-radius: 22px; background: var(--v-glass-hi); backdrop-filter: var(--v-blur); box-shadow: 0 24px 50px -28px rgba(0, 0, 0, .95), inset 0 1px 0 color-mix(in srgb, var(--ivory) 7%, transparent); animation: vibe-dock-in var(--motion-spring) var(--ease-spring) 200ms both; }
 @keyframes vibe-dock-in { from { opacity: 0; transform: translateY(24px) scale(.96); } to { opacity: 1; transform: none; } }
-.vibe-dock button { position: relative; display: grid; justify-items: center; align-content: center; gap: 5px; width: var(--stop-w); height: 60px; overflow: clip; padding: 0; border: 0; border-radius: 16px; background: none; color: var(--v-soft); font-size: 11.5px; font-weight: 550; cursor: pointer; transition: color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out), transform var(--motion-base) var(--ease-spring); }
+.vibe-dock button { position: relative; display: grid; justify-items: center; align-content: center; gap: 5px; width: 76px; height: 60px; padding: 0; border: 0; border-radius: 16px; background: none; color: var(--v-soft); font-size: 11.5px; font-weight: 550; cursor: pointer; transition: color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out), transform var(--motion-base) var(--ease-spring); }
 .vibe-dock .glyph { width: 20px; height: 20px; transition: transform var(--motion-base) var(--ease-spring); }
 .vibe-dock button:hover { color: var(--v-ink); background: color-mix(in srgb, var(--ivory) 7%, transparent); }
 .vibe-dock button:hover .glyph { transform: translateY(-2px) scale(1.08); color: var(--v-accent-hi); }
 .vibe-dock .count { position: absolute; top: 5px; right: 12px; min-width: 17px; height: 17px; padding: 0 5px; border-radius: 999px; background: var(--gold); color: var(--ink); font: 700 10px/17px var(--font-mono); text-align: center; }
 .vibe-dock .count.warn { background: var(--warn); }
 .vibe-dock .count[hidden] { display: none; }
-/* Stops step in and out as they gain or lose something to show. A stop
-   folds its width open (and shut), so the others slide over instead of
-   jumping; the negative margin takes its gap with it. */
-.vibe-dock button { opacity: 1; transition: color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out), opacity var(--motion-base) var(--ease-out), width var(--motion-spring) var(--ease-spring), margin var(--motion-spring) var(--ease-spring), scale var(--motion-spring) var(--ease-spring), display var(--motion-spring) allow-discrete; }
-@starting-style { .vibe-dock button:not([hidden]) { width: 0; margin-right: calc(-1 * var(--stop-gap)); opacity: 0; scale: .6; } }
-.vibe-dock button[hidden] { display: none; width: 0; margin-right: calc(-1 * var(--stop-gap)); opacity: 0; scale: .6; transition-duration: var(--motion-fast), var(--motion-fast), var(--motion-fast), var(--motion-base), var(--motion-base), var(--motion-base), var(--motion-base); transition-timing-function: var(--ease-in); }
-.vibe-dock button:active { scale: .94; transition-duration: var(--motion-instant); }
-/* The open panel's stop wears one mark that springs from stop to stop
-   (vibe.js renderDock sets --slot); every stop is --stop-w wide. */
-.vibe-dock-mark { position: absolute; top: 6px; left: 6px; width: var(--stop-w); height: 60px; border-radius: 16px; background: linear-gradient(160deg, color-mix(in srgb, var(--gold) 22%, transparent), color-mix(in srgb, var(--gold) 9%, transparent)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 32%, transparent), 0 10px 26px -14px color-mix(in srgb, var(--gold) 70%, transparent); translate: calc(var(--slot, 0) * (var(--stop-w) + var(--stop-gap))) 0; opacity: 0; scale: .72; pointer-events: none; transition: translate var(--motion-spring) var(--ease-spring), opacity var(--motion-base) var(--ease-out), scale var(--motion-spring) var(--ease-spring); }
-.vibe-dock[data-marked="yes"] .vibe-dock-mark { opacity: 1; scale: 1; }
-.vibe-dock button[aria-pressed="true"] { color: var(--v-ink); }
+/* Stops step in and out as they gain or lose something to show; the stop
+   whose panel is open is marked like the rail's current page. */
+.vibe-dock button { opacity: 1; transition: color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out), transform var(--motion-base) var(--ease-spring), opacity var(--motion-base) var(--ease-out), display var(--motion-base) allow-discrete; }
+@starting-style { .vibe-dock button { opacity: 0; transform: translateY(10px) scale(.9); } }
+.vibe-dock button[hidden] { display: none; opacity: 0; transform: translateY(10px) scale(.9); }
+.vibe-dock button[aria-pressed="true"] { color: var(--v-ink); background: color-mix(in srgb, var(--gold) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent); }
 .vibe-dock button[aria-pressed="true"] .glyph { color: var(--v-accent-hi); }
 
 /* ---- conversation --------------------------------------------------------- */
@@ -463,16 +439,15 @@ button.vibe-ask-chip:hover { border-color: var(--v-edge-hi); color: var(--v-ink)
   .vibe-lanes { grid-template-columns: 1fr; }
   .vibe-hint { display: none; }
   .vibe-set-names { grid-template-columns: 1fr; }
-  .vibe-dock { --stop-w: 54px; }
-  .vibe-dock button { font-size: 10.5px; }
+  .vibe-dock button { width: 54px; font-size: 10.5px; }
   .vibe-chat { top: 12px; right: 12px; bottom: 12px; width: calc(100vw - 24px); }
 }
 @media (max-height: 820px) {
   .vibe-orb { width: 54px; height: 54px; margin-bottom: 4px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .vibe-lane, .vibe-quiet, .vibe-row, .vibe-steps { animation: none; }
-  .vibe-dock button, .vibe-dock-mark, .vibe-orb, .vibe-hero h1, .vibe-fold-caret, .vibe-stage { transition: none; }
+  .vibe-lane, .vibe-quiet { animation: none; }
+  .vibe-dock button, .vibe-orb, .vibe-hero h1, .vibe-fold-caret, .vibe-stage { transition: none; }
 }
 
 /* ---- the Vibe frame ------------------------------------------------------- */
@@ -668,30 +643,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 .vibe-notes-link .glyph { width: 13px; height: 13px; }
 @media (max-width: 560px) { .vibe-notes-modes { grid-template-columns: 1fr; } .vibe-notes-foot { flex-wrap: wrap; } }
 .vibe-chat-choices { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
-.vibe-inline-confirm { padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--gold) 26%, transparent); border-radius: 16px; background: color-mix(in srgb, var(--gold) 5%, transparent); }
-.vibe-inline-confirm .vibe-msg-text { padding: 0; background: none; }
-.vibe-inline-error { margin: 6px 0 0; color: var(--bad); font-size: 12px; }
-.vibe-suggestion { padding: 12px; border-radius: 12px; background: color-mix(in srgb, var(--info) 9%, transparent); color: var(--v-ink); font-size: 13px; line-height: 1.5; }
-
-/* ---- the permissions chip and its menu (renderer/autonomy-ui.js) ------------ */
-/* In the composer they wear Vibe's glass and tokens, so every palette keeps
-   them; the menu rises from the chip and its choices follow one by one. It
-   sits inside the composer's frosted glass, whose blur cannot reach past it,
-   so it is near solid rather than glass. */
-#vibe-layer .autonomy-chip { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px 0 14px; border: 1px solid var(--v-edge); border-radius: 999px; background: color-mix(in srgb, var(--ivory) 5%, transparent); color: var(--v-soft); font: 600 12.5px/1 var(--font-ui); transition: color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out), scale var(--motion-instant) var(--ease-out); }
-#vibe-layer .autonomy-chip:hover, #vibe-layer .autonomy-chip[aria-expanded="true"] { border-color: var(--v-edge-hi); background: color-mix(in srgb, var(--gold) 10%, transparent); color: var(--v-ink); }
-#vibe-layer .autonomy-chip:active { scale: .96; }
-#vibe-layer .autonomy-chip::after { content: ""; width: 6px; height: 6px; margin-top: -3px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; opacity: .7; rotate: 45deg; transition: rotate var(--motion-base) var(--ease-spring), translate var(--motion-base) var(--ease-spring); }
-#vibe-layer .autonomy-chip[aria-expanded="true"]::after { rotate: 225deg; translate: 0 3px; }
-#vibe-layer .autonomy-popover { gap: 2px; width: min(360px, 80vw); padding: 6px; border: 1px solid var(--v-menu-edge, var(--v-edge-hi)); border-radius: 20px; background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 5%, transparent), transparent 40%), color-mix(in srgb, var(--panel-solid) 97%, transparent); box-shadow: var(--studio-float-shadow, 0 24px 60px -24px rgba(0, 0, 0, .9)); transform-origin: 24px 100%; transition: opacity var(--motion-base) var(--ease-out), translate var(--motion-spring) var(--ease-spring), scale var(--motion-spring) var(--ease-spring), display var(--motion-spring) allow-discrete; }
-#vibe-layer .autonomy-popover[hidden] { display: none; opacity: 0; translate: 0 8px; scale: .94; pointer-events: none; transition-duration: var(--motion-exit); transition-timing-function: var(--ease-in); }
-@starting-style { #vibe-layer .autonomy-popover:not([hidden]) { opacity: 0; translate: 0 8px; scale: .94; } }
-#vibe-layer .autonomy-popover .autonomy-button { display: grid; gap: 3px; width: 100%; padding: 10px 12px; border: 0; border-radius: 14px; background: none; color: var(--v-ink); font: 600 13.5px/1.25 var(--font-ui); text-align: left; transition: background var(--motion-fast) var(--ease-out), opacity var(--motion-base) var(--ease-out), translate var(--motion-slow) var(--ease-emphasized); transition-delay: 0s, calc((sibling-index() - 1) * 22ms), calc((sibling-index() - 1) * 22ms); }
-@starting-style { #vibe-layer .autonomy-popover:not([hidden]) .autonomy-button { opacity: 0; translate: 0 6px; } }
-#vibe-layer .autonomy-popover .autonomy-button:hover { background: color-mix(in srgb, var(--ivory) 6%, transparent); }
-#vibe-layer .autonomy-popover .autonomy-button[aria-checked="true"] { background: var(--v-menu-pick, color-mix(in srgb, var(--gold) 16%, transparent)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent); }
-#vibe-layer .autonomy-popover .autonomy-button:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: -2px; }
-#vibe-layer .autonomy-popover .autonomy-mode small { margin: 0; color: var(--v-soft); font-size: 12px; font-weight: 450; opacity: 1; }
-#vibe-layer .autonomy-popover > .autonomy-button:not(.autonomy-mode) { margin-top: 4px; padding-top: 11px; border-top: 1px solid var(--v-edge); border-radius: 0 0 14px 14px; color: var(--v-soft); font-size: 12.5px; }
-#vibe-layer .autonomy-popover > .autonomy-button:not(.autonomy-mode):hover { color: var(--v-ink); }
+.vibe-inline-confirm { border: 1px solid #96c4cf44; }
+.vibe-inline-error { color: #f3b2a8; font-size: 12px; }
+.vibe-suggestion { padding: 12px; border-radius: 12px; background: #81b9c516; color: #b7dfe6; font-size: 13px; line-height: 1.5; }
 @media (max-width: 600px) { .vibe-compose-foot { flex-wrap: wrap; } #vibe-autonomy-control { margin-right: auto; } }

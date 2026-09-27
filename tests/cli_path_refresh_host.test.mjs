@@ -3,7 +3,6 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
-import cliSetup from "../scripts/cli-setup.cjs";
 
 // The host's PATH refresh (refreshProcessPath) run against a stubbed registry
 // read: a CLI installed after launch must reach the where.exe probes without a
@@ -17,7 +16,7 @@ function section(start, end) {
 
 const INHERITED = "C:\\Windows\\system32;C:\\Program Files\\nodejs\\";
 const HOME = "C:\\Users\\fixture";
-const EXTRAS = [`${HOME}\\.local\\bin`, `${HOME}\\AppData\\Local\\agy\\bin`, `${HOME}\\AppData\\Roaming\\npm`, `${HOME}\\.grok\\bin`];
+const EXTRAS = [`${HOME}\\.local\\bin`, `${HOME}\\AppData\\Local\\agy\\bin`, `${HOME}\\AppData\\Roaming\\npm`];
 
 function host({ platform = "win32", registry = () => ({ code: 0, stdout: `${INHERITED}\r\n` }) } = {}) {
   const reads = [], logs = [];
@@ -35,10 +34,9 @@ function host({ platform = "win32", registry = () => ({ code: 0, stdout: `${INHE
     claudeCliProbe: { checkedAt: 1, ok: false },
     codexCliProbe: { checkedAt: 1, ok: false },
     antigravityCliProbe: { checkedAt: 1, ok: false },
-    opencodeCliProbe: { checkedAt: 1, ok: false },
   });
   vm.runInContext(section("// Entries of `incoming` that `current` lacks", "// Whether OpenCode itself holds"), context, { filename: "main.cjs:path-refresh" });
-  const probes = () => ["grokCliProbe", "claudeCliProbe", "codexCliProbe", "antigravityCliProbe", "opencodeCliProbe"].map((name) => context[name].checkedAt);
+  const probes = () => ["grokCliProbe", "claudeCliProbe", "codexCliProbe", "antigravityCliProbe"].map((name) => context[name].checkedAt);
   return { context, env, reads, logs, probes };
 }
 
@@ -57,17 +55,17 @@ test("a CLI folder added to the registry PATH after launch reaches this process"
   assert.match(reads[0].args.at(-1), /GetEnvironmentVariable\('Path','Machine'\).*GetEnvironmentVariable\('Path','User'\)/);
   assert.equal(reads[0].options.timeoutMs, 10000);
   assert.equal(env.Path, [INHERITED, claude, ...EXTRAS].join(";"), "existing entries keep their order and spelling; new ones are appended");
-  assert.deepEqual(probes(), [0, 0, 0, 0, 0], "cached where.exe answers are dropped so routing re-probes");
+  assert.deepEqual(probes(), [0, 0, 0, 0], "cached where.exe answers are dropped so routing re-probes");
   assert.equal(logs.length, 1);
   assert.doesNotMatch(logs[0], /claude-cli|fixture/, "the log names a count, not the owner's folders");
 
   // Nothing new on the next read: no rewrite, no probe churn.
   const before = env.Path;
-  for (const name of ["grokCliProbe", "claudeCliProbe", "codexCliProbe", "antigravityCliProbe", "opencodeCliProbe"]) context[name].checkedAt = 7;
+  for (const name of ["grokCliProbe", "claudeCliProbe", "codexCliProbe", "antigravityCliProbe"]) context[name].checkedAt = 7;
   assert.equal(await context.refreshProcessPath(), false);
   assert.equal(reads.length, 2);
   assert.equal(env.Path, before);
-  assert.deepEqual(probes(), [7, 7, 7, 7, 7]);
+  assert.deepEqual(probes(), [7, 7, 7, 7]);
   assert.equal(logs.length, 1);
 });
 
@@ -89,7 +87,7 @@ test("a failed or empty registry read leaves PATH alone and never rejects", asyn
     const { context, env, probes } = host({ registry });
     assert.equal(await context.refreshProcessPath(), false);
     assert.equal(env.Path, INHERITED);
-    assert.deepEqual(probes(), [1, 1, 1, 1, 1]);
+    assert.deepEqual(probes(), [1, 1, 1, 1]);
   }
 });
 
@@ -98,16 +96,6 @@ test("other platforms keep the inherited PATH without spawning", async () => {
   assert.equal(await context.refreshProcessPath(), false);
   assert.equal(reads.length, 0);
   assert.equal(env.Path, INHERITED);
-});
-
-test("the guided setup window searches the folders Studio adds, and its close reaches the guide after a PATH re-read", async () => {
-  const expand = { "$env:USERPROFILE": HOME, "$env:LOCALAPPDATA": `${HOME}\\AppData\\Local`, "$env:APPDATA": `${HOME}\\AppData\\Roaming` };
-  assert.deepEqual(cliSetup.INSTALL_FOLDERS.map((folder) => folder.replace(/^\$env:\w+/, (name) => expand[name])), EXTRAS, "one list of installer folders on both sides");
-  const guided = section("  async function refreshSetupPaths(", "  function setupEverywhere(");
-  assert.match(guided, /await refreshProcessPath\(\);/, "guided setup re-reads PATH the way the rest of Studio does");
-  assert.match(guided, /closed: \(detail\) => send\("setup:cli-closed", detail\)/);
-  const preload = await readFile(new URL("../preload.cjs", import.meta.url), "utf8");
-  assert.match(preload, /onCliSetupClosed: \(callback\) => ipcRenderer\.on\("setup:cli-closed"/);
 });
 
 test("the CLI pills, auto setup and startup refresh PATH before a CLI is looked up", () => {

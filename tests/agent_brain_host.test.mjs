@@ -56,39 +56,6 @@ test("companion movement preferences persist and learning stays with its project
   } finally { await h.brain.flush(); await h.cleanup(); }
 });
 
-test("personality applies its preset, the owner's own switch wins, and the bond remembers pets", async () => {
-  const h = harness(); await h.setup();
-  try {
-    let state = await h.brain.companionState();
-    assert.equal(state.personality, "balanced"); assert.equal(state.expressions, true); assert.equal(state.antics, false);
-    assert.equal(state.bond, "We just met");
-    const focused = await h.brain.companionPrefs({ personality: "focused" });
-    assert.ok(focused.ok); assert.equal(focused.expressions, false); assert.equal(focused.roaming, false);
-    assert.equal(await h.brain.companionManner(), "focused");
-    assert.ok((await h.brain.companionPrefs({ expressions: true })).ok);
-    state = await h.brain.companionState();
-    assert.equal(state.personality, "focused"); assert.equal(state.expressions, true, "a switch the owner set stays set");
-    assert.equal((await h.brain.companionPrefs({ personality: "chaotic" })).ok, false);
-    assert.equal((await h.brain.companionPrefs({ personality: "playful", look: "dragon" })).ok, false);
-    assert.equal((await h.brain.companionState()).personality, "focused", "an invalid change applies nothing");
-    assert.ok((await h.brain.companionPrefs({ personality: "playful", antics: false })).ok);
-    state = await h.brain.companionState();
-    assert.equal(state.antics, false, "a switch sent with the personality wins over its preset"); assert.equal(state.roaming, true);
-    assert.equal((await h.brain.companionBond({ event: "pet" })).changed, true);
-    h.clock.t += 1000;
-    assert.equal((await h.brain.companionBond({ event: "pet" })).changed, false, "one stroke is one pet");
-    h.clock.t += 5000;
-    await h.brain.companionBond({ event: "pet" }); await h.brain.companionBond({ event: "playdate" });
-    assert.equal((await h.brain.companionState()).bond, "We just met · 2 pets · 1 playdate");
-    const stored = JSON.parse(await readFile(path.join(h.dir(), "companion.json"), "utf8"));
-    assert.equal(stored.personality, "playful"); assert.equal(stored.antics, false); assert.equal(stored.bond.pets, 2);
-    const fresh = host.createAgentBrain({ dataFile: (name) => path.join(h.dir(), name), projectId: () => "p1", now: () => h.clock.t + 86_400_000 * 2 });
-    state = await fresh.companionState();
-    assert.equal(state.personality, "playful"); assert.equal(state.bond, "Together 2 days · 2 pets · 1 playdate");
-    await fresh.flush();
-  } finally { await h.brain.flush(); await h.cleanup(); }
-});
-
 test("a run lays out a pipeline and tells the worker the protocol", async () => {
   const h = harness();
   await h.setup();

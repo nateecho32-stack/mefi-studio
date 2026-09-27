@@ -52,11 +52,8 @@ export function acceptanceSpec({ title = "", prompt = "", remaining = [] } = {})
 
 // Derive the evidence kind from what the runner actually observed. The worker
 // believing it ran checks is evidence about the worker, not about the work.
-// The overseer's own verification run is runner-observed with or without a
-// worker session, so it names the kind for a sessionless builder too.
-export function evidenceKind({ state = "", changedFiles = 0, hasSession = false, namedChecks = false, observedChecks = null, overseerChecks = null, commit = null } = {}) {
+export function evidenceKind({ state = "", changedFiles = 0, hasSession = false, namedChecks = false, observedChecks = null, commit = null } = {}) {
   if (state === "verified" && hasSession && observedChecks?.passed > 0 && !observedChecks.failed && !observedChecks.pending) return "runner-observed-checks";
-  if (state === "verified" && overseerChecks?.passed > 0 && !overseerChecks.failed && !overseerChecks.pending && !observedChecks?.failed && !observedChecks?.pending) return "runner-observed-checks";
   if (state === "verified" && hasSession && intOrZero(changedFiles) > 0) return "runner-observed-edits";
   if (state === "verified" && hasSession && commit?.hash && commit.clean === true) return "runner-observed-commit";
   if (state === "verified" && namedChecks) return "worker-named-checks";
@@ -88,7 +85,7 @@ export function buildReceipt({
   const namedChecks = Boolean(verdict.evidence?.namedChecks);
   const observedChecks = verdict.evidence?.observedChecks ?? null;
   const commit = verdict.evidence?.commit ?? null;
-  const kind = evidenceKind({ state: verdict.state, changedFiles, hasSession: Boolean(attempt.sessionId), namedChecks, observedChecks, overseerChecks: verdict.evidence?.overseerChecks ?? null, commit });
+  const kind = evidenceKind({ state: verdict.state, changedFiles, hasSession: Boolean(attempt.sessionId), namedChecks, observedChecks, commit });
   const receipt = {
     schema: RECEIPT_SCHEMA,
     id: `rcp_${sha256Hex(`${runId}|${verdict.state}|${intOrZero(now)}`).slice(0, 16)}`,

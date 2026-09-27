@@ -7,10 +7,8 @@
 //
 // Per-run MCP config files name the server for the worker CLI: an OpenCode
 // config (read through OPENCODE_CONFIG) and a Claude Code --mcp-config file.
-// They are written to the OS temp folder and removed when the run ends. That
-// folder's path may hold a space or an apostrophe (C:\Users\John Smith): the
-// executor quotes it for cmd.exe (executorCore.cliInvocation), so it is never
-// a reason to leave the desk out.
+// They are written to the OS temp folder, whose path holds no spaces or quotes
+// that cmd.exe could mangle, and removed when the run ends.
 
 const http = require("node:http");
 const crypto = require("node:crypto");
@@ -19,6 +17,7 @@ const path = require("node:path");
 const fsp = require("node:fs/promises");
 
 const MAX_BODY = 16 * 1024;
+const SAFE_PATH = /^[A-Za-z]:\\[^\s"'&|<>^%!]+$|^\/[^\s"'&|<>^%!]+$/;
 
 function createDeskServer({ handle, token = crypto.randomBytes(24).toString("hex"), host = "127.0.0.1" } = {}) {
   if (typeof handle !== "function") throw new Error("createDeskServer needs handle(request)");
@@ -93,14 +92,18 @@ function createDeskServer({ handle, token = crypto.randomBytes(24).toString("hex
 }
 
 // The two per-run config files, and the environment the MCP server reads.
+// Returns null when the temp folder's path is one cmd.exe could mangle.
 async function writeRunConfigs({ url, token, taskId, runId, script, node = process.execPath, electron = Boolean(process.versions.electron), dir = os.tmpdir() }) {
   const safeRun = String(runId ?? "run").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 60) || "run";
   const env = { MEFI_DESK_URL: url, MEFI_DESK_TOKEN: token, MEFI_DESK_TASK: String(taskId ?? ""), MEFI_DESK_RUN: String(runId ?? "") };
   // A private folder per run (mkdtemp picks an unused name, 0700 on POSIX):
   // no other user can read the token or plant a config the CLI would run.
+  const probe = path.join(dir, `mefi-desk-${safeRun}-XXXXXX`);
+  if (!SAFE_PATH.test(probe)) return null;
   const folder = await fsp.mkdtemp(path.join(dir, `mefi-desk-${safeRun}-`));
   const opencode = path.join(folder, "opencode.json");
   const claude = path.join(folder, "claude.json");
+  if (!SAFE_PATH.test(opencode) || !SAFE_PATH.test(claude)) { await fsp.rm(folder, { recursive: true, force: true }).catch(() => {}); return null; }
   // Inside Studio the runtime is Electron's own binary, which ELECTRON_RUN_AS_NODE
   // turns into a plain node for the MCP server.
   const nodeEnv = electron ? { ...env, ELECTRON_RUN_AS_NODE: "1" } : env;
@@ -115,4 +118,4 @@ async function removeRunConfigs(files) {
   if (files?.folder) await fsp.rm(files.folder, { recursive: true, force: true }).catch(() => {});
 }
 
-module.exports = { createDeskServer, writeRunConfigs, removeRunConfigs };
+module.exports = { createDeskServer, writeRunConfigs, removeRunConfigs, SAFE_PATH };

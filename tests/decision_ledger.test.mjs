@@ -26,15 +26,3 @@ test("Undo waits for running work and keeps later owner edits when it can apply"
   assert.equal(restored.tasks[0].title, "My changed brief");
   assert.deepEqual(restored.conflicts, ["t:runFailures"]);
 });
-
-test("a split card that already ran is kept by Undo and loses its undo marker", () => {
-  const parent = { id: "p", status: "open" };
-  const decision = { id: "d", before: ledger.snapshot([parent], ["p"]), after: ledger.snapshot([parent], ["p"]), createdTaskIds: ["child"] };
-  // The undo was queued while the split card ran; its run ended since.
-  const child = { id: "child", status: "open", lastAttempt: { at: 3 }, autonomyUndo: "d" };
-  const result = ledger.restore([parent, child], decision, 5);
-  const kept = result.tasks.find((task) => task.id === "child");
-  assert.equal(kept.status, "open", "its work is not erased");
-  assert.equal(kept.autonomyUndo, undefined, "nothing else would clear the marker, and the card would wait on it for good");
-  assert.deepEqual(result.conflicts, ["child"]);
-});

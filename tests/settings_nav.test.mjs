@@ -58,7 +58,7 @@ const CARDS = ["settings-setup", "settings-assistant", "settings-routing", "sett
 
 // desktop: a bridge with launchStudio (the desktop app); false is the browser
 // build. storage seeds localStorage; coach: whether the walkthrough coach shows.
-function environment({ desktop = true, storage = {}, coach = false, noMotion = false, audioMarkup = "", bridge: extra = {} } = {}) {
+function environment({ desktop = true, storage = {}, coach = false, noMotion = false, audioMarkup = "" } = {}) {
   const { document, elements, get, body, documentElement } = createDom({ fromTemplate: () => true });
   const page = parse(settingsHtml);
   if (audioMarkup) page.querySelector("#settings-audio-media").append(parse(audioMarkup));
@@ -89,7 +89,6 @@ function environment({ desktop = true, storage = {}, coach = false, noMotion = f
     jevStatus: async () => ({ configured: false, enabled: true, route: "vercel", routes: {} }),
     getAiRouting: async () => ({ provider: "auto", models: {}, autoProviders: ["zai", "opencode"] }),
     cliStatus: async () => [],
-    ...extra,
   } : undefined;
   const window = {
     mefiStudio: bridge,
@@ -430,33 +429,4 @@ test("Blur behind panels mirrors the Studio-wide preference tasks.js paints", ()
   on.el("pref-blur").checked = false;
   on.booklet.showTab("studio");
   assert.equal(on.el("pref-blur").checked, true);
-});
-
-// Server Styler is a separate project most people never check out: without one
-// the card would only say where it is missing, beside a Start that cannot work.
-const styler = (state) => ({ serverStylerStatus: async () => ({ ok: state !== "missing", state, message: state === "missing" ? "Server Styler project missing." : "Server Styler is stopped." }) });
-const settle = async () => { for (let index = 0; index < 10; index += 1) await Promise.resolve(); };
-
-test("with no Server Styler checkout its card leaves Settings, Settings search and global Search", async () => {
-  const env = environment({ bridge: styler("missing") });
-  const entry = env.registered.find((item) => item.id === "settings:settings-styler");
-  assert.ok(entry, "global Search registers the card at boot, before the host has answered");
-  env.booklet.showTab("studio", { category: "system" }); await settle();
-  assert.equal(env.el("settings-styler").hidden, true);
-  assert.equal(entry.hidden(), true, "global Search stops offering it");
-  assert.equal(env.registered.find((item) => item.short === "Start Server Styler").hidden(), true, "and its buttons");
-  await env.type("server styler");
-  assert.deepEqual(env.results(), [], "Settings search finds neither the card nor its buttons");
-  assert.equal(env.booklet.jumpToSettings("server-styler"), false, "a deep link cannot land on it");
-  assert.equal(env.el("settings-integrations").hidden, false, "the other cards stay");
-});
-
-test("a found Server Styler checkout keeps its card, in Settings and in both searches", async () => {
-  const env = environment({ bridge: styler("stopped") });
-  env.booklet.showTab("studio", { category: "system" }); await settle();
-  assert.equal(env.el("settings-styler").hidden, false);
-  assert.equal(env.el("server-styler-status").textContent, "Server Styler is stopped.");
-  assert.equal(env.registered.find((item) => item.id === "settings:settings-styler").hidden(), false);
-  await env.type("server styler");
-  assert.ok(env.results().includes("settings-styler"));
 });

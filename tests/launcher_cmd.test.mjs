@@ -39,24 +39,14 @@ function scratchRoot(t, ending, files = []) {
   t.after(() => rmSync(root, { recursive: true, force: true }));
   writeFileSync(path.join(root, LAUNCHER), ENDINGS[ending](stubbedLauncher()), "latin1");
   for (const file of files) {
-    const [parts, content] = Array.isArray(file) ? [file, ""] : [file.path, file.content];
-    const full = path.join(root, ...parts);
+    const full = path.join(root, ...file);
     mkdirSync(path.dirname(full), { recursive: true });
-    writeFileSync(full, content);
+    writeFileSync(full, "");
   }
   return root;
 }
 
 const DEV_EXE = ["node_modules", "electron", "dist", "electron.exe"];
-// Electron 44's installer stand-ins: one fetches the binary, one fails.
-const INSTALL_JS = ["node_modules", "electron", "install.js"];
-const fetchingInstaller = {
-  path: INSTALL_JS,
-  content: 'const fs = require("fs"), path = require("path");\n'
-    + 'fs.mkdirSync(path.join(__dirname, "dist"), { recursive: true });\n'
-    + 'fs.writeFileSync(path.join(__dirname, "dist", "electron.exe"), "");\n',
-};
-const failingInstaller = { path: INSTALL_JS, content: 'console.error("offline"); process.exit(1);\n' };
 const PACKAGED_EXE = ["dist", "Mefi Studio AI+", "Mefi Studio AI+.exe"];
 
 // cmd /s /c strips the outer quotes and runs the rest as typed, the way a
@@ -99,24 +89,6 @@ for (const ending of Object.keys(ENDINGS)) {
       assert.ok(run.stdout.includes(args ? `${launch} ${args}` : launch), run.stdout);
       assert.doesNotMatch(run.stdout, /not installed/);
     }
-  });
-
-  // Electron 44 left npm ci without a binary, so the launcher fetches it once
-  // instead of repeating "run npm ci" after the user already did.
-  test(`with the Electron package but no binary it fetches the binary, then starts (${ending})`, windowsOnly, (t) => {
-    const root = scratchRoot(t, ending, [fetchingInstaller]);
-    const run = runLauncher(root);
-    assert.equal(run.status, 0, run.output);
-    assert.match(run.stdout, /Downloading Electron once/);
-    assert.ok(run.stdout.includes(`start "Mefi's Studio AI+" "${path.join(root, ...DEV_EXE)}" .`), run.stdout);
-  });
-
-  test(`a failed Electron fetch falls back to the setup steps (${ending})`, windowsOnly, (t) => {
-    const root = scratchRoot(t, ending, [failingInstaller]);
-    const run = runLauncher(root);
-    assert.equal(run.status, 1, run.output);
-    assert.match(run.stdout, /Mefi's Studio AI\+ is not installed yet\./);
-    assert.doesNotMatch(run.stdout, /^start /m, "nothing launches");
   });
 
   // The portable build's arguments arrive through %*, which is expanded

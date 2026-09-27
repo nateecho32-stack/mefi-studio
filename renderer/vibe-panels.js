@@ -6,9 +6,7 @@
 // things, acts on one through the host call its Build page uses, and keeps
 // Full view for the deep version, which opens inside Vibe's rail. One side
 // panel at a time (a menu, the conversation or a decision); inside a panel a
-// row opens its detail, and Back or Esc steps out again. Moving between
-// panels and details slides the way you went; a push that only changes data
-// keeps the rows that stay (renderer/motion.js).
+// row opens its detail, and Back or Esc steps out again.
 (function () {
   "use strict";
   const aside = document.getElementById("vibe-panel");
@@ -22,13 +20,9 @@
 
   const TITLES = { tasks: "Tasks", plans: "Plans", ideas: "Ideas", team: "Team", settings: "Settings", decisions: "Decided for you", newapp: "New app" };
   const EMPTY = { projectId: null, projectName: "", tasks: [], needs: [], running: [], checking: [], next: [], backlog: null, status: {}, assistant: {}, ideas: [], plans: [], gate: null, companion: "Mefi", person: "" };
-  const motion = () => window.MefiMotion;
-  const state = { place: null, depth: 0, kind: null, stack: [], data: EMPTY, busy: false, folds: { needs: true, active: true, done: false }, team: null, teamAt: 0, teamFlight: null, signature: "", noteTone: "", draftApp: { name: "", about: "" } };
+  const state = { kind: null, stack: [], data: EMPTY, busy: false, folds: { needs: true, active: true, done: false }, team: null, teamAt: 0, teamFlight: null, signature: "", noteTone: "", draftApp: { name: "", about: "" } };
   state.taskView = read("mefiStudio.vibe.taskView") === "lanes" ? "lanes" : "list";
   state.inspectorDraft = null;
-  // Half-written task notes, by project and task: the panel repaints on
-  // every action and push, and a failed save used to lose the text.
-  state.noteDrafts = {};
 
   // ---- open, close, back ---------------------------------------------------------
   function open(kind, { data = null, taskId = null, ideaId = null, familyId = null, fold = null } = {}) {
@@ -41,7 +35,6 @@
     if (taskId) state.stack.push({ view: "task", id: taskId });
     if (ideaId) state.stack.push({ view: "idea", id: ideaId });
     if (familyId) state.stack.push({ view: "family", id: familyId });
-    if (aside.hidden) state.place = null;
     aside.hidden = false;
     aside.dataset.kind = kind;
     note("");
@@ -58,7 +51,6 @@
     aside.hidden = true;
     state.kind = null;
     state.stack = [];
-    state.place = null;
     delete aside.dataset.kind;
     vibe()?.paintDock?.();
     // Focus goes back to the stop that opened it, so the keyboard stays put.
@@ -70,7 +62,6 @@
     note("");
     state.signature = "";
     render();
-    requestAnimationFrame(() => ($("body")?.querySelector?.(".vibe-row-main, button") || $("close"))?.focus?.({ preventScroll: true }));
     return true;
   }
   // Esc: out of a detail first, then out of the panel.
@@ -93,9 +84,8 @@
     return `${Math.round(ms / 86400000)} d ago`;
   }
   // The same row the cards use, so a panel reads like the front door.
-  function row({ key, tone, title, meta, action, onOpen }) {
+  function row({ tone, title, meta, action, onOpen }) {
     const item = el("li", `vibe-row${tone ? ` is-${tone}` : ""}`);
-    item.dataset.key = key || title;
     const main = el("button", "vibe-row-main");
     main.type = "button";
     main.append(el("span", "vibe-row-dot"), el("span", "vibe-row-title", title));
@@ -117,7 +107,6 @@
     head.type = "button";
     const opened = state.folds[key] !== false;
     head.setAttribute("aria-expanded", String(opened));
-    head.dataset.key = `fold:${key}`;
     head.append(el("span", "vibe-fold-label", label), el("span", "vibe-fold-count", rows.length ? String(rows.length) : ""), el("span", "vibe-fold-caret"));
     head.addEventListener("click", () => { state.folds = { ...state.folds, [key]: !opened }; state.signature = ""; render(); });
     section.append(head);
@@ -370,9 +359,6 @@
     input.placeholder = running ? "Notes can be added once this run finishes." : "Tell it something for its next attempt…";
     input.disabled = running || state.busy;
     input.setAttribute("aria-label", "A note for this task");
-    const draftKey = `${state.data.projectId}:${task.id}`;
-    input.value = state.noteDrafts[draftKey] || "";
-    input.addEventListener("input", () => { state.noteDrafts[draftKey] = input.value; });
     const send = el("button", "vibe-btn quiet", "Save note");
     send.type = "submit";
     send.disabled = running || state.busy;
@@ -382,7 +368,7 @@
       const words = input.value.trim();
       if (!words) { input.focus(); return; }
       const earlier = typeof task.notes === "string" && task.notes.trim() ? `${task.notes.trim()}\n` : "";
-      void act(() => api().tasksSave([{ ...task, notes: `${earlier}- ${words}`.slice(-4000) }]), "Saved. Its next attempt reads it.", { after: () => { delete state.noteDrafts[draftKey]; } });
+      void act(() => api().tasksSave([{ ...task, notes: `${earlier}- ${words}`.slice(-4000) }]), "Saved. Its next attempt reads it.");
     });
     body.append(form);
   }
@@ -483,15 +469,12 @@
   const SEATS = [["companion", "Talks with you"], ["lead", "Plans the work"], ["desk", "Helps stuck agents"], ["heavy", "Reviews and plans"], ["routine", "Everyday jobs"]];
   async function loadTeam({ force = false } = {}) {
     if (!api()?.agentsState) return;
-    // The roster is per project: a cached one from the project just left is
-    // neither fresh nor shown.
-    if (!force && state.team && state.teamProject === state.data.projectId && Date.now() - state.teamAt < 60000) return;
+    if (!force && state.team && Date.now() - state.teamAt < 60000) return;
     if (state.teamFlight) return state.teamFlight;
     state.teamFlight = (async () => {
       try {
-        const projectId = state.data.projectId;
-        const result = await api().agentsState({ projectId });
-        if (result && result.ok !== false && projectId === state.data.projectId) { state.team = result; state.teamProject = projectId; state.teamAt = Date.now(); }
+        const result = await api().agentsState({ projectId: state.data.projectId });
+        if (result && result.ok !== false) { state.team = result; state.teamAt = Date.now(); }
       } catch { /* the rows say the models are unknown */ }
       finally { state.teamFlight = null; state.signature = ""; if (state.kind === "team") render(); }
     })();
@@ -512,7 +495,7 @@
     body.append(actions(controls));
     fold(body, "working", "Working now", running.map((job) => row({ tone: "live", title: job.title || "A task", meta: [job.phase ? String(job.phase).replace(/_/g, " ") : "working", job.model || job.route || "", job.startedAt ? `started ${ago(job.startedAt)}` : ""].filter(Boolean).join(" · "), onOpen: () => { close({ quiet: true }); go("command", job.taskId ? { selected: `task:${job.taskId}` } : {}); } })), { empty: "Nobody is building right now." });
     const roster = [];
-    const info = state.teamProject === state.data.projectId ? state.team : null;
+    const info = state.team;
     if (info) {
       const config = info.configuration || {};
       const cli = config.executorCli || "opencode";
@@ -724,29 +707,17 @@
     $("title").textContent = view?.view === "task" ? "Task" : view?.view === "idea" ? "Idea" : view?.view === "family" ? "Plan" : TITLES[state.kind];
     $("back").hidden = !view;
     const body = $("body");
-    const paint = () => {
-      body.replaceChildren();
-      if (view?.view === "task") taskDetail(body, view.id);
-      else if (view?.view === "idea") ideaDetail(body, view.id);
-      else if (view?.view === "family") familyDetail(body, view.id);
-      else if (state.kind === "tasks") tasksList(body);
-      else if (state.kind === "plans") plansList(body);
-      else if (state.kind === "ideas") ideasList(body);
-      else if (state.kind === "team") team(body);
-      else if (state.kind === "settings") settings(body);
-      else if (state.kind === "newapp") newAppForm(body);
-      else if (state.kind === "decisions") window.MefiAutonomy?.history(body, { ...state.data.assistant, ...window.MefiAutonomy?.state?.(), projectId: state.data.projectId });
-    };
-    // Where the panel is: a new place slides (deeper from the right, back
-    // from the left, another panel across); the same place only moves rows.
-    const place = JSON.stringify([state.kind, state.stack]);
-    const moved = state.place !== null && state.place !== place;
-    const dir = state.stack.length > state.depth ? 1 : state.stack.length < state.depth ? -1 : 0;
-    state.place = place;
-    state.depth = state.stack.length;
-    if (!motion()) paint();
-    else if (moved) { motion().swap(body, paint, { dir }); motion().enter($("title"), { dir }); }
-    else motion().keep(body, paint);
+    body.replaceChildren();
+    if (view?.view === "task") taskDetail(body, view.id);
+    else if (view?.view === "idea") ideaDetail(body, view.id);
+    else if (view?.view === "family") familyDetail(body, view.id);
+    else if (state.kind === "tasks") tasksList(body);
+    else if (state.kind === "plans") plansList(body);
+    else if (state.kind === "ideas") ideasList(body);
+    else if (state.kind === "team") team(body);
+    else if (state.kind === "settings") settings(body);
+    else if (state.kind === "newapp") newAppForm(body);
+    else if (state.kind === "decisions") window.MefiAutonomy?.history(body, { ...state.data.assistant, ...window.MefiAutonomy?.state?.(), projectId: state.data.projectId });
     $("full").hidden = ["newapp", "decisions"].includes(state.kind);
     $("full").onclick = () => full();
   }

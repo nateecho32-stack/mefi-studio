@@ -266,9 +266,6 @@ test("the workspace stop ticks itself off when the user actually selects a proje
 test("saved actions tick the matching menu stops: a connection, a task or plan, and an opened task", () => {
   const env = environment();
   assert.equal(JSON.parse(env.storage.get(KEY) ?? "null"), null);
-  // A cleared key, or one that leaves no working assistant route, ticks nothing.
-  env.emit("mefi:connection-saved", { detail: { provider: "zai", routeOk: false } });
-  assert.equal(JSON.parse(env.storage.get(KEY) ?? "null"), null);
   env.emit("mefi:connection-saved", { detail: { provider: "zai" } });
   const saved = JSON.parse(env.storage.get(KEY));
   assert.equal(saved.done[CONNECT], true);
@@ -571,7 +568,7 @@ test("the map stop needs a selected project, streams the explorer's steps and ti
 test("a refused, cancelled or unparsable map explains what to do and leaves the stop unticked", async () => {
   const cases = [
     [{ ok: false, reason: "free-tier-refused", error: "The free tier refused this run." }, /refused this run\. Choose a paid model in Settings/],
-    [{ ok: false, reason: "no-scan", error: "Run the first scan first." }, /Connect an AI right here.*I have an API key or a local model server/],
+    [{ ok: false, reason: "no-scan", error: "Run the first scan first." }, /Connect a tool right here/],
     [{ ok: false, reason: "unparsable", error: "The explorer's reply contained no JSON object." }, /Map again; a second pass/],
     [{ ok: false, reason: "cancelled", error: "The map was cancelled." }, /was cancelled/],
   ];
@@ -737,8 +734,8 @@ test("workspace tool menu groups destinations and excludes duplicated sidebar li
 test("a machine without OpenCode is still configured: the scan shows auto setup's route and Use this setup stays available", async () => {
   const auto = { ok: true, applied: false, planned: true, summary: "Assistant on Claude Code CLI, fixed model defaults, builders on Claude Code.", notes: ["No assistant key saved: the assistant answers through the Claude Code CLI's own subscription login."] };
   const { host, calls } = bridge({
-    firstScan: async (payload) => { calls.push(["scan", payload]); return { ok: true, plan: { ...PLAN, ok: false, opencode: { installed: false }, nextSteps: ["Optional: install OpenCode for its free and linked models, then scan again."] }, autoSetup: auto }; },
-    firstScanApply: async (payload) => { calls.push(["apply", payload]); return { ok: true, summary: auto.summary, notes: ["Auto setup: " + auto.summary], autoSetup: { ...auto, applied: true } }; },
+    firstScan: async (payload) => { calls.push(["scan", payload]); return { ok: true, plan: { ...PLAN, ok: false, opencode: { installed: false }, nextSteps: ["Install the OpenCode CLI."] }, autoSetup: auto }; },
+    firstScanApply: async (payload) => { calls.push(["apply", payload]); return { ok: true, summary: "OpenCode is not usable yet; " + auto.summary, notes: ["Auto setup: " + auto.summary], autoSetup: { ...auto, applied: true } }; },
   });
   const env = environment(new Map(), { host }); env.guide.open();
   await env.settle();
@@ -749,191 +746,20 @@ test("a machine without OpenCode is still configured: the scan shows auto setup'
   assert.match(facts[0], /OpenCode is not installed/);
   assert.match(facts[facts.length - 1], /^Auto setup: Assistant on Claude Code CLI/);
   const notes = env.el("scan-notes").children.map((item) => item.textContent);
-  assert.ok(notes.includes("Next: Optional: install OpenCode for its free and linked models, then scan again."));
+  assert.ok(notes.includes("Next: Install the OpenCode CLI."));
   assert.ok(notes.some((text) => text.startsWith("Setup: No assistant key saved")));
   assert.equal(env.el("scan-apply").hidden, false, "the route can be saved without OpenCode");
   env.el("scan-apply").click();
   await env.settle();
   assert.equal(calls.filter((call) => call[0] === "apply").length, 1);
-  assert.match(env.el("scan-status").textContent, /Setup saved\. Assistant on Claude Code CLI.*Auto setup: Assistant on Claude Code CLI/);
+  assert.match(env.el("scan-status").textContent, /Setup saved\. OpenCode is not usable yet; Assistant on Claude Code CLI.*Auto setup: Assistant on Claude Code CLI/);
   assert.equal(JSON.parse(env.storage.get(KEY)).done[SCAN], true);
 });
 
 test("a first launch that already ran auto setup is reported at the scan stop before any scan", async () => {
-  // A key route finishes through the scan's Use this setup; there is no tool login to check.
-  const { host } = bridge({ firstRunStatus: async () => ({ ok: true, firstRun: null, aiProvider: "zai", autoSetup: { at: 1, automatic: true, summary: "Assistant on z.ai GLM, fixed model defaults, builders on OpenCode." } }) });
+  const { host } = bridge({ firstRunStatus: async () => ({ ok: true, firstRun: null, autoSetup: { at: 1, automatic: true, summary: "Assistant on z.ai GLM, fixed model defaults, builders on OpenCode." } }) });
   const env = environment(new Map(), { host }); env.guide.open();
   await env.settle();
-  assert.match(env.el("scan-status").textContent, /Auto setup ran on first launch: Assistant on z\.ai GLM.*Run the first scan, then choose Use this setup and continue/);
-  assert.doesNotMatch(env.el("scan-status").textContent, /Choose your tool/);
+  assert.match(env.el("scan-status").textContent, /Auto setup ran on first launch: Assistant on z\.ai GLM.*Choose your tool/);
   assert.equal(JSON.parse(env.storage.get(KEY)).done[SCAN], false, "auto setup alone does not complete the scan stop");
-  // A subscription tool still needs its login checked above.
-  const cli = bridge({ firstRunStatus: async () => ({ ok: true, firstRun: null, aiProvider: "claude", autoSetup: { at: 1, automatic: true, summary: "Assistant on Claude Code CLI, fixed model defaults, builders on Claude Code." } }) });
-  const withCli = environment(new Map(), { host: cli.host }); withCli.guide.open();
-  await withCli.settle();
-  assert.match(withCli.el("scan-status").textContent, /Auto setup ran on first launch: Assistant on Claude Code CLI.*Choose your tool above to check its connection/);
-});
-
-test("with no folder open the workspace stop stays open and Use this setup never starts a doomed map", async () => {
-  const { host, calls } = bridge();
-  const env = environment(new Map(), { host });
-  // The workspace's fallback header is plain "Workspace"; its active project id is the truth.
-  let activeId = null;
-  env.context.window.MefiWorkspace = { activeProjectId: () => activeId };
-  env.get("workspace-project-name").textContent = "Workspace";
-  env.guide.open();
-  assert.doesNotMatch(env.el("invite-steps").children[WORKSPACE].textContent, /✓/);
-  assert.doesNotMatch(env.el("steps").children[WORKSPACE].textContent, /✓/);
-  env.el("scan-run").click(); await env.settle();
-  env.el("scan-apply").click(); await env.settle();
-  assert.match(env.el("progress").textContent, /Step 2 of 7/, "the guide waits at Your workspace");
-  assert.ok(!calls.some((call) => call[0] === "map"), "no map without a folder");
-  env.el("steps").children[MAP].click();
-  env.el("map-run").click(); await env.settle();
-  assert.match(env.el("map-status").textContent, /Select a project first/);
-  assert.ok(!calls.some((call) => call[0] === "map"));
-  // Walking the workspace stop never claims a project that is not there.
-  env.el("steps").children[WORKSPACE].click();
-  env.el("action").click();
-  assert.doesNotMatch(env.el("coach-hint").textContent, /Project selected/);
-  assert.match(env.el("coach-next").textContent, /Done — next stop/);
-  // The header text alone (no workspace module) is read the same way.
-  const bare = environment(new Map());
-  bare.get("workspace-project-name").textContent = "Workspace";
-  bare.guide.open();
-  assert.doesNotMatch(bare.el("steps").children[WORKSPACE].textContent, /✓/);
-  // Selecting a folder ticks the stop and, with the setup saved, maps it.
-  const waiting = environment(new Map(), { host });
-  waiting.context.window.MefiWorkspace = { activeProjectId: () => activeId };
-  waiting.guide.open();
-  waiting.el("scan-run").click(); await waiting.settle();
-  waiting.el("scan-apply").click(); await waiting.settle();
-  activeId = "alpha";
-  waiting.emit("mefi:project-changed", { detail: { projectId: "alpha" } });
-  await waiting.settle();
-  assert.match(waiting.el("progress").textContent, /Step 3 of 7/);
-  assert.equal(calls.filter((call) => call[0] === "map").length, 1);
-});
-
-test("Use for the whole studio with no folder open waits at the workspace stop", async () => {
-  const { host, calls } = bridge({
-    cliSetupStatus: async () => ({ ok: true, selected: "codex", clis: [{ id: "codex", name: "Codex", installed: true }] }),
-    cliSetupCheck: async () => ({ ok: true, message: "Ready" }),
-    cliSetupUse: async () => ({ ok: true }),
-  });
-  const env = environment(new Map(), { host });
-  env.context.window.MefiWorkspace = { activeProjectId: () => null };
-  env.guide.open(); await env.settle();
-  env.el("cli-check").click(); await env.settle();
-  env.el("cli-use").click(); await env.settle();
-  assert.match(env.el("progress").textContent, /Step 2 of 7/);
-  assert.ok(!calls.some((call) => call[0] === "map"));
-});
-
-test("in Vibe mode the Create and Review walks use Vibe's box and Tasks panel, not Build's hidden controls", async () => {
-  const panels = [];
-  const { host } = bridge();
-  host.firstAssist = async () => ({ ok: true, via: "assistant", advice: { summary: "Next.", stops: {}, firstTask: { title: "Add a README run section", brief: "Check: README names the command." } }, warnings: [] });
-  const env = environment(new Map(), { host });
-  env.context.window.MefiVibe = { mode: () => "vibe", openPanel: (kind, options) => { panels.push([kind, { ...options }]); return true; } };
-  env.guide.open();
-  env.el("steps").children[CREATE].click();
-  env.el("action").click();
-  assert.deepEqual(env.routes, ["workspace"]);
-  assert.equal(env.get("workspace-mode-work").clicks, 0, "Build's composer is never switched behind Vibe");
-  assert.equal(env.document.activeElement, env.get("vibe-input"));
-  assert.equal(env.query("#vibe-input").classList.contains("walkthrough-focus"), true);
-  assert.equal(env.query("#workspace-input").classList.contains("walkthrough-focus"), false);
-  assert.match(env.el("coach-copy").textContent, /Vibe's box .*Build it/);
-  env.el("coach-next").click(); // Monitor
-  env.el("coach-next").click(); // Review
-  assert.deepEqual(panels, [["tasks", { fold: "done" }]]);
-  assert.equal(env.get("workspace-review").clicks, 0);
-  assert.equal(env.query("#vibe-panel").classList.contains("walkthrough-focus"), true);
-  assert.match(env.el("coach-copy").textContent, /Tasks in Vibe/);
-  // The suggested first task lands in the box the user actually sees.
-  env.get("workspace-project-name").textContent = "My project";
-  env.guide.open();
-  env.el("steps").children[SCAN].click();
-  env.el("scan-run").click(); await env.settle();
-  env.el("scan-apply").click(); await env.settle();
-  env.el("steps").children[CREATE].click();
-  env.el("assist-task").click();
-  assert.equal(env.get("vibe-input").value, "Add a README run section\n\nCheck: README names the command.");
-  assert.equal(env.get("workspace-input").value, undefined, "nothing is written into Build's hidden box");
-  assert.equal(env.get("workspace-send").clicks, 0);
-  assert.equal(env.get("vibe-build").clicks, 0, "placing a task never builds it");
-});
-
-test("I have an API key or a local model server walks to Connections and a usable save brings back a fresh scan", async () => {
-  let keySaved = false;
-  const auto = { ok: true, applied: false, planned: true, summary: "Assistant on z.ai GLM, fixed model defaults, no builder CLI installed yet.", notes: [], active: { provider: "zai" } };
-  const { host, calls } = bridge({
-    firstScan: async (payload) => { calls.push(["scan", payload]); return { ok: true, plan: { ...PLAN, ok: false, opencode: { installed: false }, explorer: { model: null, reason: "OpenCode is not installed; the AI you connect maps the folder instead." }, builder: { model: null, reason: "OpenCode is not installed; builders run on the coding CLI you connect." } }, autoSetup: keySaved ? auto : { ok: false, error: "Nothing to set up yet." } }; },
-  });
-  const env = environment(new Map(), { host }); env.guide.open();
-  env.el("scan-run").click(); await env.settle();
-  assert.match(env.el("scan-status").textContent, /I have an API key or a local model server/);
-  assert.equal(env.el("scan-apply").disabled, true, "nothing to save yet");
-  env.el("cli-keys").click();
-  assert.equal(env.el("overlay").hidden, true);
-  assert.equal(env.el("coach").hidden, false);
-  assert.deepEqual(env.routes.slice(-1), ["studio"]);
-  assert.deepEqual({ ...env.routeParams.at(-1) }, { section: "settings-assistant" });
-  assert.equal(env.el("coach-next").textContent, "Back to the scan");
-  assert.match(env.el("coach-hint").textContent, /LM Studio/);
-  // A cleared key, or one that leaves no working route, changes nothing.
-  env.emit("mefi:connection-saved", { detail: { provider: "zai", routeOk: false } });
-  assert.equal(env.el("coach").hidden, false);
-  assert.equal(JSON.parse(env.storage.get(KEY)).done[CONNECT], false);
-  keySaved = true;
-  env.emit("mefi:connection-saved", { detail: { provider: "zai", routeOk: true } });
-  await env.settle();
-  assert.equal(env.el("overlay").hidden, false);
-  assert.match(env.el("progress").textContent, /Step 1 of 7/);
-  assert.equal(JSON.parse(env.storage.get(KEY)).done[CONNECT], true);
-  assert.equal(calls.filter((call) => call[0] === "scan").length, 2, "the scan runs again on return");
-  assert.match(env.el("scan-status").textContent, /Assistant on z\.ai GLM.*Choose Use this setup and continue/);
-  assert.equal(env.el("scan-apply").hidden, false);
-  assert.equal(env.el("scan-apply").disabled, false);
-  const facts = env.el("scan-facts").children.map((item) => item.textContent);
-  assert.match(facts[0], /OpenCode is not installed on this computer\. It is optional/);
-  assert.ok(!facts.some((text) => /^(Explorer|Builder):/.test(text)), "no OpenCode-only explorer or builder lines without OpenCode");
-  // Back to the scan works without a key save (LM Studio needs none), and closing the walk ends the detour.
-  const manual = environment(new Map(), { host }); manual.guide.open();
-  manual.el("cli-keys").click();
-  manual.el("coach-next").click(); await manual.settle();
-  assert.equal(manual.el("overlay").hidden, false);
-  assert.match(manual.el("progress").textContent, /Step 1 of 7/);
-  assert.equal(JSON.parse(manual.storage.get(KEY)).done[CONNECT], false, "going back is not a saved connection");
-  const ended = environment(new Map(), { host }); ended.guide.open();
-  ended.el("cli-keys").click();
-  ended.el("coach-end").click();
-  ended.emit("mefi:connection-saved", { detail: { provider: "zai" } });
-  assert.equal(ended.el("overlay").hidden, true, "a later save never pulls a closed guide open");
-});
-
-test("a closed setup window refreshes the installed tools so Check connection comes alive", async () => {
-  let installed = false, statusCalls = 0;
-  const { host } = bridge({
-    cliSetupStatus: async () => { statusCalls++; return { ok: true, selected: null, clis: [{ id: "codex", name: "Codex", installed }] }; },
-    cliSetupAction: async () => ({ ok: true, launched: true, message: "Finish Codex setup in the setup window and browser, then close that window." }),
-    onCliSetupClosed: (callback) => { host.closed = callback; },
-  });
-  const env = environment(new Map(), { host }); env.guide.open(); await env.settle();
-  assert.equal(env.el("cli-check").disabled, true);
-  env.el("cli-install").click(); await env.settle();
-  installed = true;
-  host.closed({ id: "codex", action: "install" });
-  await env.settle(); await env.settle();
-  assert.equal(env.el("cli-check").disabled, false);
-  assert.equal(env.el("cli-login").disabled, false);
-  assert.equal(env.el("cli-status").textContent, "Codex is installed. Choose Check connection next.");
-  // Without the host's push, Studio regaining focus after a launch stands in, once.
-  const before = statusCalls;
-  env.el("cli-install").click(); await env.settle();
-  env.emit("focus"); await env.settle(); await env.settle();
-  assert.equal(statusCalls, before + 1);
-  env.emit("focus"); await env.settle();
-  assert.equal(statusCalls, before + 1, "focus only refreshes after a setup window was opened");
 });

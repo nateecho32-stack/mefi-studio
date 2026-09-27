@@ -7,10 +7,10 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { atRisk, describe, inspect, pending, projectCheck, runGit, scrub, sync } from "../scripts/sync.mjs";
+import { describe, inspect, pending, runGit, scrub, sync } from "../scripts/sync.mjs";
 
 async function run(cwd, ...args) {
   const out = await runGit(cwd, args);
@@ -124,48 +124,15 @@ test("stranded work is listed: uncommitted files, stashes, branches and worktree
   assert.match(describe(result), /Before moving to another PC/);
 });
 
-test("a missing or renamed repository is a failure to show, never a quiet offline", async (t) => {
+test("an unreachable remote is reported and changes nothing", async (t) => {
   const { second } = await fixture(t);
   await run(second, "remote", "set-url", "origin", path.join(tmpdir(), "mefi-sync-missing-remote.git"));
   const head = await run(second, "rev-parse", "HEAD");
   const result = await sync(second);
-  assert.equal(result.ok, false, "GitHub may hold work this PC cannot see");
-  assert.deepEqual(result.problems.map((item) => item.kind), ["fetch-failed"]);
-  assert.match(result.headline, /^Couldn't check GitHub \(.+\)\. Sign in to GitHub again or check this project's GitHub address; nothing was changed\.$/);
-  assert.equal(result.canRebase, false);
+  assert.equal(result.ok, true, "offline is a state, not a failure");
+  assert.deepEqual(result.problems.map((item) => item.kind), ["offline"]);
+  assert.equal(result.headline, "GitHub could not be reached. As of the last check, this PC matched GitHub.");
   assert.equal(await run(second, "rev-parse", "HEAD"), head);
-});
-
-test("a network failure or timeout is offline: a state, not a failure", async () => {
-  for (const failure of [{ stderr: "fatal: unable to access 'https://github.com/a/b.git/': Could not resolve host: github.com" }, { stderr: "", timedOut: true }]) {
-    const fake = async (_cwd, args) => {
-      if (args[0] === "fetch") return { ok: false, stdout: "", ...failure };
-      const answers = { "rev-parse --show-toplevel": "/repo", "symbolic-ref --quiet --short refs/remotes/origin/HEAD": "origin/main", "rev-parse --abbrev-ref HEAD": "main", "rev-list --left-right --count main...origin/main": "0\t0" };
-      const key = args.join(" ");
-      return { ok: true, stdout: answers[key] ?? "", stderr: "" };
-    };
-    const result = await sync("/repo", { run: fake });
-    assert.equal(result.ok, true);
-    assert.deepEqual(result.problems.map((item) => item.kind), ["offline"]);
-    assert.equal(result.headline, "GitHub could not be reached. As of the last check, this PC matched GitHub.");
-  }
-  const auth = await sync("/repo", { run: async (_cwd, args) => (args[0] === "fetch"
-    ? { ok: false, stdout: "", stderr: "remote: Invalid username or token.\nfatal: Authentication failed for 'https://github.com/a/b.git/'" }
-    : { ok: true, stdout: { "rev-parse --show-toplevel": "/repo", "rev-parse --abbrev-ref HEAD": "main" }[args.join(" ")] ?? "", stderr: "" }) });
-  assert.deepEqual(auth.problems.map((item) => item.kind), ["fetch-failed"], "a lapsed sign-in is not offline");
-});
-
-test("a merge.autoStash setting never moves live edits during a pull", async (t) => {
-  const { first, second } = await fixture(t);
-  await run(second, "config", "merge.autoStash", "true");
-  await edit(first, "README.md", "from the other PC\n");
-  await sync(first);
-  writeFileSync(path.join(second, "README.md"), "live edit\n");
-  const result = await sync(second, { push: false });
-  assert.deepEqual(result.problems.map((item) => item.kind), ["pull-refused"]);
-  assert.deepEqual(result.actions, []);
-  assert.equal(await run(second, "stash", "list"), "", "nothing was stashed");
-  assert.equal(await run(second, "status", "--porcelain"), "M README.md", "the edit stays as it was, with no conflict");
 });
 
 test("folders without Git or without a remote explain themselves", async (t) => {
@@ -195,90 +162,4 @@ test("credentials in remote URLs never reach a caller", async () => {
   const result = await sync("/repo", { run: fake });
   assert.doesNotMatch(JSON.stringify(result), /pw@|me:pw/);
   assert.ok(calls.every((call) => !call.startsWith("push") && !call.startsWith("merge")), "offline never writes");
-});
-
-async function edit(cwd, name, body) {
-  writeFileSync(path.join(cwd, name), body);
-  await run(cwd, "add", name);
-  await run(cwd, "commit", "-q", "-m", `Edit ${name}`);
-}
-
-test("a failing project check stops the push and says why; a passing one lets it through", async (t) => {
-  const { first, hub } = await fixture(t);
-  const before = await run(hub, "rev-parse", "main");
-  await commit(first, "feature.txt");
-  let checks = 0;
-  const failed = await sync(first, { check: async () => { checks += 1; return { ok: false, detail: "3 tests failed" }; } });
-  assert.equal(checks, 1);
-  assert.equal(failed.ok, false);
-  assert.deepEqual(failed.problems.map((item) => item.kind), ["check-failed"]);
-  assert.equal(failed.headline, "The project's check failed, so nothing was pushed. Fix it, then sync again.");
-  assert.ok(failed.lines.includes("npm run check: 3 tests failed"));
-  assert.equal(await run(hub, "rev-parse", "main"), before, "nothing reached GitHub");
-  const passed = await sync(first, { check: async () => ({ ok: true }) });
-  assert.deepEqual(passed.actions, [{ kind: "pushed", commits: 1 }]);
-  const quiet = await sync(first, { check: async () => { throw new Error("never called"); } });
-  assert.deepEqual(quiet.actions, [], "no push, so no check");
-});
-
-test("put my commits on top: a clean rebase, then the check, then the push", async (t) => {
-  const { first, second, hub } = await fixture(t);
-  await commit(first, "theirs.txt");
-  await sync(first);
-  await commit(second, "mine.txt");
-  const looked = await sync(second, { push: false });
-  assert.equal(looked.canRebase, true, "diverged and nothing uncommitted");
-  assert.match(looked.headline, /Put this PC's commits on top of GitHub's/);
-  let checked = 0;
-  const result = await sync(second, { rebase: true, check: async () => { checked += 1; return { ok: true }; } });
-  assert.deepEqual(result.actions, [{ kind: "rebased", commits: 1 }, { kind: "pushed", commits: 1 }]);
-  assert.equal(checked, 1);
-  assert.equal(await run(hub, "rev-parse", "main"), await run(second, "rev-parse", "HEAD"));
-  assert.equal(await run(second, "log", "-2", "--format=%s"), "Add mine.txt\nAdd theirs.txt");
-  assert.equal(result.headline, "This PC matches GitHub main.");
-});
-
-test("a rebase that conflicts is abandoned and names the files; uncommitted files block it", async (t) => {
-  const { first, second, hub } = await fixture(t);
-  await edit(first, "README.md", "theirs\n");
-  await sync(first);
-  await edit(second, "README.md", "mine\n");
-  const head = await run(second, "rev-parse", "HEAD");
-  const remote = await run(hub, "rev-parse", "main");
-  const conflicted = await sync(second, { rebase: true });
-  assert.deepEqual(conflicted.problems.map((item) => item.kind), ["rebase-conflict"]);
-  assert.deepEqual(conflicted.problems[0].files, ["README.md"]);
-  assert.match(conflicted.headline, /both change README\.md\. Nothing was changed/);
-  assert.equal(await run(second, "rev-parse", "HEAD"), head, "the rebase was abandoned");
-  assert.equal(existsSync(path.join(second, ".git", "rebase-merge")) || existsSync(path.join(second, ".git", "rebase-apply")), false);
-  assert.equal(await run(hub, "rev-parse", "main"), remote);
-  writeFileSync(path.join(second, "notes.txt"), "draft\n");
-  const dirty = await sync(second, { rebase: true });
-  assert.equal(dirty.canRebase, false);
-  assert.deepEqual(dirty.problems.map((item) => item.kind), ["diverged"]);
-  assert.match(dirty.headline, /Commit or set aside the uncommitted files/);
-  assert.equal(await run(second, "rev-parse", "HEAD"), head);
-});
-
-test("the project check is package.json's own, and its failure keeps only the telling lines", async (t) => {
-  const root = mkdtempSync(path.join(tmpdir(), "mefi-sync-check-"));
-  t.after(() => rmSync(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 }));
-  assert.equal(await projectCheck(root), null, "no package.json");
-  writeFileSync(path.join(root, "package.json"), JSON.stringify({ scripts: { test: "x" } }));
-  assert.equal(await projectCheck(root), null, "no check script");
-  writeFileSync(path.join(root, "package.json"), JSON.stringify({ scripts: { check: "node check.mjs" } }));
-  const seen = [];
-  const passing = await projectCheck(root, { run: async (dir) => { seen.push(dir); return { ok: true, output: "" }; } });
-  assert.deepEqual(await passing(), { ok: true });
-  assert.deepEqual(seen, [root]);
-  const failing = await projectCheck(root, { run: async () => ({ ok: false, output: "check-targets: ok\nspec: FAIL 2 orphans at https://me:pw@host/x\nmore noise" }) });
-  assert.deepEqual(await failing(), { ok: false, detail: "spec: FAIL 2 orphans at https://host/x" });
-  const slow = await projectCheck(root, { run: async () => ({ ok: false, output: "", timedOut: true }) });
-  assert.equal((await slow()).detail, "npm run check did not finish in 10 minutes");
-});
-
-test("only work this PC alone holds counts as at risk", () => {
-  const items = ["branch", "uncommitted", "unpushed", "stash", "worktree", "local-branch", "github-branch"].map((kind) => ({ kind }));
-  assert.deepEqual(atRisk(items).map((item) => item.kind), ["uncommitted", "unpushed", "stash", "worktree", "local-branch"]);
-  assert.deepEqual(atRisk(null), []);
 });

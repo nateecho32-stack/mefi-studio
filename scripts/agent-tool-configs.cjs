@@ -1,16 +1,17 @@
-// Per-run tool attachments for the workers with supported MCP injection:
-// OpenCode's config file (OPENCODE_CONFIG), Claude Code's --mcp-config file,
-// and the server table (`servers`) Codex takes as -c overrides. A temp folder
-// under C:\Users\John Smith is fine: the executor quotes the path for cmd.exe
-// (executorCore.cliInvocation), where it used to turn Studio tools off.
+// Per-run tool attachments for the two workers with supported MCP injection.
 "use strict";
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const os = require("node:os");
+const { SAFE_PATH } = require("./desk-server.cjs");
 const tools = require("./agent-tools.cjs");
 async function prepare({ root, settings, desk, script, dir = os.tmpdir(), node = process.execPath }) {
   const folder = await fs.mkdtemp(path.join(dir, "mefi-tools-"));
-  const files = { folder, opencode: path.join(folder, "opencode.json"), claude: path.join(folder, "claude.json"), servers: null };
+  // A temp path with a space or shell metacharacter (C:\Users\John Smith\...)
+  // cannot carry the attachment. Throwing failed every dispatch's prompt
+  // build; like desk-server's writeRunConfigs, run without it instead.
+  if (!SAFE_PATH.test(folder)) { await fs.rmdir(folder); return null; }
+  const files = { folder, opencode: path.join(folder, "opencode.json"), claude: path.join(folder, "claude.json") };
   try {
     const config = path.join(folder, "policy.json");
     await fs.writeFile(config, JSON.stringify({ root, policy: tools.policy(settings, "builder") }), { mode: 0o600, flag: "wx" });
@@ -21,7 +22,6 @@ async function prepare({ root, settings, desk, script, dir = os.tmpdir(), node =
     claude.mcpServers = { ...claude.mcpServers, mefi_tools: { command: node, args: [script], env } };
     await fs.writeFile(files.opencode, JSON.stringify(open), { mode: 0o600, flag: "wx" });
     await fs.writeFile(files.claude, JSON.stringify(claude), { mode: 0o600, flag: "wx" });
-    files.servers = claude.mcpServers;
     return files;
   } catch (error) { await remove(files); throw error; }
 }

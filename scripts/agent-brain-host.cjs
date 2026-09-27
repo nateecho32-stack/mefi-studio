@@ -142,7 +142,6 @@ function createAgentBrain(options = {}) {
     projectMap: modules.projectMap ?? require("./project-map.cjs"),
     desk: modules.desk ?? require("./desk.cjs"),
     companion: modules.companion ?? require("./companion.cjs"),
-    pet: modules.pet ?? require("./companion-pet.cjs"),
   };
   const scopes = new Map();
   const warned = new Set();
@@ -245,11 +244,6 @@ function createAgentBrain(options = {}) {
       scope: saw.scope === "all" ? "all" : "project",
       roaming: saw.roaming !== false, pinned: saw.pinned === true, bubbles: saw.bubbles !== false, growth: saw.growth !== false,
       anchor: validAnchor(saw.anchor) ? saw.anchor : null,
-      // How it carries itself (companion-pet.cjs): an unset switch follows the
-      // personality's preset, so only the owner's own choices are kept.
-      personality: mods.pet.normalizePersonality(saw.personality),
-      ...Object.fromEntries(["expressions", "antics"].filter((key) => typeof saw[key] === "boolean").map((key) => [key, saw[key]])),
-      bond: saw.bond && typeof saw.bond === "object" ? mods.pet.normalizeBond(saw.bond, now()) : null,
       decisions: decisionMemory.normalize(saw.decisions),
       cleared: mods.companion.markCleared(saw.cleared, []),
     });
@@ -817,8 +811,8 @@ function createAgentBrain(options = {}) {
   // ---- the companion --------------------------------------------------------
 
   function saveCompanion(s) {
-    const { lastSeenAt, look, scope: reach, decisions, roaming, pinned, bubbles, growth, anchor, cleared, personality, expressions, antics, bond } = s.companion;
-    const value = { v: 2, lastSeenAt, look, scope: reach, decisions, roaming, pinned, bubbles, growth, anchor, cleared: cleared ?? {}, personality, expressions, antics, bond };
+    const { lastSeenAt, look, scope: reach, decisions, roaming, pinned, bubbles, growth, anchor, cleared } = s.companion;
+    const value = { v: 2, lastSeenAt, look, scope: reach, decisions, roaming, pinned, bubbles, growth, anchor, cleared: cleared ?? {} };
     if (!sharedCompanion) return persist(s, s.files.companion, value);
     sharedCompanion.writes = sharedCompanion.writes.then(() => writeJsonAtomic(sharedCompanion.file, value)).catch((error) => warn("save companion", error));
     return sharedCompanion.writes;
@@ -889,52 +883,17 @@ function createAgentBrain(options = {}) {
       look: s.companion.look,
       scope: s.companion.scope,
       lastSeenAt: s.companion.lastSeenAt,
-      ...mods.pet.presentation(s.companion),
-      bond: bondLine(s),
     };
-  }
-
-  // The bond starts the first time anyone asks for it, so an existing owner's
-  // "together" days count from this version rather than from zero each read.
-  function bondLine(s) {
-    if (!s.companion.bond) s.companion.bond = mods.pet.normalizeBond(null, now());
-    return mods.pet.bondLine(s.companion.bond, now());
-  }
-
-  // A pet or a playdate. Pets inside a few seconds are one moment, and only a
-  // change is written.
-  async function companionBond({ event } = {}) {
-    const s = scope();
-    await ready(s);
-    const { bond, changed } = mods.pet.recordBond(s.companion.bond, event, now());
-    s.companion.bond = bond;
-    if (changed) await saveCompanion(s);
-    return { ok: true, changed, bond: mods.pet.bondLine(bond, now()) };
-  }
-
-  // The manner chat replies take (main.cjs passes it as ui.personality).
-  async function companionManner() {
-    const s = scope();
-    await ready(s);
-    return mods.pet.normalizePersonality(s.companion.personality);
   }
 
   function validAnchor(value) { return value && Number.isFinite(value.x) && Number.isFinite(value.y) && value.x >= 0 && value.x <= 1 && value.y >= 0 && value.y <= 1; }
 
-  async function companionPrefs({ look, scope: reach, roaming, pinned, bubbles, growth, anchor, personality, expressions, antics } = {}) {
+  async function companionPrefs({ look, scope: reach, roaming, pinned, bubbles, growth, anchor } = {}) {
     const s = scope();
     await ready(s);
     if (anchor !== undefined && !validAnchor(anchor)) return { ok: false, error: "Invalid companion position" };
-    for (const value of [roaming, pinned, bubbles, growth, expressions, antics]) if (value !== undefined && typeof value !== "boolean") return { ok: false, error: "Companion switches must be on or off" };
+    for (const value of [roaming, pinned, bubbles, growth]) if (value !== undefined && typeof value !== "boolean") return { ok: false, error: "Companion switches must be on or off" };
     if (reach !== undefined && reach !== "project" && reach !== "all") return { ok: false, error: "Scope is either this project or all projects" };
-    if (personality !== undefined && !mods.pet.PERSONALITIES.includes(personality)) return { ok: false, error: `Unknown personality "${String(personality).slice(0, 20)}"` };
-    if (look !== undefined && !mods.companion.LOOKS.includes(look)) return { ok: false, error: `Unknown look "${String(look).slice(0, 20)}"` };
-    // Choosing a personality applies its preset; a switch sent with it wins.
-    if (personality !== undefined) {
-      const preset = mods.pet.presetFor(personality);
-      Object.assign(s.companion, preset, Object.fromEntries(Object.entries({ expressions, antics, roaming }).filter(([, value]) => value !== undefined)));
-    }
-    for (const [key, value] of Object.entries({ expressions, antics })) if (value !== undefined) s.companion[key] = value;
     if (look !== undefined) {
       if (!mods.companion.LOOKS.includes(look)) return { ok: false, error: `Unknown look "${String(look).slice(0, 20)}"` };
       s.companion.look = look;
@@ -945,7 +904,7 @@ function createAgentBrain(options = {}) {
     }
     for (const [key, value] of Object.entries({ roaming, pinned, bubbles, growth, anchor })) if (value !== undefined) s.companion[key] = value;
     await saveCompanion(s);
-    return { ok: true, look: s.companion.look, scope: s.companion.scope, ...mods.pet.presentation(s.companion), roaming: s.companion.roaming !== false };
+    return { ok: true, look: s.companion.look, scope: s.companion.scope };
   }
 
   // The owner's Clear on the needs-you list: every listed item is marked seen
@@ -1113,8 +1072,6 @@ function createAgentBrain(options = {}) {
     companionState,
     companionPrefs,
     companionScope,
-    companionBond,
-    companionManner,
     clearQueue,
     clearedMarks,
     recordDecision,

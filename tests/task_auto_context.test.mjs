@@ -72,23 +72,3 @@ test("a selected alternate scout ranks only gathered files within the short dead
   assert.equal(calls[0][0], "scout");
   assert.equal(calls[0][4].timeoutMs, 8000);
 });
-
-test("a Zen scout with no Zen key rides the planning and review route instead of pointing nowhere", async () => {
-  const calls = [], direct = [];
-  const env = vm.createContext({
-    setTimeout, clearTimeout,
-    readSettings: async () => ({}), decryptKey: () => null,
-    seatChoice: () => ({ provider: "zen", model: "gpt-6-luna", effort: "low", fast: true }),
-    scrubOutbound: (value) => value,
-    chatCompletion: async (...args) => { direct.push(args); return { ok: false }; },
-    seatFetch: async (...args) => { calls.push(args); return { ok: true, text: '{"index":0,"why":"The entry point is here."}', model: "glm-5.3" }; },
-  });
-  vm.runInContext(section("async function lunaContextPointer(", "async function attachTaskRefs("), env);
-  const pointer = await env.lunaContextPointer("Update entry", { files: ["src/entry.js"] });
-  assert.equal(pointer.title, "Start with src/entry.js");
-  assert.equal(calls.length, 1, "seatFetch carries the seat to its fallback route");
-  assert.equal(calls[0][0], "scout");
-  assert.equal(direct.length, 0, "no keyless Zen call is attempted");
-  env.seatFetch = async () => ({ ok: true, text: '{"index":0}', model: "glm-5.3" });
-  assert.match((await env.lunaContextPointer("Update entry", { files: ["src/entry.js"] })).detail, /by glm-5\.3/, "the detail names the model that answered, not the unconnected Zen default");
-});

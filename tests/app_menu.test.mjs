@@ -22,9 +22,6 @@ function host() {
     rendererValue: async (expression) => { events.push(`save:${expression}`); return null; },
     Menu: { buildFromTemplate: (template) => template },
     app: { isQuitting: false, quit: () => events.push(`quit:${env.app.isQuitting}`) },
-    // The "Multi-PC sync" block's requestQuit: it asks about work only on this
-    // PC, then quits for real (tests/sync_host.test.mjs covers the asking).
-    requestQuit: () => { events.push("request-quit"); env.app.isQuitting = true; env.app.quit(); },
   };
   vm.createContext(env);
   vm.runInContext(slice("async function saveResume()", "async function applyReload("), env);
@@ -48,11 +45,11 @@ test("Reload and Force Reload save the resume point before the page goes away", 
   assert.deepEqual(events, ["save:window.MefiNav?.saveResume?.() ?? null", "reload-ignoring-cache"]);
 });
 
-test("Quit from the menu goes through requestQuit and quits instead of parking in the tray; the edit shortcuts stay", () => {
+test("Quit from the menu quits instead of parking in the tray, and the edit shortcuts stay", () => {
   const { env, events } = host();
   const menu = env.applicationMenu();
   item(menu, "Quit").click();
-  assert.deepEqual(events, ["request-quit", "quit:true"]);
+  assert.deepEqual(events, ["quit:true"]);
   assert.ok(menu.some((entry) => entry.role === "editMenu"), "copy, paste and undo keep their shortcuts");
 });
 

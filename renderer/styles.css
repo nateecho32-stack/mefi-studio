@@ -2230,16 +2230,6 @@ button.danger:not(.primary):hover { color: var(--bad); background: color-mix(in 
    17. Toasts, footer, body.command-active
    ============================================================ */
 body.command-active { overflow: hidden; }                 /* removes the page scrollbar behind the canvas */
-/* The page under the constellation is never seen, but it still restyled, laid
-   out and ran its animations (Settings' node-style previews, 60 times a
-   second) under every frame. Command skips it once its own fade-in is done;
-   leaving shows it at once, at the size it had (contain-intrinsic-size auto).
-   Settings and the music preview float the page over Command and keep it. */
-body.command-active:not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head, #tabs) {
-  content-visibility: hidden;
-  contain-intrinsic-size: auto none;
-  transition: content-visibility var(--motion-base) allow-discrete;
-}
 body.command-active #toast-host { bottom: 64px; }         /* clears the legend pill at bottom-left */
 /* …but an open legend grows a list of up to 52vh above that pill, and #toast-host
    (--z-toast) paints over the HUD, so the stack has to clear the whole column. */

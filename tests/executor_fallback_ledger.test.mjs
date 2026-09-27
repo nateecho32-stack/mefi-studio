@@ -30,11 +30,9 @@ const settleAll = async () => { for (let i = 0; i < 30; i += 1) await tick(); };
 function host({ refPatch = {}, runRoute, providerUpAt = null }) {
   const ref = { id: "task", title: "Fixture work", prompt: "Full fixture obligation", at: 5, status: "active", runId: "run_100_1", ...refPatch };
   let board = { tasks: [structuredClone(ref)], requests: [] };
-  const entry = { id: "run_100_1", taskId: "task", title: ref.title, startedAt: 100, finished: false, spoke: false, spokeOut: false, sawDone: false, outputTail: [], outputLog: [], handoffs: [], declinedHandoffs: [], issues: [], calls: new Set(), resultNote: null, workKind: "coding", startKilled: false,
-    // Written by spawnNextJob ahead of this slice: grok reads its brief from it.
-    promptFile: "C:/fixture/task-runs/run_100_1.prompt.txt" };
+  const entry = { id: "run_100_1", taskId: "task", title: ref.title, startedAt: 100, finished: false, spoke: false, spokeOut: false, sawDone: false, outputTail: [], outputLog: [], handoffs: [], declinedHandoffs: [], issues: [], calls: new Set(), resultNote: null, workKind: "coding", startKilled: false };
   const autopilot = { execute: true, jobs: [entry], parallel: 1, infraFailures: 0, startKills: 0, startSamples: [] };
-  const observations = [], timers = [], children = [], removed = [];
+  const observations = [], timers = [], children = [];
   const clock = { offset: 0 };
   const RealDate = Date;
   class FakeDate extends RealDate { static now() { return RealDate.now() + clock.offset; } }
@@ -73,7 +71,6 @@ function host({ refPatch = {}, runRoute, providerUpAt = null }) {
     parseExecutorHandoff: () => null, executorActivity: { recordOutput: () => false },
     cliModelArg: (value) => value, agyModelArg: (value) => value,
     sweepSnapshotLocks: async () => {}, watchRunSession: () => {},
-    rm: async (file) => { removed.push(file); },
   });
   // finish() checks `instanceof Map`, so the map comes from the sandbox's realm.
   autopilot.providerUpAt = vm.runInContext("new Map()", env);
@@ -85,7 +82,7 @@ function host({ refPatch = {}, runRoute, providerUpAt = null }) {
   run.attach(run.spawnAttempt(runRoute, run.cliRoute), run.label(), runRoute, Boolean(run.cliRoute));
   // The start watchdog: the one pending timer that is not the hard budget or a poll.
   const watchdog = () => timers.filter((timer) => !timer.cleared && ![25 * 60000, 500, 15000].includes(timer.ms)).at(-1);
-  return { entry, autopilot, children, clock, watchdog, observations, removed, board: () => board };
+  return { entry, autopilot, children, clock, watchdog, observations, board: () => board };
 }
 
 const zaiRoute = () => ({ cli: "opencode", modelProvider: "zai", model: "glm-5.3-flash", modelArgs: " --model mefi-zai/glm-5.3-flash", via: "mefi-zai/glm-5.3-flash" });
@@ -109,7 +106,6 @@ test("a CLI killed at start hands a fresh watchdog to its OpenCode fallback, who
   await settleAll();
   assert.deepEqual(ledger(h), [["zai", "glm-5.3-flash", "error", "failed"]]);
   assert.deepEqual(card(h), { runFailures: 1, startFailures: 0, providerFailures: 0 }, "the attempt ran and failed: no 'never started' waiver");
-  assert.deepEqual(h.removed, ["C:/fixture/task-runs/run_100_1.prompt.txt"], "grok's prompt file goes when the run finishes, fallback or not");
 });
 
 test("an outage the provider reported is never the model's loss, even once the card's outage grace has run out", async () => {

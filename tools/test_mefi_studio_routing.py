@@ -270,18 +270,15 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertGreater(claim, route_call, "claiming work before the route is known strands the board on a throw")
 
     def test_grok_executor_is_an_agentic_session_not_a_single_turn(self):
-        # Build jobs have to be a headless grok session that can actually edit
-        # the repo: tools auto-approved and a turn cap. `--prompt-file` starts
-        # the same headless session as `-p` (grok's headless-mode guide) and
-        # keeps the brief off the command line, which a .cmd shim cannot carry;
-        # replies stay single-turn through --max-turns 1 and --tools= instead.
+        # `--prompt-file` is a single-turn completion (no tools). Build jobs
+        # have to be a headless grok session that can actually edit the repo.
         spawn = _function_body(self.main, "spawnNextJob")
         self.assertIn('runRoute.cli === "grok"', spawn)
         self.assertIn("--always-approve", self.core)
         self.assertIn("--output-format", self.core)
         self.assertIn("--max-turns", self.core)
-        self.assertIn('"--prompt-file", promptFile', self.core, "the brief rides a file, never grok's command line")
-        self.assertNotIn('"--max-turns", "1"', self.core, "a build is never a single turn")
+        self.assertNotIn('"--prompt-file"', spawn, "prompt-file is the chat completion path; builders need tools")
+        self.assertNotIn('"--prompt-file"', self.core, "prompt-file is the chat completion path; builders need tools")
         complete = _function_body(self.main, "grokCompletion")
         self.assertIn('cliText.run({ provider: "grok"', complete)
         self.assertIn('args.push("--prompt-file", prompt)', self.cli_text, "assistant replies stay single-turn")
@@ -322,7 +319,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         # Builders: same subscription login, agentic print mode, prompt on stdin.
         spawn = _function_body(self.main, "spawnNextJob")
         self.assertIn('cli === "claude"', self.core)
-        self.assertIn('"-p", "--output-format", "text", "--dangerously-skip-permissions"', self.core, "nobody is at the keyboard to approve an edit")
+        self.assertIn("claude -p --output-format text --dangerously-skip-permissions", self.core, "nobody is at the keyboard to approve an edit")
         self.assertIn('chosenCli === "claude"', _function_body(self.main, "executorRunEnv"))
         self.assertIn("claudeCliAvailable", _function_body(self.main, "executorRunEnv"))
         self.assertIn("claude: true", _function_body(self.main, "executorRunEnv"))
@@ -351,7 +348,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         # keyboard, plain stdout so the sentinel protocol stays readable.
         spawn = _function_body(self.main, "spawnNextJob")
         self.assertIn('cli === "codex"', self.core)
-        self.assertIn('"exec", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "--color", "never"', self.core)
+        self.assertIn("codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check --color never", self.core)
         route = _function_body(self.main, "executorRunEnv")
         self.assertIn('chosenCli === "codex"', route)
         self.assertIn("codexCliAvailable", route)
@@ -415,7 +412,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         # Builders: agentic print mode, permissions skipped, model before -p.
         spawn = _function_body(self.main, "spawnNextJob")
         self.assertIn('cli === "antigravity"', self.core)
-        self.assertIn('binaryLaunch("agy", args, platform, shim)', self.core, "a native agy spawns directly; only a batch shim goes through cmd.exe")
+        self.assertIn('command: "agy", args', self.core, "agy spawns directly, never through cmd.exe")
         self.assertIn('"--dangerously-skip-permissions", "--print-timeout", "60m"', self.core, "nobody is at the keyboard, and the CLI never ends a live build early")
         self.assertIn('chosenCli === "antigravity"', _function_body(self.main, "executorRunEnv"))
         self.assertIn("antigravityCliAvailable", _function_body(self.main, "executorRunEnv"))
@@ -442,8 +439,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
 
     def test_lmstudio_and_custom_routes_are_local_or_keyed_http(self):
         # LM Studio is keyless on the loopback server; the custom route is any
-        # OpenAI-compatible endpoint with its own encrypted key, which is
-        # optional: a keyless local server (Ollama) sends no Authorization.
+        # OpenAI-compatible endpoint with its own encrypted key.
         self.assertIn('LMSTUDIO_ENDPOINT = "http://127.0.0.1:1234/v1/chat/completions"', self.main)
         body = _function_body(self.main, "resolveAiRoute")
         self.assertIn('provider === "lmstudio"', body)
@@ -451,10 +447,8 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertIn('apiKey: "lm-studio"', body, "the local server ignores the bearer")
         self.assertIn('provider === "custom"', body)
         self.assertIn('decryptKey(settings, "customApiKeyEncrypted")', body)
-        self.assertNotIn("no custom API key saved", body, "a missing custom key is a keyless server, not an error")
-        self.assertIn("save its API key if it needs one", body)
+        self.assertIn("no custom API key saved", body)
         self.assertIn("no custom endpoint saved", body)
-        self.assertIn("if (apiKey) headers.authorization", _function_body(self.main, "chatCompletion"), "no empty bearer is sent")
         # Bare base URLs normalize onto the chat-completions path; non-http
         # values fall back instead of reaching fetch.
         helper = _function_body(self.main, "normalizeCompatEndpoint")
@@ -479,16 +473,14 @@ class MefiStudioRoutingTests(unittest.TestCase):
         # One predicate for the passes (runAssistant) and the chat's gate
         # (assistantKeyPresent), so a Zen-only or keyless-CLI setup is never
         # answered by the regex fallback while the passes call the model.
-        self.assertIn("aiRouteReady(settings)", _function_body(self.main, "runAssistant"))
-        self.assertIn("aiRouteReady(", _function_body(self.main, "assistantKeyPresent"))
-        self.assertIn("aiRouteConfigured(settings, { clis", _function_body(self.main, "aiRouteReady"), "the async gate adds only the CLI lookups")
+        self.assertIn("aiRouteConfigured(settings)", _function_body(self.main, "runAssistant"))
+        self.assertIn("aiRouteConfigured(", _function_body(self.main, "assistantKeyPresent"))
         assistant = _function_body(self.main, "aiRouteConfigured")
-        self.assertRegex(assistant, r'keyless = \["grok", "claude", "codex", "antigravity", "lmstudio"\]')
+        self.assertRegex(assistant, r'keyless = provider === "grok".*provider === "claude".*provider === "lmstudio"')
         self.assertIn('keyAvailable(settings, field)', assistant, "the gate reads keys through one source-aware check")
         self.assertIn('"customApiKeyEncrypted"', assistant, "a custom key counts as a saved key")
         self.assertNotIn("safeStorage.isEncryptionAvailable()", assistant, "an environment-supplied key never needs the OS keystore")
-        self.assertIn("autoProviderOrder(settings)", assistant, "Auto is judged on the walk the resolver takes, subscriptions first included")
-        self.assertIn("autoRescueProviders(settings", assistant, "a saved key outside the order counts, as the resolver answers with it")
+        self.assertIn("normalizeAutoProviders(settings.aiAutoProviders)", assistant, "an auto order with a keyless route also skips the key gate")
 
     def test_mefi_zai_provider_config_shape(self):
         body = _function_body(self.main, "zaiProviderConfig")

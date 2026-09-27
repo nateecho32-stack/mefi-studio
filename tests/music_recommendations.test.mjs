@@ -53,17 +53,3 @@ test("unconfigured AI does not prevent music playback or call the provider", asy
   const recommend = createMusicRecommender({ resolveRoute: async () => ({ ok: false }), complete: () => { throw new Error("must not call"); } });
   assert.match((await recommend({ mood: "quiet" })).error, /Local playback/);
 });
-
-test("a CLI-only setup gets suggestions: the host's data-only CLIs answer through the route it resolved", async () => {
-  const dataOnly = new Set(["claude", "codex"]);
-  const seen = [];
-  const recommend = createMusicRecommender({
-    allowCli: dataOnly,
-    resolveRoute: async (role, options) => { seen.push([role, options.allowCli]); return { ok: true, cli: true, provider: "claude", model: "sonnet" }; },
-    complete: async (route) => { assert.equal(route.cli, true, "the resolved CLI route reaches the completion call"); return { ok: true, text: '{"suggestions":[{"title":"Song","artist":"Artist"}]}', model: "sonnet" }; },
-  });
-  const result = await recommend({ mood: "rainy focus" });
-  assert.equal(result.ok, true);
-  assert.equal(seen[0][0], "routine");
-  assert.equal(seen[0][1], dataOnly, "the CLI allowance is the host's own set, passed through untouched");
-});

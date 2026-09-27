@@ -3,19 +3,13 @@
    from the theme tokens, so light palettes keep their own. */
 .trace-sheet { display: flex; flex-direction: column; }
 .trace-grid { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 14px; flex: 1; min-height: 0; padding: 0 var(--s5, 16px) var(--s5, 16px); }
-.trace-channels { position: relative; display: flex; flex-direction: column; gap: 8px; min-height: 0; padding: 12px 10px; border: 1px solid var(--hairline); border-radius: var(--r-lg, 14px); background: var(--surface-raised, var(--glass)); overflow-y: auto; }
+.trace-channels { display: flex; flex-direction: column; gap: 8px; min-height: 0; padding: 12px 10px; border: 1px solid var(--hairline); border-radius: var(--r-lg, 14px); background: var(--surface-raised, var(--glass)); overflow-y: auto; }
 .trace-side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 4px; }
 .trace-side-head h3 { margin: 0; color: var(--muted); font: 650 11px/1.2 var(--font-ui); letter-spacing: .07em; text-transform: uppercase; }
 .trace-channel-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
-.trace-channel { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 6px 10px; border: 0; border-radius: 10px; background: none; color: var(--ivory); font: 550 13px/1.2 var(--font-ui); text-align: left; cursor: pointer; }
-.trace-channel { transition: background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out); }
+.trace-channel { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 6px 10px; border: 0; border-radius: 10px; background: none; color: var(--ivory); font: 550 13px/1.2 var(--font-ui); text-align: left; cursor: pointer; }
 .trace-channel:hover { background: color-mix(in srgb, var(--ivory) 6%, transparent); }
-.trace-channel[aria-current="true"] { background: none; }
-/* The mark behind the open channel (MefiMotion.glide sets --glide-*). */
-.trace-channel-mark { position: absolute; top: 0; left: 0; z-index: 0; width: var(--glide-w, 0); height: var(--glide-h, 0); border-radius: 10px; background: color-mix(in srgb, var(--gold) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent); translate: var(--glide-x, 0) var(--glide-y, 0); opacity: 0; pointer-events: none; transition: translate var(--motion-spring) var(--ease-spring), height var(--motion-spring) var(--ease-spring), width var(--motion-base) var(--ease-out), opacity var(--motion-base) var(--ease-out); }
-.trace-channel-mark[data-on="true"] { opacity: 1; }
-.trace-filters .chip { transition: background var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out), scale var(--motion-instant) var(--ease-out); }
-.trace-filters .chip:active { scale: .95; }
+.trace-channel[aria-current="true"] { background: color-mix(in srgb, var(--gold) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent); }
 .trace-channel:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 1px; }
 .trace-channel-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .trace-channel-size { color: var(--dim); font: 11px/1 var(--font-mono); }
@@ -34,7 +28,6 @@
 .trace-chip-warn.on { border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 14%, transparent); }
 .trace-lines { flex: 1; min-height: 0; margin: 0; padding: 6px 0; overflow: auto; border: 1px solid var(--hairline); border-radius: var(--r-lg, 14px); background: color-mix(in srgb, var(--bg-deep) 70%, transparent); font: 12px/1.5 var(--font-mono); list-style: none; }
 .trace-line { display: grid; grid-template-columns: 64px 44px minmax(60px, 120px) minmax(0, 1fr); gap: 10px; padding: 2px 12px; border-left: 2px solid transparent; }
-.trace-line { transition: background var(--motion-fast) var(--ease-out); }
 .trace-line:hover { background: color-mix(in srgb, var(--ivory) 4%, transparent); }
 .trace-line.is-error { border-left-color: var(--bad); background: color-mix(in srgb, var(--bad) 7%, transparent); }
 .trace-line.is-warn { border-left-color: var(--warn); }
@@ -44,7 +37,6 @@
 .trace-line.is-warn .trace-level { color: var(--warn); }
 .trace-source { overflow: hidden; color: var(--gold-bright); text-overflow: ellipsis; white-space: nowrap; }
 .trace-text { color: var(--ivory); white-space: pre-wrap; overflow-wrap: anywhere; }
-@media (prefers-reduced-motion: reduce) { .trace-channel-mark { transition: none; } }
 @media (max-width: 900px) {
   .trace-grid { grid-template-columns: 1fr; }
   .trace-channels { max-height: 180px; }

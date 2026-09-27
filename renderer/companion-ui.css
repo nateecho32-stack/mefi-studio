@@ -25,7 +25,7 @@
 .companion-message-user { margin-left: 24px !important; }
 .companion-message-assistant { margin-right: 24px !important; }
 .companion-message-notice { opacity: .8; font-size: 12px; }
-.companion-chips, .companion-starters { display: flex; flex-wrap: wrap; gap: 6px; }
+.companion-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .companion-chips[hidden] { display: none; }
 .companion-chip { max-width: 100%; border-radius: 999px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .companion-menu-pane textarea { width: 100%; box-sizing: border-box; resize: vertical; min-height: 70px; max-height: 180px; }

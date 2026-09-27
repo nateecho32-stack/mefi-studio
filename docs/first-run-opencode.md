@@ -377,7 +377,7 @@ done by this file.
 | 25 | Assistant route is a CLI provider (Grok / Claude Code / Antigravity) | `assistantFetch` already handles CLI completions, so the assistant judge works; its latency is unknown, so routing uses the 15 s judge deadline and backs off 30 s on failure. | Part 5 |
 | 26 | A saved Zen key | Already a Jev route (paid `jev-1.13` pin); next step suggests testing `jev-1.13-free` via `MEFI_JEV_MODEL`. | `planFirstRun.nextSteps` |
 | 27 | Re-running the scan later (new provider linked) | Re-scan from Settings; `firstRun.scanAt` updates; walkthrough done-state follows settings, not localStorage. | Part 1–2 |
-| 28 | Portable build vs source install | Both read the same CLI and share `settings.json` (with the scan record) in `%APPDATA%Mefi's Studio AI+`; only each install's `data/` is separate. | AGENTS.md |
+| 28 | Portable build vs source install | Both read the same CLI; portable data dir is separate (existing rule); the scan record lives in `settings.json` of that install. | AGENTS.md |
 | 29 | Non-Windows host | `which` instead of `where`, direct spawn instead of cmd.exe; note that `codingCliStatus` is still Windows-only. | `SCAN_COMMANDS.locate` |
 | 30 | Memory-starved host (0.36 GB free measured) | Scan is sequential with deadlines; never scheduled on a timer; the map is one process; free routes never widen the pool. | `runFirstScan` |
 | 31 | Test harness traps | New host functions must sit outside sliced spans; `tests/jev_model_routing_host.test.mjs` hangs `node --test` on this machine, so run new specs alone. | memory notes |

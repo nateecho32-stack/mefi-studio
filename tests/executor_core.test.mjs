@@ -404,93 +404,22 @@ test("the start budget scales with siblings, learns from starts, widens after ki
 
 // ---- the command line per builder CLI -------------------------------------------------
 
-test("each builder CLI gets its headless command line, and the brief never rides a command line", () => {
+test("each builder CLI gets its headless command line, and all but grok take the prompt on stdin", () => {
   const modelArg = (value) => /^[A-Za-z0-9._:/-]{1,80}$/.test(String(value ?? "")) ? String(value) : "";
   const agyModelArg = (value) => /^[A-Za-z0-9 ._()/:-]{1,80}$/.test(String(value ?? "").trim()) ? String(value).trim() : "";
-  const run = (route, cli, extra = {}) => core.cliInvocation(route, cli, "PROMPT", { modelArg, agyModelArg, promptFile: "C:\\data\\task-runs\\run_1_1.prompt.txt", ...extra });
+  const run = (route, cli) => core.cliInvocation(route, cli, "PROMPT", { modelArg, agyModelArg });
   assert.deepEqual(run({ modelArgs: " --model mefi-zai/glm-5.3-flash", env: { Z: "1" } }, null),
-    { command: "cmd.exe", args: ["/d", "/s", "/c", "opencode run --auto --model mefi-zai/glm-5.3-flash"], verbatim: false, stdio: ["pipe", "pipe", "pipe"], stdin: "PROMPT", env: { Z: "1" }, dropped: [] });
+    { command: "cmd.exe", args: ["/d", "/s", "/c", "opencode run --auto --model mefi-zai/glm-5.3-flash"], stdio: ["pipe", "pipe", "pipe"], stdin: "PROMPT", env: { Z: "1" } });
   assert.deepEqual(run({ model: "grok-4", env: {} }, "grok"),
-    { command: "grok", args: ["--output-format", "plain", "--always-approve", "--max-turns", "60", "--no-alt-screen", "--verbatim", "-m", "grok-4", "--prompt-file", "C:\\data\\task-runs\\run_1_1.prompt.txt"], verbatim: false, stdio: ["ignore", "pipe", "pipe"], stdin: null, env: {}, dropped: [] });
-  assert.deepEqual(run({ env: {} }, "grok").args.slice(-3), ["--verbatim", "--prompt-file", "C:\\data\\task-runs\\run_1_1.prompt.txt"], "no model: no -m");
-  assert.equal(run({ model: "x && del", env: {} }, "grok").args.includes("-m"), false, "grok's model goes through the same id filter");
-  assert.throws(() => run({ env: {} }, "grok", { promptFile: null }), /prompt file/, "no file, no spawn: the host falls back as for any spawn failure");
-  assert.deepEqual(run({ model: "claude-sonnet-5" }, "claude"),
-    { command: "cmd.exe", args: ["/d", "/s", "/c", "\"claude -p --output-format text --dangerously-skip-permissions --model claude-sonnet-5\""], verbatim: true, stdio: ["pipe", "pipe", "pipe"], stdin: "PROMPT", env: undefined, dropped: [] });
-  assert.deepEqual(run({ model: "x && del" }, "claude").args, ["/d", "/s", "/c", "\"claude -p --output-format text --dangerously-skip-permissions\""], "a model id that is not an id never reaches cmd.exe");
-  assert.equal(run({ model: "gpt-6" }, "codex").args[3], "\"codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check --color never -m gpt-6 -\"");
+    { command: "grok", args: ["--output-format", "plain", "--always-approve", "--max-turns", "60", "--no-alt-screen", "--verbatim", "-m", "grok-4", "PROMPT"], stdio: ["ignore", "pipe", "pipe"], stdin: null, env: {} });
+  assert.deepEqual(run({ env: {} }, "grok").args.slice(-2), ["--verbatim", "PROMPT"], "no model: no -m");
+  assert.deepEqual(run({ model: "claude-sonnet-5" }, "claude").args, ["/d", "/s", "/c", "claude -p --output-format text --dangerously-skip-permissions --model claude-sonnet-5"]);
+  assert.deepEqual(run({ model: "x && del" }, "claude").args, ["/d", "/s", "/c", "claude -p --output-format text --dangerously-skip-permissions"], "a model id that is not an id never reaches cmd.exe");
+  assert.equal(run({ model: "gpt-6" }, "codex").args[3], "codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check --color never -m gpt-6 -");
   assert.equal(run({}, "codex").stdin, "PROMPT");
   assert.deepEqual(run({ model: "Gemini 3.1 Pro (High)" }, "antigravity"),
-    { command: "agy", args: ["--model", "Gemini 3.1 Pro (High)", "--dangerously-skip-permissions", "--print-timeout", "60m", "--output-format", "text", "-p"], verbatim: false, stdio: ["pipe", "pipe", "pipe"], stdin: "PROMPT", env: undefined, dropped: [] });
+    { command: "agy", args: ["--model", "Gemini 3.1 Pro (High)", "--dangerously-skip-permissions", "--print-timeout", "60m", "--output-format", "text", "-p"], stdio: ["pipe", "pipe", "pipe"], stdin: "PROMPT", env: undefined });
   assert.equal(run({}, "antigravity").args[0], "--dangerously-skip-permissions", "every flag precedes -p, with or without a model");
-  for (const cli of [null, "grok", "claude", "codex", "antigravity"]) {
-    assert.ok(!JSON.stringify(run({ model: "m" }, cli).args).includes("PROMPT"), `${cli ?? "opencode"}: the brief is never an argument`);
-  }
-});
-
-// The guided installer puts grok on PATH as npm's grok.cmd, which Node cannot
-// spawn without a shell: every Grok run failed ENOENT while where.exe said the
-// CLI was installed. A shim goes through cmd.exe; a real binary still spawns
-// directly.
-test("a grok or agy installed as a batch shim runs through cmd.exe, a native binary directly", () => {
-  const shimmed = (name) => `C:\\Users\\John Smith\\AppData\\Roaming\\npm\\${name}.cmd`;
-  const grok = core.cliInvocation({ model: "grok-4", env: {} }, "grok", "PROMPT", { modelArg: (value) => value, promptFile: "C:\\Mefi's Studio AI+\\run_1_1.prompt.txt", shim: shimmed });
-  assert.equal(grok.command, "cmd.exe");
-  assert.equal(grok.verbatim, true);
-  assert.equal(grok.args[3], "\"\"C:\\Users\\John Smith\\AppData\\Roaming\\npm\\grok.cmd\" --output-format plain --always-approve --max-turns 60 --no-alt-screen --verbatim -m grok-4 --prompt-file \"C:\\Mefi's Studio AI+\\run_1_1.prompt.txt\"\"");
-  assert.equal(grok.stdin, null);
-  const agy = core.cliInvocation({ model: "Gemini 3.1 Pro (High)" }, "antigravity", "PROMPT", { agyModelArg: (value) => value, shim: shimmed });
-  assert.equal(agy.command, "cmd.exe");
-  assert.match(agy.args[3], /agy\.cmd" --model "Gemini 3\.1 Pro \(High\)" --dangerously-skip-permissions/, "the display name stays one quoted word");
-  assert.equal(agy.stdin, "PROMPT");
-  // Off Windows there are no batch shims to look for.
-  let asked = false;
-  const posix = core.cliInvocation({}, "grok", "PROMPT", { promptFile: "/tmp/p.txt", platform: "linux", shim: () => { asked = true; return "/x.cmd"; } });
-  assert.equal(posix.command, "grok");
-  assert.equal(asked, false);
-});
-
-test("off Windows the shell CLIs get an sh line, which platform.cjs runs as sh -c", () => {
-  const claude = core.cliInvocation({ model: "opus" }, "claude", "PROMPT", { modelArg: (value) => value, platform: "linux", desk: { claude: "/tmp/it's here/claude.json" } });
-  assert.equal(claude.verbatim, false);
-  assert.deepEqual(claude.args, ["/d", "/s", "/c", "claude -p --output-format text --dangerously-skip-permissions --model opus --mcp-config '/tmp/it'\\''s here/claude.json'"]);
-});
-
-// Codex takes Studio's tool server as config overrides: no per-run config file
-// flag exists, and cmd.exe can carry no `"` through codex's npm shim, so the
-// values are TOML literal strings.
-test("codex gets the run's MCP servers as -c overrides, and never one that carries a credential", () => {
-  const exe = "C:\\Program Files\\Mefi's Studio AI+\\Mefi's Studio AI+.exe";
-  const servers = {
-    mefi_tools: { command: exe, args: ["C:\\app\\scripts\\agent-tools-mcp.cjs"], env: { MEFI_TOOLS_CONFIG: "C:\\Users\\John Smith\\Temp\\mefi-tools-x\\policy.json", ELECTRON_RUN_AS_NODE: "1" } },
-    mefi_desk: { command: exe, args: ["C:\\app\\scripts\\desk-mcp.mjs"], env: { MEFI_DESK_TOKEN: "secret", ELECTRON_RUN_AS_NODE: "1" } },
-    "bad name": { command: exe, args: [] },
-  };
-  const codex = core.cliInvocation({}, "codex", "PROMPT", { desk: { servers }, platform: "linux" });
-  assert.deepEqual(codex.dropped, ["mefi_desk", "bad name"]);
-  const line = codex.args[3];
-  assert.ok(line.includes("mcp_servers.mefi_tools.command=") && line.includes("mcp_servers.mefi_tools.args="), line);
-  assert.ok(!line.includes("secret") && !line.includes("mefi_desk"), "the desk's token stays off the command line");
-  assert.match(line, / -$/, "the prompt still comes from stdin");
-  const windows = core.cliInvocation({}, "codex", "PROMPT", { desk: { servers: { mefi_tools: servers.mefi_tools } } });
-  assert.equal(windows.verbatim, true);
-  assert.ok(windows.args[3].includes(`-c "mcp_servers.mefi_tools.command='''${exe}'''"`), windows.args[3]);
-  assert.ok(windows.args[3].includes(`-c "mcp_servers.mefi_tools.env={MEFI_TOOLS_CONFIG='C:\\Users\\John Smith\\Temp\\mefi-tools-x\\policy.json',ELECTRON_RUN_AS_NODE='1'}"`), windows.args[3]);
-  assert.ok(!windows.args[3].slice(1, -1).includes("\"\"\""), "no value carries a double quote of its own");
-  assert.deepEqual(core.cliInvocation({}, "codex", "PROMPT", { desk: { servers: { odd: { command: "C:\\it'''s\\x.exe" } } } }).dropped, ["odd"], "a value no TOML literal can hold is left out, not mangled");
-});
-
-// ---- a heavier retry -----------------------------------------------------------------
-
-test("a heavier retry is pending from the owner's retry-deep until the next attempt starts", () => {
-  const decided = (extra = {}) => ({ at: 500, choice: "retry-deep", kind: "capability", ...extra });
-  assert.equal(core.heavyRetryPending({ decisions: [decided()], lastAttempt: { startedAt: 100, at: 400 } }), true);
-  assert.equal(core.heavyRetryPending({ decisions: [decided({ by: "desk" })], lastAttempt: { startedAt: 100, at: 400 } }), true, "the desk answers for the owner");
-  assert.equal(core.heavyRetryPending({ decisions: [decided()], lastAttempt: { startedAt: 600, at: 900 } }), false, "the attempt that started after it spent it");
-  assert.equal(core.heavyRetryPending({ decisions: [decided({ by: "assistant" })] }), false, "the assistant's record of another card's answer routes nothing");
-  assert.equal(core.heavyRetryPending({ decisions: [decided({ choice: "retry" })] }), false);
-  assert.equal(core.heavyRetryPending({}), false);
-  assert.equal(core.heavyRetryPending({ decisions: [decided(), { at: 700, choice: "instruct" }], lastAttempt: { startedAt: 100 } }), true, "a later note does not cancel it");
 });
 
 // ---- one line of worker output ------------------------------------------------------------

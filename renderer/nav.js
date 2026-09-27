@@ -504,27 +504,6 @@
       isOpen: () => overlayOpen("palette-overlay"),
     },
     {
-      id: "config",
-      label: "Configuration",
-      short: "Configuration",
-      kind: "overlay",
-      layer: "transient",
-      section: "settings",
-      group: "system",
-      key: "Ctrl Shift ,",
-      keyMatch: (event) => Boolean(event?.ctrlKey || event?.metaKey) && event.shiftKey && !event.altKey && (event.key === "<" || event.key === ","),
-      glyph: "g-sliders",
-      badge: null,
-      desc: "Every setting in one searchable tree, filed by what it does",
-      searchTerms: "configuration config settings preferences options all settings tree search scale zoom interface",
-      showIn: showIn({ tools: true, palette: true, help: true }),
-      element: "config-overlay",
-      focus: "#config-search",
-      open: (params) => window.MefiConfig?.open?.(params),
-      close: () => window.MefiConfig?.close?.(),
-      isOpen: () => overlayOpen("config-overlay"),
-    },
-    {
       id: "music", label: "Appearance", short: "Appearance", kind: "action", layer: null, section: "settings",
       group: "tools", key: "U", glyph: "g-style", badge: null, commandPrimary: true,
       desc: "Themes, colours, node styles and canvas effects",
@@ -1121,39 +1100,32 @@
 
   // ---- badges ------------------------------------------------------------
 
-  // Badges repaint on every push, several a second while agents run. Only
-  // what changed is written: an unchanged `hidden`, class or text still
-  // queues a mutation and re-runs the page's :has() rules.
   function paintBadges(root) {
     const scope = root ?? document;
-    const hide = (element, hidden) => { if (element.hidden !== hidden) element.hidden = hidden; };
-    const text = (element, value) => { if (element.textContent !== value) element.textContent = value; };
-    const flag = (element, name, on) => { if (element.classList.contains(name) !== on) element.classList.toggle(name, on); };
     for (const element of scope.querySelectorAll("[data-badge]")) {
       const key = element.dataset.badge;
       const value = badges[key];
       if (element.dataset.badgeMode === "dot") {
-        hide(element, !value || value === "free");
+        element.hidden = !value || value === "free";
         continue;
       }
       if (element.dataset.badgeMode === "tone") {
         // green while the service runs, amber when it wants attention, grey paused
-        hide(element, !value);
-        flag(element, "live", value === "ok" || value === "busy");
-        flag(element, "warn", value === "warn" || value === "offline");
-        const title = value ? `assistant · ${value}` : "";
-        if (element.title !== title) element.title = title;
+        element.hidden = !value;
+        element.classList.toggle("live", value === "ok" || value === "busy");
+        element.classList.toggle("warn", value === "warn" || value === "offline");
+        element.title = value ? `assistant · ${value}` : "";
         continue;
       }
       if (key === "machine") {
-        text(element, value === "exclusive" ? "excl" : value === "busy" ? "busy" : "");
-        flag(element, "warn", value === "busy");
-        flag(element, "bad", value === "exclusive");
-        hide(element, !(value === "busy" || value === "exclusive"));
+        element.textContent = value === "exclusive" ? "excl" : value === "busy" ? "busy" : "";
+        element.classList.toggle("warn", value === "busy");
+        element.classList.toggle("bad", value === "exclusive");
+        element.hidden = !(value === "busy" || value === "exclusive");
         continue;
       }
-      text(element, String(value ?? 0));
-      hide(element, !(Number(value) > 0));
+      element.textContent = String(value ?? 0);
+      element.hidden = !(Number(value) > 0);
     }
   }
 

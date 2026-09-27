@@ -216,10 +216,7 @@ test("planFirstRun: no CLI, or a 0.x CLI, blocks explorer and builder and says w
   assert.equal(missing.explorer.model, null);
   assert.equal(missing.builder.parallel, 0);
   assert.equal(missing.judge.kind, "fixed");
-  // OpenCode is offered as one option, never as the step everyone must take.
-  assert.match(missing.nextSteps[0], /^Optional: install OpenCode .*A subscription tool, an API key or a local model server works without it\./);
-  assert.match(missing.explorer.reason, /not installed; the AI you connect maps the folder/);
-  assert.match(missing.builder.reason, /not installed; builders run on the coding CLI you connect/);
+  assert.match(missing.nextSteps[0], /Install the OpenCode CLI/);
   const old = planFirstRun({ scan: scanWith({ cli: { installed: true, version: "0.9.2", major: 0 } }), keys: { gateway: true } });
   assert.equal(old.ok, false);
   assert.equal(old.opencode.supported, false);

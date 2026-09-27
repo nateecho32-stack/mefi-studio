@@ -716,20 +716,6 @@ test("verifyCompletion: evidence, not edits, decides completion", () => {
   assert.match(sessionless.reason, /grok runs leave no session the verifier can read/);
   assert.equal(verifyCompletion({ verdictOk: false, hasSession: false, sessionlessRoute: "grok" }).reason, "the run did not report success");
   assert.equal(verifyCompletion({ verdictOk: true, changedFiles: 2, hasSession: true, sessionlessRoute: "grok" }).state, "verified", "a session, when present, is judged as usual");
-  // The overseer's own verification run is Studio's evidence, not the
-  // worker's: it verifies a sessionless builder exactly as it does OpenCode.
-  const overseerGreen = [{ command: "npm test", status: "completed", exitCode: 0, passed: true, startedAt: 2000 }];
-  const overseerRed = [{ command: "npm test", status: "completed", exitCode: 1, passed: false, startedAt: 2000 }];
-  const provenByStudio = verifyCompletion({ verdictOk: true, changedFiles: 0, hasSession: false, overseerChecks: overseerGreen, sessionlessRoute: "codex" });
-  assert.equal(provenByStudio.state, "verified");
-  assert.match(provenByStudio.reason, /1 check\(s\) passed in the overseer's verification run/);
-  const redByStudio = verifyCompletion({ verdictOk: true, changedFiles: 0, hasSession: false, overseerChecks: overseerRed, sessionlessRoute: "codex" });
-  assert.equal(redByStudio.state, "unverified", "a failing overseer run retries like any failed check, not a park");
-  assert.match(redByStudio.reason, /recorded checks failed in the overseer's verification run/);
-  assert.equal(verifyCompletion({ verdictOk: true, hasSession: false, overseerChecks: overseerGreen, sessionlessRoute: "codex", resultNote: { parts: { remaining: "the settings page" } } }).state, "unverified", "green checks never discharge owed work");
-  assert.equal(verifyCompletion({ verdictOk: false, hasSession: false, overseerChecks: overseerGreen, sessionlessRoute: "codex" }).state, "unverified", "a run that did not report success is not verified by green checks");
-  assert.equal(verifyCompletion({ verdictOk: true, hasSession: false, observedChecks: overseerGreen, sessionlessRoute: "codex" }).state, "failed", "rows claimed as session checks without a session still prove nothing");
-  assert.match(sessionless.reason, /no Studio check ran for this attempt/);
   // Partial results never verify, whatever the edits say.
   assert.equal(verifyCompletion({ verdictOk: true, changedFiles: 4, hasSession: true, resultNote: { parts: { remaining: "catalog contract" } } }).state, "unverified");
   assert.equal(verifyCompletion({ verdictOk: true, changedFiles: 4, hasSession: true, remaining: ["handoff: follow-up"] }).state, "unverified");

@@ -18,7 +18,7 @@ const trackerSource = await readFile(new URL("../renderer/tracker.js", import.me
 const buildSource = await readFile(new URL("../scripts/build-booklet.mjs", import.meta.url), "utf8");
 const projectsSource = await readFile(new URL("../scripts/projects.cjs", import.meta.url), "utf8");
 // The builders' command lines live in the pure executor core (cliInvocation).
-const executorCore = createRequire(import.meta.url)("../scripts/executor-core.cjs");
+const executorCoreSource = await readFile(new URL("../scripts/executor-core.cjs", import.meta.url), "utf8");
 
 const code = mainSource.slice(mainSource.indexOf("const OPENCODE_USAGE_URL"), mainSource.indexOf("async function usageTrackerLimits()"));
 const accountCode = mainSource.slice(mainSource.indexOf("const ACCOUNT_READ_TIMEOUT_MS"), mainSource.indexOf("async function usageAccounts("));
@@ -276,9 +276,8 @@ test("every route that can report usage does: CLI JSON replies and Jev charges r
   assert.match(mainSource, /chargeJevCall\(result, "jev-connection-check", route\)/);
   assert.match(mainSource, /chargeJevCall\(result, "jev-model-routing", jevRoute\)/);
   // The builders keep their text protocol: their sentinel parsing reads plain stdout.
-  const builderLine = (cli) => executorCore.cliInvocation({ env: {} }, cli, "p").args[3];
-  assert.match(builderLine("claude"), /^"claude -p --output-format text --dangerously-skip-permissions/);
-  assert.match(builderLine("codex"), /^"codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check --color never/);
+  assert.match(executorCoreSource, /claude -p --output-format text --dangerously-skip-permissions/);
+  assert.match(executorCoreSource, /codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check --color never/);
 });
 
 test("both surfaces exist in the template and are driven by the tracker module", () => {

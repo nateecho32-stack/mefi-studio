@@ -52,7 +52,7 @@ test("cancelling a subscription map drops the late answer and its ideas", async 
   assert.equal(h.state.ideas.length, 0); assert.equal(h.state.mapFiles.length, 0);
 });
 
-function harness({ settings = {}, exec, projectOpen = true, ideas = [], analyze = async () => ({ inventory: { files: 3 } }), assistant = { ok: false }, smoke = false, autoSetup = null, admitIdeas = null, assistantMap = null, updateSettings = null } = {}) {
+function harness({ settings = {}, exec, projectOpen = true, ideas = [], analyze = async () => ({ inventory: { files: 3 } }), assistant = { ok: false }, smoke = false, autoSetup = null, admitIdeas = null, assistantMap = null } = {}) {
   const state = { settings: structuredClone(settings), writes: [], ideas: structuredClone(ideas), ideaWrites: [], mapFiles: [], sent: [], progress: [], logs: [], calls: [] };
   const scanOutputs = {
     "where opencode": "C:\\Users\\me\\AppData\\Roaming\\npm\\opencode\n", "opencode --version": "1.18.31\n", "opencode auth list": AUTH,
@@ -77,7 +77,6 @@ function harness({ settings = {}, exec, projectOpen = true, ideas = [], analyze 
     readIdeas: async () => structuredClone(state.ideas),
     writeIdeas: async (rows) => { state.ideas = structuredClone(rows); state.ideaWrites.push(rows.length); },
     ...(admitIdeas ? { admitIdeas } : {}),
-    ...(updateSettings ? { updateSettings: updateSettings(state) } : {}),
     writeMapFile: async (name, value) => state.mapFiles.push({ name, value }),
     send: (channel, payload) => state.sent.push({ channel, size: Array.isArray(payload) ? payload.length : null }),
     progress: (payload) => state.progress.push(payload),
@@ -159,9 +158,6 @@ test("map refuses to run without a project, a scan, an explorer, or while anothe
   const refused = await bare.service.map();
   assert.equal(refused.reason, "no-explorer");
   assert.match(refused.error, /Choose an existing subscription/);
-  // The guide's tool panel sits above the map's status, and keys count as much as tools.
-  assert.match(refused.error, /tool above .*API key or choose a local model server/);
-  assert.doesNotMatch(refused.error, /below/);
   const missing = harness({ settings: { firstRun: { explorer: { model: "opencode/x-free" }, providers: { paid: [] }, opencode: { installed: false } } } });
   assert.equal((await missing.service.map()).reason, "no-opencode");
   const smoke = harness({ smoke: true });
@@ -273,7 +269,6 @@ test("assist asks the linked assistant model, folds the map in, and falls back t
     projects: { current: () => ({ id: "project_1", name: "probe", path: "C:\\probe" }), open: () => true },
     analyzeProject: async () => ({ inventory: { files: 3, sourceFiles: 1, testFiles: 0, languages: [{ name: "JavaScript" }], checks: [] } }),
     readMapFile: async () => ({ map: MAP_REPLY }),
-    assistantRoute: async () => ({ ok: true }),
     assistantChat: async (system, user) => { chats.push({ system, user }); return { ok: true, text: `Sure: ${JSON.stringify(advice)}`, model: "deepseek-v4.1-flash" }; },
     exec, now: () => 7000,
   });
@@ -294,7 +289,6 @@ test("assist asks the linked assistant model, folds the map in, and falls back t
     scanner, mapper, judge, assistModule,
     readSettings: async () => structuredClone(state.settings), writeSettings: async () => {},
     projects: { current: () => ({ id: "project_1", name: "probe", path: "C:\\probe" }), open: () => true },
-    assistantRoute: async () => ({ ok: true }),
     assistantChat: async () => ({ ok: true, text: "I cannot help with that." }), exec,
   });
   const fallback = await broken.assist({ progress: {} });
@@ -332,70 +326,6 @@ test("assist uses the free explorer through opencode run when the judge is not t
   assert.ok(runs[0].args.includes("--dir"));
   assert.equal(runs[0].options.env.OPENCODE_CONFIG_CONTENT, '{"snapshot":false}');
   assert.match(runs[0].options.input, /setup assistant inside Mefi's Studio/);
-});
-
-test("assist asks a usable assistant route whatever the judge is, and skips an unusable one", async () => {
-  const assistModule = await import("../scripts/setup-assist.mjs");
-  const advice = { summary: "Map it next.", stops: { map: "Map probe." }, firstTask: null };
-  // An OpenRouter key makes Jev the judge, and it is also the assistant's own route.
-  const firstRun = { explorer: { model: null, reason: "OpenCode is not installed; the AI you connect maps the folder instead." }, builder: { model: null }, judge: { kind: "jev" }, providers: { paid: [], linked: [], freeCount: 0 }, opencode: { installed: false } };
-  const chats = [];
-  const build = (route, extra = {}) => createFirstRunService({
-    scanner, mapper, judge, assistModule,
-    readSettings: async () => ({ firstRun: extra.firstRun ?? firstRun }), writeSettings: async () => {},
-    projects: { current: () => ({ id: "project_1", name: "probe", path: "C:\\probe" }), open: () => true },
-    assistantRoute: async () => route,
-    assistantChat: async (system, user) => { chats.push({ system, user }); return { ok: true, text: JSON.stringify(advice), model: "openrouter/free" }; },
-    exec: extra.exec ?? (async () => { throw new Error("OpenCode must not run"); }),
-  });
-  const routed = await build({ ok: true, provider: "openrouter" }).assist();
-  assert.equal(routed.via, "assistant");
-  assert.equal(routed.model, "openrouter/free");
-  assert.equal(chats.length, 1);
-  // A judge of "assistant" whose route no longer works goes to the free explorer instead of a doomed call.
-  const runs = [];
-  const exec = async (command, args, options) => {
-    runs.push({ command, args, options });
-    return { code: 0, stdout: `${JSON.stringify({ type: "text", sessionID: "ses_b", part: { type: "text", text: JSON.stringify(advice) } })}\n`, stderr: "", timedOut: false, error: null };
-  };
-  const stale = await build({ ok: false }, { exec, firstRun: { ...firstRun, explorer: { model: "opencode/mimo-v2.5-free", free: true }, judge: { kind: "assistant" }, opencode: { installed: true } } }).assist();
-  assert.equal(stale.via, "opencode-free");
-  assert.equal(chats.length, 1, "no call to an unusable assistant route");
-  assert.equal(runs.length, 1);
-});
-
-test("apply reports each change once when the host runs the mutation for defaults and a project team", async () => {
-  // The host writes Studio defaults and then the open project's own team (main.cjs updateSetupSettings).
-  const updateSettings = (state) => async (mutate) => {
-    const defaults = structuredClone(state.settings), team = structuredClone(state.settings);
-    await mutate(defaults); await mutate(team);
-    state.settings = defaults; state.writes.push(structuredClone(defaults));
-    return defaults;
-  };
-  const { service, state } = harness({ settings: { executorModels: { grok: "grok-4" } }, updateSettings });
-  await service.scan();
-  const result = await service.apply({ prefs: { preferFree: true } });
-  assert.deepEqual(result.applied, ["firstRun", "executorCli", "executorModels.opencode"]);
-  assert.equal(state.settings.executorCli, "opencode");
-});
-
-test("without OpenCode, Use this setup reports auto setup's route, not the missing optional tool", async () => {
-  const summary = "Assistant on z.ai GLM, fixed model defaults, no builder CLI installed yet.";
-  const autoSetup = async (options = {}) => ({ ok: true, applied: options.apply !== false, planned: options.apply === false, summary, notes: [], changes: { provider: "zai" }, active: { provider: "zai" } });
-  const exec = async (command, args) => ({ code: 1, stdout: "", stderr: "not found", timedOut: false, error: `${command} ${args.join(" ")}` });
-  const service = createFirstRunService({
-    scanner, mapper, judge,
-    readSettings: async () => ({ zaiApiKeyEncrypted: "x" }), writeSettings: async () => {},
-    decryptKey: (settings, field) => (settings?.[field] ? "secret" : null),
-    projects: { current: () => ({ id: "project_1", name: "probe", path: "C:\\probe" }), open: () => true },
-    autoSetup, exec, platform: "win32",
-  });
-  const scan = await service.scan();
-  assert.equal(scan.plan.ok, false);
-  assert.match(scan.plan.nextSteps[0], /^Optional: install OpenCode/);
-  const result = await service.apply();
-  assert.equal(result.summary, summary);
-  assert.doesNotMatch(result.summary, /OpenCode/);
 });
 
 test("a paid explorer runs on OpenCode's default model and cancel kills the running child", async () => {
@@ -466,10 +396,8 @@ test("auto setup that throws or finds nothing never blocks the first-run apply",
 
 test("status mirrors the first-launch auto-setup record the host saved", async () => {
   const record = { at: 99, automatic: true, summary: "Assistant on z.ai GLM, fixed model defaults, builders on OpenCode.", notes: [] };
-  const { service } = harness({ settings: { autoSetup: record, aiProvider: "zai" } });
+  const { service } = harness({ settings: { autoSetup: record } });
   const status = await service.status();
   assert.deepEqual(status.autoSetup, record);
   assert.equal(status.firstRun, null);
-  assert.equal(status.aiProvider, "zai", "the guide tells a key route from a subscription tool");
-  assert.equal((await harness().service.status()).aiProvider, null);
 });

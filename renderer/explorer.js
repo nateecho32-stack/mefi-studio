@@ -204,7 +204,7 @@
 
   async function exploreCheckpoint(session, note) {
     if (!window.mefiStudio?.assistantRun) return;
-    status("exploring checkpoint on your AI route…");
+    status("exploring checkpoint on deepseek-v4.1-flash…");
     const result = await window.mefiStudio.assistantRun("explore", session.id, { note: note.note, at: note.at, files: note.files ?? [] });
     if (!result.ok) {
       status(result.error, true);
@@ -984,9 +984,7 @@
         growArea(els.input);
       }
       takeAssistant(result.state);
-      // The model that answered is whatever the host's route resolved to
-      // (recorded on the state it just sent), never a fixed OpenCode Go id.
-      status(result.reply?.via === "ai" ? (state.assistant?.ai?.model ? `replied on ${state.assistant.ai.model}` : "replied via your AI route") : "replied locally");
+      status(result.reply?.via === "ai" ? "replied on deepseek-v4.1-flash" : "replied locally");
     } catch (error) {
       status(`not sent · ${String(error?.message ?? error)}`, true);
     } finally {
@@ -1052,9 +1050,7 @@
     if (!state.briefing) {
       const hint = document.createElement("p");
       hint.className = "muted";
-      hint.textContent = state.assistant?.ai?.keyPresent === false
-        ? "No briefing yet. Connect an AI provider in Agents › Setup › Connections, then press Brief me."
-        : "No briefing yet. Press Brief me.";
+      hint.textContent = "No briefing yet. Save an OpenCode Go key in Studio, then press Brief me.";
       els.brief.append(hint);
     } else {
       const summary = document.createElement("div");
@@ -1324,7 +1320,7 @@
     showPanel("assistant");
     showTools(true, true);
     const target = typeof sessionId === "string" && sessionId ? sessionId : state.selected;
-    status(`${mode} running on your AI route…`);
+    status(`${mode} running on deepseek-v4.1-flash…`);
     els.briefRun.disabled = true;
     els.growRun.disabled = true;
     try {

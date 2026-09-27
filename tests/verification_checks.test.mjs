@@ -220,9 +220,6 @@ test("the verdict reason names who ran the counted check", () => {
   assert.equal(blamed.state, "unverified");
   assert.equal(blamed.reason, "recorded checks failed in the overseer's verification run");
   assert.equal(verifyCompletion({ verdictOk: true, overseerChecks: [check("npm run check")] }).state, "unverified", "an overseer run needs an attributed session, like the worker's own checks");
-  // Except for a builder that can never have one: there Studio's run is all
-  // the evidence there can be.
-  assert.equal(verifyCompletion({ verdictOk: true, overseerChecks: [check("npm run check")], sessionlessRoute: "claude" }).reason, "1 check(s) passed in the overseer's verification run");
 });
 
 test("missing and truncated command metadata never fabricates a passing check", () => {

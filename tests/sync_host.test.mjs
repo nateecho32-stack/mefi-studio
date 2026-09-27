@@ -3,14 +3,11 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 
-// main.cjs's "Multi-PC sync" block in a vm, against a fake scripts/sync.mjs,
-// fake dialogs and a hand-turned clock: a look never pulls or pushes and runs
-// no check; a sync runs the project's check and may rebase; one sync runs at a
-// time and a look shares a same-folder answer; every answer goes out as
-// sync:event; the background look starts once and skips a project switch; and
-// the question before closing asks only when work is on this PC alone, pushes
-// only on request, and never holds a quit it cannot judge in time. Then the
-// bridge, the project gate and the three places a quit starts.
+// main.cjs's "Multi-PC sync" block in a vm, against a fake scripts/sync.mjs:
+// a look never pulls or pushes, one sync runs at a time, a look during a sync
+// of the same folder shares its answer, and a failure to load comes back as an
+// answer instead of a rejection. Then the bridge: preload.cjs's syncStatus and
+// syncRun reach their handlers, and the project gate holds both.
 
 const main = (await readFile(new URL("../main.cjs", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const preload = (await readFile(new URL("../preload.cjs", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
@@ -18,84 +15,46 @@ const from = main.indexOf("// ---- Multi-PC sync: Friends › Your PCs");
 const to = main.indexOf("// ---- end of multi-PC sync", from);
 assert.ok(from > 0 && to > from, "main.cjs has a Multi-PC sync block");
 const block = main.slice(from, to);
-const flush = async () => { for (let i = 0; i < 30; i += 1) await Promise.resolve(); };
-const CHECK = () => ({ ok: true });
+const flush = async () => { for (let i = 0; i < 20; i += 1) await Promise.resolve(); };
 
-function host({ fail = null, state = null, risk = [], answers = [], flags = {}, background = false, lookNever = false } = {}) {
-  const calls = [], sent = [], dialogs = [], timers = [], quits = [];
+function host({ fail = null } = {}) {
+  const calls = [];
+  const gates = [];
   let root = "C:/projects/one";
-  const app = { isQuitting: false, quit: () => quits.push(app.isQuitting) };
-  const window = { isDestroyed: () => false, isVisible: () => true };
   const context = vm.createContext({
-    Promise, Number, Boolean, String, Array, JSON,
-    SMOKE: false, CAPTURE: false, CLI_MODE: false, ...flags,
-    projectSwitching: false,
+    Promise,
     projectRoot: () => root,
-    send: (channel, payload) => sent.push([channel, payload]),
-    app, window,
-    tray: background ? {} : null,
-    assistantState: { prefs: { background } },
-    setTimeout: (fn, ms) => { const timer = { fn, ms, unref() {} }; timers.push(timer); return timer; },
-    setInterval: (fn, ms) => { const timer = { fn, ms, every: true, unref() {} }; timers.push(timer); return timer; },
-    clearTimeout: () => {}, clearInterval: () => {},
-    dialog: { showMessageBox: async (...args) => { const box = args.at(-1); dialogs.push({ box, parent: args.length > 1 ? args[0] : null }); return { response: answers.shift() ?? box.cancelId }; } },
     loadModule: async (rel) => {
       assert.equal(rel, "scripts/sync.mjs");
       if (fail) throw new Error(fail);
       return {
-        projectCheck: async (folder) => (folder ? CHECK : null),
-        inspect: (folder) => (lookNever ? new Promise(() => {}) : Promise.resolve(state ?? { repo: true, remote: true, branch: "main", main: "main", ahead: 0, behind: 0, folder })),
-        pending: () => risk,
-        atRisk: (items) => items,
         sync: (folder, options) => new Promise((resolve) => {
-          const call = { folder, options: { ...options }, resolve: (extra = {}) => resolve({ ok: true, headline: `synced ${folder}`, folder, lines: [`synced ${folder}`], actions: [], problems: [], ...extra }) };
+          const call = { folder, options: { ...options }, resolve: (extra = {}) => resolve({ ok: true, headline: `synced ${folder}`, folder, options: call.options, ...extra }) };
           calls.push(call);
+          gates.push(call);
         }),
       };
     },
   });
-  vm.runInContext(`${block}\nthis.api = { syncProject, startSyncWatch, stopSyncWatch, requestQuit, syncWindowClose, state: () => syncQuit };`, context);
-  return { api: context.api, context, app, calls, sent, dialogs, timers, quits, setRoot: (value) => { root = value; } };
+  vm.runInContext(`${block}\nthis.api = { syncProject };`, context);
+  return { api: context.api, calls, setRoot: (value) => { root = value; } };
 }
 
-test("a look fetches only and runs no check; Sync this PC runs the project's check and may rebase", async () => {
+test("a look fetches only; Sync this PC pulls and pushes", async () => {
   const h = host();
   const look = h.api.syncProject(false);
   await flush();
-  assert.deepEqual(h.calls[0].options, { pull: false, push: false, rebase: false, check: null });
+  assert.deepEqual(h.calls[0].options, { pull: false, push: false });
   h.calls[0].resolve();
-  await look;
-  const run = h.api.syncProject(true, { rebase: true });
+  assert.equal((await look).headline, "synced C:/projects/one");
+  const run = h.api.syncProject(true);
   await flush();
-  assert.deepEqual({ ...h.calls[1].options, check: typeof h.calls[1].options.check }, { pull: true, push: true, rebase: true, check: "function" });
-  assert.equal(h.calls[1].options.check, CHECK, "the project's own check guards the push");
+  assert.deepEqual(h.calls[1].options, { pull: true, push: true });
   h.calls[1].resolve();
   await run;
-  const odd = h.api.syncProject(false, { rebase: true });
-  await flush();
-  assert.equal(h.calls[2].options.rebase, false, "a look never rebases");
-  h.calls[2].resolve();
-  await odd;
 });
 
-test("every answer goes out as sync:event, including one that failed to load", async () => {
-  const h = host();
-  const look = h.api.syncProject(false);
-  await flush();
-  h.calls[0].resolve({ risk: 2 });
-  const answer = await look;
-  assert.deepEqual(h.sent.map(([channel]) => channel), ["sync:event"]);
-  assert.equal(h.sent[0][1], answer);
-  const broken = host({ fail: "missing module" });
-  const result = await broken.api.syncProject(true);
-  assert.equal(result.ok, false);
-  assert.equal(result.headline, "Sync could not run: missing module");
-  assert.equal(result.lines.length, 0);
-  assert.equal(broken.sent[0][1], result);
-  assert.equal((await broken.api.syncProject(false)).ok, false, "a later call runs again");
-});
-
-test("one sync at a time: a same-folder look shares the answer, other calls wait their turn", async () => {
+test("a look during a sync of the same folder shares its answer", async () => {
   const h = host();
   const run = h.api.syncProject(true);
   await flush();
@@ -105,161 +64,57 @@ test("one sync at a time: a same-folder look shares the answer, other calls wait
   h.calls[0].resolve({ actions: [{ kind: "pushed", commits: 2 }] });
   const [ran, looked] = await Promise.all([run, look]);
   assert.equal(looked, ran);
-  const first = h.api.syncProject(false);
+});
+
+test("a sync asked for during another waits its turn, and another folder never shares an answer", async () => {
+  const h = host();
+  const look = h.api.syncProject(false);
   await flush();
-  const second = h.api.syncProject(true);
+  const run = h.api.syncProject(true);
   await flush();
-  assert.equal(h.calls.length, 2, "the run waits for the look");
-  h.calls[1].resolve();
-  await first;
+  assert.equal(h.calls.length, 1, "the run waits for the look");
+  h.calls[0].resolve();
+  await look;
   await flush();
-  assert.equal(h.calls.length, 3);
+  assert.equal(h.calls.length, 2);
+  assert.deepEqual(h.calls[1].options, { pull: true, push: true });
   h.setRoot("C:/projects/two");
   const other = h.api.syncProject(false);
   await flush();
-  h.calls[2].resolve();
-  await second;
+  assert.equal(h.calls.length, 2, "still waiting on the run");
+  h.calls[1].resolve();
+  await run;
   await flush();
-  assert.equal(h.calls[3].folder, "C:/projects/two", "another folder never shares an answer");
-  h.calls[3].resolve();
+  assert.equal(h.calls[2].folder, "C:/projects/two");
+  h.calls[2].resolve();
   assert.equal((await other).folder, "C:/projects/two");
 });
 
-test("the background look starts once, looks without pushing, and skips a project switch", async () => {
-  const quiet = host({ flags: { SMOKE: true } });
-  quiet.api.startSyncWatch();
-  assert.equal(quiet.timers.length, 0, "smoke, capture and CLI runs never watch");
-  const h = host();
-  h.api.startSyncWatch();
-  h.api.startSyncWatch();
-  assert.deepEqual(h.timers.map((timer) => [timer.ms, Boolean(timer.every)]), [[45000, false], [900000, true]]);
-  h.timers[0].fn();
-  await flush();
-  assert.deepEqual(h.calls[0].options, { pull: false, push: false, rebase: false, check: null });
-  h.calls[0].resolve();
-  await flush();
-  h.context.projectSwitching = true;
-  h.timers[1].fn();
-  await flush();
-  assert.equal(h.calls.length, 1, "no look lands in the middle of a switch");
+test("a sync module that cannot load answers instead of rejecting, and frees the next call", async () => {
+  const h = host({ fail: "missing module" });
+  const result = await h.api.syncProject(true);
+  assert.equal(result.ok, false);
+  assert.equal(result.headline, "Sync could not run: missing module");
+  assert.equal(result.lines.length, 0);
+  assert.equal((await h.api.syncProject(false)).ok, false, "a later call runs again");
 });
 
-const unpushed = { repo: true, remote: true, branch: "main", main: "main", ahead: 2, behind: 0 };
-const RISK = [{ kind: "unpushed", text: "2 commits on main not pushed yet." }, { kind: "uncommitted", text: "3 uncommitted files in this checkout." }];
-
-test("nothing only on this PC: Studio closes at once without asking", async () => {
-  const h = host();
-  h.api.requestQuit();
-  await flush();
-  assert.equal(h.dialogs.length, 0);
-  assert.deepEqual(h.quits, [true]);
-});
-
-test("Keep Studio open cancels the quit; Close anyway quits; the question lists the work", async () => {
-  const kept = host({ state: unpushed, risk: RISK, answers: [2] });
-  kept.api.requestQuit();
-  await flush();
-  assert.equal(kept.dialogs.length, 1);
-  const box = kept.dialogs[0].box;
-  assert.equal(box.message, "Some work in this project is only on this PC.");
-  assert.deepEqual([...box.buttons], ["Push and close", "Close anyway", "Keep Studio open"]);
-  assert.match(box.detail, /• 2 commits on main not pushed yet\.\n• 3 uncommitted files/);
-  assert.equal(box.cancelId, 2, "Escape keeps Studio open");
-  assert.ok(kept.dialogs[0].parent, "asked over the visible window");
-  assert.deepEqual(kept.quits, []);
-  assert.equal(kept.api.state(), "idle", "a later quit asks again");
-  assert.equal(kept.app.isQuitting, false);
-  const closed = host({ state: unpushed, risk: RISK, answers: [1] });
-  closed.api.requestQuit();
-  await flush();
-  assert.deepEqual(closed.quits, [true]);
-  closed.api.requestQuit();
-  await flush();
-  assert.equal(closed.dialogs.length, 1, "a decided quit is never asked twice");
-});
-
-test("Push and close runs the checked sync, and a push that fails asks again", async () => {
-  const h = host({ state: unpushed, risk: RISK, answers: [0] });
-  h.api.requestQuit();
-  await flush();
-  assert.equal(h.calls.length, 1);
-  assert.equal(h.calls[0].options.push, true);
-  assert.equal(h.calls[0].options.check, CHECK);
-  h.calls[0].resolve({ actions: [{ kind: "pushed", commits: 2 }] });
-  await flush();
-  assert.deepEqual(h.quits, [true]);
-  const refused = host({ state: unpushed, risk: RISK, answers: [0, 1] });
-  refused.api.requestQuit();
-  await flush();
-  refused.calls[0].resolve({ ok: false, headline: "The project's check failed, so nothing was pushed. Fix it, then sync again.", lines: ["x", "npm run check: 2 tests failed"], problems: [{ kind: "check-failed" }] });
-  await flush();
-  assert.equal(refused.dialogs.length, 2);
-  assert.equal(refused.dialogs[1].box.message, "The push did not go through.");
-  assert.match(refused.dialogs[1].box.detail, /check failed[\s\S]*2 tests failed/);
-  assert.deepEqual([...refused.dialogs[1].box.buttons], ["Close anyway", "Keep Studio open"]);
-  assert.deepEqual(refused.quits, [], "Keep Studio open after a failed push");
-});
-
-test("uncommitted work alone offers no push, and a look that runs late never holds the quit", async () => {
-  const dirty = host({ state: { ...unpushed, ahead: 0 }, risk: [RISK[1]], answers: [0] });
-  dirty.api.requestQuit();
-  await flush();
-  assert.deepEqual([...dirty.dialogs[0].box.buttons], ["Close anyway", "Keep Studio open"]);
-  assert.match(dirty.dialogs[0].box.detail, /Commit it and sync from Friends › Your PCs/);
-  assert.deepEqual(dirty.quits, [true]);
-  const slow = host({ state: unpushed, risk: RISK, lookNever: true });
-  slow.api.requestQuit();
-  await flush();
-  const limit = slow.timers.find((timer) => timer.ms === 3000);
-  assert.ok(limit, "the look has a 3 s limit");
-  limit.fn();
-  await flush();
-  assert.equal(slow.dialogs.length, 0);
-  assert.deepEqual(slow.quits, [true]);
-});
-
-test("closing the window is a quit unless Studio lives in the tray, and a quit already under way passes", async () => {
-  let prevented = 0;
-  const event = { preventDefault: () => { prevented += 1; } };
-  const tray = host({ background: true, state: unpushed, risk: RISK });
-  tray.api.syncWindowClose(event);
-  assert.equal(prevented, 0, "parking in the tray is not a quit");
-  const quitting = host({ state: unpushed, risk: RISK });
-  quitting.app.isQuitting = true;
-  quitting.api.syncWindowClose(event);
-  assert.equal(prevented, 0, "File › Quit and the tray already asked");
-  const h = host({ state: unpushed, risk: RISK, answers: [2] });
-  h.api.syncWindowClose(event);
-  await flush();
-  assert.equal(prevented, 1);
-  assert.equal(h.dialogs.length, 1);
-  assert.deepEqual(h.quits, []);
-});
-
-test("the bridge, the project gate and the three places a quit starts", async () => {
-  const invoked = [], listened = [];
+test("the bridge reaches both handlers with no payload, and the project gate holds them", async () => {
+  const invoked = [];
   const page = {
     require: () => ({
       contextBridge: { executeInMainWorld: ({ func, args }) => func(...args) },
-      ipcRenderer: { invoke: async (channel, ...args) => { invoked.push([channel, args]); return { ok: true }; }, on: (channel) => listened.push(channel) },
+      ipcRenderer: { invoke: async (channel, ...args) => { invoked.push([channel, args]); return { ok: true }; }, on: () => {} },
     }),
   };
   vm.runInNewContext(preload, page);
   await page.mefiStudio.syncStatus({ root: "C:/elsewhere" });
   await page.mefiStudio.syncRun("C:/elsewhere");
-  await page.mefiStudio.syncRun({ rebase: true, root: "C:/elsewhere" });
-  page.mefiStudio.onSyncEvent(() => {});
-  assert.deepEqual(JSON.parse(JSON.stringify(invoked)), [["sync:status", []], ["sync:run", [{ rebase: false }]], ["sync:run", [{ rebase: true }]]], "the renderer cannot choose the folder");
-  assert.ok(listened.includes("sync:event"));
+  assert.deepEqual(JSON.parse(JSON.stringify(invoked)), [["sync:status", []], ["sync:run", []]], "the renderer cannot choose the folder");
   assert.match(main, /ipcMain\.handle\("sync:status", async \(\) => syncProject\(false\)\);/);
-  assert.match(main, /ipcMain\.handle\("sync:run", async \(_event, payload\) => syncProject\(true, \{ rebase: payload\?\.rebase === true \}\)\);/);
+  assert.match(main, /ipcMain\.handle\("sync:run", async \(\) => syncProject\(true\)\);/);
   const prefixes = main.match(/const APP_WIDE_PREFIXES = \[([^\]]*)\]/)[1];
   const channels = main.match(/const APP_WIDE_CHANNELS = new Set\(\[([^\]]*)\]\)/)[1];
   assert.doesNotMatch(prefixes, /"sync:"/, "sync:* waits for a project switch");
   assert.doesNotMatch(channels, /"sync:/);
-  assert.match(main, /label: "Quit", accelerator: "CmdOrCtrl\+Q", click: \(\) => requestQuit\(\)/, "File › Quit asks first");
-  assert.match(main, /label: "Quit",\n\s+click: \(\) => requestQuit\(\),/, "the tray's Quit asks first");
-  assert.match(main, /window\.on\("close", \(event\) => syncWindowClose\(event\)\);/, "closing the window asks first");
-  assert.match(main, /if \(!SMOKE && !CAPTURE && !CLI_MODE\) startSyncWatch\(\);/);
-  assert.equal((main.match(/app\.isQuitting = true;\s*app\.quit\(\)/g) ?? []).length, 2, "only requestQuit sets up a quit by hand");
 });

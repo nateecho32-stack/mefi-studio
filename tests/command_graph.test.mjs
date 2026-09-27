@@ -1811,55 +1811,6 @@ test("the overview turns the tree about its own centre, at one steady frame, wit
   }
 });
 
-test("Free keeps the user's pan but leashes a tree thrown out of frame back into view", () => {
-  for (const view of ["3d", "2d"]) {
-    const { env, state, nodes, area } = overviewFixture("constellation");
-    state.view = view;
-    const run = (mode) => {
-      const points = nodes.map((node) => ({ node, p: env.project(node) }));
-      env.layoutProjectedGraph(points, area, mode, 1000, true);
-      return points;
-    };
-    run("orbit");
-    for (const axis of ["x", "y", "z"]) state.camera[`t${axis}`] ??= state.camera[axis]; // the app seeds its targets
-    // Let the overview's camera land, then hand it to the user.
-    Object.assign(state.camera, { x: state.camera.tx, y: state.camera.ty, z: state.camera.tz });
-    run("orbit");
-    const home = { ...state.camera };
-    const extent = (points) => {
-      const xs = points.map(({ p }) => p.x), ys = points.map(({ p }) => p.y);
-      return { left: Math.min(...xs), right: Math.max(...xs), top: Math.min(...ys), bottom: Math.max(...ys) };
-    };
-    // A modest pan that leaves most of the tree on screen is the user's to keep.
-    const nudge = { tx: home.tx + 40, x: home.x + 40 };
-    Object.assign(state.camera, nudge);
-    run("free");
-    assert.equal(state.camera.tx, nudge.tx, `${view}: a small pan is not pulled back`);
-    // Thrown far off: while the hand is still down nothing pulls.
-    const away = view === "2d" ? { tx: home.tx - 10000, x: home.x - 10000, tz: home.tz + 6000, z: home.z + 6000 } : { tx: home.tx - 10000, x: home.x - 10000, ty: home.ty + 6000, y: home.y + 6000 };
-    Object.assign(state.camera, away);
-    state.panning = { moved: true };
-    run("free");
-    assert.equal(state.camera.tx, away.tx, `${view}: the leash waits for the hand to let go`);
-    state.panning = null;
-    run("free");
-    const target = { ...state.camera };
-    assert.notEqual(target.tx, away.tx, `${view}: letting go aims the camera back`);
-    run("free");
-    assert.deepEqual({ ...state.camera }, target, `${view}: a correction in flight is not added again`);
-    // Land the glide and check the tree fills its share of the view again.
-    for (let step = 0; step < 6; step += 1) {
-      Object.assign(state.camera, { x: state.camera.tx, y: state.camera.ty, z: state.camera.tz });
-      run("free");
-    }
-    const box = extent(run("free"));
-    const overlapX = Math.min(box.right, area.x + area.w - 28) - Math.max(box.left, area.x + 28);
-    const overlapY = Math.min(box.bottom, area.y + area.h - 28) - Math.max(box.top, area.y + 28);
-    assert.ok(overlapX >= Math.min(box.right - box.left, (area.w - 56) * 0.35) - 2, `${view}: the tree is back across the view (${overlapX})`);
-    assert.ok(overlapY >= Math.min(box.bottom - box.top, (area.h - 56) * 0.35) - 2, `${view}: the tree is back down the view (${overlapY})`);
-  }
-});
-
 test("the tree's centre is the smallest circle around it from above, halfway up its height", () => {
   const { env } = overviewFixture("constellation");
   const circle = env.enclosingCircle([{ x: -3, z: 0 }, { x: 3, z: 0 }, { x: 0, z: 1 }]);

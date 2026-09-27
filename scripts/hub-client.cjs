@@ -12,12 +12,6 @@
 //     subscriber as a `listen` frame.
 //   - Now playing: with the member's say-so, `nowPlaying` tells the hub what
 //     Studio is playing, so the bot's /nowplaying can show it on Discord.
-//   - Companions: when the hub's `ready` frame lists the "companion" feature,
-//     `companion` frames carry a companion's card to a room (and, with
-//     "companion.direct", to one member of it), so friends' companions can
-//     meet and play. The hub only relays them. A hub without the feature is
-//     never sent one. What a card may hold is main's "Companion friends" block
-//     and scripts/companion-friends.cjs; this file passes cards on unread.
 //
 // Like scripts/discord-oauth.cjs this is a network module, and everything it
 // reaches for is injected: fetch, the WebSocket class, the clock and the
@@ -153,8 +147,6 @@ function createHubClient(options = {}) {
   let nonceSeq = 0;
   let nowPlaying = null;
   let opening = null;
-  // What the hub said it carries in its last `ready` frame.
-  let features = [];
   const rooms = new Set();
   const pending = new Map(); // nonce -> { resolve, timer }
 
@@ -164,7 +156,6 @@ function createHubClient(options = {}) {
       configured: Boolean(address), state, error,
       user: session?.user ?? null, readOnly: Boolean(session?.readOnly), paused,
       rooms: [...rooms],
-      companions: features.includes("companion"), companionDirect: features.includes("companion") && features.includes("companion.direct"),
     };
   }
   function setState(next, nextError = null) {
@@ -313,7 +304,6 @@ function createHubClient(options = {}) {
         if (who && session) session.user = who;
         if (session) session.readOnly = frame.readOnly === true;
         paused = frame.paused === true;
-        features = Array.isArray(frame.features) ? frame.features.filter((name) => typeof name === "string" && name.length <= 40).slice(0, 32) : [];
         setState("ready");
         emit({ type: "status", status: status() });
         for (const roomId of rooms) { send({ type: "subscribe", roomId }); send({ type: "presence", roomId }); }
@@ -341,12 +331,6 @@ function createHubClient(options = {}) {
       }
       case "membership":
         if (OPAQUE_ID.test(String(frame.roomId)) && ["joined", "left", "removed", "closed"].includes(frame.state)) emit({ type: "membership", roomId: frame.roomId, userId: String(frame.userId ?? ""), state: frame.state });
-        return;
-      // A friend's companion card (null when it went home). The card is passed
-      // on as received; main reads it through companion-friends.readCard.
-      // `direct` marks a card sent to this member alone (the hub keeps `to`).
-      case "companion":
-        if (OPAQUE_ID.test(String(frame.roomId)) && SNOWFLAKE.test(String(frame.from))) emit({ type: "companion", roomId: frame.roomId, from: String(frame.from), card: object(frame.card) ? frame.card : null, direct: frame.to != null, receivedAt: now() });
         return;
       case "hubState":
         paused = frame.paused === true;
@@ -404,7 +388,6 @@ function createHubClient(options = {}) {
       session = null;
       rooms.clear();
       nowPlaying = null;
-      features = [];
       setState("off");
       if (token) await request("DELETE", "/v1/session", undefined, token);
       return status();
@@ -449,16 +432,6 @@ function createHubClient(options = {}) {
         frame.positionMs = Math.max(0, Math.min(MAX_POSITION_MS, position));
       } else if (fields.action === "seek") return Promise.resolve({ ok: false, reason: "bad-request" });
       return withAck(frame);
-    },
-    // A companion card for a subscribed room, or null to say it went home.
-    // Only to a hub that carries companions; `to` (one member) only to a hub
-    // that delivers to one member, so a card meant for one friend can never
-    // reach the whole room. False when it was not sent.
-    sendCompanion(roomId, card, to = null) {
-      if (state !== "ready" || !features.includes("companion") || !rooms.has(roomId)) return false;
-      if (card !== null && !object(card)) return false;
-      if (to != null && (!SNOWFLAKE.test(String(to)) || !features.includes("companion.direct"))) return false;
-      return send({ type: "companion", roomId, card, ...(to != null ? { to: String(to) } : {}) });
     },
     // The track /nowplaying may show, or null to stop sharing. Kept and
     // re-sent after a reconnect; only a change goes out.

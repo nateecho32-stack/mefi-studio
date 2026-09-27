@@ -11,7 +11,6 @@
     "node": ">=24"
   },
   "scripts": {
-    "postinstall": "node scripts/fetch-electron.mjs",
     "start": "electron .",
     "start:web": "node scripts/serve.mjs",
     "serve": "node scripts/serve.mjs",

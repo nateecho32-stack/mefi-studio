@@ -5,7 +5,6 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const os = require("node:os");
 const crypto = require("node:crypto");
-const habits = require("./habits.cjs");
 const ROLES = ["routine", "heavy", "companion", "scout", "overseer", "lead", "desk", "builder"];
 async function inventory(root, { home = os.homedir() } = {}) {
   const rows = [];
@@ -29,11 +28,7 @@ async function inventory(root, { home = os.homedir() } = {}) {
 async function catalog(root, options) {
   return (await inventory(root, options)).map(({ file, ...row }) => row);
 }
-// The role's chosen skills, then its habits (scripts/habits.cjs).
 async function instructions(root, settings, role, options) {
-  return `${await skillInstructions(root, settings, role, options)}${habits.instructions(settings?.agentHabits?.[role])}`;
-}
-async function skillInstructions(root, settings, role, options) {
   const selected = settings?.agentSkills?.[role];
   if (!Array.isArray(selected) || !selected.length) return "";
   const rows = await inventory(root, options), parts = [];

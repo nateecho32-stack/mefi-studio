@@ -158,16 +158,6 @@ test("every runner rejection settles its own attempt as a loss, retry budget lef
     assert.equal(map(receiptOf({ state: "verified", reason: "bare", evidence: {} }, { sessionId: "s" })), "unverified", "a verified verdict with no runner-observed evidence");
     assert.equal(map(receiptOf({ state: "verified", reason: "edits", evidence: {} }, { sessionId: "s", changedFiles: 1, remaining: ["write the docs"] })), "unverified", "edits with obligations still owed are not trusted");
     assert.equal(map(receiptOf({ state: "failed", reason: "parked", evidence: {} }, { sessionId: "s" })), "failed");
-    // A sessionless builder with no overseer run was never judged: its park
-    // is neither a win nor a loss. The overseer's green run is a real win.
-    const parked = assistantModule.verifyCompletion({ verdictOk: true, changedFiles: 0, hasSession: false, sessionlessRoute: "codex" });
-    assert.equal(map(receiptOf(parked)), null);
-    const green = [{ command: "npm test", startedAt: 1_700_000_000_100, status: "completed", exitCode: 0, passed: true }];
-    const provenByStudio = assistantModule.verifyCompletion({ verdictOk: true, changedFiles: 0, hasSession: false, overseerChecks: green, sessionlessRoute: "codex" });
-    assert.equal(receiptOf(provenByStudio).evidence.kind, "runner-observed-checks");
-    assert.equal(map(receiptOf(provenByStudio)), "verified", "Studio's own checks are runner-observed without a session");
-    const redByStudio = assistantModule.verifyCompletion({ verdictOk: true, changedFiles: 0, hasSession: false, overseerChecks: [{ ...green[0], exitCode: 1, passed: false }], sessionlessRoute: "codex" });
-    assert.equal(map(receiptOf(redByStudio)), "failed", "a failing overseer run is still the model's loss");
     assert.equal(map(receiptOf({ state: "verified", reason: "edits", evidence: {} }, { sessionId: "s", changedFiles: 1 }), null), "verified", "without the module the receipt's own trust decides");
     assert.equal(map(null), null);
   } finally {
@@ -223,31 +213,6 @@ test("the verification pass loses a rejected attempt and takes back a win its ov
     assert.equal(await outcomeOf("run_1"), "failed", "the runner took the win back");
     const flash = (await host.store.snapshot()).models.find((row) => row.provider === "zai" && row.model === "glm-5.3-flash");
     assert.deepEqual([flash.wins, flash.losses, flash.unsettled], [0, 2, 0]);
-  } finally {
-    await host.cleanup();
-  }
-});
-
-// Claude, Codex, Grok and Antigravity builds write no OpenCode session. The
-// overseer's own check run is what proves them: green closes the card and
-// wins, and with no run at all the card parks without a ledger verdict.
-test("the verification pass closes a sessionless build on the overseer's green run and parks one with none", async () => {
-  const host = await ledger();
-  try {
-    for (const id of ["run_1", "run_2"]) host.env.recordWorkerAttempt({ id, startedAt: 1, workKind: "coding-implement" }, { cli: "codex", model: "gpt-6-luna" }, { ok: true, durationMs: 1000 });
-    const pass = housekeepingHost(host, [
-      { id: "checked", title: "Codex build with a green overseer run", status: "awaiting_verification", lastAttempt: { runId: "run_1", route: "codex", startedAt: 1, at: 2, code: 0, sawDone: true },
-        verificationRun: { key: "overseer:run_1", state: "passed", at: 3, results: [{ command: "npm test", ok: true, exitCode: 0 }] } },
-      { id: "unchecked", title: "Codex build nobody checked", status: "awaiting_verification", lastAttempt: { runId: "run_2", route: "codex", startedAt: 1, at: 2, code: 0, sawDone: true } },
-    ]);
-    const outcomeOf = async (id) => (await host.store.read()).observations.find((row) => row.id === id)?.outcome;
-    await host.env.autopilotHousekeeping();
-    assert.equal(pass.task("checked").status, "done");
-    assert.match(pass.task("checked").verification.reason, /passed in the overseer's verification run/);
-    assert.equal(await outcomeOf("run_1"), "verified");
-    assert.equal(pass.task("unchecked").verification.state, "failed");
-    assert.match(pass.task("unchecked").verification.reason, /codex runs leave no session the verifier can read, and no Studio check ran/);
-    assert.equal(await outcomeOf("run_2"), undefined, "an unjudged park is neither a win nor a loss");
   } finally {
     await host.cleanup();
   }

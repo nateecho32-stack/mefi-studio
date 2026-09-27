@@ -4,14 +4,8 @@
   const { fmt, privacyLabel } = window.MefiGraph;
   // Tell the Start here walkthrough that a provider connection was saved. Only
   // a successful save announces; a failed or cancelled save must not advance it.
-  // A save is not always a connection: clearing a key, or a key that only
-  // feeds Jev, announces too, so the detail says what the host found after
-  // the save - `routeOk` true when an assistant route can answer now (false
-  // when none can, null when the host did not say) - and `cleared` when the
-  // save removed a key.
-  const noteConnectionSaved = (which, result = null, cleared = false) => {
-    const routeOk = typeof result?.routeOk === "boolean" ? result.routeOk : null;
-    try { if (typeof CustomEvent === "function" && typeof window.dispatchEvent === "function") window.dispatchEvent(new CustomEvent("mefi:connection-saved", { detail: { provider: which || null, routeOk, cleared: cleared === true } })); } catch {}
+  const noteConnectionSaved = (which) => {
+    try { if (typeof CustomEvent === "function" && typeof window.dispatchEvent === "function") window.dispatchEvent(new CustomEvent("mefi:connection-saved", { detail: { provider: which || null } })); } catch {}
   };
 
   // Global toasts: quiet confirmations that do not need a panel status line.
@@ -476,9 +470,7 @@
   let settingsSearchRegistered = new Set();
   let settingsControlSerial = 0;
   const settingsQuery = () => String(document.getElementById("settings-find")?.value ?? "").trim().toLowerCase();
-  // A card the host hid (Server Styler with no checkout on this machine) has
-  // nothing to find or jump to, in Settings or in Search.
-  const settingsAvailable = (node) => Boolean(node) && !node.closest?.(".settings-card[hidden]") && (Boolean(window.mefiStudio?.launchStudio) || !node.closest?.("#studio-desktop, [data-desktop-only]"));
+  const settingsAvailable = (node) => Boolean(node) && (Boolean(window.mefiStudio?.launchStudio) || !node.closest?.("#studio-desktop, [data-desktop-only]"));
   const coachShowing = () => { const coach = document.getElementById("walkthrough-coach"); return Boolean(coach && !coach.hidden); };
   function settingsTarget(section) {
     const raw = String(section ?? "").trim();
@@ -704,7 +696,6 @@
         short: item.label, kind: "action", layer: null, section: "settings", group: "system", key: null,
         glyph: "g-sliders", badge: null, desc: SETTINGS_CATEGORIES[item.category], searchTerms: item.terms,
         showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
-        hidden: () => !settingsAvailable(document.getElementById(item.id)),
         run: () => window.MefiNav?.go?.("studio", { section: item.id }),
       }); } catch { /* Search remains usable if a host declines a registration. */ }
     }
@@ -785,13 +776,7 @@
 
     const stylerActions = document.getElementById("server-styler-actions");
     const stylerStatus = document.getElementById("server-styler-status");
-    // Server Styler is a separate project most people never check out. Without
-    // one the card could only say where it is missing, beside a Start button
-    // that cannot work, so it stays out of Settings until the host finds it
-    // (a sibling discord-server-styler checkout, or MEFI_STYLER_ROOT).
-    const stylerCard = document.getElementById("settings-styler");
     function paintStylerStatus(status) {
-      if (stylerCard) stylerCard.hidden = status?.state === "missing";
       stylerStatus.textContent = status?.message ?? "Server Styler status is unavailable.";
       stylerStatus.dataset.state = status?.state ?? "error";
       if (typeof stylerActions.querySelector !== "function") return;
@@ -886,37 +871,17 @@
     }
     // The auto order is tried top to bottom; usability here comes from the same
     // flags the readiness line already reads (saved keys, installed CLIs, the
-    // local server's last probe), never a fresh probe.
+    // local server), never a fresh probe.
     const autoOrderOf = (routing) => Array.isArray(routing?.autoProviders) && routing.autoProviders.length ? routing.autoProviders : ["zai", "opencode"];
-    // The walk the host resolves: its own `autoOrder` (signed-in CLIs first
-    // unless subscriptions-first is off, then the saved order). A draft the
-    // Agents overlay has not applied yet carries no host walk, so it is
-    // rebuilt from the same two settings only then.
-    const subscriptionClis = ["claude", "codex", "grok", "antigravity"];
-    const autoWalkOf = (routing) => Array.isArray(routing?.autoOrder) && routing.autoOrder.length ? routing.autoOrder
-      : routing?.subscriptionFirst === true ? [...new Set([...subscriptionClis, ...autoOrderOf(routing)])] : autoOrderOf(routing);
-    // Saved keys outside the walk still answer when nothing in it can.
-    const autoRescueOf = (routing) => (Array.isArray(routing?.autoRescue) ? routing.autoRescue : []).filter((id) => providerNames[id] && !autoWalkOf(routing).includes(id));
-    const lmStudioUp = () => setup.routing?.lmStudio?.up === true;
     function autoProviderUsable(id) {
       if (id === "zai") return setup.keys.zai === true || setup.routing?.hasZai === true;
       if (id === "opencode") return setup.keys.opencode === true || setup.routing?.hasOpenCode === true;
       if (id === "zen") return setup.routing?.hasZen === true;
       if (id === "openrouter") return setup.keys.openrouter === true || setup.routing?.hasOpenRouter === true;
-      // The custom endpoint's key is optional (a keyless local server).
-      if (id === "custom") return Boolean(setup.routing?.customEndpoint);
-      if (id === "lmstudio") return lmStudioUp();
+      if (id === "custom") return Boolean(setup.routing?.customEndpoint) && (setup.keys.custom === true || setup.routing?.hasCustom === true);
+      if (id === "lmstudio") return true;
       return cliInstalled(id);
     }
-    // Which route Auto answers through right now, from the walk and then the
-    // saved keys outside it; null when nothing can.
-    function autoAnswerOf(routing) {
-      const first = autoWalkOf(routing).find((entry) => autoProviderUsable(entry));
-      if (first) return { id: first, rescue: false };
-      const rescue = autoRescueOf(routing).find((entry) => autoProviderUsable(entry));
-      return rescue ? { id: rescue, rescue: true } : null;
-    }
-    const autoAnswerNote = (answer) => `will use ${providerNames[answer.id]}${answer.rescue ? " (a saved key outside the order)" : ""}`;
     // Availability of one route from the flags already in hand: ready, not
     // ready, or unknown while a read is still in flight. Every picker label,
     // status pill and overview tile reads from here so they never disagree.
@@ -929,8 +894,8 @@
       const kind = providerKinds[id];
       if (kind === "auto") {
         if (!setup.routing) return { ready: null, note: "checking…" };
-        const answer = autoAnswerOf(setup.routing);
-        return answer ? { ready: true, note: autoAnswerNote(answer) } : { ready: false, note: "nothing in the order is ready yet" };
+        const first = autoOrderOf(setup.routing).find((entry) => autoProviderUsable(entry));
+        return first ? { ready: true, note: `will use ${providerNames[first]}` } : { ready: false, note: "nothing in the order is ready yet" };
       }
       if (kind === "key") {
         const state = keyState(id);
@@ -940,19 +905,10 @@
         if (!setup.routing && setup.keys.custom === null) return { ready: null, note: "checking…" };
         const endpoint = Boolean(setup.routing?.customEndpoint);
         const key = setup.keys.custom ?? setup.routing?.hasCustom === true;
-        // A keyless server (Ollama, llama.cpp) answers with the URL alone.
-        if (endpoint) return { ready: true, note: key ? "endpoint and key saved" : "endpoint saved · no key (optional)" };
-        return { ready: false, note: "no endpoint saved" };
+        if (endpoint && key) return { ready: true, note: "endpoint and key saved" };
+        return { ready: false, note: !endpoint && !key ? "no endpoint or key saved" : !endpoint ? "no endpoint saved" : "no key saved" };
       }
-      // No key is not the same as running: the local server is ready only when
-      // its last probe found a loaded model.
-      if (kind === "local") {
-        const probe = setup.routing?.lmStudio;
-        if (!setup.routing) return { ready: null, note: "checking…" };
-        if (probe?.up === true) return { ready: true, note: `running${probe.model ? ` · ${probe.model}` : ""}` };
-        if (probe?.up === false) return { ready: false, note: "not running or no model loaded" };
-        return { ready: null, note: "not checked yet · no key needed" };
-      }
+      if (kind === "local") return { ready: true, note: "local server · no key needed" };
       return cliAvailability(id);
     }
     const stateOf = (availability) => availability.ready === true ? "ready" : availability.ready === false ? "missing" : "unknown";
@@ -1024,11 +980,12 @@
       else if (!routing) setPill(setupAssistant, "unknown", "checking…");
       else {
         const provider = providerNames[routing.provider] ? routing.provider : "auto";
-        const autoAnswer = autoAnswerOf(routing);
+        const order = autoOrderOf(routing);
+        const autoFirst = order.find((id) => autoProviderUsable(id));
         const detail = provider === "grok" || provider === "claude" || provider === "codex" || provider === "antigravity" ? "CLI login"
-          : provider === "lmstudio" ? providerAvailability("lmstudio").note
-          : provider === "custom" ? providerAvailability("custom").note
-          : provider === "auto" ? (autoAnswer ? autoAnswerNote(autoAnswer) : "no usable provider in this order yet")
+          : provider === "lmstudio" ? "no key needed"
+          : provider === "custom" ? (routing.hasCustom ? "key saved" : "no key saved")
+          : provider === "auto" ? (autoFirst ? `will use ${providerNames[autoFirst]}` : "no usable provider in this order yet")
           : keyState(provider);
         // A role on its own provider is named, and the pill is only as ready
         // as the least ready provider actually answering.
@@ -1044,16 +1001,11 @@
         // The Zen key lives in its own tile; opencode's OPENCODE_API_KEY counts.
         setPill(document.getElementById("zen-key-status"), routing.hasZen ? "ready" : "missing", routing.hasZen ? (routing.zenKeySource === "env" ? "key from environment" : "key saved (encrypted)") : "no key saved");
         setPill(document.getElementById("openrouter-key-status"), routing.hasOpenRouter ? "ready" : "missing", routing.hasOpenRouter ? (routing.openrouterKeySource === "env" ? "key from environment" : "key saved (encrypted)") : "no key saved");
-        const lmStudio = providerAvailability("lmstudio");
-        setPill(document.getElementById("lmstudio-status"), stateOf(lmStudio), lmStudio.note);
       }
       if (setup.routingError) setPill(setupSelection, "unknown", "status unavailable");
       else if (!routing) setPill(setupSelection, "unknown", "checking…");
       else if ((routing.modelSelection ?? "jev") === "fixed") setPill(setupSelection, "ready", "Fixed defaults · overrides win");
-      // Jev is optional: never chosen and no Jev key reads as the defaults
-      // that actually run, not as a missing piece.
-      else if (routing.modelSelectionSaved === false && !routing.jevConfigured) setPill(setupSelection, "ready", "Fixed defaults · Jev optional");
-      else setPill(setupSelection, routing.jevConfigured ? "ready" : "missing", routing.jevConfigured ? "Jev · task fit, speed & cost" : "Jev · waiting for a Jev key");
+      else setPill(setupSelection, routing.jevConfigured ? "ready" : "missing", routing.jevConfigured ? "Jev · task fit, speed & cost" : "Jev · waiting for a gateway key");
       if (setup.cliError) setPill(setupBuilders, "unknown", "CLI status unavailable");
       else if (!setup.clis) setPill(setupBuilders, "unknown", "checking…");
       else {
@@ -1064,18 +1016,12 @@
       const selected = routing && providerNames[routing.provider] ? routing.provider : null;
       if (!selected) readiness.textContent = "checking…";
       else if (selected === "auto") {
-        // Signed-in CLIs the host puts first are named only when they are on
-        // this machine (a missing one is skipped, not waited on); the saved
-        // order is shown whole, and saved keys outside it close the line.
-        const saved = autoOrderOf(routing);
-        const walk = autoWalkOf(routing).filter((id) => saved.includes(id) || !subscriptionClis.includes(id) || autoProviderUsable(id) || !setup.clis);
-        const order = walk.map((id) => `${providerNames[id] ?? id}${autoProviderUsable(id) ? "" : " (unavailable)"}`);
-        const rescue = autoRescueOf(routing).map((id) => providerNames[id]);
-        readiness.textContent = `auto order: ${order.join(" → ")}${rescue.length ? `; if none answers, saved keys: ${rescue.join(", ")}` : ""}`;
+        const order = autoOrderOf(routing).map((id) => `${providerNames[id] ?? id}${autoProviderUsable(id) ? "" : " (unavailable)"}`);
+        readiness.textContent = `auto order: ${order.join(" → ")}`;
       }
       else if (selected === "zai" || selected === "opencode" || selected === "zen" || selected === "openrouter") readiness.textContent = `${keyState(selected)} — this provider's saved model applies`;
-      else if (selected === "custom") readiness.textContent = `${routing.customEndpoint ? "endpoint saved" : "no endpoint saved"}, ${setup.keys.custom ? "key saved" : "no key saved (optional for a local server)"}`;
-      else if (selected === "lmstudio") readiness.textContent = `local server — no key needed; ${providerAvailability("lmstudio").note}; its loaded model is detected automatically`;
+      else if (selected === "custom") readiness.textContent = `${routing.customEndpoint ? "endpoint saved" : "no endpoint saved"}, ${setup.keys.custom ? "key saved" : "no key saved"}`;
+      else if (selected === "lmstudio") readiness.textContent = "local server — no key needed; its loaded model is detected automatically";
       else if (setup.cliError) readiness.textContent = "CLI status unavailable";
       else if (!setup.clis) readiness.textContent = "checking CLI…";
       else readiness.textContent = cliInstalled(selected) ? "CLI installed on this machine" : "CLI not found — you can still save its model and install it later";
@@ -1094,9 +1040,7 @@
     const customKeyStatus = document.getElementById("custom-key-status");
     const openrouterKeyStatus = document.getElementById("openrouter-key-status");
     const keyPills = { opencode: keyStatus, zai: zaiKeyStatus, openrouter: openrouterKeyStatus, custom: customKeyStatus };
-    // The custom endpoint's key is optional (a keyless local server), so its
-    // absence reads neutral there rather than as a missing piece.
-    const showKeyState = (which, saved) => setPill(keyPills[which], saved ? "ready" : which === "custom" ? "unknown" : "missing", saved ? "key saved (encrypted)" : which === "custom" ? "no key (optional)" : "no key saved");
+    const showKeyState = (which, saved) => setPill(keyPills[which], saved ? "ready" : "missing", saved ? "key saved (encrypted)" : "no key saved");
     window.mefiStudio
       .getApiKey("opencode")
       .then((key) => { setup.keys.opencode = Boolean(key?.saved); showKeyState("opencode", setup.keys.opencode); renderSetupState(); })
@@ -1179,7 +1123,7 @@
       if (!value && !clearingKey(input)) return;
       delete input.dataset.clearing;
       const result = await window.mefiStudio.setApiKey(value, "opencode");
-      if (result?.ok) { setup.keys.opencode = Boolean(value); setPill(keyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); noteConnectionSaved("opencode", result, !value); }
+      if (result?.ok) { setup.keys.opencode = Boolean(value); setPill(keyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); noteConnectionSaved("opencode"); }
       else setPill(keyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
       document.getElementById("api-key").value = "";
       resyncKeySaves();
@@ -1197,7 +1141,7 @@
       input.value = "";
       resyncKeySaves();
       if (!result?.ok) setPill(document.getElementById("zen-key-status"), "unknown", `save failed: ${result?.error ?? "unknown"}`);
-      else noteConnectionSaved("zen", result, !value);
+      else noteConnectionSaved("zen");
       await refreshJev();
       await loadAiRouting();
     });
@@ -1211,7 +1155,7 @@
       input.value = "";
       resyncKeySaves();
       if (!result?.ok) setPill(openrouterKeyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
-      else { setup.keys.openrouter = Boolean(value); noteConnectionSaved("openrouter", result, !value); }
+      else { setup.keys.openrouter = Boolean(value); noteConnectionSaved("openrouter"); }
       await refreshJev();
       await loadAiRouting();
     });
@@ -1222,7 +1166,7 @@
       if (!value && !clearingKey(input)) return;
       delete input.dataset.clearing;
       const result = await window.mefiStudio.setApiKey(value, "zai");
-      if (result?.ok) { setup.keys.zai = Boolean(value); setPill(zaiKeyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); noteConnectionSaved("zai", result, !value); }
+      if (result?.ok) { setup.keys.zai = Boolean(value); setPill(zaiKeyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); noteConnectionSaved("zai"); }
       else setPill(zaiKeyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
       document.getElementById("zai-key").value = "";
       resyncKeySaves();
@@ -1230,15 +1174,14 @@
     });
 
     // The custom endpoint's URL is saved like any routing preference; its key
-    // (optional: a keyless local server needs none) rides the same encrypted
-    // setApiKey path as every other credential.
+    // rides the same encrypted setApiKey path as every other credential.
     document.getElementById("save-custom-key").addEventListener("click", async () => {
       const input = document.getElementById("custom-key");
       const value = input.value.trim();
       if (!value && !clearingKey(input)) return;
       delete input.dataset.clearing;
       const result = await window.mefiStudio.setApiKey(value, "custom");
-      if (result?.ok) { setup.keys.custom = Boolean(value); setPill(customKeyStatus, value ? "ready" : "unknown", value ? "key saved (encrypted)" : "key cleared"); noteConnectionSaved("custom", result, !value); }
+      if (result?.ok) { setup.keys.custom = Boolean(value); setPill(customKeyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); noteConnectionSaved("custom"); }
       else setPill(customKeyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
       document.getElementById("custom-key").value = "";
       resyncKeySaves();
@@ -1281,7 +1224,7 @@
         input.value = "";
         resyncKeySaves();
         if (!result?.ok) { jevStatus.textContent = `Save failed: ${result?.error ?? "unknown"}`; return; }
-        noteConnectionSaved(jevRouteFields[jevRouteOf()].key, result);
+        noteConnectionSaved(jevRouteFields[jevRouteOf()].key);
         await refreshJev();
         await loadAiRouting();
       } catch { input.value = ""; jevStatus.textContent = "Could not save Jev key"; }
@@ -1456,7 +1399,7 @@
         : tier === "free" && !active.model
           ? `Free tier: no free model is saved for ${cliName}, so builds wait until one is${cli === "opencode" ? " (run the first scan, or save a free provider/model id)" : ""}.`
           : `${tierNames[tier]} tier: ${cliName} runs ${active.model || "its CLI default"}${tier === "free" ? ", one worker at a time" : ""}.`;
-      const review = cli === "opencode" ? "" : ` ${cliName} leaves no session Studio can read, so Studio verifies its finished tasks with the project's own checks (npm test or npm run check).`;
+      const review = cli === "opencode" ? "" : ` ${cliName} leaves no session Studio can check, so its finished tasks wait for you to confirm them.`;
       executorTierStatus.textContent = `${lead} ${["free", "fast", "heavy"].map(describe).join(" · ")}.${review}`;
     }
     // Each model field names the provider it saves to, and its placeholder is
@@ -1558,7 +1501,7 @@
             : routing.provider === "lmstudio"
               ? "LM Studio answers from the local server with no key. Load one model there or save a model override."
               : routing.provider === "custom"
-                ? "The custom endpoint answers with its saved key, or with none for a keyless local server. Save a model override when it serves more than one model."
+                ? "The custom endpoint answers with the saved key. Save a model override when it serves more than one model."
                 : routing.jevConfigured
                   ? "Jev model selection ready · task fit, speed and cost. Explicit model overrides take priority."
                   : "Jev model selection is waiting for a Jev key. Save one below for the selected route; usual defaults apply until connected.";

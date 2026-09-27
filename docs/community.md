@@ -447,23 +447,6 @@ own plan when they start:
   "Rooms hub" block) and `renderer/together.js`. They need the hub's address
   in `hub-client.cjs`'s `HUB_URL` (or `MEFI_STUDIO_HUB_URL`) and a linked
   Discord account.
-  **Companion playdates** are the second piece, and the first that needs the
-  hub to learn something new. Studio's side ships; the hub only relays:
-  - The hub's `ready` frame lists `features`. Studio sends companion frames
-    only when it lists `"companion"`, and addresses one member only when it
-    also lists `"companion.direct"`. A hub without them is never sent one.
-  - Studio → hub: `{ type: "companion", roomId, card, to? }` for a room the
-    member subscribed. `card` is a small object (at most a few hundred bytes)
-    or `null` for "went home". With `to` (a member's Discord id) the hub must
-    deliver it to that member alone, or drop it; it must never broadcast a
-    frame that carries `to`.
-  - Hub → Studio: the same frame with `from` (the sender's Discord id) added,
-    and `to` kept on a one-member delivery. The hub does not read, store or
-    log cards, and does not replay them: Studio sends its card again when a
-    newcomer shows in the room's `presence`.
-  What a card holds is Studio's business (`scripts/companion-friends.cjs`
-  checks both the cards it sends and the ones it hears); the owner's sharing
-  rules are in [architecture.md](architecture.md) (Friends › Playground).
 - **Phase 4, cowork rooms.** Rooms that grant GitHub access to a project,
   where members' agents coordinate so they don't collide.
 - **Phase 5, capacity pools.** Members can offer their coding-agent capacity

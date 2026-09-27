@@ -22,8 +22,8 @@ const code = [
   section("function normalizeCompatEndpoint(", "const modelPerformanceStores"),
 ].join("\n");
 
-function routeHost({ settings = {}, keys = {}, serve = null, now = null, clis = [] } = {}) {
-  const logs = [], fetches = [], cliChecks = [], probeHeaders = [];
+function routeHost({ settings = {}, keys = {}, serve = null, now = null } = {}) {
+  const logs = [], fetches = [], cliChecks = [];
   let saved = { aiProvider: "auto", ...settings };
   const store = { zaiApiKeyEncrypted: "zai-fixture-key", apiKeyEncrypted: "go-fixture-key", openrouterApiKeyEncrypted: "or-fixture-key", customApiKeyEncrypted: "custom-fixture-key", ...keys };
   const context = vm.createContext({
@@ -38,15 +38,15 @@ function routeHost({ settings = {}, keys = {}, serve = null, now = null, clis = 
     readSettings: async () => structuredClone(saved),
     decryptKey: (_settings, field) => store[field] ?? null,
     logLine: (message) => logs.push(message),
-    grokCliAvailable: async () => { cliChecks.push("grok"); return clis.includes("grok"); }, claudeCliAvailable: async () => { cliChecks.push("claude"); return clis.includes("claude"); },
-    codexCliAvailable: async () => clis.includes("codex"), antigravityCliAvailable: async () => clis.includes("antigravity"),
+    grokCliAvailable: async () => { cliChecks.push("grok"); return false; }, claudeCliAvailable: async () => { cliChecks.push("claude"); return false; },
+    codexCliAvailable: async () => false, antigravityCliAvailable: async () => false,
     AbortController, setTimeout, clearTimeout,
-    fetch: async (url, options) => { fetches.push(String(url)); probeHeaders.push(options?.headers ?? null); await Promise.resolve(); return serve ? { ok: true, json: async () => ({ data: [{ id: serve }] }) } : { ok: false, json: async () => ({}) }; },
+    fetch: async (url) => { fetches.push(String(url)); await Promise.resolve(); return serve ? { ok: true, json: async () => ({ data: [{ id: serve }] }) } : { ok: false, json: async () => ({}) }; },
     ...(now ? { Date: { now: () => now.at } } : {}),
   });
   vm.runInContext(code, context);
   return {
-    logs, fetches, cliChecks, probeHeaders, context,
+    logs, fetches, cliChecks,
     resolve: (role = "routine", options) => context.resolveAiRoute(role, options),
     routes: (options) => context.armedFallbackRoutes(saved, { zaiKey: store.zaiApiKeyEncrypted ?? null, goKey: store.apiKeyEncrypted ?? null, ...options }),
   };
@@ -122,7 +122,7 @@ test("the armed walk never probes endpoint models and skips its own provider", a
     keys: { customApiKeyEncrypted: null },
   });
   const routes = host.routes({ skip: "zai", role: "routine" });
-  assert.deepEqual([...routes.map((row) => row.provider)], ["opencode"], "an endpoint-less custom route and override-less LM Studio join nothing");
+  assert.deepEqual([...routes.map((row) => row.provider)], ["opencode"], "keyless custom and override-less LM Studio join nothing");
   assert.deepEqual(host.fetches, [], "the retry list resolves without a single endpoint probe");
 });
 
@@ -177,7 +177,7 @@ test("an auto route takes the first usable provider and walks the rest only when
 });
 
 test("an auto route with nothing usable names the saved order and what to do", async () => {
-  const host = routeHost({ settings: { aiAutoProviders: ["zai", "opencode"] }, keys: { zaiApiKeyEncrypted: null, apiKeyEncrypted: null, openrouterApiKeyEncrypted: null, customApiKeyEncrypted: null } });
+  const host = routeHost({ settings: { aiAutoProviders: ["zai", "opencode"] }, keys: { zaiApiKeyEncrypted: null, apiKeyEncrypted: null } });
   const result = await host.resolve();
   assert.equal(result.ok, false);
   assert.match(result.error, /no usable provider in the auto order \(Claude Code CLI > Codex CLI > Grok CLI > Antigravity CLI > z\.ai GLM > OpenCode Go\)/);

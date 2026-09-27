@@ -32,11 +32,7 @@ function singleProvider(settings, provider) {
   return settings;
 }
 
-// The per-user folders vendor installers use. Studio's own PATH refresh
-// (main.cjs refreshProcessPath) adds the same ones, so a CLI whose installer
-// did not update the user PATH is still found here and signed in right away.
-const INSTALL_FOLDERS = Object.freeze(["$env:USERPROFILE\\.local\\bin", "$env:LOCALAPPDATA\\agy\\bin", "$env:APPDATA\\npm", "$env:USERPROFILE\\.grok\\bin"]);
-const refreshPathScript = `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User') + ';' + $env:Path + ';' + (@(${INSTALL_FOLDERS.map((folder) => `"${folder}"`).join(", ")}) -join ';')`;
+const refreshPathScript = "$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User') + ';' + $env:Path";
 function setupScript(id, action) {
   const cli = CLIS.find((item) => item.id === id);
   if (!cli || !["install", "login"].includes(action)) throw new Error("Unknown CLI setup action.");
@@ -51,17 +47,13 @@ function setupScript(id, action) {
         `npm.cmd install --global ${cli.package}`,
         "if ($LASTEXITCODE -ne 0) { throw 'The CLI installation did not finish. Check the message above and retry.' }");
     } else lines.push(cli.install);
-    // Studio re-reads PATH itself when this window closes, so a restart is
-    // never the fix; a command still missing here needs its installer rerun.
-    lines.push(refreshPathScript, `if (-not (Get-Command ${cli.cmd} -ErrorAction SilentlyContinue)) { throw 'Installation finished, but the ${cli.cmd} command was not found. Close this window: Studio refreshes your installed tools. If ${cli.name} is still missing, choose Install and sign in again or open Setup instructions.' }`);
+    lines.push(refreshPathScript, `if (-not (Get-Command ${cli.cmd} -ErrorAction SilentlyContinue)) { throw 'Installation finished, but the CLI is not on PATH yet. Restart Studio and check again.' }`);
   }
-  lines.push(`Write-Host 'Sign in to ${cli.name} using the window or browser below. Then close this window and choose Check connection in Studio.'`, cli.login);
+  lines.push(`Write-Host 'Sign in to ${cli.name} using the window or browser below. Then return to Studio and choose Check connection.'`, cli.login);
   return lines.join("\n");
 }
 
-// `closed` hears about a finished setup window once `refresh` has re-read
-// PATH, so the host can tell the guide to re-detect tools at the right time.
-function createCliSetup({ spawn, openExternal, refresh = async () => {}, closed = () => {}, platform = process.platform, cwd, env = () => process.env }) {
+function createCliSetup({ spawn, openExternal, refresh = async () => {}, platform = process.platform, cwd, env = () => process.env }) {
   const running = new Set();
   async function action(payload) {
     const { id, action } = payload || {};
@@ -73,20 +65,14 @@ function createCliSetup({ spawn, openExternal, refresh = async () => {}, closed 
     running.add(id);
     try {
       const script = `try {\n${setupScript(id, action)}\n} catch { Write-Host $_.Exception.Message -ForegroundColor Red }\nRead-Host 'Press Enter to close this setup window'`;
-      const child = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { cwd, env: env(), windowsHide: false, stdio: "ignore" });
-      // Not detached: a detached PowerShell gets no console and exits at once
-      // without running the script. From Studio (no console of its own) this
-      // child opens its own visible terminal, and its close still re-checks.
+      const child = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { cwd, env: env(), windowsHide: false, detached: true, stdio: "ignore" });
       await new Promise((resolve, reject) => { child.once("spawn", resolve); child.once("error", reject); });
-      child.once("close", () => {
-        running.delete(id);
-        void Promise.resolve().then(() => refresh()).catch(() => {}).then(() => { try { closed({ id, action }); } catch {} });
-      });
+      child.once("close", () => { running.delete(id); void refresh().catch(() => {}); });
       child.unref();
-      return { ok: true, launched: true, message: `Finish ${cli.name} setup in the setup window and browser, then close that window. Studio refreshes your installed tools when it closes (or choose Refresh installed tools); then choose Check connection.` };
+      return { ok: true, launched: true, message: `Finish ${cli.name} setup in the terminal and browser, then choose Check connection here.` };
     } catch (error) { running.delete(id); return { ok: false, error: `Could not open setup: ${error.message}` }; }
   }
   return { action };
 }
 
-module.exports = { CLIS, SUBSCRIPTIONS, INSTALL_FOLDERS, singleProvider, setupScript, createCliSetup };
+module.exports = { CLIS, SUBSCRIPTIONS, singleProvider, setupScript, createCliSetup };
