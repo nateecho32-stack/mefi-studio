@@ -76,7 +76,9 @@ function createAutonomyHost(io) {
     await io.ensure();
     if (projectId && projectId !== project()) return { ok: false, error: "The selected project changed." };
     const decision = rows(state().decisions).find((row) => row.id === id);
-    if (!decision || decision.undone || decision.pending) return { ok: false, error: "That decision is no longer available to undo." };
+    // A failed decision changed nothing: undoing it logged "You undid" on the
+    // card and taught the learner a correction for a choice never applied.
+    if (!decision || decision.undone || decision.pending || decision.failed) return { ok: false, error: "That decision is no longer available to undo." };
     const result = await io.mutate((board) => {
       const restored = ledger.restore(board.tasks, decision, now());
       board.tasks = restored.tasks;
@@ -176,7 +178,10 @@ function createAutonomyHost(io) {
   async function holdBudget(question, config) {
     const projectId = project(), tasks = await io.readTasks(), ids = idsFor(question);
     const targets = tasks.filter((task) => ids.includes(task.id) && !task.autonomyBudgetHold);
-    if (!targets.length || targets.some((task) => task.ownerHold || ledger.held(task))) return;
+    // The same refusals the board write below makes: checked only there, a
+    // card with a pending or queued undo recorded one failed decision per pass
+    // until the ledger cap pushed real decisions (and their Undo) out.
+    if (!targets.length || targets.some((task) => task.ownerHold || ledger.held(task) || task.autonomyPending || task.autonomyUndo)) return;
     const decision = { id: io.id(), at: now(), level: config.level, by: "desk", source: "budget", questionId: question.id,
       taskId: question.context?.taskId ?? targets[0].id, kind: "budget", choice: "hold-budget", label: `Held: ${targets[0].title || "task"}`,
       reason: "Its two automatic decisions for today are spent. Review it, Undo the hold, or choose Try again.", before: ledger.snapshot(tasks, targets.map((task) => task.id)), after: [], question: JSON.parse(JSON.stringify(question)), pending: true };
@@ -287,7 +292,10 @@ function createAutonomyHost(io) {
         const room = desk.budget(state().decideHistory, key, now());
         if (!room.ok || affected.some((row) => backlog.delegatedRetries(row, now()).length >= 2)) {
           if (room.reason === "hour") break;
-          if (config.level === "elevated") await holdBudget(question, config);
+          // The hold says two automatic decisions were spent, so it needs two
+          // that applied: desk answers that never landed (the card waited on
+          // dependencies, the action was refused) only use up the desk's turns.
+          if (config.level === "elevated" && affected.some((row) => backlog.delegatedRetries(row, now()).length >= 2)) await holdBudget(question, config);
           continue;
         }
         if (humanClassify) {

@@ -107,7 +107,7 @@ const { createPerformanceProfiler } = require("./scripts/performance-profiler.cj
 const { buildContext } = require("./scripts/context-manager.cjs");
 const { scrubOutbound } = require("./scripts/redaction.cjs");
 const { createBreaker } = require("./scripts/provider-breaker.cjs");
-const { buildWindowsCmdArgs } = require("./scripts/windows-command-line.cjs");
+const { buildWindowsCmdArgs, quoteWindowsCmdArg } = require("./scripts/windows-command-line.cjs");
 // The Discord community link behind the Void collection perks. Both helpers
 // postdate installed builds, so they load through the guard: without the rules
 // module the feature reports itself unavailable (no card, premium stays
@@ -1247,10 +1247,15 @@ async function applyReleaseUpdate() {
     stopMachineWatch();
     stopCommunityWatch();
     stopAssistant();
-    const helper = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", prepared.scriptPath], {
+    // Launched through `start`: a detached PowerShell has no console and
+    // exits at once without running its script, so the update never applied.
+    // start gives it its own (hidden) console, and it outlives this exit.
+    const helperLine = ["start", '""', "powershell.exe", ...["-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", prepared.scriptPath].map(quoteWindowsCmdArg)].join(" ");
+    const helper = spawn(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", `"${helperLine}"`], {
       detached: true,
       stdio: "ignore",
       windowsHide: true,
+      windowsVerbatimArguments: true,
     });
     helper.unref();
     logLine(`[release] applying v${prepared.version}; helper pid ${helper.pid}`);
@@ -8443,7 +8448,9 @@ async function assistantDecisionContext(taskId = null) {
   ]);
   return {
     mode: autonomySettings.level, elevated: { ...autonomySettings.elevated },
-    decisions: (assistantState?.decisions ?? []).slice(-8).map(({ id, taskId, kind, label, choice, reason, at, undone, undoPending }) => ({ id, taskId, kind, label, choice, reason, at, undone: Boolean(undone), undoPending: Boolean(undoPending) })),
+    // Only decisions that applied: a failed or still-pending row is nothing the
+    // chat can offer to undo.
+    decisions: (assistantState?.decisions ?? []).filter((row) => !row?.failed && !row?.pending).slice(-8).map(({ id, taskId, kind, label, choice, reason, at, undone, undoPending }) => ({ id, taskId, kind, label, choice, reason, at, undone: Boolean(undone), undoPending: Boolean(undoPending) })),
     todos: (assistantState?.todos ?? []).filter((row) => !row.doneAt).slice(-12).map(({ id, taskId, text }) => ({ id, taskId, text })),
     preferences: preferences.slice(0, 8),
     deskAnswers: taskId ? (brain?.answers?.[taskId] ?? []).slice(-3) : [],

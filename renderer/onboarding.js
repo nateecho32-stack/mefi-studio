@@ -533,9 +533,16 @@
   function placeSuggestedTask() {
     const task = assistResult?.advice?.firstTask;
     if (!task) return;
-    const input = document.getElementById("workspace-input");
-    if (input) { input.value = `${task.title}\n\n${task.brief || ""}`.trim(); }
+    // Surface first: visit("task") flips the composer to task mode, which saves
+    // the box as the chat draft and loads the task draft, so a brief placed
+    // before it overwrote the chat draft and vanished. In Vibe the workspace
+    // hands over to Vibe's own box.
     visit("task");
+    const input = document.getElementById(window.MefiVibe?.mode?.() === "vibe" ? "vibe-input" : "workspace-input");
+    if (!input) return;
+    input.value = `${task.title}\n\n${task.brief || ""}`.trim();
+    if (typeof Event === "function") input.dispatchEvent?.(new Event("input", { bubbles: true }));
+    input.focus?.();
   }
   // ---- coach --------------------------------------------------------------------------
   function renderCoach() {
@@ -735,6 +742,10 @@
     window.addEventListener("keydown", (event) => {
       if (event.key !== "Escape" || state.mode !== "coach") return;
       if (event.target?.closest?.("input, textarea, select, [contenteditable]")) return;
+      // Escape inside a menu, picker, dialog or the sidebar (often one the
+      // coach itself opened) closes that first; taking it here closed the
+      // coach and left the menu open.
+      if (event.target?.closest?.('[role="menu"], [role="listbox"], [role="dialog"], [aria-modal="true"], dialog, .studio-choice-popup, .ws-sidebar') && !$("coach")?.contains(event.target)) return;
       event.preventDefault?.(); event.stopPropagation?.();
       close();
     }, true);

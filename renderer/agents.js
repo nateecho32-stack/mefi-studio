@@ -682,7 +682,15 @@
     window.addEventListener("blur", () => closeNavMenu());
     api()?.onAssistantStatus?.((status) => adoptQueue(status)); api()?.onAssistant?.((payload) => adoptQueue(null, payload?.state));
     api()?.onProjects?.(() => { readSerial++; if ($("agents-overlay")?.hidden === false) load(); });
-    api()?.onSettingsChanged?.((payload) => { if (payload?.agents && draft()?.dirty) return; if (draft() && !draft().dirty) drafts.delete(draftKey()); });
+    // Another writer changed settings: a clean draft is re-read. A push during
+    // this sheet's own save is that save's echo, and unsaved edits are kept.
+    // An open sheet reloads at once; its form stayed bound to the dropped
+    // draft, so edits and Apply silently did nothing.
+    api()?.onSettingsChanged?.(() => {
+      if (saving || !draft() || draft().dirty) return;
+      drafts.delete(draftKey());
+      if ($("agents-overlay")?.hidden === false) void load();
+    });
     window.addEventListener("mefi:queue-settings", syncQueue);
     window.MefiNav?.register({ id: "agents", label: "Agents", short: "Agents", kind: "overlay", layer: "sheet", section: "agents", group: "tools", glyph: "g-agents", badge: "questions", desc: "Set up your team, follow live work, workflows, models and usage", searchTerms: "agent setup team presets seats connections provider effort routing automation", showIn: { palette: true, help: true, tools: true }, element: "agents-overlay", focus: "#agents-title", open, close, isOpen: () => $("agents-overlay")?.hidden === false });
     // Canonical settings ownership is established before the first visit.

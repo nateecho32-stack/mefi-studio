@@ -682,6 +682,10 @@
     $("ask").hidden = true; layer.dataset.ask = "closed";
     if (!quiet) layer.focus({ preventScroll: true });
   }
+  // A typed answer per question: pushes rebuild the drawer (another need
+  // arriving changes the signature), which emptied the box and took focus.
+  const askDrafts = new Map();
+  let askRefocus = false;
   function renderAsk() {
     if (!state.need || $("ask").hidden) return;
     const all = needs();
@@ -691,6 +695,7 @@
     const task = need && need.kind !== "question" ? taskById(need.id) : null;
     if (!changed("ask", [need ?? null, task, all.length, state.askSending, state.status.autoBuild])) return;
     const body = $("ask-body");
+    askRefocus = Boolean(document.activeElement && body.contains(document.activeElement) && document.activeElement.matches?.(".vibe-ask-own textarea"));
     body.replaceChildren();
     const watch = $("ask-watch");
     if (!need) {
@@ -810,7 +815,7 @@
       if (option.description) button.append(el("span", "vibe-ask-option-desc", option.description));
       button.disabled = state.askSending;
       button.addEventListener("click", () => {
-        if (option.text || option.action?.action === "instruct") { selectedTextOption = option; input.placeholder = "Your one-line answer…"; input.focus(); }
+        if (option.text || option.action?.action === "instruct") { selectedTextOption = option; input.placeholder = "Your one-line answer…"; remember(); input.focus(); }
         else void answer(question, { optionId: option.id, label: option.label });
       });
       options.append(button);
@@ -821,12 +826,21 @@
     const input = el("textarea");
     input.rows = 2; input.placeholder = choices.length ? "Or say it in your own words…" : "Your answer…";
     input.setAttribute("aria-label", "Write your own answer");
+    const kept = askDrafts.get(question.id);
+    if (kept) {
+      input.value = kept.text;
+      selectedTextOption = choices.find((option) => option.id === kept.optionId) ?? null;
+      if (selectedTextOption) input.placeholder = "Your one-line answer…";
+    }
+    const remember = () => askDrafts.set(question.id, { text: input.value, optionId: selectedTextOption?.id ?? null });
+    input.addEventListener("input", remember);
     const send = el("button", "vibe-btn quiet", "Send");
     send.type = "submit"; send.disabled = state.askSending;
     own.append(input, send);
     own.addEventListener("submit", (event) => { event.preventDefault(); const text = input.value.trim(); if (text) void answer(question, { optionId: selectedTextOption?.id ?? null, text, label: text }); else input.focus(); });
     input.addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); own.requestSubmit(); } });
     body.append(own);
+    if (askRefocus) { askRefocus = false; input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
   }
   function renderApproval(body, need, task) {
     const row = need.row || {};
@@ -880,14 +894,16 @@
     note.textContent = "Working on it…"; note.dataset.tone = "";
     try {
       const result = await call();
-      if (requestProject !== projectId()) return;
+      // Switched project while this ran: release the drawer, or its buttons stay
+      // disabled and act() returns at once until a reload.
+      if (requestProject !== projectId()) { state.askSending = false; signatures.delete("ask"); return; }
       if (!result || result.ok === false) throw Object.assign(new Error(result?.error || "That didn't go through."), { gone: result?.gone });
       if (result.backlog && belongs(result.backlog)) state.backlog = { ...result.backlog, ok: true };
       if (result.task) state.tasks = state.tasks.map((item) => item.id === result.task.id ? result.task : item);
       if (result.state && belongs(result.state)) state.assistant = result.state;
       // Until the next read, what was just handled stays out of Needs you.
       if (state.backlog && Array.isArray(state.backlog[need.kind])) state.backlog = { ...state.backlog, [need.kind]: state.backlog[need.kind].filter((item) => item.id !== need.id) };
-      if (requestProject !== projectId()) return;
+      if (requestProject !== projectId()) { state.askSending = false; signatures.delete("ask"); return; }
       const message = window.MefiAutonomy?.outcome?.(result, success) || result.dispatch?.message || success;
       if (needKey(state.need) === requestKey) moveOn(need, message, place);
       else { state.askSending = false; feedback(message, result.dispatch?.held || result.dispatch?.paused ? "warn" : "good"); }
@@ -916,6 +932,7 @@
     if (!api()?.assistantAnswer) { const note = $("ask-note"); note.textContent = "Answers are available in the desktop app."; note.dataset.tone = "warn"; return; }
     await act(need, async () => {
       const result = await api().assistantAnswer({ id: question.id, optionId, text });
+      if (result?.ok !== false) askDrafts.delete(question.id);
       if (answeringProject === projectId() && result?.ok !== false && !(result?.state && belongs(result.state))) state.assistant = { ...state.assistant, questions: (state.assistant.questions || []).map((item) => item.id === question.id ? { ...item, status: "answered" } : item) };
       return result ?? { ok: true };
     }, `Answered: ${label.length > 60 ? `${label.slice(0, 57)}…` : label}. ${companion()} carries on.`);

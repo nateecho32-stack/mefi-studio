@@ -34,6 +34,28 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-27 - Second bug-hunt pass: CLI setup, release helper, media browser, Vibe, autonomy
+
+Reviewed the modules that landed since the first pass (media browser, CLI
+setup, decision ledger/memory, desk resolve, autonomy host, request sizing,
+model learning, new app, PC sync, Vibe panels, onboarding, Agents). Fixed:
+guided CLI setup and the release apply helper, which never ran because a detached PowerShell gets no
+console (reproduced: the marker was never written; attached, or through `cmd /c
+start`, it ran and outlived the parent); the media browser closing on refused
+Studio navigations and blocking blob/data subframes; the Vibe drawer stuck
+after a mid-action project switch; Vibe answer and note drafts; the Team roster
+per project; Agents setup after outside settings pushes; the walkthrough's
+suggested task and coach Escape; autonomy undo markers, ledger flooding,
+Elevated budget holds and undo of failed decisions. Two findings were handed
+to the sync session, which owns sync.mjs (--no-autostash, fetch-failed). One
+was a false positive (Agents overview selection: nav maps taskId to selected).
+
+Validation on the rebased commit over 997b7aa: npm run check passed, npm run audit returned 0
+findings, and lint was unchanged at 0 errors. Full npm test passed with every leg green: Node 3963
+passed and 4 skipped, Electron 38 passed and 1 skipped, and all Python contracts passed. New or updated tests are
+decision_ledger (kept split loses its marker), autonomy_host (failed decision
+not undoable) and media_browser (a refused Studio navigation keeps playback).
+
 ## 2026-09-27 - Configuration, Habits and menu motion: gates on a private worktree of 8b4ab00
 
 Detached worktree C:\wt\build-e at 8b4ab00 plus 5d47154 only: Configuration
@@ -302,20 +324,6 @@ There were no renderer errors, network attempts or child-process attempts.
 Artifacts are local in the OS temporary mefi-owner-panel-wITATv directory;
 no live data was opened or changed. This is focused pre-commit evidence;
 the full gate on the combined commit is still pending.
-
-## 2026-09-26 - Command video-background performance pass: gates, one pre-existing Electron failure
-
-Uncommitted tree with the Command performance pass (renderer/studio-ui.js,
-styles.css section 17, nav.js paintBadges, idle.js rail lists and far layer,
-docs/performance.md) plus other sessions' uncommitted work. `npm run check`
-and `npm run audit` passed. `npm test`: Node parallel stage 3689 tests, 0
-failures; Python contracts and the normalized-path lock passed; the Electron
-fixture stage failed two files. `command_render` timed out in the stage and
-passed solo (78 s). `unified_studio_render` fails "primary destinations stay
-visible at 600 / 1.5" solo as well, and fails identically on a clean detached
-worktree of 06b5d7d with the booklet rebuilt from HEAD, so it predates this
-pass; it matches the "Unified Agents navigation" failure recorded for the
-v0.4.3 tag workflow.
 
 ## Read Before Any Tests
 

@@ -26,6 +26,9 @@
   const state = { place: null, depth: 0, kind: null, stack: [], data: EMPTY, busy: false, folds: { needs: true, active: true, done: false }, team: null, teamAt: 0, teamFlight: null, signature: "", noteTone: "", draftApp: { name: "", about: "" } };
   state.taskView = read("mefiStudio.vibe.taskView") === "lanes" ? "lanes" : "list";
   state.inspectorDraft = null;
+  // Half-written task notes, by project and task: the panel repaints on
+  // every action and push, and a failed save used to lose the text.
+  state.noteDrafts = {};
 
   // ---- open, close, back ---------------------------------------------------------
   function open(kind, { data = null, taskId = null, ideaId = null, familyId = null, fold = null } = {}) {
@@ -367,6 +370,9 @@
     input.placeholder = running ? "Notes can be added once this run finishes." : "Tell it something for its next attempt…";
     input.disabled = running || state.busy;
     input.setAttribute("aria-label", "A note for this task");
+    const draftKey = `${state.data.projectId}:${task.id}`;
+    input.value = state.noteDrafts[draftKey] || "";
+    input.addEventListener("input", () => { state.noteDrafts[draftKey] = input.value; });
     const send = el("button", "vibe-btn quiet", "Save note");
     send.type = "submit";
     send.disabled = running || state.busy;
@@ -376,7 +382,7 @@
       const words = input.value.trim();
       if (!words) { input.focus(); return; }
       const earlier = typeof task.notes === "string" && task.notes.trim() ? `${task.notes.trim()}\n` : "";
-      void act(() => api().tasksSave([{ ...task, notes: `${earlier}- ${words}`.slice(-4000) }]), "Saved. Its next attempt reads it.");
+      void act(() => api().tasksSave([{ ...task, notes: `${earlier}- ${words}`.slice(-4000) }]), "Saved. Its next attempt reads it.", { after: () => { delete state.noteDrafts[draftKey]; } });
     });
     body.append(form);
   }
@@ -477,12 +483,15 @@
   const SEATS = [["companion", "Talks with you"], ["lead", "Plans the work"], ["desk", "Helps stuck agents"], ["heavy", "Reviews and plans"], ["routine", "Everyday jobs"]];
   async function loadTeam({ force = false } = {}) {
     if (!api()?.agentsState) return;
-    if (!force && state.team && Date.now() - state.teamAt < 60000) return;
+    // The roster is per project: a cached one from the project just left is
+    // neither fresh nor shown.
+    if (!force && state.team && state.teamProject === state.data.projectId && Date.now() - state.teamAt < 60000) return;
     if (state.teamFlight) return state.teamFlight;
     state.teamFlight = (async () => {
       try {
-        const result = await api().agentsState({ projectId: state.data.projectId });
-        if (result && result.ok !== false) { state.team = result; state.teamAt = Date.now(); }
+        const projectId = state.data.projectId;
+        const result = await api().agentsState({ projectId });
+        if (result && result.ok !== false && projectId === state.data.projectId) { state.team = result; state.teamProject = projectId; state.teamAt = Date.now(); }
       } catch { /* the rows say the models are unknown */ }
       finally { state.teamFlight = null; state.signature = ""; if (state.kind === "team") render(); }
     })();
@@ -503,7 +512,7 @@
     body.append(actions(controls));
     fold(body, "working", "Working now", running.map((job) => row({ tone: "live", title: job.title || "A task", meta: [job.phase ? String(job.phase).replace(/_/g, " ") : "working", job.model || job.route || "", job.startedAt ? `started ${ago(job.startedAt)}` : ""].filter(Boolean).join(" · "), onOpen: () => { close({ quiet: true }); go("command", job.taskId ? { selected: `task:${job.taskId}` } : {}); } })), { empty: "Nobody is building right now." });
     const roster = [];
-    const info = state.team;
+    const info = state.teamProject === state.data.projectId ? state.team : null;
     if (info) {
       const config = info.configuration || {};
       const cli = config.executorCli || "opencode";

@@ -6,6 +6,20 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-26 - Command video-background performance pass: gates, one pre-existing Electron failure
+
+Uncommitted tree with the Command performance pass (renderer/studio-ui.js,
+styles.css section 17, nav.js paintBadges, idle.js rail lists and far layer,
+docs/performance.md) plus other sessions' uncommitted work. `npm run check`
+and `npm run audit` passed. `npm test`: Node parallel stage 3689 tests, 0
+failures; Python contracts and the normalized-path lock passed; the Electron
+fixture stage failed two files. `command_render` timed out in the stage and
+passed solo (78 s). `unified_studio_render` fails "primary destinations stay
+visible at 600 / 1.5" solo as well, and fails identically on a clean detached
+worktree of 06b5d7d with the booklet rebuilt from HEAD, so it predates this
+pass; it matches the "Unified Agents navigation" failure recorded for the
+v0.4.3 tag workflow.
+
 ## 2026-09-26 - Canvas transfer applied, loaded and full gates passed
 
 The expanded isolated media renderer passed (1 test, 38.4 s), including the

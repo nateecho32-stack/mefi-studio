@@ -7,6 +7,21 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- Second bug-hunt pass over the newest features. **Guided CLI setup** opens
+  its terminal again (a detached PowerShell never ran its script), and the
+  **release updater**'s install helper now actually runs after Studio exits.
+  The **built-in browser** keeps playing when a dropped file or link is
+  refused, and embedded players may load their own blob/data frames.
+  **Vibe**: the Needs you drawer recovers after a project switch mid-action,
+  typed answers and task notes survive repaints and failed saves, and the
+  Team panel shows the current project's agents. **Agents setup** reloads
+  after settings change elsewhere instead of ignoring edits and Apply. The
+  **walkthrough** puts its suggested task in the right box without
+  overwriting your chat draft, and Escape closes a menu the coach opened
+  before the coach. **Autonomy**: a split card is no longer left waiting on
+  an Undo that finished, a card with a queued undo no longer floods the
+  decision history, Elevated holds a card only after two decisions applied,
+  and a failed decision can't be undone.
 - **Configuration** (Ctrl Shift ,, and **All settings in one place** under
   Settings' categories): every setting Studio has, in one searchable tree
   filed under Inference & Agents, Knowledge, Files & Exec, Web & Community,

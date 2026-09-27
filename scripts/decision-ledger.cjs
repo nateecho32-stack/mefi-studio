@@ -26,7 +26,9 @@ function restore(tasks, decision, now) {
     const applied = after.find((row) => row.id === task.id);
     if (!original) {
       // A split that has already run is kept: undo must not erase its work.
-      if (task.lastAttempt || task.doneAt || task.ownerHold) { conflicts.push(task.id); return task; }
+      // Its undo marker still goes: nothing else clears it, and workState would
+      // hold the card behind "Undo is waiting" for good.
+      if (task.lastAttempt || task.doneAt || task.ownerHold) { conflicts.push(task.id); const { autonomyUndo: _undo, ...kept } = task; return kept; }
       return { ...task, status: "archived", dropped: { at: now, by: "undo", reason: "Automatic split undone" }, autonomyUndo: null };
     }
     const next = { ...task };

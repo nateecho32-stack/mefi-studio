@@ -65,7 +65,10 @@ function createCliSetup({ spawn, openExternal, refresh = async () => {}, platfor
     running.add(id);
     try {
       const script = `try {\n${setupScript(id, action)}\n} catch { Write-Host $_.Exception.Message -ForegroundColor Red }\nRead-Host 'Press Enter to close this setup window'`;
-      const child = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { cwd, env: env(), windowsHide: false, detached: true, stdio: "ignore" });
+      const child = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { cwd, env: env(), windowsHide: false, stdio: "ignore" });
+      // Not detached: a detached PowerShell gets no console and exits at once
+      // without running the script. From Studio (no console of its own) this
+      // child opens its own visible terminal, and its close still re-checks.
       await new Promise((resolve, reject) => { child.once("spawn", resolve); child.once("error", reject); });
       child.once("close", () => { running.delete(id); void refresh().catch(() => {}); });
       child.unref();
