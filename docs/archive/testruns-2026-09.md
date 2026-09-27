@@ -6,6 +6,48 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-26 - AI offline route-change recovery and isolated blockers (task_b172488b3c947b88)
+
+Read all eight saved context revisions and preserved the inherited Claude
+error parser, CLI exit guard and successful-reply warning cleanup. Read-only
+runtime evidence showed five failures and a Claude quota backoff despite
+Codex already being selected. Saving routing reset the provider breaker but
+left that assistant backoff intact. A new regression failed with 5 !== 0.
+
+Added resetAssistantAiBackoff in main.cjs. Accepted route, credential and
+applied team changes now clear retry counters/timers so the running loop can
+probe the saved route. Offline status, last error and warning remain until a
+real success. Refused changes and merely saving a preset retain the backoff;
+a paused service stays paused. Updated architecture and changelog. No
+renderer source, user settings, task store or portable data was changed.
+
+Validation:
+- Initial inherited focused suites: 88/88 pass. New route regression: 9 pass,
+  1 expected fail before the fix. Final six focused suites: 117/117 pass.
+- npm.cmd run check passes; npm.cmd run audit has zero findings;
+  git diff --check passes. npm.cmd avoids the local npm.ps1 execution policy.
+- Full npm.cmd test: CPU 3825 pass / 7 fail / 4 skipped; Electron lane
+  37 pass / 1 skip; eyes-toggle 1/1; occlusion 1 pass / 1 fail. Python
+  contracts 248 tests OK (1 skipped); normalized-path lock 6/6.
+- That full run began before the final route patch. The final-source
+  npm.cmd run test:fast has 3831 pass / the same 7 fail / 4 skipped.
+- In a temporary copy, Analyzer/sidebar/Vibe tests reproduce all seven UI
+  failures (30/37 pass). Replacing only analyzer.js and nav.js with HEAD
+  yields 37/37. These shared renderer changes are separate from AI recovery.
+- Solo occlusion retry still fails rAF silence (growth=17). An isolated HEAD
+  host and booklet also fail the same assertion (growth=23), establishing a
+  baseline failure outside this fix. The initial temporary harness omitted
+  main.cjs; the comparison above is the completed run with that input supplied.
+- At 20:10 America/Chicago, a bounded no-tools Claude call returns its session
+  limit and 23:10 reset, with zero tokens. At 20:11, the already-selected Codex
+  route returns ok through the real host CLI completion function. Claude's
+  account limit remains; no provider-selection decision is needed for Codex.
+
+Logs are local at %TEMP%/mefi-ai-offline-2-{focused,route-before,route-after,
+final-focused,check,audit,full,final-fast,ui-current,ui-head-renderers,
+occlusion,occlusion-head}.log. Sources are saved for the next app load;
+the running Studio was not restarted during its active worker session.
+
 ## 2026-09-26 - AI offline resumed diagnosis and companion recovery (task_b172488b3c947b88)
 
 Read the dispatch context and all prior attempt evidence, preserved the inherited

@@ -39566,6 +39566,34 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
   }
 
+  // Keep the interactive DOM canvases, but let their drawing contexts resolve
+  // explicit canvas fonts without synchronously updating the document's styles.
+  // Probe 2D support before the irreversible transfer; an existing DOM context
+  // or an unsupported preview retains the ordinary canvas path.
+  const drawingContexts = new WeakMap();
+  let offscreen2DSupported;
+  function createDrawingContext(canvas, options) {
+    if (!canvas?.getContext) return null;
+    if (drawingContexts.has(canvas)) return drawingContexts.get(canvas);
+    let target = canvas;
+    if (typeof canvas.transferControlToOffscreen === "function" && typeof OffscreenCanvas === "function") {
+      if (offscreen2DSupported === undefined) {
+        try {
+          const probe = new OffscreenCanvas(1, 1);
+          offscreen2DSupported = Boolean(probe.getContext("2d"));
+          probe.width = probe.height = 0;
+        } catch { offscreen2DSupported = false; }
+      }
+      if (offscreen2DSupported) {
+        try { target = canvas.transferControlToOffscreen(); }
+        catch { /* A context already acquired by an embedding host stays usable. */ }
+      }
+    }
+    const context = target.getContext("2d", options);
+    if (context) drawingContexts.set(canvas, context);
+    return context;
+  }
+
   function resize() {
     const dpr = window.devicePixelRatio || 1;
     const width = window.innerWidth;
@@ -39575,10 +39603,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const bitmapW = Math.round(width * dpr);
     const bitmapH = Math.round(height * dpr);
     const fit = (canvas, ctx) => {
-      const cleared = canvas.width !== bitmapW || canvas.height !== bitmapH;
+      const bitmap = ctx.canvas ?? canvas;
+      const cleared = bitmap.width !== bitmapW || bitmap.height !== bitmapH;
       if (cleared) {
-        canvas.width = bitmapW;
-        canvas.height = bitmapH;
+        bitmap.width = bitmapW;
+        bitmap.height = bitmapH;
       }
       canvas.style.width = width + "px";
       canvas.style.height = height + "px";
@@ -39677,10 +39706,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     el.far = document.getElementById("idle-layer-far");
     // Transparent when video supplies the sky; ordinary scenes still paint
     // the whole backdrop. Nodes retain their own full-strength paint.
-    el.farCtx = el.far?.getContext?.("2d", { alpha: true }) ?? null;
+    el.farCtx = createDrawingContext(el.far, { alpha: true });
       el.hud = document.getElementById("idle-hud");
       if (!el.canvas) return;
-      el.ctx = el.canvas.getContext("2d");
+      el.ctx = createDrawingContext(el.canvas);
       el.width = window.innerWidth;
       el.height = window.innerHeight;
     }
@@ -40411,6 +40440,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   applyTreePreferences(window.MefiMusic?.graphPreferences?.() ?? {});
 
   window.MefiIdle = {
+    // Read the actual paint target for pixel diagnostics after a canvas transfer.
+    canvasContext: (canvas) => drawingContexts.get(canvas) ?? null,
     mediaSceneArea, setMediaFocus,
     queueSettings,
     refreshQueueSettings,
