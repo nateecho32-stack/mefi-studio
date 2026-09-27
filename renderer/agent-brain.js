@@ -156,11 +156,10 @@
     if (style === "halo") { ctx.strokeStyle = rgba(color, 0.7); ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(x, y, r * 1.6, t * 2, t * 2 + Math.PI * 1.4); ctx.stroke(); }
   }
 
-  // The done beat at the step. A landed MefiNodeStyles.done hook draws it
-  // first; the fallback below is the pack's own version.
+  // The done beat at the step, drawn by the pack itself: node-styles.js
+  // exports no done or absorb painter for it to defer to.
   function popFx(ctx, x, y, r, p, t, P, ok = true) {
     const style = nodeStyle();
-    try { if (window.MefiNodeStyles?.done?.(ctx, style, { x, y }, r, ok ? P.good : P.bad, p, { t }) === true) return; } catch {}
     const tint = ok ? P.good : P.bad;
     if (style === "singularity") {
       ctx.strokeStyle = rgba(P.ember, 1 - p); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, r * (1.4 + p * 2.6), 0, Math.PI * 2); ctx.stroke();
@@ -190,7 +189,6 @@
   }
   function absorbFx(ctx, lead, leadR, p, t, P) {
     const style = nodeStyle();
-    try { if (window.MefiNodeStyles?.absorb?.(ctx, style, { x: lead[0], y: lead[1] }, leadR, P.live, p, { t }) === true) return; } catch {}
     if (style === "singularity") {
       ctx.strokeStyle = rgba(P.ember, (1 - p) * 0.9); ctx.lineWidth = 1.4;
       for (let i = 0; i < 3; i += 1) { ctx.beginPath(); ctx.arc(lead[0], lead[1], leadR * (2.2 - p * 1.1 - i * 0.28), p * 6 + i, p * 6 + i + 2.2); ctx.stroke(); }

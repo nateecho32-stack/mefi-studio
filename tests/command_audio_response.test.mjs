@@ -46,7 +46,7 @@ function recordingContext() {
   let path = [];
   return {
     strokes,
-    save() {}, restore() {}, fill() {},
+    save() {}, restore() {}, fill() {}, translate() {}, scale() {},
     createRadialGradient: () => ({ addColorStop() {} }),
     beginPath() { path = []; },
     moveTo: (x, y) => path.push({ type: "move", x, y }),
@@ -383,7 +383,7 @@ test("music light stays inside each node and graph links retain their endpoints 
   const state = { nodes: [a, b], edges: [{ a: 0, b: 1 }], branchParents: new Map([[b.id, a.id]]), audioEffects: { splitBands: false } };
   const env = environment(state), arcs = [], strokes = [], points = [];
   const ctx = {
-    save() {}, restore() {}, beginPath() {}, fill() {},
+    save() {}, restore() {}, beginPath() {}, fill() {}, translate() {}, scale() {},
     arc: (...args) => arcs.push(args),
     createRadialGradient: () => ({ addColorStop() {} }),
     moveTo: (...args) => points.push(args), lineTo: (...args) => points.push(args),

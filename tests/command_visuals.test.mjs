@@ -1038,9 +1038,9 @@ test("a floating panel carves the clear rectangle without re-seeding the tree, a
   const env = vm.createContext({ state, project, unprojectForLayout: (p, world) => ({ x: p.x - 700, y: p.y - 450, z: world.z }), Map, Set, Number, Math, String });
   vm.runInContext(section(idle, "  function graphLayoutSeeds(", "  function hexToRgb("), env);
   const nodes = [{ id: "task:a", kind: "task", x: 0, y: 0, z: 1 }, { id: "task:b", kind: "task", x: 2, y: 4, z: 2 }, { id: "session", kind: "session", x: -40, y: -40, z: 0 }];
-  const run = (area) => {
+  const run = (area, time = 1000) => {
     const projected = nodes.map((node) => ({ node, p: project(node) }));
-    env.layoutProjectedGraph(projected, area, "free");
+    env.layoutProjectedGraph(projected, area, "free", time);
     return new Map(projected.map(({ node, p }) => [node.id, [p.x, p.y]]));
   };
   const before = run(frame);
@@ -1049,8 +1049,10 @@ test("a floating panel carves the clear rectangle without re-seeding the tree, a
   assert.equal(state.screenLayout, layout, "the same frame keeps the same persisted layout");
   for (const [id, point] of before) assert.deepEqual(carved.get(id), point, id + " keeps its anchor when the card opens");
   state.graphFrame = { x: 300, y: 150, w: 700, h: 600 };
-  run(state.graphFrame);
-  assert.notEqual(state.screenLayout, layout, "a change of frame (window, rails, feeds) still re-seeds");
+  run(state.graphFrame, 1000);
+  assert.equal(state.screenLayout, layout, "a frame still changing (a window being dragged) keeps the settled anchors");
+  run(state.graphFrame, 1200);
+  assert.notEqual(state.screenLayout, layout, "a change of frame (window, rails, feeds) re-seeds once it holds still");
 
   // The centre: eased in the user's camera, snapped for the overview, a new
   // frame, or reduced motion.

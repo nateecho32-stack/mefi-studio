@@ -74,7 +74,8 @@ class MefiStudioTreeKeyboardTests(unittest.TestCase):
         self.assertIn('canvas.setAttribute("role", "tree");', init)
         self.assertIn('canvas.setAttribute("aria-label", "Session tree");', init)
         self.assertIn('kbdProxy.setAttribute("role", "treeitem");', init, "the roving activedescendant needs a treeitem to point at")
-        self.assertIn('canvas.setAttribute("aria-owns", "tree-kbd-item");', init, "the proxy is not a canvas child, so the canvas must own it")
+        self.assertIn('canvas.setAttribute("aria-owns", KBD_PROXY_IDS.join(" "));', init, "the proxies are not canvas children, so the canvas must own them")
+        self.assertIn('const KBD_PROXY_IDS = ["tree-kbd-item", "tree-kbd-item-alt"];', self.tree, "two proxies alternate so every move changes the activedescendant id")
 
     # ---- binding 2: arrows navigate, Enter/Space activate ----------------
 
@@ -111,7 +112,7 @@ class MefiStudioTreeKeyboardTests(unittest.TestCase):
     def test_set_kbd_focus_keeps_the_activedescendant_labelled(self):
         setter = _function_body(self.tree, "setKbdFocus")
         self.assertTrue(setter, "setKbdFocus must exist")
-        self.assertIn('canvas.setAttribute("aria-activedescendant", "tree-kbd-item");', setter)
+        self.assertIn('canvas.setAttribute("aria-activedescendant", kbdProxy.id);', setter)
         self.assertIn('canvas.removeAttribute("aria-activedescendant");', setter, "a dropped focus must clear the attribute")
         self.assertIn('kbdProxy.setAttribute("aria-label", kbdLabel(kbdFocus));', setter, "the proxy must carry the focused node's label")
         self.assertIn('kbdProxy.setAttribute("aria-selected"', setter, "sessions and todos must report their selection state")

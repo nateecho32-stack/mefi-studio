@@ -10,6 +10,11 @@
     const key = (value) => String(value || "").replace(/[\\/]+/g, "/").replace(/\/+$/, "").toLowerCase();
     return !a?.projectPath || !b?.projectPath || key(a.projectPath) === key(b.projectPath);
   };
+  // Work still on the board: open, running, or done and waiting for its
+  // verifier. Every view that counts live tasks asks here, so a task parked
+  // for verification never drops out of one surface while another shows it.
+  const LIVE_STATUSES = new Set(["open", "active", "awaiting_verification"]);
+  const isLiveTask = (task) => LIVE_STATUSES.has(task?.status);
 
   function groupTasks(tasks, { plans = [] } = {}) {
     const byId = new Map();
@@ -77,7 +82,7 @@
   }
 
   function graphTasks(tasks, { groups = groupTasks(tasks), runningIds = new Set(), expanded = new Set(), limit = 12, childLimit = 12 } = {}) {
-    const live = (task) => ["open", "active", "awaiting_verification"].includes(task?.status);
+    const live = isLiveTask;
     const urgent = (task) => runningIds.has(task.id) || ["active", "awaiting_verification"].includes(task.status);
     // The host pins with pin/pinAt; workPin/pinnedAt are the legacy spellings.
     const pinned = (task) => Boolean(task?.pin || task?.pinAt || task?.workPin || task?.pinnedAt);
@@ -179,5 +184,5 @@
     return [...result.values()];
   }
 
-  window.MefiTaskGroups = { groupTasks, graphTasks, overviewGroups };
+  window.MefiTaskGroups = { groupTasks, graphTasks, overviewGroups, isLiveTask };
 })();

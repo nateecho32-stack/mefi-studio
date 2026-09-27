@@ -1377,7 +1377,7 @@ test("the music node opens the audio dropdown and does not claim Spotify playbac
   let opened = 0;
   const anchor = {};
   const env = vm.createContext({ String, el: { musicToggle: anchor }, window: { MefiMusic: { status: () => ({ source: "spotify", title: "Spotify playlist", playing: false, externalPlayback: true }), openAudio: (opener) => { assert.equal(opener, anchor); opened += 1; } } }, bumpHud() {} });
-  vm.runInContext(section("function musicNodeDetails()", "function appendMusicNode()"), env);
+  vm.runInContext(section("function musicNodeDetails()", "function syncMusicNode()"), env);
   vm.runInContext(section("function selectNode(", "function select(id)"), env);
   const details = env.musicNodeDetails();
   assert.equal(details.state, "music");

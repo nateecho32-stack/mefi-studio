@@ -28,7 +28,9 @@
   let checkpoints = {};
   let initialized = false;
   let readyPromise = null;
-  const read = (method) => window.MefiBoot?.read ? window.MefiBoot.read(method) : Promise.resolve().then(() => window.mefiStudio?.[method]?.());
+  // `fresh` skips joining a shared read already in flight: after a project
+  // switch that read may still be answering for the previous folder.
+  const read = (method, options) => window.MefiBoot?.read ? window.MefiBoot.read(method, options) : Promise.resolve().then(() => window.mefiStudio?.[method]?.());
   // What the store told us last, for the Command view's empty state.
   let status = window.mefiStudio?.eyesState ? "ok" : "desktop-only";
   let statusText = "no session yet";
@@ -331,6 +333,19 @@
       lastDraw = -Infinity;
     }
     syncAnimation();
+  }
+
+  // Moving the window to a monitor with another pixel ratio fires no resize
+  // when the CSS size stays put. A resolution query matches only the current
+  // ratio, so its change is the move; it re-arms on the new ratio each time.
+  function watchPixelRatio() {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+    if (typeof query?.addEventListener !== "function") return;
+    query.addEventListener("change", () => {
+      resize();
+      watchPixelRatio();
+    }, { once: true });
   }
 
   function seedStars() {
@@ -1016,17 +1031,21 @@
       };
       nodes.push(node);
       edges.push({ a: rootNode, b: node });
-      const sessionTodos = (todosBySession.get(session.id) ?? [])
-        .sort((a, b) => a.position - b.position)
-        .slice(0, maxTodos);
+      const allTodos = (todosBySession.get(session.id) ?? []).sort((a, b) => a.position - b.position);
+      const sessionTodos = allTodos.slice(0, maxTodos);
       // A stale session keeps its colour from its todos but draws none of them.
       const shown = stale ? [] : sessionTodos;
       node.todos = shown;
       const span = Math.max(1, shown.length);
+      const todoIds = new Set();
       shown.forEach((todo, todoIndex) => {
         const todoAngle = (todoIndex / span) * Math.PI * 2;
+        // The store keys a todo by (session, position), so the id is stable
+        // across rebuilds where the shown index would shift.
+        // A malformed store with a repeated position still gets unique ids.
+        const baseId = `${session.id}:${todo.position}`;
         const todoNode = {
-          id: `${session.id}:${todo.position}:${todoIndex}`,
+          id: todoIds.has(baseId) ? `${baseId}:${todoIndex}` : baseId,
           kind: "todo",
           label: todo.content,
           status: todo.status,
@@ -1040,16 +1059,21 @@
           state: isClosedTodo(todo) ? "done" : todo.status === "in_progress" ? "active" : "pending",
           r: 4,
         };
+        todoIds.add(todoNode.id);
         nodes.push(todoNode);
         edges.push({ a: node, b: todoNode, sessionId: session.id });
       });
-      const done = sessionTodos.filter(isClosedTodo).length;
-      const active = sessionTodos.some((todo) => todo.status === "in_progress");
+      // Counted over the whole list, not the capped slice: fourteen closed
+      // steps shown with six pending ones hidden is not a finished session.
+      const done = allTodos.filter(isClosedTodo).length;
+      const active = allTodos.some((todo) => todo.status === "in_progress");
       // Stale wins: organize() calls a session stale only while it holds an
       // in_progress todo untouched for staleAfterHours, so "active" is always
       // true for it and would paint that rot as live work.
-      node.state = stale ? "stale" : active ? "active" : sessionTodos.length && done === sessionTodos.length ? "done" : "session";
-      node.progress = sessionTodos.length ? done / sessionTodos.length : 0;
+      node.state = stale ? "stale" : active ? "active" : allTodos.length && done === allTodos.length ? "done" : "session";
+      node.progress = allTodos.length ? done / allTodos.length : 0;
+      node.todoTotal = allTodos.length;
+      node.todoDone = done;
     });
     if (foldedIds.length) {
       const foldAngle = roots.length * golden;
@@ -1139,22 +1163,44 @@
     });
     reconcileMotions(roster);
 
-    const all = nodes.filter((node) => node.kind === "todo");
-    const doneCount = all.filter((node) => node.state === "done").length;
     // The hub wears the whole board on its own meter: how much of the
-    // sessions' work is done, at a glance.
+    // sessions' work is done, at a glance. It sums the sessions' full counts,
+    // like their own meters, so the per-session cap cannot hide pending work;
+    // a stale session still stays out of it, as its todos stay off the rail.
+    let taskTotal = 0;
+    let doneCount = 0;
+    for (const node of nodes) {
+      if (node.kind !== "session" || node.stale) continue;
+      taskTotal += node.todoTotal;
+      doneCount += node.todoDone;
+    }
     const hubNode = nodes.find((node) => node.kind === "assistant");
-    if (hubNode) hubNode.progress = all.length ? doneCount / all.length : null;
+    if (hubNode) hubNode.progress = taskTotal ? doneCount / taskTotal : null;
     if (!roots.length && !foldedIds.length) {
       status = fallback.status;
       statusText = fallback.text;
       statsBase = fallback.stats;
     } else {
-      statsBase = `${plural(roots.length, "session")}${foldedIds.length ? ` · ${foldedIds.length} folded` : ""} · ${plural(all.length, "task")} · ${all.length ? Math.round((doneCount / all.length) * 100) : 0}% done`;
+      statsBase = `${plural(roots.length, "session")}${foldedIds.length ? ` · ${foldedIds.length} folded` : ""} · ${plural(taskTotal, "task")} · ${taskTotal ? Math.round((doneCount / taskTotal) * 100) : 0}% done`;
       status = "ok";
       statusText = statsBase;
     }
     paintStats();
+    // A rebuild replaces every node object. In-flight pulses and the hover
+    // hold the old ones, which draw() and the click path no longer know, so
+    // each is re-pointed at its node's successor by id, or dropped with it.
+    const rebuilt = new Map(nodes.map((node) => [node.id, node]));
+    if (pulses.length) {
+      pulses = pulses.filter((pulse) => {
+        const from = rebuilt.get(pulse.from?.id);
+        const to = rebuilt.get(pulse.to?.id);
+        if (!from || !to) return false;
+        pulse.from = from;
+        pulse.to = to;
+        return true;
+      });
+    }
+    if (hover) hover = rebuilt.get(hover.id) ?? null;
     // Keyboard focus follows its node across a rebuild (todos re-index,
     // sessions fold away) and drops when the node is gone.
     if (kbdFocus) setKbdFocus(findNodeById(kbdFocus.id));
@@ -1162,6 +1208,11 @@
     // of making nav fan out to IPC on every rail reload.
     const inProgress = nodes.filter((node) => node.kind === "todo" && node.status === "in_progress").length;
     window.MefiNav?.setBadge?.({ progress: inProgress, sessions: roots.length });
+    // Views that mirror the graph (the Command view's snapshot) can follow a
+    // rebuild instead of polling for one.
+    if (typeof window.dispatchEvent === "function" && typeof CustomEvent === "function") {
+      window.dispatchEvent(new CustomEvent("mefi:tree-rebuilt"));
+    }
   }
 
   function project(node) {
@@ -1201,7 +1252,9 @@
     if (node.state === "stale" || node.kind === "todo" && node.status === "cancelled") return palette?.dim ?? COLORS.stale;
     if (node.state === "done") return COLORS.done;
     if (node.state === "active") return palette?.bright ?? COLORS.active;
-    if (node.state === "session") return node.progress === 1 ? COLORS.done : node.progress ? palette?.bright ?? COLORS.active : palette?.text ?? COLORS.session;
+    // Partial progress is not live work: only an in_progress todo makes a
+    // session "active", and the Command view paints the rest the session tone.
+    if (node.state === "session") return node.progress === 1 ? COLORS.done : palette?.text ?? COLORS.session;
     return palette?.muted ?? COLORS.pending;
   }
 
@@ -1288,24 +1341,43 @@
     }
   }
 
+  // The sky never turns (the viewing angle is fixed), so its projection and
+  // fill strings only change with the rail's size, the theme or a reseed; the
+  // frame reuses them instead of projecting 170 stars into new objects.
+  const skyCache = { key: null, stars: null, wash: null, list: [] };
   function drawStars(palette) {
+    const accent = palette?.accent ?? null;
+    const text = palette?.text ?? "#ece5d8";
+    const key = `${width}|${height}|${angle}|${accent}|${text}`;
+    if (skyCache.key !== key || skyCache.stars !== stars) {
+      skyCache.key = key;
+      skyCache.stars = stars;
+      skyCache.wash = null;
+      if (accent) {
+        const rgb = hexRgb(accent);
+        const wash = ctx.createRadialGradient(width * 0.5, height * 1.05, 0, width * 0.5, height * 1.05, height * 0.8);
+        wash.addColorStop(0, `rgba(${rgb}, 0.10)`);
+        wash.addColorStop(1, `rgba(${rgb}, 0)`);
+        skyCache.wash = wash;
+      }
+      const tint = hexRgb(text);
+      skyCache.list = [];
+      for (const star of stars) {
+        const p = project(star);
+        if (p.depth < 80) continue;
+        const alpha = Math.max(0.05, Math.min(0.5, 1 - p.depth / 900));
+        skyCache.list.push({ x: p.x, y: p.y, size: star.size, fill: `rgba(${tint}, ${alpha * 0.5})` });
+      }
+    }
     // The rail's sky follows the colour theme: a faint accent wash rises from
     // the foot of the strip and the stars take the theme's text tone.
-    if (palette?.accent) {
-      const accent = hexRgb(palette.accent);
-      const wash = ctx.createRadialGradient(width * 0.5, height * 1.05, 0, width * 0.5, height * 1.05, height * 0.8);
-      wash.addColorStop(0, `rgba(${accent}, 0.10)`);
-      wash.addColorStop(1, `rgba(${accent}, 0)`);
-      ctx.fillStyle = wash;
+    if (skyCache.wash) {
+      ctx.fillStyle = skyCache.wash;
       ctx.fillRect(0, 0, width, height);
     }
-    const tint = hexRgb(palette?.text ?? "#ece5d8");
-    for (const star of stars) {
-      const p = project(star);
-      if (p.depth < 80) continue;
-      const alpha = Math.max(0.05, Math.min(0.5, 1 - p.depth / 900));
-      ctx.fillStyle = `rgba(${tint}, ${alpha * 0.5})`;
-      ctx.fillRect(p.x, p.y, star.size, star.size);
+    for (const star of skyCache.list) {
+      ctx.fillStyle = star.fill;
+      ctx.fillRect(star.x, star.y, star.size, star.size);
     }
   }
 
@@ -1770,7 +1842,9 @@
     return !document.hidden && width > 0 && height > 0 &&
       !(sheet && sheet !== "music") &&
       !document.body.classList.contains("workspace-active") &&
-      !document.body.classList.contains("command-active");
+      !document.body.classList.contains("command-active") &&
+      // Vibe mode hides the rail with visibility:hidden, which keeps its box.
+      !document.body.classList.contains("vibe-active");
   }
 
   function queuePulse(pulse) {
@@ -1816,15 +1890,19 @@
 
   function hitTest(x, y) {
     let best = null;
-    let bestDistance = 16;
+    // Nodes within reach compete on the distance to their edge, so the
+    // nearest rim wins: a centre distance mixed with a radius bonus let a
+    // farther, larger node take the click from the one under the pointer.
+    let bestEdge = Infinity;
     for (const node of nodes) {
       if (node._px == null) continue;
       const distance = Math.hypot(node._px - x, node._py - y);
       const notes = node.kind === "session" ? checkpoints[node.id] : null;
       const threshold = Math.max(8, node._pr + (notes?.length ? 18 : 6));
-      if (distance < threshold && distance < bestDistance + node._pr) {
+      const edge = distance - node._pr;
+      if (distance < threshold && edge < bestEdge) {
         best = node;
-        bestDistance = distance;
+        bestEdge = edge;
       }
     }
     return best;
@@ -1905,8 +1983,13 @@
   // ---- keyboard + screen-reader access --------------------------------------
   // The canvas is the tree's one tab stop (role "tree"): arrows walk the
   // nodes, Enter/Space activate through the click path above, Escape drops
-  // the focus. One hidden treeitem carries the roving aria-activedescendant
-  // label, so a screen reader names whatever node the arrows land on.
+  // the focus. A hidden treeitem carries the roving aria-activedescendant
+  // label, so a screen reader names whatever node the arrows land on. There
+  // are two, alternated on every move: Chromium raises the active-descendant
+  // event only when the attribute's id changes, so relabelling one proxy in
+  // place would leave most moves unannounced.
+  const KBD_PROXY_IDS = ["tree-kbd-item", "tree-kbd-item-alt"];
+  const kbdProxies = [];
   let kbdFocus = null;
   let kbdProxy = null;
 
@@ -1919,8 +2002,12 @@
   }
 
   function setKbdFocus(node) {
+    const previous = kbdFocus;
     kbdFocus = node ?? null;
     if (!kbdFocus) {
+      // The focus lent the hover its node; a dropped focus (Escape, blur, a
+      // rebuild that lost the node) takes back the tooltip and ring with it.
+      if (previous && hover === previous) hover = null;
       canvas.removeAttribute("aria-activedescendant");
       return;
     }
@@ -1928,11 +2015,15 @@
     // The keyboard shares the pointer's hover, so the tooltip and the lift
     // ring land on the focused node and sighted keyboard users see it too.
     hover = kbdFocus;
+    // A move to another node takes the other proxy, so the id changes and the
+    // move is announced; the same node again (a rebuild, a selection toggle)
+    // keeps its proxy and only refreshes what it says.
+    if (kbdProxies.length > 1 && previous?.id !== kbdFocus.id) kbdProxy = kbdProxies[kbdProxy === kbdProxies[0] ? 1 : 0];
     kbdProxy.setAttribute("aria-label", kbdLabel(kbdFocus));
     const selectedId = kbdFocus.kind === "session" ? kbdFocus.id : kbdFocus.kind === "todo" ? kbdFocus.sessionId : null;
     if (selectedId != null) kbdProxy.setAttribute("aria-selected", String(selectedId === activeSessionId));
     else kbdProxy.removeAttribute("aria-selected");
-    canvas.setAttribute("aria-activedescendant", "tree-kbd-item");
+    canvas.setAttribute("aria-activedescendant", kbdProxy.id);
   }
 
   // Sibling walk: from the focused node one step along the graph the rail
@@ -2070,16 +2161,21 @@
     return Promise.resolve();
   }
 
-  function load() {
+  // Bumped by every load(): an answer that lands after a newer load started
+  // (a slow read for the previous folder) is dropped instead of drawn.
+  let loadSeq = 0;
+  function load({ fresh = false } = {}) {
     // The store is project-scoped, and a reload can race a caller (a project
     // switch, an organize tick, a retry). ready() tracks the latest read, so
     // awaiting it never hands back the previous folder's graph.
+    const seq = ++loadSeq;
     readyPromise = (async () => {
       if (!window.mefiStudio?.eyesState) {
         buildGraph([], [], { status: "desktop-only", text: "desktop mode only", stats: "desktop mode only" });
         return;
       }
-      const result = await read("eyesState");
+      const result = await read("eyesState", fresh ? { fresh: true } : undefined);
+      if (seq !== loadSeq) return;
       loadResult(result);
     })();
     return readyPromise;
@@ -2132,7 +2228,27 @@
       });
       lastRead = { ...lastRead, sessions };
     }
+    // Most pushes carry the same todo list the rail already drew: skip the
+    // rebuild (and its fresh node objects) when neither the todos nor the
+    // sessions changed since this graph was built from them. The pushed
+    // pulses still land, since they are queued after this returns.
+    const key = activityKey(lastRead.sessions, data.todos);
+    if (activityBuilt && activityBuilt.key === key && cache.sessions === activityBuilt.sessions && cache.todos === activityBuilt.todos) return;
     buildGraph(lastRead.sessions, data.todos);
+    activityBuilt = { key, sessions: cache.sessions, todos: cache.todos };
+  }
+
+  // What an activity rebuild drew from, by content: the pushed todo rows and
+  // the sessions' ids and activity times (both reorder and relabel the rail).
+  // The identities pin it to the graph on screen, so any other build (a store
+  // read, a project switch) forces the next push to rebuild.
+  let activityBuilt = null;
+  function activityKey(sessions, todos) {
+    const parts = [todos.length];
+    for (const todo of todos) parts.push(`${todo?.sessionId}|${todo?.position}|${todo?.status}|${todo?.timeUpdated}|${todo?.content}`);
+    parts.push(sessions.length);
+    for (const session of sessions) parts.push(`${session?.id}|${session?.timeUpdated}`);
+    return parts.join("\n");
   }
 
   // The rail's pinned state is a preference: it must survive a reload, and the
@@ -2173,6 +2289,7 @@
     setPinned(pinned);
     document.getElementById("tree-pin")?.addEventListener("click", () => togglePin());
     window.addEventListener("resize", () => resize());
+    watchPixelRatio();
     document.addEventListener?.("visibilitychange", syncAnimation);
     window.addEventListener("mefi:nav", syncAnimation);
     // Sessions and todos belong to the selected folder: a project switch must
@@ -2189,7 +2306,9 @@
       activeSessionId = null;
       sessionSlots = new Map();
       lastRead = null;
-      load().catch(() => {});
+      // Fresh: a shared eyesState read still in flight was asked of the
+      // previous folder, and joining it would redraw that folder's nodes.
+      load({ fresh: true }).catch(() => {});
     });
     if (typeof MutationObserver !== "undefined") {
       new MutationObserver(syncAnimation).observe(document.body, { attributes: true, attributeFilter: ["class", "data-sheet"] });
@@ -2205,19 +2324,25 @@
     canvas.setAttribute("tabindex", "0");
     canvas.setAttribute("role", "tree");
     canvas.setAttribute("aria-label", "Session tree");
-    kbdProxy = document.createElement("div");
-    kbdProxy.id = "tree-kbd-item";
-    kbdProxy.setAttribute("role", "treeitem");
-    // Labeled from the first paint: the owned treeitem must never read as an
-    // anonymous stop, even before the arrows have moved anywhere.
-    kbdProxy.setAttribute("aria-label", "no node focused");
-    kbdProxy.style.cssText = "position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;";
-    rail.append(kbdProxy);
-    canvas.setAttribute("aria-owns", "tree-kbd-item");
+    for (const id of KBD_PROXY_IDS) {
+      kbdProxy = document.createElement("div");
+      kbdProxy.id = id;
+      kbdProxy.setAttribute("role", "treeitem");
+      // Labeled from the first paint: the owned treeitem must never read as an
+      // anonymous stop, even before the arrows have moved anywhere.
+      kbdProxy.setAttribute("aria-label", "no node focused");
+      kbdProxy.style.cssText = "position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;";
+      rail.append(kbdProxy);
+      kbdProxies.push(kbdProxy);
+    }
+    // The loop leaves the second proxy current, so the first focus flips to
+    // the first one, tree-kbd-item.
+    canvas.setAttribute("aria-owns", KBD_PROXY_IDS.join(" "));
     syncAnimation();
     // Fetch organisation and sessions together, then build once with both.
     // Command waits for this promise before taking its initial snapshot.
     const checkpointRead = read("eyesCheckpointsRead").catch(() => null);
+    const initSeq = loadSeq;
     readyPromise = Promise.all([
       read("assistantState").catch(() => null),
       read("eyesState").catch((error) => ({ ok: false, error: String(error?.message ?? error) })),
@@ -2230,9 +2355,13 @@
       if (jobs > 0 && resumed?.at && Date.now() - resumed.at < 120000) {
         window.MefiToast?.(`Restarted ${plural(jobs, "interrupted job")}`, "info");
       }
-      if (window.mefiStudio?.eyesState) loadResult(sessions);
+      // A load() that started meanwhile (a project switch) owns the sessions;
+      // this read only contributes the organisation to what is on the rail.
+      if (initSeq !== loadSeq) rebuild();
+      else if (window.mefiStudio?.eyesState) loadResult(sessions);
       else buildGraph([], [], { status: "desktop-only", text: "desktop mode only", stats: "desktop mode only" });
     }).catch((error) => {
+      if (initSeq !== loadSeq) return;
       buildGraph([], [], { status: "unavailable", text: `store unavailable · ${String(error?.message ?? error)}`, stats: "store offline" });
     });
     await readyPromise;
@@ -2274,6 +2403,9 @@
           model: node.model ?? null,
           updated: node.updated ?? null,
           progress: node.progress ?? null,
+          // A session's full todo counts: its drawn todos are capped, these are not.
+          todoTotal: node.todoTotal ?? null,
+          todoDone: node.todoDone ?? null,
           sessionId: node.sessionId ?? node.id,
           status: node.status ?? null,
           state: node.state,

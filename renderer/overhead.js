@@ -46,11 +46,24 @@
       return;
     }
     const before = JSON.stringify([state.nodes, state.edges, state.tasks]);
-    await load();
+    try {
+      await load();
+    } catch {
+      // One refused read must not end polling for good: the sheet keeps what
+      // it last showed and retries at the slowest cadence.
+      if (!initialized || el.overlay.hidden) return;
+      pollDelay = POLL_MAX_MS;
+      schedulePoll();
+      return;
+    }
     if (!initialized || el.overlay.hidden) return;
     pollDelay = JSON.stringify([state.nodes, state.edges, state.tasks]) === before ? Math.min(pollDelay * 2, POLL_MAX_MS) : POLL_INTERVAL_MS;
     schedulePoll();
   }
+
+  // The live test is task-groups.js's, shared by every view; the fallback
+  // keeps a bare harness (no task-groups.js) on the same statuses.
+  const isLive = (task) => window.MefiTaskGroups?.isLiveTask?.(task) ?? ["open", "active", "awaiting_verification"].includes(task?.status);
 
   const keywords = (text) => new Set((String(text).toLowerCase().match(/[a-z][a-z0-9_-]{3,}/g) ?? []).slice(0, 10));
 
@@ -117,7 +130,7 @@
     ctx.fillStyle = P.background;
     ctx.fillRect(0, 0, el.width, el.height);
 
-    const active = state.tasks.filter((task) => task.status === "open" || task.status === "active");
+    const active = state.tasks.filter(isLive);
     if (!still && state.overview && active.length && time - state.lastCycle > 4000) {
       state.lastCycle = time;
       state.cycleIndex = (state.cycleIndex + 1) % active.length;
@@ -270,7 +283,7 @@
   function renderLegend() {
     const focusedTask = document.activeElement?.dataset?.overheadTask;
     el.legend.textContent = "";
-    const active = state.tasks.filter((task) => task.status === "open" || task.status === "active");
+    const active = state.tasks.filter(isLive);
     if (!active.length) {
       const li = document.createElement("li");
       li.className = "muted";
@@ -330,7 +343,14 @@
   async function open() {
     window.MefiNav?.claim?.("overhead");
     el.overlay.hidden = false;
-    await load();
+    // A refused first read still opens the sheet on what it last knew (or an
+    // empty board) and leaves the poll to retry at the slowest cadence.
+    let loaded = true;
+    try {
+      await load();
+    } catch {
+      loaded = false;
+    }
     // Esc, O, the backdrop or another sheet's claim() can close us while load()
     // is still awaiting: starting the loop then leaves it drawing forever.
     if (el.overlay.hidden) return;
@@ -338,8 +358,21 @@
     cancelAnimationFrame(raf);
     lastDraw = -Infinity;
     raf = requestAnimationFrame(draw);
-    pollDelay = POLL_INTERVAL_MS;
+    pollDelay = loaded ? POLL_INTERVAL_MS : POLL_MAX_MS;
     schedulePoll();
+  }
+
+  // A move to a monitor with another pixel ratio fires no window resize when
+  // the CSS size stays put. The resolution query matches only the current
+  // ratio, so its change is the move; it re-arms on the new ratio each time.
+  function watchPixelRatio() {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+    if (typeof query?.addEventListener !== "function") return;
+    query.addEventListener("change", () => {
+      if (!el.overlay.hidden) resize();
+      watchPixelRatio();
+    }, { once: true });
   }
 
   function close() {
@@ -420,6 +453,7 @@
       openTask(state.hover);
     });
     window.addEventListener("resize", () => !el.overlay.hidden && resize());
+    watchPixelRatio();
   }
 
   window.MefiOverhead = { open, close };

@@ -785,7 +785,11 @@
       for (let index = 0; index < samples.length; index += 1) wavePeak = Math.max(wavePeak, Math.abs(Number(samples[index]) || 0));
     }
     const waveGate = clamp((20 * Math.log10(Math.max(1e-12, wavePeak)) + 112) / 12);
-    const amplitudes = new Float32Array(buffer.length);
+    // Two spectra alternate: this frame writes into the one the frame before
+    // last used, and only `prior.spectrum` (last frame's) is read below.
+    const spare = prior.spareSpectrum;
+    const amplitudes = spare instanceof Float32Array && spare.length === buffer.length && spare !== prior.spectrum ? spare : new Float32Array(buffer.length);
+    amplitudes[0] = 0;
     let spectrumPeak = 0;
     for (let index = 1; index < buffer.length; index += 1) {
       const value = Number(buffer[index]);
@@ -793,6 +797,7 @@
       if (index * hzPerBin >= 20 && index * hzPerBin < 16000) spectrumPeak = Math.max(spectrumPeak, amplitudes[index]);
     }
     const bandState = {}, targets = {}, attacks = {};
+    const measured = [];
     for (const [name, fromHz, toHz, cue, hold] of [
       ["bass", 20, 250, "kick", 125], ["mid", 250, 4000, "snare", 95], ["treble", 4000, 16000, "hat", 65],
     ]) {
@@ -820,8 +825,20 @@
       // Release in log space lets a large volume reduction settle in seconds,
       // instead of waiting through a long linear peak decay from a loud track.
       const reference = Math.max(1e-7, raw, oldReference * Math.exp(Math.log(Math.max(1e-7, raw) / oldReference) * (1 - Math.exp(-dt / 900))));
-      const target = clamp(raw / reference * 0.86) * gate;
-      const flux = clamp((Math.sqrt(fluxSquares / count) * 0.65 + fluxPeak * 0.35) / reference * Math.min(2, 33 / dt)) * gate;
+      measured.push({ name, cue, hold, history, raw, gate, reference, fluxLevel: Math.sqrt(fluxSquares / count) * 0.65 + fluxPeak * 0.35 });
+    }
+    // Each band scales to its own recent level, so a quiet voice still moves
+    // the picture. A band far below the loudest one is mostly spill from it
+    // (a snare's click in the bass, a kick's in the mids and highs): past
+    // BAND_SPILL_DB under the loudest band it is measured against that floor
+    // instead, which keeps spill from being scaled up to a full-size hit
+    // while a real quiet voice (a hat 36 dB under the bass) keeps its range.
+    const BAND_SPILL_DB = 40;
+    const spillFloor = Math.max(...measured.map((band) => band.reference)) * 10 ** (-BAND_SPILL_DB / 20);
+    for (const { name, cue, hold, history, raw, gate, reference, fluxLevel } of measured) {
+      const scale = Math.max(reference, spillFloor);
+      const target = clamp(raw / scale * 0.86) * gate;
+      const flux = clamp(fluxLevel / scale * Math.min(2, 33 / dt)) * gate;
       const onset = target > 0.12 && flux > Math.max(0.14, (history.fluxMean ?? 0) * 1.8 + 0.045) && now - (history.lastOnset ?? -1000) >= hold;
       targets[name] = target;
       attacks[cue] = onset ? clamp(0.42 + flux * 0.65) * gate : 0;
@@ -858,6 +875,7 @@
       kick, snare, hat, bassline: envelope(prior.bassline, targets.bass, 100, 360), waveform,
       bassMean: envelope(prior.bassMean, bandState.bass.raw, 650, 650), bassRaw: bandState.bass.raw,
       lastBeat: onset ? now : prior.lastBeat ?? -1000, peak: spectrumPeak, bandState, spectrum: amplitudes,
+      spareSpectrum: prior.spectrum instanceof Float32Array ? prior.spectrum : null,
     };
   }
 
@@ -964,14 +982,25 @@
     state.graphSeeded = true;
     // The hub wears the whole board on its own meter: how much of the
     // sessions' work is done, at a glance.
-    const todoNodes = state.nodes.filter((node) => node.kind === "todo");
+    // The rail counts each session's whole todo list (todoTotal/todoDone), not
+    // only the capped todos it draws; the hub reads the same totals so the two
+    // meters agree. A snapshot without them falls back to the drawn todos.
     const hubNode = state.nodes.find((node) => node.kind === "assistant");
-    if (hubNode) hubNode.progress = todoNodes.length ? todoNodes.filter((node) => node.state === "done").length / todoNodes.length : null;
+    if (hubNode) {
+      const counted = state.nodes.filter((node) => node.kind === "session" && !node.stale && Number.isFinite(node.todoTotal));
+      const total = counted.reduce((sum, node) => sum + node.todoTotal, 0);
+      const todoNodes = counted.length ? null : state.nodes.filter((node) => node.kind === "todo");
+      hubNode.progress = counted.length
+        ? total ? counted.reduce((sum, node) => sum + (node.todoDone ?? 0), 0) / total : null
+        : todoNodes.length ? todoNodes.filter((node) => node.state === "done").length / todoNodes.length : null;
+    }
     // Task nodes exist only here; the tree's agent simulation needs their
     // positions so a reference agent can fly to the task it gathers for.
+    // Approved-plan groups are task work too: an agent gathering for one
+    // flies to its node like to any task's.
     window.MefiTree?.setExternalNodes?.(
       state.nodes
-        .filter((node) => node.kind === "task" && !node.dying)
+        .filter((node) => (node.kind === "task" || node.kind === "task-group") && !node.dying)
         .map((node) => ({ id: node.id, kind: "task", label: node.label, x: node.x, y: node.y, z: node.z, anchorSessionId: node.anchorSessionId ?? null }))
     );
     if (firstGraph) autoFit();
@@ -980,8 +1009,11 @@
     // pointing at a vanished node dims the whole constellation and stops orbit.
     if (state.selected) {
       const fresh = state.nodes.find((entry) => entry.id === state.selected.id);
-      if (fresh) state.selected.node = fresh;
-      else selectNode(null);
+      if (fresh) {
+        state.selected.node = fresh;
+        // The card read the old node: redraw it when what it shows moved on.
+        if (state.cardSignature != null && state.cardSignature !== cardSignature(fresh)) renderInfo();
+      } else selectNode(null);
     }
     state.hoverNode = state.hoverNode ? state.nodes.find((entry) => entry.id === state.hoverNode.id) ?? null : null;
     state.hoverBubble = state.hoverBubble ? state.nodes.find((entry) => entry.id === state.hoverBubble.id) ?? null : null;
@@ -1012,16 +1044,11 @@
     };
   }
 
-  function appendMusicNode() {
-    const details = musicNodeDetails();
-    if (!details) return;
-    state.nodes.push({ id: "__music__", kind: "music", ...details, r: 7, x: 150, y: -100, z: -65, bx: 150, by: -100, bz: -65 });
-  }
-
+  // The player no longer has a node of its own on the graph (the toolbar and
+  // the companion carry it); a player change still wakes suspended audio and
+  // re-picks the reactive input.
   function syncMusicNode() {
     const details = musicNodeDetails();
-    const node = state.nodes.find((entry) => entry.kind === "music");
-    if (node && details) Object.assign(node, details);
     if (details?.music.playing && state.audio?.state === "suspended") state.audio.resume().catch(() => {});
     if (!state.reactive || !state.active) return;
     const element = localMusicElement();
@@ -1106,11 +1133,6 @@
   function appendTaskNodes() {
     const runningTasks = new Set(autopilotJobs(state.assistant).map((job) => job.taskId).filter(Boolean));
     const rank = (task) => runningTasks.has(task.id) ? 0 : task.status === "active" ? 1 : workPinned(task) ? 2 : 3;
-    const entries = window.MefiTaskGroups?.graphTasks(state.allTasks, { groups: state.taskGroups, runningIds: runningTasks, expanded: state.expandedTaskGroups }) ?? [...(state.tasks ?? [])]
-      .sort((a, b) => rank(a) - rank(b) || (b.updatedAt ?? b.createdAt ?? 0) - (a.updatedAt ?? a.createdAt ?? 0))
-      .slice(0, 12).map((task) => ({ task }));
-    const metadata = new Map(entries.map((entry) => [entry.task.id, entry]));
-    const retained = new Set([...(state.allTasks ?? state.tasks ?? []).map((task) => task.id), ...state.taskGroups.map((group) => group.id), ...state.taskGroups.flatMap((group) => group.members.map((member) => member.id))]);
     // The hub is where the assistant's chores land. Their slots go to work the
     // user actually owns. Without a hub on the board they keep their nodes —
     // filed work must never leave the view just because the hub is folded.
@@ -1125,6 +1147,19 @@
       for (const task of chores) filed.set(String(task.id), task);
       hub.filedWork = chores;
     }
+    // Chores leave the list before it is cut to the visible slots: cut first,
+    // eight frequent chores in the top twelve left the owner four nodes.
+    const owned = (tasks) => filed.size ? (tasks ?? []).filter((task) => !filed.has(String(task?.id))) : tasks;
+    const entries = window.MefiTaskGroups?.graphTasks(owned(state.allTasks), { groups: state.taskGroups, runningIds: runningTasks, expanded: state.expandedTaskGroups }) ?? [...(owned(state.tasks) ?? [])]
+      .sort((a, b) => rank(a) - rank(b) || (b.updatedAt ?? b.createdAt ?? 0) - (a.updatedAt ?? a.createdAt ?? 0))
+      .slice(0, 12).map((task) => ({ task }));
+    const metadata = new Map(entries.map((entry) => [entry.task.id, entry]));
+    // Layout slots are held for work that can still show: open work, groups
+    // and their members. Every finished task used to keep its slot for as long
+    // as it stayed on the board, so each new task on a busy session landed a
+    // ring further out.
+    const openWork = (task) => ["open", "active", "awaiting_verification"].includes(task?.status);
+    const retained = new Set([...(state.allTasks ?? state.tasks ?? []).filter(openWork).map((task) => task.id), ...entries.map((entry) => entry.task.id), ...state.taskGroups.map((group) => group.id), ...state.taskGroups.flatMap((group) => group.members.map((member) => member.id))]);
     const placed = taskPlacements(entries.filter((entry) => !filed.has(String(entry.task.id))).map((entry) => entry.task), state.nodes, autopilotJobs(state.assistant), state.taskLayout, retained);
     state.taskLayout = placed.layout;
     placed.entries.forEach(({ task, anchor, x: bx, y: by, z: bz }) => {
@@ -1215,6 +1250,12 @@
   // board. Requests usually name the thing they are about ("Work on <session>").
   const titleKeys = (text) => new Set((String(text ?? "").toLowerCase().match(/[a-z][a-z0-9_-]{3,}/g) ?? []).slice(0, 10));
 
+  // One worker, one key, for the whole run: its task when it has one, else the
+  // run's own id. A claimed request used to be keyed by its title until its
+  // session was found (up to 30 s later) and then by the session, so it popped
+  // a second builder mid-run, and two untitled-alike runs shared one orb.
+  const builderKey = (job) => job?.taskId ?? job?.id ?? job?.sessionId ?? job?.title ?? null;
+
   // Work on it pins work to the node the user pointed at (a session or a todo):
   // the running ring, the card and the builder belong on that node, not on a
   // second node echoing its name. Null when the target is not on the board.
@@ -1238,8 +1279,10 @@
       const host = targetHostNode(owned?.target);
       if (host) return host;
     }
+    // The same rule Work on it uses for its target: the session's node, by
+    // its id or by the session it belongs to.
     if (job.sessionId) {
-      const session = state.nodes.find((node) => node.kind === "session" && node.id === job.sessionId);
+      const session = targetHostNode({ kind: "session", id: job.sessionId });
       if (session) return session;
     }
     // A queued request the executor already claimed carries its target only on
@@ -1280,7 +1323,7 @@
       const host = hostForJob(job);
       const anchor = host ?? hub;
       if (!anchor) return;
-      const id = `builder:${job.taskId ?? job.sessionId ?? job.title ?? loose++}`;
+      const id = `builder:${builderKey(job) ?? loose++}`;
       const fx = ensureFx(id, { pop: true });
       // Slots belong to a worker, not to its current index in a status poll.
       // A peer starting, finishing or being reordered cannot move this orbit.
@@ -1518,7 +1561,13 @@
   function sweepFx() {
     const now = Date.now();
     const still = noMotion();
+    // A read-only node (a group parent that closed while a member still runs)
+    // stays on the board without a lifecycle of its own. An absorb its task
+    // earned would add a dying twin under the same id, and the flight's end
+    // would hide the live node instead.
+    const readOnlyIds = new Set((state.nodes ?? []).filter((node) => node.readOnly && !node.dying).map((node) => node.id));
     for (const [id, fx] of [...state.fx]) {
+      if (readOnlyIds.has(id)) { state.fx.delete(id); continue; }
       if (fx.absorbAt != null) {
         if (still || !fx.wasRendered || now - fx.absorbAt > NODE_ABSORB_TTL) finalizeAbsorb(id, fx);
         else appendDyingNode(id, fx);
@@ -1555,8 +1604,7 @@
         status: fx.task?.status ?? null,
         at: Date.now(),
       };
-      state.absorbed.set(key, [entry, ...(state.absorbed.get(key) ?? [])].slice(0, ABSORBED_MAX));
-      if (state.absorbed.size > 48) for (const stale of [...state.absorbed.keys()].slice(0, state.absorbed.size - 40)) state.absorbed.delete(stale);
+      rememberAbsorbed(key, entry);
     }
     if (host && state.active && !noMotion()) {
       spawnParticles(host, 10, { gold: true });
@@ -1564,7 +1612,21 @@
     }
     if (fx.folded) pushFeed({ noFold: true, kind: "task", text: `finished sessions absorbed · ${fx.label ?? "cluster"}` });
     else if (!fx.builder && fx.task?.status === "done") pushFeed({ noFold: true, kind: "task", text: `task finished · ${fx.task.title ?? "task"}` });
-    if (state.selected) renderInfo();
+    // Only the card that lists this work changes: the host's absorbed list.
+    if (state.selected && (state.selected.id === host?.id || state.selected.id === id)) renderInfo();
+  }
+
+  // A host's absorbed list, newest first. Map.set on a key already present
+  // keeps its old place, so re-insert it: the eviction below drops the least
+  // recently used hosts, never the root's or the hub's busy lists.
+  function rememberAbsorbed(key, entry) {
+    const list = [entry, ...(state.absorbed.get(key) ?? [])].slice(0, ABSORBED_MAX);
+    state.absorbed.delete(key);
+    state.absorbed.set(key, list);
+    if (state.absorbed.size > 48) {
+      const keep = new Set(["__root__", "__assistant__"]);
+      for (const stale of [...state.absorbed.keys()].filter((name) => !keep.has(name)).slice(0, state.absorbed.size - 40)) state.absorbed.delete(stale);
+    }
   }
 
   const easeOut = (t) => 1 - (1 - t) ** 3;
@@ -1737,7 +1799,21 @@
     state.backlog = null;
     state.backlogError = null;
     state.feedDirty = true;
+    // A task read already on its way belongs to the folder it was asked for.
+    state.tasksRevision = (state.tasksRevision ?? 0) + 1;
     if (switched) {
+      // The lifecycle of the old project's nodes goes with it. Kept, the first
+      // board of the new project marked every old task absorbed (ghosts flying
+      // into the new hub), popped its whole backlog as news because the tasks
+      // were already seeded, kept the old root's finished titles on the new
+      // root's card and never recorded the new project's folded cluster.
+      state.fx?.clear?.();
+      state.doneHold?.clear?.();
+      state.absorbed?.clear?.();
+      state.touches?.clear?.();
+      state.expandedTaskGroups?.clear?.();
+      state.tasksSeeded = false;
+      state.foldedAbsorbedAt = 0;
       state.readyPromise = Promise.resolve(window.MefiTree?.ready?.())
         .then(() => {
           refreshGraph();
@@ -1749,10 +1825,14 @@
   }
 
   async function refreshTasks(shared = false) {
+    // A push or a project switch that lands while this read is out is newer
+    // than what the read returns: a stale list would reopen finished work.
+    const revision = state.tasksRevision ?? 0;
     try {
       // Only the initial view shares reads. A refresh following a write must
       // fetch after that write, even if an older startup request is pending.
       const result = await (shared ? read("tasksList") : window.mefiStudio?.tasksList?.());
+      if ((state.tasksRevision ?? 0) !== revision) return;
       takeTasks(result?.tasks);
     } catch {}
   }
@@ -2061,7 +2141,7 @@
     el.rail?.classList.toggle("rail-collapsed", collapsed);
   }
 
-  function setRailTab(name, { save = true, focus = false } = {}) {
+  function setRailTab(name, { save = true, focus = false, render = true } = {}) {
     // Older links open the toolbar dropdown without replacing the rail view.
     if (name === "settings") { openAgentSettings({ focus }); return; }
     let view = RAIL_VIEWS.includes(name) ? name : "work";
@@ -2084,7 +2164,7 @@
     // Never remember "node": it belongs to a selection, not to a launch.
     if (save && view !== "node") writeStore("mefiStudio.cmdRailTab", view);
     applyRailCollapsed();
-    if (view === "node") renderInfo();
+    if (view === "node" && render) renderInfo();
     if (view === "done") void loadDoneLog();
     if (view === "ask") renderAsks();
     state.graphAreaAt = 0;
@@ -3668,7 +3748,7 @@
   function renderHint() {
     if (!el.hint) return;
     let text = DEFAULT_HINT;
-    if (state.treeStatus !== "ok") text = "desktop store not available · the dock still works";
+    if (state.treeStatus !== "ok") text = "Desktop store not available · the dock still works";
     else if (state.query) text = "Enter cycles matches · Esc clears the search";
     else if (state.selected?.kind === "task") text = "Enter opens it in Tasks · [ ] other tasks · Esc clears";
     else if (state.selected?.kind === "assistant") text = "Enter sends · ↓ focuses the composer · Esc clears";
@@ -3956,17 +4036,29 @@
     // radius in the x/z plane at any angle, while its vertical reach is just y.
     // Fitting each axis against its own side of the safe area fills a wide
     // window instead of sizing everything to the shorter side.
+    // The reach is measured when there is no settled layout (a first graph,
+    // Fit, a view switch) and kept while the layout holds: the anchors were
+    // seeded under the fit it gave, so a panel opening scales the drawn tree
+    // with the clear area alone. Re-measured each time, the raw simulation
+    // positions of a builder or loose task arriving far out shrank the whole
+    // settled tree the next time any panel moved.
     let reach = 1;
     let maxY = 1;
-    for (const node of state.nodes) {
-      if (state.view === "2d") {
-        // flat map: horizontal reach is |x|, vertical reach is |z|
-        reach = Math.max(reach, Math.abs(node.x));
-        maxY = Math.max(maxY, Math.abs(node.z));
-      } else {
-        reach = Math.max(reach, Math.hypot(node.x, node.z));
-        maxY = Math.max(maxY, Math.abs(node.y));
+    const kept = state.screenLayout && state.fitReach?.view === state.view ? state.fitReach : null;
+    if (kept) ({ reach, maxY } = kept);
+    else {
+      for (const node of state.nodes) {
+        if (node.kind === "agent" || node.dying || node._absorbed) continue;
+        if (state.view === "2d") {
+          // flat map: horizontal reach is |x|, vertical reach is |z|
+          reach = Math.max(reach, Math.abs(node.x));
+          maxY = Math.max(maxY, Math.abs(node.z));
+        } else {
+          reach = Math.max(reach, Math.hypot(node.x, node.z));
+          maxY = Math.max(maxY, Math.abs(node.y));
+        }
       }
+      if (Number.isFinite(reach) && Number.isFinite(maxY)) state.fitReach = { view: state.view, reach, maxY };
     }
     const area = usableArea();
     // 1.3: perspective magnifies the near side (k up to ~1.25) and halos need air.
@@ -4727,6 +4819,29 @@
     }));
   }
 
+  // Edges index state.nodes, but the frame draws `projected`, which leaves the
+  // hub (and the music node) out. Reading edge.a / edge.b straight into
+  // projected shifted every wire past the hub onto the next node and dropped
+  // the last one, and the branch parents the layouts space by came out wrong
+  // the same way. One remap per graph, reused while the graph holds: an edge
+  // with a hidden end is dropped, the rest point at their projected entries.
+  // drawFrame keeps the result on state.frameEdges for the passes after it.
+  function frameEdges(projected) {
+    const edges = state.edges ?? [];
+    const cached = state.frameEdgeCache;
+    if (cached && cached.nodes === state.nodes && cached.nodeCount === state.nodes.length && cached.edges === edges && cached.edgeCount === edges.length && cached.projectedCount === projected.length) return cached.list;
+    const at = new Map();
+    projected.forEach(({ node }, index) => at.set(node, index));
+    const list = [];
+    for (const edge of edges) {
+      const a = at.get(state.nodes[edge.a]), b = at.get(state.nodes[edge.b]);
+      if (a == null || b == null) continue;
+      list.push(a === edge.a && b === edge.b ? edge : { ...edge, a, b });
+    }
+    state.frameEdgeCache = { nodes: state.nodes, nodeCount: state.nodes.length, edges, edgeCount: edges.length, projectedCount: projected.length, list };
+    return list;
+  }
+
   function primaryBranchParents(projected, edges) {
     const nodes = new Map(projected.map(({ node }) => [node.id, node]));
     const candidates = new Map();
@@ -4894,13 +5009,25 @@
     // fixed. This depends on the viewport, never on a changing work status.
     const rotationRoom = state.view === "3d" && ["constellation", "radial"].includes(state.nodeLayout ?? "constellation")
       ? Math.min(16, Math.max(0, (area.w - 480) / 40)) : 0;
+    // Parents need a small label gutter before their world anchors settle.
+    // A later addition joins its branch at the seeded offset instead.
+    const labelRoomFor = (node) => !fixedIds.size && ["session", "task", "task-group", "assistant"].includes(node.kind) ? Math.min(24, Math.max(0, (area.w - 320) / 20)) : 0;
+    const baseSize = (node) => {
+      const diameter = (node.kind === "todo" ? 14 : 38) + rotationRoom, labelRoom = labelRoomFor(node);
+      return { w: diameter + labelRoom + 14, h: diameter + labelRoom * 0.4 + 14 };
+    };
+    // A tree larger than the frame can hold at full reservation shares the
+    // shortfall evenly: every rect shrinks by the same factor. Unscaled, the
+    // spiral and the grid ran out of room past about ninety nodes and the
+    // rest fell back onto their raw seed points, stacked exactly on each other.
+    const demand = entries.reduce((sum, { node }) => { const size = baseSize(node); return sum + size.w * size.h; }, 0);
+    const density = Math.max(0.45, Math.min(1, Math.sqrt(Math.max(1, area.w * area.h * 0.55) / Math.max(1, demand))));
     for (const { node, p } of entries) {
       // Reserve the largest work rim even while idle. Appearance/effect or
       // status changes must never trigger a reflow of established anchors.
-      const diameter = (node.kind === "todo" ? 14 : 38) + rotationRoom;
-      // Parents need a small label gutter before their world anchors settle.
+      const diameter = ((node.kind === "todo" ? 14 : 38) + rotationRoom) * density;
       // Never recompute this from changing activity or hover state.
-      const labelRoom = !fixedIds.size && ["session", "task", "task-group", "assistant"].includes(node.kind) ? Math.min(24, Math.max(0, (area.w - 320) / 20)) : 0;
+      const labelRoom = labelRoomFor(node) * density;
       const size = { w: diameter + labelRoom, h: diameter + labelRoom * 0.4 };
       const bounds = (x, y) => ({ x: x - size.w / 2 - 7, y: y - size.h / 2 - 7, w: size.w + 14, h: size.h + 14 });
       if (fixedIds.has(node.id)) {
@@ -5080,6 +5207,25 @@
     return moved;
   }
 
+  // The view a layout's anchors were seeded under: the turn, tilt, zoom and
+  // camera at that moment. A layout re-seeded for a new frame (a resize, a rail
+  // folding) seeds under the same view, so its anchors land where the old ones
+  // were instead of being laid out as if seen from wherever the camera now
+  // stands (after a quarter turn, two pixels of width moved nodes 244 px on
+  // average) or at whatever zoom it now has (a close-up shrank the tree).
+  const LAYOUT_SETTLE_MS = 150;
+  function currentSeedView() {
+    const camera = state.camera;
+    return { angle: state.angle, pitch: state.pitch, zoom: state.zoom, camera: camera ? { x: camera.x, y: camera.y, z: camera.z } : null };
+  }
+  function underSeedView(view, read) {
+    if (!view) return read();
+    const kept = { angle: state.angle, pitch: state.pitch, zoom: state.zoom, camera: state.camera, overviewScale: state.overviewScale, overviewOffset: state.overviewOffset };
+    Object.assign(state, { angle: view.angle, pitch: view.pitch, zoom: view.zoom, camera: view.camera ? { ...state.camera, ...view.camera } : state.camera, overviewScale: 1, overviewOffset: null });
+    try { return read(); }
+    finally { Object.assign(state, kept); }
+  }
+
   function layoutProjectedGraph(projected, area, mode, animationTime = Date.now(), still = false) {
     const profiler = globalThis.window?.MefiProfiler;
     const span = profiler?.begin("command.layout");
@@ -5095,9 +5241,25 @@
     // for it made the tree jump under the click. Orbit's overview back-off
     // below still keeps the anchors inside the clear rectangle.
     const frame = state.graphFrame ?? area;
-    const key = `${layoutName}|${state.view}|${frame.x},${frame.y},${frame.w},${frame.h}`;
+    let key = `${layoutName}|${state.view}|${frame.x},${frame.y},${frame.w},${frame.h}`;
+    const previousLayout = state.screenLayout;
+    // Only the frame moved: same arrangement, same view.
+    const frameOnly = Boolean(previousLayout) && previousLayout.key !== key && previousLayout.key.startsWith(`${layoutName}|${state.view}|`);
+    // A window being dragged changes the frame on every event, and re-seeding
+    // two hundred nodes costs tens of milliseconds each time. The settled
+    // anchors keep drawing (the fit follows the frame) until it holds still.
+    if (frameOnly && !still && Number.isFinite(animationTime)) {
+      if (state.pendingLayout?.key !== key) state.pendingLayout = { key, at: animationTime };
+      if (animationTime - state.pendingLayout.at < LAYOUT_SETTLE_MS) key = previousLayout.key;
+    }
     if (state.screenLayout?.key !== key) {
-      state.screenLayout = { key, nodes: new Map(), slots: new Map(), fresh: true };
+      state.pendingLayout = null;
+      // A new frame under an established tree re-seeds it under the view it
+      // was seeded with, and glides there from where the nodes were drawn.
+      // Fit and a mode switch start their own morph and clear the layout
+      // first, so they are not doubled.
+      if (state.screenLayout && state.active && !state.morph && typeof beginLayoutMorph === "function") beginLayoutMorph();
+      state.screenLayout = { key, nodes: new Map(), slots: new Map(), fresh: true, seedView: frameOnly ? previousLayout.seedView ?? null : null };
       state.overviewScale = 1;
       state.overviewOffset = null;
       state.overviewMotion = null;
@@ -5105,10 +5267,20 @@
     }
     const layout = state.screenLayout.nodes;
     const anchors = projected.filter(({ node }) => node.kind !== "agent");
-    const retained = new Set([...anchors.map(({ node }) => node.id), ...(state.allTasks ?? state.tasks ?? []).map((task) => `task:${task.id}`), ...(state.taskGroups ?? []).flatMap((group) => [`task:${group.id}`, ...group.members.map((member) => `task:${member.id}`)])]);
+    // Layout records outlive a node that is hidden for a while (a collapsed
+    // group member, a task pushed off the visible slice), as long as its task
+    // is still on the board. The board's ids are gathered once per board, not
+    // once per frame.
+    const boardTasks = state.allTasks ?? state.tasks ?? [];
+    let boardIds = state.layoutBoardIds;
+    if (boardIds?.tasks !== boardTasks || boardIds.groups !== state.taskGroups) {
+      boardIds = state.layoutBoardIds = { tasks: boardTasks, groups: state.taskGroups, ids: new Set([...boardTasks.map((task) => `task:${task.id}`), ...(state.taskGroups ?? []).flatMap((group) => [`task:${group.id}`, ...group.members.map((member) => `task:${member.id}`)])]) };
+    }
+    const anchorIds = new Set(anchors.map(({ node }) => node.id));
+    const retained = { has: (id) => anchorIds.has(id) || boardIds.ids.has(id) };
     for (const id of layout.keys()) if (!retained.has(id)) layout.delete(id);
     for (const id of state.screenLayout.slots.keys()) if (!retained.has(id)) state.screenLayout.slots.delete(id);
-    const parentIds = cachedBranchParents(projected, state.edges ?? []);
+    const parentIds = cachedBranchParents(projected, state.frameEdges ?? state.edges ?? []);
     state.branchParents = parentIds;
     const previousParents = state.screenLayout.parents ??= new Map();
     for (const id of previousParents.keys()) if (!retained.has(id)) previousParents.delete(id);
@@ -5134,9 +5306,18 @@
     for (const { node, p } of anchors) {
       const saved = layout.get(node.id);
       const world = saved?.world ?? { x: node.x, y: node.y, z: node.z };
-      const source = saved ? project(world) : { ...p };
-      if (saved) { Object.assign(p, source); fixedIds.add(node.id); }
-      node._layoutAnchor = { ...world };
+      if (saved) {
+        // drawFrame already projected this anchor (p.anchor) when it was
+        // saved last frame at the same spot; project only what moved.
+        const drawn = p.anchor;
+        if (!(drawn && drawn === node._layoutAnchor && drawn.x === world.x && drawn.y === world.y && drawn.z === world.z)) Object.assign(p, project(world));
+        fixedIds.add(node.id);
+      }
+      // One anchor object per node, refreshed in place: never the saved
+      // record itself, which only a re-seed may change.
+      const anchor = node._layoutAnchor;
+      if (anchor && anchor !== world) { anchor.x = world.x; anchor.y = world.y; anchor.z = world.z; }
+      else node._layoutAnchor = { x: world.x, y: world.y, z: world.z };
     }
     // A narrow tree needs clear bands where active task names can fit.
     // Filling every last gap with orbs otherwise leaves Auto with no labels.
@@ -5154,18 +5335,34 @@
         let parent = parentIds.get(node.id);
         const seen = new Set([node.id]);
         while (parent && !seen.has(parent) && !fixed.has(parent)) { seen.add(parent); parent = parentIds.get(parent); }
+        // The seed's offset from its parent is in unscaled seed pixels, while
+        // the saved parent is drawn under the Overview's framing: scale the
+        // offset into that framing. Added raw, unprojectForLayout divided it
+        // back out, so each live addition reached 1/framing too far, widened
+        // the tree, shrank the framing again and compounded (Branches fell
+        // from 0.69 to 0.22 over two dozen additions).
         const original = seeds.get(parent), saved = fixed.get(parent);
-        p.x = seed.x + (original && saved ? saved.x - original.x : 0);
-        p.y = seed.y + (original && saved ? saved.y - original.y : 0);
+        if (original && saved) {
+          const framing = Number.isFinite(state.overviewScale) && state.overviewScale > 0 ? state.overviewScale : 1;
+          p.x = saved.x + (seed.x - original.x) * framing;
+          p.y = saved.y + (seed.y - original.y) * framing;
+        } else {
+          p.x = seed.x;
+          p.y = seed.y;
+        }
       }
     }
     // Saved anchors only need projection. Rebuilding the collision grid for
     // an entirely fixed graph cannot move a node and wastes every idle frame.
     if (fixedIds.size !== anchors.length) arrangeProjectedNodes(anchors, nodeArea, { mode: "free", fixedIds });
+    // A fresh layout seeds under its recorded view (a first seeding records
+    // the current one); nodes joining a settled layout are placed beside what
+    // is on screen now, so they keep the current view.
+    if (state.screenLayout.fresh) state.screenLayout.seedView ??= currentSeedView();
+    const seedView = state.screenLayout.fresh ? state.screenLayout.seedView : null;
     for (const { node, p } of anchors) {
       if (layout.has(node.id)) continue;
-      const depthSource = layoutDepthSource(node, seeds.get(node.id), area, layoutName, parentIds);
-      const anchor = unprojectForLayout(p, depthSource);
+      const anchor = underSeedView(seedView, () => unprojectForLayout(p, layoutDepthSource(node, seeds.get(node.id), area, layoutName, parentIds)));
       layout.set(node.id, { world: anchor }); node._layoutAnchor = { ...anchor };
       Object.assign(p, project(anchor));
     }
@@ -5227,6 +5424,17 @@
       state.overviewAt = animationTime;
       state.overviewScale = scale;
       if (scale !== previousScale || state.overviewOffset?.x !== previousOffset.x || state.overviewOffset?.y !== previousOffset.y) for (const { node, p } of anchors) Object.assign(p, project(node._layoutAnchor));
+    } else if (state.overviewOffset && (state.focus || mode === "follow")) {
+      // The Overview's drift is a lens on the whole tree. A camera handed a
+      // target (a clicked node, Follow) centres on the camera and would land
+      // the target up to the drift away from the centre, so the lens folds
+      // away under it. A plain free pan keeps it: that is the owner's view.
+      const dt = Math.max(0, Math.min(0.1, (animationTime - (state.overviewAt ?? animationTime)) / 1000));
+      const keep = still ? 0 : Math.exp(-dt * 4);
+      const offset = { x: state.overviewOffset.x * keep, y: state.overviewOffset.y * keep };
+      state.overviewOffset = Math.hypot(offset.x, offset.y) < 0.5 ? null : offset;
+      state.overviewAt = animationTime;
+      for (const { node, p } of anchors) Object.assign(p, project(node._layoutAnchor));
     }
     if (mode === "free" && !state.panning && !state.rotating && !state.focus && !state.director && !state.settingsPreview) leashFreeCamera(anchors, frame, still);
     const occupied = anchors.filter(({ node }) => !node.dying && !node._absorbed).map(({ node, p }) => ({ x: p.x, y: p.y, radius: node.kind === "todo" ? 8 : 25 }));
@@ -5657,10 +5865,18 @@
       if (typeof hostedOnCard === "function" && hostedOnCard(node)) continue;
       const alpha = speechAlpha(bubble, now, still) * Math.max(0.35, node._fade ?? 1);
       if (alpha <= 0.01) continue;
-      const lines = bubble.lines ?? speechLines(ctx, bubble.text, maxWidth - 22);
-      bubble.lines = lines;
+      // The wrap belongs to the width it was made for: a resize or a panel
+      // opening re-wraps the remark instead of keeping lines that no longer
+      // fit. The widest line is measured once per wrap, not once per frame.
+      const wrapAt = Math.round(maxWidth - 22);
+      if (!bubble.lines || bubble.wrapAt !== wrapAt) {
+        bubble.lines = speechLines(ctx, bubble.text, wrapAt);
+        bubble.wrapAt = wrapAt;
+        bubble.textWidth = null;
+      }
+      const lines = bubble.lines;
       ctx.font = SPEECH_FONT;
-      const textWidth = Math.max(...lines.map((line) => ctx.measureText(line).width));
+      const textWidth = bubble.textWidth ??= Math.max(...lines.map((line) => ctx.measureText(line).width));
       const marked = Boolean(SPEECH_MARKS[bubble.kind]);
       const w = Math.ceil(textWidth + 18 + (marked ? 13 : 0));
       const h = 12 + lines.length * 14;
@@ -5787,8 +6003,16 @@
     return state.nodes.find((node) => node.kind === "root") ?? null;
   }
 
+  // On the board and still drawn: a dying node is flying home and an absorbed
+  // one has already sunk into its host until the next rebuild drops it. The
+  // keys, search and sibling lists must not land on either, or the camera flies
+  // to empty space and opens the card of work that is no longer there.
+  const liveNode = (node) => Boolean(node) && !node.dying && !node._absorbed;
+  const TASK_KINDS = new Set(["task", "task-group"]);
+  const isTaskNode = (node) => TASK_KINDS.has(node?.kind);
+
   function sessionNodes() {
-    return state.nodes.filter((node) => node.kind === "session").sort((a, b) => (b.updated ?? 0) - (a.updated ?? 0));
+    return state.nodes.filter((node) => node.kind === "session" && liveNode(node)).sort((a, b) => (b.updated ?? 0) - (a.updated ?? 0));
   }
 
   // What ← → walk at the top level: the assistant, the sessions, the folded cluster.
@@ -5799,13 +6023,13 @@
   }
 
   function taskNodes() {
-    return state.nodes.filter((node) => ["task", "task-group"].includes(node.kind) && !node.dying).sort((a, b) => (b.task?.updatedAt ?? 0) - (a.task?.updatedAt ?? 0));
+    return state.nodes.filter((node) => isTaskNode(node) && liveNode(node)).sort((a, b) => (b.task?.updatedAt ?? 0) - (a.task?.updatedAt ?? 0));
   }
 
   function childrenOf(sessionId) {
     if (!sessionId) return [];
-    const todos = state.nodes.filter((node) => node.kind === "todo" && node.sessionId === sessionId);
-    const tasks = state.nodes.filter((node) => node.kind === "task" && !node.dying && node.anchorSessionId === sessionId);
+    const todos = state.nodes.filter((node) => node.kind === "todo" && liveNode(node) && node.sessionId === sessionId);
+    const tasks = state.nodes.filter((node) => isTaskNode(node) && liveNode(node) && node.anchorSessionId === sessionId);
     return todos.concat(tasks);
   }
 
@@ -5875,7 +6099,7 @@
   // graph pushes (the board, the store's todos, checkpoints; up to once a
   // second per running job) share their refreshGraph the same way.
   const FEED_PUSH_MS = 250;
-  function coalescedPush(run) {
+  function coalescedPush(run, wanted = () => state.active) {
     let timer = 0;
     let ranAt = 0;
     return () => {
@@ -5889,12 +6113,14 @@
       timer = setTimeout(() => {
         timer = 0;
         ranAt = Date.now();
-        if (state.active) run();
+        if (wanted()) run();
       }, wait);
     };
   }
   const paintFeedSoon = coalescedPush(() => renderFeed());
-  const refreshGraphSoon = coalescedPush(() => refreshGraph());
+  // Home's backdrop draws the same graph, so the last push of a burst reaches
+  // it too instead of waiting for the next backdrop tick.
+  const refreshGraphSoon = coalescedPush(() => refreshGraph(), () => state.active || state.homeBackdrop);
 
   function feedLine(item) {
     if (item.kind === "tool") return `${item.tool ?? "tool"} ${item.file ?? ""}`.trim();
@@ -6844,7 +7070,9 @@
         bell({ quick: true, level: 0.6 });
       }
     }
-    if (data.todos) refreshGraphSoon();
+    // The rail applies this push after us; once it announces its rebuilds
+    // (mefi:tree-rebuilt), that is when the graph is worth re-reading.
+    if (data.todos && !state.treeAnnounces) refreshGraphSoon();
     else if (state.camMode === "follow") updateFollowCamera(now, true);
   }
 
@@ -7187,6 +7415,12 @@
       try {
         drawFrame(time);
       } catch (error) {
+        // A throw between drawFrame's clip and its restore would leave every
+        // later frame one save deep inside this frame's clip: clears and the
+        // sky would stop at the old graph area for good. Close it here.
+        const open = state.frameClip;
+        state.frameClip = null;
+        if (open) for (const layer of open) { try { layer.restore(); } catch {} }
         if (!state.frameError) {
           state.frameError = true;
           // The stack, not just the message: a one-shot early-frame error must
@@ -7203,7 +7437,12 @@
         }
       }
     }
-    scheduleFrame(frameGap(hot) - (time - lastFrameAt));
+    // At rest the next frame is a rest frame away, on a timer: booked at the
+    // ambient pace it went through requestAnimationFrame, which ran this
+    // callback on every display refresh only to skip the draw (5 empty wakes
+    // per rest frame at 60 Hz, 13 at 144 Hz). Input ends the sleep at once
+    // (wakeFrames); a data push is drawn by the next rest frame.
+    scheduleFrame(frameGap(hot, calm) - (time - lastFrameAt));
   }
 
   function normalizeAudioPreferences(value, legacyResponse = null) {
@@ -7242,9 +7481,33 @@
     renderMusicStatus(true);
   }
 
+  // While music drives the tree, every wire asked for its own copy of the
+  // frame's music (the drum-free view, then its band's split) and every node
+  // for a fresh response, a hundred-odd objects a frame. The views below are
+  // made once per analysed frame (keyed on that frame's object, so they go
+  // with it) and reused by every wire and node that asks.
+  const musicViews = new WeakMap();
+  const musicView = (music) => {
+    let view = musicViews.get(music);
+    if (!view) { view = { calm: null, bands: new Map() }; musicViews.set(music, view); }
+    return view;
+  };
+  const NO_WAVEFORM = Object.freeze([]);
+  const AUDIO_BASS_KINDS = new Set(["root", "assistant", "music"]);
+  const AUDIO_TREBLE_KINDS = new Set(["todo", "agent", "checkpoint"]);
+  const AUDIO_BANDS = ["bass", "mid", "treble"];
+  const SILENT_RESPONSE = Object.freeze(Object.fromEntries(AUDIO_BANDS.map((band) => [band, Object.freeze({ band, level: 0, beat: 0 })])));
+  const unitClamp = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+  const waveTints = new WeakMap();
+  // Per-node memos live beside the nodes, not on them: audio never writes to
+  // a node, and a rebuilt node object starts fresh.
+  const nodeBands = new WeakMap();
+  const cableHashes = new WeakMap();
+
   function visualMusicResponse(music, effects = {}) {
     if (!music || effects.percussion === true) return music;
-    return { ...music, beat: 0, kick: 0, snare: 0, hat: 0 };
+    const view = musicView(music);
+    return view.calm ??= { ...music, beat: 0, kick: 0, snare: 0, hat: 0 };
   }
 
   function hashedAudioBand(key) {
@@ -7271,20 +7534,37 @@
     if (!music || band === "mix") return music;
     // A full-mix waveform would make every cable jump to the same drum hit.
     // Split cables use only their own band's envelope and attack contour.
-    return { bass: band === "bass" ? music.bass : 0, bassline: band === "bass" ? music.bassline ?? music.bass : 0,
-      mid: band === "mid" ? music.mid : 0, treble: band === "treble" ? music.treble : 0,
-      kick: band === "bass" ? music.kick ?? music.beat : 0, snare: band === "mid" ? music.snare : 0,
-      hat: band === "treble" ? music.hat : 0, beat: 0, waveform: [] };
+    const bands = musicView(music).bands;
+    let split = bands.get(band);
+    if (!split) {
+      split = { bass: band === "bass" ? music.bass : 0, bassline: band === "bass" ? music.bassline ?? music.bass : 0,
+        mid: band === "mid" ? music.mid : 0, treble: band === "treble" ? music.treble : 0,
+        kick: band === "bass" ? music.kick ?? music.beat : 0, snare: band === "mid" ? music.snare : 0,
+        hat: band === "treble" ? music.hat : 0, beat: 0, waveform: NO_WAVEFORM };
+      bands.set(band, split);
+    }
+    return split;
   }
 
   // A node keeps its frequency voice across sorting, camera moves and rebuilds.
   // Music changes light within the existing surface, never its layout or status.
   function nodeAudioResponse(node, music, enabled, response = 1) {
     let band = "mid";
-    if (["root", "assistant", "music"].includes(node.kind)) band = "bass";
-    else if (["todo", "agent", "checkpoint"].includes(node.kind)) band = "treble";
-    else if (node.kind === "task" || node.kind === "task-group") band = hashedAudioBand(taskGroupAudioKey(node) ?? node.id);
-    const clamp = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+    if (AUDIO_BASS_KINDS.has(node.kind)) band = "bass";
+    else if (AUDIO_TREBLE_KINDS.has(node.kind)) band = "treble";
+    else if (node.kind === "task" || node.kind === "task-group") {
+      // The voice is the node's for life (its group's, inside a task group):
+      // hash its key once, not every frame.
+      const key = taskGroupAudioKey(node) ?? node.id;
+      let known = nodeBands.get(node);
+      if (known?.key !== key) {
+        known = { key, band: hashedAudioBand(key) };
+        nodeBands.set(node, known);
+      }
+      band = known.band;
+    }
+    if (!enabled) return SILENT_RESPONSE[band];
+    const clamp = unitClamp;
     const strength = Number.isFinite(Number(response)) ? Math.max(0, Math.min(2, Number(response))) : 0.35;
     const transient = band === "bass" ? music?.kick : band === "mid" ? music?.snare : music?.hat;
     const beat = enabled ? clamp((clamp(transient ?? music?.beat) * 0.85 + clamp(music?.beat) * 0.15) * strength) : 0;
@@ -7298,12 +7578,19 @@
     ctx.save();
     ctx.globalAlpha = (node._fade ?? 1) * emphasis(node);
     // Leave the status rim and central music/assistant glyph readable.
-    const core = radius * (0.28 + level * 0.42 + beat * 0.1);
-    const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, Math.max(1, core));
-    glow.addColorStop(0, rgba(tint, Math.min(0.9, level * 0.58 + beat * 0.32)));
-    glow.addColorStop(1, rgba(tint, 0));
-    ctx.fillStyle = glow;
-    ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, core), 0, Math.PI * 2); ctx.fill();
+    const core = Math.max(1, radius * (0.28 + level * 0.42 + beat * 0.1));
+    // The disc is traced in canvas space, so the light never leaves the orb;
+    // its fade is the sky's unit wash for this canvas and tint (unitGlow),
+    // mapped onto it by the transform at fill time with the strength in
+    // globalAlpha, instead of a new gradient per node per frame.
+    ctx.beginPath(); ctx.arc(p.x, p.y, core, 0, Math.PI * 2);
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.scale(core, core);
+    ctx.globalAlpha *= Math.min(0.9, level * 0.58 + beat * 0.32);
+    ctx.fillStyle = unitGlow(ctx, "wash", tint);
+    ctx.fill();
+    ctx.restore();
     ctx.strokeStyle = rgba(tint, level * 0.6 + beat * 0.24);
     ctx.lineWidth = Math.min(1.8, radius * 0.14);
     ctx.beginPath(); ctx.arc(p.x, p.y, radius * (0.72 + level * 0.12), 0, Math.PI * 2); ctx.stroke();
@@ -7367,16 +7654,36 @@
 
   function drawAudioConnection(ctx, a, b, tint, lifetime, time, curved = false, sourceLink = false) {
     if (lifetime <= 0.02) return;
-    let seed = 0;
-    for (const char of `${a.node.id}:${b.node.id}`) seed = (seed * 31 + char.charCodeAt(0)) >>> 0;
-    const band = state.audioEffects?.splitBands === false ? "mix" : connectionAudioBand(a.node.id, b.node.id, b.node);
+    // The cable's seed and its voice (connectionAudioBand's: its task group's
+    // band, else the hash of its two ends) are remembered for the child while
+    // its parent and group stay the same, instead of a string built and
+    // hashed per wire per frame.
+    const group = taskGroupAudioKey(b.node);
+    let cable = cableHashes.get(b.node);
+    if (cable?.from !== a.node.id || cable.to !== b.node.id || cable.group !== group) {
+      let hash = 0;
+      for (const char of `${a.node.id}:${b.node.id}`) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+      cable = { from: a.node.id, to: b.node.id, group, hash, band: group ? hashedAudioBand(group) : AUDIO_BANDS[hash % 3] };
+      cableHashes.set(b.node, cable);
+    }
+    const seed = cable.hash;
+    const band = state.audioEffects?.splitBands === false ? "mix" : cable.band;
     const music = connectionMusicResponse(visualMusicResponse(state.music, state.audioEffects), band);
     const wave = audioConnectionWave(a.p, b.p, music, state.audioResponse, time, curved, seed % 628 / 100);
     if (!wave) return;
     const { points, activity } = wave;
     const attack = Math.max(wave.kick, wave.snare, wave.hat) * Math.min(1, Math.max(0, state.audioResponse ?? 0.35));
     const bandTint = wave.treble > wave.bass && wave.treble > wave.mid ? NODE_RGB.session : wave.mid > wave.bass ? NODE_RGB.pending : NODE_RGB.warm;
-    const color = tint.map((channel, index) => Math.round(channel * 0.4 + (bandTint?.[index] ?? channel) * 0.6));
+    // One blended triple per (tint, band tint): a fresh array per wire missed
+    // the colour-string memo, which is keyed on the triple itself.
+    let blends = waveTints.get(tint);
+    if (!blends) { blends = new Map(); waveTints.set(tint, blends); }
+    let color = blends.get(bandTint);
+    if (!color) {
+      color = Object.freeze(tint.map((channel, index) => Math.round(channel * 0.4 + (bandTint?.[index] ?? channel) * 0.6)));
+      if (blends.size >= 8) blends.clear();
+      blends.set(bandTint, color);
+    }
     ctx.save(); ctx.lineCap = "round"; ctx.lineJoin = "round";
     ctx.beginPath(); ctx.moveTo(points[0].x, points[0].y);
     for (let index = 1; index < points.length; index += 1) ctx.lineTo(points[index].x, points[index].y);
@@ -7384,7 +7691,8 @@
     ctx.strokeStyle = rgba(color, lifetime * Math.min(0.85, activity * 0.62 + attack * 0.2));
     ctx.lineWidth = (sourceLink ? 1.6 : 1.1) + attack * 0.9; ctx.stroke();
     ctx.restore();
-    state.audioWaves.push({ from: a.node.id, to: b.node.id, sourceLink, band, ...wave });
+    wave.from = a.node.id; wave.to = b.node.id; wave.sourceLink = sourceLink; wave.band = band;
+    state.audioWaves.push(wave);
   }
 
   function drawGraphConnections(ctx, projected, runningIds, audioLinked = false, time = 0, layers = null) {
@@ -7449,7 +7757,7 @@
     const bend = nodeStyles ? { x1: 0, y1: 0, x2: 0, y2: 0 } : null;
     // Keep the work tether underneath each waveform so its endpoints and
     // assignment remain readable as the sound bends the connection.
-    for (const edge of state.edges) {
+    for (const edge of state.frameEdges ?? state.edges) {
       const a = projected[edge.a], b = projected[edge.b];
       if (!a || !b || a.node._absorbed || b.node._absorbed || a.node.kind === "agent" || b.node.kind === "agent") continue;
       const lifetime = Math.min(a.node._fade ?? 1, b.node._fade ?? 1);
@@ -7558,6 +7866,44 @@
   // The sky behind the constellation: the theme background, the scene the
   // theme (or the override) asked for, then the core glow and the vignette
   // every scene shares. Motion off freezes every scene at its resting pose.
+  // A soft wash, a bokeh disc and a firefly's glow are each one tint fading
+  // out: built once per canvas and tint in unit space, then drawn under a
+  // transform with their alpha in globalAlpha. Built per wash per frame they
+  // cost the nebula sky seven gradients, bokeh 22 and the fireflies up to 34,
+  // and nebula and bokeh are skies the rest cadence still draws.
+  const backdropGlows = new WeakMap();
+  function unitGlow(ctx, kind, triple) {
+    let kinds = backdropGlows.get(ctx);
+    if (!kinds) { kinds = new Map(); backdropGlows.set(ctx, kinds); }
+    let paints = kinds.get(kind);
+    if (!paints) { paints = new Map(); kinds.set(kind, paints); }
+    let paint = paints.get(triple);
+    if (!paint) {
+      if (paints.size >= 16) paints.clear();
+      if (kind === "disc") {
+        paint = ctx.createRadialGradient(0, 0, 0.55, 0, 0, 1);
+        paint.addColorStop(0, rgba(triple, 1));
+        paint.addColorStop(0.85, rgba(triple, 0.8));
+        paint.addColorStop(1, rgba(triple, 0));
+      } else {
+        paint = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+        paint.addColorStop(0, rgba(triple, 1));
+        paint.addColorStop(1, rgba(triple, 0));
+      }
+      paints.set(triple, paint);
+    }
+    return paint;
+  }
+  function fillGlow(ctx, kind, triple, x, y, r, alpha) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(r, r);
+    ctx.globalAlpha *= alpha;
+    ctx.fillStyle = unitGlow(ctx, kind, triple);
+    ctx.fillRect(-1, -1, 2, 2);
+    ctx.restore();
+  }
+
   function drawBackdrop(ctx, time, still, energy, musicBands, musicBeat) {
     const width = el.width, height = el.height;
     const media = globalThis.document?.body?.dataset?.mediaBackground === "true";
@@ -7567,8 +7913,20 @@
     // Media supplies the sky; keep both node layers at their normal opacity.
     if (media) return;
     const scene = activeBackdrop();
-    const backdrop = hexToRgb(state.canvasPalette?.background ?? "#050507");
-    const accent = state.canvasPalette?.accent ? hexToRgb(state.canvasPalette.accent) : NODE_RGB.warm;
+    // One triple per palette colour, not one per frame: the colour-string memo
+    // (rgb/rgba) is keyed on the triple itself and missed every frame.
+    const tripleOf = (hex) => {
+      const cache = (state.backdropTriples ??= new Map());
+      let triple = cache.get(hex);
+      if (!triple) {
+        if (cache.size >= 16) cache.clear();
+        triple = Object.freeze(hexToRgb(hex));
+        cache.set(hex, triple);
+      }
+      return triple;
+    };
+    const backdrop = tripleOf(state.canvasPalette?.background ?? "#050507");
+    const accent = state.canvasPalette?.accent ? tripleOf(state.canvasPalette.accent) : NODE_RGB.warm;
     const bright = NODE_RGB.warm;
     const ink = NODE_RGB.session;
     const diagonal = Math.hypot(width, height);
@@ -7593,12 +7951,8 @@
     ctx.fillStyle = skyPaints.sky;
     ctx.fillRect(0, 0, width, height);
     const nebula = (x, y, r, triple, alpha) => {
-      if (alpha <= 0.002) return;
-      const wash = ctx.createRadialGradient(x, y, 0, x, y, r);
-      wash.addColorStop(0, rgba(triple, alpha));
-      wash.addColorStop(1, rgba(triple, 0));
-      ctx.fillStyle = wash;
-      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      if (alpha <= 0.002 || !(r > 0)) return;
+      fillGlow(ctx, "wash", triple, x, y, r, alpha);
     };
     // starfield: depth bands wheeling at a fraction of the orbit rate, so the
     // sky drifts against the constellation; sizes and tones vary, and a
@@ -7754,11 +8108,7 @@
         const x = hash01(4.3, index) * width + Math.sin(clock / (5000 + hash01(4.4, index) * 4000) + index) * 24;
         const y = height * (0.3 + hash01(4.5, index) * 0.65) + Math.cos(clock / (6000 + hash01(4.6, index) * 5000) + index * 1.3) * 18;
         const size = 1.4 + blink * 1.6;
-        const glow = ctx.createRadialGradient(x, y, 0, x, y, size * 4);
-        glow.addColorStop(0, rgba(NODE_RGB.live, blink * 0.55));
-        glow.addColorStop(1, rgba(NODE_RGB.live, 0));
-        ctx.fillStyle = glow;
-        ctx.fillRect(x - size * 4, y - size * 4, size * 8, size * 8);
+        fillGlow(ctx, "wash", NODE_RGB.live, x, y, size * 4, blink * 0.55);
         ctx.globalAlpha = Math.pow(blink, 1.5);
         ctx.fillStyle = "#e8ffd0";
         ctx.beginPath(); ctx.arc(x, y, size * 0.6, 0, Math.PI * 2); ctx.fill();
@@ -7775,12 +8125,7 @@
         const mix = hash01(8.6, index);
         const triple = mix < 0.5 ? accent : mix < 0.8 ? bright : ink;
         const alpha = (0.035 + hash01(8.7, index) * 0.05) * (0.8 + 0.2 * breathe) + energy * 0.02;
-        const disc = ctx.createRadialGradient(x, y, r * 0.55, x, y, r);
-        disc.addColorStop(0, rgba(triple, alpha));
-        disc.addColorStop(0.85, rgba(triple, alpha * 0.8));
-        disc.addColorStop(1, rgba(triple, 0));
-        ctx.fillStyle = disc;
-        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+        fillGlow(ctx, "disc", triple, x, y, r, alpha);
       }
       ctx.restore();
       stars([{ count: 24, seed: 11.3, spin: 0.012, tempo: 3400, size: 0.7, alpha: 0.12 }]);
@@ -7927,11 +8272,31 @@
     return { number, title, mark, counts, lines: lines.slice(0, 2) };
   }
 
+  // Callout titles are whole task and session titles, often a hundred
+  // characters and more. Trimming them one character at a time measured (and
+  // cached) every prefix, so six long cards overflowed the width cache and
+  // cleared it every frame. The cut is found by bisection, capped first the way
+  // labelText caps, and the answer is kept per font, width and text.
   function clipLine(ctx, font, text, maxWidth) {
+    const cache = (state.clipLines ??= new Map());
+    const key = `${font}|${Math.round(maxWidth)}|${text}`;
+    const known = cache.get(key);
+    if (known !== undefined) return known;
     let value = String(text ?? "").replace(/\s+/g, " ").trim();
-    if (measure(ctx, font, value) <= maxWidth) return value;
-    while (value.length > 1 && measure(ctx, font, `${value}…`) > maxWidth) value = value.slice(0, -1);
-    return `${value.trimEnd()}…`;
+    let result = value;
+    if (measure(ctx, font, value) > maxWidth) {
+      value = value.slice(0, 160);
+      let low = 1, high = value.length;
+      while (low < high) {
+        const middle = Math.ceil((low + high) / 2);
+        if (measure(ctx, font, `${value.slice(0, middle)}…`) <= maxWidth) low = middle;
+        else high = middle - 1;
+      }
+      result = `${value.slice(0, low).trimEnd()}…`;
+    }
+    if (cache.size >= 256) cache.delete(cache.keys().next().value);
+    cache.set(key, result);
+    return result;
   }
 
   // The card's measurements: its width from the title row, the title clipped
@@ -8232,8 +8597,8 @@
     drawCalloutMark(ctx, content.mark, x + 5, baseline - 4, tint);
     x += 15;
     if (content.number) {
+      const nw = measure(ctx, CALLOUT_NUMBER_FONT, content.number) + 8;
       ctx.font = CALLOUT_NUMBER_FONT;
-      const nw = ctx.measureText(content.number).width + 8;
       ctx.beginPath(); ctx.roundRect(x, baseline - 10.5, nw, 13, 3.5); ctx.fillStyle = rgba(tint, filled ? 0.28 : 0.2); ctx.fill();
       ctx.fillStyle = rgba(tint, 1); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(content.number, x + 4, baseline - 0.5);
       x += nw + 5;
@@ -8442,9 +8807,11 @@
     }
     return true;
   }
-  // Ends a rest: the next frame comes at the ambient pace (or sooner).
+  // Ends a rest: the next frame comes at the ambient pace (or sooner). A rest
+  // sleeps on a timer, so input cuts it short instead of waiting it out.
   function wakeFrames() {
     state.calmFrames = 0;
+    if (frameTimer && state.active && !document.hidden && !document.body?.dataset?.sheet) scheduleFrame(0);
   }
 
   // A pulse's head glow (see drawFrame) and its comet tail's two stops,
@@ -8588,11 +8955,23 @@
     ctx.rect(clip.x, clip.y, clip.w, clip.h);
     ctx.clip();
     if (far !== ctx) { far.save(); far.beginPath(); far.rect(clip.x, clip.y, clip.w, clip.h); far.clip(); }
+    // Open until the restore below; a throw in between is closed by frame().
+    state.frameClip = far !== ctx ? [ctx, far] : [ctx];
 
     syncAgentMotion(Date.now(), time);
     stepFx(Date.now());
     stepDoneHold(Date.now());
-    const projected = state.nodes.filter((node) => node.kind !== "assistant" && node.kind !== "music").map((node) => ({ node, p: project(node) }));
+    // A node with a saved layout record is drawn at its anchor: project that
+    // (the layout then reuses it) instead of the raw position it replaces.
+    const savedLayout = state.screenLayout?.nodes;
+    const projected = state.nodes.filter((node) => node.kind !== "assistant" && node.kind !== "music").map((node) => {
+      const anchor = node.kind !== "agent" && !node.dying && node._layoutAnchor && savedLayout?.has(node.id) ? node._layoutAnchor : null;
+      const p = project(anchor ?? node);
+      if (anchor) p.anchor = anchor;
+      return { node, p };
+    });
+    // The layout and the wires index `projected`, not state.nodes.
+    state.frameEdges = frameEdges(projected);
     const runningIds = autopilotBusyIds(state.assistant);
     const runningJobs = autopilotJobs(state.assistant);
     // Motion records (renderer/node-styles.js) live by id: a refresh that
@@ -8644,13 +9023,18 @@
       for (const entry of projected) {
         const fx = state.fx.get(entry.node.id);
         if (!fx || fx.builder) continue;
-        const hostP = pointOf.get(absorbHost(fx)?.id);
+        const hostId = absorbHost(fx)?.id;
+        const hostP = pointOf.get(hostId);
         if (!hostP) continue;
         if (fx.absorbAt != null) {
           const t = Math.min(1, Math.max(0, (nowFx - fx.absorbAt) / NODE_ABSORB_MS));
           fx.fromScreen ??= { x: entry.p.x, y: entry.p.y };
           const e = smoothStep(t);
           entry.p = { ...entry.p, x: fx.fromScreen.x + (hostP.x - fx.fromScreen.x) * e, y: fx.fromScreen.y + (hostP.y - fx.fromScreen.y) * e };
+          // A live shape moves the host after this: the flight tells it where
+          // home is and how far along it is, so the node lands on the host
+          // where the host is drawn.
+          entry.flight = { hostId, e };
           lifeHot = true;
         } else if (fx.bornAt != null && nowFx - fx.bornAt >= 0 && nowFx - fx.bornAt < NODE_GROW_MS) {
           const e = easeOut((nowFx - fx.bornAt) / NODE_GROW_MS);
@@ -8979,8 +9363,15 @@
     }
     ctx.restore();
     if (far !== ctx) far.restore();
+    state.frameClip = null;
     syncFarLayer(liveFocusIds);
     state.calmFrames = sceneAtRest(projected, runningIds, still, audioLinked) ? (state.calmFrames ?? 0) + 1 : 0;
+    // A still pointer over a turning or gliding tree: ask again what is under
+    // it now that this frame's positions are known (a few times a second).
+    if (state.pointer && !state.panning && !state.rotating && !scenery && time - (state.pointerHoverAt ?? -Infinity) >= 150) {
+      state.pointerHoverAt = time;
+      pointerHover(state.pointer.x, state.pointer.y);
+    }
   }
 
   // ---------- labels ----------
@@ -8988,7 +9379,9 @@
     const key = `${font}|${text}`;
     let width = state.labelWidths.get(key);
     if (width == null) {
-      if (state.labelWidths.size > LABEL_CACHE_MAX) state.labelWidths.clear();
+      // Oldest first, not all at once: a burst of new text evicts what it
+      // displaced instead of re-measuring every label on the next frame.
+      if (state.labelWidths.size > LABEL_CACHE_MAX) state.labelWidths.delete(state.labelWidths.keys().next().value);
       ctx.font = font;
       width = ctx.measureText(text).width;
       state.labelWidths.set(key, width);
@@ -9218,7 +9611,19 @@
 
   // Important labels can search hundreds of free slots. Only nearby nodes
   // can obstruct one; keep the exact padded overlap test inside those cells.
+  // The callouts, the speech bubbles and the labels each ask for the grid in
+  // the same frame, over the same projected list, after every orb has its
+  // place: build it once per frame. Outside a counted frame it is rebuilt.
   function nodeLabelBlocker(projected) {
+    const frame = state.frameNo;
+    const kept = state.labelBlocker;
+    if (Number.isFinite(frame) && kept?.frame === frame && kept.projected === projected && kept.count === projected.length) return kept.blocker;
+    const blocker = buildLabelBlocker(projected);
+    state.labelBlocker = Number.isFinite(frame) ? { frame, projected, count: projected.length, blocker } : null;
+    return blocker;
+  }
+
+  function buildLabelBlocker(projected) {
     const cells = new Map(), broad = [], rects = [], ghosts = [];
     const cellSize = 64;
     for (const { node, p } of projected) {
@@ -9563,7 +9968,7 @@
     if (best) return best.node;
     // labels are part of the node: clicking the text selects it
     for (const node of state.nodes) {
-      if (node.kind === "assistant" || node.kind === "music") continue;
+      if (node.kind === "assistant" || node.kind === "music" || node.dying || node._absorbed) continue;
       const rect = node._label;
       if (!rect) continue;
       if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) return node;
@@ -9589,6 +9994,22 @@
       if (Math.hypot(excl.x - x, excl.y - y) <= excl.r) return node;
     }
     return null;
+  }
+
+  // What the pointer rests on. The mousemove handler asks on every move, and
+  // the frame loop asks again while the tree turns or glides under a still
+  // pointer, so the lift, the cursor and the tip follow the node that is
+  // actually under it instead of sticking to one that rotated away.
+  function pointerHover(x, y) {
+    state.hoverNode = nodeAt(x, y) ?? exclAt(x, y);
+    state.hoverBubble = bubbleAt(x, y);
+    state.hoverSpeech = state.hoverNode || state.hoverBubble ? null : speechAt(x, y)?.id ?? null;
+    // A hovered callout lifts and sharpens while the rest softens; the card
+    // is its own explanation, so no tooltip rides along.
+    state.hoverCallout = state.hoverNode || state.hoverBubble || state.hoverSpeech ? null : calloutAt(x, y)?.id ?? null;
+    el.canvas.style.cursor = state.hoverNode || state.hoverBubble || state.hoverSpeech || state.hoverCallout ? "pointer" : "default";
+    if (state.hoverCallout) hideTip();
+    else refreshTip(x, y);
   }
 
   // Evidence popups are ambience: the moment the view is used as a menu they
@@ -9631,7 +10052,9 @@
     const focusInCard = !node && (Boolean(el.info?.contains(document.activeElement)) || Boolean(el.nodePanel?.contains(document.activeElement)));
     // The style's selection settles at the hot cadence for 400 ms (motionHot).
     if ((node?.id ?? null) !== (state.selected?.id ?? null)) state.styleBurstUntil = (globalThis.performance?.now?.() ?? Date.now()) + 400;
+    const changed = (node?.id ?? null) !== (state.selected?.id ?? null);
     state.selected = node ? { id: node.id, kind: node.kind, node, via: options.via ?? "pointer" } : null;
+    if (changed) announceSelection(node);
     if (!node) exitFocus(); // letting go of the selection lets go of the focus too
     if (node?.doneHold) ackDoneHold(node.id); // the click is the read
     if (node && !node.readOnly && (node.kind === "session" || node.kind === "todo" || node.kind === "task")) focusAssistant(node);
@@ -9641,7 +10064,8 @@
     // node is picked, then give the rail back to the tab you were on.
     if (typeof setRailTab === "function") {
       if (el.railTabNode) el.railTabNode.hidden = !node || !railVisible();
-      if (node && railVisible()) setRailTab("node", { save: false });
+      // selectNode builds the card itself below: once per selection.
+      if (node && railVisible()) setRailTab("node", { save: false, render: false });
       else if (state.railTab === "node") setRailTab(state.railHome ?? "work", { save: false });
     }
     // Letting go of the selection also forgets that the owner asked for the
@@ -9655,6 +10079,16 @@
     if (focusInCard && state.active) el.canvas.focus?.({ preventScroll: true });
     renderHint();
     bumpHud();
+  }
+
+  // The cards are not live regions: every rebuild would read a whole card,
+  // buttons and thread included, again. A selection says one short line, once.
+  function announceSelection(node) {
+    if (!el.announce) return;
+    const kinds = { root: "Constellation", session: "Session", todo: "Todo", task: "Task", "task-group": "Task group", assistant: "Assistant", folded: "Finished sessions", agent: "Agent" };
+    if (!node) { el.announce.textContent = "Selection cleared"; return; }
+    const badge = typeof statusBadge === "function" ? statusBadge(node)?.text : "";
+    el.announce.textContent = [kinds[node.kind] ?? "Node", node.kind === "agent" ? node.role : node.label, badge].filter(Boolean).join(", ");
   }
 
   function select(id) {
@@ -9893,6 +10327,22 @@
 
   // One absorbed brief: its verdict, what it was and when it sank in — a
   // click opens the task or the session it came from.
+  // A card row that opens something is a link for the keyboard and screen
+  // readers too, not only a pointer target: it takes focus, has a role and
+  // answers Enter and Space.
+  function linkRow(item, open) {
+    item.style.cursor = "pointer";
+    item.setAttribute("role", "link");
+    item.tabIndex = 0;
+    item.addEventListener("click", open);
+    item.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      event.stopPropagation();
+      open();
+    });
+  }
+
   function absorbedRow(entry) {
     const item = document.createElement("div");
     item.className = "cp-note checkpoint-note absorbed-row";
@@ -9900,13 +10350,8 @@
     const verdict = entry.kind === "job" ? "job" : entry.kind === "session" ? "session" : "done";
     item.textContent = `${verdict} · ${entry.title} · ${agoLabel(entry.absorbedAt ?? entry.at) ?? ""}`;
     item.title = entry.detail || entry.prompt || entry.title;
-    if (entry.taskId) {
-      item.style.cursor = "pointer";
-      item.addEventListener("click", () => nav("tasks", { taskId: entry.taskId, filter: "all" }));
-    } else if (entry.sessionId) {
-      item.style.cursor = "pointer";
-      item.addEventListener("click", () => nav("explorer", { sessionId: entry.sessionId }));
-    }
+    if (entry.taskId) linkRow(item, () => nav("tasks", { taskId: entry.taskId, filter: "all" }));
+    else if (entry.sessionId) linkRow(item, () => nav("explorer", { sessionId: entry.sessionId }));
     return item;
   }
 
@@ -10005,7 +10450,70 @@
     info.append(details);
   }
 
-  function renderInfo({ clearDraft = false } = {}) {
+  // The card is rebuilt whole on many pushes (a task sinking home, the assistant
+  // focus moving, a group toggling). A rebuild of the same node keeps what the
+  // owner was doing in it: the focused control, half-typed notes and the folds
+  // they opened. The assistant composer's own draft is carried by the builder.
+  function cardControlKey(element) {
+    const parts = [element.tagName, element.className, element.getAttribute?.("aria-label"), element.getAttribute?.("placeholder"), element.dataset?.cardKey];
+    if (element.tagName === "BUTTON" || element.tagName === "A" || element.tagName === "SUMMARY") parts.push(String(element.textContent ?? "").trim().slice(0, 60));
+    return parts.map((part) => part ?? "").join("|");
+  }
+
+  function captureCard(host) {
+    if (!host?.querySelectorAll) return null;
+    const active = document.activeElement;
+    const fields = new Map();
+    for (const field of host.querySelectorAll("input:not([type=checkbox]):not([type=radio]), textarea")) {
+      if (field.closest(".assistant-composer") || !field.value) continue;
+      fields.set(cardControlKey(field), { value: field.value, start: field.selectionStart, end: field.selectionEnd });
+    }
+    const open = new Set([...host.querySelectorAll("details")].map((details) => `${details.className}|${details.querySelector("summary")?.textContent?.trim() ?? ""}|${details.open}`));
+    return { focus: active && active !== host && host.contains(active) && !active.closest(".assistant-composer") ? cardControlKey(active) : null, fields, open };
+  }
+
+  function restoreCard(host, kept) {
+    if (!host?.querySelectorAll || !kept) return;
+    for (const field of host.querySelectorAll("input:not([type=checkbox]):not([type=radio]), textarea")) {
+      const saved = kept.fields.get(cardControlKey(field));
+      if (!saved || field.value) continue;
+      field.value = saved.value;
+      try { field.setSelectionRange?.(saved.start ?? saved.value.length, saved.end ?? saved.value.length); } catch {}
+    }
+    for (const details of host.querySelectorAll("details")) {
+      const key = `${details.className}|${details.querySelector("summary")?.textContent?.trim() ?? ""}`;
+      if (kept.open.has(`${key}|true`)) details.open = true;
+      else if (kept.open.has(`${key}|false`)) details.open = false;
+    }
+    if (kept.focus) {
+      const target = [...host.querySelectorAll("button, a[href], input, textarea, select, summary, [tabindex]")].find((element) => cardControlKey(element) === kept.focus);
+      target?.focus?.({ preventScroll: true });
+    }
+  }
+
+  function renderInfo(options) {
+    const host = infoHost();
+    const sameNode = Boolean(state.selected) && state.cardNodeId === state.selected.id;
+    const kept = sameNode ? captureCard(host) : null;
+    renderInfoImpl(options);
+    state.cardNodeId = state.selected?.id ?? null;
+    state.cardSignature = state.selected ? cardSignature(state.selected.node) : null;
+    if (kept && state.selected) restoreCard(infoHost(), kept);
+  }
+
+  // What the card shows about a node, cheaply: a rebuild of the graph redraws
+  // the card only when one of these changed (a task moving from Ready to
+  // Running, a session's todo count, a todo's status), not on every push.
+  function cardSignature(node) {
+    if (!node) return "";
+    const task = node.task;
+    const todos = node.kind === "session" ? todosOf(node.id) : null;
+    return [node.kind, node.label, node.state, node.status, node.stale, node.doneHold, node.anchorSessionId, node.readOnly,
+      task?.status, task?.updatedAt, task?.stage, task?.run?.sessionId, todos?.length, todos?.filter((todo) => todo.state === "done").length,
+      node.count, node.progress == null ? "" : Math.round(node.progress * 100)].map((part) => part ?? "").join("|");
+  }
+
+  function renderInfoImpl({ clearDraft = false } = {}) {
     const host = infoHost();
     if (!host) return;
     state.graphAreaAt = 0;
@@ -10178,8 +10686,7 @@
           when.textContent = status;
           item.append(name, when);
           item.title = task.prompt ?? task.title ?? "";
-          item.style.cursor = "pointer";
-          item.addEventListener("click", () => nav("tasks", { taskId: task.id, filter: "all" }));
+          linkRow(item, () => nav("tasks", { taskId: task.id, filter: "all" }));
           details.append(item);
         }
         info.append(details);
@@ -10519,14 +11026,20 @@
       appendTaskGroupInfo(info, node);
       if (!node.readOnly) appendNodeFolder(info, node);
       if (node.groupMember?.canonical !== false) action("Open in Tasks", () => primaryAction(node), { primary: true, title: "Tasks (T)" });
-      if (!node.readOnly) {
+      // Finished work held on the board to be read offers only the reading:
+      // marking it done again or queueing work on it is not what it is for.
+      const finished = node.doneHold || task.status === "done";
+      if (!node.readOnly && !finished) {
       action("Work on it", () => workOnNode(node), {
         title: "Prioritize this task. Machine managed starts eligible work while Studio remains responsive; prerequisites, approval, file claims and any selected manual build limit still apply.",
       });
-      action(
+      const doneButton = action(
         "Done",
         async () => {
-          const result = await confirmTaskDone(task);
+          // One status write per press: a double press used to send two.
+          if (doneButton.disabled) return;
+          doneButton.disabled = true;
+          const result = await confirmTaskDone(task).finally(() => { doneButton.disabled = false; });
           if (!result.ok) {
             window.MefiToast?.(`${task.title} · not marked done: ${result.error}`, "bad");
             return;
@@ -10670,7 +11183,7 @@
     const hit = (node) => {
       const fields = [node.label];
       if (node.kind === "session") fields.push(node.agent, node.model, node.stale ? "stale" : null);
-      else if (node.kind === "task") fields.push(node.task?.prompt, node.task?.status);
+      else if (isTaskNode(node)) fields.push(node.task?.prompt, node.task?.status);
       else if (node.kind === "todo") fields.push(node.status);
       else if (node.kind === "assistant") fields.push("assistant", node.sublabel, node.tone, ...(node.filedWork ?? []).map((task) => task?.title));
       else if (node.kind === "folded") fields.push("finished", "folded", ...(node.titles ?? []));
@@ -10687,7 +11200,7 @@
     const cluster = foldedNode();
     if (cluster && hit(cluster)) matches.push(cluster.id);
     for (const task of taskNodes()) if (hit(task)) matches.push(task.id);
-    for (const agent of state.nodes) if (agent.kind === "agent" && hit(agent)) matches.push(agent.id);
+    for (const agent of state.nodes) if (agent.kind === "agent" && liveNode(agent) && hit(agent)) matches.push(agent.id);
     const root = rootNode();
     if (root && hit(root)) matches.push(root.id);
     state.matches = matches;
@@ -10886,15 +11399,35 @@
   }
 
   // A zoom the user asked for (wheel, buttons, keys): the mode steps aside.
-  function userZoom(value) {
+  // `anchor` (canvas pixels) is the point that stays put: the wheel zooms
+  // toward what the pointer is on instead of the frame's centre, so closing
+  // in on an edge node no longer pushes it out of view. The shift is mapped
+  // to the camera the way a drag pans it, perspective aside.
+  function userZoom(value, anchor = null) {
     setCamMode("free", { quiet: true, transient: true });
+    const before = state.zoom;
     setZoom(value);
+    if (!anchor || !(before > 0) || state.zoom === before) return;
+    const offset = state.overviewOffset ?? { x: 0, y: 0 };
+    const base = Math.max(0.01, state.fit) * (state.overviewScale ?? 1);
+    const factor = (1 / state.zoom - 1 / before) / base;
+    const dx = (anchor.x - centerX() - offset.x) * factor;
+    const dy = (anchor.y - centerY() - offset.y) * factor;
+    if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+    // Both the camera and any glide it is on shift together.
+    const shift = state.view === "2d" ? { x: dx, y: 0, z: dy } : { x: dx * Math.cos(state.angle), y: dy, z: -dx * Math.sin(state.angle) };
+    const camera = state.camera;
+    for (const axis of ["x", "y", "z"]) {
+      camera[axis] += shift[axis];
+      camera[`t${axis}`] = (camera[`t${axis}`] ?? camera[axis] - shift[axis]) + shift[axis];
+    }
   }
 
   function setLabels(mode) {
     state.labels = LABEL_MODES.includes(mode) ? mode : "auto";
     writeStore("mefiStudio.cmdLabels", state.labels);
     state.labelWidths.clear();
+    state.clipLines?.clear();
     syncViewControls();
   }
 
@@ -11106,7 +11639,7 @@
 
   function cycleSiblings(node, delta) {
     let list = topNodes();
-    if (node && (node.kind === "todo" || node.kind === "task")) {
+    if (node && (node.kind === "todo" || isTaskNode(node))) {
       const siblings = childrenOf(branchIdOf(node));
       list = siblings.length ? siblings : taskNodes();
     }
@@ -11116,7 +11649,7 @@
   function cycleTasks(delta) {
     const list = taskNodes();
     if (!list.length) return;
-    const current = state.selected?.node?.kind === "task" ? state.selected.node : null;
+    const current = isTaskNode(state.selected?.node) ? state.selected.node : null;
     moveTo(stepThrough(list, current, delta));
   }
 
@@ -11131,7 +11664,7 @@
 
   function ascend(node) {
     if (!node) return;
-    if (node.kind === "todo" || node.kind === "task") {
+    if (node.kind === "todo" || isTaskNode(node)) {
       moveTo(parentSession(node) ?? rootNode());
       return;
     }
@@ -11150,7 +11683,12 @@
     if (event.ctrlKey || event.altKey || event.metaKey) return false;
     if (event.target?.closest?.("input, textarea, select, [contenteditable]")) return false;
     // Let a focused control keep Enter and Space (dock buttons, view controls, legend).
-    const onControl = event.target?.closest?.("button, a, summary, [role='button']");
+    // Focus inside the selection card keeps its arrow keys: they scroll the
+    // card, and walking the tree from there rebuilt the card under the
+    // focused button. The canvas and the rest of the HUD still walk it.
+    const inCard = Boolean(event.target && (el.info?.contains?.(event.target) || el.nodePanel?.contains?.(event.target)));
+    if (inCard && event.key?.startsWith?.("Arrow")) return false;
+    const onControl = event.target?.closest?.("button, a, summary, [role='button'], [role='link']");
     if (onControl && (event.key === " " || event.key === "Enter" || event.key === "Spacebar")) return false;
     const node = state.selected?.node ?? null;
     switch (event.key) {
@@ -11755,6 +12293,7 @@
     el.width = width;
     el.height = height;
     state.labelWidths.clear();
+    state.clipLines?.clear();
     state.speechLineCache?.clear();
     state.hudRectsAt = 0;
     state.graphAreaAt = 0;
@@ -11845,6 +12384,7 @@
     }
     syncGraphTheme();
     el.info = document.getElementById("idle-info");
+    el.announce = document.getElementById("cmd-announce");
     el.chatLog = document.getElementById("cmd-chat");
     el.chatLogDot = document.getElementById("cmd-chat-dot");
     el.chatLogState = document.getElementById("cmd-chat-state");
@@ -12217,16 +12757,29 @@
     // second read that could land inside the next save and come back empty.
     window.mefiStudio?.onTasks?.(async (tasks) => {
       state.calmFrames = 0;
-      if (Array.isArray(tasks)) takeTasks(tasks);
+      if (Array.isArray(tasks)) {
+        state.tasksRevision = (state.tasksRevision ?? 0) + 1;
+        takeTasks(tasks);
+      }
       else await refreshTasks();
       if (state.active || state.homeBackdrop) refreshGraphSoon();
     });
     window.addEventListener("resize", () => (state.active || state.homeBackdrop) && resize());
+    // The rail owns the session graph and rebuilds it on its own schedule: a
+    // push it applies after ours, a store read that lands later, a roster
+    // change that brings a new agent. Re-read the graph whenever it does, so
+    // the last change of a burst and a newly started agent are never missing.
+    window.addEventListener("mefi:tree-rebuilt", () => {
+      state.treeAnnounces = true;
+      if (state.active || state.homeBackdrop) refreshGraphSoon();
+    });
 
     // Mouse interacts with the constellation instead of dismissing it.
     // A right-drag orbits the camera; the menu key/gesture must not interrupt it.
     el.canvas.addEventListener("contextmenu", (event) => event.preventDefault());
-    el.canvas.addEventListener("mousedown", (event) => {
+    // The press, move and release handlers are named: touch and pen reuse
+    // them below, so a finger taps, drags and focuses exactly like the mouse.
+    const onPress = (event) => {
       const rect = el.canvas.getBoundingClientRect();
       const x = event.clientX - rect.left;
       const y = event.clientY - rect.top;
@@ -12262,7 +12815,8 @@
       const hit = nodeAt(x, y) ?? calloutAt(x, y);
       const node = hit && hit.kind === "agent" ? assistantNode() ?? hit : hit;
       state.panning = { x: event.clientX, y: event.clientY, cam: { ...state.camera, tx: state.camera.x, ty: state.camera.y, tz: state.camera.z }, moved: false, node };
-    });
+    };
+    el.canvas.addEventListener("mousedown", onPress);
     el.canvas.addEventListener("dblclick", (event) => {
       const rect = el.canvas.getBoundingClientRect();
       const x = event.clientX - rect.left;
@@ -12282,11 +12836,16 @@
         primaryAction(exclNode);
         return;
       }
-      const node = nodeAt(x, y);
+      // The same targets as a single press, so a double-click on a callout
+      // card or a speech bubble opens its node instead of undoing the focus
+      // the two presses just made with a Fit of the whole tree.
+      const speaker = speechAt(x, y);
+      const hit = speaker ?? nodeAt(x, y) ?? calloutAt(x, y);
+      const node = hit && hit.kind === "agent" ? assistantNode() ?? hit : hit;
       if (node) primaryAction(node);
       else fitAll();
     });
-    window.addEventListener("mousemove", (event) => {
+    const onMove = (event) => {
       if (!state.active) return;
       const rect = el.canvas.getBoundingClientRect();
       const x = event.clientX - rect.left;
@@ -12333,27 +12892,28 @@
         el.canvas.style.cursor = "grabbing";
         return;
       }
-      if (event.target !== el.canvas) return;
-      state.hoverNode = nodeAt(x, y) ?? exclAt(x, y);
-      state.hoverBubble = bubbleAt(x, y);
-      state.hoverSpeech = state.hoverNode || state.hoverBubble ? null : speechAt(x, y)?.id ?? null;
-      // A hovered callout lifts and sharpens while the rest softens; the card
-      // is its own explanation, so no tooltip rides along.
-      state.hoverCallout = state.hoverNode || state.hoverBubble || state.hoverSpeech ? null : calloutAt(x, y)?.id ?? null;
-      el.canvas.style.cursor = state.hoverNode || state.hoverBubble || state.hoverSpeech || state.hoverCallout ? "pointer" : "default";
-      if (state.hoverCallout) hideTip();
-      else refreshTip(x, y);
-    });
+      if (event.target !== el.canvas) {
+        state.pointer = null;
+        return;
+      }
+      state.pointer = { x, y };
+      pointerHover(x, y);
+    };
+    window.addEventListener("mousemove", onMove);
     el.canvas.addEventListener("mouseleave", () => {
+      state.pointer = null;
       state.hoverNode = null;
       state.hoverBubble = null;
       state.hoverSpeech = null;
       state.hoverCallout = null;
       hideTip();
     });
-    window.addEventListener("mouseup", () => {
+    const onRelease = () => {
       if (state.panning && !state.panning.moved) {
-        const node = state.panning.node;
+        // The node pressed, as it is now: a rebuild between press and release
+        // replaced the object, and one that left the graph is let go.
+        const pressed = state.panning.node;
+        const node = pressed ? state.nodes.find((entry) => entry.id === pressed.id) ?? null : null;
         // A click on a node or its callout focuses it: the camera closes in
         // (less on a parent, so its children stay in frame) and the rest of
         // the tree keeps turning, softly blurred, behind it. Empty canvas
@@ -12364,7 +12924,58 @@
       state.panning = null;
       state.rotating = null;
       if (state.active) el.canvas.style.cursor = "default";
+    };
+    window.addEventListener("mouseup", onRelease);
+    // Touch and pen: one finger presses, drags and taps like the left mouse
+    // button, through the same handlers; two fingers pinch to zoom about their
+    // midpoint. Taking pointerdown stops the compatibility mouse events, so a
+    // tap is handled once, and the canvas claims the gesture from the page.
+    el.canvas.style.touchAction = "none";
+    const touches = new Map();
+    let pinch = null;
+    const touchPoint = (event) => ({ clientX: event.clientX, clientY: event.clientY, button: 0, buttons: 1, target: el.canvas });
+    el.canvas.addEventListener("pointerdown", (event) => {
+      if (event.pointerType === "mouse") return;
+      event.preventDefault();
+      try { el.canvas.setPointerCapture?.(event.pointerId); } catch {}
+      touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (touches.size === 1 && !pinch) { onPress(touchPoint(event)); return; }
+      // A second finger turns the drag into a pinch until every finger lifts.
+      state.panning = null;
+      state.rotating = null;
+      const [a, b] = [...touches.values()];
+      if (b) pinch = { distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), zoom: state.zoom };
     });
+    el.canvas.addEventListener("pointermove", (event) => {
+      if (event.pointerType === "mouse" || !touches.has(event.pointerId)) return;
+      touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (pinch) {
+        const [a, b] = [...touches.values()];
+        if (!b) return;
+        const rect = el.canvas.getBoundingClientRect();
+        state.ambient = false;
+        state.settleUntil = Date.now() + SETTLE_MS;
+        userZoom(pinch.zoom * Math.hypot(a.x - b.x, a.y - b.y) / pinch.distance, { x: (a.x + b.x) / 2 - rect.left, y: (a.y + b.y) / 2 - rect.top });
+        return;
+      }
+      onMove(touchPoint(event));
+    });
+    const liftTouch = (event, cancelled = false) => {
+      if (event.pointerType === "mouse" || !touches.delete(event.pointerId) || touches.size) return;
+      const pinched = Boolean(pinch);
+      pinch = null;
+      if (pinched || cancelled) { state.panning = null; state.rotating = null; }
+      else onRelease();
+      // A finger leaves no pointer resting on the canvas: no hover lingers.
+      state.pointer = null;
+      state.hoverNode = null;
+      state.hoverBubble = null;
+      state.hoverSpeech = null;
+      state.hoverCallout = null;
+      hideTip();
+    };
+    el.canvas.addEventListener("pointerup", (event) => liftTouch(event));
+    el.canvas.addEventListener("pointercancel", (event) => liftTouch(event, true));
     el.canvas.addEventListener(
       "wheel",
       (event) => {
@@ -12376,7 +12987,9 @@
         // small deltas zooms in small steps instead of 8% per event.
         const perUnit = event.deltaMode === 1 ? 0.0278 : event.deltaMode === 2 ? 0.0834 : 0.000834;
         const delta = Math.max(-240, Math.min(240, Number(event.deltaY) || 0));
-        if (delta) userZoom(state.zoom * Math.exp(-delta * perUnit));
+        if (!delta) return;
+        const rect = el.canvas.getBoundingClientRect();
+        userZoom(state.zoom * Math.exp(-delta * perUnit), { x: event.clientX - rect.left, y: event.clientY - rect.top });
       },
       { passive: false }
     );
@@ -12428,23 +13041,23 @@
       // The builder nodes are built from this list, so any change to which jobs
       // are in flight has to redraw the graph — otherwise a run shows no agent
       // at all, or a finished one keeps orbiting a task nobody is building.
-      const signature = jobs.map((job) => job.taskId ?? job.sessionId ?? job.title).sort().join("|");
+      const signature = jobs.map((job) => builderKey(job)).sort().join("|");
       if (signature !== state.builderSignature) {
         // A job id the last push did not carry is a builder the assistant just
         // sent out: mark it before the rebuild, pulse it after.
         const known = state.builderIds ?? new Set();
-        const fresh = jobs.filter((job) => !known.has(job.taskId ?? job.sessionId ?? job.title));
+        const fresh = jobs.filter((job) => !known.has(builderKey(job)));
         state.builderSignature = signature;
-        state.builderIds = new Set(jobs.map((job) => job.taskId ?? job.sessionId ?? job.title));
+        state.builderIds = new Set(jobs.map((job) => builderKey(job)));
         refreshGraph();
         // The hand-off, on screen: a packet pulse from the assistant to each
         // new builder, so a dispatch reads as the assistant sending work out.
         const hub = assistantNode();
         if (state.active && hub && fresh.length) {
           for (const job of fresh) {
-            const key = job.taskId ?? job.sessionId ?? job.title;
+            const key = builderKey(job);
             const node = state.nodes.find(
-              (entry) => entry.kind === "agent" && entry.builder && (entry.job?.taskId ?? entry.job?.sessionId ?? entry.job?.title) === key,
+              (entry) => entry.kind === "agent" && entry.builder && builderKey(entry.job) === key,
             );
             if (!node) continue;
             state.pulses.push({ from: hub, to: node, start: Date.now(), duration: 1100, color: "#f1dcae", glow: "#e6c98d", wave: true, packet: true });
@@ -12456,8 +13069,8 @@
         // meters in place — a full rebuild is for jobs joining or leaving.
         for (const node of state.nodes) {
           if (node.kind !== "agent" || !node.builder) continue;
-          const key = node.job?.taskId ?? node.job?.sessionId ?? node.job?.title;
-          const job = jobs.find((entry) => (entry.taskId ?? entry.sessionId ?? entry.title) === key);
+          const key = builderKey(node.job);
+          const job = jobs.find((entry) => builderKey(entry) === key);
           if (!job) continue;
           node.job = job;
           node.progress = typeof job.progress === "number" ? job.progress : null;

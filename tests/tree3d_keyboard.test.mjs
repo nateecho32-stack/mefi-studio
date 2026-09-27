@@ -139,11 +139,15 @@ test("tree rail: arrows move the focus, Enter/Space activate, ARIA follows", asy
   assert.equal(canvas.attrs.role, "tree");
   assert.equal(canvas.attrs.tabindex, "0");
   assert.equal(canvas.attrs["aria-label"], "Session tree");
-  assert.equal(canvas.attrs["aria-owns"], "tree-kbd-item");
-  const proxy = rail.children.find((child) => child.id === "tree-kbd-item");
-  assert.ok(proxy, "the hidden treeitem proxy exists in the rail");
-  assert.equal(proxy.attrs.role, "treeitem");
-  assert.ok(String(proxy.attrs["aria-label"] ?? "").length > 0, "the owned treeitem carries a label before the first navigation");
+  assert.equal(canvas.attrs["aria-owns"], "tree-kbd-item tree-kbd-item-alt");
+  for (const id of ["tree-kbd-item", "tree-kbd-item-alt"]) {
+    const proxy = rail.children.find((child) => child.id === id);
+    assert.ok(proxy, `the hidden treeitem proxy ${id} exists in the rail`);
+    assert.equal(proxy.attrs.role, "treeitem");
+    assert.ok(String(proxy.attrs["aria-label"] ?? "").length > 0, "each owned treeitem carries a label before the first navigation");
+  }
+  // Whichever proxy the activedescendant names is the one the reader speaks.
+  const proxy = { get attrs() { return rail.children.find((child) => child.id === canvas.attrs["aria-activedescendant"])?.attrs ?? {}; } };
 
   const keydown = (key) => {
     const event = { key, preventDefault() { event.defaultPrevented = true; } };
@@ -161,11 +165,19 @@ test("tree rail: arrows move the focus, Enter/Space activate, ARIA follows", asy
   // ArrowDown walks to the first session and names it; Enter selects it
   keydown("ArrowDown");
   assert.equal(tree.focused(), "s1");
+  assert.equal(canvas.attrs["aria-activedescendant"], "tree-kbd-item-alt", "every move changes the activedescendant id, so Chromium announces it");
   assert.match(String(proxy.attrs["aria-label"]), /Alpha session/);
   keydown("Enter");
   assert.equal(tree.activeSession(), "s1");
   assert.equal(lastSelect()?.sessionId, "s1");
+  assert.equal(canvas.attrs["aria-activedescendant"], "tree-kbd-item-alt", "activating the focused node keeps its proxy");
   assert.equal(proxy.attrs["aria-selected"], "true");
+  await tree.reload();
+  assert.equal(tree.focused(), "s1", "focus follows its node across a rebuild");
+  assert.equal(canvas.attrs["aria-activedescendant"], "tree-kbd-item-alt", "a rebuild re-focusing the same node stays on its proxy");
+  keydown("ArrowDown");
+  assert.equal(canvas.attrs["aria-activedescendant"], "tree-kbd-item", "the next move flips back");
+  keydown("ArrowUp");
 
   // on past the todo to the second session, Enter moves the selection
   keydown("ArrowDown");
@@ -205,11 +217,13 @@ test("tree rail: arrows move the focus, Enter/Space activate, ARIA follows", asy
   assert.ok(!tab.defaultPrevented, "Tab keeps its native focus movement");
   keydown("ArrowDown");
   assert.equal(tree.focused(), "__root__");
-  assert.equal(canvas.attrs["aria-activedescendant"], "tree-kbd-item");
+  const rootProxy = canvas.attrs["aria-activedescendant"];
+  assert.ok(["tree-kbd-item", "tree-kbd-item-alt"].includes(rootProxy));
 
   // programmatic focus (tests, dev tools) lands on the same path
   tree.focusNode("s2");
   assert.equal(tree.focused(), "s2");
-  assert.equal(canvas.attrs["aria-activedescendant"], "tree-kbd-item");
+  assert.ok(["tree-kbd-item", "tree-kbd-item-alt"].includes(canvas.attrs["aria-activedescendant"]));
+  assert.notEqual(canvas.attrs["aria-activedescendant"], rootProxy);
   assert.match(String(proxy.attrs["aria-label"]), /Beta session/);
 });

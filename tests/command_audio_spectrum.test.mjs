@@ -176,3 +176,14 @@ test("real analyzer path reads floats and time samples, then ignores stale FFT d
   context.audioEnergy();
   assert.ok(state.music.kick > 0.5, "resume reads the source again");
 });
+
+test("spill far under the loudest band is not scaled up into a hit of its own", () => {
+  // A snare's energy spilling 48 dB down into the bass range, or a kick's
+  // click 50 dB down in the highs: each band still follows its own level,
+  // but not past 40 dB under the loudest band, so the spill stays small.
+  const snare = settle(spectrum([[500, 3000, -12], [50, 180, -60]]));
+  assert.ok(snare.mid > 0.8, "the snare itself reads in full");
+  assert.ok(snare.bass < 0.45 && snare.bass < snare.mid / 2, `spill in the bass stays small (${snare.bass.toFixed(2)})`);
+  const kick = settle(spectrum([[55, 200, -12], [6000, 12000, -62]]));
+  assert.ok(kick.bass > 0.8 && kick.treble < 0.45, `a kick's click in the highs stays small (${kick.treble.toFixed(2)})`);
+});

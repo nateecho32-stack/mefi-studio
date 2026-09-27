@@ -52,10 +52,30 @@
     const area = ctx.viewport;
     if (!points.length || !ctx.project || !(area?.w > 0 && area?.h > 0)) return limit;
     const padX = Math.min(140, area.w * 0.18), padY = Math.min(110, area.h * 0.2);
-    const fits = (zoom) => points.every((point) => {
-      const p = ctx.project(point, { ...shot, zoom });
-      return Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= area.x + padX && p.x <= area.x + area.w - padX && p.y >= area.y + padY && p.y <= area.y + area.h - padY;
-    });
+    const left = area.x + padX, right = area.x + area.w - padX, top = area.y + padY, bottom = area.y + area.h - padY;
+    // The flat map projects x and z each onto one screen axis, rising with
+    // both, so the extremes on those axes decide the fit exactly.
+    if (ctx.view === "2d" && points.length > 4) {
+      let minX = points[0], maxX = minX, minZ = minX, maxZ = minX;
+      for (const point of points) {
+        if (point.x < minX.x) minX = point; if (point.x > maxX.x) maxX = point;
+        if (point.z < minZ.z) minZ = point; if (point.z > maxZ.z) maxZ = point;
+      }
+      points = [minX, maxX, minZ, maxZ];
+    }
+    // One shot per trial zoom. The point that last spilled out is tried
+    // first, so a failing trial usually costs one projection. NaN fails.
+    let spill = 0;
+    const inside = (point, view) => {
+      const p = ctx.project(point, view);
+      return p.x >= left && p.x <= right && p.y >= top && p.y <= bottom;
+    };
+    const fits = (zoom) => {
+      const view = { ...shot, zoom };
+      if (!inside(points[spill], view)) return false;
+      for (let i = 0; i < points.length; i += 1) if (i !== spill && !inside(points[i], view)) { spill = i; return false; }
+      return true;
+    };
     if (fits(limit)) return limit;
     let low = 0.45, high = limit;
     for (let i = 0; i < 10; i += 1) {
@@ -66,7 +86,7 @@
   }
 
   function create({ seed = Date.now() } = {}) {
-    const tour = { stops: [], t: 0, time: 0, out: null, vel: {}, basePitch: 0, count: 0, recent: [], seed: seed | 0 };
+    const tour = { stops: [], t: 0, time: 0, out: null, vel: {}, basePitch: 0, count: 0, recent: [], seed: seed | 0, framed: [] };
 
     function random() {
       tour.seed = (tour.seed + 0x6d2b79f5) | 0;
@@ -152,14 +172,22 @@
       // Reveal the destination before passing between branches. At mid-leg
       // both groups fit, so a flight across a large gap still shows the tree.
       // At either stop only that branch determines the close-up.
-      const points = [];
-      for (const [group, weight] of [[b.points, 1 - ease((u - 0.65) / 0.35)], [c.points, ease(u / 0.35)]]) {
+      // Framed points reuse one scratch list. A group weighted to nothing
+      // collapses onto the camera, and a node in both groups under the same
+      // weight frames once.
+      const points = tour.framed, weightB = 1 - ease((u - 0.65) / 0.35), weightC = ease(u / 0.35);
+      const shared = weightB === weightC && b.points.length && c.points.length ? new Set(b.points) : null;
+      let used = 0;
+      for (const [later, group, weight] of [[false, b.points, weightB], [true, c.points, weightC]]) {
         for (const point of group) {
-          const framed = {};
+          if (later && shared?.has(point)) continue;
+          const framed = points[used] ??= {};
+          used += 1;
           for (const axis of axes) framed[axis] = mix(-tour.out[axis], point[axis], weight);
-          points.push(framed);
+          if (weight === 0) break;
         }
       }
+      points.length = used;
       const travel = Math.sin(Math.PI * u) ** 2;
       const wanted = Math.exp(spline(Math.log(a.zoom), Math.log(b.zoom), Math.log(c.zoom), Math.log(d.zoom), u));
       const limit = mix(wanted, Math.min(wanted, ZOOM.wide), travel * 0.65);
@@ -184,7 +212,7 @@
   // entire tree. Work in projected coordinates so every arrangement and
   // perspective angle uses the same hard frame, without moving any anchors.
   function createOverview() {
-    let time = 0, out = null;
+    let time = 0, out = null, rest = null;
     const velocity = {};
     function step({ points, viewport, dt = 0, moving = false, still = false, initial = { scale: 1, x: 0, y: 0 }, ceiling = Infinity }) {
       dt = clamp(Number(dt) || 0, 0, 0.05);
@@ -201,11 +229,19 @@
       // The caller's own frame (Command's whole-turn fit) caps the zoom too.
       const cap = Number.isFinite(ceiling) && ceiling > 0 ? ceiling : Infinity;
       const limit = Math.min(1.35, cap, halfW * 2 / Math.max(1, right - left), halfH * 2 / Math.max(1, bottom - top));
-      const goal = limit * (0.91 + 0.055 * Math.sin(time * 0.16));
+      const breath = 0.91 + 0.055 * Math.sin(time * 0.16);
       out ??= { ...initial };
       // Ease ordinary zoom changes; shrinking windows and new branches take
       // precedence over the spring so work never crosses the panel boundary.
-      out.scale = Math.min(limit, animate ? damp(out.scale, goal, velocity, "scale", 1.4, dt) : out.scale);
+      // A paused lens keeps the share of the frame it last held (the clock
+      // stays put), so it grows back once a departing branch returns the
+      // room. Reduced motion settles there at once.
+      if (animate) out.scale = Math.min(limit, damp(out.scale, limit * breath, velocity, "scale", 1.4, dt));
+      else {
+        const held = rest ? rest.scale * (limit / rest.limit) : limit * breath;
+        out.scale = Math.min(limit, still ? held : held + (out.scale - held) * Math.exp(-dt / 0.7));
+      }
+      if (animate) rest = { scale: out.scale, limit };
       const xMin = -halfW - left * out.scale, xMax = halfW - right * out.scale;
       const yMin = -halfH - top * out.scale, yMax = halfH - bottom * out.scale;
       const x = (xMin + xMax) / 2 + (xMax - xMin) * 0.28 * Math.sin(time * 0.11);

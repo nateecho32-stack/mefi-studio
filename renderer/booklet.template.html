@@ -1022,7 +1022,7 @@
         <button id="idle-ambience" class="ghost icon" aria-haspopup="dialog" aria-expanded="false" aria-controls="idle-ambience-pop" title="Ambience: look, sound and calm" aria-label="Ambience"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-ambience"/></svg></button>
       </div>
       <span class="tools-sep" aria-hidden="true"></span>
-      <button id="idle-exit" class="ghost icon" title="Leave Command (Esc / D)" aria-label="Leave Command"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-exit"/></svg></button>
+      <button id="idle-exit" class="ghost icon" title="Close Command view (Esc / D)" aria-label="Close Command view"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-exit"/></svg></button>
     </div>
   </div>
   <!-- View ▾ folds 2D/3D, labels and zoom one menu away from the toolbar. idle.js
@@ -1133,7 +1133,8 @@
       </details>
     </div>
   </section>
-  <aside id="idle-info" class="cmd-card" role="region" aria-label="Selected node" aria-live="polite" hidden></aside>
+  <aside id="idle-info" class="cmd-card" role="region" aria-label="Selected node" hidden></aside>
+  <div id="cmd-announce" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
   <div id="idle-follow-status" class="cmd-follow-status" hidden aria-live="polite"></div>
   <aside id="cmd-rail" class="cmd-rail" role="region" aria-label="Work, assistant, runs and questions">
     <header class="rail-tabs" role="tablist" aria-label="Panel views">
@@ -1147,7 +1148,7 @@
   <!-- The selected node's detail. It owns the whole rail while a node is
        picked, so the reading surface is full height with one scroller; the
        floating #idle-info card is only the narrow-layout fallback. -->
-  <aside id="cmd-node" class="cmd-node cmd-card" role="tabpanel" aria-labelledby="cmd-rail-tab-node" aria-live="polite" hidden></aside>
+  <aside id="cmd-node" class="cmd-node cmd-card" role="tabpanel" aria-labelledby="cmd-rail-tab-node" hidden></aside>
   <aside id="cmd-chat" class="cmd-chat" role="tabpanel" aria-label="Assistant chat log" hidden>
     <header class="rail-view-head chat-log-head">
       <i id="cmd-chat-dot" class="feed-dot" aria-hidden="true"></i>

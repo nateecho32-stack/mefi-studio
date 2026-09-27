@@ -11343,6 +11343,8 @@ function autopilotStatus() {
     // is the run's own todo fraction (null until the session reports todos),
     // what the builder meters on the constellation show.
     running: autopilot.jobs.filter((entry) => !entry.finished).map((entry) => ({
+      // The run's id keys its builder orb on the tree for the whole run.
+      id: entry.id,
       title: entry.title,
       startedAt: entry.startedAt,
       phase: !entry.child ? "preparing" : entry.sawDone ? "finishing" : "building",

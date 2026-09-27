@@ -10152,7 +10152,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         <button id="idle-ambience" class="ghost icon" aria-haspopup="dialog" aria-expanded="false" aria-controls="idle-ambience-pop" title="Ambience: look, sound and calm" aria-label="Ambience"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-ambience"/></svg></button>
       </div>
       <span class="tools-sep" aria-hidden="true"></span>
-      <button id="idle-exit" class="ghost icon" title="Leave Command (Esc / D)" aria-label="Leave Command"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-exit"/></svg></button>
+      <button id="idle-exit" class="ghost icon" title="Close Command view (Esc / D)" aria-label="Close Command view"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-exit"/></svg></button>
     </div>
   </div>
   <!-- View ▾ folds 2D/3D, labels and zoom one menu away from the toolbar. idle.js
@@ -10263,7 +10263,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       </details>
     </div>
   </section>
-  <aside id="idle-info" class="cmd-card" role="region" aria-label="Selected node" aria-live="polite" hidden></aside>
+  <aside id="idle-info" class="cmd-card" role="region" aria-label="Selected node" hidden></aside>
+  <div id="cmd-announce" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
   <div id="idle-follow-status" class="cmd-follow-status" hidden aria-live="polite"></div>
   <aside id="cmd-rail" class="cmd-rail" role="region" aria-label="Work, assistant, runs and questions">
     <header class="rail-tabs" role="tablist" aria-label="Panel views">
@@ -10277,7 +10278,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   <!-- The selected node's detail. It owns the whole rail while a node is
        picked, so the reading surface is full height with one scroller; the
        floating #idle-info card is only the narrow-layout fallback. -->
-  <aside id="cmd-node" class="cmd-node cmd-card" role="tabpanel" aria-labelledby="cmd-rail-tab-node" aria-live="polite" hidden></aside>
+  <aside id="cmd-node" class="cmd-node cmd-card" role="tabpanel" aria-labelledby="cmd-rail-tab-node" hidden></aside>
   <aside id="cmd-chat" class="cmd-chat" role="tabpanel" aria-label="Assistant chat log" hidden>
     <header class="rail-view-head chat-log-head">
       <i id="cmd-chat-dot" class="feed-dot" aria-hidden="true"></i>
@@ -14804,7 +14805,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (style === "minimal") {
       circle(ctx, 0, 0, active || selected ? 0.68 : 0.5); ctx.fillStyle = tint; ctx.fill();
     } else if (style === "crystal" || style === "prism") {
-      const shape = window.MefiTree?.voidShapes;
+      // The Void shapes live in node-styles.js (the rail stopped re-exporting
+      // them), so the prism rim is read from there.
+      const shape = window.MefiNodeStyles?.shapes;
       const path = () => { if (style === "prism" && shape) { ctx.beginPath(); shape.trace(ctx, shape.prismRim); } else polygon(ctx, 1); };
       path(); ctx.fillStyle = paint.deep; ctx.fill(); ctx.fillStyle = paint.glass; ctx.fill();
       ctx.save(); ctx.clip();
@@ -15204,6 +15207,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const key = (value) => String(value || "").replace(/[\\/]+/g, "/").replace(/\/+$/, "").toLowerCase();
     return !a?.projectPath || !b?.projectPath || key(a.projectPath) === key(b.projectPath);
   };
+  // Work still on the board: open, running, or done and waiting for its
+  // verifier. Every view that counts live tasks asks here, so a task parked
+  // for verification never drops out of one surface while another shows it.
+  const LIVE_STATUSES = new Set(["open", "active", "awaiting_verification"]);
+  const isLiveTask = (task) => LIVE_STATUSES.has(task?.status);
 
   function groupTasks(tasks, { plans = [] } = {}) {
     const byId = new Map();
@@ -15271,7 +15279,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
 
   function graphTasks(tasks, { groups = groupTasks(tasks), runningIds = new Set(), expanded = new Set(), limit = 12, childLimit = 12 } = {}) {
-    const live = (task) => ["open", "active", "awaiting_verification"].includes(task?.status);
+    const live = isLiveTask;
     const urgent = (task) => runningIds.has(task.id) || ["active", "awaiting_verification"].includes(task.status);
     // The host pins with pin/pinAt; workPin/pinnedAt are the legacy spellings.
     const pinned = (task) => Boolean(task?.pin || task?.pinAt || task?.workPin || task?.pinnedAt);
@@ -15373,7 +15381,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     return [...result.values()];
   }
 
-  window.MefiTaskGroups = { groupTasks, graphTasks, overviewGroups };
+  window.MefiTaskGroups = { groupTasks, graphTasks, overviewGroups, isLiveTask };
 })();
 
 // Shared Studio controls: scrollbar-free overflow, accessible select menus and
@@ -26158,7 +26166,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   let checkpoints = {};
   let initialized = false;
   let readyPromise = null;
-  const read = (method) => window.MefiBoot?.read ? window.MefiBoot.read(method) : Promise.resolve().then(() => window.mefiStudio?.[method]?.());
+  // `fresh` skips joining a shared read already in flight: after a project
+  // switch that read may still be answering for the previous folder.
+  const read = (method, options) => window.MefiBoot?.read ? window.MefiBoot.read(method, options) : Promise.resolve().then(() => window.mefiStudio?.[method]?.());
   // What the store told us last, for the Command view's empty state.
   let status = window.mefiStudio?.eyesState ? "ok" : "desktop-only";
   let statusText = "no session yet";
@@ -26461,6 +26471,19 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       lastDraw = -Infinity;
     }
     syncAnimation();
+  }
+
+  // Moving the window to a monitor with another pixel ratio fires no resize
+  // when the CSS size stays put. A resolution query matches only the current
+  // ratio, so its change is the move; it re-arms on the new ratio each time.
+  function watchPixelRatio() {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+    if (typeof query?.addEventListener !== "function") return;
+    query.addEventListener("change", () => {
+      resize();
+      watchPixelRatio();
+    }, { once: true });
   }
 
   function seedStars() {
@@ -27146,17 +27169,21 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       };
       nodes.push(node);
       edges.push({ a: rootNode, b: node });
-      const sessionTodos = (todosBySession.get(session.id) ?? [])
-        .sort((a, b) => a.position - b.position)
-        .slice(0, maxTodos);
+      const allTodos = (todosBySession.get(session.id) ?? []).sort((a, b) => a.position - b.position);
+      const sessionTodos = allTodos.slice(0, maxTodos);
       // A stale session keeps its colour from its todos but draws none of them.
       const shown = stale ? [] : sessionTodos;
       node.todos = shown;
       const span = Math.max(1, shown.length);
+      const todoIds = new Set();
       shown.forEach((todo, todoIndex) => {
         const todoAngle = (todoIndex / span) * Math.PI * 2;
+        // The store keys a todo by (session, position), so the id is stable
+        // across rebuilds where the shown index would shift.
+        // A malformed store with a repeated position still gets unique ids.
+        const baseId = `${session.id}:${todo.position}`;
         const todoNode = {
-          id: `${session.id}:${todo.position}:${todoIndex}`,
+          id: todoIds.has(baseId) ? `${baseId}:${todoIndex}` : baseId,
           kind: "todo",
           label: todo.content,
           status: todo.status,
@@ -27170,16 +27197,21 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
           state: isClosedTodo(todo) ? "done" : todo.status === "in_progress" ? "active" : "pending",
           r: 4,
         };
+        todoIds.add(todoNode.id);
         nodes.push(todoNode);
         edges.push({ a: node, b: todoNode, sessionId: session.id });
       });
-      const done = sessionTodos.filter(isClosedTodo).length;
-      const active = sessionTodos.some((todo) => todo.status === "in_progress");
+      // Counted over the whole list, not the capped slice: fourteen closed
+      // steps shown with six pending ones hidden is not a finished session.
+      const done = allTodos.filter(isClosedTodo).length;
+      const active = allTodos.some((todo) => todo.status === "in_progress");
       // Stale wins: organize() calls a session stale only while it holds an
       // in_progress todo untouched for staleAfterHours, so "active" is always
       // true for it and would paint that rot as live work.
-      node.state = stale ? "stale" : active ? "active" : sessionTodos.length && done === sessionTodos.length ? "done" : "session";
-      node.progress = sessionTodos.length ? done / sessionTodos.length : 0;
+      node.state = stale ? "stale" : active ? "active" : allTodos.length && done === allTodos.length ? "done" : "session";
+      node.progress = allTodos.length ? done / allTodos.length : 0;
+      node.todoTotal = allTodos.length;
+      node.todoDone = done;
     });
     if (foldedIds.length) {
       const foldAngle = roots.length * golden;
@@ -27269,22 +27301,44 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     });
     reconcileMotions(roster);
 
-    const all = nodes.filter((node) => node.kind === "todo");
-    const doneCount = all.filter((node) => node.state === "done").length;
     // The hub wears the whole board on its own meter: how much of the
-    // sessions' work is done, at a glance.
+    // sessions' work is done, at a glance. It sums the sessions' full counts,
+    // like their own meters, so the per-session cap cannot hide pending work;
+    // a stale session still stays out of it, as its todos stay off the rail.
+    let taskTotal = 0;
+    let doneCount = 0;
+    for (const node of nodes) {
+      if (node.kind !== "session" || node.stale) continue;
+      taskTotal += node.todoTotal;
+      doneCount += node.todoDone;
+    }
     const hubNode = nodes.find((node) => node.kind === "assistant");
-    if (hubNode) hubNode.progress = all.length ? doneCount / all.length : null;
+    if (hubNode) hubNode.progress = taskTotal ? doneCount / taskTotal : null;
     if (!roots.length && !foldedIds.length) {
       status = fallback.status;
       statusText = fallback.text;
       statsBase = fallback.stats;
     } else {
-      statsBase = `${plural(roots.length, "session")}${foldedIds.length ? ` · ${foldedIds.length} folded` : ""} · ${plural(all.length, "task")} · ${all.length ? Math.round((doneCount / all.length) * 100) : 0}% done`;
+      statsBase = `${plural(roots.length, "session")}${foldedIds.length ? ` · ${foldedIds.length} folded` : ""} · ${plural(taskTotal, "task")} · ${taskTotal ? Math.round((doneCount / taskTotal) * 100) : 0}% done`;
       status = "ok";
       statusText = statsBase;
     }
     paintStats();
+    // A rebuild replaces every node object. In-flight pulses and the hover
+    // hold the old ones, which draw() and the click path no longer know, so
+    // each is re-pointed at its node's successor by id, or dropped with it.
+    const rebuilt = new Map(nodes.map((node) => [node.id, node]));
+    if (pulses.length) {
+      pulses = pulses.filter((pulse) => {
+        const from = rebuilt.get(pulse.from?.id);
+        const to = rebuilt.get(pulse.to?.id);
+        if (!from || !to) return false;
+        pulse.from = from;
+        pulse.to = to;
+        return true;
+      });
+    }
+    if (hover) hover = rebuilt.get(hover.id) ?? null;
     // Keyboard focus follows its node across a rebuild (todos re-index,
     // sessions fold away) and drops when the node is gone.
     if (kbdFocus) setKbdFocus(findNodeById(kbdFocus.id));
@@ -27292,6 +27346,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     // of making nav fan out to IPC on every rail reload.
     const inProgress = nodes.filter((node) => node.kind === "todo" && node.status === "in_progress").length;
     window.MefiNav?.setBadge?.({ progress: inProgress, sessions: roots.length });
+    // Views that mirror the graph (the Command view's snapshot) can follow a
+    // rebuild instead of polling for one.
+    if (typeof window.dispatchEvent === "function" && typeof CustomEvent === "function") {
+      window.dispatchEvent(new CustomEvent("mefi:tree-rebuilt"));
+    }
   }
 
   function project(node) {
@@ -27331,7 +27390,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (node.state === "stale" || node.kind === "todo" && node.status === "cancelled") return palette?.dim ?? COLORS.stale;
     if (node.state === "done") return COLORS.done;
     if (node.state === "active") return palette?.bright ?? COLORS.active;
-    if (node.state === "session") return node.progress === 1 ? COLORS.done : node.progress ? palette?.bright ?? COLORS.active : palette?.text ?? COLORS.session;
+    // Partial progress is not live work: only an in_progress todo makes a
+    // session "active", and the Command view paints the rest the session tone.
+    if (node.state === "session") return node.progress === 1 ? COLORS.done : palette?.text ?? COLORS.session;
     return palette?.muted ?? COLORS.pending;
   }
 
@@ -27418,24 +27479,43 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
   }
 
+  // The sky never turns (the viewing angle is fixed), so its projection and
+  // fill strings only change with the rail's size, the theme or a reseed; the
+  // frame reuses them instead of projecting 170 stars into new objects.
+  const skyCache = { key: null, stars: null, wash: null, list: [] };
   function drawStars(palette) {
+    const accent = palette?.accent ?? null;
+    const text = palette?.text ?? "#ece5d8";
+    const key = `${width}|${height}|${angle}|${accent}|${text}`;
+    if (skyCache.key !== key || skyCache.stars !== stars) {
+      skyCache.key = key;
+      skyCache.stars = stars;
+      skyCache.wash = null;
+      if (accent) {
+        const rgb = hexRgb(accent);
+        const wash = ctx.createRadialGradient(width * 0.5, height * 1.05, 0, width * 0.5, height * 1.05, height * 0.8);
+        wash.addColorStop(0, `rgba(${rgb}, 0.10)`);
+        wash.addColorStop(1, `rgba(${rgb}, 0)`);
+        skyCache.wash = wash;
+      }
+      const tint = hexRgb(text);
+      skyCache.list = [];
+      for (const star of stars) {
+        const p = project(star);
+        if (p.depth < 80) continue;
+        const alpha = Math.max(0.05, Math.min(0.5, 1 - p.depth / 900));
+        skyCache.list.push({ x: p.x, y: p.y, size: star.size, fill: `rgba(${tint}, ${alpha * 0.5})` });
+      }
+    }
     // The rail's sky follows the colour theme: a faint accent wash rises from
     // the foot of the strip and the stars take the theme's text tone.
-    if (palette?.accent) {
-      const accent = hexRgb(palette.accent);
-      const wash = ctx.createRadialGradient(width * 0.5, height * 1.05, 0, width * 0.5, height * 1.05, height * 0.8);
-      wash.addColorStop(0, `rgba(${accent}, 0.10)`);
-      wash.addColorStop(1, `rgba(${accent}, 0)`);
-      ctx.fillStyle = wash;
+    if (skyCache.wash) {
+      ctx.fillStyle = skyCache.wash;
       ctx.fillRect(0, 0, width, height);
     }
-    const tint = hexRgb(palette?.text ?? "#ece5d8");
-    for (const star of stars) {
-      const p = project(star);
-      if (p.depth < 80) continue;
-      const alpha = Math.max(0.05, Math.min(0.5, 1 - p.depth / 900));
-      ctx.fillStyle = `rgba(${tint}, ${alpha * 0.5})`;
-      ctx.fillRect(p.x, p.y, star.size, star.size);
+    for (const star of skyCache.list) {
+      ctx.fillStyle = star.fill;
+      ctx.fillRect(star.x, star.y, star.size, star.size);
     }
   }
 
@@ -27900,7 +27980,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     return !document.hidden && width > 0 && height > 0 &&
       !(sheet && sheet !== "music") &&
       !document.body.classList.contains("workspace-active") &&
-      !document.body.classList.contains("command-active");
+      !document.body.classList.contains("command-active") &&
+      // Vibe mode hides the rail with visibility:hidden, which keeps its box.
+      !document.body.classList.contains("vibe-active");
   }
 
   function queuePulse(pulse) {
@@ -27946,15 +28028,19 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 
   function hitTest(x, y) {
     let best = null;
-    let bestDistance = 16;
+    // Nodes within reach compete on the distance to their edge, so the
+    // nearest rim wins: a centre distance mixed with a radius bonus let a
+    // farther, larger node take the click from the one under the pointer.
+    let bestEdge = Infinity;
     for (const node of nodes) {
       if (node._px == null) continue;
       const distance = Math.hypot(node._px - x, node._py - y);
       const notes = node.kind === "session" ? checkpoints[node.id] : null;
       const threshold = Math.max(8, node._pr + (notes?.length ? 18 : 6));
-      if (distance < threshold && distance < bestDistance + node._pr) {
+      const edge = distance - node._pr;
+      if (distance < threshold && edge < bestEdge) {
         best = node;
-        bestDistance = distance;
+        bestEdge = edge;
       }
     }
     return best;
@@ -28035,8 +28121,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   // ---- keyboard + screen-reader access --------------------------------------
   // The canvas is the tree's one tab stop (role "tree"): arrows walk the
   // nodes, Enter/Space activate through the click path above, Escape drops
-  // the focus. One hidden treeitem carries the roving aria-activedescendant
-  // label, so a screen reader names whatever node the arrows land on.
+  // the focus. A hidden treeitem carries the roving aria-activedescendant
+  // label, so a screen reader names whatever node the arrows land on. There
+  // are two, alternated on every move: Chromium raises the active-descendant
+  // event only when the attribute's id changes, so relabelling one proxy in
+  // place would leave most moves unannounced.
+  const KBD_PROXY_IDS = ["tree-kbd-item", "tree-kbd-item-alt"];
+  const kbdProxies = [];
   let kbdFocus = null;
   let kbdProxy = null;
 
@@ -28049,8 +28140,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
 
   function setKbdFocus(node) {
+    const previous = kbdFocus;
     kbdFocus = node ?? null;
     if (!kbdFocus) {
+      // The focus lent the hover its node; a dropped focus (Escape, blur, a
+      // rebuild that lost the node) takes back the tooltip and ring with it.
+      if (previous && hover === previous) hover = null;
       canvas.removeAttribute("aria-activedescendant");
       return;
     }
@@ -28058,11 +28153,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     // The keyboard shares the pointer's hover, so the tooltip and the lift
     // ring land on the focused node and sighted keyboard users see it too.
     hover = kbdFocus;
+    // A move to another node takes the other proxy, so the id changes and the
+    // move is announced; the same node again (a rebuild, a selection toggle)
+    // keeps its proxy and only refreshes what it says.
+    if (kbdProxies.length > 1 && previous?.id !== kbdFocus.id) kbdProxy = kbdProxies[kbdProxy === kbdProxies[0] ? 1 : 0];
     kbdProxy.setAttribute("aria-label", kbdLabel(kbdFocus));
     const selectedId = kbdFocus.kind === "session" ? kbdFocus.id : kbdFocus.kind === "todo" ? kbdFocus.sessionId : null;
     if (selectedId != null) kbdProxy.setAttribute("aria-selected", String(selectedId === activeSessionId));
     else kbdProxy.removeAttribute("aria-selected");
-    canvas.setAttribute("aria-activedescendant", "tree-kbd-item");
+    canvas.setAttribute("aria-activedescendant", kbdProxy.id);
   }
 
   // Sibling walk: from the focused node one step along the graph the rail
@@ -28200,16 +28299,21 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     return Promise.resolve();
   }
 
-  function load() {
+  // Bumped by every load(): an answer that lands after a newer load started
+  // (a slow read for the previous folder) is dropped instead of drawn.
+  let loadSeq = 0;
+  function load({ fresh = false } = {}) {
     // The store is project-scoped, and a reload can race a caller (a project
     // switch, an organize tick, a retry). ready() tracks the latest read, so
     // awaiting it never hands back the previous folder's graph.
+    const seq = ++loadSeq;
     readyPromise = (async () => {
       if (!window.mefiStudio?.eyesState) {
         buildGraph([], [], { status: "desktop-only", text: "desktop mode only", stats: "desktop mode only" });
         return;
       }
-      const result = await read("eyesState");
+      const result = await read("eyesState", fresh ? { fresh: true } : undefined);
+      if (seq !== loadSeq) return;
       loadResult(result);
     })();
     return readyPromise;
@@ -28262,7 +28366,27 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       });
       lastRead = { ...lastRead, sessions };
     }
+    // Most pushes carry the same todo list the rail already drew: skip the
+    // rebuild (and its fresh node objects) when neither the todos nor the
+    // sessions changed since this graph was built from them. The pushed
+    // pulses still land, since they are queued after this returns.
+    const key = activityKey(lastRead.sessions, data.todos);
+    if (activityBuilt && activityBuilt.key === key && cache.sessions === activityBuilt.sessions && cache.todos === activityBuilt.todos) return;
     buildGraph(lastRead.sessions, data.todos);
+    activityBuilt = { key, sessions: cache.sessions, todos: cache.todos };
+  }
+
+  // What an activity rebuild drew from, by content: the pushed todo rows and
+  // the sessions' ids and activity times (both reorder and relabel the rail).
+  // The identities pin it to the graph on screen, so any other build (a store
+  // read, a project switch) forces the next push to rebuild.
+  let activityBuilt = null;
+  function activityKey(sessions, todos) {
+    const parts = [todos.length];
+    for (const todo of todos) parts.push(`${todo?.sessionId}|${todo?.position}|${todo?.status}|${todo?.timeUpdated}|${todo?.content}`);
+    parts.push(sessions.length);
+    for (const session of sessions) parts.push(`${session?.id}|${session?.timeUpdated}`);
+    return parts.join("\n");
   }
 
   // The rail's pinned state is a preference: it must survive a reload, and the
@@ -28303,6 +28427,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     setPinned(pinned);
     document.getElementById("tree-pin")?.addEventListener("click", () => togglePin());
     window.addEventListener("resize", () => resize());
+    watchPixelRatio();
     document.addEventListener?.("visibilitychange", syncAnimation);
     window.addEventListener("mefi:nav", syncAnimation);
     // Sessions and todos belong to the selected folder: a project switch must
@@ -28319,7 +28444,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       activeSessionId = null;
       sessionSlots = new Map();
       lastRead = null;
-      load().catch(() => {});
+      // Fresh: a shared eyesState read still in flight was asked of the
+      // previous folder, and joining it would redraw that folder's nodes.
+      load({ fresh: true }).catch(() => {});
     });
     if (typeof MutationObserver !== "undefined") {
       new MutationObserver(syncAnimation).observe(document.body, { attributes: true, attributeFilter: ["class", "data-sheet"] });
@@ -28335,19 +28462,25 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     canvas.setAttribute("tabindex", "0");
     canvas.setAttribute("role", "tree");
     canvas.setAttribute("aria-label", "Session tree");
-    kbdProxy = document.createElement("div");
-    kbdProxy.id = "tree-kbd-item";
-    kbdProxy.setAttribute("role", "treeitem");
-    // Labeled from the first paint: the owned treeitem must never read as an
-    // anonymous stop, even before the arrows have moved anywhere.
-    kbdProxy.setAttribute("aria-label", "no node focused");
-    kbdProxy.style.cssText = "position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;";
-    rail.append(kbdProxy);
-    canvas.setAttribute("aria-owns", "tree-kbd-item");
+    for (const id of KBD_PROXY_IDS) {
+      kbdProxy = document.createElement("div");
+      kbdProxy.id = id;
+      kbdProxy.setAttribute("role", "treeitem");
+      // Labeled from the first paint: the owned treeitem must never read as an
+      // anonymous stop, even before the arrows have moved anywhere.
+      kbdProxy.setAttribute("aria-label", "no node focused");
+      kbdProxy.style.cssText = "position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;";
+      rail.append(kbdProxy);
+      kbdProxies.push(kbdProxy);
+    }
+    // The loop leaves the second proxy current, so the first focus flips to
+    // the first one, tree-kbd-item.
+    canvas.setAttribute("aria-owns", KBD_PROXY_IDS.join(" "));
     syncAnimation();
     // Fetch organisation and sessions together, then build once with both.
     // Command waits for this promise before taking its initial snapshot.
     const checkpointRead = read("eyesCheckpointsRead").catch(() => null);
+    const initSeq = loadSeq;
     readyPromise = Promise.all([
       read("assistantState").catch(() => null),
       read("eyesState").catch((error) => ({ ok: false, error: String(error?.message ?? error) })),
@@ -28360,9 +28493,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       if (jobs > 0 && resumed?.at && Date.now() - resumed.at < 120000) {
         window.MefiToast?.(`Restarted ${plural(jobs, "interrupted job")}`, "info");
       }
-      if (window.mefiStudio?.eyesState) loadResult(sessions);
+      // A load() that started meanwhile (a project switch) owns the sessions;
+      // this read only contributes the organisation to what is on the rail.
+      if (initSeq !== loadSeq) rebuild();
+      else if (window.mefiStudio?.eyesState) loadResult(sessions);
       else buildGraph([], [], { status: "desktop-only", text: "desktop mode only", stats: "desktop mode only" });
     }).catch((error) => {
+      if (initSeq !== loadSeq) return;
       buildGraph([], [], { status: "unavailable", text: `store unavailable · ${String(error?.message ?? error)}`, stats: "store offline" });
     });
     await readyPromise;
@@ -28404,6 +28541,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
           model: node.model ?? null,
           updated: node.updated ?? null,
           progress: node.progress ?? null,
+          // A session's full todo counts: its drawn todos are capped, these are not.
+          todoTotal: node.todoTotal ?? null,
+          todoDone: node.todoDone ?? null,
           sessionId: node.sessionId ?? node.id,
           status: node.status ?? null,
           state: node.state,
@@ -28565,8 +28705,45 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (count !== live.length) { count = live.length; revision++; candidate = -1; streak = 0; refresh(); }
     const ids = new Set(projected.map(({ node }) => node.id));
     for (const id of positions.keys()) if (!ids.has(id)) positions.delete(id);
-    // Inspect, pan, Follow and tours own the camera while in use.
-    if (interactive || !live.length) { positions.clear(); return false; }
+    // Only stable anchors take a slot, so launching or retiring a worker never
+    // renumbers the shape. A worker rides its host's offset (idle.js orbits it
+    // about the host, or the assistant); a leaving node keeps its last offset
+    // through its absorb flight.
+    const anchors = live.filter(({ node }) => node.kind !== "agent");
+    const entries = new Map(projected.map(entry => [entry.node.id, entry]));
+    const assistant = projected.find(({ node }) => node.kind === "assistant");
+    const offsetOf = ({ node, flight }) => {
+      if (node.kind !== "agent") {
+        const own = positions.get(node.id);
+        // A node flying home (idle.js sets `flight` on its entry) trades its
+        // frozen offset for its host's as it goes, so it sinks into the host
+        // where the host is drawn, not beside it.
+        if (!flight) return own;
+        const home = positions.get(flight.hostId);
+        if (!own && !home) return undefined;
+        const e = Math.max(0, Math.min(1, Number(flight.e) || 0));
+        return { x: (own?.x ?? 0) * (1 - e) + (home?.x ?? 0) * e, y: (own?.y ?? 0) * (1 - e) + (home?.y ?? 0) * e };
+      }
+      const target = entries.get(node.targetNode?.id ?? node.targetId ?? node.hostId);
+      const host = target && target.node.kind !== "agent" ? target : assistant;
+      return host ? positions.get(host.node.id) : undefined;
+    };
+    // Inspect, pan, Follow and tours own the camera while in use. The shape
+    // lets go as gently as it arrived; reduced motion lets go at once.
+    if (interactive || !anchors.length) {
+      if (still || !anchors.length) { positions.clear(); return false; }
+      const ease = 1 - Math.exp(-Math.max(0, dt) / prefs.smoothing);
+      let moving = false;
+      for (const [id, offset] of positions) {
+        offset.x -= offset.x * ease; offset.y -= offset.y * ease;
+        if (Math.abs(offset.x) + Math.abs(offset.y) > .1) moving = true; else positions.delete(id);
+      }
+      for (const entry of projected) {
+        const offset = offsetOf(entry);
+        if (offset) { entry.p.x += offset.x; entry.p.y += offset.y; }
+      }
+      return moving;
+    }
     const audio = !still && linked && musicEnabled() ? clamp(response, 0, 2) : 0;
     const bass = clamp(Number(music?.bass) || 0, 0, 1) * audio;
     const mid = clamp(Number(music?.mid) || 0, 0, 1) * audio;
@@ -28587,21 +28764,23 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const offsetX = clamp(prefs.x + (video?.x ?? 0) * strength + Math.sin(time / 1700) * bass * prefs.positionMotion * .2, -1, 1);
     const offsetY = clamp(prefs.y + (video?.y ?? 0) * strength + Math.sin(time / 2200) * mid * prefs.positionMotion * .2, -1, 1);
     // Ordered identities keep membership deterministic through graph refreshes.
-    const ordered = [...live].sort((a, b) => String(a.node.id).localeCompare(String(b.node.id)));
+    const slots = anchors.length;
+    const ordered = [...anchors].sort((a, b) => String(a.node.id).localeCompare(String(b.node.id)));
     const rank = new Map(ordered.map((entry, i) => [entry.node.id, i]));
     let reachX = 1, reachY = 1;
-    const targets = projected.map(entry => {
-      const { node, p } = entry, i = rank.get(node.id) ?? 0, t = i / Math.max(1, count - 1), theta = i / Math.max(1, count) * Math.PI * 2 - Math.PI / 2;
+    const treeScale = prefs.nodeSize * countScale * (1 + bass * prefs.nodeMotion * .12 * density);
+    for (const { node } of projected) node._treeScale = treeScale;
+    const targets = anchors.map(entry => {
+      const { node, p } = entry, i = rank.get(node.id), t = i / Math.max(1, slots - 1), theta = i / Math.max(1, slots) * Math.PI * 2 - Math.PI / 2;
       let x = p.x - cx, y = p.y - cy;
       if (prefs.shape === "ring") { x = Math.cos(theta) * halfW * .85; y = Math.sin(theta) * halfH * .85; }
       if (prefs.shape === "wave") { x = (t * 2 - 1) * halfW * .85; y = Math.sin(t * Math.PI * 4) * halfH * .65; }
       if (prefs.shape === "spiral") { const r = .15 + .7 * Math.sqrt(t); x = Math.cos(t * Math.PI * 6) * halfW * r; y = Math.sin(t * Math.PI * 6) * halfH * r; }
-      if (count === 1 && prefs.shape !== "layout") { x = 0; y = 0; }
+      if (slots === 1 && prefs.shape !== "layout") { x = 0; y = 0; }
       const phase = phaseOf(node.id), drift = (bass + treble) * prefs.nodeMotion * 12 * density;
       const tx = (x * Math.cos(angle) - y * Math.sin(angle)) * width + Math.sin(time / 1100 + phase) * drift;
       const ty = (x * Math.sin(angle) + y * Math.cos(angle)) * height + Math.cos(time / 1400 + phase) * drift;
-      if (!node.dying && !node._absorbed) { reachX = Math.max(reachX, Math.abs(tx)); reachY = Math.max(reachY, Math.abs(ty)); }
-      node._treeScale = prefs.nodeSize * countScale * (1 + bass * prefs.nodeMotion * .12 * density);
+      reachX = Math.max(reachX, Math.abs(tx)); reachY = Math.max(reachY, Math.abs(ty));
       return { entry, x: tx, y: ty };
     });
     // Reserve space for placement and never clip the transformed tree to a rail.
@@ -28621,6 +28800,14 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       entry.p.x = clamp(entry.p.x + previous.x, cx - halfW, cx + halfW);
       entry.p.y = clamp(entry.p.y + previous.y, cy - halfH, cy + halfH);
       positions.set(entry.node.id, previous);
+    }
+    // Workers and leaving nodes follow once every anchor has eased.
+    for (const entry of projected) {
+      if (rank.has(entry.node.id)) continue;
+      const offset = offsetOf(entry);
+      if (!offset) continue;
+      entry.p.x = clamp(entry.p.x + offset.x, cx - halfW, cx + halfW);
+      entry.p.y = clamp(entry.p.y + offset.y, cy - halfH, cy + halfH);
     }
     return moving || audio > 0;
   }
@@ -29491,7 +29678,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       for (let index = 0; index < samples.length; index += 1) wavePeak = Math.max(wavePeak, Math.abs(Number(samples[index]) || 0));
     }
     const waveGate = clamp((20 * Math.log10(Math.max(1e-12, wavePeak)) + 112) / 12);
-    const amplitudes = new Float32Array(buffer.length);
+    // Two spectra alternate: this frame writes into the one the frame before
+    // last used, and only `prior.spectrum` (last frame's) is read below.
+    const spare = prior.spareSpectrum;
+    const amplitudes = spare instanceof Float32Array && spare.length === buffer.length && spare !== prior.spectrum ? spare : new Float32Array(buffer.length);
+    amplitudes[0] = 0;
     let spectrumPeak = 0;
     for (let index = 1; index < buffer.length; index += 1) {
       const value = Number(buffer[index]);
@@ -29499,6 +29690,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       if (index * hzPerBin >= 20 && index * hzPerBin < 16000) spectrumPeak = Math.max(spectrumPeak, amplitudes[index]);
     }
     const bandState = {}, targets = {}, attacks = {};
+    const measured = [];
     for (const [name, fromHz, toHz, cue, hold] of [
       ["bass", 20, 250, "kick", 125], ["mid", 250, 4000, "snare", 95], ["treble", 4000, 16000, "hat", 65],
     ]) {
@@ -29526,8 +29718,20 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       // Release in log space lets a large volume reduction settle in seconds,
       // instead of waiting through a long linear peak decay from a loud track.
       const reference = Math.max(1e-7, raw, oldReference * Math.exp(Math.log(Math.max(1e-7, raw) / oldReference) * (1 - Math.exp(-dt / 900))));
-      const target = clamp(raw / reference * 0.86) * gate;
-      const flux = clamp((Math.sqrt(fluxSquares / count) * 0.65 + fluxPeak * 0.35) / reference * Math.min(2, 33 / dt)) * gate;
+      measured.push({ name, cue, hold, history, raw, gate, reference, fluxLevel: Math.sqrt(fluxSquares / count) * 0.65 + fluxPeak * 0.35 });
+    }
+    // Each band scales to its own recent level, so a quiet voice still moves
+    // the picture. A band far below the loudest one is mostly spill from it
+    // (a snare's click in the bass, a kick's in the mids and highs): past
+    // BAND_SPILL_DB under the loudest band it is measured against that floor
+    // instead, which keeps spill from being scaled up to a full-size hit
+    // while a real quiet voice (a hat 36 dB under the bass) keeps its range.
+    const BAND_SPILL_DB = 40;
+    const spillFloor = Math.max(...measured.map((band) => band.reference)) * 10 ** (-BAND_SPILL_DB / 20);
+    for (const { name, cue, hold, history, raw, gate, reference, fluxLevel } of measured) {
+      const scale = Math.max(reference, spillFloor);
+      const target = clamp(raw / scale * 0.86) * gate;
+      const flux = clamp(fluxLevel / scale * Math.min(2, 33 / dt)) * gate;
       const onset = target > 0.12 && flux > Math.max(0.14, (history.fluxMean ?? 0) * 1.8 + 0.045) && now - (history.lastOnset ?? -1000) >= hold;
       targets[name] = target;
       attacks[cue] = onset ? clamp(0.42 + flux * 0.65) * gate : 0;
@@ -29564,6 +29768,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       kick, snare, hat, bassline: envelope(prior.bassline, targets.bass, 100, 360), waveform,
       bassMean: envelope(prior.bassMean, bandState.bass.raw, 650, 650), bassRaw: bandState.bass.raw,
       lastBeat: onset ? now : prior.lastBeat ?? -1000, peak: spectrumPeak, bandState, spectrum: amplitudes,
+      spareSpectrum: prior.spectrum instanceof Float32Array ? prior.spectrum : null,
     };
   }
 
@@ -29670,14 +29875,25 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     state.graphSeeded = true;
     // The hub wears the whole board on its own meter: how much of the
     // sessions' work is done, at a glance.
-    const todoNodes = state.nodes.filter((node) => node.kind === "todo");
+    // The rail counts each session's whole todo list (todoTotal/todoDone), not
+    // only the capped todos it draws; the hub reads the same totals so the two
+    // meters agree. A snapshot without them falls back to the drawn todos.
     const hubNode = state.nodes.find((node) => node.kind === "assistant");
-    if (hubNode) hubNode.progress = todoNodes.length ? todoNodes.filter((node) => node.state === "done").length / todoNodes.length : null;
+    if (hubNode) {
+      const counted = state.nodes.filter((node) => node.kind === "session" && !node.stale && Number.isFinite(node.todoTotal));
+      const total = counted.reduce((sum, node) => sum + node.todoTotal, 0);
+      const todoNodes = counted.length ? null : state.nodes.filter((node) => node.kind === "todo");
+      hubNode.progress = counted.length
+        ? total ? counted.reduce((sum, node) => sum + (node.todoDone ?? 0), 0) / total : null
+        : todoNodes.length ? todoNodes.filter((node) => node.state === "done").length / todoNodes.length : null;
+    }
     // Task nodes exist only here; the tree's agent simulation needs their
     // positions so a reference agent can fly to the task it gathers for.
+    // Approved-plan groups are task work too: an agent gathering for one
+    // flies to its node like to any task's.
     window.MefiTree?.setExternalNodes?.(
       state.nodes
-        .filter((node) => node.kind === "task" && !node.dying)
+        .filter((node) => (node.kind === "task" || node.kind === "task-group") && !node.dying)
         .map((node) => ({ id: node.id, kind: "task", label: node.label, x: node.x, y: node.y, z: node.z, anchorSessionId: node.anchorSessionId ?? null }))
     );
     if (firstGraph) autoFit();
@@ -29686,8 +29902,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     // pointing at a vanished node dims the whole constellation and stops orbit.
     if (state.selected) {
       const fresh = state.nodes.find((entry) => entry.id === state.selected.id);
-      if (fresh) state.selected.node = fresh;
-      else selectNode(null);
+      if (fresh) {
+        state.selected.node = fresh;
+        // The card read the old node: redraw it when what it shows moved on.
+        if (state.cardSignature != null && state.cardSignature !== cardSignature(fresh)) renderInfo();
+      } else selectNode(null);
     }
     state.hoverNode = state.hoverNode ? state.nodes.find((entry) => entry.id === state.hoverNode.id) ?? null : null;
     state.hoverBubble = state.hoverBubble ? state.nodes.find((entry) => entry.id === state.hoverBubble.id) ?? null : null;
@@ -29718,16 +29937,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     };
   }
 
-  function appendMusicNode() {
-    const details = musicNodeDetails();
-    if (!details) return;
-    state.nodes.push({ id: "__music__", kind: "music", ...details, r: 7, x: 150, y: -100, z: -65, bx: 150, by: -100, bz: -65 });
-  }
-
+  // The player no longer has a node of its own on the graph (the toolbar and
+  // the companion carry it); a player change still wakes suspended audio and
+  // re-picks the reactive input.
   function syncMusicNode() {
     const details = musicNodeDetails();
-    const node = state.nodes.find((entry) => entry.kind === "music");
-    if (node && details) Object.assign(node, details);
     if (details?.music.playing && state.audio?.state === "suspended") state.audio.resume().catch(() => {});
     if (!state.reactive || !state.active) return;
     const element = localMusicElement();
@@ -29812,11 +30026,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   function appendTaskNodes() {
     const runningTasks = new Set(autopilotJobs(state.assistant).map((job) => job.taskId).filter(Boolean));
     const rank = (task) => runningTasks.has(task.id) ? 0 : task.status === "active" ? 1 : workPinned(task) ? 2 : 3;
-    const entries = window.MefiTaskGroups?.graphTasks(state.allTasks, { groups: state.taskGroups, runningIds: runningTasks, expanded: state.expandedTaskGroups }) ?? [...(state.tasks ?? [])]
-      .sort((a, b) => rank(a) - rank(b) || (b.updatedAt ?? b.createdAt ?? 0) - (a.updatedAt ?? a.createdAt ?? 0))
-      .slice(0, 12).map((task) => ({ task }));
-    const metadata = new Map(entries.map((entry) => [entry.task.id, entry]));
-    const retained = new Set([...(state.allTasks ?? state.tasks ?? []).map((task) => task.id), ...state.taskGroups.map((group) => group.id), ...state.taskGroups.flatMap((group) => group.members.map((member) => member.id))]);
     // The hub is where the assistant's chores land. Their slots go to work the
     // user actually owns. Without a hub on the board they keep their nodes —
     // filed work must never leave the view just because the hub is folded.
@@ -29831,6 +30040,19 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       for (const task of chores) filed.set(String(task.id), task);
       hub.filedWork = chores;
     }
+    // Chores leave the list before it is cut to the visible slots: cut first,
+    // eight frequent chores in the top twelve left the owner four nodes.
+    const owned = (tasks) => filed.size ? (tasks ?? []).filter((task) => !filed.has(String(task?.id))) : tasks;
+    const entries = window.MefiTaskGroups?.graphTasks(owned(state.allTasks), { groups: state.taskGroups, runningIds: runningTasks, expanded: state.expandedTaskGroups }) ?? [...(owned(state.tasks) ?? [])]
+      .sort((a, b) => rank(a) - rank(b) || (b.updatedAt ?? b.createdAt ?? 0) - (a.updatedAt ?? a.createdAt ?? 0))
+      .slice(0, 12).map((task) => ({ task }));
+    const metadata = new Map(entries.map((entry) => [entry.task.id, entry]));
+    // Layout slots are held for work that can still show: open work, groups
+    // and their members. Every finished task used to keep its slot for as long
+    // as it stayed on the board, so each new task on a busy session landed a
+    // ring further out.
+    const openWork = (task) => ["open", "active", "awaiting_verification"].includes(task?.status);
+    const retained = new Set([...(state.allTasks ?? state.tasks ?? []).filter(openWork).map((task) => task.id), ...entries.map((entry) => entry.task.id), ...state.taskGroups.map((group) => group.id), ...state.taskGroups.flatMap((group) => group.members.map((member) => member.id))]);
     const placed = taskPlacements(entries.filter((entry) => !filed.has(String(entry.task.id))).map((entry) => entry.task), state.nodes, autopilotJobs(state.assistant), state.taskLayout, retained);
     state.taskLayout = placed.layout;
     placed.entries.forEach(({ task, anchor, x: bx, y: by, z: bz }) => {
@@ -29921,6 +30143,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   // board. Requests usually name the thing they are about ("Work on <session>").
   const titleKeys = (text) => new Set((String(text ?? "").toLowerCase().match(/[a-z][a-z0-9_-]{3,}/g) ?? []).slice(0, 10));
 
+  // One worker, one key, for the whole run: its task when it has one, else the
+  // run's own id. A claimed request used to be keyed by its title until its
+  // session was found (up to 30 s later) and then by the session, so it popped
+  // a second builder mid-run, and two untitled-alike runs shared one orb.
+  const builderKey = (job) => job?.taskId ?? job?.id ?? job?.sessionId ?? job?.title ?? null;
+
   // Work on it pins work to the node the user pointed at (a session or a todo):
   // the running ring, the card and the builder belong on that node, not on a
   // second node echoing its name. Null when the target is not on the board.
@@ -29944,8 +30172,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       const host = targetHostNode(owned?.target);
       if (host) return host;
     }
+    // The same rule Work on it uses for its target: the session's node, by
+    // its id or by the session it belongs to.
     if (job.sessionId) {
-      const session = state.nodes.find((node) => node.kind === "session" && node.id === job.sessionId);
+      const session = targetHostNode({ kind: "session", id: job.sessionId });
       if (session) return session;
     }
     // A queued request the executor already claimed carries its target only on
@@ -29986,7 +30216,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       const host = hostForJob(job);
       const anchor = host ?? hub;
       if (!anchor) return;
-      const id = `builder:${job.taskId ?? job.sessionId ?? job.title ?? loose++}`;
+      const id = `builder:${builderKey(job) ?? loose++}`;
       const fx = ensureFx(id, { pop: true });
       // Slots belong to a worker, not to its current index in a status poll.
       // A peer starting, finishing or being reordered cannot move this orbit.
@@ -30224,7 +30454,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   function sweepFx() {
     const now = Date.now();
     const still = noMotion();
+    // A read-only node (a group parent that closed while a member still runs)
+    // stays on the board without a lifecycle of its own. An absorb its task
+    // earned would add a dying twin under the same id, and the flight's end
+    // would hide the live node instead.
+    const readOnlyIds = new Set((state.nodes ?? []).filter((node) => node.readOnly && !node.dying).map((node) => node.id));
     for (const [id, fx] of [...state.fx]) {
+      if (readOnlyIds.has(id)) { state.fx.delete(id); continue; }
       if (fx.absorbAt != null) {
         if (still || !fx.wasRendered || now - fx.absorbAt > NODE_ABSORB_TTL) finalizeAbsorb(id, fx);
         else appendDyingNode(id, fx);
@@ -30261,8 +30497,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         status: fx.task?.status ?? null,
         at: Date.now(),
       };
-      state.absorbed.set(key, [entry, ...(state.absorbed.get(key) ?? [])].slice(0, ABSORBED_MAX));
-      if (state.absorbed.size > 48) for (const stale of [...state.absorbed.keys()].slice(0, state.absorbed.size - 40)) state.absorbed.delete(stale);
+      rememberAbsorbed(key, entry);
     }
     if (host && state.active && !noMotion()) {
       spawnParticles(host, 10, { gold: true });
@@ -30270,7 +30505,21 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
     if (fx.folded) pushFeed({ noFold: true, kind: "task", text: `finished sessions absorbed · ${fx.label ?? "cluster"}` });
     else if (!fx.builder && fx.task?.status === "done") pushFeed({ noFold: true, kind: "task", text: `task finished · ${fx.task.title ?? "task"}` });
-    if (state.selected) renderInfo();
+    // Only the card that lists this work changes: the host's absorbed list.
+    if (state.selected && (state.selected.id === host?.id || state.selected.id === id)) renderInfo();
+  }
+
+  // A host's absorbed list, newest first. Map.set on a key already present
+  // keeps its old place, so re-insert it: the eviction below drops the least
+  // recently used hosts, never the root's or the hub's busy lists.
+  function rememberAbsorbed(key, entry) {
+    const list = [entry, ...(state.absorbed.get(key) ?? [])].slice(0, ABSORBED_MAX);
+    state.absorbed.delete(key);
+    state.absorbed.set(key, list);
+    if (state.absorbed.size > 48) {
+      const keep = new Set(["__root__", "__assistant__"]);
+      for (const stale of [...state.absorbed.keys()].filter((name) => !keep.has(name)).slice(0, state.absorbed.size - 40)) state.absorbed.delete(stale);
+    }
   }
 
   const easeOut = (t) => 1 - (1 - t) ** 3;
@@ -30443,7 +30692,21 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     state.backlog = null;
     state.backlogError = null;
     state.feedDirty = true;
+    // A task read already on its way belongs to the folder it was asked for.
+    state.tasksRevision = (state.tasksRevision ?? 0) + 1;
     if (switched) {
+      // The lifecycle of the old project's nodes goes with it. Kept, the first
+      // board of the new project marked every old task absorbed (ghosts flying
+      // into the new hub), popped its whole backlog as news because the tasks
+      // were already seeded, kept the old root's finished titles on the new
+      // root's card and never recorded the new project's folded cluster.
+      state.fx?.clear?.();
+      state.doneHold?.clear?.();
+      state.absorbed?.clear?.();
+      state.touches?.clear?.();
+      state.expandedTaskGroups?.clear?.();
+      state.tasksSeeded = false;
+      state.foldedAbsorbedAt = 0;
       state.readyPromise = Promise.resolve(window.MefiTree?.ready?.())
         .then(() => {
           refreshGraph();
@@ -30455,10 +30718,14 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
 
   async function refreshTasks(shared = false) {
+    // A push or a project switch that lands while this read is out is newer
+    // than what the read returns: a stale list would reopen finished work.
+    const revision = state.tasksRevision ?? 0;
     try {
       // Only the initial view shares reads. A refresh following a write must
       // fetch after that write, even if an older startup request is pending.
       const result = await (shared ? read("tasksList") : window.mefiStudio?.tasksList?.());
+      if ((state.tasksRevision ?? 0) !== revision) return;
       takeTasks(result?.tasks);
     } catch {}
   }
@@ -30767,7 +31034,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     el.rail?.classList.toggle("rail-collapsed", collapsed);
   }
 
-  function setRailTab(name, { save = true, focus = false } = {}) {
+  function setRailTab(name, { save = true, focus = false, render = true } = {}) {
     // Older links open the toolbar dropdown without replacing the rail view.
     if (name === "settings") { openAgentSettings({ focus }); return; }
     let view = RAIL_VIEWS.includes(name) ? name : "work";
@@ -30790,7 +31057,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     // Never remember "node": it belongs to a selection, not to a launch.
     if (save && view !== "node") writeStore("mefiStudio.cmdRailTab", view);
     applyRailCollapsed();
-    if (view === "node") renderInfo();
+    if (view === "node" && render) renderInfo();
     if (view === "done") void loadDoneLog();
     if (view === "ask") renderAsks();
     state.graphAreaAt = 0;
@@ -32374,7 +32641,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   function renderHint() {
     if (!el.hint) return;
     let text = DEFAULT_HINT;
-    if (state.treeStatus !== "ok") text = "desktop store not available · the dock still works";
+    if (state.treeStatus !== "ok") text = "Desktop store not available · the dock still works";
     else if (state.query) text = "Enter cycles matches · Esc clears the search";
     else if (state.selected?.kind === "task") text = "Enter opens it in Tasks · [ ] other tasks · Esc clears";
     else if (state.selected?.kind === "assistant") text = "Enter sends · ↓ focuses the composer · Esc clears";
@@ -32662,17 +32929,29 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     // radius in the x/z plane at any angle, while its vertical reach is just y.
     // Fitting each axis against its own side of the safe area fills a wide
     // window instead of sizing everything to the shorter side.
+    // The reach is measured when there is no settled layout (a first graph,
+    // Fit, a view switch) and kept while the layout holds: the anchors were
+    // seeded under the fit it gave, so a panel opening scales the drawn tree
+    // with the clear area alone. Re-measured each time, the raw simulation
+    // positions of a builder or loose task arriving far out shrank the whole
+    // settled tree the next time any panel moved.
     let reach = 1;
     let maxY = 1;
-    for (const node of state.nodes) {
-      if (state.view === "2d") {
-        // flat map: horizontal reach is |x|, vertical reach is |z|
-        reach = Math.max(reach, Math.abs(node.x));
-        maxY = Math.max(maxY, Math.abs(node.z));
-      } else {
-        reach = Math.max(reach, Math.hypot(node.x, node.z));
-        maxY = Math.max(maxY, Math.abs(node.y));
+    const kept = state.screenLayout && state.fitReach?.view === state.view ? state.fitReach : null;
+    if (kept) ({ reach, maxY } = kept);
+    else {
+      for (const node of state.nodes) {
+        if (node.kind === "agent" || node.dying || node._absorbed) continue;
+        if (state.view === "2d") {
+          // flat map: horizontal reach is |x|, vertical reach is |z|
+          reach = Math.max(reach, Math.abs(node.x));
+          maxY = Math.max(maxY, Math.abs(node.z));
+        } else {
+          reach = Math.max(reach, Math.hypot(node.x, node.z));
+          maxY = Math.max(maxY, Math.abs(node.y));
+        }
       }
+      if (Number.isFinite(reach) && Number.isFinite(maxY)) state.fitReach = { view: state.view, reach, maxY };
     }
     const area = usableArea();
     // 1.3: perspective magnifies the near side (k up to ~1.25) and halos need air.
@@ -33433,6 +33712,29 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }));
   }
 
+  // Edges index state.nodes, but the frame draws `projected`, which leaves the
+  // hub (and the music node) out. Reading edge.a / edge.b straight into
+  // projected shifted every wire past the hub onto the next node and dropped
+  // the last one, and the branch parents the layouts space by came out wrong
+  // the same way. One remap per graph, reused while the graph holds: an edge
+  // with a hidden end is dropped, the rest point at their projected entries.
+  // drawFrame keeps the result on state.frameEdges for the passes after it.
+  function frameEdges(projected) {
+    const edges = state.edges ?? [];
+    const cached = state.frameEdgeCache;
+    if (cached && cached.nodes === state.nodes && cached.nodeCount === state.nodes.length && cached.edges === edges && cached.edgeCount === edges.length && cached.projectedCount === projected.length) return cached.list;
+    const at = new Map();
+    projected.forEach(({ node }, index) => at.set(node, index));
+    const list = [];
+    for (const edge of edges) {
+      const a = at.get(state.nodes[edge.a]), b = at.get(state.nodes[edge.b]);
+      if (a == null || b == null) continue;
+      list.push(a === edge.a && b === edge.b ? edge : { ...edge, a, b });
+    }
+    state.frameEdgeCache = { nodes: state.nodes, nodeCount: state.nodes.length, edges, edgeCount: edges.length, projectedCount: projected.length, list };
+    return list;
+  }
+
   function primaryBranchParents(projected, edges) {
     const nodes = new Map(projected.map(({ node }) => [node.id, node]));
     const candidates = new Map();
@@ -33600,13 +33902,25 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     // fixed. This depends on the viewport, never on a changing work status.
     const rotationRoom = state.view === "3d" && ["constellation", "radial"].includes(state.nodeLayout ?? "constellation")
       ? Math.min(16, Math.max(0, (area.w - 480) / 40)) : 0;
+    // Parents need a small label gutter before their world anchors settle.
+    // A later addition joins its branch at the seeded offset instead.
+    const labelRoomFor = (node) => !fixedIds.size && ["session", "task", "task-group", "assistant"].includes(node.kind) ? Math.min(24, Math.max(0, (area.w - 320) / 20)) : 0;
+    const baseSize = (node) => {
+      const diameter = (node.kind === "todo" ? 14 : 38) + rotationRoom, labelRoom = labelRoomFor(node);
+      return { w: diameter + labelRoom + 14, h: diameter + labelRoom * 0.4 + 14 };
+    };
+    // A tree larger than the frame can hold at full reservation shares the
+    // shortfall evenly: every rect shrinks by the same factor. Unscaled, the
+    // spiral and the grid ran out of room past about ninety nodes and the
+    // rest fell back onto their raw seed points, stacked exactly on each other.
+    const demand = entries.reduce((sum, { node }) => { const size = baseSize(node); return sum + size.w * size.h; }, 0);
+    const density = Math.max(0.45, Math.min(1, Math.sqrt(Math.max(1, area.w * area.h * 0.55) / Math.max(1, demand))));
     for (const { node, p } of entries) {
       // Reserve the largest work rim even while idle. Appearance/effect or
       // status changes must never trigger a reflow of established anchors.
-      const diameter = (node.kind === "todo" ? 14 : 38) + rotationRoom;
-      // Parents need a small label gutter before their world anchors settle.
+      const diameter = ((node.kind === "todo" ? 14 : 38) + rotationRoom) * density;
       // Never recompute this from changing activity or hover state.
-      const labelRoom = !fixedIds.size && ["session", "task", "task-group", "assistant"].includes(node.kind) ? Math.min(24, Math.max(0, (area.w - 320) / 20)) : 0;
+      const labelRoom = labelRoomFor(node) * density;
       const size = { w: diameter + labelRoom, h: diameter + labelRoom * 0.4 };
       const bounds = (x, y) => ({ x: x - size.w / 2 - 7, y: y - size.h / 2 - 7, w: size.w + 14, h: size.h + 14 });
       if (fixedIds.has(node.id)) {
@@ -33786,6 +34100,25 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     return moved;
   }
 
+  // The view a layout's anchors were seeded under: the turn, tilt, zoom and
+  // camera at that moment. A layout re-seeded for a new frame (a resize, a rail
+  // folding) seeds under the same view, so its anchors land where the old ones
+  // were instead of being laid out as if seen from wherever the camera now
+  // stands (after a quarter turn, two pixels of width moved nodes 244 px on
+  // average) or at whatever zoom it now has (a close-up shrank the tree).
+  const LAYOUT_SETTLE_MS = 150;
+  function currentSeedView() {
+    const camera = state.camera;
+    return { angle: state.angle, pitch: state.pitch, zoom: state.zoom, camera: camera ? { x: camera.x, y: camera.y, z: camera.z } : null };
+  }
+  function underSeedView(view, read) {
+    if (!view) return read();
+    const kept = { angle: state.angle, pitch: state.pitch, zoom: state.zoom, camera: state.camera, overviewScale: state.overviewScale, overviewOffset: state.overviewOffset };
+    Object.assign(state, { angle: view.angle, pitch: view.pitch, zoom: view.zoom, camera: view.camera ? { ...state.camera, ...view.camera } : state.camera, overviewScale: 1, overviewOffset: null });
+    try { return read(); }
+    finally { Object.assign(state, kept); }
+  }
+
   function layoutProjectedGraph(projected, area, mode, animationTime = Date.now(), still = false) {
     const profiler = globalThis.window?.MefiProfiler;
     const span = profiler?.begin("command.layout");
@@ -33801,9 +34134,25 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     // for it made the tree jump under the click. Orbit's overview back-off
     // below still keeps the anchors inside the clear rectangle.
     const frame = state.graphFrame ?? area;
-    const key = `${layoutName}|${state.view}|${frame.x},${frame.y},${frame.w},${frame.h}`;
+    let key = `${layoutName}|${state.view}|${frame.x},${frame.y},${frame.w},${frame.h}`;
+    const previousLayout = state.screenLayout;
+    // Only the frame moved: same arrangement, same view.
+    const frameOnly = Boolean(previousLayout) && previousLayout.key !== key && previousLayout.key.startsWith(`${layoutName}|${state.view}|`);
+    // A window being dragged changes the frame on every event, and re-seeding
+    // two hundred nodes costs tens of milliseconds each time. The settled
+    // anchors keep drawing (the fit follows the frame) until it holds still.
+    if (frameOnly && !still && Number.isFinite(animationTime)) {
+      if (state.pendingLayout?.key !== key) state.pendingLayout = { key, at: animationTime };
+      if (animationTime - state.pendingLayout.at < LAYOUT_SETTLE_MS) key = previousLayout.key;
+    }
     if (state.screenLayout?.key !== key) {
-      state.screenLayout = { key, nodes: new Map(), slots: new Map(), fresh: true };
+      state.pendingLayout = null;
+      // A new frame under an established tree re-seeds it under the view it
+      // was seeded with, and glides there from where the nodes were drawn.
+      // Fit and a mode switch start their own morph and clear the layout
+      // first, so they are not doubled.
+      if (state.screenLayout && state.active && !state.morph && typeof beginLayoutMorph === "function") beginLayoutMorph();
+      state.screenLayout = { key, nodes: new Map(), slots: new Map(), fresh: true, seedView: frameOnly ? previousLayout.seedView ?? null : null };
       state.overviewScale = 1;
       state.overviewOffset = null;
       state.overviewMotion = null;
@@ -33811,10 +34160,20 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
     const layout = state.screenLayout.nodes;
     const anchors = projected.filter(({ node }) => node.kind !== "agent");
-    const retained = new Set([...anchors.map(({ node }) => node.id), ...(state.allTasks ?? state.tasks ?? []).map((task) => `task:${task.id}`), ...(state.taskGroups ?? []).flatMap((group) => [`task:${group.id}`, ...group.members.map((member) => `task:${member.id}`)])]);
+    // Layout records outlive a node that is hidden for a while (a collapsed
+    // group member, a task pushed off the visible slice), as long as its task
+    // is still on the board. The board's ids are gathered once per board, not
+    // once per frame.
+    const boardTasks = state.allTasks ?? state.tasks ?? [];
+    let boardIds = state.layoutBoardIds;
+    if (boardIds?.tasks !== boardTasks || boardIds.groups !== state.taskGroups) {
+      boardIds = state.layoutBoardIds = { tasks: boardTasks, groups: state.taskGroups, ids: new Set([...boardTasks.map((task) => `task:${task.id}`), ...(state.taskGroups ?? []).flatMap((group) => [`task:${group.id}`, ...group.members.map((member) => `task:${member.id}`)])]) };
+    }
+    const anchorIds = new Set(anchors.map(({ node }) => node.id));
+    const retained = { has: (id) => anchorIds.has(id) || boardIds.ids.has(id) };
     for (const id of layout.keys()) if (!retained.has(id)) layout.delete(id);
     for (const id of state.screenLayout.slots.keys()) if (!retained.has(id)) state.screenLayout.slots.delete(id);
-    const parentIds = cachedBranchParents(projected, state.edges ?? []);
+    const parentIds = cachedBranchParents(projected, state.frameEdges ?? state.edges ?? []);
     state.branchParents = parentIds;
     const previousParents = state.screenLayout.parents ??= new Map();
     for (const id of previousParents.keys()) if (!retained.has(id)) previousParents.delete(id);
@@ -33840,9 +34199,18 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     for (const { node, p } of anchors) {
       const saved = layout.get(node.id);
       const world = saved?.world ?? { x: node.x, y: node.y, z: node.z };
-      const source = saved ? project(world) : { ...p };
-      if (saved) { Object.assign(p, source); fixedIds.add(node.id); }
-      node._layoutAnchor = { ...world };
+      if (saved) {
+        // drawFrame already projected this anchor (p.anchor) when it was
+        // saved last frame at the same spot; project only what moved.
+        const drawn = p.anchor;
+        if (!(drawn && drawn === node._layoutAnchor && drawn.x === world.x && drawn.y === world.y && drawn.z === world.z)) Object.assign(p, project(world));
+        fixedIds.add(node.id);
+      }
+      // One anchor object per node, refreshed in place: never the saved
+      // record itself, which only a re-seed may change.
+      const anchor = node._layoutAnchor;
+      if (anchor && anchor !== world) { anchor.x = world.x; anchor.y = world.y; anchor.z = world.z; }
+      else node._layoutAnchor = { x: world.x, y: world.y, z: world.z };
     }
     // A narrow tree needs clear bands where active task names can fit.
     // Filling every last gap with orbs otherwise leaves Auto with no labels.
@@ -33860,18 +34228,34 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         let parent = parentIds.get(node.id);
         const seen = new Set([node.id]);
         while (parent && !seen.has(parent) && !fixed.has(parent)) { seen.add(parent); parent = parentIds.get(parent); }
+        // The seed's offset from its parent is in unscaled seed pixels, while
+        // the saved parent is drawn under the Overview's framing: scale the
+        // offset into that framing. Added raw, unprojectForLayout divided it
+        // back out, so each live addition reached 1/framing too far, widened
+        // the tree, shrank the framing again and compounded (Branches fell
+        // from 0.69 to 0.22 over two dozen additions).
         const original = seeds.get(parent), saved = fixed.get(parent);
-        p.x = seed.x + (original && saved ? saved.x - original.x : 0);
-        p.y = seed.y + (original && saved ? saved.y - original.y : 0);
+        if (original && saved) {
+          const framing = Number.isFinite(state.overviewScale) && state.overviewScale > 0 ? state.overviewScale : 1;
+          p.x = saved.x + (seed.x - original.x) * framing;
+          p.y = saved.y + (seed.y - original.y) * framing;
+        } else {
+          p.x = seed.x;
+          p.y = seed.y;
+        }
       }
     }
     // Saved anchors only need projection. Rebuilding the collision grid for
     // an entirely fixed graph cannot move a node and wastes every idle frame.
     if (fixedIds.size !== anchors.length) arrangeProjectedNodes(anchors, nodeArea, { mode: "free", fixedIds });
+    // A fresh layout seeds under its recorded view (a first seeding records
+    // the current one); nodes joining a settled layout are placed beside what
+    // is on screen now, so they keep the current view.
+    if (state.screenLayout.fresh) state.screenLayout.seedView ??= currentSeedView();
+    const seedView = state.screenLayout.fresh ? state.screenLayout.seedView : null;
     for (const { node, p } of anchors) {
       if (layout.has(node.id)) continue;
-      const depthSource = layoutDepthSource(node, seeds.get(node.id), area, layoutName, parentIds);
-      const anchor = unprojectForLayout(p, depthSource);
+      const anchor = underSeedView(seedView, () => unprojectForLayout(p, layoutDepthSource(node, seeds.get(node.id), area, layoutName, parentIds)));
       layout.set(node.id, { world: anchor }); node._layoutAnchor = { ...anchor };
       Object.assign(p, project(anchor));
     }
@@ -33933,6 +34317,17 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       state.overviewAt = animationTime;
       state.overviewScale = scale;
       if (scale !== previousScale || state.overviewOffset?.x !== previousOffset.x || state.overviewOffset?.y !== previousOffset.y) for (const { node, p } of anchors) Object.assign(p, project(node._layoutAnchor));
+    } else if (state.overviewOffset && (state.focus || mode === "follow")) {
+      // The Overview's drift is a lens on the whole tree. A camera handed a
+      // target (a clicked node, Follow) centres on the camera and would land
+      // the target up to the drift away from the centre, so the lens folds
+      // away under it. A plain free pan keeps it: that is the owner's view.
+      const dt = Math.max(0, Math.min(0.1, (animationTime - (state.overviewAt ?? animationTime)) / 1000));
+      const keep = still ? 0 : Math.exp(-dt * 4);
+      const offset = { x: state.overviewOffset.x * keep, y: state.overviewOffset.y * keep };
+      state.overviewOffset = Math.hypot(offset.x, offset.y) < 0.5 ? null : offset;
+      state.overviewAt = animationTime;
+      for (const { node, p } of anchors) Object.assign(p, project(node._layoutAnchor));
     }
     if (mode === "free" && !state.panning && !state.rotating && !state.focus && !state.director && !state.settingsPreview) leashFreeCamera(anchors, frame, still);
     const occupied = anchors.filter(({ node }) => !node.dying && !node._absorbed).map(({ node, p }) => ({ x: p.x, y: p.y, radius: node.kind === "todo" ? 8 : 25 }));
@@ -34363,10 +34758,18 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       if (typeof hostedOnCard === "function" && hostedOnCard(node)) continue;
       const alpha = speechAlpha(bubble, now, still) * Math.max(0.35, node._fade ?? 1);
       if (alpha <= 0.01) continue;
-      const lines = bubble.lines ?? speechLines(ctx, bubble.text, maxWidth - 22);
-      bubble.lines = lines;
+      // The wrap belongs to the width it was made for: a resize or a panel
+      // opening re-wraps the remark instead of keeping lines that no longer
+      // fit. The widest line is measured once per wrap, not once per frame.
+      const wrapAt = Math.round(maxWidth - 22);
+      if (!bubble.lines || bubble.wrapAt !== wrapAt) {
+        bubble.lines = speechLines(ctx, bubble.text, wrapAt);
+        bubble.wrapAt = wrapAt;
+        bubble.textWidth = null;
+      }
+      const lines = bubble.lines;
       ctx.font = SPEECH_FONT;
-      const textWidth = Math.max(...lines.map((line) => ctx.measureText(line).width));
+      const textWidth = bubble.textWidth ??= Math.max(...lines.map((line) => ctx.measureText(line).width));
       const marked = Boolean(SPEECH_MARKS[bubble.kind]);
       const w = Math.ceil(textWidth + 18 + (marked ? 13 : 0));
       const h = 12 + lines.length * 14;
@@ -34493,8 +34896,16 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     return state.nodes.find((node) => node.kind === "root") ?? null;
   }
 
+  // On the board and still drawn: a dying node is flying home and an absorbed
+  // one has already sunk into its host until the next rebuild drops it. The
+  // keys, search and sibling lists must not land on either, or the camera flies
+  // to empty space and opens the card of work that is no longer there.
+  const liveNode = (node) => Boolean(node) && !node.dying && !node._absorbed;
+  const TASK_KINDS = new Set(["task", "task-group"]);
+  const isTaskNode = (node) => TASK_KINDS.has(node?.kind);
+
   function sessionNodes() {
-    return state.nodes.filter((node) => node.kind === "session").sort((a, b) => (b.updated ?? 0) - (a.updated ?? 0));
+    return state.nodes.filter((node) => node.kind === "session" && liveNode(node)).sort((a, b) => (b.updated ?? 0) - (a.updated ?? 0));
   }
 
   // What ← → walk at the top level: the assistant, the sessions, the folded cluster.
@@ -34505,13 +34916,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
 
   function taskNodes() {
-    return state.nodes.filter((node) => ["task", "task-group"].includes(node.kind) && !node.dying).sort((a, b) => (b.task?.updatedAt ?? 0) - (a.task?.updatedAt ?? 0));
+    return state.nodes.filter((node) => isTaskNode(node) && liveNode(node)).sort((a, b) => (b.task?.updatedAt ?? 0) - (a.task?.updatedAt ?? 0));
   }
 
   function childrenOf(sessionId) {
     if (!sessionId) return [];
-    const todos = state.nodes.filter((node) => node.kind === "todo" && node.sessionId === sessionId);
-    const tasks = state.nodes.filter((node) => node.kind === "task" && !node.dying && node.anchorSessionId === sessionId);
+    const todos = state.nodes.filter((node) => node.kind === "todo" && liveNode(node) && node.sessionId === sessionId);
+    const tasks = state.nodes.filter((node) => isTaskNode(node) && liveNode(node) && node.anchorSessionId === sessionId);
     return todos.concat(tasks);
   }
 
@@ -34581,7 +34992,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   // graph pushes (the board, the store's todos, checkpoints; up to once a
   // second per running job) share their refreshGraph the same way.
   const FEED_PUSH_MS = 250;
-  function coalescedPush(run) {
+  function coalescedPush(run, wanted = () => state.active) {
     let timer = 0;
     let ranAt = 0;
     return () => {
@@ -34595,12 +35006,14 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       timer = setTimeout(() => {
         timer = 0;
         ranAt = Date.now();
-        if (state.active) run();
+        if (wanted()) run();
       }, wait);
     };
   }
   const paintFeedSoon = coalescedPush(() => renderFeed());
-  const refreshGraphSoon = coalescedPush(() => refreshGraph());
+  // Home's backdrop draws the same graph, so the last push of a burst reaches
+  // it too instead of waiting for the next backdrop tick.
+  const refreshGraphSoon = coalescedPush(() => refreshGraph(), () => state.active || state.homeBackdrop);
 
   function feedLine(item) {
     if (item.kind === "tool") return `${item.tool ?? "tool"} ${item.file ?? ""}`.trim();
@@ -35550,7 +35963,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         bell({ quick: true, level: 0.6 });
       }
     }
-    if (data.todos) refreshGraphSoon();
+    // The rail applies this push after us; once it announces its rebuilds
+    // (mefi:tree-rebuilt), that is when the graph is worth re-reading.
+    if (data.todos && !state.treeAnnounces) refreshGraphSoon();
     else if (state.camMode === "follow") updateFollowCamera(now, true);
   }
 
@@ -35893,6 +36308,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       try {
         drawFrame(time);
       } catch (error) {
+        // A throw between drawFrame's clip and its restore would leave every
+        // later frame one save deep inside this frame's clip: clears and the
+        // sky would stop at the old graph area for good. Close it here.
+        const open = state.frameClip;
+        state.frameClip = null;
+        if (open) for (const layer of open) { try { layer.restore(); } catch {} }
         if (!state.frameError) {
           state.frameError = true;
           // The stack, not just the message: a one-shot early-frame error must
@@ -35909,7 +36330,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         }
       }
     }
-    scheduleFrame(frameGap(hot) - (time - lastFrameAt));
+    // At rest the next frame is a rest frame away, on a timer: booked at the
+    // ambient pace it went through requestAnimationFrame, which ran this
+    // callback on every display refresh only to skip the draw (5 empty wakes
+    // per rest frame at 60 Hz, 13 at 144 Hz). Input ends the sleep at once
+    // (wakeFrames); a data push is drawn by the next rest frame.
+    scheduleFrame(frameGap(hot, calm) - (time - lastFrameAt));
   }
 
   function normalizeAudioPreferences(value, legacyResponse = null) {
@@ -35948,9 +36374,33 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     renderMusicStatus(true);
   }
 
+  // While music drives the tree, every wire asked for its own copy of the
+  // frame's music (the drum-free view, then its band's split) and every node
+  // for a fresh response, a hundred-odd objects a frame. The views below are
+  // made once per analysed frame (keyed on that frame's object, so they go
+  // with it) and reused by every wire and node that asks.
+  const musicViews = new WeakMap();
+  const musicView = (music) => {
+    let view = musicViews.get(music);
+    if (!view) { view = { calm: null, bands: new Map() }; musicViews.set(music, view); }
+    return view;
+  };
+  const NO_WAVEFORM = Object.freeze([]);
+  const AUDIO_BASS_KINDS = new Set(["root", "assistant", "music"]);
+  const AUDIO_TREBLE_KINDS = new Set(["todo", "agent", "checkpoint"]);
+  const AUDIO_BANDS = ["bass", "mid", "treble"];
+  const SILENT_RESPONSE = Object.freeze(Object.fromEntries(AUDIO_BANDS.map((band) => [band, Object.freeze({ band, level: 0, beat: 0 })])));
+  const unitClamp = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+  const waveTints = new WeakMap();
+  // Per-node memos live beside the nodes, not on them: audio never writes to
+  // a node, and a rebuilt node object starts fresh.
+  const nodeBands = new WeakMap();
+  const cableHashes = new WeakMap();
+
   function visualMusicResponse(music, effects = {}) {
     if (!music || effects.percussion === true) return music;
-    return { ...music, beat: 0, kick: 0, snare: 0, hat: 0 };
+    const view = musicView(music);
+    return view.calm ??= { ...music, beat: 0, kick: 0, snare: 0, hat: 0 };
   }
 
   function hashedAudioBand(key) {
@@ -35977,20 +36427,37 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (!music || band === "mix") return music;
     // A full-mix waveform would make every cable jump to the same drum hit.
     // Split cables use only their own band's envelope and attack contour.
-    return { bass: band === "bass" ? music.bass : 0, bassline: band === "bass" ? music.bassline ?? music.bass : 0,
-      mid: band === "mid" ? music.mid : 0, treble: band === "treble" ? music.treble : 0,
-      kick: band === "bass" ? music.kick ?? music.beat : 0, snare: band === "mid" ? music.snare : 0,
-      hat: band === "treble" ? music.hat : 0, beat: 0, waveform: [] };
+    const bands = musicView(music).bands;
+    let split = bands.get(band);
+    if (!split) {
+      split = { bass: band === "bass" ? music.bass : 0, bassline: band === "bass" ? music.bassline ?? music.bass : 0,
+        mid: band === "mid" ? music.mid : 0, treble: band === "treble" ? music.treble : 0,
+        kick: band === "bass" ? music.kick ?? music.beat : 0, snare: band === "mid" ? music.snare : 0,
+        hat: band === "treble" ? music.hat : 0, beat: 0, waveform: NO_WAVEFORM };
+      bands.set(band, split);
+    }
+    return split;
   }
 
   // A node keeps its frequency voice across sorting, camera moves and rebuilds.
   // Music changes light within the existing surface, never its layout or status.
   function nodeAudioResponse(node, music, enabled, response = 1) {
     let band = "mid";
-    if (["root", "assistant", "music"].includes(node.kind)) band = "bass";
-    else if (["todo", "agent", "checkpoint"].includes(node.kind)) band = "treble";
-    else if (node.kind === "task" || node.kind === "task-group") band = hashedAudioBand(taskGroupAudioKey(node) ?? node.id);
-    const clamp = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+    if (AUDIO_BASS_KINDS.has(node.kind)) band = "bass";
+    else if (AUDIO_TREBLE_KINDS.has(node.kind)) band = "treble";
+    else if (node.kind === "task" || node.kind === "task-group") {
+      // The voice is the node's for life (its group's, inside a task group):
+      // hash its key once, not every frame.
+      const key = taskGroupAudioKey(node) ?? node.id;
+      let known = nodeBands.get(node);
+      if (known?.key !== key) {
+        known = { key, band: hashedAudioBand(key) };
+        nodeBands.set(node, known);
+      }
+      band = known.band;
+    }
+    if (!enabled) return SILENT_RESPONSE[band];
+    const clamp = unitClamp;
     const strength = Number.isFinite(Number(response)) ? Math.max(0, Math.min(2, Number(response))) : 0.35;
     const transient = band === "bass" ? music?.kick : band === "mid" ? music?.snare : music?.hat;
     const beat = enabled ? clamp((clamp(transient ?? music?.beat) * 0.85 + clamp(music?.beat) * 0.15) * strength) : 0;
@@ -36004,12 +36471,19 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     ctx.save();
     ctx.globalAlpha = (node._fade ?? 1) * emphasis(node);
     // Leave the status rim and central music/assistant glyph readable.
-    const core = radius * (0.28 + level * 0.42 + beat * 0.1);
-    const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, Math.max(1, core));
-    glow.addColorStop(0, rgba(tint, Math.min(0.9, level * 0.58 + beat * 0.32)));
-    glow.addColorStop(1, rgba(tint, 0));
-    ctx.fillStyle = glow;
-    ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, core), 0, Math.PI * 2); ctx.fill();
+    const core = Math.max(1, radius * (0.28 + level * 0.42 + beat * 0.1));
+    // The disc is traced in canvas space, so the light never leaves the orb;
+    // its fade is the sky's unit wash for this canvas and tint (unitGlow),
+    // mapped onto it by the transform at fill time with the strength in
+    // globalAlpha, instead of a new gradient per node per frame.
+    ctx.beginPath(); ctx.arc(p.x, p.y, core, 0, Math.PI * 2);
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.scale(core, core);
+    ctx.globalAlpha *= Math.min(0.9, level * 0.58 + beat * 0.32);
+    ctx.fillStyle = unitGlow(ctx, "wash", tint);
+    ctx.fill();
+    ctx.restore();
     ctx.strokeStyle = rgba(tint, level * 0.6 + beat * 0.24);
     ctx.lineWidth = Math.min(1.8, radius * 0.14);
     ctx.beginPath(); ctx.arc(p.x, p.y, radius * (0.72 + level * 0.12), 0, Math.PI * 2); ctx.stroke();
@@ -36073,16 +36547,36 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 
   function drawAudioConnection(ctx, a, b, tint, lifetime, time, curved = false, sourceLink = false) {
     if (lifetime <= 0.02) return;
-    let seed = 0;
-    for (const char of `${a.node.id}:${b.node.id}`) seed = (seed * 31 + char.charCodeAt(0)) >>> 0;
-    const band = state.audioEffects?.splitBands === false ? "mix" : connectionAudioBand(a.node.id, b.node.id, b.node);
+    // The cable's seed and its voice (connectionAudioBand's: its task group's
+    // band, else the hash of its two ends) are remembered for the child while
+    // its parent and group stay the same, instead of a string built and
+    // hashed per wire per frame.
+    const group = taskGroupAudioKey(b.node);
+    let cable = cableHashes.get(b.node);
+    if (cable?.from !== a.node.id || cable.to !== b.node.id || cable.group !== group) {
+      let hash = 0;
+      for (const char of `${a.node.id}:${b.node.id}`) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+      cable = { from: a.node.id, to: b.node.id, group, hash, band: group ? hashedAudioBand(group) : AUDIO_BANDS[hash % 3] };
+      cableHashes.set(b.node, cable);
+    }
+    const seed = cable.hash;
+    const band = state.audioEffects?.splitBands === false ? "mix" : cable.band;
     const music = connectionMusicResponse(visualMusicResponse(state.music, state.audioEffects), band);
     const wave = audioConnectionWave(a.p, b.p, music, state.audioResponse, time, curved, seed % 628 / 100);
     if (!wave) return;
     const { points, activity } = wave;
     const attack = Math.max(wave.kick, wave.snare, wave.hat) * Math.min(1, Math.max(0, state.audioResponse ?? 0.35));
     const bandTint = wave.treble > wave.bass && wave.treble > wave.mid ? NODE_RGB.session : wave.mid > wave.bass ? NODE_RGB.pending : NODE_RGB.warm;
-    const color = tint.map((channel, index) => Math.round(channel * 0.4 + (bandTint?.[index] ?? channel) * 0.6));
+    // One blended triple per (tint, band tint): a fresh array per wire missed
+    // the colour-string memo, which is keyed on the triple itself.
+    let blends = waveTints.get(tint);
+    if (!blends) { blends = new Map(); waveTints.set(tint, blends); }
+    let color = blends.get(bandTint);
+    if (!color) {
+      color = Object.freeze(tint.map((channel, index) => Math.round(channel * 0.4 + (bandTint?.[index] ?? channel) * 0.6)));
+      if (blends.size >= 8) blends.clear();
+      blends.set(bandTint, color);
+    }
     ctx.save(); ctx.lineCap = "round"; ctx.lineJoin = "round";
     ctx.beginPath(); ctx.moveTo(points[0].x, points[0].y);
     for (let index = 1; index < points.length; index += 1) ctx.lineTo(points[index].x, points[index].y);
@@ -36090,7 +36584,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     ctx.strokeStyle = rgba(color, lifetime * Math.min(0.85, activity * 0.62 + attack * 0.2));
     ctx.lineWidth = (sourceLink ? 1.6 : 1.1) + attack * 0.9; ctx.stroke();
     ctx.restore();
-    state.audioWaves.push({ from: a.node.id, to: b.node.id, sourceLink, band, ...wave });
+    wave.from = a.node.id; wave.to = b.node.id; wave.sourceLink = sourceLink; wave.band = band;
+    state.audioWaves.push(wave);
   }
 
   function drawGraphConnections(ctx, projected, runningIds, audioLinked = false, time = 0, layers = null) {
@@ -36155,7 +36650,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const bend = nodeStyles ? { x1: 0, y1: 0, x2: 0, y2: 0 } : null;
     // Keep the work tether underneath each waveform so its endpoints and
     // assignment remain readable as the sound bends the connection.
-    for (const edge of state.edges) {
+    for (const edge of state.frameEdges ?? state.edges) {
       const a = projected[edge.a], b = projected[edge.b];
       if (!a || !b || a.node._absorbed || b.node._absorbed || a.node.kind === "agent" || b.node.kind === "agent") continue;
       const lifetime = Math.min(a.node._fade ?? 1, b.node._fade ?? 1);
@@ -36264,6 +36759,44 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   // The sky behind the constellation: the theme background, the scene the
   // theme (or the override) asked for, then the core glow and the vignette
   // every scene shares. Motion off freezes every scene at its resting pose.
+  // A soft wash, a bokeh disc and a firefly's glow are each one tint fading
+  // out: built once per canvas and tint in unit space, then drawn under a
+  // transform with their alpha in globalAlpha. Built per wash per frame they
+  // cost the nebula sky seven gradients, bokeh 22 and the fireflies up to 34,
+  // and nebula and bokeh are skies the rest cadence still draws.
+  const backdropGlows = new WeakMap();
+  function unitGlow(ctx, kind, triple) {
+    let kinds = backdropGlows.get(ctx);
+    if (!kinds) { kinds = new Map(); backdropGlows.set(ctx, kinds); }
+    let paints = kinds.get(kind);
+    if (!paints) { paints = new Map(); kinds.set(kind, paints); }
+    let paint = paints.get(triple);
+    if (!paint) {
+      if (paints.size >= 16) paints.clear();
+      if (kind === "disc") {
+        paint = ctx.createRadialGradient(0, 0, 0.55, 0, 0, 1);
+        paint.addColorStop(0, rgba(triple, 1));
+        paint.addColorStop(0.85, rgba(triple, 0.8));
+        paint.addColorStop(1, rgba(triple, 0));
+      } else {
+        paint = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+        paint.addColorStop(0, rgba(triple, 1));
+        paint.addColorStop(1, rgba(triple, 0));
+      }
+      paints.set(triple, paint);
+    }
+    return paint;
+  }
+  function fillGlow(ctx, kind, triple, x, y, r, alpha) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(r, r);
+    ctx.globalAlpha *= alpha;
+    ctx.fillStyle = unitGlow(ctx, kind, triple);
+    ctx.fillRect(-1, -1, 2, 2);
+    ctx.restore();
+  }
+
   function drawBackdrop(ctx, time, still, energy, musicBands, musicBeat) {
     const width = el.width, height = el.height;
     const media = globalThis.document?.body?.dataset?.mediaBackground === "true";
@@ -36273,8 +36806,20 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     // Media supplies the sky; keep both node layers at their normal opacity.
     if (media) return;
     const scene = activeBackdrop();
-    const backdrop = hexToRgb(state.canvasPalette?.background ?? "#050507");
-    const accent = state.canvasPalette?.accent ? hexToRgb(state.canvasPalette.accent) : NODE_RGB.warm;
+    // One triple per palette colour, not one per frame: the colour-string memo
+    // (rgb/rgba) is keyed on the triple itself and missed every frame.
+    const tripleOf = (hex) => {
+      const cache = (state.backdropTriples ??= new Map());
+      let triple = cache.get(hex);
+      if (!triple) {
+        if (cache.size >= 16) cache.clear();
+        triple = Object.freeze(hexToRgb(hex));
+        cache.set(hex, triple);
+      }
+      return triple;
+    };
+    const backdrop = tripleOf(state.canvasPalette?.background ?? "#050507");
+    const accent = state.canvasPalette?.accent ? tripleOf(state.canvasPalette.accent) : NODE_RGB.warm;
     const bright = NODE_RGB.warm;
     const ink = NODE_RGB.session;
     const diagonal = Math.hypot(width, height);
@@ -36299,12 +36844,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     ctx.fillStyle = skyPaints.sky;
     ctx.fillRect(0, 0, width, height);
     const nebula = (x, y, r, triple, alpha) => {
-      if (alpha <= 0.002) return;
-      const wash = ctx.createRadialGradient(x, y, 0, x, y, r);
-      wash.addColorStop(0, rgba(triple, alpha));
-      wash.addColorStop(1, rgba(triple, 0));
-      ctx.fillStyle = wash;
-      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      if (alpha <= 0.002 || !(r > 0)) return;
+      fillGlow(ctx, "wash", triple, x, y, r, alpha);
     };
     // starfield: depth bands wheeling at a fraction of the orbit rate, so the
     // sky drifts against the constellation; sizes and tones vary, and a
@@ -36460,11 +37001,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         const x = hash01(4.3, index) * width + Math.sin(clock / (5000 + hash01(4.4, index) * 4000) + index) * 24;
         const y = height * (0.3 + hash01(4.5, index) * 0.65) + Math.cos(clock / (6000 + hash01(4.6, index) * 5000) + index * 1.3) * 18;
         const size = 1.4 + blink * 1.6;
-        const glow = ctx.createRadialGradient(x, y, 0, x, y, size * 4);
-        glow.addColorStop(0, rgba(NODE_RGB.live, blink * 0.55));
-        glow.addColorStop(1, rgba(NODE_RGB.live, 0));
-        ctx.fillStyle = glow;
-        ctx.fillRect(x - size * 4, y - size * 4, size * 8, size * 8);
+        fillGlow(ctx, "wash", NODE_RGB.live, x, y, size * 4, blink * 0.55);
         ctx.globalAlpha = Math.pow(blink, 1.5);
         ctx.fillStyle = "#e8ffd0";
         ctx.beginPath(); ctx.arc(x, y, size * 0.6, 0, Math.PI * 2); ctx.fill();
@@ -36481,12 +37018,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         const mix = hash01(8.6, index);
         const triple = mix < 0.5 ? accent : mix < 0.8 ? bright : ink;
         const alpha = (0.035 + hash01(8.7, index) * 0.05) * (0.8 + 0.2 * breathe) + energy * 0.02;
-        const disc = ctx.createRadialGradient(x, y, r * 0.55, x, y, r);
-        disc.addColorStop(0, rgba(triple, alpha));
-        disc.addColorStop(0.85, rgba(triple, alpha * 0.8));
-        disc.addColorStop(1, rgba(triple, 0));
-        ctx.fillStyle = disc;
-        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+        fillGlow(ctx, "disc", triple, x, y, r, alpha);
       }
       ctx.restore();
       stars([{ count: 24, seed: 11.3, spin: 0.012, tempo: 3400, size: 0.7, alpha: 0.12 }]);
@@ -36633,11 +37165,31 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     return { number, title, mark, counts, lines: lines.slice(0, 2) };
   }
 
+  // Callout titles are whole task and session titles, often a hundred
+  // characters and more. Trimming them one character at a time measured (and
+  // cached) every prefix, so six long cards overflowed the width cache and
+  // cleared it every frame. The cut is found by bisection, capped first the way
+  // labelText caps, and the answer is kept per font, width and text.
   function clipLine(ctx, font, text, maxWidth) {
+    const cache = (state.clipLines ??= new Map());
+    const key = `${font}|${Math.round(maxWidth)}|${text}`;
+    const known = cache.get(key);
+    if (known !== undefined) return known;
     let value = String(text ?? "").replace(/\s+/g, " ").trim();
-    if (measure(ctx, font, value) <= maxWidth) return value;
-    while (value.length > 1 && measure(ctx, font, `${value}…`) > maxWidth) value = value.slice(0, -1);
-    return `${value.trimEnd()}…`;
+    let result = value;
+    if (measure(ctx, font, value) > maxWidth) {
+      value = value.slice(0, 160);
+      let low = 1, high = value.length;
+      while (low < high) {
+        const middle = Math.ceil((low + high) / 2);
+        if (measure(ctx, font, `${value.slice(0, middle)}…`) <= maxWidth) low = middle;
+        else high = middle - 1;
+      }
+      result = `${value.slice(0, low).trimEnd()}…`;
+    }
+    if (cache.size >= 256) cache.delete(cache.keys().next().value);
+    cache.set(key, result);
+    return result;
   }
 
   // The card's measurements: its width from the title row, the title clipped
@@ -36938,8 +37490,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     drawCalloutMark(ctx, content.mark, x + 5, baseline - 4, tint);
     x += 15;
     if (content.number) {
+      const nw = measure(ctx, CALLOUT_NUMBER_FONT, content.number) + 8;
       ctx.font = CALLOUT_NUMBER_FONT;
-      const nw = ctx.measureText(content.number).width + 8;
       ctx.beginPath(); ctx.roundRect(x, baseline - 10.5, nw, 13, 3.5); ctx.fillStyle = rgba(tint, filled ? 0.28 : 0.2); ctx.fill();
       ctx.fillStyle = rgba(tint, 1); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(content.number, x + 4, baseline - 0.5);
       x += nw + 5;
@@ -37148,9 +37700,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
     return true;
   }
-  // Ends a rest: the next frame comes at the ambient pace (or sooner).
+  // Ends a rest: the next frame comes at the ambient pace (or sooner). A rest
+  // sleeps on a timer, so input cuts it short instead of waiting it out.
   function wakeFrames() {
     state.calmFrames = 0;
+    if (frameTimer && state.active && !document.hidden && !document.body?.dataset?.sheet) scheduleFrame(0);
   }
 
   // A pulse's head glow (see drawFrame) and its comet tail's two stops,
@@ -37294,11 +37848,23 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     ctx.rect(clip.x, clip.y, clip.w, clip.h);
     ctx.clip();
     if (far !== ctx) { far.save(); far.beginPath(); far.rect(clip.x, clip.y, clip.w, clip.h); far.clip(); }
+    // Open until the restore below; a throw in between is closed by frame().
+    state.frameClip = far !== ctx ? [ctx, far] : [ctx];
 
     syncAgentMotion(Date.now(), time);
     stepFx(Date.now());
     stepDoneHold(Date.now());
-    const projected = state.nodes.filter((node) => node.kind !== "assistant" && node.kind !== "music").map((node) => ({ node, p: project(node) }));
+    // A node with a saved layout record is drawn at its anchor: project that
+    // (the layout then reuses it) instead of the raw position it replaces.
+    const savedLayout = state.screenLayout?.nodes;
+    const projected = state.nodes.filter((node) => node.kind !== "assistant" && node.kind !== "music").map((node) => {
+      const anchor = node.kind !== "agent" && !node.dying && node._layoutAnchor && savedLayout?.has(node.id) ? node._layoutAnchor : null;
+      const p = project(anchor ?? node);
+      if (anchor) p.anchor = anchor;
+      return { node, p };
+    });
+    // The layout and the wires index `projected`, not state.nodes.
+    state.frameEdges = frameEdges(projected);
     const runningIds = autopilotBusyIds(state.assistant);
     const runningJobs = autopilotJobs(state.assistant);
     // Motion records (renderer/node-styles.js) live by id: a refresh that
@@ -37350,13 +37916,18 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       for (const entry of projected) {
         const fx = state.fx.get(entry.node.id);
         if (!fx || fx.builder) continue;
-        const hostP = pointOf.get(absorbHost(fx)?.id);
+        const hostId = absorbHost(fx)?.id;
+        const hostP = pointOf.get(hostId);
         if (!hostP) continue;
         if (fx.absorbAt != null) {
           const t = Math.min(1, Math.max(0, (nowFx - fx.absorbAt) / NODE_ABSORB_MS));
           fx.fromScreen ??= { x: entry.p.x, y: entry.p.y };
           const e = smoothStep(t);
           entry.p = { ...entry.p, x: fx.fromScreen.x + (hostP.x - fx.fromScreen.x) * e, y: fx.fromScreen.y + (hostP.y - fx.fromScreen.y) * e };
+          // A live shape moves the host after this: the flight tells it where
+          // home is and how far along it is, so the node lands on the host
+          // where the host is drawn.
+          entry.flight = { hostId, e };
           lifeHot = true;
         } else if (fx.bornAt != null && nowFx - fx.bornAt >= 0 && nowFx - fx.bornAt < NODE_GROW_MS) {
           const e = easeOut((nowFx - fx.bornAt) / NODE_GROW_MS);
@@ -37685,8 +38256,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
     ctx.restore();
     if (far !== ctx) far.restore();
+    state.frameClip = null;
     syncFarLayer(liveFocusIds);
     state.calmFrames = sceneAtRest(projected, runningIds, still, audioLinked) ? (state.calmFrames ?? 0) + 1 : 0;
+    // A still pointer over a turning or gliding tree: ask again what is under
+    // it now that this frame's positions are known (a few times a second).
+    if (state.pointer && !state.panning && !state.rotating && !scenery && time - (state.pointerHoverAt ?? -Infinity) >= 150) {
+      state.pointerHoverAt = time;
+      pointerHover(state.pointer.x, state.pointer.y);
+    }
   }
 
   // ---------- labels ----------
@@ -37694,7 +38272,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const key = `${font}|${text}`;
     let width = state.labelWidths.get(key);
     if (width == null) {
-      if (state.labelWidths.size > LABEL_CACHE_MAX) state.labelWidths.clear();
+      // Oldest first, not all at once: a burst of new text evicts what it
+      // displaced instead of re-measuring every label on the next frame.
+      if (state.labelWidths.size > LABEL_CACHE_MAX) state.labelWidths.delete(state.labelWidths.keys().next().value);
       ctx.font = font;
       width = ctx.measureText(text).width;
       state.labelWidths.set(key, width);
@@ -37924,7 +38504,19 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 
   // Important labels can search hundreds of free slots. Only nearby nodes
   // can obstruct one; keep the exact padded overlap test inside those cells.
+  // The callouts, the speech bubbles and the labels each ask for the grid in
+  // the same frame, over the same projected list, after every orb has its
+  // place: build it once per frame. Outside a counted frame it is rebuilt.
   function nodeLabelBlocker(projected) {
+    const frame = state.frameNo;
+    const kept = state.labelBlocker;
+    if (Number.isFinite(frame) && kept?.frame === frame && kept.projected === projected && kept.count === projected.length) return kept.blocker;
+    const blocker = buildLabelBlocker(projected);
+    state.labelBlocker = Number.isFinite(frame) ? { frame, projected, count: projected.length, blocker } : null;
+    return blocker;
+  }
+
+  function buildLabelBlocker(projected) {
     const cells = new Map(), broad = [], rects = [], ghosts = [];
     const cellSize = 64;
     for (const { node, p } of projected) {
@@ -38269,7 +38861,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (best) return best.node;
     // labels are part of the node: clicking the text selects it
     for (const node of state.nodes) {
-      if (node.kind === "assistant" || node.kind === "music") continue;
+      if (node.kind === "assistant" || node.kind === "music" || node.dying || node._absorbed) continue;
       const rect = node._label;
       if (!rect) continue;
       if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) return node;
@@ -38295,6 +38887,22 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       if (Math.hypot(excl.x - x, excl.y - y) <= excl.r) return node;
     }
     return null;
+  }
+
+  // What the pointer rests on. The mousemove handler asks on every move, and
+  // the frame loop asks again while the tree turns or glides under a still
+  // pointer, so the lift, the cursor and the tip follow the node that is
+  // actually under it instead of sticking to one that rotated away.
+  function pointerHover(x, y) {
+    state.hoverNode = nodeAt(x, y) ?? exclAt(x, y);
+    state.hoverBubble = bubbleAt(x, y);
+    state.hoverSpeech = state.hoverNode || state.hoverBubble ? null : speechAt(x, y)?.id ?? null;
+    // A hovered callout lifts and sharpens while the rest softens; the card
+    // is its own explanation, so no tooltip rides along.
+    state.hoverCallout = state.hoverNode || state.hoverBubble || state.hoverSpeech ? null : calloutAt(x, y)?.id ?? null;
+    el.canvas.style.cursor = state.hoverNode || state.hoverBubble || state.hoverSpeech || state.hoverCallout ? "pointer" : "default";
+    if (state.hoverCallout) hideTip();
+    else refreshTip(x, y);
   }
 
   // Evidence popups are ambience: the moment the view is used as a menu they
@@ -38337,7 +38945,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const focusInCard = !node && (Boolean(el.info?.contains(document.activeElement)) || Boolean(el.nodePanel?.contains(document.activeElement)));
     // The style's selection settles at the hot cadence for 400 ms (motionHot).
     if ((node?.id ?? null) !== (state.selected?.id ?? null)) state.styleBurstUntil = (globalThis.performance?.now?.() ?? Date.now()) + 400;
+    const changed = (node?.id ?? null) !== (state.selected?.id ?? null);
     state.selected = node ? { id: node.id, kind: node.kind, node, via: options.via ?? "pointer" } : null;
+    if (changed) announceSelection(node);
     if (!node) exitFocus(); // letting go of the selection lets go of the focus too
     if (node?.doneHold) ackDoneHold(node.id); // the click is the read
     if (node && !node.readOnly && (node.kind === "session" || node.kind === "todo" || node.kind === "task")) focusAssistant(node);
@@ -38347,7 +38957,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     // node is picked, then give the rail back to the tab you were on.
     if (typeof setRailTab === "function") {
       if (el.railTabNode) el.railTabNode.hidden = !node || !railVisible();
-      if (node && railVisible()) setRailTab("node", { save: false });
+      // selectNode builds the card itself below: once per selection.
+      if (node && railVisible()) setRailTab("node", { save: false, render: false });
       else if (state.railTab === "node") setRailTab(state.railHome ?? "work", { save: false });
     }
     // Letting go of the selection also forgets that the owner asked for the
@@ -38361,6 +38972,16 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (focusInCard && state.active) el.canvas.focus?.({ preventScroll: true });
     renderHint();
     bumpHud();
+  }
+
+  // The cards are not live regions: every rebuild would read a whole card,
+  // buttons and thread included, again. A selection says one short line, once.
+  function announceSelection(node) {
+    if (!el.announce) return;
+    const kinds = { root: "Constellation", session: "Session", todo: "Todo", task: "Task", "task-group": "Task group", assistant: "Assistant", folded: "Finished sessions", agent: "Agent" };
+    if (!node) { el.announce.textContent = "Selection cleared"; return; }
+    const badge = typeof statusBadge === "function" ? statusBadge(node)?.text : "";
+    el.announce.textContent = [kinds[node.kind] ?? "Node", node.kind === "agent" ? node.role : node.label, badge].filter(Boolean).join(", ");
   }
 
   function select(id) {
@@ -38599,6 +39220,22 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 
   // One absorbed brief: its verdict, what it was and when it sank in — a
   // click opens the task or the session it came from.
+  // A card row that opens something is a link for the keyboard and screen
+  // readers too, not only a pointer target: it takes focus, has a role and
+  // answers Enter and Space.
+  function linkRow(item, open) {
+    item.style.cursor = "pointer";
+    item.setAttribute("role", "link");
+    item.tabIndex = 0;
+    item.addEventListener("click", open);
+    item.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      event.stopPropagation();
+      open();
+    });
+  }
+
   function absorbedRow(entry) {
     const item = document.createElement("div");
     item.className = "cp-note checkpoint-note absorbed-row";
@@ -38606,13 +39243,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const verdict = entry.kind === "job" ? "job" : entry.kind === "session" ? "session" : "done";
     item.textContent = `${verdict} · ${entry.title} · ${agoLabel(entry.absorbedAt ?? entry.at) ?? ""}`;
     item.title = entry.detail || entry.prompt || entry.title;
-    if (entry.taskId) {
-      item.style.cursor = "pointer";
-      item.addEventListener("click", () => nav("tasks", { taskId: entry.taskId, filter: "all" }));
-    } else if (entry.sessionId) {
-      item.style.cursor = "pointer";
-      item.addEventListener("click", () => nav("explorer", { sessionId: entry.sessionId }));
-    }
+    if (entry.taskId) linkRow(item, () => nav("tasks", { taskId: entry.taskId, filter: "all" }));
+    else if (entry.sessionId) linkRow(item, () => nav("explorer", { sessionId: entry.sessionId }));
     return item;
   }
 
@@ -38711,7 +39343,70 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     info.append(details);
   }
 
-  function renderInfo({ clearDraft = false } = {}) {
+  // The card is rebuilt whole on many pushes (a task sinking home, the assistant
+  // focus moving, a group toggling). A rebuild of the same node keeps what the
+  // owner was doing in it: the focused control, half-typed notes and the folds
+  // they opened. The assistant composer's own draft is carried by the builder.
+  function cardControlKey(element) {
+    const parts = [element.tagName, element.className, element.getAttribute?.("aria-label"), element.getAttribute?.("placeholder"), element.dataset?.cardKey];
+    if (element.tagName === "BUTTON" || element.tagName === "A" || element.tagName === "SUMMARY") parts.push(String(element.textContent ?? "").trim().slice(0, 60));
+    return parts.map((part) => part ?? "").join("|");
+  }
+
+  function captureCard(host) {
+    if (!host?.querySelectorAll) return null;
+    const active = document.activeElement;
+    const fields = new Map();
+    for (const field of host.querySelectorAll("input:not([type=checkbox]):not([type=radio]), textarea")) {
+      if (field.closest(".assistant-composer") || !field.value) continue;
+      fields.set(cardControlKey(field), { value: field.value, start: field.selectionStart, end: field.selectionEnd });
+    }
+    const open = new Set([...host.querySelectorAll("details")].map((details) => `${details.className}|${details.querySelector("summary")?.textContent?.trim() ?? ""}|${details.open}`));
+    return { focus: active && active !== host && host.contains(active) && !active.closest(".assistant-composer") ? cardControlKey(active) : null, fields, open };
+  }
+
+  function restoreCard(host, kept) {
+    if (!host?.querySelectorAll || !kept) return;
+    for (const field of host.querySelectorAll("input:not([type=checkbox]):not([type=radio]), textarea")) {
+      const saved = kept.fields.get(cardControlKey(field));
+      if (!saved || field.value) continue;
+      field.value = saved.value;
+      try { field.setSelectionRange?.(saved.start ?? saved.value.length, saved.end ?? saved.value.length); } catch {}
+    }
+    for (const details of host.querySelectorAll("details")) {
+      const key = `${details.className}|${details.querySelector("summary")?.textContent?.trim() ?? ""}`;
+      if (kept.open.has(`${key}|true`)) details.open = true;
+      else if (kept.open.has(`${key}|false`)) details.open = false;
+    }
+    if (kept.focus) {
+      const target = [...host.querySelectorAll("button, a[href], input, textarea, select, summary, [tabindex]")].find((element) => cardControlKey(element) === kept.focus);
+      target?.focus?.({ preventScroll: true });
+    }
+  }
+
+  function renderInfo(options) {
+    const host = infoHost();
+    const sameNode = Boolean(state.selected) && state.cardNodeId === state.selected.id;
+    const kept = sameNode ? captureCard(host) : null;
+    renderInfoImpl(options);
+    state.cardNodeId = state.selected?.id ?? null;
+    state.cardSignature = state.selected ? cardSignature(state.selected.node) : null;
+    if (kept && state.selected) restoreCard(infoHost(), kept);
+  }
+
+  // What the card shows about a node, cheaply: a rebuild of the graph redraws
+  // the card only when one of these changed (a task moving from Ready to
+  // Running, a session's todo count, a todo's status), not on every push.
+  function cardSignature(node) {
+    if (!node) return "";
+    const task = node.task;
+    const todos = node.kind === "session" ? todosOf(node.id) : null;
+    return [node.kind, node.label, node.state, node.status, node.stale, node.doneHold, node.anchorSessionId, node.readOnly,
+      task?.status, task?.updatedAt, task?.stage, task?.run?.sessionId, todos?.length, todos?.filter((todo) => todo.state === "done").length,
+      node.count, node.progress == null ? "" : Math.round(node.progress * 100)].map((part) => part ?? "").join("|");
+  }
+
+  function renderInfoImpl({ clearDraft = false } = {}) {
     const host = infoHost();
     if (!host) return;
     state.graphAreaAt = 0;
@@ -38884,8 +39579,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
           when.textContent = status;
           item.append(name, when);
           item.title = task.prompt ?? task.title ?? "";
-          item.style.cursor = "pointer";
-          item.addEventListener("click", () => nav("tasks", { taskId: task.id, filter: "all" }));
+          linkRow(item, () => nav("tasks", { taskId: task.id, filter: "all" }));
           details.append(item);
         }
         info.append(details);
@@ -39225,14 +39919,20 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       appendTaskGroupInfo(info, node);
       if (!node.readOnly) appendNodeFolder(info, node);
       if (node.groupMember?.canonical !== false) action("Open in Tasks", () => primaryAction(node), { primary: true, title: "Tasks (T)" });
-      if (!node.readOnly) {
+      // Finished work held on the board to be read offers only the reading:
+      // marking it done again or queueing work on it is not what it is for.
+      const finished = node.doneHold || task.status === "done";
+      if (!node.readOnly && !finished) {
       action("Work on it", () => workOnNode(node), {
         title: "Prioritize this task. Machine managed starts eligible work while Studio remains responsive; prerequisites, approval, file claims and any selected manual build limit still apply.",
       });
-      action(
+      const doneButton = action(
         "Done",
         async () => {
-          const result = await confirmTaskDone(task);
+          // One status write per press: a double press used to send two.
+          if (doneButton.disabled) return;
+          doneButton.disabled = true;
+          const result = await confirmTaskDone(task).finally(() => { doneButton.disabled = false; });
           if (!result.ok) {
             window.MefiToast?.(`${task.title} · not marked done: ${result.error}`, "bad");
             return;
@@ -39376,7 +40076,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const hit = (node) => {
       const fields = [node.label];
       if (node.kind === "session") fields.push(node.agent, node.model, node.stale ? "stale" : null);
-      else if (node.kind === "task") fields.push(node.task?.prompt, node.task?.status);
+      else if (isTaskNode(node)) fields.push(node.task?.prompt, node.task?.status);
       else if (node.kind === "todo") fields.push(node.status);
       else if (node.kind === "assistant") fields.push("assistant", node.sublabel, node.tone, ...(node.filedWork ?? []).map((task) => task?.title));
       else if (node.kind === "folded") fields.push("finished", "folded", ...(node.titles ?? []));
@@ -39393,7 +40093,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const cluster = foldedNode();
     if (cluster && hit(cluster)) matches.push(cluster.id);
     for (const task of taskNodes()) if (hit(task)) matches.push(task.id);
-    for (const agent of state.nodes) if (agent.kind === "agent" && hit(agent)) matches.push(agent.id);
+    for (const agent of state.nodes) if (agent.kind === "agent" && liveNode(agent) && hit(agent)) matches.push(agent.id);
     const root = rootNode();
     if (root && hit(root)) matches.push(root.id);
     state.matches = matches;
@@ -39592,15 +40292,35 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
 
   // A zoom the user asked for (wheel, buttons, keys): the mode steps aside.
-  function userZoom(value) {
+  // `anchor` (canvas pixels) is the point that stays put: the wheel zooms
+  // toward what the pointer is on instead of the frame's centre, so closing
+  // in on an edge node no longer pushes it out of view. The shift is mapped
+  // to the camera the way a drag pans it, perspective aside.
+  function userZoom(value, anchor = null) {
     setCamMode("free", { quiet: true, transient: true });
+    const before = state.zoom;
     setZoom(value);
+    if (!anchor || !(before > 0) || state.zoom === before) return;
+    const offset = state.overviewOffset ?? { x: 0, y: 0 };
+    const base = Math.max(0.01, state.fit) * (state.overviewScale ?? 1);
+    const factor = (1 / state.zoom - 1 / before) / base;
+    const dx = (anchor.x - centerX() - offset.x) * factor;
+    const dy = (anchor.y - centerY() - offset.y) * factor;
+    if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+    // Both the camera and any glide it is on shift together.
+    const shift = state.view === "2d" ? { x: dx, y: 0, z: dy } : { x: dx * Math.cos(state.angle), y: dy, z: -dx * Math.sin(state.angle) };
+    const camera = state.camera;
+    for (const axis of ["x", "y", "z"]) {
+      camera[axis] += shift[axis];
+      camera[`t${axis}`] = (camera[`t${axis}`] ?? camera[axis] - shift[axis]) + shift[axis];
+    }
   }
 
   function setLabels(mode) {
     state.labels = LABEL_MODES.includes(mode) ? mode : "auto";
     writeStore("mefiStudio.cmdLabels", state.labels);
     state.labelWidths.clear();
+    state.clipLines?.clear();
     syncViewControls();
   }
 
@@ -39812,7 +40532,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 
   function cycleSiblings(node, delta) {
     let list = topNodes();
-    if (node && (node.kind === "todo" || node.kind === "task")) {
+    if (node && (node.kind === "todo" || isTaskNode(node))) {
       const siblings = childrenOf(branchIdOf(node));
       list = siblings.length ? siblings : taskNodes();
     }
@@ -39822,7 +40542,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   function cycleTasks(delta) {
     const list = taskNodes();
     if (!list.length) return;
-    const current = state.selected?.node?.kind === "task" ? state.selected.node : null;
+    const current = isTaskNode(state.selected?.node) ? state.selected.node : null;
     moveTo(stepThrough(list, current, delta));
   }
 
@@ -39837,7 +40557,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 
   function ascend(node) {
     if (!node) return;
-    if (node.kind === "todo" || node.kind === "task") {
+    if (node.kind === "todo" || isTaskNode(node)) {
       moveTo(parentSession(node) ?? rootNode());
       return;
     }
@@ -39856,7 +40576,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (event.ctrlKey || event.altKey || event.metaKey) return false;
     if (event.target?.closest?.("input, textarea, select, [contenteditable]")) return false;
     // Let a focused control keep Enter and Space (dock buttons, view controls, legend).
-    const onControl = event.target?.closest?.("button, a, summary, [role='button']");
+    // Focus inside the selection card keeps its arrow keys: they scroll the
+    // card, and walking the tree from there rebuilt the card under the
+    // focused button. The canvas and the rest of the HUD still walk it.
+    const inCard = Boolean(event.target && (el.info?.contains?.(event.target) || el.nodePanel?.contains?.(event.target)));
+    if (inCard && event.key?.startsWith?.("Arrow")) return false;
+    const onControl = event.target?.closest?.("button, a, summary, [role='button'], [role='link']");
     if (onControl && (event.key === " " || event.key === "Enter" || event.key === "Spacebar")) return false;
     const node = state.selected?.node ?? null;
     switch (event.key) {
@@ -40461,6 +41186,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     el.width = width;
     el.height = height;
     state.labelWidths.clear();
+    state.clipLines?.clear();
     state.speechLineCache?.clear();
     state.hudRectsAt = 0;
     state.graphAreaAt = 0;
@@ -40551,6 +41277,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
     syncGraphTheme();
     el.info = document.getElementById("idle-info");
+    el.announce = document.getElementById("cmd-announce");
     el.chatLog = document.getElementById("cmd-chat");
     el.chatLogDot = document.getElementById("cmd-chat-dot");
     el.chatLogState = document.getElementById("cmd-chat-state");
@@ -40923,16 +41650,29 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     // second read that could land inside the next save and come back empty.
     window.mefiStudio?.onTasks?.(async (tasks) => {
       state.calmFrames = 0;
-      if (Array.isArray(tasks)) takeTasks(tasks);
+      if (Array.isArray(tasks)) {
+        state.tasksRevision = (state.tasksRevision ?? 0) + 1;
+        takeTasks(tasks);
+      }
       else await refreshTasks();
       if (state.active || state.homeBackdrop) refreshGraphSoon();
     });
     window.addEventListener("resize", () => (state.active || state.homeBackdrop) && resize());
+    // The rail owns the session graph and rebuilds it on its own schedule: a
+    // push it applies after ours, a store read that lands later, a roster
+    // change that brings a new agent. Re-read the graph whenever it does, so
+    // the last change of a burst and a newly started agent are never missing.
+    window.addEventListener("mefi:tree-rebuilt", () => {
+      state.treeAnnounces = true;
+      if (state.active || state.homeBackdrop) refreshGraphSoon();
+    });
 
     // Mouse interacts with the constellation instead of dismissing it.
     // A right-drag orbits the camera; the menu key/gesture must not interrupt it.
     el.canvas.addEventListener("contextmenu", (event) => event.preventDefault());
-    el.canvas.addEventListener("mousedown", (event) => {
+    // The press, move and release handlers are named: touch and pen reuse
+    // them below, so a finger taps, drags and focuses exactly like the mouse.
+    const onPress = (event) => {
       const rect = el.canvas.getBoundingClientRect();
       const x = event.clientX - rect.left;
       const y = event.clientY - rect.top;
@@ -40968,7 +41708,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       const hit = nodeAt(x, y) ?? calloutAt(x, y);
       const node = hit && hit.kind === "agent" ? assistantNode() ?? hit : hit;
       state.panning = { x: event.clientX, y: event.clientY, cam: { ...state.camera, tx: state.camera.x, ty: state.camera.y, tz: state.camera.z }, moved: false, node };
-    });
+    };
+    el.canvas.addEventListener("mousedown", onPress);
     el.canvas.addEventListener("dblclick", (event) => {
       const rect = el.canvas.getBoundingClientRect();
       const x = event.clientX - rect.left;
@@ -40988,11 +41729,16 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         primaryAction(exclNode);
         return;
       }
-      const node = nodeAt(x, y);
+      // The same targets as a single press, so a double-click on a callout
+      // card or a speech bubble opens its node instead of undoing the focus
+      // the two presses just made with a Fit of the whole tree.
+      const speaker = speechAt(x, y);
+      const hit = speaker ?? nodeAt(x, y) ?? calloutAt(x, y);
+      const node = hit && hit.kind === "agent" ? assistantNode() ?? hit : hit;
       if (node) primaryAction(node);
       else fitAll();
     });
-    window.addEventListener("mousemove", (event) => {
+    const onMove = (event) => {
       if (!state.active) return;
       const rect = el.canvas.getBoundingClientRect();
       const x = event.clientX - rect.left;
@@ -41039,27 +41785,28 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         el.canvas.style.cursor = "grabbing";
         return;
       }
-      if (event.target !== el.canvas) return;
-      state.hoverNode = nodeAt(x, y) ?? exclAt(x, y);
-      state.hoverBubble = bubbleAt(x, y);
-      state.hoverSpeech = state.hoverNode || state.hoverBubble ? null : speechAt(x, y)?.id ?? null;
-      // A hovered callout lifts and sharpens while the rest softens; the card
-      // is its own explanation, so no tooltip rides along.
-      state.hoverCallout = state.hoverNode || state.hoverBubble || state.hoverSpeech ? null : calloutAt(x, y)?.id ?? null;
-      el.canvas.style.cursor = state.hoverNode || state.hoverBubble || state.hoverSpeech || state.hoverCallout ? "pointer" : "default";
-      if (state.hoverCallout) hideTip();
-      else refreshTip(x, y);
-    });
+      if (event.target !== el.canvas) {
+        state.pointer = null;
+        return;
+      }
+      state.pointer = { x, y };
+      pointerHover(x, y);
+    };
+    window.addEventListener("mousemove", onMove);
     el.canvas.addEventListener("mouseleave", () => {
+      state.pointer = null;
       state.hoverNode = null;
       state.hoverBubble = null;
       state.hoverSpeech = null;
       state.hoverCallout = null;
       hideTip();
     });
-    window.addEventListener("mouseup", () => {
+    const onRelease = () => {
       if (state.panning && !state.panning.moved) {
-        const node = state.panning.node;
+        // The node pressed, as it is now: a rebuild between press and release
+        // replaced the object, and one that left the graph is let go.
+        const pressed = state.panning.node;
+        const node = pressed ? state.nodes.find((entry) => entry.id === pressed.id) ?? null : null;
         // A click on a node or its callout focuses it: the camera closes in
         // (less on a parent, so its children stay in frame) and the rest of
         // the tree keeps turning, softly blurred, behind it. Empty canvas
@@ -41070,7 +41817,58 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       state.panning = null;
       state.rotating = null;
       if (state.active) el.canvas.style.cursor = "default";
+    };
+    window.addEventListener("mouseup", onRelease);
+    // Touch and pen: one finger presses, drags and taps like the left mouse
+    // button, through the same handlers; two fingers pinch to zoom about their
+    // midpoint. Taking pointerdown stops the compatibility mouse events, so a
+    // tap is handled once, and the canvas claims the gesture from the page.
+    el.canvas.style.touchAction = "none";
+    const touches = new Map();
+    let pinch = null;
+    const touchPoint = (event) => ({ clientX: event.clientX, clientY: event.clientY, button: 0, buttons: 1, target: el.canvas });
+    el.canvas.addEventListener("pointerdown", (event) => {
+      if (event.pointerType === "mouse") return;
+      event.preventDefault();
+      try { el.canvas.setPointerCapture?.(event.pointerId); } catch {}
+      touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (touches.size === 1 && !pinch) { onPress(touchPoint(event)); return; }
+      // A second finger turns the drag into a pinch until every finger lifts.
+      state.panning = null;
+      state.rotating = null;
+      const [a, b] = [...touches.values()];
+      if (b) pinch = { distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), zoom: state.zoom };
     });
+    el.canvas.addEventListener("pointermove", (event) => {
+      if (event.pointerType === "mouse" || !touches.has(event.pointerId)) return;
+      touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (pinch) {
+        const [a, b] = [...touches.values()];
+        if (!b) return;
+        const rect = el.canvas.getBoundingClientRect();
+        state.ambient = false;
+        state.settleUntil = Date.now() + SETTLE_MS;
+        userZoom(pinch.zoom * Math.hypot(a.x - b.x, a.y - b.y) / pinch.distance, { x: (a.x + b.x) / 2 - rect.left, y: (a.y + b.y) / 2 - rect.top });
+        return;
+      }
+      onMove(touchPoint(event));
+    });
+    const liftTouch = (event, cancelled = false) => {
+      if (event.pointerType === "mouse" || !touches.delete(event.pointerId) || touches.size) return;
+      const pinched = Boolean(pinch);
+      pinch = null;
+      if (pinched || cancelled) { state.panning = null; state.rotating = null; }
+      else onRelease();
+      // A finger leaves no pointer resting on the canvas: no hover lingers.
+      state.pointer = null;
+      state.hoverNode = null;
+      state.hoverBubble = null;
+      state.hoverSpeech = null;
+      state.hoverCallout = null;
+      hideTip();
+    };
+    el.canvas.addEventListener("pointerup", (event) => liftTouch(event));
+    el.canvas.addEventListener("pointercancel", (event) => liftTouch(event, true));
     el.canvas.addEventListener(
       "wheel",
       (event) => {
@@ -41082,7 +41880,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         // small deltas zooms in small steps instead of 8% per event.
         const perUnit = event.deltaMode === 1 ? 0.0278 : event.deltaMode === 2 ? 0.0834 : 0.000834;
         const delta = Math.max(-240, Math.min(240, Number(event.deltaY) || 0));
-        if (delta) userZoom(state.zoom * Math.exp(-delta * perUnit));
+        if (!delta) return;
+        const rect = el.canvas.getBoundingClientRect();
+        userZoom(state.zoom * Math.exp(-delta * perUnit), { x: event.clientX - rect.left, y: event.clientY - rect.top });
       },
       { passive: false }
     );
@@ -41134,23 +41934,23 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       // The builder nodes are built from this list, so any change to which jobs
       // are in flight has to redraw the graph — otherwise a run shows no agent
       // at all, or a finished one keeps orbiting a task nobody is building.
-      const signature = jobs.map((job) => job.taskId ?? job.sessionId ?? job.title).sort().join("|");
+      const signature = jobs.map((job) => builderKey(job)).sort().join("|");
       if (signature !== state.builderSignature) {
         // A job id the last push did not carry is a builder the assistant just
         // sent out: mark it before the rebuild, pulse it after.
         const known = state.builderIds ?? new Set();
-        const fresh = jobs.filter((job) => !known.has(job.taskId ?? job.sessionId ?? job.title));
+        const fresh = jobs.filter((job) => !known.has(builderKey(job)));
         state.builderSignature = signature;
-        state.builderIds = new Set(jobs.map((job) => job.taskId ?? job.sessionId ?? job.title));
+        state.builderIds = new Set(jobs.map((job) => builderKey(job)));
         refreshGraph();
         // The hand-off, on screen: a packet pulse from the assistant to each
         // new builder, so a dispatch reads as the assistant sending work out.
         const hub = assistantNode();
         if (state.active && hub && fresh.length) {
           for (const job of fresh) {
-            const key = job.taskId ?? job.sessionId ?? job.title;
+            const key = builderKey(job);
             const node = state.nodes.find(
-              (entry) => entry.kind === "agent" && entry.builder && (entry.job?.taskId ?? entry.job?.sessionId ?? entry.job?.title) === key,
+              (entry) => entry.kind === "agent" && entry.builder && builderKey(entry.job) === key,
             );
             if (!node) continue;
             state.pulses.push({ from: hub, to: node, start: Date.now(), duration: 1100, color: "#f1dcae", glow: "#e6c98d", wave: true, packet: true });
@@ -41162,8 +41962,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         // meters in place — a full rebuild is for jobs joining or leaving.
         for (const node of state.nodes) {
           if (node.kind !== "agent" || !node.builder) continue;
-          const key = node.job?.taskId ?? node.job?.sessionId ?? node.job?.title;
-          const job = jobs.find((entry) => (entry.taskId ?? entry.sessionId ?? entry.title) === key);
+          const key = builderKey(node.job);
+          const job = jobs.find((entry) => builderKey(entry) === key);
           if (!job) continue;
           node.job = job;
           node.progress = typeof job.progress === "number" ? job.progress : null;
@@ -41429,10 +42229,30 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const area = ctx.viewport;
     if (!points.length || !ctx.project || !(area?.w > 0 && area?.h > 0)) return limit;
     const padX = Math.min(140, area.w * 0.18), padY = Math.min(110, area.h * 0.2);
-    const fits = (zoom) => points.every((point) => {
-      const p = ctx.project(point, { ...shot, zoom });
-      return Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= area.x + padX && p.x <= area.x + area.w - padX && p.y >= area.y + padY && p.y <= area.y + area.h - padY;
-    });
+    const left = area.x + padX, right = area.x + area.w - padX, top = area.y + padY, bottom = area.y + area.h - padY;
+    // The flat map projects x and z each onto one screen axis, rising with
+    // both, so the extremes on those axes decide the fit exactly.
+    if (ctx.view === "2d" && points.length > 4) {
+      let minX = points[0], maxX = minX, minZ = minX, maxZ = minX;
+      for (const point of points) {
+        if (point.x < minX.x) minX = point; if (point.x > maxX.x) maxX = point;
+        if (point.z < minZ.z) minZ = point; if (point.z > maxZ.z) maxZ = point;
+      }
+      points = [minX, maxX, minZ, maxZ];
+    }
+    // One shot per trial zoom. The point that last spilled out is tried
+    // first, so a failing trial usually costs one projection. NaN fails.
+    let spill = 0;
+    const inside = (point, view) => {
+      const p = ctx.project(point, view);
+      return p.x >= left && p.x <= right && p.y >= top && p.y <= bottom;
+    };
+    const fits = (zoom) => {
+      const view = { ...shot, zoom };
+      if (!inside(points[spill], view)) return false;
+      for (let i = 0; i < points.length; i += 1) if (i !== spill && !inside(points[i], view)) { spill = i; return false; }
+      return true;
+    };
     if (fits(limit)) return limit;
     let low = 0.45, high = limit;
     for (let i = 0; i < 10; i += 1) {
@@ -41443,7 +42263,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
 
   function create({ seed = Date.now() } = {}) {
-    const tour = { stops: [], t: 0, time: 0, out: null, vel: {}, basePitch: 0, count: 0, recent: [], seed: seed | 0 };
+    const tour = { stops: [], t: 0, time: 0, out: null, vel: {}, basePitch: 0, count: 0, recent: [], seed: seed | 0, framed: [] };
 
     function random() {
       tour.seed = (tour.seed + 0x6d2b79f5) | 0;
@@ -41529,14 +42349,22 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       // Reveal the destination before passing between branches. At mid-leg
       // both groups fit, so a flight across a large gap still shows the tree.
       // At either stop only that branch determines the close-up.
-      const points = [];
-      for (const [group, weight] of [[b.points, 1 - ease((u - 0.65) / 0.35)], [c.points, ease(u / 0.35)]]) {
+      // Framed points reuse one scratch list. A group weighted to nothing
+      // collapses onto the camera, and a node in both groups under the same
+      // weight frames once.
+      const points = tour.framed, weightB = 1 - ease((u - 0.65) / 0.35), weightC = ease(u / 0.35);
+      const shared = weightB === weightC && b.points.length && c.points.length ? new Set(b.points) : null;
+      let used = 0;
+      for (const [later, group, weight] of [[false, b.points, weightB], [true, c.points, weightC]]) {
         for (const point of group) {
-          const framed = {};
+          if (later && shared?.has(point)) continue;
+          const framed = points[used] ??= {};
+          used += 1;
           for (const axis of axes) framed[axis] = mix(-tour.out[axis], point[axis], weight);
-          points.push(framed);
+          if (weight === 0) break;
         }
       }
+      points.length = used;
       const travel = Math.sin(Math.PI * u) ** 2;
       const wanted = Math.exp(spline(Math.log(a.zoom), Math.log(b.zoom), Math.log(c.zoom), Math.log(d.zoom), u));
       const limit = mix(wanted, Math.min(wanted, ZOOM.wide), travel * 0.65);
@@ -41561,7 +42389,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   // entire tree. Work in projected coordinates so every arrangement and
   // perspective angle uses the same hard frame, without moving any anchors.
   function createOverview() {
-    let time = 0, out = null;
+    let time = 0, out = null, rest = null;
     const velocity = {};
     function step({ points, viewport, dt = 0, moving = false, still = false, initial = { scale: 1, x: 0, y: 0 }, ceiling = Infinity }) {
       dt = clamp(Number(dt) || 0, 0, 0.05);
@@ -41578,11 +42406,19 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       // The caller's own frame (Command's whole-turn fit) caps the zoom too.
       const cap = Number.isFinite(ceiling) && ceiling > 0 ? ceiling : Infinity;
       const limit = Math.min(1.35, cap, halfW * 2 / Math.max(1, right - left), halfH * 2 / Math.max(1, bottom - top));
-      const goal = limit * (0.91 + 0.055 * Math.sin(time * 0.16));
+      const breath = 0.91 + 0.055 * Math.sin(time * 0.16);
       out ??= { ...initial };
       // Ease ordinary zoom changes; shrinking windows and new branches take
       // precedence over the spring so work never crosses the panel boundary.
-      out.scale = Math.min(limit, animate ? damp(out.scale, goal, velocity, "scale", 1.4, dt) : out.scale);
+      // A paused lens keeps the share of the frame it last held (the clock
+      // stays put), so it grows back once a departing branch returns the
+      // room. Reduced motion settles there at once.
+      if (animate) out.scale = Math.min(limit, damp(out.scale, limit * breath, velocity, "scale", 1.4, dt));
+      else {
+        const held = rest ? rest.scale * (limit / rest.limit) : limit * breath;
+        out.scale = Math.min(limit, still ? held : held + (out.scale - held) * Math.exp(-dt / 0.7));
+      }
+      if (animate) rest = { scale: out.scale, limit };
       const xMin = -halfW - left * out.scale, xMax = halfW - right * out.scale;
       const yMin = -halfH - top * out.scale, yMax = halfH - bottom * out.scale;
       const x = (xMin + xMax) / 2 + (xMax - xMin) * 0.28 * Math.sin(time * 0.11);
@@ -46518,11 +47354,24 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       return;
     }
     const before = JSON.stringify([state.nodes, state.edges, state.tasks]);
-    await load();
+    try {
+      await load();
+    } catch {
+      // One refused read must not end polling for good: the sheet keeps what
+      // it last showed and retries at the slowest cadence.
+      if (!initialized || el.overlay.hidden) return;
+      pollDelay = POLL_MAX_MS;
+      schedulePoll();
+      return;
+    }
     if (!initialized || el.overlay.hidden) return;
     pollDelay = JSON.stringify([state.nodes, state.edges, state.tasks]) === before ? Math.min(pollDelay * 2, POLL_MAX_MS) : POLL_INTERVAL_MS;
     schedulePoll();
   }
+
+  // The live test is task-groups.js's, shared by every view; the fallback
+  // keeps a bare harness (no task-groups.js) on the same statuses.
+  const isLive = (task) => window.MefiTaskGroups?.isLiveTask?.(task) ?? ["open", "active", "awaiting_verification"].includes(task?.status);
 
   const keywords = (text) => new Set((String(text).toLowerCase().match(/[a-z][a-z0-9_-]{3,}/g) ?? []).slice(0, 10));
 
@@ -46589,7 +47438,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     ctx.fillStyle = P.background;
     ctx.fillRect(0, 0, el.width, el.height);
 
-    const active = state.tasks.filter((task) => task.status === "open" || task.status === "active");
+    const active = state.tasks.filter(isLive);
     if (!still && state.overview && active.length && time - state.lastCycle > 4000) {
       state.lastCycle = time;
       state.cycleIndex = (state.cycleIndex + 1) % active.length;
@@ -46742,7 +47591,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   function renderLegend() {
     const focusedTask = document.activeElement?.dataset?.overheadTask;
     el.legend.textContent = "";
-    const active = state.tasks.filter((task) => task.status === "open" || task.status === "active");
+    const active = state.tasks.filter(isLive);
     if (!active.length) {
       const li = document.createElement("li");
       li.className = "muted";
@@ -46802,7 +47651,14 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   async function open() {
     window.MefiNav?.claim?.("overhead");
     el.overlay.hidden = false;
-    await load();
+    // A refused first read still opens the sheet on what it last knew (or an
+    // empty board) and leaves the poll to retry at the slowest cadence.
+    let loaded = true;
+    try {
+      await load();
+    } catch {
+      loaded = false;
+    }
     // Esc, O, the backdrop or another sheet's claim() can close us while load()
     // is still awaiting: starting the loop then leaves it drawing forever.
     if (el.overlay.hidden) return;
@@ -46810,8 +47666,21 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     cancelAnimationFrame(raf);
     lastDraw = -Infinity;
     raf = requestAnimationFrame(draw);
-    pollDelay = POLL_INTERVAL_MS;
+    pollDelay = loaded ? POLL_INTERVAL_MS : POLL_MAX_MS;
     schedulePoll();
+  }
+
+  // A move to a monitor with another pixel ratio fires no window resize when
+  // the CSS size stays put. The resolution query matches only the current
+  // ratio, so its change is the move; it re-arms on the new ratio each time.
+  function watchPixelRatio() {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+    if (typeof query?.addEventListener !== "function") return;
+    query.addEventListener("change", () => {
+      if (!el.overlay.hidden) resize();
+      watchPixelRatio();
+    }, { once: true });
   }
 
   function close() {
@@ -46892,6 +47761,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       openTask(state.hover);
     });
     window.addEventListener("resize", () => !el.overlay.hidden && resize());
+    watchPixelRatio();
   }
 
   window.MefiOverhead = { open, close };
@@ -62629,11 +63499,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (style === "halo") { ctx.strokeStyle = rgba(color, 0.7); ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(x, y, r * 1.6, t * 2, t * 2 + Math.PI * 1.4); ctx.stroke(); }
   }
 
-  // The done beat at the step. A landed MefiNodeStyles.done hook draws it
-  // first; the fallback below is the pack's own version.
+  // The done beat at the step, drawn by the pack itself: node-styles.js
+  // exports no done or absorb painter for it to defer to.
   function popFx(ctx, x, y, r, p, t, P, ok = true) {
     const style = nodeStyle();
-    try { if (window.MefiNodeStyles?.done?.(ctx, style, { x, y }, r, ok ? P.good : P.bad, p, { t }) === true) return; } catch {}
     const tint = ok ? P.good : P.bad;
     if (style === "singularity") {
       ctx.strokeStyle = rgba(P.ember, 1 - p); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, r * (1.4 + p * 2.6), 0, Math.PI * 2); ctx.stroke();
@@ -62663,7 +63532,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   function absorbFx(ctx, lead, leadR, p, t, P) {
     const style = nodeStyle();
-    try { if (window.MefiNodeStyles?.absorb?.(ctx, style, { x: lead[0], y: lead[1] }, leadR, P.live, p, { t }) === true) return; } catch {}
     if (style === "singularity") {
       ctx.strokeStyle = rgba(P.ember, (1 - p) * 0.9); ctx.lineWidth = 1.4;
       for (let i = 0; i < 3; i += 1) { ctx.beginPath(); ctx.arc(lead[0], lead[1], leadR * (2.2 - p * 1.1 - i * 0.28), p * 6 + i, p * 6 + i + 2.2); ctx.stroke(); }

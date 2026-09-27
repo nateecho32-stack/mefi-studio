@@ -680,7 +680,21 @@ proposal is left out and counted in its note.
   pipelines. Hover still exposes the full step title and details. Reduced
   motion freezes the scene; hidden canvases suspend their animation loops.
 
-- The toolbar is four labelled groups and **Leave**. **Agents** chooses how
+- **Pointer, keys and the card.** The wheel, and a two-finger pinch, zoom
+  toward the point under the pointer. Touch and pen drag, tap and focus
+  through the mouse's own handlers. Arrow keys belong to the card while focus
+  is inside it. Hover follows the node actually under a still pointer while the tree
+  spins or glides. A double-click opens whatever a single click selects,
+  callout cards and speech bubbles included; on empty canvas it fits the tree.
+  The arrow keys and `[` / `]` treat approved-plan groups like tasks and skip
+  work that has already sunk into its host. The selected node's card redraws
+  when what it shows changes (a task starting or finishing, a session's todo
+  count), and a rebuild keeps its focused control, half-typed notes and open
+  folds. A finished task held on the board offers only Open in Tasks. Card rows
+  that open something are keyboard links. Screen readers hear one short line
+  per selection change (`#cmd-announce`); the cards themselves are not live
+  regions.
+- The toolbar is four labelled groups and **Close**. **Agents** chooses how
   the roster shares work between **Swarm** (across the queue) and **Cluster**
   (one goal at a time). **Camera** holds **Fit**, the **Overview** / **Follow**
   camera modes (`C` cycles Overview, Follow and free) and **Spin**. **View ▾**

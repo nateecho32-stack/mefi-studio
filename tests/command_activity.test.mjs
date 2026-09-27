@@ -638,7 +638,10 @@ test("graph pushes refresh at once after a quiet window and share one trailing r
   state.active = false;
   clock = timers[0].at; timers.shift().fn();
   assert.equal(refreshes, 3, "leaving Command drops the trailing rebuild");
-  for (const marker of ["if (data.todos) refreshGraphSoon();", "if (state.active || state.homeBackdrop) refreshGraphSoon();\n    });\n    window.addEventListener(\"resize\"", "state.checkpoints = data ?? {};\n      if (state.active) refreshGraphSoon();"]) {
+  // Until the rail announces its rebuilds a todo push refreshes directly;
+  // after that each announced rebuild does, since the rail applies pushes
+  // after Command reads them.
+  for (const marker of ["if (data.todos && !state.treeAnnounces) refreshGraphSoon();", "window.addEventListener(\"mefi:tree-rebuilt\", () => {\n      state.treeAnnounces = true;\n      if (state.active || state.homeBackdrop) refreshGraphSoon();","if (state.active || state.homeBackdrop) refreshGraphSoon();\n    });\n    window.addEventListener(\"resize\"", "state.checkpoints = data ?? {};\n      if (state.active) refreshGraphSoon();"]) {
     assert.ok(text.includes(marker), `idle.js carries ${marker}`);
   }
 });

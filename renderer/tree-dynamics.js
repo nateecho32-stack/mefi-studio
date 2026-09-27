@@ -73,8 +73,45 @@
     if (count !== live.length) { count = live.length; revision++; candidate = -1; streak = 0; refresh(); }
     const ids = new Set(projected.map(({ node }) => node.id));
     for (const id of positions.keys()) if (!ids.has(id)) positions.delete(id);
-    // Inspect, pan, Follow and tours own the camera while in use.
-    if (interactive || !live.length) { positions.clear(); return false; }
+    // Only stable anchors take a slot, so launching or retiring a worker never
+    // renumbers the shape. A worker rides its host's offset (idle.js orbits it
+    // about the host, or the assistant); a leaving node keeps its last offset
+    // through its absorb flight.
+    const anchors = live.filter(({ node }) => node.kind !== "agent");
+    const entries = new Map(projected.map(entry => [entry.node.id, entry]));
+    const assistant = projected.find(({ node }) => node.kind === "assistant");
+    const offsetOf = ({ node, flight }) => {
+      if (node.kind !== "agent") {
+        const own = positions.get(node.id);
+        // A node flying home (idle.js sets `flight` on its entry) trades its
+        // frozen offset for its host's as it goes, so it sinks into the host
+        // where the host is drawn, not beside it.
+        if (!flight) return own;
+        const home = positions.get(flight.hostId);
+        if (!own && !home) return undefined;
+        const e = Math.max(0, Math.min(1, Number(flight.e) || 0));
+        return { x: (own?.x ?? 0) * (1 - e) + (home?.x ?? 0) * e, y: (own?.y ?? 0) * (1 - e) + (home?.y ?? 0) * e };
+      }
+      const target = entries.get(node.targetNode?.id ?? node.targetId ?? node.hostId);
+      const host = target && target.node.kind !== "agent" ? target : assistant;
+      return host ? positions.get(host.node.id) : undefined;
+    };
+    // Inspect, pan, Follow and tours own the camera while in use. The shape
+    // lets go as gently as it arrived; reduced motion lets go at once.
+    if (interactive || !anchors.length) {
+      if (still || !anchors.length) { positions.clear(); return false; }
+      const ease = 1 - Math.exp(-Math.max(0, dt) / prefs.smoothing);
+      let moving = false;
+      for (const [id, offset] of positions) {
+        offset.x -= offset.x * ease; offset.y -= offset.y * ease;
+        if (Math.abs(offset.x) + Math.abs(offset.y) > .1) moving = true; else positions.delete(id);
+      }
+      for (const entry of projected) {
+        const offset = offsetOf(entry);
+        if (offset) { entry.p.x += offset.x; entry.p.y += offset.y; }
+      }
+      return moving;
+    }
     const audio = !still && linked && musicEnabled() ? clamp(response, 0, 2) : 0;
     const bass = clamp(Number(music?.bass) || 0, 0, 1) * audio;
     const mid = clamp(Number(music?.mid) || 0, 0, 1) * audio;
@@ -95,21 +132,23 @@
     const offsetX = clamp(prefs.x + (video?.x ?? 0) * strength + Math.sin(time / 1700) * bass * prefs.positionMotion * .2, -1, 1);
     const offsetY = clamp(prefs.y + (video?.y ?? 0) * strength + Math.sin(time / 2200) * mid * prefs.positionMotion * .2, -1, 1);
     // Ordered identities keep membership deterministic through graph refreshes.
-    const ordered = [...live].sort((a, b) => String(a.node.id).localeCompare(String(b.node.id)));
+    const slots = anchors.length;
+    const ordered = [...anchors].sort((a, b) => String(a.node.id).localeCompare(String(b.node.id)));
     const rank = new Map(ordered.map((entry, i) => [entry.node.id, i]));
     let reachX = 1, reachY = 1;
-    const targets = projected.map(entry => {
-      const { node, p } = entry, i = rank.get(node.id) ?? 0, t = i / Math.max(1, count - 1), theta = i / Math.max(1, count) * Math.PI * 2 - Math.PI / 2;
+    const treeScale = prefs.nodeSize * countScale * (1 + bass * prefs.nodeMotion * .12 * density);
+    for (const { node } of projected) node._treeScale = treeScale;
+    const targets = anchors.map(entry => {
+      const { node, p } = entry, i = rank.get(node.id), t = i / Math.max(1, slots - 1), theta = i / Math.max(1, slots) * Math.PI * 2 - Math.PI / 2;
       let x = p.x - cx, y = p.y - cy;
       if (prefs.shape === "ring") { x = Math.cos(theta) * halfW * .85; y = Math.sin(theta) * halfH * .85; }
       if (prefs.shape === "wave") { x = (t * 2 - 1) * halfW * .85; y = Math.sin(t * Math.PI * 4) * halfH * .65; }
       if (prefs.shape === "spiral") { const r = .15 + .7 * Math.sqrt(t); x = Math.cos(t * Math.PI * 6) * halfW * r; y = Math.sin(t * Math.PI * 6) * halfH * r; }
-      if (count === 1 && prefs.shape !== "layout") { x = 0; y = 0; }
+      if (slots === 1 && prefs.shape !== "layout") { x = 0; y = 0; }
       const phase = phaseOf(node.id), drift = (bass + treble) * prefs.nodeMotion * 12 * density;
       const tx = (x * Math.cos(angle) - y * Math.sin(angle)) * width + Math.sin(time / 1100 + phase) * drift;
       const ty = (x * Math.sin(angle) + y * Math.cos(angle)) * height + Math.cos(time / 1400 + phase) * drift;
-      if (!node.dying && !node._absorbed) { reachX = Math.max(reachX, Math.abs(tx)); reachY = Math.max(reachY, Math.abs(ty)); }
-      node._treeScale = prefs.nodeSize * countScale * (1 + bass * prefs.nodeMotion * .12 * density);
+      reachX = Math.max(reachX, Math.abs(tx)); reachY = Math.max(reachY, Math.abs(ty));
       return { entry, x: tx, y: ty };
     });
     // Reserve space for placement and never clip the transformed tree to a rail.
@@ -129,6 +168,14 @@
       entry.p.x = clamp(entry.p.x + previous.x, cx - halfW, cx + halfW);
       entry.p.y = clamp(entry.p.y + previous.y, cy - halfH, cy + halfH);
       positions.set(entry.node.id, previous);
+    }
+    // Workers and leaving nodes follow once every anchor has eased.
+    for (const entry of projected) {
+      if (rank.has(entry.node.id)) continue;
+      const offset = offsetOf(entry);
+      if (!offset) continue;
+      entry.p.x = clamp(entry.p.x + offset.x, cx - halfW, cx + halfW);
+      entry.p.y = clamp(entry.p.y + offset.y, cy - halfH, cy + halfH);
     }
     return moving || audio > 0;
   }

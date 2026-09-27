@@ -17,7 +17,7 @@ function fixture() {
       return () => {};
     },
   });
-  return { visual: window.MefiNodeVisuals, ctx, gradients: () => gradients, measures: () => measures,
+  return { window, visual: window.MefiNodeVisuals, ctx, gradients: () => gradients, measures: () => measures,
     theme(value) { theme = value; listeners["mefi-theme-change"](); } };
 }
 test("shared finishes reuse paints across moving nodes, separate contexts and invalidate theme colors", () => {
@@ -95,4 +95,29 @@ test("pipeline hover titles stay in the visible pane after inner or outer scroll
     assert.ok(left>=pane.left && left+tip.offsetWidth<=pane.right);
     assert.ok(top>=pane.top && top+tip.offsetHeight<=pane.bottom);
   }
+});
+test("the prism draws its Void rim from MefiNodeStyles.shapes, and polygons without it", () => {
+  const f = fixture();
+  const traced = [];
+  f.visual.drawNode(f.ctx, { x: 0, y: 0 }, 8, "#71cbb7", { style: "prism" });
+  assert.equal(traced.length, 0, "no shapes module: the fallback polygon draws");
+  const rim = [[0, -1], [1, 0], [0, 1]];
+  const window = f.window;
+  window.MefiNodeStyles = { shapes: { prismRim: rim, trace: (target, points) => traced.push(points) } };
+  window.MefiTree = { voidShapes: { prismRim: [], trace: () => assert.fail("the rail no longer provides the Void shapes") } };
+  assert.equal(f.visual.drawNode(f.ctx, { x: 0, y: 0 }, 8, "#71cbb7", { style: "prism" }), true);
+  assert.ok(traced.length >= 2 && traced.every((points) => points === rim), "the fill and the stroke both trace the shared prism rim");
+});
+test("every MefiNodeStyles member a renderer script probes is one node-styles.js exports", async () => {
+  const { loadNodeStyles } = await import("./fixtures/node-styles-harness.mjs");
+  const { readdir } = await import("node:fs/promises");
+  const exported = new Set(Object.keys(loadNodeStyles()));
+  const dir = new URL("../renderer/", import.meta.url);
+  const probes = [];
+  for (const name of (await readdir(dir)).filter((file) => file.endsWith(".js"))) {
+    const text = await readFile(new URL(name, dir), "utf8");
+    for (const match of text.matchAll(/MefiNodeStyles\??\.([A-Za-z_$][\w$]*)/g)) probes.push([name, match[1]]);
+  }
+  assert.ok(probes.some(([name, member]) => name === "node-visuals.js" && member === "shapes"), "the prism reads the shared shapes");
+  for (const [name, member] of probes) assert.ok(exported.has(member), `${name} probes MefiNodeStyles.${member}, which node-styles.js does not export`);
 });

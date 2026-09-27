@@ -26,7 +26,7 @@ async function environment({ classes = [], sessions, todos = [], profiler, assis
   canvas.getContext = () => ctx;
   for (const dimension of ["width", "height"]) Object.defineProperty(canvas, dimension, { set() { bitmapWrites += 1; } });
   const elements = { "tree-canvas": canvas, "tree-rail": rail, "tree-stats": element() };
-  const bodyData = {};
+  const bodyData = {}, dispatched = [], mediaQueries = [];
   const document = {
     hidden: false, body: { dataset: bodyData, classList: { contains: (name) => bodyClasses.has(name) } },
     getElementById: (id) => elements[id] ?? null, createElement: element,
@@ -34,8 +34,16 @@ async function environment({ classes = [], sessions, todos = [], profiler, assis
   };
   const window = {
     MefiProfiler: profiler,
-    devicePixelRatio: 1, matchMedia: () => ({ matches: false }),
+    devicePixelRatio: 1,
+    // Resolution queries record their change listener, so a test can play the
+    // monitor move the rail must follow.
+    matchMedia: (query) => {
+      const entry = { query, matches: false, listeners: [], addEventListener(type, callback, options) { entry.listeners.push({ type, callback, once: options?.once === true }); } };
+      mediaQueries.push(entry);
+      return entry;
+    },
     addEventListener: (name, callback) => windowEvents.set(name, callback),
+    dispatchEvent: (event) => { dispatched.push(event.type); return true; },
     mefiStudio: {
       eyesState: async () => { stateReads += 1; return { ok: true, sessions: sessions ?? [{ id: "s1", title: "Current session", timeUpdated: Date.now() }], todos }; },
       assistantState: async () => ({ ok: true, state: assistant ?? { status: "idle", agents: [] } }),
@@ -49,13 +57,14 @@ async function environment({ classes = [], sessions, todos = [], profiler, assis
     localStorage: { getItem: () => null, setItem() {} },
     requestAnimationFrame: (callback) => { const id = ++nextFrame; frames.set(id, callback); return id; },
     cancelAnimationFrame: (id) => frames.delete(id),
+    CustomEvent: class CustomEvent { constructor(type, options) { this.type = type; this.detail = options?.detail; } },
     MutationObserver: class { constructor(callback) { bodyObserver = callback; } observe() {} },
     ResizeObserver: class { constructor(callback) { resizeObserver = callback; } observe() {} },
   });
-  vm.runInContext(source.replace("  window.MefiTree = {", "  window.__pulseCount = () => pulses.length;\n  window.__pulsesLive = () => pulses.every((pulse) => nodes.includes(pulse.from) && nodes.includes(pulse.to));\n  window.MefiTree = {"), context);
+  vm.runInContext(source.replace("  window.MefiTree = {", "  window.__pulseCount = () => pulses.length;\n  window.__pulsesLive = () => pulses.every((pulse) => nodes.includes(pulse.from) && nodes.includes(pulse.to));\n  window.__hover = (id) => { if (id !== undefined) hover = findNodeById(id); return hover; };\n  window.__nodeLive = (node) => nodes.includes(node);\n  window.__skyCache = () => skyCache;\n  window.MefiTree = {"), context);
   await window.MefiTree.init();
   return {
-    tree: window.MefiTree, window, rail, frames,
+    tree: window.MefiTree, window, rail, frames, dispatched, mediaQueries, hover: window.__hover, nodeLive: window.__nodeLive, skyCache: window.__skyCache,
     paints: () => paints, bitmapWrites: () => bitmapWrites, stateReads: () => stateReads, pulseCount: window.__pulseCount, pulsesLive: window.__pulsesLive,
     resize: () => resizeObserver(),
     failPaint(error) { paintError = error; },
@@ -386,4 +395,136 @@ test("activity pushes rebuild from their own todos and read the store only for a
   assert.equal(env.stateReads(), 4, "sessions are re-read at least every 15 s while activity flows");
   await env.activity({ activity: [{ sessionId: "s1" }] });
   assert.equal(env.stateReads(), 4, "tool activity alone only pulses");
+});
+
+test("Vibe mode hides the rail with visibility:hidden, so its loop stops too", async () => {
+  const env = await environment({ classes: ["vibe-active"] });
+  assert.equal(env.frames.size, 0, "a rail Vibe keeps sized but invisible schedules no frames");
+  env.cover("vibe-active", false);
+  assert.equal(env.frames.size, 1, "leaving Vibe resumes the loop");
+  env.cover("vibe-active", true);
+  assert.equal(env.frames.size, 0);
+});
+
+test("a rebuild re-points in-flight pulses and the hover at the new nodes, and drops them with a vanished node", async () => {
+  const sessions = [{ id: "s1", title: "First", timeUpdated: Date.now() }, { id: "s2", title: "Second", timeUpdated: Date.now() - 1 }];
+  const todos = [{ sessionId: "s1", position: 0, content: "step", status: "in_progress" }];
+  const env = await environment({ sessions, todos });
+  await env.activity({ activity: [{ sessionId: "s1" }, { sessionId: "s2" }] });
+  const queued = env.pulseCount();
+  assert.ok(queued >= 3, "root -> s1, s1 -> its todo and root -> s2 are in flight");
+  env.hover("s1");
+  await env.tree.reload();
+  assert.equal(env.pulseCount(), queued, "a rebuild cannot orphan the pulses in flight");
+  assert.ok(env.pulsesLive(), "every pulse rides the rebuilt node objects");
+  assert.equal(env.hover()?.id, "s1");
+  assert.ok(env.nodeLive(env.hover()), "the hover is the rebuilt node, not the replaced one");
+  sessions.splice(0, 1);
+  await env.tree.reload();
+  assert.equal(env.pulseCount(), 1, "pulses to a session that left the rail leave with it");
+  assert.ok(env.pulsesLive());
+  assert.equal(env.hover(), null, "a hover on a vanished node clears");
+  env.tree.focusNode("s2");
+  assert.equal(env.hover()?.id, "s2", "keyboard focus lends the hover its node");
+  env.tree.focusNode("not-a-node");
+  assert.equal(env.hover(), null, "dropping the focus takes the hover it lent back");
+});
+
+test("hit testing picks the nearest rim, whatever order or size the candidates come in", () => {
+  const env = vm.createContext({ nodes: [], checkpoints: {} });
+  vm.runInContext(source.slice(source.indexOf("  function hitTest(x, y) {"), source.indexOf("  function openExplorer(")), env);
+  const small = { id: "small", kind: "todo", _px: 20, _py: 0, _pr: 3 };
+  const large = { id: "large", kind: "session", _px: 0, _py: 0, _pr: 10 };
+  for (const order of [[small, large], [large, small]]) {
+    vm.runInContext("nodes = order;", Object.assign(env, { order }));
+    // 3 px from the small rim, 4 px from the large one.
+    assert.equal(env.hitTest(14, 0)?.id, "small", "a farther, larger node cannot take the click");
+    assert.equal(env.hitTest(4, 0)?.id, "large", "a pointer inside a node picks it");
+  }
+  assert.equal(env.hitTest(40, 0), null, "out of reach hits nothing");
+});
+
+test("session progress counts every todo, not only the capped ones the rail draws", async () => {
+  const now = Date.now();
+  const sessions = [{ id: "s1", title: "Long list", timeUpdated: now }];
+  const todos = Array.from({ length: 20 }, (_, i) => ({ sessionId: "s1", position: i, content: `Step ${i}`, status: i < 14 ? "completed" : "pending" }));
+  const env = await environment({ sessions, todos });
+  const nodes = env.tree.snapshot().nodes;
+  const session = nodes.find((node) => node.id === "s1");
+  assert.equal(nodes.filter((node) => node.kind === "todo").length, 14, "the drawn todos stay capped");
+  assert.equal(session.state, "session", "six hidden pending steps keep the session open");
+  assert.equal(session.progress, 14 / 20);
+  assert.equal(session.todoTotal, 20);
+  assert.equal(session.todoDone, 14);
+  assert.equal(nodes.find((node) => node.kind === "assistant").progress, 14 / 20, "the hub meter sums the sessions' full counts");
+  assert.equal(nodes.filter((node) => node.kind === "todo").slice(0, 2).map((node) => node.id).join(","), "s1:0,s1:1", "todo ids are session:position");
+});
+
+test("todo ids stay unique even when a malformed store repeats a position", async () => {
+  const todos = [
+    { sessionId: "s1", position: 0, content: "one", status: "pending" },
+    { sessionId: "s1", position: 0, content: "two", status: "pending" },
+  ];
+  const env = await environment({ todos });
+  const ids = env.tree.snapshot().nodes.filter((node) => node.kind === "todo").map((node) => node.id);
+  assert.equal(new Set(ids).size, 2);
+  assert.equal(ids[0], "s1:0");
+});
+
+test("rebuilds announce themselves, and a push with the todos already drawn only pulses", async () => {
+  const sessions = [{ id: "s1", title: "First", timeUpdated: Date.now() }];
+  const todo = (status) => [{ sessionId: "s1", position: 0, content: "step", status, timeUpdated: 1 }];
+  const env = await environment({ sessions, todos: todo("pending") });
+  const rebuilds = () => env.dispatched.filter((type) => type === "mefi:tree-rebuilt").length;
+  const initial = rebuilds();
+  assert.ok(initial >= 1, "the first build dispatches mefi:tree-rebuilt");
+  await env.activity({ activity: [{ sessionId: "s1" }], todos: todo("in_progress") });
+  assert.equal(rebuilds(), initial + 1, "changed todos rebuild");
+  const pulses = env.pulseCount();
+  await env.activity({ activity: [{ sessionId: "s1" }], todos: todo("in_progress") });
+  assert.equal(rebuilds(), initial + 1, "an equal todo list and unchanged sessions skip the rebuild");
+  assert.ok(env.pulseCount() > pulses, "the skipped push still queues its pulses");
+  assert.ok(env.pulsesLive());
+  await env.activity({ activity: [{ sessionId: "s1" }], todos: todo("completed") });
+  assert.equal(rebuilds(), initial + 2, "a status change rebuilds");
+  await env.tree.reload();
+  const afterRead = rebuilds();
+  await env.activity({ activity: [{ sessionId: "s1" }], todos: todo("completed") });
+  assert.equal(rebuilds(), afterRead + 1, "after a store read the next push rebuilds from its own list");
+});
+
+test("a partly done session with no live todo paints the session tone, not the active one", () => {
+  const paint = vm.createContext({ window: {}, agentColor: () => "#ffffff" });
+  vm.runInContext(source.slice(source.indexOf("  const COLORS = {"), source.indexOf("  const ASSISTANT_PULSE_KINDS")), paint);
+  vm.runInContext("var framePalette = { bright: '#ffee00', text: '#eeeeee' };", paint);
+  vm.runInContext(source.slice(source.indexOf("  function colorOf(node) {"), source.indexOf("  const hexRgb =")), paint);
+  const colors = vm.runInContext("COLORS", paint);
+  assert.equal(paint.colorOf({ kind: "session", state: "session", progress: 0.5 }), "#eeeeee");
+  assert.equal(paint.colorOf({ kind: "session", state: "active", progress: 0.5 }), "#ffee00", "live work keeps the bright tone");
+  assert.equal(paint.colorOf({ kind: "session", state: "session", progress: 1 }), colors.done);
+});
+
+test("a monitor move (pixel ratio change) resizes the bitmap and re-arms the resolution watch", async () => {
+  const env = await environment();
+  const armed = env.mediaQueries.filter((entry) => entry.query === "(resolution: 1dppx)" && entry.listeners.length);
+  assert.equal(armed.length, 1, "init watches the current ratio once");
+  const writes = env.bitmapWrites();
+  env.window.devicePixelRatio = 2;
+  armed[0].listeners[0].callback();
+  assert.equal(env.bitmapWrites(), writes + 2, "the backing store follows the new ratio");
+  assert.equal(env.mediaQueries.filter((entry) => entry.query === "(resolution: 2dppx)" && entry.listeners.length).length, 1, "the watch re-arms on the new ratio");
+  assert.equal(armed[0].listeners[0].once, true, "the old query's listener is one-shot");
+});
+
+test("the fixed sky is projected once and reused until the rail's size changes", async () => {
+  const env = await environment();
+  env.frame(1);
+  const first = env.skyCache().list;
+  assert.ok(first.length > 0);
+  env.frame(40);
+  assert.equal(env.skyCache().list, first, "a frame at the same size reuses the projected stars");
+  env.rail.clientHeight = 500;
+  env.resize();
+  env.frame(80);
+  assert.notEqual(env.skyCache().list, first, "a new height re-projects them");
 });
