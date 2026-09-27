@@ -29,10 +29,31 @@ the guide are the frozen archive.
 | `expand_finished_guard` | One-off failure in the parallel stage, passes solo | Parallel-load timing | Rerun. |
 | Any `section()` / vm suite | Rotating `ReferenceError: X is not defined`, a different file each run, every file green solo | Another session edited `main.cjs` or `renderer/idle.js` while the run read them | The runner now waits for the tree to settle and says when sources moved mid-run; rerun on a quiet tree. |
 | `tools/test_mefi_studio_assistant.py` | One-shot duplicate-declaration failure in `main.cjs` | Racing a sibling session's in-flight edit | Re-runs after a short settle; capture the traceback to a file, never through `Select-Object -Last N`. |
-| `npm test` stops before the Node stage | "needs Python 3 on PATH as `python`" | The Python contracts are part of the gate | Install Python 3, or `npm run test:fast` for the Node suites alone. |
+| `npm test` stops before the Node stage | "needs Python 3 for the contracts in tools/ (tried ...)" | No `python`, `py -3` or `python3` answered as Python 3 (Windows' Store stub exits 9009); the Python contracts are part of the gate | Install Python 3 (python.org's default `py` launcher is enough), or `npm run test:fast` for the Node suites alone. |
 
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
+
+## 2026-09-27 - First-time setup and agent-choice blockers: install, any builder, any AI route, Start here
+
+Audit of a fresh clone (npm ci, launcher, onboarding) and of every place a
+non-default agent or AI route was locked out. Fixed: npm ci left no Electron
+binary (Electron 44), so the launcher looped on "not installed" and CI's
+render suites skipped silently; sessionless builders (Claude Code, Codex,
+Grok, Antigravity) always parked as failed, now verified by the overseer's
+own checks; npm-installed Grok/agy shims failed ENOENT; late failures were
+re-run on OpenCode (even when not installed); retry-deep changed nothing on
+most routes; Auto with a CLI login or an OpenRouter/Zen/custom key read as
+unconfigured; Start here counted "no folder" as a project and dead-ended
+key-only users. run-node-tests hit Windows' command-line limit from deep
+clones (ENAMETOOLONG, no output). Built in four parallel clones, merged over
+origin/main 215b7d9.
+
+Validation on the merged tree: npm run check passed, npm run audit returned
+0 findings, lint gained no warnings over main. Full npm test passed with every
+leg green: Node 4033 passed and 4 skipped, Electron 43 passed and 1 skipped,
+and all 248 Python contracts passed (routing contracts updated for the new
+builder launch; grok's headless guide documents --prompt-file as headless -p).
 
 ## 2026-09-27 - Companion as pet and friend: six-bubble menu, personality, Suggest work, Friends playground with sharing rules
 
@@ -279,55 +300,6 @@ exited 1; this is not recorded as a green full gate.
 Local-only evidence: tools/logs/music-polish-full-test.log,
 music-polish-unit.log, music-polish-media-render.log, music-polish-check.log,
 music-polish-audit.log and the music-polish/ preview and integration captures.
-
-## 2026-09-26 - Committed owner-ask and desk safeguards gate on c655647
-
-Full post-commit validation ran in the clean, unchanged C:/wt/assist-g0
-checkout at c655647dd5fea2024cc72dbb6f26be35b4c76b96, which is also landed on
-shared main. `npm run check` passed; `npm run audit` returned zero findings.
-`npm test` completed all legs and exited 1 only for two previously reproduced
-Electron fixture failures:
-
-- Node CPU stage: 3710 tests, 3706 passed, 4 skipped, 0 failed (99 s).
-- Electron stage: 37 tests, 34 passed, 1 skipped, 2 failed (312 s).
-  command_render reached its 80-second child kill bound with no report;
-  unified_studio_render failed `primary destinations stay visible at 600 / 1.5`.
-  Both failures had been reproduced in the Phase 0 recovery before this final
-  commit; the navigation failure is also documented on the earlier baseline.
-- Exclusive Electron stages: 3 tests passed, no failures or skips.
-- Python: 248 tests, 1 skipped, no failures (99 s).
-- Normalized-path lock: all 6 checks passed.
-
-The companion panel proof recorded in the preceding continuation row passed
-at 1440x900 and 600x700. The committed agent-brain.js, agent-brain.css,
-companion-ui.js and agents.js were compared against that proof's copied
-sources and match (line endings normalized). The final commit includes the
-reverse-order and task-reference-in-detail regressions and the hidden Agents
-paint guard. The full gate is not green: no renderer failure was suppressed.
-Logs are in the OS temporary directory as mefi-owner-final-check.log,
-mefi-owner-final-audit.log and mefi-owner-final-npm-test.log. Another chat's
-full suite began during the Python leg; no additional solo rendering rerun
-was launched into that contention. Live stores and portable data were untouched.
-
-## 2026-09-26 - Owner ask folding continuation and companion panel proof
-
-On the shared 8de8b58 working tree with the owner-ask folding and companion
-changes still uncommitted, the focused agent_issues, agents_overview_paint
-and assistant_issue_host suites passed 65/65 (0 failures, 0 skips). The new
-checks cover reversed arrival order, the separate npm-check request, and
-references to either ask's own task or another task in either detail.
-The matching rule remains shared content words divided by the larger word
-set, at least 0.4, only for owner asks with no task references.
-
-A temporary offscreen Electron verifier rebuilt a copied renderer and used
-only a synthetic bridge and sample queue. It passed at 1440x900 and 600x700:
-owner/held/parked labels and project names, Clear list after all rows and
-reachable, first-click confirmation, one bridge call on confirmation, and
-no clear control on an empty list. Both captures were visually inspected.
-There were no renderer errors, network attempts or child-process attempts.
-Artifacts are local in the OS temporary mefi-owner-panel-wITATv directory;
-no live data was opened or changed. This is focused pre-commit evidence;
-the full gate on the combined commit is still pending.
 
 ## Read Before Any Tests
 

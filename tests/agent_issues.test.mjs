@@ -143,6 +143,25 @@ test("a task that already failed and was retried is not recommended the same ret
   assert.equal(recommended(questionForIssue(worker("check-failed", "the css gate is red", { attempts: 0 }))), "retry");
 });
 
+// A builder with no Heavy model other than the one it runs (Codex, Grok or
+// Antigravity with none saved, a builder already on the Heavy tier) re-ran the
+// same model when this was picked, and autonomy could pick it by itself.
+test("with no heavier model on offer, the heavier retry is neither offered nor recommended", () => {
+  const recommended = (question) => question.options.find((option) => option.recommended)?.id ?? null;
+  const ids = (question) => question.options.map((option) => option.id);
+  const failed = runFailureIssue({ task: { id: "task_2", title: "Wire the board" }, failures: 5, outputTail: ["FAIL tests/board.test.mjs"] });
+  const plain = questionForIssue(failed, { heavier: false });
+  assert.equal(ids(plain).includes("retry-deep"), false);
+  assert.equal(recommended(plain), "retry", "a run failure has no one-line instruction to fall back on, so the retry stays");
+  const capability = questionForIssue(worker("capability", "the parser is past this model"), { heavier: false });
+  assert.deepEqual(ids(capability), ["split", "hold"]);
+  assert.equal(recommended(capability), "split", "the kind's own pick is gone, so the first real change is recommended");
+  const triaged = triageIssue(worker("capability", "the parser is past this model"), { heavier: false });
+  assert.equal(triaged.question.options.some((option) => option.id === "retry-deep"), false, "triage passes it on");
+  assert.ok(ids(questionForIssue(worker("capability", "the parser is past this model"))).includes("retry-deep"), "offered by default");
+  assert.match(questionForIssue(worker("capability", "x")).options[0].description, /Heavy-tier model/);
+});
+
 test("a failing named check is filed as a failing check, with the check named", () => {
   const issue = runFailureIssue({
     task: { id: "task_3", title: "Tidy the rail" },

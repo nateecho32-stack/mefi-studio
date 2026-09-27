@@ -19,10 +19,9 @@
 // binary (render captures, the occlusion probe, the packaging privacy check:
 // the slow, desktop-bound, load-sensitive ones) so a contributor gets a
 // sub-minute signal; `npm run test:fast` is that plus no Python stage.
-// `--list` prints the suites a run would select and exits. Without `--fast`
-// the runner first checks that `python` on PATH is Python 3, because
-// `npm test` chains the tools/ contracts after this stage and a missing
-// interpreter otherwise fails forty seconds in with a bare "not found".
+// `--list` prints the suites a run would select and exits. Python is not this
+// script's business: `npm test` (scripts/run-all-tests.mjs) finds the
+// interpreter before this stage starts.
 //
 // Before any of that: the vm/section() suites eval slices of the real sources
 // (main.cjs, renderer/idle.js, ...) in sandboxes stubbed for the current
@@ -52,7 +51,6 @@ all.sort();
 const args = new Set(process.argv.slice(2));
 const fast = args.has("--fast");
 const listOnly = args.has("--list");
-const skipPythonCheck = fast || listOnly || args.has("--skip-python-check");
 
 // A suite is "heavy" when its source reaches for the Electron binary or one of
 // the *-electron.cjs fixtures: those need a desktop and a minute or more each.
@@ -72,18 +70,6 @@ if (listOnly) {
   process.exit(0);
 }
 
-function pythonPreflight() {
-  const probe = spawnSync("python", ["--version"], { encoding: "utf8" });
-  const version = `${probe.stdout || ""}${probe.stderr || ""}`.trim();
-  if (!probe.error && probe.status === 0 && /^Python 3\./.test(version)) return;
-  const found = probe.error ? probe.error.code : version || `exit ${probe.status}`;
-  console.error(
-    `run-node-tests: npm test needs Python 3 on PATH as \`python\` for the contracts in tools/ (found: ${found}). ` +
-      "Install it, or run `npm run test:fast` for the Node suites alone.",
-  );
-  process.exit(1);
-}
-if (!skipPythonCheck) pythonPreflight();
 console.log(
   `run-node-tests: ${selected.length} suites` +
     (fast ? ` (--fast: ${heavy.size} Electron suites skipped, Python stage not part of this script)` : ` (${heavy.size} launch Electron)`),
@@ -138,9 +124,14 @@ async function waitForSettledSources() {
   process.exit(1);
 }
 
+// Paths go in relative to the checkout (the child's cwd): ~300 absolute paths
+// under a deep clone (a temp or OneDrive folder) passed Windows' 32,767-
+// character command-line limit, and the spawn failed with ENAMETOOLONG before
+// a single suite ran, printing nothing but "stage failed".
 const runGroup = (files, concurrency = 0) => {
   const flags = concurrency > 0 ? [`--test-concurrency=${concurrency}`] : [];
-  const run = spawnSync(process.execPath, ["--test", ...flags, ...files], { cwd: studio, stdio: "inherit" });
+  const run = spawnSync(process.execPath, ["--test", ...flags, ...files.map((file) => path.relative(studio, file))], { cwd: studio, stdio: "inherit" });
+  if (run.error) console.error(`run-node-tests: could not start node --test: ${run.error.message}`);
   return { failed: run.status !== 0 || Boolean(run.error), status: run.status };
 };
 

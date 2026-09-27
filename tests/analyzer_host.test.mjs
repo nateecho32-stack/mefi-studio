@@ -9,7 +9,10 @@ const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
 const start = source.indexOf("async function analyzerAi(");
 const end = source.indexOf("async function gatherReferences(", start);
 assert.ok(start >= 0 && end > start, "analyzer host helper section is present");
-const helpers = source.slice(start, end);
+// The route-missing wording is shared with the passes and brain drafts.
+const missing = source.slice(source.indexOf("function aiRouteMissing("), source.indexOf("async function runAssistant("));
+assert.ok(missing.startsWith("function aiRouteMissing("), "aiRouteMissing is present");
+const helpers = `${missing}\n${source.slice(start, end)}`;
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const flush = async () => { for (let index = 0; index < 12; index += 1) await Promise.resolve(); };
 const deferred = () => {
@@ -223,7 +226,10 @@ test("missing HTTP credentials leave local analysis available without a CLI fall
   await f.runAnalyzer({ kind: "project" });
   const result = await f.analyzerAi("project", { projectId: projectA.id });
   assert.equal(result.ok, false);
-  assert.match(result.error, /saved z.ai, OpenCode Go or OpenCode Zen key, or Claude Code/);
+  assert.match(result.error, /needs a connected AI provider \(No saved HTTP key\)/, "the resolver's own reason survives");
+  assert.match(result.error, /Agents > Setup > Connections/);
+  assert.match(result.error, /local project analysis is available/);
+  assert.doesNotMatch(result.error, /z\.ai, OpenCode Go or OpenCode Zen key/, "no maintainer-only provider list");
   assert.equal(f.analyzerProjectReports.has(projectA.id), true);
   assert.equal(f.calls.http.length, 0);
   assert.equal(f.calls.assistant.length, 0);

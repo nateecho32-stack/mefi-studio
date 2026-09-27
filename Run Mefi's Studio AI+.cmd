@@ -14,8 +14,18 @@ set "PACKAGED=%ROOT%\dist\Mefi Studio AI+\Mefi Studio AI+.exe"
 if exist "%PACKAGED%" goto packaged
 
 set "DEV_EXE=%ROOT%\node_modules\electron\dist\electron.exe"
+if exist "%DEV_EXE%" goto source
+
+rem Electron 44 fetches its binary on first use, not during npm ci. An install
+rem made before the postinstall step, or with --ignore-scripts, has the package
+rem but no binary: fetch it once here rather than send the user back to npm ci.
+set "ELECTRON_INSTALL=%ROOT%\node_modules\electron\install.js"
+if not exist "%ELECTRON_INSTALL%" goto notinstalled
+echo Downloading Electron once, about 110 MB...
+node "%ELECTRON_INSTALL%"
 if not exist "%DEV_EXE%" goto notinstalled
 
+:source
 pushd "%ROOT%"
 start "Mefi's Studio AI+" "%DEV_EXE%" . %*
 popd

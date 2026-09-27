@@ -234,8 +234,18 @@ function createAutonomyHost(io) {
     }
   }
 
+  // Whether a heavier retry would change the builder's model (the host's
+  // heavierRetryOnOffer): one that cannot is never offered to the desk, which
+  // could otherwise pick it and re-run the same model. Asked once per pass.
+  let heavierAnswer = null;
+  const heavier = async () => {
+    if (heavierAnswer === null) heavierAnswer = typeof io.heavierRetry === "function" ? (await io.heavierRetry()) !== false : true;
+    return heavierAnswer;
+  };
+
   async function decide() {
     if (busy || now() < backoffUntil || !project()) return null;
+    heavierAnswer = null;
     busy = true;
     try {
       await io.ensure();
@@ -258,7 +268,7 @@ function createAutonomyHost(io) {
           && Number(question.answer?.at ?? question.at) >= Number(item.at));
         if (settled) continue;
         const kind = Number(task.verifyAttempts) >= 3 || task.verification?.state === "failed" ? "verify" : "run-failed";
-        const question = io.question(issues.questionForIssue({ kind, source: "host", taskId: task.id, taskTitle: task.title, title: item.title, attempts: task.runFailures ?? 0 }, { now: now() }));
+        const question = io.question(issues.questionForIssue({ kind, source: "host", taskId: task.id, taskTitle: task.title, title: item.title, attempts: task.runFailures ?? 0 }, { now: now(), heavier: await heavier() }));
         if (question) questions.push(question);
       }
       let spent = 0;
@@ -300,7 +310,7 @@ function createAutonomyHost(io) {
         }
         if (humanClassify) {
           for (const verb of ["retry", "retry-deep", "split"]) {
-            if (verb === "retry-deep" && config.elevated["pricier-model"]) continue;
+            if (verb === "retry-deep" && (config.elevated["pricier-model"] || !(await heavier()))) continue;
             if (!question.options.some((option) => option.id === verb)) question.options.push({ id: verb, label: { retry: "Retry in Studio", "retry-deep": "Retry with a heavier model", split: "Split the work" }[verb], action: { kind: "issue", action: verb, payload: { taskId: task?.id, issueKind: "blocked", ask: question.title, detail: question.detail } } });
           }
         }

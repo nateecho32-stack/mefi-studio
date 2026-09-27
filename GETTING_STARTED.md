@@ -20,10 +20,12 @@ folder starts the map; **Map this project** starts it by hand.
 
 Five stops have a **Walk me…** button. It keeps a small coach in the corner
 while it opens the matching menu with you and highlights the exact control: the
-project **+**, Agents › Setup › Connections, the task box, Live work, and Review. Scan
-and First map have no menu to walk to, so they have no Walk button: their
-buttons (**Run the first scan**, **Map this project**) sit on the guide's own
-sheet, and the coach hands you back to it at those stops. Press **Done — next
+project **+**, Agents › Setup › Connections, the task box, Live work, and Review (in Vibe mode, Vibe's own box and Tasks
+panel). Scan and First map keep their buttons (**Run the first scan**, **Map
+this project**) on the guide's own sheet, and the coach hands you back to it
+at those stops. Their **I have an API key or a local model server** button
+walks to Connections instead of a CLI install, and the scan runs again when
+you come back. Press **Done — next
 stop** and the coach travels to the next menu; the workspace stop ticks itself
 off as soon as you select a project. **Esc** or **End tour** puts the coach
 away, and the setup trail under the workspace invitation shows what is done.
@@ -64,9 +66,16 @@ sections are required, and nothing starts on its own.
 - **Windows** — Studio is built for Windows, and its saved keys are protected
   by the Windows keystore (DPAPI).
 - **Node 24 and npm** — needed for a source install only; `npm ci` downloads
-  Electron once (about 110 MB). A portable download needs neither.
-- **Git** — needed only to clone this repository. **Python 3** is needed only
-  for the test contracts (`npm test`).
+  Electron once (about 110 MB), and stops at once with "Unsupported engine" on
+  an older Node. A portable download needs neither.
+- **Git** — needed to clone this repository, and recommended at runtime:
+  Studio reads the open project through git to verify a result that claims a
+  commit, warn agents about staged or uncommitted work and add history to the
+  project map, and **Friends › Your PCs** and opt-in worktree runs need it.
+  Without git those checks are skipped or read as unknown.
+- **Python 3** — needed only for the test contracts (`npm test`). The runner
+  tries `python`, then `py -3`, then `python3`, so the `py` launcher that
+  python.org's installer adds by default is enough.
 - **A builder CLI (optional)** — `opencode` is the preferred coding worker;
   `grok`, `claude`, `codex` and `agy` (Antigravity) are detected too. Studio connects
   without one, but no build can start until one is installed and signed in.
@@ -107,10 +116,11 @@ capabilities: a saved key alone never proves a build can start.
 | --- | --- | --- |
 | z.ai coding plan | **z.ai GLM** | a saved z.ai key |
 | OpenCode Go subscription | **OpenCode Go** | its saved key |
+| OpenCode Zen key | **OpenCode Zen** | its saved key |
 | OpenRouter API key | **OpenRouter** | its saved key; the free models router is the default |
 | Grok, Claude Code, Codex or Antigravity login | that CLI | the CLI on PATH, no key |
 | A local model server | **LM Studio (local)** | LM Studio running with a loaded model |
-| Another OpenAI-compatible server | **Custom endpoint** | endpoint URL and key |
+| Ollama or another OpenAI-compatible server | **Custom endpoint** | endpoint URL; the key is optional (auto setup finds Ollama on its default port) |
 
 - **Jev model selection** needs a key for its route (Vercel AI Gateway,
   TypeSafe, OpenCode Zen or OpenRouter); without one Studio uses fixed model
@@ -120,12 +130,20 @@ capabilities: a saved key alone never proves a build can start.
   `%APPDATA%\Mefi's Studio AI+\auth.json`, a credentials file kept separate
   from the `settings.json` preferences. They are bound to the Windows account
   that saved them. A new user enters their own keys — copying the file between
-  machines does not work. Headless installs can pass keys with
-  `electron . --set-key`, `--set-zai-key`, `--set-gateway-key`,
-  `--set-jev-key`, `--set-zen-key`, `--set-openrouter-key` and
-  `--set-custom-key`; [.env.example](.env.example) pairs each flag with its
-  `MEFI_STUDIO_*_KEY` variable. Unset the variable once the key is stored:
-  while it is set, Studio uses it instead of the saved key.
+  machines does not work. A headless install stores a key from the
+  repository root; in PowerShell:
+
+  ```powershell
+  $env:MEFI_STUDIO_KEY = "<your OpenCode Go key>"
+  npx electron . --set-key
+  Remove-Item Env:MEFI_STUDIO_KEY
+  ```
+
+  The other flags are `--set-zai-key`, `--set-gateway-key`, `--set-jev-key`,
+  `--set-zen-key`, `--set-openrouter-key` and `--set-custom-key`;
+  [.env.example](.env.example) pairs each flag with its `MEFI_STUDIO_*_KEY`
+  variable. Remove the variable once the key is stored: while it is set,
+  Studio uses it instead of the saved key.
 - Models are saved per provider and per builder CLI, so switching routes never
   carries one provider's model id into another.
 
@@ -151,6 +169,9 @@ one stays editable in **Settings** or the workspace.
   when one is found. Set `MEFI_STUDIO_GAME_ROOT` when it is not a sibling `2d Trippy
   Hell` folder, and run the game's `tools/build-windows.ps1` once if its LÖVE
   runtime is missing.
+- **Discord Server Styler** — its card appears under Settings › System once
+  Studio finds the separate checkout: a sibling `discord-server-styler` folder,
+  or the path in `MEFI_STYLER_ROOT`.
 - **A different working repository** — set `MEFI_STUDIO_REPO`; otherwise Studio
   opens with no project until a folder is chosen.
 - **Private release updates** — save a read-only GitHub token in **Settings ›
@@ -161,8 +182,12 @@ one stays editable in **Settings** or the workspace.
 
 Settings, keys, tasks, conversations, captures and databases are local state
 and do not travel. Only `data/curated.json` and `data/models.json` belong to
-the repository, and a source install and a portable build keep separate local
-stores. Never copy `auth.json` to another machine: its encrypted fields
+the repository. On one machine, a source install and a portable build keep
+their own tasks, ideas, plans and conversations (each in its own `data/`
+folder; `resources\app\data` in the portable build) but share
+`%APPDATA%\Mefi's Studio AI+`: settings, saved keys, the project list, the
+Discord link and resume state. Because they share it, only one of the two runs
+at a time. Never copy `auth.json` to another machine: its encrypted fields
 cannot be decrypted there. `settings.json` holds preferences only, but it is
 still local state — build the new machine's own state with the steps above.
 
@@ -279,7 +304,9 @@ before opening `Mefi Studio AI+.exe`; keep its supporting folders beside it.
 Source installs use `npm ci`, `npm run build-booklet`, then `npm start` from the
 repository root. The browser preview cannot run local desktop workflows.
 
-Source and portable installations retain separate local project stores. Back
-up the installation's local data before moving it. A downloaded release begins
+Source and portable installations keep separate task, idea, plan and
+conversation stores in their own `data/` folders, and share the settings,
+keys, project list and resume state in `%APPDATA%\Mefi's Studio AI+`. Back up
+both before moving an installation. A downloaded release begins
 with the public model catalog; it does not contain the maintainer's projects,
 conversations or credentials. Ruins Runner is optional and is installed separately.

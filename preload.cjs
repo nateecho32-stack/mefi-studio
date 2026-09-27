@@ -78,6 +78,8 @@ const api = {
   cliSetupAction: (payload) => ipcRenderer.invoke("setup:cli-action", payload),
   cliSetupCheck: (id) => ipcRenderer.invoke("setup:cli-check", id),
   cliSetupUse: (id) => ipcRenderer.invoke("setup:cli-use", id),
+  // A guided setup window closed and PATH was re-read (main.cjs guidedCliSetup).
+  onCliSetupClosed: (callback) => ipcRenderer.on("setup:cli-closed", (_event, data) => callback(data)),
   launchCli: (id) => ipcRenderer.invoke("studio:launch-cli", id),
   testZai: () => ipcRenderer.invoke("studio:test-zai"),
   speedProbe: (modelId) => ipcRenderer.invoke("speed:probe", { modelId }),

@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { TOOL, handleMessage, deskAsker, loopbackUrl } from "../scripts/desk-mcp.mjs";
 import deskServer from "../scripts/desk-server.cjs";
@@ -111,26 +111,34 @@ test("per-run config files name the server for OpenCode and Claude Code, and are
     assert.ok(!path.basename(files.claude).includes(":"), "the run id is cleaned for the file name");
     await deskServer.removeRunConfigs(files);
     await assert.rejects(stat(files.opencode));
-    assert.equal(await deskServer.writeRunConfigs({ url: "u", token: "t", runId: "r", script: "s", dir: "C:\\Program Files\\x" }), null, "a path with spaces is never used");
+    // A temp folder under C:\Users\John Smith used to turn the desk off
+    // without a word; the command line now quotes the path instead.
+    const spaced = path.join(dir, "John's temp & 50%");
+    await mkdir(spaced);
+    const quoted = await deskServer.writeRunConfigs({ url: "u", token: "t", runId: "r", script: "s", dir: spaced });
+    assert.ok(quoted && quoted.claude.startsWith(spaced), "a path with spaces and shell characters is used");
+    await deskServer.removeRunConfigs(quoted);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
 });
 
-test("the command lines carry the config only for Claude Code and OpenCode, and only a safe path", () => {
+test("the command lines carry the config for Claude Code and OpenCode, whatever the path", () => {
   const route = { env: { A: "1" }, modelArgs: "", model: null };
   const desk = { claude: "C:\\Temp\\mefi-desk-r-claude.json", opencode: "C:\\Temp\\mefi-desk-r-opencode.json" };
   const claude = core.cliInvocation(route, "claude", "p", { desk });
-  assert.match(claude.args.at(-1), / --mcp-config C:\\Temp\\mefi-desk-r-claude\.json$/);
+  assert.match(claude.args.at(-1), / --mcp-config C:\\Temp\\mefi-desk-r-claude\.json"$/);
+  assert.equal(claude.verbatim, true);
   const opencode = core.cliInvocation(route, "opencode", "p", { desk });
   assert.equal(opencode.env.OPENCODE_CONFIG, desk.opencode);
   assert.equal(opencode.env.A, "1");
   assert.equal(route.env.OPENCODE_CONFIG, undefined, "the route's own env is not changed");
-  assert.equal(core.cliInvocation(route, "codex", "p", { desk }).args.at(-1).includes("mcp"), false);
-  assert.equal(core.cliInvocation(route, "grok", "p", { desk }).env, route.env);
-  const unsafe = { claude: "C:\\Temp dir\\x.json & calc", opencode: "C:\\a b\\x.json" };
-  assert.doesNotMatch(core.cliInvocation(route, "claude", "p", { desk: unsafe }).args.at(-1), /mcp-config/);
-  assert.equal(core.cliInvocation(route, "opencode", "p", { desk: unsafe }).env.OPENCODE_CONFIG, undefined);
+  assert.equal(core.cliInvocation(route, "codex", "p", { desk }).args.at(-1).includes("mcp"), false, "the desk's files are not codex's; only a server table is");
+  assert.equal(core.cliInvocation(route, "grok", "p", { desk, promptFile: "C:\\p.txt" }).env, route.env);
+  // A path with a space or shell characters is quoted for cmd.exe, never dropped.
+  const spaced = { claude: "C:\\Users\\John Smith\\Temp\\x.json & calc", opencode: "C:\\a b\\x.json" };
+  assert.match(core.cliInvocation(route, "claude", "p", { desk: spaced }).args.at(-1), / --mcp-config "C:\\Users\\John Smith\\Temp\\x\.json & calc""$/);
+  assert.equal(core.cliInvocation(route, "opencode", "p", { desk: spaced }).env.OPENCODE_CONFIG, spaced.opencode, "OpenCode's path rides the environment, which needs no quoting");
   assert.equal(core.cliInvocation(route, "opencode", "p").env, route.env, "no desk, no change");
 });
 

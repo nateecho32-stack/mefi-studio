@@ -4,7 +4,11 @@ First-time setup can install a missing coding CLI, open its sign-in and check
 its connection. A single Codex, Claude Code, Grok or Antigravity subscription
 can serve the assistant, first map, planning, agent roles and coding workers.
 First map offers connection recovery in place and can use the local project
-scan through the selected provider without OpenCode. See
+scan through the selected provider without OpenCode. Scan and First map also
+offer **I have an API key or a local model server**: the guide walks to
+Connections and, once a usable key is saved (or you choose **Back to the
+scan**), scans again so **Use this setup** can map with that route. In Vibe
+mode the Create and Review walks use Vibe's own box and Tasks panel. See
 [Guided CLI setup](cli-setup.md) for configuration scope, account limits and
 the text-session controls.
 
@@ -1025,11 +1029,22 @@ proposal is left out and counted in its note.
   visible (without CLI probes); the account channels bypass the
   project-switch gate.
 - **AI routing** picks who pays — Auto walks an ordered provider list you edit
-  in Settings (the first usable provider answers, and the opt-in fallback
-  walks down the list), plus z.ai only, OpenCode Go only, OpenRouter, the Grok, Claude
-  Code or Antigravity CLIs on their own logins, a local LM Studio server, or a
-  custom OpenAI-compatible endpoint with your own key. **Model selection** uses
-  Jev or fixed defaults; for builders it is a win-probability evaluator
+  in Settings (signed-in coding CLIs first unless *Use subscription logins
+  first* is off, then your list; the first usable provider answers, and the
+  opt-in fallback walks down the list). When nothing listed can answer, a key
+  you saved for a provider outside the list (z.ai, OpenCode Go, Zen,
+  OpenRouter or a custom endpoint) still answers, so saving a key never needs
+  a routing change; such a key never joins the fallback's retry list. Besides
+  Auto: z.ai only, OpenCode Go only, OpenCode Zen, OpenRouter, the Grok, Claude
+  Code, Codex or Antigravity CLIs on their own logins, a local LM Studio
+  server, or a custom OpenAI-compatible endpoint whose key is optional (a
+  keyless local server such as Ollama, `http://127.0.0.1:11434/v1`, sends no
+  Authorization header). The chat's "AI connected" gate, the passes, the
+  Auditor's AI pass and the Settings pills all read this same walk, so a setup
+  the router can answer is never shown as "No AI connected". The LM Studio
+  tile reads ready only when its last probe found a loaded model.
+  **Model selection** uses Jev or fixed defaults (a fresh install with no Jev
+  key reads as Fixed); for builders it is a win-probability evaluator
   (below).
 - **Models are saved per provider and per builder CLI**, so switching routes
   never carries one provider's model id into another; a provider with nothing
@@ -1047,30 +1062,48 @@ proposal is left out and counted in its note.
   The Models settings load OpenRouter's live text-response roster, with free
   choices first; select a model for routine or heavy passes, or enter its slug.
   The OpenRouter key also serves its Jev route and account usage reading.
-  Plan specs, brain drafts and the analyzer read stay data-only, so the only
-  CLI they may use is Claude Code, which runs with `--tools=` (no tools).
+  Plan specs, brain drafts and the analyzer read stay data-only: a CLI route
+  (Claude Code, Codex, Grok or Antigravity) answers them through the
+  restricted text adapter with its native tools off (`scripts/cli-text.cjs`).
 - **Settings › Decision model** chooses where Jev classifier calls go — the Vercel AI Gateway
   (`typesafe-ai/jev`), TypeSafe's Jev API directly (`jev-1.13.0`), OpenCode
   Zen (`jev-1.13`, including its free tier), or OpenRouter
   (`typesafe/jev-1.13`) — each route keeping its own encrypted key. Headless
-  setup: `MEFI_STUDIO_GATEWAY_KEY=... electron . --set-gateway-key`,
-  `MEFI_STUDIO_JEV_KEY=... electron . --set-jev-key`,
-  `MEFI_STUDIO_ZEN_KEY=... electron . --set-zen-key`,
-  `MEFI_STUDIO_OPENROUTER_KEY=... electron . --set-openrouter-key`, and
-  `MEFI_JEV_ROUTE=zen` (or `vercel`, `typesafe`, `openrouter`) to pick the
+  setup (PowerShell, from a source checkout) sets the route's variable, then
+  runs its flag: `$env:MEFI_STUDIO_ZEN_KEY = "<key>"; npx electron . --set-zen-key`;
+  likewise `MEFI_STUDIO_GATEWAY_KEY` / `--set-gateway-key`, `MEFI_STUDIO_JEV_KEY`
+  / `--set-jev-key` and `MEFI_STUDIO_OPENROUTER_KEY` / `--set-openrouter-key`,
+  and `MEFI_JEV_ROUTE=zen` (or `vercel`, `typesafe`, `openrouter`) to pick the
   route.
-- **Auto setup** in Settings reads saved-key flags, installed CLIs and (only
-  when nothing else is available) a live local server, then applies the
-  matching provider, model selection and builder in one pass. It sends no paid
+- **Auto setup** in Settings reads saved-key flags (z.ai, OpenCode Go, Zen,
+  OpenRouter, custom), installed CLIs and (only when nothing else is
+  available) a live local server — LM Studio, a saved keyless custom endpoint,
+  or Ollama on its default port, which it then saves as the custom endpoint —
+  and applies the matching provider, model selection and builder in one pass.
+  With no Jev route saved it moves Jev to the route whose key is present
+  (TypeSafe, Zen, then OpenRouter), and its note says when Jev cannot pick
+  models for the chosen provider (per-task selection covers z.ai GLM and
+  OpenCode Go work only). It sends no paid
   request, changes no key, keeps model overrides, reports every choice, and
   leaves the same controls editable afterward. A fresh install runs it by
   itself on its first launch, and the walkthrough's scan step reads its plan,
   so a machine with only a signed-in coding CLI is configured before the first
-  task.
+  task. Its route (and the walkthrough's **Use this setup**) is saved to
+  Studio defaults, so folders added later inherit it; an open project that
+  keeps its own team gets the same changes. A machine with no builder CLI is
+  reported as such rather than as "builders on OpenCode".
 - Builders run through `opencode run` (with a Studio-managed z.ai provider),
   the Grok CLI, Claude Code (`claude -p` on your subscription login), Codex
   (`codex exec` on your ChatGPT login), or Antigravity (`agy` on your Google
-  account), with automatic one-time fallback decided by the failure kind.
+  account), with automatic one-time fallback to OpenCode, when it is
+  installed, for a CLI that never got going (a spawn failure, a wedged start,
+  or a quick exit with nothing on stdout that is not a usage limit). A CLI
+  installed as an npm `.cmd` shim (Grok from the guided installer) runs
+  through `cmd.exe`; Grok's brief goes in a prompt file.
+- *Try again with a heavier model* runs that task's next attempt on the
+  builder's Heavy-tier model (`opus` for Claude Code, the z.ai heavy model on
+  the coding plan, or the Heavy model saved for the CLI), and is offered only
+  where such a model exists.
 - A **coding tier** in Settings › Coding workers decides what each build may
   cost. **Auto** selects per task on the z.ai route (between the GLM pair) and
   on the OpenCode Go route with no builder model pinned (among up to six Go
@@ -1093,9 +1126,9 @@ proposal is left out and counted in its note.
 - Keys live in the OS keystore (`safeStorage`; DPAPI on Windows); their
   ciphertext persists in `auth.json` beside `settings.json`, so preferences
   stay copyable and credentials stay machine-bound. Headless
-  setup: `MEFI_STUDIO_KEY=... electron . --set-key`,
-  `MEFI_STUDIO_ZAI_KEY=... electron . --set-zai-key`, and
-  `MEFI_STUDIO_CUSTOM_KEY=... electron . --set-custom-key`.
+  setup (PowerShell): `$env:MEFI_STUDIO_KEY = "<key>"; npx electron . --set-key`,
+  and the same with `MEFI_STUDIO_ZAI_KEY` / `--set-zai-key` and
+  `MEFI_STUDIO_CUSTOM_KEY` / `--set-custom-key`; unset the variable afterwards.
 
 ### Verification, storage and experiments
 

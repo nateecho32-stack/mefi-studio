@@ -333,7 +333,9 @@
     return icon;
   }
   function providerNote(provider, saved) {
-    const key = { zai: "hasZai", opencode: "hasOpenCode", zen: "hasZen", openrouter: "hasOpenRouter", custom: "hasCustom" }[provider];
+    // The custom endpoint is connected by its URL; its key is optional.
+    if (provider === "custom") return saved.routing?.customEndpoint ? (saved.routing?.hasCustom ? "Key saved" : "Endpoint saved") : "Needs connection";
+    const key = { zai: "hasZai", opencode: "hasOpenCode", zen: "hasZen", openrouter: "hasOpenRouter" }[provider];
     if (key) return saved.routing?.[key] ? "Key saved" : "Needs connection";
     return provider === "auto" ? "Follow routing" : provider === "lmstudio" ? "Local server" : "CLI login";
   }
@@ -391,7 +393,9 @@
     for (const missing of selected.filter((key) => !(saved.skills || []).some((skill) => skill.id === key))) list.append(button("Remove unavailable skill", () => { config.agentSkills[id] = config.agentSkills[id].filter((key) => key !== missing); dirty(); refreshRows(`agent-${id}-add`); }, "ghost mini"));
     if (!(saved.skills || []).length) list.append(node("p", "muted", "No installed skills found. Add a SKILL.md folder under .agents/skills, .claude/skills, .codex/skills or .opencode/skills, then reload saved settings."));
     panel.append(list, node("h4", "", "Allowed Studio tools"));
-    const supportedTools = id !== "builder" || ["opencode", "claude"].includes(provider);
+    // Codex takes Studio's tool server as config overrides; Grok and
+    // Antigravity have no per-run MCP config (executorCore.cliInvocation).
+    const supportedTools = id !== "builder" || ["opencode", "claude", "codex"].includes(provider);
     const permissions = config.agentTools?.[id] || {};
     const setPermission = (key, value) => { config.agentTools = { ...config.agentTools, [id]: { ...config.agentTools?.[id], [key]: value } }; dirty(); };
     for (const [key, label, detail, enabled] of [
@@ -418,7 +422,7 @@
       const supported = ["opencode", "claude"].includes(provider), input = node("input"); input.id = "agent-builder-desk-tool"; input.type = "checkbox"; input.checked = config.agentBrain?.deskTool === true; input.disabled = !supported;
       input.addEventListener("change", () => { config.agentBrain = { ...config.agentBrain, deskTool: input.checked }; dirty(); });
       panel.append(field("Studio desk · ask_desk", input, supported ? "Give this coding worker an MCP tool for help from the desk agent." : "Available with OpenCode and Claude Code workers."));
-      panel.append(node("p", "muted", supportedTools ? "Studio search and selected MCP tools attach to this worker. The coding CLI also has its own tools and runs with automatic approval and broad file/command access. These checkboxes limit Studio tools only; manage native tools and MCP servers in the CLI configuration." : "Studio tool attachment supports OpenCode and Claude Code. This worker uses its CLI's native search, tools and permissions; it runs with broad file/command access."));
+      panel.append(node("p", "muted", supportedTools ? "Studio search and selected MCP tools attach to this worker. The coding CLI also has its own tools and runs with automatic approval and broad file/command access. These checkboxes limit Studio tools only; manage native tools and MCP servers in the CLI configuration." : "Studio tool attachment supports OpenCode, Claude Code and Codex. This worker uses its CLI's native search, tools and permissions; it runs with broad file/command access."));
     } else panel.append(node("p", "muted", "Studio enforces these tool choices for every turn. File writes and shell commands are unavailable unless you explicitly select an MCP tool that provides them. Skills guide answers and never grant tool permissions."));
     panel.append(habitsPanel(id, config, saved));
     return panel;
@@ -538,7 +542,12 @@
     const item = draft(); if (!item) return;
     $("agents-team-summary").textContent = `${item.saved.name} · ${item.saved.inherited ? "Studio defaults" : "Project team"}`;
     const ready = item.saved.routing || {};
-    $("agents-ready").textContent = ready.hasZai || ready.hasOpenCode || ready.hasZen || ready.hasOpenRouter || ["grok", "claude", "codex", "antigravity", "lmstudio"].includes(ready.provider) ? "A route is configured. Check its connection before starting work." : "Connect a provider, a local model, or a signed-in coding tool to begin.";
+    // The host's own gate (routeReady) knows Auto's whole walk - signed-in
+    // CLIs first, saved keys outside the order - so a CLI-only or custom
+    // endpoint setup is not told to connect something it already has.
+    const configured = typeof ready.routeReady === "boolean" ? ready.routeReady
+      : ready.hasZai || ready.hasOpenCode || ready.hasZen || ready.hasOpenRouter || ready.hasCustom || Boolean(ready.customEndpoint) || ["grok", "claude", "codex", "antigravity", "lmstudio"].includes(ready.provider);
+    $("agents-ready").textContent = configured ? "A route is configured. Check its connection before starting work." : "Connect a provider, a local model, or a signed-in coding tool to begin.";
     for (const pane of ["team", "routing"]) $("agents-" + pane).inert = false;
     const config = item.configuration, roles = $("agents-role-grid"); roles.replaceChildren();
     for (const [role, title, detail] of [["routine", "Assistant · routine", "Chat, checks and advisory answers"], ["heavy", "Assistant · planning & review", "Plans, briefs and reviews"]]) {
@@ -621,7 +630,12 @@
   function routingView(base) {
     const item = draft(); if (!item || $("agents-overlay")?.hidden || params.pane === "connections") return base;
     const config = item.configuration, cli = config.executorCli || base.executorCli;
-    return { ...base, provider: config.aiProvider || base.provider, roleProviders: config.aiRoleProviders || {}, models: config.aiModels || {}, providerModels: config.aiModelsByProvider || {}, autoProviders: config.aiAutoProviders || base.autoProviders, autoFallback: config.aiAutoFallback ?? base.autoFallback, modelSelection: config.modelSelection || base.modelSelection, executorCli: cli, executorTier: config.executorTier || base.executorTier, executorModels: config.executorModels || {}, executorModel: config.executorModels?.[cli] || "", executorTierModels: config.executorTierModels || {} };
+    // A drafted order or subscriptions-first switch the host has not applied
+    // drops the host's walk, so the page rebuilds it from the draft instead
+    // of showing the saved one.
+    const autoProviders = config.aiAutoProviders || base.autoProviders, subscriptionFirst = config.aiSubscriptionFirst ?? base.subscriptionFirst;
+    const walkChanged = JSON.stringify(autoProviders) !== JSON.stringify(base.autoProviders) || subscriptionFirst !== base.subscriptionFirst;
+    return { ...base, provider: config.aiProvider || base.provider, roleProviders: config.aiRoleProviders || {}, models: config.aiModels || {}, providerModels: config.aiModelsByProvider || {}, autoProviders, subscriptionFirst, ...(walkChanged ? { autoOrder: null } : {}), autoFallback: config.aiAutoFallback ?? base.autoFallback, modelSelection: config.modelSelection || base.modelSelection, executorCli: cli, executorTier: config.executorTier || base.executorTier, executorModels: config.executorModels || {}, executorModel: config.executorModels?.[cli] || "", executorTierModels: config.executorTierModels || {} };
   }
   async function load() {
     const key = draftKey(), serial = ++readSerial;

@@ -9899,7 +9899,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
           <details class="provider-tile" data-provider="lmstudio"><summary class="provider-tile-head">
               <span class="provider-mark" aria-hidden="true">LM</span>
               <div class="provider-title"><span class="provider-name">LM Studio</span><span class="provider-kind">Local server · no key</span></div>
-              <span class="provider-pill" id="lmstudio-status" data-state="ready">no key needed</span>
+              <span class="provider-pill" id="lmstudio-status" data-state="unknown">checking…</span>
             </summary>
             <div class="provider-tile-body">
               <input type="text" id="lmstudio-endpoint" placeholder="http://127.0.0.1:1234/v1/chat/completions" spellcheck="false" autocomplete="off" aria-label="LM Studio endpoint" title="The local LM Studio server's chat-completions URL; saved when you leave the field. Its loaded model is detected automatically.">
@@ -9907,12 +9907,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
           </details>
           <details class="provider-tile" data-provider="custom"><summary class="provider-tile-head">
               <span class="provider-mark" aria-hidden="true">API</span>
-              <div class="provider-title"><span class="provider-name">Custom endpoint</span><span class="provider-kind">OpenAI-compatible · your key</span></div>
+              <div class="provider-title"><span class="provider-name">Custom endpoint</span><span class="provider-kind">OpenAI-compatible · key optional</span></div>
               <span class="provider-pill" id="custom-key-status" data-state="unknown">checking…</span>
             </summary>
             <div class="provider-tile-body">
               <input type="text" id="custom-endpoint" placeholder="https://host/v1" spellcheck="false" autocomplete="off" aria-label="Custom provider endpoint" title="Your own OpenAI-compatible endpoint. A bare base URL gains the chat-completions path; saved when you leave the field.">
-              <input type="password" id="custom-key" placeholder="API key" autocomplete="off" aria-label="Custom provider API key">
+              <input type="password" id="custom-key" placeholder="API key (optional for a local server)" autocomplete="off" aria-label="Custom provider API key" title="Leave empty for a keyless local server such as Ollama (http://127.0.0.1:11434/v1); its requests then carry no Authorization header.">
               <button id="save-custom-key" class="mini">Save</button>
             </div>
           </details>
@@ -11121,7 +11121,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
           <button class="ghost mini" id="walkthrough-cli-refresh" type="button">Refresh installed tools</button>
           <button class="ghost mini" id="walkthrough-cli-docs" type="button">Setup instructions</button>
         </div>
-        <p class="muted">Install opens a setup window and downloads the selected tool. Node.js is installed if an npm tool needs it. Check connection sends a small test using your account's allowance. Passwords stay in the provider's sign-in window.</p>
+        <p class="muted">Install opens a setup window and downloads the selected tool. Node.js is installed if an npm tool needs it. Studio looks for the tool again when that window closes. Check connection sends a small test using your account's allowance. Passwords stay in the provider's sign-in window.</p>
+        <div class="walkthrough-panel-actions"><button class="ghost" id="walkthrough-cli-keys" type="button">I have an API key or a local model server</button></div>
+        <p class="muted">No subscription tool? Save a z.ai, OpenRouter, OpenCode Go or Zen key, point the custom route at your own endpoint, or pick LM Studio in Connections. The guide walks you there, then scans again so Use this setup can map your folder with it.</p>
         <p id="walkthrough-cli-status" role="status" aria-live="polite"></p>
       </div>
       <div id="walkthrough-scan" class="walkthrough-panel" hidden>
@@ -42723,7 +42725,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 
   async function exploreCheckpoint(session, note) {
     if (!window.mefiStudio?.assistantRun) return;
-    status("exploring checkpoint on deepseek-v4.1-flash…");
+    status("exploring checkpoint on your AI route…");
     const result = await window.mefiStudio.assistantRun("explore", session.id, { note: note.note, at: note.at, files: note.files ?? [] });
     if (!result.ok) {
       status(result.error, true);
@@ -43503,7 +43505,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         growArea(els.input);
       }
       takeAssistant(result.state);
-      status(result.reply?.via === "ai" ? "replied on deepseek-v4.1-flash" : "replied locally");
+      // The model that answered is whatever the host's route resolved to
+      // (recorded on the state it just sent), never a fixed OpenCode Go id.
+      status(result.reply?.via === "ai" ? (state.assistant?.ai?.model ? `replied on ${state.assistant.ai.model}` : "replied via your AI route") : "replied locally");
     } catch (error) {
       status(`not sent · ${String(error?.message ?? error)}`, true);
     } finally {
@@ -43569,7 +43573,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (!state.briefing) {
       const hint = document.createElement("p");
       hint.className = "muted";
-      hint.textContent = "No briefing yet. Save an OpenCode Go key in Studio, then press Brief me.";
+      hint.textContent = state.assistant?.ai?.keyPresent === false
+        ? "No briefing yet. Connect an AI provider in Agents › Setup › Connections, then press Brief me."
+        : "No briefing yet. Press Brief me.";
       els.brief.append(hint);
     } else {
       const summary = document.createElement("div");
@@ -43839,7 +43845,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     showPanel("assistant");
     showTools(true, true);
     const target = typeof sessionId === "string" && sessionId ? sessionId : state.selected;
-    status(`${mode} running on deepseek-v4.1-flash…`);
+    status(`${mode} running on your AI route…`);
     els.briefRun.disabled = true;
     els.growRun.disabled = true;
     try {
@@ -60484,11 +60490,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   const SCAN_STEPS = ["locate", "version", "auth", "models", "verbose", "agents"];
   const SCAN_STEP_LABELS = { locate: "finding OpenCode", version: "reading its version", auth: "linked providers", models: "models", verbose: "free models", agents: "agents" };
   const ADVICE_STOPS = [["workspace", WORKSPACE], ["map", MAP], ["connections", CONNECT], ["create", CREATE], ["monitor", MONITOR], ["review", REVIEW]];
+  // Subscription CLIs that sign in with their own account (cli-setup.cjs).
+  const SUBSCRIPTIONS = ["codex", "claude", "grok", "antigravity"];
   const $ = (id) => document.getElementById(`walkthrough-${id}`);
   const lessons = [
     {
       title: "Link an AI and scan this computer", short: "Scan", glyph: "g-ambience", panel: "scan",
-      copy: "Start with the account you already use. Codex, Claude Code, Grok or Antigravity can power your studio through its own login. Install a missing tool here, or scan for OpenCode's linked and free models.",
+      copy: "Start with the account you already use. Codex, Claude Code, Grok or Antigravity can power your studio through its own login. Install a missing tool here, use an API key (z.ai, OpenRouter, OpenCode Go or Zen, or your own endpoint) or a local model server such as LM Studio, or scan for OpenCode's linked and free models.",
       points: ["The scan asks OpenCode for its version, its linked provider names, its model list and its agents. It never opens the credential store, never sends a prompt and never changes OpenCode's own configuration.", "Free models cost nothing and are used first for exploring; paid plans you have linked are kept for building. Free-tier models may use prompts to improve the model, so keep confidential work on a paid model.", "Nothing is saved until you choose Use this setup and continue. From there the guide maps your selected folder and asks the linked AI to plan the remaining stops. You can run this scan again from Start here, or Auto setup from Agents setup, after linking a provider."],
       action: null, note: "Run the first scan reads OpenCode's own answers. Use this setup and continue saves the choices shown (no key), maps the selected folder, and asks the linked AI what to do next.",
       done: "Setup saved",
@@ -60512,7 +60520,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     {
       title: "Connect the assistant and coding workers", short: "Connections", glyph: "g-ambience",
       copy: "The assistant helps you think and organize. Coding workers carry out tasks in your project. Their provider settings are separate, and the scan's choices are shown at the top of Agents setup.",
-      points: ["In Agents › Setup › Connections › Providers, save the key for the assistant provider you want, choose Grok, Claude Code, Codex or Antigravity with their own CLI logins, or point the custom route at your own OpenAI-compatible endpoint.", "LM Studio needs no key: keep its local server running and pick it as the provider.", "Models are saved per provider: set the model you have for each option and switching never mixes them.", "Coding workers run through OpenCode by default: on your linked plan, or on the free model the scan found. The coding tier decides what each build may cost — Free, Fast or Heavy — while Auto lets Studio pick per task. Saving an assistant key alone does not prove a worker is ready.", "Manual planning works without an AI key. Jev is optional; without it the assistant's own model, or a free model, stands in for the small routing decisions."],
+      points: ["In Agents › Setup › Connections › Providers, save the key for the assistant provider you want, choose Grok, Claude Code, Codex or Antigravity with their own CLI logins, or point the custom route at your own OpenAI-compatible endpoint.", "LM Studio needs no key: keep its local server running and pick it as the provider.", "Models are saved per provider: set the model you have for each option and switching never mixes them.", "Coding workers run through the builder CLI your setup chose: the subscription tool you connected, or OpenCode on your linked plan or the free model the scan found. Agents › Setup › Team shows which one. The coding tier decides what each build may cost — Free, Fast or Heavy — while Auto lets Studio pick per task. Saving an assistant key alone does not prove a worker is ready.", "Manual planning works without an AI key. Jev is optional; without it the assistant's own model, or a free model, stands in for the small routing decisions."],
       action: "Walk me to connections", route: "studio", params: { section: "settings-assistant" },
       station: "We are in Agents › Setup › Connections, at Providers. Save the key you want, then open Agents › Setup › Team to confirm the CLI and pick a coding tier. Nothing is sent until you choose to test it.",
       note: "Connection tests and AI requests may use your provider allowance when you explicitly run them.",
@@ -60524,8 +60532,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       points: ["Chat is for questions and discussion. Create task saves work in the selected project, and Use a task outline helps you describe the result and its checks.", "Start small: for example, ‘Add a Create note button to the empty notes list; check that it opens a new note.’ Say what should stay unchanged, too.", "Plan an idea collects questions and decisions. Review and approve the specification, then explicitly create its tasks.", "With Verify first, View task lets you inspect the brief and Approve build, or leave it waiting. New work also follows your Pause and worker settings."],
       action: "Walk me to the task box", route: "task", secondary: "Explore a plan", secondaryRoute: "plans",
       station: "This is the task box for the selected project. Describe the result and how you will check it, or open Use a task outline for a guided shape. I do not send anything from here.",
+      // Vibe (the default) hides Build's workspace, so the walk uses its box.
+      vibeStation: "This is Vibe's box for the selected project. Describe the result and how you will check it, then choose Build it to save it as a task, or Talk it over to discuss it first. I do not send anything from here.",
       note: "These buttons open the editor and the plan sheet. They do not submit a task or start a planning request.",
-      target: "#workspace-input", done: "Task box found",
+      target: "#workspace-input", vibeTarget: "#vibe-input", done: "Task box found",
     },
     {
       title: "Follow the queue and current work", short: "Monitor", glyph: "g-command",
@@ -60542,8 +60552,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       points: ["Open Review in Your work to read the result, evidence and next actions. Inspect the project changes and run any remaining acceptance checks.", "If work needs attention, read its reason first. Correct the connection, brief or prerequisite, then use its retry control when you are ready.", "Keep failed work available for diagnosis. Task history can recover an earlier brief; it does not roll back your project files."],
       action: "Walk me to Review", route: "review",
       station: "This is Review in Your work. Open a finished task to read the result and evidence, then run any remaining acceptance checks. Tasks that need attention keep their reason and retry controls here.",
+      vibeStation: "This is Tasks in Vibe. Open a task under Done to read the result and evidence, then run any remaining acceptance checks. Work that needs attention waits under Needs you with its reason.",
       note: "You can reopen this guide from Start here at the foot of the menu, or from Settings or Shortcuts. Completing the guide does not mark any task done.",
-      target: "#workspace-review", done: "Review found",
+      target: "#workspace-review", vibeTarget: "#vibe-panel", done: "Review found",
     },
   ];
   const blankDone = () => lessons.map(() => false);
@@ -60593,8 +60604,14 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   let assistResult = null;
   let assistBusy = false;
   let cliSetupState = null;
-  let cliSetupLoading = false;
+  let cliSetupFlight = null;
   let cliSetupBusy = false;
+  // A setup window launched from here is still open: Studio regaining focus
+  // is the cue to look for the newly installed tool again.
+  let cliWindowOpen = false;
+  // The person left Scan or First map to save a key or pick a local server:
+  // a usable connection (or Back to the scan) brings them back to a fresh scan.
+  let keyReturn = false;
   const checkedClis = new Set();
   function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} }
   function node(tag, className, text) {
@@ -60617,13 +60634,24 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       return typeof fn === "function" ? (...args) => fn.apply(api, args) : null;
     } catch { return null; }
   }
-  // The workspace header carries the truth about a selected project. Reading it
-  // keeps the guide away from every project-writing host API.
+  // The workspace's active project id is the truth about a selected project;
+  // its header text is only a fallback where the workspace is absent (its
+  // no-project wording has changed before). Reading either keeps the guide
+  // away from every project-writing host API.
   function projectReady() {
+    const workspace = window.MefiWorkspace;
+    if (typeof workspace?.activeProjectId === "function") {
+      try { return Boolean(workspace.activeProjectId()); } catch { return false; }
+    }
     const label = document.getElementById("workspace-project-name")?.textContent?.trim() || "";
-    if (!label) return false;
+    if (!label || label === "Workspace") return false;
     return !/^(Your workspace|Opening your project|Loading|Desktop app)/.test(label);
   }
+  // Vibe (the default mode) hides Build's workspace: go("workspace") lands
+  // on Vibe, so the Create and Review stops point at Vibe's own controls.
+  const vibeMode = () => { try { return window.MefiVibe?.mode?.() === "vibe"; } catch { return false; } };
+  const targetOf = (lesson) => (vibeMode() && lesson.vibeTarget) || lesson.target;
+  const stationOf = (lesson) => (vibeMode() && lesson.vibeStation) || lesson.station || lesson.copy;
   function isDone(index) {
     if (state.done[index]) return true;
     return index === WORKSPACE && projectReady();
@@ -60728,31 +60756,49 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (!panel) return;
     panel.hidden = ![SCAN, MAP].includes(state.step);
     if (panel.hidden) return;
-    if (!cliSetupState && !cliSetupLoading) void refreshCliSetup();
+    if (!cliSetupState && !cliSetupFlight) void refreshCliSetup();
     const id = $("cli-choice")?.value || "codex";
     const cli = cliSetupState?.clis?.find((item) => item.id === id);
     const busy = cliSetupBusy || scanBusy || mapBusy;
     if ($("cli-choice")) $("cli-choice").disabled = busy;
-    for (const action of ["install", "login", "check", "use", "refresh", "docs"]) if ($(`cli-${action}`)) $(`cli-${action}`).disabled = busy;
+    for (const action of ["install", "login", "check", "use", "refresh", "docs", "keys"]) if ($(`cli-${action}`)) $(`cli-${action}`).disabled = busy;
     if ($("cli-install")) $("cli-install").textContent = cli?.installed ? "Update and sign in" : "Install and sign in";
     if ($("cli-login")) $("cli-login").disabled = busy || !cli?.installed;
     if ($("cli-check")) { $("cli-check").disabled = busy || !cli?.installed; $("cli-check").textContent = id === "opencode" ? "Scan OpenCode" : "Check connection"; }
     if ($("cli-use")) { $("cli-use").textContent = id === "opencode" ? "Use scanned setup" : "Use for the whole studio"; $("cli-use").disabled = busy || !cli?.installed || (id === "opencode" ? !scanResult?.plan?.ok : !checkedClis.has(id)); }
     if ($("cli-detail")) $("cli-detail").textContent = !cli ? "Checking installed tools…" : id === "opencode" ? `${cli.installed ? "Installed." : "Not installed yet."} After sign-in, choose Scan OpenCode to discover its models, then Use scanned setup.` : checkedClis.has(id) ? `${cli.name} answered the connection check. Ready to use.` : `${cli.installed ? "Installed" : "Not installed yet"}. ${cli.installed ? "Sign in if needed, then choose Check connection." : "Choose Install and sign in to get started."}`;
   }
-  async function refreshCliSetup() {
-    if (cliSetupLoading) return;
+  // Callers arriving while a detection runs share it instead of starting a
+  // second host read.
+  function refreshCliSetup() {
+    if (cliSetupFlight) return cliSetupFlight;
     const fn = hostApi("cliSetupStatus");
-    if (!fn) { cliSetupState = { clis: [] }; setPanelStatus("cli-status", "Guided installation is available in the desktop app."); return; }
-    cliSetupLoading = true;
-    try {
-      const result = await fn();
-      if (!result?.ok) throw new Error(result?.error || "Could not check installed tools.");
-      const first = !cliSetupState;
-      cliSetupState = result;
-      if (first && $("cli-choice")) $("cli-choice").value = result.clis?.find((cli) => cli.id === result.selected && cli.installed)?.id || result.clis?.find((cli) => cli.installed)?.id || "codex";
-    } catch (error) { cliSetupState = { clis: [] }; setPanelStatus("cli-status", error.message, true); }
-    finally { cliSetupLoading = false; renderCliSetup(); }
+    if (!fn) { cliSetupState = { clis: [] }; setPanelStatus("cli-status", "Guided installation is available in the desktop app."); return Promise.resolve(); }
+    cliSetupFlight = (async () => {
+      try {
+        const result = await fn();
+        if (!result?.ok) throw new Error(result?.error || "Could not check installed tools.");
+        const first = !cliSetupState;
+        cliSetupState = result;
+        if (first && $("cli-choice")) $("cli-choice").value = result.clis?.find((cli) => cli.id === result.selected && cli.installed)?.id || result.clis?.find((cli) => cli.installed)?.id || "codex";
+      } catch (error) { cliSetupState = { clis: [] }; setPanelStatus("cli-status", error.message, true); }
+    })().finally(() => { cliSetupFlight = null; renderCliSetup(); });
+    return cliSetupFlight;
+  }
+  // The host pushes a closed setup window after re-reading PATH (and the
+  // window regaining focus stands in where it cannot): detect the tools again
+  // so Sign in and Check connection come alive without a manual refresh.
+  async function setupWindowClosed(detail = {}) {
+    cliWindowOpen = false;
+    // A detection that began before the window closed may predate the
+    // install: let it land, then read again.
+    if (cliSetupFlight) await cliSetupFlight;
+    await refreshCliSetup();
+    const cli = cliSetupState?.clis?.find((item) => item.id === (detail?.id || $("cli-choice")?.value));
+    if (!cli) return;
+    setPanelStatus("cli-status", cli.installed
+      ? `${cli.name} is installed. Choose ${cli.id === "opencode" ? "Scan OpenCode" : "Check connection"} next.`
+      : `${cli.name} is not detected yet. If its setup finished, choose Refresh installed tools; otherwise run Install and sign in again.`);
   }
   async function cliSetupAction(action) {
     if (cliSetupBusy || mapBusy || scanBusy) return;
@@ -60767,7 +60813,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       const result = await fn(["use", "check"].includes(action) ? id : { id, action });
       if (!result?.ok) { if (action === "check") checkedClis.delete(id); throw new Error(result?.error || "Setup did not finish. Try again."); }
       if (action === "check") checkedClis.add(id);
-      if (action === "install" || action === "login") checkedClis.delete(id);
+      if (action === "install" || action === "login") { checkedClis.delete(id); cliWindowOpen = result.launched === true; }
       setPanelStatus("cli-status", result.message || "Setup instructions opened.");
       if (action === "use") {
         state.done[SCAN] = true; save(); scanResult = null; scanSynced = true;
@@ -60778,17 +60824,23 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
   function scanFacts(plan, auto = null) {
     if (!plan) return [];
-    if (["codex", "claude", "grok", "antigravity"].includes(auto?.active?.provider)) return [auto.summary, "Choose this tool above to check its login and use it for the whole studio. OpenCode is optional."];
+    if (SUBSCRIPTIONS.includes(auto?.active?.provider)) return [auto.summary, "Choose this tool above to check its login and use it for the whole studio. OpenCode is optional."];
     const facts = [];
     const cli = plan.opencode || {};
-    facts.push(cli.installed ? `OpenCode ${cli.version || "(version unknown)"} found${cli.path ? ` at ${cli.path}` : ""}${cli.supported === false ? " — older than the supported 1.x line" : ""}.` : "OpenCode is not installed on this computer.");
-    const linked = plan.providers?.linked || [];
-    facts.push(linked.length ? `Linked in OpenCode: ${linked.join(", ")}.` : "No provider is linked in OpenCode yet.");
-    const free = plan.providers?.free || {};
-    const best = Array.isArray(free.models) ? free.models.find((model) => model.usable) : null;
-    facts.push(free.count ? `${free.count} free model${free.count === 1 ? "" : "s"} available${best ? `, newest ${best.name || best.id}` : ""}.` : "No free model is available right now.");
-    facts.push(`Explorer: ${plan.explorer?.model || "OpenCode's default model"} — ${plan.explorer?.reason || ""}`.trim());
-    facts.push(`Builder: ${plan.builder?.model || "OpenCode's default model"} — ${plan.builder?.reason || ""}`.trim());
+    if (cli.installed) {
+      facts.push(`OpenCode ${cli.version || "(version unknown)"} found${cli.path ? ` at ${cli.path}` : ""}${cli.supported === false ? " — older than the supported 1.x line" : ""}.`);
+      const linked = plan.providers?.linked || [];
+      facts.push(linked.length ? `Linked in OpenCode: ${linked.join(", ")}.` : "No provider is linked in OpenCode yet.");
+      const free = plan.providers?.free || {};
+      const best = Array.isArray(free.models) ? free.models.find((model) => model.usable) : null;
+      facts.push(free.count ? `${free.count} free model${free.count === 1 ? "" : "s"} available${best ? `, newest ${best.name || best.id}` : ""}.` : "No free model is available right now.");
+      facts.push(`Explorer: ${plan.explorer?.model || "OpenCode's default model"} — ${plan.explorer?.reason || ""}`.trim());
+      facts.push(`Builder: ${plan.builder?.model || "OpenCode's default model"} — ${plan.builder?.reason || ""}`.trim());
+    } else {
+      // OpenCode's explorer and builder lines only describe OpenCode; without
+      // it they would read as the studio's only road.
+      facts.push("OpenCode is not installed on this computer. It is optional: a subscription tool above, an API key or a local model server can run your studio instead.");
+    }
     facts.push(`Judge: ${plan.judge?.kind || "fixed"} — ${plan.judge?.reason || ""}`.trim());
     // Auto setup's plan rides along with the scan: the assistant route and
     // builder CLI this machine's keys, CLIs and local servers already allow.
@@ -60798,7 +60850,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
   function scanNotes(plan, auto = null) {
     if (!plan) return [];
-    if (["codex", "claude", "grok", "antigravity"].includes(auto?.active?.provider)) return ["Every agent can use models available to this account. Choose provider defaults or save models per role in Agents setup."];
+    if (SUBSCRIPTIONS.includes(auto?.active?.provider)) return ["Every agent can use models available to this account. Choose provider defaults or save models per role in Agents setup."];
     return [
       ...(plan.warnings || []).map((text) => `Warning: ${text}`),
       ...(plan.nextSteps || []).map((text) => `Next: ${text}`),
@@ -60827,7 +60879,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       if (!status?.firstRun) {
         // A fresh install's first launch ran auto setup by itself; the scan
         // adds OpenCode's free explorer and builder on top of that route.
-        if (status?.autoSetup?.summary && !scanResult) setPanelStatus("scan-status", `Auto setup ran on first launch: ${status.autoSetup.summary} Choose your tool above to check its connection and finish setup.`);
+        // A subscription tool still needs its login checked; a key or a local
+        // server finishes through the scan's Use this setup.
+        if (status?.autoSetup?.summary && !scanResult) setPanelStatus("scan-status", `Auto setup ran on first launch: ${status.autoSetup.summary} ${SUBSCRIPTIONS.includes(status.aiProvider) ? "Choose your tool above to check its connection and finish setup." : "Run the first scan, then choose Use this setup and continue to finish setup."}`);
         return;
       }
       if (!state.done[SCAN]) { state.done[SCAN] = true; save(); }
@@ -60852,8 +60906,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       scanResult = result;
       if (!result?.ok) setPanelStatus("scan-status", result?.error || "The scan did not finish.", true);
       else if (result.plan?.ok) setPanelStatus("scan-status", "Scan complete. Review the facts below, then choose Use this setup and continue: it saves these choices (no key), maps your selected folder and asks the linked AI what to do next.");
-      else if (result.autoSetup?.ok) setPanelStatus("scan-status", `Scan complete. ${result.autoSetup.summary} Choose your installed tool above to use that subscription throughout the studio, including your first map.`);
-      else setPanelStatus("scan-status", "Let's connect your first tool. Choose one above, then Install and sign in. You can also continue the tour and connect it later.");
+      else if (result.autoSetup?.ok && SUBSCRIPTIONS.includes(result.autoSetup.active?.provider)) setPanelStatus("scan-status", `Scan complete. ${result.autoSetup.summary} Choose your installed tool above to use that subscription throughout the studio, including your first map.`);
+      else if (result.autoSetup?.ok) setPanelStatus("scan-status", `Scan complete. ${result.autoSetup.summary} Choose Use this setup and continue: it saves this route, maps your selected folder and asks the linked AI what to do next.`);
+      else setPanelStatus("scan-status", "Let's connect your first AI. Choose a tool above and Install and sign in, or choose I have an API key or a local model server. You can also continue the tour and connect it later.");
     } catch (error) {
       setPanelStatus("scan-status", error?.message || "The scan failed.", true);
     } finally {
@@ -60905,7 +60960,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   function mapAdvice(result) {
     const reason = result?.reason;
     if (reason === "free-tier-refused") return `${result.error} Choose a paid model in Settings, then map again.`;
-    if (reason === "no-scan" || reason === "no-explorer" || reason === "no-opencode") return "Connect a tool right here to make your first map. Choose an existing subscription, or Install and sign in above. You can continue the tour while you set it up.";
+    if (reason === "no-scan" || reason === "no-explorer" || reason === "no-opencode") return "Connect an AI right here to make your first map: choose a subscription tool and Install and sign in above, or choose I have an API key or a local model server. You can continue the tour while you set it up.";
     if (reason === "timeout") return `${result.error}`;
     if (reason === "unparsable") return `${result.error} Map again; a second pass usually answers in the requested shape.`;
     if (reason === "busy") return result.error;
@@ -60993,18 +61048,16 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
   // Places the suggested brief in the task box and takes the user there. It
   // never submits: sending stays a deliberate click in the workspace.
+  // The box is filled after the visit: switching Build's composer to Create
+  // task swaps in that mode's draft, and in Vibe the box is Vibe's own. The
+  // input event lets the owning surface save the draft and size the box.
   function placeSuggestedTask() {
     const task = assistResult?.advice?.firstTask;
     if (!task) return;
-    // Surface first: visit("task") flips the composer to task mode, which saves
-    // the box as the chat draft and loads the task draft, so a brief placed
-    // before it overwrote the chat draft and vanished. In Vibe the workspace
-    // hands over to Vibe's own box.
-    visit("task");
-    const input = document.getElementById(window.MefiVibe?.mode?.() === "vibe" ? "vibe-input" : "workspace-input");
+    const input = visit("task");
     if (!input) return;
     input.value = `${task.title}\n\n${task.brief || ""}`.trim();
-    if (typeof Event === "function") input.dispatchEvent?.(new Event("input", { bubbles: true }));
+    try { if (typeof Event === "function") input.dispatchEvent?.(new Event("input", { bubbles: true })); } catch {}
     input.focus?.();
   }
   // ---- coach --------------------------------------------------------------------------
@@ -61015,13 +61068,16 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const done = isDone(state.step);
     $("coach-progress").textContent = `Step ${state.step + 1} of ${lessons.length} · ${lesson.short}`;
     $("coach-title").textContent = lesson.title;
-    $("coach-copy").textContent = lesson.station || lesson.copy;
-    $("coach-hint").textContent = done
-      ? `${lesson.done} ✓ — press the button when you are ready for the next stop.`
-      : lesson.waitFor
-        ? "I will tick this off the moment it is done. Take your time."
-        : "I stay out of your way here; press the button when you are ready.";
-    $("coach-next").textContent = state.step === lessons.length - 1 ? "Finish the tour" : done ? "Next stop" : "Done — next stop";
+    $("coach-copy").textContent = stationOf(lesson);
+    const returning = keyReturn && state.step === CONNECT;
+    $("coach-hint").textContent = returning
+      ? "Save your key here, or start LM Studio's server and choose LM Studio as the provider. A saved key brings you back to the scan; otherwise choose Back to the scan."
+      : done
+        ? `${lesson.done} ✓ — press the button when you are ready for the next stop.`
+        : lesson.waitFor
+          ? "I will tick this off the moment it is done. Take your time."
+          : "I stay out of your way here; press the button when you are ready.";
+    $("coach-next").textContent = returning ? "Back to the scan" : state.step === lessons.length - 1 ? "Finish the tour" : done ? "Next stop" : "Done — next stop";
     $("coach-back").disabled = state.step === 0;
     $("coach").hidden = false;
   }
@@ -61074,8 +61130,35 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     overlay.hidden = true;
     if (coachEl) coachEl.hidden = true;
     clearHighlight();
+    // Closing the guide ends a detour to Connections: a later save must not
+    // pull the guide back open.
+    keyReturn = false;
     state = { ...state, mode: "idle" };
     save(); releaseLayer(); renderInvitation();
+  }
+  // Opens Home and reaches the task box or the review list, returning the
+  // control it landed on. In Vibe mode Home is Vibe (Build's workspace stays
+  // hidden), so the box is Vibe's own and review is Vibe's Tasks panel.
+  function reachWorkspace(route) {
+    window.MefiNav?.go?.("workspace");
+    const vibe = vibeMode();
+    if (route === "task") {
+      if (!vibe) document.getElementById("workspace-mode-work")?.click();
+      const input = document.getElementById(vibe ? "vibe-input" : "workspace-input") ?? null;
+      input?.focus?.();
+      return input;
+    }
+    if (route === "review") {
+      if (vibe) {
+        // The panel focuses its own first control once it has drawn.
+        window.MefiVibe?.openPanel?.("tasks", { fold: "done" });
+        return document.getElementById("vibe-panel") ?? null;
+      }
+      const review = document.getElementById("workspace-review") ?? null;
+      review?.click(); review?.focus?.();
+      return review;
+    }
+    return null;
   }
   // Safe destinations: navigation and highlighting only. Nothing is submitted,
   // approved or started from a lesson.
@@ -61084,47 +61167,37 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   function routeTo(lesson) {
     const route = lesson.route;
     let focused = null;
-    if (["project", "task", "review"].includes(route)) {
-      window.MefiNav?.go?.("workspace");
-      if (route === "task") {
-        document.getElementById("workspace-mode-work")?.click();
-        focused = document.getElementById("workspace-input") ?? null;
-        focused?.focus?.();
-      } else if (route === "review") {
-        const review = document.getElementById("workspace-review");
-        review?.click(); review?.focus?.();
-        focused = review ?? null;
-      }
-    } else window.MefiNav?.go?.(route, lesson.params);
+    if (["project", "task", "review"].includes(route)) focused = reachWorkspace(route);
+    else window.MefiNav?.go?.(route, lesson.params);
     if (lesson.menu) window.MefiSidebar?.open?.();
-    highlight(lesson.target);
+    highlight(targetOf(lesson));
     if (route === "project") { focused = document.getElementById("workspace-add-project") ?? null; focused?.focus?.(); }
     const at = state.step;
     later(() => {
       if (state.mode !== "coach" || state.step !== at) return;
       if (lesson.menu) window.MefiSidebar?.open?.();
-      highlight(lesson.target);
+      highlight(targetOf(lesson));
     });
     return focused;
   }
   function visit(route) {
     close();
-    if (["project", "task", "review"].includes(route)) {
+    if (route === "project") {
       window.MefiNav?.go?.("workspace");
-      if (route === "task") {
-        document.getElementById("workspace-mode-work")?.click();
-        document.getElementById("workspace-input")?.focus();
-      } else if (route === "review") {
-        const review = document.getElementById("workspace-review");
-        review?.click(); review?.focus();
-      } else document.getElementById("workspace-add-project")?.focus();
-    } else window.MefiNav?.go?.(route);
+      const add = document.getElementById("workspace-add-project");
+      add?.focus?.();
+      return add ?? null;
+    }
+    if (["task", "review"].includes(route)) return reachWorkspace(route);
+    window.MefiNav?.go?.(route);
+    return null;
   }
   // A stop with a panel has no menu to walk to: the coach hands it back to the
   // sheet at that stop, where its button lives.
   function coach(index, options = {}) {
     init();
     const step = clampStep(index);
+    if (step !== CONNECT) keyReturn = false;
     if (lessons[step].panel) {
       state = { ...state, step, status: "reading" };
       open();
@@ -61143,9 +61216,32 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (!focused) $("coach-next")?.focus?.();
   }
   function advance() {
+    if (keyReturn && state.step === CONNECT) { returnToScan(); return; }
     state.done[state.step] = true;
     if (state.step >= lessons.length - 1) { state.status = "complete"; close(); return; }
     coach(state.step + 1);
+  }
+  // Keys and local model servers live in Connections, not in this panel: the
+  // coach walks there, and a usable saved connection (or Back to the scan)
+  // returns to the Scan stop and scans again, so auto setup can offer the
+  // route that key or server allows before the first map.
+  function keyPath() {
+    coach(CONNECT);
+    keyReturn = true;
+    renderCoach();
+  }
+  function returnToScan() {
+    keyReturn = false;
+    open();
+    move(SCAN);
+    void runScan();
+  }
+  function connectionSaved(event) {
+    // A cleared key, or one that leaves no working assistant route, is not a
+    // connection (booklet.js reports routeOk; older builds leave it unset).
+    if (event?.detail?.routeOk === false) return;
+    tickStop(CONNECT);
+    if (keyReturn) returnToScan();
   }
   function projectChanged(event) {
     if (!event?.detail?.projectId) return;
@@ -61193,14 +61289,21 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     window.addEventListener("mefi:build-mode", renderBuildMode);
     document.getElementById("settings-guided-cli")?.addEventListener("click", () => { open(); move(SCAN); });
     window.addEventListener("mefi:project-changed", projectChanged);
-    window.addEventListener("mefi:connection-saved", () => tickStop(CONNECT));
+    window.addEventListener("mefi:connection-saved", connectionSaved);
     window.addEventListener("mefi:task-created", () => tickStop(CREATE));
     window.addEventListener("mefi:plan-created", () => tickStop(CREATE));
     window.addEventListener("mefi:task-opened", taskOpened);
     window.addEventListener("mefi:nav", () => {
       if (state.mode !== "coach") return;
       const at = state.step;
-      later(() => { if (state.mode === "coach" && state.step === at) highlight(lessons[at].target); });
+      later(() => { if (state.mode === "coach" && state.step === at) highlight(targetOf(lessons[at])); });
+    });
+    // Back from a setup window: the host's push is the cue; Studio regaining
+    // focus stands in where that push never arrives (an older host).
+    try { hostApi("onCliSetupClosed")?.((detail) => { void setupWindowClosed(detail); }); } catch {}
+    window.addEventListener("focus", () => {
+      if (!cliWindowOpen || $("overlay")?.hidden !== false || $("cli-setup")?.hidden !== false) return;
+      void setupWindowClosed({});
     });
     window.addEventListener("keydown", (event) => {
       if (event.key !== "Escape" || state.mode !== "coach") return;
@@ -61221,6 +61324,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     $("scan-apply")?.addEventListener("click", () => { void applyScan(); });
     $("cli-choice")?.addEventListener("change", () => { setPanelStatus("cli-status", ""); renderCliSetup(); });
     $("cli-refresh")?.addEventListener("click", () => { void refreshCliSetup(); });
+    $("cli-keys")?.addEventListener("click", () => keyPath());
     for (const action of ["install", "login", "check", "use", "docs"]) $("cli-" + action)?.addEventListener("click", () => {
       void cliSetupAction(action);
     });
@@ -66394,7 +66498,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     return icon;
   }
   function providerNote(provider, saved) {
-    const key = { zai: "hasZai", opencode: "hasOpenCode", zen: "hasZen", openrouter: "hasOpenRouter", custom: "hasCustom" }[provider];
+    // The custom endpoint is connected by its URL; its key is optional.
+    if (provider === "custom") return saved.routing?.customEndpoint ? (saved.routing?.hasCustom ? "Key saved" : "Endpoint saved") : "Needs connection";
+    const key = { zai: "hasZai", opencode: "hasOpenCode", zen: "hasZen", openrouter: "hasOpenRouter" }[provider];
     if (key) return saved.routing?.[key] ? "Key saved" : "Needs connection";
     return provider === "auto" ? "Follow routing" : provider === "lmstudio" ? "Local server" : "CLI login";
   }
@@ -66452,7 +66558,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     for (const missing of selected.filter((key) => !(saved.skills || []).some((skill) => skill.id === key))) list.append(button("Remove unavailable skill", () => { config.agentSkills[id] = config.agentSkills[id].filter((key) => key !== missing); dirty(); refreshRows(`agent-${id}-add`); }, "ghost mini"));
     if (!(saved.skills || []).length) list.append(node("p", "muted", "No installed skills found. Add a SKILL.md folder under .agents/skills, .claude/skills, .codex/skills or .opencode/skills, then reload saved settings."));
     panel.append(list, node("h4", "", "Allowed Studio tools"));
-    const supportedTools = id !== "builder" || ["opencode", "claude"].includes(provider);
+    // Codex takes Studio's tool server as config overrides; Grok and
+    // Antigravity have no per-run MCP config (executorCore.cliInvocation).
+    const supportedTools = id !== "builder" || ["opencode", "claude", "codex"].includes(provider);
     const permissions = config.agentTools?.[id] || {};
     const setPermission = (key, value) => { config.agentTools = { ...config.agentTools, [id]: { ...config.agentTools?.[id], [key]: value } }; dirty(); };
     for (const [key, label, detail, enabled] of [
@@ -66479,7 +66587,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const supported = ["opencode", "claude"].includes(provider), input = node("input"); input.id = "agent-builder-desk-tool"; input.type = "checkbox"; input.checked = config.agentBrain?.deskTool === true; input.disabled = !supported;
       input.addEventListener("change", () => { config.agentBrain = { ...config.agentBrain, deskTool: input.checked }; dirty(); });
       panel.append(field("Studio desk · ask_desk", input, supported ? "Give this coding worker an MCP tool for help from the desk agent." : "Available with OpenCode and Claude Code workers."));
-      panel.append(node("p", "muted", supportedTools ? "Studio search and selected MCP tools attach to this worker. The coding CLI also has its own tools and runs with automatic approval and broad file/command access. These checkboxes limit Studio tools only; manage native tools and MCP servers in the CLI configuration." : "Studio tool attachment supports OpenCode and Claude Code. This worker uses its CLI's native search, tools and permissions; it runs with broad file/command access."));
+      panel.append(node("p", "muted", supportedTools ? "Studio search and selected MCP tools attach to this worker. The coding CLI also has its own tools and runs with automatic approval and broad file/command access. These checkboxes limit Studio tools only; manage native tools and MCP servers in the CLI configuration." : "Studio tool attachment supports OpenCode, Claude Code and Codex. This worker uses its CLI's native search, tools and permissions; it runs with broad file/command access."));
     } else panel.append(node("p", "muted", "Studio enforces these tool choices for every turn. File writes and shell commands are unavailable unless you explicitly select an MCP tool that provides them. Skills guide answers and never grant tool permissions."));
     panel.append(habitsPanel(id, config, saved));
     return panel;
@@ -66599,7 +66707,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const item = draft(); if (!item) return;
     $("agents-team-summary").textContent = `${item.saved.name} · ${item.saved.inherited ? "Studio defaults" : "Project team"}`;
     const ready = item.saved.routing || {};
-    $("agents-ready").textContent = ready.hasZai || ready.hasOpenCode || ready.hasZen || ready.hasOpenRouter || ["grok", "claude", "codex", "antigravity", "lmstudio"].includes(ready.provider) ? "A route is configured. Check its connection before starting work." : "Connect a provider, a local model, or a signed-in coding tool to begin.";
+    // The host's own gate (routeReady) knows Auto's whole walk - signed-in
+    // CLIs first, saved keys outside the order - so a CLI-only or custom
+    // endpoint setup is not told to connect something it already has.
+    const configured = typeof ready.routeReady === "boolean" ? ready.routeReady
+      : ready.hasZai || ready.hasOpenCode || ready.hasZen || ready.hasOpenRouter || ready.hasCustom || Boolean(ready.customEndpoint) || ["grok", "claude", "codex", "antigravity", "lmstudio"].includes(ready.provider);
+    $("agents-ready").textContent = configured ? "A route is configured. Check its connection before starting work." : "Connect a provider, a local model, or a signed-in coding tool to begin.";
     for (const pane of ["team", "routing"]) $("agents-" + pane).inert = false;
     const config = item.configuration, roles = $("agents-role-grid"); roles.replaceChildren();
     for (const [role, title, detail] of [["routine", "Assistant · routine", "Chat, checks and advisory answers"], ["heavy", "Assistant · planning & review", "Plans, briefs and reviews"]]) {
@@ -66682,7 +66795,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function routingView(base) {
     const item = draft(); if (!item || $("agents-overlay")?.hidden || params.pane === "connections") return base;
     const config = item.configuration, cli = config.executorCli || base.executorCli;
-    return { ...base, provider: config.aiProvider || base.provider, roleProviders: config.aiRoleProviders || {}, models: config.aiModels || {}, providerModels: config.aiModelsByProvider || {}, autoProviders: config.aiAutoProviders || base.autoProviders, autoFallback: config.aiAutoFallback ?? base.autoFallback, modelSelection: config.modelSelection || base.modelSelection, executorCli: cli, executorTier: config.executorTier || base.executorTier, executorModels: config.executorModels || {}, executorModel: config.executorModels?.[cli] || "", executorTierModels: config.executorTierModels || {} };
+    // A drafted order or subscriptions-first switch the host has not applied
+    // drops the host's walk, so the page rebuilds it from the draft instead
+    // of showing the saved one.
+    const autoProviders = config.aiAutoProviders || base.autoProviders, subscriptionFirst = config.aiSubscriptionFirst ?? base.subscriptionFirst;
+    const walkChanged = JSON.stringify(autoProviders) !== JSON.stringify(base.autoProviders) || subscriptionFirst !== base.subscriptionFirst;
+    return { ...base, provider: config.aiProvider || base.provider, roleProviders: config.aiRoleProviders || {}, models: config.aiModels || {}, providerModels: config.aiModelsByProvider || {}, autoProviders, subscriptionFirst, ...(walkChanged ? { autoOrder: null } : {}), autoFallback: config.aiAutoFallback ?? base.autoFallback, modelSelection: config.modelSelection || base.modelSelection, executorCli: cli, executorTier: config.executorTier || base.executorTier, executorModels: config.executorModels || {}, executorModel: config.executorModels?.[cli] || "", executorTierModels: config.executorTierModels || {} };
   }
   async function load() {
     const key = draftKey(), serial = ++readSerial;
@@ -68689,8 +68807,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const { fmt, privacyLabel } = window.MefiGraph;
   // Tell the Start here walkthrough that a provider connection was saved. Only
   // a successful save announces; a failed or cancelled save must not advance it.
-  const noteConnectionSaved = (which) => {
-    try { if (typeof CustomEvent === "function" && typeof window.dispatchEvent === "function") window.dispatchEvent(new CustomEvent("mefi:connection-saved", { detail: { provider: which || null } })); } catch {}
+  // A save is not always a connection: clearing a key, or a key that only
+  // feeds Jev, announces too, so the detail says what the host found after
+  // the save - `routeOk` true when an assistant route can answer now (false
+  // when none can, null when the host did not say) - and `cleared` when the
+  // save removed a key.
+  const noteConnectionSaved = (which, result = null, cleared = false) => {
+    const routeOk = typeof result?.routeOk === "boolean" ? result.routeOk : null;
+    try { if (typeof CustomEvent === "function" && typeof window.dispatchEvent === "function") window.dispatchEvent(new CustomEvent("mefi:connection-saved", { detail: { provider: which || null, routeOk, cleared: cleared === true } })); } catch {}
   };
 
   // Global toasts: quiet confirmations that do not need a panel status line.
@@ -69155,7 +69279,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   let settingsSearchRegistered = new Set();
   let settingsControlSerial = 0;
   const settingsQuery = () => String(document.getElementById("settings-find")?.value ?? "").trim().toLowerCase();
-  const settingsAvailable = (node) => Boolean(node) && (Boolean(window.mefiStudio?.launchStudio) || !node.closest?.("#studio-desktop, [data-desktop-only]"));
+  // A card the host hid (Server Styler with no checkout on this machine) has
+  // nothing to find or jump to, in Settings or in Search.
+  const settingsAvailable = (node) => Boolean(node) && !node.closest?.(".settings-card[hidden]") && (Boolean(window.mefiStudio?.launchStudio) || !node.closest?.("#studio-desktop, [data-desktop-only]"));
   const coachShowing = () => { const coach = document.getElementById("walkthrough-coach"); return Boolean(coach && !coach.hidden); };
   function settingsTarget(section) {
     const raw = String(section ?? "").trim();
@@ -69381,6 +69507,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         short: item.label, kind: "action", layer: null, section: "settings", group: "system", key: null,
         glyph: "g-sliders", badge: null, desc: SETTINGS_CATEGORIES[item.category], searchTerms: item.terms,
         showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
+        hidden: () => !settingsAvailable(document.getElementById(item.id)),
         run: () => window.MefiNav?.go?.("studio", { section: item.id }),
       }); } catch { /* Search remains usable if a host declines a registration. */ }
     }
@@ -69461,7 +69588,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
     const stylerActions = document.getElementById("server-styler-actions");
     const stylerStatus = document.getElementById("server-styler-status");
+    // Server Styler is a separate project most people never check out. Without
+    // one the card could only say where it is missing, beside a Start button
+    // that cannot work, so it stays out of Settings until the host finds it
+    // (a sibling discord-server-styler checkout, or MEFI_STYLER_ROOT).
+    const stylerCard = document.getElementById("settings-styler");
     function paintStylerStatus(status) {
+      if (stylerCard) stylerCard.hidden = status?.state === "missing";
       stylerStatus.textContent = status?.message ?? "Server Styler status is unavailable.";
       stylerStatus.dataset.state = status?.state ?? "error";
       if (typeof stylerActions.querySelector !== "function") return;
@@ -69556,17 +69689,37 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     // The auto order is tried top to bottom; usability here comes from the same
     // flags the readiness line already reads (saved keys, installed CLIs, the
-    // local server), never a fresh probe.
+    // local server's last probe), never a fresh probe.
     const autoOrderOf = (routing) => Array.isArray(routing?.autoProviders) && routing.autoProviders.length ? routing.autoProviders : ["zai", "opencode"];
+    // The walk the host resolves: its own `autoOrder` (signed-in CLIs first
+    // unless subscriptions-first is off, then the saved order). A draft the
+    // Agents overlay has not applied yet carries no host walk, so it is
+    // rebuilt from the same two settings only then.
+    const subscriptionClis = ["claude", "codex", "grok", "antigravity"];
+    const autoWalkOf = (routing) => Array.isArray(routing?.autoOrder) && routing.autoOrder.length ? routing.autoOrder
+      : routing?.subscriptionFirst === true ? [...new Set([...subscriptionClis, ...autoOrderOf(routing)])] : autoOrderOf(routing);
+    // Saved keys outside the walk still answer when nothing in it can.
+    const autoRescueOf = (routing) => (Array.isArray(routing?.autoRescue) ? routing.autoRescue : []).filter((id) => providerNames[id] && !autoWalkOf(routing).includes(id));
+    const lmStudioUp = () => setup.routing?.lmStudio?.up === true;
     function autoProviderUsable(id) {
       if (id === "zai") return setup.keys.zai === true || setup.routing?.hasZai === true;
       if (id === "opencode") return setup.keys.opencode === true || setup.routing?.hasOpenCode === true;
       if (id === "zen") return setup.routing?.hasZen === true;
       if (id === "openrouter") return setup.keys.openrouter === true || setup.routing?.hasOpenRouter === true;
-      if (id === "custom") return Boolean(setup.routing?.customEndpoint) && (setup.keys.custom === true || setup.routing?.hasCustom === true);
-      if (id === "lmstudio") return true;
+      // The custom endpoint's key is optional (a keyless local server).
+      if (id === "custom") return Boolean(setup.routing?.customEndpoint);
+      if (id === "lmstudio") return lmStudioUp();
       return cliInstalled(id);
     }
+    // Which route Auto answers through right now, from the walk and then the
+    // saved keys outside it; null when nothing can.
+    function autoAnswerOf(routing) {
+      const first = autoWalkOf(routing).find((entry) => autoProviderUsable(entry));
+      if (first) return { id: first, rescue: false };
+      const rescue = autoRescueOf(routing).find((entry) => autoProviderUsable(entry));
+      return rescue ? { id: rescue, rescue: true } : null;
+    }
+    const autoAnswerNote = (answer) => `will use ${providerNames[answer.id]}${answer.rescue ? " (a saved key outside the order)" : ""}`;
     // Availability of one route from the flags already in hand: ready, not
     // ready, or unknown while a read is still in flight. Every picker label,
     // status pill and overview tile reads from here so they never disagree.
@@ -69579,8 +69732,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const kind = providerKinds[id];
       if (kind === "auto") {
         if (!setup.routing) return { ready: null, note: "checking…" };
-        const first = autoOrderOf(setup.routing).find((entry) => autoProviderUsable(entry));
-        return first ? { ready: true, note: `will use ${providerNames[first]}` } : { ready: false, note: "nothing in the order is ready yet" };
+        const answer = autoAnswerOf(setup.routing);
+        return answer ? { ready: true, note: autoAnswerNote(answer) } : { ready: false, note: "nothing in the order is ready yet" };
       }
       if (kind === "key") {
         const state = keyState(id);
@@ -69590,10 +69743,19 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         if (!setup.routing && setup.keys.custom === null) return { ready: null, note: "checking…" };
         const endpoint = Boolean(setup.routing?.customEndpoint);
         const key = setup.keys.custom ?? setup.routing?.hasCustom === true;
-        if (endpoint && key) return { ready: true, note: "endpoint and key saved" };
-        return { ready: false, note: !endpoint && !key ? "no endpoint or key saved" : !endpoint ? "no endpoint saved" : "no key saved" };
+        // A keyless server (Ollama, llama.cpp) answers with the URL alone.
+        if (endpoint) return { ready: true, note: key ? "endpoint and key saved" : "endpoint saved · no key (optional)" };
+        return { ready: false, note: "no endpoint saved" };
       }
-      if (kind === "local") return { ready: true, note: "local server · no key needed" };
+      // No key is not the same as running: the local server is ready only when
+      // its last probe found a loaded model.
+      if (kind === "local") {
+        const probe = setup.routing?.lmStudio;
+        if (!setup.routing) return { ready: null, note: "checking…" };
+        if (probe?.up === true) return { ready: true, note: `running${probe.model ? ` · ${probe.model}` : ""}` };
+        if (probe?.up === false) return { ready: false, note: "not running or no model loaded" };
+        return { ready: null, note: "not checked yet · no key needed" };
+      }
       return cliAvailability(id);
     }
     const stateOf = (availability) => availability.ready === true ? "ready" : availability.ready === false ? "missing" : "unknown";
@@ -69665,12 +69827,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       else if (!routing) setPill(setupAssistant, "unknown", "checking…");
       else {
         const provider = providerNames[routing.provider] ? routing.provider : "auto";
-        const order = autoOrderOf(routing);
-        const autoFirst = order.find((id) => autoProviderUsable(id));
+        const autoAnswer = autoAnswerOf(routing);
         const detail = provider === "grok" || provider === "claude" || provider === "codex" || provider === "antigravity" ? "CLI login"
-          : provider === "lmstudio" ? "no key needed"
-          : provider === "custom" ? (routing.hasCustom ? "key saved" : "no key saved")
-          : provider === "auto" ? (autoFirst ? `will use ${providerNames[autoFirst]}` : "no usable provider in this order yet")
+          : provider === "lmstudio" ? providerAvailability("lmstudio").note
+          : provider === "custom" ? providerAvailability("custom").note
+          : provider === "auto" ? (autoAnswer ? autoAnswerNote(autoAnswer) : "no usable provider in this order yet")
           : keyState(provider);
         // A role on its own provider is named, and the pill is only as ready
         // as the least ready provider actually answering.
@@ -69686,11 +69847,16 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         // The Zen key lives in its own tile; opencode's OPENCODE_API_KEY counts.
         setPill(document.getElementById("zen-key-status"), routing.hasZen ? "ready" : "missing", routing.hasZen ? (routing.zenKeySource === "env" ? "key from environment" : "key saved (encrypted)") : "no key saved");
         setPill(document.getElementById("openrouter-key-status"), routing.hasOpenRouter ? "ready" : "missing", routing.hasOpenRouter ? (routing.openrouterKeySource === "env" ? "key from environment" : "key saved (encrypted)") : "no key saved");
+        const lmStudio = providerAvailability("lmstudio");
+        setPill(document.getElementById("lmstudio-status"), stateOf(lmStudio), lmStudio.note);
       }
       if (setup.routingError) setPill(setupSelection, "unknown", "status unavailable");
       else if (!routing) setPill(setupSelection, "unknown", "checking…");
       else if ((routing.modelSelection ?? "jev") === "fixed") setPill(setupSelection, "ready", "Fixed defaults · overrides win");
-      else setPill(setupSelection, routing.jevConfigured ? "ready" : "missing", routing.jevConfigured ? "Jev · task fit, speed & cost" : "Jev · waiting for a gateway key");
+      // Jev is optional: never chosen and no Jev key reads as the defaults
+      // that actually run, not as a missing piece.
+      else if (routing.modelSelectionSaved === false && !routing.jevConfigured) setPill(setupSelection, "ready", "Fixed defaults · Jev optional");
+      else setPill(setupSelection, routing.jevConfigured ? "ready" : "missing", routing.jevConfigured ? "Jev · task fit, speed & cost" : "Jev · waiting for a Jev key");
       if (setup.cliError) setPill(setupBuilders, "unknown", "CLI status unavailable");
       else if (!setup.clis) setPill(setupBuilders, "unknown", "checking…");
       else {
@@ -69701,12 +69867,18 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const selected = routing && providerNames[routing.provider] ? routing.provider : null;
       if (!selected) readiness.textContent = "checking…";
       else if (selected === "auto") {
-        const order = autoOrderOf(routing).map((id) => `${providerNames[id] ?? id}${autoProviderUsable(id) ? "" : " (unavailable)"}`);
-        readiness.textContent = `auto order: ${order.join(" → ")}`;
+        // Signed-in CLIs the host puts first are named only when they are on
+        // this machine (a missing one is skipped, not waited on); the saved
+        // order is shown whole, and saved keys outside it close the line.
+        const saved = autoOrderOf(routing);
+        const walk = autoWalkOf(routing).filter((id) => saved.includes(id) || !subscriptionClis.includes(id) || autoProviderUsable(id) || !setup.clis);
+        const order = walk.map((id) => `${providerNames[id] ?? id}${autoProviderUsable(id) ? "" : " (unavailable)"}`);
+        const rescue = autoRescueOf(routing).map((id) => providerNames[id]);
+        readiness.textContent = `auto order: ${order.join(" → ")}${rescue.length ? `; if none answers, saved keys: ${rescue.join(", ")}` : ""}`;
       }
       else if (selected === "zai" || selected === "opencode" || selected === "zen" || selected === "openrouter") readiness.textContent = `${keyState(selected)} — this provider's saved model applies`;
-      else if (selected === "custom") readiness.textContent = `${routing.customEndpoint ? "endpoint saved" : "no endpoint saved"}, ${setup.keys.custom ? "key saved" : "no key saved"}`;
-      else if (selected === "lmstudio") readiness.textContent = "local server — no key needed; its loaded model is detected automatically";
+      else if (selected === "custom") readiness.textContent = `${routing.customEndpoint ? "endpoint saved" : "no endpoint saved"}, ${setup.keys.custom ? "key saved" : "no key saved (optional for a local server)"}`;
+      else if (selected === "lmstudio") readiness.textContent = `local server — no key needed; ${providerAvailability("lmstudio").note}; its loaded model is detected automatically`;
       else if (setup.cliError) readiness.textContent = "CLI status unavailable";
       else if (!setup.clis) readiness.textContent = "checking CLI…";
       else readiness.textContent = cliInstalled(selected) ? "CLI installed on this machine" : "CLI not found — you can still save its model and install it later";
@@ -69725,7 +69897,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const customKeyStatus = document.getElementById("custom-key-status");
     const openrouterKeyStatus = document.getElementById("openrouter-key-status");
     const keyPills = { opencode: keyStatus, zai: zaiKeyStatus, openrouter: openrouterKeyStatus, custom: customKeyStatus };
-    const showKeyState = (which, saved) => setPill(keyPills[which], saved ? "ready" : "missing", saved ? "key saved (encrypted)" : "no key saved");
+    // The custom endpoint's key is optional (a keyless local server), so its
+    // absence reads neutral there rather than as a missing piece.
+    const showKeyState = (which, saved) => setPill(keyPills[which], saved ? "ready" : which === "custom" ? "unknown" : "missing", saved ? "key saved (encrypted)" : which === "custom" ? "no key (optional)" : "no key saved");
     window.mefiStudio
       .getApiKey("opencode")
       .then((key) => { setup.keys.opencode = Boolean(key?.saved); showKeyState("opencode", setup.keys.opencode); renderSetupState(); })
@@ -69808,7 +69982,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (!value && !clearingKey(input)) return;
       delete input.dataset.clearing;
       const result = await window.mefiStudio.setApiKey(value, "opencode");
-      if (result?.ok) { setup.keys.opencode = Boolean(value); setPill(keyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); noteConnectionSaved("opencode"); }
+      if (result?.ok) { setup.keys.opencode = Boolean(value); setPill(keyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); noteConnectionSaved("opencode", result, !value); }
       else setPill(keyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
       document.getElementById("api-key").value = "";
       resyncKeySaves();
@@ -69826,7 +70000,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       input.value = "";
       resyncKeySaves();
       if (!result?.ok) setPill(document.getElementById("zen-key-status"), "unknown", `save failed: ${result?.error ?? "unknown"}`);
-      else noteConnectionSaved("zen");
+      else noteConnectionSaved("zen", result, !value);
       await refreshJev();
       await loadAiRouting();
     });
@@ -69840,7 +70014,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       input.value = "";
       resyncKeySaves();
       if (!result?.ok) setPill(openrouterKeyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
-      else { setup.keys.openrouter = Boolean(value); noteConnectionSaved("openrouter"); }
+      else { setup.keys.openrouter = Boolean(value); noteConnectionSaved("openrouter", result, !value); }
       await refreshJev();
       await loadAiRouting();
     });
@@ -69851,7 +70025,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (!value && !clearingKey(input)) return;
       delete input.dataset.clearing;
       const result = await window.mefiStudio.setApiKey(value, "zai");
-      if (result?.ok) { setup.keys.zai = Boolean(value); setPill(zaiKeyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); noteConnectionSaved("zai"); }
+      if (result?.ok) { setup.keys.zai = Boolean(value); setPill(zaiKeyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); noteConnectionSaved("zai", result, !value); }
       else setPill(zaiKeyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
       document.getElementById("zai-key").value = "";
       resyncKeySaves();
@@ -69859,14 +70033,15 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     });
 
     // The custom endpoint's URL is saved like any routing preference; its key
-    // rides the same encrypted setApiKey path as every other credential.
+    // (optional: a keyless local server needs none) rides the same encrypted
+    // setApiKey path as every other credential.
     document.getElementById("save-custom-key").addEventListener("click", async () => {
       const input = document.getElementById("custom-key");
       const value = input.value.trim();
       if (!value && !clearingKey(input)) return;
       delete input.dataset.clearing;
       const result = await window.mefiStudio.setApiKey(value, "custom");
-      if (result?.ok) { setup.keys.custom = Boolean(value); setPill(customKeyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); noteConnectionSaved("custom"); }
+      if (result?.ok) { setup.keys.custom = Boolean(value); setPill(customKeyStatus, value ? "ready" : "unknown", value ? "key saved (encrypted)" : "key cleared"); noteConnectionSaved("custom", result, !value); }
       else setPill(customKeyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
       document.getElementById("custom-key").value = "";
       resyncKeySaves();
@@ -69909,7 +70084,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         input.value = "";
         resyncKeySaves();
         if (!result?.ok) { jevStatus.textContent = `Save failed: ${result?.error ?? "unknown"}`; return; }
-        noteConnectionSaved(jevRouteFields[jevRouteOf()].key);
+        noteConnectionSaved(jevRouteFields[jevRouteOf()].key, result);
         await refreshJev();
         await loadAiRouting();
       } catch { input.value = ""; jevStatus.textContent = "Could not save Jev key"; }
@@ -70084,7 +70259,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         : tier === "free" && !active.model
           ? `Free tier: no free model is saved for ${cliName}, so builds wait until one is${cli === "opencode" ? " (run the first scan, or save a free provider/model id)" : ""}.`
           : `${tierNames[tier]} tier: ${cliName} runs ${active.model || "its CLI default"}${tier === "free" ? ", one worker at a time" : ""}.`;
-      const review = cli === "opencode" ? "" : ` ${cliName} leaves no session Studio can check, so its finished tasks wait for you to confirm them.`;
+      const review = cli === "opencode" ? "" : ` ${cliName} leaves no session Studio can read, so Studio verifies its finished tasks with the project's own checks (npm test or npm run check).`;
       executorTierStatus.textContent = `${lead} ${["free", "fast", "heavy"].map(describe).join(" · ")}.${review}`;
     }
     // Each model field names the provider it saves to, and its placeholder is
@@ -70186,7 +70361,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
             : routing.provider === "lmstudio"
               ? "LM Studio answers from the local server with no key. Load one model there or save a model override."
               : routing.provider === "custom"
-                ? "The custom endpoint answers with the saved key. Save a model override when it serves more than one model."
+                ? "The custom endpoint answers with its saved key, or with none for a keyless local server. Save a model override when it serves more than one model."
                 : routing.jevConfigured
                   ? "Jev model selection ready · task fit, speed and cost. Explicit model overrides take priority."
                   : "Jev model selection is waiting for a Jev key. Save one below for the selected route; usual defaults apply until connected.";

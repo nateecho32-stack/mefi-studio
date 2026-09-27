@@ -7,6 +7,33 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- First-time setup and agent choice. **Install**: `npm ci` fetches the
+  Electron binary again (Electron 44 stopped doing it), the launcher fetches
+  it itself when missing, `npm ci` stops on a Node older than 24, CI's
+  Electron render suites run again (they skipped silently without the binary),
+  and
+  `npm test` finds Python 3 as `python`, `py -3` or `python3`. The test
+  runner works from deep folders (Windows' command-line limit). **Any
+  builder**: Claude Code, Codex, Grok and Antigravity builds are verified by
+  Studio's own checks instead of always parking as "retry it on OpenCode";
+  npm-installed Grok and Antigravity start; a run that fails after working is
+  no longer re-run from scratch on OpenCode (and never when OpenCode isn't
+  installed); "Try again with a heavier model" runs the Heavy-tier model and
+  is only offered where one exists; Codex builders get Studio's tools; tools
+  stay attached when the temp path has a space or apostrophe. **Any AI
+  route**: Auto with only a CLI login counts as connected; a saved OpenRouter,
+  Zen or custom key works on Auto without editing the order; auto setup
+  recognises Zen and a local Ollama; the custom endpoint key is optional; the
+  Auditor, scout, music suggestions and brain drafts no longer need a z.ai,
+  OpenCode Go or Zen key; errors keep the real reason; LM Studio only shows
+  ready when it is running with a model. **Start here**: no folder is no
+  longer "project selected"; Scan and First map offer an API-key or
+  local-server path; Vibe-mode walks use Vibe's box and Tasks panel; closing
+  a setup window refreshes the tools; the setup window finds per-user
+  install folders; setups save to Studio defaults so later folders keep the
+  route. Settings hides the Server Styler card until its checkout exists. The
+  docs give the PowerShell headless key form and say what source and
+  portable installs share.
 - **The companion as a pet and a friend.** Its menu is six bubbles with one
   job each: Talk (with three one-tap starters), What I'm doing (the work, the
   team and recent activity together), Needs you, Suggest work (your idea to

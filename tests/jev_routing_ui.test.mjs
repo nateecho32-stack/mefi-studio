@@ -17,7 +17,7 @@ const announce = source.slice(source.indexOf("  const noteConnectionSaved"), sou
 const flush = async () => { for (let index = 0; index < 20; index += 1) await Promise.resolve(); };
 const deferred = () => { let resolve; const promise = new Promise((done) => { resolve = done; }); return { promise, resolve }; };
 
-function environment(overrides = {}, bridge = {}) {
+function environment(overrides = {}, bridge = {}, { window: windowExtra = {}, context: contextExtra = {} } = {}) {
   const ids = new Map(); const writes = []; const logs = [];
     for (const match of template.matchAll(/\bid="([^"]+)"/g)) ids.set(match[1], new Element());
   const settings = { provider: "auto", autoProviders: ["zai", "opencode"], autoFallback: false, models: {}, executorCli: "opencode", executorModel: "", modelSelection: "jev", jevConfigured: false, jevRoute: "vercel", routingDecision: null, ...overrides };
@@ -47,7 +47,7 @@ function environment(overrides = {}, bridge = {}) {
     ...bridge,
   };
   const document = { getElementById: (id) => ids.get(id) || null, createElement: (tag) => new Element(tag), querySelectorAll: () => [] };
-  const context = vm.createContext({ document, window: { mefiStudio: api, addEventListener() {} }, state: { doc: { models: [] } }, updateSpeedModels() {}, studioLog: (line) => logs.push(line) });
+  const context = vm.createContext({ document, window: { mefiStudio: api, addEventListener() {}, ...windowExtra }, state: { doc: { models: [] } }, updateSpeedModels() {}, studioLog: (line) => logs.push(line), ...contextExtra });
   vm.runInContext(`${announce}\n${studio}\ninitStudio();`, context);
   return { get: (id) => ids.get(id), settings, writes, saved, api, logs, reads: () => reads };
 }
@@ -243,8 +243,8 @@ test("CLI, local and custom providers explain themselves and save their endpoint
   assert.deepEqual(local.writes, [{ lmStudioEndpoint: "http://127.0.0.1:5555/v1" }]);
 
   const custom = environment({ provider: "custom", hasCustom: true, customEndpoint: "https://api.example.com/v1/chat/completions" }); await flush();
-  assert.match(custom.get("ai-routing-status").textContent, /custom endpoint answers with the saved key/);
-  assert.equal(custom.get("setup-assistant").textContent, "Custom endpoint · key saved");
+  assert.match(custom.get("ai-routing-status").textContent, /custom endpoint answers with its saved key, or with none for a keyless local server/);
+  assert.equal(custom.get("setup-assistant").textContent, "Custom endpoint · endpoint and key saved");
   custom.get("custom-endpoint").value = "";
   await custom.get("custom-endpoint").trigger("change");
   assert.deepEqual(custom.writes, [{ customEndpoint: "" }]);
@@ -336,7 +336,7 @@ test("the coding tier saves on its own and the model field follows the tier and 
   assert.deepEqual(env.writes[2], { executorCli: "claude" });
   assert.match(env.get("executor-model").placeholder, /opus · Claude Code alias/, "switching builders shows that CLI's own tier default");
   assert.match(status(), /Heavy tier: Claude Code runs opus/);
-  assert.match(status(), /Claude Code leaves no session Studio can check, so its finished tasks wait for you to confirm them\./);
+  assert.match(status(), /Claude Code leaves no session Studio can read, so Studio verifies its finished tasks with the project's own checks \(npm test or npm run check\)\./);
   env.get("executor-tier").value = "free";
   await env.get("executor-tier").trigger("change");
   assert.match(status(), /Free tier: no free model is saved for Claude Code, so builds wait/);
@@ -469,4 +469,87 @@ test("the fallback switch saves the generalized auto fallback and auto readiness
   env.get("ai-fallback").checked = true;
   await env.get("ai-fallback").trigger("change");
   assert.deepEqual(env.writes, [{ autoFallback: true }]);
+});
+
+test("Auto readiness follows the host's walk: signed-in CLIs first, then saved keys outside the order", async () => {
+  const cli = environment(
+    { provider: "auto", autoProviders: ["zai", "opencode"], subscriptionFirst: true, autoOrder: ["claude", "codex", "grok", "antigravity", "zai", "opencode"], hasZai: false, hasOpenCode: false },
+    { getApiKey: async () => ({ saved: false }), cliStatus: async () => [{ id: "claude", name: "Claude Code", installed: true }] },
+  ); await flush();
+  assert.equal(cli.get("setup-assistant").textContent, "Auto (your order) · will use Claude Code CLI", "a CLI login on the default walk is a connected AI");
+  assert.equal(cli.get("setup-assistant").getAttribute("data-state"), "ready");
+  assert.match(cli.get("provider-readiness").textContent, /^auto order: Claude Code CLI → z\.ai GLM \(unavailable\) → OpenCode Go \(unavailable\)$/, "subscription CLIs this machine lacks are left out of the line");
+  const rescue = environment(
+    { provider: "auto", autoProviders: ["zai", "opencode"], subscriptionFirst: false, autoOrder: ["zai", "opencode"], autoRescue: ["openrouter"], hasOpenRouter: true },
+    { getApiKey: async (which) => ({ saved: which === "openrouter" }) },
+  ); await flush();
+  assert.equal(rescue.get("setup-assistant").textContent, "Auto (your order) · will use OpenRouter (a saved key outside the order)");
+  assert.match(rescue.get("provider-readiness").textContent, /; if none answers, saved keys: OpenRouter$/);
+  const none = environment({ provider: "auto", autoProviders: ["zai"], subscriptionFirst: false, autoOrder: ["zai"], autoRescue: [] }, { getApiKey: async () => ({ saved: false }) }); await flush();
+  assert.equal(none.get("setup-assistant").getAttribute("data-state"), "missing");
+});
+
+test("LM Studio is ready only when its last probe found a model, and an unset Jev choice reads as the defaults", async () => {
+  const unchecked = environment({ provider: "zai", hasZai: true, modelSelection: "jev", modelSelectionSaved: false, jevConfigured: false }); await flush();
+  assert.equal(unchecked.get("lmstudio-status").getAttribute("data-state"), "unknown");
+  assert.match(unchecked.get("lmstudio-status").textContent, /not checked yet/);
+  const entries = unchecked.get("ai-provider").children.map((option) => [option.value, option.dataset.state]);
+  const lmAt = entries.findIndex(([id]) => id === "lmstudio");
+  assert.equal(entries[lmAt][1], "unknown");
+  assert.ok(entries.slice(lmAt + 1).every(([, state]) => state !== "ready"), "an unverified local server never sorts above a ready route");
+  assert.equal(unchecked.get("setup-selection").textContent, "Fixed defaults · Jev optional", "a fresh install is not waiting on Jev");
+  assert.equal(unchecked.get("setup-selection").getAttribute("data-state"), "ready");
+  const up = environment({ provider: "lmstudio", lmStudio: { up: true, model: "qwen3-8b", at: 1 } }); await flush();
+  assert.equal(up.get("lmstudio-status").getAttribute("data-state"), "ready");
+  assert.equal(up.get("setup-assistant").textContent, "LM Studio (local) · running · qwen3-8b");
+  const down = environment({ provider: "lmstudio", lmStudio: { up: false, model: null, at: 1 } }); await flush();
+  assert.equal(down.get("lmstudio-status").getAttribute("data-state"), "missing");
+  const chosen = environment({ provider: "zai", modelSelection: "jev", modelSelectionSaved: true, jevConfigured: false }); await flush();
+  assert.equal(chosen.get("setup-selection").textContent, "Jev · waiting for a Jev key", "a saved Jev choice still says what it waits for");
+});
+
+test("a custom endpoint is ready without a key, and its missing key reads neutral", async () => {
+  const env = environment({ provider: "custom", customEndpoint: "http://127.0.0.1:11434/v1/chat/completions", hasCustom: false }, { getApiKey: async (which) => ({ saved: which !== "custom" }) }); await flush();
+  assert.equal(env.get("setup-assistant").textContent, "Custom endpoint · endpoint saved · no key (optional)");
+  assert.equal(env.get("setup-assistant").getAttribute("data-state"), "ready");
+  assert.equal(env.get("custom-key-status").getAttribute("data-state"), "unknown");
+  assert.equal(env.get("custom-key-status").textContent, "no key (optional)");
+});
+
+test("a saved connection tells the walkthrough whether an assistant route can answer now", async () => {
+  const events = [];
+  const env = environment({}, { setApiKey: async (value) => ({ ok: true, routeOk: Boolean(value) }) },
+    { window: { dispatchEvent: (event) => events.push(JSON.parse(JSON.stringify({ type: event.type, detail: event.detail }))) }, context: { CustomEvent } });
+  await flush();
+  env.get("zai-key").value = "fixture-zai-key";
+  await env.get("save-zai-key").trigger("click");
+  assert.deepEqual(events.at(-1), { type: "mefi:connection-saved", detail: { provider: "zai", routeOk: true, cleared: false } });
+  env.get("zai-key").value = "";
+  env.get("zai-key").dataset.clearing = "1";
+  await env.get("save-zai-key").trigger("click");
+  assert.deepEqual(events.at(-1).detail, { provider: "zai", routeOk: false, cleared: true }, "clearing a key says so instead of reading as a connection");
+  const unknown = [];
+  const quiet = environment({}, { setApiKey: async () => ({ ok: true }) }, { window: { dispatchEvent: (event) => unknown.push(event.detail) }, context: { CustomEvent } });
+  await flush();
+  quiet.get("openrouter-key").value = "fixture-openrouter-key";
+  await quiet.get("save-openrouter-key").trigger("click");
+  assert.equal(unknown.at(-1).routeOk, null, "a host that did not say leaves it unknown");
+});
+
+test("an Agents draft that changes the Auto order drops the host's walk so the page never shows the saved one", async () => {
+  const agents = await readFile(new URL("../renderer/agents.js", import.meta.url), "utf8");
+  const body = agents.slice(agents.indexOf("  function routingView(base)"), agents.indexOf("  async function load()"));
+  const context = vm.createContext({ item: null, $: () => ({ hidden: false }), params: { pane: "team" }, JSON });
+  vm.runInContext(`function draft() { return item; }\n${body}\nthis.routingView = routingView;`, context);
+  const base = { provider: "auto", autoProviders: ["zai", "opencode"], subscriptionFirst: true, autoOrder: ["claude", "codex", "grok", "antigravity", "zai", "opencode"], executorCli: "opencode" };
+  context.item = { configuration: { aiAutoProviders: ["zai", "opencode"] } };
+  assert.deepEqual([...context.routingView(base).autoOrder], base.autoOrder, "an unchanged draft keeps the host's walk");
+  context.item = { configuration: { aiAutoProviders: ["openrouter"] } };
+  const reordered = context.routingView(base);
+  assert.equal(reordered.autoOrder, null);
+  assert.deepEqual([...reordered.autoProviders], ["openrouter"]);
+  context.item = { configuration: { aiSubscriptionFirst: false } };
+  const off = context.routingView(base);
+  assert.equal(off.autoOrder, null);
+  assert.equal(off.subscriptionFirst, false);
 });

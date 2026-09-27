@@ -311,8 +311,11 @@ export function planFirstRun({ scan = {}, keys = {}, prefs = {} } = {}) {
   const version = cli.version ?? null;
   const supported = Boolean(cli.installed) && Number.isInteger(cli.major) && cli.major >= MINIMUM_OPENCODE_MAJOR;
 
+  // OpenCode is one route among several: a subscription CLI, an API key or a
+  // local model server runs the studio without it, so its install is offered,
+  // never presented as the step everyone must take.
   if (!cli.installed) {
-    nextSteps.push("Install the OpenCode CLI (npm i -g opencode-ai, or the installer at opencode.ai) and run the scan again.");
+    nextSteps.push("Optional: install OpenCode (npm i -g opencode-ai, or the installer at opencode.ai) for its free and linked models, then scan again. A subscription tool, an API key or a local model server works without it.");
   } else if (!version) {
     warnings.push("OpenCode is installed but did not report a version; the CLI may be broken or blocked by a security tool. Run `opencode --version` in a terminal.");
   } else if (!supported) {
@@ -325,12 +328,14 @@ export function planFirstRun({ scan = {}, keys = {}, prefs = {} } = {}) {
   if (ranked.some((item) => item.deprecated)) warnings.push("Some free models are marked deprecated by the roster and were skipped.");
   if (!allowFree && usableFree.length) warnings.push("Free models were excluded because free-tier data collection was declined.");
 
-  const explorer = !cli.installed || !supported ? { model: null, agent: "plan", transport: "opencode-run", reason: "OpenCode is not usable yet." }
+  const explorer = !cli.installed ? { model: null, agent: "plan", transport: "opencode-run", reason: "OpenCode is not installed; the AI you connect maps the folder instead." }
+    : !supported ? { model: null, agent: "plan", transport: "opencode-run", reason: "OpenCode is not usable yet." }
     : bestFree ? { model: bestFree.id, agent: "plan", transport: "opencode-run", parallel: FREE_MODEL_PARALLEL, free: true, reason: `${bestFree.name ?? bestFree.id} is free, current and reads files with tools; exploring costs nothing.` }
       : paid.length ? { model: null, agent: "plan", transport: "opencode-run", free: false, reason: `No free model is available; the explorer uses OpenCode's default model on your linked ${PAID_PROVIDER_LABELS[paid[0]] ?? paid[0]} account.` }
         : { model: null, agent: "plan", transport: "opencode-run", reason: "No free model and no linked provider: exploring a folder needs one of them." };
 
-  const builder = !cli.installed || !supported ? { model: null, agent: "build", reason: "OpenCode is not usable yet.", parallel: 0 }
+  const builder = !cli.installed ? { model: null, agent: "build", reason: "OpenCode is not installed; builders run on the coding CLI you connect.", parallel: 0 }
+    : !supported ? { model: null, agent: "build", reason: "OpenCode is not usable yet.", parallel: 0 }
     : paid.length && prefs.preferFree !== true ? {
       model: null, agent: "build", free: false, parallel: null,
       reason: `Builders run on OpenCode's default model from your linked ${PAID_PROVIDER_LABELS[paid[0]] ?? paid[0]} account (paid plans keep zero-retention terms).`,
@@ -358,7 +363,7 @@ export function planFirstRun({ scan = {}, keys = {}, prefs = {} } = {}) {
   // A saved Zen key is already a Jev route (decision-client's `zen`), pinned
   // to the paid jev-1.13; the roster also carries a limited-time free Jev.
   if (keys.zen) nextSteps.push("A Zen key is saved: Jev may be reachable free as `jev-1.13-free` on the zen route (set MEFI_JEV_MODEL) — test it in Settings before relying on the paid pin.");
-  if (!jevReady && !assistantRoute) nextSteps.push("Save a Jev key, or an assistant key (z.ai, OpenCode Go, custom), to enable task-aware model routing.");
+  if (!jevReady && !assistantRoute) nextSteps.push("Save a Jev key, or an assistant key (z.ai, OpenCode Go, OpenCode Zen, OpenRouter or a custom endpoint), to enable task-aware model routing.");
   if (!bestFree && !paid.length && cli.installed) nextSteps.push("Sign in to OpenCode Zen (free tier) or link any provider before choosing a folder to explore.");
 
   return {
