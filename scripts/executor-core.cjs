@@ -19,6 +19,7 @@ const executorResume = require("./executor-resume.cjs");
 const agentModes = require("./agent-modes.cjs");
 const agentIssues = require("./agent-issues.cjs");
 const taskHandoffs = require("./task-handoffs.cjs");
+const { buildWindowsCmdArgs } = require("./windows-command-line.cjs");
 
 const MINUTE_MS = 60 * 1000;
 // A card is parked for a manual reopen at its fifth charged failure.
@@ -511,56 +512,136 @@ function startBudgetMs({ base, running = 0, kills = 0, samples = [] }) {
 
 // ---- the command line per builder CLI --------------------------------------------
 
-// How a builder route starts: the command, its arguments, the stdio shape,
-// what goes to stdin (null: nothing, the pipe stays ignored), and the
-// environment the route adds to the host's. Every route runs the same prompt
-// and sentinel protocol headless, tools auto-approved because nobody is at
-// the keyboard. `cli` is the route's CLI (grok, claude, codex, antigravity),
-// or anything else for `opencode run`. `modelArg` and `agyModelArg` are the
-// host's model-id filters (cliModelArg, agyModelArg), called only by the
-// route that needs one.
-// `desk` names the per-run MCP config files that put the desk's ask_desk tool
-// beside the run (agent-brain-host prepareDeskTool); only Claude Code and
-// OpenCode take them, and a path cmd.exe could mangle is never passed.
-const DESK_CONFIG_PATH = /^[A-Za-z]:\\[^\s"'&|<>^%!]+$|^\/[^\s"'&|<>^%!]+$/;
-function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = () => "", desk = null } = {}) {
+// One word of a POSIX `sh -c` line: bare when it holds nothing the shell
+// reads, single-quoted otherwise (a quote inside closes, escapes, reopens).
+function shWord(value) {
+  const text = String(value);
+  return /^[A-Za-z0-9_\/.:=@%+,-]+$/.test(text) ? text : `'${text.replace(/'/g, "'\\''")}'`;
+}
+
+// A builder CLI started through the shell. On Windows that is cmd.exe with a
+// line built by scripts/windows-command-line.cjs and handed over verbatim
+// (`verbatim`: the spawn's windowsVerbatimArguments), so a value holding a
+// space, an apostrophe, `&` or `%` (an MCP config under C:\Users\John Smith,
+// the Electron path under "Mefi's Studio AI+", a display-name model) arrives
+// as one argument; left to Node's own escaping, cmd read its quotes as \" and
+// such a value used to be dropped instead. No prompt ever rides this line
+// (stdin or a file carries it): cmd stops at the first newline and at 8191
+// characters. Elsewhere it is the same cmd.exe call holding an sh line, which
+// scripts/platform.cjs runs as `sh -c` in its own process group.
+function shellLaunch(command, args, platform) {
+  if (platform === "win32") return { command: "cmd.exe", args: buildWindowsCmdArgs(command, args), verbatim: true };
+  return { command: "cmd.exe", args: ["/d", "/s", "/c", [command, ...args].map(shWord).join(" ")], verbatim: false };
+}
+
+// A CLI that ships as a native binary (grok, agy) spawns directly, with no
+// shell between it and its arguments. An install that put a batch shim on
+// PATH instead cannot: the guided installer's `npm install --global` leaves
+// grok.cmd, Node refuses to spawn .cmd/.bat without a shell, and every Grok
+// run failed ENOENT while where.exe reported the CLI installed. `shim` is the
+// host's PATH lookup (agent-mcp windowsShim): the shim's path when a .cmd or
+// .bat comes before any .exe, and that shim runs through cmd.exe with the
+// same verbatim quoting.
+function binaryLaunch(command, args, platform, shim) {
+  const batch = platform === "win32" ? shim(command) : null;
+  if (batch) return { command: "cmd.exe", args: buildWindowsCmdArgs(batch, args), verbatim: true };
+  return { command, args, verbatim: false };
+}
+
+// A TOML string for a codex `-c key=value` override, in the literal forms: no
+// escapes, so a Windows path reads as written, and never a `"`, which cmd.exe
+// cannot carry through codex's npm shim. A value with an apostrophe ("Mefi's
+// Studio AI+") takes the multi-line literal form; one neither form can hold,
+// or one with a control character, is refused (null).
+function tomlLiteral(value) {
+  const text = String(value ?? "");
+  if (/[\u0000-\u0008\u000a-\u001f\u007f]/.test(text)) return null;
+  if (!text.includes("'")) return `'${text}'`;
+  if (text.includes("'''") || text.endsWith("'")) return null;
+  return `'''${text}'''`;
+}
+
+// The run's MCP servers as codex config overrides. `servers` is the
+// attachment's server table ({ name: { command, args, env } },
+// agent-tool-configs prepare). Codex takes no per-run config file, so each
+// server is spelled out on its command line, where anything that can list
+// processes can read it: a server whose environment names a credential is
+// left out. Returns the `-c` arguments and the names left out.
+const CODEX_SECRET_ENV = /KEY|TOKEN|SECRET|PASSWORD/i;
+function codexMcpArgs(servers) {
+  const args = [], dropped = [];
+  for (const [name, server] of Object.entries(servers && typeof servers === "object" ? servers : {})) {
+    const command = server?.command ? tomlLiteral(server.command) : null;
+    const list = (Array.isArray(server?.args) ? server.args : []).map(tomlLiteral);
+    const env = Object.entries(server?.env && typeof server.env === "object" ? server.env : {}).map(([key, value]) => [key, tomlLiteral(value)]);
+    const refused = !/^[A-Za-z0-9_-]{1,64}$/.test(name) || !command || list.includes(null)
+      || env.some(([key, value]) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || value === null || CODEX_SECRET_ENV.test(key));
+    if (refused) { dropped.push(String(name).slice(0, 64)); continue; }
+    args.push("-c", `mcp_servers.${name}.command=${command}`, "-c", `mcp_servers.${name}.args=[${list.join(",")}]`);
+    if (env.length) args.push("-c", `mcp_servers.${name}.env={${env.map(([key, value]) => `${key}=${value}`).join(",")}}`);
+  }
+  return { args, dropped };
+}
+
+// How a builder route starts: the command, its arguments, whether they reach
+// cmd.exe verbatim (`verbatim`, the spawn's windowsVerbatimArguments), the
+// stdio shape, what goes to stdin (null: nothing, the pipe stays ignored),
+// the environment the route adds to the host's, and the MCP servers this
+// launch could not carry (`dropped`, which the host logs). Every route runs
+// the same prompt and sentinel protocol headless, tools auto-approved because
+// nobody is at the keyboard. `cli` is the route's CLI (grok, claude, codex,
+// antigravity), or anything else for `opencode run`. `modelArg` and
+// `agyModelArg` are the host's model-id filters (cliModelArg, agyModelArg),
+// called only by the route that needs one; `platform` is the host's, `shim`
+// its batch-shim lookup, and `promptFile` the file the host wrote the brief
+// to for grok, which reads no prompt on stdin.
+// `desk` is the run's MCP attachment (agent-tool-configs prepare, or the
+// desk's own files from agent-brain-host prepareDeskTool): OpenCode reads its
+// file through OPENCODE_CONFIG, Claude Code takes --mcp-config, Codex takes
+// its server table as config overrides. Grok and Antigravity have no per-run
+// MCP flag and keep their own configuration.
+function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = () => "", desk = null, platform = "win32", shim = () => null, promptFile = null } = {}) {
   if (cli === "grok") {
-    // A headless agentic session: positional prompt (so, unlike the others,
-    // the brief is visible in this process's command line), tools
-    // auto-approved, plain stdout, a turn cap so a wedged run cannot outlive
-    // the kill timer.
-    const grokArgs = ["--output-format", "plain", "--always-approve", "--max-turns", "60", "--no-alt-screen", "--verbatim"];
-    if (route.model) grokArgs.push("-m", route.model);
-    grokArgs.push(prompt);
-    return { command: "grok", args: grokArgs, stdio: ["ignore", "pipe", "pipe"], stdin: null, env: route.env };
+    // A headless agentic session. --prompt-file both starts grok's headless
+    // mode and keeps a brief of up to EXECUTOR_PROMPT_MAX off every command
+    // line (a positional prompt was visible in the process list, and cannot
+    // cross cmd.exe at all when grok is a shim). Tools auto-approved, plain
+    // stdout, the model held to real-id characters, a turn cap so a wedged
+    // run cannot outlive the kill timer.
+    if (!promptFile) throw new Error("the grok brief was not written to its prompt file");
+    const selected = route.model ? modelArg(route.model) : "";
+    const args = ["--output-format", "plain", "--always-approve", "--max-turns", "60", "--no-alt-screen", "--verbatim", ...(selected ? ["-m", selected] : []), "--prompt-file", promptFile];
+    return { ...binaryLaunch("grok", args, platform, shim), stdio: ["ignore", "pipe", "pipe"], stdin: null, env: route.env, dropped: [] };
   }
   if (cli === "claude") {
     // Claude Code's headless print mode: permission checks bypassed, the
     // prompt on stdin (never cmd's command line), plain text so the sentinel
-    // protocol stays readable, the model id held to real-id characters before
-    // it enters the command string.
+    // protocol stays readable, the model id held to real-id characters.
+    // --mcp-config takes a list, so it goes last.
     const selected = modelArg(route.model);
-    const mcp = desk?.claude && DESK_CONFIG_PATH.test(desk.claude) ? ` --mcp-config ${desk.claude}` : "";
-    return { command: "cmd.exe", args: ["/d", "/s", "/c", `claude -p --output-format text --dangerously-skip-permissions${selected ? ` --model ${selected}` : ""}${mcp}`], stdio: ["pipe", "pipe", "pipe"], stdin: prompt, env: route.env };
+    const args = ["-p", "--output-format", "text", "--dangerously-skip-permissions", ...(selected ? ["--model", selected] : []), ...(desk?.claude ? ["--mcp-config", desk.claude] : [])];
+    return { ...shellLaunch("claude", args, platform), stdio: ["pipe", "pipe", "pipe"], stdin: prompt, env: route.env, dropped: [] };
   }
   if (cli === "codex") {
     // `codex exec`: approvals and the sandbox bypassed (the run root is the
     // whole workspace), the prompt on stdin ("-" reads it there), --color
-    // never keeps the protocol readable on plain stdout.
+    // never keeps the protocol readable, the run's MCP servers as overrides.
     const selected = modelArg(route.model);
-    return { command: "cmd.exe", args: ["/d", "/s", "/c", `codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check --color never${selected ? ` -m ${selected}` : ""} -`], stdio: ["pipe", "pipe", "pipe"], stdin: prompt, env: route.env };
+    const mcp = codexMcpArgs(desk?.servers);
+    const args = ["exec", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "--color", "never", ...(selected ? ["-m", selected] : []), ...mcp.args, "-"];
+    return { ...shellLaunch("codex", args, platform), stdio: ["pipe", "pipe", "pipe"], stdin: prompt, env: route.env, dropped: mcp.dropped };
   }
   if (cli === "antigravity") {
     // The Antigravity CLI's agentic print mode. Every flag precedes `-p` (with
     // `-p` first agy silently drops --model), permissions are skipped, and the
     // print timeout sits above the executor's own kill budget so the CLI never
-    // ends a live build early. agy is a Go binary, so it spawns directly: the
-    // display-name model never passes through cmd.exe.
+    // ends a live build early. The display-name model is one argument either
+    // way: argv on a direct spawn, a quoted word through a shim.
     const args = [];
     const selected = agyModelArg(route.model);
     if (selected) args.push("--model", selected);
     args.push("--dangerously-skip-permissions", "--print-timeout", "60m", "--output-format", "text", "-p");
-    return { command: "agy", args, stdio: ["pipe", "pipe", "pipe"], stdin: prompt, env: route.env };
+    return { ...binaryLaunch("agy", args, platform, shim), stdio: ["pipe", "pipe", "pipe"], stdin: prompt, env: route.env, dropped: [] };
   }
   // --auto: nobody is at the keyboard to answer a permission prompt, so a
   // headless run without it stops at the first edit and reports back prose.
@@ -568,9 +649,23 @@ function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = 
   // stdin as its message, so an open, never-ended pipe leaves it waiting for a
   // prompt that never comes (this shape wedged every run on 2026-09-18), and
   // cmd's quoting and percent-expansion mangle long prompt bodies until the
-  // CLI prints its help and exits 1. Write + end is a clean prompt and a clean EOF.
-  const env = desk?.opencode && DESK_CONFIG_PATH.test(desk.opencode) ? { ...(route.env ?? {}), OPENCODE_CONFIG: desk.opencode } : route.env;
-  return { command: "cmd.exe", args: ["/d", "/s", "/c", `opencode run --auto${route.modelArgs}`], stdio: ["pipe", "pipe", "pipe"], stdin: prompt, env };
+  // CLI prints its help and exits 1. Write + end is a clean prompt and a clean
+  // EOF. The attachment's path rides the environment, which needs no quoting.
+  const env = desk?.opencode ? { ...(route.env ?? {}), OPENCODE_CONFIG: desk.opencode } : route.env;
+  return { command: "cmd.exe", args: ["/d", "/s", "/c", `opencode run --auto${route.modelArgs}`], verbatim: false, stdio: ["pipe", "pipe", "pipe"], stdin: prompt, env, dropped: [] };
+}
+
+// ---- a heavier retry ------------------------------------------------------------------
+
+// Whether this card's next attempt is the "Try again with a heavier model" its
+// owner chose (or the desk chose for them): a retry-deep decision newer than
+// the start of the card's last attempt. It is read from the card, so it
+// survives a restart, and the one attempt that starts after it spends it. The
+// assistant's own record of an answer given on another card routes nothing,
+// exactly as it re-arms nothing.
+function heavyRetryPending(task) {
+  const since = Number(task?.lastAttempt?.startedAt ?? task?.lastAttempt?.at) || 0;
+  return (Array.isArray(task?.decisions) ? task.decisions : []).some((row) => row?.choice === "retry-deep" && row.by !== "assistant" && Number(row.at) > since);
 }
 
 // ---- one line of worker output -----------------------------------------------------
@@ -666,6 +761,7 @@ module.exports = {
   attemptRecord,
   startBudgetMs,
   cliInvocation,
+  heavyRetryPending,
   readWorkerLine,
   applyWorkerLine,
 };

@@ -76,7 +76,9 @@ function createAutonomyHost(io) {
     await io.ensure();
     if (projectId && projectId !== project()) return { ok: false, error: "The selected project changed." };
     const decision = rows(state().decisions).find((row) => row.id === id);
-    if (!decision || decision.undone || decision.pending) return { ok: false, error: "That decision is no longer available to undo." };
+    // A failed decision changed nothing: undoing it logged "You undid" on the
+    // card and taught the learner a correction for a choice never applied.
+    if (!decision || decision.undone || decision.pending || decision.failed) return { ok: false, error: "That decision is no longer available to undo." };
     const result = await io.mutate((board) => {
       const restored = ledger.restore(board.tasks, decision, now());
       board.tasks = restored.tasks;
@@ -176,7 +178,10 @@ function createAutonomyHost(io) {
   async function holdBudget(question, config) {
     const projectId = project(), tasks = await io.readTasks(), ids = idsFor(question);
     const targets = tasks.filter((task) => ids.includes(task.id) && !task.autonomyBudgetHold);
-    if (!targets.length || targets.some((task) => task.ownerHold || ledger.held(task))) return;
+    // The same refusals the board write below makes: checked only there, a
+    // card with a pending or queued undo recorded one failed decision per pass
+    // until the ledger cap pushed real decisions (and their Undo) out.
+    if (!targets.length || targets.some((task) => task.ownerHold || ledger.held(task) || task.autonomyPending || task.autonomyUndo)) return;
     const decision = { id: io.id(), at: now(), level: config.level, by: "desk", source: "budget", questionId: question.id,
       taskId: question.context?.taskId ?? targets[0].id, kind: "budget", choice: "hold-budget", label: `Held: ${targets[0].title || "task"}`,
       reason: "Its two automatic decisions for today are spent. Review it, Undo the hold, or choose Try again.", before: ledger.snapshot(tasks, targets.map((task) => task.id)), after: [], question: JSON.parse(JSON.stringify(question)), pending: true };
@@ -229,8 +234,18 @@ function createAutonomyHost(io) {
     }
   }
 
+  // Whether a heavier retry would change the builder's model (the host's
+  // heavierRetryOnOffer): one that cannot is never offered to the desk, which
+  // could otherwise pick it and re-run the same model. Asked once per pass.
+  let heavierAnswer = null;
+  const heavier = async () => {
+    if (heavierAnswer === null) heavierAnswer = typeof io.heavierRetry === "function" ? (await io.heavierRetry()) !== false : true;
+    return heavierAnswer;
+  };
+
   async function decide() {
     if (busy || now() < backoffUntil || !project()) return null;
+    heavierAnswer = null;
     busy = true;
     try {
       await io.ensure();
@@ -255,7 +270,7 @@ function createAutonomyHost(io) {
           && Number(question.answer?.at ?? question.at) >= Number(item.at));
         if (settled) continue;
         const kind = Number(task.verifyAttempts) >= 3 || task.verification?.state === "failed" ? "verify" : "run-failed";
-        const question = io.question(issues.questionForIssue({ kind, source: "host", taskId: task.id, taskTitle: task.title, title: item.title, attempts: task.runFailures ?? 0 }, { now: now() }));
+        const question = io.question(issues.questionForIssue({ kind, source: "host", taskId: task.id, taskTitle: task.title, title: item.title, attempts: task.runFailures ?? 0 }, { now: now(), heavier: await heavier() }));
         if (question) questions.push(question);
       }
       let spent = 0;
@@ -296,12 +311,15 @@ function createAutonomyHost(io) {
         const room = desk.budget(state().decideHistory, key, now());
         if (!room.ok || affected.some((row) => backlog.delegatedRetries(row, now()).length >= 2)) {
           if (room.reason === "hour") break;
-          if (config.level === "elevated") await holdBudget(question, config);
+          // The hold says two automatic decisions were spent, so it needs two
+          // that applied: desk answers that never landed (the card waited on
+          // dependencies, the action was refused) only use up the desk's turns.
+          if (config.level === "elevated" && affected.some((row) => backlog.delegatedRetries(row, now()).length >= 2)) await holdBudget(question, config);
           continue;
         }
         if (humanClassify) {
           for (const verb of ["retry", "retry-deep", "split"]) {
-            if (verb === "retry-deep" && config.elevated["pricier-model"]) continue;
+            if (verb === "retry-deep" && (config.elevated["pricier-model"] || !(await heavier()))) continue;
             if (!question.options.some((option) => option.id === verb)) question.options.push({ id: verb, label: { retry: "Retry in Studio", "retry-deep": "Retry with a heavier model", split: "Split the work" }[verb], action: { kind: "issue", action: verb, payload: { taskId: task?.id, issueKind: "blocked", ask: question.title, detail: question.detail } } });
           }
         }

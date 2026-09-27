@@ -67,13 +67,17 @@ npm run test:fast   # Node suites only, minus the nine that launch Electron
 npm run lint        # eslint, check-only: undefined identifiers fail, unused ones warn
 ```
 
-`npm test` needs Python 3 on PATH as `python` (the runner checks first and
-says so) and a real desktop: the Electron fixtures drive real windows and are
+`npm test` needs Python 3 and a real desktop. The runner finds Python before
+anything runs, trying `python`, then `py -3` (Windows), then `python3`, and
+skips Windows' Microsoft Store stub; with none it names what it tried. The
+desktop matters because the Electron fixtures drive real windows and are
 timing-sensitive under load. Every leg and every Node stage runs even after
 one fails, and the run ends with a pass/FAIL line per leg, so one red suite
 no longer hides the rest. `npm run lint` fetches eslint through `npx` so the
 app keeps zero runtime dependencies; CI runs it too. `.editorconfig` sets
-two-space indentation, LF line endings and UTF-8.
+two-space indentation, LF line endings and UTF-8. `.npmrc` sets
+`engine-strict`, so `npm ci` on a Node older than 24 stops before installing
+anything instead of warning.
 
 `npm run check` chains six stages, in this order, and stops at the first one
 that fails. Each also runs on its own:

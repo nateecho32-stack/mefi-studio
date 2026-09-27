@@ -27,6 +27,7 @@ const CODE_SOURCES = [
   "task-groups.js",
   "studio-ui.js",
   "file-inputs.js",
+  "motion.js",
   "nav.js",
   "sidebar.js",
   "graph.js",
@@ -44,6 +45,7 @@ const CODE_SOURCES = [
   "overhead.js",
   "brains.js",
   "palette.js",
+  "config-dialog.js",
   "eyes.js",
   "trace.js",
   "boot.js",
@@ -54,6 +56,7 @@ const CODE_SOURCES = [
   "music.js",
   "together.js",
   "pc-sync.js",
+  "companion-friends.js",
   "planning.js",
   "onboarding.js",
   "community.js",
@@ -161,21 +164,24 @@ export async function build({ root = ROOT } = {}) {
     readFile(path.join(RENDERER, "vibe.css"), "utf8"),
   ]);
   const mediaBrowser = await readFile(path.join(RENDERER, "media-browser.js"), "utf8");
+  const companionFriends = await readFile(path.join(RENDERER, "companion-friends.js"), "utf8");
   const nodeVisuals = await readFile(path.join(RENDERER, "node-visuals.js"), "utf8");
   const projectMapView = await readFile(path.join(RENDERER, "project-map-view.js"), "utf8");
   const fileInputs = await readFile(path.join(RENDERER, "file-inputs.js"), "utf8");
+  const motion = await readFile(path.join(RENDERER, "motion.js"), "utf8");
   const treeDynamics = await readFile(path.join(RENDERER, "tree-dynamics.js"), "utf8");
   const autonomyUi = await readFile(path.join(RENDERER, "autonomy-ui.js"), "utf8");
   const vibePanels = await readFile(path.join(RENDERER, "vibe-panels.js"), "utf8");
   const [traceCode, traceStyles] = await Promise.all([readFile(path.join(RENDERER, "trace.js"), "utf8"), readFile(path.join(RENDERER, "trace.css"), "utf8")]);
-  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle, cameraTour, explorer, analyzer, tasks, ideas, overhead, brains, palette, eyes, traceCode, boot, startup, workspace, mediaWindow, mediaBrowser, music, together, pcSync, planning, onboarding, community, demoPanel, autonomyUi, companionUi, companionHub, projectMapView, agentBrain, agents, vibePanels, vibe, booklet];
+  const [configCode, configStyles] = await Promise.all([readFile(path.join(RENDERER, "config-dialog.js"), "utf8"), readFile(path.join(RENDERER, "config-dialog.css"), "utf8")]);
+  const codeParts = [stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, motion, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle, cameraTour, explorer, analyzer, tasks, ideas, overhead, brains, palette, configCode, eyes, traceCode, boot, startup, workspace, mediaWindow, mediaBrowser, music, together, pcSync, companionFriends, planning, onboarding, community, demoPanel, autonomyUi, companionUi, companionHub, projectMapView, agentBrain, agents, vibePanels, vibe, booklet];
   const code = codeParts.join("\n");
   const html = template
     // "</" and "<!--" escaped: a fetched model name holding "</script>" would
     // otherwise end the data block and run as renderer script. JSON.parse
     // reads < back as "<"; a plain "<= 200K" is left as it was.
     .replace("__BOOKLET_DATA__", () => catalog.trim().replace(/<(?=\/|!--)/g, "\\u003c"))
-    .replace("__BOOKLET_STYLES__", () => `${styles}\n${musicStyles}\n${planningStyles}\n${brainStyles}\n${profilerStyles}\n${traceStyles}\n${agentBrainStyles}\n${agentsStyles}\n${companionStyles}\n${studioUiStyles}\n${companionHubStyles}\n${vibeStyles}`)
+    .replace("__BOOKLET_STYLES__", () => `${styles}\n${musicStyles}\n${planningStyles}\n${brainStyles}\n${profilerStyles}\n${traceStyles}\n${configStyles}\n${agentBrainStyles}\n${agentsStyles}\n${companionStyles}\n${studioUiStyles}\n${companionHubStyles}\n${vibeStyles}`)
     .replace("__BOOKLET_CODE__", () => code);
 
   const out = path.join(RENDERER, "booklet.html");

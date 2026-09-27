@@ -578,7 +578,7 @@ test("the shortcut sheet groups every key by the rail's sections, with Esc under
   const keysIn = (name) => grid.children.find((group) => title(group) === name).querySelectorAll("kbd").map((cap) => cap.textContent);
   assert.deepEqual(keysIn("Home & Work"), ["H", "T", "P", "I", "A"]);
   assert.deepEqual(new Set(keysIn("Agents")), new Set(["B", "D", "3", "E", "J", "O", "G", "1", "2", "/", "R"]));
-  assert.deepEqual(keysIn("Settings"), ["4", "Ctrl ,", "U"]);
+  assert.deepEqual(keysIn("Settings"), ["4", "Ctrl ,", "Ctrl Shift ,", "U"]);
   assert.deepEqual(keysIn("Help"), ["Ctrl K", "?", "Esc"]);
   for (const group of grid.children) assert.equal(group.getAttribute("aria-labelledby"), group.querySelector("h4").id);
   // Command view's own rows arrive from idle.js and get the last group.

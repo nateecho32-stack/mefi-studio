@@ -123,9 +123,14 @@ handler and holds the roles gated on it; the foreman dispatches regardless.
 
 It used to brief, grow and improve outside the roster whenever `keyPresent`
 was not true. `keyPresent` now reads the same predicate `runAssistant` gates on
-(`aiRouteConfigured`), so a false one means no route can answer: those calls
-only ever failed, and before the first tick refreshed `keyPresent` they could
-run a paid brief with no pool accounting or backoff.
+(`aiRouteReady`: `aiRouteConfigured` plus the cached CLI lookups), so a false
+one means no route can answer: those calls only ever failed, and before the
+first tick refreshed `keyPresent` they could run a paid brief with no pool
+accounting or backoff. For Auto the predicate walks what the resolver walks —
+the signed-in CLIs first unless subscriptions-first is off, the saved order,
+then any saved key outside it (`autoRescueProviders`) — so a CLI-only or
+OpenRouter-only Auto setup is not held as keyless while its calls would
+answer. A key save refreshes `keyPresent` at once.
 
 `assistantAskForWork` is the one dispatch trigger, and it coalesces: a general
 foreman pass (key `"foreman"`) already running is marked dirty for exactly one
@@ -278,15 +283,31 @@ The run is a child process (`spawnAttempt`): `cmd.exe /c opencode run
 auto-approved because nobody is at the keyboard. `grok`, `claude`, `codex` and
 `antigravity` are alternative routes with the same contract (`isCliRun`, and
 `executorCore.cliInvocation`, which gives each route its command, arguments,
-stdin and environment; `spawnAttempt` spawns them) — except `grok`, which takes the prompt as
-a positional argument rather than on stdin, so a run's brief is visible in
-that process's command line. `claude` and `antigravity` run in print mode,
+stdin and environment; `spawnAttempt` spawns them) — except `grok`, which
+reads no prompt on stdin: the host writes the brief to
+`task-runs/<runId>.prompt.txt` beside the run file, passes it with
+`--prompt-file` (which is also what starts grok's headless mode) and removes
+it when the run finishes. `claude` and `codex` run through `cmd.exe` with a
+line built by `scripts/windows-command-line.cjs` and handed over verbatim, so
+a path with a space or an apostrophe arrives as one argument; `grok` and
+`agy` spawn directly, unless the first match on PATH is a batch shim (the
+guided installer's npm install leaves `grok.cmd`, which Node cannot spawn
+without a shell), which runs through `cmd.exe` the same way
+(`agent-mcp.windowsShim`). Off Windows the shell routes are an `sh -c` line.
+`claude` and `antigravity` run in print mode,
 which says nothing until the answer and registers no OpenCode session, so they
 arm no wedged-start watchdog (the hard kill still bounds them) and their first
 line is not a start sample. A one-shot fallback to opencode
-(`fallbackToOpencode`, from `attach`) covers a CLI that exits non-zero without
-ever writing to stdout; output on stderr alone — a deprecation notice, say —
-does not count as the CLI having reported on the work. The replacement is
+(`fallbackToOpencode`, from `attach`) covers a CLI that never got going: a
+spawn failure, a wedged start, or a non-zero exit within `SILENT_DEATH_MS`
+(15 s) without a line on stdout; output on stderr alone — a deprecation
+notice, cmd's "is not recognized" — does not count as the CLI having reported
+on the work. A later exit, or a quick one whose last words are a provider
+outage (a usage limit), is the run's own to settle, so a print-mode run that
+worked twenty minutes is not started again on another account, and an outage
+still takes the uncharged requeue. With no OpenCode on the machine
+(`opencodeCliAvailable`) a CLI route has no fallback at all, and its own
+error stays on the card. The replacement is
 judged on its own start and its own verdict: the CLI attempt's `spoke`,
 `startKilled` and verdict flags are cleared before it attaches, and no
 replacement starts once the run was stopped by the operator, the executor
@@ -490,13 +511,16 @@ plus the command results of the overseer run queued for that attempt
 - **failed** (the third unverified attempt) → parked for manual review with no
   `nextRunAt` (the comment "Out of verification budget"); the line ends
   `· parked for manual review` (the `outcome` helper).
-- **failed at once** for a run whose builder CLI writes no OpenCode session
-  (`executorCli` claude, grok, codex or antigravity; the attempt records it as
-  `lastAttempt.route`). Session evidence can never appear for such a run, so it
-  is parked on its first check with "`<cli>` runs leave no session the verifier
-  can read" instead of retrying blind. Nothing about it is trusted more; a
-  failure it reports still reads as that failure, and Settings says so when a
-  CLI builder is chosen.
+- **Builders without a session** (`executorCli` claude, grok, codex or
+  antigravity; the attempt records it as `lastAttempt.route`) write no
+  OpenCode session, so they are judged by the overseer's own verification run
+  alone: its passing checks verify the attempt exactly as they do for
+  OpenCode, and a failing or pending one fails it the same way. Only when no
+  overseer run exists for the attempt (it reported no result) is it **failed
+  at once**, parked on its first check with "`<cli>` runs leave no session
+  the verifier can read, and no Studio check ran for this attempt" instead of
+  retrying blind. That park is neither a win nor a loss in the model ledger
+  (`receiptModelOutcome`).
 
 Edits without an attributable session, or zero changed files with no executed
 named checks, are exactly the "no attributable edits and no named checks"
@@ -908,7 +932,13 @@ counts as leaving it for review when a later ask folds into it.
 does not recommend a plain retry, which is the answer already given: it
 recommends *Try again with a heavier model* where the kind offers it, else
 *Answer it in one line*, and its retry option reads *Try again unchanged*
-with the failure count. Only a worker's own detail is quoted as "The agent
+with the failure count. The heavier retry is offered only where it changes
+the model (`heavierRetryOnOffer`: the builder's Heavy-tier model is another
+model, or OpenCode on the Auto tier routes each task). Answered, it puts the
+next attempt of that task, and only that one, on the builder's Heavy-tier
+model (`executorCore.heavyRetryPending` reads the decision on the card;
+`heavyRetryRoute` applies the model after routing), whatever the tier or
+model selection. Only a worker's own detail is quoted as "The agent
 says"; a host-raised issue's detail is Studio's account of the run.
 `repeatAsks: "ask"` asks every one.
 
@@ -1268,7 +1298,10 @@ repeat ask. With `settings.agentBrain.deskTool` on, `prepareDeskTool` starts a
 127.0.0.1 endpoint (`desk-server.cjs`, a random token per process) and writes
 two per-run MCP config files into the OS temp folder: OpenCode reads one
 through `OPENCODE_CONFIG`, Claude Code the other through `--mcp-config`
-(`executorCore.cliInvocation`'s `desk`). The worker's `ask_desk` call
+(`executorCore.cliInvocation`'s `desk`, quoted for `cmd.exe`, so a temp
+folder under `C:\Users\John Smith` works). Codex, Grok and Antigravity runs
+keep the `MEFI_HELP` line: Codex could carry the desk's token only on its
+command line. The worker's `ask_desk` call
 (`desk-mcp.mjs`) waits for `askDesk`, which shares the queue, the fold and the
 per-run limit with `MEFI_HELP`. The files are removed when the run finishes.
 

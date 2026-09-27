@@ -79,6 +79,28 @@ test("builder configs retain the desk alongside Studio tools and remove captured
   await assert.rejects(fs.stat(files.folder), /ENOENT/);
 }));
 
+// A temp folder under C:\Users\John Smith used to turn Studio tools off for
+// every run (the path was refused rather than quoted); Codex reads the same
+// servers from the returned table as -c overrides.
+test("builder configs are written under a temp path with spaces and apostrophes, with the server table for Codex", () => fixture(async (root) => {
+  const dir = path.join(root, "John's temp & 50%");
+  await fs.mkdir(dir);
+  const deskClaude = path.join(dir, "desk-claude.json");
+  await fs.writeFile(deskClaude, JSON.stringify({ mcpServers: { mefi_desk: { command: "fixture", args: [], env: { MEFI_DESK_TOKEN: "t" } } } }));
+  const script = fileURLToPath(new URL("../scripts/agent-tools-mcp.cjs", import.meta.url));
+  const files = await configs.prepare({ root, settings: {}, desk: { claude: deskClaude }, script, dir, node: "C:\\Mefi's Studio AI+\\Mefi's Studio AI+.exe" });
+  try {
+    assert.ok(files, "the attachment is prepared, not refused");
+    assert.ok(files.claude.startsWith(dir));
+    assert.deepEqual(Object.keys(files.servers).sort(), ["mefi_desk", "mefi_tools"]);
+    assert.equal(files.servers.mefi_tools.command, "C:\\Mefi's Studio AI+\\Mefi's Studio AI+.exe");
+    assert.deepEqual(files.servers.mefi_tools.args, [script]);
+    assert.equal(files.servers.mefi_tools.env.MEFI_TOOLS_CONFIG, path.join(files.folder, "policy.json"));
+    assert.deepEqual(JSON.parse(await fs.readFile(files.claude, "utf8")).mcpServers, files.servers, "the table is the one Claude Code reads");
+  } finally { await configs.remove(files); }
+  await assert.rejects(fs.stat(files.folder), /ENOENT/);
+}));
+
 test("real host seat fallback keeps the seat's skills and permissions across research turns", () => fixture(async (root) => {
   await fs.writeFile(path.join(root, "README.md"), "Seat research evidence");
   const source = await fs.readFile(new URL("../main.cjs", import.meta.url), "utf8");

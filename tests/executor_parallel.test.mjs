@@ -87,6 +87,31 @@ test("the auto order decides which account the opencode builder runner uses", as
   assert.equal(route.modelArgs, "", "an order without a keyed runner keeps the OpenCode default");
 });
 
+test("an explicit assistant pick never reads the Auto order for the OpenCode builder", async () => {
+  let settings = {};
+  let zai = null;
+  const env = vm.createContext({ autonomy, autonomySettings: autonomy.migrate({}),
+    process: { env: {} }, AI_PROVIDERS: ["auto", "zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"], AI_AUTO_PROVIDERS: ["zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"], ZAI_MODEL_ROUTINE: "fixture", ZAI_MODEL_HEAVY: "fixture-heavy", ASSISTANT_MODEL: "fixture-go",
+    readSettings: async () => settings, zaiOpencodeEnv: async () => zai,
+    opencodeGoLogin: async () => true,
+    grokCliAvailable: async () => true, claudeCliAvailable: async () => true, codexCliAvailable: async () => true, antigravityCliAvailable: async () => true, logLine() {}, pushAutopilotHistory() {},
+  });
+  vm.runInContext(section("function executorModelOverride(", "// Auto setup:") + section("function executorOpencodeEnv(", "// Which route an autopilot") + section("async function executorRunEnv(", "async function assistantFetch("), env);
+  for (const aiProvider of ["zen", "openrouter", "claude", "lmstudio", "custom"]) {
+    settings = { aiProvider, executorCli: "opencode", aiAutoProviders: ["zai"] };
+    const route = await env.executorRunEnv();
+    assert.equal(route.error, undefined, `${aiProvider}: a z.ai-only Auto order never refuses an explicit pick's builders`);
+    assert.equal(route.via, "opencode default", `${aiProvider}: no "z.ai key missing" label from an order this pick does not use`);
+  }
+  zai = { OPENCODE_CONFIG_CONTENT: '{"provider":{"fixture":{}}}' };
+  settings = { aiProvider: "zen", executorCli: "opencode", aiAutoProviders: ["opencode", "zai"] };
+  const route = await env.executorRunEnv();
+  assert.equal(route.modelProvider, "zai", "a saved z.ai key still carries the builders on the coding plan");
+  settings = { aiProvider: "auto", aiAutoProviders: ["zai"] };
+  zai = null;
+  assert.match((await env.executorRunEnv()).error, /z\.ai-only/, "Auto's own z.ai-only order keeps its honest refusal");
+});
+
 test("manual mode retains its two-worker default and one-to-three worker limits", async () => {
   let saved = {};
   const autopilot = { enabled: false, execute: false, parallel: 2, jobs: [], minutes: 5 };

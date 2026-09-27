@@ -96,7 +96,8 @@ const runFixture = async () => {
     assert.equal(controls.zero.audio.response, 0);
     assert.ok(controls.zero.connections.length===0 && controls.zero.nodeLevels.every(level=>level===0));
     assert.equal(controls.restored.audio.response, .35);
-    assert.ok(new Set(controls.restored.connections.map(wave=>wave.band)).size>=2);
+    assert.ok(controls.restored.connections.every(wave=>["bass", "mid", "treble"].includes(wave.band)));
+    assert.ok(new Set([...controls.restored.connections.map(wave=>wave.band), ...controls.restored.nodeBands]).size>=2);
     assert.ok(controls.fullMix.connections.every(wave=>wave.band==='mix'));
     for (const sample of Object.values(controls)) {
       assert.ok(sample.playing && sample.sourceStable);
