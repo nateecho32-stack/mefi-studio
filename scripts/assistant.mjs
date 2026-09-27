@@ -10,6 +10,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import decisionLedger from "./decision-ledger.cjs";
+import agentIssues from "./agent-issues.cjs";
 import { fileURLToPath } from "node:url";
 import { dependencyIds } from "./backlog.cjs";
 import workAdmission from "./work-admission.cjs";
@@ -2072,7 +2073,7 @@ function mergeCollisionRequest(winner, other) {
   return { ...winner, files, file: winner.file || files[0] || other.file, sessions, owner };
 }
 
-function tidyRequests(requests, { now, collisions, audit, duplicates }, report) {
+function tidyRequests(requests, { now, collisions, audit, duplicates, ai }, report) {
   const findings = isObject(audit) && Array.isArray(audit.findings) ? audit.findings.map((finding) => str(finding?.message)).filter(Boolean) : null;
   // A grouped collision's representative file is the newest one; leftover
   // per-file alerts still count as live if they share a file or the same
@@ -2084,6 +2085,7 @@ function tidyRequests(requests, { now, collisions, audit, duplicates }, report) 
   const dirtyDupes = isObject(duplicates) && Array.isArray(duplicates.findings)
     ? new Set(duplicates.findings.map((row) => (isObject(row) ? row.file : row)).filter((file) => typeof file === "string"))
     : null;
+  const linkHealthy = aiLinkHealthy(ai, now);
   const cutoff = now - TIDY_LIMITS.autoRequestDays * DAY;
   const protectedRequest = (request) => !isObject(request) || hasHandoffLineage(request) || hasDelegation(request) || hasPendingContinuation(request) || request.source === "chat" || !AUTO_SOURCES.has(request.source) || request.status === "running" || request.status === "verifying";
   let removed = 0;
@@ -2093,6 +2095,7 @@ function tidyRequests(requests, { now, collisions, audit, duplicates }, report) 
     if (request.source === "audit" && findings && !findings.some((message) => prompt.includes(message))) return false;
     if (request.source === "collision" && live && !collisionRequestLive(request, live)) return false;
     if (request.source === "duplicate" && scannedDupes && scannedDupes.has(request.file) && dirtyDupes && !dirtyDupes.has(request.file)) return false;
+    if (linkHealthy && aiLinkTicket(request)) return false;
     // Aged from when it was last filed: a lost claim put back in the inbox
     // (requeuedAt) gets a fresh window to be promoted, as in housekeeping.
     const at = filedAt(request);
@@ -2801,6 +2804,37 @@ function isFixTicket(item) {
   return /^fix\s*:/i.test(str(item?.title));
 }
 
+// A fix ticket about the assistant's own AI link ("AI link failing, backoff
+// escalating", "ai-offline unresolved over an hour") names a condition the
+// host can re-check for free: the store's ai block is the live state the
+// filing pass never sees, because the briefer cannot refile while the link is
+// down — a healthy link is the resolution, not a fresher filing. Without this
+// the ticket sits unclaimed in the handout queue until the stale clock, and
+// every compactor pass re-broadcasts it as the next pick: the stale work
+// broadcast loop. Title/alertTitle only, and briefing-filed rows only, so a
+// chat ask never drops just because the link recovered. ("Errors rising after
+// an AI link fix" names a symptom that outlives the link; it rides the stale
+// clock like every other ticket.)
+const AI_LINK_TICKET_RE = /\bai[\s_-]*(?:link|gateway|connection)\b|\bai[\s_-]*offline\b|\bbackoff\b/i;
+export function aiLinkTicket(item) {
+  if (str(item?.source) !== "fix" || !str(item?.alertTitle)) return false;
+  return AI_LINK_TICKET_RE.test(`${str(item?.alertTitle)} ${str(item?.title)}`);
+}
+
+// Healthy means: a key is present, the link last ran online, it has not
+// stacked consecutive failures, and no backoff window is still open. Anything
+// unknown (no state, an older store) keeps the ticket — the purge must never
+// be braver than the evidence.
+export function aiLinkHealthy(ai, now = Date.now()) {
+  const state = isObject(ai) ? ai : null;
+  if (!state || state.keyPresent === false) return false;
+  if (state.online !== true) return false;
+  if (num(state.failures, 0) >= 2) return false;
+  return num(state.backoffUntil, 0) <= now;
+}
+
+export const aiLinkResolved = (item, ai, now = Date.now()) => aiLinkTicket(item) && aiLinkHealthy(ai, now);
+
 // The family alone is too broad to authorize a delete: every "duplicate"
 // ticket on the board would collapse into one job even when they aim at
 // different files. The named targets scope the family — two tickets share a
@@ -3176,7 +3210,7 @@ export function groupTasks({ tasks = [], ideas = [], groups = [], now = Date.now
 // promoted instead of dying in the pass that requeued it.
 const filedAt = (request) => Math.max(num(request?.at, 0), num(request?.requeuedAt, 0));
 
-export function compact({ requests = [], tasks = [], ideas = [], collisions = null, now = Date.now(), limits = {}, taskGroups = null, allocateId = null, promoteIdeas = true } = {}) {
+export function compact({ requests = [], tasks = [], ideas = [], collisions = null, now = Date.now(), limits = {}, taskGroups = null, allocateId = null, promoteIdeas = true, ai = null } = {}) {
   const rules = { ...COMPACT_LIMITS, ...(isObject(limits) ? limits : {}) };
   const inRequests = asArray(requests).filter(isObject);
   const inTasks = asArray(tasks).filter(isObject);
@@ -3694,6 +3728,21 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
     report.resolved = before - outRequests.length;
   }
 
+  // Resolved self-alerts: when the caller hands us the assistant's own ai
+  // block, an unclaimed briefing fix ticket about the AI link is a snapshot
+  // of an outage the store says is over. Promotion holds the same ticket out
+  // (its done cousins stand on the board), so nothing else ever retires it:
+  // it stayed runnable, and every pass handed the same dead job to the
+  // foreman. A claim in flight is never touched.
+  if (aiLinkHealthy(ai, now)) {
+    const before = outRequests.length;
+    outRequests = outRequests.filter((request) => {
+      if (request.status === "running" || request.status === "verifying" || hasHandoffLineage(request) || hasDelegation(request) || hasPendingContinuation(request)) return true;
+      return !aiLinkTicket(request);
+    });
+    report.resolved += before - outRequests.length;
+  }
+
   // 6. The review. Auto-filed requests expire: the pass that wrote one
   //    re-checks every tick and files it again while the problem is still
   //    there, so an unclaimed one this old is a snapshot that moved on. The
@@ -4072,7 +4121,10 @@ export function verificationJobKey(taskId = null, attemptKey = null) {
 export function focusedTestsForTask(task = null, resultNote = null) {
   const candidates = [];
   const source = isObject(task) ? task : {};
-  candidates.push(...asArray(source.files), source.file, ...asArray(source.refs));
+  // Board tasks store refs as rows (`{ kind: "file", title: <path> }`), as
+  // workFiles reads them; plain string refs are kept as they are.
+  const refPath = (ref) => (!isObject(ref) ? ref : (str(ref.kind) && str(ref.kind) !== "file" ? "" : ref.file || ref.path || ref.title));
+  candidates.push(...asArray(source.files), source.file, ...asArray(source.refs).map(refPath));
   // The path keeps its case: it becomes the command, and a lowercased path
   // names no file on a case-sensitive filesystem. Only the dedupe folds case.
   const ran = str(isObject(resultNote) ? resultNote.parts?.ran : "");
@@ -4254,6 +4306,8 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerCh
   const parts = (resultNote && isObject(resultNote) ? resultNote.parts : null) ?? {};
   const namedChecks = checkReports(parts).some(namesCheck);
   const remainingText = str(parts.remaining);
+  const ownerIssue = agentIssues.ownerResultIssue(parts);
+  const repairOutstanding = Boolean(ownerIssue && ownerIssue.kind !== "owner");
   const remainingKey = (value) => str(value).toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
   // The attempt handed its leftover scope on as follow-up cards (handedOff:
   // this run's recorded hand-offs) and every one has settled, finished or
@@ -4269,7 +4323,7 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerCh
   const allHandedOnSettled = handedOn > 0 && asArray(remaining).length === 0 && asArray(resolvedHandoffs).length >= handedOn
     && proseItems <= handedOn && !/\bowner\b/i.test(remainingText);
   const handedOffAndFinished = remainingKey(remainingText) && (allHandedOnSettled || asArray(resolvedHandoffs).some((title) => remainingKey(title) === remainingKey(remainingText)));
-  const outstanding = (remainingText.length > 0 && !noRemainingWork(remainingText) && !handedOffAndFinished) || asArray(remaining).length > 0;
+  const outstanding = repairOutstanding || (remainingText.length > 0 && !noRemainingWork(remainingText) && !handedOffAndFinished) || asArray(remaining).length > 0;
   // A done+verified retry re-checks work that already verified once: a
   // faithful scoped-check rerun changes 0 files by design, so the attempt's
   // own fresh green recorded checks discharge the changed-file obligation.
@@ -4298,7 +4352,7 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerCh
   const totalChanges = Math.max(0, Number(changedFiles) || 0);
   const ledgerOwed = Math.max(0, Number(ledgerChanges) || 0);
   const ledger = Math.min(ledgerOwed, totalChanges);
-  const rerunDischarges = priorVerified === true && outstanding && (totalChanges === 0 || (ledgerOwed > 0 && ledgerOwed === totalChanges)) && observedSummary.passed > 0 && asArray(remaining).length === 0;
+  const rerunDischarges = !repairOutstanding && priorVerified === true && outstanding && (totalChanges === 0 || (ledgerOwed > 0 && ledgerOwed === totalChanges)) && observedSummary.passed > 0 && asArray(remaining).length === 0;
   // The runner's commit observation resolves the claimed abbreviation to a
   // real commit and reports the scoped path status. A claim the runner could
   // not match — unknown hash, git failure, no observation — is not evidence.
@@ -4666,13 +4720,13 @@ function tidyNodeFolders(folders, { sessions, tasks, now, staleHours }, report) 
 // Housekeeping over the data files. Conservative: a collection that was not
 // handed in (null, not an array/object) comes back as its empty fallback and is
 // NOT reported as changed; manual requests and non-done tasks are never touched.
-export function tidy({ tasks, ideas, requests, checkpoints, nodeFolders = null, sessions = null, collisions = null, audit = null, duplicates = null, now = Date.now(), prefs = {} } = {}) {
+export function tidy({ tasks, ideas, requests, checkpoints, nodeFolders = null, sessions = null, collisions = null, audit = null, duplicates = null, ai = null, now = Date.now(), prefs = {} } = {}) {
   const rules = normalizePrefs({ ...DEFAULT_PREFS, ...(isObject(prefs) ? prefs : {}) });
   const report = { tasksArchived: 0, ideasPruned: 0, requestsCleared: 0, checkpointsDropped: 0, foldersCleaned: 0, text: "" };
   const out = {
     tasks: Array.isArray(tasks) ? tidyTasks(tasks, now, rules.tidyDoneAfterHours, report) : [],
     ideas: Array.isArray(ideas) ? tidyIdeas(ideas, now, report) : [],
-    requests: Array.isArray(requests) ? tidyRequests(requests, { now, collisions, audit, duplicates }, report) : [],
+    requests: Array.isArray(requests) ? tidyRequests(requests, { now, collisions, audit, duplicates, ai }, report) : [],
     checkpoints: isObject(checkpoints) ? tidyCheckpoints(checkpoints, sessions, now, report) : {},
     nodeFolders: isObject(nodeFolders) ? tidyNodeFolders(nodeFolders, { sessions, tasks, now, staleHours: rules.tidyDoneAfterHours }, report) : {},
   };

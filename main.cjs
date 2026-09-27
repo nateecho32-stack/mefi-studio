@@ -6543,7 +6543,7 @@ async function assistantCompactorJob(now, entry) {
   const heldTasks = new Set(autopilot.jobs.map((job) => job.taskId).filter(Boolean));
   const result = await mutateBoard((board) => {
     const stamped = board.tasks.map((task) => (task && heldTasks.has(task.id) ? { ...task, runId: task.runId ?? "live" } : task));
-    const out = assistant.compact({ requests: board.requests, tasks: stamped, ideas: board.ideas, collisions: assistantCache.store?.collisions, now, promoteIdeas: !assistantState?.prefs?.backlogMode });
+    const out = assistant.compact({ requests: board.requests, tasks: stamped, ideas: board.ideas, collisions: assistantCache.store?.collisions, now, ai: assistantCache.store?.ai ?? null, promoteIdeas: !assistantState?.prefs?.backlogMode });
     // Strip the view-only stamp from tasks that were held but carry no real
     // run id (their claim write had not landed when the board was read).
     const tasks = heldTasks.size
@@ -6621,6 +6621,7 @@ async function assistantKeeperJob(now, entry) {
       collisions: store?.collisions ?? null,
       audit: assistantCache.audit ?? null,
       duplicates: assistantCache.duplicateScan ?? null,
+      ai: store?.ai ?? null,
       now,
       prefs: assistantState.prefs,
     });
@@ -11794,6 +11795,19 @@ function isFixWork(item) {
   return item?.source === "fix" || Boolean(item?.alertTitle) || /^fix\s*:/i.test(String(item?.title ?? ""));
 }
 
+// Whether a fix ticket names the assistant's own AI link while the store says
+// the link is healthy: the resolution the compactor absorbs and promotion must
+// not build ahead of. Guarded like workFixTheme — section-extracted tests run
+// this code without the host's caches.
+function resolvedAiLinkWork(item) {
+  try {
+    const ai = typeof assistantCache !== "undefined" ? assistantCache?.store?.ai ?? null : null;
+    return assistantModule?.aiLinkResolved?.(item, ai) === true;
+  } catch {
+    return false;
+  }
+}
+
 function liveFixShape(job) {
   return {
     title: job?.title,
@@ -11918,6 +11932,10 @@ async function promoteRequestsToTasks({ requestId = null } = {}) {
     const kept = (task) => workAdmission.standsOnBoard(task);
     for (const request of candidates) {
       if (added >= 3) break;
+      // A fix ticket about the AI link whose problem the store says is over
+      // never builds: compaction absorbs it, and until then promotion must
+      // not hand the dead job to a worker ahead of that pass.
+      if (isFixWork(request) && resolvedAiLinkWork(request)) continue;
       const title = workAdmission.requestTitle(request).slice(0, 90);
       const candidate = { ...request, title };
       // The one admission ladder (scripts/work-admission.cjs). A delegated
@@ -16529,7 +16547,7 @@ async function scanIdeasInternal(ai = false, entry = null) {
     if (ai && assistantModule?.compact) {
       const heldTasks = new Set(autopilot.jobs.map((job) => job.taskId).filter(Boolean));
       const stamped = board.tasks.map((task) => (task && heldTasks.has(task.id) ? { ...task, runId: task.runId ?? "live" } : task));
-      const out = assistantModule.compact({ requests: board.requests, tasks: stamped, ideas: board.ideas, collisions: assistantCache.store?.collisions, now: Date.now(), taskGroups, promoteIdeas: !assistantState?.prefs?.backlogMode });
+      const out = assistantModule.compact({ requests: board.requests, tasks: stamped, ideas: board.ideas, collisions: assistantCache.store?.collisions, now: Date.now(), ai: assistantCache.store?.ai ?? null, taskGroups, promoteIdeas: !assistantState?.prefs?.backlogMode });
       board.requests = out.requests;
       board.ideas = out.ideas;
       // Strip the view-only stamp from tasks that were held but carry no real
