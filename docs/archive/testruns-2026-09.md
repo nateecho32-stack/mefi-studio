@@ -6,6 +6,37 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-26 - Briefer CLI failure boundary and recovery (task_f9e52aa317ae8c28)
+
+Read the saved run and briefer error without changing Studio data. The saved
+`claude error: success` came from an error envelope whose subtype said success.
+The working tree already contained the diagnostic parser and offline-warning
+recovery changes; preserved them and verified them through the briefer path.
+Added the missing main.cjs exit-status guard: failed or signalled CLI processes
+cannot turn partial text or JSON into a successful brief or queued requests.
+
+- New `tests/briefer_cli_failure.test.mjs`: reproduced four false successes
+  before the guard; all seven cases pass after it, including error envelopes,
+  backoff, recovery and legacy successful plain-text output.
+- Focused Node run (briefer, usage_tracker, usage_tracker_host): 52/52 pass.
+- `python -m unittest discover -s tools -p test_mefi_studio_assistant.py`:
+  66/66 pass.
+- `npm.cmd run check` and `npm.cmd run audit`: exit 0, zero audit findings.
+- `npm.cmd test`: exit 1. CPU stage: 3820 pass, five failures, four skips;
+  Electron stage: 37 pass, one skip; exclusive stages: two pass, one skip.
+  All five failures are in `tests/analyzer_ui.test.mjs` (lines 120, 182, 218,
+  227 and 264), which reads only the concurrently edited renderer files.
+  Clean HEAD 8b4ab00 copies of that test and its two renderer inputs pass 16/16
+  in a temporary directory. Preserved the other session's renderer work.
+  Full Python leg: 248 tests, OK (one skip); normalized-path lock: 6/6 pass.
+
+Full logs remain local at `%TEMP%/mefi-briefer-npm-test.log`,
+`%TEMP%/mefi-briefer-check.log`, `%TEMP%/mefi-briefer-audit.log` and
+`%TEMP%/mefi-briefer-analyzer-baseline.log`. No paid provider calls, preview
+server, live task-store changes or renderer rebuilds were needed for this fix.
+The owner of the concurrent Analyzer changes still needs to reconcile its
+contracts before the shared full gate can be green.
+
 ## 2026-09-26 - Trace log viewer (Build): gates on a private worktree of 6e03f15
 
 Detached worktree C:\wt\build-g at 6e03f15 plus the Trace change only

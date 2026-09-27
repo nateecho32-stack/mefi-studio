@@ -34,6 +34,10 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-26 - Briefer fix commit re-verified landed: cliReply guard and tests green (task_c61c1cb49e01e552, run_1790480422178_7)
+
+Verified the already-landed briefer fix commit 11fcebc (Guard the briefer against failed CLI exits) in the current work tree for task task_c61c1cb49e01e552. The cliReply exit-code guard is intact in main.cjs (committed, no work-tree drift; the many modified files belong to sibling sessions), and tests/briefer_cli_failure.test.mjs is committed unchanged. Narrow validation this run: node --test tests/briefer_cli_failure.test.mjs 7/7 pass; node --test tests/usage_tracker_host.test.mjs 23/23 pass (shared cliReply/parse coverage green alongside sibling usage-tracker edits). No new commit needed: the fix and its tests are already in history at 11fcebc.
+
 ## 2026-09-26 - ai-offline overseer re-verification and spec-scan artifacts fix (task_b172488b3c947b88)
 
 Resumed the ai-offline overseer task after the owner re-plan decision. Inspected
@@ -729,37 +733,6 @@ remains recorded as failed; no clean full-gate claim.
 
 Complete logs are in `%TEMP%/mefi-thread-{focused,build,check,audit,full-test,render-retry}.log`;
 Analyzer isolation logs are `%TEMP%/mefi-thread-{local-analyzer-only,head-analyzer-only}.log`.
-
-## 2026-09-26 - Briefer CLI failure boundary and recovery (task_f9e52aa317ae8c28)
-
-Read the saved run and briefer error without changing Studio data. The saved
-`claude error: success` came from an error envelope whose subtype said success.
-The working tree already contained the diagnostic parser and offline-warning
-recovery changes; preserved them and verified them through the briefer path.
-Added the missing main.cjs exit-status guard: failed or signalled CLI processes
-cannot turn partial text or JSON into a successful brief or queued requests.
-
-- New `tests/briefer_cli_failure.test.mjs`: reproduced four false successes
-  before the guard; all seven cases pass after it, including error envelopes,
-  backoff, recovery and legacy successful plain-text output.
-- Focused Node run (briefer, usage_tracker, usage_tracker_host): 52/52 pass.
-- `python -m unittest discover -s tools -p test_mefi_studio_assistant.py`:
-  66/66 pass.
-- `npm.cmd run check` and `npm.cmd run audit`: exit 0, zero audit findings.
-- `npm.cmd test`: exit 1. CPU stage: 3820 pass, five failures, four skips;
-  Electron stage: 37 pass, one skip; exclusive stages: two pass, one skip.
-  All five failures are in `tests/analyzer_ui.test.mjs` (lines 120, 182, 218,
-  227 and 264), which reads only the concurrently edited renderer files.
-  Clean HEAD 8b4ab00 copies of that test and its two renderer inputs pass 16/16
-  in a temporary directory. Preserved the other session's renderer work.
-  Full Python leg: 248 tests, OK (one skip); normalized-path lock: 6/6 pass.
-
-Full logs remain local at `%TEMP%/mefi-briefer-npm-test.log`,
-`%TEMP%/mefi-briefer-check.log`, `%TEMP%/mefi-briefer-audit.log` and
-`%TEMP%/mefi-briefer-analyzer-baseline.log`. No paid provider calls, preview
-server, live task-store changes or renderer rebuilds were needed for this fix.
-The owner of the concurrent Analyzer changes still needs to reconcile its
-contracts before the shared full gate can be green.
 
 ## Read Before Any Tests
 
