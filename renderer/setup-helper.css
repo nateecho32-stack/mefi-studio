@@ -125,6 +125,8 @@
   background: radial-gradient(circle, var(--swatch-2, var(--swatch)) 0 38%, var(--swatch) 42%);
 }
 .setup-helper-swatch[aria-checked="true"] { border-color: var(--gold); background: var(--tint-gold-3); }
+.setup-helper-habit { display: grid; gap: var(--s1); padding-top: var(--s2); border-top: 1px solid var(--frost-edge-soft); }
+.setup-helper-habit > strong { color: var(--ivory); font-size: var(--fs-md); }
 .setup-helper-autonomy { display: grid; gap: var(--s3); }
 
 .setup-helper-foot {

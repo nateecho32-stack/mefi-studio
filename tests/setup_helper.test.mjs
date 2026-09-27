@@ -22,7 +22,7 @@ function bridge({ team = {}, inherited = true, stale = 0 } = {}) {
   let configuration = { aiProvider: "auto", executorCli: "opencode", executorTier: "auto", ...team };
   const view = (scope) => ({ ok: true, projectId: P, revision, inherited: scope === "defaults" ? true : inherited, name: "Studio defaults", scope,
     configuration: JSON.parse(JSON.stringify(configuration)), presets: [], skills: [{ id: "s1", name: "Release notes", scope: "project" }],
-    mcpTools: [{ id: "fs.read", server: "fs", name: "read", description: "Read a file" }], seats: {}, choices: {}, routing: { executorTierDefaults: {} } });
+    mcpTools: [{ id: "fs.read", server: "fs", name: "read", description: "Read a file" }], habits: [{ id: "test-changes", title: "Test changes", fires: "when it finishes a change", fallback: "touched", variants: [{ id: "always", text: "Always test." }, { id: "touched", text: "Test what you touched." }], costs: { touched: { brief: 9, full: 24 } } }], seats: {}, choices: {}, routing: { executorTierDefaults: {} } });
   const api = {
     agentsState: async ({ scope }) => { calls.push(["agentsState", scope]); return view(scope); },
     agentsSave: async (payload) => {
@@ -222,4 +222,16 @@ test("connected() reports the last connections read so the walkthrough can skip 
   helper.open("welcome");
   await settle();
   assert.equal(helper.connected(), false, "no key, no CLI route and no local server in this bridge");
+});
+
+test("habits save per agent through the team, with the chosen variant and mode", async () => {
+  const { helper, calls, content } = load();
+  helper.open("tools");
+  await settle();
+  const mode = content().querySelectorAll("select").find((node) => node.getAttribute("aria-label") === "Test changes: off, brief or full");
+  mode.value = "brief";
+  await mode.trigger("change");
+  await settle();
+  const saved = calls.filter((row) => row[0] === "agentsSave").at(-1)[1];
+  assert.deepEqual(saved.configuration.agentHabits, { routine: { "test-changes": { variant: "touched", mode: "brief" } } });
 });

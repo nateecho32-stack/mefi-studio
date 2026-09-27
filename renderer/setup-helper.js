@@ -787,7 +787,7 @@
   // ---- tools ----
   SECTIONS.push({
     id: "tools", short: "Tools & skills", title: "Tools and skills for each agent",
-    intro: "Give each agent the tools it may use and the skills it should follow. Studio enforces these on every call; skills guide answers and never grant tools.",
+    intro: "Give each agent the tools it may use, the skills it should follow and its habits. Studio enforces these on every call; skills guide answers and never grant tools.",
     status: () => (seenAndLeft("tools") ? "done" : ""),
     async render(body, context) {
       const [ui] = await Promise.all([api()?.prefsGet?.().catch?.(() => null) ?? null, loadTeam().catch(() => null)]);
@@ -833,6 +833,29 @@
         }
         for (const missing of chosen.filter((id) => !found.some((skill) => skill.id === id))) skills.append(button(`Remove unavailable skill ${missing}`, () => void saveTeam((draft) => { draft.agentSkills = { ...draft.agentSkills, [role]: chosen.filter((id) => id !== missing) }; }).then(() => rerenderSoon()), "ghost mini"));
         body.append(skills);
+        // Habits (scripts/habits.cjs): short rules of behaviour, each with a
+        // variant and off, brief (one line) or full, and its prompt cost.
+        const library = Array.isArray(data.team.habits) ? data.team.habits : [];
+        if (library.length) {
+          const habits = card("Habits", "Short rules this agent follows on every call. Brief adds one line to its prompt; full adds the whole rule.");
+          const picks = configuration.agentHabits?.[role] || {};
+          const setHabit = (habit, patch) => saveTeam((draft) => {
+            const current = draft.agentHabits?.[role]?.[habit.id] || { variant: habit.fallback, mode: "off" };
+            draft.agentHabits = { ...draft.agentHabits, [role]: { ...draft.agentHabits?.[role], [habit.id]: { ...current, ...patch } } };
+          });
+          for (const habit of library) {
+            const pick = picks[habit.id] || { variant: habit.fallback, mode: "off" };
+            const box = node("div", "setup-helper-habit");
+            box.append(node("strong", "", habit.title), node("small", "setup-helper-hint", `Fires ${habit.fires}.`));
+            const row = node("div", "setup-helper-row");
+            const costs = habit.costs?.[pick.variant] || {};
+            row.append(select((habit.variants || []).map((variant) => [variant.id, variant.id]), pick.variant, (variant) => void setHabit(habit, { variant }).then(() => rerenderSoon()), `${habit.title}: variant`),
+              select([["off", "Off"], ["brief", `Brief · about ${costs.brief || 0} tokens`], ["full", `Full · about ${costs.full || 0} tokens`]], pick.mode || "off", (mode) => void setHabit(habit, { mode }).then(() => rerenderSoon()), `${habit.title}: off, brief or full`));
+            box.append(row, node("p", "setup-helper-hint", (habit.variants || []).find((variant) => variant.id === pick.variant)?.text || ""));
+            habits.append(box);
+          }
+          body.append(habits);
+        }
       } else body.append(card("Desktop app only", "Agent tools are saved by the desktop app."));
 
       const prefs = ui?.prefs || {};
