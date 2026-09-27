@@ -72,7 +72,7 @@ const asArray = (value) => (Array.isArray(value) ? value : []);
 const isObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const num = (value) => (Number.isFinite(Number(value)) && value !== null && value !== "" ? Number(value) : 0);
 const clip = (value, max) => {
-  const text = String(value ?? "").replace(/[\u0000-\u001f\u007f‪-‮⁦-⁩]/g, " ").replace(/\s+/g, " ").trim();
+  const text = String(value ?? "").replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g, " ").replace(/\s+/g, " ").trim();
   return text.length > max ? `${text.slice(0, Math.max(0, max - 1)).trimEnd()}…` : text;
 };
 const plural = (count, word, many = `${word}s`) => `${count} ${count === 1 ? word : many}`;

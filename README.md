@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.3"><img src="https://img.shields.io/badge/release-v0.4.3-D8AE65?style=flat-square" alt="Release 0.4.3"></a>
+  <a href="https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.4"><img src="https://img.shields.io/badge/release-v0.4.4-D8AE65?style=flat-square" alt="Release 0.4.4"></a>
   <a href="https://github.com/nateecho32-stack/mefi-studio/actions/workflows/ci.yml"><img src="https://github.com/nateecho32-stack/mefi-studio/actions/workflows/ci.yml/badge.svg?branch=main&style=flat-square" alt="Studio checks"></a>
   <img src="https://img.shields.io/badge/platform-Windows-0078D4?style=flat-square&logo=windows&logoColor=white" alt="Platform: Windows">
   <img src="https://img.shields.io/badge/node-24-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white" alt="Node 24">
@@ -21,7 +21,7 @@
   <img src="docs/images/workspace.png" width="900" alt="The workspace: a status strip, a conversation with the companion, and the project's work queue">
 </p>
 
-**[Download 0.4.3 for Windows](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.3)** · [Watch the 40-second showreel](https://github.com/nateecho32-stack/mefi-studio/releases/download/v0.4.2/mefi-studio-v0.4.2-discord.mp4)
+**[Download 0.4.3 for Windows](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.4)** · [Watch the 40-second showreel](https://github.com/nateecho32-stack/mefi-studio/releases/download/v0.4.2/mefi-studio-v0.4.2-discord.mp4)
 
 **Quick links:** [What's new](#whats-new-in-043) · [Install](#install-and-run) · [First launch](#first-launch) · [Tour](#a-short-tour) · [Keys and privacy](#keys-and-privacy) · [Community](#community--perks) · [Docs](#documentation) · [Contributing](#contributing)
 
@@ -68,7 +68,7 @@ npm start
 
 - `npm start` needs a normal shell. If `ELECTRON_RUN_AS_NODE` is set (some agent harnesses set it), Studio refuses to start and prints the fix.
 - `Run Mefi's Studio AI+.cmd` starts the portable build when one exists in `dist/`, otherwise the source install.
-- **Portable build:** [download 0.4.3](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.3), extract the whole folder, then open `Mefi Studio AI+.exe`. It keeps its own data next to the executable.
+- **Portable build:** [download 0.4.3](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.4), extract the whole folder, then open `Mefi Studio AI+.exe`. It keeps its own data next to the executable.
 - `npm run start:web` serves a browser-only preview on <http://localhost:4173>; it cannot launch workers.
 
 ## First launch

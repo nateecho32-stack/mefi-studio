@@ -84,7 +84,7 @@ async function call(server, name, args, { timeoutMs = 20000 } = {}) {
   });
   const timer = setTimeout(() => { fail(new Error("MCP request timed out.")); end(); }, timeoutMs);
   try {
-    const init = await request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "mefi-studio", version: "0.4.3" } });
+    const init = await request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "mefi-studio", version: "0.4.4" } });
     if (!["2024-11-05", "2025-03-26", "2025-06-18"].includes(init?.protocolVersion)) throw new Error("Unsupported MCP protocol version.");
     write({ method: "notifications/initialized" });
     let cursor, found = false;

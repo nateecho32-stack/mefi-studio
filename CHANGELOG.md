@@ -7,6 +7,8 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-09-27
+
 - **Work done outside Studio.** Studio now keeps a last look at each project
   folder while it watches it, and when you open the folder again it reports
   what changed meanwhile: commits, uncommitted edits, and Claude Code or
@@ -1379,7 +1381,8 @@ which installed copies pick up through the in-app updater.
   locked or the cover window is destroyed.
 - Project switch drains background work instead of refusing it.
 
-[Unreleased]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.4.3...main
+[Unreleased]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.4.4...main
+[0.4.4]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.4.0...v0.4.2
 [0.4.0]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.3.3...v0.4.0

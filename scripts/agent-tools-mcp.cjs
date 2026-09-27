@@ -11,7 +11,7 @@ async function serve() {
   async function handle(message) {
     if (message.id === undefined) return;
     let result;
-    if (message.method === "initialize") result = { protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "mefi-tools", version: "0.4.3" } };
+    if (message.method === "initialize") result = { protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "mefi-tools", version: "0.4.4" } };
     else if (message.method === "ping") result = {};
     else if (message.method === "tools/list") result = { tools: definitions.map(({ mcpId, ...tool }) => tool) };
     else if (message.method === "tools/call") {
