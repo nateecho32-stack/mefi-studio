@@ -806,7 +806,10 @@ function handleUpdateEvent(payload) {
   send("update:event", payload);
 }
 
-async function applyRestart(files, { counted = true } = {}) {
+async function applyRestart(files, { counted = true, stopAgents = false } = {}) {
+  // An explicit update click has the same stop-and-save contract as Restart
+  // Studio. Automatic updates still drain workers without interrupting them.
+  if (stopAgents) return restartStudio({ files, reason: "restarting for update" });
   // A relaunch taskkills the LOVE child (see the process exit hook); park the
   // update instead of shooting the user's running game.
   if (activeChild && activeChild.exitCode === null) return { deferred: true, reason: "Love2D is running" };
@@ -3761,6 +3764,12 @@ function responsesAsChat(payload = {}) {
 function cliReply(name, parsed, text, { code, err, model }) {
   const fallback = model || name;
   if (parsed && !parsed.ok) return { ok: false, error: `${name} error: ${parsed.error || "unknown"}`, model: parsed.model || fallback, tokenUsage: parsed.tokenUsage ?? {}, costUsd: parsed.costUsd ?? null };
+  // A CLI can print partial output or a login/quota message before failing.
+  // Only a clean process exit may turn that output into a successful brief.
+  if (code !== 0) {
+    const detail = String(err || "").trim() || (!parsed ? text.trim() : "");
+    return { ok: false, error: `${name} cli failed (exit ${code ?? "?"})${detail ? `: ${detail.slice(-160)}` : ""}`, model: parsed?.model || fallback, tokenUsage: parsed?.tokenUsage ?? {}, costUsd: parsed?.costUsd ?? null };
+  }
   if (parsed && parsed.text.trim()) return { ok: true, text: parsed.text.trim(), model: parsed.model || fallback, tokenUsage: parsed.tokenUsage ?? {}, costUsd: parsed.costUsd ?? null, equivalentUsd: parsed.equivalentUsd ?? null };
   if (!parsed && text.trim()) return { ok: true, text: text.trim(), model: fallback };
   return { ok: false, error: `${name} empty reply (exit ${code ?? "?"})${err.trim() ? `: ${err.trim().slice(-160)}` : ""}` };
@@ -5282,6 +5291,16 @@ function assistantEmit(event) {
   assistantEmitTimer.unref?.();
 }
 
+function resetAssistantAiBackoff() {
+  if (!assistantState?.ai) return;
+  // A saved route or credential change must not inherit the old provider's
+  // quota wait. Keep its warning until a real reply proves the new route works.
+  assistantState.ai.failures = 0;
+  assistantState.ai.backoffUntil = 0;
+  assistantAiProbeAttempts = 0;
+  clearAssistantAiProbe();
+}
+
 function assistantAiOk() {
   const ai = assistantState.ai;
   ai.online = true;
@@ -5291,6 +5310,8 @@ function assistantAiOk() {
   ai.backoffUntil = 0;
   assistantAiProbeAttempts = 0;
   clearAssistantAiProbe();
+  // Chat also recovers the connection; every success must retire the warning.
+  assistantSetProblems(["ai-offline"], []);
 }
 
 function assistantAiFailed(error) {
@@ -10142,7 +10163,7 @@ async function assistantIssueAction(action = {}, note = null, { origin = "owner"
       const splitTitle = depth === 1 ? `Follow-up: ${root}` : `Follow-up ${depth}: ${root}`;
       // The new card's brief is the ask itself; a typed note still wins.
       const brief = ask
-        ? `${ask}${askDetail ? ` — ${askDetail}` : ""}\n\nSplit out of "${task.title ?? "the task"}" (${taskId}) by ${delegated ? "the assistant for the owner" : "the owner"}: build only this. If it turns out to be something only the owner can do (the board, Studio's task store, another session's files), put it under owner: in MEFI_RESULT and finish; do not ask to split it again.`
+        ? `${ask}${askDetail ? ` — ${askDetail}` : ""}\n\nSplit out of "${task.title ?? "the task"}" (${taskId}) by ${delegated ? "the assistant for the owner" : "the owner"}: build only this. Keep routine repairs, failing checks and concurrent-file conflicts in remaining: until resolved. Preserve other sessions' work; Studio handles board bookkeeping. Reserve owner: for a concrete human decision, missing access or physical action; do not ask to split it again.`
         : `Work the agent found while building "${task.title ?? "the task"}" that its brief did not cover. Decide the scope from the parent task's decision log.`;
       // The follow-up is admitted in this same write and BEFORE the decision
       // is recorded, so a refused follow-up leaves the card as it was instead
@@ -15752,13 +15773,20 @@ async function stopAllAgents({ reason = "stopped by user", pauseAssistant = true
 // Manual "restart Studio": stop the agents first so running builds cannot
 // defer the relaunch, then hand off to the same restart path the updater uses.
 // Love2D still wins — never shoot the user's running game.
-async function restartStudio({ stopAgents = true, reason = "restarting" } = {}) {
+async function restartStudio({ stopAgents = true, reason = "restarting", files = [] } = {}) {
   if (activeChild && activeChild.exitCode === null) return { deferred: true, reason: "Love2D is running" };
+  if (projectSwitching) return { deferred: true, reason: "Project switch is saving progress before update" };
   if (stopAgents) {
     const stopped = await stopAllAgents({ reason, pauseAssistant: true, pauseExecutor: true });
     if (stopped?.ok === false) return stopped;
+    // The normal pause logs storage errors; an explicit restart must also
+    // confirm the latest helper continuations reached disk before exiting.
+    if (assistantState && !CLI_MODE) {
+      const saved = await saveAssistant({ force: true });
+      if (saved?.ok === false) return { ok: false, error: `Could not save agent progress: ${saved.error}` };
+    }
   }
-  return applyRestart([], { counted: false });
+  return applyRestart(files, { counted: false });
 }
 
 // Retained manual-mode default; automatic mode uses measured resources.
@@ -17284,6 +17312,7 @@ function registerIpc() {
       else delete settings[field];
     });
     providerBreaker.reset(); // a new key deserves a try now, not after a pause
+    if (!["github", "jev"].includes(which)) resetAssistantAiBackoff();
     if (["gateway", "jev", "zen", "openrouter"].includes(which)) (await getJevQueue()).wake();
     return { ok: true };
   });
@@ -17445,6 +17474,7 @@ function registerIpc() {
     });
     if (!result?.ok) return result;
     providerBreaker.reset();
+    if (["save", "inherit", "apply"].includes(payload.action)) resetAssistantAiBackoff();
     send("settings:changed", { agents: true, projectId, revision: result.revision });
     return agentsView(settings, projectId, payload.scope === "defaults" ? "defaults" : "project");
   }
@@ -17461,6 +17491,7 @@ function registerIpc() {
     });
     if (refusal) return refusal;
     providerBreaker.reset(); // new routes, models or endpoints start unpaused
+    resetAssistantAiBackoff();
     return { ok: true };
   });
 
@@ -17679,6 +17710,7 @@ function registerIpc() {
       applyPlan(raw);
     });
     providerBreaker.reset(); // the routes it just chose start unpaused
+    resetAssistantAiBackoff();
     logLine(`[setup] auto setup: ${summary}`);
     return { ...plan, applied: true, summary };
   }
@@ -17829,6 +17861,10 @@ function registerIpc() {
   ipcMain.handle("media:scene-sample", require("./scripts/media-scene.cjs").createSceneSampler(() => window));
   ipcMain.handle("media:youtube-search", require("./scripts/youtube-explorer.cjs").createYouTubeExplorer(() => window));
   ipcMain.handle("media:clipboard-link", require("./scripts/media-clipboard.cjs").createMediaClipboardReader(() => window, clipboard));
+  const mediaBrowser = require("./scripts/media-browser.cjs").createMediaBrowser({ electron, getWindow: () => window, root: STUDIO_ROOT });
+  ipcMain.handle("media-browser:open", mediaBrowser.open);
+  ipcMain.handle("media-browser:command", mediaBrowser.command);
+  app.on("will-quit", mediaBrowser.close);
 
   // The evidence walk behind eyes:state (tools/logs, two levels, one stat per
   // PNG) is shared by overlapping reads and kept for 30 s per folder: several
@@ -18351,10 +18387,11 @@ function registerIpc() {
     const result = await updater.applyNow();
     // A queued result only reports the phase as of the call, so it never means
     // "nothing pending": the run in flight already owns this apply.
-    if (result.applied === false && !result.queued && result.phase !== "held" && result.phase !== "error") {
+    if (result.applied === false && !result.queued && result.phase === "watching") {
       // Nothing pending: the button is still a manual "restart the app now".
-      const manual = await applyRestart([], { counted: false });
+      const manual = await restartStudio();
       if (manual?.deferred) return { ok: false, error: manual.reason, status: updater.status() };
+      if (manual?.ok === false) return { ...manual, status: updater.status() };
     }
     return { ok: result.ok !== false, ...result, status: updater.status() };
   });
