@@ -34,6 +34,10 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-27 - Errors-rising alert verified: one transient foreman entry, link repair holds (task_79329b8c68060082, run_1790504647068_6)
+
+Follow-up verification for the A-Eyes "Errors rising after AI-link fix" alert (overseer logged error entries rising 0→10 after ses_f1f897 finished normally). Root cause stands as triaged by the sibling sessions in this family: during the quota window the pre-restart instance's AI-gated roles (briefer cadence, thinker, probes) each ended in error and appended a log row — two of the failures were the spurious "claude error: success" misparse and the rest real session-limit quota — so the burst tracked the old code plus the provider quota, not the builder session's work; the 02:39Z restart loaded the committed fixes (cliReply exit guard 11fcebc, parseClaudeCliResult is_error surfacing, resetAssistantAiBackoff at the four route-change sites, scheduleAssistantAiProbe chain) and the queue-stall side of the noise was retired by 6f1ef62. The live data/eyes-assistant.json read read-only this run confirms the repair still holds: ai online true, keyPresent true, failures 0, backoffUntil 0, lastError null, lastOkAt 2026-09-27T10:29Z, problems empty, digest.logErrors reset to [] by the clean 10:12Z audit, overseer score 100/health good, briefer error null at 129 runs; the log carries exactly one error row, the transient 10:10Z foreman "10 queued, nothing running" dispatch-congestion line that cleared itself by the next review. No code change was needed this run; the two in-flight work-tree hunks owned by sibling cards (assistant.mjs verifyCompletion deferral parsing, usage-tracker.cjs parser detail text) were preserved untouched. Narrow validation: node --test tests/briefer_cli_failure.test.mjs tests/assistant_overseer_chat.test.mjs tests/role_provider_isolation.test.mjs tests/usage_tracker_host.test.mjs 80 pass / 0 fail; python tools/test_mefi_studio_assistant.py 66 tests OK; python tools/test_mefi_studio_offline_probe.py 12 tests OK; npm run check ok (165 targets, 20 live rows); npm run audit 0 errors / 0 warnings.
+
 ## 2026-09-27 - Verifier deferral fix: remaining prose owed by sibling sessions no longer reopens a finished card (task_2b0634e6823e8b0d)
 
 Root cause of the triple-landed media-browser work: run_1790480592972_8 finished task_b5026aa2c68858d0 correctly (fixture 08c677c + TESTRUNS row), but its MEFI_RESULT remaining note attributed the stale committed booklet to sibling sessions; verifyCompletion read that prose as an outstanding obligation of the card, reopened it, and run_1790481107523_10 rebuilt the same booklet byte-identical. scripts/assistant.mjs now treats remaining prose that names its owner as other work (owed by sibling/other/parent sessions, cards, tasks) as a deferral, not an obligation; imperatives and unattributed leftovers still bind, tracked remaining lists still bind, and all positive-evidence gates are unchanged. Also verified the three landed diffs dedupe: renderer/booklet.html carries exactly one media-browser inline, npm run build-booklet is byte-idempotent (hash f98dd2322a01, no working-tree diff). Tests: node --test tests/verification_checks.test.mjs (20/20, new deferral case), tests/executor_result_protocol + model_win_evaluator + executor_continuation (55/55), npm run check green.
@@ -399,42 +403,6 @@ confirmed boot complete, updater watching and profiler recording stopped.
 No UI navigation or forced restart occurred. Reports remain ignored under
 tools/logs/live-20260926-command-scroll-loaded*.json and the heartbeat
 status reports. Command callout attribution awaits an active visible sample.
-
-## 2026-09-26 - AI link alert re-verified against the saved fixes (task_59ca346c1f3bdb46)
-
-Continuation run for the A-Eyes "AI link failing repeatedly" alert after the
-prior attempt was marked unverified (no attributable edits, no named checks).
-Inspected the work tree before touching anything and confirmed every claimed
-fix is present and coherent, preserving other sessions' uncommitted work:
-
-- `resetAssistantAiBackoff` (main.cjs:5294) clears failures, backoffUntil and
-  the offline-probe bookkeeping, wired at all four recovery sites: key save
-  (settings:set-key, non-github/jev), team save/inherit/apply,
-  settings:set-ai-routing, and auto-setup apply. Success still requires a real
-  reply: the ai-offline problem and lastError survive until assistantAiOk.
-- The Claude CLI exit guard and error parser (parseClaudeCliResult in
-  scripts/usage-tracker.cjs feeding assistantBrieferJob) are in place with
-  tests/briefer_cli_failure.test.mjs covering exit 0/1 is_error replies,
-  plain-text rejections, recovery, and no request queuing on failure.
-- The offline probe plan/scheduler/runner chain (main.cjs:5340-5402,
-  scripts/assistant.mjs OFFLINE_PROBE_*) is intact.
-
-Root cause stands as previously reported: of the five consecutive failures,
-two were spurious (the parser/exit bugs above, now fixed) and three were real
-Claude session-limit quota (reset 23:10 America/Chicago). The alerting Studio
-instance predates all of these fixes; loading them needs the owner's restart.
-
-Validation (named checks, this run):
-- node --test tests/briefer_cli_failure.test.mjs
-  tests/role_provider_isolation.test.mjs tests/assistant_overseer_chat.test.mjs
-  tests/usage_tracker_host.test.mjs tests/usage_tracker.test.mjs
-  tests/provider_breaker_host.test.mjs: 109/109 pass.
-- python tools/test_mefi_studio_offline_probe.py: 12 tests OK.
-- npm.cmd run check: ok (targets, specs, css, syntax, testruns).
-- npm.cmd run audit: zero findings. git diff --check: clean.
-
-No source, settings, task store or portable data was changed; this row is the
-run's attributable record.
 
 ## Read Before Any Tests
 

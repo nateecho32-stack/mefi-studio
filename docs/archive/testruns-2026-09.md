@@ -6,6 +6,42 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-26 - AI link alert re-verified against the saved fixes (task_59ca346c1f3bdb46)
+
+Continuation run for the A-Eyes "AI link failing repeatedly" alert after the
+prior attempt was marked unverified (no attributable edits, no named checks).
+Inspected the work tree before touching anything and confirmed every claimed
+fix is present and coherent, preserving other sessions' uncommitted work:
+
+- `resetAssistantAiBackoff` (main.cjs:5294) clears failures, backoffUntil and
+  the offline-probe bookkeeping, wired at all four recovery sites: key save
+  (settings:set-key, non-github/jev), team save/inherit/apply,
+  settings:set-ai-routing, and auto-setup apply. Success still requires a real
+  reply: the ai-offline problem and lastError survive until assistantAiOk.
+- The Claude CLI exit guard and error parser (parseClaudeCliResult in
+  scripts/usage-tracker.cjs feeding assistantBrieferJob) are in place with
+  tests/briefer_cli_failure.test.mjs covering exit 0/1 is_error replies,
+  plain-text rejections, recovery, and no request queuing on failure.
+- The offline probe plan/scheduler/runner chain (main.cjs:5340-5402,
+  scripts/assistant.mjs OFFLINE_PROBE_*) is intact.
+
+Root cause stands as previously reported: of the five consecutive failures,
+two were spurious (the parser/exit bugs above, now fixed) and three were real
+Claude session-limit quota (reset 23:10 America/Chicago). The alerting Studio
+instance predates all of these fixes; loading them needs the owner's restart.
+
+Validation (named checks, this run):
+- node --test tests/briefer_cli_failure.test.mjs
+  tests/role_provider_isolation.test.mjs tests/assistant_overseer_chat.test.mjs
+  tests/usage_tracker_host.test.mjs tests/usage_tracker.test.mjs
+  tests/provider_breaker_host.test.mjs: 109/109 pass.
+- python tools/test_mefi_studio_offline_probe.py: 12 tests OK.
+- npm.cmd run check: ok (targets, specs, css, syntax, testruns).
+- npm.cmd run audit: zero findings. git diff --check: clean.
+
+No source, settings, task store or portable data was changed; this row is the
+run's attributable record.
+
 ## 2026-09-26 - Media mini browser and listening-room upgrade
 
 Added a standalone media BrowserWindow with a sandboxed WebContentsView,
