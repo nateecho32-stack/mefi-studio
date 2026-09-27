@@ -36,6 +36,7 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   dates, with revision checks and the same dispatch and approval gates.
 
 ### Added
+- Multi-PC sync. **Friends › Your PCs** shows whether this PC matches the open project's default branch on GitHub and lists work that has not reached it. **Sync this PC** pulls and pushes that branch without force. `npm run sync` does the same from a terminal, and a Claude Code SessionStart hook fetches, fast-forwards and reports at the start of each new session.
 - Mefi learns from successful owner answers, including family choices, approvals,
   offers and chat. Recent choices count more, corrections count double, and
   learning can be disabled or forgotten by project or across projects. Auto

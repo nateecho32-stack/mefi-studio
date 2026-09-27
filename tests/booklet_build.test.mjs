@@ -54,6 +54,7 @@ const INLINE_SCRIPTS = [
   "media-browser.js",
   "music.js",
   "together.js",
+  "pc-sync.js",
   "onboarding.js",
   "community.js",
   "demo-panel.js",

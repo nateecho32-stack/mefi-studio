@@ -3957,7 +3957,7 @@ body.command-active .walkthrough-coach { right: 392px; }
 .field-scope { font-weight: 400; opacity: .75; }
 .field-hint { color: var(--dim); font-size: var(--fs-xs); line-height: 1.5; }
 .field > select, .field > input { width: 100%; max-width: 100%; box-sizing: border-box; }
-.field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: 10px; }
+.field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
 .settings-help { margin-top: 2px; }
 .settings-help > summary { color: var(--dim); font-size: var(--fs-xs); cursor: pointer; }
 .settings-help > summary:hover { color: var(--muted); }
@@ -4061,9 +4061,10 @@ body.command-active .walkthrough-coach { right: 392px; }
 /* A jump opens a folded card at full height at once (booklet.js marks it for
    that one frame), so the scroll lands on the card as it will be. */
 .settings-card[data-settings-opening]::details-content { transition: none; }
-/* Keep the sticky category list and jumps below the fixed local navigation. */
-html[data-shell="rail"] .settings-nav { top: calc(var(--shell-local-h) + var(--s4)); max-height: calc(100vh - var(--shell-local-h) - 2 * var(--s4)); }
-html[data-shell="rail"] .settings-card { scroll-margin-top: calc(var(--shell-local-h) + var(--s4)); }
+/* The rail shell has no tabs row above the page: the list sticks near the
+   top, and a jump lands a card just under the window's edge. */
+html[data-shell="rail"] .settings-nav { top: var(--s4); max-height: calc(100vh - 2 * var(--s4)); }
+html[data-shell="rail"] .settings-card { scroll-margin-top: var(--s4); }
 /* Narrow panel: one column, and the list turns into a strip over the cards —
    Find first, then every section as a chip in one row that scrolls sideways. */
 @container settings (max-width: 720px) {
@@ -4078,11 +4079,11 @@ html[data-shell="rail"] .settings-card { scroll-margin-top: calc(var(--shell-loc
   .settings-nav-item[aria-current="true"] { box-shadow: none; }
   .settings-card { padding: 14px 16px; }
   .settings-optional { padding: 12px 16px; }
-  /* The category strip sticks below the fixed local navigation. */
+  /* The rail shell has no tabs row above the page, so the strip can stick. */
   /* Stuck, it reaches a little past the cards, so its rounded corners sit over
      the panel's empty padding rather than over a card's edge. */
-  html[data-shell="rail"] .settings-nav { position: sticky; top: var(--shell-local-h); z-index: 2; max-height: none; margin-inline: calc(-1 * var(--s2)); padding-inline: var(--s4); border-radius: 0 0 12px 12px; background: var(--panel-solid); box-shadow: var(--shadow-1); }
-  html[data-shell="rail"] .settings-card { scroll-margin-top: calc(var(--shell-local-h) + 112px); }
+  html[data-shell="rail"] .settings-nav { position: sticky; top: 0; z-index: 2; max-height: none; margin-inline: calc(-1 * var(--s2)); padding-inline: var(--s4); border-radius: 0 0 12px 12px; background: var(--panel-solid); box-shadow: var(--shadow-1); }
+  html[data-shell="rail"] .settings-card { scroll-margin-top: 112px; }
 }
 /* The classic tabs row wraps at 1250px and grows past the list's 68px offset. */
 @media (max-width: 1250px) {
@@ -4864,7 +4865,6 @@ html[data-shell="rail"] .overlay,
 html[data-shell="rail"] .planning-overlay,
 html[data-shell="rail"] .profiler-overlay,
 html[data-shell="rail"] .music-overlay { left: var(--shell-rail-w); }
-html[data-shell="rail"] #workspace-layer,
 html[data-shell="rail"] #idle-hud { top: var(--shell-local-h); }
 /* The project panel slides out of the rail's edge, not the window's. */
 html[data-shell="rail"] #workspace-sidebar-panel { left: var(--shell-rail-w); }
@@ -5817,7 +5817,6 @@ body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left
 .music-dropdown[hidden], .music-dropdown [hidden] { display: none !important; }
 .music-dropdown[data-source="radio"] { width: min(540px, calc(100vw - 24px)); }
 .music-dropdown[data-video="true"] { width: min(624px, calc(100vw - 24px)); }
-.music-dropdown[data-source="link"] { width: min(920px, calc(100vw - 24px)); }
 .music-dropdown-header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--hairline); background: var(--panel-solid); }
 .music-dropdown-header h2 { flex: 1; margin: 0; font: 600 15px/1.4 var(--font-ui); }
 .music-dropdown-header { flex-wrap: wrap; }
@@ -5830,9 +5829,9 @@ body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left
 .music-tree-visibility > summary { cursor: pointer; font-weight: 600; }
 .media-window-controls > .music-tree-visibility { grid-column: 1 / -1; }
 .music-dropdown-header button { flex: none; }
-.music-dropdown-body { min-width: 0; padding: 16px; container-type: inline-size; container-name: media-menu; }
-.music-dropdown .music-main { padding: 0 0 16px; margin-top: 0; }
-.music-dropdown .music-group-label { position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip-path: inset(50%); }
+.music-dropdown-body { min-width: 0; padding: 16px; }
+.music-dropdown .music-main { padding: 16px 0; margin-top: 14px; }
+.music-dropdown .music-group-label { display: block; margin: 0 0 12px; color: var(--gold-bright); font-size: 10px; letter-spacing: .13em; }
 .music-dropdown .music-art { display: grid; }
 .music-dropdown .music-player { padding: 16px; border: 1px solid var(--hairline-strong); border-radius: 14px; background: linear-gradient(125deg, var(--tint-gold-2), var(--bg-deep)); }
 .music-dropdown .music-tabs { width: 100%; margin: 0 0 16px; padding: 3px; border-radius: 9px; }
@@ -5861,54 +5860,6 @@ body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left
 .music-dropdown .music-link-now { padding: 14px; margin-top: 14px; border: 1px solid var(--hairline-strong); border-radius: 12px; background: var(--tint-gold-1); }
 .music-dropdown .music-station { min-height: 70px; border-radius: 12px; }
 .music-dropdown .music-tab[aria-selected="true"] { box-shadow: inset 0 -2px var(--gold); }
-.music-video-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(220px, 1fr); gap: 18px; align-items: start; margin-top: 16px; }
-.music-video-watching { min-width: 0; }
-.music-video-stage { width: 100%; min-width: 0; aspect-ratio: 16 / 9; min-height: 190px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; box-sizing: border-box; border: 1px solid var(--hairline-strong); border-radius: 12px; background: radial-gradient(ellipse at 50% 0, var(--tint-gold-3), transparent 80%), var(--bg-deep); text-align: center; overflow: hidden; }
-.music-video-stage-icon { font-size: 34px; line-height: 1; color: var(--gold-bright); }
-.music-video-stage strong { font-size: 14px; }
-.music-video-stage small { max-width: 290px; font-size: 11px; line-height: 1.6; color: var(--muted); }
-.music-video-stage[data-shape="browser"] { min-height: 340px; aspect-ratio: auto; }
-.music-video-stage[data-shape="audio"] { min-height: 104px; aspect-ratio: auto; }
-.music-video-stage[data-mode="background"] { min-height: 160px; aspect-ratio: auto; }
-.music-video-presentation { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; }
-.music-video-presentation .eyebrow { color: var(--muted); font-size: 9px; }
-.music-video-presentation button { padding: 7px 12px; font-size: 12px; border-color: var(--gold-dim); }
-.music-video-presentation button[aria-pressed="true"] { color: var(--gold-bright); background: var(--tint-gold-2); }
-.music-video-layout .music-link-queue { min-width: 0; margin: 0; padding: 14px; background: var(--tint-gold-1); border: 1px solid var(--hairline-strong); border-radius: 12px; }
-.music-video-layout .music-link-queue-header { align-items: center; margin: 0 0 12px; gap: 8px; }
-.music-video-layout .music-link-queue-header h3 { font-size: 14px; }
-.music-video-layout .music-link-queue-header button { padding: 5px 8px; font-size: 10px; }
-.music-video-layout .music-link-queue-list { max-height: 310px; margin: 0; padding: 0; gap: 8px; }
-.music-video-layout .music-link-queue-item { padding: 12px; border-color: var(--hairline); background: var(--panel-solid); }
-.music-video-layout .music-link-queue-copy strong { font-size: 12px; line-height: 1.5; }
-.music-video-layout .music-link-queue-actions { gap: 4px; }
-.music-video-layout .music-link-queue-actions button { padding: 5px 7px; font-size: 10px; }
-.music-video-layout .music-link-queue-actions button:first-child { color: var(--gold-bright); }
-.music-video-layout .music-browser-card { margin: 12px 0 0; padding: 10px 12px; background: transparent; }
-.music-video-layout .music-browser-copy strong { font-size: 11px; }
-.music-video-layout .music-browser-copy span { font-size: 10px; }
-.music-dropdown .music-connection { padding: 12px 0; margin: 0; border-top: 1px solid var(--hairline); }
-.music-connection > summary { cursor: pointer; color: var(--muted); font: 600 12px/1.5 var(--font-ui); }
-.music-connection[open] > summary { margin-bottom: 14px; color: var(--ivory); }
-.music-dropdown .music-video-settings { padding: 14px; border: 1px solid var(--hairline); border-radius: 12px; }
-.music-dropdown .music-video-settings > h3 { margin: 0 0 12px; font-size: 13px; }
-.music-dropdown .music-video-settings .media-window-controls { background: transparent; }
-.media-window[data-docked="true"] { padding: 0; border-radius: 12px; box-shadow: none; background: var(--bg-deep); }
-.media-window[data-docked="true"] .media-window-resize { display: none; }
-.media-window[data-docked="true"] #browser-move { cursor: default; }
-@container media-menu (max-width: 620px) {
-  .music-video-layout { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-  .music-video-watching { display: contents; }
-  .music-video-layout .music-link-queue-list { max-height: 220px; }
-  .music-video-stage { order: 0; height: 200px; min-height: 0; aspect-ratio: auto; }
-  .music-video-stage[data-shape="browser"] { height: 300px; min-height: 0; }
-  .music-video-stage[data-mode="background"] { height: 120px; }
-  .music-video-presentation { order: 1; margin: 2px 0; }
-  .music-video-layout .music-link-queue { order: 2; }
-  .music-video-layout .music-link-now { order: 3; }
-  .music-video-layout .music-recent { order: 4; }
-  .music-video-layout .music-browser-card { order: 5; }
-}
 @media (max-width: 500px) {
   .music-browser-card { flex-wrap: wrap; }
   .music-dropdown .music-player { gap: 12px; padding: 12px; }
@@ -7123,7 +7074,7 @@ html[data-motion="off"] .companion-orb, html[data-motion="off"] .companion-orb .
 .agents-head .muted { font-size: var(--fs-sm); }
 .agents-head-actions { display: flex; align-items: center; justify-content: end; flex-wrap: wrap; gap: 8px; }
 .agents-eyebrow { font-size: var(--fs-2xs); letter-spacing: .12em; color: var(--gold-bright); }
-.agents-body { container: settings / inline-size; min-width: 0; min-height: 0; overflow-y: auto; padding: 12px 16px; }
+.agents-body { min-width: 0; min-height: 0; overflow-y: auto; padding: 12px 16px; }
 .agents-pane { display: grid; gap: 10px; min-width: 0; }
 .agents-pane[hidden], .agents-save-bar[hidden], .agents-team-toolbar[hidden] { display: none; }
 .agents-card { padding: 14px; border: 1px solid var(--hairline); border-radius: var(--r-lg); background: var(--panel-solid); min-width: 0; }
@@ -7581,7 +7532,7 @@ button, .button { font-family: var(--font-ui); }
 
 /* Settings reads as a preferences notebook. Agent cards keep technical labels,
    while their section heading shares the theme's display face. */
-html[data-shell=rail] .settings-nav { background: var(--studio-menu-fill); border-color: var(--studio-glass-edge); backdrop-filter: var(--studio-menu-blur); }
+html[data-shell=rail] .settings-nav { background: var(--studio-inset-bg); border-color: var(--studio-glass-edge); }
 html[data-studio-style] :is(.settings-find, .segmented, .eyes-mode-tabs, .lab-usage-switch, .music-tabs) { background: var(--studio-field-bg); border-color: var(--studio-glass-edge); }
 .settings-category-head h2 { font-family: var(--font-display); font-size: 28px; }
 html[data-studio-style] .settings-card { border-radius: var(--r-xl); }
@@ -7711,29 +7662,11 @@ html[data-density=compact] :is(.settings-card, .agents-card) { padding: 14px; }
 .studio-select:focus-visible, .studio-scroll-arrow:focus-visible, .studio-choice-option:focus-visible, .studio-style-choice:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
 @keyframes studio-menu-in { from { opacity: 0; translate: 0 4px; scale: .97; } to { opacity: 1; translate: 0 0; scale: 1; } }
 @media (max-width: 760px) { .studio-field { gap: 8px; } }
-/* Anchor Tools to the whole action row when its button is near the left edge. */
-@media (max-width: 600px) {
-  .sheet-actions { position: relative; }
-  .sheet-actions > .surface-tools { position: static; }
-  .sheet-actions .surface-tools-menu { max-width: min(284px, calc(100vw - var(--shell-rail-w, 0px) - 32px)); }
-}
 @media (prefers-reduced-motion: reduce) { .studio-choice-popup { animation: none; } .studio-scroll-arrow { transition: none; } }
 html[data-motion=off] .studio-choice-popup { animation: none; }
 
-/* Moving media can be white, black or patterned. Keep a reading floor under
-   text, including unboxed copy and the navigation, while glass still varies. */
-:root:has([data-media-background="true"]) {
-  --studio-panel-bg: color-mix(in srgb, var(--theme-panel-solid) calc(96% - var(--studio-glass) * 10%), transparent);
-  --studio-shell-fill: color-mix(in srgb, var(--studio-reading-bg) calc(96% - var(--studio-glass) * 8%), transparent);
-  --studio-float-fill: color-mix(in srgb, var(--theme-panel-solid) calc(98% - var(--studio-glass) * 6%), transparent);
-  --studio-page-fill: color-mix(in srgb, var(--studio-reading-bg) 82%, transparent);
-}
-body[data-media-background="true"] {
-  --muted: color-mix(in srgb, var(--ivory) 85%, var(--theme-panel-solid));
-  --dim: var(--muted);
-}
 /* Without blur, a stronger translucent tint protects reading contrast. */
-:root[data-no-blur] {
+html[data-no-blur] {
   --studio-glass-blur: none; --studio-menu-blur: none;
   --studio-panel-bg: color-mix(in srgb, var(--theme-panel-solid) 92%, transparent);
   --studio-menu-fill: color-mix(in srgb, var(--theme-panel-solid) 98%, transparent);
@@ -7750,18 +7683,12 @@ html[data-studio-theme-tone=light] {
   --studio-float-shadow: inset 0 1px var(--studio-glass-highlight), 0 12px 32px -10px rgb(0 0 0 / .14), 0 2px 8px rgb(0 0 0 / .05);
   --studio-glide: color-mix(in srgb, var(--ivory) 10%, transparent);
 }
-/* Zero glass means solid, including when a video is behind the workspace. */
-:root[data-studio-material=solid] {
-  --studio-panel-bg: var(--theme-panel-solid); --studio-menu-fill: var(--theme-panel-solid); --studio-shell-fill: var(--studio-reading-bg);
-  --studio-field-bg: var(--studio-reading-bg); --studio-inset-bg: var(--theme-panel-solid); --studio-page-fill: var(--studio-reading-bg);
-  --studio-glass-blur: none; --studio-menu-blur: none; --studio-float-fill: var(--theme-panel-solid); --studio-float-blur: none;
-}
 /* A light theme brightens what the glass shows instead of dimming it. */
 @media not (prefers-reduced-transparency: reduce) {
-  html[data-studio-theme-tone=light]:not([data-no-blur], [data-studio-material=solid]) { --studio-float-blur: blur(calc(16px + var(--studio-glass) * 16px)) saturate(1.3) brightness(1.06); }
+  html[data-studio-theme-tone=light]:not([data-no-blur]) { --studio-float-blur: blur(calc(16px + var(--studio-glass) * 16px)) saturate(1.3) brightness(1.06); }
 }
 @media (prefers-reduced-transparency: reduce) {
-  :root[data-studio-style], :root[data-no-blur] {
+  :root, html[data-no-blur] {
     --studio-panel-bg: var(--theme-panel-solid); --studio-menu-fill: var(--theme-panel-solid); --studio-shell-fill: var(--studio-reading-bg);
     --studio-field-bg: var(--studio-reading-bg); --studio-inset-bg: var(--theme-panel-solid); --studio-page-fill: var(--studio-reading-bg);
     --studio-glass-blur: none; --studio-menu-blur: none; --studio-sheen: linear-gradient(transparent, transparent);
@@ -8037,6 +7964,15 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .agent-hub-extra h3 { margin: 0; font-size: 18px; font-weight: 500; }
 .agent-hub-extra p { font-size: 12px; line-height: 1.7; margin: 0; }
 .agent-hub-action { text-align: left; white-space: normal; border: 1px solid var(--hairline); padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--gold) 4%, transparent); }
+/* Friends › Your PCs (renderer/pc-sync.js). */
+.pc-sync { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--hairline); border-left: 3px solid var(--hairline); border-radius: 14px; }
+.pc-sync[data-state=clean] { border-left-color: var(--good); }
+.pc-sync[data-state=pending] { border-left-color: var(--warn); }
+.pc-sync[data-state=problem] { border-left-color: var(--bad); }
+.pc-sync-title { margin: 0; font-size: 13px; font-weight: 600; }
+.pc-sync-list { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.pc-sync-run { justify-self: start; }
+.pc-sync-meta { font-variant-numeric: tabular-nums; }
 .agent-hub .companion-panel.companion-in-hub { position: relative; inset: auto; width: 100%; min-height: 160px; max-height: min(510px, calc(100dvh - 290px)); flex: 0 1 auto; background: color-mix(in srgb, var(--theme-panel-solid, #131b28) 24%, transparent); backdrop-filter: blur(10px); box-shadow: none; transition: height 340ms cubic-bezier(.22,1,.36,1); }
 .companion-in-hub .companion-shell-head { display: none; }
 .companion-in-hub .companion-tabs { flex-wrap: wrap; }
@@ -8142,8 +8078,6 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
 @starting-style { #vibe-layer { opacity: 0; } }
 #vibe-layer[hidden] { display: none; opacity: 0; }
 html[data-no-blur] #vibe-layer { --v-blur: none; --v-glass: color-mix(in srgb, var(--panel-solid) 94%, transparent); --v-glass-hi: color-mix(in srgb, var(--gold) 7%, var(--panel-solid)); }
-body[data-media-background="true"] #vibe-layer,
-html[data-studio-material="solid"] #vibe-layer { --v-glass: var(--studio-panel-bg); --v-glass-hi: var(--studio-panel-bg); --v-blur: var(--studio-glass-blur); }
 /* The Build frame steps aside while Vibe is up; the tree stays as the sky.
    Home's section bar (Back, Forward, Home) is Build's too, and it sat over
    Vibe's own top bar, where it swallowed the Search and Settings buttons. */
@@ -8367,7 +8301,7 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-dock button[aria-pressed="true"] .glyph { color: var(--v-accent-hi); }
 
 /* ---- conversation --------------------------------------------------------- */
-.vibe-chat { position: absolute; top: 84px; right: 24px; bottom: 24px; z-index: 2; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(420px, calc(100vw - 48px)); border: 1px solid var(--v-edge); border-radius: 24px; background: var(--studio-float-fill); backdrop-filter: var(--v-blur); box-shadow: -30px 0 80px -40px rgba(0, 0, 0, .9), inset 0 1px 0 color-mix(in srgb, var(--ivory) 7%, transparent); opacity: 1; transform: none; transition: opacity var(--motion-slow) var(--ease-out), transform var(--motion-slow) var(--ease-emphasized), display var(--motion-slow) allow-discrete; }
+.vibe-chat { position: absolute; top: 84px; right: 24px; bottom: 24px; z-index: 2; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(420px, calc(100vw - 48px)); border: 1px solid var(--v-edge); border-radius: 24px; background: color-mix(in srgb, var(--panel-solid) 78%, transparent); backdrop-filter: var(--v-blur); box-shadow: -30px 0 80px -40px rgba(0, 0, 0, .9), inset 0 1px 0 color-mix(in srgb, var(--ivory) 7%, transparent); opacity: 1; transform: none; transition: opacity var(--motion-slow) var(--ease-out), transform var(--motion-slow) var(--ease-emphasized), display var(--motion-slow) allow-discrete; }
 @starting-style { .vibe-chat { opacity: 0; transform: translateX(28px); } }
 .vibe-chat[hidden] { display: none; opacity: 0; transform: translateX(28px); }
 .vibe-chat-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 12px; padding: 16px 16px 12px 20px; border-bottom: 1px solid var(--v-edge); }
@@ -8563,7 +8497,7 @@ button.vibe-ask-chip:hover { border-color: var(--v-edge-hi); color: var(--v-ink)
 html[data-ui-mode="vibe"][data-shell="rail"],
 html[data-ui-mode="vibe"][data-shell="rail"][data-rail-pinned] { --shell-rail-w: 72px; }
 html[data-ui-mode="vibe"] :is(#app-rail, #tabs, #workspace-sidebar-toggle, body > footer) { display: none !important; }
-html[data-ui-mode="vibe"] #app-local-nav { background: var(--studio-menu-fill); backdrop-filter: var(--studio-menu-blur); }
+html[data-ui-mode="vibe"] #app-local-nav { background: color-mix(in srgb, var(--bg) 95%, transparent); backdrop-filter: blur(18px) saturate(1.3); }
 
 .vibe-rail {
   position: fixed; top: 0; bottom: 0; left: 0; z-index: var(--z-shell);
@@ -8627,8 +8561,8 @@ html[data-ui-mode="vibe"] {
   --studio-float-shadow: inset 0 1px color-mix(in srgb, var(--ivory) 10%, transparent), 0 0 0 1px color-mix(in srgb, var(--gold) 14%, transparent), 0 30px 70px -30px rgb(0 0 0 / .8), 0 0 50px -26px color-mix(in srgb, var(--gold) 45%, transparent);
 }
 @media not (prefers-reduced-transparency: reduce) {
-  html[data-ui-mode="vibe"]:not([data-no-blur], [data-studio-material="solid"]):not(:has([data-media-background="true"])) { --studio-float-fill: color-mix(in srgb, var(--theme-panel-solid) 86%, transparent); }
-  html[data-ui-mode="vibe"]:not([data-no-blur], [data-studio-material="solid"]):not([data-studio-theme-tone="light"]):not(:has([data-media-background="true"])) { --studio-float-blur: blur(26px) saturate(1.5) brightness(.9); }
+  html[data-ui-mode="vibe"]:not([data-no-blur]) { --studio-float-fill: color-mix(in srgb, var(--theme-panel-solid) 86%, transparent); }
+  html[data-ui-mode="vibe"]:not([data-no-blur]):not([data-studio-theme-tone="light"]) { --studio-float-blur: blur(26px) saturate(1.5) brightness(.9); }
 }
 
 /* On Vibe's own page there is no rail, so sheets and the project panel use
@@ -10489,11 +10423,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       </aside>
       <section class="explorer-col">
         <h3 id="analyzer-title">Findings</h3>
-        <div id="analyzer-findings"><p class="muted analyzer-empty">Open a project for a local overview, or analyze a file or idea here.</p></div>
+        <div id="analyzer-findings"><p class="muted">Open a project for a local overview, or analyze a file or idea here.</p></div>
       </section>
       <aside class="explorer-col">
         <h3>Evidence &amp; limits</h3>
-        <ul id="analyzer-evidence" class="pin-list"><li class="muted analyzer-empty">The evidence behind each finding, and anything the scan could not inspect, appears here.</li></ul>
+        <ul id="analyzer-evidence" class="pin-list"></ul>
         <div id="analyzer-ai-out"></div>
       </aside>
     </div>
@@ -14998,7 +14932,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     schedule();
   }
   const resize = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
-  function arrowPosition(button, direction, left, top, width, height) {
+  function placeArrow(button, direction, left, top, width, height) {
     if (button.dataset.holding) return;
     const horizontal = direction === "left" || direction === "right";
     const fixed = horizontal ? direction === "left" ? 3 : width - 33 : direction === "up" ? 3 : height - 29;
@@ -15013,24 +14947,21 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         return hit && !hit.closest("button, a, input, textarea, select, summary, [role=button], [role=tab], [contenteditable=true]");
       });
     };
-    return candidates.find(clear);
+    const point = candidates.find(clear);
+    if (point) Object.assign(button.style, { left: `${point[0]}px`, top: `${point[1]}px`, right: "auto", bottom: "auto" });
   }
   function refresh() {
-    // Read every region before writing any hint. Interleaving visibility and
-    // geometry reads with hint updates repeats style resolution for each panel.
-    const updates = [];
     for (const [el, region] of regions) {
-      const update = { el, region, hidden: true };
-      updates.push(update);
-      if (!el.isConnected) { update.remove = true; continue; }
+      if (!el.isConnected) { region.stop(); region.hint.remove(); resize?.unobserve(el); regions.delete(el); continue; }
       const { hint, buttons } = region;
-      if (!visible(el)) continue;
+      if (!visible(el)) { hint.hidden = true; region.stop(); continue; }
       const root = el === document.scrollingElement;
       const style = getComputedStyle(el);
-      if (root && getComputedStyle(document.body).overflowY === "hidden" || !root && !/(auto|scroll)/.test(`${style.overflowX} ${style.overflowY}`)) continue;
+      if (root && getComputedStyle(document.body).overflowY === "hidden" || !root && !/(auto|scroll)/.test(`${style.overflowX} ${style.overflowY}`)) { hint.hidden = true; region.stop(); continue; }
       const height = root ? innerHeight : el.clientHeight, width = root ? innerWidth : el.clientWidth;
       const x = el.scrollWidth - width > 2, y = el.scrollHeight - height > 2;
-      if (!x && !y) { update.removeTab = region.addedTab; continue; }
+      hint.hidden = !x && !y;
+      if (hint.hidden) { region.stop(); if (region.addedTab) { el.removeAttribute("tabindex"); region.addedTab = false; } continue; }
       const bounds = root ? { left: 0, top: 0 } : el.getBoundingClientRect();
       let left = Math.max(0, bounds.left + (el.clientLeft || 0)), top = Math.max(0, bounds.top + (el.clientTop || 0));
       let right = Math.min(innerWidth, bounds.left + width), bottom = Math.min(innerHeight, bounds.top + height);
@@ -15038,43 +14969,14 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         if (!/(auto|scroll|hidden|clip)/.test(getComputedStyle(parent).overflow)) continue;
         const clip = parent.getBoundingClientRect(); left = Math.max(left, clip.left); top = Math.max(top, clip.top); right = Math.min(right, clip.right); bottom = Math.min(bottom, clip.bottom);
       }
-      if (right - left < 35 || bottom - top < 35) continue;
+      if (right - left < 35 || bottom - top < 35) { hint.hidden = true; region.stop(); continue; }
+      Object.assign(hint.style, { left: `${left}px`, top: `${top}px`, width: `${right - left}px`, height: `${bottom - top}px` });
+      hint.dataset.scrollOwner = el.id || el.className || el.tagName;
       const directions = { up: y && el.scrollTop > 1, down: y && el.scrollTop + height < el.scrollHeight - 2, left: x && el.scrollLeft > 1, right: x && el.scrollLeft + width < el.scrollWidth - 2 };
-      const active = el.matches(":hover, :focus-within") || hint.contains(document.activeElement);
-      const arrows = [];
-      if (active || hint.classList.contains("engaged")) for (const [direction, button] of Object.entries(buttons)) if (directions[direction]) {
-        const point = arrowPosition(button, direction, left, top, right - left, bottom - top);
-        if (point) arrows.push({ button, point });
-      }
-      Object.assign(update, { hidden: false, left, top, width: right - left, height: bottom - top, directions, active, arrows,
-        owner: el.id || el.className || el.tagName,
-        addTab: el.tabIndex < 0 && !el.hasAttribute("tabindex") && !el.matches("input, textarea, select, html, body") });
-    }
-    for (const update of updates) {
-      const { el, region } = update;
-      const { hint, buttons } = region;
-      if (update.remove) { region.stop(); hint.remove(); resize?.unobserve(el); regions.delete(el); continue; }
-      if (hint.hidden !== update.hidden) hint.hidden = update.hidden;
-      if (update.hidden) {
-        region.stop();
-        if (update.removeTab) { el.removeAttribute("tabindex"); region.addedTab = false; }
-        continue;
-      }
-      for (const key of ["left", "top", "width", "height"]) {
-        const value = `${update[key]}px`;
-        if (hint.style[key] !== value) hint.style[key] = value;
-      }
-      if (hint.dataset.scrollOwner !== update.owner) hint.dataset.scrollOwner = update.owner;
-      for (const [direction, can] of Object.entries(update.directions)) {
-        if (buttons[direction].hidden !== !can) buttons[direction].hidden = !can;
-        hint.classList.toggle(`can-${direction}`, can);
-      }
-      hint.classList.toggle("active", update.active);
-      for (const { button, point } of update.arrows) {
-        const style = { left: `${point[0]}px`, top: `${point[1]}px`, right: "auto", bottom: "auto" };
-        for (const [key, value] of Object.entries(style)) if (button.style[key] !== value) button.style[key] = value;
-      }
-      if (update.addTab) { el.tabIndex = 0; region.addedTab = true; }
+      for (const [direction, can] of Object.entries(directions)) { buttons[direction].hidden = !can; hint.classList.toggle(`can-${direction}`, can); }
+      hint.classList.toggle("active", el.matches(":hover, :focus-within") || hint.contains(document.activeElement));
+      if (hint.classList.contains("active") || hint.classList.contains("engaged")) for (const [direction, button] of Object.entries(buttons)) if (!button.hidden) placeArrow(button, direction, left, top, right - left, bottom - top);
+      if (el.tabIndex < 0 && !el.hasAttribute("tabindex") && !el.matches("input, textarea, select, html, body")) { el.tabIndex = 0; region.addedTab = true; }
     }
     for (const [select, control] of selects) {
       if (!select.isConnected) { control.remove(); selects.delete(select); continue; }
@@ -15249,7 +15151,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (!presets[appearance.preset]) appearance.preset = "studio";
     const root = document.documentElement;
     root.dataset.studioStyle = appearance.preset; root.dataset.density = appearance.density === "compact" ? "compact" : "comfortable";
-    root.dataset.studioMaterial = Number(appearance.glass) > 0 ? "glass" : "solid";
     root.style.setProperty("--studio-glass", String(Math.max(0, Math.min(100, Number(appearance.glass) || 0)) / 100));
     root.style.setProperty("--studio-glow", String(Math.max(0, Math.min(100, Number(appearance.glow) || 0)) / 100));
     if (save) { try { localStorage.setItem(appearanceKey, JSON.stringify(appearance)); } catch {} }
@@ -16144,7 +16045,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     window.MefiModelLab?.show?.(view);
   }
 
-  const WORKSPACE_PAGES = new Set(["tasks", "plans", "ideas", "brains", "analyzer", "explorer", "trace", "overhead", "agent-brain", "agents"]);
+  const WORKSPACE_PAGES = new Set(["tasks", "plans", "ideas", "brains", "analyzer", "explorer", "overhead", "agent-brain", "agents"]);
   const isWorkspacePage = (dest) => document.documentElement?.dataset?.shell === "rail" && WORKSPACE_PAGES.has(dest?.id);
   function syncPageInert() {
     const page = isWorkspacePage(get(state.sheet));
@@ -16404,7 +16305,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
 
   function close(id) {
-    if (isWorkspacePage(get(id)) && current() === id) {
+    if (WORKSPACE_PAGES.has(id) && current() === id) {
       if (historyState().canBack) return back();
       // In Vibe mode these pages open from Vibe, so Back with nothing behind
       // it goes there instead of stopping on Build's section home.
@@ -29853,9 +29754,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   // One thread renderer for both surfaces (the rail console and the right-side
   // chat log): the newest bubbles, a thinking bubble while a reply is pending,
   // and the scroll pinned to the tail only while the reader already is.
-  // Keep history separate from the live thought: a thinking update must not
-  // replace every message and make the shared controls rescan all its nodes.
-  // Unchanged pushes also skip the scroll measurements (forced layouts).
+  // Every feed push repaints the chat log, and most pushes (a worker's stdout
+  // lines) change nothing the thread shows; rebuilding it anyway cost two
+  // forced layouts of the whole document per push (7.6 ms each on the live
+  // Command view), so a thread that would read the same is left alone.
   const threadPainted = new WeakMap();
   function fillThread(container, full) {
     if (!container) return;
@@ -29879,22 +29781,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const last = messages[messages.length - 1];
     const sameLive = Boolean(live && last?.role === "thinking" && String(last.text ?? "") === live);
     const pending = replyPending(full) && !sameLive;
-    const history = JSON.stringify([bridge, rows]);
-    const previous = threadPainted.get(container);
-    const sameHistory = previous?.history === history && container.firstChild;
-    if (sameHistory && Boolean(previous.bubble) === pending && (!pending || previous.live === live)) return;
+    const signature = JSON.stringify([bridge, rows, pending, pending && live]);
+    if (threadPainted.get(container) === signature && container.firstChild) return;
+    threadPainted.set(container, signature);
     const pinned = container.scrollTop + container.clientHeight >= container.scrollHeight - 28;
     const top = container.scrollTop;
-    if (sameHistory) {
-      let bubble = previous.bubble;
-      if (pending) {
-        if (bubble) thinkingBubble(full, bubble);
-        else { bubble = thinkingBubble(full); container.append(bubble); }
-      } else { bubble?.remove(); bubble = null; }
-      threadPainted.set(container, { history, bubble, live });
-      container.scrollTop = pinned ? container.scrollHeight : top;
-      return;
-    }
     container.textContent = "";
     if (!messages.length) {
       const empty = document.createElement("p");
@@ -29921,9 +29812,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       bubble.append(when);
       container.append(bubble);
     }
-    const bubble = pending ? thinkingBubble(full) : null;
-    if (bubble) container.append(bubble);
-    threadPainted.set(container, { history, bubble, live });
+    if (pending) container.append(thinkingBubble(full));
     container.scrollTop = pinned ? container.scrollHeight : top;
   }
 
@@ -34508,15 +34397,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   // The composer is a textarea that grows with the draft up to a few lines.
   function growArea(area) {
     if (!area) return;
-    // Chromium can size the field as part of its normal layout. Resetting its
-    // height and reading scrollHeight on every status push forces two layouts,
-    // even for an unchanged draft. Keep the old path for older web previews.
-    if (window.CSS?.supports?.("field-sizing", "content")) {
-      if (area.style.fieldSizing !== "content") Object.assign(area.style, {
-        fieldSizing: "content", height: "auto", minHeight: "38px", maxHeight: "120px", overflowY: "auto",
-      });
-      return;
-    }
     area.style.height = "auto";
     const height = Math.min(120, Math.max(38, area.scrollHeight));
     area.style.height = `${height}px`;
@@ -34534,23 +34414,21 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     return agents.some((agent) => agent?.role === "thinker" && agent.status === "running");
   }
 
-  function thinkingBubble(full, bubble = document.createElement("div")) {
+  function thinkingBubble(full) {
+    const bubble = document.createElement("div");
     bubble.className = "assistant-msg assistant thinking";
     const live = String(full?.thinking?.text ?? "").trim();
-    let line = bubble.querySelector(".thought");
     if (live) {
-      if (!line) { line = document.createElement("span"); line.className = "thought"; bubble.prepend(line); }
-      if (line.textContent !== live) line.textContent = live;
-    } else line?.remove();
-    let dots = bubble.querySelector(".dots");
-    if (!dots) {
-      dots = document.createElement("span");
-      dots.className = "dots";
-      dots.append(document.createElement("i"), document.createElement("i"), document.createElement("i"));
-      bubble.append(dots);
+      const line = document.createElement("span");
+      line.className = "thought";
+      line.textContent = live;
+      bubble.append(line);
     }
-    const label = live ? "the assistant is thinking" : "the assistant is replying";
-    if (dots.getAttribute("aria-label") !== label) dots.setAttribute("aria-label", label);
+    const dots = document.createElement("span");
+    dots.className = "dots";
+    dots.setAttribute("aria-label", live ? "the assistant is thinking" : "the assistant is replying");
+    dots.append(document.createElement("i"), document.createElement("i"), document.createElement("i"));
+    bubble.append(dots);
     return bubble;
   }
 
@@ -39566,34 +39444,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
   }
 
-  // Keep the interactive DOM canvases, but let their drawing contexts resolve
-  // explicit canvas fonts without synchronously updating the document's styles.
-  // Probe 2D support before the irreversible transfer; an existing DOM context
-  // or an unsupported preview retains the ordinary canvas path.
-  const drawingContexts = new WeakMap();
-  let offscreen2DSupported;
-  function createDrawingContext(canvas, options) {
-    if (!canvas?.getContext) return null;
-    if (drawingContexts.has(canvas)) return drawingContexts.get(canvas);
-    let target = canvas;
-    if (typeof canvas.transferControlToOffscreen === "function" && typeof OffscreenCanvas === "function") {
-      if (offscreen2DSupported === undefined) {
-        try {
-          const probe = new OffscreenCanvas(1, 1);
-          offscreen2DSupported = Boolean(probe.getContext("2d"));
-          probe.width = probe.height = 0;
-        } catch { offscreen2DSupported = false; }
-      }
-      if (offscreen2DSupported) {
-        try { target = canvas.transferControlToOffscreen(); }
-        catch { /* A context already acquired by an embedding host stays usable. */ }
-      }
-    }
-    const context = target.getContext("2d", options);
-    if (context) drawingContexts.set(canvas, context);
-    return context;
-  }
-
   function resize() {
     const dpr = window.devicePixelRatio || 1;
     const width = window.innerWidth;
@@ -39603,11 +39453,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const bitmapW = Math.round(width * dpr);
     const bitmapH = Math.round(height * dpr);
     const fit = (canvas, ctx) => {
-      const bitmap = ctx.canvas ?? canvas;
-      const cleared = bitmap.width !== bitmapW || bitmap.height !== bitmapH;
+      const cleared = canvas.width !== bitmapW || canvas.height !== bitmapH;
       if (cleared) {
-        bitmap.width = bitmapW;
-        bitmap.height = bitmapH;
+        canvas.width = bitmapW;
+        canvas.height = bitmapH;
       }
       canvas.style.width = width + "px";
       canvas.style.height = height + "px";
@@ -39706,10 +39555,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     el.far = document.getElementById("idle-layer-far");
     // Transparent when video supplies the sky; ordinary scenes still paint
     // the whole backdrop. Nodes retain their own full-strength paint.
-    el.farCtx = createDrawingContext(el.far, { alpha: true });
+    el.farCtx = el.far?.getContext?.("2d", { alpha: true }) ?? null;
       el.hud = document.getElementById("idle-hud");
       if (!el.canvas) return;
-      el.ctx = createDrawingContext(el.canvas);
+      el.ctx = el.canvas.getContext("2d");
       el.width = window.innerWidth;
       el.height = window.innerHeight;
     }
@@ -40440,8 +40289,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   applyTreePreferences(window.MefiMusic?.graphPreferences?.() ?? {});
 
   window.MefiIdle = {
-    // Read the actual paint target for pixel diagnostics after a canvas transfer.
-    canvasContext: (canvas) => drawingContexts.get(canvas) ?? null,
     mediaSceneArea, setMediaFocus,
     queueSettings,
     refreshQueueSettings,
@@ -42471,7 +42318,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   let initialized = false;
 
   const base = (file) => (file ? file.split(/[\\/]/).pop() : "(unknown)");
-  const plural = (count, one, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
   // #analyzer-open binds straight to open(), so arg 0 can be a click Event.
   const optionsOf = (value) =>
     value && typeof value === "object" && typeof value.preventDefault !== "function" ? value : {};
@@ -42495,31 +42341,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     return block;
   }
 
-  // Findings and Evidence are never left blank: before a run, while one reads,
-  // and after one is cancelled or fails, each column says what belongs there.
-  const PENDING = {
-    project: "Reading the project's files and old plans…",
-    file: "Reading the file…",
-    idea: "Comparing the idea with the project's files…",
-    picker: "Waiting for a file…",
-  };
-  function emptyState(kind) {
-    if (!els.findings || !els.evidence) return;
-    const note = document.createElement("p");
-    note.className = "muted analyzer-empty";
-    note.textContent = PENDING[kind]
-      ?? (!window.mefiStudio?.analyzerRun ? "Analysis runs in the desktop app, where Studio can read your project folder."
-        : !state.projectId ? "Open a project folder to see its languages, entry points, old plans and starting points. You can also analyze a single file or an idea."
-          : "Choose Analyze project, pick a file, or describe an idea to see findings here.");
-    els.findings.textContent = "";
-    els.findings.append(note);
-    const row = document.createElement("li");
-    row.className = "muted analyzer-empty";
-    row.textContent = PENDING[kind] ? "Evidence appears as the read finishes." : "The evidence behind each finding, and anything the scan could not inspect, appears here.";
-    els.evidence.textContent = "";
-    els.evidence.append(row);
-  }
-
   function list(parent, heading, items, emptyText) {
     const title = document.createElement("h4");
     title.textContent = heading;
@@ -42528,7 +42349,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (!items.length) {
       const li = document.createElement("li");
       li.className = "muted";
-      li.textContent = emptyText ?? "None found";
+      li.textContent = emptyText ?? "none";
       ul.append(li);
     }
     for (const item of items) {
@@ -42565,15 +42386,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     parent.append(wrap);
     const legend = document.createElement("p");
     legend.className = "eyes-status";
-    legend.textContent = `${plural(composition.lines, "line")} · ${composition.codePercent}% code · ${composition.commentPercent}% comments`;
+    legend.textContent = `${composition.lines} lines · ${composition.codePercent}% code · ${composition.commentPercent}% comments`;
     parent.append(legend);
   }
 
-  const sentence = (text) => { const value = String(text ?? ""); return value.charAt(0).toUpperCase() + value.slice(1); };
-
   function renderFile(result) {
     for (const finding of result.findings) {
-      card(els.findings, sentence(finding.kind), finding.kind === "markers" ? "collision" : finding.kind === "references" ? "improver" : "", finding.text);
+      card(els.findings, finding.kind.toUpperCase(), finding.kind === "markers" ? "collision" : finding.kind === "references" ? "improver" : "", finding.text);
     }
     compositionBar(els.findings, result.composition);
     if (result.outline.length) {
@@ -42581,16 +42400,16 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         els.findings,
         "Outline",
         result.outline.slice(0, 14).map((entry) => ({ label: `L${entry.line}`, value: entry.label })),
-        "No outline entries"
+        "no outline entries"
       );
-      if (result.outline.length > 14) card(els.findings, "Outline", "improver", `…and ${plural(result.outline.length - 14, "more entry", "more entries")}`);
+      if (result.outline.length > 14) card(els.findings, "OUTLINE", "improver", `…and ${result.outline.length - 14} more entries`);
     }
     if (result.markers.length) {
       list(
         els.findings,
         "Markers",
         result.markers.slice(0, 10).map((marker) => ({ label: `${marker.level} L${marker.line}`, value: marker.text })),
-        "Clean"
+        "clean"
       );
     }
     const missing = result.references.filter((reference) => !reference.found);
@@ -42598,44 +42417,35 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       els.findings,
       "Referenced paths",
       result.references.slice(0, 12).map((reference) => ({
-        label: reference.found ? "Present" : "Missing",
+        label: reference.found ? "exists" : "MISSING",
         value: reference.ref,
         title: reference.found ? "present in the work tree" : "not found in the work tree",
       })),
-      "No path references"
+      "no path references"
     );
     for (const reference of missing.slice(0, 8)) {
       const row = document.createElement("li");
       row.className = "muted";
-      row.textContent = `Missing: ${reference.ref}`;
+      row.textContent = `missing: ${reference.ref}`;
       els.evidence.append(row);
     }
-    if (result.references.length && !missing.length) {
-      const row = document.createElement("li");
-      row.textContent = result.references.length === 1 ? "The referenced path exists in the work tree." : `All ${result.references.length} referenced paths exist in the work tree.`;
-      els.evidence.append(row);
-    }
-    const limit = document.createElement("li");
-    limit.textContent = "Local read of this file only. Nothing was run.";
-    els.evidence.append(limit);
   }
 
   function renderIdea(result) {
     const verdictClass = result.verdict === "new" ? "improver" : result.verdict === "related work exists" ? "collision" : "fix";
-    card(els.findings, "Verdict", verdictClass, `${sentence(result.verdict)} · ${result.coverage}% keyword coverage across ${plural(result.files.length, "file")}, ${result.scanned} scanned`);
+    card(els.findings, "VERDICT", verdictClass, `${result.verdict} · ${result.coverage}% keyword coverage across ${result.files.length} file(s), ${result.scanned} scanned`);
     const chips = document.createElement("div");
     chips.className = "keyword-row";
     for (const keyword of result.keywords) {
       const chip = document.createElement("span");
       chip.className = `chip ${result.keywordHits[keyword] ? "on" : ""}`;
-      chip.textContent = `${keyword} · ${result.keywordHits[keyword] || 0}`;
-      chip.title = result.keywordHits[keyword] ? `${plural(result.keywordHits[keyword], "match", "matches")} in the project` : "Not found in the project";
+      chip.textContent = `${keyword} ${result.keywordHits[keyword] ? `·${result.keywordHits[keyword]}` : "· 0"}`;
       chips.append(chip);
     }
     els.findings.append(chips);
-    for (const suggestion of result.suggestions) card(els.findings, "Next step", "", suggestion);
+    for (const suggestion of result.suggestions) card(els.findings, "NEXT", "", suggestion);
     for (const reference of result.references.slice(0, 8)) {
-      card(els.findings, reference.found ? "Present" : "Missing", reference.found ? "" : "fix", reference.ref);
+      card(els.findings, reference.found ? "REF OK" : "REF MISSING", reference.found ? "" : "fix", reference.ref);
     }
     if (result.hits.length) {
       list(
@@ -42646,12 +42456,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
           value: hit.snippet,
           title: `${hit.keyword} · ${hit.file}`,
         })),
-        "No matches"
+        "no hits"
       );
     } else {
       const li = document.createElement("li");
       li.className = "muted";
-      li.textContent = "No matches in the project. Every keyword is new ground.";
+      li.textContent = "No evidence hits — every keyword is new ground.";
       els.evidence.append(li);
     }
   }
@@ -42671,15 +42481,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const inventory = result.inventory || {};
     const plans = result.plans || [];
     const summary = result.summary || {};
-    card(els.findings, "Project", "improver", `${plural(inventory.files || 0, "file")} · ${plural(inventory.sourceFiles || 0, "source file")} · ${plural(inventory.testFiles || 0, "test file")} · ${plural(inventory.documents || 0, "document")}`);
-    card(els.findings, "Plan check", "", `${plural(plans.length, "old plan")} · ${plural(summary.claimedComplete || 0, "completion claim")} · ${plural(summary.missingReferences || 0, "missing path")}. Related code and existing paths are evidence to review; they do not prove a plan is complete.`);
+    card(els.findings, "PROJECT", "improver", `${inventory.files || 0} files · ${inventory.sourceFiles || 0} source files · ${inventory.testFiles || 0} test files · ${inventory.documents || 0} documents`);
+    card(els.findings, "PLAN CHECK", "", `${plans.length} old plan(s) · ${summary.claimedComplete || 0} completion claim(s) · ${summary.missingReferences || 0} missing path(s). Related code and existing paths are evidence to review; they do not prove a plan is complete.`);
 
     const heading = document.createElement("h4");
     heading.textContent = "Starting points";
     els.findings.append(heading);
     for (const point of result.startingPoints || []) {
       const block = document.createElement("section");
-      card(block, "Next step", "improver", point.title);
+      card(block, "NEXT", "improver", point.title);
       const reason = document.createElement("p");
       reason.textContent = point.reason;
       block.append(reason);
@@ -42699,8 +42509,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       block.append(prepare);
       els.findings.append(block);
     }
-    if (!result.startingPoints?.length) card(els.findings, "Next step", "", "Describe the outcome you want under Idea to explore a starting point.");
-    list(els.findings, "Languages", (inventory.languages || []).map((language) => `${language.name} · ${plural(language.count, "file")}`), "No source languages discovered.");
+    if (!result.startingPoints?.length) card(els.findings, "NEXT", "", "Describe the outcome you want in the idea box to explore a starting point.");
+    list(els.findings, "Languages", (inventory.languages || []).map((language) => `${language.name} · ${language.count} files`), "No source languages discovered.");
     list(els.findings, "Entry points", inventory.entryPoints || [], "No entry points discovered.");
     list(els.findings, "Checks discovered — not run", (inventory.checks || []).map((check) => `${check.name}: ${check.command}`), "No automated checks discovered.");
 
@@ -42747,7 +42557,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       }
       els.findings.append(details);
     }
-    if (!plans.length) card(els.findings, "Plans", "", "No old plans were found in the scanned documents or this project's saved Studio plans.");
+    if (!plans.length) card(els.findings, "PLANS", "", "No old plans were found in the scanned documents or this project's saved Studio plans.");
     for (const limitation of result.limitations || []) {
       const row = document.createElement("li");
       row.textContent = limitation;
@@ -42766,8 +42576,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const heading = document.createElement("h4");
     heading.textContent = "AI deep read";
     els.aiOut.append(heading);
-    if (typeof ai.summary === "string" && ai.summary) card(els.aiOut, "Summary", "improver", ai.summary);
-    for (const [key, tag] of [["features", "Feature"], ["ideas", "Idea"], ["content", "Content"], ["gaps", "Gap"]]) {
+    if (typeof ai.summary === "string" && ai.summary) card(els.aiOut, "SUMMARY", "improver", ai.summary);
+    for (const [key, tag] of [["features", "FEATURE"], ["ideas", "IDEA"], ["content", "CONTENT"], ["gaps", "GAP"]]) {
       for (const item of (Array.isArray(ai[key]) ? ai[key] : []).filter((entry) => typeof entry === "string").slice(0, 6)) card(els.aiOut, tag, key === "gaps" ? "fix" : "", item);
     }
   }
@@ -42780,12 +42590,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (els.projectAi) els.projectAi.disabled = !state.projectResult || state.aiPending || !window.mefiStudio?.analyzerAi;
   }
 
-  function clearResult(kind) {
+  function clearResult() {
     state.result = null;
     state.ai = null;
+    els.findings.textContent = "";
+    els.evidence.textContent = "";
     els.aiOut.textContent = "";
     els.title.textContent = "Findings";
-    emptyState(kind);
   }
 
   // Every intent owns one sequence, including the time spent in a native picker.
@@ -42795,7 +42606,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     state.aiRequest += 1;
     state.pending = kind;
     state.aiPending = false;
-    clearResult(kind);
+    clearResult();
     controls();
     return { request: state.request, epoch: state.epoch, projectId: state.projectId };
   }
@@ -42809,8 +42620,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   function finish(token) {
     if (!current(token)) return;
     state.pending = null;
-    // A cancelled picker or a failed read leaves no result: drop the "Reading…" note.
-    if (!state.result) emptyState();
     controls();
   }
 
@@ -42845,15 +42654,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       state.projectResult = result;
       els.title.textContent = `Project · ${result.name}`;
       renderProject(result);
-      status(`Project scan complete · ${plural((result.plans || []).length, "old plan")} · ${plural((result.startingPoints || []).length, "starting point")} · checks not run`);
+      status(`Project scan complete · ${(result.plans || []).length} old plan(s) · ${(result.startingPoints || []).length} starting point(s) · checks not run`);
     } else if (result.kind === "file") {
       els.title.textContent = `Findings · ${result.name}`;
       renderFile(result);
-      status(`Analyzed ${result.name} · ${result.language} · ${plural(result.composition.lines, "line")}`);
+      status(`analyzed ${result.name} · ${result.language} · ${result.composition.lines} lines`);
     } else {
-      els.title.textContent = "Findings · Idea";
+      els.title.textContent = "Findings · idea";
       renderIdea(result);
-      status(`Idea compared · ${result.verdict} · ${result.coverage}% keyword coverage`);
+      status(`idea compared · ${result.verdict} · ${result.coverage}% keyword coverage`);
     }
     controls();
   }
@@ -42868,7 +42677,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (!filePath || !window.mefiStudio?.analyzerRun) return;
     if (pickerToken && !current(pickerToken)) return;
     const token = pickerToken || begin("file");
-    status(`Reading ${base(filePath)}…`);
+    status(`reading ${base(filePath)}…`);
     try {
       const response = await window.mefiStudio.analyzerRun("file", { path: filePath, projectId: token.projectId || undefined });
       if (!current(token, response)) return;
@@ -42886,7 +42695,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   async function runIdea(text) {
     if (!text || !window.mefiStudio?.analyzerRun) return;
     const token = begin("idea");
-    status("Comparing the idea with the project's files…");
+    status("verifying idea against the work tree…");
     try {
       const response = await window.mefiStudio.analyzerRun("idea", { text, projectId: token.projectId || undefined });
       if (!current(token, response)) return;
@@ -42936,7 +42745,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       state.pending = null;
       state.aiPending = false;
       clearResult();
-      status("Open a project folder to analyze it.");
+      status("Open a project folder to analyse it.");
       controls();
       return;
     }
@@ -52908,7 +52717,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   const finite = (value, fallback) => Number.isFinite(value) ? value : fallback;
   const distance = (point, box) => Math.hypot(Math.max(box.x - point.x, 0, point.x - box.x - box.width), Math.max(box.y - point.y, 0, point.y - box.y - box.height));
 
-  function create({ content, onClose, onSettings, settingsHost, onPlacement }) {
+  function create({ content, onClose, onSettings, settingsHost }) {
     let saved;
     try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); } catch {}
     let pinned = saved?.pinned === true;
@@ -52921,7 +52730,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     let trackDark = saved?.trackDark === true, sceneTimer = null, sceneBusy = false;
     let darkCandidate = -1, darkStreak = 0, darkCurrent = 4, darkMovedAt = 0;
     let knownTasks = null, projectId = null, taskRevision = 0;
-    let box = null, dockBox = null, dockDetached = false, placementStamp = "", shape = "video", minimized = false, gesture = null;
+    let box = null, shape = "video", minimized = false, gesture = null;
     let visible = false, hovered = false, yielded = false, awaySince = 0, lastDistance = Infinity, graceUntil = 0;
     let size = {};
     for (const key of ["video", "tall", "compact", "audio", "browser"]) {
@@ -53044,17 +52853,14 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     function visibleBox() {
       if (minimized) return { ...box, width: Math.min(box.width, 304), height: 44 };
       if (background && shape !== "browser") { const area = bounds(); return { x: area.left, y: area.top, width: area.right - area.left, height: area.bottom - area.top }; }
-      return dockBox || box;
+      return box;
     }
     function layout() {
       if (!box) return;
       box = fit(box);
       const current = visibleBox();
-      const docked = Boolean(dockBox && !minimized && !(background && shape !== "browser"));
-      root.dataset.docked = String(docked);
-      root.style.clipPath = docked && dockBox.clip ? `inset(${dockBox.clip.join("px ")}px)` : "none";
       Object.assign(root.style, { left: `${current.x}px`, top: `${current.y}px`, width: `${current.width}px`, height: `${current.height}px` });
-      for (const grip of edges) grip.hidden = docked || minimized || background && shape !== "browser";
+      for (const grip of edges) grip.hidden = minimized || background && shape !== "browser";
       paintVideo();
     }
     function persist() {
@@ -53100,9 +52906,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       for (const control of [backgroundButton, opacityInput, brightnessInput, fadeButton, darkButton]) control.disabled = browsing;
       // A backdrop must never take keyboard focus or intercept workspace clicks.
       content.inert = backdrop || minimized;
-      const placement = { background: backdrop, minimized, docked: root.dataset.docked === "true", visible };
-      const nextStamp = JSON.stringify(placement);
-      if (nextStamp !== placementStamp) { placementStamp = nextStamp; onPlacement?.(placement); }
       if (backdrop && tracking && window.mefiStudio?.mediaSceneSample && !sceneTimer) sceneTimer = window.setInterval(sampleDarkArea, 5000);
       if ((!backdrop || !tracking) && sceneTimer) { window.clearInterval(sceneTimer); sceneTimer = null; }
       if (dynamics || !backdrop || !trackDark) {
@@ -53191,7 +52994,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
     function start(event, edge = "move") {
       if (event.button !== 0 || gesture || !visible || background && shape !== "browser") return;
-      if (dockBox) { dockBox = null; dockDetached = true; layout(); }
       event.preventDefault(); event.stopPropagation();
       gesture = { edge, x: event.clientX, y: event.clientY, box: { ...box }, target: event.currentTarget, pointerId: event.pointerId };
       root.dataset.dodging = "false";
@@ -53221,7 +53023,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     function keyboard(event, edge) {
       const vectors = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
       if (!vectors[event.key] || !box || background && shape !== "browser") return;
-      if (dockBox) { dockBox = null; dockDetached = true; }
       event.preventDefault(); event.stopPropagation();
       root.dataset.dodging = "false";
       const step = event.shiftKey ? 2 : 16;
@@ -53239,7 +53040,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         box = changed(event.clientX - gesture.x, event.clientY - gesture.y, gesture.edge, gesture.box);
         layout(); return;
       }
-      if (!visible || minimized || dockBox || background || shape === "browser" || event.buttons || event.pointerType && event.pointerType !== "mouse") return;
+      if (!visible || minimized || background || shape === "browser" || event.buttons || event.pointerType && event.pointerType !== "mouse") return;
       const point = { x: event.clientX, y: event.clientY }, gap = distance(point, box), time = now();
       const approaching = gap < lastDistance; lastDistance = gap;
       // After one dodge, following the player always wins. Rearm only after
@@ -53285,10 +53086,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     });
     seedTasks();
     paintToggles();
-    return { show, hide, reveal, dock: value => { if (!value) dockDetached = false; if (value && dockDetached || JSON.stringify(value) === JSON.stringify(dockBox)) return; dockBox = value; layout(); },
-      setBackground: value => { if (Boolean(value) !== background) backgroundButton.click(); },
-      beginMove: start, moveKey: event => keyboard(event, "move"), minimize: () => minimize.click(),
-      snapshot: () => ({ minimized }), restore: (value) => { if (Boolean(value?.minimized) !== minimized) minimize.click(); } };
+    return { show, hide, reveal, beginMove: start, moveKey: event => keyboard(event, "move"), minimize: () => minimize.click(), snapshot: () => ({ minimized }), restore: (value) => { if (Boolean(value?.minimized) !== minimized) minimize.click(); } };
   }
   window.MefiMediaWindow = { create };
 })();
@@ -54629,7 +54427,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       state.link = null; state.handoff = null; state.source = "link"; prefs.source = "link"; persist();
       els.floatingPlayer?.show({ shape: "browser", label: "Media browser" });
       els.floatingPlayer?.restore?.({ minimized: false });
-      render(); announce(); openAudio(); scheduleDropdown(); els.browser.schedule?.();
+      render(); announce(); closeAudio(); els.browser.schedule?.();
       note("Browse and play inside Studio. Use the website’s playback controls.");
       return true;
     } catch { note("The browser could not open. Try again.", true); return false; }
@@ -54854,22 +54652,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     paintLinkVolume();
     const link = state.source === "link" ? state.link : null;
     const browser = els.browser?.active ? els.browser.state : null;
-    if (els.linkStage) {
-      els.linkStage.dataset.shape = browser ? "browser" : link?.shape || "video";
-      els.linkStage.dataset.mode = els.mediaPlacement?.background ? "background" : "player";
-      els.linkStageTitle.textContent = els.mediaPlacement?.background ? "Playing behind your workspace" : els.mediaPlacement?.minimized ? "Player minimized" : "Your next video starts here";
-      els.linkStageHint.textContent = els.mediaPlacement?.background ? "Your queue stays here. Return to the player any time." : "Paste a video link above, or choose one from your queue.";
-    }
-    if (els.backgroundToggle) {
-      const candidate = browser ? mediaLink(browser.url) : link;
-      els.backgroundToggle.disabled = !playableLink(candidate) || candidate.shape === "audio";
-      els.backgroundToggle.textContent = els.mediaPlacement?.background ? "Return to player" : "Use as background";
-      els.backgroundToggle.setAttribute("aria-pressed", String(Boolean(els.mediaPlacement?.background)));
-      els.backgroundToggle.title = browser && !playableLink(candidate) ? "Open a video link to use background playback" : "Play this video behind your workspace";
-    }
     els.linkNow.hidden = !link && !browser;
     if (els.browseLink) els.browseLink.hidden = Boolean(browser);
-    if (els.linkNext) els.linkNext.hidden = !linkQueue.length && link?.provider !== "youtube";
+    if (els.linkNext) els.linkNext.hidden = Boolean(browser) || !linkQueue.length && link?.provider !== "youtube";
     if (browser) {
       els.linkNowTitle.textContent = browser.title || "Media browser";
       els.linkNowDetail.textContent = "Browsing inside Studio · use the website’s playback controls";
@@ -55051,8 +54836,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     for (const [action, label] of [["play", "Play"], ["queue", "Add to queue"], ["next", "Queue next"], ["dismiss", "Dismiss"]]) button(label, "ghost mini", clipboardActions, () => useClipboardOffer(action), `music-clipboard-${action}`);
     const dropdownBody = element("div", "music-dropdown-body", null, dropdown);
     els.dropdownBody = dropdownBody;
-    const connection = element("details", "music-connection", null, dropdownBody);
-    element("summary", null, "Audio connection & clipboard", connection);
+    const connection = element("div", "music-connection", null, dropdownBody);
     const copiedLinksLabel = element("label", "music-clipboard-toggle", null, connection);
     els.copiedLinks = element("input", null, null, copiedLinksLabel); els.copiedLinks.id = "music-copied-links"; els.copiedLinks.type = "checkbox";
     element("span", null, "Offer copied media links", copiedLinksLabel);
@@ -55066,8 +54850,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const soundLabel = element("p", "eyebrow music-group-label", "Your listening room", main); soundLabel.id = "music-sound-label"; soundLabel.tabIndex = -1;
     const browserCard = element("div", "music-browser-card", null, main);
     const browserCopy = element("div", "music-browser-copy", null, browserCard);
-    element("strong", null, "Browse a website", browserCopy);
-    element("span", null, "Open a page inside this player.", browserCopy);
+    element("strong", null, "The web, inside your player", browserCopy);
+    element("span", null, "Videos, music and live streams right here in Studio.", browserCopy);
     button("Browse here", "ghost", browserCard, () => void openMediaBrowser(), "music-browser-launch");
     els.groups = { look: { group: settings, label: lookLabel }, sound: { group: main, label: soundLabel } };
     const tabs = element("div", "music-tabs", null, main); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Music source");
@@ -55144,8 +54928,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     els.radioVolume.addEventListener("input", () => setVolume(els.radioVolume.value));
     element("p", "music-fineprint", "Each station lists several mirrors. If one stops sending, Studio brings the next one up on a second deck and crosses over, so the music keeps playing through the handover.", els.radio);
     els.link = element("section", "music-link", null, main); els.link.id = "music-link-panel"; els.link.setAttribute("role", "tabpanel"); els.link.setAttribute("aria-labelledby", "music-link-tab");
-    element("h3", null, "Your video space", els.link);
-    element("p", "music-subtitle", "Watch here, play in the background, or line up what’s next.", els.link);
+    element("h3", null, "One link. Your next escape.", els.link);
+    element("p", "music-subtitle", "Paste or drop a video, song, stream or website. Supported media plays here; other pages open in the mini browser.", els.link);
     const linkForm = element("form", "music-link-form", null, els.link);
     els.linkInput = element("input", null, null, linkForm); els.linkInput.id = "music-link-url"; els.linkInput.type = "text"; els.linkInput.inputMode = "url"; els.linkInput.placeholder = "Paste a link or website address…"; els.linkInput.setAttribute("aria-label", "Media link");
     els.linkInput.autocomplete = "off"; els.linkInput.spellcheck = false;
@@ -55155,26 +54939,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     button("Browse here", "ghost", queueTools, () => void openMediaBrowser(els.linkInput.value.trim()), "music-link-browser");
     button("Add to queue", "ghost", queueTools, () => queueLink(els.linkInput.value), "music-link-queue-add");
     button("Queue next", "ghost", queueTools, () => queueLink(els.linkInput.value, null, true), "music-link-queue-first");
-    const linkLayout = element("div", "music-video-layout", null, els.link);
-    const watching = element("div", "music-video-watching", null, linkLayout);
-    els.linkStage = element("div", "music-video-stage", null, watching); els.linkStage.id = "music-video-stage";
-    element("span", "music-video-stage-icon", "▷", els.linkStage).setAttribute("aria-hidden", "true");
-    els.linkStageTitle = element("strong", null, "Your next video starts here", els.linkStage);
-    els.linkStageHint = element("small", null, "Paste a video link above, or choose one from your queue.", els.linkStage);
-    const presentation = element("div", "music-video-presentation", null, watching);
-    element("span", "eyebrow", "PLAYBACK", presentation);
-    els.backgroundToggle = button("Use as background", "ghost", presentation, () => {
-      const browsing = els.browser?.active;
-      if (browsing && !playLink(els.browser.state.url)) return;
-      els.floatingPlayer?.setBackground(browsing || !els.mediaPlacement?.background);
-      renderLinkNow(); scheduleDropdown();
-    }, "music-video-background");
     els.linkHandoff = element("div", "music-link-handoff", null, els.link); els.linkHandoff.id = "music-link-handoff"; els.linkHandoff.hidden = true;
-    els.recent = element("div", "music-recent", null, watching); els.recent.setAttribute("aria-label", "Recent links");
+    els.recent = element("div", "music-recent", null, els.link); els.recent.setAttribute("aria-label", "Recent links");
     // renderer/together.js fills this, above the player, with Listen together and the
     // now-playing share (both need the rooms hub).
     els.together = element("section", "music-together", null, els.link); els.together.hidden = true;
-    els.linkNow = element("div", "music-link-now", null, watching); els.linkNow.hidden = true;
+    els.linkNow = element("div", "music-link-now", null, els.link); els.linkNow.hidden = true;
     const nowCopy = element("span", "music-link-now-copy", null, els.linkNow);
     els.linkNowTitle = element("strong", null, null, nowCopy);
     els.linkNowDetail = element("small", null, null, nowCopy);
@@ -55199,7 +54969,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     els.floatingPlayer = window.MefiMediaWindow?.create({
       content: els.linkPlayer,
       settingsHost: videoSettings,
-      onPlacement: placement => { els.mediaPlacement = placement; renderLinkNow(); },
       onSettings: () => open("sound"),
       onClose: () => { unmountLink(); state.link = null; render(); announce(); },
     });
@@ -55220,15 +54989,14 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     searchForm.addEventListener("submit", event => { event.preventDefault(); searchYouTube(); });
     els.youtubeNotice = element("p", "music-fineprint", "Find a video, then Play. Next video follows your results or YouTube playlist.", els.youtubeExplorer); els.youtubeNotice.setAttribute("role", "status");
     els.youtubeResults = element("div", "music-youtube-results", null, els.youtubeExplorer); els.youtubeResults.id = "music-youtube-results";
-    const queue = element("section", "music-link-queue", null, linkLayout); queue.setAttribute("aria-label", "Video queue");
+    const queue = element("section", "music-link-queue", null, els.link); queue.setAttribute("aria-label", "Video queue");
     const queueHeader = element("div", "music-link-queue-header", null, queue);
     els.linkQueueHeading = element("h3", null, "Up next", queueHeader); els.linkQueueHeading.setAttribute("aria-live", "polite");
     els.linkQueueNext = button("Play next video", "ghost", queueHeader, () => playQueued(), "music-link-queue-next");
     els.linkQueueEmpty = element("p", "music-fineprint", "Your queue is empty. Add a link above or choose a YouTube result.", queue);
     els.linkQueueList = element("ol", "music-link-queue-list", null, queue); els.linkQueueList.id = "music-link-queue-list";
-    element("p", "music-fineprint", "Your queue is saved. Play now, move a video to next, or remove it.", queue);
+    element("p", "music-fineprint", "Queued videos play first when you press Next video. YouTube, Vimeo and direct files also advance automatically when they finish. Your queue is saved across reloads.", queue);
     renderLinkQueue();
-    watching.append(browserCard);
     element("p", "music-fineprint", "Video settings live here in Music & video. Background and Transparency put the video behind your work; Float video restores its controls. Keep tree in dark areas waits for a consistently darker area, then glides slowly. Fade on finish dims the video and notifies you when a task completes.", els.link);
     element("p", "music-fineprint", "Embedded players use their service’s sign-in, ads and availability rules. YouTube and Vimeo remember playback when Studio reopens within ten minutes. Set the audio link to Desktop audio and the node tree follows them.", els.link);
     els.link.addEventListener("dragover", (event) => {
@@ -55245,7 +55013,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       playLink(text);
     });
     const audioLink = element("details", "music-audio-link", null, dropdownBody);
-    dropdownBody.append(connection);
     els.audioLink = audioLink;
     audioLink.id = "music-audio-reactions";
     audioLink.setAttribute("aria-labelledby", "music-audio-heading");
@@ -55299,20 +55066,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     els.recommendation = element("div", "music-recommendation", "", ai); els.recommendation.id = "music-recommendation"; els.recommendation.setAttribute("aria-live", "polite");
     els.notice = element("p", "music-notice", "", dropdownBody); els.notice.setAttribute("role", "status");
     dropdown.addEventListener("keydown", audioKey);
-    dropdown.addEventListener("transitionend", scheduleDropdown);
-    if (typeof ResizeObserver === "function") {
-      const playerLayout = new ResizeObserver(scheduleDropdown);
-      playerLayout.observe(els.linkStage); playerLayout.observe(dropdownHeader);
-    }
     dropdown.addEventListener("pointerenter", cancelAudioHoverTimers);
     dropdown.addEventListener("pointerleave", leaveAudioHover);
     dropdown.addEventListener("pointerdown", pinAudioDropdown);
     dropdown.addEventListener("focusin", pinAudioDropdown);
     dropdown.addEventListener("focusout", (event) => {
-      if (event.relatedTarget && !dropdown.contains(event.relatedTarget) && !els.linkPlayer?.contains(event.relatedTarget) && !dropdownAnchor?.contains(event.relatedTarget) && !audioSelectContains(event.relatedTarget)) closeAudio();
+      if (event.relatedTarget && !dropdown.contains(event.relatedTarget) && !dropdownAnchor?.contains(event.relatedTarget) && !audioSelectContains(event.relatedTarget)) closeAudio();
     });
-    els.linkPlayer.addEventListener("pointerenter", cancelAudioHoverTimers);
-    els.linkPlayer.addEventListener("pointerleave", leaveAudioHover);
     const preview = element("section", "music-preview", null, els.overlay);
     preview.setAttribute("aria-labelledby", "music-preview-heading");
     const previewHeader = element("header", "music-preview-header", null, preview);
@@ -55348,20 +55108,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const above = anchor?.height ? Math.max(0, anchor.top - 8 - edge) : 0;
     const below = height - bottom - 8 - edge;
     const flip = below < 280 && above > below && above >= 240;
-    const top = els.dropdown.dataset.source === "link" ? Math.max(edge, Math.min(bottom + 8, 72, height - 280))
-      : flip ? edge : Math.max(edge, Math.min(bottom + 8, height - 280));
+    const top = flip ? edge : Math.max(edge, Math.min(bottom + 8, height - 280));
     const panelWidth = els.dropdown.getBoundingClientRect().width;
     const right = anchor?.width ? width - anchor.right : edge;
     els.dropdown.style.top = `${Math.round(top)}px`;
     els.dropdown.style.right = `${Math.round(Math.max(edge, Math.min(right, width - panelWidth - edge)))}px`;
-    els.dropdown.style.maxHeight = `${Math.max(0, flip && els.dropdown.dataset.source !== "link" ? above : height - top - edge)}px`;
-    const stage = els.linkStage?.getBoundingClientRect?.();
-    const panel = els.dropdown.getBoundingClientRect();
-    const header = els.dropdownHeader.getBoundingClientRect();
-    els.floatingPlayer?.dock?.(els.link.hidden || !stage?.width || !stage?.height ? null : {
-      x: stage.left, y: stage.top, width: stage.width, height: stage.height,
-      clip: [Math.max(0, header.bottom - stage.top), Math.max(0, stage.right - panel.right), Math.max(0, stage.bottom - Math.min(panel.bottom, height - edge)), Math.max(0, panel.left - stage.left)],
-    });
+    els.dropdown.style.maxHeight = `${Math.max(0, flip ? above : height - top - edge)}px`;
   }
   function scheduleDropdown() {
     if (els.dropdown?.hidden !== false || dropdownFrame) return;
@@ -55369,7 +55121,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     else positionDropdown();
   }
   function audioOutside(event) {
-    if (!els.dropdown?.contains(event.target) && !els.linkPlayer?.contains(event.target) && !dropdownAnchor?.contains(event.target) && !audioSelectContains(event.target)) closeAudio();
+    if (!els.dropdown?.contains(event.target) && !dropdownAnchor?.contains(event.target) && !audioSelectContains(event.target)) closeAudio();
   }
   function audioSelectContains(target) {
     return window.MefiSelect?.owns?.(els.dropdown) && window.MefiSelect?.contains?.(target);
@@ -55434,8 +55186,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       const headerHeight = els.dropdownHeader.getBoundingClientRect().height;
       els.dropdown.scrollTop = Number.isFinite(top) && Number.isFinite(panelTop)
         ? Math.max(0, (els.dropdown.scrollTop || 0) + top - panelTop - headerHeight - 12) : 0;
-    } else els.dropdown.scrollTop = 0;
-    scheduleDropdown();
+    }
     document.addEventListener("pointerdown", audioOutside);
     document.addEventListener("keydown", audioKey, true);
     window.addEventListener("scroll", scheduleDropdown, true);
@@ -55448,7 +55199,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (els.dropdown?.hidden !== false) return;
     if (window.MefiSelect?.owns?.(els.dropdown)) window.MefiSelect.close();
     els.dropdown.hidden = true;
-    els.floatingPlayer?.dock?.(null);
     dropdownAnchor?.setAttribute("aria-expanded", "false");
     document.removeEventListener?.("pointerdown", audioOutside);
     document.removeEventListener?.("keydown", audioKey, true);
@@ -55521,7 +55271,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (unlocked && premium.nodeStyle) effective.nodeStyle = premium.nodeStyle;
     build();
     for (const id of ["idle-music-toggle", "settings-audio-open"]) bindAudioHover(document.getElementById(id));
-    window.addEventListener("blur", () => { if (!els.browser?.active && !els.linkPlayer?.contains(document.activeElement)) closeAudio(); });
+    window.addEventListener("blur", () => closeAudio());
     if (unlocked && premium.theme) event("mefi-theme-change", paintTheme(premium.theme));
     else applyTheme(prefs.theme, false);
     syncTreePreferences(false); renderPremiumLocks(unlocked); render(); renderMediaMenu();
@@ -56276,6 +56026,92 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   window.MefiTogether = { init, status: () => ({ hub: state.hub, roomId: prefs.roomId, following: prefs.following, share: prefs.share, session: state.session }), position, embedCommands };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
+})();
+
+// Friends › Your PCs: whether the open project on this PC matches its default
+// branch on GitHub, what has not reached GitHub yet, and Sync this PC. The
+// words come from scripts/sync.mjs through main's sync:status and sync:run;
+// this file only lays them out. Opening the card looks (a fetch that moves no
+// branch). Only the button pulls and pushes, and only in the directions that
+// cannot lose work. renderer/companion-hub.js mounts it in the Friends section.
+(function () {
+  "use strict";
+  const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
+  // The last answer, so reopening Friends paints at once while it re-checks.
+  let last = null;
+
+  function stateOf(result) {
+    if (!result || result.ok === false) return "problem";
+    if (result.state?.behind || result.pending?.length) return "pending";
+    return "clean";
+  }
+
+  function card() {
+    const root = node("section", "pc-sync");
+    root.setAttribute("aria-labelledby", "pc-sync-title");
+    const title = node("h4", "pc-sync-title", "Your PCs");
+    title.id = "pc-sync-title";
+    const status = node("p", "pc-sync-status", "Checking GitHub…");
+    status.id = "pc-sync-status";
+    status.setAttribute("role", "status");
+    const list = node("ul", "pc-sync-list");
+    list.hidden = true;
+    const run = node("button", "ghost pc-sync-run", "Sync this PC");
+    run.type = "button";
+    run.id = "pc-sync-run";
+    const meta = node("p", "muted pc-sync-meta");
+    meta.hidden = true;
+    const note = node("p", "muted", "Sync pulls what your other PCs pushed and pushes this PC's commits. It never overwrites uncommitted work or force-pushes.");
+    root.append(title, status, list, run, meta, note);
+    const bridge = window.mefiStudio;
+    if (typeof bridge?.syncStatus !== "function" || typeof bridge?.syncRun !== "function") {
+      status.textContent = "Syncing your PCs works in the desktop app.";
+      run.hidden = true;
+      note.hidden = true;
+      root.dataset.state = "unavailable";
+      return root;
+    }
+    let busy = false;
+    const show = (result) => {
+      root.dataset.state = stateOf(result);
+      status.textContent = result?.headline || "Sync did not answer. Try again.";
+      const details = Array.isArray(result?.lines) ? result.lines.slice(1) : [];
+      list.replaceChildren(...details.map((line) => node("li", "", line)));
+      list.hidden = !details.length;
+      const linked = result?.state?.repo !== false && result?.state?.remote !== false;
+      run.hidden = !linked;
+      const when = Number.isFinite(result?.checkedAt) ? new Date(result.checkedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : null;
+      const device = typeof result?.state?.device === "string" && result.state.device ? result.state.device : "This PC";
+      meta.textContent = when ? `${device} · checked ${when}` : "";
+      meta.hidden = !linked || !when;
+    };
+    const ask = async (push) => {
+      if (busy) return;
+      busy = true;
+      run.disabled = true;
+      run.textContent = push ? "Syncing…" : "Sync this PC";
+      root.setAttribute("aria-busy", "true");
+      if (push || !last) status.textContent = push ? "Syncing with GitHub…" : "Checking GitHub…";
+      let result;
+      try {
+        result = await (push ? bridge.syncRun() : bridge.syncStatus());
+      } catch (error) {
+        result = { ok: false, headline: `Sync could not run: ${error?.message || error}`, lines: [] };
+      }
+      last = result;
+      busy = false;
+      run.disabled = false;
+      run.textContent = "Sync this PC";
+      root.removeAttribute("aria-busy");
+      show(result);
+    };
+    run.addEventListener("click", () => { void ask(true); });
+    if (last) show(last);
+    void ask(false);
+    return root;
+  }
+
+  window.MefiPcSync = { card };
 })();
 
 // Project-local decisions and reviewed task handoffs. Mefi interviews you here
@@ -59412,7 +59248,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const MODES = [
     ["ask", "Always ask", "You choose each step; Mefi suggests an answer."],
     ["accept", "Accept per task", "Accept a task once, then Mefi handles its ordinary asks."],
-    ["auto", "Auto", "Mefi starts queued tasks, including agent proposals, and handles confident choices."],
+    ["auto", "Auto", "Mefi handles confident choices and asks when unsure."],
     ["elevated", "Elevated only", "Mefi handles ordinary choices; elevated requests stay yours."],
   ];
   const SCOPE = [["blend", "This project + others"], ["project", "This project"], ["global", "All projects"]];
@@ -59459,7 +59295,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (mine === epoch && expected === project()) { if (mounts.has(root)) paint(root, mounts.get(root)); const errorNote = root.querySelector(".autonomy-note") || note; if (errorNote) { errorNote.textContent = error.message; errorNote.dataset.tone = "bad"; } }
     } finally {
       root.removeAttribute("aria-busy");
-      for (const control of root.querySelectorAll("button, input, select")) control.disabled = control.dataset.autonomyLocked === "true";
+      for (const control of root.querySelectorAll("button, input, select")) control.disabled = false;
     }
   }
   function openSettings() {
@@ -59497,7 +59333,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     for (const category of current?.categories || []) {
       const row = el("label", "autonomy-check");
       const input = el("input"); input.type = "checkbox"; input.checked = current.elevated?.[category.id] !== false;
-      if (category.id === "agent-filed" && current.level === "auto") { input.checked = false; input.disabled = true; input.dataset.autonomyLocked = "true"; }
       const words = el("span", "", category.label); words.append(el("small", "", category.blurb)); row.append(input, words);
       input.addEventListener("change", () => {
         const value = input.checked;
@@ -60081,7 +59916,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
   const items = [
     ["ask", "Talk to me", "g-help", "Ask, plan, or make a task"],
-    ["friends", "Friends", "g-orbit", "Connect and listen together"],
+    ["friends", "Friends", "g-orbit", "Your PCs, rooms and listening"],
     ["requests", "Requests", "g-tasks", "Decisions waiting for you"],
     ["notices", "Notifications", "g-ideas", "What happened in your studio"],
     ["settings", "Settings", "g-ambience", "Make this space yours"],
@@ -60202,6 +60037,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         action("Connect with Discord", () => window.MefiNav?.go("community")),
         action("Friends & listening rooms", () => { window.MefiMusic?.openAudio?.(); window.MefiMusic?.setSource?.("link"); window.MefiMusic?.togetherHost?.()?.scrollIntoView({ block: "nearest" }); }),
         node("p", "ab-quiet", "Choose Connect or Join in the room controls when you're ready."));
+      // Friends › Your PCs (renderer/pc-sync.js) stays in the hub: Sync this
+      // PC answers in place instead of navigating away.
+      const pcs = window.MefiPcSync?.card?.();
+      if (pcs) el.extra.append(pcs);
     } else {
       el.extra.append(node("p", "muted", "A few useful things, close at hand."),
         action("Walk me through setup", () => window.MefiOnboarding?.open?.()),
@@ -61993,8 +61832,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (sheetTab === "live") brainView?.resize();
     if (sheetTab === "seats") renderSeats();
     window.MefiNav?.note?.("agent-brain", { tab: sheetTab });
-    // open() claims the page before its async read; paint the loaded tab too.
-    window.MefiNav?.paintCurrent?.();
   }
 
   // The seats and the owner's two switches. Every change saves at once and
@@ -62816,7 +62653,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   ];
   const children = {
     setup: [["Team & models", "agents", { section: "setup", pane: "team" }], ["Providers", "agents", { section: "setup", pane: "connections" }], ["Routing & fallback", "agents", { section: "setup", pane: "routing" }], ["Run behavior", "agents", { section: "setup", pane: "behavior" }]],
-    live: [["Command", "command"], ["Pipelines", "agent-brain", { tab: "live" }], ["Sessions", "explorer"], ["Activity", "eyes"], ["Trace", "trace"], ["Overhead", "overhead"]],
+    live: [["Command", "command"], ["Pipelines", "agent-brain", { tab: "live" }], ["Sessions", "explorer"], ["Activity", "eyes"], ["Overhead", "overhead"]],
     workflows: [["Brain maps", "brains"], ["Playbook", "agent-brain", { tab: "playbook" }], ["Project map", "agent-brain", { tab: "map" }], ["Context", "context"]],
     models: [["Catalog", "booklet"], ["Performance", "graph"]],
     usage: [["Recorded calls", "usage", { view: "usage" }], ["Provider accounts", "usage", { view: "tracker" }]],
@@ -65723,27 +65560,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const id = SETTINGS_CATEGORIES[key] ? `settings-category-${key}` : SETTINGS_ALIASES[key] ?? `settings-${key}`;
     return document.getElementById(id) ? id : null;
   }
-  // A choice button's textContent runs its parts together ("Fullevery
-  // animation", "VoidMembers", "Classic orbsLuminous circles"): name it by its
-  // title element, or by its own words without the <small> detail and the lock
-  // badge, and prefix the group it belongs to ("Motion › Full").
-  function settingsButtonLabel(control) {
-    const named = control.querySelector?.("strong, b");
-    const nodes = Array.from(control.childNodes ?? []);
-    const own = named?.textContent || (nodes.length
-      ? nodes.filter((node) => node.nodeType === 3 || !(node.tagName === "SMALL" || node.classList?.contains?.("music-premium-lock") || node.getAttribute?.("aria-hidden") === "true")).map((node) => node.textContent ?? "").join(" ")
-      : control.textContent);
-    const group = control.closest?.("[role=group][aria-labelledby]");
-    const heading = group ? document.getElementById?.(group.getAttribute("aria-labelledby")) : null;
-    const title = heading ? Array.from(heading.childNodes ?? []).filter((node) => node.nodeType === 3).map((node) => node.textContent).join(" ").trim() || heading.textContent : "";
-    const text = String(own ?? "").replace(/\s+/g, " ").trim();
-    return title && text ? `${title.replace(/\s+/g, " ").trim()} › ${text}` : text;
-  }
   function settingsControlLabel(control) {
     const label = control.closest?.("label") ?? document.querySelector?.(`label[for="${control.id}"]`);
     const named = label?.querySelector?.(".field-label, b, strong, .grow");
     const parts = label ? Array.from(label.children ?? []).filter((node) => !["INPUT", "SELECT", "TEXTAREA", "SMALL"].includes(node.tagName)).map((node) => node.textContent ?? "").join(" ") : "";
-    return String(control.getAttribute?.("aria-label") || named?.textContent || parts || (control.tagName === "BUTTON" ? settingsButtonLabel(control) : "") || control.getAttribute?.("title") || "").replace(/\s+/g, " ").trim();
+    return String(control.getAttribute?.("aria-label") || named?.textContent || parts || (control.tagName === "BUTTON" ? control.textContent : "") || control.getAttribute?.("title") || "").replace(/\s+/g, " ").trim();
   }
   function settingsEntries() {
     const entries = [];
