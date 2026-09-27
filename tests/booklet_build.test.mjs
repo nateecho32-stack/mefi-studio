@@ -51,6 +51,7 @@ const INLINE_SCRIPTS = [
   "workspace.js",
   "planning.js",
   "media-window.js",
+  "media-browser.js",
   "music.js",
   "together.js",
   "onboarding.js",
