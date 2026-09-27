@@ -103,11 +103,11 @@
   function cells(parent, values, header = false) {
     for (const value of values) { const cell = document.createElement(header ? "th" : "td"); cell.textContent = value; parent.append(cell); }
   }
-  function table(id, rows, columns, empty) {
+  function table(id, rows, columns, empty, span) {
     const body = $(id); if (!body) return;
     const fragment = document.createDocumentFragment();
     for (const row of rows.slice(0, 15)) { const tr = document.createElement("tr"); cells(tr, columns(row)); fragment.append(tr); }
-    if (!rows.length) { const tr = document.createElement("tr"), td = document.createElement("td"); td.colSpan = 8; td.textContent = empty; tr.append(td); fragment.append(tr); }
+    if (!rows.length) { const tr = document.createElement("tr"), td = document.createElement("td"); td.colSpan = span; td.className = "profiler-empty"; td.textContent = empty; tr.append(td); fragment.append(tr); }
     body.replaceChildren(fragment);
   }
   function chart(data) {
@@ -116,16 +116,33 @@
     if (canvas.width !== Math.round(width * dpr) || canvas.height !== height * dpr) { canvas.width = Math.round(width * dpr); canvas.height = height * dpr; }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, width, height);
     const rows = data.frames.slice(-180), max = Math.max(66.7, ...rows.map((row) => row.durationMs));
-    const color = getComputedStyle(canvas), ink = color.getPropertyValue("--gold-bright").trim() || "#dec084";
-    const y = (value) => 120 - (value / max) * 100;
-    ctx.strokeStyle = color.getPropertyValue("--hairline-strong").trim() || "#555";
+    const color = getComputedStyle(canvas), token = (name, fallback) => color.getPropertyValue(name).trim() || fallback;
+    const ink = token("--gold-bright", "#dec084"), warn = token("--warn", "#ffd479"), muted = token("--muted", "#aaa");
+    const y = (value) => 124 - (value / max) * 104;
+    // Faint guides at the top and the floor, the budget dashed between them.
+    ctx.strokeStyle = token("--hairline", "#333"); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, y(max) + 0.5); ctx.lineTo(width, y(max) + 0.5); ctx.moveTo(0, y(0) + 0.5); ctx.lineTo(width, y(0) + 0.5); ctx.stroke();
+    ctx.strokeStyle = token("--hairline-strong", "#555");
     ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(0, y(data.budgetMs)); ctx.lineTo(width, y(data.budgetMs)); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = color.getPropertyValue("--muted").trim() || "#aaa"; ctx.font = "11px system-ui";
-    ctx.fillText(`${number(max, 0)} ms`, 4, 12); ctx.fillText(`${number(data.budgetMs)} ms budget`, 4, y(data.budgetMs) - 5);
+    ctx.fillStyle = muted; ctx.font = "11px system-ui"; ctx.textAlign = "right";
+    ctx.fillText(`${number(max, 0)} ms`, width - 4, y(max) + 13); ctx.fillText(`${number(data.budgetMs)} ms budget`, width - 4, y(data.budgetMs) - 5);
+    ctx.textAlign = "left";
     if (rows.length) {
-      ctx.strokeStyle = ink; ctx.lineWidth = 1.5; ctx.beginPath();
-      rows.forEach((row, index) => { const x = index * width / Math.max(1, rows.length - 1); if (!index) ctx.moveTo(x, y(row.durationMs)); else ctx.lineTo(x, y(row.durationMs)); }); ctx.stroke();
-    } else ctx.fillText("Frame history appears while recording in a visible window.", 12, Math.min(112, y(data.budgetMs) + 22));
+      const x = (index) => index * width / Math.max(1, rows.length - 1);
+      // A soft wash under the line, the line itself, then each over-budget frame as a warning dot.
+      ctx.beginPath(); ctx.moveTo(0, y(0));
+      rows.forEach((row, index) => ctx.lineTo(x(index), y(row.durationMs)));
+      ctx.lineTo(x(rows.length - 1), y(0)); ctx.closePath();
+      ctx.globalAlpha = 0.14; ctx.fillStyle = ink; ctx.fill(); ctx.globalAlpha = 1;
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.5; ctx.lineJoin = "round"; ctx.beginPath();
+      rows.forEach((row, index) => { if (!index) ctx.moveTo(x(index), y(row.durationMs)); else ctx.lineTo(x(index), y(row.durationMs)); }); ctx.stroke();
+      ctx.fillStyle = warn;
+      rows.forEach((row, index) => { if (row.durationMs > data.budgetMs * 1.1) { ctx.beginPath(); ctx.arc(x(index), y(row.durationMs), 2.5, 0, Math.PI * 2); ctx.fill(); } });
+    } else {
+      ctx.fillStyle = muted; ctx.textAlign = "center";
+      ctx.fillText(core.isRecording() ? "Waiting for frames. Keep this window visible." : "Start a capture to draw the latest UI frame intervals here.", width / 2, y(data.budgetMs) + 26);
+      ctx.textAlign = "left";
+    }
   }
   function paint() {
     const active = core.isRecording();
@@ -137,25 +154,31 @@
     $("start").disabled = busy || active; $("stop").disabled = busy || !active;
     $("reset").disabled = busy || !data.startedAt; $("export").disabled = busy || !data.startedAt;
     text("host-status", hostState || "Host sampling every second · CPU covers Studio processes, not external coding workers.");
-    const metrics = [ ["UI cadence", finite(stats.fps) ? `${number(stats.fps, 0)} fps` : "—"], ["Frame p95", ms(stats.p95Ms)],
-      ["Worst frame", ms(stats.maxMs)], ["Hitches ≥50 ms", String(data.hitchCount)], ["Long tasks", longTasksSupported ? String(data.longTaskCount) : "Unavailable"],
-      ["Host lag", ms(latest?.hostLagMs)], ["Studio CPU", finite(latest?.cpuPercent) ? `${number(latest.cpuPercent)}%` : "—"],
+    // Long tasks read "—" until a capture has tried to observe them, and a
+    // card turns amber (or red) when its reading is past the frame budget.
+    const over = (value, warnAt, badAt) => !finite(value) ? "" : value >= badAt ? "is-bad" : value >= warnAt ? "is-warn" : "";
+    const metrics = [ ["UI cadence", finite(stats.fps) ? `${number(stats.fps, 0)} fps` : "—"], ["Frame p95", ms(stats.p95Ms), over(stats.p95Ms, data.budgetMs * 1.1, 50)],
+      ["Worst frame", ms(stats.maxMs), over(stats.maxMs, 50, 100)], ["Hitches ≥50 ms", String(data.hitchCount), data.hitchCount ? "is-warn" : ""],
+      ["Long tasks", longTasksSupported ? String(data.longTaskCount) : data.startedAt ? "Not supported" : "—", longTasksSupported && data.longTaskCount ? "is-warn" : ""],
+      ["Host lag", ms(latest?.hostLagMs), over(latest?.hostLagMs, 50, 200)], ["Studio CPU", finite(latest?.cpuPercent) ? `${number(latest.cpuPercent)}%` : "—", over(latest?.cpuPercent, 60, 90)],
       ["Host memory", finite(latest?.rssMB) ? `${number(latest.rssMB, 0)} MB` : "—"] ];
     const fragment = document.createDocumentFragment();
-    for (const [label, value] of metrics) { const card = document.createElement("div"), title = document.createElement("span"), metric = document.createElement("strong"); title.textContent = label; metric.textContent = value; card.append(title, metric); fragment.append(card); }
+    for (const [label, value, tone] of metrics) { const card = document.createElement("div"), title = document.createElement("span"), metric = document.createElement("strong"); card.className = tone ? `profiler-metric ${tone}` : "profiler-metric"; title.textContent = label; metric.textContent = value; card.append(title, metric); fragment.append(card); }
     $("metrics").replaceChildren(fragment);
-    text("frames-note", `${stats.count} recent UI intervals · ${stats.overBudget} over budget (+10% tolerance). Command intentionally draws at about 30 fps; UI cadence measures browser callbacks, not GPU rendering.`);
+    text("frames-note", stats.count
+      ? `${stats.count} recent UI ${stats.count === 1 ? "interval" : "intervals"} · ${stats.overBudget} over budget (+10% tolerance). Command intentionally draws at about 30 fps; UI cadence measures browser callbacks, not GPU rendering.`
+      : "Command intentionally draws at about 30 fps; UI cadence measures browser callbacks, not GPU rendering.");
     chart(data);
-    table("spans", data.spans, (row) => [row.name, row.count, ms(row.selfMs), ms(row.selfMeanMs), ms(row.meanMs), ms(row.p95Ms), ms(row.maxMs)], "No measured rendering work yet. Start recording, close this panel and use Command or the node tree.");
-    table("ipc", [...(host?.spans || [])].sort((a, b) => b.totalMs - a.totalMs), (row) => [row.name, row.count, ms(row.meanMs), ms(row.p95Ms), ms(row.maxMs), row.errors], "Host requests appear during a desktop capture.");
-    table("processes", latest?.processes || [], (row) => [row.type, finite(row.cpuPercent) ? `${number(row.cpuPercent)}%` : "—", finite(row.memoryMB) ? `${number(row.memoryMB, 0)} MB` : "—"], "Waiting for process measurements.");
+    table("spans", data.spans, (row) => [row.name, row.count, ms(row.selfMs), ms(row.selfMeanMs), ms(row.meanMs), ms(row.p95Ms), ms(row.maxMs)], "No measured rendering work yet. Start recording, close this panel and use Command or the node tree.", 7);
+    table("ipc", [...(host?.spans || [])].sort((a, b) => b.totalMs - a.totalMs), (row) => [row.name, row.count, ms(row.meanMs), ms(row.p95Ms), ms(row.maxMs), row.errors], "Host requests appear during a desktop capture.", 6);
+    table("processes", latest?.processes || [], (row) => [row.type, finite(row.cpuPercent) ? `${number(row.cpuPercent)}%` : "—", finite(row.memoryMB) ? `${number(row.memoryMB, 0)} MB` : "—"], data.startedAt ? "Waiting for process measurements." : "Process CPU and memory appear during a desktop capture.", 3);
     const events = [...data.incidents.map((row) => ({ ...row, source: "Renderer" })), ...(host?.incidents || []).map((row) => ({ ...row, source: "Host" }))].sort((a, b) => b.at - a.at).slice(0, 20);
     const items = events.map((row) => {
       const li = document.createElement("li");
       const nearby = row.recentScopes?.length ? ` · nearby: ${row.recentScopes.map((scope) => `${scope.name} ${ms(scope.durationMs)}`).join(", ")}` : "";
       li.textContent = `+${number(row.at / 1000, 1)}s · ${row.source} · ${row.name || row.kind} · ${ms(row.durationMs)}${nearby}`; return li;
     });
-    if (!items.length) { const li = document.createElement("li"); li.textContent = "No hitches captured yet. Frame gaps and long tasks ≥50 ms, slow host requests and host lag appear here."; items.push(li); }
+    if (!items.length) { const li = document.createElement("li"); li.className = "profiler-empty"; li.textContent = "No hitches captured yet. Frame gaps and long tasks ≥50 ms, slow host requests and host lag appear here."; items.push(li); }
     $("incidents").replaceChildren(...items);
     text("limits", `Bounded history: ${data.limits.frames} UI intervals, ${data.limits.durations} timings per scope, ${data.limits.incidents} renderer incidents. ${data.droppedScopes} scope samples dropped at the name limit. Recent p95; capture-wide counts, means, self time and maxima.`);
   }

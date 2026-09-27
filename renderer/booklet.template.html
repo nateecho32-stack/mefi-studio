@@ -508,12 +508,12 @@
             <button id="eyes-view-evidence" class="ghost eyes-narrow" type="button">View evidence →</button>
           </div>
           <div class="row">
-            <select id="eyes-agent" title="Filter by agent"><option value="">all agents</option></select>
-            <select id="eyes-window" title="Time window">
-              <option value="">all time</option>
-              <option value="900000">last 15m</option>
-              <option value="3600000">last 1h</option>
-              <option value="86400000">last 24h</option>
+            <select id="eyes-agent" title="Filter by agent" aria-label="Agent"><option value="">All agents</option></select>
+            <select id="eyes-window" title="Time window" aria-label="Time window">
+              <option value="">All time</option>
+              <option value="900000">Last 15 minutes</option>
+              <option value="3600000">Last hour</option>
+              <option value="86400000">Last 24 hours</option>
             </select>
           </div>
           <ul class="feed" id="eyes-feed"></ul>
@@ -535,14 +535,14 @@
           </div>
           <div class="viewer">
             <div id="eyes-mode-png">
-              <p class="muted" id="eyes-png-empty">No PNG selected yet. Newest evidence from tools/logs appears here; click the image to drop a pin.</p>
+              <p class="muted" id="eyes-png-empty">No screenshot selected. The newest image in tools/logs opens here on its own; you can also choose Open… or drop a PNG. Click an image to pin a note to it.</p>
               <div class="png-wrap">
                 <img id="eyes-png" alt="Selected evidence PNG" hidden>
                 <canvas id="eyes-pins-layer"></canvas>
               </div>
             </div>
             <div id="eyes-mode-diff" hidden><div class="diff-view" id="eyes-diff">Select a change in the feed to see its diff.</div></div>
-            <div id="eyes-mode-log" hidden><pre class="log" id="eyes-log">log tail</pre></div>
+            <div id="eyes-mode-log" hidden><pre class="log" id="eyes-log">The latest Studio log lines appear here and refresh every few seconds.</pre></div>
           </div>
         </div>
       </div>
@@ -555,7 +555,7 @@
             <button id="eyes-copy" class="ghost" disabled>Copy path</button>
           </div>
           <h2 class="mt">Pins</h2>
-          <p class="muted" id="eyes-pin-hint">Click the PNG to drop a pin.</p>
+          <p class="muted" id="eyes-pin-hint">Click a spot on the image to pin a note there.</p>
           <ul class="pin-list" id="eyes-pins"></ul>
         </div>
       </div>
@@ -1634,7 +1634,7 @@
   <div class="profiler-sheet sheet" role="dialog" aria-modal="true" aria-labelledby="profiler-heading" tabindex="-1">
     <header class="profiler-head">
       <div class="sheet-title"><div class="eyebrow">Settings · Diagnostics</div><h2 id="profiler-heading">Performance profiler</h2><p id="profiler-status" role="status">Ready to record</p></div>
-      <button id="profiler-close" class="ghost" title="Close (Esc)">Close <kbd>Esc</kbd></button>
+      <button id="profiler-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
     </header>
     <div class="profiler-body">
       <div class="profiler-controls">
@@ -1747,11 +1747,11 @@
       </aside>
       <section class="explorer-col">
         <h3 id="analyzer-title">Findings</h3>
-        <div id="analyzer-findings"><p class="muted">Open a project for a local overview, or analyze a file or idea here.</p></div>
+        <div id="analyzer-findings"><p class="muted analyzer-empty">Open a project for a local overview, or analyze a file or idea here.</p></div>
       </section>
       <aside class="explorer-col">
         <h3>Evidence &amp; limits</h3>
-        <ul id="analyzer-evidence" class="pin-list"></ul>
+        <ul id="analyzer-evidence" class="pin-list"><li class="muted analyzer-empty">The evidence behind each finding, and anything the scan could not inspect, appears here.</li></ul>
         <div id="analyzer-ai-out"></div>
       </aside>
     </div>

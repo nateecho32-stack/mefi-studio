@@ -7,6 +7,17 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- A polish pass on long-untouched menus. **Search Studio** names Settings
+  choices properly ("Motion › Full", "Node style › Classic orbs") instead of
+  running their words together. **Analyzer** never leaves Findings or
+  Evidence blank, uses sentence-case tags and real plurals. **Activity &
+  evidence** has readable filters and inspector labels, theme-coloured pins
+  and a keyboard-reachable Remove per pin (a click on a pin row no longer
+  deletes it). **Feature ideas** shows each idea's title, source and state,
+  asks before Delete, and its graph follows the active theme. The
+  **Performance profiler** shows "—" for Long tasks until a capture runs,
+  marks over-budget frames and readings, and uses the standard Close button.
+
 - **Trace** (Live, beside Activity): Studio's logs as channels in one viewer.
   The studio log, the assistant's log, the run ledger, OpenCode's log and
   the window's own warnings, each with its size and problem count; search,

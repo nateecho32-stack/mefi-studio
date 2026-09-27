@@ -475,11 +475,27 @@
     const id = SETTINGS_CATEGORIES[key] ? `settings-category-${key}` : SETTINGS_ALIASES[key] ?? `settings-${key}`;
     return document.getElementById(id) ? id : null;
   }
+  // A choice button's textContent runs its parts together ("Fullevery
+  // animation", "VoidMembers", "Classic orbsLuminous circles"): name it by its
+  // title element, or by its own words without the <small> detail and the lock
+  // badge, and prefix the group it belongs to ("Motion › Full").
+  function settingsButtonLabel(control) {
+    const named = control.querySelector?.("strong, b");
+    const nodes = Array.from(control.childNodes ?? []);
+    const own = named?.textContent || (nodes.length
+      ? nodes.filter((node) => node.nodeType === 3 || !(node.tagName === "SMALL" || node.classList?.contains?.("music-premium-lock") || node.getAttribute?.("aria-hidden") === "true")).map((node) => node.textContent ?? "").join(" ")
+      : control.textContent);
+    const group = control.closest?.("[role=group][aria-labelledby]");
+    const heading = group ? document.getElementById?.(group.getAttribute("aria-labelledby")) : null;
+    const title = heading ? Array.from(heading.childNodes ?? []).filter((node) => node.nodeType === 3).map((node) => node.textContent).join(" ").trim() || heading.textContent : "";
+    const text = String(own ?? "").replace(/\s+/g, " ").trim();
+    return title && text ? `${title.replace(/\s+/g, " ").trim()} › ${text}` : text;
+  }
   function settingsControlLabel(control) {
     const label = control.closest?.("label") ?? document.querySelector?.(`label[for="${control.id}"]`);
     const named = label?.querySelector?.(".field-label, b, strong, .grow");
     const parts = label ? Array.from(label.children ?? []).filter((node) => !["INPUT", "SELECT", "TEXTAREA", "SMALL"].includes(node.tagName)).map((node) => node.textContent ?? "").join(" ") : "";
-    return String(control.getAttribute?.("aria-label") || named?.textContent || parts || (control.tagName === "BUTTON" ? control.textContent : "") || control.getAttribute?.("title") || "").replace(/\s+/g, " ").trim();
+    return String(control.getAttribute?.("aria-label") || named?.textContent || parts || (control.tagName === "BUTTON" ? settingsButtonLabel(control) : "") || control.getAttribute?.("title") || "").replace(/\s+/g, " ").trim();
   }
   function settingsEntries() {
     const entries = [];

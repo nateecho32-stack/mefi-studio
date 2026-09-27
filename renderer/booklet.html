@@ -971,6 +971,16 @@ table#table tr:hover td { background: color-mix(in srgb, var(--gold) 4%, transpa
 .pin-list { list-style: none; margin: 6px 0 0; padding: 0; font-size: 12px; display: flex; flex-direction: column; gap: 5px; }
 .pin-list li { border-left: 2px solid var(--gold-dim); padding-left: var(--s2); color: var(--muted); }
 .pin-list .who { color: var(--dim); font-size: 11px; }
+/* Activity pins: number, note, and a real Remove button (no click-to-delete rows). */
+.pin-list li.eyes-pin { display: flex; align-items: center; gap: var(--s2); padding: 4px 0 4px var(--s2); border-left-color: var(--gold); }
+.eyes-pin-number { flex: none; display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--gold); color: var(--ink); font-size: 10.5px; font-weight: 600; }
+.eyes-pin-note { flex: 1; min-width: 0; color: var(--ivory); overflow-wrap: anywhere; }
+.eyes-pin-note.muted { color: var(--dim); font-style: italic; }
+.eyes-pin-remove { flex: none; opacity: 0.7; }
+.eyes-pin:hover .eyes-pin-remove, .eyes-pin-remove:focus-visible { opacity: 1; }
+.pin-list li.eyes-pin-pending { border-left-style: dashed; }
+.feed li.eyes-empty, .eyes-inspector-empty { grid-column: 1 / -1; padding: var(--s3); border: 1px dashed var(--hairline); border-radius: var(--r-sm); background: transparent; cursor: default; line-height: 1.5; font-size: var(--fs-sm); }
+.feed li.eyes-empty::before { display: none; }
 .inspector-kv { display: grid; grid-template-columns: 90px 1fr; gap: var(--s1) var(--s2); font-size: var(--fs-sm); }
 .inspector-kv .k { color: var(--dim); }
 .eyes-status { font-size: 12px; color: var(--muted); }
@@ -1294,6 +1304,9 @@ input.drag-over { border-color: var(--live); box-shadow: 0 0 0 3px color-mix(in 
 #analyzer-findings p { font-size: var(--fs-sm); line-height: 1.5; }
 #analyzer-findings h4 { margin: var(--s3) 0 var(--s2); }
 #analyzer-overlay .finding > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+#analyzer-overlay .finding > .src-tag { flex: none; margin-top: 1px; }
+/* An empty Findings or Evidence column says what belongs there. */
+#analyzer-overlay .analyzer-empty { margin: var(--s2) 0; padding: var(--s4); border: 1px dashed var(--hairline); border-left: 1px dashed var(--hairline); border-radius: var(--r-md); color: var(--muted); font-size: var(--fs-sm); line-height: 1.55; }
 @media (max-width: 740px) {
   #analyzer-overlay .explorer-grid { grid-template-columns: minmax(0, 1fr); overflow-y: auto; }
   #analyzer-overlay .explorer-col { overflow: visible; }
@@ -1315,7 +1328,7 @@ input.drag-over { border-color: var(--live); box-shadow: 0 0 0 3px color-mix(in 
   border-radius: var(--r-xs);
   overflow: hidden;
   margin: var(--s2) 0 var(--s1);
-  background: #0b0b10;
+  background: var(--bg-deep);
   border: 1px solid color-mix(in srgb, var(--gold) 8%, transparent);
 }
 .comp-bar i { display: block; height: 100%; }
@@ -1332,6 +1345,9 @@ input.drag-over { border-color: var(--live); box-shadow: 0 0 0 3px color-mix(in 
   border-bottom: 1px dashed color-mix(in srgb, var(--gold) 8%, transparent);
 }
 .keyword-row { display: flex; flex-wrap: wrap; gap: 5px; margin: var(--s2) 0; }
+#ideas-detail .idea-detail-title { margin: 0 0 var(--s1); font-size: var(--fs-md); font-weight: 600; color: var(--ivory); line-height: 1.35; text-transform: none; letter-spacing: normal; }
+#ideas-detail .idea-detail-meta { margin: 0 0 var(--s3); font-size: var(--fs-xs); color: var(--dim); }
+#ideas-detail .idea-detail-text { margin: 0 0 var(--s2); color: var(--ivory); line-height: 1.55; white-space: pre-wrap; }
 #task-list li, #ideas-list li { cursor: pointer; }
 #ideas-canvas { border-radius: var(--r-sm); border: 1px solid color-mix(in srgb, var(--gold) 10%, transparent); }
 #overhead-canvas { border-radius: var(--r-sm); border: 1px solid color-mix(in srgb, var(--gold) 10%, transparent); }
@@ -6696,6 +6712,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
 .profiler-metrics > div { padding: 14px; border: 1px solid var(--hairline); background: var(--tint-gold-1); border-radius: 10px; }
 .profiler-metrics span { display: block; color: var(--muted); font-size: 11px; margin-bottom: 7px; }
 .profiler-metrics strong { font-size: 23px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.profiler-metrics > .is-warn { border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 7%, transparent); }
+.profiler-metrics > .is-warn strong { color: var(--warn); }
+.profiler-metrics > .is-bad { border-color: color-mix(in srgb, var(--bad) 50%, transparent); background: color-mix(in srgb, var(--bad) 8%, transparent); }
+.profiler-metrics > .is-bad strong { color: var(--bad); }
+.profiler-table td.profiler-empty, .profiler-incidents li.profiler-empty { font-family: var(--font-ui); color: var(--muted); text-align: left; padding-block: 16px; }
 .profiler-section { border-top: 1px solid var(--hairline); padding-top: 18px; margin-top: 20px; min-width: 0; }
 .profiler-section h3 { margin: 0 0 8px; font-size: 15px; font-weight: 600; }
 .profiler-section h3 span { font-weight: 400; font-size: 11px; color: var(--muted); margin-left: 8px; }
@@ -9184,12 +9205,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
             <button id="eyes-view-evidence" class="ghost eyes-narrow" type="button">View evidence →</button>
           </div>
           <div class="row">
-            <select id="eyes-agent" title="Filter by agent"><option value="">all agents</option></select>
-            <select id="eyes-window" title="Time window">
-              <option value="">all time</option>
-              <option value="900000">last 15m</option>
-              <option value="3600000">last 1h</option>
-              <option value="86400000">last 24h</option>
+            <select id="eyes-agent" title="Filter by agent" aria-label="Agent"><option value="">All agents</option></select>
+            <select id="eyes-window" title="Time window" aria-label="Time window">
+              <option value="">All time</option>
+              <option value="900000">Last 15 minutes</option>
+              <option value="3600000">Last hour</option>
+              <option value="86400000">Last 24 hours</option>
             </select>
           </div>
           <ul class="feed" id="eyes-feed"></ul>
@@ -9211,14 +9232,14 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
           </div>
           <div class="viewer">
             <div id="eyes-mode-png">
-              <p class="muted" id="eyes-png-empty">No PNG selected yet. Newest evidence from tools/logs appears here; click the image to drop a pin.</p>
+              <p class="muted" id="eyes-png-empty">No screenshot selected. The newest image in tools/logs opens here on its own; you can also choose Open… or drop a PNG. Click an image to pin a note to it.</p>
               <div class="png-wrap">
                 <img id="eyes-png" alt="Selected evidence PNG" hidden>
                 <canvas id="eyes-pins-layer"></canvas>
               </div>
             </div>
             <div id="eyes-mode-diff" hidden><div class="diff-view" id="eyes-diff">Select a change in the feed to see its diff.</div></div>
-            <div id="eyes-mode-log" hidden><pre class="log" id="eyes-log">log tail</pre></div>
+            <div id="eyes-mode-log" hidden><pre class="log" id="eyes-log">The latest Studio log lines appear here and refresh every few seconds.</pre></div>
           </div>
         </div>
       </div>
@@ -9231,7 +9252,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
             <button id="eyes-copy" class="ghost" disabled>Copy path</button>
           </div>
           <h2 class="mt">Pins</h2>
-          <p class="muted" id="eyes-pin-hint">Click the PNG to drop a pin.</p>
+          <p class="muted" id="eyes-pin-hint">Click a spot on the image to pin a note there.</p>
           <ul class="pin-list" id="eyes-pins"></ul>
         </div>
       </div>
@@ -10310,7 +10331,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   <div class="profiler-sheet sheet" role="dialog" aria-modal="true" aria-labelledby="profiler-heading" tabindex="-1">
     <header class="profiler-head">
       <div class="sheet-title"><div class="eyebrow">Settings · Diagnostics</div><h2 id="profiler-heading">Performance profiler</h2><p id="profiler-status" role="status">Ready to record</p></div>
-      <button id="profiler-close" class="ghost" title="Close (Esc)">Close <kbd>Esc</kbd></button>
+      <button id="profiler-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
     </header>
     <div class="profiler-body">
       <div class="profiler-controls">
@@ -10423,11 +10444,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       </aside>
       <section class="explorer-col">
         <h3 id="analyzer-title">Findings</h3>
-        <div id="analyzer-findings"><p class="muted">Open a project for a local overview, or analyze a file or idea here.</p></div>
+        <div id="analyzer-findings"><p class="muted analyzer-empty">Open a project for a local overview, or analyze a file or idea here.</p></div>
       </section>
       <aside class="explorer-col">
         <h3>Evidence &amp; limits</h3>
-        <ul id="analyzer-evidence" class="pin-list"></ul>
+        <ul id="analyzer-evidence" class="pin-list"><li class="muted analyzer-empty">The evidence behind each finding, and anything the scan could not inspect, appears here.</li></ul>
         <div id="analyzer-ai-out"></div>
       </aside>
     </div>
@@ -14601,11 +14622,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   function cells(parent, values, header = false) {
     for (const value of values) { const cell = document.createElement(header ? "th" : "td"); cell.textContent = value; parent.append(cell); }
   }
-  function table(id, rows, columns, empty) {
+  function table(id, rows, columns, empty, span) {
     const body = $(id); if (!body) return;
     const fragment = document.createDocumentFragment();
     for (const row of rows.slice(0, 15)) { const tr = document.createElement("tr"); cells(tr, columns(row)); fragment.append(tr); }
-    if (!rows.length) { const tr = document.createElement("tr"), td = document.createElement("td"); td.colSpan = 8; td.textContent = empty; tr.append(td); fragment.append(tr); }
+    if (!rows.length) { const tr = document.createElement("tr"), td = document.createElement("td"); td.colSpan = span; td.className = "profiler-empty"; td.textContent = empty; tr.append(td); fragment.append(tr); }
     body.replaceChildren(fragment);
   }
   function chart(data) {
@@ -14614,16 +14635,33 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (canvas.width !== Math.round(width * dpr) || canvas.height !== height * dpr) { canvas.width = Math.round(width * dpr); canvas.height = height * dpr; }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, width, height);
     const rows = data.frames.slice(-180), max = Math.max(66.7, ...rows.map((row) => row.durationMs));
-    const color = getComputedStyle(canvas), ink = color.getPropertyValue("--gold-bright").trim() || "#dec084";
-    const y = (value) => 120 - (value / max) * 100;
-    ctx.strokeStyle = color.getPropertyValue("--hairline-strong").trim() || "#555";
+    const color = getComputedStyle(canvas), token = (name, fallback) => color.getPropertyValue(name).trim() || fallback;
+    const ink = token("--gold-bright", "#dec084"), warn = token("--warn", "#ffd479"), muted = token("--muted", "#aaa");
+    const y = (value) => 124 - (value / max) * 104;
+    // Faint guides at the top and the floor, the budget dashed between them.
+    ctx.strokeStyle = token("--hairline", "#333"); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, y(max) + 0.5); ctx.lineTo(width, y(max) + 0.5); ctx.moveTo(0, y(0) + 0.5); ctx.lineTo(width, y(0) + 0.5); ctx.stroke();
+    ctx.strokeStyle = token("--hairline-strong", "#555");
     ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(0, y(data.budgetMs)); ctx.lineTo(width, y(data.budgetMs)); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = color.getPropertyValue("--muted").trim() || "#aaa"; ctx.font = "11px system-ui";
-    ctx.fillText(`${number(max, 0)} ms`, 4, 12); ctx.fillText(`${number(data.budgetMs)} ms budget`, 4, y(data.budgetMs) - 5);
+    ctx.fillStyle = muted; ctx.font = "11px system-ui"; ctx.textAlign = "right";
+    ctx.fillText(`${number(max, 0)} ms`, width - 4, y(max) + 13); ctx.fillText(`${number(data.budgetMs)} ms budget`, width - 4, y(data.budgetMs) - 5);
+    ctx.textAlign = "left";
     if (rows.length) {
-      ctx.strokeStyle = ink; ctx.lineWidth = 1.5; ctx.beginPath();
-      rows.forEach((row, index) => { const x = index * width / Math.max(1, rows.length - 1); if (!index) ctx.moveTo(x, y(row.durationMs)); else ctx.lineTo(x, y(row.durationMs)); }); ctx.stroke();
-    } else ctx.fillText("Frame history appears while recording in a visible window.", 12, Math.min(112, y(data.budgetMs) + 22));
+      const x = (index) => index * width / Math.max(1, rows.length - 1);
+      // A soft wash under the line, the line itself, then each over-budget frame as a warning dot.
+      ctx.beginPath(); ctx.moveTo(0, y(0));
+      rows.forEach((row, index) => ctx.lineTo(x(index), y(row.durationMs)));
+      ctx.lineTo(x(rows.length - 1), y(0)); ctx.closePath();
+      ctx.globalAlpha = 0.14; ctx.fillStyle = ink; ctx.fill(); ctx.globalAlpha = 1;
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.5; ctx.lineJoin = "round"; ctx.beginPath();
+      rows.forEach((row, index) => { if (!index) ctx.moveTo(x(index), y(row.durationMs)); else ctx.lineTo(x(index), y(row.durationMs)); }); ctx.stroke();
+      ctx.fillStyle = warn;
+      rows.forEach((row, index) => { if (row.durationMs > data.budgetMs * 1.1) { ctx.beginPath(); ctx.arc(x(index), y(row.durationMs), 2.5, 0, Math.PI * 2); ctx.fill(); } });
+    } else {
+      ctx.fillStyle = muted; ctx.textAlign = "center";
+      ctx.fillText(core.isRecording() ? "Waiting for frames. Keep this window visible." : "Start a capture to draw the latest UI frame intervals here.", width / 2, y(data.budgetMs) + 26);
+      ctx.textAlign = "left";
+    }
   }
   function paint() {
     const active = core.isRecording();
@@ -14635,25 +14673,31 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     $("start").disabled = busy || active; $("stop").disabled = busy || !active;
     $("reset").disabled = busy || !data.startedAt; $("export").disabled = busy || !data.startedAt;
     text("host-status", hostState || "Host sampling every second · CPU covers Studio processes, not external coding workers.");
-    const metrics = [ ["UI cadence", finite(stats.fps) ? `${number(stats.fps, 0)} fps` : "—"], ["Frame p95", ms(stats.p95Ms)],
-      ["Worst frame", ms(stats.maxMs)], ["Hitches ≥50 ms", String(data.hitchCount)], ["Long tasks", longTasksSupported ? String(data.longTaskCount) : "Unavailable"],
-      ["Host lag", ms(latest?.hostLagMs)], ["Studio CPU", finite(latest?.cpuPercent) ? `${number(latest.cpuPercent)}%` : "—"],
+    // Long tasks read "—" until a capture has tried to observe them, and a
+    // card turns amber (or red) when its reading is past the frame budget.
+    const over = (value, warnAt, badAt) => !finite(value) ? "" : value >= badAt ? "is-bad" : value >= warnAt ? "is-warn" : "";
+    const metrics = [ ["UI cadence", finite(stats.fps) ? `${number(stats.fps, 0)} fps` : "—"], ["Frame p95", ms(stats.p95Ms), over(stats.p95Ms, data.budgetMs * 1.1, 50)],
+      ["Worst frame", ms(stats.maxMs), over(stats.maxMs, 50, 100)], ["Hitches ≥50 ms", String(data.hitchCount), data.hitchCount ? "is-warn" : ""],
+      ["Long tasks", longTasksSupported ? String(data.longTaskCount) : data.startedAt ? "Not supported" : "—", longTasksSupported && data.longTaskCount ? "is-warn" : ""],
+      ["Host lag", ms(latest?.hostLagMs), over(latest?.hostLagMs, 50, 200)], ["Studio CPU", finite(latest?.cpuPercent) ? `${number(latest.cpuPercent)}%` : "—", over(latest?.cpuPercent, 60, 90)],
       ["Host memory", finite(latest?.rssMB) ? `${number(latest.rssMB, 0)} MB` : "—"] ];
     const fragment = document.createDocumentFragment();
-    for (const [label, value] of metrics) { const card = document.createElement("div"), title = document.createElement("span"), metric = document.createElement("strong"); title.textContent = label; metric.textContent = value; card.append(title, metric); fragment.append(card); }
+    for (const [label, value, tone] of metrics) { const card = document.createElement("div"), title = document.createElement("span"), metric = document.createElement("strong"); card.className = tone ? `profiler-metric ${tone}` : "profiler-metric"; title.textContent = label; metric.textContent = value; card.append(title, metric); fragment.append(card); }
     $("metrics").replaceChildren(fragment);
-    text("frames-note", `${stats.count} recent UI intervals · ${stats.overBudget} over budget (+10% tolerance). Command intentionally draws at about 30 fps; UI cadence measures browser callbacks, not GPU rendering.`);
+    text("frames-note", stats.count
+      ? `${stats.count} recent UI ${stats.count === 1 ? "interval" : "intervals"} · ${stats.overBudget} over budget (+10% tolerance). Command intentionally draws at about 30 fps; UI cadence measures browser callbacks, not GPU rendering.`
+      : "Command intentionally draws at about 30 fps; UI cadence measures browser callbacks, not GPU rendering.");
     chart(data);
-    table("spans", data.spans, (row) => [row.name, row.count, ms(row.selfMs), ms(row.selfMeanMs), ms(row.meanMs), ms(row.p95Ms), ms(row.maxMs)], "No measured rendering work yet. Start recording, close this panel and use Command or the node tree.");
-    table("ipc", [...(host?.spans || [])].sort((a, b) => b.totalMs - a.totalMs), (row) => [row.name, row.count, ms(row.meanMs), ms(row.p95Ms), ms(row.maxMs), row.errors], "Host requests appear during a desktop capture.");
-    table("processes", latest?.processes || [], (row) => [row.type, finite(row.cpuPercent) ? `${number(row.cpuPercent)}%` : "—", finite(row.memoryMB) ? `${number(row.memoryMB, 0)} MB` : "—"], "Waiting for process measurements.");
+    table("spans", data.spans, (row) => [row.name, row.count, ms(row.selfMs), ms(row.selfMeanMs), ms(row.meanMs), ms(row.p95Ms), ms(row.maxMs)], "No measured rendering work yet. Start recording, close this panel and use Command or the node tree.", 7);
+    table("ipc", [...(host?.spans || [])].sort((a, b) => b.totalMs - a.totalMs), (row) => [row.name, row.count, ms(row.meanMs), ms(row.p95Ms), ms(row.maxMs), row.errors], "Host requests appear during a desktop capture.", 6);
+    table("processes", latest?.processes || [], (row) => [row.type, finite(row.cpuPercent) ? `${number(row.cpuPercent)}%` : "—", finite(row.memoryMB) ? `${number(row.memoryMB, 0)} MB` : "—"], data.startedAt ? "Waiting for process measurements." : "Process CPU and memory appear during a desktop capture.", 3);
     const events = [...data.incidents.map((row) => ({ ...row, source: "Renderer" })), ...(host?.incidents || []).map((row) => ({ ...row, source: "Host" }))].sort((a, b) => b.at - a.at).slice(0, 20);
     const items = events.map((row) => {
       const li = document.createElement("li");
       const nearby = row.recentScopes?.length ? ` · nearby: ${row.recentScopes.map((scope) => `${scope.name} ${ms(scope.durationMs)}`).join(", ")}` : "";
       li.textContent = `+${number(row.at / 1000, 1)}s · ${row.source} · ${row.name || row.kind} · ${ms(row.durationMs)}${nearby}`; return li;
     });
-    if (!items.length) { const li = document.createElement("li"); li.textContent = "No hitches captured yet. Frame gaps and long tasks ≥50 ms, slow host requests and host lag appear here."; items.push(li); }
+    if (!items.length) { const li = document.createElement("li"); li.className = "profiler-empty"; li.textContent = "No hitches captured yet. Frame gaps and long tasks ≥50 ms, slow host requests and host lag appear here."; items.push(li); }
     $("incidents").replaceChildren(...items);
     text("limits", `Bounded history: ${data.limits.frames} UI intervals, ${data.limits.durations} timings per scope, ${data.limits.incidents} renderer incidents. ${data.droppedScopes} scope samples dropped at the name limit. Recent p95; capture-wide counts, means, self time and maxima.`);
   }
@@ -42318,6 +42362,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   let initialized = false;
 
   const base = (file) => (file ? file.split(/[\\/]/).pop() : "(unknown)");
+  const plural = (count, one, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
   // #analyzer-open binds straight to open(), so arg 0 can be a click Event.
   const optionsOf = (value) =>
     value && typeof value === "object" && typeof value.preventDefault !== "function" ? value : {};
@@ -42341,6 +42386,31 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     return block;
   }
 
+  // Findings and Evidence are never left blank: before a run, while one reads,
+  // and after one is cancelled or fails, each column says what belongs there.
+  const PENDING = {
+    project: "Reading the project's files and old plans…",
+    file: "Reading the file…",
+    idea: "Comparing the idea with the project's files…",
+    picker: "Waiting for a file…",
+  };
+  function emptyState(kind) {
+    if (!els.findings || !els.evidence) return;
+    const note = document.createElement("p");
+    note.className = "muted analyzer-empty";
+    note.textContent = PENDING[kind]
+      ?? (!window.mefiStudio?.analyzerRun ? "Analysis runs in the desktop app, where Studio can read your project folder."
+        : !state.projectId ? "Open a project folder to see its languages, entry points, old plans and starting points. You can also analyze a single file or an idea."
+          : "Choose Analyze project, pick a file, or describe an idea to see findings here.");
+    els.findings.textContent = "";
+    els.findings.append(note);
+    const row = document.createElement("li");
+    row.className = "muted analyzer-empty";
+    row.textContent = PENDING[kind] ? "Evidence appears as the read finishes." : "The evidence behind each finding, and anything the scan could not inspect, appears here.";
+    els.evidence.textContent = "";
+    els.evidence.append(row);
+  }
+
   function list(parent, heading, items, emptyText) {
     const title = document.createElement("h4");
     title.textContent = heading;
@@ -42349,7 +42419,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (!items.length) {
       const li = document.createElement("li");
       li.className = "muted";
-      li.textContent = emptyText ?? "none";
+      li.textContent = emptyText ?? "None found";
       ul.append(li);
     }
     for (const item of items) {
@@ -42386,13 +42456,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     parent.append(wrap);
     const legend = document.createElement("p");
     legend.className = "eyes-status";
-    legend.textContent = `${composition.lines} lines · ${composition.codePercent}% code · ${composition.commentPercent}% comments`;
+    legend.textContent = `${plural(composition.lines, "line")} · ${composition.codePercent}% code · ${composition.commentPercent}% comments`;
     parent.append(legend);
   }
 
+  const sentence = (text) => { const value = String(text ?? ""); return value.charAt(0).toUpperCase() + value.slice(1); };
+
   function renderFile(result) {
     for (const finding of result.findings) {
-      card(els.findings, finding.kind.toUpperCase(), finding.kind === "markers" ? "collision" : finding.kind === "references" ? "improver" : "", finding.text);
+      card(els.findings, sentence(finding.kind), finding.kind === "markers" ? "collision" : finding.kind === "references" ? "improver" : "", finding.text);
     }
     compositionBar(els.findings, result.composition);
     if (result.outline.length) {
@@ -42400,16 +42472,16 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         els.findings,
         "Outline",
         result.outline.slice(0, 14).map((entry) => ({ label: `L${entry.line}`, value: entry.label })),
-        "no outline entries"
+        "No outline entries"
       );
-      if (result.outline.length > 14) card(els.findings, "OUTLINE", "improver", `…and ${result.outline.length - 14} more entries`);
+      if (result.outline.length > 14) card(els.findings, "Outline", "improver", `…and ${plural(result.outline.length - 14, "more entry", "more entries")}`);
     }
     if (result.markers.length) {
       list(
         els.findings,
         "Markers",
         result.markers.slice(0, 10).map((marker) => ({ label: `${marker.level} L${marker.line}`, value: marker.text })),
-        "clean"
+        "Clean"
       );
     }
     const missing = result.references.filter((reference) => !reference.found);
@@ -42417,35 +42489,44 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       els.findings,
       "Referenced paths",
       result.references.slice(0, 12).map((reference) => ({
-        label: reference.found ? "exists" : "MISSING",
+        label: reference.found ? "Present" : "Missing",
         value: reference.ref,
         title: reference.found ? "present in the work tree" : "not found in the work tree",
       })),
-      "no path references"
+      "No path references"
     );
     for (const reference of missing.slice(0, 8)) {
       const row = document.createElement("li");
       row.className = "muted";
-      row.textContent = `missing: ${reference.ref}`;
+      row.textContent = `Missing: ${reference.ref}`;
       els.evidence.append(row);
     }
+    if (result.references.length && !missing.length) {
+      const row = document.createElement("li");
+      row.textContent = result.references.length === 1 ? "The referenced path exists in the work tree." : `All ${result.references.length} referenced paths exist in the work tree.`;
+      els.evidence.append(row);
+    }
+    const limit = document.createElement("li");
+    limit.textContent = "Local read of this file only. Nothing was run.";
+    els.evidence.append(limit);
   }
 
   function renderIdea(result) {
     const verdictClass = result.verdict === "new" ? "improver" : result.verdict === "related work exists" ? "collision" : "fix";
-    card(els.findings, "VERDICT", verdictClass, `${result.verdict} · ${result.coverage}% keyword coverage across ${result.files.length} file(s), ${result.scanned} scanned`);
+    card(els.findings, "Verdict", verdictClass, `${sentence(result.verdict)} · ${result.coverage}% keyword coverage across ${plural(result.files.length, "file")}, ${result.scanned} scanned`);
     const chips = document.createElement("div");
     chips.className = "keyword-row";
     for (const keyword of result.keywords) {
       const chip = document.createElement("span");
       chip.className = `chip ${result.keywordHits[keyword] ? "on" : ""}`;
-      chip.textContent = `${keyword} ${result.keywordHits[keyword] ? `·${result.keywordHits[keyword]}` : "· 0"}`;
+      chip.textContent = `${keyword} · ${result.keywordHits[keyword] || 0}`;
+      chip.title = result.keywordHits[keyword] ? `${plural(result.keywordHits[keyword], "match", "matches")} in the project` : "Not found in the project";
       chips.append(chip);
     }
     els.findings.append(chips);
-    for (const suggestion of result.suggestions) card(els.findings, "NEXT", "", suggestion);
+    for (const suggestion of result.suggestions) card(els.findings, "Next step", "", suggestion);
     for (const reference of result.references.slice(0, 8)) {
-      card(els.findings, reference.found ? "REF OK" : "REF MISSING", reference.found ? "" : "fix", reference.ref);
+      card(els.findings, reference.found ? "Present" : "Missing", reference.found ? "" : "fix", reference.ref);
     }
     if (result.hits.length) {
       list(
@@ -42456,12 +42537,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
           value: hit.snippet,
           title: `${hit.keyword} · ${hit.file}`,
         })),
-        "no hits"
+        "No matches"
       );
     } else {
       const li = document.createElement("li");
       li.className = "muted";
-      li.textContent = "No evidence hits — every keyword is new ground.";
+      li.textContent = "No matches in the project. Every keyword is new ground.";
       els.evidence.append(li);
     }
   }
@@ -42481,15 +42562,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const inventory = result.inventory || {};
     const plans = result.plans || [];
     const summary = result.summary || {};
-    card(els.findings, "PROJECT", "improver", `${inventory.files || 0} files · ${inventory.sourceFiles || 0} source files · ${inventory.testFiles || 0} test files · ${inventory.documents || 0} documents`);
-    card(els.findings, "PLAN CHECK", "", `${plans.length} old plan(s) · ${summary.claimedComplete || 0} completion claim(s) · ${summary.missingReferences || 0} missing path(s). Related code and existing paths are evidence to review; they do not prove a plan is complete.`);
+    card(els.findings, "Project", "improver", `${plural(inventory.files || 0, "file")} · ${plural(inventory.sourceFiles || 0, "source file")} · ${plural(inventory.testFiles || 0, "test file")} · ${plural(inventory.documents || 0, "document")}`);
+    card(els.findings, "Plan check", "", `${plural(plans.length, "old plan")} · ${plural(summary.claimedComplete || 0, "completion claim")} · ${plural(summary.missingReferences || 0, "missing path")}. Related code and existing paths are evidence to review; they do not prove a plan is complete.`);
 
     const heading = document.createElement("h4");
     heading.textContent = "Starting points";
     els.findings.append(heading);
     for (const point of result.startingPoints || []) {
       const block = document.createElement("section");
-      card(block, "NEXT", "improver", point.title);
+      card(block, "Next step", "improver", point.title);
       const reason = document.createElement("p");
       reason.textContent = point.reason;
       block.append(reason);
@@ -42509,8 +42590,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       block.append(prepare);
       els.findings.append(block);
     }
-    if (!result.startingPoints?.length) card(els.findings, "NEXT", "", "Describe the outcome you want in the idea box to explore a starting point.");
-    list(els.findings, "Languages", (inventory.languages || []).map((language) => `${language.name} · ${language.count} files`), "No source languages discovered.");
+    if (!result.startingPoints?.length) card(els.findings, "Next step", "", "Describe the outcome you want under Idea to explore a starting point.");
+    list(els.findings, "Languages", (inventory.languages || []).map((language) => `${language.name} · ${plural(language.count, "file")}`), "No source languages discovered.");
     list(els.findings, "Entry points", inventory.entryPoints || [], "No entry points discovered.");
     list(els.findings, "Checks discovered — not run", (inventory.checks || []).map((check) => `${check.name}: ${check.command}`), "No automated checks discovered.");
 
@@ -42557,7 +42638,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       }
       els.findings.append(details);
     }
-    if (!plans.length) card(els.findings, "PLANS", "", "No old plans were found in the scanned documents or this project's saved Studio plans.");
+    if (!plans.length) card(els.findings, "Plans", "", "No old plans were found in the scanned documents or this project's saved Studio plans.");
     for (const limitation of result.limitations || []) {
       const row = document.createElement("li");
       row.textContent = limitation;
@@ -42576,8 +42657,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const heading = document.createElement("h4");
     heading.textContent = "AI deep read";
     els.aiOut.append(heading);
-    if (typeof ai.summary === "string" && ai.summary) card(els.aiOut, "SUMMARY", "improver", ai.summary);
-    for (const [key, tag] of [["features", "FEATURE"], ["ideas", "IDEA"], ["content", "CONTENT"], ["gaps", "GAP"]]) {
+    if (typeof ai.summary === "string" && ai.summary) card(els.aiOut, "Summary", "improver", ai.summary);
+    for (const [key, tag] of [["features", "Feature"], ["ideas", "Idea"], ["content", "Content"], ["gaps", "Gap"]]) {
       for (const item of (Array.isArray(ai[key]) ? ai[key] : []).filter((entry) => typeof entry === "string").slice(0, 6)) card(els.aiOut, tag, key === "gaps" ? "fix" : "", item);
     }
   }
@@ -42590,13 +42671,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (els.projectAi) els.projectAi.disabled = !state.projectResult || state.aiPending || !window.mefiStudio?.analyzerAi;
   }
 
-  function clearResult() {
+  function clearResult(kind) {
     state.result = null;
     state.ai = null;
-    els.findings.textContent = "";
-    els.evidence.textContent = "";
     els.aiOut.textContent = "";
     els.title.textContent = "Findings";
+    emptyState(kind);
   }
 
   // Every intent owns one sequence, including the time spent in a native picker.
@@ -42606,7 +42686,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     state.aiRequest += 1;
     state.pending = kind;
     state.aiPending = false;
-    clearResult();
+    clearResult(kind);
     controls();
     return { request: state.request, epoch: state.epoch, projectId: state.projectId };
   }
@@ -42620,6 +42700,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   function finish(token) {
     if (!current(token)) return;
     state.pending = null;
+    // A cancelled picker or a failed read leaves no result: drop the "Reading…" note.
+    if (!state.result) emptyState();
     controls();
   }
 
@@ -42654,15 +42736,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       state.projectResult = result;
       els.title.textContent = `Project · ${result.name}`;
       renderProject(result);
-      status(`Project scan complete · ${(result.plans || []).length} old plan(s) · ${(result.startingPoints || []).length} starting point(s) · checks not run`);
+      status(`Project scan complete · ${plural((result.plans || []).length, "old plan")} · ${plural((result.startingPoints || []).length, "starting point")} · checks not run`);
     } else if (result.kind === "file") {
       els.title.textContent = `Findings · ${result.name}`;
       renderFile(result);
-      status(`analyzed ${result.name} · ${result.language} · ${result.composition.lines} lines`);
+      status(`Analyzed ${result.name} · ${result.language} · ${plural(result.composition.lines, "line")}`);
     } else {
-      els.title.textContent = "Findings · idea";
+      els.title.textContent = "Findings · Idea";
       renderIdea(result);
-      status(`idea compared · ${result.verdict} · ${result.coverage}% keyword coverage`);
+      status(`Idea compared · ${result.verdict} · ${result.coverage}% keyword coverage`);
     }
     controls();
   }
@@ -42677,7 +42759,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (!filePath || !window.mefiStudio?.analyzerRun) return;
     if (pickerToken && !current(pickerToken)) return;
     const token = pickerToken || begin("file");
-    status(`reading ${base(filePath)}…`);
+    status(`Reading ${base(filePath)}…`);
     try {
       const response = await window.mefiStudio.analyzerRun("file", { path: filePath, projectId: token.projectId || undefined });
       if (!current(token, response)) return;
@@ -42695,7 +42777,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   async function runIdea(text) {
     if (!text || !window.mefiStudio?.analyzerRun) return;
     const token = begin("idea");
-    status("verifying idea against the work tree…");
+    status("Comparing the idea with the project's files…");
     try {
       const response = await window.mefiStudio.analyzerRun("idea", { text, projectId: token.projectId || undefined });
       if (!current(token, response)) return;
@@ -42745,7 +42827,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       state.pending = null;
       state.aiPending = false;
       clearResult();
-      status("Open a project folder to analyse it.");
+      status("Open a project folder to analyze it.");
       controls();
       return;
     }
@@ -44998,11 +45080,26 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     } catch (error) { if (projectId === state.projectId) window.MefiToast?.(error.message, "bad"); return false; }
   }
 
+  const STATUS_LABELS = { new: "New", keep: "Kept", accepted: "Task made", done: "Done" };
   function statusTag(idea) {
     const tag = document.createElement("span");
     tag.className = `src-tag ${idea.status === "done" ? "improver" : idea.status === "accepted" ? "" : idea.status === "keep" ? "collision" : ""}`;
-    tag.textContent = String(idea.status || "new").toUpperCase();
+    const status = String(idea.status || "new");
+    tag.textContent = STATUS_LABELS[status] ?? status.charAt(0).toUpperCase() + status.slice(1);
     return tag;
+  }
+
+  // The graph paints with the active theme's tokens, so it matches every
+  // theme instead of the original gold-on-black.
+  function palette() {
+    const root = document.documentElement;
+    const css = root && typeof getComputedStyle === "function" ? getComputedStyle(root) : null;
+    const read = (name, fallback) => css?.getPropertyValue(name)?.trim() || fallback;
+    return {
+      bg: read("--bg-deep", "#05060a"), accent: read("--gold", "#71cbb7"), bright: read("--gold-bright", "#a7f3da"),
+      hairline: read("--hairline", "rgba(120,140,140,0.4)"), ivory: read("--ivory", "#e7f5ee"), dim: read("--dim", "#7c8a8c"),
+      good: read("--good", "#afdfc2"), info: read("--info", "#9db7ff"), warn: read("--warn", "#ffd479"), live: read("--live", "#57ff9a"),
+    };
   }
 
   function renderList() {
@@ -45012,7 +45109,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (!filtered.length) {
       const li = document.createElement("li");
       li.className = "muted";
-      li.textContent = state.clusterFilter ? `No ideas tagged "${state.clusterFilter}".` : "No ideas yet — press Scan chats.";
+      li.textContent = state.clusterFilter ? `No ideas tagged "${state.clusterFilter}". Select the tag again to show every idea.` : "No ideas yet. Choose Tools › Scan chats to collect them from recent conversations.";
       el.list.append(li);
       return;
     }
@@ -45068,8 +45165,21 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       el.detail.append(hint);
       return;
     }
+    // Title, where it came from and its state, then the full text.
+    if (idea.title && idea.title !== idea.detail) {
+      const heading = document.createElement("h4");
+      heading.className = "idea-detail-title";
+      heading.textContent = idea.title;
+      el.detail.append(heading);
+    }
+    const meta = document.createElement("p");
+    meta.className = "idea-detail-meta";
+    const at = idea.at == null || idea.at === "" ? NaN : new Date(idea.at).getTime();
+    meta.append(statusTag(idea), document.createTextNode(` ${[idea.source ? `From ${idea.source}` : "", Number.isFinite(at) ? new Date(at).toLocaleString() : ""].filter(Boolean).join(" · ")}`));
+    el.detail.append(meta);
     const title = document.createElement("p");
-    title.textContent = idea.detail;
+    title.className = "idea-detail-text";
+    title.textContent = idea.detail ?? idea.title ?? "";
     el.detail.append(title);
     const tags = document.createElement("div");
     tags.className = "keyword-row";
@@ -45137,7 +45247,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       save();
       renderDetail();
     });
-    action("Delete", () => {
+    action("Delete", async () => {
+      if (typeof window.MefiConfirm === "function" && !(await window.MefiConfirm(`Delete the idea "${String(idea.title ?? idea.detail ?? "").slice(0, 60)}"? This cannot be undone.`, { label: "Delete" }))) return;
       if (window.mefiStudio?.ideasAction) { act("delete", { ideaId: idea.id }); return; }
       state.ideas = state.ideas.filter((item) => item.id !== idea.id);
       state.selected = null;
@@ -45192,8 +45303,16 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const ctx = el.canvas.getContext("2d");
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = "#05060a";
+    const colors = palette();
+    ctx.fillStyle = colors.bg;
     ctx.fillRect(0, 0, width, height);
+    if (!state.ideas.length) {
+      ctx.fillStyle = colors.dim;
+      ctx.font = "12px system-ui";
+      ctx.textAlign = "center";
+      ctx.fillText("Ideas that share a tag gather into clusters here once you scan some chats.", width / 2, height / 2);
+      ctx.textAlign = "left";
+    }
 
     const clusters = cluster();
     const positions = new Map();
@@ -45205,7 +45324,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       const cy = height / 2 + Math.sin(clusterAngle) * clusterRadius * 0.8;
       ctx.beginPath();
       ctx.arc(cx, cy, 26 + group.length * 2.4, 0, Math.PI * 2);
-      ctx.strokeStyle = "rgba(201,168,106,0.18)";
+      ctx.strokeStyle = colors.hairline;
       ctx.lineWidth = 1;
       ctx.stroke();
       group.forEach((idea, ideaIndex) => {
@@ -45223,11 +45342,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         const sibling = state.ideas.find((other) => other.id !== idea.id && (other.tags ?? []).includes(tag));
         const target = sibling ? positions.get(sibling.id) : null;
         if (target) {
-          ctx.strokeStyle = "rgba(157,183,255,0.10)";
+          ctx.strokeStyle = colors.info;
+          ctx.globalAlpha = 0.16;
           ctx.beginPath();
           ctx.moveTo(home.x, home.y);
           ctx.lineTo(target.x, target.y);
           ctx.stroke();
+          ctx.globalAlpha = 1;
         }
       }
     }
@@ -45235,7 +45356,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       const point = positions.get(idea.id);
       if (!point) continue;
       const selected = idea.id === state.selected;
-      const colour = idea.status === "done" ? "#57ff9a" : idea.status === "accepted" ? "#9db7ff" : idea.status === "keep" ? "#ffd479" : idea.read ? "#9a8f7d" : "#e6c98d";
+      const colour = idea.status === "done" ? colors.good : idea.status === "accepted" ? colors.info : idea.status === "keep" ? colors.warn : idea.read ? colors.dim : colors.bright;
       ctx.beginPath();
       ctx.arc(point.x, point.y, selected ? 7 : idea.read ? 4 : 5.5, 0, Math.PI * 2);
       ctx.fillStyle = colour;
@@ -45243,17 +45364,19 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       if (selected) {
         ctx.beginPath();
         ctx.arc(point.x, point.y, 11, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(236,229,216,0.8)";
+        ctx.strokeStyle = colors.ivory;
         ctx.stroke();
       }
       if (!idea.read) {
         ctx.beginPath();
         ctx.arc(point.x, point.y, 9, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(87,255,154,0.5)";
+        ctx.strokeStyle = colors.accent;
+        ctx.globalAlpha = 0.6;
         ctx.stroke();
+        ctx.globalAlpha = 1;
       }
-      ctx.fillStyle = "rgba(236,229,216,0.72)";
-      ctx.font = "10px system-ui";
+      ctx.fillStyle = selected ? colors.ivory : colors.dim;
+      ctx.font = selected ? "600 11px system-ui" : "10px system-ui";
       // Shortened at a word where one is near, and marked as shortened.
       const name = String(idea.title ?? idea.detail ?? "");
       const cut = name.length > 22 ? `${(name.slice(0, 21).replace(/\s+\S*$/, "") || name.slice(0, 21)).trimEnd()}…` : name;
@@ -45277,10 +45400,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
 
   async function scan(ai) {
-    el.status.textContent = ai ? "AI review…" : "scanning chats…";
+    el.status.textContent = ai ? "Reviewing ideas with AI…" : "Scanning recent chats for ideas…";
     const result = await window.mefiStudio?.ideasScan?.(ai);
     if (!result?.ok) {
-      el.status.textContent = result?.error ?? "scan failed";
+      el.status.textContent = result?.error ?? (ai ? "The AI review didn't finish. Check the AI connection and try again." : "The chat scan didn't finish. Try again.");
       return;
     }
     state.ideas = result.ideas ?? state.ideas;
@@ -45289,7 +45412,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     drawGraph();
     // The pass writes its own summary line (ideas added, what the AI review
     // compacted); the composed fallback only covers older main processes.
-    el.status.textContent = result.text || `+${result.added} ideas · ${result.scanned} lines considered${result.aiError ? ` · ${result.aiError}` : ""}`;
+    el.status.textContent = result.text || `${result.added} new idea${result.added === 1 ? "" : "s"} · ${result.scanned} lines considered${result.aiError ? ` · ${result.aiError}` : ""}`;
     if (result.added) window.MefiToast?.(`${result.added} new idea${result.added === 1 ? "" : "s"} captured`, "good");
   }
 
@@ -50297,6 +50420,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (seconds < 86400) return `${Math.round(seconds / 3600)}h`;
     return `${Math.round(seconds / 86400)}d`;
   };
+  const plural = (count, one, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
+  // A theme token as a canvas colour: the pins follow the active theme.
+  const token = (name, fallback) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 
   function status(text, isError) {
     els.status.textContent = text;
@@ -50312,11 +50438,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   function renderSessions() {
     fillSelect(els.session, [
       ["", "All sessions"],
-      ...state.sessions.map((session) => [session.id, `${session.title || session.id} · ${session.agent ?? "?"} · ${session.model?.id ?? "?"}`]),
+      ...state.sessions.map((session) => [session.id, [session.title || session.id, session.agent, session.model?.id].filter(Boolean).join(" · ")]),
     ]);
     els.session.value = state.sessionId ?? "";
     const agents = [...new Set(state.sessions.map((session) => session.agent).filter(Boolean))].sort();
-    fillSelect(els.agent, [["", "all agents"], ...agents.map((agent) => [agent, agent])]);
+    fillSelect(els.agent, [["", "All agents"], ...agents.map((agent) => [agent, agent])]);
     els.agent.value = state.agent ?? "";
   }
 
@@ -50336,7 +50462,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const files = new Set(items.map((change) => change.file).filter(Boolean)).size;
     const session = state.sessionId ? state.sessions.find((item) => item.id === state.sessionId) : null;
     const cost = session ? ` · session cost $${Number(session.cost ?? 0).toFixed(3)}` : "";
-    els.summary.textContent = `${items.length} changes · ${files} files · +${additions}/-${deletions}${cost}`;
+    els.summary.textContent = `${plural(items.length, "change")} · ${plural(files, "file")} · +${additions} / −${deletions}${cost}`;
   }
 
   const GLYPHS = { edit: "✎", write: "✎", patch: "⚑", bash: "⌘", read: "◇", grep: "◌", glob: "◌", websearch: "☍", webfetch: "☍", task: "◆" };
@@ -50353,8 +50479,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     els.feed.textContent = "";
     if (!items.length) {
       const empty = document.createElement("li");
-      empty.className = "muted";
-      empty.textContent = "No edits found for this filter yet.";
+      empty.className = "muted eyes-empty";
+      empty.textContent = !state.sessions.length
+        ? "No agent sessions yet. Edits appear here as coding agents work."
+        : state.changes.length ? "No edits match these filters. Try All agents or All time." : "No edits recorded for this session yet.";
       els.feed.append(empty);
       return;
     }
@@ -50462,18 +50590,21 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (els.reveal) els.reveal.disabled = !hasFile;
     if (els.copy) els.copy.disabled = !hasFile;
     if (!change) {
-      els.inspector.innerHTML = '<span class="k muted">no selection</span>';
+      const hint = document.createElement("span");
+      hint.className = "muted eyes-inspector-empty";
+      hint.textContent = "Select a change in the feed to see its file, agent, model and task.";
+      els.inspector.append(hint);
       return;
     }
     const session = state.sessions.find((item) => item.id === change.sessionId);
     const rows = [
-      ["file", change.file ?? "(unknown)"],
-      ["tool", change.tool],
-      ["lines", `+${change.additions} / -${change.deletions}`],
-      ["agent", session?.agent ?? "?"],
-      ["model", session?.model.id ?? "?"],
-      ["session", session?.title ?? change.sessionId],
-      ["when", new Date(change.time).toLocaleString()],
+      ["File", change.file ?? "Unknown"],
+      ["Tool", change.tool],
+      ["Lines", `+${change.additions} / −${change.deletions}`],
+      ["Agent", session?.agent ?? "Unknown"],
+      ["Model", session?.model?.id ?? "Unknown"],
+      ["Session", session?.title ?? change.sessionId],
+      ["When", `${new Date(change.time).toLocaleString()} · ${ago(change.time)} ago`],
     ];
     for (const [key, value] of rows) {
       const k = document.createElement("span");
@@ -50487,7 +50618,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (owner?.taskId) {
       const k = document.createElement("span");
       k.className = "k";
-      k.textContent = "task";
+      k.textContent = "Task";
       const open = document.createElement("button");
       open.className = "ghost mini";
       open.textContent = "Open task";
@@ -50498,7 +50629,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
 
   function renderPngSelect() {
-    fillSelect(els.pngSelect, [["", "newest evidence…"], ...state.pngs.map((png) => [png.path, `${png.name} · ${ago(png.mtime)} ago`])]);
+    fillSelect(els.pngSelect, [["", state.pngs.length ? "Newest evidence…" : "No screenshots yet"], ...state.pngs.map((png) => [png.path, `${png.name} · ${ago(png.mtime)} ago`])]);
     if (state.png) els.pngSelect.value = state.png;
   }
 
@@ -50554,45 +50685,69 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     pinCanvasCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     pinCanvasCtx.clearRect(0, 0, width, height);
     const pins = currentPins();
+    const fill = token("--gold", "#71cbb7");
+    const ink = token("--ink", "#000");
     pinCanvasCtx.font = "600 11px system-ui";
-    pins.forEach((pin, index) => {
+    pinCanvasCtx.textAlign = "center";
+    pinCanvasCtx.textBaseline = "middle";
+    const marks = state.pendingPin ? [...pins, { ...state.pendingPin, pending: true }] : pins;
+    marks.forEach((pin, index) => {
       const x = pin.x * width;
       const y = pin.y * height;
       pinCanvasCtx.beginPath();
-      pinCanvasCtx.arc(x, y, 9, 0, Math.PI * 2);
-      pinCanvasCtx.fillStyle = "rgba(201, 168, 106, 0.92)";
+      pinCanvasCtx.arc(x, y, 10, 0, Math.PI * 2);
+      pinCanvasCtx.globalAlpha = pin.pending ? 0.55 : 0.95;
+      pinCanvasCtx.fillStyle = fill;
       pinCanvasCtx.fill();
-      pinCanvasCtx.strokeStyle = "#050507";
+      pinCanvasCtx.globalAlpha = 1;
+      pinCanvasCtx.strokeStyle = "rgba(0, 0, 0, 0.7)";
       pinCanvasCtx.lineWidth = 2;
       pinCanvasCtx.stroke();
-      pinCanvasCtx.fillStyle = "#171307";
-      pinCanvasCtx.fillText(String(index + 1), x - 3.5, y + 4);
+      pinCanvasCtx.fillStyle = ink;
+      pinCanvasCtx.fillText(String(index + 1), x, y + 0.5);
     });
+  }
+
+  function removePin(index) {
+    const next = currentPins().filter((_, i) => i !== index);
+    if (state.png) state.pins[state.png] = next;
+    if (!next.length && state.png) delete state.pins[state.png];
+    savePins();
+    renderPinList();
+    drawPins();
+    els.pinsList.querySelector("button")?.focus();
   }
 
   function renderPinList() {
     els.pinsList.textContent = "";
     const pins = currentPins();
+    if (els.pinHint) els.pinHint.hidden = Boolean(pins.length || state.pendingPin);
     pins.forEach((pin, index) => {
       const li = document.createElement("li");
-      li.textContent = `${index + 1}. ${pin.note || "(no note)"} · ${Math.round(pin.x * 100)}%,${Math.round(pin.y * 100)}%`;
-      li.title = "click to remove";
-      li.style.cursor = "pointer";
-      li.addEventListener("click", () => {
-        const next = pins.filter((_, i) => i !== index);
-        if (state.png) state.pins[state.png] = next;
-        if (!next.length && state.png) delete state.pins[state.png];
-        savePins();
-        renderPinList();
-        drawPins();
-      });
+      li.className = "eyes-pin";
+      const number = document.createElement("span");
+      number.className = "eyes-pin-number";
+      number.textContent = String(index + 1);
+      const note = document.createElement("span");
+      note.className = "eyes-pin-note";
+      note.textContent = pin.note || "No note";
+      if (!pin.note) note.classList.add("muted");
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "ghost mini eyes-pin-remove";
+      remove.textContent = "Remove";
+      remove.setAttribute("aria-label", `Remove pin ${index + 1}${pin.note ? `: ${pin.note}` : ""}`);
+      remove.addEventListener("click", () => removePin(index));
+      li.append(number, note, remove);
       els.pinsList.append(li);
     });
     if (state.pendingPin) {
       const li = document.createElement("li");
+      li.className = "eyes-pin eyes-pin-pending";
       const input = document.createElement("input");
       input.type = "text";
-      input.placeholder = "note for pin " + (pins.length + 1) + " · Enter saves";
+      input.placeholder = `Note for pin ${pins.length + 1} · Enter saves, Esc cancels`;
+      input.setAttribute("aria-label", `Note for pin ${pins.length + 1}`);
       input.style.width = "100%";
       input.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
@@ -50604,8 +50759,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
           drawPins();
         }
         if (event.key === "Escape") {
+          // Cancels this pin only; the sheet stays open.
+          event.preventDefault();
+          event.stopPropagation();
           state.pendingPin = null;
           renderPinList();
+          drawPins();
+          els.png?.focus?.();
         }
       });
       li.append(input);
@@ -50645,7 +50805,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (els.tab?.hidden) return;
     if (!window.mefiStudio?.eyesLog) return;
     const result = await window.mefiStudio.eyesLog(220);
-    els.log.textContent = result.ok ? result.text : `log unavailable: ${result.error}`;
+    els.log.textContent = result.ok ? (result.text || "The Studio log is empty so far.") : `Log unavailable: ${result.error}`;
     els.log.scrollTop = els.log.scrollHeight;
   }
 
@@ -50654,7 +50814,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   let refreshSeq = 0;
   async function refresh({ keepSelection = true } = {}) {
     if (!window.mefiStudio?.eyesState) {
-      status("Desktop mode only — run npm start inside mefi-studio to read live sessions.", true);
+      status("Activity reads live agent sessions in the Studio desktop app.");
       return;
     }
     const seq = ++refreshSeq;
@@ -50662,7 +50822,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const result = await window.mefiStudio.eyesState(state.sessionId);
     if (seq !== refreshSeq) return;
     if (!result.ok) {
-      status(`OpenCode store unavailable: ${result.error}`, true);
+      status(`Couldn't read the OpenCode session store: ${result.error}`, true);
       return;
     }
     state.sessions = result.sessions;
@@ -50682,7 +50842,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     renderPngSelect();
     if (!state.png && state.pngs.length) loadPng(state.pngs[0].path);
     const edits = visibleChanges().length;
-    status(`${state.sessions.length} sessions · ${edits} changes shown · live`);
+    status(`Live · ${plural(state.sessions.length, "session")} · ${plural(edits, "change")} shown`);
   }
 
   function wire() {
@@ -50737,7 +50897,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       const change = findChange(state.changeId);
       if (!change?.file) return;
       await window.mefiStudio?.shellCopy?.(change.file);
-      status(`copied ${base(change.file)} path to clipboard`);
+      status(`Copied the path of ${base(change.file)}`);
     });
     els.refresh.addEventListener("click", () => refresh());
     els.pngSelect.addEventListener("change", () => loadPng(els.pngSelect.value || null));
@@ -50776,12 +50936,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       const inspectorPanel = document.getElementById("eyes-inspector-panel");
       if (inspectorPanel?.hidden) inspectorToggle?.click();
       renderPinList();
+      drawPins();
     });
     window.addEventListener("resize", () => requestAnimationFrame(drawPins));
     window.addEventListener("mefi:restore-png", (event) => {
       if (event.detail?.path) {
         loadPng(event.detail.path);
-        status(`visual state restored from checkpoint: ${base(event.detail.path)}`);
+        status(`Restored ${base(event.detail.path)} from a checkpoint`);
       }
     });
     // Registered here, not at the end of init(): init() is async, and a deep link
@@ -50829,6 +50990,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       pinsLayer: "eyes-pins-layer",
       inspector: "eyes-inspector",
       pinsList: "eyes-pins",
+      pinHint: "eyes-pin-hint",
     })) {
       els[key] = document.getElementById(id);
     }
@@ -50847,7 +51009,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       if (els.tab?.hidden) state.dirty = true;
       else refresh({ keepSelection: true });
     });
-    window.mefiStudio?.onEyesError?.((message) => status(`poll error: ${message}`, true));
+    window.mefiStudio?.onEyesError?.((message) => status(`Activity update failed: ${message}`, true));
   }
 
   window.MefiEyes = { init, state };
@@ -65560,11 +65722,27 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const id = SETTINGS_CATEGORIES[key] ? `settings-category-${key}` : SETTINGS_ALIASES[key] ?? `settings-${key}`;
     return document.getElementById(id) ? id : null;
   }
+  // A choice button's textContent runs its parts together ("Fullevery
+  // animation", "VoidMembers", "Classic orbsLuminous circles"): name it by its
+  // title element, or by its own words without the <small> detail and the lock
+  // badge, and prefix the group it belongs to ("Motion › Full").
+  function settingsButtonLabel(control) {
+    const named = control.querySelector?.("strong, b");
+    const nodes = Array.from(control.childNodes ?? []);
+    const own = named?.textContent || (nodes.length
+      ? nodes.filter((node) => node.nodeType === 3 || !(node.tagName === "SMALL" || node.classList?.contains?.("music-premium-lock") || node.getAttribute?.("aria-hidden") === "true")).map((node) => node.textContent ?? "").join(" ")
+      : control.textContent);
+    const group = control.closest?.("[role=group][aria-labelledby]");
+    const heading = group ? document.getElementById?.(group.getAttribute("aria-labelledby")) : null;
+    const title = heading ? Array.from(heading.childNodes ?? []).filter((node) => node.nodeType === 3).map((node) => node.textContent).join(" ").trim() || heading.textContent : "";
+    const text = String(own ?? "").replace(/\s+/g, " ").trim();
+    return title && text ? `${title.replace(/\s+/g, " ").trim()} › ${text}` : text;
+  }
   function settingsControlLabel(control) {
     const label = control.closest?.("label") ?? document.querySelector?.(`label[for="${control.id}"]`);
     const named = label?.querySelector?.(".field-label, b, strong, .grow");
     const parts = label ? Array.from(label.children ?? []).filter((node) => !["INPUT", "SELECT", "TEXTAREA", "SMALL"].includes(node.tagName)).map((node) => node.textContent ?? "").join(" ") : "";
-    return String(control.getAttribute?.("aria-label") || named?.textContent || parts || (control.tagName === "BUTTON" ? control.textContent : "") || control.getAttribute?.("title") || "").replace(/\s+/g, " ").trim();
+    return String(control.getAttribute?.("aria-label") || named?.textContent || parts || (control.tagName === "BUTTON" ? settingsButtonLabel(control) : "") || control.getAttribute?.("title") || "").replace(/\s+/g, " ").trim();
   }
   function settingsEntries() {
     const entries = [];
