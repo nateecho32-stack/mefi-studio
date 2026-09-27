@@ -206,7 +206,9 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-bar i::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent); transform: translateX(-100%); animation: vibe-sheen 2.2s var(--ease-in-out) infinite; }
 .vibe-bar.is-flowing i { width: 34%; animation: vibe-flow 1.8s var(--ease-in-out) infinite; }
 @keyframes vibe-sheen { to { transform: translateX(260%); } }
-@keyframes vibe-flow { 0% { left: -34%; } 100% { left: 100%; } }
+/* The same sweep as left: -34% → 100% of the bar, in the bar's own width
+   (34%): a transform runs on the compositor instead of a layout per frame. */
+@keyframes vibe-flow { 0% { transform: translateX(-100%); } 100% { transform: translateX(294.12%); } }
 .vibe-row-action { flex: none; height: 30px; margin-right: 8px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--lane) 45%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--lane) 12%, transparent); color: var(--v-ink); font-size: 12px; font-weight: 600; cursor: pointer; transition: background var(--motion-fast) var(--ease-out); }
 .vibe-row-action:hover { background: color-mix(in srgb, var(--lane) 24%, transparent); }
 .vibe-empty { padding: 14px 10px; color: var(--v-faint); font-size: 13px; line-height: 1.5; list-style: none; }
