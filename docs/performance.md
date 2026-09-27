@@ -1,5 +1,50 @@
 # Agent loop and startup measurements
 
+## Work for surfaces nobody can see, September 27, 2026
+
+A read-only audit of the push paths found per-push work aimed at hidden
+surfaces. These changes were not profiled; the costs quoted come from the
+measurements earlier in this file.
+
+- **Command's chat log and Ask cards while Command is closed.**
+  `onAssistantEvent` ran `paintChatLog` and `renderAsks` on every assistant
+  push, but both live in `#idle-hud`, which is hidden unless Command is
+  open. On Home the rebuilt thread and the shared-controls observer walking
+  it were the 40 + 41 ms of a 97 ms push measured on September 25. Both now
+  return while `state.active` is false, and `enter()` paints them.
+- **`mefi:queue-settings` on every push.** `adoptQueue` (renderer/agents.js)
+  dispatched it on every assistant and status push; its listeners re-render
+  the companion panel and walk the document for queue controls. It now goes
+  out only when the snapshot changes. idle.js already deduplicated its own.
+- **Pushes to a window in the tray or minimized.** `eyes:tasks`,
+  `eyes:requests`, `eyes:ideas` and `machine:status` are whole snapshots.
+  While the real window is hidden or minimized, `send` keeps only the newest
+  of each and sends them on `show` or `restore`; a board list held for a
+  project the owner has since left is dropped. Harness windows (smoke,
+  capture) are never shown and are not held. Assistant pushes still go out,
+  because listeners act on each event's kind (`seedHeard`, agent, mail and
+  reply handling in `onAssistantEvent`), not just on the state.
+- **Vibe's flow bar** animated `left`, a layout per frame while anything
+  builds. It animates `transform` over the same sweep (`translateX(-100%)`
+  to `294.12%` of its 34% width).
+
+Tests: tests/command_closed_pushes.test.mjs and the hidden-window cases in
+tests/host_push_batching.test.mjs.
+
+Left alone on purpose:
+
+- The board read's row cache still reads the whole file and compares bytes.
+  A `stat` check first would skip the 8 MB read and the 3 ms byte compare,
+  but the cache exists to never trust a timestamp, and the exFAT volume
+  this tree lives on keeps modification times to 10 ms. Shrinking the board does more
+  (`logs` in task-context.cjs's snapshot fields gives every log line a full
+  revision), but it changes what history keeps.
+- Vibe's aurora (three 90 px blurs drifting under about ten backdrop-blurred
+  panels) and the composer's spinning ring (a `conic-gradient` driven by a
+  registered property, repainted every frame) are decorative loops the
+  Motion setting already stops under Calm. Pausing them otherwise is a
+  design decision.
+
 ## Command over a video background stops restyling the page, September 26, 2026
 
 The owner's everyday scene: Command in Zen, a YouTube link as the Studio
