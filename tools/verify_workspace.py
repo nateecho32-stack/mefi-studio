@@ -518,6 +518,11 @@ class VerifiedWindow extends NativeWindow {
     await this.until("document.querySelector('#workspace-ideas span').textContent === '100' && !document.getElementById('workspace-run-backlog').disabled", "the entire seeded backlog loads");
     assert.equal(await this.run("return (await window.mefiStudio.projectsList()).activeId;"), config.alpha.id);
     assert.equal((await this.run("return (await window.mefiStudio.tasksList()).tasks;")).length, 30, "all thirty fixture tasks survive loading");
+    // The setup helper comes first on a first launch; the walkthrough follows it.
+    await this.until("window.MefiSetupHelper?.isOpen?.()", "the setup helper opens first on a first launch");
+    assert.equal(await this.run("return window.MefiSetupHelper.section();"), "welcome", "the setup helper starts at Welcome");
+    await this.click("#setup-helper-close");
+    await this.until("!window.MefiSetupHelper.isOpen()", "Save & close puts the setup helper away");
     await this.until("window.MefiOnboarding && !document.getElementById('walkthrough-overlay').hidden", "walkthrough opens automatically on first launch");
     if (config.menusOnly) {
       // The menu regroup alone: close the first-run guide through its public

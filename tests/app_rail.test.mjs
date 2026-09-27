@@ -15,7 +15,7 @@ const RAIL_IDS = ["app-rail", "app-rail-brand", "app-rail-sections", "app-rail-f
 // What community.js registers at DOMContentLoaded, after init() has drawn the
 // rail. community.js is not loaded here, so the late arrival is replayed.
 const COMMUNITY = {
-  id: "community", label: "Void Engine Discord & perks", short: "Community", kind: "action", layer: null,
+  id: "community", label: "Void Engine Discord", short: "Community", kind: "action", layer: null,
   group: "system", key: null, glyph: "g-agents", badge: null,
   showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
   run() {},

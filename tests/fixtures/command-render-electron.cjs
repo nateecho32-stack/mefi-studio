@@ -203,7 +203,6 @@ app.whenReady().then(async () => {
       for(const fn of listeners.onAssistant)fn({state:responses.assistantState.state});
     }});
     localStorage.setItem('mefiStudio.keyHint.v1','1');
-    localStorage.setItem('mefiStudio.community.v1',JSON.stringify({premium:true,validUntil:Date.now()+86400000}));
     localStorage.setItem('mefiStudio.walkthrough.v1',JSON.stringify({version:1,status:'complete'}));
     ` : ''}
     localStorage.setItem("mefiStudio.zen","0");

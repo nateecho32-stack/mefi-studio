@@ -34,7 +34,7 @@ in JavaScript. A route opening alone does not verify its interior controls.
 | System | Updates; diagnostics; profiler; connection log; machine tools; optional game/Server Styler integrations |
 | Help/search | Help menu (Start here, Shortcuts, Community); grouped Shortcuts sheet; Search Studio results, selection, empty results and return focus |
 | Onboarding | Seven stops (Scan, Your workspace, First map, Connections, Create, Monitor, Review); scan/apply, free-model choice, map/cancel, assistant advice/task draft; resumable full guide; corner coach Back/Full guide/End tour/Next |
-| Community | General disclosure; theme/node-style showcase; linked/unlinked/linking/cancel, unavailable, not-configured, not-member, relink, offline, session-only and self-unlocked states; Check now/Unlink; Build it yourself → What the agent will change; invitation snooze/dismiss; locked-item toast actions |
+| Community | General disclosure; linked/unlinked/linking/cancel, unavailable, not-configured, not-member, relink, offline and session-only states; Check now/Unlink; invitation Join/Link/snooze/dismiss; the toast outside the workspace |
 | Profiler | Start/Stop/Reset/Export JSON, frame-budget select, recording HUD; frame history, rendering hotspots, host requests, recent hitches and process tables; closed-panel recording and return focus |
 | Feedback/dialogs | Status, warning/error and action toasts; Confirm/Cancel/dismiss/Escape with focus return; Brain map in-sheet input/confirmation dialogs and nested shortcuts; operating-system file/folder pickers |
 

@@ -194,12 +194,11 @@ settings and per-model work-kind summaries for the shared controls.
 | **Agent brain** | The Live view (`J`) that draws a task's **pipeline** from recorded **work events**: the head (the companion), the lead, the steps and the sub-agents; plus the **Playbook** of recipes and **project map** under Agents › Workflows. The seats live under Agents › Setup. See [roadmap-0.4.0.md](roadmap-0.4.0.md) and [agent-loop.md §13](agent-loop.md#13-the-agent-brain). |
 | **Companion** | The roaming character (named under General): click it to ask questions, create tasks, navigate, see the team and its messages, change settings, or handle its needs-you queue. It also gives a welcome-back digest and covers this project or all of them. Its default model is GPT-6 Luna on Zen at medium reasoning and fast service when Zen is connected. |
 | **Orb, callout, absorb** | Command-view vocabulary: an orb is a node, a callout is its floating card, and absorb is a finished node collapsing into its host. |
-| **Node style / `MefiNodeStyles`** | How a node is drawn: one of eight looks (five free, three in the Void collection), painted on both the Command view and the tree rail by `renderer/node-styles.js`. Each look owns its body and may take over the agent ring, hub dress, work orbit, arrival, selection, wires, pulses and landing; per-node motion records keep every node animating, and reduced motion freezes each look to a still pose. |
+| **Node style / `MefiNodeStyles`** | How a node is drawn: one of eight looks (five classic, three in the two-tone Void collection), painted on both the Command view and the tree rail by `renderer/node-styles.js`. Each look owns its body and may take over the agent ring, hub dress, work orbit, arrival, selection, wires, pulses and landing; per-node motion records keep every node animating, and reduced motion freezes each look to a still pose. |
 | **Ruins Runner** | The author's LÖVE game, an optional external project Studio can launch. A fresh clone works without it. |
 | **Discord Server Styler** | An optional separate bot and local dashboard. Settings can start it, open its dashboard or folder, show its status and stop a process Studio started. |
-| **Void collection** | Four themes (Void, Eclipse, Abyss, Neon Dusk) and three node styles (Singularity, Prism, Sigil). Anyone can preview them in Settings › Appearance. A preview resets when the canvas preview closes or you leave Settings; members of the Void Engine Discord can save their choices. Settings › Community shows the collection and its link. Everything else stays free. |
-| **Community link** | An optional Discord login (Settings › Community, which **Community** at the menu foot opens) that lets Studio read your membership and roles in the Void Engine server: when you link, then every seven days (after a failed check, in an hour, six hours, then daily) and whenever you press **Check now**. The data is kept in `settings.community`, and the refresh token is encrypted in `community-auth.json`. |
-| **`SELF_UNLOCKED`** | The documented fork switch in `scripts/community.cjs`. Setting it to `true` unlocks every perk without Discord. To unlock only one PC across rebuilds and updates, set `localStyleUnlock: true` in that machine's `settings.json`; the default for new installations stays locked. |
+| **Void collection** | Four two-tone themes (Void, Eclipse, Abyss, Neon Dusk) and three node styles (Singularity, Prism, Sigil), free for everyone like every other look. Settings › Appearance lists them under their own small heading, and a choice saves like any other. A theme with a second hue sets `data-studio-theme-tier="duo"`, which the stylesheets paint with. |
+| **Community link** | An optional Discord login (Settings › Community, which **Community** at the menu foot opens) for Listen together and the rooms hub; it unlocks nothing. It lets Studio read your membership and roles in the Void Engine server: when you link, then every seven days (after a failed check, in an hour, six hours, then daily) and whenever you press **Check now**. The data is kept in `settings.community`, and the refresh token is encrypted in `community-auth.json`. |
 
 ## Highlights
 
@@ -349,6 +348,29 @@ settings and per-model work-kind summaries for the shared controls.
   Usage under Agents. **New task** and **Search** (`Ctrl K`) sit above the
   destinations; **Settings** and **Help** stay at the foot. Help contains
   Start here, Shortcuts (`?`) and Community.
+- The **setup helper** (`renderer/setup-helper.js`) is one sheet holding
+  every setting that decides what the agents do: Welcome, Connect an AI
+  (subscription CLIs, API keys, LM Studio and custom endpoints, Auto setup),
+  Team & models (main assistant, routine and planning roles with effort, the
+  coding worker and its tier, subtask builders, the five seats, saved teams),
+  Routing (Jev or fixed model choice, the Automatic order, subscription logins
+  first, fallback, and Jev's own route and key), How work runs (new work, the
+  queue running on its own, pass interval, coding workers at once, the team's
+  coordination, reporting and delegation switches, backlog mode, the
+  assistant roster and housekeeping), Permissions (autonomy-ui's shared
+  control), Tools & skills (per-agent web search, project reads, MCP tools and
+  skills, plus task-context gathering), Machine & app (keep awake, tray,
+  resource manager limits, updates, companion reach, GitHub token), Look and
+  Finish. It opens by itself before the Start here walkthrough on a fresh
+  profile, and once after an update that raises its `REVISION`; Next and
+  Back walk every section, and Quick setup walks Connect, Permissions and
+  Finish only. It owns no settings: each control saves through the host call
+  its setting already had, and team fields are saved for one scope (this
+  project, or the Studio defaults every inheriting project uses) with the same
+  revision check the Agents workspace uses. Search reaches each section
+  (`Setup helper › Routing`), and `MefiSetupHelper.open(section)` deep-links
+  it. When the helper has connected an AI, the walkthrough starts at Your
+  workspace instead of its scan stop.
 - The menu stays open by default at widths of 1100px or more, with the page
   beside it. **Keep menu open** saves your choice across launches. When unpinned
   or narrower than 1100px, it opens over the page on hover or keyboard focus;
@@ -810,8 +832,8 @@ failed process stays an error and cannot produce briefing requests.
   workers. High CPU alone never limits builds.
 - **Follow** frames the active task; **Fit** repairs the layout. Pick node style
   (**Classic orbs**, **Soft glass**, **Minimal**, **Halo**, **Crystal**, plus
-  the Void collection's **Singularity**, **Prism** and **Sigil** for Discord
-  members) and arrangement (**Constellation**, **Branches**, **Rings**,
+  the Void collection's **Singularity**, **Prism** and **Sigil**) and
+  arrangement (**Constellation**, **Branches**, **Rings**,
   **Helix**, **Terraces**) per project, in 2D or real 3D. Every node style
   moves all the time and faster while its node works (a Sigil's hex cells
   assemble, a Singularity's disc spins up, a Prism's shards orbit); a stale
@@ -925,7 +947,7 @@ failed process stays an error and cannot produce briefing requests.
   (`renderer/together.js`) follows a room's shared player on the Void Engine
   rooms hub through `scripts/hub-client.cjs`, and **Share what I'm playing**
   feeds the bot's `/nowplaying` (see [community.md](community.md)). Audio input and reactions activate only when
-  enabled. A Void item previews live and explains how linked members keep it.
+  enabled.
   With the Audio link on, its **Tree motion** reaction lets the music
   smoothly quicken the Overview's spin, sway it round a small figure of eight
   and swell it on the bass, inside room the frame keeps for it.
@@ -1209,35 +1231,30 @@ vX.Y.Z --publish`, or push a `v*` tag and let
 token: save one in Settings › Updates, set `MEFI_STUDIO_GITHUB_TOKEN`, or let
 Studio reuse the GitHub CLI's `gh auth token`.
 
-### Community and perks
+### Community
 
-Members of the **Void Engine Discord** unlock the **Void collection**. The
-themes (Void, Eclipse, Abyss, Neon Dusk) each carry a second accent hue and a
-premium finish on primary buttons, and each has its own sky in the Command
-view. The node styles are Singularity, Prism and Sigil. The seven original
-themes, custom colours and the five original node styles stay free.
-**Community** at the foot of the menu opens Settings › Community, the card
-that holds the link. The full flow is in [community.md](community.md).
+The **Void Engine Discord** is where people share what they build with
+Studio, swap model setups and listen together. Nothing in Studio is locked
+behind it: every theme and node style, the two-tone Void collection included,
+is free for everyone. **Community** at the foot of the menu opens Settings ›
+Community, the card that holds the link. The full flow is in
+[community.md](community.md).
 
 **Linking**
 - It is optional. Nothing reaches Discord until you choose **Link my Discord**
-  in Settings › Community.
+  in Settings › Community. **Listen together** and the rooms hub use the link.
 - Main then runs an OAuth2 PKCE login as a public client, with no client
   secret. The browser returns to a one-shot listener on `127.0.0.1` (ports
   53134–53136).
 - It reads your Discord id, names and roles in the Void Engine server.
 - After that, a watcher beside the release watcher re-reads them every seven
-  days, sooner after a failed check (below). It wakes hourly, contacts Discord
-  only when a check is due, and stops with the other watchers when Studio
-  closes its last window or installs a release. **Check now** can run one at
-  most once a minute.
-
-**When perks stay on or lock**
-- A failed check keeps the perks for 14 days after the last good one, and
-  retries after 1 hour, 6 hours, then daily.
-- An answer of "not a member" locks them at once.
-- A refused grant asks you to link again: Settings › Community offers **Link
-  my Discord**.
+  days, sooner after a failed check (1 hour, 6 hours, then daily). It wakes
+  hourly, contacts Discord only when a check is due, and stops with the other
+  watchers when Studio closes its last window or installs a release. **Check
+  now** can run one at most once a minute.
+- A failed check keeps the last answer. "Not a member" is recorded at once. A
+  refused grant asks you to link again: Settings › Community offers **Link my
+  Discord**.
 
 **Storage**
 - The public half of the link and the card's cadence are kept in
@@ -1248,34 +1265,21 @@ that holds the link. The full flow is in [community.md](community.md).
 - **Unlink** revokes the grant at Discord and deletes the file.
 
 **The weekly card**
-- It invites non-members to join. It waits three days after the first
-  launch, then shows at most weekly, and monthly after four ignored showings.
-  Members never see it.
+- It invites people who are not in the server to join. It waits three days
+  after the first launch, then shows at most weekly, and monthly after four
+  ignored showings. A linked member never sees it.
 - It appears only at a quiet moment, never during the walkthrough or while
   you type.
 - **Not now** snoozes it for a week and **Don't show again** stops it.
 
-**Void previews**
-- The themes and node styles stay clickable before a Discord link. Choosing one
-  paints it live without saving it. The preview resets when Style & sound
-  closes or you leave Settings. A member who links while previewing keeps the
-  active choice; a linked account outside the server still cannot save it.
-- A click explains how to keep the choice without changing the view: on the
-  workspace an inline card, anywhere else a toast whose **See the perks**
-  opens Settings › General › Community with the item named.
-- Every locked group carries the same fine print: *"Members of the Void Engine
-  Discord unlock these. Studio is MIT-licensed: fork the project and unlock it
-  yourself, or ask an agent to do it for you."*
-- Alongside are **Join the Discord**, **Link my Discord** and **Copy agent
-  prompt**.
-- An entitled member's choice is saved on its own
-  (`localStorage["mefiStudio.music.premium.v1"]`), so losing access falls back
-  to your free choice without forgetting it.
-
-**The fork switch.** `SELF_UNLOCKED` in `scripts/community.cjs` is the one
-switch. There is no obfuscation to defeat. The rules live in
-`scripts/community.cjs`, the network calls in `scripts/discord-oauth.cjs`, and
-the renderer side in `renderer/community.js` (`window.MefiCommunity`).
+**Leftovers from the retired lock.** Earlier builds kept the Void collection
+for members. A Void choice saved in
+`localStorage["mefiStudio.music.premium.v1"]` moves into the ordinary
+preferences at load and the old key goes; the boot hint
+`mefiStudio.community.v1` is removed; a `localStyleUnlock` field in
+`settings.json` is no longer read. The rules live in `scripts/community.cjs`,
+the network calls in `scripts/discord-oauth.cjs`, and the renderer side in
+`renderer/community.js` (`window.MefiCommunity`).
 
 ### Shared decision context
 

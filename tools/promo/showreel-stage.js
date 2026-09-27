@@ -612,7 +612,7 @@
     }
     text(`${String(near + 1).padStart(2, "0")}/${String(list.length).padStart(2, "0")}`, 150, 190, { size: 20, weight: 500, family: MONO, track: 4, fill: rgba(TH.INK, 0.7) });
     riseText(name, 150, 262, show, { size: 64, weight: 800, stretch: "condensed", stagger: 0.03 });
-    text(premium ? "VOID COLLECTION" : "FREE STYLE", 150, 300, { size: 17, weight: 500, family: MONO, track: 4, fill: rgba(premium ? TH.ACCENT2 : TH.INK, 0.85 * show) });
+    text(premium ? "VOID COLLECTION" : "CLASSIC STYLE", 150, 300, { size: 17, weight: 500, family: MONO, track: 4, fill: rgba(premium ? TH.ACCENT2 : TH.INK, 0.85 * show) });
     text(STYLE_LINES[style] ?? "", 150, 340, { size: 24, weight: 400, family: SERIF, fill: rgba(TH.INK, 0.65 * show) });
   }
 

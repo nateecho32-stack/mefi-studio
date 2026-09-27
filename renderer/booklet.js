@@ -480,14 +480,14 @@
     return document.getElementById(id) ? id : null;
   }
   // A choice button's textContent runs its parts together ("Fullevery
-  // animation", "VoidMembers", "Classic orbsLuminous circles"): name it by its
-  // title element, or by its own words without the <small> detail and the lock
-  // badge, and prefix the group it belongs to ("Motion › Full").
+  // animation", "Classic orbsLuminous circles"): name it by its title
+  // element, or by its own words without the <small> detail and any
+  // aria-hidden art, and prefix the group it belongs to ("Motion › Full").
   function settingsButtonLabel(control) {
     const named = control.querySelector?.("strong, b");
     const nodes = Array.from(control.childNodes ?? []);
     const own = named?.textContent || (nodes.length
-      ? nodes.filter((node) => node.nodeType === 3 || !(node.tagName === "SMALL" || node.classList?.contains?.("music-premium-lock") || node.getAttribute?.("aria-hidden") === "true")).map((node) => node.textContent ?? "").join(" ")
+      ? nodes.filter((node) => node.nodeType === 3 || !(node.tagName === "SMALL" || node.getAttribute?.("aria-hidden") === "true")).map((node) => node.textContent ?? "").join(" ")
       : control.textContent);
     const group = control.closest?.("[role=group][aria-labelledby]");
     const heading = group ? document.getElementById?.(group.getAttribute("aria-labelledby")) : null;
@@ -1970,11 +1970,15 @@
       else if (window.MefiWorkspace?.isActive?.()) document.getElementById("workspace-layer")?.focus({ preventScroll: true });
       else if (window.MefiVibe?.isActive?.()) document.getElementById("vibe-layer")?.focus({ preventScroll: true });
       else document.getElementById("search")?.focus({ preventScroll: true });
-      window.MefiOnboarding?.startup?.({ automatic: true });
+      // The setup helper comes first on a new profile, and once after an
+      // update that brings it something new (renderer/setup-helper.js). The
+      // walkthrough's own first open waits until the helper closes.
+      const walkthrough = () => window.MefiOnboarding?.startup?.({ automatic: true });
+      if (!window.MefiSetupHelper?.startup?.({ then: walkthrough })) walkthrough();
       // The one-time "what's new" card for a returning profile (renderer/vibe.js).
       window.MefiVibe?.startup?.();
-      // Community status, the member-perk boot hint and the weekly Discord
-      // card's quiet schedule (renderer/community.js). Diagnostic launches skip it.
+      // Community status and the weekly Discord card's quiet schedule
+      // (renderer/community.js). Diagnostic launches skip it.
       window.MefiCommunity?.startup?.();
       // "Open and start agents": the studio is up, so the agents may start now.
       // Every other choice leaves them held for the workspace's Start agents.

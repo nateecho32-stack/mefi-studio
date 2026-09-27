@@ -71,7 +71,7 @@ test("onCommunityEvent listens on community:event and hands over the bare status
   api.onCommunityEvent((status) => seen.push(status));
   const mine = listeners.filter((entry) => entry.channel === "community:event");
   assert.equal(mine.length, 1);
-  const status = { available: true, linked: false, entitlement: { premium: false } };
+  const status = { available: true, linked: false, member: false };
   mine[0].listener({ sender: "ipc-event" }, status);
   assert.deepEqual(seen, [status], "the IPC event object stays in the preload");
 });

@@ -263,29 +263,29 @@ async function environment({ timerQueue = null, bridgeOverrides = {}, autoEnter 
     window: context.window, emit: (name, detail) => { for (const fn of windowListeners.get(name) || []) fn({ detail }); } };
 }
 
-test("Void theme previews color Preferences without saving its accent", async () => {
+test("a Void theme chosen in Preferences applies and saves its accent like any other theme", async () => {
+  // Every theme is free: MefiMusic applies and saves a Void theme at once and
+  // announces it as an ordinary change (no preview flag), so Workspace keeps it.
   const env = await environment();
   let currentTheme = "aurora";
+  const applied = [];
   env.window.MefiMusic = {
-    applyTheme(theme) { currentTheme = theme; env.emit("mefi-theme-change", { theme, preview: true }); return theme; },
+    applyTheme(theme) { applied.push(theme); currentTheme = theme; env.emit("mefi-theme-change", { theme, tier: theme === "void" ? "duo" : "solo" }); return theme; },
     status: () => ({ theme: currentTheme }),
   };
   env.el("accent").value = "void";
   await env.el("accent").trigger("input");
+  assert.deepEqual(applied, ["void"], "the select hands the choice to Style & sound");
   assert.equal(env.el("layer").dataset.accent, "void");
-  assert.equal(env.storage.get("mefiStudio.workspace.accent"), undefined);
+  assert.equal(env.storage.get("mefiStudio.workspace.accent"), "void", "saved at once, with no membership in the way");
   env.el("person-name").value = "Mefi";
   await env.el("person-name").trigger("input");
-  assert.equal(env.el("layer").dataset.accent, "void", "another preference redraw keeps the live preview");
-  assert.equal(env.storage.get("mefiStudio.workspace.accent"), undefined);
-  currentTheme = "aurora";
-  env.emit("mefi-theme-change", { theme: "aurora", tier: "free" });
+  assert.equal(env.el("layer").dataset.accent, "void", "another preference redraw keeps the theme");
+  env.el("accent").value = "aurora";
+  await env.el("accent").trigger("input");
   assert.equal(env.el("accent").value, "aurora");
   assert.equal(env.el("layer").dataset.accent, "aurora");
-  assert.equal(env.storage.get("mefiStudio.workspace.accent"), undefined);
-  currentTheme = "void";
-  env.emit("mefi-theme-change", { theme: "void", tier: "premium" });
-  assert.equal(env.storage.get("mefiStudio.workspace.accent"), "void", "an unlocked choice can be saved");
+  assert.equal(env.storage.get("mefiStudio.workspace.accent"), "aurora");
 });
 
 test("startup readiness waits for projects and populated panels without duplicating cold enters", async () => {

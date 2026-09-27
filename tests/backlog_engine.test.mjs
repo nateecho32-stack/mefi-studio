@@ -212,6 +212,7 @@ function controlHost({ tasks = [], requests = [], ideas = [] } = {}) {
     autopilotHousekeeping: async () => effects.push("verify"),
     classifyPendingWork: async () => ({ ok: true }), promoteRequestsToTasks: async () => effects.push("promote requests"),
     refreshAutopilotQueue: async () => {}, emitAutopilot: () => {},
+    saveAssistant: async () => effects.push("saved"),
   });
   // Use the actual board gateway, including serialized writes and automatic
   // durable history, against memory-only fixture files.
@@ -586,4 +587,21 @@ test("Drop closes unfinished work without claiming it finished, and the parent t
   assert.equal(reopened.task.dropped, undefined, "Reopen clears the drop");
   const dependent = controlHost({ tasks: [{ id: "base", title: "Base", status: "open" }, { id: "after", title: "After", status: "open", dependsOn: ["base"] }] });
   assert.equal((await dependent.env.taskAction({ action: "drop", taskId: "base" })).ok, false, "a card other work waits on is not dropped");
+});
+
+test("stop ends backlog mode only: pause and the executor switch stay as they were", async () => {
+  const { env, state, autopilot, effects } = controlHost();
+  await env.backlogControl({ action: "run", projectId: "project-a" });
+  assert.equal(state.prefs.backlogMode, true);
+  const executing = autopilot.execute, status = state.status;
+  const result = await env.backlogControl({ action: "stop", projectId: "project-a" });
+  assert.equal(result.ok, true);
+  assert.equal(state.prefs.backlogMode, false);
+  assert.equal(result.backlog.draining, false);
+  assert.equal(autopilot.execute, executing, "stop is not pause");
+  assert.equal(state.status, status);
+  assert.ok(effects.includes("saved"), "the change is saved with the assistant state");
+  const again = effects.length;
+  assert.equal((await env.backlogControl({ action: "stop" })).ok, true, "stopping when off is a quiet no-op");
+  assert.equal(effects.length, again);
 });

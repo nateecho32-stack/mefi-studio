@@ -7,6 +7,29 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Setup helper**: one menu for every setting that decides what the agents
+  do. It opens first on a new install, and once after updating to this
+  version: Connect an AI (subscription logins, API keys, LM Studio and custom
+  endpoints, automatic setup), Team & models (every role, the coding worker
+  and its tier, subtask builders, all five seats, saved teams), Routing (Jev
+  or fixed, the Automatic order, subscription logins first, fallback, Jev's
+  route and key), How work runs (new work, the queue on its own, pass
+  interval, workers at once, coordination, reporting, delegation, backlog
+  mode, roster and housekeeping), Permissions, per-agent Tools & skills,
+  Machine & app (keep awake, tray, resource limits, updates, companion,
+  GitHub token) and Look. Quick setup is three steps; Search reaches every
+  section. Every control saves through the host call its setting already had.
+  The Start here walkthrough follows it, skips its scan when an AI is already
+  connected, and switches Vibe to Build before pointing at Home's controls.
+- Settings that saved but did nothing now work: saving an LM Studio or custom
+  endpoint no longer copies the project off the Studio defaults (so an open
+  team draft no longer fails as stale); activating a brain map no longer
+  writes a model selection that the next team save refused; "Work through
+  the backlog" can be stopped; the Jev gate preview reads Jev as on when it
+  is; `machine:set` keeps only the resource manager's fields, range-checked.
+  The Agents "desk handles asks" switch, which nothing read, is gone from the
+  helper: the permission mode decides that.
+
 - **Build on your app with MEFI.** Vibe offers Modify, Experiment, Fix and
   Improve, contextual briefs from the map, and suggestions that can be added
   to a draft or saved as ideas. Saving a suggestion does not start work.

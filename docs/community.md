@@ -1,84 +1,39 @@
 # The Void Engine community link
 
 Studio can link your Discord account to the **Void Engine** server
-(<https://discord.gg/xgfKc5pVxG>). Members unlock the **Void collection**,
-four extra themes and three node styles. Linking is optional, and nothing
-contacts Discord until you choose **Link my Discord**. The lock is honest: a
-fork can switch it off with one documented constant (see
-[Unlocking it yourself](#unlocking-it-yourself)). The link and its status
-live in **Settings › Community**, which **Community** at the foot of the menu
-opens.
+(<https://discord.gg/xgfKc5pVxG>), where people share what they build with
+Studio, swap model setups and listen together. Linking is optional, and
+nothing contacts Discord until you choose **Link my Discord**. The link and
+its status live in **Settings › Community**, which **Community** at the foot
+of the menu opens.
 
 This page follows the feature end to end: the weekly card, the login, the
 weekly re-check, what is stored and where, the setup a maintainer does once,
 and what later phases add. The short version is in the README's
-[Community & perks](../README.md#community--perks) section, and the privacy
-summary is in [SECURITY.md](../SECURITY.md).
+[Community](../README.md#community) section, and the privacy summary is in
+[SECURITY.md](../SECURITY.md).
 
-## What members get
+## Nothing is locked behind the link
 
-Everything that was free stays free: the seven original themes, **Custom
-colors** and the five original node styles. The Void collection adds:
+Every theme and node style is free for everyone, in every build. The
+two-tone **Void collection** (themes Void, Eclipse, Abyss and Neon Dusk; node
+styles Singularity, Prism and Sigil) sits in **Settings › Appearance** under
+its own small heading, and saves like any other choice. The link is what
+**Listen together** and the Void Engine rooms use, and it keeps a member from
+being asked to join.
 
-| Theme | Key | Colours | Command-view sky |
-| --- | --- | --- | --- |
-| **Void** | `void` | violet and cyan | Deep space |
-| **Eclipse** | `eclipse` | amber on black | Warm dust |
-| **Abyss** | `abyss` | teal and indigo | Fireflies |
-| **Neon Dusk** | `dusk` | pink and cyan | Quiet grid |
+Earlier builds kept the collection for Discord members. What they left behind
+is cleaned up on the first launch of a build without the lock:
 
-| Node style | Key | Look |
-| --- | --- | --- |
-| **Singularity** | `singularity` | A black hole with a turning disc |
-| **Prism** | `prism` | A turning crystal that splits light |
-| **Sigil** | `sigil` | Hex runes that assemble as it works |
-
-- Each Void theme has a second accent hue (`--accent-2`). While one is on,
-  `:root[data-studio-theme-tier="premium"]` gives primary buttons a gradient
-  and a second-hue glow. The only motion is a hover sheen, and only when motion
-  is allowed. Nothing animates at rest.
-- The node-style painters in `renderer/idle.js` and `renderer/tree3d.js` build
-  their geometry once and cache their gradients per canvas, like the existing
-  orb paints, so the Command frame budget does not grow.
-- The pickers in **Settings › Appearance** show the collection as its own "Void
-  collection" group under the free choices. The **Studio theme** quick select
-  there has a "Void collection · Discord members" group,
-  whose options read "Void · preview" and so on without membership.
-
-### Previewing, keeping, and losing access
-
-- **Unentitled items** stay focusable and clickable, with a **Members** badge.
-  Clicking one paints the real theme or node style in the current view. It
-  writes neither the ordinary nor the premium preference store. The choice
-  resets when the canvas preview closes or you leave Settings; a restart also
-  restores the saved choice. The preview is explained in place without moving
-  the view. On the workspace the inline card says you can preview now and
-  must link your Discord membership to keep it. Anywhere else, a 12-second
-  toast says so, and its **See the perks**
-  opens **Settings › Community** with the item marked in the collection strip.
-- **A successful member link during a preview** saves the active premium
-  choice. A linked account that is not in the Void Engine server can still
-  preview, but its choice remains temporary.
-- Every locked group shows the same fine print:
-
-  > Members of the Void Engine Discord unlock these. Studio is MIT-licensed:
-  > fork the project and unlock it yourself, or ask an agent to do it for you.
-
-  Under it are **Join the Discord**, **Link my Discord** and **Copy agent
-  prompt**. In the browser preview (`npm run start:web`) there is no desktop
-  bridge, so the group says "Desktop app only".
-- **Unlocked,** a pick applies at once and is saved only in
-  `localStorage["mefiStudio.music.premium.v1"]` as `{ theme, nodeStyle }`. The
-  ordinary saved preferences keep accepting free keys only, so they always hold
-  a free fallback. Picking a free item clears the matching premium entry.
-- **When access ends** (you leave the server, or the offline grace runs out),
-  Studio falls back to your saved free choice without writing anything. It
-  shows "Void collection locked again; your choice is saved." once. If you get
-  access back, your premium choice returns.
-- **At launch** a member's premium choice paints from a boot hint, so the free
-  theme does not flash first. The hint is
-  `localStorage["mefiStudio.community.v1"] = { premium, validUntil }` and is
-  rewritten on every status.
+- A Void theme or node style saved in
+  `localStorage["mefiStudio.music.premium.v1"]` moves into the ordinary
+  preferences (`mefiStudio.music.v1`) and the old key is removed
+  (`renderer/music.js`). A write that fails keeps the old key for the next
+  launch.
+- The boot hint `localStorage["mefiStudio.community.v1"]` is removed
+  (`renderer/community.js`).
+- A `localStyleUnlock` field in `settings.json` is no longer read. It is left
+  in place and does nothing.
 
 ## The flow end to end
 
@@ -97,15 +52,15 @@ community.recordCheck() → settings.community.link   (public fields only)
 refresh token → safeStorage → community-auth.json   (access token: memory only)
         │
         ▼
-community.entitlement() → publicStatus() → community:event → window.MefiCommunity
+community.publicStatus() → community:event → window.MefiCommunity
         │
         ▼
-MefiCommunity.has("premium") → music.js pickers, idle.js / tree3d.js painters
+mefi-community-status → renderer/together.js (Listen together)
 ```
 
 ### 1. The weekly card
 
-A small card invites non-members to join. The rules are in
+A small card invites people who are not in the server to join. The rules are in
 `promptDue()` and `applyPrompt()` in `scripts/community.cjs`, and the state is
 `settings.community.prompt`:
 
@@ -115,8 +70,9 @@ A small card invites non-members to join. The rules are in
   a snooze is running.
 - **Back-off.** After four showings the gap grows to 30 days. The count starts
   over when you press **Join the Discord**.
-- **Never shown** when you chose **Don't show again**, when you already have the
-  perks, or when the community modules are missing (`available: false`).
+- **Never shown** when you chose **Don't show again**, to a linked member
+  (`isMember()`: a check has said "member" and none has said "not a member"
+  since), or when the community modules are missing (`available: false`).
 - **Once per session.** The renderer shows it at most once per app session.
 
 What each button does:
@@ -144,7 +100,11 @@ A busy moment retries every few seconds for about ten minutes. After that the
 card waits for the window to become visible again or for the six-hour
 `MefiBoot.pollStart("community.prompt")` re-read, which is a local read with no
 network. On the workspace the card appears inline, after the walkthrough
-invitation. Elsewhere it is a 12-second toast with **See the perks**.
+invitation. Elsewhere it is a 12-second toast with **Open Community**.
+
+The card's copy says what the server is for: "Share what you're building,
+swap model setups, and listen together with other builders." It promises no
+unlock.
 
 ### 2. Linking: OAuth2 with PKCE and a loopback redirect
 
@@ -174,7 +134,7 @@ invitation. Elsewhere it is a 12-second toast with **See the perks**.
 6. `GET /users/@me` and `GET /users/@me/guilds/1345380333302059129/member`
    say who you are and whether you are in the Void Engine server.
    - A 404 (Discord code 10004) means "not a member".
-   - A not-member login still stores the link, with perks locked, so
+   - A not-member login still stores the link, as a non-member, so
      **Check now** can notice when you join.
 
 A few more details:
@@ -204,8 +164,7 @@ last window or applies a release update.
   It is skipped in smoke, capture and CLI runs.
 - A tick contacts Discord only when `checkDue()` says so: at `nextCheckAt`,
   or `checkedAt` plus seven days. Every tick still republishes the status, so
-  a card coming due or a grace period running out reaches the window without
-  a restart.
+  a card coming due reaches the window without a restart.
 - **Check now** in Settings runs the same check, at most once a minute (it
   answers `throttled` otherwise). Only one check runs at a time.
 
@@ -221,33 +180,23 @@ last window or applies a release update.
 | Answer | Link state | Effect |
 | --- | --- | --- |
 | Member | `ok` | Roles refreshed. `lastOkAt` and `checkedAt` set to now, next check in 7 days. |
-| Not in the server | `not-member` | Perks locked **at once**, roles cleared, next check in 7 days. |
-| Grant refused (`401`/`403`, `invalid_grant`) | `relink` | Settings says Discord needs you to link again and offers **Link my Discord**. Perks last until the grace period ends. |
-| Network error, `5xx`, rate limit | `offline` | Retries after 1 hour, then 6 hours, then daily. A longer `Retry-After` wins, up to 7 days. Perks last until the grace period ends. |
+| Not in the server | `not-member` | `member` turns false **at once**, roles cleared, next check in 7 days. |
+| Grant refused (`401`/`403`, `invalid_grant`) | `relink` | Settings says Discord needs you to link again and offers **Link my Discord**. The last answer stands. |
+| Network error, `5xx`, rate limit | `offline` | Retries after 1 hour, then 6 hours, then daily. A longer `Retry-After` wins, up to 7 days. The last answer stands. |
 
-### 4. Entitlement
+### 4. Membership
 
-`entitlement({ link, now, selfUnlocked })` returns
-`{ premium, perks, validUntil, reason }`:
+`isMember(link)` answers whether the saved link says the account is in the
+Void Engine server: a check has answered "member" at least once
+(`lastOkAt`), and none has said "not a member" since. A failed or refused
+check (`offline`, `relink`) keeps the last answer; nothing expires, because
+nothing is locked behind it. The status carries it as `member`, and main uses
+it so the weekly card never asks a member to join.
 
-| Reason | When | Premium |
-| --- | --- | --- |
-| `self` | `SELF_UNLOCKED` is true | yes, every perk, no expiry |
-| `member` | the last check said member (or the link is session-only) and it is within 14 days of `lastOkAt` | yes |
-| `grace` | the last check failed or needs a relink, but the last good one is within 14 days | yes, until `validUntil` |
-| `not-member` | Discord said you are not in the server | no |
-| `unlinked` | no account linked | no |
-| `expired` | 14 days passed since the last good check | no |
-
-`perks` is `["premium"]` plus whatever `ROLE_PERKS` maps your role ids to.
-`ROLE_PERKS` is empty in Phase 1. The renderer asks
-`MefiCommunity.has("premium")` and listens for the `mefi-community-change`
-window event, whose detail is the entitlement. The event fires once after the
-first status and again whenever the entitlement changes. A second event,
-`mefi-community-status` (detail `{ configured, linked, state, linking }`),
-fires when whether linking is possible changes; the Style pickers show
-**Link my Discord** only in a configured build, for an account that is not
-linked yet or that Discord asks to link again.
+The renderer announces link changes with the `mefi-community-status` window
+event (detail `{ configured, linked, member, state, linking }`), which fires
+after the first status and whenever one of those changes.
+`renderer/together.js` re-reads the rooms hub on it.
 
 ## Data and storage
 
@@ -257,7 +206,6 @@ linked yet or that Discord asks to link again.
 | Public half of the link: Discord user id, username, display name, role ids in the Void Engine server, join date, linked/checked/last-good/next-check times, state, failure count | `settings.json` → `community.link` | `normalize()` keeps only these fields, so a token that strayed into the object is dropped before the write. |
 | Refresh token | `community-auth.json` → `{ refreshTokenEncrypted }` | Encrypted with `safeStorage` (the OS keystore, DPAPI on Windows) and written atomically. A separate file from `auth.json`. |
 | Access token | memory only | Gone when Studio quits. |
-| Boot hint, premium choice | the renderer's `localStorage` | `{ premium, validUntil }` and `{ theme, nodeStyle }`; no identity. |
 
 - `settings.json` and `community-auth.json` sit side by side in Electron's
   userData folder, `%APPDATA%\Mefi's Studio AI+` on Windows. Nothing goes in
@@ -284,15 +232,15 @@ linked yet or that Discord asks to link again.
 
 The reply says whether Discord confirmed the revoke. You can also remove
 "Mefi Studio Link" under Discord › User Settings › Authorized Apps. Studio then
-finds out at the next check: the link goes to `relink`, and the perks last
-until the 14-day grace period ends.
+finds out at the next check: the link goes to `relink`, and Settings offers
+**Link my Discord** again.
 
 ## The IPC surface
 
 Every call returns `{ ok: true, status }` or `{ ok: false, error, status }`.
 `community:event` pushes the bare status, and only when its `signature()`
 changes. The `community:` prefix bypasses the project gate in
-`handleProjectIpc`, because perks are app-wide.
+`handleProjectIpc`, because the link is app-wide.
 
 | Preload method | Channel | Notes |
 | --- | --- | --- |
@@ -308,12 +256,11 @@ changes. The `community:` prefix bypasses the project gate in
 The status is:
 
 ```
-{ available, configured, linked, linking, selfUnlocked,
+{ available, configured, linked, linking, member,
   user: { id, username, globalName } | null, roles, state,
-  entitlement: { premium, perks, validUntil, reason },
   checkedAt, lastOkAt, nextCheckAt,
   prompt: { due, never, snoozeUntil },
-  inviteUrl, serverUrl, forkCopy, agentPrompt }
+  inviteUrl, serverUrl }
 ```
 
 **Error codes:**
@@ -329,30 +276,23 @@ The status is:
   - `canceled` also comes from `community:check`: a link or unlink landed
     while the check was out, so its answer was dropped.
 
-In the renderer, `window.MefiCommunity` offers:
-- `has(perk)`, `status()`, `refresh()`
-- `offer({ kind, key, name, navigate })`, `open({ note, lead, key })`. Every
-  temporary Void picker passes `navigate: false`: the tiles in Appearance,
-  which must keep the controls open, and the Studio theme select,
-  which fires on every arrow key. The preview and how to keep it are explained
-  in place, in the inline card or a toast, and the view never changes. Without
-  it, `offer()` opens Settings › Community.
-- `join()`, `link()`, `cancelLink()`, `check()`, `unlink()`
-- `copyAgentPrompt()`
-- the `FORK_COPY` and `AGENT_PROMPT` strings
+In the renderer, `window.MefiCommunity` offers `status()`, `refresh()`,
+`open()`, `join()`, `link()`, `cancelLink()`, `check()` and `unlink()`.
+`open()` opens Settings › Community; where Settings cannot show it, the
+workspace's inline card stands in, else a toast whose action opens the invite.
 
-It also registers the "Void Engine Discord & perks" action, which Search
-Studio (`Ctrl K`) files under Community. `RAIL_SLOTS` in `renderer/nav.js`
-gives it a place at the foot of the menu, so **Community** there opens
-Settings › Community too. So do the Community row in Settings' own list and,
-on the classic shell, the project panel's **Community** button.
+It also registers the "Void Engine Discord" action, which Search Studio
+(`Ctrl K`) files under Community. `RAIL_SLOTS` in `renderer/nav.js` gives it a
+place at the foot of the menu, so **Community** there opens Settings ›
+Community too. So do the Community row in Settings' own list and, on the
+classic shell, the project panel's **Community** button.
 
 ## Maintainer setup (Phase 0)
 
 The code ships with `CLIENT_ID = ""`. Until an id is set, the status reports
 `configured: false`:
-- The weekly card and Settings offer **Join the Discord** and the fork path,
-  but no Link button.
+- The weekly card and Settings offer **Join the Discord**, but no Link
+  button.
 - `community:link` answers `not-configured` without opening a port.
 
 To turn linking on:
@@ -384,44 +324,12 @@ Before shipping, prove these once against the real application:
 
 Then walk the whole flow in an Electron probe with its own userData:
 
-1. Link, and the member perks unlock.
-2. Leave the server, press **Check now**, and the perks lock.
+1. Link, and Settings shows the account as a member.
+2. Leave the server, press **Check now**, and it shows "not in the server".
 3. Unlink, and `community-auth.json` is deleted.
 
 Confirm that the file holds only ciphertext and that `settings.json` holds no
 token.
-
-## Unlocking it yourself
-
-For one PC, set the top-level `localStyleUnlock` field to `true` in that
-machine's Electron `settings.json` (`%APPDATA%\Mefi's Studio AI+\settings.json`
-on Windows). Restart Studio after enabling it. This unlocks the themes and
-node styles without Discord and survives app rebuilds and updates. The file
-is outside the app payload and is never packaged; new installations remain
-locked by default. Set the field to `false` or remove it to undo the opt-in.
-
-Studio is MIT-licensed, and the Void collection is a thank-you to community
-members, not DRM. There is one switch and no obfuscation. In your fork, open
-`scripts/community.cjs` and change:
-
-```js
-const SELF_UNLOCKED = true;
-```
-
-Restart Studio, and every perk unlocks with no Discord account and no network
-request. Settings › Community then says "Unlocked in this build
-(SELF_UNLOCKED)". The file is part of the main process, so there is no booklet
-to rebuild. Run `npm run check` and `npm test` as for any change.
-
-Or let a coding agent do it. **Copy agent prompt**, on every locked group and
-in Settings › Community, copies exactly this:
-
-```
-In my fork of Mefi's Studio AI+, set SELF_UNLOCKED to true in scripts/community.cjs so the Void collection themes and node styles unlock without Discord, then run npm run check and npm test.
-```
-
-`tests/community_ui.test.mjs` pins the renderer's copy of both sentences to
-the constants in `scripts/community.cjs`.
 
 ## What comes later
 
@@ -430,8 +338,8 @@ own plan when they start:
 
 - **Phase 2, the Void Engine bot.** A separate repository, run on the
   maintainer's machine. It grants participation roles (Regular, Builder,
-  Helper and others). `ROLE_PERKS` then maps those role ids to extra perks. The
-  bot never needs to be online for Studio's membership check.
+  Helper and others). The bot never needs to be online for Studio's
+  membership check.
 - **Phase 3, rooms.** Chat rooms you join by invite or request, backed by
   Discord and mirrored inside Studio. A media link posted in a room can play
   in Studio's Links player: `MefiMusic.linkInfo(url)` reports whether and
@@ -452,20 +360,18 @@ own plan when they start:
 - **Phase 5, capacity pools.** Members can offer their coding-agent capacity
   to a room under a shared cap.
 
-Phase 1 rewards nothing for inviting people: joining only moves the card's
-schedule, and plain membership is the only condition. The approved plan leaves
-invite rewards out because Discord's Platform Manipulation policy forbids
+Nothing rewards inviting people: joining only moves the card's schedule.
+Invite rewards stay out because Discord's Platform Manipulation policy forbids
 inducing server joins.
 
 ## Files
 
 | File | Role |
 | --- | --- |
-| `scripts/community.cjs` | Pure rules: constants, the fork switch, card cadence, re-check timing, entitlement, link allow-list, PKCE and the public status. Held to its "Pure module" header by `tests/module_purity.test.mjs`. |
+| `scripts/community.cjs` | Pure rules: constants, card cadence, re-check timing, what an answer means (`recordCheck`, `isMember`), link allow-list, PKCE and the public status. Held to its "Pure module" header by `tests/module_purity.test.mjs`. |
 | `scripts/discord-oauth.cjs` | The network half: loopback login, token exchange, refresh, member read and revoke. |
 | `main.cjs` | The "Discord community link" block (state, storage, watcher, link/check/unlink), the `// ---- Community ----` IPC handlers, and the `community:` project-gate bypass. |
 | `preload.cjs` | The eight `community*` bridge methods. |
-| `renderer/community.js` | `window.MefiCommunity`: the perk gate, the weekly card, Settings › Community, and the action that Search lists and the menu foot shows as **Community**. |
+| `renderer/community.js` | `window.MefiCommunity`: the weekly card, Settings › Community, and the action that Search lists and the menu foot shows as **Community**. |
 | `renderer/nav.js` | `RAIL_SLOTS`, which places that late-registered action at the menu foot. |
-| `renderer/music.js`, `music.css`, `idle.js`, `tree3d.js` | The Void collection itself: catalog, pickers, the premium tier CSS and the node painters. |
-| `tests/community_rules.test.mjs`, `discord_oauth.test.mjs`, `community_host.test.mjs`, `community_bridge.test.mjs`, `community_ui.test.mjs` | Rules; real loopback login against a fake Discord; the main block in a `vm` slice; the preload pairs; the renderer card and gates. |
+| `tests/community_rules.test.mjs`, `discord_oauth.test.mjs`, `community_host.test.mjs`, `community_bridge.test.mjs`, `community_ui.test.mjs` | Rules; real loopback login against a fake Discord; the main block in a `vm` slice; the preload pairs; the renderer card and gates, and that no lock copy is left. |

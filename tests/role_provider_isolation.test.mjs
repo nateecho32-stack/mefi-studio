@@ -202,3 +202,24 @@ test("an OpenCode tier model that is not provider/model is refused and writes no
   assert.equal(h.state.writes, 0, "the invalid route is refused before it can reach a shell");
   assert.equal("executorTierModels" in h.settings(), false);
 });
+
+// Endpoints belong to this device, like keys. Routed through the team layer,
+// saving one copied the current project off the Studio defaults into its own
+// team and bumped the team revision, so an open draft then failed as stale.
+test("an endpoint save stays device-wide; a model save goes to the project's team and says so", async () => {
+  const require = (await import("node:module")).createRequire(import.meta.url);
+  const agentProfiles = require("../scripts/agent-profiles.cjs");
+  const h = host({ aiProvider: "zai", agentTeams: { version: 1, revision: 3, projects: {}, presets: [] } });
+  const sent = [];
+  Object.assign(h.context, { agentProfiles, projects: { current: () => ({ id: "p1" }) }, send: (channel, payload) => sent.push([channel, structuredClone(payload)]) });
+  assert.equal((await h.apply({ lmStudioEndpoint: "http://127.0.0.1:9999/v1" })).ok, true);
+  assert.equal(h.settings().lmStudioEndpoint, "http://127.0.0.1:9999/v1");
+  assert.deepEqual(h.settings().agentTeams.projects, {}, "the project still follows the Studio defaults");
+  assert.equal(h.settings().agentTeams.revision, 3, "no team revision was spent");
+  assert.deepEqual(sent, [], "nothing for a team draft to reload");
+  assert.equal((await h.apply({ customEndpoint: "ftp://nope" })).ok, false, "the endpoint check still applies");
+  assert.equal((await h.apply({ providerModels: { zai: { routine: "glm-5.3" } } })).ok, true);
+  assert.equal(h.settings().agentTeams.projects.p1.configuration.aiModelsByProvider.zai.routine, "glm-5.3");
+  assert.equal(h.settings().agentTeams.revision, 4);
+  assert.deepEqual(sent, [["settings:changed", { agents: true, source: "routing", projectId: "p1", revision: 4 }]]);
+});

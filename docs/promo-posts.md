@@ -51,7 +51,7 @@ https://github.com/nateecho32-stack/mefi-studio
 The film illustrates the agent workflow; the post lists the broader changes. Link
 `CHANGELOG.md` for the full history, including fixes to task admission,
 delegation, verification, routing, interrupted work, project switching, usage
-readings, Brain map drafts, navigation, community perks and Server Styler
+readings, Brain map drafts, navigation, the community link and Server Styler
 integration. Shared listening needs a configured rooms hub. Desk tools, nested
 delegation and head drafts are optional and disabled by default.
 

@@ -80,7 +80,7 @@ app.whenReady().then(async () => {
       contextBridge.exposeInMainWorld('startupFixture',{
         releaseProjects:()=>{released=true;release();},releaseCatalog:()=>{catalogReleased=true;releaseCatalog();},allowProjects:()=>{failing=false;released=true;release();},projectReads:()=>projectReads
       });
-      localStorage.setItem('mefiStudio.commandHome','1');localStorage.setItem('mefiStudio.zen','0');localStorage.setItem('mefiStudio.zenReactive','0');
+      localStorage.setItem('mefiStudio.commandHome','1');localStorage.setItem('mefiStudio.zen','0');localStorage.setItem('mefiStudio.zenReactive','0');localStorage.setItem('mefiStudio.setupHelper.seen','setup-helper-1');
       ${mode === "delayed" ? "localStorage.removeItem('mefiStudio.walkthrough.v1');" : "localStorage.setItem('mefiStudio.walkthrough.v1',JSON.stringify({version:1,step:0,status:'complete'}));"}
     `);
     const window = new BrowserWindow({ show: false, width, height: 800, frame: false, webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: true, backgroundThrottling: false } });

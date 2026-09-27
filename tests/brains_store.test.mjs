@@ -238,7 +238,7 @@ test("activating moves exactly the switches the map names", async () => {
   assert.equal(h.autopilot.autoBuild, false, "verify-first holds each saved scope");
   assert.equal(h.autopilot.execute, true);
   assert.equal(h.saved.jevShadow, true);
-  assert.equal(h.saved.modelSelection, "auto");
+  assert.equal(h.saved.modelSelection, "jev", "the map says auto; settings say jev, the value agentProfiles.validate accepts");
   assert.equal(h.state.prefs.proactive, true);
   // Workers at once is the build worker limit, not the assistant's roster.
   assert.equal(h.autopilot.parallel, 3, "the dispatch part's worker count is the build worker limit");

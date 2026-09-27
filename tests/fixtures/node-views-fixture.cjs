@@ -4,7 +4,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 exports.seed = (responses, now) => {
-  responses.communityStatus = { ok: true, status: { state: "member", configured: true, linked: true, entitlement: { premium: true, perks: ["premium"], validUntil: now + 86400000 }, nudge: { due: false } } };
+  // A linked member: the weekly Discord card stays out of the captures. Every node style is free.
+  responses.communityStatus = { ok: true, status: { available: true, configured: true, linked: true, member: true, state: "ok", prompt: { due: false, never: false, snoozeUntil: null } } };
   const titles = ["Search notes by tag", "Keep keyboard focus while filtering the results", "Export notes as Markdown", "Verify the saved notebook", "Add an empty state to the notes list", "Sync the sidebar selection", "Improve startup diagnostics", "Review completed changes"];
   responses.eyesState.sessions = titles.slice(0, 3).map((title, i) => ({ id: `visual-session-${i}`, title, timeCreated: now - 60000, timeUpdated: now }));
   responses.eyesState.todos = titles.slice(0, 3).flatMap((_, s) => Array.from({ length: 4 }, (_, i) => ({ id: `visual-todo-${s}-${i}`, sessionId: `visual-session-${s}`, content: ["Read the current behavior", "Implement the change", "Run the checks", "Review the result"][i], status: i === 0 ? "completed" : i === 1 ? "in_progress" : "pending" })));

@@ -10473,7 +10473,8 @@ async function brainsGatePlan(id) {
   const current = {
     approveBeforeBuild: autopilot.autoBuild === false,
     briefing: assistantState?.prefs?.proactive !== false,
-    jev: settings.jevShadow === true,
+    // Absent means on, as the intake queue reads it.
+    jev: settings.jevShadow !== false,
     modelChoice: settings.modelSelection === "fixed" ? "fixed" : "auto",
     dispatch: autopilot.execute === true,
     // The build worker limit in force now, a session narrowing included.
@@ -10514,8 +10515,12 @@ async function brainsActivate(id, { applyGates = true } = {}) {
         await updateSettings((settings) => {
           if (gates.jev !== null) { settings.jevShadow = gates.jev === true; moved.push(brains.GATES.jev.label); }
           if (gates.modelChoice !== null) {
-            if (typeof agentProfiles !== "undefined") agentProfiles.update(settings, projects.current().id, (next) => { next.modelSelection = gates.modelChoice; });
-            else settings.modelSelection = gates.modelChoice;
+            // The map says "auto" or "fixed"; settings say "jev" or "fixed".
+            // Writing "auto" left a value agentProfiles.validate refuses, so the
+            // next Apply in Agents failed.
+            const selection = gates.modelChoice === "fixed" ? "fixed" : "jev";
+            if (typeof agentProfiles !== "undefined") agentProfiles.update(settings, projects.current().id, (next) => { next.modelSelection = selection; });
+            else settings.modelSelection = selection;
             moved.push(brains.GATES.modelChoice.label);
           }
         });
@@ -12054,10 +12059,19 @@ async function admitBacklogIdeas({ ideaIds = null } = {}) {
 
 async function backlogControl({ action, taskId, ideaId, projectId, expectedScope } = {}) {
   if (projectId && projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Reload its backlog before continuing." };
-  if (!["run", "pause", "retry", "prioritize", "promote", "approve"].includes(action)) return { ok: false, error: "Choose run, pause, retry, prioritize, promote, or approve." };
+  if (!["run", "stop", "pause", "retry", "prioritize", "promote", "approve"].includes(action)) return { ok: false, error: "Choose run, stop, pause, retry, prioritize, promote, or approve." };
   await ensureAssistant();
   let result = { ok: true };
-  if (action === "pause") {
+  if (action === "stop") {
+    // Ends "work through the backlog" only: idea generation and overseer
+    // upgrades resume. Pause and the executor switch are left as they are.
+    // Before this, nothing turned backlog mode off once it was on.
+    if (assistantState.prefs.backlogMode) {
+      assistantState.prefs.backlogMode = false;
+      await saveAssistant({ force: true });
+      assistantLog("control", "Stopped working through the backlog; new ideas may be generated again.");
+    }
+  } else if (action === "pause") {
     // Explicit pause clears a timed breaker as well, so it cannot re-arm
     // itself later and undo the user's decision.
     autopilot.parkedUntil = 0;
@@ -18299,16 +18313,26 @@ function registerIpc() {
   ipcMain.handle("agents:preset", (_event, payload) => saveAgentTeam(payload, true));
 
   // The patch lands on the queue's fresh read, so a save landing beside it
-  // keeps its change; a refusal writes nothing.
+  // keeps its change; a refusal writes nothing. The two endpoints are this
+  // device's, like keys: a patch holding only those is written as it is.
+  // Through agentProfiles.update it copied the current project off the Studio
+  // defaults into a "Project team" and bumped the team revision, so an open
+  // team draft then failed its Apply as stale.
   ipcMain.handle("settings:set-ai-routing", async (_event, patch = {}) => {
     let refusal = null;
+    const keys = Object.keys(patch && typeof patch === "object" ? patch : {});
+    const deviceOnly = keys.length > 0 && keys.every((key) => ["customEndpoint", "lmStudioEndpoint"].includes(key));
+    let teamRevision = null;
     await updateSettings((settings) => {
-      refusal = typeof agentProfiles === "undefined" ? applyAiRoutingPatch(settings, patch) : agentProfiles.update(settings, projects.current().id, (draft) => applyAiRoutingPatch(draft, patch));
+      refusal = typeof agentProfiles === "undefined" || deviceOnly ? applyAiRoutingPatch(settings, patch) : agentProfiles.update(settings, projects.current().id, (draft) => applyAiRoutingPatch(draft, patch));
       if (refusal) return false;
+      if (!deviceOnly) teamRevision = settings.agentTeams?.revision ?? null;
     });
     if (refusal) return refusal;
     providerBreaker.reset(); // new routes, models or endpoints start unpaused
     resetAssistantAiBackoff();
+    // A team change tells open drafts (Agents, the setup helper) to reload.
+    if (teamRevision !== null) send("settings:changed", { agents: true, source: "routing", projectId: projects.current().id, revision: teamRevision });
     return { ok: true };
   });
 
@@ -19177,9 +19201,24 @@ function registerIpc() {
     const settings = await readSettings();
     return { ok: true, machine: { ...MACHINE_DEFAULTS, ...(settings.machine ?? {}) } };
   });
+  // Only the fields the resource manager reads, each checked; this used to
+  // spread whatever arrived into settings.machine.
   ipcMain.handle("machine:set", async (_event, prefs) => {
+    const input = prefs && typeof prefs === "object" ? prefs : {};
+    const patch = {};
+    for (const key of ["autoKill", "memoryWarnOverride"]) {
+      if (input[key] === undefined) continue;
+      if (typeof input[key] !== "boolean") return { ok: false, error: `${key} must be on or off` };
+      patch[key] = input[key];
+    }
+    for (const [key, min, max] of [["idleSeconds", 30, 86400], ["maxAgeMinutes", 1, 1440], ["maxMemMB", 128, 262144]]) {
+      if (input[key] === undefined) continue;
+      const value = Number(input[key]);
+      if (!Number.isFinite(value) || value < min || value > max) return { ok: false, error: `${key} must be between ${min} and ${max}` };
+      patch[key] = Math.round(value);
+    }
     const settings = await updateSettings((next) => {
-      next.machine = { ...MACHINE_DEFAULTS, ...(next.machine ?? {}), ...(prefs ?? {}) };
+      next.machine = { ...MACHINE_DEFAULTS, ...(next.machine ?? {}), ...patch };
     });
     return { ok: true, machine: settings.machine };
   });

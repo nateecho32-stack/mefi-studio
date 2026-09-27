@@ -194,13 +194,14 @@ worker's claim).
 
 ### The community link
 
-The Void Engine Discord login behind the members' Void collection. The host
-side is the "Discord community link" block and the `// ---- Community ----`
-handlers in `main.cjs`. See [community.md](community.md).
+The optional Void Engine Discord login, which Listen together and the rooms
+hub use (it unlocks nothing). The host side is the "Discord community link"
+block and the `// ---- Community ----` handlers in `main.cjs`. See
+[community.md](community.md).
 
 | File | Lines | Purpose |
 | --- | ---: | --- |
-| `community.cjs` | 437 | Pure rules: the Void Engine ids, the fork switch `SELF_UNLOCKED`, the weekly card's cadence, when a linked account is re-checked, what a check result means, entitlement with its 14-day offline grace, the Discord link allow-list, PKCE and the public status. No Electron, filesystem or network, and time is injectable. `module_purity.test.mjs` holds it to that; `community_rules.test.mjs` pins the rules. |
+| `community.cjs` | 386 | Pure rules: the Void Engine ids, the weekly card's cadence (never shown to a member, `isMember`), when a linked account is re-checked, what a check result means, the Discord link allow-list, PKCE and the public status. No Electron, filesystem or network, and time is injectable. `module_purity.test.mjs` holds it to that; `community_rules.test.mjs` pins the rules. |
 | `discord-oauth.cjs` | 408 | The network half: the OAuth2 PKCE login through a one-shot `127.0.0.1` loopback redirect, the secret-less token exchange, refresh, the membership read and revoke. Every POST the feature makes lives here, and everything it reaches for is injectable. `discord_oauth.test.mjs` runs a real loopback against a fake Discord. |
 | `hub-client.cjs` | 452 | The Void Engine rooms hub client (the bot repository's docs/protocol.md): trades the Discord access token for a hub session, keeps one WebSocket with backoff, renewal and presence, and carries Listen together's `listen` frames and the opt-in `nowPlaying` share. Everything network is injected; main's "Rooms hub" block owns the one client. |
 
@@ -241,15 +242,16 @@ imports.
 | `tasks.js` | 1,571 | The task board, per-task logs and ideas, and the reference menu. |
 | `explorer.js` | 1,430 | Sessions: session list/detail with Assistant, Activity and Diagnostics tabs. |
 | `booklet.js` | 1,318 | The expandable model catalog, filters, seven-category Settings navigation and control search, the studio launcher and the boot sequence. |
-| `music.js` | | Appearance controls in Settings and the optional canvas preview; the hover/click audio dropdown (`openAudio` / `toggleAudio`) owns local music, radio, Links, connection setup, reactions and recommendations. Includes saved URL visibility and copied-link offers through the focused-main-frame-only `scripts/media-clipboard.cjs` helper. Also owns colour themes, node styles and layouts, the members' Void collection (gated by `MefiCommunity`) and media parsing (`MefiMusic.playLink` / `linkInfo` for other modules). |
+| `music.js` | | Appearance controls in Settings and the optional canvas preview; the hover/click audio dropdown (`openAudio` / `toggleAudio`) owns local music, radio, Links, connection setup, reactions and recommendations. Includes saved URL visibility and copied-link offers through the focused-main-frame-only `scripts/media-clipboard.cjs` helper. Also owns colour themes, node styles and layouts (the two-tone Void collection among them, free like the rest; a choice left in the retired `mefiStudio.music.premium.v1` store is migrated at load) and media parsing (`MefiMusic.playLink` / `linkInfo` for other modules). |
 | `tree-dynamics.js` | | Shared saved tree modes and controls, bounded live shape transforms, count-aware sizing, music deformation and stable dark/bright video-region selection. Loaded before `idle.js`; transforms painted positions before wires, labels and hit targets. Also owns independent node/line brightness paint passes, enable switches and optional contrasting node outlines. Controls synchronize across Appearance, Audio reactions and the media window's brightness section. |
 | `media-window.js` | | The Links player's persistent floating surface: pointer and keyboard move/resize, viewport bounds, controls hosted in the media menu, background/transparency, stable dark-area tree placement, task-completion fades and notifications, minimize, saved geometry, and a single dodge in menus that yields to intentional interaction. Bundled before `music.js`; styling lives in `music.css`. Host helpers `scripts/media-scene.cjs` return brightness scores only; `scripts/youtube-explorer.cjs` provides bounded public YouTube search results to the explorer in `music.js`, which also records recent playback position. |
 | `workspace.js` | | The home screen: project context, bottom composer, compact current-task summary, Activity panel, scoped start/resume, app preview controls and durable results. Task presentation comes from the shared helpers in `tasks.js`; selected task identity comes from `nav.js`. |
 | `vibe.js` / `vibe.css` | | `window.MefiVibe`: Vibe, the calm front door (one box to talk or build, cards that show only while they have something: Needs you / Building now / Freshly done / Fresh ideas, and a dock whose Watch, Plans and Ideas stops come and go), the Vibe / Build switch and the one-time "what's new" card. In Vibe mode it also owns `#vibe-rail`, the frame every other page opens inside, in place of Build's menu. |
 | `vibe-panels.js` | | `window.MefiVibePanels`: Vibe's menus, including the Tasks List/Lanes board, queue controls and revision-aware Inspector. Tasks, Plans, Ideas, Team and Settings as compact panels in `#vibe-panel`, fed by what `vibe.js` already holds; a row opens its detail, Full view opens the Build page inside Vibe's rail. |
 | `planning.js` | | The plan interview, live writing partner and file tree, editable suggestions, Enter field navigation, and reviewed task handoffs. |
-| `onboarding.js` | 692 | The resumable *Start here* walkthrough. |
-| `community.js` | 726 | `window.MefiCommunity`: the perk gate the Style pickers ask (`has`, with a boot hint so a member's theme does not flash), the quiet weekly community card, General's Community disclosure, the in-place explanation of a locked item, and the Community action in Help and Search. It sees only the public status from main, never a token. Bundled after `music.js` and before `booklet.js`. |
+| `onboarding.js` | 815 | The resumable *Start here* walkthrough. It starts at Your workspace when the setup helper already connected an AI, and switches Vibe to Build before pointing at Home's controls. |
+| `setup-helper.js` / `setup-helper.css` | 1169 | `window.MefiSetupHelper`: one sheet for every agent setting (connections, team and models, routing, how work runs, permissions, tools, machine, look). Opens before the walkthrough on a new profile and once per `REVISION` after an update; saves only through existing host calls (`agents:save` for the team, key, routing and CLI setup calls, `MefiAgentControls`, `assistant:prefs`, `machine:set`, `jev:*`, `prefs:set`). Registers the `setup-helper` sheet and a Search entry per section. Bundled after `agents.js`. |
+| `community.js` | 487 | `window.MefiCommunity`: the quiet weekly community card, General's Community disclosure, and the Community action in Help and Search; `mefi-community-status` tells Listen together when the link changes. It sees only the public status from main, never a token. Bundled after `music.js` and before `booklet.js`. |
 | `together.js` | 463 | `window.MefiTogether`: Listen together and the now-playing share, drawn into the Links panel (`MefiMusic.togetherHost`). It picks a room, follows its shared player (a file to the second, YouTube/Vimeo/SoundCloud through their postMessage APIs, Spotify by loading the same link) and sends the share only when the member turns it on. Talks to main only through `hub*` on the bridge. Bundled after `music.js`. |
 | `pc-sync.js` | 90 | `window.MefiPcSync`: the Your PCs card that `companion-hub.js` mounts in Friends. It shows this PC against GitHub and offers Sync this PC. Its wording comes from `scripts/sync.mjs` through `syncStatus` and `syncRun`. Bundled after `together.js`. |
 | `camera-tour.js` | | `window.MefiCameraTour`: Zen's branch tour through `idle.js.setDirector`, plus automatic Overview's bounded pan/scale lens. Uses painted layout anchors and the real canvas projection; the overview lens fits every branch without moving anchors. The tour's `velocity()` carries pan, zoom and tilt into the glide home. Bundled right after `idle.js`. |
@@ -349,11 +351,9 @@ commit rewrites the JSON view as well.
   `scripts/platform.cjs` and `scripts/windows-command-line.cjs`.
 - **a control in the UI:** its destination in `renderer/nav.js`, then the
   owning `renderer/*.js` and `booklet.template.html`; rebuild the booklet.
-- **the Discord link or a Void collection lock misbehaves:**
+- **the Discord link misbehaves:**
   `scripts/community.cjs` (the rules) and `scripts/discord-oauth.cjs` (the
   network). Then the "Discord community link" block in `main.cjs`, and
-  `renderer/community.js`. Last, the premium branches of `applyTheme` and
-  `applyNodeStyle` in `renderer/music.js`. [community.md](community.md) walks
-  the flow.
+  `renderer/community.js`. [community.md](community.md) walks the flow.
 - **something only the running app shows:** the recipes in
   [performance.md](performance.md) and `tools/profile_studio.mjs`.

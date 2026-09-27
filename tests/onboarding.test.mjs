@@ -763,3 +763,42 @@ test("a first launch that already ran auto setup is reported at the scan stop be
   assert.match(env.el("scan-status").textContent, /Auto setup ran on first launch: Assistant on z\.ai GLM.*Choose your tool/);
   assert.equal(JSON.parse(env.storage.get(KEY)).done[SCAN], false, "auto setup alone does not complete the scan stop");
 });
+
+test("a first launch after the setup helper connected an AI starts at Your workspace and does not scan", async () => {
+  const { host, calls } = bridge();
+  const env = environment(new Map(), { host });
+  env.context.window.MefiSetupHelper = { connected: () => true };
+  assert.equal(env.guide.startup(), true);
+  await env.settle();
+  assert.match(env.el("title").textContent, /Welcome to Mefi/);
+  assert.equal(calls.filter((call) => call[0] === "scan").length, 0, "the helper already linked an AI");
+  assert.equal(JSON.parse(env.storage.get(KEY)).done[SCAN], true);
+  // Without a connection the helper's answer changes nothing: the scan stop and its scan.
+  const fresh = bridge();
+  const unlinked = environment(new Map(), { host: fresh.host });
+  unlinked.context.window.MefiSetupHelper = { connected: () => false };
+  assert.equal(unlinked.guide.startup(), true);
+  await unlinked.settle();
+  assert.match(unlinked.el("title").textContent, /scan this computer/i);
+  assert.equal(fresh.calls.filter((call) => call[0] === "scan").length, 1);
+});
+
+test("in Vibe the walk switches to Build's Home before it points at Home's controls", () => {
+  const env = environment();
+  const modes = [];
+  let mode = "vibe";
+  env.context.window.MefiVibe = { mode: () => mode, setMode: (next, options) => { modes.push([next, options?.go]); mode = next; } };
+  env.guide.open();
+  env.el("steps").children[MONITOR].click();
+  env.el("action").click();
+  assert.deepEqual(modes, [], "Command is the same in both modes");
+  env.guide.open();
+  env.el("steps").children[CREATE].click();
+  env.el("action").click();
+  assert.deepEqual(modes, [["build", false]], "switched without its own navigation; the walk navigates next");
+  assert.deepEqual(env.routes.slice(-1), ["workspace"]);
+  env.guide.open();
+  env.el("steps").children[REVIEW].click();
+  env.el("action").click();
+  assert.equal(modes.length, 1, "already in Build");
+});

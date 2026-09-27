@@ -2,7 +2,27 @@
 
 For the new workspace, team presets and companion controls, see [Unified Studio](docs/unified-studio.md).
 
-The in-app walkthrough opens automatically on your first launch. It has seven
+## First: the setup helper
+
+On your first launch (and once after an update that adds to it) the **setup
+helper** opens before anything else. It is the one place for every setting
+that decides what your agents do: connecting an AI, the team and its models,
+routing and fallback, how work runs, permissions, per-agent tools and skills,
+this computer's limits, and the look. **Quick setup** takes three steps:
+connect an AI (a subscription you already have, such as Codex or Claude Code,
+an API key, or a local LM Studio), choose how much Mefi may decide for you,
+and finish. **Everything** walks every section. Changes save as you make
+them; **Save & close** or `Esc` leaves at any point. Reopen it from Search
+(`Ctrl K`, type *setup*) or Help, or jump to one part with *Setup helper ›
+Routing*.
+
+When it closes, the walkthrough below takes over. If the helper already
+connected an AI, the walkthrough skips its scan and starts at Your workspace.
+
+## The walkthrough
+
+The in-app walkthrough opens automatically on your first launch, once the
+setup helper closes. It has seven
 stops: **Scan**, **Your workspace**, **First map**, **Connections**,
 **Create**, **Monitor** and **Review**. The numbered sections below cover the
 five stops you work through by hand. You can close the guide whenever you

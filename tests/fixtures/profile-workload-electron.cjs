@@ -42,9 +42,9 @@ function finish(error) {
 process.on("uncaughtException", finish);
 process.on("unhandledRejection", finish);
 
-// A linked member's status. MefiCommunity only answers has("premium") when the
-// bridge has communityStatus, so the Void collection's styles are allowed.
-const COMMUNITY_STATUS = { ok: true, status: { entitlement: { premium: true, perks: ["premium"], validUntil: null } } };
+// A linked member's status, so the weekly Discord card never lands in a run.
+// Every node style is free; nothing here unlocks anything.
+const COMMUNITY_STATUS = { ok: true, status: { available: true, configured: true, linked: true, member: true, state: "ok", prompt: { due: false, never: false, snoozeUntil: null } } };
 
 // The numeric workloads: a chain of open tasks, sessions with one todo in
 // progress each, two roster agents and one builder.
@@ -203,8 +203,7 @@ app.whenReady().then(async () => {
     // onTasks carries the pushes the workload sends over profile:emit; like the
     // host's store, later reads return the pushed list. A push marked "tick"
     // waits for Command's refresh tick, which reads collisions right after its
-    // graph refresh. The community hint is what MefiCommunity and music.js read
-    // before a status. The one-time keys tip counts as seen, or it lands in the
+    // graph refresh. The one-time keys tip counts as seen, or it lands in the
     // first run only.
     fs.writeFileSync(preload, `const {contextBridge,ipcRenderer}=require('electron');const responses=${JSON.stringify(responses)};
       const listeners={tasks:[]};
@@ -224,7 +223,6 @@ app.whenReady().then(async () => {
         performanceControl:request=>ipcRenderer.invoke('performance:control',request),performanceSnapshot:()=>ipcRenderer.invoke('performance:snapshot')
       });
       for(const key of ['zen','zenReactive','commandHome'])localStorage.setItem('mefiStudio.'+key,'0');
-      localStorage.setItem('mefiStudio.community.v1','{"premium":true,"validUntil":null}');
       localStorage.setItem('mefiStudio.keyHint.v1','1');
     `);
     const window = new BrowserWindow({ show: false, width, height, webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: true, backgroundThrottling: false } });
@@ -261,9 +259,9 @@ app.whenReady().then(async () => {
     await run(`window.MefiNav.go('command');await window.MefiIdle.ready();window.MefiIdle.setView(${JSON.stringify(view)});window.MefiIdle.setOrbit(${showcase ? "'paused',{quiet:true}" : "'auto'"});window.MefiIdle.setMusicReactive(false);window.MefiProfiler.close();`);
     let applied = null;
     if (style) {
-      // music.js is the gate (the unlocked Void collection included); if it
-      // still refuses, the tree preference event drives the canvas directly.
-      applied = await run(`const style=${JSON.stringify(style)};let via="music";window.MefiMusic.applyNodeStyle(style,false,{navigate:false});if(window.MefiIdle.status().nodeStyle!==style){via="event";window.dispatchEvent(new CustomEvent("mefi-tree-preferences",{detail:{nodeStyle:style}}));}return {via,nodeStyle:window.MefiIdle.status().nodeStyle,premium:window.MefiCommunity?.has?.("premium")===true};`);
+      // music.js applies any style, the Void collection's included; if the
+      // canvas has not taken it, the tree preference event drives it directly.
+      applied = await run(`const style=${JSON.stringify(style)};let via="music";window.MefiMusic.applyNodeStyle(style,false);if(window.MefiIdle.status().nodeStyle!==style){via="event";window.dispatchEvent(new CustomEvent("mefi-tree-preferences",{detail:{nodeStyle:style}}));}return {via,nodeStyle:window.MefiIdle.status().nodeStyle};`);
       assert.equal(applied.nodeStyle, style, `${id}: the Command view must draw the ${style} node style (it draws ${applied.nodeStyle})`);
     }
     if (scene.pins) await run(`const pins=${JSON.stringify(scene.pins)};const tree=window.MefiTree;const snapshot=tree.snapshot;tree.snapshot=()=>{const value=snapshot();for(const node of value?.nodes??[])if(pins[node.id])Object.assign(node,pins[node.id]);return value;};window.dispatchEvent(new CustomEvent("mefi:tree-select"));`);

@@ -130,7 +130,7 @@ span.catalog-expand { width: 16px; height: 16px; }
 :root[data-studio-theme=violet] { --studio-secondary: #de9cb7; --font-display: "Trebuchet MS", "Segoe UI", sans-serif; --studio-gradient-angle: 145deg; }
 :root[data-studio-theme=ember] { --studio-secondary: #d2ba7b; --font-display: "Georgia", serif; --studio-title-tracking: -.025em; --studio-gradient-angle: 115deg; }
 :root[data-studio-theme=rose] { --studio-secondary: #bba2de; --font-display: "Georgia", serif; --studio-title-tracking: -.025em; }
-:root[data-studio-theme-tier=premium] { --studio-secondary: var(--accent-2); }
+:root[data-studio-theme-tier=duo] { --studio-secondary: var(--accent-2); }
 :root[data-studio-theme=eclipse] { --font-display: "Georgia", serif; --studio-gradient-angle: 110deg; }
 :root[data-studio-theme=dusk] { --font-display: "Trebuchet MS", "Segoe UI", sans-serif; --studio-gradient-angle: 160deg; }
 :root[data-studio-theme=custom] { --studio-secondary: var(--gold-bright); }
@@ -182,7 +182,7 @@ body:not(.appearance-settings-active) .settings-panel { padding-top: 20px; }
 html[data-studio-style] :is(.task-context-section, .task-handoff-text, .checkpoint, .lab-stat, .lab-note, .lab-table-wrap, .lab-context-source, .lab-catalog, .provider-tile, .tier-row, .auto-order-item, .music-node-choice, .music-station, .music-effect, .companion-item, .companion-message, .stat) {
   background: var(--studio-inset-bg); border-color: var(--studio-glass-edge);
 }
-html[data-studio-style] :is(.log, .diff-view, .lab-context-source pre, .community-prompt-code, .brains-map-pick, .brains-search, .brains-field input[type=number], .ask-evidence) { background: var(--studio-field-bg); border-color: var(--studio-glass-edge); }
+html[data-studio-style] :is(.log, .diff-view, .lab-context-source pre, .brains-map-pick, .brains-search, .brains-field input[type=number], .ask-evidence) { background: var(--studio-field-bg); border-color: var(--studio-glass-edge); }
 
 /* Headers can overlap scrolling text, so they use the denser menu material. */
 html[data-studio-style] :is(.sheet-head, .explorer-head, .agents-head, .agents-save-bar, .music-header, .music-dropdown-header, #task-detail-tabs, .explorer-inspector .surface-tabs) {

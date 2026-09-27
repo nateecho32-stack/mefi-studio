@@ -611,10 +611,19 @@
   // approved or started from a lesson.
   // Returns the real control it focused, if any, so the coach knows whether it
   // still needs to hand focus to its own primary button.
+  // The project, task and review stops live on Build's Home. In Vibe, Home is
+  // Vibe and those controls are hidden, so the walk switches to Build first
+  // (the mode switch on the rail goes back) rather than highlight nothing.
+  function buildHome() {
+    if (window.MefiVibe?.mode?.() !== "vibe" || typeof window.MefiVibe.setMode !== "function") return;
+    window.MefiVibe.setMode("build", { go: false });
+    window.MefiToast?.("The tour uses Build mode's Home. Switch back to Vibe any time from the menu.", "info");
+  }
   function routeTo(lesson) {
     const route = lesson.route;
     let focused = null;
     if (["project", "task", "review"].includes(route)) {
+      buildHome();
       window.MefiNav?.go?.("workspace");
       if (route === "task") {
         document.getElementById("workspace-mode-work")?.click();
@@ -640,6 +649,7 @@
   function visit(route) {
     close();
     if (["project", "task", "review"].includes(route)) {
+      buildHome();
       window.MefiNav?.go?.("workspace");
       if (route === "task") {
         document.getElementById("workspace-mode-work")?.click();
@@ -766,7 +776,10 @@
       state.status = "dismissed"; save();
       close();
       renderInvitation();
-      document.querySelector('[data-nav="onboarding"]')?.focus();
+      // The header button is hidden under the rail and in Vibe: focus a Start
+      // here that can actually be seen.
+      const starts = Array.from(document.querySelectorAll?.('[data-nav="onboarding"]') ?? []);
+      (starts.find((item) => !item.hidden && !item.closest?.("[hidden], [inert]") && (item.getClientRects?.().length ?? 1) > 0) ?? starts[0])?.focus?.();
     });
     $("overlay").addEventListener("click", (event) => { if (event.target === $("overlay")) close(); });
     $("overlay").addEventListener("keydown", (event) => {
@@ -784,10 +797,16 @@
     // closing, following a lesson link or reloading never restarts the tour.
     // Capture/smoke callers can initialize the controls without consuming it.
     if (!automatic || state.status !== "new" || !$("overlay")) return false;
+    // The setup helper runs first on a new profile. When it already connected
+    // an AI, the scan stop is done: the tour starts at the workspace instead.
+    if (window.MefiSetupHelper?.connected?.() === true && !state.done[SCAN]) {
+      state.done[SCAN] = true;
+      state.step = WORKSPACE;
+    }
     open();
     // The first launch starts linking an AI by itself: the scan is read-only,
     // shows its progress, and still saves nothing until "Use this setup".
-    if (!scanStarted && hostApi("firstScan")) void runScan({ automatic: true });
+    if (!state.done[SCAN] && !scanStarted && hostApi("firstScan")) void runScan({ automatic: true });
     return true;
   }
   // status() lets other quiet prompts (the weekly community card) stay out of
