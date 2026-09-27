@@ -6,6 +6,77 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-26 - AI offline resumed diagnosis and companion recovery (task_b172488b3c947b88)
+
+Read the dispatch context and all prior attempt evidence, preserved the inherited
+Claude diagnostic parser, central AI recovery fix and briefer exit-status guard,
+and added three companion-chat integration cases in
+`tests/assistant_overseer_chat.test.mjs`. The real host turn now has coverage
+for successful recovery (clearing only ai-offline and retry state) and failed or
+blank replies (retaining offline state). No settings or Studio stores changed.
+
+Fresh validation:
+- Focused usage tracker, host, briefer and companion suites: 88/88 pass.
+- Clean HEAD comparison of Analyzer, sidebar, verification drain and Vibe:
+  57/57 pass. Current worktree comparison: 50/57, with five Analyzer and two
+  navigation failures. Verification drain's full-run failure passed on retry.
+- Isolated HEAD plus the six adopted/updated implementation and test files:
+  all eight comparison/focused suites pass, 145/145. The initial isolated
+  harness omitted preload.cjs; after supplying it, the final run is clean.
+- Removing the central recovery clear in that temporary copy makes the new
+  successful-companion regression fail as expected; the workspace was untouched.
+- npm run check and npm run audit pass, zero audit findings; git diff --check
+  passes. No renderer source was edited during this continuation.
+- Full npm test exits 1: CPU stage 3824 pass / 8 fail / 4 skipped; Electron
+  lane 37 pass / 1 skip; eyes-toggle 1/1; occlusion 1 pass / 1 fail. Python
+  contracts: 248 tests OK (1 skip); normalized-path lock: 6/6.
+- Solo occlusion retry: 1 pass / 1 capability skip (native desktop occlusion
+  did not engage), not a claim that the occluded phase passed.
+- One bounded, no-tools Claude probe still returns a session-limit error,
+  exit 1 and zero tokens. The parser preserves the provider's reset explanation.
+  Code cannot reset the provider quota; live successful recovery remains
+  dependent on quota reset or the owner's provider selection.
+
+Full logs remain local at %TEMP%/mefi-ai-offline-{focused,check,audit,full,
+head-isolation,current-isolation,isolated-fix-final,regression-proof,
+occlusion-retry}.log. The unrelated shared renderer edits were preserved.
+
+## 2026-09-26 - Native chat composer sizing and loading-delay triage
+
+Windows, Electron 44.4.1. Command chat composers now use supported native
+content sizing, preserving the 38-120 px bounds and scrollable long drafts.
+Older web previews keep the previous JavaScript path. The isolated real
+Electron comparison in `tools/profile_chat_thread.cjs --composer` measured
+80 explicit scrollHeight reads per 40 unchanged updates before and zero
+after; median sizing-call time was 0.10 ms before and below 0.01 ms after.
+The report in ignored `tools/logs/composer-performance.json` also verifies
+width/font changes, long-draft scrolling, reopening and clearing. This is a
+composer measurement, not an end-to-end startup or frame-rate claim.
+
+- Focused composer, command activity and command visuals: 81/81 pass.
+- `npm run build-booklet`, `npm run check`, `npm run audit`: pass; audit has
+  zero findings. The generated booklet includes the source change.
+- Full `npm test`: CPU stage 3,823 pass, five fail, four skipped; the five
+  failures are the existing Analyzer UI assertions previously isolated from
+  these performance edits. Electron stage: 34 pass, three fail, one skipped;
+  Command hit its timeout, Plans missed its backdrop check and tree dynamics
+  missed painted movement. All three pass in a sequential retry (3/3).
+  The serialized eyes toggle and occlusion probe also pass. Python: 248
+  tests, OK with one skipped. Normalized-path lock: six checks pass.
+- Sources changed during the full run and another session's Electron tests
+  were active during retries. No quiet-machine timing claim is made. Full
+  output remains in the temporary `mefi-composer-full-test.log`; retry and
+  focused output use `mefi-composer-render-retry.log` and
+  `mefi-composer-focused.log` in the same temporary directory.
+- Investigated a reported blank/slow launch while tests were active. The
+  cold-startup renderer fixture passed; the occlusion fixture intentionally
+  shows a window. The live app had loaded by the time of inspection, so the
+  report cannot establish whether that delay was a test window or app boot.
+  No live app restart or user-data modification was performed.
+
+A separate dropdown-label snapshot experiment was discarded because its
+real Electron comparison was slower than native label lookup.
+
 ## 2026-09-26 - Fix Home and Trace layout and agent-brain navigation selections
 
 Windows, Node 24, Electron 44.4.1. Fixes from the exploration: Home's fixed

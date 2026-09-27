@@ -34,9 +34,47 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-27 early morning - booklet rebuilt with the inlined media browser (task_b5026aa2c68858d0, run_1790481107523_10)
+
+Closed the obligation left by 96272eb: its scripts/build-booklet.mjs change inlined renderer/media-browser.js, but the committed renderer/booklet.html predated it and carried no media-browser code. The work tree already held a fresh build; this run verified it end to end and landed it. Evidence: build-booklet.mjs lists media-browser.js in CODE_SOURCES (46 segments) and reads it at the mediaBrowser slot; npm run build-booklet over the quiet tree reproduced renderer/booklet.html byte-for-byte (hash f98dd2322a01, 39 models) with 15 mediaBrowser references in the artifact and renderer/media-browser.js in the booklet.sources.json manifest; the renderer sources held still across a 20 s watch before committing. node --test tests/booklet_build.test.mjs 4 pass / 0 fail. Committed path-limited as fb2b29c (renderer/booklet.html only, 615 insertions); no renderer source or script was edited by this run, and sibling work-tree edits were left untouched.
+
 ## 2026-09-27 early morning - ai-offline resolved: live instance healthy, recovery chain re-verified (task_dc3cbe4e9796268a, run_1790480854175_9)
 
 Verified the ai-offline issue end to end from the running Studio instance. The live data/eyes-assistant.json shows the AI back online: ai.online true, keyPresent true, model glm-5.3-flash (zai/jev team route for project_d453f6fb00cc5e2d), failures 0, backoffUntil 0, problems empty, lastOkAt 2026-09-27T04:27Z - i.e. the provider recovered after the 23:10 America/Chicago quota reset and the app's 02:39Z restart had already loaded the committed recovery fixes (cliReply exit guard 11fcebc, resetAssistantAiBackoff at all four route-change sites, the scheduleAssistantAiProbe offline-probe chain in main.cjs, and planOfflineProbe/offlineProbeDelayMs in scripts/assistant.mjs - all intact; the sibling work-tree diff on scripts/assistant.mjs touches only focusedTestsForTask/verifyCompletion, not the offline path). brains.js, boot.js and the other pinned renderer refs are the pipeline editor and UI shell - not part of the offline chain. Narrow validation this run: python tools/test_mefi_studio_offline_probe.py 12 tests OK; node --test tests/assistant_overseer_chat.test.mjs tests/role_provider_isolation.test.mjs tests/usage_tracker_host.test.mjs 73 pass / 0 fail. No code change was needed; the issue stands resolved and no owner action remains beyond watching that the warning stays clear.
+
+## 2026-09-26 - Media panel redesign brings playback, background and queue together
+
+Reorganized Music & video around the current source. The video panel now
+shows playback beside Up next, with a prominent Use as background / Return
+to player control. Narrow windows stack the queue immediately below playback
+and the background control. Audio connection and clipboard settings move
+into a disclosure below the main player; local music keeps its artwork,
+transport and queue at the top. The browser opens within this panel.
+
+The persistent player docks by geometry without reparenting its iframe.
+Opening/closing the panel, scrolling and resizing preserve playback and
+floating placement; background mode releases the dock while leaving the
+queue available. Supported video URLs viewed in the browser can switch to
+the embedded player for background mode. Generic web pages keep that action
+disabled. Player focus and pointer transitions stay within the open panel.
+
+Validation: 111 focused music/media-window tests passed, including a docking,
+background and geometry preservation contract. The isolated Electron browser
+and media-window fixtures both passed alone and in the full run. The media
+fixture verifies the same single provider load through panel/background
+switches, reachable queue controls, non-overlapping player/queue geometry at
+1440 and 600 pixels, and the new background button. Browser coverage checks
+its dock matches the preview and does not cover the queue. Seed-only captures
+of local music, video, browser and background layouts were inspected in the
+OS temporary directory. Layout review caught and fixed the browser stage's
+aspect-ratio overflow before the final checks.
+
+npm run build-booklet, npm run check and npm run audit passed (zero audit
+findings). Full npm test passed: 3,906 Node tests passed, 5 skipped; Python
+ran 248 tests, OK with 1 skip; normalized-path checks passed 6/6. The final
+focus/available-height adjustments were also covered by the focused 111-test
+rerun and a fresh build/check/audit. Logs and captures remain local in the
+OS temporary directory; no user data or portable data was changed.
 
 ## 2026-09-26 - Canvas candidate passes isolated renderer checks; expanded media retry pending
 
@@ -577,77 +615,6 @@ Logs are local at %TEMP%/mefi-ai-offline-2-{focused,route-before,route-after,
 final-focused,check,audit,full,final-fast,ui-current,ui-head-renderers,
 occlusion,occlusion-head}.log. Sources are saved for the next app load;
 the running Studio was not restarted during its active worker session.
-
-## 2026-09-26 - AI offline resumed diagnosis and companion recovery (task_b172488b3c947b88)
-
-Read the dispatch context and all prior attempt evidence, preserved the inherited
-Claude diagnostic parser, central AI recovery fix and briefer exit-status guard,
-and added three companion-chat integration cases in
-`tests/assistant_overseer_chat.test.mjs`. The real host turn now has coverage
-for successful recovery (clearing only ai-offline and retry state) and failed or
-blank replies (retaining offline state). No settings or Studio stores changed.
-
-Fresh validation:
-- Focused usage tracker, host, briefer and companion suites: 88/88 pass.
-- Clean HEAD comparison of Analyzer, sidebar, verification drain and Vibe:
-  57/57 pass. Current worktree comparison: 50/57, with five Analyzer and two
-  navigation failures. Verification drain's full-run failure passed on retry.
-- Isolated HEAD plus the six adopted/updated implementation and test files:
-  all eight comparison/focused suites pass, 145/145. The initial isolated
-  harness omitted preload.cjs; after supplying it, the final run is clean.
-- Removing the central recovery clear in that temporary copy makes the new
-  successful-companion regression fail as expected; the workspace was untouched.
-- npm run check and npm run audit pass, zero audit findings; git diff --check
-  passes. No renderer source was edited during this continuation.
-- Full npm test exits 1: CPU stage 3824 pass / 8 fail / 4 skipped; Electron
-  lane 37 pass / 1 skip; eyes-toggle 1/1; occlusion 1 pass / 1 fail. Python
-  contracts: 248 tests OK (1 skip); normalized-path lock: 6/6.
-- Solo occlusion retry: 1 pass / 1 capability skip (native desktop occlusion
-  did not engage), not a claim that the occluded phase passed.
-- One bounded, no-tools Claude probe still returns a session-limit error,
-  exit 1 and zero tokens. The parser preserves the provider's reset explanation.
-  Code cannot reset the provider quota; live successful recovery remains
-  dependent on quota reset or the owner's provider selection.
-
-Full logs remain local at %TEMP%/mefi-ai-offline-{focused,check,audit,full,
-head-isolation,current-isolation,isolated-fix-final,regression-proof,
-occlusion-retry}.log. The unrelated shared renderer edits were preserved.
-
-## 2026-09-26 - Native chat composer sizing and loading-delay triage
-
-Windows, Electron 44.4.1. Command chat composers now use supported native
-content sizing, preserving the 38-120 px bounds and scrollable long drafts.
-Older web previews keep the previous JavaScript path. The isolated real
-Electron comparison in `tools/profile_chat_thread.cjs --composer` measured
-80 explicit scrollHeight reads per 40 unchanged updates before and zero
-after; median sizing-call time was 0.10 ms before and below 0.01 ms after.
-The report in ignored `tools/logs/composer-performance.json` also verifies
-width/font changes, long-draft scrolling, reopening and clearing. This is a
-composer measurement, not an end-to-end startup or frame-rate claim.
-
-- Focused composer, command activity and command visuals: 81/81 pass.
-- `npm run build-booklet`, `npm run check`, `npm run audit`: pass; audit has
-  zero findings. The generated booklet includes the source change.
-- Full `npm test`: CPU stage 3,823 pass, five fail, four skipped; the five
-  failures are the existing Analyzer UI assertions previously isolated from
-  these performance edits. Electron stage: 34 pass, three fail, one skipped;
-  Command hit its timeout, Plans missed its backdrop check and tree dynamics
-  missed painted movement. All three pass in a sequential retry (3/3).
-  The serialized eyes toggle and occlusion probe also pass. Python: 248
-  tests, OK with one skipped. Normalized-path lock: six checks pass.
-- Sources changed during the full run and another session's Electron tests
-  were active during retries. No quiet-machine timing claim is made. Full
-  output remains in the temporary `mefi-composer-full-test.log`; retry and
-  focused output use `mefi-composer-render-retry.log` and
-  `mefi-composer-focused.log` in the same temporary directory.
-- Investigated a reported blank/slow launch while tests were active. The
-  cold-startup renderer fixture passed; the occlusion fixture intentionally
-  shows a window. The live app had loaded by the time of inspection, so the
-  report cannot establish whether that delay was a test window or app boot.
-  No live app restart or user-data modification was performed.
-
-A separate dropdown-label snapshot experiment was discarded because its
-real Electron comparison was slower than native label lookup.
 
 ## Read Before Any Tests
 
