@@ -25,6 +25,35 @@ const accountCode = mainSource.slice(mainSource.indexOf("const ACCOUNT_READ_TIME
 assert.ok(mainSource.indexOf("async function usageAccounts(") > mainSource.indexOf("const ACCOUNT_READ_TIMEOUT_MS"), "the account readers' slice anchors are in order");
 const payload = { usage: { rolling: { status: "ok", percent: 12, resetsAt: "2026-08-22T17:00:00Z" }, weekly: { status: "ok", percent: 34 }, monthly: { status: "ok", percent: 56 } } };
 
+test("Claude quota errors reach the host and a later AI success removes only the offline problem", () => {
+  const slice = (start, end) => mainSource.slice(mainSource.indexOf(start), mainSource.indexOf(end, mainSource.indexOf(start)));
+  let cleared = 0;
+  const context = vm.createContext({
+    Date, assistantAiProbeAttempts: 2,
+    assistantState: { ai: { online: false, failures: 2, lastError: "old", backoffUntil: Date.now() + 60000 },
+      problems: [{ kind: "ai-offline", text: "old" }, { kind: "store-error", text: "keep" }] },
+    clearAssistantAiProbe() { cleared += 1; }, logError() {},
+  });
+  vm.runInContext([
+    slice("function cliReply(", "// The Grok CLI"),
+    slice("function assistantAiOk()", "function assistantAiFailed("),
+    slice("function assistantSetProblems(", "// ---- the agent pool"),
+  ].join("\n"), context);
+  const message = "You've hit your session limit · resets 11:10pm (America/Chicago)";
+  const raw = JSON.stringify({ type: "result", subtype: "success", is_error: true, result: message });
+  const call = context.cliReply("claude", tracker.parseClaudeCliResult(raw), raw, { code: 1, err: "", model: "claude" });
+  assert.equal(call.ok, false);
+  assert.equal(call.error, `claude error: ${message}`);
+  context.assistantAiOk();
+  assert.equal(context.assistantState.ai.online, true);
+  assert.equal(context.assistantState.ai.failures, 0);
+  assert.equal(context.assistantState.ai.backoffUntil, 0);
+  assert.equal(context.assistantState.ai.lastError, null);
+  assert.equal(context.assistantAiProbeAttempts, 0);
+  assert.equal(cleared, 1);
+  assert.deepEqual(Array.from(context.assistantState.problems, (row) => row.kind), ["store-error"]);
+});
+
 function fixture({ key = "test-key", fetchImpl = null } = {}) {
   const calls = [];
   const context = vm.createContext({

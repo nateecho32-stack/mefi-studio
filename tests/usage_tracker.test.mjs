@@ -527,6 +527,23 @@ test("CLI replies yield the text and the tokens, and never an invented cost", ()
   assert.equal(parseCliJson("[1,2]"), null, "an array is not a reply object");
 });
 
+test("Claude error envelopes preserve the quota or login message even with a success subtype", () => {
+  const result = "You've hit your session limit · resets 11:10pm (America/Chicago)";
+  const parsed = parseClaudeCliResult(JSON.stringify({ type: "result", subtype: "success", is_error: true, result,
+    usage: { input_tokens: 0, output_tokens: 0 } }));
+  assert.equal(parsed.ok, false, "is_error wins over the misleading success subtype");
+  assert.equal(parsed.error, result);
+  assert.equal(parsed.tokenUsage.totalTokens, 0);
+  const login = parseClaudeCliResult(JSON.stringify({ type: "result", subtype: "success", is_error: true, result: "Please log in again" }));
+  assert.equal(login.error, "Please log in again");
+  const empty = parseClaudeCliResult(JSON.stringify({ type: "result", subtype: "success", is_error: true }));
+  assert.equal(empty.ok, false);
+  assert.notEqual(empty.error, "success");
+  assert.ok(empty.error);
+  const detailed = parseClaudeCliResult(JSON.stringify({ type: "result", subtype: "error_during_execution", is_error: true, result: "fallback", errors: ["specific failure"] }));
+  assert.equal(detailed.error, "error_during_execution: specific failure");
+});
+
 test("the Codex CLI event stream yields the agent message and the turn's tokens, never a price", () => {
   const stream = [
     "Reading prompt from stdin...",

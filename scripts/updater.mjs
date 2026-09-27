@@ -572,7 +572,14 @@ export function createUpdater({
           await gate("restart");
         }
         emit("restarting", { reason: null });
-        const answer = await actions.restart?.(files);
+        // Preserve the owner's explicit intent all the way to the host: a
+        // manual restart stops and checkpoints workers; automatic ones drain.
+        const answer = await actions.restart?.(files, { counted: !force, stopAgents: force });
+        if (answer?.ok === false) {
+          emit("held", { reason: "restart failed", error: answer.error ?? "Could not save work before restarting" });
+          outcome = { ok: false, applied: false, phase: "held", kind, files, reason: state.reason, error: state.error };
+          return outcome;
+        }
         if (answer && answer.deferred) {
           emit("pending", { reason: state.auto ? answer.reason ?? "restart deferred" : "auto-restart is off" });
           // Worker/game completion does not change the watched source. The
@@ -589,7 +596,7 @@ export function createUpdater({
           outcome = { ok: true, applied: false, phase: "pending", kind, files, reason: state.reason };
           return outcome;
         }
-        state.history = [...state.history.filter((at) => now() - at < DEFAULTS.loopWindowMs), now()];
+        if (!force) state.history = [...state.history.filter((at) => now() - at < DEFAULTS.loopWindowMs), now()];
       } else {
         // In place first: swapped modules and injected styles interrupt nobody,
         // so they never wait behind the pause gate.

@@ -117,8 +117,8 @@ class MefiStudioUpdaterTests(unittest.TestCase):
     def test_manual_restart_and_a_queued_apply_are_kept_apart(self):
         """Runs main.cjs's own applyRestart and update:apply handler (lifted from the file) against the real engine."""
         for marker in (
-            "async function applyRestart(files, { counted = true } = {})",
-            "applyRestart([], { counted: false })",
+            "async function applyRestart(files, { counted = true, stopAgents = false } = {})",
+            "const manual = await restartStudio()",
             "!result.queued",
             # A restart taskkills the executor's `opencode run` children, and the
             # agents edit main.cjs — without this the loop restarted itself every
@@ -141,6 +141,7 @@ const applySource = `${cut('ipcMain.handle("update:apply"', "\\n  });\\n")}\\n  
 // lifted code sees the current updater / LOVE child at call time.
 let stored = { update: { auto: true, restarts: [Date.now() - 120000] } };
 const exits = [];
+let agentStops = 0;
 const handlers = {};
 const scope = {
   updater: null,
@@ -161,17 +162,20 @@ const scope = {
   stopEyesWatch: () => {},
   stopMachineWatch: () => {},
   stopAssistant: () => {},
+  assistantState: null,
+  stopAllAgents: async () => { agentStops += 1; return { ok: true, idle: true }; },
   relaunchArgs: () => ["--updated"],
   app: { releaseSingleInstanceLock: () => {}, relaunch: () => {}, exit: (code) => exits.push(code) },
   ipcMain: { handle: (channel, handler) => { handlers[channel] = handler; } },
 };
 const bind = (body) => new Function("scope", `with (scope) { ${body} }`)(scope);
 scope.applyRestart = bind(`return (${restartSource.replace("async function applyRestart(", "async function (")});`);
+scope.restartStudio = bind(`return (${cut("async function restartStudio(", "// Retained manual-mode default")});`);
 // Settings saves ride main's queue, lifted the same way.
 scope.updateSettings = bind(`return (${cut("function updateSettings(", "\\nfunction send(channel, payload)")});`);
 bind(applySource);
 const apply = handlers["update:apply"];
-const viaMain = { restart: (files) => scope.applyRestart(files) };
+const viaMain = { restart: (files, options) => scope.applyRestart(files, options) };
 await seed(root);
 
 // 1. An apply that lands mid-run is queued; it must not relaunch the app.
@@ -196,7 +200,7 @@ await scope.updater.whenIdle();
 // 2. Nothing pending: three manual "Restart now" presses inside a minute.
 const manual = [];
 for (let press = 0; press < 3; press += 1) manual.push(await apply());
-const afterManual = { exits: exits.length, restarts: [...stored.update.restarts], last: stored.update.lastRestart };
+const afterManual = { exits: exits.length, restarts: [...stored.update.restarts], last: stored.update.lastRestart, agentStops };
 
 // 3. The next boot seeds the loop guard from settings, as startUpdateWatch does,
 // and a genuine restart-class change still applies.
@@ -226,6 +230,7 @@ console.log(JSON.stringify({ queued, exitsWhileQueued, reloads: calls.reload.map
         self.assertEqual(0, payload["exitsWhileQueued"], "an apply queued behind a run in flight never relaunches the app")
         self.assertEqual([["renderer/a.js"]], payload["reloads"], "the run the queued apply joined still reloads")
         self.assertEqual(3, payload["afterManual"]["exits"], "with nothing pending the button is a manual restart")
+        self.assertEqual(3, payload["afterManual"]["agentStops"], "each explicit restart stops and saves the agents first")
         for reply in payload["manual"]:
             self.assertTrue(reply["ok"], reply)
         self.assertEqual([], payload["afterManual"]["restarts"], "manual restarts stay out of the loop history, and stale stamps are dropped")
