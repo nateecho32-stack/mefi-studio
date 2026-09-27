@@ -4230,6 +4230,27 @@ const noRemainingWork = (text) => {
   const rest = (head[2] ?? "").trim().replace(/[.!\s]+$/, "");
   return !rest || noRemainingScopeTail.test(rest);
 };
+
+// A deferral names its owner as OTHER live work: "owed by sibling sessions",
+// "other sessions own that rebuild", "owned by the parent task". The
+// triple-landed media-browser fix came from the opposite reading: a finished
+// card's honest note ("committed booklet.html is stale …, owed by sibling
+// sessions landing their renderer edits") was counted as an outstanding
+// obligation of that card, the verifier reopened it, and a third session
+// rebuilt the same booklet byte-identical. A deferral is not work THIS card
+// owes. The reading is narrow: an imperative aimed at this card ("fix the
+// stale booklet owed by other sessions") and a leftover with no attribution
+// at all still bind, and the positive-evidence gates below are untouched, so
+// this prose alone never verifies anything.
+const OTHER_WORK_OWNER = String.raw`(?:the\s+)?(?:sibling|other|another|parallel|concurrent|later|parent)\s+(?:sessions?(?:'s)?|cards?(?:'s)?|tasks?(?:'s)?|workers?|runs?|agents?|attempts?|edits?|work|lanes?)\b`;
+const OWED_BY_OTHER_WORK = new RegExp(String.raw`\b(?:owed|owned|held|landed|handled|tracked|carried|due|covered|claimed|left)\s+(?:by|to|with|for)\s+${OTHER_WORK_OWNER}`, "i");
+const OTHER_WORK_OWNS = new RegExp(String.raw`\b${OTHER_WORK_OWNER}\s+(?:own|owns|handle|handles|land|lands|landing|cover|covers|carry|carries|owe|owes|track|tracks)\b`, "i");
+const ACTION_FIRST_REMAINING = /^\s*(?:please\s+)?(?:fix|update|add|write|rebuild|rerun|run|test|verify|land|commit|recommit|revert|refactor|remove|delete|finish|complete|document|port|backport|rebase)\b/i;
+const deferredToOtherWork = (text) => {
+  const body = str(text);
+  if (!body || ACTION_FIRST_REMAINING.test(body)) return false;
+  return OWED_BY_OTHER_WORK.test(body) || OTHER_WORK_OWNS.test(body);
+};
 const namesCheck = (text) => !/^(?:none|nothing|n\/a|not (?:run|tested)|skipped|unavailable|pending|passed|ok|done)[.!\s]*$/i.test(text)
   && !/\b(?:not run|not tested|did not run|didn't run|could not run|couldn't run|unable to run|skipped)\b/i.test(text);
 
@@ -4323,7 +4344,7 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerCh
   const allHandedOnSettled = handedOn > 0 && asArray(remaining).length === 0 && asArray(resolvedHandoffs).length >= handedOn
     && proseItems <= handedOn && !/\bowner\b/i.test(remainingText);
   const handedOffAndFinished = remainingKey(remainingText) && (allHandedOnSettled || asArray(resolvedHandoffs).some((title) => remainingKey(title) === remainingKey(remainingText)));
-  const outstanding = repairOutstanding || (remainingText.length > 0 && !noRemainingWork(remainingText) && !handedOffAndFinished) || asArray(remaining).length > 0;
+  const outstanding = repairOutstanding || (remainingText.length > 0 && !noRemainingWork(remainingText) && !handedOffAndFinished && !deferredToOtherWork(remainingText)) || asArray(remaining).length > 0;
   // A done+verified retry re-checks work that already verified once: a
   // faithful scoped-check rerun changes 0 files by design, so the attempt's
   // own fresh green recorded checks discharge the changed-file obligation.

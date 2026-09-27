@@ -34,6 +34,14 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-27 - Verifier deferral fix: remaining prose owed by sibling sessions no longer reopens a finished card (task_2b0634e6823e8b0d)
+
+Root cause of the triple-landed media-browser work: run_1790480592972_8 finished task_b5026aa2c68858d0 correctly (fixture 08c677c + TESTRUNS row), but its MEFI_RESULT remaining note attributed the stale committed booklet to sibling sessions; verifyCompletion read that prose as an outstanding obligation of the card, reopened it, and run_1790481107523_10 rebuilt the same booklet byte-identical. scripts/assistant.mjs now treats remaining prose that names its owner as other work (owed by sibling/other/parent sessions, cards, tasks) as a deferral, not an obligation; imperatives and unattributed leftovers still bind, tracked remaining lists still bind, and all positive-evidence gates are unchanged. Also verified the three landed diffs dedupe: renderer/booklet.html carries exactly one media-browser inline, npm run build-booklet is byte-idempotent (hash f98dd2322a01, no working-tree diff). Tests: node --test tests/verification_checks.test.mjs (20/20, new deferral case), tests/executor_result_protocol + model_win_evaluator + executor_continuation (55/55), npm run check green.
+
+## 2026-09-27 morning - ai-offline follow-up re-verified: link healthy, recovery chain intact (task_6a1b319e87e8ad32, run_1790504373646_5)
+
+Follow-up verification for the ai-offline alert ("failed 5 consecutive times, backoff 48m"). The live data/eyes-assistant.json shows the link healthy and the warning retired: ai.online true, keyPresent true, failures 0, backoffUntil 0, lastError null, problems empty, lastOkAt 2026-09-27T10:42Z - recent successful replies, so the follow-up completes. Root cause stands as triaged earlier: real provider quota/session-limit failures escalated the backoff; the committed recovery chain is intact in the work tree and unchanged by it (git diff on main.cjs and scripts/assistant.mjs is empty): cliReply exit guard, resetAssistantAiBackoff (main.cjs:5294) at all four route-change sites, the scheduleAssistantAiProbe offline-probe chain (main.cjs:5340-5402, armed in assistantTick), planOfflineProbe/offlineProbeDelayMs (scripts/assistant.mjs), and quota-vs-offline classification with quota regexes (scripts/assistant.mjs:4767). No code change was needed this run. Narrow validation: python tools/test_mefi_studio_offline_probe.py 12 tests OK; node --test tests/assistant_overseer_chat.test.mjs tests/role_provider_isolation.test.mjs tests/usage_tracker_host.test.mjs 73 pass / 0 fail (includes the offline-warning retirement, quota-backoff release on route change, and probe-contract pins).
+
 ## 2026-09-27 morning - AI-link alert re-verified against the landed retirement fix (task_8e7e835ea0dcfe56, run_1790504205051_2)
 
 Continuation of the A-Eyes "AI link failing, backoff escalating" alert after the sibling's retirement fix. Inspected the work tree before touching anything: HEAD 6f1ef62 carries aiLinkTicket/aiLinkHealthy/aiLinkResolved (scripts/assistant.mjs), the compact()/tidy() ai-block absorb and the resolvedAiLinkWork promotion guard (main.cjs), all wired; the sibling session's uncommitted fix-family alignment (eyes.mjs FIX_BRIEF_CLOSING plus its two tests) stands untouched alongside. The live store confirms the stale work broadcast loop is over: data/eyes-assistant.json ai block online true, keyPresent true, failures 0, backoffUntil 0, lastOkAt 2026-09-27T10:15Z, problems empty, requests 0, work queue 0 - the fix-loaded restart (resource-manager.json touched 10:10Z, right after the commit) let the compactor absorb the stale AI-link tickets. No code change was needed this run; root cause and fix stand as recorded in the sibling row. Narrow validation this run: node --test tests/board.test.mjs tests/briefing_fix_requests.test.mjs 43 pass / 0 fail (4 AI-link retirement tests plus both fix-family tests); node --test tests/request_dedupe tests/task_delegation tests/task_grouping_cleanup tests/idea_backlog tests/task_history tests/work_admission_host tests/request_admission tests/board_growth tests/assistant_loop 123 pass / 0 fail; python tools/test_mefi_studio_assistant.py 66 OK; python tools/test_mefi_studio_eyes.py 18 OK; npm.cmd run check ok. No source, settings, task store or portable data was changed; this row is the run's attributable record.
@@ -427,82 +435,6 @@ Validation (named checks, this run):
 
 No source, settings, task store or portable data was changed; this row is the
 run's attributable record.
-
-## 2026-09-26 - Media mini browser and listening-room upgrade
-
-Added a standalone media BrowserWindow with a sandboxed WebContentsView,
-separate persistent session, web-address validation, main-frame-only IPC,
-navigation, reload/stop, mute, pin and an explicit external-browser action.
-Remote sites have no Studio preload or Node access. Downloads and device
-permissions remain unavailable in the mini browser. Ordinary web links open
-there; supported embeds and direct files retain the existing floating player.
-The media menu adds a browser launcher, Pop out and updated music artwork,
-source tabs and radio cards. Successful handoffs stop duplicate Studio audio;
-failed opens and opening an empty browser preserve the current source.
-
-Validation on the shared checkout, preserving the pre-existing local edits:
-
-- Focused media/host/auditor suites: 125/125 pass. Earlier focused failures
-  were two outdated UI assertions, updated for the browser launcher and
-  non-error web handoff.
-- Real Electron mini-browser smoke passes alone and in the full run. Covers
-  pages with frame-ancestors none / X-Frame-Options DENY, redirects, history,
-  popups, sender isolation, mute, pin toggle, errors and close/reopen cleanup.
-  Early native runs exposed the Windows topmost getter/event disagreement,
-  popup-navigation ordering and load-timeout sensitivity; final tests pass.
-- Floating-media Electron fixture passes alone and in the full run; includes
-  refreshed local/link layouts at 1440px and 600px. Browser toolbar checked at
-  960px and 480px. Fixture captures stayed in the OS temp directory.
-- npm.cmd run build-booklet, npm.cmd run check and npm.cmd run audit pass;
-  the audit reports zero findings. git diff --check passes.
-- Full npm.cmd test exits 0: CPU 3861 pass / 4 skip; desktop lane 38 pass /
-  1 skip; eyes toggle 1 pass; occlusion 1 pass / 1 capability skip. Total
-  Node: 3901 pass / 6 skip / 0 fail. The occlusion probe cannot obtain native
-  occlusion events on this desktop. Python: 248 tests OK (1 skipped).
-  Normalized-path lock: 6/6. Logs remain under %TEMP%/mefi-media-*.log.
-
-During the transition from CPU tests to desktop tests, the standalone browser
-welcome controls were hidden after navigation; the desktop lane subsequently
-verified that final UI. No application state, portable data or credentials
-were changed. renderer/booklet.html was regenerated.
-
-## 2026-09-26 - Live-session scroll controls batch geometry before hint writes
-
-Live Vibe and Command captures identified shared scroll refresh and Command
-callout drawing as CPU leads. This change batches scroll-region reads before
-writing hints and avoids unchanged visibility, owner and coordinate writes.
-`tools/profile_live_studio.mjs` adds bounded, PID-checked loopback captures;
-`tools/profile_scroll_controls.cjs` compares production refresh versions in
-an isolated Electron renderer. Private reports stay in ignored tools/logs.
-
-Validation:
-- Five alternating pairs after warmup, 16 overflowing regions and 25 content
-  changes per run: median style recalculations 16.96 -> 0.96 per refresh;
-  layouts remain 0.96; refresh time 0.80 -> 0.572 ms. The fixture verifies
-  identical arrow placement, scroll boundaries, tab stops, hide/reopen,
-  overflow removal/return and detached-region cleanup.
-- npm run build-booklet, npm run check and npm run audit pass; audit reports
-  zero findings. Both new tools pass node --check; git diff --check passes.
-  Logs: %TEMP%/mefi-live-{build,check,audit}.log.
-- Live collector completed two captures, rejected a mismatched PID, cleaned
-  up its own capture after a later timeout, and left recording stopped.
-  A final read-only status check confirms the restarted app loaded the new
-  scroll code and completed boot. No live before/after gain is claimed:
-  the window was hidden and other tests were active during that final check.
-- npm test: CPU stage 3,861 passed, 0 failed, 4 skipped. Two full runners
-  started together after waiting for an earlier run; the Electron stage
-  reported media-window, node-view, profiler, Plans and startup failures amid
-  contention and concurrent source changes. Only this session's owned test
-  process tree was stopped to reduce load. The full gate is incomplete;
-  these failures are not classified as regressions or cleared as flakes.
-  Partial log: %TEMP%/mefi-live-full-test.log.
-- Further heavy validation was deferred while additional suites kept
-  starting. Follow up with tests/unified_studio_render.test.mjs and a clean
-  required full gate when the shared checkout and machine are quiet. The
-  periodic session monitor retains that follow-up and the callout CPU lead.
-
-Controlled report: tools/logs/live-scroll-comparison.json. Live reports:
-tools/logs/live-20260926-{first,second,status-final}.json (all ignored).
 
 ## Read Before Any Tests
 

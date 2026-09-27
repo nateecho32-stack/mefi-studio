@@ -6,6 +6,82 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-26 - Media mini browser and listening-room upgrade
+
+Added a standalone media BrowserWindow with a sandboxed WebContentsView,
+separate persistent session, web-address validation, main-frame-only IPC,
+navigation, reload/stop, mute, pin and an explicit external-browser action.
+Remote sites have no Studio preload or Node access. Downloads and device
+permissions remain unavailable in the mini browser. Ordinary web links open
+there; supported embeds and direct files retain the existing floating player.
+The media menu adds a browser launcher, Pop out and updated music artwork,
+source tabs and radio cards. Successful handoffs stop duplicate Studio audio;
+failed opens and opening an empty browser preserve the current source.
+
+Validation on the shared checkout, preserving the pre-existing local edits:
+
+- Focused media/host/auditor suites: 125/125 pass. Earlier focused failures
+  were two outdated UI assertions, updated for the browser launcher and
+  non-error web handoff.
+- Real Electron mini-browser smoke passes alone and in the full run. Covers
+  pages with frame-ancestors none / X-Frame-Options DENY, redirects, history,
+  popups, sender isolation, mute, pin toggle, errors and close/reopen cleanup.
+  Early native runs exposed the Windows topmost getter/event disagreement,
+  popup-navigation ordering and load-timeout sensitivity; final tests pass.
+- Floating-media Electron fixture passes alone and in the full run; includes
+  refreshed local/link layouts at 1440px and 600px. Browser toolbar checked at
+  960px and 480px. Fixture captures stayed in the OS temp directory.
+- npm.cmd run build-booklet, npm.cmd run check and npm.cmd run audit pass;
+  the audit reports zero findings. git diff --check passes.
+- Full npm.cmd test exits 0: CPU 3861 pass / 4 skip; desktop lane 38 pass /
+  1 skip; eyes toggle 1 pass; occlusion 1 pass / 1 capability skip. Total
+  Node: 3901 pass / 6 skip / 0 fail. The occlusion probe cannot obtain native
+  occlusion events on this desktop. Python: 248 tests OK (1 skipped).
+  Normalized-path lock: 6/6. Logs remain under %TEMP%/mefi-media-*.log.
+
+During the transition from CPU tests to desktop tests, the standalone browser
+welcome controls were hidden after navigation; the desktop lane subsequently
+verified that final UI. No application state, portable data or credentials
+were changed. renderer/booklet.html was regenerated.
+
+## 2026-09-26 - Live-session scroll controls batch geometry before hint writes
+
+Live Vibe and Command captures identified shared scroll refresh and Command
+callout drawing as CPU leads. This change batches scroll-region reads before
+writing hints and avoids unchanged visibility, owner and coordinate writes.
+`tools/profile_live_studio.mjs` adds bounded, PID-checked loopback captures;
+`tools/profile_scroll_controls.cjs` compares production refresh versions in
+an isolated Electron renderer. Private reports stay in ignored tools/logs.
+
+Validation:
+- Five alternating pairs after warmup, 16 overflowing regions and 25 content
+  changes per run: median style recalculations 16.96 -> 0.96 per refresh;
+  layouts remain 0.96; refresh time 0.80 -> 0.572 ms. The fixture verifies
+  identical arrow placement, scroll boundaries, tab stops, hide/reopen,
+  overflow removal/return and detached-region cleanup.
+- npm run build-booklet, npm run check and npm run audit pass; audit reports
+  zero findings. Both new tools pass node --check; git diff --check passes.
+  Logs: %TEMP%/mefi-live-{build,check,audit}.log.
+- Live collector completed two captures, rejected a mismatched PID, cleaned
+  up its own capture after a later timeout, and left recording stopped.
+  A final read-only status check confirms the restarted app loaded the new
+  scroll code and completed boot. No live before/after gain is claimed:
+  the window was hidden and other tests were active during that final check.
+- npm test: CPU stage 3,861 passed, 0 failed, 4 skipped. Two full runners
+  started together after waiting for an earlier run; the Electron stage
+  reported media-window, node-view, profiler, Plans and startup failures amid
+  contention and concurrent source changes. Only this session's owned test
+  process tree was stopped to reduce load. The full gate is incomplete;
+  these failures are not classified as regressions or cleared as flakes.
+  Partial log: %TEMP%/mefi-live-full-test.log.
+- Further heavy validation was deferred while additional suites kept
+  starting. Follow up with tests/unified_studio_render.test.mjs and a clean
+  required full gate when the shared checkout and machine are quiet. The
+  periodic session monitor retains that follow-up and the callout CPU lead.
+
+Controlled report: tools/logs/live-scroll-comparison.json. Live reports:
+tools/logs/live-20260926-{first,second,status-final}.json (all ignored).
+
 ## 2026-09-26 - Restart now stops and saves coding agents before updating
 
 The live updater now carries an explicit apply through to Studio's existing
