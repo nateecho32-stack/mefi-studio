@@ -4,8 +4,8 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 
 // Search Studio names each Settings choice button. textContent alone ran a
-// button's parts together ("Fullevery animation", "VoidMembers", "Classic
-// orbsLuminous circles"), so the label comes from the button's own words.
+// button's parts together ("Fullevery animation", "Classic orbsLuminous
+// circles"), so the label comes from the button's own words.
 const source = await readFile(new URL("../renderer/booklet.js", import.meta.url), "utf8");
 const code = source.slice(source.indexOf("  function settingsButtonLabel("), source.indexOf("  function settingsEntries("));
 
@@ -41,16 +41,17 @@ function labels(ids = {}) {
   return context.label;
 }
 
-test("a choice button's detail line and lock badge stay out of its search label", () => {
+test("a choice button's detail line and hidden art stay out of its search label", () => {
   const motionHeading = element("span", [text("Motion")]);
   const full = element("button", [text("Full"), element("small", [text("every animation")])]);
   element("div", [full], { role: "group", "aria-labelledby": "motion-label" });
-  const premiumHeading = element("h4", [text("Void collection"), element("span", [element("span", [text("Members")])], { class: "music-premium-tag" })]);
-  const voidTheme = element("button", [text("Void"), element("span", [element("span", [text("Members")])], { class: "music-premium-lock" })]);
-  element("div", [voidTheme], { role: "group", "aria-labelledby": "premium-label" });
+  // The Void collection is an ordinary group under its own small heading: no lock, no Members tag.
+  const voidHeading = element("h4", [text("Void collection")]);
+  const voidTheme = element("button", [text("Void")], { class: "music-theme music-theme-duo" });
+  element("div", [voidTheme], { role: "group", "aria-labelledby": "music-void-theme-label" });
   const orbs = element("button", [element("span", [], { "aria-hidden": "true" }), element("strong", [text("Classic orbs")]), element("small", [text("Luminous circles")])]);
   const link = element("button", [text("Appearance settings "), element("span", [text("↗")], { "aria-hidden": "true" })]);
-  const label = labels({ "motion-label": motionHeading, "premium-label": premiumHeading });
+  const label = labels({ "motion-label": motionHeading, "music-void-theme-label": voidHeading });
   assert.equal(label(full), "Motion › Full");
   assert.equal(label(voidTheme), "Void collection › Void");
   assert.equal(label(orbs), "Classic orbs");
