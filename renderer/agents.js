@@ -376,7 +376,7 @@
   }
   function addonPanel(id, title, provider, config, saved) {
     const panel = node("div", "agents-addons"); panel.id = `agent-${id}-addons`; panel.hidden = true;
-    panel.append(node("h4", "", `Skills & tools · ${title}`));
+    panel.append(node("h4", "", `Skills, tools & habits · ${title}`));
     const list = node("div", "agents-skill-list"), selected = config.agentSkills?.[id] || [];
     for (const skill of saved.skills || []) {
       const input = node("input"); input.type = "checkbox"; input.checked = selected.includes(skill.id);
@@ -420,7 +420,60 @@
       panel.append(field("Studio desk · ask_desk", input, supported ? "Give this coding worker an MCP tool for help from the desk agent." : "Available with OpenCode and Claude Code workers."));
       panel.append(node("p", "muted", supportedTools ? "Studio search and selected MCP tools attach to this worker. The coding CLI also has its own tools and runs with automatic approval and broad file/command access. These checkboxes limit Studio tools only; manage native tools and MCP servers in the CLI configuration." : "Studio tool attachment supports OpenCode and Claude Code. This worker uses its CLI's native search, tools and permissions; it runs with broad file/command access."));
     } else panel.append(node("p", "muted", "Studio enforces these tool choices for every turn. File writes and shell commands are unavailable unless you explicitly select an MCP tool that provides them. Skills guide answers and never grant tool permissions."));
+    panel.append(habitsPanel(id, config, saved));
     return panel;
+  }
+  // Habits (scripts/habits.cjs): short rules of behaviour for this agent, each
+  // with its variants and off / brief / full, and what it adds to every prompt.
+  function habitsPanel(id, config, saved) {
+    const box = node("section", "agents-habits"); box.id = `agent-${id}-habits`;
+    const library = Array.isArray(saved.habits) ? saved.habits : [];
+    const heading = node("h4", "", "Habits");
+    const totalNote = node("p", "muted agents-habits-total");
+    box.append(heading, totalNote);
+    const chosen = () => config.agentHabits?.[id] || {};
+    const paintTotal = () => {
+      let sum = 0;
+      for (const habit of library) { const pick = chosen()[habit.id]; if (pick && pick.mode !== "off") sum += habit.costs?.[pick.variant]?.[pick.mode] || 0; }
+      if (!sum) { totalNote.removeAttribute?.("aria-label"); totalNote.textContent = "No habit is on for this agent."; return; }
+      // The number counts to its new value (renderer/motion.js); a screen
+      // reader gets the settled sentence at once.
+      totalNote.setAttribute("aria-label", `These habits add about ${sum} tokens to each of this agent's prompts.`);
+      let count = totalNote.querySelector?.(".agents-habits-sum");
+      if (!count) { count = node("b", "agents-habits-sum"); totalNote.replaceChildren("These habits add about ", count, " tokens to each of this agent's prompts."); }
+      if (window.MefiMotion?.tally) window.MefiMotion.tally(count, sum);
+      else count.textContent = String(sum);
+    };
+    const set = (habitId, patch) => {
+      const current = chosen()[habitId] || { variant: library.find((habit) => habit.id === habitId)?.fallback, mode: "off" };
+      config.agentHabits = { ...config.agentHabits, [id]: { ...chosen(), [habitId]: { ...current, ...patch } } };
+      dirty(); paintTotal();
+    };
+    for (const habit of library) {
+      const row = node("div", "agents-habit"); row.dataset.habit = habit.id;
+      const pick = chosen()[habit.id] || { variant: habit.fallback, mode: "off" };
+      const words = node("span", "agents-habit-words");
+      words.append(node("strong", "", habit.title), node("small", "muted", `Fires ${habit.fires}.`));
+      const variants = selectOptions(habit.variants.map((variant) => [variant.id, variant.id]), pick.variant, `${habit.title}: variant`, (value) => { set(habit.id, { variant: value }); paintCosts(); rule.textContent = habit.variants.find((variant) => variant.id === value)?.text || ""; });
+      const modes = node("div", "agents-habit-modes"); modes.setAttribute("role", "radiogroup"); modes.setAttribute("aria-label", `${habit.title}: off, brief or full`);
+      // One thumb slides under the chosen mode (agents.css reads --seg).
+      const mark = (mode) => { modes.dataset.mode = mode; modes.style?.setProperty?.("--seg", String(["off", "brief", "full"].indexOf(mode))); row.dataset.on = String(mode !== "off"); };
+      const buttons = ["off", "brief", "full"].map((mode) => {
+        const choice = node("button", "agents-habit-mode", mode); choice.type = "button"; choice.dataset.mode = mode; choice.setAttribute("role", "radio");
+        choice.setAttribute("aria-checked", String(pick.mode === mode));
+        choice.addEventListener("click", () => { set(habit.id, { mode }); mark(mode); for (const other of buttons) other.setAttribute("aria-checked", String(other === choice)); });
+        modes.append(choice); return choice;
+      });
+      mark(pick.mode || "off");
+      const paintCosts = () => { const costs = habit.costs?.[variants.value] || {}; for (const choice of buttons) choice.title = choice.dataset.mode === "off" ? "Not in the prompt" : `About ${costs[choice.dataset.mode] || 0} tokens`; };
+      paintCosts();
+      const rule = node("p", "muted agents-habit-rule", habit.variants.find((variant) => variant.id === pick.variant)?.text || "");
+      row.append(words, variants, modes, rule);
+      box.append(row);
+    }
+    if (!library.length) box.append(node("p", "muted", "Habits load with the saved settings."));
+    paintTotal();
+    return box;
   }
   function agentRow({ id, title, detail, provider, model, effort = "", fast = false, builder = false, seat = false, setProvider, setModel, setEffort, setFast }, config, saved) {
     const box = node("section", "agents-model-row"); box.dataset.agent = id;

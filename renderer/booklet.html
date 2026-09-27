@@ -6690,13 +6690,19 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
    from the theme tokens, so light palettes keep their own. */
 .trace-sheet { display: flex; flex-direction: column; }
 .trace-grid { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 14px; flex: 1; min-height: 0; padding: 0 var(--s5, 16px) var(--s5, 16px); }
-.trace-channels { display: flex; flex-direction: column; gap: 8px; min-height: 0; padding: 12px 10px; border: 1px solid var(--hairline); border-radius: var(--r-lg, 14px); background: var(--surface-raised, var(--glass)); overflow-y: auto; }
+.trace-channels { position: relative; display: flex; flex-direction: column; gap: 8px; min-height: 0; padding: 12px 10px; border: 1px solid var(--hairline); border-radius: var(--r-lg, 14px); background: var(--surface-raised, var(--glass)); overflow-y: auto; }
 .trace-side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 4px; }
 .trace-side-head h3 { margin: 0; color: var(--muted); font: 650 11px/1.2 var(--font-ui); letter-spacing: .07em; text-transform: uppercase; }
 .trace-channel-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
-.trace-channel { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 6px 10px; border: 0; border-radius: 10px; background: none; color: var(--ivory); font: 550 13px/1.2 var(--font-ui); text-align: left; cursor: pointer; }
+.trace-channel { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 6px 10px; border: 0; border-radius: 10px; background: none; color: var(--ivory); font: 550 13px/1.2 var(--font-ui); text-align: left; cursor: pointer; }
+.trace-channel { transition: background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out); }
 .trace-channel:hover { background: color-mix(in srgb, var(--ivory) 6%, transparent); }
-.trace-channel[aria-current="true"] { background: color-mix(in srgb, var(--gold) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent); }
+.trace-channel[aria-current="true"] { background: none; }
+/* The mark behind the open channel (MefiMotion.glide sets --glide-*). */
+.trace-channel-mark { position: absolute; top: 0; left: 0; z-index: 0; width: var(--glide-w, 0); height: var(--glide-h, 0); border-radius: 10px; background: color-mix(in srgb, var(--gold) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent); translate: var(--glide-x, 0) var(--glide-y, 0); opacity: 0; pointer-events: none; transition: translate var(--motion-spring) var(--ease-spring), height var(--motion-spring) var(--ease-spring), width var(--motion-base) var(--ease-out), opacity var(--motion-base) var(--ease-out); }
+.trace-channel-mark[data-on="true"] { opacity: 1; }
+.trace-filters .chip { transition: background var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out), scale var(--motion-instant) var(--ease-out); }
+.trace-filters .chip:active { scale: .95; }
 .trace-channel:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 1px; }
 .trace-channel-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .trace-channel-size { color: var(--dim); font: 11px/1 var(--font-mono); }
@@ -6715,6 +6721,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
 .trace-chip-warn.on { border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 14%, transparent); }
 .trace-lines { flex: 1; min-height: 0; margin: 0; padding: 6px 0; overflow: auto; border: 1px solid var(--hairline); border-radius: var(--r-lg, 14px); background: color-mix(in srgb, var(--bg-deep) 70%, transparent); font: 12px/1.5 var(--font-mono); list-style: none; }
 .trace-line { display: grid; grid-template-columns: 64px 44px minmax(60px, 120px) minmax(0, 1fr); gap: 10px; padding: 2px 12px; border-left: 2px solid transparent; }
+.trace-line { transition: background var(--motion-fast) var(--ease-out); }
 .trace-line:hover { background: color-mix(in srgb, var(--ivory) 4%, transparent); }
 .trace-line.is-error { border-left-color: var(--bad); background: color-mix(in srgb, var(--bad) 7%, transparent); }
 .trace-line.is-warn { border-left-color: var(--warn); }
@@ -6724,11 +6731,94 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
 .trace-line.is-warn .trace-level { color: var(--warn); }
 .trace-source { overflow: hidden; color: var(--gold-bright); text-overflow: ellipsis; white-space: nowrap; }
 .trace-text { color: var(--ivory); white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { .trace-channel-mark { transition: none; } }
 @media (max-width: 900px) {
   .trace-grid { grid-template-columns: 1fr; }
   .trace-channels { max-height: 180px; }
   .trace-line { grid-template-columns: 58px minmax(0, 1fr); }
   .trace-level, .trace-source { display: none; }
+}
+
+/* Configuration (renderer/config-dialog.js): every setting in one searchable
+   tree, over whatever page is open. A category column with one mark that
+   springs to the current category, then the settings grouped by where they
+   live; picking one opens the real control. The scrim is the shared .overlay
+   one (styles.css presence); the sheet rises on the spring and leaves on the
+   exit curve, like every sheet. */
+.config-overlay { z-index: calc(var(--z-sheet, 80) + 4); display: grid; place-items: start center; padding: 7vh 16px 16px; }
+.config-sheet { display: flex; flex-direction: column; width: min(1040px, 100%); max-height: min(760px, 86vh); border: 1px solid var(--studio-glass-edge, var(--hairline)); border-radius: var(--r-xl, 22px); background: var(--studio-float-fill, var(--panel-solid)); box-shadow: var(--studio-float-shadow, 0 30px 80px -30px rgba(0, 0, 0, .8)); overflow: hidden; transform-origin: 50% 0; transition: opacity var(--motion-base) var(--ease-out), translate var(--motion-spring) var(--ease-spring), scale var(--motion-spring) var(--ease-spring); }
+.config-overlay[hidden] > .config-sheet { opacity: 0; translate: 0 -8px; scale: .975; transition: opacity var(--motion-exit) var(--ease-in), translate var(--motion-exit) var(--ease-in), scale var(--motion-exit) var(--ease-in); }
+@starting-style { .config-overlay:not([hidden]) > .config-sheet { opacity: 0; translate: 0 14px; scale: .965; } }
+
+.config-head { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-bottom: 1px solid var(--hairline); }
+.config-head h2 { margin: 0; font: 650 18px/1.2 var(--font-display); white-space: nowrap; }
+.config-head input[type="search"] { flex: 1; min-width: 0; transition: border-color var(--motion-fast) var(--ease-out), box-shadow var(--motion-base) var(--ease-out); }
+.config-head input[type="search"]:focus { box-shadow: 0 0 0 4px color-mix(in srgb, var(--gold) 14%, transparent); }
+.config-body { position: relative; display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 0; flex: 1; }
+
+/* ---- the tree ---- */
+.config-tree { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 12px 10px; border-right: 1px solid var(--hairline); overflow-y: auto; }
+.config-category { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 40px; padding: 8px 12px; border: 0; border-radius: 12px; background: none; color: var(--muted); font: 600 14px/1.2 var(--font-ui); text-align: left; cursor: pointer; transition: color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out); }
+.config-category:hover { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 5%, transparent); }
+.config-category[aria-current="true"] { color: var(--ivory); background: none; }
+.config-category[hidden] { display: none; }
+.config-category:focus-visible, .config-item:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: -2px; }
+.config-category-count { min-width: 22px; padding: 2px 6px; border-radius: 999px; color: var(--dim); font: 600 11px/1.2 var(--font-mono); text-align: center; transition: color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out); }
+.config-category[aria-current="true"] .config-category-count { background: color-mix(in srgb, var(--gold) 18%, transparent); color: var(--gold-bright); }
+/* The mark behind the current category (MefiMotion.glide sets --glide-*). */
+.config-tree-mark { position: absolute; top: 0; left: 0; z-index: 0; width: var(--glide-w, 0); height: var(--glide-h, 0); border-radius: 12px; background: linear-gradient(135deg, color-mix(in srgb, var(--gold) 18%, transparent), color-mix(in srgb, var(--gold) 7%, transparent)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent); translate: var(--glide-x, 0) var(--glide-y, 0); opacity: 0; pointer-events: none; transition: translate var(--motion-spring) var(--ease-spring), height var(--motion-spring) var(--ease-spring), width var(--motion-base) var(--ease-out), opacity var(--motion-base) var(--ease-out); }
+.config-tree-mark[data-on="true"] { opacity: 1; }
+.config-tree-mark::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--gold-bright); box-shadow: 0 0 10px var(--gold); }
+
+/* ---- the pane ---- */
+.config-pane { position: relative; display: flex; flex-direction: column; gap: 12px; min-height: 0; padding: 18px 22px 22px; overflow-y: auto; scrollbar-width: thin; }
+.config-pane-head { display: grid; gap: 4px; }
+.config-pane-title { margin: 0; font: 650 19px/1.25 var(--font-display); letter-spacing: -.005em; }
+.config-pane-about { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.config-empty { margin: 8px 0 0; color: var(--dim); font-size: 13px; }
+.config-group { display: grid; gap: 2px; }
+/* A group's heading runs a hairline out to its count. */
+.config-group-title { display: flex; align-items: center; gap: 10px; margin: 10px 0 4px; padding: 0 12px; color: var(--dim); font: 650 11px/1.2 var(--font-ui); letter-spacing: .07em; text-transform: uppercase; }
+.config-group-title::after { content: ""; order: 1; flex: 1; height: 1px; background: var(--hairline); }
+.config-group-count { order: 2; color: var(--dim); font: 600 10.5px/1 var(--font-mono); letter-spacing: 0; }
+.config-items { display: grid; gap: 1px; margin: 0; padding: 0; list-style: none; }
+/* Rows rise in, cascading by --i; a row that was already there stays put
+   and glides if it moved (renderer/motion.js). */
+.config-row { animation: config-rise var(--motion-base) var(--ease-out) both; animation-delay: calc(var(--i, 0) * var(--motion-step, 26ms)); }
+.config-row[data-kept] { animation: none; }
+@keyframes config-rise { from { opacity: 0; translate: 0 6px; } to { opacity: 1; translate: none; } }
+/* The shared button rule centres a button's content; a setting reads from
+   the left, with Open sliding in on the right as the hover's answer. */
+.config-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; justify-content: stretch; justify-items: start; gap: 12px; width: 100%; min-height: 44px; padding: 8px 12px; border: 0; border-radius: 12px; background: none; color: var(--ivory); text-align: left; cursor: pointer; transition: background var(--motion-fast) var(--ease-out), scale var(--motion-instant) var(--ease-out); }
+.config-item:hover { background: color-mix(in srgb, var(--ivory) 5%, transparent); }
+.config-item:active { scale: .99; }
+.config-item-words { display: grid; gap: 2px; min-width: 0; max-width: 100%; justify-items: start; text-align: left; }
+.config-item-title { max-width: 100%; overflow: hidden; font-size: 14px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.config-item-meta { max-width: 100%; overflow: hidden; color: var(--muted); font-size: 12px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.config-item-go { justify-self: end; padding: 4px 10px; border-radius: 999px; background: color-mix(in srgb, var(--gold) 14%, transparent); color: var(--gold-bright); font-size: 11.5px; font-weight: 650; opacity: 0; translate: -6px 0; transition: opacity var(--motion-fast) var(--ease-out), translate var(--motion-base) var(--ease-spring); }
+.config-item:is(:hover, :focus-visible) .config-item-go { opacity: 1; translate: 0 0; }
+
+/* ---- the interface scale ---- */
+.config-scale { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--hairline); border-radius: 16px; background: color-mix(in srgb, var(--ivory) 3%, transparent); }
+.config-scale-row { display: grid; grid-template-columns: auto minmax(0, 1fr) 52px; align-items: center; gap: 14px; }
+.config-scale-name { font-size: 14px; font-weight: 600; }
+/* The track fills up to the thumb (--fill from config-dialog.js). */
+.config-scale-row input[type="range"] { width: 100%; height: 6px; margin: 0; border-radius: 999px; background: linear-gradient(90deg, var(--gold) var(--fill, 37.5%), color-mix(in srgb, var(--ivory) 12%, transparent) var(--fill, 37.5%)); appearance: none; cursor: pointer; }
+.config-scale-row input[type="range"]::-webkit-slider-thumb { width: 18px; height: 18px; border: 2px solid var(--panel-solid); border-radius: 50%; background: var(--gold-bright); box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 50%, transparent), 0 4px 12px -4px var(--gold); appearance: none; transition: scale var(--motion-base) var(--ease-spring); }
+.config-scale-row input[type="range"]:is(:hover, :active)::-webkit-slider-thumb { scale: 1.18; }
+.config-scale-row input[type="range"]:disabled { opacity: .5; cursor: not-allowed; }
+.config-scale-value { color: var(--gold-bright); font: 600 13px/1 var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.config-scale-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+@media (max-width: 760px) {
+  .config-overlay { padding: 12px; }
+  .config-body { grid-template-columns: 1fr; }
+  .config-tree { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--hairline); }
+  .config-category { width: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .config-row { animation: none; }
+  .config-sheet, .config-tree-mark, .config-item-go { transition: none; }
 }
 
 /* The Agent Brain's surfaces (renderer/agent-brain.js): the Agent brain sheet,
@@ -7196,6 +7286,29 @@ body[data-nav-section=agents] #app-task-context { display: none; }
 @media (prefers-reduced-motion: reduce) { .agents-nav-subsections { animation: none; } .agents-model-row { transition: none; } }
 html[data-motion=off] .agents-nav-subsections { animation: none; }
 html[data-motion=off] .agents-model-row { transition: none; }
+
+/* Habits (scripts/habits.cjs) in each agent's Skills, tools & habits panel:
+   a rule, its variant, and off / brief / full with what each costs. */
+.agents-habits { display: grid; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--hairline); }
+.agents-habits-total { margin: 0; font-size: 12px; }
+.agents-habit { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 6px 10px; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 12px; transition: border-color var(--motion-base) var(--ease-out), background var(--motion-base) var(--ease-out); }
+.agents-habit[data-on="true"] { border-color: color-mix(in srgb, var(--gold) 26%, var(--hairline)); background: color-mix(in srgb, var(--gold) 4%, transparent); }
+.agents-habit[data-on="false"] .agents-habit-rule { opacity: .6; }
+.agents-habits-sum { color: var(--gold-bright); font-variant-numeric: tabular-nums; }
+.agents-habit-words { display: grid; gap: 2px; min-width: 0; }
+.agents-habit-rule { grid-column: 1 / -1; margin: 0; font-size: 12px; line-height: 1.45; transition: opacity var(--motion-base) var(--ease-out); }
+/* Off / Brief / Full: three equal slots and one thumb that springs to the
+   chosen one and takes its colour (quiet, gold, live). */
+.agents-habit-modes { --seg: 0; --thumb: color-mix(in srgb, var(--ivory) 10%, transparent); position: relative; display: inline-grid; grid-template-columns: repeat(3, 1fr); padding: 2px; border: 1px solid var(--hairline); border-radius: 999px; isolation: isolate; }
+.agents-habit-modes[data-mode="brief"] { --thumb: color-mix(in srgb, var(--gold) 24%, transparent); }
+.agents-habit-modes[data-mode="full"] { --thumb: color-mix(in srgb, var(--live) 26%, transparent); }
+.agents-habit-modes::before { content: ""; position: absolute; z-index: -1; top: 2px; bottom: 2px; left: 2px; width: calc((100% - 4px) / 3); border-radius: 999px; background: var(--thumb); translate: calc(var(--seg) * 100%) 0; transition: translate var(--motion-spring) var(--ease-spring), background var(--motion-base) var(--ease-out); }
+.agents-habit-mode { min-width: 46px; min-height: 26px; padding: 2px 10px; border: 0; border-radius: 999px; background: none; color: var(--muted); font-size: 12px; text-transform: capitalize; cursor: pointer; transition: color var(--motion-fast) var(--ease-out), scale var(--motion-instant) var(--ease-out); }
+.agents-habit-mode:hover { color: var(--ivory); }
+.agents-habit-mode:active { scale: .94; }
+.agents-habit-mode[aria-checked="true"] { color: var(--ivory); }
+.agents-habit-mode:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 1px; }
+@media (max-width: 760px) { .agents-habit { grid-template-columns: 1fr; } }
 
 .companion-panel.companion-dynamic {
   display: flex; flex-direction: column; gap: 12px; padding: 18px;
@@ -8207,6 +8320,24 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-lane-link span { display: inline-block; transition: transform var(--motion-base) var(--ease-spring); }
 .vibe-lane-link:hover { color: var(--lane); }
 .vibe-lane-link:hover span { transform: translateX(4px); }
+/* Rows are rebuilt on every paint (vibe.js, vibe-panels.js). MefiMotion
+   (renderer/motion.js) marks the ones that were already there data-kept, so
+   they keep still instead of replaying their rise, and glides them if they
+   moved; a new one rises, cascading by --i. A row that left fades where it
+   was, over its old card, so the host holds its ghosts. */
+.vibe-lanes, .vibe-panel-body { position: relative; }
+/* A ghost is a still picture of what left (renderer/motion.js, every menu that
+   uses it): nothing inside replays an entrance or eases a hover as it fades. */
+.motion-ghost, .motion-ghost * { animation: none !important; transition: none !important; }
+/* A side panel lays itself out alone: a menu repaint never reflows the page. */
+.vibe-chat, .config-sheet { contain: layout style; }
+.vibe-row { animation-delay: calc(var(--i, 0) * var(--motion-step, 26ms)); }
+.vibe-steps { animation: vibe-rise var(--motion-base) var(--ease-out) both; animation-delay: calc(var(--i, 0) * var(--motion-step, 26ms)); }
+:is(.vibe-row, .vibe-steps, .vibe-msg)[data-kept] { animation: none; }
+.vibe-row-main { transition: scale var(--motion-instant) var(--ease-out); }
+.vibe-row-main:active { scale: .985; }
+.vibe-row-action { transition: background var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), scale var(--motion-instant) var(--ease-out); }
+.vibe-row-action:active { scale: .95; }
 /* With nothing to show, one calm line; with cards up, the hero steps back so
    the box and the cards sit higher. */
 .vibe-quiet { margin: 26px 0 0; color: var(--v-faint); font-size: 13.5px; text-align: center; animation: vibe-rise var(--motion-base) var(--ease-out) both; }
@@ -8237,21 +8368,27 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-last-open { flex: none; padding: 5px 10px; border-radius: 9px; background: color-mix(in srgb, var(--ivory) 7%, transparent); color: var(--v-ink); font-size: 12px; font-weight: 600; }
 
 /* ---- dock ----------------------------------------------------------------- */
-.vibe-dock { grid-row: 2; grid-column: 1; align-self: end; justify-self: center; position: relative; z-index: 1; display: flex; gap: 4px; margin: 0 0 22px; padding: 6px; border: 1px solid var(--v-edge); border-radius: 22px; background: var(--v-glass-hi); backdrop-filter: var(--v-blur); box-shadow: 0 24px 50px -28px rgba(0, 0, 0, .95), inset 0 1px 0 color-mix(in srgb, var(--ivory) 7%, transparent); animation: vibe-dock-in var(--motion-spring) var(--ease-spring) 200ms both; }
+.vibe-dock { --stop-w: 76px; --stop-gap: 4px; grid-row: 2; grid-column: 1; align-self: end; justify-self: center; position: relative; z-index: 1; display: flex; gap: var(--stop-gap); margin: 0 0 22px; padding: 6px; border: 1px solid var(--v-edge); border-radius: 22px; background: var(--v-glass-hi); backdrop-filter: var(--v-blur); box-shadow: 0 24px 50px -28px rgba(0, 0, 0, .95), inset 0 1px 0 color-mix(in srgb, var(--ivory) 7%, transparent); animation: vibe-dock-in var(--motion-spring) var(--ease-spring) 200ms both; }
 @keyframes vibe-dock-in { from { opacity: 0; transform: translateY(24px) scale(.96); } to { opacity: 1; transform: none; } }
-.vibe-dock button { position: relative; display: grid; justify-items: center; align-content: center; gap: 5px; width: 76px; height: 60px; padding: 0; border: 0; border-radius: 16px; background: none; color: var(--v-soft); font-size: 11.5px; font-weight: 550; cursor: pointer; transition: color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out), transform var(--motion-base) var(--ease-spring); }
+.vibe-dock button { position: relative; display: grid; justify-items: center; align-content: center; gap: 5px; width: var(--stop-w); height: 60px; overflow: clip; padding: 0; border: 0; border-radius: 16px; background: none; color: var(--v-soft); font-size: 11.5px; font-weight: 550; cursor: pointer; transition: color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out), transform var(--motion-base) var(--ease-spring); }
 .vibe-dock .glyph { width: 20px; height: 20px; transition: transform var(--motion-base) var(--ease-spring); }
 .vibe-dock button:hover { color: var(--v-ink); background: color-mix(in srgb, var(--ivory) 7%, transparent); }
 .vibe-dock button:hover .glyph { transform: translateY(-2px) scale(1.08); color: var(--v-accent-hi); }
 .vibe-dock .count { position: absolute; top: 5px; right: 12px; min-width: 17px; height: 17px; padding: 0 5px; border-radius: 999px; background: var(--gold); color: var(--ink); font: 700 10px/17px var(--font-mono); text-align: center; }
 .vibe-dock .count.warn { background: var(--warn); }
 .vibe-dock .count[hidden] { display: none; }
-/* Stops step in and out as they gain or lose something to show; the stop
-   whose panel is open is marked like the rail's current page. */
-.vibe-dock button { opacity: 1; transition: color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out), transform var(--motion-base) var(--ease-spring), opacity var(--motion-base) var(--ease-out), display var(--motion-base) allow-discrete; }
-@starting-style { .vibe-dock button { opacity: 0; transform: translateY(10px) scale(.9); } }
-.vibe-dock button[hidden] { display: none; opacity: 0; transform: translateY(10px) scale(.9); }
-.vibe-dock button[aria-pressed="true"] { color: var(--v-ink); background: color-mix(in srgb, var(--gold) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent); }
+/* Stops step in and out as they gain or lose something to show. A stop
+   folds its width open (and shut), so the others slide over instead of
+   jumping; the negative margin takes its gap with it. */
+.vibe-dock button { opacity: 1; transition: color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out), opacity var(--motion-base) var(--ease-out), width var(--motion-spring) var(--ease-spring), margin var(--motion-spring) var(--ease-spring), scale var(--motion-spring) var(--ease-spring), display var(--motion-spring) allow-discrete; }
+@starting-style { .vibe-dock button:not([hidden]) { width: 0; margin-right: calc(-1 * var(--stop-gap)); opacity: 0; scale: .6; } }
+.vibe-dock button[hidden] { display: none; width: 0; margin-right: calc(-1 * var(--stop-gap)); opacity: 0; scale: .6; transition-duration: var(--motion-fast), var(--motion-fast), var(--motion-fast), var(--motion-base), var(--motion-base), var(--motion-base), var(--motion-base); transition-timing-function: var(--ease-in); }
+.vibe-dock button:active { scale: .94; transition-duration: var(--motion-instant); }
+/* The open panel's stop wears one mark that springs from stop to stop
+   (vibe.js renderDock sets --slot); every stop is --stop-w wide. */
+.vibe-dock-mark { position: absolute; top: 6px; left: 6px; width: var(--stop-w); height: 60px; border-radius: 16px; background: linear-gradient(160deg, color-mix(in srgb, var(--gold) 22%, transparent), color-mix(in srgb, var(--gold) 9%, transparent)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 32%, transparent), 0 10px 26px -14px color-mix(in srgb, var(--gold) 70%, transparent); translate: calc(var(--slot, 0) * (var(--stop-w) + var(--stop-gap))) 0; opacity: 0; scale: .72; pointer-events: none; transition: translate var(--motion-spring) var(--ease-spring), opacity var(--motion-base) var(--ease-out), scale var(--motion-spring) var(--ease-spring); }
+.vibe-dock[data-marked="yes"] .vibe-dock-mark { opacity: 1; scale: 1; }
+.vibe-dock button[aria-pressed="true"] { color: var(--v-ink); }
 .vibe-dock button[aria-pressed="true"] .glyph { color: var(--v-accent-hi); }
 
 /* ---- conversation --------------------------------------------------------- */
@@ -8430,15 +8567,16 @@ button.vibe-ask-chip:hover { border-color: var(--v-edge-hi); color: var(--v-ink)
   .vibe-lanes { grid-template-columns: 1fr; }
   .vibe-hint { display: none; }
   .vibe-set-names { grid-template-columns: 1fr; }
-  .vibe-dock button { width: 54px; font-size: 10.5px; }
+  .vibe-dock { --stop-w: 54px; }
+  .vibe-dock button { font-size: 10.5px; }
   .vibe-chat { top: 12px; right: 12px; bottom: 12px; width: calc(100vw - 24px); }
 }
 @media (max-height: 820px) {
   .vibe-orb { width: 54px; height: 54px; margin-bottom: 4px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .vibe-lane, .vibe-quiet { animation: none; }
-  .vibe-dock button, .vibe-orb, .vibe-hero h1, .vibe-fold-caret, .vibe-stage { transition: none; }
+  .vibe-lane, .vibe-quiet, .vibe-row, .vibe-steps { animation: none; }
+  .vibe-dock button, .vibe-dock-mark, .vibe-orb, .vibe-hero h1, .vibe-fold-caret, .vibe-stage { transition: none; }
 }
 
 /* ---- the Vibe frame ------------------------------------------------------- */
@@ -8634,9 +8772,32 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 .vibe-notes-link .glyph { width: 13px; height: 13px; }
 @media (max-width: 560px) { .vibe-notes-modes { grid-template-columns: 1fr; } .vibe-notes-foot { flex-wrap: wrap; } }
 .vibe-chat-choices { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
-.vibe-inline-confirm { border: 1px solid #96c4cf44; }
-.vibe-inline-error { color: #f3b2a8; font-size: 12px; }
-.vibe-suggestion { padding: 12px; border-radius: 12px; background: #81b9c516; color: #b7dfe6; font-size: 13px; line-height: 1.5; }
+.vibe-inline-confirm { padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--gold) 26%, transparent); border-radius: 16px; background: color-mix(in srgb, var(--gold) 5%, transparent); }
+.vibe-inline-confirm .vibe-msg-text { padding: 0; background: none; }
+.vibe-inline-error { margin: 6px 0 0; color: var(--bad); font-size: 12px; }
+.vibe-suggestion { padding: 12px; border-radius: 12px; background: color-mix(in srgb, var(--info) 9%, transparent); color: var(--v-ink); font-size: 13px; line-height: 1.5; }
+
+/* ---- the permissions chip and its menu (renderer/autonomy-ui.js) ------------ */
+/* In the composer they wear Vibe's glass and tokens, so every palette keeps
+   them; the menu rises from the chip and its choices follow one by one. It
+   sits inside the composer's frosted glass, whose blur cannot reach past it,
+   so it is near solid rather than glass. */
+#vibe-layer .autonomy-chip { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px 0 14px; border: 1px solid var(--v-edge); border-radius: 999px; background: color-mix(in srgb, var(--ivory) 5%, transparent); color: var(--v-soft); font: 600 12.5px/1 var(--font-ui); transition: color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out), scale var(--motion-instant) var(--ease-out); }
+#vibe-layer .autonomy-chip:hover, #vibe-layer .autonomy-chip[aria-expanded="true"] { border-color: var(--v-edge-hi); background: color-mix(in srgb, var(--gold) 10%, transparent); color: var(--v-ink); }
+#vibe-layer .autonomy-chip:active { scale: .96; }
+#vibe-layer .autonomy-chip::after { content: ""; width: 6px; height: 6px; margin-top: -3px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; opacity: .7; rotate: 45deg; transition: rotate var(--motion-base) var(--ease-spring), translate var(--motion-base) var(--ease-spring); }
+#vibe-layer .autonomy-chip[aria-expanded="true"]::after { rotate: 225deg; translate: 0 3px; }
+#vibe-layer .autonomy-popover { gap: 2px; width: min(360px, 80vw); padding: 6px; border: 1px solid var(--v-menu-edge, var(--v-edge-hi)); border-radius: 20px; background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 5%, transparent), transparent 40%), color-mix(in srgb, var(--panel-solid) 97%, transparent); box-shadow: var(--studio-float-shadow, 0 24px 60px -24px rgba(0, 0, 0, .9)); transform-origin: 24px 100%; transition: opacity var(--motion-base) var(--ease-out), translate var(--motion-spring) var(--ease-spring), scale var(--motion-spring) var(--ease-spring), display var(--motion-spring) allow-discrete; }
+#vibe-layer .autonomy-popover[hidden] { display: none; opacity: 0; translate: 0 8px; scale: .94; pointer-events: none; transition-duration: var(--motion-exit); transition-timing-function: var(--ease-in); }
+@starting-style { #vibe-layer .autonomy-popover:not([hidden]) { opacity: 0; translate: 0 8px; scale: .94; } }
+#vibe-layer .autonomy-popover .autonomy-button { display: grid; gap: 3px; width: 100%; padding: 10px 12px; border: 0; border-radius: 14px; background: none; color: var(--v-ink); font: 600 13.5px/1.25 var(--font-ui); text-align: left; transition: background var(--motion-fast) var(--ease-out), opacity var(--motion-base) var(--ease-out), translate var(--motion-slow) var(--ease-emphasized); transition-delay: 0s, calc((sibling-index() - 1) * 22ms), calc((sibling-index() - 1) * 22ms); }
+@starting-style { #vibe-layer .autonomy-popover:not([hidden]) .autonomy-button { opacity: 0; translate: 0 6px; } }
+#vibe-layer .autonomy-popover .autonomy-button:hover { background: color-mix(in srgb, var(--ivory) 6%, transparent); }
+#vibe-layer .autonomy-popover .autonomy-button[aria-checked="true"] { background: var(--v-menu-pick, color-mix(in srgb, var(--gold) 16%, transparent)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent); }
+#vibe-layer .autonomy-popover .autonomy-button:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: -2px; }
+#vibe-layer .autonomy-popover .autonomy-mode small { margin: 0; color: var(--v-soft); font-size: 12px; font-weight: 450; opacity: 1; }
+#vibe-layer .autonomy-popover > .autonomy-button:not(.autonomy-mode) { margin-top: 4px; padding-top: 11px; border-top: 1px solid var(--v-edge); border-radius: 0 0 14px 14px; color: var(--v-soft); font-size: 12.5px; }
+#vibe-layer .autonomy-popover > .autonomy-button:not(.autonomy-mode):hover { color: var(--v-ink); }
 @media (max-width: 600px) { .vibe-compose-foot { flex-wrap: wrap; } #vibe-autonomy-control { margin-right: auto; } }
 </style>
 <div id="boot-layer" role="dialog" aria-modal="true" aria-labelledby="boot-title" aria-describedby="boot-detail" tabindex="-1">
@@ -8933,6 +9094,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   </div>
   <!-- Watch, Plans and Ideas step in only while they have something to show. -->
   <nav id="vibe-dock" class="vibe-dock" aria-label="Go to">
+    <span class="vibe-dock-mark" aria-hidden="true"></span>
     <button id="vibe-stop-watch" type="button" data-nav="command" data-vibe-stop="watch" title="Watch the agents work on the live node tree (D)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span></button>
     <button id="vibe-stop-tasks" type="button" data-vibe-panel="tasks" data-vibe-stop="tasks" title="Your tasks and results"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
     <button id="vibe-stop-plans" type="button" data-vibe-panel="plans" data-vibe-stop="plans" title="Plans in progress" hidden><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span></button>
@@ -9205,6 +9367,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 <button type="button" class="settings-nav-item" data-settings-category="audio" aria-current="false"><svg class="glyph" aria-hidden="true"><use href="#g-audio"/></svg><span class="label">Audio</span></button>
 <button type="button" class="settings-nav-item" data-settings-category="system" aria-current="false"><svg class="glyph" aria-hidden="true"><use href="#g-gauge"/></svg><span class="label">System</span></button>
 </div>
+          <button id="settings-config-open" class="ghost settings-config-open" type="button" data-nav="config" title="Every setting in one searchable tree (Ctrl Shift ,)">All settings in one place</button>
         </nav>
         <div id="settings-sections" class="settings-sections">
           <div id="settings-search-results" class="settings-search-results" aria-label="Setting search results" hidden></div>
@@ -10286,6 +10449,21 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         <section class="profiler-section"><h3>Studio processes</h3><div class="profiler-table-wrap"><table class="profiler-table"><thead><tr><th scope="col">Process</th><th scope="col">CPU</th><th scope="col">Memory</th></tr></thead><tbody id="profiler-processes"></tbody></table></div><p>Memory is each process's working set. Shared pages may be counted in more than one process.</p></section>
       </div>
       <p id="profiler-limits"></p><p>Capture stays in memory until you export. Reports contain operation names and measurements, with no task text, request payloads, paths or credentials. Profiling adds some measurement overhead.</p>
+    </div>
+  </div>
+</div>
+<!-- Configuration (renderer/config-dialog.js): every setting in one searchable
+     tree, filed under seven categories; picking one opens the real control. -->
+<div class="overlay config-overlay" id="config-overlay" hidden>
+  <div class="config-sheet" role="dialog" aria-modal="true" aria-labelledby="config-heading">
+    <header class="config-head">
+      <h2 id="config-heading">Configuration</h2>
+      <input id="config-search" type="search" placeholder="Search every setting…" aria-label="Search every setting" autocomplete="off">
+      <button id="config-close" class="ghost sheet-close" type="button" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+    </header>
+    <div class="config-body">
+      <nav id="config-tree" class="config-tree" aria-label="Categories"></nav>
+      <section id="config-pane" class="config-pane" aria-live="polite"></section>
     </div>
   </div>
 </div>
@@ -15288,6 +15466,249 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   window.MefiFileInputs = { bind, isReading: (input) => bindings.get(input)?.reading === true };
 })();
 
+// Mefi's Studio AI+ — motion for menus (window.MefiMotion).
+//
+// Menus here repaint by rebuilding their rows (replaceChildren). That keeps
+// their state honest and their code short, but a rebuilt row replays its
+// entrance on every push and a row that leaves takes the rest down with a
+// jump. These helpers keep the rebuild and fix the pixels:
+//
+//   keep(root, paint)        rows with the same data-key before and after a
+//                            paint stay still (data-kept stops their entrance)
+//                            and glide to where they now sit; new rows rise,
+//                            cascading; rows that left fade
+//                            out from where they were.
+//   swap(box, paint, {dir, axis})  a view change: the old view leaves toward where
+//                            you came from while the new one arrives from the
+//                            side you went (1 deeper, -1 back, 0 across).
+//   enter(node, {dir})       one element arrives the same way (a title).
+//   glide(mark, target)      a selection mark follows the current item.
+//   tally(node, value)       a number counts to its new value.
+//
+// With motion off (html[data-motion=off], reduced motion) or without layout
+// (the tests' fake DOM) each helper just paints; nothing here decides what a
+// menu shows. A ghost (.motion-ghost) is held still by vibe.css, which the
+// booklet bundles for every page.
+(function () {
+  "use strict";
+  const root = () => document.documentElement;
+  function off() {
+    const nav = window.MefiNav?.noMotion;
+    if (typeof nav === "function") return nav();
+    return root()?.dataset?.motion === "off";
+  }
+  const live = (node) => Boolean(node) && typeof node.animate === "function" && typeof node.getBoundingClientRect === "function" && node.isConnected !== false && !off();
+  // Durations and curves come from the motion tokens (styles.css section 1).
+  let tokens = null;
+  function motion() {
+    if (tokens) return tokens;
+    let style = null;
+    try { style = getComputedStyle(root()); } catch { /* the defaults below */ }
+    const read = (name, fallback) => style?.getPropertyValue?.(name)?.trim() || fallback;
+    const time = (name, fallback) => {
+      const value = read(name, "");
+      const number = parseFloat(value);
+      if (!Number.isFinite(number)) return fallback;
+      return /ms$/.test(value) ? number : /s$/.test(value) ? number * 1000 : number;
+    };
+    tokens = {
+      fast: time("--motion-fast", 140), base: time("--motion-base", 200), slow: time("--motion-slow", 280), spring: time("--motion-spring", 480),
+      out: read("--ease-out", "cubic-bezier(.22, .61, .36, 1)"), in: read("--ease-in", "cubic-bezier(.4, 0, 1, 1)"),
+      emphasized: read("--ease-emphasized", "cubic-bezier(.2, 0, 0, 1)"), springy: read("--ease-spring", "cubic-bezier(.2, 0, 0, 1)"),
+    };
+    return tokens;
+  }
+  const shown = (node) => { const box = node.getBoundingClientRect(); return box.width > 0 || box.height > 0; };
+  const setVar = (node, name, value) => { try { node.style.setProperty(name, value); } catch { /* a node without style */ } };
+  const later = (fn, ms) => setTimeout(fn, ms);
+
+  // Keyed nodes under a root, in document order. A key seen twice gets #2.
+  function keyed(host, selector) {
+    const out = new Map();
+    const counts = new Map();
+    for (const node of host.querySelectorAll?.(selector) ?? []) {
+      const base = node.dataset?.key;
+      if (!base) continue;
+      const count = counts.get(base) ?? 0;
+      counts.set(base, count + 1);
+      out.set(count ? `${base}#${count + 1}` : base, node);
+    }
+    return out;
+  }
+  // A leaving element is laid over its old place and fades there. The host
+  // must be a containing block (position other than static); a host that is
+  // not gets no ghosts, and its rows simply go.
+  // Whether a host holds absolute children, read once per host.
+  const blocks = new WeakMap();
+  function holds(host) {
+    if (!blocks.has(host)) { let position = "static"; try { position = getComputedStyle(host).position; } catch { /* static */ } blocks.set(host, position !== "static"); }
+    return blocks.get(host);
+  }
+  function ghost(node, was, host, { lift = -2, duration } = {}) {
+    if (!holds(host)) return;
+    const copy = node.isConnected ? node.cloneNode(true) : node;
+    copy.removeAttribute?.("id");
+    copy.removeAttribute?.("hidden");
+    for (const inner of copy.querySelectorAll?.("[id]") ?? []) inner.removeAttribute("id");
+    copy.setAttribute?.("aria-hidden", "true");
+    copy.inert = true;
+    copy.classList?.add?.("motion-ghost");
+    delete copy.dataset.key;
+    const box = host.getBoundingClientRect();
+    Object.assign(copy.style, {
+      position: "absolute", margin: "0", zIndex: "3", pointerEvents: "none", animation: "none", boxSizing: "border-box",
+      top: `${was.top - box.top - (host.clientTop || 0) + (host.scrollTop || 0)}px`,
+      left: `${was.left - box.left - (host.clientLeft || 0) + (host.scrollLeft || 0)}px`,
+      width: `${was.width}px`, height: `${was.height}px`,
+    });
+    host.append(copy);
+    const time = duration ?? motion().base * 0.8;
+    const run = copy.animate([{ opacity: 1, translate: "0 0", scale: 1 }, { opacity: 0, translate: `0 ${lift}px`, scale: 0.97 }], { duration: time, easing: motion().in, fill: "forwards" });
+    const done = () => copy.remove();
+    run.onfinish = done;
+    run.oncancel = done;
+    later(done, time + 400);
+  }
+
+  /**
+   * Repaint `host` with `paint()` and keep its [data-key] nodes steady:
+   * { selector = "[data-key]", ghosts = true, cascade = true, ghostHost = host, step = 26 }.
+   */
+  function keep(host, paint, options = {}) {
+    if (!live(host)) { paint(); return; }
+    const selector = options.selector ?? "[data-key]";
+    const cascade = options.cascade !== false;
+    // A host that is off screen (a panel opening) has nothing to glide from:
+    // it paints, numbers its rows for their cascade and reads no layout.
+    const before = host.closest?.("[hidden]") ? new Map() : keyed(host, selector);
+    const rects = new Map();
+    for (const [key, node] of before) { const box = node.getBoundingClientRect(); if (box.width || box.height) rects.set(key, box); }
+    paint();
+    const after = keyed(host, selector);
+    const moved = new Map();
+    let fresh = 0;
+    for (const [key, node] of after) {
+      const was = rects.get(key);
+      if (!was) {
+        delete node.dataset.kept;
+        setVar(node, "--i", String(cascade ? Math.min(fresh, 12) : 0));
+        setVar(node, "--motion-step", `${options.step ?? 26}ms`);
+        fresh += 1;
+        continue;
+      }
+      node.dataset.kept = "";
+      const now = node.getBoundingClientRect();
+      if (!now.width && !now.height) continue;
+      const dx = was.left - now.left, dy = was.top - now.top;
+      if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) moved.set(node, [dx, dy]);
+    }
+    // A keyed node inside another that moves travels with it: it only
+    // animates its own share of the move.
+    for (const [node, [dx, dy]] of moved) {
+      let parent = node.parentElement;
+      let ox = 0, oy = 0;
+      while (parent && parent !== host) {
+        const outer = moved.get(parent);
+        if (outer) { ox = outer[0]; oy = outer[1]; break; }
+        parent = parent.parentElement;
+      }
+      const x = dx - ox, y = dy - oy;
+      if (Math.abs(x) <= 0.5 && Math.abs(y) <= 0.5) continue;
+      node.animate([{ translate: `${x}px ${y}px` }, { translate: "0 0" }], { duration: motion().spring * 0.75, easing: motion().springy });
+    }
+    if (options.ghosts === false) return;
+    const ghostHost = options.ghostHost ?? host;
+    for (const [key, node] of before) {
+      const was = rects.get(key);
+      if (!was) continue;
+      const now = after.get(key);
+      if (now && shown(now)) continue;
+      ghost(node, was, ghostHost);
+    }
+  }
+
+  /** Swap a view in `box`: dir 1 goes deeper, -1 comes back, 0 goes across. */
+  function swap(box, paint, { dir = 0, axis = "x" } = {}) {
+    const shift = (px) => (axis === "y" ? `0 ${px}px` : `${px}px 0`);
+    const host = box?.parentElement;
+    if (!live(box) || !host || box.closest?.("[hidden]") || !shown(box)) { paint(); return; }
+    const time = motion();
+    if (holds(host) && box.childNodes.length) {
+      // The old view leaves as it was, scrolled where it was, over the new one.
+      // It fades through: out fast, and the new view only starts as it goes,
+      // so the two never sit on top of each other half-read.
+      const was = box.getBoundingClientRect();
+      const outer = host.getBoundingClientRect();
+      const copy = box.cloneNode(false);
+      copy.removeAttribute("id");
+      copy.setAttribute("aria-hidden", "true");
+      copy.inert = true;
+      copy.classList.add("motion-ghost");
+      // Scrolled where it was without writing scrollTop (a write forces a
+      // layout): the copy sits higher by the scroll and clips it away.
+      const scroll = box.scrollTop;
+      copy.append(...box.childNodes);
+      Object.assign(copy.style, { position: "absolute", margin: "0", zIndex: "3", pointerEvents: "none", overflow: "hidden", top: `${was.top - outer.top - (host.clientTop || 0) - scroll}px`, left: `${was.left - outer.left - (host.clientLeft || 0)}px`, width: `${was.width}px`, height: `${was.height + scroll}px`, clipPath: scroll ? `inset(${scroll}px 0 0 0)` : "" });
+      host.append(copy);
+      const run = copy.animate([{ opacity: 1, translate: "0 0" }, { opacity: 0, translate: dir ? shift(-dir * (axis === "y" ? 16 : 28)) : "0 -6px" }], { duration: time.fast * 0.75, easing: time.in, fill: "forwards" });
+      const done = () => copy.remove();
+      run.onfinish = done;
+      run.oncancel = done;
+      later(done, time.base + 400);
+    }
+    const scrolled = box.scrollTop;
+    paint();
+    if (scrolled) box.scrollTop = 0;
+    box.animate([{ opacity: 0, translate: dir ? shift(dir * (axis === "y" ? 22 : 36)) : "0 10px" }, { opacity: 1, offset: 0.45 }, { opacity: 1, translate: "0 0" }], { duration: time.slow + 40, delay: time.fast * 0.55, easing: time.emphasized, fill: "backwards" });
+  }
+  function enter(node, { dir = 0, delay = 0 } = {}) {
+    if (!live(node)) return;
+    node.animate([{ opacity: 0, translate: dir ? `${dir * 12}px 0` : "0 4px" }, { opacity: 1, translate: "0 0" }], { duration: motion().slow, delay, easing: motion().emphasized, fill: "backwards" });
+  }
+
+  /**
+   * Put a selection mark over `target` (both inside the same positioned
+   * parent): it springs there through --glide-x/-y/-w/-h. The first time it
+   * appears in place rather than flying in from the corner.
+   */
+  function glide(mark, target) {
+    if (!mark) return;
+    if (!target || !shown(target)) { if (mark.dataset) mark.dataset.on = "false"; return; }
+    const arriving = mark.dataset?.on !== "true";
+    if (arriving) mark.style.transition = "none";
+    setVar(mark, "--glide-x", `${target.offsetLeft}px`);
+    setVar(mark, "--glide-y", `${target.offsetTop}px`);
+    setVar(mark, "--glide-w", `${target.offsetWidth}px`);
+    setVar(mark, "--glide-h", `${target.offsetHeight}px`);
+    if (arriving) {
+      void mark.offsetWidth;
+      mark.style.transition = "";
+    }
+    mark.dataset.on = "true";
+  }
+
+  /** Count a number up or down to `value` (text only; a label wraps it). */
+  function tally(node, value, { format = (number) => String(Math.round(number)) } = {}) {
+    if (!node) return;
+    const to = Number(value) || 0;
+    const from = Number(node.dataset?.value);
+    if (node.dataset) node.dataset.value = String(to);
+    if (!Number.isFinite(from) || from === to || !live(node) || typeof requestAnimationFrame !== "function") { node.textContent = format(to); return; }
+    const start = performance.now();
+    const time = motion().slow + 120;
+    const step = (at) => {
+      if (node.dataset.value !== String(to)) return;
+      const t = Math.min(1, (at - start) / time);
+      const eased = 1 - Math.pow(1 - t, 3);
+      node.textContent = format(from + (to - from) * eased);
+      if (t < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  window.MefiMotion = { keep, swap, enter, glide, tally, off };
+})();
+
 // Mefi's Studio AI+ — navigation registry for Home, Work, Live and Models,
 // project-scoped recent tasks, the local view row, Search, Help and shortcuts.
 // Classic tabs, dock and sheet links resolve through this same registry.
@@ -15792,6 +16213,27 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       open: () => window.MefiPalette?.open?.(),
       close: () => window.MefiPalette?.close?.(),
       isOpen: () => overlayOpen("palette-overlay"),
+    },
+    {
+      id: "config",
+      label: "Configuration",
+      short: "Configuration",
+      kind: "overlay",
+      layer: "transient",
+      section: "settings",
+      group: "system",
+      key: "Ctrl Shift ,",
+      keyMatch: (event) => Boolean(event?.ctrlKey || event?.metaKey) && event.shiftKey && !event.altKey && (event.key === "<" || event.key === ","),
+      glyph: "g-sliders",
+      badge: null,
+      desc: "Every setting in one searchable tree, filed by what it does",
+      searchTerms: "configuration config settings preferences options all settings tree search scale zoom interface",
+      showIn: showIn({ tools: true, palette: true, help: true }),
+      element: "config-overlay",
+      focus: "#config-search",
+      open: (params) => window.MefiConfig?.open?.(params),
+      close: () => window.MefiConfig?.close?.(),
+      isOpen: () => overlayOpen("config-overlay"),
     },
     {
       id: "music", label: "Appearance", short: "Appearance", kind: "action", layer: null, section: "settings",
@@ -50220,6 +50662,297 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   else init();
 })();
 
+// Configuration: every setting Studio has, in one searchable tree (Build's
+// Ctrl Shift ,). Settings lives in several places — Settings' own cards, the
+// Agents setup panes, Appearance — and each of them registers its controls
+// with the navigation registry as `settings:*` records for Search. This
+// dialog reads those same records, files them under seven categories (by the
+// page a setting lives on, then by its words), and opens the real control
+// when you pick one, so there is never a second copy of a setting to drift.
+// It also holds the one setting that has no page of its own: the interface
+// scale. Moving between categories slides the pane the way the tree goes and
+// a mark follows the current category (renderer/motion.js).
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(`config-${id}`);
+  const api = () => window.mefiStudio;
+  const motion = () => window.MefiMotion;
+  const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = String(text); return node; };
+  // Category, title, what it covers, and the words that file a setting there.
+  const CATEGORIES = [
+    { id: "agents", title: "Inference & Agents", about: "Who thinks and who builds: providers, models, roles, seats and routing.", words: /\b(model|models|provider|providers|seat|seats|role|roles|routing|fallback|effort|reasoning|openai|anthropic|claude|codex|opencode|grok|jev|api key|keys?|connection|subscription)\b/i },
+    { id: "knowledge", title: "Knowledge", about: "What agents read before they work: references, context, memory and the project map.", words: /\b(reference|references|context|scout|memory|playbook|project map|history|brief|learn|learned|preferences)\b/i },
+    { id: "exec", title: "Files & Exec", about: "How work runs: builders, parallel workers, worktrees, tools, skills and approvals.", words: /\b(worker|workers|builder|builders|parallel|worktree|worktrees|executor|tool|tools|mcp|skill|skills|desk|delegat\w*|pipeline|pipelines|verify|approval|approve|build|queue|autopilot|backlog|permission|elevated|swarm|cluster)\b/i },
+    { id: "web", title: "Web & Community", about: "Everything that reaches out: the web, updates, Discord and listening rooms.", words: /\b(web|link|links|discord|community|update|updates|release|github|browser|radio|stream|together|youtube|spotify)\b/i },
+    { id: "storage", title: "Storage", about: "What Studio keeps: projects, data, backups, pruning and cleanup.", words: /\b(project|projects|data|storage|backup|prune|pruning|compact\w*|cache|folder|clean\w*|archive)\b/i },
+    { id: "ui", title: "UI & Surfaces", about: "How Studio looks and sounds: themes, nodes, motion, glass, Vibe and what opens on launch.", words: /\b(appearance|theme|themes|colou?rs?|node|nodes|motion|blur|glass|layout|sound|audio|music|vibe|launch|home|font|scale|companion|name|camera|ambient)\b/i },
+    { id: "dev", title: "Dev & Meta", about: "Diagnostics, logs, performance and everything else.", words: /./ },
+  ];
+  // The page a setting lives on files it first; only a page that mixes
+  // concerns (System, Agents) lets the words decide. Appearance's "Zen mode"
+  // is a look, not an OpenCode Zen key.
+  const PLACES = [
+    { path: /^Settings › (Appearance|Audio)\b/, category: "ui" },
+    { path: /^Settings › General › Community\b/, category: "web" },
+    { path: /^Settings › General\b/, category: "ui" },
+    { path: /^Settings › (Connections|Models)\b/, category: "agents" },
+    { path: /^Settings › Automation › Memory\b/, category: "knowledge" },
+    { path: /^Settings › Automation\b/, category: "exec" },
+    { path: /^Settings › System\b/, words: /\b(update|updates|github|discord|styler|dashboard|bot)\b/i, category: "web", otherwise: "dev" },
+    { path: /^Agents\b/, words: /\b(builders? run on|parallel builds|build approval|agent coordination|allow new work|run the queue|each build may cost|pinned model for this cli)\b/i, category: "exec", otherwise: "agents" },
+  ];
+  // Buttons that only act on the field beside them (Save, Add, Refresh list)
+  // and links out of a card are reached through that field or card: listed
+  // alone they read as five identical "Save" rows.
+  const NOISE = /^(save|add|stop|save token|refresh list|refresh selection|use for (routine|heavy)|close appearance|copy agent prompt|join the discord|manage in settings › community)$/i;
+  const state = { query: "", category: "agents", zoom: null, previous: null, painted: null, buttons: null, mark: null };
+  let initialized = false;
+  const isOpen = () => Boolean($("overlay")) && !$("overlay").hidden;
+
+  // ---- the settings, from the registry ---------------------------------------------------
+  function categoryOf(label, words) {
+    for (const place of PLACES) {
+      if (!place.path.test(label)) continue;
+      if (!place.words) return place.category;
+      return place.words.test(words) ? place.category : place.otherwise;
+    }
+    return CATEGORIES.find((item) => item.words.test(words))?.id ?? "dev";
+  }
+  function records() {
+    const list = window.MefiNav?.list?.({}) ?? [];
+    const seen = new Set();
+    const named = new Set();
+    const rows = [];
+    for (const record of list) {
+      if (!record || typeof record.id !== "string" || !record.id.startsWith("settings:") || seen.has(record.id)) continue;
+      if (typeof record.hidden === "function" && record.hidden()) continue;
+      seen.add(record.id);
+      const label = String(record.label || record.short || record.id);
+      const path = label.split(" › ").map((part) => part.trim()).filter(Boolean);
+      const title = path.at(-1) || record.id;
+      if (NOISE.test(title)) continue;
+      // One row per setting: a picker registered twice (its field and its
+      // choices) is one setting.
+      if (named.has(label)) continue;
+      named.add(label);
+      const words = `${label} ${record.desc || ""} ${record.searchTerms || ""}`;
+      rows.push({ id: record.id, title, path, where: path.slice(0, -1).join(" › "), desc: String(record.desc || ""), terms: words.toLowerCase(), category: categoryOf(label, words), run: record.run });
+    }
+    return rows;
+  }
+  function matches(rows) {
+    const words = state.query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) return rows;
+    return rows.filter((row) => words.every((word) => row.terms.includes(word)));
+  }
+  // An empty category stays out of the tree, except UI & Surfaces, which
+  // always holds the interface scale.
+  const listed = (category, count) => count > 0 || category?.id === "ui";
+
+  // ---- painting ---------------------------------------------------------------------------
+  // The category buttons are built once and kept, so the mark behind the
+  // current one can spring from one to the next.
+  function treeButtons() {
+    if (state.buttons) return state.buttons;
+    const tree = $("tree");
+    state.buttons = new Map();
+    for (const category of CATEGORIES) {
+      const button = el("button", "config-category");
+      button.type = "button";
+      button.dataset.category = category.id;
+      button.append(el("span", "config-category-title", category.title), el("span", "config-category-count", "0"));
+      button.addEventListener("click", () => { state.category = category.id; if (state.query) { state.query = ""; $("search").value = ""; } render(); });
+      tree.append(button);
+      state.buttons.set(category.id, button);
+    }
+    const mark = el("span", "config-tree-mark");
+    mark.setAttribute("aria-hidden", "true");
+    tree.append(mark);
+    state.mark = mark;
+    return state.buttons;
+  }
+  function render() {
+    const rows = records();
+    const shown = matches(rows);
+    const counts = new Map(CATEGORIES.map((category) => [category.id, 0]));
+    for (const row of (state.query ? shown : rows)) counts.set(row.category, counts.get(row.category) + 1);
+    if (!state.query && !listed(CATEGORIES.find((item) => item.id === state.category), counts.get(state.category))) {
+      state.category = CATEGORIES.find((category) => listed(category, counts.get(category.id)))?.id ?? "ui";
+    }
+    const buttons = treeButtons();
+    for (const category of CATEGORIES) {
+      const button = buttons.get(category.id);
+      const count = counts.get(category.id);
+      button.hidden = state.query ? count === 0 : !listed(category, count);
+      button.children[1].textContent = String(count);
+      button.setAttribute("aria-current", String(!state.query && category.id === state.category));
+    }
+    motion()?.glide?.(state.mark, state.query ? null : buttons.get(state.category));
+    paintPane(rows, shown);
+  }
+  // A new category slides in the way the tree goes (down the list from
+  // below, back up from above). Typing keeps the rows that still match and
+  // glides them into place; clearing the search fades back to the category.
+  function paintPane(rows, shown) {
+    const pane = $("pane");
+    const place = state.query ? "search" : state.category;
+    const before = state.painted;
+    state.painted = place;
+    const paint = () => {
+      pane.replaceChildren();
+      if (state.query) paintResults(pane, shown);
+      else paintCategory(pane, CATEGORIES.find((item) => item.id === state.category) ?? CATEGORIES[0], rows.filter((row) => row.category === state.category));
+    };
+    const order = (id) => CATEGORIES.findIndex((item) => item.id === id);
+    if (!motion() || before === null) { paint(); return; }
+    if (before === place || place === "search") motion().keep(pane, paint);
+    else motion().swap(pane, paint, { dir: before === "search" ? 0 : Math.sign(order(place) - order(before)), axis: "y" });
+  }
+  function paintCategory(pane, category, rows) {
+    const head = el("header", "config-pane-head");
+    head.append(el("h3", "config-pane-title", category.title), el("p", "config-pane-about", category.about));
+    pane.append(head);
+    if (category.id === "ui") pane.append(scaleControl());
+    if (!rows.length) { if (category.id !== "ui") pane.append(el("p", "config-empty", "Nothing is filed here yet.")); return; }
+    // Grouped by where each setting lives (Settings › General, Agents …).
+    const groups = new Map();
+    for (const row of rows) { const key = row.where || "Studio"; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(row); }
+    for (const [where, items] of groups) {
+      const section = el("section", "config-group");
+      const title = el("h4", "config-group-title");
+      title.append(el("span", "config-group-name", where), el("span", "config-group-count", String(items.length)));
+      section.append(title);
+      const list = el("ul", "config-items");
+      for (const row of items) list.append(item(row));
+      section.append(list);
+      pane.append(section);
+    }
+  }
+  function paintResults(pane, rows) {
+    const head = el("header", "config-pane-head");
+    head.append(el("h3", "config-pane-title", rows.length ? `${rows.length} setting${rows.length === 1 ? "" : "s"} match` : "No setting matches"));
+    if (!rows.length) head.append(el("p", "config-pane-about", "Try a shorter word, or a word from what the setting does."));
+    pane.append(head);
+    if (!rows.length) return;
+    const list = el("ul", "config-items");
+    for (const row of rows.slice(0, 80)) list.append(item(row, true));
+    pane.append(list);
+  }
+  function item(row, withCategory = false) {
+    const li = el("li", "config-row");
+    li.dataset.key = row.id;
+    const button = el("button", "config-item");
+    button.type = "button";
+    button.dataset.setting = row.id;
+    const words = el("span", "config-item-words");
+    words.append(el("span", "config-item-title", row.title));
+    // In a category the group heading already says where; a match says both.
+    const meta = withCategory ? [CATEGORIES.find((category) => category.id === row.category)?.title, row.where].filter(Boolean).join(" · ") : row.desc && !row.where.endsWith(row.desc) ? row.desc : "";
+    if (meta) words.append(el("span", "config-item-meta", meta));
+    const go = el("span", "config-item-go", "Open");
+    go.setAttribute("aria-hidden", "true");
+    button.append(words, go);
+    button.addEventListener("click", () => pick(row));
+    li.append(button);
+    return li;
+  }
+  // Picking a setting opens its real control: the dialog steps aside first.
+  function pick(row) {
+    close();
+    try { row.run?.(); } catch { window.MefiToast?.("That setting could not be opened.", "bad"); }
+  }
+
+  // ---- the interface scale -----------------------------------------------------------------
+  function scaleControl() {
+    const box = el("div", "config-scale");
+    box.dataset.key = "scale";
+    const label = el("label", "config-scale-row");
+    const slider = el("input");
+    slider.type = "range"; slider.min = "70"; slider.max = "150"; slider.step = "5";
+    slider.value = String(Math.round((state.zoom ?? 1) * 100));
+    slider.setAttribute("aria-label", "Interface scale");
+    const value = el("span", "config-scale-value", `${slider.value}%`);
+    label.append(el("span", "config-scale-name", "Interface scale"), slider, value);
+    const reset = el("button", "ghost mini", "Reset to 100%");
+    reset.type = "button";
+    const hint = el("p", "config-pane-about", api()?.uiZoom ? "Scales every page, text included. Saved for the next launch." : "The interface scale is set in the desktop app.");
+    slider.disabled = !api()?.uiZoom;
+    reset.disabled = !api()?.uiZoom;
+    // The track fills up to the thumb (config-dialog.css reads --fill).
+    const fill = () => slider.style?.setProperty?.("--fill", `${((Number(slider.value) - 70) / 80) * 100}%`);
+    fill();
+    slider.addEventListener("input", () => { value.textContent = `${slider.value}%`; fill(); });
+    slider.addEventListener("change", () => void setZoom(Number(slider.value) / 100));
+    reset.addEventListener("click", () => { slider.value = "100"; value.textContent = "100%"; fill(); void setZoom(1); });
+    const foot = el("div", "config-scale-foot");
+    foot.append(hint, reset);
+    box.append(label, foot);
+    return box;
+  }
+  async function setZoom(factor) {
+    try {
+      const result = await api().uiZoom({ factor });
+      if (result?.ok === false) throw new Error(result.error || "The scale was not saved.");
+      state.zoom = result?.factor ?? factor;
+    } catch (error) { window.MefiToast?.(error?.message || "The scale was not saved.", "bad"); }
+  }
+
+  // ---- the dialog ----------------------------------------------------------------------------
+  async function open(params = {}) {
+    init();
+    state.previous = document.activeElement;
+    if (typeof params?.category === "string" && CATEGORIES.some((item) => item.id === params.category)) state.category = params.category;
+    state.query = typeof params?.query === "string" ? params.query : "";
+    $("search").value = state.query;
+    // A fresh open paints in place and the mark appears where it belongs;
+    // the sheet's own entrance carries both.
+    state.painted = null;
+    if (state.mark?.dataset) state.mark.dataset.on = "false";
+    $("overlay").hidden = false;
+    render();
+    requestAnimationFrame(() => $("search")?.focus?.({ preventScroll: true }));
+    if (api()?.uiZoomGet) {
+      try { const result = await api().uiZoomGet(); if (result?.ok !== false && Number.isFinite(result?.factor)) { state.zoom = result.factor; if (isOpen() && state.category === "ui" && !state.query) render(); } } catch { /* the slider shows 100% */ }
+    }
+  }
+  function close() {
+    if (!isOpen()) return;
+    $("overlay").hidden = true;
+    const back = state.previous;
+    state.previous = null;
+    if (back && document.contains?.(back)) back.focus?.({ preventScroll: true });
+  }
+  // Up and Down walk the categories from the tree.
+  function step(delta) {
+    const shown = CATEGORIES.filter((category) => !state.buttons?.get(category.id)?.hidden);
+    const at = shown.findIndex((category) => category.id === state.category);
+    const next = shown[Math.max(0, Math.min(shown.length - 1, at + delta))];
+    if (!next || next.id === state.category) return;
+    state.category = next.id;
+    render();
+    state.buttons.get(next.id)?.focus?.({ preventScroll: true });
+  }
+  function init() {
+    if (initialized || !$("overlay")) return;
+    initialized = true;
+    $("close").addEventListener("click", () => close());
+    $("search").addEventListener("input", () => { state.query = $("search").value; render(); });
+    $("search").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") { const first = $("pane").querySelector(".config-item"); if (first) { event.preventDefault(); first.click(); } }
+      else if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); if ($("search").value) { $("search").value = ""; state.query = ""; render(); } else close(); }
+    });
+    $("tree").addEventListener("keydown", (event) => {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); step(event.key === "ArrowDown" ? 1 : -1); }
+    });
+    $("overlay").addEventListener("click", (event) => { if (event.target === $("overlay")) close(); });
+    $("overlay").addEventListener("keydown", (event) => { if (event.key === "Escape" && event.target !== $("search")) { event.preventDefault(); event.stopPropagation(); close(); } });
+  }
+
+  window.MefiConfig = { open, close, isOpen, categories: () => CATEGORIES.map(({ id, title }) => ({ id, title })), records: () => records().map(({ id, title, where, category }) => ({ id, title, where, category })) };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+
 // Mefi's Studio AI+ — A-Eyes: change feed, diffs, PNG evidence with pins, log tail.
 (function () {
   "use strict";
@@ -50893,6 +51626,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       item.append(button);
       list.append(item);
     }
+    // One mark sits behind the open channel and springs to the next one
+    // (renderer/motion.js); the list is rebuilt, so the mark lives beside it.
+    const box = list.parentElement;
+    let mark = box?.querySelector?.(".trace-channel-mark");
+    if (box && !mark) { mark = el("span", "trace-channel-mark"); mark.setAttribute("aria-hidden", "true"); box.append(mark); }
+    window.MefiMotion?.glide?.(mark, list.querySelector?.('.trace-channel[aria-current="true"]'));
     const current = state.channels.find((channel) => channel.id === state.channel);
     $("channel-detail").textContent = current?.error ? `${current.detail} It could not be read: ${current.error}` : current?.detail || "";
   }
@@ -50933,6 +51672,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       return item;
     }));
     if (pinned) lines.scrollTop = state.newest ? 0 : lines.scrollHeight;
+    // Another channel's log arrives with a short rise; a tail that grows
+    // does not.
+    if (state.painted !== state.channel) { state.painted = state.channel; window.MefiMotion?.enter?.(lines); }
   }
   function choose(id) {
     if (id === state.channel) return;
@@ -59075,6 +59817,15 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     root.append(note);
   }
+  // A click anywhere else closes an open permissions menu, like every other menu.
+  document.addEventListener?.("pointerdown", (event) => {
+    for (const menu of document.querySelectorAll?.(".autonomy-popover:not([hidden])") ?? []) {
+      const control = menu.closest?.(".autonomy-control");
+      if (control?.contains?.(event.target)) continue;
+      menu.hidden = true;
+      control?.querySelector?.(".autonomy-chip")?.setAttribute("aria-expanded", "false");
+    }
+  }, true);
   function mount(root, options = {}) { if (!root) return; mounts.set(root, options); paint(root, options); if (!current || options.full && !learned) void refresh({ learning: options.full }); }
   function history(root, data = current) {
     root.replaceChildren(); root.classList.add("autonomy-history");
@@ -62665,7 +63416,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   function addonPanel(id, title, provider, config, saved) {
     const panel = node("div", "agents-addons"); panel.id = `agent-${id}-addons`; panel.hidden = true;
-    panel.append(node("h4", "", `Skills & tools · ${title}`));
+    panel.append(node("h4", "", `Skills, tools & habits · ${title}`));
     const list = node("div", "agents-skill-list"), selected = config.agentSkills?.[id] || [];
     for (const skill of saved.skills || []) {
       const input = node("input"); input.type = "checkbox"; input.checked = selected.includes(skill.id);
@@ -62709,7 +63460,60 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       panel.append(field("Studio desk · ask_desk", input, supported ? "Give this coding worker an MCP tool for help from the desk agent." : "Available with OpenCode and Claude Code workers."));
       panel.append(node("p", "muted", supportedTools ? "Studio search and selected MCP tools attach to this worker. The coding CLI also has its own tools and runs with automatic approval and broad file/command access. These checkboxes limit Studio tools only; manage native tools and MCP servers in the CLI configuration." : "Studio tool attachment supports OpenCode and Claude Code. This worker uses its CLI's native search, tools and permissions; it runs with broad file/command access."));
     } else panel.append(node("p", "muted", "Studio enforces these tool choices for every turn. File writes and shell commands are unavailable unless you explicitly select an MCP tool that provides them. Skills guide answers and never grant tool permissions."));
+    panel.append(habitsPanel(id, config, saved));
     return panel;
+  }
+  // Habits (scripts/habits.cjs): short rules of behaviour for this agent, each
+  // with its variants and off / brief / full, and what it adds to every prompt.
+  function habitsPanel(id, config, saved) {
+    const box = node("section", "agents-habits"); box.id = `agent-${id}-habits`;
+    const library = Array.isArray(saved.habits) ? saved.habits : [];
+    const heading = node("h4", "", "Habits");
+    const totalNote = node("p", "muted agents-habits-total");
+    box.append(heading, totalNote);
+    const chosen = () => config.agentHabits?.[id] || {};
+    const paintTotal = () => {
+      let sum = 0;
+      for (const habit of library) { const pick = chosen()[habit.id]; if (pick && pick.mode !== "off") sum += habit.costs?.[pick.variant]?.[pick.mode] || 0; }
+      if (!sum) { totalNote.removeAttribute?.("aria-label"); totalNote.textContent = "No habit is on for this agent."; return; }
+      // The number counts to its new value (renderer/motion.js); a screen
+      // reader gets the settled sentence at once.
+      totalNote.setAttribute("aria-label", `These habits add about ${sum} tokens to each of this agent's prompts.`);
+      let count = totalNote.querySelector?.(".agents-habits-sum");
+      if (!count) { count = node("b", "agents-habits-sum"); totalNote.replaceChildren("These habits add about ", count, " tokens to each of this agent's prompts."); }
+      if (window.MefiMotion?.tally) window.MefiMotion.tally(count, sum);
+      else count.textContent = String(sum);
+    };
+    const set = (habitId, patch) => {
+      const current = chosen()[habitId] || { variant: library.find((habit) => habit.id === habitId)?.fallback, mode: "off" };
+      config.agentHabits = { ...config.agentHabits, [id]: { ...chosen(), [habitId]: { ...current, ...patch } } };
+      dirty(); paintTotal();
+    };
+    for (const habit of library) {
+      const row = node("div", "agents-habit"); row.dataset.habit = habit.id;
+      const pick = chosen()[habit.id] || { variant: habit.fallback, mode: "off" };
+      const words = node("span", "agents-habit-words");
+      words.append(node("strong", "", habit.title), node("small", "muted", `Fires ${habit.fires}.`));
+      const variants = selectOptions(habit.variants.map((variant) => [variant.id, variant.id]), pick.variant, `${habit.title}: variant`, (value) => { set(habit.id, { variant: value }); paintCosts(); rule.textContent = habit.variants.find((variant) => variant.id === value)?.text || ""; });
+      const modes = node("div", "agents-habit-modes"); modes.setAttribute("role", "radiogroup"); modes.setAttribute("aria-label", `${habit.title}: off, brief or full`);
+      // One thumb slides under the chosen mode (agents.css reads --seg).
+      const mark = (mode) => { modes.dataset.mode = mode; modes.style?.setProperty?.("--seg", String(["off", "brief", "full"].indexOf(mode))); row.dataset.on = String(mode !== "off"); };
+      const buttons = ["off", "brief", "full"].map((mode) => {
+        const choice = node("button", "agents-habit-mode", mode); choice.type = "button"; choice.dataset.mode = mode; choice.setAttribute("role", "radio");
+        choice.setAttribute("aria-checked", String(pick.mode === mode));
+        choice.addEventListener("click", () => { set(habit.id, { mode }); mark(mode); for (const other of buttons) other.setAttribute("aria-checked", String(other === choice)); });
+        modes.append(choice); return choice;
+      });
+      mark(pick.mode || "off");
+      const paintCosts = () => { const costs = habit.costs?.[variants.value] || {}; for (const choice of buttons) choice.title = choice.dataset.mode === "off" ? "Not in the prompt" : `About ${costs[choice.dataset.mode] || 0} tokens`; };
+      paintCosts();
+      const rule = node("p", "muted agents-habit-rule", habit.variants.find((variant) => variant.id === pick.variant)?.text || "");
+      row.append(words, variants, modes, rule);
+      box.append(row);
+    }
+    if (!library.length) box.append(node("p", "muted", "Habits load with the saved settings."));
+    paintTotal();
+    return box;
   }
   function agentRow({ id, title, detail, provider, model, effort = "", fast = false, builder = false, seat = false, setProvider, setModel, setEffort, setFast }, config, saved) {
     const box = node("section", "agents-model-row"); box.dataset.agent = id;
@@ -62935,7 +63739,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 // things, acts on one through the host call its Build page uses, and keeps
 // Full view for the deep version, which opens inside Vibe's rail. One side
 // panel at a time (a menu, the conversation or a decision); inside a panel a
-// row opens its detail, and Back or Esc steps out again.
+// row opens its detail, and Back or Esc steps out again. Moving between
+// panels and details slides the way you went; a push that only changes data
+// keeps the rows that stay (renderer/motion.js).
 (function () {
   "use strict";
   const aside = document.getElementById("vibe-panel");
@@ -62949,7 +63755,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
   const TITLES = { tasks: "Tasks", plans: "Plans", ideas: "Ideas", team: "Team", settings: "Settings", decisions: "Decided for you", newapp: "New app" };
   const EMPTY = { projectId: null, projectName: "", tasks: [], needs: [], running: [], checking: [], next: [], backlog: null, status: {}, assistant: {}, ideas: [], plans: [], gate: null, companion: "Mefi", person: "" };
-  const state = { kind: null, stack: [], data: EMPTY, busy: false, folds: { needs: true, active: true, done: false }, team: null, teamAt: 0, teamFlight: null, signature: "", noteTone: "", draftApp: { name: "", about: "" } };
+  const motion = () => window.MefiMotion;
+  const state = { place: null, depth: 0, kind: null, stack: [], data: EMPTY, busy: false, folds: { needs: true, active: true, done: false }, team: null, teamAt: 0, teamFlight: null, signature: "", noteTone: "", draftApp: { name: "", about: "" } };
   state.taskView = read("mefiStudio.vibe.taskView") === "lanes" ? "lanes" : "list";
   state.inspectorDraft = null;
 
@@ -62964,6 +63771,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (taskId) state.stack.push({ view: "task", id: taskId });
     if (ideaId) state.stack.push({ view: "idea", id: ideaId });
     if (familyId) state.stack.push({ view: "family", id: familyId });
+    if (aside.hidden) state.place = null;
     aside.hidden = false;
     aside.dataset.kind = kind;
     note("");
@@ -62980,6 +63788,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     aside.hidden = true;
     state.kind = null;
     state.stack = [];
+    state.place = null;
     delete aside.dataset.kind;
     vibe()?.paintDock?.();
     // Focus goes back to the stop that opened it, so the keyboard stays put.
@@ -62991,6 +63800,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     note("");
     state.signature = "";
     render();
+    requestAnimationFrame(() => ($("body")?.querySelector?.(".vibe-row-main, button") || $("close"))?.focus?.({ preventScroll: true }));
     return true;
   }
   // Esc: out of a detail first, then out of the panel.
@@ -63013,8 +63823,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     return `${Math.round(ms / 86400000)} d ago`;
   }
   // The same row the cards use, so a panel reads like the front door.
-  function row({ tone, title, meta, action, onOpen }) {
+  function row({ key, tone, title, meta, action, onOpen }) {
     const item = el("li", `vibe-row${tone ? ` is-${tone}` : ""}`);
+    item.dataset.key = key || title;
     const main = el("button", "vibe-row-main");
     main.type = "button";
     main.append(el("span", "vibe-row-dot"), el("span", "vibe-row-title", title));
@@ -63036,6 +63847,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     head.type = "button";
     const opened = state.folds[key] !== false;
     head.setAttribute("aria-expanded", String(opened));
+    head.dataset.key = `fold:${key}`;
     head.append(el("span", "vibe-fold-label", label), el("span", "vibe-fold-count", rows.length ? String(rows.length) : ""), el("span", "vibe-fold-caret"));
     head.addEventListener("click", () => { state.folds = { ...state.folds, [key]: !opened }; state.signature = ""; render(); });
     section.append(head);
@@ -63636,17 +64448,29 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     $("title").textContent = view?.view === "task" ? "Task" : view?.view === "idea" ? "Idea" : view?.view === "family" ? "Plan" : TITLES[state.kind];
     $("back").hidden = !view;
     const body = $("body");
-    body.replaceChildren();
-    if (view?.view === "task") taskDetail(body, view.id);
-    else if (view?.view === "idea") ideaDetail(body, view.id);
-    else if (view?.view === "family") familyDetail(body, view.id);
-    else if (state.kind === "tasks") tasksList(body);
-    else if (state.kind === "plans") plansList(body);
-    else if (state.kind === "ideas") ideasList(body);
-    else if (state.kind === "team") team(body);
-    else if (state.kind === "settings") settings(body);
-    else if (state.kind === "newapp") newAppForm(body);
-    else if (state.kind === "decisions") window.MefiAutonomy?.history(body, { ...state.data.assistant, ...window.MefiAutonomy?.state?.(), projectId: state.data.projectId });
+    const paint = () => {
+      body.replaceChildren();
+      if (view?.view === "task") taskDetail(body, view.id);
+      else if (view?.view === "idea") ideaDetail(body, view.id);
+      else if (view?.view === "family") familyDetail(body, view.id);
+      else if (state.kind === "tasks") tasksList(body);
+      else if (state.kind === "plans") plansList(body);
+      else if (state.kind === "ideas") ideasList(body);
+      else if (state.kind === "team") team(body);
+      else if (state.kind === "settings") settings(body);
+      else if (state.kind === "newapp") newAppForm(body);
+      else if (state.kind === "decisions") window.MefiAutonomy?.history(body, { ...state.data.assistant, ...window.MefiAutonomy?.state?.(), projectId: state.data.projectId });
+    };
+    // Where the panel is: a new place slides (deeper from the right, back
+    // from the left, another panel across); the same place only moves rows.
+    const place = JSON.stringify([state.kind, state.stack]);
+    const moved = state.place !== null && state.place !== place;
+    const dir = state.stack.length > state.depth ? 1 : state.stack.length < state.depth ? -1 : 0;
+    state.place = place;
+    state.depth = state.stack.length;
+    if (!motion()) paint();
+    else if (moved) { motion().swap(body, paint, { dir }); motion().enter($("title"), { dir }); }
+    else motion().keep(body, paint);
     $("full").hidden = ["newapp", "decisions"].includes(state.kind);
     $("full").onclick = () => full();
   }
@@ -63824,6 +64648,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
   // ---- render ---------------------------------------------------------------
   const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = String(text); return node; };
+  // Rows are rebuilt on every paint; MefiMotion (renderer/motion.js) keeps the
+  // ones that stay still, glides them to their new place, cascades what is
+  // new and fades what left. Without it (tests, motion off) a paint just runs.
+  const keep = (host, paint, options) => { if (host && window.MefiMotion?.keep) window.MefiMotion.keep(host, paint, options); else paint(); };
   const signatures = new Map();
   // Skip a paint when its inputs are unchanged, so a push storm stays cheap.
   function changed(key, value) {
@@ -63933,8 +64761,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       button.onclick = () => void gate.action.run();
     }
   }
-  function row({ tone, title, meta, progress, action, onOpen }) {
+  function row({ key, tone, title, meta, progress, action, onOpen }) {
     const item = el("li", `vibe-row${tone ? ` is-${tone}` : ""}`);
+    item.dataset.key = key || title;
     const open = el("button", "vibe-row-main");
     open.type = "button";
     open.append(el("span", "vibe-row-dot"), el("span", "vibe-row-title", title));
@@ -63964,21 +64793,37 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function renderLanes() {
     const data = lanes();
     if (!changed("lanes", [data, projectId(), state.gateBusy])) { sharePanels(); return; }
+    const needCount = data.needs.length;
+    keep($("card-needs")?.parentElement, () => paintLanes(data));
+    renderDock(data);
+
+    renderGate();
+    // The pill says the one thing that matters most: agents held back, then
+    // what waits on you, then what is building.
+    const pulse = $("pulse");
+    const blocked = data.gate && ["held", "key"].includes(data.gate.key);
+    pulse.dataset.tone = blocked || needCount ? "ask" : data.running.length ? "live" : "quiet";
+    $("pulse-text").textContent = blocked ? data.gate.pill : needCount ? `${needCount} need${needCount === 1 ? "s" : ""} you` : data.running.length ? `${data.running.length} building` : data.gate ? data.gate.pill : "All quiet";
+    sharePanels(data);
+  }
+  // Each row's key names its card, so a task that moves from Building to
+  // Freshly done leaves one card and arrives in the other.
+  function paintLanes(data) {
     const building = $("lane-building");
     building.replaceChildren();
     for (const job of data.running.slice(0, 3)) {
       const phase = job.phase ? String(job.phase).replace(/_/g, " ") : "working";
-      building.append(row({ tone: "live", title: job.title || "A task", meta: `${phase} · started ${ago(job.startedAt)}`, progress: job.progress, onOpen: () => go("command", job.taskId ? { selected: `task:${job.taskId}` } : {}) }));
+      building.append(row({ key: `building:${job.taskId || job.title}`, tone: "live", title: job.title || "A task", meta: `${phase} · started ${ago(job.startedAt)}`, progress: job.progress, onOpen: () => go("command", job.taskId ? { selected: `task:${job.taskId}` } : {}) }));
     }
-    for (const task of data.checking.slice(0, Math.max(0, 4 - building.children.length))) building.append(row({ tone: "check", title: task.title || "A finished task", meta: "checking its work", onOpen: () => openTask(task.id) }));
+    for (const task of data.checking.slice(0, Math.max(0, 4 - building.children.length))) building.append(row({ key: `building:${task.id}`, tone: "check", title: task.title || "A finished task", meta: "checking its work", onOpen: () => openTask(task.id) }));
     const heldBack = data.gate && ["held", "paused", "key"].includes(data.gate.key);
-    for (const item of data.next.slice(0, Math.max(0, 4 - building.children.length))) building.append(row({ tone: "next", title: item.title || "Next task", meta: heldBack ? "queued · waiting for the agents" : item.stage === "waiting" ? "waiting for what it depends on" : item.stage === "cooling" ? "trying again soon" : "up next", onOpen: () => openTask(item.id) }));
+    for (const item of data.next.slice(0, Math.max(0, 4 - building.children.length))) building.append(row({ key: `building:${item.id}`, tone: "next", title: item.title || "Next task", meta: heldBack ? "queued · waiting for the agents" : item.stage === "waiting" ? "waiting for what it depends on" : item.stage === "cooling" ? "trying again soon" : "up next", onOpen: () => openTask(item.id) }));
     $("count-building").textContent = data.running.length ? String(data.running.length) : "";
 
     const needs = $("lane-needs");
     needs.replaceChildren();
-    for (const need of data.needs.slice(0, 4)) needs.append(row({ tone: need.tone, title: need.title, meta: need.meta, action: { label: need.verb, run: () => openNeed(need) }, onOpen: () => openNeed(need) }));
-    if (data.needs.length > 4) needs.append(row({ tone: "next", title: `${data.needs.length - 4} more waiting on you`, meta: "in your tasks", onOpen: () => openPanel("tasks", { fold: "needs" }) }));
+    for (const need of data.needs.slice(0, 4)) needs.append(row({ key: `needs:${need.kind}:${need.id}`, tone: need.tone, title: need.title, meta: need.meta, action: { label: need.verb, run: () => openNeed(need) }, onOpen: () => openNeed(need) }));
+    if (data.needs.length > 4) needs.append(row({ key: "needs:more", tone: "next", title: `${data.needs.length - 4} more waiting on you`, meta: "in your tasks", onOpen: () => openPanel("tasks", { fold: "needs" }) }));
     const needCount = data.needs.length;
     $("count-needs").textContent = needCount ? String(needCount) : "";
     layer.dataset.needs = needCount ? "yes" : "no";
@@ -63987,13 +64832,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     finished.replaceChildren();
     for (const task of data.finished) {
       const verified = task.verification?.state === "verified";
-      finished.append(row({ tone: "done", title: task.title || "A task", meta: `${verified ? "verified" : "done"} · ${ago(task.updatedAt || task.createdAt)}`, onOpen: () => openTask(task.id) }));
+      finished.append(row({ key: `done:${task.id}`, tone: "done", title: task.title || "A task", meta: `${verified ? "verified" : "done"} · ${ago(task.updatedAt || task.createdAt)}`, onOpen: () => openTask(task.id) }));
     }
     $("count-done").textContent = "";
 
     const ideas = $("lane-ideas");
     ideas.replaceChildren();
-    for (const idea of data.ideas.slice(0, 3)) ideas.append(row({ tone: "idea", title: idea.title || idea.detail || "An idea", meta: [idea.source, idea.at ? ago(idea.at) : ""].filter(Boolean).join(" · ") || "new idea", action: { label: "Build it", run: () => void promoteIdea(idea) }, onOpen: () => openPanel("ideas", { ideaId: idea.id }) }));
+    for (const idea of data.ideas.slice(0, 3)) ideas.append(row({ key: `ideas:${idea.id}`, tone: "idea", title: idea.title || idea.detail || "An idea", meta: [idea.source, idea.at ? ago(idea.at) : ""].filter(Boolean).join(" · ") || "new idea", action: { label: "Build it", run: () => void promoteIdea(idea) }, onOpen: () => openPanel("ideas", { ideaId: idea.id }) }));
     $("count-ideas").textContent = data.ideas.length > 3 ? String(data.ideas.length) : "";
 
     // A request split into steps: where it stands, its steps as marks, and
@@ -64004,9 +64849,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const waiting = data.needs.find((need) => need.kind === "family" && need.id === family.id);
       const current = family.steps.find((step) => step.state === "running") || family.steps.find((step) => step.state === "checking");
       const meta = `${family.finished} of ${family.steps.length} steps done${current ? ` · ${STEP_STATES[current.state]}: ${current.title}` : waiting ? " · waiting for your go-ahead" : family.final === "running" ? " · final check running" : family.final === "next" ? " · final check next" : ""}`;
-      plan.append(row({ tone: waiting ? "ask" : current || family.final === "running" ? "live" : "next", title: family.title, meta, progress: family.steps.length ? family.finished / family.steps.length : undefined,
+      plan.append(row({ key: `plan:${family.id}`, tone: waiting ? "ask" : current || family.final === "running" ? "live" : "next", title: family.title, meta, progress: family.steps.length ? family.finished / family.steps.length : undefined,
         action: waiting ? { label: "Start all", run: () => openNeed(waiting) } : null, onOpen: () => openPanel("plans", { familyId: family.id }) }));
       const marks = el("li", "vibe-steps");
+      marks.dataset.key = `plan:${family.id}:steps`;
       marks.setAttribute("aria-label", `Steps of ${family.title}`);
       for (const step of family.steps) { const mark = el("span", `vibe-step is-${step.state}`, step.title); mark.title = `${step.title}: ${STEP_STATES[step.state]}`; marks.append(mark); }
       plan.append(marks);
@@ -64020,16 +64866,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const visible = Object.values(shown).filter(Boolean).length;
     layer.dataset.cards = visible ? "some" : "none";
     $("quiet").hidden = visible > 0 || Boolean(data.gate);
-    renderDock(data);
-
-    renderGate();
-    // The pill says the one thing that matters most: agents held back, then
-    // what waits on you, then what is building.
-    const pulse = $("pulse");
-    const blocked = data.gate && ["held", "key"].includes(data.gate.key);
-    pulse.dataset.tone = blocked || needCount ? "ask" : data.running.length ? "live" : "quiet";
-    $("pulse-text").textContent = blocked ? data.gate.pill : needCount ? `${needCount} need${needCount === 1 ? "s" : ""} you` : data.running.length ? `${data.running.length} building` : data.gate ? data.gate.pill : "All quiet";
-    sharePanels(data);
   }
 
   // ---- the dock ---------------------------------------------------------------
@@ -64044,13 +64880,27 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function renderDock(data) {
     const stops = dockStops(data);
     const open = window.MefiVibePanels?.current?.() ?? null;
+    const standing = [];
     for (const key of STOPS) {
       const button = $(`stop-${key}`);
       if (!button) continue;
       // An open panel keeps its own stop, even after its last item leaves.
       button.hidden = !stops[key] && open !== key;
+      if (!button.hidden) standing.push(key);
       if (PANEL_STOPS.has(key)) button.setAttribute("aria-pressed", String(open === key));
     }
+    // One mark sits behind the open panel's stop and springs to the next one
+    // (vibe.css .vibe-dock-mark); every stop is the same width, so its place
+    // is a slot number, right even while a stop is still stepping in or out.
+    const dock = $("dock");
+    const slot = PANEL_STOPS.has(open) ? standing.indexOf(open) : -1;
+    // A mark that was off appears at its stop instead of sliding from the last.
+    const mark = dock?.querySelector?.(".vibe-dock-mark");
+    const arriving = slot >= 0 && mark?.style && dock.dataset?.marked !== "yes";
+    if (arriving) mark.style.transition = "none";
+    if (slot >= 0) dock?.style?.setProperty?.("--slot", String(slot));
+    if (arriving) { void mark.offsetWidth; mark.style.transition = ""; }
+    if (dock?.dataset) dock.dataset.marked = slot >= 0 ? "yes" : "no";
   }
 
   // ---- panels -------------------------------------------------------------------
@@ -64107,10 +64957,21 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     $("chat-title").textContent = companion();
     const thread = $("thread");
     const pinned = thread.scrollTop + thread.clientHeight >= thread.scrollHeight - 40;
+    keep(thread, () => paintThread(thread, list, confirms), { ghosts: false, cascade: false });
+    if (pinned || state.pending) thread.scrollTop = thread.scrollHeight;
+    const last = [...list].reverse().find((message) => message.role === "assistant");
+    $("last").hidden = !last || state.chatOpen;
+    if (last) { $("last-who").textContent = companion(); $("last-text").textContent = last.text; }
+    if (state.chatOpen) state.seenMessageId = list.at(-1)?.id ?? state.seenMessageId;
+    const unread = Boolean(list.at(-1)?.id && list.at(-1).id !== state.seenMessageId && !state.chatOpen && list.at(-1)?.role === "assistant");
+    $("chat-dot").hidden = !unread;
+  }
+  function paintThread(thread, list, confirms) {
     thread.replaceChildren();
     if (!list.length) thread.append(el("li", "vibe-empty", `Ask ${companion()} anything about this project. Replies show up here.`));
     for (const message of list) {
       const item = el("li", `vibe-msg is-${message.role}${message.kind === "notice" ? " is-notice" : ""}`);
+      item.dataset.key = message.id || `${message.role}:${message.at ?? ""}:${String(message.text ?? "").slice(0, 40)}`;
       item.append(el("span", "vibe-msg-who", message.role === "user" ? person() || "You" : companion()), el("p", "vibe-msg-text", message.text));
       if (message.role === "assistant" && Array.isArray(message.offers)) {
         const chips = el("div", "vibe-chat-choices");
@@ -64131,7 +64992,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       thread.append(item);
     }
     for (const question of confirms) {
-      const item = el("li", "vibe-msg is-assistant vibe-inline-confirm"); item.append(el("p", "vibe-msg-text", question.title));
+      const item = el("li", "vibe-msg is-assistant vibe-inline-confirm"); item.dataset.key = `confirm:${question.id}`; item.append(el("p", "vibe-msg-text", question.title));
       const controls = el("div", "vibe-chat-choices");
       for (const option of question.options || []) {
         const pick = el("button", "vibe-btn quiet", option.id === "yes" ? "Yes" : option.id === "no" ? "No" : option.label); pick.type = "button";
@@ -64147,14 +65008,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         }); controls.append(pick);
       } item.append(controls); thread.append(item);
     }
-    if (state.pending) { const typing = el("li", "vibe-msg is-assistant is-typing"); typing.append(el("span", "vibe-msg-who", companion()), el("span", "vibe-typing")); typing.lastChild.append(el("i"), el("i"), el("i")); thread.append(typing); }
-    if (pinned || state.pending) thread.scrollTop = thread.scrollHeight;
-    const last = [...list].reverse().find((message) => message.role === "assistant");
-    $("last").hidden = !last || state.chatOpen;
-    if (last) { $("last-who").textContent = companion(); $("last-text").textContent = last.text; }
-    if (state.chatOpen) state.seenMessageId = list.at(-1)?.id ?? state.seenMessageId;
-    const unread = Boolean(list.at(-1)?.id && list.at(-1).id !== state.seenMessageId && !state.chatOpen && list.at(-1)?.role === "assistant");
-    $("chat-dot").hidden = !unread;
+    if (state.pending) { const typing = el("li", "vibe-msg is-assistant is-typing"); typing.dataset.key = "typing"; typing.append(el("span", "vibe-msg-who", companion()), el("span", "vibe-typing")); typing.lastChild.append(el("i"), el("i"), el("i")); thread.append(typing); }
   }
   function renderHead() {
     syncDraft();
@@ -65254,7 +66108,16 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const label = control.closest?.("label") ?? document.querySelector?.(`label[for="${control.id}"]`);
     const named = label?.querySelector?.(".field-label, b, strong, .grow");
     const parts = label ? Array.from(label.children ?? []).filter((node) => !["INPUT", "SELECT", "TEXTAREA", "SMALL"].includes(node.tagName)).map((node) => node.textContent ?? "").join(" ") : "";
-    return String(control.getAttribute?.("aria-label") || named?.textContent || parts || (control.tagName === "BUTTON" ? control.textContent : "") || control.getAttribute?.("title") || "").replace(/\s+/g, " ").trim();
+    return String(control.getAttribute?.("aria-label") || named?.textContent || parts || (control.tagName === "BUTTON" ? buttonName(control) : "") || control.getAttribute?.("title") || "").replace(/\s+/g, " ").trim();
+  }
+  // A choice button names itself in bold and explains itself in small print
+  // ("<b>Full</b><small>every animation</small>"): its bold part is its name,
+  // and a button without one reads its pieces apart, not run together.
+  function buttonName(control) {
+    const bold = control.querySelector?.("b, strong");
+    if (bold?.textContent?.trim()) return bold.textContent;
+    const pieces = Array.from(control.childNodes ?? []).map((node) => node.textContent ?? "").filter((text) => text.trim());
+    return pieces.length ? pieces.join(" ") : control.textContent ?? "";
   }
   function settingsEntries() {
     const entries = [];

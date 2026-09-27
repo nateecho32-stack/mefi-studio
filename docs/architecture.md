@@ -347,6 +347,30 @@ settings and per-model work-kind summaries for the shared controls.
   while Home is still underneath. **Blur behind panels** off makes the panels
   solid. The glass is mixed from the theme's own colours, so every theme
   keeps its hue.
+- **Configuration** (Ctrl Shift ,; **All settings in one place** in Settings)
+  lists every setting in one searchable tree. Settings, Agents' setup panes
+  and Appearance already register each control as a `settings:*` record for
+  Search; `renderer/config-dialog.js` files those records under seven
+  categories (the first whose words match) and opens the real control when
+  one is picked, so there is never a second copy to drift. Its UI & Surfaces
+  page adds the interface scale (the window's zoom, 70% to 150%, saved in
+  `settings.ui.zoom` and put back on every page load, `main.cjs` `ui:zoom`).
+- **Menu motion** (`renderer/motion.js`, `window.MefiMotion`): menus still
+  rebuild their rows on each paint, and the helper keeps the pixels calm.
+  Rows carry a `data-key`; `keep()` marks the ones that were there before
+  `data-kept` (CSS stops their entrance), glides them to their new place,
+  numbers new ones `--i` for a cascade and fades removed ones as
+  `.motion-ghost` copies. `swap()` moves between views (panel to panel,
+  list to detail, category to category) by fading the old view out fast and
+  bringing the new one in from the side you went. Both read layout only
+  when something on screen could move. Vibe's cards, panels, chat and dock,
+  Configuration, Trace and the Habits panel use it.
+- Each agent's **Skills, tools & habits** panel (Agents › Setup) now ends
+  with **Habits** (`scripts/habits.cjs`): six short behaviour rules with
+  variants, each off, brief (one line) or full, with its token cost and the
+  total the agent's habits add to every prompt. `agent-addons.cjs` appends a
+  role's habits wherever its skills go (seats, roles, the builder), and a
+  team snapshot carries `agentHabits` like `agentSkills`.
 - **Trace** (Live, next to Activity; `renderer/trace.js`) reads Studio's logs
   as channels: the studio log (every line the host logs, kept in a bounded
   ring since it was only ever streamed to the window), the assistant's log,

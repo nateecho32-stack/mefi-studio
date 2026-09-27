@@ -21,7 +21,7 @@ const RENDERER = path.join(STUDIO, "renderer");
 // Keep in step with the inline list in scripts/build-booklet.mjs; the fixture
 // only counts as faithful while it copies the same inputs the real build reads.
 const INLINE_SCRIPTS = [
-  "file-inputs.js", "autonomy-ui.js",
+  "file-inputs.js", "motion.js", "autonomy-ui.js",
   "performance-core.js",
   "profiler.js",
   "stage-labels.js",
@@ -44,6 +44,7 @@ const INLINE_SCRIPTS = [
   "overhead.js",
   "brains.js",
   "palette.js",
+  "config-dialog.js",
   "eyes.js",
   "trace.js",
   "boot.js",
@@ -97,7 +98,7 @@ async function makeFixtureRoot() {
   await copyFile(path.join(RENDERER, "profiler.css"), path.join(renderer, "profiler.css"));
   await copyFile(path.join(RENDERER, "brains.css"), path.join(renderer, "brains.css"));
   await copyFile(path.join(RENDERER, "agent-brain.css"), path.join(renderer, "agent-brain.css"));
-  for (const name of ["studio-ui.css", "agents.css", "companion-ui.css", "companion-hub.css", "vibe.css", "trace.css"]) await copyFile(path.join(RENDERER, name), path.join(renderer, name));
+  for (const name of ["studio-ui.css", "agents.css", "companion-ui.css", "companion-hub.css", "vibe.css", "trace.css", "config-dialog.css"]) await copyFile(path.join(RENDERER, name), path.join(renderer, name));
   for (const name of INLINE_SCRIPTS) {
     await copyFile(path.join(RENDERER, name), path.join(renderer, name));
   }

@@ -246,7 +246,7 @@ console.log(JSON.stringify({ queued, exitsWhileQueued, reloads: calls.reload.map
         for name in ("task-groups.js", "file-inputs.js", "nav.js", "sidebar.js", "styles.css", "model-lab.js", "idle.js", "booklet.js"):
             with self.subTest(name=name):
                 self.assertIn(f'readFile(path.join(RENDERER, "{name}")', self.build)
-        self.assertIn("[stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle,", self.build)
+        self.assertIn("[stageLabels, nodeVisuals, performanceCore, profiler, taskGroups, studioUi, fileInputs, motion, nav, sidebar, graph, modelLab, tracker, nodeStyles, tree, treeDynamics, idle,", self.build)
         self.assertNotIn('from "electron"', self.updater)
         self.assertNotIn('require("electron")', self.updater)
         check = self.package.get("scripts", {}).get("check", "")

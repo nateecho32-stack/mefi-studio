@@ -1,0 +1,81 @@
+/* Configuration (renderer/config-dialog.js): every setting in one searchable
+   tree, over whatever page is open. A category column with one mark that
+   springs to the current category, then the settings grouped by where they
+   live; picking one opens the real control. The scrim is the shared .overlay
+   one (styles.css presence); the sheet rises on the spring and leaves on the
+   exit curve, like every sheet. */
+.config-overlay { z-index: calc(var(--z-sheet, 80) + 4); display: grid; place-items: start center; padding: 7vh 16px 16px; }
+.config-sheet { display: flex; flex-direction: column; width: min(1040px, 100%); max-height: min(760px, 86vh); border: 1px solid var(--studio-glass-edge, var(--hairline)); border-radius: var(--r-xl, 22px); background: var(--studio-float-fill, var(--panel-solid)); box-shadow: var(--studio-float-shadow, 0 30px 80px -30px rgba(0, 0, 0, .8)); overflow: hidden; transform-origin: 50% 0; transition: opacity var(--motion-base) var(--ease-out), translate var(--motion-spring) var(--ease-spring), scale var(--motion-spring) var(--ease-spring); }
+.config-overlay[hidden] > .config-sheet { opacity: 0; translate: 0 -8px; scale: .975; transition: opacity var(--motion-exit) var(--ease-in), translate var(--motion-exit) var(--ease-in), scale var(--motion-exit) var(--ease-in); }
+@starting-style { .config-overlay:not([hidden]) > .config-sheet { opacity: 0; translate: 0 14px; scale: .965; } }
+
+.config-head { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-bottom: 1px solid var(--hairline); }
+.config-head h2 { margin: 0; font: 650 18px/1.2 var(--font-display); white-space: nowrap; }
+.config-head input[type="search"] { flex: 1; min-width: 0; transition: border-color var(--motion-fast) var(--ease-out), box-shadow var(--motion-base) var(--ease-out); }
+.config-head input[type="search"]:focus { box-shadow: 0 0 0 4px color-mix(in srgb, var(--gold) 14%, transparent); }
+.config-body { position: relative; display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 0; flex: 1; }
+
+/* ---- the tree ---- */
+.config-tree { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 12px 10px; border-right: 1px solid var(--hairline); overflow-y: auto; }
+.config-category { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 40px; padding: 8px 12px; border: 0; border-radius: 12px; background: none; color: var(--muted); font: 600 14px/1.2 var(--font-ui); text-align: left; cursor: pointer; transition: color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out); }
+.config-category:hover { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 5%, transparent); }
+.config-category[aria-current="true"] { color: var(--ivory); background: none; }
+.config-category[hidden] { display: none; }
+.config-category:focus-visible, .config-item:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: -2px; }
+.config-category-count { min-width: 22px; padding: 2px 6px; border-radius: 999px; color: var(--dim); font: 600 11px/1.2 var(--font-mono); text-align: center; transition: color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out); }
+.config-category[aria-current="true"] .config-category-count { background: color-mix(in srgb, var(--gold) 18%, transparent); color: var(--gold-bright); }
+/* The mark behind the current category (MefiMotion.glide sets --glide-*). */
+.config-tree-mark { position: absolute; top: 0; left: 0; z-index: 0; width: var(--glide-w, 0); height: var(--glide-h, 0); border-radius: 12px; background: linear-gradient(135deg, color-mix(in srgb, var(--gold) 18%, transparent), color-mix(in srgb, var(--gold) 7%, transparent)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent); translate: var(--glide-x, 0) var(--glide-y, 0); opacity: 0; pointer-events: none; transition: translate var(--motion-spring) var(--ease-spring), height var(--motion-spring) var(--ease-spring), width var(--motion-base) var(--ease-out), opacity var(--motion-base) var(--ease-out); }
+.config-tree-mark[data-on="true"] { opacity: 1; }
+.config-tree-mark::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--gold-bright); box-shadow: 0 0 10px var(--gold); }
+
+/* ---- the pane ---- */
+.config-pane { position: relative; display: flex; flex-direction: column; gap: 12px; min-height: 0; padding: 18px 22px 22px; overflow-y: auto; scrollbar-width: thin; }
+.config-pane-head { display: grid; gap: 4px; }
+.config-pane-title { margin: 0; font: 650 19px/1.25 var(--font-display); letter-spacing: -.005em; }
+.config-pane-about { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.config-empty { margin: 8px 0 0; color: var(--dim); font-size: 13px; }
+.config-group { display: grid; gap: 2px; }
+/* A group's heading runs a hairline out to its count. */
+.config-group-title { display: flex; align-items: center; gap: 10px; margin: 10px 0 4px; padding: 0 12px; color: var(--dim); font: 650 11px/1.2 var(--font-ui); letter-spacing: .07em; text-transform: uppercase; }
+.config-group-title::after { content: ""; order: 1; flex: 1; height: 1px; background: var(--hairline); }
+.config-group-count { order: 2; color: var(--dim); font: 600 10.5px/1 var(--font-mono); letter-spacing: 0; }
+.config-items { display: grid; gap: 1px; margin: 0; padding: 0; list-style: none; }
+/* Rows rise in, cascading by --i; a row that was already there stays put
+   and glides if it moved (renderer/motion.js). */
+.config-row { animation: config-rise var(--motion-base) var(--ease-out) both; animation-delay: calc(var(--i, 0) * var(--motion-step, 26ms)); }
+.config-row[data-kept] { animation: none; }
+@keyframes config-rise { from { opacity: 0; translate: 0 6px; } to { opacity: 1; translate: none; } }
+/* The shared button rule centres a button's content; a setting reads from
+   the left, with Open sliding in on the right as the hover's answer. */
+.config-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; justify-content: stretch; justify-items: start; gap: 12px; width: 100%; min-height: 44px; padding: 8px 12px; border: 0; border-radius: 12px; background: none; color: var(--ivory); text-align: left; cursor: pointer; transition: background var(--motion-fast) var(--ease-out), scale var(--motion-instant) var(--ease-out); }
+.config-item:hover { background: color-mix(in srgb, var(--ivory) 5%, transparent); }
+.config-item:active { scale: .99; }
+.config-item-words { display: grid; gap: 2px; min-width: 0; max-width: 100%; justify-items: start; text-align: left; }
+.config-item-title { max-width: 100%; overflow: hidden; font-size: 14px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.config-item-meta { max-width: 100%; overflow: hidden; color: var(--muted); font-size: 12px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.config-item-go { justify-self: end; padding: 4px 10px; border-radius: 999px; background: color-mix(in srgb, var(--gold) 14%, transparent); color: var(--gold-bright); font-size: 11.5px; font-weight: 650; opacity: 0; translate: -6px 0; transition: opacity var(--motion-fast) var(--ease-out), translate var(--motion-base) var(--ease-spring); }
+.config-item:is(:hover, :focus-visible) .config-item-go { opacity: 1; translate: 0 0; }
+
+/* ---- the interface scale ---- */
+.config-scale { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--hairline); border-radius: 16px; background: color-mix(in srgb, var(--ivory) 3%, transparent); }
+.config-scale-row { display: grid; grid-template-columns: auto minmax(0, 1fr) 52px; align-items: center; gap: 14px; }
+.config-scale-name { font-size: 14px; font-weight: 600; }
+/* The track fills up to the thumb (--fill from config-dialog.js). */
+.config-scale-row input[type="range"] { width: 100%; height: 6px; margin: 0; border-radius: 999px; background: linear-gradient(90deg, var(--gold) var(--fill, 37.5%), color-mix(in srgb, var(--ivory) 12%, transparent) var(--fill, 37.5%)); appearance: none; cursor: pointer; }
+.config-scale-row input[type="range"]::-webkit-slider-thumb { width: 18px; height: 18px; border: 2px solid var(--panel-solid); border-radius: 50%; background: var(--gold-bright); box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 50%, transparent), 0 4px 12px -4px var(--gold); appearance: none; transition: scale var(--motion-base) var(--ease-spring); }
+.config-scale-row input[type="range"]:is(:hover, :active)::-webkit-slider-thumb { scale: 1.18; }
+.config-scale-row input[type="range"]:disabled { opacity: .5; cursor: not-allowed; }
+.config-scale-value { color: var(--gold-bright); font: 600 13px/1 var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.config-scale-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+@media (max-width: 760px) {
+  .config-overlay { padding: 12px; }
+  .config-body { grid-template-columns: 1fr; }
+  .config-tree { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--hairline); }
+  .config-category { width: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .config-row { animation: none; }
+  .config-sheet, .config-tree-mark, .config-item-go { transition: none; }
+}

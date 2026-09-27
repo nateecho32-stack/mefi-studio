@@ -140,6 +140,15 @@
     }
     root.append(note);
   }
+  // A click anywhere else closes an open permissions menu, like every other menu.
+  document.addEventListener?.("pointerdown", (event) => {
+    for (const menu of document.querySelectorAll?.(".autonomy-popover:not([hidden])") ?? []) {
+      const control = menu.closest?.(".autonomy-control");
+      if (control?.contains?.(event.target)) continue;
+      menu.hidden = true;
+      control?.querySelector?.(".autonomy-chip")?.setAttribute("aria-expanded", "false");
+    }
+  }, true);
   function mount(root, options = {}) { if (!root) return; mounts.set(root, options); paint(root, options); if (!current || options.full && !learned) void refresh({ learning: options.full }); }
   function history(root, data = current) {
     root.replaceChildren(); root.classList.add("autonomy-history");

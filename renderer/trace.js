@@ -84,6 +84,12 @@
       item.append(button);
       list.append(item);
     }
+    // One mark sits behind the open channel and springs to the next one
+    // (renderer/motion.js); the list is rebuilt, so the mark lives beside it.
+    const box = list.parentElement;
+    let mark = box?.querySelector?.(".trace-channel-mark");
+    if (box && !mark) { mark = el("span", "trace-channel-mark"); mark.setAttribute("aria-hidden", "true"); box.append(mark); }
+    window.MefiMotion?.glide?.(mark, list.querySelector?.('.trace-channel[aria-current="true"]'));
     const current = state.channels.find((channel) => channel.id === state.channel);
     $("channel-detail").textContent = current?.error ? `${current.detail} It could not be read: ${current.error}` : current?.detail || "";
   }
@@ -124,6 +130,9 @@
       return item;
     }));
     if (pinned) lines.scrollTop = state.newest ? 0 : lines.scrollHeight;
+    // Another channel's log arrives with a short rise; a tail that grows
+    // does not.
+    if (state.painted !== state.channel) { state.painted = state.channel; window.MefiMotion?.enter?.(lines); }
   }
   function choose(id) {
     if (id === state.channel) return;

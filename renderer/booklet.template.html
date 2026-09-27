@@ -303,6 +303,7 @@
   </div>
   <!-- Watch, Plans and Ideas step in only while they have something to show. -->
   <nav id="vibe-dock" class="vibe-dock" aria-label="Go to">
+    <span class="vibe-dock-mark" aria-hidden="true"></span>
     <button id="vibe-stop-watch" type="button" data-nav="command" data-vibe-stop="watch" title="Watch the agents work on the live node tree (D)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span></button>
     <button id="vibe-stop-tasks" type="button" data-vibe-panel="tasks" data-vibe-stop="tasks" title="Your tasks and results"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
     <button id="vibe-stop-plans" type="button" data-vibe-panel="plans" data-vibe-stop="plans" title="Plans in progress" hidden><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span></button>
@@ -575,6 +576,7 @@
 <button type="button" class="settings-nav-item" data-settings-category="audio" aria-current="false"><svg class="glyph" aria-hidden="true"><use href="#g-audio"/></svg><span class="label">Audio</span></button>
 <button type="button" class="settings-nav-item" data-settings-category="system" aria-current="false"><svg class="glyph" aria-hidden="true"><use href="#g-gauge"/></svg><span class="label">System</span></button>
 </div>
+          <button id="settings-config-open" class="ghost settings-config-open" type="button" data-nav="config" title="Every setting in one searchable tree (Ctrl Shift ,)">All settings in one place</button>
         </nav>
         <div id="settings-sections" class="settings-sections">
           <div id="settings-search-results" class="settings-search-results" aria-label="Setting search results" hidden></div>
@@ -1656,6 +1658,21 @@
         <section class="profiler-section"><h3>Studio processes</h3><div class="profiler-table-wrap"><table class="profiler-table"><thead><tr><th scope="col">Process</th><th scope="col">CPU</th><th scope="col">Memory</th></tr></thead><tbody id="profiler-processes"></tbody></table></div><p>Memory is each process's working set. Shared pages may be counted in more than one process.</p></section>
       </div>
       <p id="profiler-limits"></p><p>Capture stays in memory until you export. Reports contain operation names and measurements, with no task text, request payloads, paths or credentials. Profiling adds some measurement overhead.</p>
+    </div>
+  </div>
+</div>
+<!-- Configuration (renderer/config-dialog.js): every setting in one searchable
+     tree, filed under seven categories; picking one opens the real control. -->
+<div class="overlay config-overlay" id="config-overlay" hidden>
+  <div class="config-sheet" role="dialog" aria-modal="true" aria-labelledby="config-heading">
+    <header class="config-head">
+      <h2 id="config-heading">Configuration</h2>
+      <input id="config-search" type="search" placeholder="Search every setting…" aria-label="Search every setting" autocomplete="off">
+      <button id="config-close" class="ghost sheet-close" type="button" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+    </header>
+    <div class="config-body">
+      <nav id="config-tree" class="config-tree" aria-label="Categories"></nav>
+      <section id="config-pane" class="config-pane" aria-live="polite"></section>
     </div>
   </div>
 </div>

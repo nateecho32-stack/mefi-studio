@@ -90,6 +90,9 @@ const api = {
   // Trace: Studio's logs as channels (main.cjs trace:channels / trace:read).
   traceChannels: () => ipcRenderer.invoke("trace:channels"),
   traceRead: (payload) => ipcRenderer.invoke("trace:read", payload ?? {}),
+  // Configuration's interface scale (main.cjs ui:zoom).
+  uiZoom: (payload) => ipcRenderer.invoke("ui:zoom", payload ?? {}),
+  uiZoomGet: () => ipcRenderer.invoke("ui:zoom-get"),
   eyesPinsRead: () => ipcRenderer.invoke("eyes:pins-read"),
   eyesPinsWrite: (pins) => ipcRenderer.invoke("eyes:pins-write", pins),
   eyesWatch: (running) => ipcRenderer.invoke("eyes:watch", { running }),

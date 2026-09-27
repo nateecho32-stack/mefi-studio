@@ -80,6 +80,7 @@ const agentIssues = require("./scripts/agent-issues.cjs");
 const brains = require("./scripts/brains.cjs");
 const taskDelegation = require("./scripts/task-delegation.cjs");
 const trace = require("./scripts/trace.cjs");
+const habitsLibrary = require("./scripts/habits.cjs");
 // Trace keeps the studio log and the window's warnings (see traceRows); made
 // here, before anything can log, so logLine never meets them uninitialised.
 const traceStudio = trace.ring(trace.LIMITS.ring);
@@ -16052,6 +16053,11 @@ async function traceRows(id, { tail = 250 } = {}) {
   }
   return null;
 }
+// 70% to 150% in 5% steps; anything else is 100%.
+function zoomFactorOf(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.min(1.5, Math.max(0.7, Math.round(number * 20) / 20)) : 1;
+}
 async function traceChannels() {
   const channels = [];
   for (const channel of TRACE_CHANNELS) {
@@ -17411,7 +17417,8 @@ function registerIpc() {
         choices[seat] = { ok: route.ok, provider: route.provider || chosen.provider, model: route.model || "Provider default", inherited: false, reason: route.error || (route.provider !== chosen.provider ? "Using an enabled fallback" : "Selected seat route"), ...agentProfiles.capabilities(route.provider, route.model) };
       }
     }
-    return { ...state, name: scope === "defaults" ? "Studio defaults" : state.name, scope, configuration: agentProfiles.extract(effective), routing, seats, choices, skills, mcpTools,
+    const habits = habitsLibrary.library().map((habit) => ({ ...habit, costs: Object.fromEntries(habit.variants.map((variant) => [variant.id, habitsLibrary.cost(habit.id, variant.id)])) }));
+    return { ...state, name: scope === "defaults" ? "Studio defaults" : state.name, scope, configuration: agentProfiles.extract(effective), routing, seats, choices, skills, mcpTools, habits,
       capabilities: Object.fromEntries(["routine", "heavy"].map((role) => {
         const provider = roleProvider(effective, role);
         const model = assistantModelOverride(effective, role, provider);
@@ -17866,6 +17873,15 @@ function registerIpc() {
     }
   });
 
+  // Configuration's interface scale: the window's zoom factor, saved in
+  // settings.ui.zoom and put back when the page loads.
+  ipcMain.handle("ui:zoom-get", async () => ({ ok: true, factor: zoomFactorOf((await readSettings()).ui?.zoom) }));
+  ipcMain.handle("ui:zoom", async (_event, { factor } = {}) => {
+    const value = zoomFactorOf(factor);
+    if (!window.isDestroyed()) window.webContents.setZoomFactor(value);
+    await updateSettings((settings) => { settings.ui = { ...(settings.ui ?? {}), zoom: value }; });
+    return { ok: true, factor: value };
+  });
   ipcMain.handle("trace:channels", () => traceChannels());
   ipcMain.handle("trace:read", (_event, payload = {}) => traceRead(payload ?? {}));
   ipcMain.handle("eyes:log", async (_event, { lines = 220 } = {}) => {
@@ -18515,6 +18531,10 @@ function createWindow() {
       .catch(() => callback({}));
   });
   if (CAPTURE) window.webContents.setFrameRate(30);
+  // The saved interface scale (Configuration), on every load and reload.
+  window.webContents.on("did-finish-load", () => {
+    readSettings().then((settings) => { const factor = zoomFactorOf(settings?.ui?.zoom); if (factor !== 1 && !window.isDestroyed()) window.webContents.setZoomFactor(factor); }).catch(() => {});
+  });
   // The window's own warnings and errors, kept for Trace's Window channel.
   window.webContents.on("console-message", (...args) => {
     const details = args[1] && typeof args[1] === "object" && "message" in args[1] ? args[1] : { level: args[1], message: args[2], sourceId: args[4], lineNumber: args[3] };

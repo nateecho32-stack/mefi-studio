@@ -479,7 +479,16 @@
     const label = control.closest?.("label") ?? document.querySelector?.(`label[for="${control.id}"]`);
     const named = label?.querySelector?.(".field-label, b, strong, .grow");
     const parts = label ? Array.from(label.children ?? []).filter((node) => !["INPUT", "SELECT", "TEXTAREA", "SMALL"].includes(node.tagName)).map((node) => node.textContent ?? "").join(" ") : "";
-    return String(control.getAttribute?.("aria-label") || named?.textContent || parts || (control.tagName === "BUTTON" ? control.textContent : "") || control.getAttribute?.("title") || "").replace(/\s+/g, " ").trim();
+    return String(control.getAttribute?.("aria-label") || named?.textContent || parts || (control.tagName === "BUTTON" ? buttonName(control) : "") || control.getAttribute?.("title") || "").replace(/\s+/g, " ").trim();
+  }
+  // A choice button names itself in bold and explains itself in small print
+  // ("<b>Full</b><small>every animation</small>"): its bold part is its name,
+  // and a button without one reads its pieces apart, not run together.
+  function buttonName(control) {
+    const bold = control.querySelector?.("b, strong");
+    if (bold?.textContent?.trim()) return bold.textContent;
+    const pieces = Array.from(control.childNodes ?? []).map((node) => node.textContent ?? "").filter((text) => text.trim());
+    return pieces.length ? pieces.join(" ") : control.textContent ?? "";
   }
   function settingsEntries() {
     const entries = [];

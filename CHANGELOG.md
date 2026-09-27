@@ -7,6 +7,36 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Configuration** (Ctrl Shift ,, and **All settings in one place** under
+  Settings' categories): every setting Studio has, in one searchable tree
+  filed under Inference & Agents, Knowledge, Files & Exec, Web & Community,
+  Storage, UI & Surfaces and Dev & Meta. It reads the same records Search
+  lists, so picking a setting opens its real control; nothing is copied.
+  UI & Surfaces also holds a new **Interface scale** (70% to 150%), saved and
+  put back on every launch. Settings are filed by the page they live on
+  (Appearance's Zen mode is a look, not a Zen key), a lone Save or a second
+  copy of a picker is left out, and choice buttons are named by their bold
+  part in Search too ("Full", not "Fullevery animation").
+- **Menus move cleanly.** Vibe's cards, panels, conversation and dock, and
+  Build's Configuration, Trace and Habits, no longer replay every row on
+  each refresh: a row that stays keeps still and glides to its new place, a
+  new one rises (cascading when several arrive), and one that leaves fades
+  where it was. Moving into a task's detail slides in from the right and Back
+  slides it out; switching panels or categories fades through instead of
+  overlapping. The open panel's dock stop, the current Configuration
+  category and the open Trace channel each wear one mark that springs from
+  item to item; dock stops fold open and shut so the others slide over; the
+  permissions menu rises from its chip in Vibe's own colours and closes on a
+  click elsewhere; Off / Brief / Full slides one thumb and the habit total
+  counts to its new value. Reduced motion and the Motion setting turn it
+  all off.
+- **Habits** in each agent's Skills, tools & habits panel (Agents › Setup):
+  short rules of behaviour, such as explaining changes, testing, small
+  steps, matching the code around it, report shape and a to-do list, each
+  with its variants and **off / brief / full**, and what the agent's habits
+  add to every prompt in tokens. They reach every prompt the agent's skills
+  reach and ride its team like its skills.
+
 - **Trace** (Live, beside Activity): Studio's logs as channels in one viewer.
   The studio log, the assistant's log, the run ledger, OpenCode's log and
   the window's own warnings, each with its size and problem count; search,
