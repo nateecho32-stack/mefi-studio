@@ -27,7 +27,9 @@ function windowsShim(command, env, platform = process.platform) {
   if (ext) return null;
   const dirs = /[\\/]/.test(command) ? [""] : String(env.PATH ?? env.Path ?? "").split(";").filter(Boolean);
   for (const dir of dirs) {
-    const base = dir ? path.win32.join(dir, command) : command;
+    // The host join: on Windows it is the win32 one, and a test resolving the
+    // win32 rule elsewhere still finds the files it wrote.
+    const base = dir ? path.join(dir, command) : command;
     if (existsSync(`${base}.com`) || existsSync(`${base}.exe`)) return null;
     for (const shim of [".bat", ".cmd"]) if (existsSync(base + shim)) return base + shim;
   }

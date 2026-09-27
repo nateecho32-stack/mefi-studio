@@ -38,7 +38,7 @@ test("an MCP command that is a Windows batch shim is found for the cmd.exe route
     writeFileSync(path.join(dir, "both.cmd"), "@echo off\r\n");
     writeFileSync(path.join(dir, "both.exe"), "");
     const env = { PATH: dir };
-    assert.equal(mcp.windowsShim("tool", env, "win32"), path.win32.join(dir, "tool.cmd"));
+    assert.equal(mcp.windowsShim("tool", env, "win32"), path.join(dir, "tool.cmd"));
     assert.equal(mcp.windowsShim("both", env, "win32"), null, "an .exe in the same folder wins, as PATHEXT orders it");
     assert.equal(mcp.windowsShim("C:/x/run.bat", env, "win32"), "C:/x/run.bat");
     assert.equal(mcp.windowsShim("tool", env, "linux"), null);
