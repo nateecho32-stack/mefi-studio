@@ -11689,8 +11689,27 @@ function autopilotStatus() {
   };
 }
 
+// Every running job's output timer, tool change and phase step emits, up to
+// twice a second per job, and five renderer listeners rebuild from each copy.
+// Like assistantEmit: the first of a quiet window goes out at once, and later
+// calls inside 250 ms share one trailing push built when it goes, so it
+// carries the newest status. Listeners read it as a snapshot (history rows are
+// de-duplicated, job lists compared by signature), so nothing is lost.
+let autopilotEmitTimer = null;
+let autopilotEmitPending = false;
 function emitAutopilot() {
+  if (autopilotEmitTimer) {
+    autopilotEmitPending = true;
+    return;
+  }
   send("assistant:status", autopilotStatus());
+  autopilotEmitTimer = setTimeout(() => {
+    autopilotEmitTimer = null;
+    if (!autopilotEmitPending) return;
+    autopilotEmitPending = false;
+    emitAutopilot();
+  }, 250);
+  autopilotEmitTimer.unref?.();
 }
 
 // A transition emits; an unchanged reason does not — both renderers read the

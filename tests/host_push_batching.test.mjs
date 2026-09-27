@@ -284,3 +284,27 @@ test("the store facade is kept per module and project, so its session scope carr
   const second = projects.add("/elsewhere");
   assert.notEqual(projects.eyes(fake, second), first, "another project gets its own facade");
 });
+
+test("autopilot status: the first push goes at once, a burst shares one trailing push of the newest status", () => {
+  const time = clock(), sent = [];
+  let running = 0;
+  const context = vm.createContext({
+    ...time,
+    send: (channel, payload) => sent.push({ channel, payload }),
+    autopilotStatus: () => ({ running }),
+  });
+  vm.runInContext(section("let autopilotEmitTimer = null;", "// A transition emits;"), context);
+  context.emitAutopilot();
+  assert.deepEqual(sent, [{ channel: "assistant:status", payload: { running: 0 } }], "a quiet status goes out at once");
+  running = 1; context.emitAutopilot();
+  running = 2; context.emitAutopilot();
+  assert.equal(sent.length, 1, "calls inside the window wait");
+  time.advance(250);
+  assert.deepEqual(sent.at(-1).payload, { running: 2 }, "the trailing push is built when it goes");
+  assert.equal(sent.length, 2);
+  time.advance(250);
+  assert.equal(sent.length, 2, "nothing new, nothing sent");
+  assert.equal(time.pending(), 0);
+  context.emitAutopilot();
+  assert.equal(sent.length, 3, "a later call after a quiet window goes at once again");
+});
