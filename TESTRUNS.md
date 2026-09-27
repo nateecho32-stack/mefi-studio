@@ -34,6 +34,18 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-27 morning - AI-link alert re-verified against the landed retirement fix (task_8e7e835ea0dcfe56, run_1790504205051_2)
+
+Continuation of the A-Eyes "AI link failing, backoff escalating" alert after the sibling's retirement fix. Inspected the work tree before touching anything: HEAD 6f1ef62 carries aiLinkTicket/aiLinkHealthy/aiLinkResolved (scripts/assistant.mjs), the compact()/tidy() ai-block absorb and the resolvedAiLinkWork promotion guard (main.cjs), all wired; the sibling session's uncommitted fix-family alignment (eyes.mjs FIX_BRIEF_CLOSING plus its two tests) stands untouched alongside. The live store confirms the stale work broadcast loop is over: data/eyes-assistant.json ai block online true, keyPresent true, failures 0, backoffUntil 0, lastOkAt 2026-09-27T10:15Z, problems empty, requests 0, work queue 0 - the fix-loaded restart (resource-manager.json touched 10:10Z, right after the commit) let the compactor absorb the stale AI-link tickets. No code change was needed this run; root cause and fix stand as recorded in the sibling row. Narrow validation this run: node --test tests/board.test.mjs tests/briefing_fix_requests.test.mjs 43 pass / 0 fail (4 AI-link retirement tests plus both fix-family tests); node --test tests/request_dedupe tests/task_delegation tests/task_grouping_cleanup tests/idea_backlog tests/task_history tests/work_admission_host tests/request_admission tests/board_growth tests/assistant_loop 123 pass / 0 fail; python tools/test_mefi_studio_assistant.py 66 OK; python tools/test_mefi_studio_eyes.py 18 OK; npm.cmd run check ok. No source, settings, task store or portable data was changed; this row is the run's attributable record.
+
+## 2026-09-27 morning - Fix-family keys aligned: the briefing closing no longer reads as the dup family (task_be106669b70fb5b0, run_1790503845970_1)
+
+Aligned eyes.mjs problemFamilyOf with assistant.mjs fixThemeKey: problemText now strips the briefing's closing instruction (FIX_BRIEF_CLOSING copy, word-for-word with assistant.mjs) before family classification, so a filed brief whose alert names no dup/stale word carries no family instead of the boilerplate 'root cause' dup. Reproduced first: alertProblem(filed brief).family was 'dup' while fixThemeKey said null, requestsFromBriefing refused an unrelated dup-worded alert against it, and promotion's sameFixProblem(request, task) refused the same pair. After the strip the refile is admitted. Regression tests: tests/briefing_fix_requests.test.mjs (boilerplate closing does not refuse an unrelated dup-worded alert) and tests/board.test.mjs (problemFamilyOf and fixThemeKey read one filed brief the same way). Narrow validation: node --test tests/briefing_fix_requests tests/board tests/work_admission_host tests/work_admission tests/request_admission tests/request_dedupe tests/board_growth tests/eyes_collision_lifecycle tests/assistant_chat_admission 120 pass / 0 fail; node --test tests/task_delegation tests/task_grouping_cleanup tests/idea_backlog tests/task_history tests/assistant_loop tests/family_decisions 110 pass / 0 fail; python tools/test_mefi_studio_eyes.py 18 OK (simulate themeDedup/problemFamily expectations intact); python tools/test_mefi_studio_assistant.py 66 OK; npm run check ok.
+
+## 2026-09-27 morning - Stale AI-link fix tickets leave the handout queue (task_165e3985f8675e47, run_1790502825074_13)
+
+Root-causes the stale work broadcast loop: briefing fix tickets about the assistant's own AI link lingered unclaimed in the handout queue after the link recovered (ai.online true, failures 0) because promotion refused them on the boilerplate "root cause" dup family while compaction's stripped fixThemeKey never absorbed them, so every compactor pass re-broadcast "Fix: AI link failing, backoff escalating" as the next handout. Fix: assistant.mjs exports aiLinkTicket/aiLinkHealthy/aiLinkResolved; compact() and tidy() take the store's ai block and retire unclaimed briefing AI-link tickets (report.resolved) when the link is provably healthy, and promotion skips them (resolvedAiLinkWork guard) so the foreman cannot build one ahead of the absorb. Verified against the live store read-only: the fix drops 4 stale AI-link tickets including the reported one and keeps the 4 unrelated ones. Narrow validation: node --test tests/board.test.mjs 39 pass (4 new: purge on healthy, keep on down/unknown/claimed, chat never purged, tidy parity); node --test tests/request_dedupe tests/task_delegation tests/task_grouping_cleanup tests/idea_backlog tests/task_history tests/work_admission_host tests/request_admission tests/board_growth tests/assistant_loop 162 pass / 0 fail; python tools/test_mefi_studio_assistant.py 66 OK; python tools/test_mefi_studio_eyes.py 18 OK; npm run check ok. The live app loads the fix on its next start; the two stale rows also age out on the 12h clock.
+
 ## 2026-09-27 early morning - Booklet refresh landed with the sibling canvas-transfer idle change (task_b1133e8672733a6b, run_1790481393330_11)
 
 Landed the booklet refresh task_b1133e8672733a6b owes. The work-tree renderer/booklet.html (36 insertions / 5 deletions vs HEAD) folds the sibling canvas-transfer perf edit in renderer/idle.js: createDrawingContext resolves canvas fonts offscreen when supported, resize writes the transferred bitmap, and MefiIdle.canvasContext exposes the paint target. Verified end to end on a quiet tree: renderer sources held still across a 20 s hash watch; npm.cmd run build-booklet reproduced renderer/booklet.html byte-for-byte (SHA-256 prefix 1520FE87240B, 39 models, catalog hash f98dd2322a01) with the media browser still inlined (16 mediaBrowser references; booklet.sources.json stays ignored). node --test tests/booklet_build.test.mjs 4 pass / 0 fail. No renderer source or script was edited by this run; sibling work-tree edits were left untouched and committed nothing else.
@@ -45,6 +57,54 @@ Closed the obligation left by 96272eb: its scripts/build-booklet.mjs change inli
 ## 2026-09-27 early morning - ai-offline resolved: live instance healthy, recovery chain re-verified (task_dc3cbe4e9796268a, run_1790480854175_9)
 
 Verified the ai-offline issue end to end from the running Studio instance. The live data/eyes-assistant.json shows the AI back online: ai.online true, keyPresent true, model glm-5.3-flash (zai/jev team route for project_d453f6fb00cc5e2d), failures 0, backoffUntil 0, problems empty, lastOkAt 2026-09-27T04:27Z - i.e. the provider recovered after the 23:10 America/Chicago quota reset and the app's 02:39Z restart had already loaded the committed recovery fixes (cliReply exit guard 11fcebc, resetAssistantAiBackoff at all four route-change sites, the scheduleAssistantAiProbe offline-probe chain in main.cjs, and planOfflineProbe/offlineProbeDelayMs in scripts/assistant.mjs - all intact; the sibling work-tree diff on scripts/assistant.mjs touches only focusedTestsForTask/verifyCompletion, not the offline path). brains.js, boot.js and the other pinned renderer refs are the pipeline editor and UI shell - not part of the offline chain. Narrow validation this run: python tools/test_mefi_studio_offline_probe.py 12 tests OK; node --test tests/assistant_overseer_chat.test.mjs tests/role_provider_isolation.test.mjs tests/usage_tracker_host.test.mjs 73 pass / 0 fail. No code change was needed; the issue stands resolved and no owner action remains beyond watching that the warning stays clear.
+
+## 2026-09-26 - Canvas transfer applied, loaded and full gates passed
+
+The expanded isolated media renderer passed (1 test, 38.4 s), including the
+other session's new player/queue layout assertions. The previously validated
+Command and tree fixtures were unchanged. Original and candidate hashes
+were verified before copying the four candidate files into the checkout;
+the seven capability/resize tests were added as command_canvas_context.
+Other sessions' source changes were retained.
+
+Command's interactive DOM canvas elements now transfer their 2D drawing
+contexts when supported. The capability probe runs before irreversible
+transfer; existing/unsupported contexts retain the normal path. Resize
+updates the drawing bitmap rather than the placeholder. Context options,
+DPR behavior, no-op pixel retention, transparent background video and visual
+output were validated in isolation. MefiIdle.canvasContext exposes the
+actual context for diagnostics, and the three renderer fixtures use it.
+
+Validation after promotion (uncontended full run, Studio idle):
+- npm run build-booklet passed, generated booklet hash f98dd2322a01.
+- npm run check passed: 165 syntax targets, 344 unique specs, CSS and
+  TESTRUNS checks clean.
+- npm run audit passed with zero findings, errors or warnings.
+- npm test exited 0: CPU stage 3,872 passed / 4 skipped; Electron lane
+  38 passed / 1 skipped; serialized eyes test 1 passed; occlusion 2 passed.
+  Total Node: 3,913 passed, 5 skipped, 0 failed. Python: 248 tests, OK with
+  1 skip. Normalized-path checks: 6/6. Node leg 276 s, Python leg 34 s.
+- All four promoted source/fixture hashes remained unchanged after the run.
+- Standalone tools/verify_command.py pixel probes were then migrated to the
+  context accessor and bitmap dimensions. Python AST and embedded JavaScript
+  syntax passed, including both updated probe bodies; no full verifier tour
+  was launched. The initial local parser wrapper added a redundant closing
+  brace; correcting that wrapper made the syntax check pass without another
+  source change. git diff --check passed for this task's edited files.
+
+The final PID- and booklet-validated status confirms the normal automatic
+reload loaded commandCanvasTransferred=true, boot complete and recording
+false. Studio remained idle (1,461 seconds of system idle on the final
+check), so no live sample or before/after claim was made. The controlled
+29% cycle reduction and native setter timings remain component evidence.
+No further application gate is pending for this change.
+
+Logs: tools/logs/canvas-transfer-expanded-media.log, canvas-transfer-build.log,
+canvas-transfer-check.log, canvas-transfer-audit.log,
+canvas-transfer-full-test.log and live-20260926-canvas-final-status.json.
+Original promotion backups and manifest remain in ignored
+canvas-transfer-pre-promotion/. The old candidate guard correctly rejects
+the now-applied source: do not rerun its promotion or overwrite later edits.
 
 ## 2026-09-26 - Media panel redesign brings playback, background and queue together
 
@@ -443,140 +503,6 @@ Validation:
 
 Controlled report: tools/logs/live-scroll-comparison.json. Live reports:
 tools/logs/live-20260926-{first,second,status-final}.json (all ignored).
-
-## 2026-09-26 - Restart now stops and saves coding agents before updating
-
-The live updater now carries an explicit apply through to Studio's existing
-stop-and-save restart. It stops every owned builder tree, preserves each task's
-session, checklist and recent output, awaits settlement, saves helper journals,
-and relaunches paused. Resume continues the queued work without spending a
-failed attempt. Automatic updates still drain workers. Manual restarts retain
-the changed-file list and stay out of the restart-loop count; refused journal
-saves leave the update retryable, and pending saves do not trigger a second
-empty restart. Project-switch and running-game guards remain in place.
-
-Validation on Windows:
-- Focused loop control, updater, continuity, executor resume and assistant pool:
-  82/82 pass. Real host settlement is exercised with two workers and deliberately
-  blocked checkpoint writes; no relaunch occurs until progress is durable.
-- Updater Python contracts: 24/24 pass. npm.cmd run check, npm.cmd run audit
-  (zero findings), and git diff --check pass. No renderer sources changed here.
-- Full npm.cmd test: main stage 3,861 pass / zero failures / four skips;
-  Electron stage 32 pass / five failures / one timeout cancellation / one skip;
-  eyes toggle 1/1; occlusion 1 pass / 1 failure (rAF growth=14). Python contracts
-  248 tests OK (one skipped); normalized-path lock 6/6. Overall exit 1.
-- Waited for existing full runs to finish before starting. Another full run
-  started concurrently, and the runner detected source edits during both the
-  Electron and occlusion stages. Desktop failures were media-browser navigation,
-  missing media/planning reports, node-view timeout, profiler download timeout
-  and tree-dynamics selection timeout. Further isolated retries were withheld
-  while sibling desktop runs remained active. This is not a clean full-gate pass.
-
-Complete local logs: %TEMP%/mefi-restart-{focused-final,python,check-final,audit,
-full}.log. Existing shared edits and local/portable application data were
-preserved. No live Studio restart or package deployment was performed.
-
-## 2026-09-26 - Final UI video audit reruns and resolved integration gate
-
-Follow-up to Video backgrounds, solid reading surfaces and compact UI audit.
-The final renderer audit includes actual element fills as well as the shared
-tokens: 90 page states, 21 Vibe panel states, 864 contrast checks across 24
-variants, minimum reading contrast 6.68:1. A rendered Vibe drawer exposed a
-hard-coded translucent fill after the token-only pass; it now uses the shared
-material, and zero glass prevents underlying text from showing through it.
-
-Final checks:
-- Floating media passes with the explicit animation wait (76.5 seconds).
-- Unified navigation, companion, 36 original responsive layouts and the added
-  video matrix pass together (180.4 seconds). The first combined retry exceeded
-  its original 150-second renderer guard. With 111 additional video states, the
-  fixture now allows a bounded 240-second renderer run and writes progress
-  checkpoints; source copying/cleanup fit within a 420-second outer bound.
-- Latest npm.cmd run check passes (166 targets, 343 specs, 13 stylesheets).
-- Latest npm.cmd run audit has zero findings. The other session completed its
-  standalone media-browser auditor integration; Python auditor retry is 4/4.
-- Final fast run remains 3861 pass, 4 skipped. Original full-run preview/media
-  failures passed their targeted reruns. The original full run itself remains
-  recorded red; no single all-green full rerun is claimed.
-- Final credential audit compares 13 saved values against 667 tracked/nonignored
-  files, 653 index blobs and the staged diff: no matches. Only three synthetic
-  credential-shaped test fixtures are flagged. Local evidence remains ignored.
-
-Evidence: tools/logs/ui-polish-unified-final.log, ui-polish-render-final.log,
-ui-polish-audit-latest.log, ui-polish-python-auditor-retry.log,
-ui-polish-credential-final.json and ui-polish-20260926.md. No commit or push.
-
-## 2026-09-26 - Video backgrounds, solid reading surfaces and compact UI audit
-
-Reproduced washed-out navigation and patterned video showing through reading
-surfaces, Settings categories sliding under the fixed bar, and narrow Tools and
-advanced Agent routing overflow. Added a media reading floor, stronger secondary
-text, solid zero-glass materials (including Vibe drawers), a named responsive
-container for Agent settings, bounded Tools placement and a dense Settings strip
-below local navigation. Updated Analyzer copy assertions without dropping stale
-reply checks, and initialized rail navigation in the sidebar/Vibe unit fixtures.
-
-The isolated renderer pass covers 90 Build page states and 21 Vibe panel states,
-with an actual playing canvas video inside a locally answered provider iframe.
-It checks 864 contrast combinations over black/white frames, including real
-surface fills; minimum reading contrast is 6.68:1. Expanded Routing, open Ideas
-Tools and scrolled Settings search are hit-tested. Playback advances, keeps its
-iframe and loads once. No renderer errors, external requests or child execution.
-The early sweep's generic closed-disclosure flags were not treated as defects.
-
-Validation:
-- Booklet rebuild and npm.cmd run check pass; focused navigation/Analyzer 47/47.
-- Final npm.cmd run test:fast: 3861 pass, 4 skipped, zero failures.
-- Full npm.cmd test: CPU 3855 pass / 1 fail / 4 skipped; Electron 36 pass /
-  1 fail / 1 skip; visibility 1/1; occlusion 1 pass / 1 capability skip;
-  Python 248 tests with 1 failure and 1 skip; normalized-path lock 6/6.
-- Preview process shutdown timed out in the full run and passed its solo retry.
-  Floating media's follow assertion passed on retry; the fixture now waits for
-  the dodge animation to finish before measuring follow. An export-enabled retry
-  completed the renderer but exceeded 120 seconds while copying screenshots;
-  the retry without export passed in 36.5 seconds.
-- Earlier audit passes had zero findings. The latest audit/Python failure is the
-  concurrently added standalone renderer/media-browser.js not being recognized
-  by the booklet auditor. That in-flight feature is preserved, not modified here.
-- Credential value comparisons against tracked/nonignored files, index blobs and
-  staged changes have no matches. Logs and captures are ignored; no commits/pushes.
-
-Local evidence: tools/logs/ui-polish-*.log, ui-polish-after/report.json and
-ui-polish-20260926.md. Shared source changes were reported during the full run;
-the complete repository gate is not claimed green.
-
-## 2026-09-26 - Auto runs agent-proposed repairs and recovers misfiled owner questions
-
-Auto now admits agent-proposed tasks even when the saved agent-filed switch
-is on; Always ask, Accept per task and Elevated only keep their approval
-rules. The UI explains Auto and preserves the saved Elevated-only preference.
-Worker and split prompts keep test failures, concurrent edits and test-history
-conflicts with Studio. Concrete repair requests mislabeled owner regain bounded
-retry options, including legacy open questions. Answered/dismissed questions,
-Undo, owner holds, named permissions and risk decisions retain their gates.
-Unfinished repairs reported under owner cannot falsely pass verification.
-Missing sessionless evidence still forbids confirmation but permits repair.
-
-Validation:
-- Final eight focused suites: 178/178 pass, including real-host dispatch,
-  Pause, all four reported repair titles, saved-question recovery, retry budgets,
-  permission/scope preservation, missing evidence and the mode-switch UI.
-- npm.cmd run build-booklet, npm.cmd run check and npm.cmd run audit pass;
-  audit has zero findings. The generated booklet contains the updated controls.
-- Full npm.cmd test: CPU 3847 pass, 0 fail, 4 skipped; Electron lane 37 pass,
-  0 fail, 1 skipped; eyes toggle 1/1. Occlusion: 1 pass, 1 fail (rAF growth 11).
-  Python contracts: 248 tests OK, 1 skipped. Normalized-path lock: 6/6 pass.
-- The full run overlaps other sessions' edits and the final focused refinements;
-  its source-change guard fired at the occlusion failure. The same rAF failure
-  is documented in the preceding AI-recovery baseline comparison.
-- Single-file occlusion retry: 1 pass, 1 capability skip, exit 0. Other sessions
-  also ran Electron fixtures; this is not proof of the occluded phase passing.
-- A read-only evaluation of the four actual saved cards under the updated Auto
-  rule finds one running and three ready, with none awaiting approval.
-
-Logs are local at %TEMP%/mefi-auto-repairs-{final-focused,full,final-check,
-final-audit,occlusion-retry}.log. No live task store or settings were edited,
-and the live Studio process was not restarted during active work.
 
 ## Read Before Any Tests
 

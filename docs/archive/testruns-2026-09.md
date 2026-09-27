@@ -6,6 +6,140 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-26 - Restart now stops and saves coding agents before updating
+
+The live updater now carries an explicit apply through to Studio's existing
+stop-and-save restart. It stops every owned builder tree, preserves each task's
+session, checklist and recent output, awaits settlement, saves helper journals,
+and relaunches paused. Resume continues the queued work without spending a
+failed attempt. Automatic updates still drain workers. Manual restarts retain
+the changed-file list and stay out of the restart-loop count; refused journal
+saves leave the update retryable, and pending saves do not trigger a second
+empty restart. Project-switch and running-game guards remain in place.
+
+Validation on Windows:
+- Focused loop control, updater, continuity, executor resume and assistant pool:
+  82/82 pass. Real host settlement is exercised with two workers and deliberately
+  blocked checkpoint writes; no relaunch occurs until progress is durable.
+- Updater Python contracts: 24/24 pass. npm.cmd run check, npm.cmd run audit
+  (zero findings), and git diff --check pass. No renderer sources changed here.
+- Full npm.cmd test: main stage 3,861 pass / zero failures / four skips;
+  Electron stage 32 pass / five failures / one timeout cancellation / one skip;
+  eyes toggle 1/1; occlusion 1 pass / 1 failure (rAF growth=14). Python contracts
+  248 tests OK (one skipped); normalized-path lock 6/6. Overall exit 1.
+- Waited for existing full runs to finish before starting. Another full run
+  started concurrently, and the runner detected source edits during both the
+  Electron and occlusion stages. Desktop failures were media-browser navigation,
+  missing media/planning reports, node-view timeout, profiler download timeout
+  and tree-dynamics selection timeout. Further isolated retries were withheld
+  while sibling desktop runs remained active. This is not a clean full-gate pass.
+
+Complete local logs: %TEMP%/mefi-restart-{focused-final,python,check-final,audit,
+full}.log. Existing shared edits and local/portable application data were
+preserved. No live Studio restart or package deployment was performed.
+
+## 2026-09-26 - Final UI video audit reruns and resolved integration gate
+
+Follow-up to Video backgrounds, solid reading surfaces and compact UI audit.
+The final renderer audit includes actual element fills as well as the shared
+tokens: 90 page states, 21 Vibe panel states, 864 contrast checks across 24
+variants, minimum reading contrast 6.68:1. A rendered Vibe drawer exposed a
+hard-coded translucent fill after the token-only pass; it now uses the shared
+material, and zero glass prevents underlying text from showing through it.
+
+Final checks:
+- Floating media passes with the explicit animation wait (76.5 seconds).
+- Unified navigation, companion, 36 original responsive layouts and the added
+  video matrix pass together (180.4 seconds). The first combined retry exceeded
+  its original 150-second renderer guard. With 111 additional video states, the
+  fixture now allows a bounded 240-second renderer run and writes progress
+  checkpoints; source copying/cleanup fit within a 420-second outer bound.
+- Latest npm.cmd run check passes (166 targets, 343 specs, 13 stylesheets).
+- Latest npm.cmd run audit has zero findings. The other session completed its
+  standalone media-browser auditor integration; Python auditor retry is 4/4.
+- Final fast run remains 3861 pass, 4 skipped. Original full-run preview/media
+  failures passed their targeted reruns. The original full run itself remains
+  recorded red; no single all-green full rerun is claimed.
+- Final credential audit compares 13 saved values against 667 tracked/nonignored
+  files, 653 index blobs and the staged diff: no matches. Only three synthetic
+  credential-shaped test fixtures are flagged. Local evidence remains ignored.
+
+Evidence: tools/logs/ui-polish-unified-final.log, ui-polish-render-final.log,
+ui-polish-audit-latest.log, ui-polish-python-auditor-retry.log,
+ui-polish-credential-final.json and ui-polish-20260926.md. No commit or push.
+
+## 2026-09-26 - Video backgrounds, solid reading surfaces and compact UI audit
+
+Reproduced washed-out navigation and patterned video showing through reading
+surfaces, Settings categories sliding under the fixed bar, and narrow Tools and
+advanced Agent routing overflow. Added a media reading floor, stronger secondary
+text, solid zero-glass materials (including Vibe drawers), a named responsive
+container for Agent settings, bounded Tools placement and a dense Settings strip
+below local navigation. Updated Analyzer copy assertions without dropping stale
+reply checks, and initialized rail navigation in the sidebar/Vibe unit fixtures.
+
+The isolated renderer pass covers 90 Build page states and 21 Vibe panel states,
+with an actual playing canvas video inside a locally answered provider iframe.
+It checks 864 contrast combinations over black/white frames, including real
+surface fills; minimum reading contrast is 6.68:1. Expanded Routing, open Ideas
+Tools and scrolled Settings search are hit-tested. Playback advances, keeps its
+iframe and loads once. No renderer errors, external requests or child execution.
+The early sweep's generic closed-disclosure flags were not treated as defects.
+
+Validation:
+- Booklet rebuild and npm.cmd run check pass; focused navigation/Analyzer 47/47.
+- Final npm.cmd run test:fast: 3861 pass, 4 skipped, zero failures.
+- Full npm.cmd test: CPU 3855 pass / 1 fail / 4 skipped; Electron 36 pass /
+  1 fail / 1 skip; visibility 1/1; occlusion 1 pass / 1 capability skip;
+  Python 248 tests with 1 failure and 1 skip; normalized-path lock 6/6.
+- Preview process shutdown timed out in the full run and passed its solo retry.
+  Floating media's follow assertion passed on retry; the fixture now waits for
+  the dodge animation to finish before measuring follow. An export-enabled retry
+  completed the renderer but exceeded 120 seconds while copying screenshots;
+  the retry without export passed in 36.5 seconds.
+- Earlier audit passes had zero findings. The latest audit/Python failure is the
+  concurrently added standalone renderer/media-browser.js not being recognized
+  by the booklet auditor. That in-flight feature is preserved, not modified here.
+- Credential value comparisons against tracked/nonignored files, index blobs and
+  staged changes have no matches. Logs and captures are ignored; no commits/pushes.
+
+Local evidence: tools/logs/ui-polish-*.log, ui-polish-after/report.json and
+ui-polish-20260926.md. Shared source changes were reported during the full run;
+the complete repository gate is not claimed green.
+
+## 2026-09-26 - Auto runs agent-proposed repairs and recovers misfiled owner questions
+
+Auto now admits agent-proposed tasks even when the saved agent-filed switch
+is on; Always ask, Accept per task and Elevated only keep their approval
+rules. The UI explains Auto and preserves the saved Elevated-only preference.
+Worker and split prompts keep test failures, concurrent edits and test-history
+conflicts with Studio. Concrete repair requests mislabeled owner regain bounded
+retry options, including legacy open questions. Answered/dismissed questions,
+Undo, owner holds, named permissions and risk decisions retain their gates.
+Unfinished repairs reported under owner cannot falsely pass verification.
+Missing sessionless evidence still forbids confirmation but permits repair.
+
+Validation:
+- Final eight focused suites: 178/178 pass, including real-host dispatch,
+  Pause, all four reported repair titles, saved-question recovery, retry budgets,
+  permission/scope preservation, missing evidence and the mode-switch UI.
+- npm.cmd run build-booklet, npm.cmd run check and npm.cmd run audit pass;
+  audit has zero findings. The generated booklet contains the updated controls.
+- Full npm.cmd test: CPU 3847 pass, 0 fail, 4 skipped; Electron lane 37 pass,
+  0 fail, 1 skipped; eyes toggle 1/1. Occlusion: 1 pass, 1 fail (rAF growth 11).
+  Python contracts: 248 tests OK, 1 skipped. Normalized-path lock: 6/6 pass.
+- The full run overlaps other sessions' edits and the final focused refinements;
+  its source-change guard fired at the occlusion failure. The same rAF failure
+  is documented in the preceding AI-recovery baseline comparison.
+- Single-file occlusion retry: 1 pass, 1 capability skip, exit 0. Other sessions
+  also ran Electron fixtures; this is not proof of the occluded phase passing.
+- A read-only evaluation of the four actual saved cards under the updated Auto
+  rule finds one running and three ready, with none awaiting approval.
+
+Logs are local at %TEMP%/mefi-auto-repairs-{final-focused,full,final-check,
+final-audit,occlusion-retry}.log. No live task store or settings were edited,
+and the live Studio process was not restarted during active work.
+
 ## 2026-09-26 - AI offline route-change recovery and isolated blockers (task_b172488b3c947b88)
 
 Read all eight saved context revisions and preserved the inherited Claude
