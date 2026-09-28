@@ -17,6 +17,13 @@
     const el = button(label, () => { const input = panes.ask?.querySelector("textarea"); if (!input || chatBusy) return; input.value = message; sendConversation(); });
     el.classList.add("companion-chip"); el.title = message; return el;
   };
+  // scripts/companion-pet.cjs's personalities, as the owner reads them
+  // (tests/companion_ui.test.mjs keeps the two in step).
+  const PERSONALITIES = [
+    ["focused", "Straight work", "Short, plain answers. No small talk, faces or wandering."],
+    ["balanced", "Balanced", "Warm and to the point. Reacts when things happen."],
+    ["playful", "Friendly & expressive", "Chatty and playful: little faces, idle play and celebrations."],
+  ];
   let conversationTimer = 0;
   const inside = (rect, x, y, margin = 14) => x >= rect.left - margin && x <= rect.right + margin && y >= rect.top - margin && y <= rect.bottom + margin;
   const editing = () => host?.panel.contains(document.activeElement) && document.activeElement?.matches("input:not([type=checkbox]):not([type=range]), textarea, [contenteditable=true]");
@@ -50,7 +57,7 @@
     if (!host || host.panel.hidden) return;
     if (host.panel.classList.contains("companion-in-hub")) { window.MefiCompanionHub?.resize(); return; }
     const box = host.orb.getBoundingClientRect(), panel = host.panel;
-    const width = Math.min(innerWidth - 24, tab === "status" ? 370 : tab === "activity" ? 430 : 460);
+    const width = Math.min(innerWidth - 24, tab === "status" ? 370 : tab === "now" ? 430 : 460);
     panel.style.width = `${width}px`;
     const content = panel.querySelector(".companion-content");
     const cap = Math.max(180, innerHeight - 32), head = panel.querySelector(".companion-shell-head").offsetHeight + panel.querySelector(".companion-tabs").offsetHeight + 44;
@@ -84,14 +91,19 @@
     control.addEventListener("change", async () => { control.disabled = true; try { await save(control.type === "checkbox" ? control.checked : control.value); } catch (error) { window.MefiToast?.(error.message, "bad"); } finally { control.disabled = false; render(latest); } });
     row.append(words, control); panes.settings.append(row); fields[key] = control;
   }
+  // Tab names from before the menu was tidied still open their new home.
+  const TAB_ALIASES = { team: "now", activity: "now", learned: "settings" };
   function selectTab(value) {
+    value = TAB_ALIASES[value] || value;
+    if (!panes[value]) value = "ask";
     tab = value;
     for (const [key, pane] of Object.entries(panes)) pane.hidden = key !== value;
     for (const control of host.panel.querySelectorAll("[data-companion-tab]")) { control.setAttribute("aria-selected", String(control.dataset.companionTab === value)); control.tabIndex = control.dataset.companionTab === value ? 0 : -1; }
     if (value === "ask") refreshConversation();
-    if (value === "team") refreshTeam();
+    if (value === "now") refreshNow();
     render(latest); requestAnimationFrame(position);
   }
+  function heading(text) { panes.settings.append(node("h4", "companion-heading", text)); }
   async function refreshConversation() {
     const thread = panes.ask?.querySelector(".companion-thread");
     if (!thread || !window.mefiStudio?.assistantState) return;
@@ -102,7 +114,8 @@
     thread.replaceChildren();
     const messages = (result.state?.messages || []).filter((item) => ["user", "assistant"].includes(item.role)).slice(-10);
     const name = companionName();
-    if (!messages.length) thread.append(node("p", "muted", `Hi, I'm ${name}. Ask me about this project, or tell me what task to create.`));
+    const hello = { focused: `${name}. Ask about this project, or describe a task.`, playful: `Hi hi, I'm ${name}! ^_^ What are we making today?` }[latest?.state?.personality] || `Hi, I'm ${name}. Ask me about this project, or tell me what task to create.`;
+    if (!messages.length) thread.append(node("p", "muted", hello));
     for (const item of messages) {
       const row = node("p", `companion-message companion-message-${item.role}${item.kind === "notice" ? " companion-message-notice" : ""}`);
       row.append(node("strong", "", item.role === "user" ? "You" : name), document.createTextNode(` ${String(item.text || "").slice(0, 1200)}`));
@@ -138,20 +151,24 @@
     } catch (error) { status.textContent = error.message; }
     finally { chatBusy = false; window.MefiCompanionHub?.thinking(false, { celebrate: answered }); send.disabled = false; input.disabled = false; if (!host.panel.hidden && !panes.ask.hidden) input.focus(); }
   }
-  async function refreshTeam() {
-    const pane = panes.team;
-    if (!pane || !window.mefiStudio?.assistantState) return;
+  // What I'm doing: the work being built, the team and what they said to each
+  // other (read when the tab opens), then recent activity (kept live by render).
+  let nowRead = 0;
+  async function refreshNow() {
+    const live = panes.now?.querySelector(".companion-now-live");
+    if (!live || !window.mefiStudio?.assistantState) return;
+    const read = ++nowRead;
     const [full, status] = await Promise.all([window.mefiStudio.assistantState().catch(() => null), Promise.resolve(window.mefiStudio.assistantStatus?.()).catch(() => null)]);
-    pane.replaceChildren(node("p", "muted", "Current agents, work and messages shared between them."));
+    if (read !== nowRead) return;
     const state = full?.state || {}, agents = state.agents || [], jobs = status?.status?.running || [];
+    const parts = [node("h3", "", jobs.length ? `Building now · ${jobs.length}` : "Building now")];
+    parts.push(...(jobs.length ? jobs.slice(0, 8).map((job) => node("p", "companion-item", job.title || job.taskId || "Task in progress")) : [node("p", "muted", "Nothing is being built right now.")]));
     const roster = node("div", "companion-team-list");
     for (const agent of agents) roster.append(node("p", "companion-item", `${agent.role || "agent"} · ${agent.status || "idle"}${agent.step ? ` · ${agent.step}` : ""}`));
-    if (!agents.length) roster.append(node("p", "muted", "No agents reported yet."));
-    pane.append(roster);
-    if (jobs.length) pane.append(node("h3", "", "Building now"), ...jobs.slice(0, 8).map((job) => node("p", "companion-item", job.title || job.taskId || "Task in progress")));
-    const mail = (state.mail || []).slice(-8).reverse();
-    if (mail.length) pane.append(node("h3", "", "Agent messages"), ...mail.map((item) => node("p", "companion-item", `${item.from || "agent"} → ${item.to || "team"}: ${item.text || ""}`)));
-    pane.append(button("Open live agent work", () => { host.toggle(false); window.MefiNav?.go("agents", { section: "live" }); }));
+    if (agents.length) parts.push(node("h3", "", "The team"), roster);
+    const mail = (state.mail || []).slice(-6).reverse();
+    if (mail.length) parts.push(node("h3", "", "What they told each other"), ...mail.map((item) => node("p", "companion-item", `${item.from || "agent"} → ${item.to || "team"}: ${item.text || ""}`)));
+    live.replaceChildren(...parts);
     requestAnimationFrame(position);
   }
   function attach(options) {
@@ -166,7 +183,7 @@
     title.append(name, status); head.append(title, button("×", () => { if (window.MefiCompanionHub?.isOpen()) window.MefiCompanionHub.back(); else { host.toggle(false); orb.focus({ preventScroll: true }); } })); head.lastChild.setAttribute("aria-label", "Close assistant menu");
     const tabs = node("div", "companion-tabs"); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Assistant menu");
     const content = node("div", "companion-content"); content.id = "companion-content";
-    for (const [key, label] of [["ask", "Ask"], ["status", "Status"], ["team", "Team"], ["activity", "Activity"], ["learned", "Learned"], ["settings", "Settings"]]) {
+    for (const [key, label] of [["ask", "Talk"], ["status", "Needs you"], ["now", "Now"], ["settings", "Settings"]]) {
       const control = button(label, () => selectTab(key)); control.dataset.companionTab = key; control.id = `companion-tab-${key}`; control.setAttribute("role", "tab"); control.setAttribute("aria-controls", `companion-pane-${key}`);
       control.addEventListener("keydown", (event) => { if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return; event.preventDefault(); event.stopPropagation(); const all = Array.from(tabs.children), at = all.indexOf(control); const next = event.key === "Home" ? 0 : event.key === "End" ? all.length - 1 : (at + (event.key === "ArrowLeft" ? -1 : 1) + all.length) % all.length; all[next].click(); all[next].focus(); }); tabs.append(control);
       const pane = node("div", "companion-menu-pane"); pane.id = `companion-pane-${key}`; pane.setAttribute("role", "tabpanel"); pane.setAttribute("aria-labelledby", control.id); pane.hidden = key !== tab; content.append(pane); panes[key] = pane;
@@ -180,11 +197,17 @@
     const actions = node("div", "companion-ask-actions");
     actions.append(button("Create a task", () => { input.value = "Create a task: "; input.focus(); }), button("Send", sendConversation)); actions.lastChild.dataset.send = "true";
     const chatStatus = node("p", "ab-quiet"); chatStatus.setAttribute("role", "status");
-    panes.ask.append(thread, input, actions, chatStatus);
+    // Three questions worth one tap, whatever the thread holds.
+    const starters = node("div", "companion-starters");
+    starters.append(chip("What are you doing?", "What are you doing right now?"), chip("What's next?", "What should we work on next?"), chip("Recap today", "Recap what happened today."));
+    panes.ask.append(thread, starters, input, actions, chatStatus);
     const places = node("div", "companion-places");
     for (const [label, route, options] of [["Tasks", "tasks"], ["Agents", "agents"], ["Live", "command"], ["Project map", "agent-brain", { tab: "map" }], ["Settings", "studio"]]) places.append(button(label, () => { host.toggle(false); window.MefiNav?.go(route, options); }));
     const location = node("p", "ab-quiet"); location.dataset.companionLocation = "true";
-    panes.ask.append(location, node("p", "ab-quiet", "You can ask me to open a view, create a task, or explain what the team is doing."), places);
+    panes.ask.append(location, places);
+    const nowLive = node("div", "companion-now-live"); nowLive.setAttribute("aria-live", "polite");
+    const nowActivity = node("div", "companion-now-activity");
+    panes.now.append(nowLive, node("h3", "", "Recently"), nowActivity, button("Open live agent work", () => { host.toggle(false); window.MefiNav?.go("agents", { section: "live" }); }));
     // Replies that land later, and the notices the team posts, appear while
     // the Ask tab is open instead of on its next visit.
     window.mefiStudio?.onAssistant?.(() => {
@@ -193,16 +216,32 @@
       conversationTimer = setTimeout(refreshConversation, 250);
     });
     const growth = node("span", "companion-growth"); growth.setAttribute("aria-hidden", "true"); for (let i = 0; i < 3; i++) growth.append(node("i")); orb.append(growth);
+    // Settings, top to bottom: who it is, how it works, what it has learned,
+    // and the shortcuts Quick actions used to hold.
+    heading("Personality");
+    addField("personality", "Personality", PERSONALITIES.map(([value, text]) => [value, text]), (value) => preference({ personality: value }));
+    const says = node("p", "ab-quiet"); says.id = "companion-personality-says"; panes.settings.append(says);
+    addField("look", "Companion look", [["wisp", "Wisp"], ["fox", "Fox"], ["owl", "Owl"], ["cat", "Cat"], ["person", "Person"]], (value) => preference({ look: value }));
+    addField("expressions", "Little faces and reactions", null, (value) => preference({ expressions: value }));
+    addField("antics", "Idle play while you work", null, (value) => preference({ antics: value }));
+    addField("bubbles", "Show speech bubbles", null, (value) => preference({ bubbles: value }));
+    addField("roaming", "Roam around the studio", null, (value) => preference({ roaming: value }));
+    addField("pinned", "Pin companion position", null, (value) => preference({ pinned: value, anchor: anchor() }));
+    addField("growth", "Show project growth", null, (value) => preference({ growth: value }));
+    addField("scope", "Project reach", [["project", "Current project"], ["all", "All projects"]], (value) => preference({ scope: value }));
+    const bond = node("p", "ab-quiet"); bond.id = "companion-bond"; panes.settings.append(bond);
+    heading("Work");
     for (const [key, label] of [["newWork", "Allow new work"], ["enabled", "Run the queue"], ["proactive", "Proactive suggestions"]]) addField(key, label, null, (value) => window.MefiAgentControls?.set(key, value));
     const permissions = document.createElement("div"); permissions.id = "companion-autonomy";
     panes.settings.append(permissions); window.MefiAutonomy?.mount(permissions, { full: true });
-    addField("roaming", "Roam around the studio", null, (value) => preference({ roaming: value }));
-    addField("pinned", "Pin companion position", null, (value) => preference({ pinned: value, anchor: anchor() }));
-    addField("bubbles", "Show speech bubbles", null, (value) => preference({ bubbles: value }));
-    addField("growth", "Show project growth", null, (value) => preference({ growth: value }));
-    addField("look", "Companion look", [["wisp", "Wisp"], ["fox", "Fox"], ["owl", "Owl"], ["cat", "Cat"], ["person", "Person"]], (value) => preference({ look: value }));
-    addField("scope", "Project reach", [["project", "Current project"], ["all", "All projects"]], (value) => preference({ scope: value }));
-    panes.settings.append(button("Open full Agents setup", () => { host.toggle(false); window.MefiNav?.go("agents", { section: "setup", pane: "team" }); }), button("Studio styling", () => { host.toggle(false); window.MefiNav?.go("studio", { category: "appearance" }); }));
+    heading("What I've learned");
+    const learned = node("div", "companion-learned"); panes.settings.append(learned);
+    heading("Shortcuts");
+    const shortcuts = node("div", "companion-places");
+    for (const [label, run] of [["Walk me through setup", () => window.MefiOnboarding?.open?.()], ["Team & connections", () => window.MefiNav?.go("agents", { section: "setup", pane: "team" })], ["Audio & music", () => window.MefiMusic?.openAudio?.()], ["Studio styling", () => window.MefiNav?.go("studio", { category: "appearance" })]]) {
+      shortcuts.append(button(label, () => { window.MefiCompanionHub?.close?.({ immediate: true, restore: false }); host.toggle(false); run(); }));
+    }
+    panes.settings.append(shortcuts);
     orb.addEventListener("pointerdown", startDrag);
     orb.addEventListener("click", (event) => { if (dragged) { event.preventDefault(); event.stopImmediatePropagation(); dragged = false; } }, true);
     document.addEventListener("pointermove", (event) => {
@@ -306,9 +345,14 @@
     for (const [key, control] of Object.entries(fields)) {
       if (control.disabled || control === document.activeElement && control.type !== "checkbox") continue;
       const value = ["newWork", "enabled", "proactive"].includes(key) ? window.MefiAgentControls?.snapshot()?.[key] : state[key];
-      if (control.type === "checkbox") control.checked = ["roaming", "bubbles", "growth"].includes(key) ? value !== false : value === true;
-      else control.value = value || (key === "look" ? "wisp" : "project");
+      if (control.type === "checkbox") control.checked = ["roaming", "bubbles", "growth", "expressions"].includes(key) ? value !== false : value === true;
+      else control.value = value || ({ look: "wisp", personality: "balanced" }[key] ?? "project");
     }
+    const personality = PERSONALITIES.find(([value]) => value === (state.personality || "balanced"));
+    const says = document.getElementById("companion-personality-says");
+    if (says && personality && says.textContent !== personality[2]) says.textContent = personality[2];
+    const bond = document.getElementById("companion-bond");
+    if (bond) bond.textContent = state.bond ? `${data.name || companionName()} · ${state.bond}` : "";
     const statusItems = [];
     if (data.digest) statusItems.push({ id: "digest", kind: "digest", ...data.digest });
     const waiting = state.queue?.items || [];
@@ -323,9 +367,9 @@
       return data.queueItem(item);
     });
     const activity = (state.activity || []).map((event, index) => ({ ...event, id: event.id || `${event.at}:${index}` }));
-    keyed(panes.activity, activity.length ? activity : [{ id: "empty", text: "Project activity will appear here as work happens." }], (event) => { const box = node("div", "companion-item"); box.append(node("strong", "", event.text || event.title || String(event.kind || "Activity").replaceAll(".", " "))); if (event.at) box.append(node("span", "ab-quiet", new Date(event.at).toLocaleTimeString())); return box; });
+    keyed(panes.now.querySelector(".companion-now-activity"), activity.length ? activity.slice(0, 12) : [{ id: "empty", text: "Project activity will appear here as work happens." }], (event) => { const box = node("div", "companion-item"); box.append(node("strong", "", event.text || event.title || String(event.kind || "Activity").replaceAll(".", " "))); if (event.at) box.append(node("span", "ab-quiet", new Date(event.at).toLocaleTimeString())); return box; });
     const learned = [{ id: "project", text: `${state.projectName || "This project"} · ${learning.systems || 0} mapped systems` }, { id: "workflows", text: `${learning.verifiedRecipes || 0} workflows with verified success` }, ...(state.preferences || []).map((text, index) => ({ id: `preference:${index}`, text })), ...(state.studioPreferences || []).map((text, index) => ({ id: `studio-preference:${index}`, text: `Studio observation: ${text}` })), { id: "explanation", text: "The three companion lights mark project knowledge, verified workflows, and learned preferences. Observations stay suggestions; they never change permissions or answer for you." }];
-    keyed(panes.learned, learned, (item) => node("p", item.id === "explanation" ? "ab-quiet" : "companion-item", item.text));
+    keyed(panes.settings.querySelector(".companion-learned"), learned, (item) => node("p", item.id === "explanation" ? "ab-quiet" : "companion-item", item.text));
     if (!host.panel.hidden) requestAnimationFrame(position);
   }
   function opened(open, options = {}) {

@@ -343,3 +343,13 @@ test("Auto clears agent proposals from Needs you; switching back restores the ap
   await f.host.set({ level: "auto" });
   assert.equal((await f.host.notices()).counts.total, 0);
 });
+
+test("a decision that failed to apply cannot be undone or taught as a correction", async () => {
+  const f = fixture({ kind: "run-failed", task: { runFailures: 5 }, reply: { optionId: "retry", confidence: 0.9, reason: "The transient failure has cleared." } });
+  await f.host.decide();
+  f.state.decisions[0].failed = true;
+  const result = await f.host.undo({ id: f.state.decisions[0].id, projectId: "project" });
+  assert.equal(result.ok, false);
+  assert.equal(f.corrections.length, 0, "no correction for a choice that never applied");
+  assert.ok(!f.state.decisions[0].undone);
+});

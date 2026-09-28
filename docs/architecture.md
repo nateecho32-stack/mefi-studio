@@ -4,7 +4,11 @@ First-time setup can install a missing coding CLI, open its sign-in and check
 its connection. A single Codex, Claude Code, Grok or Antigravity subscription
 can serve the assistant, first map, planning, agent roles and coding workers.
 First map offers connection recovery in place and can use the local project
-scan through the selected provider without OpenCode. See
+scan through the selected provider without OpenCode. Scan and First map also
+offer **I have an API key or a local model server**: the guide walks to
+Connections and, once a usable key is saved (or you choose **Back to the
+scan**), scans again so **Use this setup** can map with that route. In Vibe
+mode the Create and Review walks use Vibe's own box and Tasks panel. See
 [Guided CLI setup](cli-setup.md) for configuration scope, account limits and
 the text-session controls.
 
@@ -192,7 +196,7 @@ settings and per-model work-kind summaries for the shared controls.
 | **Awaiting verification** | A finished attempt whose completion is not yet established; housekeeping checks the evidence before it becomes **Done**. |
 | **Work done outside Studio** | What changed in the open folder while Studio was closed, on another folder or hidden: commits, uncommitted edits and Claude Code, Codex or OpenCode sessions, compared with Studio's **last look** at the folder. The thread, the chat assistant (even without a model) and the welcome-back digest report it, and when the code changed every queued card is **checked** against it before a worker takes it: still needed, partly done (its worker is told what changed), or already done / no longer needed, which waits for your answer on an Ask card. See [agent-loop.md §14](agent-loop.md#14-work-done-outside-studio). |
 | **Agent brain** | The Live view (`J`) that draws a task's **pipeline** from recorded **work events**: the head (the companion), the lead, the steps and the sub-agents; plus the **Playbook** of recipes and **project map** under Agents › Workflows. The seats live under Agents › Setup. See [roadmap-0.4.0.md](roadmap-0.4.0.md) and [agent-loop.md §13](agent-loop.md#13-the-agent-brain). |
-| **Companion** | The roaming character (named under General): click it to ask questions, create tasks, navigate, see the team and its messages, change settings, or handle its needs-you queue. It also gives a welcome-back digest and covers this project or all of them. Its default model is GPT-6 Luna on Zen at medium reasoning and fast service when Zen is connected. |
+| **Companion** | The roaming character (named under General): click it to talk, see what it and the team are doing, handle its needs-you queue, suggest work or take its picks, meet friends' companions, or set its personality (Straight work, Balanced, Friendly & expressive). It also gives a welcome-back digest, can be petted, and covers this project or all of them. Its default model is GPT-6 Luna on Zen at medium reasoning and fast service when Zen is connected. |
 | **Orb, callout, absorb** | Command-view vocabulary: an orb is a node, a callout is its floating card, and absorb is a finished node collapsing into its host. |
 | **Node style / `MefiNodeStyles`** | How a node is drawn: one of eight looks (five classic, three in the two-tone Void collection), painted on both the Command view and the tree rail by `renderer/node-styles.js`. Each look owns its body and may take over the agent ring, hub dress, work orbit, arrival, selection, wires, pulses and landing; per-node motion records keep every node animating, and reduced motion freezes each look to a still pose. |
 | **Ruins Runner** | The author's LÖVE game, an optional external project Studio can launch. A fresh clone works without it. |
@@ -311,12 +315,51 @@ settings and per-model work-kind summaries for the shared controls.
   there reads **Open Vibe on launch** (off opens Watch).
 - Click the companion or press **Escape** on a workspace page to open its
   compact bubble menu over the current view. The center returns to Studio;
-  the surrounding bubbles open conversation, friends and listening rooms,
-  requests, notifications, settings and quick actions. Escape first closes a
+  six bubbles each do one job: **Talk** (chat, with What are you doing? /
+  What's next? / Recap today one tap away), **What I'm doing** (what is being
+  built, the team and what they told each other, and recent activity),
+  **Needs you** (the queue, with its count), **Suggest work**, **Friends** and
+  **Personality** (how it behaves, run controls, what it has learned, and the
+  shortcuts Quick actions used to hold). Inside the menu the bubbles are the
+  navigation, so the panel's own tabs are hidden. Escape first closes a
   nested picker or returns from a bubble, then closes the menu. Opening the
-  menu keeps agents on their current run settings; Quick actions exposes the
-  existing run/pause controls. The bubbles follow an already connected audio
-  link, respect motion and transparency preferences, and never start capture.
+  menu keeps agents on their current run settings. The bubbles follow an
+  already connected audio link, respect motion and transparency preferences,
+  and never start capture.
+- **Suggest work** takes the owner's idea into the inbox as their own request
+  (the inbox's own add), and lists the companion's next picks from the backlog,
+  each one **Work on it** away. Nothing starts on its own.
+- **Personality** is Straight work, Balanced (the default) or Friendly &
+  expressive (`scripts/companion-pet.cjs`). Choosing one sets its switches:
+  little faces and reactions, idle play, roaming. Each switch can be changed
+  afterwards, and the owner's own choice wins over a later preset. Every chat
+  box's message carries it as `ui.personality`, so replies are terse, warm or
+  playful; it never changes what the companion may do. Without faces a
+  finished reply shows a plain check. With idle play on, the orb does
+  something small now and then while nothing needs it, and dozes after ten
+  quiet minutes until touched. Stroking it back and forth is a pet: hearts
+  rise and the bond (days together, pets, playdates) remembers, one pet per
+  few seconds.
+- **Friends › Playground** (`renderer/companion-friends.js`, main's
+  "Companion friends" block, `scripts/companion-friends.cjs`): like the toys
+  that linked up, companions in the same room meet and play short scripted
+  playdates, and **Practice with Pip** plays one on this PC with nothing sent.
+  What a companion tells friends is a small fixed card, and nothing about the
+  owner or their work leaves until they allow it. Levels: Stay home, Play only
+  (look, mood and games; the default), Say hi (name and personality), Status
+  (working or resting and counts, no titles) and Work titles (the project and
+  a few task titles, scrubbed of anything secret-looking). Rules are for
+  everyone, a room or a friend, for this session or always; the most specific
+  wins, and **This session** can hold everything at Just play or Stay home. A
+  room hears the lowest level of anyone who might be in it; a friend allowed
+  more gets their own card only from a hub that delivers to one member. When a
+  friend's companion shares more, the companion asks whether to share the same
+  back (For this session / Always / Not now) and never shares on its own.
+  Keys, tokens, paths, links, chats, decisions and settings never leave at any
+  level. **What was sent** lists every card that left. A friend's card is read,
+  clipped and shown as text, never sent to a model. Playdates need the rooms
+  hub to relay `companion` frames (see [community.md](community.md)); until it
+  does, Friends says so and Pip is there to practice.
 - The same glowing wisp wakes in the launch box, responds to pointer play with
   floating ASCII expressions and a few sparks, and accompanies the first-run
   guide. During setup, a pending chat reply or reported agent work, little lights
@@ -412,6 +455,30 @@ settings and per-model work-kind summaries for the shared controls.
   while Home is still underneath. **Blur behind panels** off makes the panels
   solid. The glass is mixed from the theme's own colours, so every theme
   keeps its hue.
+- **Configuration** (Ctrl Shift ,; **All settings in one place** in Settings)
+  lists every setting in one searchable tree. Settings, Agents' setup panes
+  and Appearance already register each control as a `settings:*` record for
+  Search; `renderer/config-dialog.js` files those records under seven
+  categories (the first whose words match) and opens the real control when
+  one is picked, so there is never a second copy to drift. Its UI & Surfaces
+  page adds the interface scale (the window's zoom, 70% to 150%, saved in
+  `settings.ui.zoom` and put back on every page load, `main.cjs` `ui:zoom`).
+- **Menu motion** (`renderer/motion.js`, `window.MefiMotion`): menus still
+  rebuild their rows on each paint, and the helper keeps the pixels calm.
+  Rows carry a `data-key`; `keep()` marks the ones that were there before
+  `data-kept` (CSS stops their entrance), glides them to their new place,
+  numbers new ones `--i` for a cascade and fades removed ones as
+  `.motion-ghost` copies. `swap()` moves between views (panel to panel,
+  list to detail, category to category) by fading the old view out fast and
+  bringing the new one in from the side you went. Both read layout only
+  when something on screen could move. Vibe's cards, panels, chat and dock,
+  Configuration, Trace and the Habits panel use it.
+- Each agent's **Skills, tools & habits** panel (Agents › Setup) now ends
+  with **Habits** (`scripts/habits.cjs`): six short behaviour rules with
+  variants, each off, brief (one line) or full, with its token cost and the
+  total the agent's habits add to every prompt. `agent-addons.cjs` appends a
+  role's habits wherever its skills go (seats, roles, the builder), and a
+  team snapshot carries `agentHabits` like `agentSkills`.
 - **Trace** (Live, next to Activity; `renderer/trace.js`) reads Studio's logs
   as channels: the studio log (every line the host logs, kept in a bounded
   ring since it was only ever streamed to the window), the assistant's log,
@@ -621,10 +688,12 @@ failed process stays an error and cannot produce briefing requests.
   the verdict and the commits behind it. Without a model the check matches
   files and commit subjects and only says "may already be done". See
   [agent-loop.md §14](agent-loop.md#14-work-done-outside-studio).
-- **Talking to the companion.** Every chat box (the companion's Ask tab,
+- **Talking to the companion.** Every chat box (the companion's Talk tab,
   Home's composer, Command's chat log, the Explorer) sends the screen you are
   on and the companion's name with each message
-  (`MefiCompanionUI.context()`), and the reply speaks as that name.
+  (`MefiCompanionUI.context()`), and the reply speaks as that name. The host
+  adds the owner's chosen personality (`ui.personality`), which changes the
+  manner of the reply and nothing else.
   Command's chat log and rail console update live thinking text in place,
   preserving the saved bubbles, text selection and the reader's scroll.
   Their composers grow with the draft up to 120 px, then scroll, and follow
@@ -633,7 +702,7 @@ failed process stays an error and cannot produce briefing requests.
   `needsYou` is built by the same `companion.queue()` that counts "N need
   you". The model also reads the latest notices and what each reply offered.
   After a reply that offered several cards, "all of them" or "both" starts
-  every offered card and only those. The Ask tab shows the last reply's
+  every offered card and only those. The Talk tab shows the last reply's
   offers as one-tap buttons (plus All of them) and refreshes when a reply or
   notice lands.
 - **Work on it** makes a node the assistant's next piece of work — pinned to
@@ -1082,11 +1151,22 @@ failed process stays an error and cannot produce briefing requests.
   visible (without CLI probes); the account channels bypass the
   project-switch gate.
 - **AI routing** picks who pays — Auto walks an ordered provider list you edit
-  in Settings (the first usable provider answers, and the opt-in fallback
-  walks down the list), plus z.ai only, OpenCode Go only, OpenRouter, the Grok, Claude
-  Code or Antigravity CLIs on their own logins, a local LM Studio server, or a
-  custom OpenAI-compatible endpoint with your own key. **Model selection** uses
-  Jev or fixed defaults; for builders it is a win-probability evaluator
+  in Settings (signed-in coding CLIs first unless *Use subscription logins
+  first* is off, then your list; the first usable provider answers, and the
+  opt-in fallback walks down the list). When nothing listed can answer, a key
+  you saved for a provider outside the list (z.ai, OpenCode Go, Zen,
+  OpenRouter or a custom endpoint) still answers, so saving a key never needs
+  a routing change; such a key never joins the fallback's retry list. Besides
+  Auto: z.ai only, OpenCode Go only, OpenCode Zen, OpenRouter, the Grok, Claude
+  Code, Codex or Antigravity CLIs on their own logins, a local LM Studio
+  server, or a custom OpenAI-compatible endpoint whose key is optional (a
+  keyless local server such as Ollama, `http://127.0.0.1:11434/v1`, sends no
+  Authorization header). The chat's "AI connected" gate, the passes, the
+  Auditor's AI pass and the Settings pills all read this same walk, so a setup
+  the router can answer is never shown as "No AI connected". The LM Studio
+  tile reads ready only when its last probe found a loaded model.
+  **Model selection** uses Jev or fixed defaults (a fresh install with no Jev
+  key reads as Fixed); for builders it is a win-probability evaluator
   (below).
 - **Models are saved per provider and per builder CLI**, so switching routes
   never carries one provider's model id into another; a provider with nothing
@@ -1104,30 +1184,48 @@ failed process stays an error and cannot produce briefing requests.
   The Models settings load OpenRouter's live text-response roster, with free
   choices first; select a model for routine or heavy passes, or enter its slug.
   The OpenRouter key also serves its Jev route and account usage reading.
-  Plan specs, brain drafts and the analyzer read stay data-only, so the only
-  CLI they may use is Claude Code, which runs with `--tools=` (no tools).
+  Plan specs, brain drafts and the analyzer read stay data-only: a CLI route
+  (Claude Code, Codex, Grok or Antigravity) answers them through the
+  restricted text adapter with its native tools off (`scripts/cli-text.cjs`).
 - **Settings › Decision model** chooses where Jev classifier calls go — the Vercel AI Gateway
   (`typesafe-ai/jev`), TypeSafe's Jev API directly (`jev-1.13.0`), OpenCode
   Zen (`jev-1.13`, including its free tier), or OpenRouter
   (`typesafe/jev-1.13`) — each route keeping its own encrypted key. Headless
-  setup: `MEFI_STUDIO_GATEWAY_KEY=... electron . --set-gateway-key`,
-  `MEFI_STUDIO_JEV_KEY=... electron . --set-jev-key`,
-  `MEFI_STUDIO_ZEN_KEY=... electron . --set-zen-key`,
-  `MEFI_STUDIO_OPENROUTER_KEY=... electron . --set-openrouter-key`, and
-  `MEFI_JEV_ROUTE=zen` (or `vercel`, `typesafe`, `openrouter`) to pick the
+  setup (PowerShell, from a source checkout) sets the route's variable, then
+  runs its flag: `$env:MEFI_STUDIO_ZEN_KEY = "<key>"; npx electron . --set-zen-key`;
+  likewise `MEFI_STUDIO_GATEWAY_KEY` / `--set-gateway-key`, `MEFI_STUDIO_JEV_KEY`
+  / `--set-jev-key` and `MEFI_STUDIO_OPENROUTER_KEY` / `--set-openrouter-key`,
+  and `MEFI_JEV_ROUTE=zen` (or `vercel`, `typesafe`, `openrouter`) to pick the
   route.
-- **Auto setup** in Settings reads saved-key flags, installed CLIs and (only
-  when nothing else is available) a live local server, then applies the
-  matching provider, model selection and builder in one pass. It sends no paid
+- **Auto setup** in Settings reads saved-key flags (z.ai, OpenCode Go, Zen,
+  OpenRouter, custom), installed CLIs and (only when nothing else is
+  available) a live local server — LM Studio, a saved keyless custom endpoint,
+  or Ollama on its default port, which it then saves as the custom endpoint —
+  and applies the matching provider, model selection and builder in one pass.
+  With no Jev route saved it moves Jev to the route whose key is present
+  (TypeSafe, Zen, then OpenRouter), and its note says when Jev cannot pick
+  models for the chosen provider (per-task selection covers z.ai GLM and
+  OpenCode Go work only). It sends no paid
   request, changes no key, keeps model overrides, reports every choice, and
   leaves the same controls editable afterward. A fresh install runs it by
   itself on its first launch, and the walkthrough's scan step reads its plan,
   so a machine with only a signed-in coding CLI is configured before the first
-  task.
+  task. Its route (and the walkthrough's **Use this setup**) is saved to
+  Studio defaults, so folders added later inherit it; an open project that
+  keeps its own team gets the same changes. A machine with no builder CLI is
+  reported as such rather than as "builders on OpenCode".
 - Builders run through `opencode run` (with a Studio-managed z.ai provider),
   the Grok CLI, Claude Code (`claude -p` on your subscription login), Codex
   (`codex exec` on your ChatGPT login), or Antigravity (`agy` on your Google
-  account), with automatic one-time fallback decided by the failure kind.
+  account), with automatic one-time fallback to OpenCode, when it is
+  installed, for a CLI that never got going (a spawn failure, a wedged start,
+  or a quick exit with nothing on stdout that is not a usage limit). A CLI
+  installed as an npm `.cmd` shim (Grok from the guided installer) runs
+  through `cmd.exe`; Grok's brief goes in a prompt file.
+- *Try again with a heavier model* runs that task's next attempt on the
+  builder's Heavy-tier model (`opus` for Claude Code, the z.ai heavy model on
+  the coding plan, or the Heavy model saved for the CLI), and is offered only
+  where such a model exists.
 - A **coding tier** in Settings › Coding workers decides what each build may
   cost. **Auto** selects per task on the z.ai route (between the GLM pair) and
   on the OpenCode Go route with no builder model pinned (among up to six Go
@@ -1150,9 +1248,9 @@ failed process stays an error and cannot produce briefing requests.
 - Keys live in the OS keystore (`safeStorage`; DPAPI on Windows); their
   ciphertext persists in `auth.json` beside `settings.json`, so preferences
   stay copyable and credentials stay machine-bound. Headless
-  setup: `MEFI_STUDIO_KEY=... electron . --set-key`,
-  `MEFI_STUDIO_ZAI_KEY=... electron . --set-zai-key`, and
-  `MEFI_STUDIO_CUSTOM_KEY=... electron . --set-custom-key`.
+  setup (PowerShell): `$env:MEFI_STUDIO_KEY = "<key>"; npx electron . --set-key`,
+  and the same with `MEFI_STUDIO_ZAI_KEY` / `--set-zai-key` and
+  `MEFI_STUDIO_CUSTOM_KEY` / `--set-custom-key`; unset the variable afterwards.
 
 ### Verification, storage and experiments
 

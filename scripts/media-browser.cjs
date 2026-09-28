@@ -35,7 +35,7 @@ function createMediaBrowser({ electron, getWindow }) {
     current = null;
     entry.owner.removeListener("closed", close);
     if (!entry.owner.isDestroyed()) {
-      entry.owner.webContents.removeListener("did-start-navigation", entry.onNavigate);
+      entry.owner.webContents.removeListener("did-navigate", entry.onNavigate);
       entry.owner.contentView.removeChildView(entry.view);
     }
     if (!entry.view.webContents.isDestroyed()) entry.view.webContents.close();
@@ -68,11 +68,20 @@ function createMediaBrowser({ electron, getWindow }) {
     current = entry;
     view.setVisible(false); owner.contentView.addChildView(view);
     owner.on("closed", close);
-    entry.onNavigate = (_event, _url, _inPlace, isMainFrame) => { if (isMainFrame) close(); };
-    owner.webContents.on("did-start-navigation", entry.onNavigate);
+    // Only a committed page change in Studio ends the browser. The start of a
+    // navigation fires before Studio's guard refuses it (a dropped file or
+    // link), which closed the view and stopped playback for a page that never
+    // changed. did-navigate fires for main-frame, cross-document commits only.
+    entry.onNavigate = () => close();
+    owner.webContents.on("did-navigate", entry.onNavigate);
     const contents = view.webContents;
+    // Subframes may load about:, data: and blob: documents (players and embeds
+    // build them); refusing those broke the frame and flagged a fine page.
+    // Top-level pages still need http(s), and external protocols stay blocked.
     const guard = (event, legacyURL) => {
-      if (!browserURL(event.url ?? legacyURL)) { event.preventDefault(); entry.error = "This link needs another app. Use Open in browser."; publish(entry); }
+      const url = event.url ?? legacyURL;
+      if (browserURL(url) || (event.isMainFrame === false && /^(?:about|data|blob):/i.test(String(url)))) return;
+      event.preventDefault(); entry.error = "This link needs another app. Use Open in browser."; publish(entry);
     };
     for (const name of ["will-navigate", "will-redirect", "will-frame-navigate"]) contents.on(name, guard);
     contents.setWindowOpenHandler(({ url }) => {

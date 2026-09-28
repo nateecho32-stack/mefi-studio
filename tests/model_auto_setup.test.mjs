@@ -10,7 +10,7 @@ const main = (await readFile(new URL("../main.cjs", import.meta.url), "utf8")).r
 const from = main.indexOf("function normalizeAutoProviders(");
 const to = main.indexOf("// Pick who pays", from);
 assert.ok(from >= 0 && to > from, "planAutoSetup must exist in main.cjs");
-const context = vm.createContext({ AI_AUTO_PROVIDERS: ["zai", "opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"] });
+const context = vm.createContext({ AI_AUTO_PROVIDERS: ["zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"] });
 vm.runInContext(main.slice(from, to), context);
 const planAutoSetup = context.planAutoSetup;
 const plain = (value) => JSON.parse(JSON.stringify(value));
@@ -194,4 +194,53 @@ test("only a pristine settings file lets the first launch run auto setup by itse
   for (const saved of [{ aiProvider: "zai" }, { executorCli: "claude" }, { modelSelection: "fixed" }, { firstRun: { version: 1 } }, { autoSetup: { at: 1 } }]) {
     assert.equal(needs(saved), false, `${Object.keys(saved)[0]} hands control back to Settings`);
   }
+});
+
+test("an OpenCode Zen key alone sets up the assistant, and Jev rides that same key", () => {
+  const plan = planAutoSetup({ settings: {}, keys: { zen: true }, clis: [cli("opencode", true)] });
+  assert.equal(plan.ok, true, plan.error);
+  assert.equal(plan.active.provider, "zen");
+  assert.equal(plan.changes.jevRoute, "zen", "Jev leaves the keyless Vercel default for the route whose key is here");
+  assert.equal(plan.active.modelSelection, "jev");
+  const notes = plan.notes.join(" ");
+  assert.match(notes, /OpenCode Zen key found: the assistant bills your Zen balance/);
+  assert.match(notes, /Jev is connected, but task-aware selection only covers z\.ai GLM and OpenCode Go work/, "the note never claims per-task picks Zen cannot get");
+  assert.match(notes, /Jev rides your OpenCode Zen key/);
+  const both = planAutoSetup({ settings: {}, keys: { zen: true, openrouter: true }, clis: [] });
+  assert.equal(both.active.provider, "zen", "the Zen key leads OpenRouter for the assistant");
+  assert.equal(both.changes.jevRoute, "zen");
+});
+
+test("Jev is only 'on' when the route it answers on has its key, and a saved route is never moved", () => {
+  const typesafe = planAutoSetup({ settings: {}, keys: { zai: true, jev: true }, clis: [] });
+  assert.equal(typesafe.changes.jevRoute, "typesafe");
+  const gateway = planAutoSetup({ settings: {}, keys: { zai: true, gateway: true, zen: true }, clis: [] });
+  assert.equal(gateway.changes.jevRoute, undefined, "the gateway key keeps the default route");
+  const pinned = planAutoSetup({ settings: { jevRoute: "vercel" }, keys: { zai: true, zen: true }, clis: [] });
+  assert.equal(pinned.changes.jevRoute, undefined, "the owner's saved route stays");
+  assert.equal(pinned.active.modelSelection, "fixed", "and with no key on it, Jev is not claimed");
+  assert.match(pinned.notes.join(" "), /No Jev key required/);
+  const openrouter = planAutoSetup({ settings: {}, keys: { openrouter: true }, clis: [] });
+  assert.match(openrouter.notes.join(" "), /OpenRouter keeps its default or saved model/, "OpenRouter's note is as accurate as Zen's");
+  const zai = planAutoSetup({ settings: {}, keys: { zai: true, zen: true }, clis: [] });
+  assert.match(zai.notes.join(" "), /task-aware model selection is on for z\.ai GLM models/);
+});
+
+test("a keyless local server is set up: a saved custom endpoint, or Ollama on its default port", () => {
+  const ollama = planAutoSetup({ settings: {}, keys: {}, clis: [], local: { ollama: true } });
+  assert.equal(ollama.ok, true);
+  assert.equal(ollama.active.provider, "custom");
+  assert.equal(ollama.changes.customEndpoint, "http://127.0.0.1:11434/v1");
+  assert.match(ollama.notes.join(" "), /Ollama is running on this machine/);
+  const saved = planAutoSetup({ settings: { customEndpoint: "http://127.0.0.1:8080/v1" }, keys: {}, clis: [], local: { custom: true, ollama: true } });
+  assert.equal(saved.active.provider, "custom");
+  assert.equal(saved.changes.customEndpoint, undefined, "an endpoint the owner saved is never replaced");
+  const lmstudio = planAutoSetup({ settings: {}, keys: {}, clis: [], local: { lmstudio: true, ollama: true } });
+  assert.equal(lmstudio.active.provider, "lmstudio", "LM Studio still leads a local Ollama");
+  assert.match(planAutoSetup({ settings: {}, keys: {}, clis: [] }).error, /OpenCode Zen.*LM Studio or Ollama/);
+});
+
+test("a Zen key is a second usable leg for the armed fallback", () => {
+  const plan = planAutoSetup({ settings: { aiProvider: "zai", modelSelection: "fixed", executorCli: "opencode", aiAutoFallback: true, aiAutoProviders: ["zai", "zen"] }, keys: { zai: true, zen: true }, clis: [cli("opencode", true)] });
+  assert.equal(plan.changes.autoFallback, undefined);
 });

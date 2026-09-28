@@ -333,7 +333,9 @@
     return icon;
   }
   function providerNote(provider, saved) {
-    const key = { zai: "hasZai", opencode: "hasOpenCode", zen: "hasZen", openrouter: "hasOpenRouter", custom: "hasCustom" }[provider];
+    // The custom endpoint is connected by its URL; its key is optional.
+    if (provider === "custom") return saved.routing?.customEndpoint ? (saved.routing?.hasCustom ? "Key saved" : "Endpoint saved") : "Needs connection";
+    const key = { zai: "hasZai", opencode: "hasOpenCode", zen: "hasZen", openrouter: "hasOpenRouter" }[provider];
     if (key) return saved.routing?.[key] ? "Key saved" : "Needs connection";
     return provider === "auto" ? "Follow routing" : provider === "lmstudio" ? "Local server" : "CLI login";
   }
@@ -376,7 +378,7 @@
   }
   function addonPanel(id, title, provider, config, saved) {
     const panel = node("div", "agents-addons"); panel.id = `agent-${id}-addons`; panel.hidden = true;
-    panel.append(node("h4", "", `Skills & tools · ${title}`));
+    panel.append(node("h4", "", `Skills, tools & habits · ${title}`));
     const list = node("div", "agents-skill-list"), selected = config.agentSkills?.[id] || [];
     for (const skill of saved.skills || []) {
       const input = node("input"); input.type = "checkbox"; input.checked = selected.includes(skill.id);
@@ -391,7 +393,9 @@
     for (const missing of selected.filter((key) => !(saved.skills || []).some((skill) => skill.id === key))) list.append(button("Remove unavailable skill", () => { config.agentSkills[id] = config.agentSkills[id].filter((key) => key !== missing); dirty(); refreshRows(`agent-${id}-add`); }, "ghost mini"));
     if (!(saved.skills || []).length) list.append(node("p", "muted", "No installed skills found. Add a SKILL.md folder under .agents/skills, .claude/skills, .codex/skills or .opencode/skills, then reload saved settings."));
     panel.append(list, node("h4", "", "Allowed Studio tools"));
-    const supportedTools = id !== "builder" || ["opencode", "claude"].includes(provider);
+    // Codex takes Studio's tool server as config overrides; Grok and
+    // Antigravity have no per-run MCP config (executorCore.cliInvocation).
+    const supportedTools = id !== "builder" || ["opencode", "claude", "codex"].includes(provider);
     const permissions = config.agentTools?.[id] || {};
     const setPermission = (key, value) => { config.agentTools = { ...config.agentTools, [id]: { ...config.agentTools?.[id], [key]: value } }; dirty(); };
     for (const [key, label, detail, enabled] of [
@@ -418,9 +422,62 @@
       const supported = ["opencode", "claude"].includes(provider), input = node("input"); input.id = "agent-builder-desk-tool"; input.type = "checkbox"; input.checked = config.agentBrain?.deskTool === true; input.disabled = !supported;
       input.addEventListener("change", () => { config.agentBrain = { ...config.agentBrain, deskTool: input.checked }; dirty(); });
       panel.append(field("Studio desk · ask_desk", input, supported ? "Give this coding worker an MCP tool for help from the desk agent." : "Available with OpenCode and Claude Code workers."));
-      panel.append(node("p", "muted", supportedTools ? "Studio search and selected MCP tools attach to this worker. The coding CLI also has its own tools and runs with automatic approval and broad file/command access. These checkboxes limit Studio tools only; manage native tools and MCP servers in the CLI configuration." : "Studio tool attachment supports OpenCode and Claude Code. This worker uses its CLI's native search, tools and permissions; it runs with broad file/command access."));
+      panel.append(node("p", "muted", supportedTools ? "Studio search and selected MCP tools attach to this worker. The coding CLI also has its own tools and runs with automatic approval and broad file/command access. These checkboxes limit Studio tools only; manage native tools and MCP servers in the CLI configuration." : "Studio tool attachment supports OpenCode, Claude Code and Codex. This worker uses its CLI's native search, tools and permissions; it runs with broad file/command access."));
     } else panel.append(node("p", "muted", "Studio enforces these tool choices for every turn. File writes and shell commands are unavailable unless you explicitly select an MCP tool that provides them. Skills guide answers and never grant tool permissions."));
+    panel.append(habitsPanel(id, config, saved));
     return panel;
+  }
+  // Habits (scripts/habits.cjs): short rules of behaviour for this agent, each
+  // with its variants and off / brief / full, and what it adds to every prompt.
+  function habitsPanel(id, config, saved) {
+    const box = node("section", "agents-habits"); box.id = `agent-${id}-habits`;
+    const library = Array.isArray(saved.habits) ? saved.habits : [];
+    const heading = node("h4", "", "Habits");
+    const totalNote = node("p", "muted agents-habits-total");
+    box.append(heading, totalNote);
+    const chosen = () => config.agentHabits?.[id] || {};
+    const paintTotal = () => {
+      let sum = 0;
+      for (const habit of library) { const pick = chosen()[habit.id]; if (pick && pick.mode !== "off") sum += habit.costs?.[pick.variant]?.[pick.mode] || 0; }
+      if (!sum) { totalNote.removeAttribute?.("aria-label"); totalNote.textContent = "No habit is on for this agent."; return; }
+      // The number counts to its new value (renderer/motion.js); a screen
+      // reader gets the settled sentence at once.
+      totalNote.setAttribute("aria-label", `These habits add about ${sum} tokens to each of this agent's prompts.`);
+      let count = totalNote.querySelector?.(".agents-habits-sum");
+      if (!count) { count = node("b", "agents-habits-sum"); totalNote.replaceChildren("These habits add about ", count, " tokens to each of this agent's prompts."); }
+      if (window.MefiMotion?.tally) window.MefiMotion.tally(count, sum);
+      else count.textContent = String(sum);
+    };
+    const set = (habitId, patch) => {
+      const current = chosen()[habitId] || { variant: library.find((habit) => habit.id === habitId)?.fallback, mode: "off" };
+      config.agentHabits = { ...config.agentHabits, [id]: { ...chosen(), [habitId]: { ...current, ...patch } } };
+      dirty(); paintTotal();
+    };
+    for (const habit of library) {
+      const row = node("div", "agents-habit"); row.dataset.habit = habit.id;
+      const pick = chosen()[habit.id] || { variant: habit.fallback, mode: "off" };
+      const words = node("span", "agents-habit-words");
+      words.append(node("strong", "", habit.title), node("small", "muted", `Fires ${habit.fires}.`));
+      const variants = selectOptions(habit.variants.map((variant) => [variant.id, variant.id]), pick.variant, `${habit.title}: variant`, (value) => { set(habit.id, { variant: value }); paintCosts(); rule.textContent = habit.variants.find((variant) => variant.id === value)?.text || ""; });
+      const modes = node("div", "agents-habit-modes"); modes.setAttribute("role", "radiogroup"); modes.setAttribute("aria-label", `${habit.title}: off, brief or full`);
+      // One thumb slides under the chosen mode (agents.css reads --seg).
+      const mark = (mode) => { modes.dataset.mode = mode; modes.style?.setProperty?.("--seg", String(["off", "brief", "full"].indexOf(mode))); row.dataset.on = String(mode !== "off"); };
+      const buttons = ["off", "brief", "full"].map((mode) => {
+        const choice = node("button", "agents-habit-mode", mode); choice.type = "button"; choice.dataset.mode = mode; choice.setAttribute("role", "radio");
+        choice.setAttribute("aria-checked", String(pick.mode === mode));
+        choice.addEventListener("click", () => { set(habit.id, { mode }); mark(mode); for (const other of buttons) other.setAttribute("aria-checked", String(other === choice)); });
+        modes.append(choice); return choice;
+      });
+      mark(pick.mode || "off");
+      const paintCosts = () => { const costs = habit.costs?.[variants.value] || {}; for (const choice of buttons) choice.title = choice.dataset.mode === "off" ? "Not in the prompt" : `About ${costs[choice.dataset.mode] || 0} tokens`; };
+      paintCosts();
+      const rule = node("p", "muted agents-habit-rule", habit.variants.find((variant) => variant.id === pick.variant)?.text || "");
+      row.append(words, variants, modes, rule);
+      box.append(row);
+    }
+    if (!library.length) box.append(node("p", "muted", "Habits load with the saved settings."));
+    paintTotal();
+    return box;
   }
   function agentRow({ id, title, detail, provider, model, effort = "", fast = false, builder = false, seat = false, setProvider, setModel, setEffort, setFast }, config, saved) {
     const box = node("section", "agents-model-row"); box.dataset.agent = id;
@@ -485,7 +542,12 @@
     const item = draft(); if (!item) return;
     $("agents-team-summary").textContent = `${item.saved.name} · ${item.saved.inherited ? "Studio defaults" : "Project team"}`;
     const ready = item.saved.routing || {};
-    $("agents-ready").textContent = ready.hasZai || ready.hasOpenCode || ready.hasZen || ready.hasOpenRouter || ["grok", "claude", "codex", "antigravity", "lmstudio"].includes(ready.provider) ? "A route is configured. Check its connection before starting work." : "Connect a provider, a local model, or a signed-in coding tool to begin.";
+    // The host's own gate (routeReady) knows Auto's whole walk - signed-in
+    // CLIs first, saved keys outside the order - so a CLI-only or custom
+    // endpoint setup is not told to connect something it already has.
+    const configured = typeof ready.routeReady === "boolean" ? ready.routeReady
+      : ready.hasZai || ready.hasOpenCode || ready.hasZen || ready.hasOpenRouter || ready.hasCustom || Boolean(ready.customEndpoint) || ["grok", "claude", "codex", "antigravity", "lmstudio"].includes(ready.provider);
+    $("agents-ready").textContent = configured ? "A route is configured. Check its connection before starting work." : "Connect a provider, a local model, or a signed-in coding tool to begin.";
     for (const pane of ["team", "routing"]) $("agents-" + pane).inert = false;
     const config = item.configuration, roles = $("agents-role-grid"); roles.replaceChildren();
     for (const [role, title, detail] of [["routine", "Assistant · routine", "Chat, checks and advisory answers"], ["heavy", "Assistant · planning & review", "Plans, briefs and reviews"]]) {
@@ -568,7 +630,12 @@
   function routingView(base) {
     const item = draft(); if (!item || $("agents-overlay")?.hidden || params.pane === "connections") return base;
     const config = item.configuration, cli = config.executorCli || base.executorCli;
-    return { ...base, provider: config.aiProvider || base.provider, roleProviders: config.aiRoleProviders || {}, models: config.aiModels || {}, providerModels: config.aiModelsByProvider || {}, autoProviders: config.aiAutoProviders || base.autoProviders, autoFallback: config.aiAutoFallback ?? base.autoFallback, modelSelection: config.modelSelection || base.modelSelection, executorCli: cli, executorTier: config.executorTier || base.executorTier, executorModels: config.executorModels || {}, executorModel: config.executorModels?.[cli] || "", executorTierModels: config.executorTierModels || {} };
+    // A drafted order or subscriptions-first switch the host has not applied
+    // drops the host's walk, so the page rebuilds it from the draft instead
+    // of showing the saved one.
+    const autoProviders = config.aiAutoProviders || base.autoProviders, subscriptionFirst = config.aiSubscriptionFirst ?? base.subscriptionFirst;
+    const walkChanged = JSON.stringify(autoProviders) !== JSON.stringify(base.autoProviders) || subscriptionFirst !== base.subscriptionFirst;
+    return { ...base, provider: config.aiProvider || base.provider, roleProviders: config.aiRoleProviders || {}, models: config.aiModels || {}, providerModels: config.aiModelsByProvider || {}, autoProviders, subscriptionFirst, ...(walkChanged ? { autoOrder: null } : {}), autoFallback: config.aiAutoFallback ?? base.autoFallback, modelSelection: config.modelSelection || base.modelSelection, executorCli: cli, executorTier: config.executorTier || base.executorTier, executorModels: config.executorModels || {}, executorModel: config.executorModels?.[cli] || "", executorTierModels: config.executorTierModels || {} };
   }
   async function load() {
     const key = draftKey(), serial = ++readSerial;
@@ -629,7 +696,15 @@
     window.addEventListener("blur", () => closeNavMenu());
     api()?.onAssistantStatus?.((status) => adoptQueue(status)); api()?.onAssistant?.((payload) => adoptQueue(null, payload?.state));
     api()?.onProjects?.(() => { readSerial++; if ($("agents-overlay")?.hidden === false) load(); });
-    api()?.onSettingsChanged?.((payload) => { if (payload?.agents && draft()?.dirty) return; if (draft() && !draft().dirty) drafts.delete(draftKey()); });
+    // Another writer changed settings: a clean draft is re-read. A push during
+    // this sheet's own save is that save's echo, and unsaved edits are kept.
+    // An open sheet reloads at once; its form stayed bound to the dropped
+    // draft, so edits and Apply silently did nothing.
+    api()?.onSettingsChanged?.(() => {
+      if (saving || !draft() || draft().dirty) return;
+      drafts.delete(draftKey());
+      if ($("agents-overlay")?.hidden === false) void load();
+    });
     window.addEventListener("mefi:queue-settings", syncQueue);
     window.MefiNav?.register({ id: "agents", label: "Agents", short: "Agents", kind: "overlay", layer: "sheet", section: "agents", group: "tools", glyph: "g-agents", badge: "questions", desc: "Set up your team, follow live work, workflows, models and usage", searchTerms: "agent setup team presets seats connections provider effort routing automation", showIn: { palette: true, help: true, tools: true }, element: "agents-overlay", focus: "#agents-title", open, close, isOpen: () => $("agents-overlay")?.hidden === false });
     // Canonical settings ownership is established before the first visit.

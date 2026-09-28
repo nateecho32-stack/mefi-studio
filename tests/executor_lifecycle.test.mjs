@@ -751,6 +751,45 @@ test("a CLI that reported on stdout and then failed is the job failing, not the 
   assert.deepEqual(host.finishes, [{ code: 1, error: null }]);
 });
 
+// `claude -p` and agy print nothing on stdout until they answer, and `codex
+// exec` reports on stderr: a long run that exited nonzero (a usage limit, an
+// API error) used to be re-run from scratch on OpenCode, another account,
+// over its half-finished edits, with the uncharged outage requeue skipped.
+test("a CLI that worked silently past the start window and failed settles as itself, not on OpenCode", () => {
+  for (const label of ["claude", "codex", "antigravity"]) {
+    const host = childHost({ label });
+    host.first.stderr.emit("data", "exec: editing renderer/idle.js\n");
+    host.advance(20 * 60000);
+    host.first.emit("close", 1);
+    assert.equal(host.entry.child, host.first, `${label}: no replacement after twenty minutes of work`);
+    assert.deepEqual(host.finishes, [{ code: 1, error: null }], `${label}: the run settles with its own ending`);
+    assert.deepEqual(host.spawns, [], `${label}: nothing new was started`);
+  }
+  // Even without a single line: a print-mode run twenty minutes in started.
+  const quiet = childHost({ label: "claude" });
+  quiet.advance(20 * 60000);
+  quiet.first.emit("close", 1);
+  assert.equal(quiet.entry.child, quiet.first);
+  assert.equal(quiet.finishes.length, 1);
+});
+
+test("a CLI that dies at once on a usage limit is the provider's outage, not a broken route", () => {
+  const host = childHost({ label: "codex" });
+  host.first.stderr.emit("data", "ERROR: You've hit your usage limit. Try again later.\n");
+  host.first.emit("close", 1);
+  assert.equal(host.entry.child, host.first, "the outage requeue settles it, on its own account");
+  assert.deepEqual(host.finishes, [{ code: 1, error: null }]);
+});
+
+test("a CLI that exits at once with cmd's not-recognized line still falls back", () => {
+  const host = childHost({ label: "claude" });
+  host.first.stderr.emit("data", "'claude' is not recognized as an internal or external command,\n");
+  host.advance(executorCore.SILENT_DEATH_MS - 1000);
+  host.first.emit("close", 1);
+  assert.equal(host.entry.child, host.fallback, "a CLI that never started is the route failing");
+  assert.equal(host.finishes.length, 0);
+});
+
 test("a synchronous replacement spawn failure settles once instead of escaping the process event callback", () => {
   const host = childHost({ throwFallback: true });
   assert.doesNotThrow(() => host.first.emit("error", new Error("fixture Grok unavailable")));

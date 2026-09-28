@@ -4443,18 +4443,21 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerCh
   // The worker session's own recorded checks and the overseer's queued run
   // (overseerChecks) are judged together — latest-wins across both — but
   // summarized apart too, so the verdict's reason names who ran the check.
-  const summarize = (checks) => hasSession === true ? summarizeObservedChecks(checks) : { total: 0, passed: 0, failed: 0, pending: 0 };
+  // Session rows count only with a session to attribute them to. The
+  // overseer's rows are Studio's own run, so they count for every builder:
+  // a claude, codex, grok or antigravity attempt writes no OpenCode session,
+  // and zeroing its overseer checks too parked every such build as failed.
   // Which argument a row arrived in is what marks it runner-issued; a
   // session row can never carry the mark in.
-  const sessionRows = asArray(observedChecks).filter(isObject).map(({ runnerIssued: _runnerIssued, ...check }) => check);
+  const sessionRows = hasSession === true ? asArray(observedChecks).filter(isObject).map(({ runnerIssued: _runnerIssued, ...check }) => check) : [];
   const runnerRows = asArray(overseerChecks).filter(isObject).map((check) => ({ ...check, runnerIssued: true }));
   // Attribution only: a command the overseer also ran is judged by that later
   // run, so the session's earlier copy is neither blamed nor credited.
   const commandKey = (check) => str(check?.command).trim().replace(/\s+/g, " ");
   const theirCommands = new Set(runnerRows.map(commandKey));
-  const own = summarize(sessionRows.filter((check) => !theirCommands.has(commandKey(check))));
-  const theirs = summarize(runnerRows);
-  const observedSummary = summarize([...sessionRows, ...runnerRows]);
+  const own = summarizeObservedChecks(sessionRows.filter((check) => !theirCommands.has(commandKey(check))));
+  const theirs = summarizeObservedChecks(runnerRows);
+  const observedSummary = summarizeObservedChecks([...sessionRows, ...runnerRows]);
   const totalChanges = Math.max(0, Number(changedFiles) || 0);
   const ledgerOwed = Math.max(0, Number(ledgerChanges) || 0);
   const ledger = Math.min(ledgerOwed, totalChanges);
@@ -4508,12 +4511,20 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerCh
     }
     return fail("no attributable edits and no named checks");
   }
-  // A builder CLI that writes no OpenCode session can never produce this
-  // evidence, so retrying only burns attempts: park it for the owner now.
-  // Nothing about the run is trusted more; it simply stops pretending a retry
-  // could prove it.
+  // A builder CLI that writes no OpenCode session (claude, codex, grok,
+  // antigravity) can never be attributed one, so the overseer's own
+  // verification run is its evidence: Studio ran the project's checks itself
+  // after this attempt (the run is keyed to it), which proves the work as
+  // well as it does an OpenCode one's (failed or pending results already
+  // failed above). An OpenCode run without a session still needs one: there
+  // a missing session means the run itself went wrong.
   const route = str(sessionlessRoute).trim();
-  if (route) return { state: "failed", reason: `${route} runs leave no session the verifier can read; check the work and confirm it yourself, or retry it on OpenCode`, evidence, attemptNo: Math.max(0, Number(priorAttempts) || 0) + 1 };
+  if (route && evidence.overseerChecks.passed) return pass(`${evidence.overseerChecks.passed} check(s) passed in the overseer's verification run`);
+  // With no overseer run either (it reported no result, or the run never
+  // landed) such a build can never produce evidence, so retrying only burns
+  // attempts: park it for the owner now. Nothing about the run is trusted
+  // more; it simply stops pretending a retry could prove it.
+  if (route) return { state: "failed", reason: `${route} runs leave no session the verifier can read, and no Studio check ran for this attempt; check the work and confirm it yourself, or give the project a check script (npm test or npm run check) so Studio can verify it`, evidence, attemptNo: Math.max(0, Number(priorAttempts) || 0) + 1 };
   return fail("no session-attributed completion evidence");
 }
 

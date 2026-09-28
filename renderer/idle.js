@@ -694,11 +694,16 @@
     const status = audioStatus();
     const { listening } = status;
     const buttonLabel = status.phase === "off" ? "Connect audio" : status.text;
-    if (el.musicStatus) el.musicStatus.textContent = buttonLabel;
+    // Ten times a second: only what changed is written. An unchanged value
+    // still queues a mutation and re-runs the page's :has() rules.
+    if (el.musicStatus && el.musicStatus.textContent !== buttonLabel) el.musicStatus.textContent = buttonLabel;
     if (el.musicToggle) {
-      el.musicToggle.dataset.state = state.inputError ? "error" : listening ? "listening" : state.inputPending ? "pending" : "off";
-      el.musicToggle.title = `${status.description} Open music, video and audio setup.`;
-      el.musicToggle.setAttribute("aria-label", `${buttonLabel} · Music and video`);
+      const toggleState = state.inputError ? "error" : listening ? "listening" : state.inputPending ? "pending" : "off";
+      const toggleTitle = `${status.description} Open music, video and audio setup.`;
+      const toggleLabel = `${buttonLabel} · Music and video`;
+      if (el.musicToggle.dataset.state !== toggleState) el.musicToggle.dataset.state = toggleState;
+      if (el.musicToggle.title !== toggleTitle) el.musicToggle.title = toggleTitle;
+      if (el.musicToggle.getAttribute?.("aria-label") !== toggleLabel) el.musicToggle.setAttribute("aria-label", toggleLabel);
     }
     if (el.musicLevel) {
       el.musicLevel.style.setProperty("--music-level", String(listening && !noMotion() ? state.music?.energy ?? 0 : 0));
@@ -2185,29 +2190,28 @@
 
   // The tab counters: running builds on Work, unread replies on Assistant,
   // open decisions on Ask.
+  // Called on every assistant push, several times a second while agents run:
+  // each counter is written only when it changes, since an unchanged
+  // `hidden` still re-runs the page's :has() rules across the document.
   function renderRailBadges(full = null) {
+    const paint = (badge, count, title) => {
+      if (!badge) return;
+      const text = count > 99 ? "99+" : String(count);
+      if (badge.hidden !== !count) badge.hidden = !count;
+      if (badge.textContent !== text) badge.textContent = text;
+      if (badge.title !== title) badge.title = title;
+    };
     const jobs = autopilotJobs(state.assistant);
-    if (el.railWorkBadge) {
-      el.railWorkBadge.hidden = !jobs.length;
-      el.railWorkBadge.textContent = jobs.length > 99 ? "99+" : String(jobs.length);
-      el.railWorkBadge.title = jobs.length ? `${jobs.length} build${jobs.length === 1 ? "" : "s"} running` : "";
-    }
+    paint(el.railWorkBadge, jobs.length, jobs.length ? `${jobs.length} build${jobs.length === 1 ? "" : "s"} running` : "");
     const unread = Number(full?.unread ?? assistantFull()?.unread ?? state.assistant?.unread) || 0;
-    if (el.railAssistantBadge) {
-      el.railAssistantBadge.hidden = !unread;
-      el.railAssistantBadge.textContent = unread > 99 ? "99+" : String(unread);
-      el.railAssistantBadge.title = unread ? `${unread} unread repl${unread === 1 ? "y" : "ies"}` : "";
-    }
+    paint(el.railAssistantBadge, unread, unread ? `${unread} unread repl${unread === 1 ? "y" : "ies"}` : "");
     const waiting = railQuestions(full).filter((question) => question.status === "open").length;
-    if (el.railAskBadge) {
-      el.railAskBadge.hidden = !waiting;
-      el.railAskBadge.textContent = waiting > 99 ? "99+" : String(waiting);
-      el.railAskBadge.title = waiting ? `${waiting} decision${waiting === 1 ? "" : "s"} waiting` : "";
-    }
+    paint(el.railAskBadge, waiting, waiting ? `${waiting} decision${waiting === 1 ? "" : "s"} waiting` : "");
     for (const [view, label, badge] of [["work", "Work", el.railWorkBadge], ["assistant", "Assistant", el.railAssistantBadge], ["ask", "Ask", el.railAskBadge]]) {
       const tab = (el.railTabs ?? []).find((button) => button.dataset.railView === view);
-      tab?.setAttribute("aria-label", badge && !badge.hidden ? `${label}, ${badge.title}` : label);
-      badge?.setAttribute("aria-hidden", "true");
+      const tabLabel = badge && !badge.hidden ? `${label}, ${badge.title}` : label;
+      if (tab && tab.getAttribute?.("aria-label") !== tabLabel) tab.setAttribute("aria-label", tabLabel);
+      if (badge && badge.getAttribute?.("aria-hidden") !== "true") badge.setAttribute("aria-hidden", "true");
     }
   }
 
@@ -2375,11 +2379,18 @@
 
   // The Ask cards: every open decision with its options, the recommended one
   // flagged, and the answer history kept beside it.
-  function renderAsks(full = null) {
+  // The host pushes the same questions several times a second while agents
+  // run; a rebuild restyles every card and wipes a half-typed answer, so a
+  // list that would read the same is left alone (force: after an answer).
+  let asksPainted = null;
+  function renderAsks(full = null, force = false) {
     if (!el.askList) return;
     const questions = railQuestions(full);
     const open = questions.filter((question) => question.status === "open");
     const closed = questions.filter((question) => question.status !== "open").slice(-5);
+    const signature = JSON.stringify([open, closed, [...open, ...closed].map((question) => agoLabel(question.at))]);
+    if (!force && signature === asksPainted && el.askList.firstChild) return;
+    asksPainted = signature;
     // renderFeed repaints this list several times a second while a worker
     // streams; a half-typed answer, its chosen option and focus survive it.
     const drafts = new Map();
@@ -2581,7 +2592,7 @@
       window.MefiToast?.(`Answer failed: ${error.message}`, "warn");
     } finally {
       state.askSending = false;
-      renderAsks();
+      renderAsks(null, true);
       renderRailBadges();
     }
   }
@@ -5159,6 +5170,55 @@
     return fit;
   }
 
+  // Free keeps the user's pan and zoom, on a leash: once the hand lets go, a
+  // tree dragged or zoomed out of the frame glides back until it fills at
+  // least a third of the view on each axis (all of itself, when smaller).
+  // It measures the tree where the camera's glide will land it, so a
+  // correction already in flight is not added again every frame. A pan never
+  // changes a node's depth, so each node slides by its own perspective k; the
+  // node that sets the edge sets the step, and a second pass settles the rare
+  // case where another node takes over that edge. It holds the tree to the
+  // layout frame, not the clear rectangle, so a card opening never pans it.
+  function leashFreeCamera(anchors, area, still = false) {
+    const FREE_LEASH = 0.35, FREE_LEASH_PAD = 28;
+    const cam = state.camera, flat = state.view === "2d";
+    if (!cam) return false;
+    const scale = Math.max(0.01, state.fit * state.zoom * (state.overviewScale ?? 1));
+    const cos = Math.cos(state.angle), sin = Math.sin(state.angle), lean = flat ? 1 : Math.cos(cameraTilt());
+    const pull = (low, high, start, size) => {
+      const inner = start + FREE_LEASH_PAD, outer = start + size - FREE_LEASH_PAD;
+      const keep = Math.min(high.at - low.at, Math.max(0, outer - inner) * FREE_LEASH);
+      if (high.at < inner + keep) return (inner + keep - high.at) / high.k;
+      if (low.at > outer - keep) return (outer - keep - low.at) / low.k;
+      return 0;
+    };
+    let moved = false;
+    for (let pass = 0; pass < 2; pass += 1) {
+      const shot = { x: cam.tx, y: cam.ty, z: cam.tz, zoom: state.zoom, pitch: state.pitch };
+      let left = null, right = null, top = null, bottom = null;
+      for (const { node } of anchors) {
+        const world = node._layoutAnchor;
+        if (node.dying || node._absorbed || !world) continue;
+        const p = project(world, shot);
+        if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+        const k = Math.max(0.05, p.k);
+        if (!left || p.x < left.at) left = { at: p.x, k };
+        if (!right || p.x > right.at) right = { at: p.x, k };
+        if (!top || p.y < top.at) top = { at: p.y, k };
+        if (!bottom || p.y > bottom.at) bottom = { at: p.y, k };
+      }
+      if (!left) return moved;
+      // World units per screen pixel at k = 1, the drag's own mapping (see mousemove).
+      const dx = pull(left, right, area.x, area.w) / scale, dy = pull(top, bottom, area.y, area.h) / (scale * lean);
+      if (Math.abs(dx * scale) < 0.5 && Math.abs(dy * scale) < 0.5) break;
+      if (flat) { cam.tx += dx; cam.tz += dy; }
+      else { cam.tx += dx * cos; cam.tz -= dx * sin; cam.ty += dy; }
+      moved = true;
+    }
+    if (moved && still) { cam.x = cam.tx; cam.y = cam.ty; cam.z = cam.tz; }
+    return moved;
+  }
+
   // The view a layout's anchors were seeded under: the turn, tilt, zoom and
   // camera at that moment. A layout re-seeded for a new frame (a resize, a rail
   // folding) seeds under the same view, so its anchors land where the old ones
@@ -5388,6 +5448,7 @@
       state.overviewAt = animationTime;
       for (const { node, p } of anchors) Object.assign(p, project(node._layoutAnchor));
     }
+    if (mode === "free" && !state.panning && !state.rotating && !state.focus && !state.director && !state.settingsPreview) leashFreeCamera(anchors, frame, still);
     const occupied = anchors.filter(({ node }) => !node.dying && !node._absorbed).map(({ node, p }) => ({ x: p.x, y: p.y, radius: node.kind === "todo" ? 8 : 25 }));
     const agentLayout = state.agentLayout ??= new Map();
     const agents = projected.filter(({ node }) => node.kind === "agent" && !node._absorbed).sort((a, b) => a.node.id.localeCompare(b.node.id));
@@ -6695,68 +6756,113 @@
         el.feedAgentsCount.textContent = problems ? `${problems} need attention` : active ? `${active} working` : "Quiet";
         el.feedAgentsCount.dataset.state = problems ? "error" : active ? "running" : "idle";
       }
-      el.feedAgents.textContent = "";
       el.feedAgents.hidden = !current.length;
       if (el.feedAgentsSection) el.feedAgentsSection.hidden = !current.length || chatting;
       if (el.feedRecentAgents) el.feedRecentAgents.hidden = !recent.length || chatting;
       if (el.feedRecentCount) el.feedRecentCount.textContent = String(recent.length);
-      if (el.feedRecentList) el.feedRecentList.textContent = "";
-      for (const agent of roster) {
+      // Two lines per agent: status, name and elapsed on the first, what the
+      // agent is doing (or why it failed) wrapping on the second. The rows are
+      // worked out first and rebuilt only when one of them reads differently.
+      const rows = roster.map((agent) => {
         const status = agent.status ?? "idle";
-        const li = document.createElement("li");
-        li.className = `agent-${status}`;
-        li.style.borderLeftColor = agentHex(agent.role);
-        // Two lines per agent: status, name and elapsed on the first, what the
-        // agent is doing (or why it failed) wrapping on the second.
-        const head = document.createElement("span");
-        head.className = "agent-row-head";
-        const tag = document.createElement("span");
-        tag.className = `src-tag ${status === "error" ? "fix" : status === "running" ? "running-chip" : status === "queued" ? "improver" : "stale"}`;
-        tag.textContent = status.toUpperCase();
-        const name = document.createElement("b");
-        name.textContent = agent.label || agent.role;
-        const when = document.createElement("span");
-        when.className = "when";
-        when.textContent = agent.cluster ? agent.status === "running" && agent.since ? elapsedLabel(agent.since) : "" : status === "running" ? elapsedLabel(agent.since) : agent.lastRunAt ? agoShort(agent.lastRunAt) : "Not run yet";
-        const text = document.createElement("span");
-        text.className = "text";
-        text.textContent = String((status === "error" && agent.error) || agent.text || "").replace(new RegExp(`^${String(agent.role ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} (?:done|running|queued|error)\\s*[·:]?\\s*`, "i"), "");
-        head.append(tag, name, when);
-        li.title = `${agent.role} · ${status}${text.textContent ? ` — ${text.textContent}` : ""}`;
-        li.append(head);
-        if (text.textContent) li.append(text);
-        (current.includes(agent) ? el.feedAgents : el.feedRecentList)?.append(li);
+        const when = agent.cluster ? agent.status === "running" && agent.since ? elapsedLabel(agent.since) : "" : status === "running" ? elapsedLabel(agent.since) : agent.lastRunAt ? agoShort(agent.lastRunAt) : "Not run yet";
+        const text = String((status === "error" && agent.error) || agent.text || "").replace(new RegExp(`^${String(agent.role ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} (?:done|running|queued|error)\\s*[·:]?\\s*`, "i"), "");
+        return { status, color: agentHex(agent.role), name: agent.label || agent.role, when, text, title: `${agent.role} · ${status}${text ? ` — ${text}` : ""}`, current: current.includes(agent) };
+      });
+      // Rows are remade one at a time, only where one reads differently: a
+      // running agent's clock and a finished one's "12s ago" tick every
+      // second, and the rest of the roster has no reason to rebuild with them.
+      const painted = (state.feedAgentsPainted ??= {});
+      const lists = [[el.feedAgents, rows.filter((row) => row.current), "current"], [el.feedRecentList, rows.filter((row) => !row.current), "recent"]];
+      for (const [list, listRows, key] of lists) {
+        if (!list) continue;
+        const before = painted[key] ?? [];
+        const signatures = listRows.map((row) => JSON.stringify(row));
+        painted[key] = signatures;
+        signatures.forEach((signature, index) => {
+          const existing = list.children[index];
+          if (existing && before[index] === signature) return;
+          list.insertBefore(agentRow(listRows[index]), existing ?? null);
+          existing?.remove();
+        });
+        while (list.children.length > listRows.length) list.children[list.children.length - 1].remove();
       }
     }
 
-    if (el.feedList) {
-      el.feedList.textContent = "";
-      for (const item of state.feed) {
-        const li = document.createElement("li");
-        li.className = `feed-row ${item.kind}`;
-        const tag = document.createElement("span");
-        tag.className = "feed-tag";
-        tag.textContent = item.kind === "tool" ? item.tool ?? "tool" : item.kind === "run" ? "a-eyes" : item.kind;
-        const body = document.createElement("span");
-        body.className = "feed-text";
-        body.textContent = item.kind === "tool" ? item.file ?? item.tool ?? "" : item.text ?? "";
-        if ((item.count ?? 1) > 1) body.textContent += ` ×${item.count}`;
-        const ago = document.createElement("span");
-        ago.className = "feed-ago";
-        ago.textContent = agoLabel(item.at) ?? "";
-        li.title = feedLine(item);
-        li.append(tag, body, ago);
-        if (item.sessionId) {
-          li.classList.add("link");
-          li.addEventListener("click", () => {
-            const node = nodeForSession(item.sessionId);
-            if (!node) return;
-            selectNode(node);
-            focusNode(node, { zoom: 1.5 });
-          });
-        }
-        el.feedList.append(li);
+    function agentRow(row) {
+      const li = document.createElement("li");
+      li.className = `agent-${row.status}`;
+      li.style.borderLeftColor = row.color;
+      const head = document.createElement("span");
+      head.className = "agent-row-head";
+      const tag = document.createElement("span");
+      tag.className = `src-tag ${row.status === "error" ? "fix" : row.status === "running" ? "running-chip" : row.status === "queued" ? "improver" : "stale"}`;
+      tag.textContent = row.status.toUpperCase();
+      const name = document.createElement("b");
+      name.textContent = row.name;
+      const when = document.createElement("span");
+      when.className = "when";
+      when.textContent = row.when;
+      head.append(tag, name, when);
+      li.title = row.title;
+      li.append(head);
+      if (row.text) {
+        const text = document.createElement("span");
+        text.className = "text";
+        text.textContent = row.text;
+        li.append(text);
       }
+      return li;
+    }
+
+    // A worker's log lines rebuild the rail a few times a second. The rows
+    // are kept by entry id and remade only when an entry reads differently
+    // (a streamed line rewrites the newest row alone); a new entry is one
+    // insertion at the top instead of forty new rows to restyle.
+    if (el.feedList) {
+      const painted = state.feedRows ?? new Map();
+      const next = new Map();
+      const rows = state.feed.map((item) => {
+        const sig = JSON.stringify([item.kind, item.tool, item.file, item.text, item.count, item.sessionId, agoLabel(item.at)]);
+        let row = painted.get(item.id);
+        if (!row || row.sig !== sig) {
+          row?.li.remove();
+          row = { li: feedRow(item), sig };
+        }
+        next.set(item.id, row);
+        return row.li;
+      });
+      for (const [id, row] of painted) if (!next.has(id)) row.li.remove();
+      // Rows already in place stay put; only new or remade ones are inserted.
+      rows.forEach((li, index) => { if (el.feedList.children[index] !== li) el.feedList.insertBefore(li, el.feedList.children[index] ?? null); });
+      while (el.feedList.children.length > rows.length) el.feedList.children[el.feedList.children.length - 1].remove();
+      state.feedRows = next;
+    }
+    function feedRow(item) {
+      const li = document.createElement("li");
+      li.className = `feed-row ${item.kind}`;
+      const tag = document.createElement("span");
+      tag.className = "feed-tag";
+      tag.textContent = item.kind === "tool" ? item.tool ?? "tool" : item.kind === "run" ? "a-eyes" : item.kind;
+      const body = document.createElement("span");
+      body.className = "feed-text";
+      body.textContent = item.kind === "tool" ? item.file ?? item.tool ?? "" : item.text ?? "";
+      if ((item.count ?? 1) > 1) body.textContent += ` ×${item.count}`;
+      const ago = document.createElement("span");
+      ago.className = "feed-ago";
+      ago.textContent = agoLabel(item.at) ?? "";
+      li.title = feedLine(item);
+      li.append(tag, body, ago);
+      if (item.sessionId) {
+        li.classList.add("link");
+        li.addEventListener("click", () => {
+          const node = nodeForSession(item.sessionId);
+          if (!node) return;
+          selectNode(node);
+          focusNode(node, { zoom: 1.5 });
+        });
+      }
+      return li;
     }
 
     if (el.feedMeta) {
@@ -7427,10 +7533,24 @@
     return view.calm ??= { ...music, beat: 0, kick: 0, snare: 0, hat: 0 };
   }
 
-  function connectionAudioBand(from, to) {
+  function hashedAudioBand(key) {
     let hash = 0;
-    for (const char of `${from}:${to}`) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+    for (const char of String(key)) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
     return ["bass", "mid", "treble"][hash % 3];
+  }
+
+  // A task group sings as one voice: the group node and every member hash
+  // the group's own node id, so the whole cluster pulses on the same band.
+  function taskGroupAudioKey(node) {
+    if (!node) return null;
+    if (node.taskGroup) return node.id;
+    return node.groupParentId ?? null;
+  }
+
+  function connectionAudioBand(from, to, toNode = null) {
+    const group = taskGroupAudioKey(toNode);
+    if (group) return hashedAudioBand(group);
+    return hashedAudioBand(`${from}:${to}`);
   }
 
   function connectionMusicResponse(music, band) {
@@ -7455,13 +7575,13 @@
     let band = "mid";
     if (AUDIO_BASS_KINDS.has(node.kind)) band = "bass";
     else if (AUDIO_TREBLE_KINDS.has(node.kind)) band = "treble";
-    else if (node.kind === "task" && !node.taskGroup) {
-      // The voice is the node's for life: hash its id once, not every frame.
+    else if (node.kind === "task" || node.kind === "task-group") {
+      // The voice is the node's for life (its group's, inside a task group):
+      // hash its key once, not every frame.
+      const key = taskGroupAudioKey(node) ?? node.id;
       let known = nodeBands.get(node);
-      if (known?.id !== node.id) {
-        let hash = 0;
-        for (const char of String(node.id)) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-        known = { id: node.id, band: AUDIO_BANDS[hash % 3] };
+      if (known?.key !== key) {
+        known = { key, band: hashedAudioBand(key) };
         nodeBands.set(node, known);
       }
       band = known.band;
@@ -7557,19 +7677,20 @@
 
   function drawAudioConnection(ctx, a, b, tint, lifetime, time, curved = false, sourceLink = false) {
     if (lifetime <= 0.02) return;
-    // The cable's seed and its voice come from one hash of its two ends (the
-    // same one connectionAudioBand takes), remembered for the child while its
-    // parent stays the same, instead of a string built and hashed per wire
-    // per frame.
+    // The cable's seed and its voice (connectionAudioBand's: its task group's
+    // band, else the hash of its two ends) are remembered for the child while
+    // its parent and group stay the same, instead of a string built and
+    // hashed per wire per frame.
+    const group = taskGroupAudioKey(b.node);
     let cable = cableHashes.get(b.node);
-    if (cable?.from !== a.node.id || cable.to !== b.node.id) {
+    if (cable?.from !== a.node.id || cable.to !== b.node.id || cable.group !== group) {
       let hash = 0;
       for (const char of `${a.node.id}:${b.node.id}`) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-      cable = { from: a.node.id, to: b.node.id, hash };
+      cable = { from: a.node.id, to: b.node.id, group, hash, band: group ? hashedAudioBand(group) : AUDIO_BANDS[hash % 3] };
       cableHashes.set(b.node, cable);
     }
     const seed = cable.hash;
-    const band = state.audioEffects?.splitBands === false ? "mix" : AUDIO_BANDS[seed % 3];
+    const band = state.audioEffects?.splitBands === false ? "mix" : cable.band;
     const music = connectionMusicResponse(visualMusicResponse(state.music, state.audioEffects), band);
     const wave = audioConnectionWave(a.p, b.p, music, state.audioResponse, time, curved, seed % 628 / 100);
     if (!wave) return;
@@ -7808,9 +7929,12 @@
 
   function drawBackdrop(ctx, time, still, energy, musicBands, musicBeat) {
     const width = el.width, height = el.height;
-    ctx.clearRect(0, 0, width, height);
+    const media = globalThis.document?.body?.dataset?.mediaBackground === "true";
+    // Over media, a far layer the last frame left empty stays empty: clearing
+    // it again re-rasters and re-composites a full-window layer every frame.
+    if (!media || ctx !== el.farCtx || state.farPainted !== false) ctx.clearRect(0, 0, width, height);
     // Media supplies the sky; keep both node layers at their normal opacity.
-    if (globalThis.document?.body?.dataset?.mediaBackground === "true") return;
+    if (media) return;
     const scene = activeBackdrop();
     // One triple per palette colour, not one per frame: the colour-string memo
     // (rgb/rgba) is keyed on the triple itself and missed every frame.
@@ -8967,6 +9091,8 @@
       else state.farHold = null;
     }
     state.focusIds = focusIds;
+    // Whether this frame leaves anything on the far layer (drawBackdrop).
+    state.farPainted = Boolean(focusIds) || globalThis.document?.body?.dataset?.mediaBackground !== "true";
     const layerFor = (node) => (focusIds && far !== ctx && !focusIds.has(node.id) ? far : ctx);
 
     drawGraphConnections(ctx, projected, runningIds, audioLinked, time, { far, focusIds });
@@ -11834,7 +11960,9 @@
 
   function bumpHud() {
     if (!state.active || !el.hud) return;
-    el.hud.classList.remove("dim");
+    // Every pointer move lands here; removing an absent class still queues
+    // a mutation (and a studio-ui refresh), so it is only removed when set.
+    if (el.hud.classList.contains("dim")) el.hud.classList.remove("dim");
     if (state.hudTimer) clearTimeout(state.hudTimer);
     state.hudTimer = null;
     if (!canDim()) return;

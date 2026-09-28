@@ -54,9 +54,9 @@ The showreel above uses sample tasks from the earlier 0.4.2 release.
 | | Needed for | Notes |
 | --- | --- | --- |
 | **Windows 10/11** | Everything | Keys are protected by the Windows keystore (DPAPI). Other platforms are untested. |
-| **Node 24 + npm** | Running from source | `npm ci` downloads Electron once (about 110 MB). The portable build needs neither. |
-| **Git** | Cloning | |
-| **Python 3** | `npm test` only | Must be on PATH as `python`. |
+| **Node 24 + npm** | Running from source | `npm ci` downloads Electron once (about 110 MB), and stops at once on an older Node. The portable build needs neither. |
+| **Git** | Cloning; recommended at runtime | Studio reads the open project through git to verify a result that claims a commit, warn agents about staged or uncommitted work and add history to the project map; Friends › Your PCs and opt-in worktree runs need it. Without git those checks are skipped or read as unknown. |
+| **Python 3** | `npm test` only | Found as `python`, `py -3` or `python3`; the `py` launcher that python.org's installer adds by default is enough. |
 | **A builder CLI** (optional) | Building tasks | `opencode` is preferred; `claude`, `codex`, `grok` and `agy` are detected. Without one Studio still plans, chats and browses the catalog, but no build can start. |
 | **An API key or local model** (optional) | The companion | z.ai, OpenCode Go or Zen, OpenRouter, a CLI login, LM Studio or any OpenAI-compatible endpoint. |
 
@@ -72,7 +72,7 @@ npm start
 
 - `npm start` needs a normal shell. If `ELECTRON_RUN_AS_NODE` is set (some agent harnesses set it), Studio refuses to start and prints the fix.
 - `Run Mefi's Studio AI+.cmd` starts the portable build when one exists in `dist/`, otherwise the source install.
-- **Portable build:** [download 0.4.4](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.4), extract the whole folder, then open `Mefi Studio AI+.exe`. It keeps its own data next to the executable.
+- **Portable build:** [download 0.4.4](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.4), extract the whole folder, then open `Mefi Studio AI+.exe`. Its tasks, ideas, plans and conversations stay in its own `resources\app\data` folder. Settings, saved keys, the project list, the Discord link and resume state live in `%APPDATA%\Mefi's Studio AI+`, shared with a source install on the same Windows account, so only one of the two runs at a time: opening the other brings the running one forward.
 - `npm run start:web` serves a browser-only preview on <http://localhost:4173>; it cannot launch workers.
 
 ## First launch
@@ -80,7 +80,7 @@ npm start
 1. **Choose a project** on the launch screen, then **Open studio** (agents stay off) or **Open and start agents**. Nothing runs before you choose. If a crash or a restart interrupted work in the last ten minutes, Studio skips the question, reopens that folder and restarts the agents that were running; closing the studio yourself always brings the question back.
 2. **Follow the walkthrough.** *Start here* opens on the first launch with seven short stops: scan, workspace, first map, connections, create, monitor, review. Each stop's **Walk with me** opens the real menu and highlights the control. It remembers your place.
 
-   At Scan or First map, choose an existing Codex, Claude Code, Grok or Antigravity login, or **Install and sign in**. **Check connection**, then **Use for the whole studio** routes mapping, chat, planning, agents and coding through that account. OpenCode and additional provider keys are optional. See [guided CLI setup](docs/cli-setup.md) for installation and account limits.
+   At Scan or First map, choose an existing Codex, Claude Code, Grok or Antigravity login, or **Install and sign in**. **Check connection**, then **Use for the whole studio** routes mapping, chat, planning, agents and coding through that account. Have an API key (z.ai, OpenCode Go or Zen, OpenRouter, a custom endpoint) or a local server (LM Studio, Ollama) instead? **I have an API key or a local model server** takes you to Connections and scans again when you return. OpenCode is optional. See [guided CLI setup](docs/cli-setup.md) for installation and account limits.
 3. **Check the connection.** A fresh install runs **auto setup** by itself on the first launch, from the keys, CLIs and local servers already on the machine, and **Settings › Connections** says what it chose. Press **Run auto setup** again after adding a key or CLI, or configure a provider there. No key yet? The catalog, manual planning and saved work all work without one.
 4. **Give one clear task** and watch it move from *Ready* to *Working* to *Review*.
 
@@ -137,7 +137,7 @@ The full feature walkthrough, in Studio's own vocabulary with a glossary, is in 
 
 ## Keys and privacy
 
-- Keys are entered once in Settings › Connections and stored encrypted in the OS keystore; only "saved / not saved" reaches the UI. Headless setup: `MEFI_STUDIO_KEY=... electron . --set-key` and friends (see [.env.example](.env.example)).
+- Keys are entered once in Settings › Connections and stored encrypted in the OS keystore; only "saved / not saved" reaches the UI. Headless setup, from a source checkout in PowerShell: `$env:MEFI_STUDIO_KEY = "<key>"; npx electron . --set-key`, then `Remove-Item Env:MEFI_STUDIO_KEY` (while it is set it overrides the saved key). [.env.example](.env.example) pairs every `--set-*-key` flag with its variable.
 - Git tracks only `data/curated.json` and `data/models.json`. Tasks, conversations, settings, databases and captures stay local and are never packaged.
 - Agents run real commands in the project folder you chose. Turn **Auto build** off (*Verify first*) to approve each task before it runs.
 - Nothing contacts Discord unless you link an account (below). The link reads your Discord id, username and roles in the Void Engine server, and nothing about your projects.
@@ -159,8 +159,12 @@ The [community guide](https://nateecho32-stack.github.io/mefi-studio/wiki/#/comm
 
 GitHub is the meeting point. Each PC keeps its own clone, and the open project's default branch on GitHub is the one shared state.
 
-- **Friends › Your PCs** in the companion hub says whether this PC matches GitHub and lists anything that has not reached it yet: uncommitted files, unpushed commits, stashes, worktrees with changes, and branches that are not on `main`. Opening it only looks. **Sync this PC** pulls what your other PCs pushed and pushes this PC's commits on the default branch. It never overwrites uncommitted work, merges diverged histories or force-pushes.
-- **`npm run sync`** does the same from a terminal.
+- **Friends › Your PCs** in the companion hub says whether this PC matches GitHub and lists anything that has not reached it yet: uncommitted files, unpushed commits, stashes, worktrees with changes, and branches that are not on `main`. Opening it only looks. **Sync this PC** pulls what your other PCs pushed and pushes this PC's commits on the default branch, but only after the project's own `npm run check` passes. It never overwrites uncommitted work, merges diverged histories or force-pushes.
+- **Put my commits on top of GitHub's** appears when this PC and GitHub both moved and nothing is uncommitted. It rebases this PC's commits onto GitHub's, then checks and pushes. On a conflict it changes nothing and names the files.
+- **The Friends bubble shows a badge** for work only this PC holds, commits waiting on GitHub, or a GitHub it could not check (a lapsed sign-in or a renamed repository). Studio looks 45 seconds after launch and every 15 minutes, and it only looks.
+- **Closing Studio asks first** when the open project has work on this PC alone. You can push and close, close anyway, or keep Studio open. Update restarts never ask.
+- **`npm run sync`** does the same from a terminal (`--rebase` to put your commits on top, `--no-check` to skip the check).
+- **Set up this PC** (inside Your PCs) checks what a new PC needs: Git, the GitHub CLI, Node.js, a GitHub sign-in, and whether the open project is on GitHub, has its packages installed, and sits on a drive that can hold Git worktrees (exFAT and FAT cannot). Each missing piece has a button that opens a visible setup window running Studio's own fixed command. You sign in to GitHub in your browser, and Studio never sees the password or token. **Get a project from GitHub** lists your own repositories, clones the one you pick into a folder you choose (never onto exFAT), and opens it.
 - **Claude Code** runs `node scripts/sync.mjs --hook` at the start of each new session (`.claude/settings.json`). The hook fetches, fast-forwards `main` when it can, and hands the report to Claude. `AGENTS.md` has the working rules.
 
 Claude Code sessions, Claude's memory and local branches stay on the PC that made them. Anything another PC needs belongs on GitHub.
@@ -175,7 +179,7 @@ npm test                 # the gate: Node suites + Electron fixtures + Python co
 npm run audit            # renderer/template contract audit
 ```
 
-`npm test` needs Python 3 on PATH and a real desktop: nine suites drive Electron windows and are timing-sensitive. [CONTRIBUTING.md](CONTRIBUTING.md) explains the gates and conventions; [TESTRUNS.md](TESTRUNS.md) is the maintainers' lab notebook of past runs and flake triage, not a guide.
+`npm test` needs Python 3 (`python`, `py -3` or `python3`) and a real desktop: nine suites drive Electron windows and are timing-sensitive. [CONTRIBUTING.md](CONTRIBUTING.md) explains the gates and conventions; [TESTRUNS.md](TESTRUNS.md) is the maintainers' lab notebook of past runs and flake triage, not a guide.
 
 ## Documentation
 
@@ -211,6 +215,7 @@ Mefi. The status line reports when the bot is online or still needs setup.
 Keep Server Styler in a sibling `discord-server-styler/` checkout. Set
 `MEFI_STYLER_ROOT` to its absolute path if it lives elsewhere. Studio can still
 find the former `Discord Bot/` directory under the optional game checkout.
+The card stays out of Settings until Studio finds one of these.
 Bot credentials stay in Server Styler's ignored `.env`, outside this repository.
 Create that file from `.env.example`, set `DASHBOARD_PASSWORD`, then use the
 dashboard's Discord sign-in and setup wizard to connect the bot to a server.

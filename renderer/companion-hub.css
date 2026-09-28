@@ -109,14 +109,97 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .pc-sync[data-state=clean] { border-left-color: var(--good); }
 .pc-sync[data-state=pending] { border-left-color: var(--warn); }
 .pc-sync[data-state=problem] { border-left-color: var(--bad); }
+.pc-sync[data-state=offline] { border-left-color: var(--muted); }
 .pc-sync-title { margin: 0; font-size: 13px; font-weight: 600; }
 .pc-sync-list { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
-.pc-sync-run { justify-self: start; }
+.pc-sync-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.pc-sync-actions[hidden] { display: none; }
+.pc-sync-run { white-space: normal; text-align: left; }
 .pc-sync-meta { font-variant-numeric: tabular-nums; }
+/* Friends › Your PCs › Set up this PC. */
+.pc-setup { border-top: 1px solid var(--hairline); padding-top: 8px; }
+.pc-setup > summary { cursor: pointer; font-size: 12px; font-weight: 600; }
+.pc-setup > :not(summary) { margin-top: 8px; }
+.pc-setup-repos { flex: 1 1 180px; min-width: 0; max-width: 100%; }
+.pc-setup-list { list-style: none; padding-left: 0; }
 .agent-hub .companion-panel.companion-in-hub { position: relative; inset: auto; width: 100%; min-height: 160px; max-height: min(510px, calc(100dvh - 290px)); flex: 0 1 auto; background: color-mix(in srgb, var(--theme-panel-solid, #131b28) 24%, transparent); backdrop-filter: blur(10px); box-shadow: none; transition: height 340ms cubic-bezier(.22,1,.36,1); }
 .companion-in-hub .companion-shell-head { display: none; }
-.companion-in-hub .companion-tabs { flex-wrap: wrap; }
-.companion-in-hub .companion-tabs button { min-width: 45px; }
+/* In the hub the bubbles are the menu; the panel's own tabs would repeat them. */
+.companion-in-hub .companion-tabs { display: none; }
+.companion-heading { margin: 14px 0 0; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.companion-heading:first-child { margin-top: 0; }
+.companion-starters .companion-chip { font-size: 11px; }
+/* Suggest work. */
+.agent-hub-suggest { display: grid; gap: 8px; }
+.agent-hub-suggest textarea { width: 100%; box-sizing: border-box; resize: vertical; min-height: 64px; max-height: 160px; }
+.agent-hub-suggest button { justify-self: start; }
+.agent-hub-picks { display: grid; gap: 8px; }
+.agent-hub-picks h4, .friends-title { margin: 4px 0 0; font-size: 13px; font-weight: 600; }
+.agent-hub-pick-list { display: grid; gap: 8px; }
+.agent-hub-pick-list .companion-item { display: grid; gap: 4px; margin: 0; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 12px; }
+.agent-hub-pick-list .companion-item button { justify-self: start; }
+.agent-hub-bond { font-variant-numeric: tabular-nums; opacity: .8; }
+.agent-hub-bond:empty { display: none; }
+/* A dozing companion (Idle play): dimmer, smaller, slower, until touched. */
+.companion-orb[data-mood=sleepy] .agent-body { opacity: .5; scale: .88; }
+.companion-orb[data-mood=sleepy] .agent-glow { animation-duration: 9s; }
+/* Friends › Playground (renderer/companion-friends.js). */
+.friends-card { display: grid; gap: 10px; padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 14px; }
+.friends-stage { position: relative; display: flex; align-items: flex-end; gap: 10px; min-height: 128px; padding: 34px 10px 8px; border-radius: 12px; background: radial-gradient(ellipse at 50% 110%, color-mix(in srgb, var(--gold) 9%, transparent), transparent 70%); overflow: hidden; }
+.friends-link { flex: 1 1 24px; min-width: 16px; height: 2px; align-self: center; margin-top: 18px; border-radius: 2px; background: repeating-linear-gradient(90deg, var(--gold-bright) 0 6px, transparent 6px 12px); opacity: .2; }
+.friends-stage[data-playing] .friends-link { opacity: .9; animation: friends-beam .9s linear infinite; }
+.friends-actor { position: relative; display: grid; justify-items: center; gap: 2px; width: 70px; flex: none; }
+.friends-face, .friends-mini { display: block; width: 52px; height: 52px; color: var(--gold-bright); }
+.friends-mini { width: 22px; height: 22px; flex: none; }
+.friends-face > svg, .friends-mini > svg { display: block; width: 100%; height: 100%; }
+/* The wisp is a small light inside a large canvas; lift it to the others' size. */
+.friends-face > .agent-creature { scale: 1.45; }
+.friends-actor[data-side=friend] .friends-face, .friends-mini { filter: hue-rotate(var(--friends-hue, 150deg)); }
+.friends-actor[data-practice] { opacity: .75; }
+.friends-actor[data-mood=sleepy] .friends-face { opacity: .55; }
+:is(.friends-face, .friends-mini) .c-body { fill: color-mix(in srgb, var(--gold) 12%, transparent); stroke: currentColor; }
+:is(.friends-face, .friends-mini) .c-eye { fill: currentColor; }
+:is(.friends-face, .friends-mini) :is(.c-line, .c-ring, .c-flame) { fill: none; stroke: currentColor; }
+.friends-name { max-width: 100%; font-size: 10px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.friends-say { position: absolute; bottom: calc(100% - 22px); left: 50%; translate: -50% 0; width: max-content; max-width: 150px; padding: 5px 8px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--panel-solid); font-size: 10px; line-height: 1.35; white-space: normal; z-index: 1; }
+.friends-actor[data-side=me] .friends-say { left: 0; translate: 0 0; }
+.friends-actor[data-side=friend] .friends-say { left: auto; right: 0; translate: 0 0; }
+.friends-say:empty, .friends-emote:empty { display: none; }
+.friends-emote { position: absolute; top: 4px; right: 2px; color: var(--gold-bright); font: 600 12px ui-monospace, Consolas, monospace; animation: friends-rise 1.3s ease-out both; }
+.friends-actor[data-act] .friends-face { animation: .9s cubic-bezier(.22,1,.36,1) both; }
+.friends-actor[data-act=wave] .friends-face { animation-name: friends-wave; }
+.friends-actor[data-act=bounce] .friends-face, .friends-actor[data-act=trade] .friends-face { animation-name: friends-bounce; }
+.friends-actor[data-act=cheer] .friends-face { animation-name: friends-bounce; animation-iteration-count: 2; }
+.friends-actor[data-act=spin] .friends-face { animation-name: friends-spin; }
+.friends-actor[data-act=dance] .friends-face { animation-name: friends-wave; animation-iteration-count: 3; animation-duration: .5s; }
+.friends-actor[data-act=think] .friends-face { rotate: -8deg; transition: rotate 300ms ease; }
+.friends-actor[data-act=hide] .friends-face { opacity: .12; transition: opacity 400ms ease; }
+.friends-actor[data-act=nap] .friends-face { opacity: .55; scale: .9; transition: opacity 400ms ease, scale 400ms ease; }
+.friends-actor[data-side=me]:is([data-act=highfive], [data-act=race], [data-act=peek]) .friends-face { animation-name: friends-toward-right; }
+.friends-actor[data-side=friend]:is([data-act=highfive], [data-act=race], [data-act=peek]) .friends-face { animation-name: friends-toward-left; }
+.friends-lines { margin: 0; padding-left: 18px; font-size: 11px; line-height: 1.6; max-height: 150px; overflow-y: auto; }
+.friends-lines:empty, .friends-rules:empty { display: none; }
+.friends-practice, .friends-play { justify-self: start; }
+.friends-list { display: grid; gap: 8px; }
+.friends-friend { display: grid; gap: 6px; margin: 0; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 12px; }
+.friends-friend-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.friends-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; border-left: 3px solid var(--gold-bright); border-radius: 8px; background: color-mix(in srgb, var(--gold) 6%, transparent); }
+.friends-ask p { flex: 1 0 100%; }
+.friends-rule { display: grid; gap: 2px; }
+.friends-field { grid-template-columns: minmax(0, 1fr) auto; margin: 0; padding: 6px 0; }
+.friends-session { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.friends-sharing, .friends-log { border-top: 1px solid var(--hairline); padding-top: 8px; }
+.friends-sharing > summary, .friends-log > summary { cursor: pointer; font-size: 12px; }
+.friends-sharing[open], .friends-log[open] { display: grid; gap: 8px; }
+.friends-subhead { margin: 6px 0 0; font-size: 11px; font-weight: 600; }
+.friends-never, .friends-rules, .friends-sent { margin: 0; padding-left: 18px; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+@keyframes friends-beam { to { background-position: 12px 0; } }
+@keyframes friends-rise { from { opacity: 0; translate: 0 6px; } 30% { opacity: 1; } to { opacity: 0; translate: 3px -14px; } }
+@keyframes friends-wave { 0%,100% { rotate: 0deg; } 25% { rotate: -12deg; } 75% { rotate: 12deg; } }
+@keyframes friends-bounce { 0%,100% { translate: 0 0; } 40% { translate: 0 -12px; } 70% { translate: 0 2px; } }
+@keyframes friends-spin { to { rotate: 360deg; } }
+@keyframes friends-toward-right { 0%,100% { translate: 0 0; } 45% { translate: 22px -4px; } }
+@keyframes friends-toward-left { 0%,100% { translate: 0 0; } 45% { translate: -22px -4px; } }
 .agent-hub-foot { display: flex; align-items: center; justify-content: center; gap: 14px; color: var(--muted); font-size: 10px; margin-top: 4px; max-width: 100%; flex-wrap: wrap; }
 .agent-hub-foot > span { max-width: 260px; }
 .agent-hub-foot button { border-radius: 20px; font-size: 10px; }

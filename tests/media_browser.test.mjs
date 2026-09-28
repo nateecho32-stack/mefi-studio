@@ -80,7 +80,11 @@ test("Embedded bounds follow Studio zoom, clip to its window, and hiding keeps p
   await layout({ x: 0, y: 0, width: 100, height: 100 });
   assert.equal(view.visible, true); assert.equal(view.webContents.loads, 1);
   await layout({ x: NaN, y: 0, width: 100, height: 100 }); assert.equal(view.visible, false);
-  h.owner.webContents.emit("did-start-navigation", {}, "file:///studio", false, true);
+  // A Studio navigation that is only started (and then refused, like a dropped
+  // file) keeps playback; a committed page change ends the browser.
+  h.owner.webContents.emit("did-start-navigation", {}, "file:///dropped.mp4", false, true);
+  assert.equal(view.webContents.isDestroyed(), false);
+  h.owner.webContents.emit("did-navigate", {}, "file:///studio");
   assert.equal(view.webContents.isDestroyed(), true); assert.deepEqual(h.owner.children, []);
 });
 

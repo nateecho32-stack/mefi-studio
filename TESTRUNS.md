@@ -29,7 +29,7 @@ the guide are the frozen archive.
 | `expand_finished_guard` | One-off failure in the parallel stage, passes solo | Parallel-load timing | Rerun. |
 | Any `section()` / vm suite | Rotating `ReferenceError: X is not defined`, a different file each run, every file green solo | Another session edited `main.cjs` or `renderer/idle.js` while the run read them | The runner now waits for the tree to settle and says when sources moved mid-run; rerun on a quiet tree. |
 | `tools/test_mefi_studio_assistant.py` | One-shot duplicate-declaration failure in `main.cjs` | Racing a sibling session's in-flight edit | Re-runs after a short settle; capture the traceback to a file, never through `Select-Object -Last N`. |
-| `npm test` stops before the Node stage | "needs Python 3 on PATH as `python`" | The Python contracts are part of the gate | Install Python 3, or `npm run test:fast` for the Node suites alone. |
+| `npm test` stops before the Node stage | "needs Python 3 for the contracts in tools/ (tried ...)" | No `python`, `py -3` or `python3` answered as Python 3 (Windows' Store stub exits 9009); the Python contracts are part of the gate | Install Python 3 (python.org's default `py` launcher is enough), or `npm run test:fast` for the Node suites alone. |
 
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
@@ -233,6 +233,70 @@ Full npm test on the change: Node 3993 passed, 0 failed, 6 skipped (Electron
 fixtures included), Python contracts 248 OK (1 skipped), normalized-path lock
 passed. A final npm run check and test:fast (3954 passed, 0 failed) followed
 the last edits (a refresh race fix and Vibe's stage words).
+## 2026-09-27 - First-time setup and agent-choice blockers: install, any builder, any AI route, Start here
+
+Audit of a fresh clone (npm ci, launcher, onboarding) and of every place a
+non-default agent or AI route was locked out. Fixed: npm ci left no Electron
+binary (Electron 44), so the launcher looped on "not installed" and CI's
+render suites skipped silently; sessionless builders (Claude Code, Codex,
+Grok, Antigravity) always parked as failed, now verified by the overseer's
+own checks; npm-installed Grok/agy shims failed ENOENT; late failures were
+re-run on OpenCode (even when not installed); retry-deep changed nothing on
+most routes; Auto with a CLI login or an OpenRouter/Zen/custom key read as
+unconfigured; Start here counted "no folder" as a project and dead-ended
+key-only users. run-node-tests hit Windows' command-line limit from deep
+clones (ENAMETOOLONG, no output). Built in four parallel clones, merged over
+origin/main 215b7d9.
+
+Validation on the merged tree: npm run check passed, npm run audit returned
+0 findings, lint gained no warnings over main. Full npm test passed with every
+leg green: Node 4033 passed and 4 skipped, Electron 43 passed and 1 skipped,
+and all 248 Python contracts passed (routing contracts updated for the new
+builder launch; grok's headless guide documents --prompt-file as headless -p).
+
+## 2026-09-27 - Companion as pet and friend: six-bubble menu, personality, Suggest work, Friends playground with sharing rules
+
+Built in a separate clone on origin/main 3e0e1e0. New pure modules scripts/companion-pet.cjs (personalities, presets, bond) and scripts/companion-friends.cjs (sharing levels and rules, broadcast level, scrubbed cards, card reading, share-back ask, mirrored scripted playdates); main's "Companion friends" block and hub-client `companion` frames (sent only when the hub's ready lists the feature; one-member delivery only with companion.direct); renderer/companion-friends.js playground; companion-hub/ui menu rework. New tests: companion_friends (13), companion_friends_host (8, vm slice of the main block), companion_personality_copy, plus additions to agent_brain_host, hub_client, module_purity and the companion-hub Electron fixture (playground, share-back, practice playdate, petting, plain check, Suggest work, Now, Personality). Full npm test: Node 4015 tests, 4008 pass, 5 skipped, 2 failed: pc_sync_ui's Friends-branch source pin (fixed by restoring an explicit friends branch; 6/6 solo) and command_render (known load-sensitive; passed solo in 52 s). Python contracts and path lock passed. Solo reruns: companion_hub_render, unified_studio_render, autonomy_render all pass. npm run check ok (172 targets), audit 0 errors, lint 0 errors with no new warnings. Rebased onto 215b7d9 (booklet rebuilt; companion-hub and fixture conflicts kept both sides): check ok (175 targets), audit 0 errors, the 11 touched Node suites 117/117, and companion_hub_render, unified_studio_render and autonomy_render pass.
+
+## 2026-09-27 - Second bug-hunt pass: CLI setup, release helper, media browser, Vibe, autonomy
+
+Reviewed the modules that landed since the first pass (media browser, CLI
+setup, decision ledger/memory, desk resolve, autonomy host, request sizing,
+model learning, new app, PC sync, Vibe panels, onboarding, Agents). Fixed:
+guided CLI setup and the release apply helper, which never ran because a detached PowerShell gets no
+console (reproduced: the marker was never written; attached, or through `cmd /c
+start`, it ran and outlived the parent); the media browser closing on refused
+Studio navigations and blocking blob/data subframes; the Vibe drawer stuck
+after a mid-action project switch; Vibe answer and note drafts; the Team roster
+per project; Agents setup after outside settings pushes; the walkthrough's
+suggested task and coach Escape; autonomy undo markers, ledger flooding,
+Elevated budget holds and undo of failed decisions. Two findings were handed
+to the sync session, which owns sync.mjs (--no-autostash, fetch-failed). One
+was a false positive (Agents overview selection: nav maps taskId to selected).
+
+Validation on the rebased commit over 997b7aa: npm run check passed, npm run audit returned 0
+findings, and lint was unchanged at 0 errors. Full npm test passed with every leg green: Node 3963
+passed and 4 skipped, Electron 38 passed and 1 skipped, and all Python contracts passed. New or updated tests are
+decision_ledger (kept split loses its marker), autonomy_host (failed decision
+not undoable) and media_browser (a refused Studio navigation keeps playback).
+
+## 2026-09-27 - Configuration, Habits and menu motion: gates on a private worktree of 8b4ab00
+
+Detached worktree C:\wt\build-e at 8b4ab00 plus 5d47154 only: Configuration
+(renderer/config-dialog.js and .css, the ui:zoom host reads, nav.js's
+record), Habits (scripts/habits.cjs, agent-addons, agent-profiles, the
+Agents panel), renderer/motion.js and its users (vibe.js, vibe-panels.js,
+config-dialog.js, trace.js, agents.js, autonomy-ui.js's outside click),
+booklet.js's choice-button names, the build and fixture lists, docs.
+`npm run check` and `npm run audit` passed. `npm test`: Node suites 3828
+tests with 0 failing; the Electron fixture stage 37 passed with 1 skipped;
+the Python contracts failed once on
+test_build_exports_build_and_keeps_cli_and_auditor_literals, which pins the
+booklet's codeParts literal and now lists motion; after the pin, all 248
+contracts pass (1 skipped) and the normalized-path lock passed. Offscreen
+Electron frame captures of 13 menu transitions at 1920x1080: the worst
+frame gap for opening a task detail fell from 133 ms to 67 ms, and
+Configuration's category switch now holds 33 ms.
 
 ## 2026-09-27 - Whole-app bug hunt: host, tooling, renderer and design fixes
 
@@ -356,6 +420,103 @@ Closed the obligation left by 96272eb: its scripts/build-booklet.mjs change inli
 ## 2026-09-27 early morning - ai-offline resolved: live instance healthy, recovery chain re-verified (task_dc3cbe4e9796268a, run_1790480854175_9)
 
 Verified the ai-offline issue end to end from the running Studio instance. The live data/eyes-assistant.json shows the AI back online: ai.online true, keyPresent true, model glm-5.3-flash (zai/jev team route for project_d453f6fb00cc5e2d), failures 0, backoffUntil 0, problems empty, lastOkAt 2026-09-27T04:27Z - i.e. the provider recovered after the 23:10 America/Chicago quota reset and the app's 02:39Z restart had already loaded the committed recovery fixes (cliReply exit guard 11fcebc, resetAssistantAiBackoff at all four route-change sites, the scheduleAssistantAiProbe offline-probe chain in main.cjs, and planOfflineProbe/offlineProbeDelayMs in scripts/assistant.mjs - all intact; the sibling work-tree diff on scripts/assistant.mjs touches only focusedTestsForTask/verifyCompletion, not the offline path). brains.js, boot.js and the other pinned renderer refs are the pipeline editor and UI shell - not part of the offline chain. Narrow validation this run: python tools/test_mefi_studio_offline_probe.py 12 tests OK; node --test tests/assistant_overseer_chat.test.mjs tests/role_provider_isolation.test.mjs tests/usage_tracker_host.test.mjs 73 pass / 0 fail. No code change was needed; the issue stands resolved and no owner action remains beyond watching that the warning stays clear.
+
+## 2026-09-26 - Push readiness validation interrupted by concurrent music edits
+
+Before validation, main matched origin/main. The renderer booklet rebuild,
+npm run check and npm run audit passed (zero audit findings); npm run lint
+passed with zero errors and 72 warnings. Full npm test completed with exit 1:
+Node CPU stage 3825 tests, 3821 passed, 4 skipped, no failures; Electron
+fixtures failed with renderer startup errors including toggleLink not defined.
+The runner detected source changes during the Electron stage. renderer/music.js
+was rewritten during the run, so this is not a stable-tree regression verdict
+or approval to publish the current files. Both exclusive Electron stages passed
+(3 tests); Python passed all 248 tests; all six normalized-path checks passed.
+No commit or push was made. A quiet-tree rebuild and validation are required
+once the concurrent music edits finish. The unrelated game plan.md stays local.
+Full output is in the OS temporary mefi-push-validation-20260926.log; lint output
+is in mefi-push-lint-20260926.log. Live stores and portable data were untouched.
+
+## 2026-09-26 - c655647 solo Command and committed companion panel follow-up
+
+After the other chats released the Electron lane, preflight found no running
+full suites, unittest processes or Electron fixtures. In the clean, unchanged
+C:/wt/assist-g0 checkout at c655647dd5fea2024cc72dbb6f26be35b4c76b96,
+`node --test tests/command_render.test.mjs` passed 1/1 in 57.6 seconds with
+its normal 80-second child kill bound. This supports the documented load
+flake diagnosis for the preceding full run's Command timeout; no source or
+timeout was changed. The previously reproduced Unified Studio navigation
+assertion at 600px/150% remains the outstanding rendering failure.
+
+The isolated synthetic companion panel verifier then rebuilt this exact
+commit's renderer and passed at 1440x900 and 600x700 (7.4 seconds). It
+verified owner/held/parked labels, project name, Clear list placement and
+reachability, confirmation before the bridge call, exactly one clear call,
+and the empty state. Both screenshots were visually inspected. No renderer
+errors, network attempts or child-process attempts were recorded, and no
+live data was used. The checkout remained clean at the same commit.
+Logs: OS temporary mefi-owner-command-solo.log and
+mefi-owner-panel-committed.log; panel report/captures in
+mefi-owner-panel-vXgCJM. This focused follow-up does not replace the recorded
+full npm-test result with a claimed all-green run.
+
+## 2026-09-26 - Music mode polish: static backgrounds, player chrome and menu validation
+
+Completed the existing music-menu pass in the shared checkout. The player now
+has a draggable title bar and a reachable minimized strip, steps aside for the
+music menu, and stays below it when a narrow viewport has no spare room. Links
+puts Now playing, Stop and video settings first. Static, paused and pictureless
+backgrounds dim without reducing tree opacity or changing saved brightness.
+The local scene sampler compares finer brightness cells so motion within a
+mostly stationary video is not mistaken for album art; pending results are
+discarded after playback/source/paint changes.
+
+Focused music/media tests: 116/116 passed. A seeded offscreen Electron preview
+using the real scene sampler and local still/moving MP4 files verified automatic
+still dimming (0.72 scrim), moving video at full chosen brightness (0 scrim),
+pause dimming, a visible minimized Restore control, and a reachable Stop button
+with the floating video under a 600x780 music menu. Captures were visually
+inspected. This preview used synthetic project/task data and isolated profiles.
+The media-window Electron fixture passed solo (48.6 s) and in the full suite
+(33.2 s), including provider hit testing, drag/resize, restoration, volume,
+queue, hover, clipboard offers, tree visibility, Zen and a single iframe load.
+An earlier fixture failure exposed clipped provider corners; removing that
+clipping fixed it. Its drag check now uses the player's title bar and it also
+checks the minimized Restore button. Earlier full attempts were stopped while
+these fixes were being made; the final completed run below supersedes them.
+
+Final gates: booklet rebuilt; npm run check passed; npm run audit returned no
+findings. Full npm test completed all legs: Node parallel stage 3718 tests,
+3714 passed, 4 skipped, 0 failures; Electron stage 37 tests, 35 passed, 1 skipped,
+1 failure; both serialized files passed (3 tests). Python: 248 tests passed.
+Normalized-path lock: all 6 checks passed. No source-fingerprint warning occurred
+in this final run. The sole failure was unified_studio_render's existing
+"primary destinations stay visible at 600 / 1.5" assertion, already reproduced
+on clean HEAD in the earlier Command performance and Vibe validation rows.
+The music, media and real painted tree suites passed. Full npm test therefore
+exited 1; this is not recorded as a green full gate.
+
+Local-only evidence: tools/logs/music-polish-full-test.log,
+music-polish-unit.log, music-polish-media-render.log, music-polish-check.log,
+music-polish-audit.log and the music-polish/ preview and integration captures.
+
+Validation: 111 focused music/media-window tests passed, including a docking,
+background and geometry preservation contract. The isolated Electron browser
+and media-window fixtures both passed alone and in the full run. The media
+fixture verifies the same single provider load through panel/background
+switches, reachable queue controls, non-overlapping player/queue geometry at
+1440 and 600 pixels, and the new background button. Browser coverage checks
+its dock matches the preview and does not cover the queue. Seed-only captures
+of local music, video, browser and background layouts were inspected in the
+OS temporary directory. Layout review caught and fixed the browser stage's
+aspect-ratio overflow before the final checks.
+
+npm run build-booklet, npm run check and npm run audit passed (zero audit
+findings). Full npm test passed: 3,906 Node tests passed, 5 skipped; Python
+ran 248 tests, OK with 1 skip; normalized-path checks passed 6/6. The final
+focus/available-height adjustments were also covered by the focused 111-test
+rerun and a fresh build/check/audit. Logs and captures remain local in the
+OS temporary directory; no user data or portable data was changed.
 
 ## Read Before Any Tests
 

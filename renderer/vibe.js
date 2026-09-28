@@ -155,6 +155,10 @@
 
   // ---- render ---------------------------------------------------------------
   const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = String(text); return node; };
+  // Rows are rebuilt on every paint; MefiMotion (renderer/motion.js) keeps the
+  // ones that stay still, glides them to their new place, cascades what is
+  // new and fades what left. Without it (tests, motion off) a paint just runs.
+  const keep = (host, paint, options) => { if (host && window.MefiMotion?.keep) window.MefiMotion.keep(host, paint, options); else paint(); };
   const signatures = new Map();
   // Skip a paint when its inputs are unchanged, so a push storm stays cheap.
   function changed(key, value) {
@@ -264,8 +268,9 @@
       button.onclick = () => void gate.action.run();
     }
   }
-  function row({ tone, title, meta, progress, action, onOpen }) {
+  function row({ key, tone, title, meta, progress, action, onOpen }) {
     const item = el("li", `vibe-row${tone ? ` is-${tone}` : ""}`);
+    item.dataset.key = key || title;
     const open = el("button", "vibe-row-main");
     open.type = "button";
     open.append(el("span", "vibe-row-dot"), el("span", "vibe-row-title", title));
@@ -295,21 +300,37 @@
   function renderLanes() {
     const data = lanes();
     if (!changed("lanes", [data, projectId(), state.gateBusy])) { sharePanels(); return; }
+    const needCount = data.needs.length;
+    keep($("card-needs")?.parentElement, () => paintLanes(data));
+    renderDock(data);
+
+    renderGate();
+    // The pill says the one thing that matters most: agents held back, then
+    // what waits on you, then what is building.
+    const pulse = $("pulse");
+    const blocked = data.gate && ["held", "key"].includes(data.gate.key);
+    pulse.dataset.tone = blocked || needCount ? "ask" : data.running.length ? "live" : "quiet";
+    $("pulse-text").textContent = blocked ? data.gate.pill : needCount ? `${needCount} need${needCount === 1 ? "s" : ""} you` : data.running.length ? `${data.running.length} building` : data.gate ? data.gate.pill : "All quiet";
+    sharePanels(data);
+  }
+  // Each row's key names its card, so a task that moves from Building to
+  // Freshly done leaves one card and arrives in the other.
+  function paintLanes(data) {
     const building = $("lane-building");
     building.replaceChildren();
     for (const job of data.running.slice(0, 3)) {
       const phase = job.phase ? String(job.phase).replace(/_/g, " ") : "working";
-      building.append(row({ tone: "live", title: job.title || "A task", meta: `${phase} · started ${ago(job.startedAt)}`, progress: job.progress, onOpen: () => go("command", job.taskId ? { selected: `task:${job.taskId}` } : {}) }));
+      building.append(row({ key: `building:${job.taskId || job.title}`, tone: "live", title: job.title || "A task", meta: `${phase} · started ${ago(job.startedAt)}`, progress: job.progress, onOpen: () => go("command", job.taskId ? { selected: `task:${job.taskId}` } : {}) }));
     }
-    for (const task of data.checking.slice(0, Math.max(0, 4 - building.children.length))) building.append(row({ tone: "check", title: task.title || "A finished task", meta: "checking its work", onOpen: () => openTask(task.id) }));
+    for (const task of data.checking.slice(0, Math.max(0, 4 - building.children.length))) building.append(row({ key: `building:${task.id}`, tone: "check", title: task.title || "A finished task", meta: "checking its work", onOpen: () => openTask(task.id) }));
     const heldBack = data.gate && ["held", "paused", "key"].includes(data.gate.key);
-    for (const item of data.next.slice(0, Math.max(0, 4 - building.children.length))) building.append(row({ tone: "next", title: item.title || "Next task", meta: heldBack ? "queued · waiting for the agents" : item.stage === "waiting" ? "waiting for what it depends on" : item.stage === "cooling" ? "trying again soon" : "up next", onOpen: () => openTask(item.id) }));
+    for (const item of data.next.slice(0, Math.max(0, 4 - building.children.length))) building.append(row({ key: `building:${item.id}`, tone: "next", title: item.title || "Next task", meta: heldBack ? "queued · waiting for the agents" : item.stage === "waiting" ? "waiting for what it depends on" : item.stage === "cooling" ? "trying again soon" : "up next", onOpen: () => openTask(item.id) }));
     $("count-building").textContent = data.running.length ? String(data.running.length) : "";
 
     const needs = $("lane-needs");
     needs.replaceChildren();
-    for (const need of data.needs.slice(0, 4)) needs.append(row({ tone: need.tone, title: need.title, meta: need.meta, action: { label: need.verb, run: () => openNeed(need) }, onOpen: () => openNeed(need) }));
-    if (data.needs.length > 4) needs.append(row({ tone: "next", title: `${data.needs.length - 4} more waiting on you`, meta: "in your tasks", onOpen: () => openPanel("tasks", { fold: "needs" }) }));
+    for (const need of data.needs.slice(0, 4)) needs.append(row({ key: `needs:${need.kind}:${need.id}`, tone: need.tone, title: need.title, meta: need.meta, action: { label: need.verb, run: () => openNeed(need) }, onOpen: () => openNeed(need) }));
+    if (data.needs.length > 4) needs.append(row({ key: "needs:more", tone: "next", title: `${data.needs.length - 4} more waiting on you`, meta: "in your tasks", onOpen: () => openPanel("tasks", { fold: "needs" }) }));
     const needCount = data.needs.length;
     $("count-needs").textContent = needCount ? String(needCount) : "";
     layer.dataset.needs = needCount ? "yes" : "no";
@@ -318,13 +339,13 @@
     finished.replaceChildren();
     for (const task of data.finished) {
       const verified = task.verification?.state === "verified";
-      finished.append(row({ tone: "done", title: task.title || "A task", meta: `${verified ? "verified" : "done"} · ${ago(task.updatedAt || task.createdAt)}`, onOpen: () => openTask(task.id) }));
+      finished.append(row({ key: `done:${task.id}`, tone: "done", title: task.title || "A task", meta: `${verified ? "verified" : "done"} · ${ago(task.updatedAt || task.createdAt)}`, onOpen: () => openTask(task.id) }));
     }
     $("count-done").textContent = "";
 
     const ideas = $("lane-ideas");
     ideas.replaceChildren();
-    for (const idea of data.ideas.slice(0, 3)) ideas.append(row({ tone: "idea", title: idea.title || idea.detail || "An idea", meta: [idea.source, idea.at ? ago(idea.at) : ""].filter(Boolean).join(" · ") || "new idea", action: { label: "Build it", run: () => void promoteIdea(idea) }, onOpen: () => openPanel("ideas", { ideaId: idea.id }) }));
+    for (const idea of data.ideas.slice(0, 3)) ideas.append(row({ key: `ideas:${idea.id}`, tone: "idea", title: idea.title || idea.detail || "An idea", meta: [idea.source, idea.at ? ago(idea.at) : ""].filter(Boolean).join(" · ") || "new idea", action: { label: "Build it", run: () => void promoteIdea(idea) }, onOpen: () => openPanel("ideas", { ideaId: idea.id }) }));
     $("count-ideas").textContent = data.ideas.length > 3 ? String(data.ideas.length) : "";
 
     // A request split into steps: where it stands, its steps as marks, and
@@ -335,9 +356,10 @@
       const waiting = data.needs.find((need) => need.kind === "family" && need.id === family.id);
       const current = family.steps.find((step) => step.state === "running") || family.steps.find((step) => step.state === "checking");
       const meta = `${family.finished} of ${family.steps.length} steps done${current ? ` · ${STEP_STATES[current.state]}: ${current.title}` : waiting ? " · waiting for your go-ahead" : family.final === "running" ? " · final check running" : family.final === "next" ? " · final check next" : ""}`;
-      plan.append(row({ tone: waiting ? "ask" : current || family.final === "running" ? "live" : "next", title: family.title, meta, progress: family.steps.length ? family.finished / family.steps.length : undefined,
+      plan.append(row({ key: `plan:${family.id}`, tone: waiting ? "ask" : current || family.final === "running" ? "live" : "next", title: family.title, meta, progress: family.steps.length ? family.finished / family.steps.length : undefined,
         action: waiting ? { label: "Start all", run: () => openNeed(waiting) } : null, onOpen: () => openPanel("plans", { familyId: family.id }) }));
       const marks = el("li", "vibe-steps");
+      marks.dataset.key = `plan:${family.id}:steps`;
       marks.setAttribute("aria-label", `Steps of ${family.title}`);
       for (const step of family.steps) { const mark = el("span", `vibe-step is-${step.state}`, step.title); mark.title = `${step.title}: ${STEP_STATES[step.state]}`; marks.append(mark); }
       plan.append(marks);
@@ -351,16 +373,6 @@
     const visible = Object.values(shown).filter(Boolean).length;
     layer.dataset.cards = visible ? "some" : "none";
     $("quiet").hidden = visible > 0 || Boolean(data.gate);
-    renderDock(data);
-
-    renderGate();
-    // The pill says the one thing that matters most: agents held back, then
-    // what waits on you, then what is building.
-    const pulse = $("pulse");
-    const blocked = data.gate && ["held", "key"].includes(data.gate.key);
-    pulse.dataset.tone = blocked || needCount ? "ask" : data.running.length ? "live" : "quiet";
-    $("pulse-text").textContent = blocked ? data.gate.pill : needCount ? `${needCount} need${needCount === 1 ? "s" : ""} you` : data.running.length ? `${data.running.length} building` : data.gate ? data.gate.pill : "All quiet";
-    sharePanels(data);
   }
 
   // ---- the dock ---------------------------------------------------------------
@@ -375,13 +387,27 @@
   function renderDock(data) {
     const stops = dockStops(data);
     const open = window.MefiVibePanels?.current?.() ?? null;
+    const standing = [];
     for (const key of STOPS) {
       const button = $(`stop-${key}`);
       if (!button) continue;
       // An open panel keeps its own stop, even after its last item leaves.
       button.hidden = !stops[key] && open !== key;
+      if (!button.hidden) standing.push(key);
       if (PANEL_STOPS.has(key)) button.setAttribute("aria-pressed", String(open === key));
     }
+    // One mark sits behind the open panel's stop and springs to the next one
+    // (vibe.css .vibe-dock-mark); every stop is the same width, so its place
+    // is a slot number, right even while a stop is still stepping in or out.
+    const dock = $("dock");
+    const slot = PANEL_STOPS.has(open) ? standing.indexOf(open) : -1;
+    // A mark that was off appears at its stop instead of sliding from the last.
+    const mark = dock?.querySelector?.(".vibe-dock-mark");
+    const arriving = slot >= 0 && mark?.style && dock.dataset?.marked !== "yes";
+    if (arriving) mark.style.transition = "none";
+    if (slot >= 0) dock?.style?.setProperty?.("--slot", String(slot));
+    if (arriving) { void mark.offsetWidth; mark.style.transition = ""; }
+    if (dock?.dataset) dock.dataset.marked = slot >= 0 ? "yes" : "no";
   }
 
   // ---- panels -------------------------------------------------------------------
@@ -438,10 +464,21 @@
     $("chat-title").textContent = companion();
     const thread = $("thread");
     const pinned = thread.scrollTop + thread.clientHeight >= thread.scrollHeight - 40;
+    keep(thread, () => paintThread(thread, list, confirms), { ghosts: false, cascade: false });
+    if (pinned || state.pending) thread.scrollTop = thread.scrollHeight;
+    const last = [...list].reverse().find((message) => message.role === "assistant");
+    $("last").hidden = !last || state.chatOpen;
+    if (last) { $("last-who").textContent = companion(); $("last-text").textContent = last.text; }
+    if (state.chatOpen) state.seenMessageId = list.at(-1)?.id ?? state.seenMessageId;
+    const unread = Boolean(list.at(-1)?.id && list.at(-1).id !== state.seenMessageId && !state.chatOpen && list.at(-1)?.role === "assistant");
+    $("chat-dot").hidden = !unread;
+  }
+  function paintThread(thread, list, confirms) {
     thread.replaceChildren();
     if (!list.length) thread.append(el("li", "vibe-empty", `Ask ${companion()} anything about this project. Replies show up here.`));
     for (const message of list) {
       const item = el("li", `vibe-msg is-${message.role}${message.kind === "notice" ? " is-notice" : ""}`);
+      item.dataset.key = message.id || `${message.role}:${message.at ?? ""}:${String(message.text ?? "").slice(0, 40)}`;
       item.append(el("span", "vibe-msg-who", message.role === "user" ? person() || "You" : companion()), el("p", "vibe-msg-text", message.text));
       if (message.role === "assistant" && Array.isArray(message.offers)) {
         const chips = el("div", "vibe-chat-choices");
@@ -462,7 +499,7 @@
       thread.append(item);
     }
     for (const question of confirms) {
-      const item = el("li", "vibe-msg is-assistant vibe-inline-confirm"); item.append(el("p", "vibe-msg-text", question.title));
+      const item = el("li", "vibe-msg is-assistant vibe-inline-confirm"); item.dataset.key = `confirm:${question.id}`; item.append(el("p", "vibe-msg-text", question.title));
       const controls = el("div", "vibe-chat-choices");
       for (const option of question.options || []) {
         const pick = el("button", "vibe-btn quiet", option.id === "yes" ? "Yes" : option.id === "no" ? "No" : option.label); pick.type = "button";
@@ -478,14 +515,7 @@
         }); controls.append(pick);
       } item.append(controls); thread.append(item);
     }
-    if (state.pending) { const typing = el("li", "vibe-msg is-assistant is-typing"); typing.append(el("span", "vibe-msg-who", companion()), el("span", "vibe-typing")); typing.lastChild.append(el("i"), el("i"), el("i")); thread.append(typing); }
-    if (pinned || state.pending) thread.scrollTop = thread.scrollHeight;
-    const last = [...list].reverse().find((message) => message.role === "assistant");
-    $("last").hidden = !last || state.chatOpen;
-    if (last) { $("last-who").textContent = companion(); $("last-text").textContent = last.text; }
-    if (state.chatOpen) state.seenMessageId = list.at(-1)?.id ?? state.seenMessageId;
-    const unread = Boolean(list.at(-1)?.id && list.at(-1).id !== state.seenMessageId && !state.chatOpen && list.at(-1)?.role === "assistant");
-    $("chat-dot").hidden = !unread;
+    if (state.pending) { const typing = el("li", "vibe-msg is-assistant is-typing"); typing.dataset.key = "typing"; typing.append(el("span", "vibe-msg-who", companion()), el("span", "vibe-typing")); typing.lastChild.append(el("i"), el("i"), el("i")); thread.append(typing); }
   }
   function renderHead() {
     syncDraft();
@@ -807,6 +837,10 @@
     $("ask").hidden = true; layer.dataset.ask = "closed";
     if (!quiet) layer.focus({ preventScroll: true });
   }
+  // A typed answer per question: pushes rebuild the drawer (another need
+  // arriving changes the signature), which emptied the box and took focus.
+  const askDrafts = new Map();
+  let askRefocus = false;
   function renderAsk() {
     if (!state.need || $("ask").hidden) return;
     const all = needs();
@@ -816,6 +850,7 @@
     const task = need && need.kind !== "question" ? taskById(need.id) : null;
     if (!changed("ask", [need ?? null, task, all.length, state.askSending, state.status.autoBuild])) return;
     const body = $("ask-body");
+    askRefocus = Boolean(document.activeElement && body.contains(document.activeElement) && document.activeElement.matches?.(".vibe-ask-own textarea"));
     body.replaceChildren();
     const watch = $("ask-watch");
     if (!need) {
@@ -935,7 +970,7 @@
       if (option.description) button.append(el("span", "vibe-ask-option-desc", option.description));
       button.disabled = state.askSending;
       button.addEventListener("click", () => {
-        if (option.text || option.action?.action === "instruct") { selectedTextOption = option; input.placeholder = "Your one-line answer…"; input.focus(); }
+        if (option.text || option.action?.action === "instruct") { selectedTextOption = option; input.placeholder = "Your one-line answer…"; remember(); input.focus(); }
         else void answer(question, { optionId: option.id, label: option.label });
       });
       options.append(button);
@@ -946,12 +981,21 @@
     const input = el("textarea");
     input.rows = 2; input.placeholder = choices.length ? "Or say it in your own words…" : "Your answer…";
     input.setAttribute("aria-label", "Write your own answer");
+    const kept = askDrafts.get(question.id);
+    if (kept) {
+      input.value = kept.text;
+      selectedTextOption = choices.find((option) => option.id === kept.optionId) ?? null;
+      if (selectedTextOption) input.placeholder = "Your one-line answer…";
+    }
+    const remember = () => askDrafts.set(question.id, { text: input.value, optionId: selectedTextOption?.id ?? null });
+    input.addEventListener("input", remember);
     const send = el("button", "vibe-btn quiet", "Send");
     send.type = "submit"; send.disabled = state.askSending;
     own.append(input, send);
     own.addEventListener("submit", (event) => { event.preventDefault(); const text = input.value.trim(); if (text) void answer(question, { optionId: selectedTextOption?.id ?? null, text, label: text }); else input.focus(); });
     input.addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); own.requestSubmit(); } });
     body.append(own);
+    if (askRefocus) { askRefocus = false; input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
   }
   function renderApproval(body, need, task) {
     const row = need.row || {};
@@ -1005,14 +1049,16 @@
     note.textContent = "Working on it…"; note.dataset.tone = "";
     try {
       const result = await call();
-      if (requestProject !== projectId()) return;
+      // Switched project while this ran: release the drawer, or its buttons stay
+      // disabled and act() returns at once until a reload.
+      if (requestProject !== projectId()) { state.askSending = false; signatures.delete("ask"); return; }
       if (!result || result.ok === false) throw Object.assign(new Error(result?.error || "That didn't go through."), { gone: result?.gone });
       if (result.backlog && belongs(result.backlog)) state.backlog = { ...result.backlog, ok: true };
       if (result.task) state.tasks = state.tasks.map((item) => item.id === result.task.id ? result.task : item);
       if (result.state && belongs(result.state)) state.assistant = result.state;
       // Until the next read, what was just handled stays out of Needs you.
       if (state.backlog && Array.isArray(state.backlog[need.kind])) state.backlog = { ...state.backlog, [need.kind]: state.backlog[need.kind].filter((item) => item.id !== need.id) };
-      if (requestProject !== projectId()) return;
+      if (requestProject !== projectId()) { state.askSending = false; signatures.delete("ask"); return; }
       const message = window.MefiAutonomy?.outcome?.(result, success) || result.dispatch?.message || success;
       if (needKey(state.need) === requestKey) moveOn(need, message, place);
       else { state.askSending = false; feedback(message, result.dispatch?.held || result.dispatch?.paused ? "warn" : "good"); }
@@ -1041,6 +1087,7 @@
     if (!api()?.assistantAnswer) { const note = $("ask-note"); note.textContent = "Answers are available in the desktop app."; note.dataset.tone = "warn"; return; }
     await act(need, async () => {
       const result = await api().assistantAnswer({ id: question.id, optionId, text });
+      if (result?.ok !== false) askDrafts.delete(question.id);
       if (answeringProject === projectId() && result?.ok !== false && !(result?.state && belongs(result.state))) state.assistant = { ...state.assistant, questions: (state.assistant.questions || []).map((item) => item.id === question.id ? { ...item, status: "answered" } : item) };
       return result ?? { ok: true };
     }, `Answered: ${label.length > 60 ? `${label.slice(0, 57)}…` : label}. ${companion()} carries on.`);

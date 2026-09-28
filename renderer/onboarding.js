@@ -21,11 +21,13 @@
   const SCAN_STEPS = ["locate", "version", "auth", "models", "verbose", "agents"];
   const SCAN_STEP_LABELS = { locate: "finding OpenCode", version: "reading its version", auth: "linked providers", models: "models", verbose: "free models", agents: "agents" };
   const ADVICE_STOPS = [["workspace", WORKSPACE], ["map", MAP], ["connections", CONNECT], ["create", CREATE], ["monitor", MONITOR], ["review", REVIEW]];
+  // Subscription CLIs that sign in with their own account (cli-setup.cjs).
+  const SUBSCRIPTIONS = ["codex", "claude", "grok", "antigravity"];
   const $ = (id) => document.getElementById(`walkthrough-${id}`);
   const lessons = [
     {
       title: "Link an AI and scan this computer", short: "Scan", glyph: "g-ambience", panel: "scan",
-      copy: "Start with the account you already use. Codex, Claude Code, Grok or Antigravity can power your studio through its own login. Install a missing tool here, or scan for OpenCode's linked and free models.",
+      copy: "Start with the account you already use. Codex, Claude Code, Grok or Antigravity can power your studio through its own login. Install a missing tool here, use an API key (z.ai, OpenRouter, OpenCode Go or Zen, or your own endpoint) or a local model server such as LM Studio, or scan for OpenCode's linked and free models.",
       points: ["The scan asks OpenCode for its version, its linked provider names, its model list and its agents. It never opens the credential store, never sends a prompt and never changes OpenCode's own configuration.", "Free models cost nothing and are used first for exploring; paid plans you have linked are kept for building. Free-tier models may use prompts to improve the model, so keep confidential work on a paid model.", "Nothing is saved until you choose Use this setup and continue. From there the guide maps your selected folder and asks the linked AI to plan the remaining stops. You can run this scan again from Start here, or Auto setup from Agents setup, after linking a provider."],
       action: null, note: "Run the first scan reads OpenCode's own answers. Use this setup and continue saves the choices shown (no key), maps the selected folder, and asks the linked AI what to do next.",
       done: "Setup saved",
@@ -49,7 +51,7 @@
     {
       title: "Connect the assistant and coding workers", short: "Connections", glyph: "g-ambience",
       copy: "The assistant helps you think and organize. Coding workers carry out tasks in your project. Their provider settings are separate, and the scan's choices are shown at the top of Agents setup.",
-      points: ["In Agents › Setup › Providers, save the key for the assistant provider you want, choose Grok, Claude Code, Codex or Antigravity with their own CLI logins, or point the custom route at your own OpenAI-compatible endpoint.", "LM Studio needs no key: keep its local server running and pick it as the provider.", "Models are saved per provider: set the model you have for each option and switching never mixes them.", "Coding workers run through OpenCode by default: on your linked plan, or on the free model the scan found. The coding tier decides what each build may cost — Free, Fast or Heavy — while Auto lets Studio pick per task. Saving an assistant key alone does not prove a worker is ready.", "Manual planning works without an AI key. Jev is optional; without it the assistant's own model, or a free model, stands in for the small routing decisions."],
+      points: ["In Agents › Setup › Connections › Providers, save the key for the assistant provider you want, choose Grok, Claude Code, Codex or Antigravity with their own CLI logins, or point the custom route at your own OpenAI-compatible endpoint.", "LM Studio needs no key: keep its local server running and pick it as the provider.", "Models are saved per provider: set the model you have for each option and switching never mixes them.", "Coding workers run through the builder CLI your setup chose: the subscription tool you connected, or OpenCode on your linked plan or the free model the scan found. Agents › Setup › Team shows which one. The coding tier decides what each build may cost — Free, Fast or Heavy — while Auto lets Studio pick per task. Saving an assistant key alone does not prove a worker is ready.", "Manual planning works without an AI key. Jev is optional; without it the assistant's own model, or a free model, stands in for the small routing decisions."],
       action: "Walk me to connections", route: "studio", params: { section: "settings-assistant" },
       station: "We are in Agents › Setup › Providers. Save the key you want, then open Agents › Setup › Team & models to confirm the CLI and pick a coding tier. Nothing is sent until you choose to test it.",
       note: "Connection tests and AI requests may use your provider allowance when you explicitly run them.",
@@ -61,8 +63,10 @@
       points: ["Chat is for questions and discussion. Create task saves work in the selected project, and Use a task outline helps you describe the result and its checks.", "Start small: for example, ‘Add a Create note button to the empty notes list; check that it opens a new note.’ Say what should stay unchanged, too.", "Plan an idea collects questions and decisions. Review and approve the specification, then explicitly create its tasks.", "With Verify first, View task lets you inspect the brief and Approve build, or leave it waiting. New work also follows your Pause and worker settings."],
       action: "Walk me to the task box", route: "task", secondary: "Explore a plan", secondaryRoute: "plans",
       station: "This is the task box for the selected project. Describe the result and how you will check it, or open Use a task outline for a guided shape. I do not send anything from here.",
+      // Vibe (the default) hides Build's workspace, so the walk uses its box.
+      vibeStation: "This is Vibe's box for the selected project. Describe the result and how you will check it, then choose Build it to save it as a task, or Talk it over to discuss it first. I do not send anything from here.",
       note: "These buttons open the editor and the plan sheet. They do not submit a task or start a planning request.",
-      target: "#workspace-input", done: "Task box found",
+      target: "#workspace-input", vibeTarget: "#vibe-input", done: "Task box found",
     },
     {
       title: "Follow the queue and current work", short: "Monitor", glyph: "g-command",
@@ -79,8 +83,9 @@
       points: ["Open Review in Your work to read the result, evidence and next actions. Inspect the project changes and run any remaining acceptance checks.", "If work needs attention, read its reason first. Correct the connection, brief or prerequisite, then use its retry control when you are ready.", "Keep failed work available for diagnosis. Task history can recover an earlier brief; it does not roll back your project files."],
       action: "Walk me to Review", route: "review",
       station: "This is Review in Your work. Open a finished task to read the result and evidence, then run any remaining acceptance checks. Tasks that need attention keep their reason and retry controls here.",
+      vibeStation: "This is Tasks in Vibe. Open a task under Done to read the result and evidence, then run any remaining acceptance checks. Work that needs attention waits under Needs you with its reason.",
       note: "You can reopen this guide from Start here at the foot of the menu, or from Settings or Shortcuts. Completing the guide does not mark any task done.",
-      target: "#workspace-review", done: "Review found",
+      target: "#workspace-review", vibeTarget: "#vibe-panel", done: "Review found",
     },
   ];
   const blankDone = () => lessons.map(() => false);
@@ -130,8 +135,14 @@
   let assistResult = null;
   let assistBusy = false;
   let cliSetupState = null;
-  let cliSetupLoading = false;
+  let cliSetupFlight = null;
   let cliSetupBusy = false;
+  // A setup window launched from here is still open: Studio regaining focus
+  // is the cue to look for the newly installed tool again.
+  let cliWindowOpen = false;
+  // The person left Scan or First map to save a key or pick a local server:
+  // a usable connection (or Back to the scan) brings them back to a fresh scan.
+  let keyReturn = false;
   const checkedClis = new Set();
   function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} }
   function node(tag, className, text) {
@@ -154,13 +165,24 @@
       return typeof fn === "function" ? (...args) => fn.apply(api, args) : null;
     } catch { return null; }
   }
-  // The workspace header carries the truth about a selected project. Reading it
-  // keeps the guide away from every project-writing host API.
+  // The workspace's active project id is the truth about a selected project;
+  // its header text is only a fallback where the workspace is absent (its
+  // no-project wording has changed before). Reading either keeps the guide
+  // away from every project-writing host API.
   function projectReady() {
+    const workspace = window.MefiWorkspace;
+    if (typeof workspace?.activeProjectId === "function") {
+      try { return Boolean(workspace.activeProjectId()); } catch { return false; }
+    }
     const label = document.getElementById("workspace-project-name")?.textContent?.trim() || "";
-    if (!label) return false;
+    if (!label || label === "Workspace") return false;
     return !/^(Your workspace|Opening your project|Loading|Desktop app)/.test(label);
   }
+  // Vibe (the default mode) hides Build's workspace: go("workspace") lands
+  // on Vibe, so the Create and Review stops point at Vibe's own controls.
+  const vibeMode = () => { try { return window.MefiVibe?.mode?.() === "vibe"; } catch { return false; } };
+  const targetOf = (lesson) => (vibeMode() && lesson.vibeTarget) || lesson.target;
+  const stationOf = (lesson) => (vibeMode() && lesson.vibeStation) || lesson.station || lesson.copy;
   function isDone(index) {
     if (state.done[index]) return true;
     return index === WORKSPACE && projectReady();
@@ -265,31 +287,49 @@
     if (!panel) return;
     panel.hidden = ![SCAN, MAP].includes(state.step);
     if (panel.hidden) return;
-    if (!cliSetupState && !cliSetupLoading) void refreshCliSetup();
+    if (!cliSetupState && !cliSetupFlight) void refreshCliSetup();
     const id = $("cli-choice")?.value || "codex";
     const cli = cliSetupState?.clis?.find((item) => item.id === id);
     const busy = cliSetupBusy || scanBusy || mapBusy;
     if ($("cli-choice")) $("cli-choice").disabled = busy;
-    for (const action of ["install", "login", "check", "use", "refresh", "docs"]) if ($(`cli-${action}`)) $(`cli-${action}`).disabled = busy;
+    for (const action of ["install", "login", "check", "use", "refresh", "docs", "keys"]) if ($(`cli-${action}`)) $(`cli-${action}`).disabled = busy;
     if ($("cli-install")) $("cli-install").textContent = cli?.installed ? "Update and sign in" : "Install and sign in";
     if ($("cli-login")) $("cli-login").disabled = busy || !cli?.installed;
     if ($("cli-check")) { $("cli-check").disabled = busy || !cli?.installed; $("cli-check").textContent = id === "opencode" ? "Scan OpenCode" : "Check connection"; }
     if ($("cli-use")) { $("cli-use").textContent = id === "opencode" ? "Use scanned setup" : "Use for the whole studio"; $("cli-use").disabled = busy || !cli?.installed || (id === "opencode" ? !scanResult?.plan?.ok : !checkedClis.has(id)); }
     if ($("cli-detail")) $("cli-detail").textContent = !cli ? "Checking installed tools…" : id === "opencode" ? `${cli.installed ? "Installed." : "Not installed yet."} After sign-in, choose Scan OpenCode to discover its models, then Use scanned setup.` : checkedClis.has(id) ? `${cli.name} answered the connection check. Ready to use.` : `${cli.installed ? "Installed" : "Not installed yet"}. ${cli.installed ? "Sign in if needed, then choose Check connection." : "Choose Install and sign in to get started."}`;
   }
-  async function refreshCliSetup() {
-    if (cliSetupLoading) return;
+  // Callers arriving while a detection runs share it instead of starting a
+  // second host read.
+  function refreshCliSetup() {
+    if (cliSetupFlight) return cliSetupFlight;
     const fn = hostApi("cliSetupStatus");
-    if (!fn) { cliSetupState = { clis: [] }; setPanelStatus("cli-status", "Guided installation is available in the desktop app."); return; }
-    cliSetupLoading = true;
-    try {
-      const result = await fn();
-      if (!result?.ok) throw new Error(result?.error || "Could not check installed tools.");
-      const first = !cliSetupState;
-      cliSetupState = result;
-      if (first && $("cli-choice")) $("cli-choice").value = result.clis?.find((cli) => cli.id === result.selected && cli.installed)?.id || result.clis?.find((cli) => cli.installed)?.id || "codex";
-    } catch (error) { cliSetupState = { clis: [] }; setPanelStatus("cli-status", error.message, true); }
-    finally { cliSetupLoading = false; renderCliSetup(); }
+    if (!fn) { cliSetupState = { clis: [] }; setPanelStatus("cli-status", "Guided installation is available in the desktop app."); return Promise.resolve(); }
+    cliSetupFlight = (async () => {
+      try {
+        const result = await fn();
+        if (!result?.ok) throw new Error(result?.error || "Could not check installed tools.");
+        const first = !cliSetupState;
+        cliSetupState = result;
+        if (first && $("cli-choice")) $("cli-choice").value = result.clis?.find((cli) => cli.id === result.selected && cli.installed)?.id || result.clis?.find((cli) => cli.installed)?.id || "codex";
+      } catch (error) { cliSetupState = { clis: [] }; setPanelStatus("cli-status", error.message, true); }
+    })().finally(() => { cliSetupFlight = null; renderCliSetup(); });
+    return cliSetupFlight;
+  }
+  // The host pushes a closed setup window after re-reading PATH (and the
+  // window regaining focus stands in where it cannot): detect the tools again
+  // so Sign in and Check connection come alive without a manual refresh.
+  async function setupWindowClosed(detail = {}) {
+    cliWindowOpen = false;
+    // A detection that began before the window closed may predate the
+    // install: let it land, then read again.
+    if (cliSetupFlight) await cliSetupFlight;
+    await refreshCliSetup();
+    const cli = cliSetupState?.clis?.find((item) => item.id === (detail?.id || $("cli-choice")?.value));
+    if (!cli) return;
+    setPanelStatus("cli-status", cli.installed
+      ? `${cli.name} is installed. Choose ${cli.id === "opencode" ? "Scan OpenCode" : "Check connection"} next.`
+      : `${cli.name} is not detected yet. If its setup finished, choose Refresh installed tools; otherwise run Install and sign in again.`);
   }
   async function cliSetupAction(action) {
     if (cliSetupBusy || mapBusy || scanBusy) return;
@@ -304,7 +344,7 @@
       const result = await fn(["use", "check"].includes(action) ? id : { id, action });
       if (!result?.ok) { if (action === "check") checkedClis.delete(id); throw new Error(result?.error || "Setup did not finish. Try again."); }
       if (action === "check") checkedClis.add(id);
-      if (action === "install" || action === "login") checkedClis.delete(id);
+      if (action === "install" || action === "login") { checkedClis.delete(id); cliWindowOpen = result.launched === true; }
       setPanelStatus("cli-status", result.message || "Setup instructions opened.");
       if (action === "use") {
         state.done[SCAN] = true; save(); scanResult = null; scanSynced = true;
@@ -315,17 +355,23 @@
   }
   function scanFacts(plan, auto = null) {
     if (!plan) return [];
-    if (["codex", "claude", "grok", "antigravity"].includes(auto?.active?.provider)) return [auto.summary, "Choose this tool above to check its login and use it for the whole studio. OpenCode is optional."];
+    if (SUBSCRIPTIONS.includes(auto?.active?.provider)) return [auto.summary, "Choose this tool above to check its login and use it for the whole studio. OpenCode is optional."];
     const facts = [];
     const cli = plan.opencode || {};
-    facts.push(cli.installed ? `OpenCode ${cli.version || "(version unknown)"} found${cli.path ? ` at ${cli.path}` : ""}${cli.supported === false ? " — older than the supported 1.x line" : ""}.` : "OpenCode is not installed on this computer.");
-    const linked = plan.providers?.linked || [];
-    facts.push(linked.length ? `Linked in OpenCode: ${linked.join(", ")}.` : "No provider is linked in OpenCode yet.");
-    const free = plan.providers?.free || {};
-    const best = Array.isArray(free.models) ? free.models.find((model) => model.usable) : null;
-    facts.push(free.count ? `${free.count} free model${free.count === 1 ? "" : "s"} available${best ? `, newest ${best.name || best.id}` : ""}.` : "No free model is available right now.");
-    facts.push(`Explorer: ${plan.explorer?.model || "OpenCode's default model"} — ${plan.explorer?.reason || ""}`.trim());
-    facts.push(`Builder: ${plan.builder?.model || "OpenCode's default model"} — ${plan.builder?.reason || ""}`.trim());
+    if (cli.installed) {
+      facts.push(`OpenCode ${cli.version || "(version unknown)"} found${cli.path ? ` at ${cli.path}` : ""}${cli.supported === false ? " — older than the supported 1.x line" : ""}.`);
+      const linked = plan.providers?.linked || [];
+      facts.push(linked.length ? `Linked in OpenCode: ${linked.join(", ")}.` : "No provider is linked in OpenCode yet.");
+      const free = plan.providers?.free || {};
+      const best = Array.isArray(free.models) ? free.models.find((model) => model.usable) : null;
+      facts.push(free.count ? `${free.count} free model${free.count === 1 ? "" : "s"} available${best ? `, newest ${best.name || best.id}` : ""}.` : "No free model is available right now.");
+      facts.push(`Explorer: ${plan.explorer?.model || "OpenCode's default model"} — ${plan.explorer?.reason || ""}`.trim());
+      facts.push(`Builder: ${plan.builder?.model || "OpenCode's default model"} — ${plan.builder?.reason || ""}`.trim());
+    } else {
+      // OpenCode's explorer and builder lines only describe OpenCode; without
+      // it they would read as the studio's only road.
+      facts.push("OpenCode is not installed on this computer. It is optional: a subscription tool above, an API key or a local model server can run your studio instead.");
+    }
     facts.push(`Judge: ${plan.judge?.kind || "fixed"} — ${plan.judge?.reason || ""}`.trim());
     // Auto setup's plan rides along with the scan: the assistant route and
     // builder CLI this machine's keys, CLIs and local servers already allow.
@@ -335,7 +381,7 @@
   }
   function scanNotes(plan, auto = null) {
     if (!plan) return [];
-    if (["codex", "claude", "grok", "antigravity"].includes(auto?.active?.provider)) return ["Every agent can use models available to this account. Choose provider defaults or save models per role in Agents setup."];
+    if (SUBSCRIPTIONS.includes(auto?.active?.provider)) return ["Every agent can use models available to this account. Choose provider defaults or save models per role in Agents setup."];
     return [
       ...(plan.warnings || []).map((text) => `Warning: ${text}`),
       ...(plan.nextSteps || []).map((text) => `Next: ${text}`),
@@ -364,7 +410,9 @@
       if (!status?.firstRun) {
         // A fresh install's first launch ran auto setup by itself; the scan
         // adds OpenCode's free explorer and builder on top of that route.
-        if (status?.autoSetup?.summary && !scanResult) setPanelStatus("scan-status", `Auto setup ran on first launch: ${status.autoSetup.summary} Choose your tool above to check its connection and finish setup.`);
+        // A subscription tool still needs its login checked; a key or a local
+        // server finishes through the scan's Use this setup.
+        if (status?.autoSetup?.summary && !scanResult) setPanelStatus("scan-status", `Auto setup ran on first launch: ${status.autoSetup.summary} ${SUBSCRIPTIONS.includes(status.aiProvider) ? "Choose your tool above to check its connection and finish setup." : "Run the first scan, then choose Use this setup and continue to finish setup."}`);
         return;
       }
       if (!state.done[SCAN]) { state.done[SCAN] = true; save(); }
@@ -389,8 +437,9 @@
       scanResult = result;
       if (!result?.ok) setPanelStatus("scan-status", result?.error || "The scan did not finish.", true);
       else if (result.plan?.ok) setPanelStatus("scan-status", "Scan complete. Review the facts below, then choose Use this setup and continue: it saves these choices (no key), maps your selected folder and asks the linked AI what to do next.");
-      else if (result.autoSetup?.ok) setPanelStatus("scan-status", `Scan complete. ${result.autoSetup.summary} Choose your installed tool above to use that subscription throughout the studio, including your first map.`);
-      else setPanelStatus("scan-status", "Let's connect your first tool. Choose one above, then Install and sign in. You can also continue the tour and connect it later.");
+      else if (result.autoSetup?.ok && SUBSCRIPTIONS.includes(result.autoSetup.active?.provider)) setPanelStatus("scan-status", `Scan complete. ${result.autoSetup.summary} Choose your installed tool above to use that subscription throughout the studio, including your first map.`);
+      else if (result.autoSetup?.ok) setPanelStatus("scan-status", `Scan complete. ${result.autoSetup.summary} Choose Use this setup and continue: it saves this route, maps your selected folder and asks the linked AI what to do next.`);
+      else setPanelStatus("scan-status", "Let's connect your first AI. Choose a tool above and Install and sign in, or choose I have an API key or a local model server. You can also continue the tour and connect it later.");
     } catch (error) {
       setPanelStatus("scan-status", error?.message || "The scan failed.", true);
     } finally {
@@ -442,7 +491,7 @@
   function mapAdvice(result) {
     const reason = result?.reason;
     if (reason === "free-tier-refused") return `${result.error} Choose a paid model in Settings, then map again.`;
-    if (reason === "no-scan" || reason === "no-explorer" || reason === "no-opencode") return "Connect a tool right here to make your first map. Choose an existing subscription, or Install and sign in above. You can continue the tour while you set it up.";
+    if (reason === "no-scan" || reason === "no-explorer" || reason === "no-opencode") return "Connect an AI right here to make your first map: choose a subscription tool and Install and sign in above, or choose I have an API key or a local model server. You can continue the tour while you set it up.";
     if (reason === "timeout") return `${result.error}`;
     if (reason === "unparsable") return `${result.error} Map again; a second pass usually answers in the requested shape.`;
     if (reason === "busy") return result.error;
@@ -530,12 +579,17 @@
   }
   // Places the suggested brief in the task box and takes the user there. It
   // never submits: sending stays a deliberate click in the workspace.
+  // The box is filled after the visit: switching Build's composer to Create
+  // task swaps in that mode's draft, and in Vibe the box is Vibe's own. The
+  // input event lets the owning surface save the draft and size the box.
   function placeSuggestedTask() {
     const task = assistResult?.advice?.firstTask;
     if (!task) return;
-    const input = document.getElementById("workspace-input");
-    if (input) { input.value = `${task.title}\n\n${task.brief || ""}`.trim(); }
-    visit("task");
+    const input = visit("task");
+    if (!input) return;
+    input.value = `${task.title}\n\n${task.brief || ""}`.trim();
+    try { if (typeof Event === "function") input.dispatchEvent?.(new Event("input", { bubbles: true })); } catch {}
+    input.focus?.();
   }
   // ---- coach --------------------------------------------------------------------------
   function renderCoach() {
@@ -545,13 +599,16 @@
     const done = isDone(state.step);
     $("coach-progress").textContent = `Step ${state.step + 1} of ${lessons.length} · ${lesson.short}`;
     $("coach-title").textContent = lesson.title;
-    $("coach-copy").textContent = lesson.station || lesson.copy;
-    $("coach-hint").textContent = done
-      ? `${lesson.done} ✓ — press the button when you are ready for the next stop.`
-      : lesson.waitFor
-        ? "I will tick this off the moment it is done. Take your time."
-        : "I stay out of your way here; press the button when you are ready.";
-    $("coach-next").textContent = state.step === lessons.length - 1 ? "Finish the tour" : done ? "Next stop" : "Done — next stop";
+    $("coach-copy").textContent = stationOf(lesson);
+    const returning = keyReturn && state.step === CONNECT;
+    $("coach-hint").textContent = returning
+      ? "Save your key here, or start LM Studio's server and choose LM Studio as the provider. A saved key brings you back to the scan; otherwise choose Back to the scan."
+      : done
+        ? `${lesson.done} ✓ — press the button when you are ready for the next stop.`
+        : lesson.waitFor
+          ? "I will tick this off the moment it is done. Take your time."
+          : "I stay out of your way here; press the button when you are ready.";
+    $("coach-next").textContent = returning ? "Back to the scan" : state.step === lessons.length - 1 ? "Finish the tour" : done ? "Next stop" : "Done — next stop";
     $("coach-back").disabled = state.step === 0;
     $("coach").hidden = false;
   }
@@ -604,8 +661,35 @@
     overlay.hidden = true;
     if (coachEl) coachEl.hidden = true;
     clearHighlight();
+    // Closing the guide ends a detour to Connections: a later save must not
+    // pull the guide back open.
+    keyReturn = false;
     state = { ...state, mode: "idle" };
     save(); releaseLayer(); renderInvitation();
+  }
+  // Opens Home and reaches the task box or the review list, returning the
+  // control it landed on. In Vibe mode Home is Vibe (Build's workspace stays
+  // hidden), so the box is Vibe's own and review is Vibe's Tasks panel.
+  function reachWorkspace(route) {
+    window.MefiNav?.go?.("workspace");
+    const vibe = vibeMode();
+    if (route === "task") {
+      if (!vibe) document.getElementById("workspace-mode-work")?.click();
+      const input = document.getElementById(vibe ? "vibe-input" : "workspace-input") ?? null;
+      input?.focus?.();
+      return input;
+    }
+    if (route === "review") {
+      if (vibe) {
+        // The panel focuses its own first control once it has drawn.
+        window.MefiVibe?.openPanel?.("tasks", { fold: "done" });
+        return document.getElementById("vibe-panel") ?? null;
+      }
+      const review = document.getElementById("workspace-review") ?? null;
+      review?.click(); review?.focus?.();
+      return review;
+    }
+    return null;
   }
   // Safe destinations: navigation and highlighting only. Nothing is submitted,
   // approved or started from a lesson.
@@ -622,49 +706,38 @@
   function routeTo(lesson) {
     const route = lesson.route;
     let focused = null;
-    if (["project", "task", "review"].includes(route)) {
-      buildHome();
-      window.MefiNav?.go?.("workspace");
-      if (route === "task") {
-        document.getElementById("workspace-mode-work")?.click();
-        focused = document.getElementById("workspace-input") ?? null;
-        focused?.focus?.();
-      } else if (route === "review") {
-        const review = document.getElementById("workspace-review");
-        review?.click(); review?.focus?.();
-        focused = review ?? null;
-      }
-    } else window.MefiNav?.go?.(route, lesson.params);
+    if (["project", "task", "review"].includes(route)) { buildHome(); focused = reachWorkspace(route); }
+    else window.MefiNav?.go?.(route, lesson.params);
     if (lesson.menu) window.MefiSidebar?.open?.();
-    highlight(lesson.target);
+    highlight(targetOf(lesson));
     if (route === "project") { focused = document.getElementById("workspace-add-project") ?? null; focused?.focus?.(); }
     const at = state.step;
     later(() => {
       if (state.mode !== "coach" || state.step !== at) return;
       if (lesson.menu) window.MefiSidebar?.open?.();
-      highlight(lesson.target);
+      highlight(targetOf(lesson));
     });
     return focused;
   }
   function visit(route) {
     close();
-    if (["project", "task", "review"].includes(route)) {
-      buildHome();
+    if (["project", "task", "review"].includes(route)) buildHome();
+    if (route === "project") {
       window.MefiNav?.go?.("workspace");
-      if (route === "task") {
-        document.getElementById("workspace-mode-work")?.click();
-        document.getElementById("workspace-input")?.focus();
-      } else if (route === "review") {
-        const review = document.getElementById("workspace-review");
-        review?.click(); review?.focus();
-      } else document.getElementById("workspace-add-project")?.focus();
-    } else window.MefiNav?.go?.(route);
+      const add = document.getElementById("workspace-add-project");
+      add?.focus?.();
+      return add ?? null;
+    }
+    if (["task", "review"].includes(route)) return reachWorkspace(route);
+    window.MefiNav?.go?.(route);
+    return null;
   }
   // A stop with a panel has no menu to walk to: the coach hands it back to the
   // sheet at that stop, where its button lives.
   function coach(index, options = {}) {
     init();
     const step = clampStep(index);
+    if (step !== CONNECT) keyReturn = false;
     if (lessons[step].panel) {
       state = { ...state, step, status: "reading" };
       open();
@@ -683,9 +756,32 @@
     if (!focused) $("coach-next")?.focus?.();
   }
   function advance() {
+    if (keyReturn && state.step === CONNECT) { returnToScan(); return; }
     state.done[state.step] = true;
     if (state.step >= lessons.length - 1) { state.status = "complete"; close(); return; }
     coach(state.step + 1);
+  }
+  // Keys and local model servers live in Connections, not in this panel: the
+  // coach walks there, and a usable saved connection (or Back to the scan)
+  // returns to the Scan stop and scans again, so auto setup can offer the
+  // route that key or server allows before the first map.
+  function keyPath() {
+    coach(CONNECT);
+    keyReturn = true;
+    renderCoach();
+  }
+  function returnToScan() {
+    keyReturn = false;
+    open();
+    move(SCAN);
+    void runScan();
+  }
+  function connectionSaved(event) {
+    // A cleared key, or one that leaves no working assistant route, is not a
+    // connection (booklet.js reports routeOk; older builds leave it unset).
+    if (event?.detail?.routeOk === false) return;
+    tickStop(CONNECT);
+    if (keyReturn) returnToScan();
   }
   function projectChanged(event) {
     if (!event?.detail?.projectId) return;
@@ -733,18 +829,29 @@
     window.addEventListener("mefi:build-mode", renderBuildMode);
     document.getElementById("settings-guided-cli")?.addEventListener("click", () => { open(); move(SCAN); });
     window.addEventListener("mefi:project-changed", projectChanged);
-    window.addEventListener("mefi:connection-saved", () => tickStop(CONNECT));
+    window.addEventListener("mefi:connection-saved", connectionSaved);
     window.addEventListener("mefi:task-created", () => tickStop(CREATE));
     window.addEventListener("mefi:plan-created", () => tickStop(CREATE));
     window.addEventListener("mefi:task-opened", taskOpened);
     window.addEventListener("mefi:nav", () => {
       if (state.mode !== "coach") return;
       const at = state.step;
-      later(() => { if (state.mode === "coach" && state.step === at) highlight(lessons[at].target); });
+      later(() => { if (state.mode === "coach" && state.step === at) highlight(targetOf(lessons[at])); });
+    });
+    // Back from a setup window: the host's push is the cue; Studio regaining
+    // focus stands in where that push never arrives (an older host).
+    try { hostApi("onCliSetupClosed")?.((detail) => { void setupWindowClosed(detail); }); } catch {}
+    window.addEventListener("focus", () => {
+      if (!cliWindowOpen || $("overlay")?.hidden !== false || $("cli-setup")?.hidden !== false) return;
+      void setupWindowClosed({});
     });
     window.addEventListener("keydown", (event) => {
       if (event.key !== "Escape" || state.mode !== "coach") return;
       if (event.target?.closest?.("input, textarea, select, [contenteditable]")) return;
+      // Escape inside a menu, picker, dialog or the sidebar (often one the
+      // coach itself opened) closes that first; taking it here closed the
+      // coach and left the menu open.
+      if (event.target?.closest?.('[role="menu"], [role="listbox"], [role="dialog"], [aria-modal="true"], dialog, .studio-choice-popup, .ws-sidebar') && !$("coach")?.contains(event.target)) return;
       event.preventDefault?.(); event.stopPropagation?.();
       close();
     }, true);
@@ -757,6 +864,7 @@
     $("scan-apply")?.addEventListener("click", () => { void applyScan(); });
     $("cli-choice")?.addEventListener("change", () => { setPanelStatus("cli-status", ""); renderCliSetup(); });
     $("cli-refresh")?.addEventListener("click", () => { void refreshCliSetup(); });
+    $("cli-keys")?.addEventListener("click", () => keyPath());
     for (const action of ["install", "login", "check", "use", "docs"]) $("cli-" + action)?.addEventListener("click", () => {
       void cliSetupAction(action);
     });
