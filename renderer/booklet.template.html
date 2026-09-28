@@ -1341,15 +1341,13 @@
       </div>
     </header>
     <div class="explorer-grid">
-      <aside class="explorer-col">
-        <div class="task-board-heading"><h3>Plans & progress</h3></div>
-        <p class="task-board-intro">Your plans and discussions, with the current step and confirmed progress. Open a card to see its tasks.</p>
-        <div class="row tight">
-          <input id="task-new" type="text" class="grow" placeholder="New task — the assistant picks it up…" autocomplete="off">
+      <aside class="explorer-col task-board-col">
+        <div class="row tight task-board-compose">
+          <input id="task-new" type="text" class="grow" placeholder="Add a task — the assistant picks it up" aria-label="New task" autocomplete="off">
           <button id="task-add" class="primary">Add</button>
         </div>
-        <div class="row tight">
-          <input id="task-search" type="search" class="grow" placeholder="Search plans, discussions and tasks…" aria-label="Search plans, discussions and tasks" autocomplete="off">
+        <div class="row tight task-board-find">
+          <input id="task-search" type="search" class="grow" placeholder="Search tasks and plans" aria-label="Search plans, discussions and tasks" autocomplete="off">
         </div>
         <div class="chips" id="task-filters" role="group" aria-label="Filter tasks">
           <button class="chip on" id="task-filter-all" data-filter="all" type="button">All</button>
@@ -1359,7 +1357,7 @@
         <ul id="task-list" class="pin-list"></ul>
       </aside>
       <section class="explorer-col">
-        <button id="task-overview-back" class="ghost mini" type="button" hidden>Back to tasks</button>
+        <button id="task-overview-back" class="ghost mini" type="button" title="Close this task and show every card" hidden>← All cards</button>
         <h3 id="task-title">Select a task</h3>
         <div class="row tight" id="task-status-row"></div>
         <div class="surface-tabs" id="task-detail-tabs" role="tablist" aria-label="Task information" hidden>

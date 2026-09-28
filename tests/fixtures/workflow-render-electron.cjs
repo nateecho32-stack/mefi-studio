@@ -108,7 +108,7 @@ app.whenReady().then(async () => {
   await capture("workflow-live-1440.png");
   await run("[...document.querySelectorAll('#app-task-context button')].find(button=>button.textContent.startsWith('Open current task')).click();");
   await until("window.MefiTasks.state.selected==='snake' && !document.getElementById('tasks-overlay').hidden", "return to selected task");
-  await run("document.querySelector('[data-task-action=home]').click();");
+  await run("document.querySelector('#app-task-context button').click();");
   await until("!document.getElementById('workspace-layer').hidden && document.getElementById('workspace-focus-task').value==='snake'", "return Home with task context"); report.contextRoundTrip = true;
   await run("window.workflowFixture.conversation(24);document.getElementById('workspace-mode-chat').click();const input=document.getElementById('workspace-input');input.value='Keep this draft while I review the conversation and task progress.';input.dispatchEvent(new Event('input',{bubbles:true}));");
   await until("document.querySelectorAll('#workspace-thread .ws-message').length===24", "populated conversation");
@@ -175,8 +175,8 @@ app.whenReady().then(async () => {
     const inputReachable = await reachable("#workspace-input");
     const sendReachable = await reachable("#workspace-send");
     await run("await window.MefiNav.go('tasks',{filter:'all'});document.getElementById('task-overview-back').click();");
-    await until("document.querySelector('#task-list .task-overview-card button')", "project work opens in Work");
-    const workReachable = await reachable("#task-list .task-overview-card button");
+    await until("document.querySelector('#task-list .task-overview-card.opens-task')", "project work opens in Work");
+    const workReachable = await reachable("#task-list .task-overview-card.opens-task");
     await capture(`workflow-home-bottom-${width}.png`);
     await run("await window.MefiNav.go('workspace');document.getElementById('workspace-activity-toggle').click();document.querySelector('#workspace-preview-controls > summary').click();");
     await until("document.getElementById('workspace-preview-controls').open", "explicitly opened preview controls");
@@ -186,7 +186,7 @@ app.whenReady().then(async () => {
     await run("document.getElementById('workspace-focus-check').click();");
     await until("!document.getElementById('tasks-overlay').hidden && document.getElementById('task-tab-evidence').getAttribute('aria-selected')==='true'", "Work checks layout");
     const workOverflow = await run("return document.documentElement.scrollWidth>innerWidth+1;");
-    const homeReachable = await reachable("[data-task-action=home]");
+    const homeReachable = await reachable("#app-task-context button");
     await capture(`workflow-work-${width}.png`);
     report.layouts.push({ width: await run("return innerWidth;"), homeOverflow, workOverflow, checksReachable, homeReachable, inputReachable, sendReachable, workReachable, initialComposerVisible, compactDefault, previewControlsReachable, authoringLayout, navigation, composerReadability });
     assert.ok(!homeOverflow && !workOverflow && checksReachable && homeReachable && inputReachable && sendReachable && workReachable && compactDefault && previewControlsReachable && authoringLayout.correct && initialComposerVisible, JSON.stringify(report.layouts.at(-1)));

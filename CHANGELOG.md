@@ -7,6 +7,20 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **A calmer Task board.** The board opens straight on its tools: add a
+  task, then search with the state picker beside it, then the All / Open /
+  Review / Done chips as one compact row. The explanatory heading and the
+  "cards in this view" paragraph are gone; the count line only says how many
+  tasks the cards group when the two differ. Cards are tighter and open
+  their current task when you click anywhere on them (the separate "Open
+  current task" button is gone), the open card is ringed, and the task you
+  are reading is highlighted in its list. Task rows drop the ref and log
+  counts. In the detail, **← All cards** closes the task at any width, the
+  status box sits at the top of Details only, with a stage pill, the facts
+  as fine print, the hold as a callout and a plain **Next** line (its
+  redundant Home button is gone), the brief has a heading, and the
+  "Readiness will refresh" filler and the repeated "Verifying: …" line no
+  longer show.
 - **Reach your PCs from Discord.** Friends › Your PCs › **Reach this PC from
   Discord** lets a DM with the Void Engine bot check on this PC and talk to
   Mefi here: `/studio status`, `needs`, `made` (what is being built and what

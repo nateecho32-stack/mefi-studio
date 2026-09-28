@@ -10,7 +10,7 @@
   };
   const FILTERS = ["all", "open", "review", "done"];
   const stageLabel = (stage, task, options) => window.MefiStage?.label?.(stage, task, options) ?? String(stage ?? task?.status ?? "open");
-  const READINESS_FILTERS = { all: "All scheduling states", ready: "Ready", running: "Working", review: "Verifying", waiting: "Waiting or retrying", blocked: "Needs attention" };
+  const READINESS_FILTERS = { all: "Any state", ready: "Ready", running: "Working", review: "Verifying", waiting: "Waiting or retrying", blocked: "Needs attention" };
   // A row that just finished pulses green for a few seconds — the board's
   // echo of the constellation's done pulse — before it settles under the mark.
   const DONE_PULSE_MS = 15000;
@@ -445,7 +445,8 @@
     text.className = "task-name";
     text.textContent = ` ${shortTitle(task)}`;
     text.title = task.title || task.prompt || "";
-    text.append(Object.assign(document.createElement("span"), { className: "who", textContent: ` ${task.refs?.length ? `· ${task.refs.length} refs` : ""}${task.logs?.length ? ` · ${task.logs.length} logs` : ""}${isDone(task) && state.filter !== "done" ? ` · done ${relTime(doneStamp(task))}` : ""}` }));
+    // Ref and log counts live on the detail's tabs; the row keeps only when it finished.
+    if (isDone(task) && state.filter !== "done") text.append(Object.assign(document.createElement("span"), { className: "who", textContent: ` · done ${relTime(doneStamp(task))}` }));
     // One-click finish (or reopen) without leaving the board.
     const actions = document.createElement("span");
     actions.className = "row-actions";
@@ -675,16 +676,26 @@
       button.dataset.taskAction = release.action;
       actions.append(button);
     }
-    const target = model.current?.status === "absorbed" ? group.task : model.current?.unavailable ? null : model.current || group.task;
-    if (target && state.tasks.some((task) => task.id === target.id)) actions.append(rowButton("Open current task", "Open the full brief, result and task history", () => window.MefiTasks.selectTask(target.id)));
     if (actions.children.length) card.append(actions);
+    // The card itself opens its current task: a click anywhere outside its
+    // own buttons and task list, or Enter while it has focus.
+    const target = model.current?.status === "absorbed" ? group.task : model.current?.unavailable ? null : model.current || group.task;
+    if (target && state.tasks.some((task) => task.id === target.id)) {
+      card.classList.add("opens-task");
+      card.tabIndex = 0;
+      card.title = `Open ${shortTitle(target)}`;
+      const openTarget = () => window.MefiTasks.selectTask(target.id);
+      card.addEventListener("click", (event) => { if (!event.target?.closest?.("button, a, input, select, summary, .task-overview-details")) openTarget(); });
+      card.addEventListener("keydown", (event) => { if (event.target === card && event.key === "Enter") { event.preventDefault(); openTarget(); } });
+    }
     const members = [group.task && { id: group.task.id, task: group.task, canonical: true }, ...(group.members || [])].filter(Boolean);
     const seen = new Set();
     const detailsRows = members.filter((member) => member.task && !seen.has(member.id) && seen.add(member.id));
+    if (detailsRows.some((member) => member.id === state.selected)) card.classList.add("selected");
     if (detailsRows.length) {
       const details = node("details", "task-overview-details");
       details.open = overviewExpanded.has(group.id) || detailsRows.some((member) => member.id === state.selected);
-      details.append(node("summary", "", `Tasks & progress · ${detailsRows.length}`));
+      details.append(node("summary", "", `${detailsRows.length} ${detailsRows.length === 1 ? "task" : "tasks"} in this card`));
       details.addEventListener("toggle", () => { details.open ? overviewExpanded.add(group.id) : overviewExpanded.delete(group.id); });
       const list = node("ul", "pin-list task-overview-members");
       for (const member of detailsRows) {
@@ -715,8 +726,12 @@
     });
     const rank = { running: 0, blocked: 1, review: 2, planning: 3, waiting: 4, done: 5 };
     models.sort((a, b) => rank[a.stage] - rank[b.stage] || (b.group.plan?.updatedAt || b.group.task?.updatedAt || 0) - (a.group.plan?.updatedAt || a.group.task?.updatedAt || 0));
+    // The chips count tasks and the list shows cards; say how the two relate
+    // only when they differ.
     const heading = node("li", "task-overview-summary");
-    heading.append(node("strong", "", `${models.length} ${models.length === 1 ? "card" : "cards"} in this view`), node("span", "", "Filters count saved tasks; related tasks share a card, and completed cards may be folded below."));
+    const taskCount = summary()[state.filter] ?? 0;
+    heading.append(node("strong", "", `${models.length} ${models.length === 1 ? "card" : "cards"}`));
+    if (taskCount !== models.length) heading.append(node("span", "", `from ${taskCount} ${taskCount === 1 ? "task" : "tasks"} — related tasks share a card`));
     els.list.append(heading);
     if (state.plansError) els.list.append(node("li", "task-overview-note", "Saved plans could not be refreshed. Task progress is still available."));
     const finished = models.filter((model) => model.stage === "done");
@@ -1222,9 +1237,13 @@
   function renderTaskContext(task) {
     const key = taskKey(task), api = window.mefiStudio;
     const scheduled = state.backlog?.taskStates?.find((item) => item.id === task.id);
-    const readiness = node("p", "task-readiness", scheduled?.stage === "cooling" ? `${scheduled.reason}. ${retryDescription(scheduled.retryAt)}` : scheduled?.reason || (isDone(task) ? "This task is complete." : "Readiness will refresh with the project queue."));
-    readiness.dataset.taskReadiness = scheduled?.stage || "unknown";
-    if (scheduled?.reason !== workflowSummary(task, { status: state.live, backlog: state.backlog, assistant: state.assistant }).blocker) (detailPanels.details || els.detail).append(readiness);
+    // The scheduler's own reason, when it has one the status box has not
+    // already given; no placeholder line while the queue has not answered.
+    if (scheduled?.reason && scheduled.reason !== workflowSummary(task, { status: state.live, backlog: state.backlog, assistant: state.assistant }).blocker) {
+      const readiness = node("p", "task-readiness", scheduled.stage === "cooling" ? `${scheduled.reason}. ${retryDescription(scheduled.retryAt)}` : scheduled.reason);
+      readiness.dataset.taskReadiness = scheduled.stage || "unknown";
+      (detailPanels.details || els.detail).append(readiness);
+    }
     const message = detailMessages.get(key);
     if (message) {
       const feedback = node("p", `task-context-feedback${message.error ? " error" : ""}`, message.text);
@@ -1410,12 +1429,17 @@
     if (taskKey(selectedTask()) === key) renderDetail();
   }
 
-  function renderWorkflowSummary(task) {
+  // The status box at the top of Details: where the task stands (a stage
+  // pill), what is happening, the recorded facts, what holds it, and what to
+  // do next, with the moves that answer it.
+  function renderWorkflowSummary(task, parent = els.detail) {
     const model = workflowSummary(task, { status: state.live, backlog: state.backlog, assistant: state.assistant });
     const box = node("section", "task-workflow-summary");
     box.setAttribute("aria-label", "Current task status");
     box.dataset.stage = model.stage;
-    box.append(node("strong", "", model.label), node("p", "", model.action));
+    const label = node("strong", "task-workflow-stage", model.label);
+    label.dataset.stage = model.stage;
+    box.append(label, node("p", "task-workflow-action", model.action));
     const facts = node("div", "task-workflow-facts");
     for (const value of [model.worker, model.activityAge, model.checks]) if (value) facts.append(node("span", "", value));
     box.append(facts);
@@ -1425,14 +1449,15 @@
       blocker.dataset.taskReadiness = scheduledTask(task)?.stage || "blocked";
       box.append(blocker);
     }
-    box.append(node("p", "muted", model.nextAction));
+    const next = node("p", "task-workflow-next");
+    next.append(node("span", "task-workflow-next-label", "Next"), node("span", "", model.nextAction));
+    box.append(next);
     const actions = node("div", "task-workflow-actions");
     const button = (label, action, run, primary = false) => {
       const control = node("button", primary ? "primary" : "ghost mini", label);
       control.type = "button"; control.dataset.taskAction = action;
       control.addEventListener("click", run); actions.append(control); return control;
     };
-    button("Home", "home", () => window.MefiNav?.go?.("workspace"));
     button("View in Live", "live", () => window.MefiNav?.go?.("command", { taskId: task.id, projectId: task.projectId || state.projectId, selected: `task:${task.id}` }));
     button("View checks", "view-checks", () => showDetailView("evidence", true), isDone(task));
     const scheduled = scheduledTask(task);
@@ -1461,7 +1486,7 @@
         box.append(node("p", "task-context-hint", `Project preview: ${preview.message || preview.phase}. Task checks remain separate.`));
       }
     }
-    box.append(actions); els.detail.append(box);
+    box.append(actions); parent.append(box);
   }
 
   function renderDetail() {
@@ -1487,13 +1512,14 @@
     }
     projectSelections.set(state.projectId, task.id);
     window.MefiNav?.selectTask?.({ taskId: task.id, projectId: task.projectId || state.projectId, title: shortTitle(task) });
-    renderWorkflowSummary(task);
     for (const name of detailViewNames) {
       const panel = node("section", "surface-tab-panel task-detail-panel");
       panel.id = `task-panel-${name}`;
       panel.setAttribute("role", "tabpanel"); panel.setAttribute("aria-labelledby", `task-tab-${name}`);
       detailPanels[name] = panel; els.detail.append(panel);
     }
+    // The status box belongs to Details; the other tabs show only their records.
+    renderWorkflowSummary(task, detailPanels.details);
     let body = detailPanels.details;
     const meta = document.createElement("p");
     meta.className = "muted who task-meta";
@@ -1507,8 +1533,10 @@
       body.append(origin);
     }
     // An owner hold's reason (and its remedy) is the readiness line below, so
-    // it is not repeated up here.
-    if (needsReview(task) && !ownerHold(task)) {
+    // it is not repeated up here; nor is a pending check or a reason the
+    // status box above already gives.
+    const shown = workflowSummary(task, { status: state.live, backlog: state.backlog, assistant: state.assistant });
+    if (needsReview(task) && !ownerHold(task) && !["awaiting_verification", "verifying"].includes(task.status) && describe(task).summary !== shown.blocker) {
       const review = document.createElement("p");
       review.className = "finding";
       review.textContent = `${describe(task).label}: ${describe(task).summary}`;
@@ -1563,11 +1591,7 @@
     // The brief, unless it only repeats the heading above it.
     const brief = String(task.prompt || task.title || "");
     if (brief.trim() && brief.trim() !== shortTitle(task).trim()) {
-      const prompt = document.createElement("p");
-      prompt.className = "muted";
-      prompt.style.whiteSpace = "pre-wrap";
-      prompt.textContent = brief;
-      body.append(prompt);
+      body.append(node("h4", "task-brief-heading", "Brief"), node("p", "task-brief", brief));
     }
     renderTaskDelegation(task);
     renderTaskContext(task);
@@ -1975,7 +1999,8 @@
         setPref("taskFilter", "all");
         renderList(); renderDetail();
       });
-      els.filters.append(select); els.readinessFilter = select;
+      // It sits beside the search box, so the chips stay one row.
+      (els.search?.parentElement || els.filters).append(select); els.readinessFilter = select;
     }
     els.openButton?.addEventListener("click", open);
     els.overviewBack?.addEventListener("click", () => { state.selected = null; renderList(); renderDetail(); els.newInput?.focus?.({ preventScroll: true }); });
