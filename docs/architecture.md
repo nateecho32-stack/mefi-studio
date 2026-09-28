@@ -894,21 +894,26 @@ failed process stays an error and cannot produce briefing requests.
   link and recommendations. Links plays a pasted or dropped YouTube, Spotify,
   SoundCloud or Vimeo link in that service's embed, and a plain audio or
   video file (a Discord attachment, say) in its own `<video>`. The player lives
-  in a borderless floating window across Studio, keeping the same playing frame
-  while you navigate. **Video settings** inside Music & video holds **Pin**, **Move aside**, minimize and close without covering the provider’s controls or settings;
-  drag its grip or any edge to move or resize it. The grip and bottom-right
+  in a floating window across Studio, keeping the same playing frame
+  while you navigate. Its toolbar holds a move handle, **Settings**, minimize
+  and close above the provider's controls. **Video settings** inside Music &
+  video holds **Pin** and the optional **Move aside** (off by default);
+  drag the title or any edge to move or resize it. The title and bottom-right
   resize control also accept arrow keys, with Shift for fine steps. In deeper
   menus, Move aside glides out of the pointer's way once; following it, hovering
   or focusing it keeps it still. Pin and reduced motion also prevent dodging.
   Geometry and toggles are remembered locally; automatic moves are temporary.
+  Dragging out of the media panel starts from the player's current position.
+  **Float player** closes the panel and keeps that same loaded player available.
   **Background** puts the video behind the workspace without intercepting clicks;
   the node tree keeps full-strength nodes and labels over the video, with separate brightness and transparency controls, and
   inactive pages stay hidden beneath Command.
-  **Float video** brings back the interactive provider player. **Video transparency** and **Tree transparency** independently control the video and Command canvases, keeping menus readable. Zero transparency means full opacity. **Video brightness** ranges from 25–150% and defaults to 100%, replacing the old fixed 55% dimming; inactive workspace page styles cannot override the tree slider. These values are saved with media settings. Controls disappear with the media menu and stay hidden in Zen. **Keep tree in dark areas** is a shortcut for the shared video reaction mode. It samples broad on-screen regions every five seconds, requires two consistent improvements and the configured region hold, then smoothly moves the tree. Sampling pauses during menus, manual camera interaction and Zen. No screenshots are saved or transmitted. **Fade on finish**
+  **Float video** brings back the interactive provider player. **Video transparency** and **Tree transparency** independently control the video and Command canvases, keeping menus readable. Zero transparency means full opacity. **Video brightness** ranges from 25–150% and defaults to 100%, replacing the old fixed 55% dimming; inactive workspace page styles cannot override the tree slider. These values are saved with media settings. Advanced settings close with the media menu; the floating toolbar stays available. All media controls stay hidden in Zen. **Keep tree in dark areas** is a shortcut for the shared video reaction mode. It samples broad on-screen regions every five seconds, requires two consistent improvements and the configured region hold, then smoothly moves the tree. Sampling pauses during menus, manual camera interaction and Zen. No screenshots are saved or transmitted. **Fade on finish**
   dims the media when a known task newly reaches Done, with a notification to
   **View result** or **Restore video**. Historical, dropped and merely awaiting
   verification tasks do not trigger it. Restore video also remains in the panel.
-  **Show player** restores a minimized window, and closing it stops playback.
+  Minimize keeps a small toolbar with a restore button; **Show player** in the
+  panel also restores it. Closing the player stops playback.
   An open player returns after Studio closes or reloads if it was present in
   the last ten minutes, retaining geometry, background/transparency preferences
   and minimized state. Explicitly closing the player or switching sources clears
@@ -932,6 +937,11 @@ failed process stays an error and cannot produce briefing requests.
   Opening the browser successfully replaces the current audio source. Playback
   position is not transferred to the website. Moving, resizing or minimizing
   the player keeps its page loaded; closing or switching sources stops it.
+  Websites use the full media panel width, with the queue below. Hovering the
+  media button opens at the video, and entering the player keeps the panel open
+  for playback controls. Scrolling fits the website to the visible panel without
+  reloading the page; the website may adjust its layout to the available height.
+  Overlapping notifications leave the remaining website area visible and usable.
   Website popup links navigate this same player. Native website content yields
   to Studio overlays, and video background/fade effects are disabled while browsing.
   **Open in browser** remains an explicit action for the regular system browser.

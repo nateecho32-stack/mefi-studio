@@ -73,6 +73,8 @@ test("Embedded bounds follow Studio zoom, clip to its window, and hiding keeps p
   assert.deepEqual(view.bounds, { x: 150, y: 120, width: 600, height: 375 }); assert.equal(view.visible, true);
   await layout({ x: 500, y: 300, width: 400, height: 250 });
   assert.deepEqual(view.bounds, { x: 750, y: 450, width: 50, height: 150 });
+  await h.service.command(event, { action: "layout", visible: true, bounds: { x: 100, y: 80, width: 400, height: 250 }, clip: { x: 130, y: 180, width: 370, height: 150 } });
+  assert.deepEqual(view.bounds, { x: 195, y: 270, width: 555, height: 225 }, "partial clipping keeps the page inside the visible panel region");
   await h.service.command(event, { action: "layout", visible: false });
   assert.equal(view.visible, false); assert.equal(view.webContents.isDestroyed(), false);
   await layout({ x: 0, y: 0, width: 100, height: 100 });

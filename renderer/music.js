@@ -1233,6 +1233,7 @@
     const browser = els.browser?.active ? els.browser.state : null;
     if (els.linkStage) {
       els.linkStage.dataset.shape = browser ? "browser" : link?.shape || "video";
+      els.linkLayout.dataset.shape = els.linkStage.dataset.shape;
       els.linkStage.dataset.mode = els.mediaPlacement?.background ? "background" : "player";
       els.linkStageTitle.textContent = els.mediaPlacement?.background ? "Playing behind your workspace" : els.mediaPlacement?.minimized ? "Player minimized" : "Your next video starts here";
       els.linkStageHint.textContent = els.mediaPlacement?.background ? "Your queue stays here. Return to the player any time." : "Paste a video link above, or choose one from your queue.";
@@ -1244,6 +1245,7 @@
       els.backgroundToggle.setAttribute("aria-pressed", String(Boolean(els.mediaPlacement?.background)));
       els.backgroundToggle.title = browser && !playableLink(candidate) ? "Open a video link to use background playback" : "Play this video behind your workspace";
     }
+    if (els.floatPlayer) els.floatPlayer.disabled = !link && !browser;
     els.linkNow.hidden = !link && !browser;
     if (els.browseLink) els.browseLink.hidden = Boolean(browser);
     if (els.linkNext) els.linkNext.hidden = !linkQueue.length && link?.provider !== "youtube";
@@ -1533,13 +1535,18 @@
     button("Add to queue", "ghost", queueTools, () => queueLink(els.linkInput.value), "music-link-queue-add");
     button("Queue next", "ghost", queueTools, () => queueLink(els.linkInput.value, null, true), "music-link-queue-first");
     const linkLayout = element("div", "music-video-layout", null, els.link);
+    els.linkLayout = linkLayout;
     const watching = element("div", "music-video-watching", null, linkLayout);
     els.linkStage = element("div", "music-video-stage", null, watching); els.linkStage.id = "music-video-stage";
     element("span", "music-video-stage-icon", "▷", els.linkStage).setAttribute("aria-hidden", "true");
     els.linkStageTitle = element("strong", null, "Your next video starts here", els.linkStage);
     els.linkStageHint = element("small", null, "Paste a video link above, or choose one from your queue.", els.linkStage);
     const presentation = element("div", "music-video-presentation", null, watching);
-    element("span", "eyebrow", "PLAYBACK", presentation);
+    els.floatPlayer = button("Float player", "ghost", presentation, () => {
+      els.floatingPlayer?.setBackground(false);
+      closeAudio();
+      els.floatingPlayer?.reveal();
+    }, "music-video-float");
     els.backgroundToggle = button("Use as background", "ghost", presentation, () => {
       const browsing = els.browser?.active;
       if (browsing && !playLink(els.browser.state.url)) return;
@@ -1686,10 +1693,13 @@
     dropdown.addEventListener("pointerdown", pinAudioDropdown);
     dropdown.addEventListener("focusin", pinAudioDropdown);
     dropdown.addEventListener("focusout", (event) => {
-      if (event.relatedTarget && !dropdown.contains(event.relatedTarget) && !els.linkPlayer?.contains(event.relatedTarget) && !dropdownAnchor?.contains(event.relatedTarget) && !audioSelectContains(event.relatedTarget)) closeAudio();
+      if (event.relatedTarget && !dropdown.contains(event.relatedTarget) && !mediaPlayerContains(event.relatedTarget) && !dropdownAnchor?.contains(event.relatedTarget) && !audioSelectContains(event.relatedTarget)) closeAudio();
     });
-    els.linkPlayer.addEventListener("pointerenter", cancelAudioHoverTimers);
-    els.linkPlayer.addEventListener("pointerleave", leaveAudioHover);
+    // Embedded pages do not bubble pointer/focus events to Studio. Once the
+    // pointer enters the player, keep its menu in place until dismissed.
+    const playerSurface = document.getElementById("media-window") || els.linkPlayer;
+    for (const event of ["pointerenter", "pointerdown", "focusin"]) playerSurface.addEventListener(event, pinAudioDropdown);
+    playerSurface.addEventListener("pointerleave", leaveAudioHover);
     const preview = element("section", "music-preview", null, els.overlay);
     preview.setAttribute("aria-labelledby", "music-preview-heading");
     const previewHeader = element("header", "music-preview-header", null, preview);
@@ -1746,7 +1756,10 @@
     else positionDropdown();
   }
   function audioOutside(event) {
-    if (!els.dropdown?.contains(event.target) && !els.linkPlayer?.contains(event.target) && !dropdownAnchor?.contains(event.target) && !audioSelectContains(event.target)) closeAudio();
+    if (!els.dropdown?.contains(event.target) && !mediaPlayerContains(event.target) && !dropdownAnchor?.contains(event.target) && !audioSelectContains(event.target)) closeAudio();
+  }
+  function mediaPlayerContains(target) {
+    return document.getElementById("media-window")?.contains(target) || els.linkPlayer?.contains(target);
   }
   function audioSelectContains(target) {
     return window.MefiSelect?.owns?.(els.dropdown) && window.MefiSelect?.contains?.(target);
@@ -1795,7 +1808,9 @@
     const toolbar = document.getElementById?.("idle-music-toggle");
     dropdownAnchor = anchor || (toolbar?.getBoundingClientRect?.().width ? toolbar : document.getElementById?.("settings-audio-open"));
     dropdownFocus = document.activeElement;
-    dropdownHover = hover;
+    // Native browser views receive their own mouse events, so Studio cannot
+    // reliably tell a pointer entering the website from one leaving the menu.
+    dropdownHover = hover && !els.browser?.active;
     dropdownAnchor?.setAttribute("aria-expanded", "true");
     els.dropdown.hidden = false;
     mountLink(); render(); positionDropdown();
@@ -1803,8 +1818,8 @@
     if (hover) {
       // Bring the current source's controls back into view, even if the last
       // visit ended down in the queue or recommendations. Only this panel scrolls.
-      const current = state.source === "link" && state.link
-        ? (els.linkVolumeControls.hidden ? els.linkNow : els.linkVolumeControls.parentElement)
+      const current = state.source === "link" && (state.link || els.browser?.active)
+        ? els.linkStage
         : state.source === "radio" ? els.radioVolume.parentElement.parentElement : els.local;
       const top = current?.getBoundingClientRect?.().top;
       const panelTop = els.dropdown.getBoundingClientRect().top;

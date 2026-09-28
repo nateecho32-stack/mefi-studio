@@ -100,11 +100,19 @@ function createMediaBrowser({ electron, getWindow }) {
       entry.visible = false; entry.view.setVisible(false); return;
     }
     const [width, height] = entry.owner.getContentSize(), zoom = entry.owner.webContents.getZoomFactor();
-    const x = Math.max(0, Math.min(width, Math.round(box.x * zoom)));
-    const y = Math.max(0, Math.min(height, Math.round(box.y * zoom)));
-    const right = Math.max(x, Math.min(width, Math.round((box.x + box.width) * zoom)));
-    const bottom = Math.max(y, Math.min(height, Math.round((box.y + box.height) * zoom)));
+    const clip = payload.clip || box;
+    if (![clip.x, clip.y, clip.width, clip.height].every(Number.isFinite) || clip.width < 1 || clip.height < 1) {
+      entry.visible = false; entry.view.setVisible(false); return;
+    }
+    const pageX = Math.round(box.x * zoom), pageY = Math.round(box.y * zoom);
+    const pageRight = Math.round((box.x + box.width) * zoom), pageBottom = Math.round((box.y + box.height) * zoom);
+    const x = Math.max(0, Math.min(width, Math.max(pageX, Math.round(clip.x * zoom))));
+    const y = Math.max(0, Math.min(height, Math.max(pageY, Math.round(clip.y * zoom))));
+    const right = Math.max(x, Math.min(width, pageRight, Math.round((clip.x + clip.width) * zoom)));
+    const bottom = Math.max(y, Math.min(height, pageBottom, Math.round((clip.y + clip.height) * zoom)));
     entry.visible = right > x && bottom > y;
+    // Native child views do not inherit the DOM player's clip-path. Fit the
+    // page into its visible region so scrolling cannot cover Studio controls.
     entry.view.setBounds({ x, y, width: right - x, height: bottom - y });
     entry.view.setVisible(entry.visible && Boolean(entry.url));
   }

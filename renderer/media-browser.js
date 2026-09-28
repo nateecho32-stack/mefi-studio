@@ -57,16 +57,39 @@
       frame = 0;
       if (!active) return;
       const player = root.closest(".media-window"), box = viewport.getBoundingClientRect();
-      let visible = !root.hidden && !document.hidden && player && !player.hidden && player.dataset.minimized !== "true" && player.dataset.interacting !== "true" && box.width > 1 && box.height > 1;
-      // Native views sit above DOM content. Yield to Studio dialogs and menus
-      // so the website cannot cover their controls or take their clicks.
-      if (visible) for (const x of [box.left + 6, box.left + box.width / 2, box.right - 6]) {
-        for (const y of [box.top + 6, box.top + box.height / 2, box.bottom - 6]) {
-          const top = document.elementFromPoint(x, y);
-          if (!top || !viewport.contains(top)) visible = false;
+      let left = Math.max(0, box.left), top = Math.max(0, box.top), right = Math.min(window.innerWidth, box.right), bottom = Math.min(window.innerHeight, box.bottom);
+      // media-window clips its docked DOM surface as the menu scrolls. Native
+      // content needs the same clip, independent of the full website size.
+      const inset = player && getComputedStyle(player).clipPath.match(/^inset\(([^)]+)\)$/);
+      if (inset) {
+        const parts = inset[1].trim().split(/\s+/).map(Number.parseFloat), bounds = player.getBoundingClientRect();
+        const [north, east = north, south = north, west = east] = parts;
+        if (parts.every(Number.isFinite)) {
+          left = Math.max(left, bounds.left + west); top = Math.max(top, bounds.top + north);
+          right = Math.min(right, bounds.right - east); bottom = Math.min(bottom, bounds.bottom - south);
         }
       }
-      const payload = { action: "layout", visible: Boolean(visible), bounds: { x: box.x, y: box.y, width: box.width, height: box.height } };
+      // A small Studio notification should not blank the entire website. Keep
+      // its visible controls clear while leaving the rest of the page usable.
+      for (const notice of document.querySelectorAll("#toast-host .toast")) {
+        const area = notice.getBoundingClientRect();
+        if (area.width < 1 || area.height < 1 || area.right <= left || area.left >= right || area.bottom <= top || area.top >= bottom) continue;
+        if (area.top > top) bottom = Math.min(bottom, area.top - 4);
+        else if (area.left > left) right = Math.min(right, area.left - 4);
+        else left = Math.max(left, area.right + 4);
+      }
+      const clip = { x: left, y: top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
+      let visible = !root.hidden && !document.hidden && player && !player.hidden && player.dataset.minimized !== "true" && player.dataset.interacting !== "true" && clip.width > 1 && clip.height > 1;
+      // Native views sit above DOM content. Yield to Studio dialogs and menus
+      // so the website cannot cover their controls or take their clicks.
+      const insetX = Math.min(6, clip.width / 2), insetY = Math.min(6, clip.height / 2);
+      if (visible) for (const x of [left + insetX, left + clip.width / 2, right - insetX]) {
+        for (const y of [top + insetY, top + clip.height / 2, bottom - insetY]) {
+          const hit = document.elementFromPoint(x, y);
+          if (!hit || !viewport.contains(hit)) visible = false;
+        }
+      }
+      const payload = { action: "layout", visible: Boolean(visible), bounds: { x: box.x, y: box.y, width: box.width, height: box.height }, clip };
       const next = JSON.stringify(payload);
       if (stamp === next) return;
       stamp = next;
@@ -76,18 +99,19 @@
     function observe() {
       const player = root.closest(".media-window");
       const resize = new ResizeObserver(schedule); resize.observe(viewport); if (player) resize.observe(player);
+      const notices = document.getElementById("toast-host"); if (notices) resize.observe(notices);
       const position = new MutationObserver(schedule); if (player) position.observe(player, { attributes: true });
       const overlays = new MutationObserver(records => { if (records.some(record => !root.contains(record.target))) schedule(); });
       overlays.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["hidden", "open", "aria-modal"] });
       observers = [resize, position, overlays];
-      for (const name of ["pointerdown", "pointerup", "keydown", "focusin", "visibilitychange"]) document.addEventListener(name, schedule, true);
+      for (const name of ["pointerdown", "pointerup", "keydown", "focusin", "visibilitychange", "scroll"]) document.addEventListener(name, schedule, true);
       for (const name of ["resize", "mefi:nav", "mefi:shell"]) window.addEventListener(name, schedule);
     }
     function deactivate() {
       active = false; root.hidden = true; stamp = "";
       if (frame) window.cancelAnimationFrame(frame); frame = 0;
       for (const observer of observers) observer.disconnect(); observers = [];
-      for (const name of ["pointerdown", "pointerup", "keydown", "focusin", "visibilitychange"]) document.removeEventListener(name, schedule, true);
+      for (const name of ["pointerdown", "pointerup", "keydown", "focusin", "visibilitychange", "scroll"]) document.removeEventListener(name, schedule, true);
       for (const name of ["resize", "mefi:nav", "mefi:shell"]) window.removeEventListener(name, schedule);
     }
     async function open(raw = "") {

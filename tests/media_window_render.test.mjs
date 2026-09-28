@@ -12,7 +12,7 @@ const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = path.join(studio, "node_modules", "electron", "dist", process.platform === "win32" ? "electron.exe" : process.platform === "darwin" ? "Electron.app/Contents/MacOS/Electron" : "electron");
 const canRun = existsSync(executable) && (process.platform !== "linux" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
 
-test("Floating media renders borderless, keeps provider settings clickable beside its controls and retains its iframe through movement and navigation", { skip: !canRun, timeout: 120000 }, async (t) => {
+test("Media keeps its window controls reachable, stays still by default and retains playback through movement and navigation", { skip: !canRun, timeout: 120000 }, async (t) => {
   const fixture = await mkdtemp(path.join(tmpdir(), "mefi-media-render-"));
   try {
     await mkdir(path.join(fixture, "renderer")); await mkdir(path.join(fixture, "data"));
@@ -42,7 +42,7 @@ test("Floating media renders borderless, keeps provider settings clickable besid
     assert.equal(code, 0, `${report?.failure || "No media report"}\n${output}`);
     assert.deepEqual(report.errors, []);
     assert.equal(report.playerLoads, 1, "one provider load across all movement, resizing, minimize and navigation");
-    assert.ok(report.clipboardOffer && report.hoverDropdown && report.queue && report.zen && report.menus && report.tree && report.background && report.borderless && report.hover && report.drag && report.resize && report.dodge && report.follow && report.pin && report.minimize && report.closed);
+    assert.ok(report.clipboardOffer && report.hoverDropdown && report.hoverPlayer && report.queue && report.zen && report.menus && report.tree && report.background && report.borderless && report.hover && report.drag && report.resize && report.stillByDefault && report.dodge && report.follow && report.pin && report.minimize && report.restored && report.closed);
     assert.deepEqual(report.layouts.map(layout => layout.width), [1440, 600]);
     assert.ok(report.layouts.every(layout => layout.contained && layout.controlsFit && layout.providerClear));
   } finally {

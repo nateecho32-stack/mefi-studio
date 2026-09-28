@@ -30,6 +30,10 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   The Agents "desk handles asks" switch, which nothing read, is gone from the
   helper: the permission mode decides that.
 
+- **Media controls stay within reach.** Floating players now have a move handle,
+  Settings, minimize and close buttons, and minimize to a visible restore bar.
+  The media menu opens at the video, websites get the full panel width, and
+  scrolling or overlapping notifications no longer blank the built-in browser.
 - **Build on your app with MEFI.** Vibe offers Modify, Experiment, Fix and
   Improve, contextual briefs from the map, and suggestions that can be added
   to a draft or saved as ideas. Saving a suggestion does not start work.

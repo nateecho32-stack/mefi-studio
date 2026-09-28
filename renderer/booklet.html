@@ -5222,7 +5222,7 @@ body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + var(--m
 .music-link-tools button[hidden] { display: none; }
 
 /* Provider content stays clear; settings live in the menu and grips stay outside the video. */
-.media-window { position: fixed; z-index: calc(var(--z-transient, 90) + 1); isolation: isolate; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin: 0; padding: 8px; border: 0; border-radius: 8px; background: transparent; color: #fff; }
+.media-window { position: fixed; z-index: calc(var(--z-transient, 90) + 1); isolation: isolate; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 8px; margin: 0; padding: 8px; border: 0; border-radius: 8px; background: var(--panel-solid); color: #fff; }
 .media-window[hidden], .media-window [hidden], .media-window-controls [hidden] { display: none !important; }
 .media-window[data-dodging="true"] { transition: left 180ms ease-out, top 180ms ease-out; }
 .media-window .music-link-player, .media-window .music-link-frame { display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; margin: 0; border: 0; border-radius: 0; aspect-ratio: auto; }
@@ -5234,6 +5234,10 @@ body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + var(--m
 .media-window-controls button[aria-pressed="true"] { background: var(--gold-bright); color: var(--on-accent, #111); }
 .media-window-controls button:disabled { opacity: .45; }
 .media-window-toolbar { grid-column: 1 / -1; display: flex; flex: 0 0 auto; gap: 4px; }
+.media-window > .media-window-toolbar { min-width: 0; height: 36px; }
+.media-window > .media-window-toolbar button { min-width: 36px; min-height: 36px; margin: 0; padding: 6px 10px; border: 0; border-radius: 6px; background: #242a32; color: #fff; font: 500 12px/1.4 var(--font-ui); box-shadow: none; }
+.media-window > .media-window-toolbar button:hover { background: #39434e; }
+.media-window > .media-window-toolbar .media-window-move { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; cursor: grab; touch-action: none; }
 .media-window-toolbar .media-window-move { flex: 1; }
 .media-window-controls .media-window-move { cursor: grab; text-align: center; font-size: 18px; line-height: 20px; touch-action: none; }
 .media-window-controls .media-window-caption { grid-column: 1 / -1; font-size: 10px; overflow-wrap: anywhere; }
@@ -5255,7 +5259,7 @@ body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + var(--m
 .media-window-resize[data-edge="nw"] { top: 0; left: 0; cursor: nwse-resize; }
 .media-window[data-interacting="true"] .music-link-player { pointer-events: none; }
 .media-window[data-interacting="true"] { user-select: none; }
-.media-window[data-minimized="true"] { visibility: hidden; }
+.media-window[data-minimized="true"] { grid-template-rows: auto; gap: 0; }
 .media-window[data-minimized="true"] .music-link-player { display: none; }
 /* Keep the same playing frame below the work; controls live in the audio menu. */
 .media-window[data-background="true"] { display: contents; }
@@ -5284,7 +5288,7 @@ body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + var(--m
 .music-link-queue-copy small { color: var(--muted); font-size: 11px; margin-top: 3px; }
 .music-link-queue-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 #media-window-dark { grid-column: 1 / -1; }
-body.command-zen :is(.media-window-controls, .media-window-resize, #music-dropdown) { visibility: hidden !important; pointer-events: none; }
+body.command-zen :is(.media-window-toolbar, .media-window-controls, .media-window-resize, #music-dropdown) { visibility: hidden !important; pointer-events: none; }
 body[data-media-background="true"] :is(#workspace-layer, #vibe-layer) { background: var(--studio-page-fill); }
 body[data-media-background="true"] .ws-main { background: transparent; }
 body[data-media-background="true"] > main { position: relative; z-index: var(--z-sheet); }
@@ -5755,7 +5759,7 @@ body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left
 .music-dropdown[hidden], .music-dropdown [hidden] { display: none !important; }
 .music-dropdown[data-source="radio"] { width: min(540px, calc(100vw - 24px)); }
 .music-dropdown[data-video="true"] { width: min(624px, calc(100vw - 24px)); }
-.music-dropdown[data-source="link"] { width: min(920px, calc(100vw - 24px)); }
+.music-dropdown[data-source="link"] { width: min(1080px, calc(100vw - 24px)); }
 .music-dropdown-header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--hairline); background: var(--panel-solid); }
 .music-dropdown-header h2 { flex: 1; margin: 0; font: 600 15px/1.4 var(--font-ui); }
 .music-dropdown-header { flex-wrap: wrap; }
@@ -5799,16 +5803,17 @@ body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left
 .music-dropdown .music-link-now { padding: 14px; margin-top: 14px; border: 1px solid var(--hairline-strong); border-radius: 12px; background: var(--tint-gold-1); }
 .music-dropdown .music-station { min-height: 70px; border-radius: 12px; }
 .music-dropdown .music-tab[aria-selected="true"] { box-shadow: inset 0 -2px var(--gold); }
-.music-video-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(220px, 1fr); gap: 18px; align-items: start; margin-top: 16px; }
+.music-video-layout { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(220px, 1fr); gap: 18px; align-items: start; margin-top: 16px; }
+.music-video-layout[data-shape="browser"] { grid-template-columns: minmax(0, 1fr); }
 .music-video-watching { min-width: 0; }
 .music-video-stage { width: 100%; min-width: 0; aspect-ratio: 16 / 9; min-height: 190px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; box-sizing: border-box; border: 1px solid var(--hairline-strong); border-radius: 12px; background: radial-gradient(ellipse at 50% 0, var(--tint-gold-3), transparent 80%), var(--bg-deep); text-align: center; overflow: hidden; }
 .music-video-stage-icon { font-size: 34px; line-height: 1; color: var(--gold-bright); }
 .music-video-stage strong { font-size: 14px; }
 .music-video-stage small { max-width: 290px; font-size: 11px; line-height: 1.6; color: var(--muted); }
-.music-video-stage[data-shape="browser"] { min-height: 340px; aspect-ratio: auto; }
+.music-video-stage[data-shape="browser"] { height: clamp(320px, 52vh, 560px); min-height: 320px; aspect-ratio: auto; }
 .music-video-stage[data-shape="audio"] { min-height: 104px; aspect-ratio: auto; }
 .music-video-stage[data-mode="background"] { min-height: 160px; aspect-ratio: auto; }
-.music-video-presentation { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; }
+.music-video-presentation { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; }
 .music-video-presentation .eyebrow { color: var(--muted); font-size: 9px; }
 .music-video-presentation button { padding: 7px 12px; font-size: 12px; border-color: var(--gold-dim); }
 .music-video-presentation button[aria-pressed="true"] { color: var(--gold-bright); background: var(--tint-gold-2); }
@@ -5838,7 +5843,7 @@ body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left
   .music-video-layout { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .music-video-watching { display: contents; }
   .music-video-layout .music-link-queue-list { max-height: 220px; }
-  .music-video-stage { order: 0; height: 200px; min-height: 0; aspect-ratio: auto; }
+  .music-video-stage { order: 0; height: 244px; min-height: 0; aspect-ratio: auto; }
   .music-video-stage[data-shape="browser"] { height: 300px; min-height: 0; }
   .music-video-stage[data-mode="background"] { height: 120px; }
   .music-video-presentation { order: 1; margin: 2px 0; }
@@ -5854,7 +5859,8 @@ body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left
   .music-dropdown .music-record { width: 52px; height: 52px; }
 }
 .music-dropdown-chevron { width: 12px; height: 12px; opacity: .7; }
-.media-window[data-shape="browser"] { padding: 8px; background: var(--panel-solid); border-radius: 14px; box-shadow: 0 16px 60px #0006; }
+.media-window[data-shape="browser"] { grid-template-rows: minmax(0, 1fr); padding: 8px; background: var(--panel-solid); border-radius: 14px; box-shadow: 0 16px 60px #0006; }
+.media-window[data-shape="browser"]:not([data-minimized="true"]) > .media-window-toolbar { display: none; }
 .media-window .music-browser { height: 100%; min-height: 0; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); background: var(--bg-deep); color: var(--ivory); border-radius: 10px; overflow: hidden; font: 12px/1.4 var(--font-ui); }
 .music-browser-header, .music-browser-address { display: flex; align-items: center; gap: 5px; min-width: 0; padding: 7px 9px; }
 .music-browser-header { background: var(--tint-gold-2); border-bottom: 1px solid var(--hairline); }
@@ -54186,12 +54192,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   init();
 })();
 
-// A persistent, borderless home for the Links player. Moving this surface only
+// A persistent home for the Links player. Moving this surface only
 // changes geometry: its iframe/video is never reparented or recreated.
 (() => {
   "use strict";
   const STORAGE_KEY = "mefiStudio.mediaWindow.v1";
   const GAP = 16;
+  const TOOLBAR_HEIGHT = 44; // 36px controls and the gap above playback.
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const finite = (value, fallback) => Number.isFinite(value) ? value : fallback;
   const distance = (point, box) => Math.hypot(Math.max(box.x - point.x, 0, point.x - box.x - box.width), Math.max(box.y - point.y, 0, point.y - box.y - box.height));
@@ -54200,7 +54207,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     let saved;
     try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); } catch {}
     let pinned = saved?.pinned === true;
-    let avoid = saved?.avoid !== false;
+    let avoid = saved?.avoid === true;
     let background = saved?.background === true;
     let transparency = clamp(finite(saved?.transparency, 0), 0, 90);
     let treeTransparency = clamp(finite(saved?.treeTransparency, 0), 0, 90);
@@ -54229,7 +54236,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       if (action) node.addEventListener("click", action);
       controls.append(node); return node;
     };
-    const move = button("move", "⠿", "Move media · drag or use arrow keys (Shift for fine steps)");
+    const move = button("move", "⠿ Media", "Move media · drag or use arrow keys (Shift for fine steps)");
     move.className = "media-window-move";
     const pin = button("pin", "Pin", "Pin media in place", () => { pinned = !pinned; root.dataset.dodging = "false"; paintToggles(); persist(); });
     const dodge = button("avoid", "Move aside", "Move aside near the pointer in menus", () => { avoid = !avoid; yielded = false; paintToggles(); persist(); });
@@ -54239,7 +54246,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       minimize.title = minimized ? "Restore media" : "Minimize media";
       minimize.setAttribute("aria-label", minimize.title); minimize.setAttribute("aria-pressed", String(minimized));
       root.setAttribute("aria-label", minimized ? "Media player minimized" : "Media player");
-      layout();
+      layout(); focusPlayer();
     });
     const close = button("close", "×", "Close media and stop playback", () => { hide(); onClose(); });
     const backgroundButton = button("background", "Background", "Use video as Studio background", () => {
@@ -54290,12 +54297,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const caption = document.createElement("button");
     caption.type = "button"; caption.className = "media-window-caption";
     caption.id = "media-window-settings"; caption.title = "Open Audio settings";
+    caption.textContent = "Settings"; caption.setAttribute("aria-label", caption.title);
     caption.addEventListener("click", onSettings);
     const toolbar = document.createElement("div"); toolbar.className = "media-window-toolbar";
-    toolbar.append(move, minimize, close);
-    controls.append(toolbar, backgroundButton, opacityLabel, treeOpacityLabel, brightnessLabel, darkButton, fadeButton, restoreButton, caption, pin, dodge);
+    toolbar.setAttribute("role", "toolbar"); toolbar.setAttribute("aria-label", "Media window controls");
+    toolbar.append(move, caption, minimize, close);
+    let toolbarInSettings = false;
+    controls.append(backgroundButton, opacityLabel, treeOpacityLabel, brightnessLabel, darkButton, fadeButton, restoreButton, pin, dodge);
     window.MefiTreeDynamics?.mountVisibility?.(controls, "media");
-    root.append(content);
+    root.append(toolbar, content);
     (settingsHost || root).append(controls);
     const edges = [];
     for (const edge of ["n", "e", "s", "w", "ne", "se", "sw", "nw"]) {
@@ -54321,7 +54331,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     function limits() {
       const area = bounds();
       const maxWidth = Math.max(1, area.right - area.left), maxHeight = Math.max(1, area.bottom - area.top);
-      return { area, maxWidth, maxHeight, minWidth: Math.min(464, maxWidth), minHeight: Math.min(shape === "browser" ? 300 : shape === "tall" ? 240 : shape === "audio" ? 104 : 216, maxHeight) };
+      const minContentHeight = shape === "browser" ? 300 : shape === "tall" ? 240 : shape === "audio" ? 104 : 216;
+      return { area, maxWidth, maxHeight, minWidth: Math.min(464, maxWidth), minHeight: Math.min(minContentHeight + (shape === "browser" ? 0 : TOOLBAR_HEIGHT), maxHeight) };
     }
     function fit(candidate) {
       const { area, maxWidth, maxHeight, minWidth, minHeight } = limits();
@@ -54330,7 +54341,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       return { width, height, x: clamp(finite(candidate.x, area.right - width), area.left, area.right - width), y: clamp(finite(candidate.y, area.bottom - height), area.top, area.bottom - height) };
     }
     function visibleBox() {
-      if (minimized) return { ...box, width: Math.min(box.width, 304), height: 44 };
+      if (minimized) return { ...box, width: Math.min(box.width, 304), height: 60 };
       if (background && shape !== "browser") { const area = bounds(); return { x: area.left, y: area.top, width: area.right - area.left, height: area.bottom - area.top }; }
       return dockBox || box;
     }
@@ -54361,6 +54372,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       if (settingsHost) settingsHost.hidden = !visible;
       const browsing = shape === "browser";
       const backdrop = visible && background && !minimized && !browsing;
+      // Keep window controls beside the player. Only background playback puts
+      // its toolbar in settings, because the workspace must stay clickable.
+      if (backdrop !== toolbarInSettings) {
+        toolbarInSettings = backdrop;
+        if (backdrop) controls.prepend(toolbar);
+        else root.insertBefore(toolbar, content);
+      }
+      toolbar.hidden = browsing && !minimized;
+      caption.hidden = minimized;
       const backdropChanged = document.body.dataset.mediaBackground !== String(backdrop);
       root.dataset.background = String(backdrop);
       document.body.dataset.mediaVisible = String(visible && !minimized);
@@ -54457,13 +54477,14 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       if (!box || nextShape !== shape) {
         shape = nextShape;
         const defaults = shape === "browser" ? { width: 760, height: 520 } : shape === "tall" ? { width: 540, height: 368 } : shape === "compact" ? { width: 540, height: 216 } : shape === "audio" ? { width: 540, height: 104 } : { width: 600, height: 264 };
+        if (shape !== "browser") defaults.height += TOOLBAR_HEIGHT;
         const preferred = size[shape];
         box = fit({ ...defaults, width: finite(preferred?.width, defaults.width), height: finite(preferred?.height, defaults.height), x: box?.x, y: box?.y });
         const area = bounds();
         box.x = area.left + clamp(finite(saved?.x, 1), 0, 1) * Math.max(0, area.right - area.left - box.width);
         box.y = area.top + clamp(finite(saved?.y, 1), 0, 1) * Math.max(0, area.bottom - area.top - box.height);
       }
-      caption.textContent = `${link.label} · Audio settings`;
+      move.textContent = `⠿ ${link.label || "Media"}`;
       content.dataset.shape = shape; root.dataset.shape = shape;
       visible = true; root.hidden = false; layout();
       graceUntil = now() + 1600;
@@ -54475,11 +54496,16 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     function reveal() {
       if (minimized) minimize.click();
       graceUntil = now() + 1600;
-      (background && shape !== "browser" ? backgroundButton : move).focus({ preventScroll: true });
+      focusPlayer();
+    }
+    function focusPlayer() {
+      const target = minimized ? minimize : background && shape !== "browser" ? backgroundButton
+        : shape === "browser" ? content.querySelector?.("#browser-move") || move : move;
+      target.focus({ preventScroll: true });
     }
     function start(event, edge = "move") {
-      if (event.button !== 0 || gesture || !visible || background && shape !== "browser") return;
-      if (dockBox) { dockBox = null; dockDetached = true; layout(); }
+      if (event.button !== 0 || gesture || !visible || background && !minimized && shape !== "browser") return;
+      if (dockBox) { detach(); layout(); }
       event.preventDefault(); event.stopPropagation();
       gesture = { edge, x: event.clientX, y: event.clientY, box: { ...box }, target: event.currentTarget, pointerId: event.pointerId };
       root.dataset.dodging = "false";
@@ -54487,6 +54513,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       event.currentTarget.focus({ preventScroll: true });
       event.currentTarget.setPointerCapture?.(event.pointerId);
       graceUntil = now() + 1600;
+    }
+    function detach() {
+      // A drag begins where the user grabbed the docked player, rather than
+      // jumping back to the last floating position under the same pointer.
+      if (!minimized) {
+        box = fit(dockBox);
+        size = { ...size, [shape]: { width: box.width, height: box.height } };
+      }
+      dockBox = null; dockDetached = true;
     }
     function changed(dx, dy, edge, origin) {
       const { area, minWidth, minHeight } = limits();
@@ -54508,8 +54543,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
     function keyboard(event, edge) {
       const vectors = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
-      if (!vectors[event.key] || !box || background && shape !== "browser") return;
-      if (dockBox) { dockBox = null; dockDetached = true; }
+      if (!vectors[event.key] || !box || background && !minimized && shape !== "browser") return;
+      if (dockBox) detach();
       event.preventDefault(); event.stopPropagation();
       root.dataset.dodging = "false";
       const step = event.shiftKey ? 2 : 16;
@@ -54640,16 +54675,39 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       frame = 0;
       if (!active) return;
       const player = root.closest(".media-window"), box = viewport.getBoundingClientRect();
-      let visible = !root.hidden && !document.hidden && player && !player.hidden && player.dataset.minimized !== "true" && player.dataset.interacting !== "true" && box.width > 1 && box.height > 1;
-      // Native views sit above DOM content. Yield to Studio dialogs and menus
-      // so the website cannot cover their controls or take their clicks.
-      if (visible) for (const x of [box.left + 6, box.left + box.width / 2, box.right - 6]) {
-        for (const y of [box.top + 6, box.top + box.height / 2, box.bottom - 6]) {
-          const top = document.elementFromPoint(x, y);
-          if (!top || !viewport.contains(top)) visible = false;
+      let left = Math.max(0, box.left), top = Math.max(0, box.top), right = Math.min(window.innerWidth, box.right), bottom = Math.min(window.innerHeight, box.bottom);
+      // media-window clips its docked DOM surface as the menu scrolls. Native
+      // content needs the same clip, independent of the full website size.
+      const inset = player && getComputedStyle(player).clipPath.match(/^inset\(([^)]+)\)$/);
+      if (inset) {
+        const parts = inset[1].trim().split(/\s+/).map(Number.parseFloat), bounds = player.getBoundingClientRect();
+        const [north, east = north, south = north, west = east] = parts;
+        if (parts.every(Number.isFinite)) {
+          left = Math.max(left, bounds.left + west); top = Math.max(top, bounds.top + north);
+          right = Math.min(right, bounds.right - east); bottom = Math.min(bottom, bounds.bottom - south);
         }
       }
-      const payload = { action: "layout", visible: Boolean(visible), bounds: { x: box.x, y: box.y, width: box.width, height: box.height } };
+      // A small Studio notification should not blank the entire website. Keep
+      // its visible controls clear while leaving the rest of the page usable.
+      for (const notice of document.querySelectorAll("#toast-host .toast")) {
+        const area = notice.getBoundingClientRect();
+        if (area.width < 1 || area.height < 1 || area.right <= left || area.left >= right || area.bottom <= top || area.top >= bottom) continue;
+        if (area.top > top) bottom = Math.min(bottom, area.top - 4);
+        else if (area.left > left) right = Math.min(right, area.left - 4);
+        else left = Math.max(left, area.right + 4);
+      }
+      const clip = { x: left, y: top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
+      let visible = !root.hidden && !document.hidden && player && !player.hidden && player.dataset.minimized !== "true" && player.dataset.interacting !== "true" && clip.width > 1 && clip.height > 1;
+      // Native views sit above DOM content. Yield to Studio dialogs and menus
+      // so the website cannot cover their controls or take their clicks.
+      const insetX = Math.min(6, clip.width / 2), insetY = Math.min(6, clip.height / 2);
+      if (visible) for (const x of [left + insetX, left + clip.width / 2, right - insetX]) {
+        for (const y of [top + insetY, top + clip.height / 2, bottom - insetY]) {
+          const hit = document.elementFromPoint(x, y);
+          if (!hit || !viewport.contains(hit)) visible = false;
+        }
+      }
+      const payload = { action: "layout", visible: Boolean(visible), bounds: { x: box.x, y: box.y, width: box.width, height: box.height }, clip };
       const next = JSON.stringify(payload);
       if (stamp === next) return;
       stamp = next;
@@ -54659,18 +54717,19 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     function observe() {
       const player = root.closest(".media-window");
       const resize = new ResizeObserver(schedule); resize.observe(viewport); if (player) resize.observe(player);
+      const notices = document.getElementById("toast-host"); if (notices) resize.observe(notices);
       const position = new MutationObserver(schedule); if (player) position.observe(player, { attributes: true });
       const overlays = new MutationObserver(records => { if (records.some(record => !root.contains(record.target))) schedule(); });
       overlays.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["hidden", "open", "aria-modal"] });
       observers = [resize, position, overlays];
-      for (const name of ["pointerdown", "pointerup", "keydown", "focusin", "visibilitychange"]) document.addEventListener(name, schedule, true);
+      for (const name of ["pointerdown", "pointerup", "keydown", "focusin", "visibilitychange", "scroll"]) document.addEventListener(name, schedule, true);
       for (const name of ["resize", "mefi:nav", "mefi:shell"]) window.addEventListener(name, schedule);
     }
     function deactivate() {
       active = false; root.hidden = true; stamp = "";
       if (frame) window.cancelAnimationFrame(frame); frame = 0;
       for (const observer of observers) observer.disconnect(); observers = [];
-      for (const name of ["pointerdown", "pointerup", "keydown", "focusin", "visibilitychange"]) document.removeEventListener(name, schedule, true);
+      for (const name of ["pointerdown", "pointerup", "keydown", "focusin", "visibilitychange", "scroll"]) document.removeEventListener(name, schedule, true);
       for (const name of ["resize", "mefi:nav", "mefi:shell"]) window.removeEventListener(name, schedule);
     }
     async function open(raw = "") {
@@ -55943,6 +56002,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const browser = els.browser?.active ? els.browser.state : null;
     if (els.linkStage) {
       els.linkStage.dataset.shape = browser ? "browser" : link?.shape || "video";
+      els.linkLayout.dataset.shape = els.linkStage.dataset.shape;
       els.linkStage.dataset.mode = els.mediaPlacement?.background ? "background" : "player";
       els.linkStageTitle.textContent = els.mediaPlacement?.background ? "Playing behind your workspace" : els.mediaPlacement?.minimized ? "Player minimized" : "Your next video starts here";
       els.linkStageHint.textContent = els.mediaPlacement?.background ? "Your queue stays here. Return to the player any time." : "Paste a video link above, or choose one from your queue.";
@@ -55954,6 +56014,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       els.backgroundToggle.setAttribute("aria-pressed", String(Boolean(els.mediaPlacement?.background)));
       els.backgroundToggle.title = browser && !playableLink(candidate) ? "Open a video link to use background playback" : "Play this video behind your workspace";
     }
+    if (els.floatPlayer) els.floatPlayer.disabled = !link && !browser;
     els.linkNow.hidden = !link && !browser;
     if (els.browseLink) els.browseLink.hidden = Boolean(browser);
     if (els.linkNext) els.linkNext.hidden = !linkQueue.length && link?.provider !== "youtube";
@@ -56243,13 +56304,18 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     button("Add to queue", "ghost", queueTools, () => queueLink(els.linkInput.value), "music-link-queue-add");
     button("Queue next", "ghost", queueTools, () => queueLink(els.linkInput.value, null, true), "music-link-queue-first");
     const linkLayout = element("div", "music-video-layout", null, els.link);
+    els.linkLayout = linkLayout;
     const watching = element("div", "music-video-watching", null, linkLayout);
     els.linkStage = element("div", "music-video-stage", null, watching); els.linkStage.id = "music-video-stage";
     element("span", "music-video-stage-icon", "▷", els.linkStage).setAttribute("aria-hidden", "true");
     els.linkStageTitle = element("strong", null, "Your next video starts here", els.linkStage);
     els.linkStageHint = element("small", null, "Paste a video link above, or choose one from your queue.", els.linkStage);
     const presentation = element("div", "music-video-presentation", null, watching);
-    element("span", "eyebrow", "PLAYBACK", presentation);
+    els.floatPlayer = button("Float player", "ghost", presentation, () => {
+      els.floatingPlayer?.setBackground(false);
+      closeAudio();
+      els.floatingPlayer?.reveal();
+    }, "music-video-float");
     els.backgroundToggle = button("Use as background", "ghost", presentation, () => {
       const browsing = els.browser?.active;
       if (browsing && !playLink(els.browser.state.url)) return;
@@ -56396,10 +56462,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     dropdown.addEventListener("pointerdown", pinAudioDropdown);
     dropdown.addEventListener("focusin", pinAudioDropdown);
     dropdown.addEventListener("focusout", (event) => {
-      if (event.relatedTarget && !dropdown.contains(event.relatedTarget) && !els.linkPlayer?.contains(event.relatedTarget) && !dropdownAnchor?.contains(event.relatedTarget) && !audioSelectContains(event.relatedTarget)) closeAudio();
+      if (event.relatedTarget && !dropdown.contains(event.relatedTarget) && !mediaPlayerContains(event.relatedTarget) && !dropdownAnchor?.contains(event.relatedTarget) && !audioSelectContains(event.relatedTarget)) closeAudio();
     });
-    els.linkPlayer.addEventListener("pointerenter", cancelAudioHoverTimers);
-    els.linkPlayer.addEventListener("pointerleave", leaveAudioHover);
+    // Embedded pages do not bubble pointer/focus events to Studio. Once the
+    // pointer enters the player, keep its menu in place until dismissed.
+    const playerSurface = document.getElementById("media-window") || els.linkPlayer;
+    for (const event of ["pointerenter", "pointerdown", "focusin"]) playerSurface.addEventListener(event, pinAudioDropdown);
+    playerSurface.addEventListener("pointerleave", leaveAudioHover);
     const preview = element("section", "music-preview", null, els.overlay);
     preview.setAttribute("aria-labelledby", "music-preview-heading");
     const previewHeader = element("header", "music-preview-header", null, preview);
@@ -56456,7 +56525,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     else positionDropdown();
   }
   function audioOutside(event) {
-    if (!els.dropdown?.contains(event.target) && !els.linkPlayer?.contains(event.target) && !dropdownAnchor?.contains(event.target) && !audioSelectContains(event.target)) closeAudio();
+    if (!els.dropdown?.contains(event.target) && !mediaPlayerContains(event.target) && !dropdownAnchor?.contains(event.target) && !audioSelectContains(event.target)) closeAudio();
+  }
+  function mediaPlayerContains(target) {
+    return document.getElementById("media-window")?.contains(target) || els.linkPlayer?.contains(target);
   }
   function audioSelectContains(target) {
     return window.MefiSelect?.owns?.(els.dropdown) && window.MefiSelect?.contains?.(target);
@@ -56505,7 +56577,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const toolbar = document.getElementById?.("idle-music-toggle");
     dropdownAnchor = anchor || (toolbar?.getBoundingClientRect?.().width ? toolbar : document.getElementById?.("settings-audio-open"));
     dropdownFocus = document.activeElement;
-    dropdownHover = hover;
+    // Native browser views receive their own mouse events, so Studio cannot
+    // reliably tell a pointer entering the website from one leaving the menu.
+    dropdownHover = hover && !els.browser?.active;
     dropdownAnchor?.setAttribute("aria-expanded", "true");
     els.dropdown.hidden = false;
     mountLink(); render(); positionDropdown();
@@ -56513,8 +56587,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (hover) {
       // Bring the current source's controls back into view, even if the last
       // visit ended down in the queue or recommendations. Only this panel scrolls.
-      const current = state.source === "link" && state.link
-        ? (els.linkVolumeControls.hidden ? els.linkNow : els.linkVolumeControls.parentElement)
+      const current = state.source === "link" && (state.link || els.browser?.active)
+        ? els.linkStage
         : state.source === "radio" ? els.radioVolume.parentElement.parentElement : els.local;
       const top = current?.getBoundingClientRect?.().top;
       const panelTop = els.dropdown.getBoundingClientRect().top;

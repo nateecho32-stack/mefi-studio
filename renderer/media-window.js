@@ -1,9 +1,10 @@
-// A persistent, borderless home for the Links player. Moving this surface only
+// A persistent home for the Links player. Moving this surface only
 // changes geometry: its iframe/video is never reparented or recreated.
 (() => {
   "use strict";
   const STORAGE_KEY = "mefiStudio.mediaWindow.v1";
   const GAP = 16;
+  const TOOLBAR_HEIGHT = 44; // 36px controls and the gap above playback.
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const finite = (value, fallback) => Number.isFinite(value) ? value : fallback;
   const distance = (point, box) => Math.hypot(Math.max(box.x - point.x, 0, point.x - box.x - box.width), Math.max(box.y - point.y, 0, point.y - box.y - box.height));
@@ -12,7 +13,7 @@
     let saved;
     try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); } catch {}
     let pinned = saved?.pinned === true;
-    let avoid = saved?.avoid !== false;
+    let avoid = saved?.avoid === true;
     let background = saved?.background === true;
     let transparency = clamp(finite(saved?.transparency, 0), 0, 90);
     let treeTransparency = clamp(finite(saved?.treeTransparency, 0), 0, 90);
@@ -41,7 +42,7 @@
       if (action) node.addEventListener("click", action);
       controls.append(node); return node;
     };
-    const move = button("move", "⠿", "Move media · drag or use arrow keys (Shift for fine steps)");
+    const move = button("move", "⠿ Media", "Move media · drag or use arrow keys (Shift for fine steps)");
     move.className = "media-window-move";
     const pin = button("pin", "Pin", "Pin media in place", () => { pinned = !pinned; root.dataset.dodging = "false"; paintToggles(); persist(); });
     const dodge = button("avoid", "Move aside", "Move aside near the pointer in menus", () => { avoid = !avoid; yielded = false; paintToggles(); persist(); });
@@ -51,7 +52,7 @@
       minimize.title = minimized ? "Restore media" : "Minimize media";
       minimize.setAttribute("aria-label", minimize.title); minimize.setAttribute("aria-pressed", String(minimized));
       root.setAttribute("aria-label", minimized ? "Media player minimized" : "Media player");
-      layout();
+      layout(); focusPlayer();
     });
     const close = button("close", "×", "Close media and stop playback", () => { hide(); onClose(); });
     const backgroundButton = button("background", "Background", "Use video as Studio background", () => {
@@ -102,12 +103,15 @@
     const caption = document.createElement("button");
     caption.type = "button"; caption.className = "media-window-caption";
     caption.id = "media-window-settings"; caption.title = "Open Audio settings";
+    caption.textContent = "Settings"; caption.setAttribute("aria-label", caption.title);
     caption.addEventListener("click", onSettings);
     const toolbar = document.createElement("div"); toolbar.className = "media-window-toolbar";
-    toolbar.append(move, minimize, close);
-    controls.append(toolbar, backgroundButton, opacityLabel, treeOpacityLabel, brightnessLabel, darkButton, fadeButton, restoreButton, caption, pin, dodge);
+    toolbar.setAttribute("role", "toolbar"); toolbar.setAttribute("aria-label", "Media window controls");
+    toolbar.append(move, caption, minimize, close);
+    let toolbarInSettings = false;
+    controls.append(backgroundButton, opacityLabel, treeOpacityLabel, brightnessLabel, darkButton, fadeButton, restoreButton, pin, dodge);
     window.MefiTreeDynamics?.mountVisibility?.(controls, "media");
-    root.append(content);
+    root.append(toolbar, content);
     (settingsHost || root).append(controls);
     const edges = [];
     for (const edge of ["n", "e", "s", "w", "ne", "se", "sw", "nw"]) {
@@ -133,7 +137,8 @@
     function limits() {
       const area = bounds();
       const maxWidth = Math.max(1, area.right - area.left), maxHeight = Math.max(1, area.bottom - area.top);
-      return { area, maxWidth, maxHeight, minWidth: Math.min(464, maxWidth), minHeight: Math.min(shape === "browser" ? 300 : shape === "tall" ? 240 : shape === "audio" ? 104 : 216, maxHeight) };
+      const minContentHeight = shape === "browser" ? 300 : shape === "tall" ? 240 : shape === "audio" ? 104 : 216;
+      return { area, maxWidth, maxHeight, minWidth: Math.min(464, maxWidth), minHeight: Math.min(minContentHeight + (shape === "browser" ? 0 : TOOLBAR_HEIGHT), maxHeight) };
     }
     function fit(candidate) {
       const { area, maxWidth, maxHeight, minWidth, minHeight } = limits();
@@ -142,7 +147,7 @@
       return { width, height, x: clamp(finite(candidate.x, area.right - width), area.left, area.right - width), y: clamp(finite(candidate.y, area.bottom - height), area.top, area.bottom - height) };
     }
     function visibleBox() {
-      if (minimized) return { ...box, width: Math.min(box.width, 304), height: 44 };
+      if (minimized) return { ...box, width: Math.min(box.width, 304), height: 60 };
       if (background && shape !== "browser") { const area = bounds(); return { x: area.left, y: area.top, width: area.right - area.left, height: area.bottom - area.top }; }
       return dockBox || box;
     }
@@ -173,6 +178,15 @@
       if (settingsHost) settingsHost.hidden = !visible;
       const browsing = shape === "browser";
       const backdrop = visible && background && !minimized && !browsing;
+      // Keep window controls beside the player. Only background playback puts
+      // its toolbar in settings, because the workspace must stay clickable.
+      if (backdrop !== toolbarInSettings) {
+        toolbarInSettings = backdrop;
+        if (backdrop) controls.prepend(toolbar);
+        else root.insertBefore(toolbar, content);
+      }
+      toolbar.hidden = browsing && !minimized;
+      caption.hidden = minimized;
       const backdropChanged = document.body.dataset.mediaBackground !== String(backdrop);
       root.dataset.background = String(backdrop);
       document.body.dataset.mediaVisible = String(visible && !minimized);
@@ -269,13 +283,14 @@
       if (!box || nextShape !== shape) {
         shape = nextShape;
         const defaults = shape === "browser" ? { width: 760, height: 520 } : shape === "tall" ? { width: 540, height: 368 } : shape === "compact" ? { width: 540, height: 216 } : shape === "audio" ? { width: 540, height: 104 } : { width: 600, height: 264 };
+        if (shape !== "browser") defaults.height += TOOLBAR_HEIGHT;
         const preferred = size[shape];
         box = fit({ ...defaults, width: finite(preferred?.width, defaults.width), height: finite(preferred?.height, defaults.height), x: box?.x, y: box?.y });
         const area = bounds();
         box.x = area.left + clamp(finite(saved?.x, 1), 0, 1) * Math.max(0, area.right - area.left - box.width);
         box.y = area.top + clamp(finite(saved?.y, 1), 0, 1) * Math.max(0, area.bottom - area.top - box.height);
       }
-      caption.textContent = `${link.label} · Audio settings`;
+      move.textContent = `⠿ ${link.label || "Media"}`;
       content.dataset.shape = shape; root.dataset.shape = shape;
       visible = true; root.hidden = false; layout();
       graceUntil = now() + 1600;
@@ -287,11 +302,16 @@
     function reveal() {
       if (minimized) minimize.click();
       graceUntil = now() + 1600;
-      (background && shape !== "browser" ? backgroundButton : move).focus({ preventScroll: true });
+      focusPlayer();
+    }
+    function focusPlayer() {
+      const target = minimized ? minimize : background && shape !== "browser" ? backgroundButton
+        : shape === "browser" ? content.querySelector?.("#browser-move") || move : move;
+      target.focus({ preventScroll: true });
     }
     function start(event, edge = "move") {
-      if (event.button !== 0 || gesture || !visible || background && shape !== "browser") return;
-      if (dockBox) { dockBox = null; dockDetached = true; layout(); }
+      if (event.button !== 0 || gesture || !visible || background && !minimized && shape !== "browser") return;
+      if (dockBox) { detach(); layout(); }
       event.preventDefault(); event.stopPropagation();
       gesture = { edge, x: event.clientX, y: event.clientY, box: { ...box }, target: event.currentTarget, pointerId: event.pointerId };
       root.dataset.dodging = "false";
@@ -299,6 +319,15 @@
       event.currentTarget.focus({ preventScroll: true });
       event.currentTarget.setPointerCapture?.(event.pointerId);
       graceUntil = now() + 1600;
+    }
+    function detach() {
+      // A drag begins where the user grabbed the docked player, rather than
+      // jumping back to the last floating position under the same pointer.
+      if (!minimized) {
+        box = fit(dockBox);
+        size = { ...size, [shape]: { width: box.width, height: box.height } };
+      }
+      dockBox = null; dockDetached = true;
     }
     function changed(dx, dy, edge, origin) {
       const { area, minWidth, minHeight } = limits();
@@ -320,8 +349,8 @@
     }
     function keyboard(event, edge) {
       const vectors = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
-      if (!vectors[event.key] || !box || background && shape !== "browser") return;
-      if (dockBox) { dockBox = null; dockDetached = true; }
+      if (!vectors[event.key] || !box || background && !minimized && shape !== "browser") return;
+      if (dockBox) detach();
       event.preventDefault(); event.stopPropagation();
       root.dataset.dodging = "false";
       const step = event.shiftKey ? 2 : 16;

@@ -5,7 +5,7 @@ import vm from "node:vm";
 
 const source = await readFile(new URL("../renderer/media-window.js", import.meta.url), "utf8");
 const dynamicsSource = await readFile(new URL("../renderer/tree-dynamics.js", import.meta.url), "utf8");
-function environment(saved = null) {
+function environment(saved = null, withSettingsHost = false) {
   const ids = new Map(), storage = new Map();
   if (saved) storage.set("mefiStudio.mediaWindow.v1", JSON.stringify(saved));
   const toasts = [], intervals = new Map();
@@ -23,9 +23,12 @@ function environment(saved = null) {
     set id(value) { this._id = value; ids.set(value, this); }
     get id() { return this._id; }
     append(...nodes) { for (const node of nodes) { node.remove(); node.parent = this; this.children.push(node); } }
+    prepend(...nodes) { for (const node of [...nodes].reverse()) { node.remove(); node.parent = this; this.children.unshift(node); } }
+    insertBefore(node, reference) { node.remove(); node.parent = this; this.children.splice(this.children.indexOf(reference), 0, node); }
     remove() { if (this.parent) this.parent.children = this.parent.children.filter(node => node !== this); this.parent = null; }
     setAttribute(key, value) { this.attrs[key] = value; }
     contains(node) { return node === this || this.children.some(child => child.contains(node)); }
+    querySelector(selector) { return this.children.find(child => `#${child.id}` === selector) || this.children.map(child => child.querySelector(selector)).find(Boolean) || null; }
     focus() { document.activeElement = this; }
     blur() { document.activeElement = document.body; }
     click() { this.emit("click"); }
@@ -35,16 +38,18 @@ function environment(saved = null) {
   document = emitter({ body: new Element("body"), documentElement: new Element("html"), getElementById: id => ids.get(id), querySelector: () => null, createElement: tag => new Element(tag) });
   const window = emitter({ setInterval: fn => { intervals.set(++timerId, fn); return timerId; }, clearInterval: id => intervals.delete(id), mefiStudio: { onTasks: fn => { tasksListener = fn; }, onProjects: fn => { projectsListener = fn; } }, MefiToast: (...args) => toasts.push(args), innerWidth: 1440, innerHeight: 900, performance: { now: () => time }, MefiNav: { top: () => route }, matchMedia: () => ({ matches: reduced }) });
   const content = new Element("div"), frame = new Element("iframe"); content.append(frame);
+  const settingsHost = withSettingsHost ? new Element("section") : undefined;
+  if (settingsHost) document.body.append(settingsHost);
   const context = vm.createContext({ Date: { now: () => time }, document, window, localStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) } });
   vm.runInContext(source, context);
-  const controller = window.MefiMediaWindow.create({ content, onClose: () => { closed++; }, onSettings: () => { settings++; } });
+  const controller = window.MefiMediaWindow.create({ content, settingsHost, onClose: () => { closed++; }, onSettings: () => { settings++; } });
   const root = ids.get("media-window");
   const rect = () => ({ x: parseFloat(root.style.left), y: parseFloat(root.style.top), width: parseFloat(root.style.width), height: parseFloat(root.style.height) });
   const pointer = (x, y, values = {}) => document.emit("pointermove", { clientX: x, clientY: y, pointerId: 1, pointerType: "mouse", buttons: 0, ...values });
   const begin = (id, x, y) => ids.get(`media-window-${id}`).emit("pointerdown", { button: 0, clientX: x, clientY: y, pointerId: 1 });
   const finish = () => document.emit("pointerup", { pointerId: 1 });
   const advance = ms => { time += ms; };
-  return { intervals, toasts, tasks: value => tasksListener(value), projects: value => projectsListener(value), controller, root, content, frame, ids, document, window, storage, rect, pointer, begin, finish, advance,
+  return { intervals, toasts, tasks: value => tasksListener(value), projects: value => projectsListener(value), controller, root, content, frame, settingsHost, ids, document, window, storage, rect, pointer, begin, finish, advance,
     route: value => { route = value; }, reduced: value => { reduced = value; }, closed: () => closed, settings: () => settings,
     show: (shape = "video") => controller.show({ shape, label: "Fixture video" }),
   };
@@ -70,6 +75,30 @@ test("Media moves and resizes without remounting content, persists only delibera
   assert.equal(env.frame.parent, env.content, "the playing browsing context stays mounted");
 });
 
+test("Window controls remain on the player when video settings are in a separate menu", () => {
+  const env = environment(null, true); env.show();
+  const toolbar = env.ids.get("media-window-move").parent;
+  assert.equal(toolbar.parent, env.root);
+  assert.equal(env.ids.get("media-window-move").textContent, "⠿ Fixture video");
+  for (const action of ["settings", "minimize", "close"]) assert.equal(env.ids.get(`media-window-${action}`).parent, toolbar);
+  assert.equal(env.settingsHost.contains(env.ids.get("media-window-background")), true);
+  env.settingsHost.hidden = true;
+  env.ids.get("media-window-minimize").click();
+  assert.equal(toolbar.parent, env.root); assert.equal(toolbar.hidden, false);
+  assert.equal(env.ids.get("media-window-settings").hidden, true);
+  env.ids.get("media-window-minimize").click();
+  assert.equal(env.ids.get("media-window-settings").hidden, false);
+  env.ids.get("media-window-settings").click(); assert.equal(env.settings(), 1);
+  env.controller.setBackground(true);
+  assert.equal(env.settingsHost.contains(toolbar), true);
+  env.controller.setBackground(false);
+  assert.equal(toolbar.parent, env.root); assert.equal(env.root.children[0], toolbar);
+  env.show("browser"); assert.equal(toolbar.hidden, true, "the browser provides its own expanded toolbar");
+  env.ids.get("media-window-minimize").click(); assert.equal(toolbar.hidden, false, "a minimized browser still offers Restore");
+  env.ids.get("media-window-close").click(); assert.equal(env.closed(), 1);
+  assert.equal(env.frame.parent, env.content);
+});
+
 test("All eight resize grips preserve the opposite edges and obey minimum and viewport limits", () => {
   for (const edge of ["n", "ne", "e", "se", "s", "sw", "w", "nw"]) {
     const env = environment({ x: .5, y: .5 }); env.show(); const before = env.rect();
@@ -79,7 +108,7 @@ test("All eight resize grips preserve the opposite edges and obey minimum and vi
     if (edge.includes("n")) assert.equal(after.y + after.height, before.y + before.height);
     else assert.equal(after.y, before.y);
     env.begin(`resize-${edge}`, 700, 450); env.pointer(-10000, -10000, { buttons: 1 }); env.finish();
-    const bounded = env.rect(); assert.ok(bounded.width >= 464 && bounded.height >= 216 && bounded.x >= 16 && bounded.y >= 16);
+    const bounded = env.rect(); assert.ok(bounded.width >= 464 && bounded.height >= 260 && bounded.x >= 16 && bounded.y >= 16);
   }
 });
 
@@ -97,10 +126,43 @@ test("The media panel docks the same frame, releases it for backgrounds, and pre
   assert.equal(env.storage.get("mefiStudio.mediaWindow.v1").includes('"width":440'), false, "docking never overwrites floating dimensions");
 });
 
-test("Menus yield once to an approaching mouse and following the relocated player wins", () => {
+test("Dragging or moving a docked player starts from its visible location and keeps it detached", () => {
+  for (const method of ["pointer", "keyboard"]) {
+    const env = environment(); env.show();
+    const dock = { x: 150, y: 220, width: 520, height: 300 };
+    env.controller.dock(dock);
+    if (method === "pointer") {
+      env.begin("move", 180, 240);
+      assert.deepEqual(env.rect(), dock, "grabbing the toolbar does not teleport the player");
+      env.pointer(210, 260, { buttons: 1 }); env.finish();
+      assert.deepEqual(env.rect(), { ...dock, x: 180, y: 240 });
+    } else {
+      env.ids.get("media-window-move").emit("keydown", { key: "ArrowRight" });
+      assert.deepEqual(env.rect(), { ...dock, x: 166 });
+    }
+    const detached = env.rect(); env.controller.dock(dock);
+    assert.deepEqual(env.rect(), detached, "menu layout does not snap a manually moved player back");
+    assert.equal(env.root.dataset.docked, "false");
+    const restored = environment(JSON.parse(env.storage.get("mefiStudio.mediaWindow.v1"))); restored.show();
+    for (const key of ["x", "y", "width", "height"]) assert.ok(Math.abs(restored.rect()[key] - detached[key]) < .001, key);
+    assert.equal(env.frame.parent, env.content);
+  }
+});
+
+test("The default player stays still as its controls are approached; Move aside is opt-in", () => {
   const env = environment(); env.show(); env.advance(1800);
+  const before = env.rect(); env.pointer(before.x - 40, before.y + 80);
+  assert.deepEqual(env.rect(), before); assert.equal(env.ids.get("media-window-avoid").attrs["aria-pressed"], "false");
+  env.ids.get("media-window-avoid").click(); env.pointer(before.x - 30, before.y + 80);
+  assert.notDeepEqual(env.rect(), before);
+  assert.equal(JSON.parse(env.storage.get("mefiStudio.mediaWindow.v1")).avoid, true);
+});
+
+test("Menus yield once to an approaching mouse and following the relocated player wins", () => {
+  const env = environment({ avoid: true }); env.show(); env.advance(1800);
+  const saved = env.storage.get("mefiStudio.mediaWindow.v1");
   const before = env.rect(); env.pointer(before.x - 40, before.y + 80); const moved = env.rect();
-  assert.notDeepEqual(moved, before); assert.equal(env.storage.size, 0, "dodging does not overwrite the saved placement");
+  assert.notDeepEqual(moved, before); assert.equal(env.storage.get("mefiStudio.mediaWindow.v1"), saved, "dodging does not overwrite the saved placement");
   for (let index = 0; index < 8; index++) { env.advance(1000); env.pointer(moved.x + moved.width + 200 - index * 24, moved.y + 60); }
   assert.deepEqual(env.rect(), moved, "even a slow pursuit must not trigger a second dodge");
   env.root.emit("pointerenter"); env.pointer(moved.x + 15, moved.y + 15); env.advance(10000);
@@ -111,7 +173,7 @@ test("Menus yield once to an approaching mouse and following the relocated playe
 
 test("Home, Command, hover, keyboard focus, touch, pin and reduced motion keep the player still", () => {
   for (const scenario of ["workspace", "command", "hover", "focus", "touch", "pin", "avoid-off", "motion-off", "os-reduce", "fullscreen"]) {
-    const env = environment(); env.show(); env.advance(1800); const before = env.rect();
+    const env = environment({ avoid: true }); env.show(); env.advance(1800); const before = env.rect();
     if (["workspace", "command"].includes(scenario)) env.route(scenario);
     if (scenario === "hover") env.root.emit("pointerenter");
     if (scenario === "focus") env.frame.focus();
@@ -127,26 +189,46 @@ test("Home, Command, hover, keyboard focus, touch, pin and reduced motion keep t
 
 test("Minimize, reveal, navigation and shape changes retain the frame; close delegates stopping playback", () => {
   const env = environment(); env.show(); const first = env.rect();
-  env.ids.get("media-window-minimize").click(); assert.equal(env.rect().height, 44);
+  env.ids.get("media-window-minimize").click(); assert.equal(env.rect().height, 60);
   env.window.emit("mefi:nav"); assert.equal(env.root.hidden, false);
   env.controller.reveal(); assert.deepEqual(env.rect(), first);
-  env.show("tall"); assert.equal(env.rect().height, 368);
-  env.show("audio"); assert.equal(env.rect().height, 104);
+  env.show("tall"); assert.equal(env.rect().height, 412);
+  env.show("audio"); assert.equal(env.rect().height, 148);
   assert.equal(env.frame.parent, env.content);
   env.ids.get("media-window-settings").click(); assert.equal(env.settings(), 1);
   env.ids.get("media-window-close").click(); assert.equal(env.closed(), 1); assert.equal(env.root.hidden, true);
 });
 
+test("Browser and provider minimize, restore and reveal focus the visible player controls", () => {
+  for (const shape of ["browser", "video"]) {
+    const env = environment(null, true);
+    const browserMove = env.document.createElement("button"); browserMove.id = "browser-move"; env.content.append(browserMove);
+    env.show(shape);
+    const move = shape === "browser" ? browserMove : env.ids.get("media-window-move");
+    const minimize = env.ids.get("media-window-minimize");
+    move.focus(); env.controller.minimize();
+    assert.equal(env.document.activeElement, minimize, "minimizing transfers focus out of hidden playback");
+    assert.equal(env.content.inert, true);
+    minimize.click();
+    assert.equal(env.document.activeElement, move, "restoring focuses the toolbar that remains visible");
+    assert.equal(env.content.inert, false);
+    env.document.body.focus(); env.controller.reveal();
+    assert.equal(env.document.activeElement, move, "Float player / Show player focuses the current playback toolbar");
+    env.controller.minimize(); env.controller.reveal();
+    assert.equal(env.document.activeElement, move);
+  }
+});
+
 test("Keyboard adjustments and pointer cancellation are bounded and preference corruption is harmless", () => {
   const env = environment({ x: 900, y: -55, size: { video: { width: "bad", height: -500 } }, avoid: "false", pinned: "true" }); env.show();
-  const before = env.rect(); assert.equal(before.width, 600); assert.equal(before.y, 16); assert.equal(before.height, 216);
+  const before = env.rect(); assert.equal(before.width, 600); assert.equal(before.y, 16); assert.equal(before.height, 260);
   env.ids.get("media-window-move").emit("keydown", { key: "ArrowLeft" }); assert.equal(env.rect().x, before.x - 16);
-  env.ids.get("media-window-resize-se").emit("keydown", { key: "ArrowDown", shiftKey: true }); assert.equal(env.rect().height, 218);
+  env.ids.get("media-window-resize-se").emit("keydown", { key: "ArrowDown", shiftKey: true }); assert.equal(env.rect().height, 262);
   env.begin("move", 700, 450); env.document.emit("pointercancel", { pointerId: 1 });
   assert.equal(env.root.dataset.interacting, "false");
   const canceled = env.rect(); env.pointer(100, 100, { buttons: 1 }); assert.deepEqual(env.rect(), canceled);
   env.ids.get("media-window-pin").click(); env.ids.get("media-window-avoid").click();
-  const persisted = JSON.parse(env.storage.get("mefiStudio.mediaWindow.v1")); assert.equal(persisted.pinned, true); assert.equal(persisted.avoid, false);
+  const persisted = JSON.parse(env.storage.get("mefiStudio.mediaWindow.v1")); assert.equal(persisted.pinned, true); assert.equal(persisted.avoid, true);
 });
 
 

@@ -1162,6 +1162,39 @@ test("Clicking a hovered opener or using a setting holds the menu open for adjus
   }
 });
 
+test("Opening video controls on hover keeps the video visible and entering its frame holds the menu open", () => {
+  const env = environment();
+  env.music.playLink("https://youtu.be/dQw4w9WgXcQ");
+  const anchor = env.ids.get("idle-music-toggle"), dropdown = env.ids.get("music-dropdown");
+  const stage = env.ids.get("music-video-stage");
+  stage.getBoundingClientRect = () => ({ top: 280 });
+  dropdown.getBoundingClientRect = () => ({ top: 72, width: 1080 });
+  const header = env.ids.get("music-dropdown-heading").parentElement;
+  header.getBoundingClientRect = () => ({ height: 54 });
+  anchor.dispatch("pointerenter", { pointerType: "mouse" }); env.advance(200);
+  assert.equal(dropdown.scrollTop, 142, "reveal the video instead of scrolling past it to advanced settings");
+  const frame = env.music.linkElement().element;
+  dropdown.dispatch("pointerleave");
+  frame.parentElement.dispatch("pointerenter");
+  frame.parentElement.dispatch("pointerleave"); env.advance(1000);
+  assert.equal(dropdown.hidden, false, "cross-origin playback controls cannot dismiss their own menu");
+  assert.equal(env.music.linkElement().element, frame);
+});
+
+test("The floating toolbar belongs to the media panel and Float player keeps the loaded frame", () => {
+  const env = environment();
+  env.music.playLink("https://youtu.be/dQw4w9WgXcQ");
+  env.music.openAudio();
+  const dropdown = env.ids.get("music-dropdown"), frame = env.music.linkElement().element;
+  const surface = env.document.createElement("section"); surface.id = "media-window";
+  const control = env.document.createElement("button"); surface.append(control);
+  dropdown.dispatch("focusout", { relatedTarget: control }); env.pointer(control);
+  assert.equal(dropdown.hidden, false, "moving or closing the player is an inside interaction");
+  env.ids.get("music-video-float").click();
+  assert.equal(dropdown.hidden, true);
+  assert.equal(env.music.linkElement().element, frame, "floating does not reload or restart playback");
+});
+
 test("Hover respects touch, dismissal, navigation, window blur and Zen", () => {
   const env = environment();
   const anchor = env.ids.get("idle-music-toggle"), dropdown = env.ids.get("music-dropdown");

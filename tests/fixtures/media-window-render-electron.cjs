@@ -42,17 +42,25 @@ app.whenReady().then(async () => {
   const run = code => contents.executeJavaScript(`(async()=>{${code}})()`, true);
   const rect = () => run("const r=document.getElementById('media-window').getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height};");
   const mouse = async (x, y, type = "mouseMove") => { contents.sendInputEvent({ type, x: Math.round(x), y: Math.round(y), ...(type !== "mouseMove" ? { button: "left", clickCount: 1 } : {}) }); await sleep(70); };
+  const click = async id => {
+    const point = await run(`const n=document.getElementById(${JSON.stringify(id)}),r=n.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,clear:r.width>0&&r.height>0&&n.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))};`);
+    assert.ok(point.clear, `${id} is visibly reachable: ${JSON.stringify(point)}`);
+    await mouse(point.x, point.y); await mouse(point.x, point.y, "mouseDown"); await mouse(point.x, point.y, "mouseUp");
+  };
   const capture = async name => { await sleep(220); fs.writeFileSync(path.join(root, name), (await contents.capturePage()).toPNG()); };
   const layout = async () => {
-    const result = await run("const r=document.getElementById('media-window').getBoundingClientRect(), c=document.querySelector('.media-window-controls'), b=c.getBoundingClientRect(), f=window.fixtureMedia.getBoundingClientRect(); return {width:innerWidth,contained:r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight,controlsFit:document.getElementById('music-dropdown').contains(c)&&!document.getElementById('media-window').contains(c),hits:[[f.left+1,f.top+1],[f.right-1,f.bottom-1],[f.right-30,f.bottom-55]].map(([x,y])=>document.elementFromPoint(x,y)?.outerHTML?.slice(0,160)),providerClear:[[f.left+1,f.top+1],[f.right-1,f.bottom-1],[f.right-30,f.bottom-55]].every(([x,y])=>document.elementFromPoint(x,y)===window.fixtureMedia)};");
+    const result = await run("const root=document.getElementById('media-window'),r=root.getBoundingClientRect(),c=document.querySelector('.media-window-toolbar'),b=c.getBoundingClientRect(),f=window.fixtureMedia.getBoundingClientRect();return {width:innerWidth,contained:r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight,controlsFit:c.parentElement===root&&b.left>=r.left&&b.right<=r.right&&b.bottom<=f.top+1&&[...c.querySelectorAll('button')].filter(n=>!n.hidden).every(n=>{const t=n.getBoundingClientRect();return t.width>0&&t.height>0&&n.contains(document.elementFromPoint(t.x+t.width/2,t.y+t.height/2));}),hits:[[f.left+1,f.top+1],[f.right-1,f.bottom-1],[f.right-30,f.bottom-55]].map(([x,y])=>document.elementFromPoint(x,y)?.outerHTML?.slice(0,160)),providerClear:[[f.left+1,f.top+1],[f.right-1,f.bottom-1],[f.right-30,f.bottom-55]].every(([x,y])=>document.elementFromPoint(x,y)===window.fixtureMedia)};");
     report.layouts.push(result); assert.ok(result.contained && result.controlsFit && result.providerClear, JSON.stringify(result));
   };
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1" } });
   await run("window.MefiNav.go('studio',{category:'audio'});window.MefiMusic.playLink('https://youtu.be/dQw4w9WgXcQ',{autoplay:false});window.fixtureMedia=window.MefiMusic.linkElement().element;");
   await sleep(4500);
   report.borderless = await run("const w=document.getElementById('media-window');return w.parentElement===document.body&&!w.hidden&&getComputedStyle(w).borderTopWidth==='0px'&&getComputedStyle(document.querySelector('.media-window-controls')).opacity==='1'&&w.contains(window.fixtureMedia);");
-  assert.ok(report.borderless, "player is a borderless body surface with separate side controls");
+  assert.ok(report.borderless, "player is a borderless body surface with window controls");
   await layout(); await capture("media-window-rest.png");
+  await run("document.body.classList.add('command-zen');");
+  assert.equal(await run("return getComputedStyle(document.querySelector('.media-window-toolbar')).visibility==='hidden'&&getComputedStyle(window.fixtureMedia).visibility==='visible';"), true, "Zen hides floating window controls while preserving playback");
+  await run("document.body.classList.remove('command-zen');");
   let before = await rect(); await mouse(before.x + 50, before.y + 80); await sleep(220);
   report.hover = await run("return getComputedStyle(document.querySelector('.media-window-controls')).opacity==='1';"); assert.ok(report.hover);
   await capture("media-window-hover.png");
@@ -70,7 +78,7 @@ app.whenReady().then(async () => {
   await embedded.executeJavaScript("document.querySelector('#menu button').click()");
   await sleep(100);
   assert.equal(await run("return window.fixtureQuality;"), 1, "provider settings menu remains usable");
-  await run("document.querySelectorAll('#toast-host .toast-dismiss').forEach(button=>button.click());window.MefiMusic.openAudio();document.getElementById('media-window-move').scrollIntoView({block:'nearest'});"); await sleep(450);
+  await run("document.querySelectorAll('#toast-host .toast-dismiss').forEach(button=>button.click());window.MefiMusic.closeAudio();"); await sleep(450);
   const handle = await run("const n=document.getElementById('media-window-move'),r=n.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.outerHTML?.slice(0,400)};");
   await mouse(handle.x, handle.y); await mouse(handle.x, handle.y, "mouseDown"); await mouse(handle.x - 160, handle.y - 100); await mouse(handle.x - 160, handle.y - 100, "mouseUp");
   let after = await rect(); report.drag = Math.abs(after.x - (before.x - 160)) < 2 && Math.abs(after.y - (before.y - 100)) < 2; assert.ok(report.drag, JSON.stringify({ before, after, handle }));
@@ -79,12 +87,23 @@ app.whenReady().then(async () => {
   await mouse(before.x + before.width - 5, before.y + before.height - 5); await mouse(before.x + before.width - 5, before.y + before.height - 5, "mouseDown");
   await mouse(before.x + before.width + 59, before.y + before.height + 31); await mouse(before.x + before.width + 59, before.y + before.height + 31, "mouseUp");
   after = await rect(); report.resize = Math.abs(after.width - before.width - 64) < 2 && Math.abs(after.height - before.height - 36) < 2; assert.ok(report.resize, JSON.stringify({ before, after }));
-  await run("document.getElementById('media-window-minimize').click();"); report.minimize = (await rect()).height === 44;
-  await run("document.getElementById('music-link-show').click();window.MefiNav.go('workspace');");
+  await click("media-window-minimize");
+  report.minimize = await run("const root=document.getElementById('media-window'),r=root.getBoundingClientRect(),button=document.getElementById('media-window-minimize'),b=button.getBoundingClientRect();return r.height>=44&&r.height<=64&&root.dataset.minimized==='true'&&root.contains(button)&&button.getAttribute('aria-label')==='Restore media'&&button.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2))&&document.querySelector('.music-link-player').inert&&document.getElementById('music-dropdown').hidden;");
+  assert.ok(report.minimize, "minimized player retains its restore button without opening a menu");
+  await capture("media-window-minimized.png");
+  await click("media-window-minimize");
+  report.restored = await run("return document.getElementById('media-window').dataset.minimized==='false'&&!document.querySelector('.music-link-player').inert&&window.fixtureMedia===window.MefiMusic.linkElement().element;");
+  assert.ok(report.restored);
+  await run("window.MefiNav.go('workspace');");
   assert.equal(await run("return window.fixtureMedia===window.MefiMusic.linkElement().element&&!document.getElementById('media-window').hidden;"), true);
   await run("window.MefiNav.go('studio',{category:'general'});document.activeElement.blur();document.documentElement.dataset.motion='on';");
   await mouse(10, 10); await sleep(1850); before = await rect();
   await run(`document.dispatchEvent(new PointerEvent('pointermove',{clientX:${before.x - 40},clientY:${before.y + 70},pointerType:'mouse'}));`);
+  await sleep(260);
+  report.stillByDefault = JSON.stringify(await rect()) === JSON.stringify(before) && await run("return document.getElementById('media-window-avoid').getAttribute('aria-pressed')==='false';");
+  assert.ok(report.stillByDefault, "approaching the player leaves it still until Move aside is explicitly enabled");
+  await run("document.getElementById('media-window-avoid').click();document.activeElement.blur();");
+  await run(`document.dispatchEvent(new PointerEvent('pointermove',{clientX:0,clientY:0,pointerType:'mouse'}));document.dispatchEvent(new PointerEvent('pointermove',{clientX:${before.x - 40},clientY:${before.y + 70},pointerType:'mouse'}));`);
   await sleep(260);
   // Wait for the dodge to finish before testing a second pointer approach.
   // A busy compositor can start the CSS transition after the fixed delay.
@@ -142,18 +161,28 @@ app.whenReady().then(async () => {
   await run("await Promise.all([document.getElementById('idle-layer'),document.getElementById('idle-layer-far')].flatMap(node=>node.getAnimations()).map(animation=>animation.finished.catch(()=>{})));");
   assert.equal(await run("const holder=document.createElement('div');holder.hidden=true;const page=document.createElement('section');page.className='workspace-page';holder.append(page);document.body.append(holder);const bright=getComputedStyle(document.getElementById('idle-layer')).opacity==='1'&&getComputedStyle(document.getElementById('idle-layer-far')).opacity==='1'&&getComputedStyle(document.querySelector('.music-link-player')).filter==='brightness(1)';holder.remove();return bright;"), true, "inactive workspace pages cannot dim the tree at zero transparency");
   await capture("media-window-background-tree.png");
+  await run("document.getElementById('media-window-background').click();");
   await mouse(10, 10);
   const mediaButton = await run("window.fixtureHoverFocus=document.activeElement;const r=document.getElementById('idle-music-toggle').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};");
   await mouse(mediaButton.x, mediaButton.y); await sleep(300);
   assert.equal(await run("return !document.getElementById('music-dropdown').hidden&&document.activeElement===window.fixtureHoverFocus&&!document.getElementById('music-link-panel').hidden;"), true, "native hover opens the current media controls without moving keyboard focus");
-  assert.equal(await run("const volume=document.getElementById('music-link-volume'),r=volume.getBoundingClientRect();return r.y>document.getElementById('music-dropdown').getBoundingClientRect().y+45&&volume===document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);"), true, "hover brings current volume settings into view even after scrolling the queue");
+  report.hoverPlayer = await run("const stage=document.getElementById('music-video-stage'),r=stage.getBoundingClientRect(),menu=document.getElementById('music-dropdown').getBoundingClientRect(),frame=window.fixtureMedia.getBoundingClientRect();return r.top>menu.top+45&&r.bottom<=innerHeight&&document.getElementById('media-window').dataset.docked==='true'&&document.elementFromPoint(frame.x+frame.width/2,frame.y+frame.height/2)===window.fixtureMedia;");
+  assert.ok(report.hoverPlayer, "hover brings the player into view even after scrolling the queue");
+  const playerPoint = await run("const r=window.fixtureMedia.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};");
+  await mouse(playerPoint.x, playerPoint.y); await sleep(550);
+  assert.equal(await run("return document.getElementById('music-dropdown').hidden;"), false, "entering the docked provider frame keeps its controls open");
   const dropdownPoint = await run("const r=document.getElementById('music-dropdown').getBoundingClientRect();return {x:r.x+60,y:r.y+24};");
   await mouse(dropdownPoint.x, dropdownPoint.y); await sleep(550);
   assert.equal(await run("return document.getElementById('music-dropdown').hidden;"), false, "crossing into the dropdown cancels hover dismissal");
   await capture("media-hover-dropdown.png");
   await mouse(10, 10); await sleep(550);
+  assert.equal(await run("return document.getElementById('music-dropdown').hidden;"), false, "using the provider keeps its menu open until dismissed");
+  await click("music-dropdown-close");
+  await mouse(10, 10); await mouse(mediaButton.x, mediaButton.y); await sleep(300);
+  await mouse(10, 10); await sleep(550);
   assert.equal(await run("return document.getElementById('music-dropdown').hidden;"), true, "leaving an untouched hover dismisses it");
   await mouse(mediaButton.x, mediaButton.y); await sleep(300);
+  await run("document.getElementById('music-link-volume').scrollIntoView({block:'center'});"); await sleep(250);
   const volumePoint = await run("const input=document.getElementById('music-link-volume'),r=input.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,clear:input===document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)};");
   assert.ok(volumePoint.clear, `hover exposes the volume slider: ${JSON.stringify(volumePoint)}`);
   await mouse(volumePoint.x, volumePoint.y); await mouse(volumePoint.x, volumePoint.y, "mouseDown");
@@ -172,6 +201,7 @@ app.whenReady().then(async () => {
   assert.equal(await run("return JSON.parse(localStorage.getItem('mefiStudio.mediaQueue.v1'))[0].url==='https://example.com/copied.mp4'&&document.getElementById('music-clipboard-offer').hidden;"), true);
   await run("delete document.hasFocus;");
   await run("window.MefiMusic.closeAudio();");
+  await run("document.getElementById('media-window-background').click();");
   await run("document.body.classList.add('command-zen');");
   report.zen = await run("return getComputedStyle(document.querySelector('.media-window-controls')).visibility==='hidden'&&getComputedStyle(document.querySelector('.music-link-player')).visibility==='visible';");
   assert.ok(report.zen, "Zen keeps the video and hides its controls");
@@ -199,8 +229,8 @@ app.whenReady().then(async () => {
   for (const width of [1440, 600]) {
     window.setSize(width, 900); await sleep(250);
     await run("window.MefiMusic.openAudio();document.getElementById('music-dropdown').scrollTop=0;"); await sleep(350);
-    const design = await run("const player=document.getElementById('media-window'),p=player.getBoundingClientRect(),s=document.getElementById('music-video-stage').getBoundingClientRect(),queue=document.getElementById('music-link-queue-list'),q=queue.getBoundingClientRect(),b=queue.querySelector('button'),r=b.getBoundingClientRect();return {docked:player.dataset.docked==='true',same:window.fixtureMedia===window.MefiMusic.linkElement().element,fits:Math.abs(p.width-s.width)<1&&Math.abs(p.x-s.x)<1,separate:p.right<=q.left+1||p.bottom<=q.top+1,queueClear:b.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)),width:innerWidth};");
-    assert.ok(design.docked&&design.same&&design.fits&&design.separate&&design.queueClear, `Integrated player and queue at ${width}px: ${JSON.stringify(design)}`);
+    const design = await run("const player=document.getElementById('media-window'),p=player.getBoundingClientRect(),s=document.getElementById('music-video-stage').getBoundingClientRect(),queue=document.getElementById('music-link-queue-list'),q=queue.getBoundingClientRect(),b=queue.querySelector('button'),r=b.getBoundingClientRect();return {docked:player.dataset.docked==='true',same:window.fixtureMedia===window.MefiMusic.linkElement().element,fits:Math.abs(p.width-s.width)<1&&Math.abs(p.x-s.x)<1,separate:p.right<=q.left+1||p.bottom<=q.top+1,queueClear:b.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)),providerHeight:window.fixtureMedia.getBoundingClientRect().height,width:innerWidth};");
+    assert.ok(design.docked&&design.same&&design.fits&&design.separate&&design.queueClear&&design.providerHeight>=200, `Integrated player retains room for provider controls and queue at ${width}px: ${JSON.stringify(design)}`);
     await capture(`media-design-player-${width}.png`);
     await run("document.getElementById('music-video-background').click();"); await sleep(250);
     assert.equal(await run("const button=document.getElementById('music-video-background');return document.body.dataset.mediaBackground==='true'&&button.getAttribute('aria-pressed')==='true'&&button.textContent==='Return to player'&&document.getElementById('music-link-queue-list').children.length===3&&window.fixtureMedia===window.MefiMusic.linkElement().element;"), true);
@@ -210,7 +240,7 @@ app.whenReady().then(async () => {
     await run("window.MefiMusic.closeAudio();");
   }
   assert.equal(report.playerLoads, 1, "docking and background switches keep the original provider load");
-  await run("document.getElementById('media-window-close').click();");
+  await click("media-window-close");
   report.closed = await run("return document.getElementById('media-window').hidden&&window.MefiMusic.linkElement()===null&&!window.fixtureMedia.isConnected;");
   assert.ok(report.closed); assert.deepEqual(report.errors, []);
   // Capture the refreshed music and link surfaces without touching user data.
