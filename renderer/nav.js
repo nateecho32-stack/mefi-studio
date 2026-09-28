@@ -2876,7 +2876,8 @@
     }
     // The first frame lays out the restored surface; the second observes it
     // after a paint, when its scroll ranges and dynamically created fields exist.
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    // A covered or tray-parked window paints nothing, so the wait is capped.
+    await (window.MefiBoot?.afterPaint?.() ?? new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     if (!isCurrent()) return canceled();
     restoreDetails(saved);
     if (!isCurrent()) return canceled();

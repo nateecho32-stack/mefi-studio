@@ -17,6 +17,11 @@
   let fadeTimer = 0;
   const reducedMotion = () => window.MefiNav?.noMotion?.() ?? window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  // Two frames give the view underneath a layout and paint. A window that is
+  // covered, or parked in the tray, gets no frames at all, and a live reload
+  // there must still open; so the wait is capped by an ordinary timer.
+  const FRAME_WAIT_MS = 300;
+  const afterPaint = () => Promise.race([new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))), delay(FRAME_WAIT_MS)]);
 
   function state() {
     const steps = boot.steps.map(({ id, label, status }) => ({ id, label, status }));
@@ -158,7 +163,7 @@
     }
     // Give the populated initial view a layout/paint opportunity underneath
     // the loading screen, then reveal it. No decorative work holds the gate.
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await afterPaint();
     if (!isCurrent()) return;
     const minimum = reducedMotion() ? 0 : MIN_SHOW_MS;
     await delay(Math.max(0, minimum - (performance.now() - startedAt)));
@@ -267,5 +272,5 @@
     }
   });
 
-  window.MefiBoot = { run, ready: () => boot.promise, state, read, isActive: () => boot.active, pollStart, pollStop, pollActive: (key) => Boolean(polls.get(key)?.timer) };
+  window.MefiBoot = { run, ready: () => boot.promise, state, read, afterPaint, isActive: () => boot.active, pollStart, pollStop, pollActive: (key) => Boolean(polls.get(key)?.timer) };
 })();

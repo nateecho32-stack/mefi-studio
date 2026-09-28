@@ -19539,7 +19539,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
     // The first frame lays out the restored surface; the second observes it
     // after a paint, when its scroll ranges and dynamically created fields exist.
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    // A covered or tray-parked window paints nothing, so the wait is capped.
+    await (window.MefiBoot?.afterPaint?.() ?? new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     if (!isCurrent()) return canceled();
     restoreDetails(saved);
     if (!isCurrent()) return canceled();
@@ -54231,6 +54232,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   let fadeTimer = 0;
   const reducedMotion = () => window.MefiNav?.noMotion?.() ?? window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  // Two frames give the view underneath a layout and paint. A window that is
+  // covered, or parked in the tray, gets no frames at all, and a live reload
+  // there must still open; so the wait is capped by an ordinary timer.
+  const FRAME_WAIT_MS = 300;
+  const afterPaint = () => Promise.race([new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))), delay(FRAME_WAIT_MS)]);
 
   function state() {
     const steps = boot.steps.map(({ id, label, status }) => ({ id, label, status }));
@@ -54372,7 +54378,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
     // Give the populated initial view a layout/paint opportunity underneath
     // the loading screen, then reveal it. No decorative work holds the gate.
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await afterPaint();
     if (!isCurrent()) return;
     const minimum = reducedMotion() ? 0 : MIN_SHOW_MS;
     await delay(Math.max(0, minimum - (performance.now() - startedAt)));
@@ -54481,7 +54487,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
   });
 
-  window.MefiBoot = { run, ready: () => boot.promise, state, read, isActive: () => boot.active, pollStart, pollStop, pollActive: (key) => Boolean(polls.get(key)?.timer) };
+  window.MefiBoot = { run, ready: () => boot.promise, state, read, afterPaint, isActive: () => boot.active, pollStart, pollStop, pollActive: (key) => Boolean(polls.get(key)?.timer) };
 })();
 
 // The launch screen inside the startup gate: which project to open, and
@@ -74622,7 +74628,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         return window.MefiTree?.status?.() !== "unavailable";
       } },
       { id: "view", label: "Saved view and preferences", load: prepareView },
-      { id: "fonts", label: "Fonts and interface", load: () => document.fonts?.ready },
+      // A window that paints nothing (covered, or in the tray) never lays text
+      // out, so its fonts never finish; the studio opens on fallbacks instead.
+      { id: "fonts", label: "Fonts and interface", load: () => Promise.race([document.fonts?.ready, new Promise((resolve) => setTimeout(resolve, 4000))]) },
     ], (complete, choice) => {
       if (!viewPrepared && !restored?.restored && home) enterHome();
       if (restored?.restored) restored.finish?.();

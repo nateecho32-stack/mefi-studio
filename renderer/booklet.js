@@ -2027,7 +2027,9 @@
         return window.MefiTree?.status?.() !== "unavailable";
       } },
       { id: "view", label: "Saved view and preferences", load: prepareView },
-      { id: "fonts", label: "Fonts and interface", load: () => document.fonts?.ready },
+      // A window that paints nothing (covered, or in the tray) never lays text
+      // out, so its fonts never finish; the studio opens on fallbacks instead.
+      { id: "fonts", label: "Fonts and interface", load: () => Promise.race([document.fonts?.ready, new Promise((resolve) => setTimeout(resolve, 4000))]) },
     ], (complete, choice) => {
       if (!viewPrepared && !restored?.restored && home) enterHome();
       if (restored?.restored) restored.finish?.();

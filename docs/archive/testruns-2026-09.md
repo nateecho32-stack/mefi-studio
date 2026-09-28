@@ -6,6 +6,37 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-27 night - Work done outside Studio follow-up: keyless answer, local wording, real Electron drive
+
+Follow-up to the evening row. Codex rollouts as outside sessions and the
+code-change gate (changesCode) reached main in 3239151 and ship in 0.4.4. Two
+later edits were lost to the 17:10 `reset: moving to HEAD` in this checkout's
+reflog, since they were uncommitted and unstaged. They are re-applied here, with
+the second TESTRUNS row the reset also dropped: the keyless answer to "what
+changed while I was away?" (outside-work.cjs asksAboutAway/awayAnswer, placed
+ahead of localReply's text in main.cjs assistantRespond), and "may already be
+done" for a local match on its hold reason (holdState), the thread line
+(verdictNotice) and the task's Evidence tab (renderer/tasks.js). An Ask card
+already said it. The raw bidi characters in outside-work.cjs's clip() had
+surfaced as a check-targets failure on the tracked file; they are escapes
+since 7ba162c.
+
+Drove the real Electron app in an isolated copy (its own data/, its own profile,
+HOME redirected to a fake home, MEFI_STUDIO_REPO on a temp git repo, launched
+with --disable-features=CalculateNativeWinOcclusion so an occluded window does
+not stall the boot screen's rAF). Launch 1 took the baseline look; then a
+commit, an uncommitted file and a Claude Code transcript were made. Launch 2
+posted the report notice and held and locally checked both cards: the toggle
+card was asked about as a local done, the installer card was needed. It raised
+the Ask card with its four options. The Tasks view showed Build it anyway, the
+hold reason and the Evidence tab's "Work done outside Studio" section.
+
+Validation on 052a1ec plus these edits: npm run check passed, npm run audit
+found 0 findings, the Python contracts gave 248 OK (1 skipped), and test:fast
+had 4017 passed, 0 failed, 4 skipped. The previous full npm test on 3239151
+failed only in community_ui and music, whose files another session was
+editing during the run; they passed solo, 112/112.
+
 ## 2026-09-27 - MEFI Vibe workbench and evolving project map
 
 Validated `codex/mefi-evolution` at `75de5a4`, rebased on the current
