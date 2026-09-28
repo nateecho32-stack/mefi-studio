@@ -56,7 +56,8 @@
       root.setAttribute("aria-label", minimized ? "Media player minimized" : "Media player");
       layout(); if (focus) focusPlayer();
     }
-    const close = button("close", "×", "Close media and stop playback", () => { hide(); onClose(); });
+    const close = button("close", "", "Close media and stop playback", () => { hide(); onClose(); });
+    close.innerHTML = '<svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg>';
     const backgroundButton = button("background", "Background", "Use video as Studio background", () => {
       end(); background = !background;
       if (minimized) setMinimized(false, { focus: false });

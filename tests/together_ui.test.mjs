@@ -25,7 +25,7 @@ function session(overrides = {}) {
   return { id: "lis_1", url: YT, label: "YouTube video", title: null, provider: "youtube", host: AKSANA, playing: true, positionMs: 30_000, startedAt: T0, updatedAt: T0, ...overrides };
 }
 
-function environment({ status = {}, saved = null, search = "", bridge: bridgeOn = true, listen = () => ({ ok: true }) } = {}) {
+function environment({ status = {}, saved = null, search = "", bridge: bridgeOn = true, listen = () => ({ ok: true }), ui = null } = {}) {
   let now = T0;
   let seq = 0;
   const timers = new Map();
@@ -85,7 +85,7 @@ function environment({ status = {}, saved = null, search = "", bridge: bridgeOn 
     document: { readyState: "complete", createElement: (tag) => new Element(tag), addEventListener() {} },
     localStorage: { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) },
     window: {
-      ...(bridgeOn ? { mefiStudio: bridge } : {}), MefiMusic, location: { search },
+      ...(bridgeOn ? { mefiStudio: bridge } : {}), ...(ui ? { MefiUi: ui } : {}), MefiMusic, location: { search },
       addEventListener: (type, fn) => listeners.set(type, fn),
       setTimeout: (fn, ms = 0) => { const id = ++seq; timers.set(id, { at: now + ms, fn }); return id; },
       clearTimeout: (id) => timers.delete(id),
@@ -225,16 +225,30 @@ test("the host steers: the card's buttons, and their own pause on a plain file",
   assert.deepEqual(kinds(env, "listen").at(-1)[1], { roomId: "room_lofi", action: "stop" });
 });
 
+test("Stop ends the session for the whole room, so it asks first", async () => {
+  const armed = [];
+  const ui = { arm: (button, options) => { armed.push([button.id, options.armed]); button.addEventListener("click", options.run); return button; } };
+  const env = environment({ saved: { roomId: "room_lofi", following: true, share: false }, ui });
+  await flush(); await env.ready();
+  assert.deepEqual(armed, [["music-together-stop", "Stop for everyone?"]], "the two-step confirm owns Stop");
+  await env.hub({ type: "listen", roomId: "room_lofi", session: session({ host: ME }), sentAt: T0 });
+  env.find("music-together-stop").click(); await flush();
+  assert.deepEqual(kinds(env, "listen").at(-1)[1], { roomId: "room_lofi", action: "stop" });
+});
+
 test("Share what I'm playing is off until turned on, then sends only changes, and off sends null", async () => {
   const env = environment();
   await flush();
   const share = env.find("music-share-nowplaying");
   assert.equal(share.checked, false);
+  assert.equal(share.attrs.role, "switch");
+  assert.equal(share.attrs["aria-checked"], "false");
   env.player.source = "radio"; env.player.playing = true; env.player.stationName = "Groove Salad";
   env.emit("mefi-music-change"); await env.advance(5_000);
   assert.equal(kinds(env, "nowPlaying").length, 0, "nothing is shared by default");
   share.checked = true; share.dispatch("change"); await flush();
   assert.equal(kinds(env, "connect").length, 1, "sharing connects");
+  assert.equal(share.attrs["aria-checked"], "true", "the switch says it is on");
   assert.deepEqual(kinds(env, "nowPlaying"), [["nowPlaying", { label: "Groove Salad", provider: "radio" }]]);
   env.emit("mefi-music-change"); await env.advance(5_000);
   assert.equal(kinds(env, "nowPlaying").length, 1, "an unchanged track is not sent again");

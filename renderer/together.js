@@ -43,7 +43,7 @@
     auth: "Discord asked Studio to link again: Settings › General › Community.",
     "not-linked": "Link your Discord account (Settings › General › Community) to listen with your rooms.",
     version: "The rooms hub has moved on. Update Studio to listen together.",
-    "not-configured": "Listening together needs the Void Engine rooms hub, and this PC isn't connected to one yet: add its address in Settings › Community › Connection details.",
+    "not-configured": "Listening together needs the Void Engine rooms hub, and this PC isn't connected to one yet: add its address in Settings › General › Community › Connection details.",
     unsupported: "This Studio can't open the hub's connection.",
   };
   const bridge = () => window.mefiStudio;
@@ -75,7 +75,7 @@
     const node = element("button", className, text, parent);
     node.type = "button";
     if (id) node.id = id;
-    node.addEventListener("click", action);
+    if (action) node.addEventListener("click", action);
     return node;
   }
   const clock = (ms) => { const seconds = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`; };
@@ -374,7 +374,10 @@
     els.follow = button("Listen along", "primary", tools, () => follow(!prefs.following), "music-together-follow");
     els.toggle = button("Pause", "ghost", tools, () => void send(state.session?.playing ? "pause" : "play", hostPosition()), "music-together-toggle");
     els.restart = button("From the start", "ghost", tools, () => void send("seek", 0), "music-together-restart");
-    els.stop = button("Stop", "ghost", tools, () => void send("stop"), "music-together-stop");
+    // Stop ends the session for the whole room, so it asks first (MefiUi.arm, studio-ui.js).
+    const stop = () => void send("stop");
+    els.stop = button("Stop", "ghost", tools, null, "music-together-stop");
+    if (window.MefiUi?.arm) window.MefiUi.arm(els.stop, { run: stop, armed: "Stop for everyone?" }); else els.stop.addEventListener("click", stop);
     els.empty = element("p", "music-fineprint", null, host);
     els.note = element("p", "music-together-note", null, host); els.note.setAttribute("role", "status");
     const share = element("label", "music-effect music-together-share", null, host);
@@ -383,8 +386,9 @@
     const hint = element("small", null, "Void Engine members can see it with /nowplaying on Discord. Off unless you turn it on; the hub keeps it in memory only and drops it when Studio closes.", shareCopy);
     hint.id = "music-share-nowplaying-hint";
     els.share = element("input", null, null, share); els.share.type = "checkbox"; els.share.id = "music-share-nowplaying";
+    els.share.setAttribute("role", "switch"); els.share.setAttribute("aria-checked", String(prefs.share));
     els.share.setAttribute("aria-describedby", hint.id);
-    els.share.addEventListener("change", () => void setShare(els.share.checked));
+    els.share.addEventListener("change", () => { els.share.setAttribute("aria-checked", String(els.share.checked)); void setShare(els.share.checked); });
   }
   function stateText() {
     const hub = state.hub;
@@ -414,7 +418,7 @@
     const session = state.session;
     els.session.hidden = !session;
     if (!session) return;
-    els.sessionTitle.textContent = `🎧 ${session.host.name || "Someone"} is playing ${session.title || session.label}`;
+    els.sessionTitle.textContent = `${session.host.name || "Someone"} is playing ${session.title || session.label}`;
     const others = state.inStudio.length;
     const spotify = session.provider === "spotify" ? " · Spotify can't be synced: press play in its player" : "";
     els.sessionDetail.textContent = `On ${PROVIDERS[session.provider] || "the web"} · ${session.playing ? "playing" : "paused"} at ${clock(position())}${others ? ` · ${others} in Studio` : ""}${spotify}`;
@@ -451,6 +455,7 @@
     els.empty.hidden = !(ready() && prefs.roomId && !state.session);
     els.empty.textContent = `Nothing is playing in ${room()?.name || "this room"}. Load a link above and play it for the room.`;
     els.share.checked = prefs.share;
+    els.share.setAttribute("aria-checked", String(prefs.share));
     els.share.disabled = !canConnect();
     tick();
   }

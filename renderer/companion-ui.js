@@ -8,6 +8,8 @@
   let panelAnchor = null;
   const reduced = () => ["off", "calm"].includes(document.documentElement.dataset.motion) || document.body.classList.contains("ws-still") || document.body.classList.contains("no-motion") || matchMedia("(prefers-reduced-motion: reduce)").matches;
   const button = (title, run) => { const el = node("button", "ghost mini", title); el.type = "button"; el.addEventListener("click", run); return el; };
+  // Unit suites load this file without studio-ui.js (MefiUi).
+  const plain = (error, fallback) => window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : fallback;
   // Who the owner is talking to and where they are: sent with each message so
   // the reply knows, and shown on the replies. Home keeps the name here.
   const companionName = () => { try { return (localStorage.getItem("mefiStudio.workspace.companion") || "").trim() || "Mefi"; } catch { return "Mefi"; } };
@@ -77,7 +79,7 @@
     try {
       const result = await host.preferences(patch);
       if (result?.ok === false) throw new Error(result.error);
-    } catch (error) { window.MefiToast?.(error.message || "Companion preference was not saved.", "bad"); }
+    } catch (error) { window.MefiToast?.(plain(error, "Companion preference was not saved."), "bad"); }
   }
   function addField(key, label, choices, save) {
     const row = node("label", "studio-field"), words = node("span", "", label);
@@ -87,7 +89,7 @@
       for (const [value, text] of choices) { const option = node("option", "", text); option.value = value; control.append(option); }
     } else { control = node("input"); control.type = "checkbox"; control.setAttribute("role", "switch"); }
     control.setAttribute("aria-label", label); control.dataset.companionSetting = key;
-    control.addEventListener("change", async () => { control.disabled = true; try { await save(control.type === "checkbox" ? control.checked : control.value); } catch (error) { window.MefiToast?.(error.message, "bad"); } finally { control.disabled = false; render(latest); } });
+    control.addEventListener("change", async () => { control.disabled = true; try { await save(control.type === "checkbox" ? control.checked : control.value); } catch (error) { window.MefiToast?.(plain(error, `${label} was not saved.`), "bad"); } finally { control.disabled = false; render(latest); } });
     row.append(words, control); panes.settings.append(row); fields[key] = control;
   }
   // Tab names from before the menu was tidied still open their new home.
@@ -117,7 +119,9 @@
     if (!messages.length) thread.append(node("p", "muted", hello));
     for (const item of messages) {
       const row = node("p", `companion-message companion-message-${item.role}${item.kind === "notice" ? " companion-message-notice" : ""}`);
-      row.append(node("strong", "", item.role === "user" ? "You" : name), document.createTextNode(` ${String(item.text || "").slice(0, 1200)}`));
+      // A long reply is cut, and says so.
+      const text = String(item.text || "");
+      row.append(node("strong", "", item.role === "user" ? "You" : name), document.createTextNode(` ${text.length > 1200 ? `${text.slice(0, 1200).trimEnd()}…` : text}`));
       thread.append(row);
     }
     // What the last reply offered, one tap away; two or more can all be taken.
@@ -147,7 +151,7 @@
       input.value = ""; status.textContent = "";
       await refreshConversation();
       answered = true;
-    } catch (error) { status.textContent = error.message; }
+    } catch (error) { status.textContent = plain(error, "The message could not be sent. Try again."); }
     finally { chatBusy = false; window.MefiCompanionHub?.thinking(false, { celebrate: answered }); send.disabled = false; input.disabled = false; if (!host.panel.hidden && !panes.ask.hidden) input.focus(); }
   }
   // What I'm doing: the work being built, the team and what they said to each
@@ -179,7 +183,8 @@
     panel.classList.add("companion-dynamic");
     const head = node("header", "companion-shell-head"), title = node("div");
     const name = node("strong"); name.id = "companion-dynamic-name"; const status = node("span", "ab-quiet"); status.id = "companion-dynamic-status";
-    title.append(name, status); head.append(title, button("×", () => { if (window.MefiCompanionHub?.isOpen()) window.MefiCompanionHub.back(); else { host.toggle(false); orb.focus({ preventScroll: true }); } })); head.lastChild.setAttribute("aria-label", "Close assistant menu");
+    title.append(name, status); head.append(title, button("", () => { if (window.MefiCompanionHub?.isOpen()) window.MefiCompanionHub.back(); else { host.toggle(false); orb.focus({ preventScroll: true }); } })); head.lastChild.setAttribute("aria-label", "Close assistant menu");
+    head.lastChild.innerHTML = '<svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg>'; head.lastChild.title = "Close (Esc)";
     const tabs = node("div", "companion-tabs"); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Assistant menu");
     const content = node("div", "companion-content"); content.id = "companion-content";
     for (const [key, label] of [["ask", "Talk"], ["status", "Needs you"], ["now", "Now"], ["settings", "Settings"]]) {

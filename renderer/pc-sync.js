@@ -13,6 +13,9 @@
   "use strict";
   const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
   const bridge = () => window.mefiStudio;
+  // A failure in words (MefiUi.plainError, studio-ui.js); unit suites load
+  // this file alone, where a plain Error's own message stands in.
+  const plain = (error, fallback) => (window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : (error?.name === "Error" && error.message) || fallback);
   // The last answer from any source (a card, a sync, the background look), so
   // reopening Friends paints at once while it re-checks.
   let last = null;
@@ -144,7 +147,7 @@
       again.disabled = get.disabled = clone.disabled = true;
       box.setAttribute("aria-busy", "true");
       if (label) status.textContent = label;
-      try { await work(); } catch (error) { status.textContent = `Setup could not run: ${error?.message || error}`; }
+      try { await work(); } catch (error) { status.textContent = `Setup could not run: ${plain(error, "Studio did not answer.")}`; }
       busy = false;
       again.disabled = clone.disabled = false;
       // Listing repositories needs a GitHub sign-in this PC has shown.
@@ -260,7 +263,7 @@
       try {
         result = await (mode === "look" ? api.syncStatus() : api.syncRun({ rebase: mode === "rebase" }));
       } catch (error) {
-        result = { ok: false, headline: `Sync could not run: ${error?.message || error}`, lines: [] };
+        result = { ok: false, headline: `Sync could not run: ${plain(error, "Studio did not answer.")}`, lines: [] };
       }
       remember(result);
       busy = false;

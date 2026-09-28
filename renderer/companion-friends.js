@@ -11,6 +11,15 @@
   const button = (text, run, cls = "ghost mini") => { const el = node("button", cls, text); el.type = "button"; el.addEventListener("click", run); return el; };
   const still = () => window.MefiNav?.noMotion?.() || ["off", "calm"].includes(document.documentElement.dataset.motion) || document.body.classList.contains("ws-still") || document.body.classList.contains("no-motion") || matchMedia("(prefers-reduced-motion: reduce)").matches;
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  // Unit suites load this file without studio-ui.js (MefiUi).
+  const plain = (error, fallback) => window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : fallback;
+  // When a line was sent: the time today, the day too before that, nothing for a bad stamp.
+  function sentAt(at) {
+    const date = new Date(at);
+    if (!Number.isFinite(date.getTime())) return "";
+    const today = new Date().toDateString() === date.toDateString();
+    return date.toLocaleString([], today ? { hour: "numeric", minute: "2-digit" } : { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
   const LOOK_WORDS = { wisp: "wisp", fox: "fox", owl: "owl", cat: "cat", person: "companion" };
   const STATE_WORDS = { working: "Working", resting: "Resting", waiting: "Waiting on their person" };
   // Friends get their own tint, so two wisps side by side read as two.
@@ -66,9 +75,9 @@
     const set = async (change) => {
       root.setAttribute("aria-busy", "true");
       let view;
-      try { view = await api.hubSharingSet({ ...change, name }); } catch (error) { view = { ok: false, error: error?.message }; }
+      try { view = await api.hubSharingSet({ ...change, name }); } catch (error) { view = { ok: false, error }; }
       root.removeAttribute("aria-busy");
-      if (!view?.ok) { status.textContent = view?.error || "That could not be saved."; return; }
+      if (!view?.ok) { status.textContent = plain(view?.error, "That could not be saved."); return; }
       state.view = view; paint();
     };
     const levelSelect = (label, value, choices, onChange) => {
@@ -116,7 +125,7 @@
     function paintStatus() {
       const view = state.view, hub = view.hub;
       const out = view.friends.length;
-      status.textContent = !hub.configured ? "Friends' companions meet through the rooms hub, which this PC isn't connected to yet: add its address in Settings › Community › Connection details. Pip is here to practice."
+      status.textContent = !hub.configured ? "Friends' companions meet through the rooms hub, which this PC isn't connected to yet: add its address in Settings › General › Community › Connection details. Pip is here to practice."
         : !hub.linked ? "Link Discord under Community to meet friends' companions. Pip, the practice buddy, is always here."
         : hub.state !== "ready" ? "Connect under Rooms below, then open a room, and friends' companions there can visit."
         : !hub.companions ? "This rooms hub does not carry companions yet, so friends cannot visit. Pip is here to practice."
@@ -184,7 +193,8 @@
         const ul = node("ul", "friends-sent");
         for (const row of state.view.sent) {
           const to = row.to ? friendName(state.view.friends.find((friend) => friend.userId === row.to)?.card) : `everyone in ${roomName(row.roomId)}`;
-          ul.append(node("li", "", `${new Date(row.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} · to ${to} · ${row.level === "none" ? "went home" : row.summary}`));
+          const at = sentAt(row.at);
+          ul.append(node("li", "", `${at ? `${at} · ` : ""}to ${to} · ${row.level === "none" ? "went home" : row.summary}`));
         }
         rows.push(ul);
       }
@@ -205,8 +215,8 @@
       // Never repaint under a control the owner is using, or mid-scene.
       if (state.playing || root.contains(document.activeElement) && document.activeElement.matches("select, input")) { state.stale = true; return; }
       let view;
-      try { view = await api.hubFriends({ name }); } catch (error) { view = { ok: false, error: error?.message }; }
-      if (!view?.ok) { status.textContent = view?.error || "Friends could not be read."; return; }
+      try { view = await api.hubFriends({ name }); } catch (error) { view = { ok: false, error }; }
+      if (!view?.ok) { status.textContent = plain(view?.error, "Friends could not be read."); return; }
       state.view = view; state.stale = false;
       if (view.hub.state === "ready" && view.hub.rooms.some((id) => !roomNames.has(id)) && typeof api.hubRooms === "function") {
         Promise.resolve(api.hubRooms()).then((result) => { for (const room of result?.rooms || []) roomNames.set(room.id, room.name); if (root.isConnected) paint(); }).catch(() => {});
@@ -218,8 +228,8 @@
     async function play(target) {
       if (state.playing) return;
       let scene;
-      try { scene = await api.hubPlaydate({ ...target, music: Boolean(window.MefiIdle?.audioStatus?.()?.listening) }); } catch (error) { scene = { ok: false, error: error?.message }; }
-      if (!scene?.ok) { status.textContent = scene?.error || "That playdate could not start."; return; }
+      try { scene = await api.hubPlaydate({ ...target, music: Boolean(window.MefiIdle?.audioStatus?.()?.listening) }); } catch (error) { scene = { ok: false, error }; }
+      if (!scene?.ok) { status.textContent = plain(scene?.error, "That playdate could not start."); return; }
       state.playing = true; stage.dataset.playing = "true";
       const label = scene.practice ? "Pip · practice" : friendName(scene.friend);
       paintStage({ look: scene.friend.look, label, mood: scene.friend.mood, practice: scene.practice }, scene.friend.look);

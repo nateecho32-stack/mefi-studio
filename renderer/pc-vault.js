@@ -15,11 +15,25 @@
   const FRIEND_SHELVES = [["brains", "Agent brains"], ["recipes", "Playbook recipes"], ["presets", "Agent team setups"], ["insights", "How models did"], ["claude-memory", "Claude Code memory notes"], ["settings", "Studio preferences"]];
   const KEY_NAMES = { opencode: "OpenCode Go", zai: "z.ai", zen: "OpenCode Zen", openrouter: "OpenRouter", gateway: "AI gateway", jev: "Jev", custom: "Custom endpoint key", github: "GitHub token", customEndpoint: "Custom endpoint address", lmStudioEndpoint: "LM Studio address" };
   const when = (at) => (Number.isFinite(at) ? new Date(at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "");
+  const count = (n, one) => `${n} ${n === 1 ? one : `${one}s`}`;
+  // A failure in words (MefiUi.plainError, studio-ui.js); unit suites load
+  // this file alone, where a plain Error's own message stands in.
+  const plain = (error, fallback) => (window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : (error?.name === "Error" && error.message) || fallback);
   function button(label, id, onClick, cls = "ghost pc-sync-run") {
     const el = node("button", cls, label);
     el.type = "button";
     if (id) el.id = id;
     el.addEventListener("click", () => { void onClick(); });
+    return el;
+  }
+  // Taking something out asks twice: the first press relabels the button
+  // with the question, a second one runs it (MefiUi.arm, studio-ui.js).
+  function armed(label, id, onClick, question, cls = "ghost pc-sync-run") {
+    const el = node("button", cls, label);
+    el.type = "button";
+    if (id) el.id = id;
+    const go = () => { void onClick(); };
+    if (window.MefiUi?.arm) window.MefiUi.arm(el, { run: go, armed: question }); else el.addEventListener("click", go);
     return el;
   }
   const heading = (text) => node("h5", "pc-vault-heading", text);
@@ -134,10 +148,12 @@
         const got = await api.vaultCode();
         if (got?.ok) { showCode(got.pairingCode); status.textContent = "The pairing code is below."; } else status.textContent = got?.error || "The code could not be read.";
       })),
+      // main asks in a native dialog first, so this one needs no second press.
       button("Unpair this PC", "pc-vault-unpair", () => run(null, async () => {
         const done = await api.vaultUnpair();
         if (done?.ok) { showCode(""); await refresh(); status.textContent = "This PC no longer holds the vault. Your other PCs still do."; }
-      })),
+        else if (!done?.canceled) status.textContent = plain(done?.error, "This PC could not be unpaired. Try again.");
+      }), "ghost pc-sync-run danger"),
     );
     box.append(intro, setup, codeBox, linked);
 
@@ -151,7 +167,7 @@
         box.setAttribute("aria-busy", "true");
         for (const el of box.querySelectorAll("button")) el.disabled = true;
         if (label) status.textContent = label;
-        try { await work(); } catch (error) { status.textContent = `That did not work: ${error?.message || error}`; }
+        try { await work(); } catch (error) { status.textContent = `That did not work: ${plain(error, "Studio did not answer.")}`; }
         busy = false;
         box.removeAttribute("aria-busy");
         for (const el of box.querySelectorAll("button")) el.disabled = false;
@@ -205,16 +221,16 @@
           return row;
         }));
         send.hidden = !offered.some((item) => item.ok);
-        status.textContent = offered.length ? `${offered.length} item(s) on this shelf. Tick what to send; anything Studio stopped stays here.` : result.project === null && ["brains", "recipes", "claude-memory", "work"].includes(shelf.value) ? "This shelf needs a project that is on GitHub." : "Nothing on this shelf yet.";
+        status.textContent = offered.length ? `${count(offered.length, "item")} on this shelf. Tick what to send; anything Studio stopped stays here.` : result.project === null && ["brains", "recipes", "claude-memory", "work"].includes(shelf.value) ? "This shelf needs a project that is on GitHub." : "Nothing on this shelf yet.";
       });
     }
     async function publish() {
       const ids = [...offer.querySelectorAll("input[type=checkbox]")].filter((tick) => tick.checked && !tick.disabled).map((tick) => tick.value);
       if (!ids.length) { status.textContent = "Tick at least one item to send."; return; }
-      await run(`Sending ${ids.length} item(s) to your vault…`, async () => {
+      await run(`Sending ${count(ids.length, "item")} to your vault…`, async () => {
         const result = await api.vaultPublish(offerShelf, ids);
         const stopped = result?.stopped?.length ? ` Studio stopped ${result.stopped.length}: ${result.stopped.map((item) => item.reasons.join(" ")).join(" ")}` : "";
-        status.textContent = result?.ok ? `Sent ${result.sent.length} item(s).${stopped}` : `${result?.error || "Nothing was sent."}${stopped}`;
+        status.textContent = result?.ok ? `Sent ${count(result.sent.length, "item")}.${stopped}` : `${result?.error || "Nothing was sent."}${stopped}`;
       });
     }
     // From my other PCs: what can be used here, and what was quarantined.
@@ -239,11 +255,11 @@
           }),
           ...result.quarantined.map((item) => {
             const row = node("li", "pc-vault-item pc-vault-quarantined");
-            row.append(node("span", "", `Kept out: ${item.id}${item.from ? ` from ${item.from}` : ""}`), reasonList(item.reasons));
+            row.append(node("span", "", `Kept out: ${item.title || item.label || item.name || item.id}${item.from ? ` from ${item.from}` : ""}`), reasonList(item.reasons));
             return row;
           }),
         );
-        status.textContent = result.items.length || result.quarantined.length ? `${result.items.length} item(s) from your other PCs${result.quarantined.length ? `, ${result.quarantined.length} kept out` : ""}.` : "Your other PCs have not shared anything on this shelf.";
+        status.textContent = result.items.length || result.quarantined.length ? `${count(result.items.length, "item")} from your other PCs${result.quarantined.length ? `, ${result.quarantined.length} kept out` : ""}.` : "Your other PCs have not shared anything on this shelf.";
       });
     }
     async function paintLibrary() {
@@ -257,7 +273,11 @@
           const used = await api.vaultLibraryUse(item.shelf, item.id, item.from);
           status.textContent = used?.ok ? `${item.title} is here now.` : used?.error || "It could not be used.";
         }), "ghost mini"));
-        row.append(button("Remove", null, () => run(null, async () => { await api.vaultForget(item.shelf, item.id, item.from); await paintLibrary(); status.textContent = `${item.title} is out of your library.`; }), "ghost mini"));
+        row.append(armed("Remove", null, () => run(null, async () => {
+          const forgot = await api.vaultForget(item.shelf, item.id, item.from);
+          if (!forgot?.ok) { status.textContent = plain(forgot?.error, `${item.title} could not be removed. Try again.`); return; }
+          await paintLibrary(); status.textContent = `${item.title} is out of your library.`;
+        }), "Remove it?", "ghost mini"));
         return row;
       }));
       if (!library.children.length) library.append(node("li", "muted", "Nothing kept yet."));
@@ -267,7 +287,7 @@
     function keysSection() {
       const keys = node("details", "pc-vault-keys");
       keys.id = "pc-vault-keys";
-      const warning = node("p", "pc-vault-danger", "YOU ARE SHARING KEYS AND SETUP INFORMATION. THEY CAN BE STOLEN. Anyone who gets them can spend your money and use your accounts.");
+      const warning = node("p", "pc-vault-danger", "You are sharing keys and setup information. They can be stolen: anyone who gets them can spend your money and use your accounts.");
       const detail = node("p", "muted", "They go sealed to your private vault, and only PCs with your pairing code can open them. On the other PC they are saved straight into Windows' protected storage and never shown. Take them out of the vault once your PCs have them, and replace a key at its provider if you think it leaked.");
       const list = node("div", "pc-vault-keylist");
       list.id = "pc-vault-keys-list";
@@ -283,7 +303,7 @@
         phrase.value = "";
         status.textContent = result?.canceled ? "Nothing was shared." : result?.ok ? `Shared ${result.shared.map((name) => KEY_NAMES[name] ?? name).join(", ")}. On your other PC, open Keys and setup and choose Check for shared keys.` : result?.error || "Nothing was shared.";
         syncKeysButton();
-      }));
+      }), "ghost pc-sync-run danger");
       const incoming = node("div", "pc-vault-keylist");
       incoming.id = "pc-vault-keys-incoming";
       const use = button("Use these on this PC", "pc-vault-keys-use", () => run("Saving the keys on this PC…", async () => {
@@ -322,10 +342,10 @@
           status.textContent = names.length ? `${names.length} shared from ${result.from} on ${when(result.at)}. Ticked ones are not saved here yet.` : "No keys are shared in the vault.";
         })),
         incoming, use,
-        button("Remove shared keys from the vault", "pc-vault-keys-clear", () => run("Taking the keys out of the vault…", async () => {
+        armed("Remove shared keys from the vault", "pc-vault-keys-clear", () => run("Taking the keys out of the vault…", async () => {
           const result = await api.vaultKeys("clear");
           status.textContent = result?.ok ? "The shared keys are out of the vault. Copies already saved on your PCs stay." : result?.error || "The keys could not be removed.";
-        })),
+        }), "Remove the keys?"),
       );
       keys.addEventListener("toggle", () => {
         if (!keys.open) return;

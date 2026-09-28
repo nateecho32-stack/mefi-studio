@@ -168,30 +168,30 @@ body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + var(--m
 .music-link-tools button[hidden] { display: none; }
 
 /* Provider content stays clear; settings live in the menu and grips stay outside the video. */
-.media-window { position: fixed; z-index: calc(var(--z-transient, 90) + 1); isolation: isolate; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 8px; margin: 0; padding: 8px; border: 0; border-radius: 8px; background: var(--panel-solid); color: #fff; }
+.media-window { position: fixed; z-index: calc(var(--z-transient, 90) + 1); isolation: isolate; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 8px; margin: 0; padding: 8px; border: 0; border-radius: 8px; background: var(--panel-solid); color: var(--ivory); }
 .media-window[hidden], .media-window [hidden], .media-window-controls [hidden] { display: none !important; }
 .media-window[data-dodging="true"] { transition: left 180ms ease-out, top 180ms ease-out; }
 .media-window .music-link-player, .media-window .music-link-frame { display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; margin: 0; border: 0; border-radius: 0; aspect-ratio: auto; }
 .media-window .music-link-player { overflow: hidden; background: #08090a; transition: opacity 700ms ease; }
 .media-window .music-link-media { object-fit: contain; }
 .media-window-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; min-height: 0; padding: 6px; overflow: visible; border-radius: 7px; background: var(--panel-solid); pointer-events: auto; font: 11px/1.4 var(--font-ui); }
-.media-window-controls button { flex: 0 0 auto; min-width: 0; min-height: 28px; margin: 0; padding: 4px 8px; border: 0; border-radius: 6px; background: #242a32; color: #fff; font: 500 11px/1.4 var(--font-ui); box-shadow: none; white-space: normal; }
-.media-window-controls button:hover { background: #39434e; }
+.media-window-controls button { flex: 0 0 auto; min-width: 0; min-height: 28px; margin: 0; padding: 4px 8px; border: 0; border-radius: 6px; background: color-mix(in srgb, var(--ivory) 10%, var(--panel-solid)); color: var(--ivory); font: 500 11px/1.4 var(--font-ui); box-shadow: none; white-space: normal; }
+.media-window-controls button:hover { background: color-mix(in srgb, var(--ivory) 18%, var(--panel-solid)); }
 .media-window-controls button[aria-pressed="true"] { background: var(--gold-bright); color: var(--on-accent, #111); }
 .media-window-controls button:disabled { opacity: .45; }
 .media-window-toolbar { grid-column: 1 / -1; display: flex; flex: 0 0 auto; gap: 4px; }
 .media-window > .media-window-toolbar { min-width: 0; height: 36px; }
-.media-window > .media-window-toolbar button { min-width: 36px; min-height: 36px; margin: 0; padding: 6px 10px; border: 0; border-radius: 6px; background: #242a32; color: #fff; font: 500 12px/1.4 var(--font-ui); box-shadow: none; }
-.media-window > .media-window-toolbar button:hover { background: #39434e; }
+.media-window > .media-window-toolbar button { min-width: 36px; min-height: 36px; margin: 0; padding: 6px 10px; border: 0; border-radius: 6px; background: color-mix(in srgb, var(--ivory) 10%, var(--panel-solid)); color: var(--ivory); font: 500 12px/1.4 var(--font-ui); box-shadow: none; }
+.media-window > .media-window-toolbar button:hover { background: color-mix(in srgb, var(--ivory) 18%, var(--panel-solid)); }
 .media-window > .media-window-toolbar .media-window-move { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; cursor: grab; touch-action: none; }
 .media-window-toolbar .media-window-move { flex: 1; }
 .media-window-controls .media-window-move { cursor: grab; text-align: center; font-size: 18px; line-height: 20px; touch-action: none; }
 .media-window-controls .media-window-caption { grid-column: 1 / -1; font-size: 10px; overflow-wrap: anywhere; }
 .media-window-transparency { grid-column: 1 / -1; display: grid; flex: 0 0 auto; gap: 4px; padding: 6px 2px; }
 .media-window-transparency input { width: 100%; min-width: 0; margin: 0; padding: 0; accent-color: var(--gold-bright); }
-.media-window button:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+.media-window button:focus-visible { outline: 2px solid var(--ivory); outline-offset: -2px; }
 .media-window-resize { position: absolute; z-index: 3; min-width: 0; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; touch-action: none; }
-.media-window-resize:hover { background: #ffffff30; }
+.media-window-resize:hover { background: color-mix(in srgb, var(--ivory) 19%, transparent); }
 .media-window-resize[data-edge="n"], .media-window-resize[data-edge="s"] { height: 8px; left: 8px; right: 8px; cursor: ns-resize; }
 .media-window-resize[data-edge="n"] { top: 0; }
 .media-window-resize[data-edge="s"] { bottom: 0; }
@@ -219,7 +219,7 @@ body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + var(--m
 .music-youtube-explorer { margin-top: 12px; }
 .music-youtube-explorer summary { cursor: pointer; font-weight: 600; padding: 10px 0; }
 .music-youtube-results { display: grid; gap: 8px; max-height: 320px; overflow: auto; }
-.music-youtube-result { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px; border: 1px solid var(--hairline); border-radius: 10px; background: rgba(12,18,28,.85); }
+.music-youtube-result { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--surface-sunk); }
 .music-youtube-result > span { flex: 1; min-width: 0; }
 .music-youtube-result strong, .music-youtube-result small { display: block; overflow-wrap: anywhere; }
 .music-youtube-result small { opacity: .75; margin-top: 4px; }
@@ -228,6 +228,9 @@ body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + var(--m
 .music-link-queue { margin-top: 16px; }
 .music-link-queue-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .music-link-queue-list { display: grid; gap: 8px; max-height: 320px; overflow: auto; list-style: none; margin: 8px 0; padding: 0; }
+/* Rows keep still across a reorder and glide to their new place (MefiMotion.keep,
+   music.js renderLinkQueue); a removed one fades over the queue, which holds it. */
+.music-link-queue { position: relative; }
 .music-link-queue-item { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--panel-solid); }
 .music-link-queue-copy { min-width: 0; overflow-wrap: anywhere; }
 .music-link-queue-copy strong, .music-link-queue-copy small { display: block; }
@@ -826,7 +829,13 @@ body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left
 .music-browser-sites { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 [aria-expanded="true"] > .music-dropdown-chevron { rotate: 180deg; }
 @media (prefers-reduced-motion: no-preference) {
-  .music-dropdown { transition: opacity var(--motion-menu) var(--ease), translate var(--motion-menu) var(--ease); }
+  .music-dropdown { transition: opacity var(--motion-menu) var(--ease), translate var(--motion-menu) var(--ease), display var(--motion-menu) allow-discrete; }
+  /* Presence: closing fades it where it was (the running transition out-ranks
+     the [hidden] !important above) and it never takes the pointer meanwhile. */
+  .music-dropdown[hidden] { opacity: 0; translate: 0 -6px; pointer-events: none; transition: opacity var(--motion-exit) var(--ease-in), translate var(--motion-exit) var(--ease-in), display var(--motion-exit) allow-discrete; }
   @starting-style { .music-dropdown:not([hidden]) { opacity: 0; translate: 0 -6px; } }
+  .music-link-queue-item { animation: music-queue-rise var(--motion-base) var(--ease-out) both; animation-delay: calc(var(--i, 0) * var(--motion-step, 26ms)); }
+  .music-link-queue-item[data-kept] { animation: none; }
   .music-dropdown-chevron { transition: rotate var(--motion-fast) var(--ease-out); }
 }
+@keyframes music-queue-rise { from { opacity: 0; translate: 0 6px; } to { opacity: 1; translate: none; } }

@@ -158,7 +158,7 @@ app.whenReady().then(async () => {
   assert.ok(await run("const el=document.querySelector('#pc-setup [data-step=\"install-deps\"]');el.scrollIntoView({block:'nearest'});const r=el.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return r.width>0&&(hit===el||el.contains(hit));"), "the setup step is clickable");
   await capture("09b-friends-setup"); report.setup = true;
   // Share between my PCs: every PC's line and the library; keys stay locked
-  // until the exact phrase is typed, under the warning in capitals.
+  // until the exact phrase is typed, under the warning.
   await run("document.querySelector('#pc-vault > summary').scrollIntoView({block:'center'});"); await sleep(150);
   await click("#pc-vault > summary");
   await until("document.getElementById('pc-vault')?.dataset.state==='linked' && document.querySelectorAll('#pc-vault-pcs li').length===2 && document.querySelector('#pc-vault-library li')?.textContent.includes('counts in learning')", "the vault lists both PCs and the library");
@@ -166,7 +166,7 @@ app.whenReady().then(async () => {
   await click("#pc-vault-keys > summary");
   await until("document.querySelectorAll('#pc-vault-keys-list input[type=checkbox]').length===2", "saved keys are listed by name");
   assert.equal(await run("return document.getElementById('pc-vault-keys-share').disabled;"), true, "keys stay locked until the phrase is typed");
-  assert.match(await run("return document.getElementById('pc-vault-keys').textContent;"), /YOU ARE SHARING KEYS AND SETUP INFORMATION/);
+  assert.match(await run("return document.getElementById('pc-vault-keys').textContent;"), /You are sharing keys and setup information/);
   assert.ok(await run("const box=document.getElementById('pc-vault');return box.scrollWidth<=box.clientWidth+1;"), "the vault fits the panel");
   await capture("09d-friends-vault"); report.vault = true;
   // Friends › Rooms: the request tab counts, the room opens with its chat as

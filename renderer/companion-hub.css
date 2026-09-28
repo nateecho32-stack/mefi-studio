@@ -1,6 +1,6 @@
 /* A little light, a trailing wisp, and expressions made of floating text. */
 .agent-creature { display: block; width: 100%; height: 100%; overflow: visible; color: var(--gold-bright); pointer-events: none; }
-.agent-body { transform-origin: 40px 44px; animation: agent-float 5.6s ease-in-out infinite; translate: var(--agent-look-x, 0px) var(--agent-look-y, 0px); transition: translate 350ms ease, opacity 650ms ease, scale 650ms cubic-bezier(.22,1,.36,1); }
+.agent-body { transform-origin: 40px 44px; animation: agent-float 5.6s ease-in-out infinite; translate: var(--agent-look-x, 0px) var(--agent-look-y, 0px); transition: translate var(--motion-slow) var(--ease-out), opacity var(--motion-ambient) var(--ease-out), scale var(--motion-ambient) var(--ease-emphasized); }
 .agent-aura, .agent-glow, .agent-core, .agent-heart, .agent-mote { fill: currentColor; }
 .agent-aura { opacity: .12; filter: blur(7px); }
 .agent-glow { opacity: .5; filter: blur(6px); transform-origin: 40px 44px; animation: agent-breathe 4.8s ease-in-out infinite; }
@@ -13,7 +13,7 @@
 .agent-reaction, .agent-thought, .agent-spark { fill: currentColor; font: 600 13px ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: -.7px; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--gold) 45%, transparent)); }
 .agent-reaction { transform-origin: 40px 23px; }
 .agent-spark { font-size: 9px; font-weight: 400; transform-origin: 40px 44px; }
-.agent-thought { opacity: 0; font-size: 18px; letter-spacing: 2px; transition: opacity 250ms ease; }
+.agent-thought { opacity: 0; font-size: 18px; letter-spacing: 2px; transition: opacity var(--motion-base) var(--ease-out); }
 .agent-creature:has(.agent-reaction) .agent-thought { visibility: hidden; }
 .agent-play { border: 0; padding: 0; display: block; width: 84px; height: 84px; border-radius: 50%; background: transparent; color: var(--gold-bright); cursor: pointer; flex: none; }
 .agent-play:hover { background: transparent; filter: drop-shadow(0 0 12px color-mix(in srgb, var(--gold) 20%, transparent)); }
@@ -38,7 +38,7 @@
 #boot-layer { transition: opacity 420ms ease; }
 .boot-card { transition: width 420ms cubic-bezier(.22,1,.36,1), transform 420ms cubic-bezier(.22,1,.36,1); }
 #boot-layer.done .boot-card { transform: translateY(-8px) scale(.985); }
-.boot-mark.agent-box { width: 146px; height: 104px; margin: 0 auto 10px; border: 1px solid color-mix(in srgb, var(--gold) 22%, transparent); border-radius: 28px; background: radial-gradient(ellipse at 50% 100%, color-mix(in srgb, var(--gold) 10%, transparent), transparent 75%); box-shadow: inset 0 1px #ffffff0a; }
+.boot-mark.agent-box { width: 146px; height: 104px; margin: 0 auto 10px; border: 1px solid color-mix(in srgb, var(--gold) 22%, transparent); border-radius: 28px; background: radial-gradient(ellipse at 50% 100%, color-mix(in srgb, var(--gold) 10%, transparent), transparent 75%); box-shadow: inset 0 1px color-mix(in srgb, var(--ivory) 4%, transparent); }
 .agent-box .agent-play { width: 94px; height: 94px; }
 .agent-box .boot-spinner { inset: 12px 33px; opacity: .22; border-width: 1px; animation-duration: 6s; pointer-events: none; }
 .agent-intro-caption { color: var(--gold-bright); margin: 8px 0 22px; font-size: 11px; letter-spacing: .02em; }
@@ -64,7 +64,10 @@ html[data-shell=rail] .overlay .walkthrough-sheet[data-agent-step="2"], .overlay
 .walkthrough-coach .agent-play { width: 48px; height: 48px; }
 .walkthrough-coach .agent-guide-greeting p { font-size: 11px; }
 
-.agent-hub { --hub-energy: 0; --hub-radius: 145px; position: fixed; inset: 0; z-index: 150; display: grid; place-items: center; padding: 20px; box-sizing: border-box; background: color-mix(in srgb, var(--theme-bg, #0b111b) 28%, transparent); backdrop-filter: blur(3px); animation: hub-reveal 360ms ease both; overflow: auto; overscroll-behavior: contain; }
+.agent-hub { --hub-energy: 0; --hub-radius: 145px; position: fixed; inset: 0; z-index: 150; display: grid; place-items: center; padding: 20px; box-sizing: border-box; background: color-mix(in srgb, var(--theme-bg) 28%, transparent); backdrop-filter: blur(3px); overflow: auto; overscroll-behavior: contain; transition: opacity var(--motion-slow) var(--ease-out); }
+/* Presence: an opening hub fades up from @starting-style; close() fades it
+   out with .leaving (below) and sets hidden after --motion-slow. */
+@starting-style { .agent-hub:not([hidden]) { opacity: 0; } }
 .agent-hub[hidden], .agent-hub-detail[hidden], .agent-hub-count[hidden] { display: none; }
 body:has(.agent-hub:not([hidden])) #toast-host { z-index: 200; }
 body:has(.agent-hub:not([hidden])) #toast-host .toast.info:not(:has(.secondary)) { display: none; }
@@ -73,7 +76,7 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .agent-hub-head { display: flex; justify-content: space-between; align-items: center; gap: 28px; padding: 0 12px; }
 .agent-hub-head .eyebrow { font-size: 9px; letter-spacing: .18em; opacity: .6; }
 .agent-hub-head h2 { font: 400 23px/1.4 var(--font-display); margin: 5px 0 0; letter-spacing: -.04em; }
-.agent-hub-dismiss { border-radius: 50%; width: 32px; height: 32px; font-size: 20px; }
+.agent-hub-dismiss { border-radius: 50%; width: 32px; height: 32px; padding: 0; }
 .agent-hub-layout { display: flex; align-items: center; justify-content: center; gap: 18px; }
 .agent-hub-stage { width: 406px; height: 400px; flex: none; position: relative; }
 .agent-hub-orbit { position: absolute; width: 290px; height: 290px; left: 50%; top: 50%; translate: -50% -50%; border: 1px solid color-mix(in srgb, var(--gold) 12%, transparent); border-radius: 50%; pointer-events: none; }
@@ -82,8 +85,8 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .agent-hub-orbit i::before { content: ""; width: 4px; height: 4px; border-radius: 50%; background: var(--gold-bright); position: absolute; top: 11%; left: 19%; opacity: .45; box-shadow: 0 0 8px var(--gold); }
 .agent-hub-orbit i:nth-child(2) { animation-delay: -11s; }
 .agent-hub-orbit i:nth-child(3) { animation-delay: -22s; }
-.agent-hub-center, .agent-hub-node { position: absolute; top: 50%; left: 50%; border-radius: 50%; display: flex; align-items: center; justify-content: center; padding: 0; color: var(--ivory); border: 1px solid color-mix(in srgb, var(--gold) 24%, transparent); background: radial-gradient(ellipse at 30% 10%, #ffffff09, transparent 65%), color-mix(in srgb, var(--theme-panel-solid, #131b28) 10%, transparent); backdrop-filter: blur(5px); box-shadow: inset 0 1px #ffffff0d, 0 8px 30px #00000012; cursor: pointer; }
-.agent-hub-center { width: 122px; height: 122px; translate: -50% -50%; flex-direction: column; gap: 0; z-index: 2; box-shadow: 0 0 calc(16px + var(--hub-energy) * 25px) color-mix(in srgb, var(--gold) 10%, transparent), inset 0 1px #ffffff0f; }
+.agent-hub-center, .agent-hub-node { position: absolute; top: 50%; left: 50%; border-radius: 50%; display: flex; align-items: center; justify-content: center; padding: 0; color: var(--ivory); border: 1px solid color-mix(in srgb, var(--gold) 24%, transparent); background: radial-gradient(ellipse at 30% 10%, color-mix(in srgb, var(--ivory) 4%, transparent), transparent 65%), color-mix(in srgb, var(--theme-panel-solid) 10%, transparent); backdrop-filter: blur(5px); box-shadow: inset 0 1px color-mix(in srgb, var(--ivory) 5%, transparent), 0 8px 30px #00000012; cursor: pointer; }
+.agent-hub-center { width: 122px; height: 122px; translate: -50% -50%; flex-direction: column; gap: 0; z-index: 2; box-shadow: 0 0 calc(16px + var(--hub-energy) * 25px) color-mix(in srgb, var(--gold) 10%, transparent), inset 0 1px color-mix(in srgb, var(--ivory) 6%, transparent); }
 .agent-hub-center > span:last-child { font-size: 10px; margin-top: -5px; }
 .agent-hub-avatar { display: block; width: 82px; height: 82px; color: var(--gold-bright); }
 .agent-hub-avatar > svg { display: block; width: 100%; height: 100%; }
@@ -91,14 +94,15 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .agent-hub-avatar .c-body { fill: color-mix(in srgb, var(--gold) 12%, transparent); stroke: currentColor; }
 .agent-hub-avatar .c-eye { fill: currentColor; }
 .agent-hub-avatar :is(.c-line, .c-ring, .c-flame) { fill: none; stroke: currentColor; }
-.agent-hub-node { width: 88px; height: 88px; margin: -44px; transform: rotate(var(--hub-angle)) translateX(var(--hub-radius)) rotate(calc(-1 * var(--hub-angle))); animation: hub-spawn 560ms cubic-bezier(.22,1,.36,1) var(--hub-delay) both; transition: border-color 200ms, background 200ms; }
-.agent-hub-node-inner { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 6px; font-size: 10px; line-height: 1.2; scale: calc(1 + var(--hub-energy) * .04); transition: scale 100ms linear; }
+.agent-hub-node { width: 88px; height: 88px; margin: -44px; transform: rotate(var(--hub-angle)) translateX(var(--hub-radius)) rotate(calc(-1 * var(--hub-angle))); animation: hub-spawn var(--motion-spring) var(--ease-emphasized) var(--hub-delay) both; transition: border-color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out); }
+.agent-hub-node-inner { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 6px; font-size: 10px; line-height: 1.2; scale: calc(1 + var(--hub-energy) * .04); transition: scale var(--motion-instant) linear; }
 .agent-hub-icon { color: var(--gold-bright); display: block; }
 .agent-hub-icon .glyph { width: 22px; height: 22px; }
 .agent-hub-node:hover, .agent-hub-node[aria-expanded=true], .agent-hub-center:hover { background: color-mix(in srgb, var(--gold) 9%, transparent); border-color: color-mix(in srgb, var(--gold) 65%, transparent); }
-.agent-hub-node:hover .agent-hub-icon { translate: 0 -2px; transition: translate 200ms ease; }
+.agent-hub-node:hover .agent-hub-icon { translate: 0 -2px; transition: translate var(--motion-base) var(--ease-out); }
 .agent-hub-count { position: absolute; top: 0; right: 2px; border: 1px solid var(--gold); border-radius: 50%; width: 20px; height: 20px; font-size: 10px; display: grid; place-items: center; background: var(--panel-solid); color: var(--gold-bright); }
-.agent-hub-detail { min-width: 0; width: clamp(300px, 36vw, 460px); max-height: calc(100dvh - 165px); display: flex; flex-direction: column; gap: 10px; padding: 10px 0; box-sizing: border-box; }
+/* Positioned so a section that leaves fades where it was (MefiMotion.swap). */
+.agent-hub-detail { position: relative; min-width: 0; width: clamp(300px, 36vw, 460px); max-height: calc(100dvh - 165px); display: flex; flex-direction: column; gap: 10px; padding: 10px 0; box-sizing: border-box; }
 .agent-hub-back { align-self: flex-start; font-size: 11px; }
 .agent-hub-extra { padding: 4px 14px; display: grid; gap: 10px; overflow-y: auto; }
 .agent-hub-extra h3 { margin: 0; font-size: 18px; font-weight: 500; }
@@ -174,7 +178,7 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .rooms-privacy { margin: 0; font-size: 11px; }
 .rooms-cowork { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 10px; font-size: 12px; overflow-wrap: anywhere; }
 .rooms-cowork > p { margin: 0; }
-.agent-hub .companion-panel.companion-in-hub { position: relative; inset: auto; width: 100%; min-height: 160px; max-height: min(510px, calc(100dvh - 290px)); flex: 0 1 auto; background: color-mix(in srgb, var(--theme-panel-solid, #131b28) 24%, transparent); backdrop-filter: blur(10px); box-shadow: none; transition: height 340ms cubic-bezier(.22,1,.36,1); }
+.agent-hub .companion-panel.companion-in-hub { position: relative; inset: auto; width: 100%; min-height: 160px; max-height: min(510px, calc(100dvh - 290px)); flex: 0 1 auto; background: color-mix(in srgb, var(--theme-panel-solid) 24%, transparent); backdrop-filter: blur(10px); box-shadow: none; transition: height var(--motion-slow) var(--ease-emphasized); }
 .companion-in-hub .companion-shell-head { display: none; }
 /* In the hub the bubbles are the menu; the panel's own tabs would repeat them. */
 .companion-in-hub .companion-tabs { display: none; }
@@ -255,17 +259,15 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .agent-hub-foot { display: flex; align-items: center; justify-content: center; gap: 14px; color: var(--muted); font-size: 10px; margin-top: 4px; max-width: 100%; flex-wrap: wrap; }
 .agent-hub-foot > span { max-width: 260px; }
 .agent-hub-foot button { border-radius: 20px; font-size: 10px; }
-.agent-hub.leaving { animation: hub-dismiss 280ms ease both; }
-.agent-hub.leaving .agent-hub-node { animation: hub-absorb 260ms cubic-bezier(.4,0,1,1) both; pointer-events: none; }
-.agent-hub.leaving .agent-hub-center { transition: scale 260ms ease; scale: .94; }
+.agent-hub.leaving { opacity: 0; pointer-events: none; transition-timing-function: var(--ease-in); }
+.agent-hub.leaving .agent-hub-node { animation: hub-absorb var(--motion-slow) var(--ease-in) both; pointer-events: none; }
+.agent-hub.leaving .agent-hub-center { transition: scale var(--motion-slow) var(--ease-in); scale: .94; }
 .agent-hub[data-suspended], .agent-hub[data-suspended] * { animation-play-state: paused !important; }
 @keyframes agent-float { 0%,100% { transform: translate(0,1px); } 50% { transform: translate(1px,-3px); } }
 @keyframes agent-breathe { 0%,100% { opacity: .4; scale: .9; } 50% { opacity: .65; scale: 1.12; } }
 @keyframes agent-wisp { 0%,100% { rotate: -7deg; } 50% { rotate: 8deg; } }
 @keyframes agent-orbit { to { rotate: 360deg; } }
 @keyframes agent-think { 0%,70%,100% { opacity: .25; } 35% { opacity: 1; } }
-@keyframes hub-reveal { from { opacity: 0; } to { opacity: 1; } }
-@keyframes hub-dismiss { to { opacity: 0; } }
 @keyframes hub-orbit { to { rotate: 360deg; } }
 @keyframes hub-spawn { from { opacity: 0; transform: rotate(calc(var(--hub-angle) - 24deg)) translateX(0) rotate(calc(-1 * var(--hub-angle) + 24deg)) scale(.22); } to { opacity: 1; transform: rotate(var(--hub-angle)) translateX(var(--hub-radius)) rotate(calc(-1 * var(--hub-angle))) scale(1); } }
 @keyframes hub-absorb { from { opacity: 1; transform: rotate(var(--hub-angle)) translateX(var(--hub-radius)) rotate(calc(-1 * var(--hub-angle))) scale(1); } to { opacity: 0; transform: rotate(calc(var(--hub-angle) + 20deg)) translateX(0) rotate(calc(-1 * var(--hub-angle) - 20deg)) scale(.15); } }

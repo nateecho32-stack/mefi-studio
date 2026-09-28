@@ -813,22 +813,30 @@
     els.linkQueueHeading.textContent = `Up next · ${linkQueue.length}`;
     els.linkQueueNext.disabled = !linkQueue.length;
     els.linkQueueEmpty.hidden = Boolean(linkQueue.length);
-    els.linkQueueList.textContent = "";
-    linkQueue.forEach((item, index) => {
-      const row = element("li", "music-link-queue-item", null, els.linkQueueList);
-      const copy = element("span", "music-link-queue-copy", null, row);
-      element("strong", null, `${index + 1}. ${item.title}`, copy);
-      element("small", null, item.url, copy).hidden = !mediaMenu.showLinks;
-      const actions = element("span", "music-link-queue-actions", null, row);
-      button("Play now", "ghost", actions, () => playQueued(index)).setAttribute("aria-label", `Play ${item.title} now`);
-      const next = button("Play next", "ghost", actions, () => { linkQueue.unshift(...linkQueue.splice(index, 1)); saveLinkQueue(); });
-      next.disabled = index === 0; next.setAttribute("aria-label", `Move ${item.title} to next`);
-      button("Remove", "ghost", actions, () => {
-        linkQueue.splice(index, 1); saveLinkQueue();
-        const neighbor = els.linkQueueList.children[Math.min(index, linkQueue.length - 1)];
-        (neighbor?.querySelector?.("button") || els.linkInput).focus();
-      }).setAttribute("aria-label", `Remove ${item.title} from queue`);
-    });
+    const paint = () => {
+      els.linkQueueList.textContent = "";
+      linkQueue.forEach((item, index) => {
+        const row = element("li", "music-link-queue-item", null, els.linkQueueList);
+        row.dataset.key = item.url;
+        const copy = element("span", "music-link-queue-copy", null, row);
+        element("strong", null, `${index + 1}. ${item.title}`, copy);
+        element("small", null, item.url, copy).hidden = !mediaMenu.showLinks;
+        const actions = element("span", "music-link-queue-actions", null, row);
+        button("Play now", "ghost", actions, () => playQueued(index)).setAttribute("aria-label", `Play ${item.title} now`);
+        const next = button("Play next", "ghost", actions, () => { linkQueue.unshift(...linkQueue.splice(index, 1)); saveLinkQueue(); });
+        next.disabled = index === 0; next.setAttribute("aria-label", `Move ${item.title} to next`);
+        button("Remove", "ghost", actions, () => {
+          linkQueue.splice(index, 1); saveLinkQueue();
+          const neighbor = els.linkQueueList.children[Math.min(index, linkQueue.length - 1)];
+          (neighbor?.querySelector?.("button") || els.linkInput).focus();
+        }).setAttribute("aria-label", `Remove ${item.title} from queue`);
+      });
+    };
+    // Rows are keyed by link, so a reorder glides them (MefiMotion.keep,
+    // motion.js). A removed row fades over the queue section, not inside the
+    // list: Remove above finds its neighbour by index among the rows.
+    if (window.MefiMotion?.keep) window.MefiMotion.keep(els.linkQueueList, paint, { ghostHost: els.linkQueueList.parentElement });
+    else paint();
   }
   function nextVideo() {
     if (playQueued()) return;

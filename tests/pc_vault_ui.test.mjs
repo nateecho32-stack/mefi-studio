@@ -44,7 +44,7 @@ class Element {
   byClass(name) { return this.all().filter((item) => item.className.split(" ").includes(name)); }
 }
 
-function environment({ status = { ok: true, linked: false, account: "owner", encryption: true, confirmation: PHRASE }, replies = {}, bridge = true } = {}) {
+function environment({ status = { ok: true, linked: false, account: "owner", encryption: true, confirmation: PHRASE }, replies = {}, bridge = true, ui = null } = {}) {
   const calls = [];
   const answer = (name, fallback) => async (...args) => {
     calls.push([name, ...args]);
@@ -70,7 +70,7 @@ function environment({ status = { ok: true, linked: false, account: "owner", enc
     shareOpen: answer("shareOpen", { ok: false, canceled: true }),
     shareKeep: answer("shareKeep", { ok: true }),
   } : undefined;
-  const window = { mefiStudio: api };
+  const window = { mefiStudio: api, ...(ui ? { MefiUi: ui } : {}) };
   const context = vm.createContext({ window, document: { createElement: (tag) => new Element(tag) }, Date, Number, Array, Set, Map, Promise, JSON, Object, String });
   vm.runInContext(source, context);
   return { vault: window.MefiPcVault, calls, setStatus: (next) => { status = next; } };
@@ -129,14 +129,14 @@ test("paired: every PC's line, stopped items cannot be ticked, and only ticked o
   ticks[0].checked = true; ticks[1].checked = true;
   box.find("pc-vault-send").click(); await flush();
   assert.deepEqual(JSON.parse(JSON.stringify(env.calls.find((call) => call[0] === "vaultPublish"))), ["vaultPublish", "brains", ["b1"]]);
-  assert.equal(box.find("pc-vault-status").textContent, "Sent 1 item(s).");
+  assert.equal(box.find("pc-vault-status").textContent, "Sent 1 item.");
 });
 
 test("received items are used by name; the ones that cannot be used say why; quarantined ones stay out", async () => {
   const env = environment({ status: linkedStatus, replies: { vaultRead: { ok: true, items: [
     { id: "b1", from: "LAPTOP", at: 1, title: "Reviewer", usable: true, preview: "{}" },
     { id: "b9", from: "LAPTOP", at: 1, title: "Other", usable: false, reason: "This belongs to owner/other. Open that project to use it.", preview: "{}" },
-  ], quarantined: [{ id: "bad", from: "LAPTOP", reasons: ["Stopped: tells an agent to ignore its instructions (map.steps[0])."] }] } } });
+  ], quarantined: [{ id: "bad", from: "LAPTOP", reasons: ["Stopped: tells an agent to ignore its instructions (map.steps[0])."] }, { id: "b7", title: "Night shift", from: "LAPTOP", reasons: [] }] } } });
   const box = env.vault.section();
   box.toggle(); await flush();
   box.find("pc-vault-shelf").value = "brains";
@@ -144,12 +144,13 @@ test("received items are used by name; the ones that cannot be used say why; qua
   const received = box.find("pc-vault-received");
   assert.match(received.textContent, /Open that project to use it/);
   assert.match(received.textContent, /Kept out: bad from LAPTOP.*ignore its instructions/);
+  assert.match(received.textContent, /Kept out: Night shift from LAPTOP/, "by name when it has one");
   assert.equal(received.buttons("Use on this PC").length, 1);
   received.buttons("Use on this PC")[0].click(); await flush();
   assert.deepEqual(env.calls.find((call) => call[0] === "vaultUse"), ["vaultUse", "brains", "b1", "LAPTOP"]);
 });
 
-test("keys go only after the exact phrase, with the warning in capitals, and only names cross", async () => {
+test("keys go only after the exact phrase, under the warning, and only names cross", async () => {
   const env = environment({ status: linkedStatus, replies: { vaultKeys: (action, options) => {
     if (action === "offer") return { ok: true, confirmation: PHRASE, keys: ["openrouter", "zai"], setup: ["lmStudioEndpoint"] };
     if (action === "share") return { ok: true, shared: options.names };
@@ -159,7 +160,8 @@ test("keys go only after the exact phrase, with the warning in capitals, and onl
   const box = env.vault.section();
   box.toggle(); await flush();
   const keys = box.find("pc-vault-keys");
-  assert.match(keys.textContent, /YOU ARE SHARING KEYS AND SETUP INFORMATION\. THEY CAN BE STOLEN\./);
+  assert.match(keys.textContent, /You are sharing keys and setup information\. They can be stolen/);
+  assert.equal(box.find("pc-vault-keys-share").className.split(" ").includes("danger"), true, "Share these keys reads as risky");
   keys.toggle(); await flush();
   const share = box.find("pc-vault-keys-share");
   assert.equal(share.disabled, true, "nothing ticked, nothing typed");
@@ -229,4 +231,27 @@ test("Keys and setup opened while the vault is still loading waits its turn; a w
   failing.toggle(); await flush();
   failing.find("pc-vault-keys").toggle(); await flush();
   assert.equal(failing.find("pc-vault-status").textContent, "Switching projects. Try again in a moment.");
+});
+
+test("removing asks twice, and a refusal or a failed unpair says why", async () => {
+  const armed = [];
+  const ui = { arm: (button, options) => { armed.push([button.id || button.textContent, options.armed]); button.addEventListener("click", options.run); return button; }, plainError: (error, fallback) => error?.message || (typeof error === "string" ? error : "") || fallback };
+  const env = environment({ status: linkedStatus, ui, replies: {
+    vaultLibrary: { ok: true, items: [{ shelf: "insights", id: "models", from: "LAPTOP", source: "vault", title: "How 3 models did" }] },
+    vaultForget: { ok: false, error: "The library is busy. Try again in a moment." },
+    vaultUnpair: { ok: false, error: "GitHub did not answer." },
+  } });
+  const box = env.vault.section();
+  box.toggle(); await flush();
+  assert.deepEqual(armed, [["pc-vault-keys-clear", "Remove the keys?"], ["Remove", "Remove it?"]]);
+  box.find("pc-vault-library").buttons("Remove")[0].click(); await flush();
+  assert.equal(box.find("pc-vault-status").textContent, "The library is busy. Try again in a moment.");
+  assert.match(box.find("pc-vault-library").textContent, /How 3 models did/, "a refused remove keeps the row");
+  box.find("pc-vault-unpair").click(); await flush();
+  assert.equal(box.find("pc-vault-status").textContent, "GitHub did not answer.");
+  const canceled = environment({ status: linkedStatus, replies: { vaultUnpair: { ok: false, canceled: true } } }).vault.section();
+  canceled.toggle(); await flush();
+  const before = canceled.find("pc-vault-status").textContent;
+  canceled.find("pc-vault-unpair").click(); await flush();
+  assert.equal(canceled.find("pc-vault-status").textContent, before, "Cancel in main's own dialog says nothing");
 });
