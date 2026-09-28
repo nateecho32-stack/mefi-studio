@@ -80,13 +80,33 @@ function createVault({ dir, run, files, protect, unprotect, hostname, now = () =
     if (staged.ok) return { ok: true, pushed: false };
     const committed = await git(["-c", "user.name=Mefi's Studio", "-c", "user.email=vault@mefi-studio.invalid", "commit", "-q", "-m", message]);
     if (!committed.ok) return { ok: false, error: "The vault change could not be saved." };
-    const pushed = await git(["push", "-q", "origin", "HEAD:main"], { timeout: 60000 });
-    return pushed.ok ? { ok: true, pushed: true } : { ok: false, error: "The vault could not reach GitHub. It will try again at the next sync." };
+    let pushed = await git(["push", "-q", "origin", "HEAD:main"], { timeout: 60000 });
+    if (!pushed.ok) {
+      // Another PC pushed first (its status line lands every few minutes):
+      // put this commit on top of theirs and send it once more.
+      const state = await sync();
+      if (state === "dropped") return { ok: false, error: "Another PC changed the same thing at the same moment, and its version was kept. Try again." };
+      if (state === "synced") pushed = await git(["push", "-q", "origin", "HEAD:main"], { timeout: 60000 });
+    }
+    return pushed.ok ? { ok: true, pushed: true } : { ok: false, error: "The vault could not reach GitHub. It will send this with the next sync." };
   }
-  async function pull() {
-    const pulled = await git(["pull", "-q", "--ff-only", "--no-autostash", "origin", "main"], { timeout: 60000 });
-    return pulled.ok;
+  // GitHub's copy first, with this PC's own commits (a status line, a share
+  // that did not go out yet) put back on top. Each PC writes its own files, so
+  // that only conflicts when two PCs changed the same shelf item or the shared
+  // keys at the same moment; then GitHub's version is kept and this PC's
+  // change is dropped, so the copy is in step again. A fast-forward-only pull
+  // left such a copy stuck for good: it could neither send nor receive.
+  // "synced", "dropped" or "offline".
+  async function sync() {
+    const fetched = await git(["fetch", "-q", "origin", "main"], { timeout: 60000 });
+    if (!fetched.ok) return "offline";
+    const rebased = await git(["rebase", "-q", "--no-autostash", "origin/main"]);
+    if (rebased.ok) return "synced";
+    await git(["rebase", "--abort"]);
+    const reset = await git(["reset", "-q", "--hard", "origin/main"]);
+    return reset.ok ? "dropped" : "offline";
   }
+  const pull = async () => (await sync()) !== "offline";
 
   async function status() {
     await load();

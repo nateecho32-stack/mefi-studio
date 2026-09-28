@@ -27,8 +27,11 @@ function world(t) {
   t.after(() => rmSync(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 }));
   const hub = path.join(root, "github", "owner", "mefi-studio-vault.git");
   const calls = [];
+  // beforePush: runs once, just before the next git push (another PC landing first).
+  const hooks = { beforePush: null };
   const run = async (command, args, options) => {
     calls.push([command, ...args].join(" "));
+    if (command === "git" && args.includes("push") && hooks.beforePush) { const hook = hooks.beforePush; hooks.beforePush = null; await hook(); }
     if (command === "gh" && args[0] === "repo" && args[1] === "create") {
       if (existsSync(hub)) return { ok: false, stdout: "", stderr: "GraphQL: Name already exists on this account" };
       await mkdir(hub, { recursive: true });
@@ -63,7 +66,7 @@ function world(t) {
       }),
     };
   };
-  return { root, hub, calls, pc };
+  return { root, hub, calls, hooks, pc };
 }
 
 function everyFile(dir) {
@@ -191,4 +194,48 @@ test("unpairing forgets the vault on this PC only", async (t) => {
   assert.equal(existsSync(path.join(laptop.home, "vault-key.bin")), false);
   assert.equal((await desk.vault.status()).linked, true, "the other PC keeps its vault");
   assert.equal((await laptop.vault.pair(made.pairingCode)).ok, true, "and this PC can pair again");
+});
+
+test("a push that loses the race to another PC goes on top of it; the same item at the same moment keeps GitHub's", async (t) => {
+  const w = world(t);
+  const desk = w.pc("DESK"), laptop = w.pc("LAPTOP");
+  const made = await desk.vault.create();
+  await laptop.vault.pair(made.pairingCode);
+  // DESK's status lands between LAPTOP's pull and its push.
+  w.hooks.beforePush = () => desk.vault.heartbeat([{ repo: "owner/app", risk: 1, behind: 0 }]);
+  const shared = await laptop.vault.shareSecrets(SECRETS_CONFIRMATION, { zai: "zai-key-1" });
+  assert.equal(shared.ok, true, "sent on top of DESK's commit");
+  assert.deepEqual({ ...(await desk.vault.readSecrets()).values }, { zai: "zai-key-1" }, "the other PC gets it");
+  const seen = await laptop.vault.status();
+  assert.equal(seen.offline, false);
+  assert.deepEqual(seen.pcs.map((pc) => pc.name).sort(), ["DESK"], "and LAPTOP's copy took DESK's status too");
+  // Both share keys at once: GitHub's (DESK's) stay, LAPTOP is told, and its
+  // copy is in step again instead of stuck.
+  w.hooks.beforePush = () => desk.vault.shareSecrets(SECRETS_CONFIRMATION, { zai: "from-desk" });
+  const clash = await laptop.vault.shareSecrets(SECRETS_CONFIRMATION, { zai: "from-laptop" });
+  assert.equal(clash.ok, false);
+  assert.match(clash.error, /its version was kept/);
+  assert.deepEqual({ ...(await laptop.vault.readSecrets()).values }, { zai: "from-desk" });
+  assert.equal((await laptop.vault.heartbeat([])).ok, true, "and it sends again");
+  assert.equal((await laptop.vault.status()).offline, false);
+});
+
+test("a copy left behind with its own unsent commit catches up and sends it", async (t) => {
+  const w = world(t);
+  const desk = w.pc("DESK"), laptop = w.pc("LAPTOP");
+  const made = await desk.vault.create();
+  await laptop.vault.pair(made.pairingCode);
+  // What an older build left behind: a local commit that never reached GitHub
+  // while another PC moved on.
+  w.hooks.beforePush = async () => { await desk.vault.heartbeat([]); w.hooks.beforePush = null; };
+  const git = (args) => exec("git", ["-C", path.join(laptop.home, "vault"), ...args]);
+  await mkdir(path.join(laptop.home, "vault", "shelves", "recipes"), { recursive: true });
+  await laptop.vault.publish("recipes", [{ id: "ship", value: { steps: ["test"] } }]);
+  await desk.vault.heartbeat([]);
+  await git(["-c", "user.name=x", "-c", "user.email=x@x.invalid", "commit", "-q", "--allow-empty", "-m", "left behind"]);
+  assert.equal((await laptop.vault.status()).offline, false, "it rebases instead of refusing to move");
+  assert.equal((await laptop.vault.heartbeat([])).ok, true);
+  const log = await exec("git", ["--git-dir", w.hub, "log", "--format=%s", "main"]);
+  assert.match(log.stdout, /left behind/, "the unsent commit reached GitHub");
+  assert.deepEqual((await desk.vault.read("recipes")).items.map((item) => item.id), ["ship"]);
 });

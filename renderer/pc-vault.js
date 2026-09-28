@@ -134,17 +134,24 @@
     );
     box.append(intro, setup, codeBox, linked);
 
-    async function run(label, work) {
-      if (busy) return;
-      busy = true;
-      box.setAttribute("aria-busy", "true");
-      for (const el of box.querySelectorAll("button")) el.disabled = true;
-      if (label) status.textContent = label;
-      try { await work(); } catch (error) { status.textContent = `That did not work: ${error?.message || error}`; }
-      busy = false;
-      box.removeAttribute("aria-busy");
-      for (const el of box.querySelectorAll("button")) el.disabled = false;
-      syncKeysButton();
+    // One step at a time, in order. Buttons are off while one runs; a section
+    // opened meanwhile (Keys and setup while the vault is still being read)
+    // waits its turn instead of being dropped, which left its list empty.
+    let queue = Promise.resolve();
+    function run(label, work) {
+      const next = queue.then(async () => {
+        busy = true;
+        box.setAttribute("aria-busy", "true");
+        for (const el of box.querySelectorAll("button")) el.disabled = true;
+        if (label) status.textContent = label;
+        try { await work(); } catch (error) { status.textContent = `That did not work: ${error?.message || error}`; }
+        busy = false;
+        box.removeAttribute("aria-busy");
+        for (const el of box.querySelectorAll("button")) el.disabled = false;
+        syncKeysButton();
+      });
+      queue = next.catch(() => {});
+      return next;
     }
     function paint(result) {
       if (!result?.ok) { status.textContent = result?.error || "The vault could not be read."; return; }
@@ -263,7 +270,8 @@
         const names = [...list.querySelectorAll("input[type=checkbox]:checked")].map((tick) => tick.value);
         const result = await api.vaultKeys("share", { names, confirmation: phrase.value });
         phrase.value = "";
-        status.textContent = result?.canceled ? "Nothing was shared." : result?.ok ? `Shared ${result.shared.map((name) => KEY_NAMES[name] ?? name).join(", ")}.` : result?.error || "Nothing was shared.";
+        status.textContent = result?.canceled ? "Nothing was shared." : result?.ok ? `Shared ${result.shared.map((name) => KEY_NAMES[name] ?? name).join(", ")}. On your other PC, open Keys and setup and choose Check for shared keys.` : result?.error || "Nothing was shared.";
+        syncKeysButton();
       }));
       const incoming = node("div", "pc-vault-keylist");
       incoming.id = "pc-vault-keys-incoming";
@@ -283,12 +291,17 @@
         label.append(tick, node("span", "", KEY_NAMES[name] ?? name));
         return label;
       }));
+      // Why Share stays off, in words, once something is typed.
+      const mismatch = node("p", "muted pc-vault-mismatch", "Type the sentence exactly as shown, with the same capitals and spaces.");
+      mismatch.id = "pc-vault-keys-mismatch";
+      mismatch.hidden = true;
       syncKeysButton = () => {
         const any = list.querySelector("input[type=checkbox]:checked");
+        mismatch.hidden = !phrase.value || !keysPhrase || phrase.value === keysPhrase;
         share.disabled = busy || !any || !keysPhrase || phrase.value !== keysPhrase;
       };
       phrase.addEventListener("input", () => syncKeysButton());
-      keys.append(node("summary", "pc-vault-danger-summary", "Keys and setup"), warning, detail, list, phraseLabel, phrase, share,
+      keys.append(node("summary", "pc-vault-danger-summary", "Keys and setup"), warning, detail, list, phraseLabel, phrase, mismatch, share,
         button("Check for shared keys", "pc-vault-keys-check", () => run("Checking the vault for shared keys…", async () => {
           const result = await api.vaultKeys("list");
           if (!result?.ok) { status.textContent = result?.error || "The vault could not be read."; return; }
@@ -307,7 +320,7 @@
         if (!keys.open) return;
         void run(null, async () => {
           const result = await api.vaultKeys("offer");
-          if (!result?.ok) return;
+          if (!result?.ok) { status.textContent = result?.error || "The keys saved on this PC could not be listed. Close Keys and setup and open it again."; return; }
           keysPhrase = result.confirmation;
           phraseLabel.textContent = `To share, type exactly: ${keysPhrase}`;
           ticks(list, [...result.keys, ...result.setup], () => false);

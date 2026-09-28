@@ -207,3 +207,26 @@ test("the page never sets HTML, and main's keys handler never hands a value back
   // No return hands back the received values or the values being shared.
   for (const line of block.split("\n").filter((row) => /\breturn\b/.test(row))) assert.doesNotMatch(line, /got\.values|\bvalues\s*:|[{,]\s*values\s*[,}]|return values\b/, line.trim());
 });
+
+test("Keys and setup opened while the vault is still loading waits its turn; a wrong phrase says why; a failed list says so", async () => {
+  const env = environment({ status: linkedStatus, replies: { vaultKeys: (action, options) => (action === "offer" ? { ok: true, confirmation: PHRASE, keys: ["zai"], setup: [] } : { ok: true, shared: options?.names ?? [] }) } });
+  const box = env.vault.section();
+  box.toggle(); // starts reading the vault
+  box.find("pc-vault-keys").toggle(); // opened at once, while that read runs
+  await flush();
+  assert.equal(box.find("pc-vault-keys-list").querySelectorAll("input[type=checkbox]").length, 1, "the list still arrives");
+  const phrase = box.find("pc-vault-keys-confirm");
+  const [tick] = box.find("pc-vault-keys-list").querySelectorAll("input[type=checkbox]");
+  tick.checked = true; tick.fire("change");
+  phrase.value = "i understand"; phrase.fire("input");
+  assert.equal(box.find("pc-vault-keys-mismatch").hidden, false, "Share stays off, and says why");
+  phrase.value = PHRASE; phrase.fire("input");
+  assert.equal(box.find("pc-vault-keys-mismatch").hidden, true);
+  assert.equal(box.find("pc-vault-keys-share").disabled, false);
+  box.find("pc-vault-keys-share").click(); await flush();
+  assert.match(box.find("pc-vault-status").textContent, /On your other PC, open Keys and setup and choose Check for shared keys/);
+  const failing = environment({ status: linkedStatus, replies: { vaultKeys: { ok: false, error: "Switching projects. Try again in a moment." } } }).vault.section();
+  failing.toggle(); await flush();
+  failing.find("pc-vault-keys").toggle(); await flush();
+  assert.equal(failing.find("pc-vault-status").textContent, "Switching projects. Try again in a moment.");
+});
