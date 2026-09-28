@@ -1,10 +1,11 @@
 # Continuing: handoff (2026-09-28, afternoon)
 
-Four things are open:
+Five things are open:
 1. **The 0.4.5 build.** It started today and paused at about 13:10, when the account hit its usage limit (it resets at 2:10 pm Central). The work is partial and uncommitted, in worktrees on this PC only.
 2. **Home PCs that keep working, and reaching them from Discord** (the co-work session). Start with Windows, the Your PCs agent lines and the Studio side of the Discord remote are on main. The bot side is parked as `wip/remote-dms`. The end-to-end test, the owner's setup and subscriptions-first routing are left (section 2).
 3. **Menu Batch 3.** This is the owner's decision, unchanged (section 3).
 4. **The website rebuild** (the "Continuing fixes" session). It is parked on the pushed branch `wip/site-rebuild` and is not published: the build agents hit the same usage limit (section 4).
+5. **Model tracker, community model ratings and probes** (the "Discord bot model feedback integration" session). The Studio half is gated on `wip/model-community`; the bot half is built and tested on the bot's `wip/model-reviews`, but not documented or wired yet (section 5).
 
 ## 1. 0.4.5: agents send only what's new, logging, load times, Friends 2.0
 
@@ -418,3 +419,83 @@ The owner asked for this (2026-09-28):
 - **Release workflow:** run `gh auth refresh -s workflow` so `release.yml` can be fixed (hosted
   Windows runners fail four render fixtures), unless section 1's list already covers it.
 - **`docs/friends-setup.md`** already tells people to update to 0.4.5.
+
+## 5. Model tracker, community model ratings and probes
+
+Written 2026-09-28 by the session "Discord bot model feedback integration".
+It covers Studio and the Void Engine Bot. Both halves are pushed as `wip/`
+branches, so any PC can pick them up.
+
+### What the owner asked for
+
+- **A #model-reviews forum.** The bot runs it by itself, in its own embed style. Members rate models per task and post tips.
+- **Evidence over mood.** Ratings feed Studio's model picks from real use, never from how people feel.
+  - Read the provider's release notes first.
+  - Otherwise break comments down into task kinds: planning, structuring, writing, commits, tests and setup.
+  - Probe tests Studio can run.
+- **An updated model tracker.**
+
+The owner chose:
+- the feed published as public JSON on gh-pages;
+- a forum with one post per model;
+- LLM analysis of comments under a daily cap;
+- probes that run on demand only.
+
+The contract between the two repos is `docs/model-community.md` on the Studio branch.
+
+### 1. Studio: done and gated, but not on main
+
+- **Branch:** `wip/model-community` on origin (`a7e6294`), in the worktree `C:\wt\mc`. It is one commit on `39a153d`.
+- **Contents:**
+  - The model tracker refresh: `data/curated.json`, `data/models.json`, and `providerModels` in `refresh-models.mjs`. The catalog's "Also tracked" list is in `booklet.js`.
+  - Feed ingestion: `scripts/model-community.cjs`.
+  - The probes: `scripts/model-probes.mjs`.
+  - The routing prior: `model-routing.mjs`. Community evidence moves it at most ±0.05 and probes at most ±0.10.
+  - Models › Performance › Community: `renderer/model-community.js`.
+  - IPC `models:*`.
+- **Gate (at `a7e6294`):**
+  - `build-booklet`, `check` (192 targets) and `audit` (0 findings) pass.
+  - In `npm test`, the Python contracts and the path lock pass. The Node suites pass except `command_render`, which failed with "Assistant narrow: pointer reaches the switch track" and passed when rerun alone. That makes it the known flake.
+- **To land:**
+  1. Rebase onto the current `origin/main`. `b52a09c` and `5732ceb` touch `main.cjs` and `preload.cjs` (the Discord remote), so expect conflicts there and in `CHANGELOG.md` (keep both sides).
+  2. Run `npm run build-booklet`, `check`, `audit` and the full `npm test`.
+  3. Add a TESTRUNS row with `scripts/append-testruns-row.mjs`.
+  4. Run `git push origin HEAD:main` from the worktree.
+  5. Delete the `wip/model-community` branch.
+  6. `rmdir C:\wt\mc\node_modules`, then `git worktree remove`.
+- **Heads-up:** the bot's "New in Studio" diff will announce the six new Go models in one digest once this reaches main. The perks session knows.
+- **Known limits:**
+  - Cancel doesn't abort the probe call already in flight.
+  - Probe results for the Claude, Zen and Codex routes show in the UI only, because routing compares z.ai and Go models.
+  - The feed's `probeIdeas` aren't turned into probes yet.
+  - The catalog still carries the Go plan-wide $12/$30/$60 windows, which the docs no longer publish, because `usage-tracker.cjs` reads them.
+
+### 2. Void Engine Bot: built and tested, not documented or wired
+
+- **Branch:** `wip/model-reviews` on the bot's origin (`e7c8e95`), in the worktree `C:\wt\bot-reviews`. It is based on `61b1deb`, and `npm test` gives 506 pass.
+- **Contents** (new files only):
+  - `src/models/*`: kinds, config, tables, catalog, ratings, claims, analyze, docs, embed, forum, forum-api, feed, service, privacy, autocomplete.
+  - `src/commands/rate.mjs` and `tip.mjs`.
+  - `config/model-docs.json`: the release-notes allow-list. Check that its URLs are live.
+  - Six `test/models-*.test.mjs` files, plus fakes.
+- **Where it stopped:** the builder hit the usage limit before writing `docs/model-reviews.md`, a copy of the contract from the bot's side with a **Wiring** section. The full brief is in the session scratchpad `bot-reviews-prompt.md`, which exists on this PC only. Its main points are above.
+- **Next:**
+  1. Wait for the session "Discord community perks and verification" to push the bot repo. It holds uncommitted `models-watch`, releases, persona, chat and fun work in the main checkout, plus an integrator pass.
+  2. Rebase `wip/model-reviews` onto that push.
+  3. Wire it:
+     - add `MODEL_REVIEW_TABLES_SQL` as a store migration;
+     - add `MODEL_REVIEWS_FORUM_ID`, `MODEL_ANALYSIS_DAILY_CAP`, `GITHUB_FEED_TOKEN` and `MODEL_FEED_PUBLISH` to `config.mjs` and `.env.example`;
+     - register `/rate` and `/tip`;
+     - route `messageCreate` for forum threads;
+     - add a scheduler job for the feed publish (at most every 3 h, only when the hash changes);
+     - call `forgetModelReviews` from `/forget-me` and update the `/privacy` text;
+     - mount `registerModelCommunityRoute` on the hub;
+     - add ratings to the chat `facts` provider.
+  4. Write `docs/model-reviews.md`, and update the privacy doc, runbook and README.
+  5. Run `npm test`, commit, and push to the bot's main.
+- **Other session:** "Build 4.5 roadmap" plans hub FH0/FH1 changes (protocol, ws, rooms). It has been told which files this touches.
+- **The owner sets up:**
+  - the #model-reviews forum channel and its id in `.env`;
+  - the Message Content intent;
+  - a fine-grained GitHub token with Contents read/write on `mefi-studio` only, pasted into the bot's `.env` by the owner;
+  - a bot restart.
