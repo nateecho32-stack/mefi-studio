@@ -69,18 +69,18 @@ Check it from any PC: `https://<address>/v1/health` answers
 
 ## 3. Every PC
 
-Update Studio to 0.4.5 (`git pull` on `main`, `npm ci`, or the portable
-build once it is released). Until the release carries the addresses built
-in, give Studio the two values as user environment variables, once per PC,
-then restart Studio:
+Update Studio (`git pull` on `main`, `npm ci`, or the portable build once it
+is released). Until the release carries the addresses built in, give each PC
+the two values once in **Settings › Community › Connection details**:
 
-```powershell
-setx MEFI_STUDIO_HUB_URL "https://<the hub address>"
-setx MEFI_STUDIO_DISCORD_CLIENT_ID "<the Mefi Studio Link Application ID>"
-```
+- **Link app ID**: the Mefi Studio Link Application ID.
+- **Rooms hub address**: `https://<the hub address>` (or `http://127.0.0.1:8787`
+  on the hub PC itself).
 
-`setx` only affects programs started afterwards, so close and reopen the
-terminal or shortcut that starts Studio.
+**Save** applies them at once, with no restart, and says whether the hub
+answered. The environment variables `MEFI_STUDIO_DISCORD_CLIENT_ID` and
+`MEFI_STUDIO_HUB_URL` still work and win over what is saved (Connection
+details says so); `setx` only reaches programs started afterwards.
 
 In Studio:
 
@@ -125,13 +125,14 @@ node --test tests/companion_e2e.test.mjs
 
 | Friends says | Meaning |
 | --- | --- |
-| "…the rooms hub, which this build does not have yet" | `MEFI_STUDIO_HUB_URL` is not set in the environment that started Studio |
-| "Link Discord under Community…" | This PC has not linked Discord, or `MEFI_STUDIO_DISCORD_CLIENT_ID` is not set |
+| "…the rooms hub, which this PC isn't connected to yet" | No **Rooms hub address** in Settings › Community › Connection details (and no `MEFI_STUDIO_HUB_URL`) |
+| "Discord linking isn't set up on this PC yet" | No **Link app ID** in Connection details (and no `MEFI_STUDIO_DISCORD_CLIENT_ID`) |
+| "Link Discord under Community…" | This PC has not linked Discord yet |
+| Save says the hub did not answer | The hub is not running, its tunnel is down, or a quick tunnel's address changed since it was saved |
 | "Connect under Rooms below…" | This PC is not connected to the hub yet: **Rooms › Connect** |
 | "Open a room under Rooms below…" | Connected, but no room is open in Studio: **Open** one |
 | "This rooms hub does not carry companions yet" | The hub is older than the companion relay; update `void-engine-bot` and restart it |
 | "No friends' companions are out…" | Nobody else in your rooms has Friends open with sharing above Stay home |
 
-Sign-in is refused when `STUDIO_APP_ID` on the hub and
-`MEFI_STUDIO_DISCORD_CLIENT_ID` in Studio are different applications, or the
-account is not in the server.
+Sign-in is refused when `STUDIO_APP_ID` on the hub and Studio's link app ID
+are different applications, or the account is not in the server.

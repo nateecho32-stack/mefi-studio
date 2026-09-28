@@ -381,7 +381,7 @@
 
     function explain(hub) {
       if (!hub?.configured) {
-        status.textContent = "Rooms need the Void Engine room service, which this build is not connected to yet.";
+        status.textContent = "Rooms need the Void Engine room service, which this PC is not connected to yet: add its address in Settings › Community › Connection details.";
         root.dataset.state = "not-configured";
         body.replaceChildren();
         return false;

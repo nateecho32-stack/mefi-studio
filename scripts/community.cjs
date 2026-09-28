@@ -26,7 +26,8 @@ const GUILD_ID = "1345380333302059129";
 const INVITE_URL = "https://discord.gg/xgfKc5pVxG";
 // The public-client application Studio logs in with (no client secret; PKCE).
 // Empty until the app is registered; main also honours the environment
-// variable MEFI_STUDIO_DISCORD_CLIENT_ID, and an empty id means "not configured".
+// variable MEFI_STUDIO_DISCORD_CLIENT_ID and the id saved in Settings ›
+// Community (normalizeSetup), and an empty id means "not configured".
 const CLIENT_ID = "";
 // Registered redirects http://127.0.0.1:<port>/callback, tried in order.
 const REDIRECT_PORTS = Object.freeze([53134, 53135, 53136]);
@@ -377,8 +378,27 @@ function signature(status) {
   }
 }
 
+// Settings › Community › Connection details: the link app id and the rooms
+// hub's address, which each PC saves in settings.communitySetup instead of
+// needing environment variables and a restart. Both are public. The id is a
+// Discord application id (17 to 20 digits); `address` is the hub client's own
+// check (scripts/hub-client.cjs hubAddress), and a good address is kept in its
+// plain form. Either may be empty, which clears it. `errors` names each field
+// that was refused, in words for the form.
+function normalizeSetup(raw, { address = () => null } = {}) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const clientId = typeof source.clientId === "string" ? source.clientId.trim() : "";
+  const hubUrl = typeof source.hubUrl === "string" ? source.hubUrl.trim().replace(/\/+$/, "") : "";
+  const errors = {};
+  if (clientId && !/^\d{17,20}$/.test(clientId)) errors.clientId = "The link app ID is the Mefi Studio Link Application ID: 17 to 20 digits, from the Discord Developer Portal.";
+  let hub = null;
+  try { hub = hubUrl ? address(hubUrl) : null; } catch { hub = null; }
+  if (hubUrl && !hub) errors.hubUrl = "The hub address starts with https:// (or http://127.0.0.1 for a hub on this PC) and has no path after it.";
+  return { clientId: errors.clientId ? "" : clientId, hubUrl: hub?.http ?? "", errors };
+}
+
 module.exports = {
-  GUILD_ID, INVITE_URL, CLIENT_ID, REDIRECT_PORTS, SCOPES,
+  GUILD_ID, INVITE_URL, CLIENT_ID, REDIRECT_PORTS, SCOPES, normalizeSetup,
   DAY, CHECK_EVERY_MS, FIRST_PROMPT_MS, PROMPT_EVERY_MS, BACKOFF_EVERY_MS, BACKOFF_AFTER, CHECK_THROTTLE_MS,
   LINK_STATES, PROMPT_ACTIONS,
   normalize, normalizeLink, isMember, promptDue, applyPrompt, checkDue, nextCheckAfterFailure, recordCheck,

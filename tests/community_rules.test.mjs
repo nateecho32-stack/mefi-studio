@@ -369,3 +369,19 @@ test("signature moves on visible changes only", () => {
   for (const garbage of [undefined, null, 1, "x", [], { roles: [1n] }]) assert.equal(typeof signature(garbage), "string");
   assert.ok(!signature(publicStatus({ state: { link: { ...link(), refreshToken: "RT-x" } }, now })).includes("RT-x"));
 });
+
+test("connection details: a Discord application id and a hub address, checked, either one clearable", async () => {
+  const { hubAddress } = await import("../scripts/hub-client.cjs").then((module) => module.default ?? module);
+  const { normalizeSetup } = community;
+  const APP = "1400000000000000001";
+  assert.deepEqual(JSON.parse(JSON.stringify(normalizeSetup({ clientId: ` ${APP} `, hubUrl: "https://hub.example.com/" }, { address: hubAddress }))), { clientId: APP, hubUrl: "https://hub.example.com", errors: {} });
+  assert.equal(normalizeSetup({ hubUrl: "http://127.0.0.1:8787" }, { address: hubAddress }).hubUrl, "http://127.0.0.1:8787", "a hub on this PC");
+  assert.deepEqual(JSON.parse(JSON.stringify(normalizeSetup({}, { address: hubAddress }))), { clientId: "", hubUrl: "", errors: {} }, "both empty clears them");
+  const bad = normalizeSetup({ clientId: "12ab", hubUrl: "http://hub.example.com/v1" }, { address: hubAddress });
+  assert.deepEqual([bad.clientId, bad.hubUrl], ["", ""]);
+  assert.match(bad.errors.clientId, /17 to 20 digits/);
+  assert.match(bad.errors.hubUrl, /https:\/\//);
+  assert.match(normalizeSetup({ hubUrl: "https://user:pw@hub.example.com" }, { address: hubAddress }).errors.hubUrl, /https/, "no credentials in the address");
+  assert.equal(normalizeSetup({ clientId: 5 }, { address: hubAddress }).clientId, "", "only text is read");
+  assert.equal(normalizeSetup({ hubUrl: "https://hub.example.com" }).hubUrl, "", "without the hub client's check nothing is trusted");
+});

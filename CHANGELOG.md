@@ -7,6 +7,22 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Discord linking and Rooms without environment variables.** Settings ›
+  Community › **Connection details** takes the Mefi Studio Link Application
+  ID and the rooms hub's address once per PC, saves them in settings and uses
+  them at once: Link my Discord appears, and Rooms, Friends and Listen
+  together reach the hub without `setx` or a restart. Save says whether the
+  hub answered. The environment variables still win for test setups, and
+  every "not connected yet" message now says where to add the missing value.
+- **Share between my PCs no longer gets stuck.** A PC whose push lost the
+  race to another PC's status line kept its change unsent and then could
+  neither send nor receive anything, so the other PCs got nothing. The vault
+  now puts this PC's commits on top of GitHub's and sends them again; when
+  two PCs change the same item at the same moment, GitHub's version is kept
+  and the PC is told. Keys and setup opened while the vault is still loading
+  gets its list instead of staying empty, a phrase that does not match says
+  why Share stays off, and a finished share says where the other PC picks
+  the keys up.
 - **Agents say why they are not working.** The host now sends one answer
   (`scripts/loop-status.cjs`) with every status push. It covers whether
   agents are on, what is holding work back, and the one control that clears

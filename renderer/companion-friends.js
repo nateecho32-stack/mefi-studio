@@ -116,7 +116,7 @@
     function paintStatus() {
       const view = state.view, hub = view.hub;
       const out = view.friends.length;
-      status.textContent = !hub.configured ? "Friends' companions meet through the rooms hub, which this build does not have yet. Pip is here to practice."
+      status.textContent = !hub.configured ? "Friends' companions meet through the rooms hub, which this PC isn't connected to yet: add its address in Settings › Community › Connection details. Pip is here to practice."
         : !hub.linked ? "Link Discord under Community to meet friends' companions. Pip, the practice buddy, is always here."
         : hub.state !== "ready" ? "Connect under Rooms below, then open a room, and friends' companions there can visit."
         : !hub.companions ? "This rooms hub does not carry companions yet, so friends cannot visit. Pip is here to practice."

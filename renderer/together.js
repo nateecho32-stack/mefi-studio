@@ -43,7 +43,7 @@
     auth: "Discord asked Studio to link again: Settings › General › Community.",
     "not-linked": "Link your Discord account (Settings › General › Community) to listen with your rooms.",
     version: "The rooms hub has moved on. Update Studio to listen together.",
-    "not-configured": "Listening together needs the Void Engine rooms hub, and this build isn't connected to one yet.",
+    "not-configured": "Listening together needs the Void Engine rooms hub, and this PC isn't connected to one yet: add its address in Settings › Community › Connection details.",
     unsupported: "This Studio can't open the hub's connection.",
   };
   const bridge = () => window.mefiStudio;

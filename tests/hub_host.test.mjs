@@ -78,3 +78,83 @@ test("every hub:* channel the preload invokes is handled in main and app-wide", 
   assert.match(main, /const APP_WIDE_PREFIXES = \[[^\]]*"hub:"/, "rooms belong to the member, not to the open project");
   assert.match(preload, /onHubEvent: \(callback\) => ipcRenderer\.on\("hub:event"/);
 });
+
+// Connection details (Settings › Community): the link app id and hub address
+// saved in settings, used at once, with the environment still winning.
+import { createRequire } from "node:module";
+const requireHere = createRequire(import.meta.url);
+const communityRules = requireHere("../scripts/community.cjs");
+const hubClientModule = requireHere("../scripts/hub-client.cjs");
+const APP = "1400000000000000001";
+
+function setupHost({ saved, env = {}, reachable = true, status = 200, answer = { ok: true, protocol: 1, paused: false } } = {}) {
+  let settings = saved === undefined ? {} : { communitySetup: saved };
+  const fetches = [], published = [], logs = [];
+  let disconnected = 0;
+  const context = vm.createContext({
+    process: { env }, AbortController, setTimeout, clearTimeout,
+    community: communityRules, discordOAuth: {}, COMMUNITY_ACCESS_MARGIN_MS: MARGIN, communityTokens: null,
+    communityClientId: () => String(env.MEFI_STUDIO_DISCORD_CLIENT_ID || context.communitySetup().clientId || ""),
+    communityRead: async () => ({ state: { link: null } }),
+    checkCommunity: async () => ({ ok: true }),
+    publishCommunity: async (options) => { published.push(options); return { configured: true }; },
+    send: () => {}, logLine: (line) => logs.push(line), require: () => null,
+    SETTINGS_PATH: "settings.json",
+    readFileSync: () => JSON.stringify(settings),
+    updateSettings: async (mutate) => { const next = JSON.parse(JSON.stringify(settings)); await mutate(next); settings = next; return next; },
+    fetch: async (url) => { fetches.push(url); if (!reachable) throw new Error("connect ECONNREFUSED"); return { ok: status === 200, status, json: async () => answer }; },
+    optionalHelper: () => ({ ...hubClientModule, createHubClient: (options) => ({ url: options.url, status: () => ({ configured: Boolean(options.url), state: "off", error: null, user: null, readOnly: false, paused: false, rooms: [] }), disconnect: async () => { disconnected += 1; } }) }),
+  });
+  vm.runInContext(`${block}\nthis.api = { communitySetupView, communitySetupSave, hubInstance, communitySetup };`, context);
+  return { api: context.api, settings: () => settings, fetches, published, logs, disconnected: () => disconnected };
+}
+const plainCopy = (value) => JSON.parse(JSON.stringify(value));
+
+test("connection details save, answer at once and say whether the hub is there", async () => {
+  const h = setupHost();
+  assert.deepEqual(plainCopy(h.api.communitySetupView()), { ok: true, clientId: "", hubUrl: "", environment: { clientId: false, hubUrl: false }, linkReady: false, hubReady: false });
+  const saved = plainCopy(await h.api.communitySetupSave({ clientId: APP, hubUrl: "https://hub.example.com/" }));
+  assert.equal(saved.ok, true);
+  assert.deepEqual([saved.clientId, saved.hubUrl, saved.linkReady, saved.hubReady], [APP, "https://hub.example.com", true, true]);
+  assert.deepEqual(saved.health, { ok: true, protocol: 1, paused: false });
+  assert.deepEqual(h.fetches, ["https://hub.example.com/v1/health"]);
+  assert.deepEqual(plainCopy(h.settings().communitySetup), { clientId: APP, hubUrl: "https://hub.example.com" });
+  assert.deepEqual(plainCopy(h.published), [{ force: true }], "the Community card repaints with Link my Discord");
+  assert.ok(!h.logs.join("\n").includes(APP) && !h.logs.join("\n").includes("hub.example.com"), "the log says what changed, not the values");
+});
+
+test("a new hub address drops the old client; the next one uses it", async () => {
+  const h = setupHost({ saved: { clientId: APP, hubUrl: "https://old.example.com" } });
+  assert.equal(h.api.hubInstance().url, "https://old.example.com");
+  await h.api.communitySetupSave({ clientId: APP, hubUrl: "https://new.example.com" });
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(h.disconnected(), 1);
+  assert.equal(h.api.hubInstance().url, "https://new.example.com");
+  await h.api.communitySetupSave({ clientId: "", hubUrl: "https://new.example.com" });
+  assert.equal(h.disconnected(), 1, "the same address keeps its client");
+});
+
+test("bad values are refused with the reason and nothing is saved; empty values clear", async () => {
+  const h = setupHost({ saved: { clientId: APP, hubUrl: "https://hub.example.com" } });
+  const refused = plainCopy(await h.api.communitySetupSave({ clientId: "abc", hubUrl: "http://hub.example.com/rooms" }));
+  assert.equal(refused.ok, false);
+  assert.match(refused.errors.clientId, /17 to 20 digits/);
+  assert.match(refused.errors.hubUrl, /https:\/\//);
+  assert.deepEqual(plainCopy(h.settings().communitySetup), { clientId: APP, hubUrl: "https://hub.example.com" }, "left as it was");
+  assert.equal(h.fetches.length, 0);
+  await h.api.communitySetupSave({ clientId: "", hubUrl: "" });
+  assert.equal("communitySetup" in h.settings(), false, "cleared from settings");
+  assert.deepEqual([h.api.communitySetupView().linkReady, h.api.communitySetupView().hubReady], [false, false]);
+});
+
+test("the environment still wins, and an unreachable hub is saved with the reason", async () => {
+  const env = { MEFI_STUDIO_HUB_URL: "http://127.0.0.1:8787", MEFI_STUDIO_DISCORD_CLIENT_ID: APP };
+  const h = setupHost({ env, reachable: false });
+  const saved = plainCopy(await h.api.communitySetupSave({ clientId: "", hubUrl: "https://hub.example.com" }));
+  assert.deepEqual(saved.environment, { clientId: true, hubUrl: true });
+  assert.equal(h.api.hubInstance().url, "http://127.0.0.1:8787", "a maintainer's test hub wins");
+  assert.equal(saved.health.ok, false);
+  assert.match(saved.health.error, /could not reach the hub/);
+  const wrong = setupHost({ status: 404, answer: null });
+  assert.match((await wrong.api.communitySetupSave({ hubUrl: "https://example.com" })).health.error, /not as a Void Engine hub \(HTTP 404\)/);
+});

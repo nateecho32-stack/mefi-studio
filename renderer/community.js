@@ -37,7 +37,7 @@
     network: "Couldn't reach Discord. Check your connection and try again.",
     "not-member": "Your Discord account isn't in the Void Engine server yet. Join, then choose Check now.",
     "rate-limit": "Discord asked Studio to slow down. Try again in a few minutes.",
-    "not-configured": "Discord linking isn't set up in this build yet.",
+    "not-configured": "Discord linking isn't set up on this PC yet. Add the link app ID in Settings › Community › Connection details.",
     throttled: "Checked a moment ago. Try again in a minute.",
     unavailable: "Linking the Void Engine Discord needs the desktop app.",
   };
@@ -313,9 +313,80 @@
       target.focus?.({ preventScroll: true });
     } catch {}
   }
+  // ---- connection details --------------------------------------------------------
+  // The two public values that connect Studio to the Void Engine: the Mefi
+  // Studio Link application id (what Link my Discord signs in with) and the
+  // rooms hub's address (Rooms, Friends and Listen together). Main saves them in
+  // settings (community:setup) and uses them at once; the environment variables
+  // of a maintainer's test setup still win. Built once beside the card body, so
+  // a status repaint never wipes what is being typed.
+  let setupBox = null;
+  let setupTouched = false;
+  function setupField(label, id, placeholder) {
+    const wrap = node("label", "community-setup-field");
+    const input = node("input");
+    input.id = id;
+    input.type = "text";
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.placeholder = placeholder;
+    wrap.append(node("span", "", label), input);
+    return { wrap, input };
+  }
+  function setupSection() {
+    const body = $("community-settings-body");
+    if (setupBox || !body || !bridge("communitySetup")) return;
+    setupBox = node("details", "community-setup");
+    setupBox.id = "community-setup";
+    const client = setupField("Link app ID", "community-setup-client", "17 to 20 digits");
+    client.input.inputMode = "numeric";
+    const hub = setupField("Rooms hub address", "community-setup-hub", "https://hub.example.com");
+    const env = node("p", "muted community-setup-env");
+    env.id = "community-setup-env";
+    env.hidden = true;
+    const result = node("p", "muted community-setup-status");
+    result.id = "community-setup-status";
+    result.setAttribute("role", "status");
+    const save = node("button", "primary mini", "Save");
+    save.type = "button";
+    save.id = "community-setup-save";
+    const paint = (setup) => {
+      if (!setup?.ok && !setup?.errors) return;
+      if (document.activeElement !== client.input) client.input.value = setup.clientId || "";
+      if (document.activeElement !== hub.input) hub.input.value = setup.hubUrl || "";
+      const overridden = [setup.environment?.clientId ? "MEFI_STUDIO_DISCORD_CLIENT_ID" : "", setup.environment?.hubUrl ? "MEFI_STUDIO_HUB_URL" : ""].filter(Boolean);
+      env.textContent = overridden.length ? `${overridden.join(" and ")} ${overridden.length > 1 ? "are" : "is"} set on this PC and ${overridden.length > 1 ? "win" : "wins"} over what is saved here.` : "";
+      env.hidden = !overridden.length;
+    };
+    save.addEventListener("click", async () => {
+      save.disabled = true;
+      result.textContent = "Saving…";
+      const saved = await call("communitySetup", { clientId: client.input.value, hubUrl: hub.input.value });
+      save.disabled = false;
+      if (saved?.error === "invalid") {
+        result.textContent = [saved.errors?.clientId, saved.errors?.hubUrl].filter(Boolean).join(" ");
+        return;
+      }
+      if (!saved?.ok) { result.textContent = "Studio couldn't save these. Try again."; return; }
+      paint(saved);
+      const link = saved.linkReady ? "Link my Discord is ready above." : "Add the link app ID to link Discord.";
+      const reach = saved.health == null ? (saved.hubReady ? "" : "Add the hub address for Rooms and Friends.")
+        : saved.health.ok ? `The hub answered${saved.health.paused ? ", but it is paused for now" : ""}.` : saved.health.error;
+      result.textContent = `Saved. ${link} ${reach}`.trim();
+    });
+    setupBox.addEventListener("toggle", () => { if (setupBox.open) setupTouched = true; });
+    setupBox.append(
+      node("summary", "", "Connection details"),
+      node("p", "muted", "Studio reaches the Void Engine through two public values: the Mefi Studio Link Application ID (Discord Developer Portal) and the rooms hub's address. Set them once on each PC; they apply at once."),
+      client.wrap, hub.wrap, env, row(save), result,
+    );
+    body.after(setupBox);
+    void call("communitySetup").then(paint);
+  }
   function renderSettings() {
     const body = $("community-settings-body");
     if (!body) return;
+    setupSection();
     const focused = focusedAction();
     rendered = [];
     const state = view();
@@ -325,9 +396,11 @@
     else if (state === "unavailable") parts = [node("p", "", "Community linking isn't available in this build."), node("p", "muted", PITCH)];
     else if (state === "linking") parts = [node("p", "community-waiting", "Waiting for Discord in your browser. Approve Studio there, then come back here."), row(button("Cancel", cancelLink))];
     else if (state === "unlinked") parts = [node("p", "", PITCH), node("p", "muted community-aside", USES), row(button("Join the Discord", join), button(LINK_LABEL, link, { className: "primary", title: "Sign in with Discord in your browser" }))];
-    else if (state === "not-configured") parts = [node("p", "", "Discord linking isn't set up in this build yet."), node("p", "muted", PITCH), row(button("Join the Discord", join))];
+    else if (state === "not-configured") parts = [node("p", "", "Discord linking isn't set up on this PC yet. Add the link app ID under Connection details below."), node("p", "muted", PITCH), row(button("Join the Discord", join))];
     else parts = linkedParts(state);
     body.replaceChildren(...parts);
+    // Not set up yet: open the details, unless the owner has handled them.
+    if (setupBox && !setupTouched && state === "not-configured") setupBox.open = true;
     restoreFocus(focused);
   }
 

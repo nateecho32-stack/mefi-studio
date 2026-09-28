@@ -1334,11 +1334,13 @@ let communityWatch = null;
 let communitySignatureSent = null;
 let communityPublishing = Promise.resolve();
 
-// The public-client id: the environment wins so a maintainer can test an app
-// before the constant is filled. Empty means "not configured".
+// The public-client id: the environment wins so a maintainer can test an app,
+// then the id saved in Settings › Community (communitySetup), then the
+// constant. Empty means "not configured".
 function communityClientId() {
   if (!community || !discordOAuth) return "";
-  const id = String(process.env.MEFI_STUDIO_DISCORD_CLIENT_ID || community.CLIENT_ID || "").trim();
+  const saved = typeof communitySetup === "function" ? communitySetup().clientId : "";
+  const id = String(process.env.MEFI_STUDIO_DISCORD_CLIENT_ID || saved || community.CLIENT_ID || "").trim();
   return /^\d{1,32}$/.test(id) ? id : "";
 }
 
@@ -1799,10 +1801,80 @@ async function hubAccessToken() {
   return { ok: false, error: checked?.error === "not-member" ? "not-member" : checked?.error === "auth" ? "auth" : "network" };
 }
 
+// ---- connection details: Settings › Community ----
+// The link app id and the rooms hub's address, saved in settings.communitySetup
+// (community.normalizeSetup checks both), so a PC needs no environment
+// variables and no restart. Read from disk the first time they are needed and
+// again after each save; the environment variables still win. A changed hub
+// address drops the client, and the next call builds one for the new address.
+let communitySetupCache = null;
+function communitySetupFromDisk() {
+  const empty = { clientId: "", hubUrl: "" };
+  if (!community?.normalizeSetup) return empty;
+  try {
+    const saved = community.normalizeSetup(JSON.parse(readFileSync(SETTINGS_PATH, "utf8")).communitySetup, { address: hubModule?.hubAddress });
+    return { clientId: saved.clientId, hubUrl: saved.hubUrl };
+  } catch { return empty; }
+}
+function communitySetup() {
+  communitySetupCache ??= communitySetupFromDisk();
+  return communitySetupCache;
+}
+function communitySetupReload(value = communitySetupFromDisk()) {
+  const hubChanged = communitySetupCache?.hubUrl !== value.hubUrl;
+  communitySetupCache = value;
+  if (hubChanged && hubClient) {
+    const old = hubClient;
+    hubClient = null;
+    Promise.resolve().then(() => old.disconnect()).catch(() => {});
+  }
+}
+const communityHubUrl = () => String(process.env.MEFI_STUDIO_HUB_URL || communitySetup().hubUrl || "").trim();
+function communitySetupView() {
+  const saved = communitySetup();
+  const set = (name) => Boolean(String(process.env[name] ?? "").trim());
+  return {
+    ok: true, clientId: saved.clientId, hubUrl: saved.hubUrl,
+    environment: { clientId: set("MEFI_STUDIO_DISCORD_CLIENT_ID"), hubUrl: set("MEFI_STUDIO_HUB_URL") },
+    linkReady: Boolean(communityClientId()),
+    hubReady: Boolean(hubModule?.hubAddress(communityHubUrl())),
+  };
+}
+// Whether the saved hub answers, so the form can say so at once.
+async function communityHubHealth(url) {
+  const address = hubModule?.hubAddress(url);
+  if (!address) return { ok: false, error: "That hub address is not valid." };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+  try {
+    const response = await fetch(`${address.http}/v1/health`, { signal: controller.signal, redirect: "error" });
+    const body = await response.json().catch(() => null);
+    if (response.ok && body?.ok === true) return { ok: true, protocol: Number.isInteger(body.protocol) ? body.protocol : null, paused: body.paused === true };
+    return { ok: false, error: `The hub answered, but not as a Void Engine hub (HTTP ${response.status}).` };
+  } catch (error) {
+    return { ok: false, error: error?.name === "AbortError" ? "The hub did not answer within 6 seconds. Is it running, and is its tunnel up?" : "Studio could not reach the hub at that address." };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function communitySetupSave(payload) {
+  if (!community?.normalizeSetup) return { ok: false, error: "unavailable" };
+  const next = community.normalizeSetup(payload, { address: hubModule?.hubAddress });
+  if (Object.keys(next.errors).length) return { ...communitySetupView(), ok: false, error: "invalid", errors: next.errors };
+  await updateSettings((settings) => {
+    if (next.clientId || next.hubUrl) settings.communitySetup = { clientId: next.clientId, hubUrl: next.hubUrl };
+    else delete settings.communitySetup;
+  });
+  communitySetupReload({ clientId: next.clientId, hubUrl: next.hubUrl });
+  const health = next.hubUrl ? await communityHubHealth(next.hubUrl) : null;
+  logLine(`[community] connection details saved: link app id ${next.clientId ? "set" : "empty"}, hub ${next.hubUrl ? (health?.ok ? "answering" : "not answering") : "empty"}`);
+  return { ...communitySetupView(), health, status: await publishCommunity({ force: true }) };
+}
+
 function hubInstance() {
   if (!hubClient && hubModule) {
     hubClient = hubModule.createHubClient({
-      url: hubModule.configuredUrl(process.env),
+      url: hubModule.configuredUrl({ MEFI_STUDIO_HUB_URL: communityHubUrl() }),
       getAccessToken: hubAccessToken,
       // Companion cards go through the "Companion friends" block, which reads
       // them before the renderer sees one; everything else passes straight on.
@@ -20437,6 +20509,9 @@ function registerIpc() {
   ipcMain.handle("community:unlink", async () => unlinkCommunity());
   ipcMain.handle("community:prompt", async (_event, payload) => communityPromptAction(payload?.action));
   ipcMain.handle("community:open", async (_event, payload) => openCommunityTarget(payload?.target));
+  // Connection details (the "connection details" part of the rooms hub block):
+  // no payload reads them, { clientId, hubUrl } saves them.
+  ipcMain.handle("community:setup", async (_event, payload) => (payload && typeof payload === "object" ? communitySetupSave(payload) : communitySetupView()));
 
   // ---- Rooms hub ----------------------------------------------------------
   // Listen together and now playing (the "Rooms hub" block). App-wide like

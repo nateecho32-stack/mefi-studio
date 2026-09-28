@@ -80,7 +80,19 @@ test("the bridge exposes no way to read a Discord token", () => {
   const { api } = bridge();
   const community = Object.keys(api).filter((key) => /community/i.test(key)).sort();
   assert.deepEqual(community, [
-    "communityCheck", "communityLink", "communityLinkCancel", "communityOpen", "communityPrompt", "communityStatus", "communityUnlink", "onCommunityEvent",
+    "communityCheck", "communityLink", "communityLinkCancel", "communityOpen", "communityPrompt", "communitySetup", "communityStatus", "communityUnlink", "onCommunityEvent",
   ]);
   assert.ok(!Object.keys(api).some((key) => /discord|token/i.test(key)));
+});
+
+test("connection details cross as two strings, or as a read", async () => {
+  const { api, invoked } = bridge();
+  await api.communitySetup();
+  await api.communitySetup({ clientId: " 1400000000000000001 ", hubUrl: "https://hub.example.com", token: "not sent" });
+  await api.communitySetup({ clientId: 1400000000000000001, hubUrl: "x".repeat(400) });
+  assert.deepEqual(plain(invoked), [
+    { channel: "community:setup", args: [null] },
+    { channel: "community:setup", args: [{ clientId: " 1400000000000000001 ", hubUrl: "https://hub.example.com" }] },
+    { channel: "community:setup", args: [{ clientId: "", hubUrl: "x".repeat(300) }] },
+  ]);
 });

@@ -3785,6 +3785,14 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
 #community-settings-body > .community-aside { font-size: var(--fs-xs); }
 /* Side by side, not stacked, so each swatch keeps both of its hues in view. */
 #community-settings-body > .community-checked { margin: var(--s2) 0 2px; font-size: var(--fs-xs); }
+/* Connection details: the link app id and hub address, under the card. */
+.community-setup { margin: var(--s3) 0 0; padding-top: var(--s2); border-top: 1px solid var(--hairline); }
+.community-setup > summary { cursor: pointer; font-size: var(--fs-sm); font-weight: 600; }
+.community-setup > p { max-width: 78ch; margin: var(--s2) 0; font-size: var(--fs-xs); line-height: 1.55; }
+.community-setup-field { display: grid; gap: 4px; max-width: 460px; margin: 0 0 var(--s2); font-size: var(--fs-xs); color: var(--muted); }
+.community-setup-field > input { width: 100%; min-width: 0; box-sizing: border-box; }
+.community-setup-env { color: var(--warn); }
+.community-setup-status:empty { display: none; }
 /* Check now and Unlink are ghost mini; Unlink is the quiet one until pointed at. */
 #community-settings-body .community-unlink { color: var(--muted); border-color: transparent; }
 #community-settings-body .community-unlink:not([aria-disabled="true"]):hover { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); background: color-mix(in srgb, var(--bad) 7%, transparent); }
@@ -58170,7 +58178,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     auth: "Discord asked Studio to link again: Settings › General › Community.",
     "not-linked": "Link your Discord account (Settings › General › Community) to listen with your rooms.",
     version: "The rooms hub has moved on. Update Studio to listen together.",
-    "not-configured": "Listening together needs the Void Engine rooms hub, and this build isn't connected to one yet.",
+    "not-configured": "Listening together needs the Void Engine rooms hub, and this PC isn't connected to one yet: add its address in Settings › Community › Connection details.",
     unsupported: "This Studio can't open the hub's connection.",
   };
   const bridge = () => window.mefiStudio;
@@ -58982,17 +58990,24 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     );
     box.append(intro, setup, codeBox, linked);
 
-    async function run(label, work) {
-      if (busy) return;
-      busy = true;
-      box.setAttribute("aria-busy", "true");
-      for (const el of box.querySelectorAll("button")) el.disabled = true;
-      if (label) status.textContent = label;
-      try { await work(); } catch (error) { status.textContent = `That did not work: ${error?.message || error}`; }
-      busy = false;
-      box.removeAttribute("aria-busy");
-      for (const el of box.querySelectorAll("button")) el.disabled = false;
-      syncKeysButton();
+    // One step at a time, in order. Buttons are off while one runs; a section
+    // opened meanwhile (Keys and setup while the vault is still being read)
+    // waits its turn instead of being dropped, which left its list empty.
+    let queue = Promise.resolve();
+    function run(label, work) {
+      const next = queue.then(async () => {
+        busy = true;
+        box.setAttribute("aria-busy", "true");
+        for (const el of box.querySelectorAll("button")) el.disabled = true;
+        if (label) status.textContent = label;
+        try { await work(); } catch (error) { status.textContent = `That did not work: ${error?.message || error}`; }
+        busy = false;
+        box.removeAttribute("aria-busy");
+        for (const el of box.querySelectorAll("button")) el.disabled = false;
+        syncKeysButton();
+      });
+      queue = next.catch(() => {});
+      return next;
     }
     function paint(result) {
       if (!result?.ok) { status.textContent = result?.error || "The vault could not be read."; return; }
@@ -59111,7 +59126,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         const names = [...list.querySelectorAll("input[type=checkbox]:checked")].map((tick) => tick.value);
         const result = await api.vaultKeys("share", { names, confirmation: phrase.value });
         phrase.value = "";
-        status.textContent = result?.canceled ? "Nothing was shared." : result?.ok ? `Shared ${result.shared.map((name) => KEY_NAMES[name] ?? name).join(", ")}.` : result?.error || "Nothing was shared.";
+        status.textContent = result?.canceled ? "Nothing was shared." : result?.ok ? `Shared ${result.shared.map((name) => KEY_NAMES[name] ?? name).join(", ")}. On your other PC, open Keys and setup and choose Check for shared keys.` : result?.error || "Nothing was shared.";
+        syncKeysButton();
       }));
       const incoming = node("div", "pc-vault-keylist");
       incoming.id = "pc-vault-keys-incoming";
@@ -59131,12 +59147,17 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         label.append(tick, node("span", "", KEY_NAMES[name] ?? name));
         return label;
       }));
+      // Why Share stays off, in words, once something is typed.
+      const mismatch = node("p", "muted pc-vault-mismatch", "Type the sentence exactly as shown, with the same capitals and spaces.");
+      mismatch.id = "pc-vault-keys-mismatch";
+      mismatch.hidden = true;
       syncKeysButton = () => {
         const any = list.querySelector("input[type=checkbox]:checked");
+        mismatch.hidden = !phrase.value || !keysPhrase || phrase.value === keysPhrase;
         share.disabled = busy || !any || !keysPhrase || phrase.value !== keysPhrase;
       };
       phrase.addEventListener("input", () => syncKeysButton());
-      keys.append(node("summary", "pc-vault-danger-summary", "Keys and setup"), warning, detail, list, phraseLabel, phrase, share,
+      keys.append(node("summary", "pc-vault-danger-summary", "Keys and setup"), warning, detail, list, phraseLabel, phrase, mismatch, share,
         button("Check for shared keys", "pc-vault-keys-check", () => run("Checking the vault for shared keys…", async () => {
           const result = await api.vaultKeys("list");
           if (!result?.ok) { status.textContent = result?.error || "The vault could not be read."; return; }
@@ -59155,7 +59176,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         if (!keys.open) return;
         void run(null, async () => {
           const result = await api.vaultKeys("offer");
-          if (!result?.ok) return;
+          if (!result?.ok) { status.textContent = result?.error || "The keys saved on this PC could not be listed. Close Keys and setup and open it again."; return; }
           keysPhrase = result.confirmation;
           phraseLabel.textContent = `To share, type exactly: ${keysPhrase}`;
           ticks(list, [...result.keys, ...result.setup], () => false);
@@ -59369,7 +59390,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     function paintStatus() {
       const view = state.view, hub = view.hub;
       const out = view.friends.length;
-      status.textContent = !hub.configured ? "Friends' companions meet through the rooms hub, which this build does not have yet. Pip is here to practice."
+      status.textContent = !hub.configured ? "Friends' companions meet through the rooms hub, which this PC isn't connected to yet: add its address in Settings › Community › Connection details. Pip is here to practice."
         : !hub.linked ? "Link Discord under Community to meet friends' companions. Pip, the practice buddy, is always here."
         : hub.state !== "ready" ? "Connect under Rooms below, then open a room, and friends' companions there can visit."
         : !hub.companions ? "This rooms hub does not carry companions yet, so friends cannot visit. Pip is here to practice."
@@ -59900,7 +59921,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 
     function explain(hub) {
       if (!hub?.configured) {
-        status.textContent = "Rooms need the Void Engine room service, which this build is not connected to yet.";
+        status.textContent = "Rooms need the Void Engine room service, which this PC is not connected to yet: add its address in Settings › Community › Connection details.";
         root.dataset.state = "not-configured";
         body.replaceChildren();
         return false;
@@ -62070,7 +62091,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     network: "Couldn't reach Discord. Check your connection and try again.",
     "not-member": "Your Discord account isn't in the Void Engine server yet. Join, then choose Check now.",
     "rate-limit": "Discord asked Studio to slow down. Try again in a few minutes.",
-    "not-configured": "Discord linking isn't set up in this build yet.",
+    "not-configured": "Discord linking isn't set up on this PC yet. Add the link app ID in Settings › Community › Connection details.",
     throttled: "Checked a moment ago. Try again in a minute.",
     unavailable: "Linking the Void Engine Discord needs the desktop app.",
   };
@@ -62346,9 +62367,80 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       target.focus?.({ preventScroll: true });
     } catch {}
   }
+  // ---- connection details --------------------------------------------------------
+  // The two public values that connect Studio to the Void Engine: the Mefi
+  // Studio Link application id (what Link my Discord signs in with) and the
+  // rooms hub's address (Rooms, Friends and Listen together). Main saves them in
+  // settings (community:setup) and uses them at once; the environment variables
+  // of a maintainer's test setup still win. Built once beside the card body, so
+  // a status repaint never wipes what is being typed.
+  let setupBox = null;
+  let setupTouched = false;
+  function setupField(label, id, placeholder) {
+    const wrap = node("label", "community-setup-field");
+    const input = node("input");
+    input.id = id;
+    input.type = "text";
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.placeholder = placeholder;
+    wrap.append(node("span", "", label), input);
+    return { wrap, input };
+  }
+  function setupSection() {
+    const body = $("community-settings-body");
+    if (setupBox || !body || !bridge("communitySetup")) return;
+    setupBox = node("details", "community-setup");
+    setupBox.id = "community-setup";
+    const client = setupField("Link app ID", "community-setup-client", "17 to 20 digits");
+    client.input.inputMode = "numeric";
+    const hub = setupField("Rooms hub address", "community-setup-hub", "https://hub.example.com");
+    const env = node("p", "muted community-setup-env");
+    env.id = "community-setup-env";
+    env.hidden = true;
+    const result = node("p", "muted community-setup-status");
+    result.id = "community-setup-status";
+    result.setAttribute("role", "status");
+    const save = node("button", "primary mini", "Save");
+    save.type = "button";
+    save.id = "community-setup-save";
+    const paint = (setup) => {
+      if (!setup?.ok && !setup?.errors) return;
+      if (document.activeElement !== client.input) client.input.value = setup.clientId || "";
+      if (document.activeElement !== hub.input) hub.input.value = setup.hubUrl || "";
+      const overridden = [setup.environment?.clientId ? "MEFI_STUDIO_DISCORD_CLIENT_ID" : "", setup.environment?.hubUrl ? "MEFI_STUDIO_HUB_URL" : ""].filter(Boolean);
+      env.textContent = overridden.length ? `${overridden.join(" and ")} ${overridden.length > 1 ? "are" : "is"} set on this PC and ${overridden.length > 1 ? "win" : "wins"} over what is saved here.` : "";
+      env.hidden = !overridden.length;
+    };
+    save.addEventListener("click", async () => {
+      save.disabled = true;
+      result.textContent = "Saving…";
+      const saved = await call("communitySetup", { clientId: client.input.value, hubUrl: hub.input.value });
+      save.disabled = false;
+      if (saved?.error === "invalid") {
+        result.textContent = [saved.errors?.clientId, saved.errors?.hubUrl].filter(Boolean).join(" ");
+        return;
+      }
+      if (!saved?.ok) { result.textContent = "Studio couldn't save these. Try again."; return; }
+      paint(saved);
+      const link = saved.linkReady ? "Link my Discord is ready above." : "Add the link app ID to link Discord.";
+      const reach = saved.health == null ? (saved.hubReady ? "" : "Add the hub address for Rooms and Friends.")
+        : saved.health.ok ? `The hub answered${saved.health.paused ? ", but it is paused for now" : ""}.` : saved.health.error;
+      result.textContent = `Saved. ${link} ${reach}`.trim();
+    });
+    setupBox.addEventListener("toggle", () => { if (setupBox.open) setupTouched = true; });
+    setupBox.append(
+      node("summary", "", "Connection details"),
+      node("p", "muted", "Studio reaches the Void Engine through two public values: the Mefi Studio Link Application ID (Discord Developer Portal) and the rooms hub's address. Set them once on each PC; they apply at once."),
+      client.wrap, hub.wrap, env, row(save), result,
+    );
+    body.after(setupBox);
+    void call("communitySetup").then(paint);
+  }
   function renderSettings() {
     const body = $("community-settings-body");
     if (!body) return;
+    setupSection();
     const focused = focusedAction();
     rendered = [];
     const state = view();
@@ -62358,9 +62450,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     else if (state === "unavailable") parts = [node("p", "", "Community linking isn't available in this build."), node("p", "muted", PITCH)];
     else if (state === "linking") parts = [node("p", "community-waiting", "Waiting for Discord in your browser. Approve Studio there, then come back here."), row(button("Cancel", cancelLink))];
     else if (state === "unlinked") parts = [node("p", "", PITCH), node("p", "muted community-aside", USES), row(button("Join the Discord", join), button(LINK_LABEL, link, { className: "primary", title: "Sign in with Discord in your browser" }))];
-    else if (state === "not-configured") parts = [node("p", "", "Discord linking isn't set up in this build yet."), node("p", "muted", PITCH), row(button("Join the Discord", join))];
+    else if (state === "not-configured") parts = [node("p", "", "Discord linking isn't set up on this PC yet. Add the link app ID under Connection details below."), node("p", "muted", PITCH), row(button("Join the Discord", join))];
     else parts = linkedParts(state);
     body.replaceChildren(...parts);
+    // Not set up yet: open the details, unless the owner has handled them.
+    if (setupBox && !setupTouched && state === "not-configured") setupBox.open = true;
     restoreFocus(focused);
   }
 

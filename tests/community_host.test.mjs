@@ -148,12 +148,12 @@ const linkedHost = (options = {}) => host({
   ...options,
 });
 
-test("the host registers exactly the seven community channels", () => {
+test("the host registers exactly the eight community channels", () => {
   const h = host();
-  for (const name of ["community:status", "community:link", "community:link-cancel", "community:check", "community:unlink", "community:prompt", "community:open"]) {
+  for (const name of ["community:status", "community:link", "community:link-cancel", "community:check", "community:unlink", "community:prompt", "community:open", "community:setup"]) {
     assert.ok(handlers.includes(`ipcMain.handle("${name}"`), name);
   }
-  assert.equal(handlers.split("\n").length, 7);
+  assert.equal(handlers.split("\n").length, 8);
   assert.equal(h.run("COMMUNITY_AUTH_PATH"), AUTH_FILE, "the refresh token has its own file beside settings.json, not auth.json");
 });
 

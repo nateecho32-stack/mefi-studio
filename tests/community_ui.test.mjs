@@ -70,6 +70,8 @@ class Element {
     return event;
   }
   click() { if (!this.disabled) this.emit("click"); }
+  // Settings › Community puts its Connection details right after the card body.
+  after(...items) { (this.siblingsAfter ??= []).push(...items); }
   scrollIntoView() { this.scrolled += 1; }
   focus() { focused = this; }
   all() { return this.children.flatMap((child) => [child, ...child.all()]); }
@@ -545,7 +547,7 @@ test("Settings › Community renders each link state with plain text", async () 
   bridge.push(member({ state: "session" }));
   assert.match(body(env).textContent, /This link lasts until Studio closes/);
   bridge.push(status({ configured: false }));
-  assert.match(body(env).textContent, /Discord linking isn't set up in this build yet\./);
+  assert.match(body(env).textContent, /Discord linking isn't set up on this PC yet\. Add the link app ID under Connection details below\./);
   assert.deepEqual(body(env).labels(), ["Join the Discord"]);
   bridge.push(status());
   assert.ok(body(env).textContent.includes(PITCH) && body(env).textContent.includes(USES));
@@ -627,3 +629,39 @@ test("Community has its own glyph: the sprite symbol, the sidebar button, the se
   assert.equal(env.registered.find((dest) => dest.id === "community").glyph, "g-community");
 });
 
+
+test("Connection details: read once, open while linking is not set up, saved with the reason or whether the hub answers", async () => {
+  const APP = "1400000000000000001";
+  const saves = [];
+  const view = { ok: true, clientId: "", hubUrl: "", environment: { clientId: false, hubUrl: false }, linkReady: false, hubReady: false };
+  const bridge = fakeBridge(status({ configured: false }), {
+    communitySetup: async (values) => {
+      if (!values) return view;
+      saves.push({ ...values });
+      if (values.clientId === "abc") return { ...view, ok: false, error: "invalid", errors: { clientId: "The link app ID is the Mefi Studio Link Application ID: 17 to 20 digits." } };
+      bridge.set(status());
+      return { ok: true, clientId: values.clientId, hubUrl: values.hubUrl, environment: { clientId: false, hubUrl: true }, linkReady: true, hubReady: true, health: { ok: true, protocol: 1, paused: false }, status: status() };
+    },
+  });
+  const env = environment({ bridge });
+  await env.boot();
+  const box = body(env).siblingsAfter?.[0];
+  assert.ok(box, "the details sit right after the card body");
+  assert.equal(box.id, "community-setup");
+  assert.equal(box.open, true, "opened while linking is not set up");
+  assert.match(body(env).textContent, /Add the link app ID under Connection details below/);
+  const field = (id) => box.all().find((child) => child.id === id);
+  const save = field("community-setup-save");
+  field("community-setup-client").value = "abc";
+  field("community-setup-hub").value = "https://hub.example.com";
+  save.click(); await env.advance(0);
+  assert.match(field("community-setup-status").textContent, /17 to 20 digits/);
+  field("community-setup-client").value = APP;
+  save.click(); await env.advance(0);
+  assert.deepEqual(saves.at(-1), { clientId: APP, hubUrl: "https://hub.example.com" });
+  assert.equal(field("community-setup-status").textContent, "Saved. Link my Discord is ready above. The hub answered.");
+  assert.deepEqual(body(env).labels(), ["Join the Discord", "Link my Discord"], "the card offers Link my Discord at once");
+  assert.equal(field("community-setup-env").hidden, false);
+  assert.match(field("community-setup-env").textContent, /MEFI_STUDIO_HUB_URL is set on this PC and wins/);
+  assert.equal(body(env).siblingsAfter.length, 1, "built once, however often the card repaints");
+});

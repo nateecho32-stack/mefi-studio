@@ -185,6 +185,11 @@ const api = {
   communityUnlink: () => ipcRenderer.invoke("community:unlink"),
   communityPrompt: (action) => ipcRenderer.invoke("community:prompt", { action: typeof action === "string" ? action : null }),
   communityOpen: (target) => ipcRenderer.invoke("community:open", { target: typeof target === "string" ? target : null }),
+  // Settings › Community › Connection details: no argument reads them; the
+  // link app id and hub address (both public) save them.
+  communitySetup: (values) => ipcRenderer.invoke("community:setup", values && typeof values === "object"
+    ? { clientId: typeof values.clientId === "string" ? values.clientId.slice(0, 40) : "", hubUrl: typeof values.hubUrl === "string" ? values.hubUrl.slice(0, 300) : "" }
+    : null),
   onCommunityEvent: (callback) => ipcRenderer.on("community:event", (_event, status) => callback(status)),
   // The Void Engine rooms hub (main.cjs "Rooms hub"): Listen together and the
   // now-playing share behind the bot's /nowplaying. Nothing connects until

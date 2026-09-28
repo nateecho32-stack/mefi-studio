@@ -65,7 +65,7 @@ test("the panel explains itself until the hub is configured, linked and connecte
   const unset = environment({ status: { configured: false } }).rooms.panel();
   await flush();
   assert.equal(unset.dataset.state, "not-configured");
-  assert.match(unset.find("rooms-status").textContent, /not connected to yet/);
+  assert.match(unset.find("rooms-status").textContent, /not connected to yet: add its address in Settings › Community › Connection details/);
   const unlinked = environment({ status: { configured: true, linked: false } }).rooms.panel();
   await flush();
   assert.equal(unlinked.find("rooms-status").textContent, "Link your Discord account to use rooms.");

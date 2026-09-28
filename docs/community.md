@@ -313,9 +313,10 @@ To turn linking on:
    - `http://127.0.0.1:53135/callback`
    - `http://127.0.0.1:53136/callback`
 4. Put the application's client id in `CLIENT_ID` in `scripts/community.cjs`.
-   To test before committing, set the `MEFI_STUDIO_DISCORD_CLIENT_ID`
-   environment variable instead. The environment wins, and an id that is not
-   all digits counts as unset.
+   Until then, each PC can save it in Settings › Community › Connection
+   details (`settings.communitySetup`, checked by `community.normalizeSetup`),
+   which applies at once. The `MEFI_STUDIO_DISCORD_CLIENT_ID` environment
+   variable wins over both, and an id that is not all digits counts as unset.
 5. `GUILD_ID` (`1345380333302059129`) and `INVITE_URL` already point at the
    Void Engine server. Keep the invite permanent.
 
@@ -359,8 +360,9 @@ own plan when they start:
   **Listen along**. **Share what I'm playing**, off by default, feeds the
   bot's `/nowplaying`. Both run through `scripts/hub-client.cjs` (main's
   "Rooms hub" block) and `renderer/together.js`. They need the hub's address
-  in `hub-client.cjs`'s `HUB_URL` (or `MEFI_STUDIO_HUB_URL`) and a linked
-  Discord account.
+  in `hub-client.cjs`'s `HUB_URL`, in Settings › Community › Connection
+  details, or in `MEFI_STUDIO_HUB_URL` (which wins), and a linked Discord
+  account.
   **Companion playdates** are the second piece, and the first that needs the
   hub to learn something new. Studio's side ships; the hub only relays:
   - The hub's `ready` frame lists `features`. Studio sends companion frames
