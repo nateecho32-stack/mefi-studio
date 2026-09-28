@@ -34,6 +34,35 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-28 - Discord linking without environment variables; vault kept in step
+
+Settings › Community › Connection details saves the Mefi Studio Link
+Application ID and the rooms hub's address (settings.communitySetup, checked
+by community.normalizeSetup and the hub client's address rule) and uses them
+at once; the environment variables still win. The Your PCs vault now rebases
+its own commits onto GitHub's instead of pulling fast-forward only, so a push
+that loses the race to another PC is sent again and a copy is never left
+stuck; a clash on the same item keeps GitHub's. Keys and setup queues behind
+a loading vault instead of staying empty.
+
+- `npm run build-booklet`, `npm run check` (186 targets, 379 specs) and
+  `npm run audit` (zero findings): PASS.
+- New and changed suites: community_rules (normalizeSetup), hub_host
+  (save, refuse, clear, environment wins, hub answering or not, a new hub
+  address rebuilds the client), community_bridge, community_ui (Connection
+  details opens while not set up, reasons, Link my Discord at once),
+  pc_vault (a push losing the race goes on top; a same-item clash keeps
+  GitHub's; a copy left behind catches up and sends its commit), and
+  pc_vault_ui (Keys and setup opened while loading, the phrase hint, a
+  failed list).
+- A throwaway Electron probe of Settings › Community with a fake bridge:
+  the details open while not set up, a bad id gives its reason, Save shows
+  Link my Discord and the hub line, no overflow at 1280 or 620 px.
+- `npm test` in a private worktree, exit 0: Node parallel stage 4253 tests,
+  4248 passed, 5 skipped, 0 failures; Electron stage 42 tests, 41 passed, 1
+  skipped; `eyes_toggle_electron` 1/1; `occlusion_probe` 1 passed, 1
+  capability skip; Python contracts OK; normalized-path lock passed.
+
 ## 2026-09-28 - Merge all branches: hidden-surfaces onto the restored main; Friends across PCs verified end to end; 0.4.5
 
 Surveyed every branch and tree. gh-pages is the website (no shared history; not merged). perf/quick-wins is content-identical to aef5dfe on main (skipped). worktree-* branches and the cli-path-refresh clone are already in main. The 16:57 merge (65703a6) and "fixes" (7ba162c) losses were already restored on GitHub main by dc85f68, which keeps the docked video player the other PC is developing; this merge keeps that and the fuller Friends › Rooms (4ee6891). Merged perf/hidden-surfaces (docs/performance.md kept both). Added tests/companion_e2e.test.mjs: three Studios (main's real Companion friends block and hub client, three Discord accounts) against the Void Engine Bot's real hub with its companion relay: make a room, ask, let in, play-only default, a friend rule keeping a token-bearing title home, share-back ask, mirrored playdate, stay home; 1/1 with MEFI_STUDIO_BOT_ROOT set (hub relay patch, 462/462 bot tests). Version 0.4.5. Full npm test: 4209 passed, 1 failed (command_render, known load-sensitive; passed solo in 51 s); Python contracts and path lock passed. check ok, audit 0 errors.
@@ -445,10 +474,6 @@ five audits ran; it passed in this run.
 ## 2026-09-27 morning - Handout rebroadcast dedupe: a heard note is not re-sent; AI-link retirement re-verified (task_plan_mujom5h3_0, run_1790505348418_7)
 
 Grouped A-Eyes alerts "Compactor rebroadcasts finished work item" (task_6e3c0afebf8489ff) and "Queue handout broadcast spam" (task_9645fd821b9d03bc). Member 1 is the stale work broadcast loop the sibling session already retired: inspected HEAD before touching anything and adopted 6f1ef62 as it stands (assistant.mjs aiLinkTicket/aiLinkHealthy/aiLinkResolved, the compact()/tidy() ai-block absorb, the resolvedAiLinkWork promotion guard); all four board.test.mjs retirement tests green and the live data/eyes-assistant.json read read-only confirms the loop is over (ai online true, failures 0, backoffUntil 0, requests 0), so no further piece was owed there. Member 2's general spam had a second half the retirement did not cover: sendMail only deduped identical UNREAD notes, so once the foreman read a handout (it reads its inbox every start) the compactor's next identical "N work item(s) ready — yours to hand out" landed as a fresh row, packet and chatter line every pass — the seven handouts in eleven minutes that kept coming after the briefer's rebuke. Fix: assistant.mjs exports MAIL_REBROADCAST_MS (15 min) and sendMail now returns the state unchanged for a repeat of the same note from the same seat while a read copy sits within that window, so host assistantSendMail reports it unsent and pushes nothing; changed handouts (a different count or next pick) and repeats after the window still go out, and the unread-refresh path is untouched. Tests: new module and host cases in tests/assistant_mail.test.mjs; node --test tests/assistant_mail.test.mjs tests/board.test.mjs tests/briefing_fix_requests.test.mjs 57 pass / 0 fail; node --test tests/request_dedupe tests/task_delegation tests/task_grouping_cleanup tests/idea_backlog tests/task_history tests/work_admission_host tests/request_admission tests/board_growth tests/assistant_loop tests/role_provider_isolation 137 pass / 0 fail; python tools/test_mefi_studio_assistant.py 66 OK; npm run check ok (165 targets); npm test all gates pass; npm run audit 0 errors / 0 warnings. Sibling work-tree hunks preserved untouched.
-
-## 2026-09-27 - Errors-rising alert verified: one transient foreman entry, link repair holds (task_79329b8c68060082, run_1790504647068_6)
-
-Follow-up verification for the A-Eyes "Errors rising after AI-link fix" alert (overseer logged error entries rising 0→10 after ses_f1f897 finished normally). Root cause stands as triaged by the sibling sessions in this family: during the quota window the pre-restart instance's AI-gated roles (briefer cadence, thinker, probes) each ended in error and appended a log row — two of the failures were the spurious "claude error: success" misparse and the rest real session-limit quota — so the burst tracked the old code plus the provider quota, not the builder session's work; the 02:39Z restart loaded the committed fixes (cliReply exit guard 11fcebc, parseClaudeCliResult is_error surfacing, resetAssistantAiBackoff at the four route-change sites, scheduleAssistantAiProbe chain) and the queue-stall side of the noise was retired by 6f1ef62. The live data/eyes-assistant.json read read-only this run confirms the repair still holds: ai online true, keyPresent true, failures 0, backoffUntil 0, lastError null, lastOkAt 2026-09-27T10:29Z, problems empty, digest.logErrors reset to [] by the clean 10:12Z audit, overseer score 100/health good, briefer error null at 129 runs; the log carries exactly one error row, the transient 10:10Z foreman "10 queued, nothing running" dispatch-congestion line that cleared itself by the next review. No code change was needed this run; the two in-flight work-tree hunks owned by sibling cards (assistant.mjs verifyCompletion deferral parsing, usage-tracker.cjs parser detail text) were preserved untouched. Narrow validation: node --test tests/briefer_cli_failure.test.mjs tests/assistant_overseer_chat.test.mjs tests/role_provider_isolation.test.mjs tests/usage_tracker_host.test.mjs 80 pass / 0 fail; python tools/test_mefi_studio_assistant.py 66 tests OK; python tools/test_mefi_studio_offline_probe.py 12 tests OK; npm run check ok (165 targets, 20 live rows); npm run audit 0 errors / 0 warnings.
 
 ## Read Before Any Tests
 
