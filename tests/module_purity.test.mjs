@@ -39,6 +39,8 @@ const PROMISES = [
   { file: "scripts/playbook.cjs", says: "Pure module: no Electron, no filesystem, no clock reads (time is injected),", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   { file: "scripts/project-map.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   { file: "scripts/desk.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // The Discord remote's rules (docs/remote.md); main.cjs "Discord remote" owns the I/O.
+  { file: "scripts/remote.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   { file: "scripts/desk-resolve.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   { file: "scripts/companion.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   { file: "scripts/outside-work.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },

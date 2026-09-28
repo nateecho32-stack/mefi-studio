@@ -205,6 +205,7 @@ npm run audit            # renderer/template contract audit
 | [docs/agent-loop.md](docs/agent-loop.md) | How a chat message becomes a verified task, with file references |
 | [docs/performance.md](docs/performance.md) | Measurements and how to reproduce them |
 | [docs/community.md](docs/community.md) | The Void Engine Discord link: the weekly card, the login, what is stored, unlinking and the fork switch |
+| [docs/remote.md](docs/remote.md) | Reach your PCs from Discord: what a DM can and cannot do, the PIN, alerts, and the hub protocol |
 | [docs/ux-audit.md](docs/ux-audit.md) | The UX audit and its phased plan |
 | [docs/fleet-overhaul-plan.md](docs/fleet-overhaul-plan.md) | The fleet overhaul: seats, pods, missions and Refocus from OpenRig, Live › Fleet, and the phase plan |
 | [docs/pi-provider-storage.md](docs/pi-provider-storage.md) | How pi's coding agent stores provider config, and the settings/auth split Studio adopted from it |

@@ -240,6 +240,21 @@ const api = {
     ...(typeof change.name === "string" ? { name: change.name.slice(0, 40) } : {}),
   } : {}),
   hubPlaydate: (target) => ipcRenderer.invoke("hub:playdate", target && typeof target === "object" ? { practice: target.practice === true, music: target.music === true, roomId: typeof target.roomId === "string" ? target.roomId : null, userId: typeof target.userId === "string" ? target.userId : null } : {}),
+  // Friends › Your PCs › Reach this PC from Discord (main.cjs "Discord remote"):
+  // the switch, this PC's name, the alerts, and the approval PIN. The PIN goes
+  // one way; main keeps only its hash and never sends it back.
+  remoteStatus: () => ipcRenderer.invoke("remote:status"),
+  remoteSet: (patch) => ipcRenderer.invoke("remote:set", patch && typeof patch === "object" ? {
+    ...(typeof patch.on === "boolean" ? { on: patch.on } : {}),
+    ...(typeof patch.name === "string" ? { name: patch.name.slice(0, 40) } : {}),
+    ...(patch.notify && typeof patch.notify === "object" ? { notify: Object.fromEntries(["needsYou", "failed", "stuck", "done", "digestHour"].filter((key) => key in patch.notify).map((key) => [key, key === "digestHour" ? (Number.isInteger(patch.notify[key]) ? patch.notify[key] : null) : patch.notify[key] === true])) } : {}),
+    ...(patch.quiet === null ? { quiet: null } : patch.quiet && typeof patch.quiet === "object" ? { quiet: { from: String(patch.quiet.from ?? "").slice(0, 5), to: String(patch.quiet.to ?? "").slice(0, 5) } } : {}),
+  } : {}),
+  remotePin: (payload) => ipcRenderer.invoke("remote:pin", payload && typeof payload === "object" ? {
+    ...(typeof payload.pin === "string" ? { pin: payload.pin.slice(0, 12) } : {}),
+    ...(payload.clear === true ? { clear: true } : {}), ...(payload.unlock === true ? { unlock: true } : {}),
+  } : {}),
+  onRemoteEvent: (callback) => ipcRenderer.on("remote:event", (_event, status) => callback(status)),
   // Friends › Your PCs (main.cjs "Multi-PC sync"): the open project against
   // its default branch on GitHub. Main picks the folder; the renderer can only
   // ask for a rebase onto GitHub's commits. onSyncEvent carries every answer,

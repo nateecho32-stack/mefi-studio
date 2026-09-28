@@ -7,6 +7,20 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Reach your PCs from Discord.** Friends › Your PCs › **Reach this PC from
+  Discord** lets a DM with the Void Engine bot check on this PC and talk to
+  Mefi here: `/studio status`, `needs`, `made` (what is being built and what
+  finished today), `digest`, `pause`, `resume`, or just a message. Alerts come
+  to your DMs when something needs you, a task stops or agents sit on work,
+  with quiet hours and a daily digest. A message from Discord is your chat
+  with less power: work it files waits for your OK in every permission mode,
+  and it cannot approve, answer asks, undo or close cards, or change
+  permissions, keys or settings. Approve buttons ask for a PIN you set here,
+  in a Discord form that is never posted in the chat; five wrong PINs lock
+  Discord approvals until you unlock them. Only your own Discord account is
+  answered, no port opens on your PC, and everything sent is scrubbed of
+  keys, paths, emails and addresses first. It needs a rooms hub with the
+  remote turned on ([docs/remote.md](docs/remote.md)).
 - **Start with Windows.** Settings › General › Profile & startup (and the
   setup helper's Machine & app) has a **Start with Windows** switch. Studio
   then opens in the tray when you sign in, on the project you had open,

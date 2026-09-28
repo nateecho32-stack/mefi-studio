@@ -400,8 +400,9 @@ settings and per-model work-kind summaries for the shared controls.
   doing (main.cjs agentsSnapshot: the loop status, running titles, the
   companion's needs-you count and today's finished and stopped work), sent
   after a sync look and when that line changes, at most every ten minutes,
-  so Your PCs shows what a PC left working is building. Keys cross only with the typed confirmation and a native prompt,
-  and their values stay in main. A `.mefishare` friend file is always
+  so Your PCs shows what a PC left working is building. Keys cross only
+  with the typed confirmation and a native prompt, and their values stay in
+  main. A `.mefishare` friend file is always
   scrubbed, names no repository or PC, and is reviewed before it is kept.
   Vault calls take turns; a rebase is undone without loss unless two PCs
   changed the same file, and then GitHub's version is kept and status
@@ -417,6 +418,21 @@ settings and per-model work-kind summaries for the shared controls.
   hub or link nothing waits. Alongside it, syncFollow asks GitHub every
   minute (sync.mjs remoteMoved, one ls-remote) and fast-forwards when this
   PC has nothing in the way and no builder is running.
+- **Reach this PC from Discord** (main.cjs "Discord remote", scripts/remote.cjs,
+  the hub client's `remote` frames; [remote.md](remote.md)). Off until the
+  owner turns it on per PC. On, Studio keeps its outbound hub socket open and
+  names this PC to the hub (`remoteHello` with the cowork machine id); the hub
+  hands it `remote` commands from the owner's own DMs only, and Studio checks
+  the sender against its own session again. Status, needs, made and digest
+  read `agentsSnapshot`, the needs-you digest and the companion digest. A plain
+  DM is `assistantMessage(text, { remote: true })`: the chat gate narrows it
+  (`remote.gateActions`, `LOCAL_ACTIONS`), and the work it files carries
+  `origin.via = "remote"`, which `autonomy.needsApproval` holds for approval in
+  every mode, slices included. Approve buttons remember the card's scope when
+  shown and need the PIN (salted scrypt, five wrong tries lock it); the
+  approval goes through `backlogControl` with that scope. A look once a minute
+  turns changes into alerts (`remote.alerts`). Everything sent passes
+  `shareReview.scrub` first.
 - The same glowing wisp wakes in the launch box, responds to pointer play with
   floating ASCII expressions and a few sparks, and accompanies the first-run
   guide. During setup, a pending chat reply or reported agent work, little lights

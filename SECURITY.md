@@ -43,6 +43,21 @@
   Discord name. The share, which is off unless you turn it on, carries only
   the link and its label, a radio station's name, or just "Local music":
   never a local file's name or path. The hub keeps both in memory only.
+- **The Discord remote is off until you turn it on per PC** (Friends › Your
+  PCs › Reach this PC from Discord; [docs/remote.md](docs/remote.md)). On,
+  Studio keeps its outbound hub connection open and answers only commands
+  from the Discord account it signed in as; no port opens on your PC. Replies
+  and alerts carry task titles, short progress lines and Mefi's answers
+  through Discord and the hub to your DMs, after the friend-share scrubber has
+  taken out keys, tokens, paths, emails, addresses and this PC's names. A
+  message from Discord is your chat with less power: it can file work,
+  which waits for your OK in every permission mode, note, pause, resume,
+  stop, and start or retry a card already on the board, but it cannot
+  approve, answer asks, undo or close cards, and permissions, keys, settings,
+  sharing and the vault never change from Discord. Approving from Discord
+  takes the PIN you set in Studio, typed into a Discord form (never posted in
+  the chat); Studio keeps only its salted scrypt hash, and five wrong PINs lock
+  Discord approvals until you unlock them in Studio.
 - **Local state is never committed or packaged.** Tasks, conversations,
   databases and captures live under `data/` (source install) or the portable
   build's own `resources/app/data`; both are ignored by git and skipped by the

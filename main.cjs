@@ -223,7 +223,7 @@ function handleProjectIpc(channel, handler) {
 // is the PC's own and may open a freshly cloned project, which a gated
 // handler would wait on. (Declared beside the wrapper so the tests that load
 // it from here up to app.setName see it.)
-const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:"];
+const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "remote:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:"];
 const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits", "release:status", "release:check", "update:status", "update:set", "settings:get-key"]);
 ipcMain.handle = handleProjectIpc;
 
@@ -1894,6 +1894,14 @@ function hubInstance() {
       // A cowork room's claims also reach the dispatcher (the "Cowork claims" block).
       onEvent: (event) => {
         if (event?.type === "claims" && typeof coworkHear === "function") coworkHear(event);
+        // A Discord remote command (the "Discord remote" block) is answered
+        // there and never reaches the renderer; the remote's settings hear
+        // when the hub or the member's PCs change.
+        if (event?.type === "remote") {
+          if (typeof remoteHear === "function") remoteHear(event.command).catch((error) => logLine(`[remote] ${error?.message ?? error}`));
+          return undefined;
+        }
+        if ((event?.type === "status" || event?.type === "remoteState") && typeof remotePush === "function") remotePush();
         return typeof friendsHear === "function" ? friendsHear(event) : send("hub:event", event);
       },
       log: (line) => logLine(line),
@@ -2820,6 +2828,270 @@ async function friendsPlaydate(payload = {}) {
   return { ...scene, practice: payload?.practice === true };
 }
 // ---- end of companion friends ----------------------------------------------------
+
+// ---- Discord remote: your PCs from Discord DMs --------------------------------
+// docs/remote.md. The owner turns it on per PC (Friends › Your PCs › Reach this
+// PC from Discord). Studio then keeps the rooms hub connected, names this PC to
+// the hub (hub-client setRemote) and answers the commands the hub hands it from
+// the owner's own DMs; scripts/remote.cjs decides what a command may do and how
+// the reply reads, and this block reads the PC and does it. A plain DM is the
+// owner's chat message with `remote: true`: the chat gate narrows it
+// (remote.gateActions) and the work it files waits for the owner's OK in every
+// mode (autonomy.needsApproval). Approve buttons need the PIN; five wrong ones
+// lock Discord approvals until the owner unlocks them here. Alerts come from a
+// look once a minute (remote.alerts). Nothing here opens a port.
+const remoteRules = optionalHelper("./scripts/remote.cjs", () => require("./scripts/remote.cjs"), null);
+const REMOTE_LOOK_MS = 60 * 1000;
+const REMOTE_BUTTON_MS = 24 * 60 * 60 * 1000;
+const REMOTE_LOG_MAX = 20;
+let remoteTimer = null;
+let remoteMemory = null;
+let remoteApplying = Promise.resolve();
+// The hub client the remote was last applied to (a new hub address makes a
+// new client), and when a client that gave up may try again.
+let remoteClient = null;
+let remoteRetryAt = 0;
+const REMOTE_RETRY_MS = 10 * 60 * 1000;
+const remoteApprovals = new Map(); // button id -> { taskId, scope, title, at }
+const remoteLog = []; // the commands this PC answered, newest first
+// Everything bound for Discord passes the share scrubber first (keys, tokens,
+// paths, emails, addresses and this PC's names), as a friend share does.
+const remoteScrub = (text) => (typeof shareReview !== "undefined" && typeof shareReview?.scrub === "function" ? shareReview.scrub(String(text ?? "")) : String(text ?? ""));
+
+async function remoteSettings() {
+  return remoteRules ? remoteRules.normalizeSettings((await readSettings()).remote, { hostname: os.hostname() }) : null;
+}
+
+// Settings' view: the choices (never the PIN), the hub's side, and the log.
+async function remoteStatus() {
+  const settings = await remoteSettings();
+  if (!settings) return { ok: false, error: "unavailable" };
+  const hub = hubClient?.status?.() ?? null;
+  const linked = await communityRead().then(({ state }) => Boolean(state.link)).catch(() => false);
+  return {
+    ok: true, settings: remoteRules.publicSettings(settings), linked,
+    hub: { configured: Boolean(hubModule?.hubAddress(communityHubUrl())), state: hub?.state ?? "off", error: hub?.error ?? null, remote: hub?.remote === true, on: hub?.remoteOn === true, pcs: hub?.remotePcs ?? [] },
+    log: remoteLog.slice(0, REMOTE_LOG_MAX),
+  };
+}
+function remotePush() { remoteStatus().then((status) => send("remote:event", status)).catch(() => {}); }
+
+// Turns the remote on or off to match the saved choice: the hub connection,
+// this PC's name at the hub, and the look for alerts. One apply at a time.
+function remoteApply() {
+  const next = remoteApplying.then(async () => {
+    const settings = await remoteSettings();
+    if (!settings || SMOKE || CAPTURE || CLI_MODE) return;
+    const client = hubInstance();
+    if (!settings.on) {
+      stopRemoteLook();
+      if (client) client.setRemote(null);
+      remoteClient = null;
+      return;
+    }
+    if (!client) return;
+    client.setRemote({ pc: { id: await coworkMachineId(), name: settings.name }, on: true });
+    remoteClient = client;
+    await client.connect();
+    startRemoteLook();
+  });
+  remoteApplying = next.catch((error) => logLine(`[remote] could not apply: ${error?.message ?? error}`));
+  return remoteApplying;
+}
+
+function startRemoteLook() {
+  if (remoteTimer || SMOKE || CAPTURE || CLI_MODE) return;
+  remoteTimer = setInterval(() => { remoteLook().catch((error) => logLine(`[remote] alert look failed: ${error?.message ?? error}`)); }, REMOTE_LOOK_MS);
+  remoteTimer.unref?.();
+}
+function stopRemoteLook() {
+  if (remoteTimer) clearInterval(remoteTimer);
+  remoteTimer = null;
+  remoteMemory = null;
+}
+
+// A command from the hub. Only the account this Studio signed in as may give
+// one (remote.request checks `from` again); the reply goes back on the same
+// socket, and the command is kept in this PC's log without its words.
+async function remoteHear(command) {
+  const client = hubClient;
+  const request = remoteRules?.request(command, client?.status?.().user?.id);
+  if (!request) return;
+  const settings = await remoteSettings();
+  if (!settings?.on) return;
+  let answer;
+  try {
+    // A message to Mefi can take a minute: say so at once (done: false, the
+    // hub then waits up to three minutes for the answer) and answer after.
+    if (request.command === "say") client.remoteReply(request.requestId, "Mefi is on it…", [], false);
+    answer = await remoteAnswer(request, settings);
+  } catch (error) {
+    logLine(`[remote] ${request.command} failed: ${error?.message ?? error}`);
+    answer = { text: "Studio could not do that just now. Try again in a minute." };
+  }
+  client.remoteReply(request.requestId, remoteScrub(answer.text), answer.buttons ?? []);
+  remoteLog.unshift({ at: Date.now(), command: request.command, ...(answer.note ? { note: answer.note } : {}) });
+  remoteLog.length = Math.min(remoteLog.length, REMOTE_LOG_MAX);
+  remotePush();
+}
+
+async function remoteAnswer(request, settings) {
+  const now = Date.now();
+  switch (request.command) {
+    case "status": return remoteRules.statusReply(await agentsSnapshot(now), { now });
+    case "made": return remoteRules.madeReply(await agentsSnapshot(now), { now });
+    case "needs": return remoteNeeds(settings, now);
+    case "digest": return remoteRules.digestReply(await remoteDigest(now));
+    case "pause":
+      await assistantPause();
+      return { text: "Paused: nothing new starts on this PC until you resume. Running work finishes." };
+    case "resume": return remoteResume();
+    case "say": {
+      if (!projects.open()) return { text: "No project is open on this PC, so Mefi has nowhere to work." };
+      const result = await assistantMessage(request.text, { remote: true });
+      return remoteRules.sayReply(result?.reply);
+    }
+    case "button": return remoteButton(request, settings, now);
+    default: return { text: "Studio does not know that command." };
+  }
+}
+
+async function remoteResume() {
+  if (autopilot.held) await releaseStartupHold();
+  else await assistantControl("start-work");
+  return { text: "Resumed: agents pick up work on this PC again." };
+}
+
+// What needs the owner, numbered, with an Approve button for each single card
+// waiting for its build OK: the button remembers the card's scope as shown, so
+// a card that changed since cannot be approved from here.
+async function remoteNeeds(settings, now) {
+  const needs = await assistantNeedsYouDigest(now);
+  if (!needs) return { text: "Studio could not read this PC's board just now. Try again in a minute." };
+  const pinReady = Boolean(settings.pin) && settings.lock.failures < remoteRules.PIN_TRIES;
+  const approvals = [];
+  if (pinReady) {
+    for (const [index, item] of needs.items.entries()) {
+      if (item.kind !== "approval" || !item.taskId) continue;
+      const id = await remoteApprovalHandle(item.taskId, now);
+      if (id) approvals.push({ id, index: index + 1 });
+    }
+  }
+  return remoteRules.needsReply(needs, { pinReady, approvals });
+}
+async function remoteApprovalHandle(taskId, now) {
+  const tasks = (await (await getEyes()).readJson(TASKS_PATH, [])).filter((task) => task && !task.archived);
+  const task = tasks.find((row) => row.id === taskId);
+  if (!task || backlog.workState(task, now, { tasks, autoBuild: autopilot.autoBuild, approve: autopilot.approve }).stage !== "approval") return null;
+  for (const [key, row] of remoteApprovals) if (now - row.at > REMOTE_BUTTON_MS) remoteApprovals.delete(key);
+  const id = `ap-${crypto.randomBytes(6).toString("hex")}`;
+  remoteApprovals.set(id, { taskId, scope: backlog.buildScope(task), title: String(task.title ?? "").slice(0, 120), at: now });
+  return id;
+}
+
+// A button pressed in Discord. Approve needs the PIN; a wrong one counts
+// toward the lock, and the lock itself is sent as an alert.
+async function remoteButton(request, settings, now) {
+  if (request.buttonId === "needs") return remoteNeeds(settings, now);
+  if (request.buttonId === "pause") return remoteAnswer({ command: "pause" }, settings);
+  if (request.buttonId === "resume") return remoteResume();
+  const held = remoteApprovals.get(request.buttonId);
+  if (!held || now - held.at > REMOTE_BUTTON_MS) return { text: "That button is too old. Ask for /studio needs again." };
+  if (!request.pin) return { text: "Approving from Discord needs your PIN." };
+  const attempt = remoteRules.tryPin(settings, request.pin, now);
+  if (!attempt.ok || attempt.lock.failures !== settings.lock.failures) await updateSettings((saved) => { saved.remote = { ...(saved.remote ?? {}), lock: attempt.lock }; });
+  if (!attempt.ok) {
+    if (attempt.reason === "locked" && attempt.lock.lockedAt === now) {
+      hubClient?.remoteNotice(`pin-lock:${now}`, "info", "🔒 Five wrong PINs: approvals from Discord are locked on this PC until you unlock them in Studio (Friends › Your PCs › Reach this PC from Discord).");
+      remotePush();
+    }
+    return { text: attempt.reason === "no-pin" ? "Set an approval PIN in Studio first." : attempt.reason === "locked" ? "Approvals from Discord are locked on this PC. Unlock them in Studio." : `That PIN is not right. ${attempt.left} ${attempt.left === 1 ? "try" : "tries"} left before approvals from Discord lock.`, note: "wrong PIN" };
+  }
+  remoteApprovals.delete(request.buttonId);
+  const result = await backlogControl({ action: "approve", taskId: held.taskId, projectId: projects.current().id, expectedScope: held.scope, via: "remote" });
+  return result?.ok
+    ? { text: `Approved: ${remoteRules.plain(held.title)}. It builds when a worker is free.`, note: "approved" }
+    : { text: `Not approved: ${result?.error ?? "Studio refused it."}` };
+}
+
+// The digest since the last one, or the last day at most.
+let remoteDigestAt = 0;
+async function remoteDigest(now) {
+  const since = Math.max(remoteDigestAt, now - 24 * 60 * 60 * 1000);
+  const tasks = (await (await getEyes()).readJson(TASKS_PATH, [])).filter((task) => task && !task.archived);
+  const events = typeof agentBrain !== "undefined" && agentBrain?.events ? ((await agentBrain.events({ since }).catch(() => null))?.events ?? []) : [];
+  return companionModule.digest({ events, tasks, since, now });
+}
+
+// Once a minute while the remote is on: what changed becomes alerts.
+async function remoteLook() {
+  const settings = await remoteSettings();
+  if (!settings?.on) return;
+  // A new hub address made a new client; a client that stopped trying (no
+  // Discord link yet, a lapsed sign-in) tries again every ten minutes.
+  if (hubClient !== remoteClient) { await remoteApply(); return; }
+  const client = hubClient;
+  const state = client?.status?.().state;
+  if ((state === "off" || state === "error") && Date.now() >= remoteRetryAt) {
+    remoteRetryAt = Date.now() + REMOTE_RETRY_MS;
+    await client.connect();
+  }
+  if (!client?.status?.().remoteOn) return;
+  const now = Date.now();
+  const snapshot = await agentsSnapshot(now);
+  const digest = await assistantNeedsYouDigest(now);
+  const items = (digest?.items ?? []).map((item) => ({ ...item, id: String(item.questionId ?? `${item.kind}:${item.taskId ?? item.title}`).slice(0, 60) }));
+  const pinReady = Boolean(settings.pin) && settings.lock.failures < remoteRules.PIN_TRIES;
+  const buttons = new Map();
+  if (pinReady && remoteMemory) {
+    const known = new Set(remoteMemory.needs ?? []);
+    for (const item of items) {
+      if (item.kind !== "approval" || !item.taskId || known.has(item.id)) continue;
+      const id = await remoteApprovalHandle(item.taskId, now);
+      if (id) buttons.set(item.id, { id, label: "Approve", style: "success", pin: true });
+    }
+  }
+  const date = new Date(now);
+  const { notices, memory } = remoteRules.alerts({
+    memory: remoteMemory, snapshot, needs: digest ? { ...digest, items } : null, settings, now,
+    minuteOfDay: date.getHours() * 60 + date.getMinutes(), day: `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`,
+    approvalButton: (item) => buttons.get(item.id) ?? null,
+  });
+  remoteMemory = memory;
+  for (const notice of notices) {
+    const text = notice.digest ? remoteRules.digestReply(await remoteDigest(now)).text : notice.text;
+    if (notice.digest) remoteDigestAt = now;
+    client.remoteNotice(notice.key, notice.kind, remoteScrub(text), notice.buttons ?? []);
+  }
+}
+
+// Settings › the remote: the choices, the PIN, and unlocking.
+async function remoteSet(patch) {
+  if (!remoteRules) return { ok: false, error: "unavailable" };
+  const current = await remoteSettings();
+  const next = remoteRules.applyPatch(current, patch ?? {});
+  await updateSettings((saved) => { saved.remote = { ...next, pin: current.pin, lock: current.lock }; });
+  await remoteApply();
+  logLine(`[remote] ${next.on ? "on" : "off"} as ${next.name}`);
+  return remoteStatus();
+}
+async function remotePin(payload = {}) {
+  if (!remoteRules) return { ok: false, error: "unavailable" };
+  if (payload.unlock === true) {
+    await updateSettings((saved) => { saved.remote = { ...(saved.remote ?? {}), lock: { failures: 0, lockedAt: 0 } }; });
+    return { ...(await remoteStatus()), message: "Approvals from Discord work again." };
+  }
+  if (payload.clear === true) {
+    await updateSettings((saved) => { saved.remote = { ...(saved.remote ?? {}), pin: null, lock: { failures: 0, lockedAt: 0 } }; });
+    remoteApprovals.clear();
+    return { ...(await remoteStatus()), message: "PIN removed: approvals from Discord are off." };
+  }
+  const hashed = remoteRules.hashPin(payload.pin);
+  if (!hashed) return { ...(await remoteStatus()), ok: false, error: "A PIN is 4 to 12 digits." };
+  await updateSettings((saved) => { saved.remote = { ...(saved.remote ?? {}), pin: { ...hashed, setAt: Date.now() }, lock: { failures: 0, lockedAt: 0 } }; });
+  return { ...(await remoteStatus()), message: "PIN saved. Approve buttons in Discord ask for it." };
+}
+// ---- end of the Discord remote ---------------------------------------------------
 
 // `explicit` is the owner asking (Work on it): a finished inbox row never
 // stands in for it, only unfinished work does.
@@ -10884,7 +11156,7 @@ function assistantSettleOfferAsks(taskId, title = "") {
 
 // One validated chat action, run through the same host functions the owner's
 // own buttons use. Returns the outcome resultLine() reads.
-async function assistantChatAction(action = {}, { focused = null } = {}) {
+async function assistantChatAction(action = {}, { focused = null, remote = false } = {}) {
   const kind = String(action?.kind ?? "");
   let taskId = typeof action.taskId === "string" ? action.taskId : "";
   const titleOf = async () => {
@@ -10902,7 +11174,9 @@ async function assistantChatAction(action = {}, { focused = null } = {}) {
       // labelled, and never replaces what the owner said.
       const prompt = String(action.ownerText || action.brief || action.title || "");
       const admission = await assistantCreateTask({ title: action.title, prompt, source: "chat", focused, conversation: {},
-        details: action.brief && action.brief !== prompt ? `Assistant's reading (not the owner's words): ${action.brief}` : null });
+        details: action.brief && action.brief !== prompt ? `Assistant's reading (not the owner's words): ${action.brief}` : null,
+        // Asked for from Discord: it waits for the owner's OK in every mode.
+        ...(remote && remoteRules ? { origin: { ...remoteRules.ORIGIN } } : {}) });
       if (admission?.existing) {
         const item = admission.existing.item ?? {};
         return { ok: true, existing: { title: item.title ?? item.ref?.title ?? action.title, status: admission.existing.kind === "worker" ? "running" : item.status } };
@@ -11050,6 +11324,8 @@ async function assistantOverseerTurn({ user, text, intent, facts, did, slot, foc
   // cannot replace that explicit choice with its own interpretation.
   const proposed = localDecisions.length ? localDecisions : envelope.actions;
   let checked = taskOversight.validateChatActions(proposed, context);
+  // From Discord: file, note, brake, stop and start work only (remote.gateActions).
+  if (user?.remote && remoteRules) checked = remoteRules.gateActions(checked);
   // Talk it over is a conversation: a card the model would file becomes an
   // offer the owner can take (a yes, or Build it), never work filed unasked.
   if (user?.ui?.mode === "talk") {
@@ -11076,7 +11352,7 @@ async function assistantOverseerTurn({ user, text, intent, facts, did, slot, foc
     }
     let outcome;
     try {
-      outcome = await assistantChatAction(action, { focused });
+      outcome = await assistantChatAction(action, { focused, remote: user?.remote === true });
     } catch (error) {
       outcome = { ok: false, error: error.message };
     }
@@ -11127,7 +11403,8 @@ async function assistantLocalControl({ user, text, intent, facts, slot }) {
   const decisions = taskOversight.localDecisionActions(text, context);
   const proposed = decisions.length ? decisions : taskOversight.localChatActions(text, { digest: board, referents, intent, allTitles });
   if (!Array.isArray(proposed) || !proposed.length) return null;
-  const checked = taskOversight.validateChatActions(proposed, { ...context, limit: 1 });
+  let checked = taskOversight.validateChatActions(proposed, { ...context, limit: 1 });
+  if (user?.remote && remoteRules) checked = remoteRules.gateActions(checked);
   const results = assistantRefusalLines(checked.rejected);
   await slotReady(slot);
   for (const action of checked.run) {
@@ -11137,7 +11414,7 @@ async function assistantLocalControl({ user, text, intent, facts, slot }) {
       continue;
     }
     let outcome;
-    try { outcome = await assistantChatAction(action); } catch (error) { outcome = { ok: false, error: error.message }; }
+    try { outcome = await assistantChatAction(action, { remote: user?.remote === true }); } catch (error) { outcome = { ok: false, error: error.message }; }
     results.push(taskOversight.resultLine(action, outcome));
   }
   let tasks = context.tasks;
@@ -11254,6 +11531,11 @@ async function assistantRespond(user, entry = null) {
       await slotReady(slot);
       for (const action of local?.actions ?? []) {
         if (brakeStale(action, generation)) continue;
+        // From Discord only the brake and filing run (remote.LOCAL_ACTIONS).
+        if (user.remote && remoteRules && !remoteRules.LOCAL_ACTIONS.includes(action)) {
+          done.push(`${action} waits for you in Studio`);
+          continue;
+        }
         try {
           if (action === "tidy") {
             const result = await assistantRunRole("keeper", 20000);
@@ -11306,6 +11588,7 @@ async function assistantRespond(user, entry = null) {
               focused,
               pin: Boolean(wanted?.pin),
               conversation: wanted ? { resolvedTitle: wanted.resolvedTitle, existingTarget: wanted.existingTarget } : {},
+              ...(user.remote && remoteRules ? { origin: { ...remoteRules.ORIGIN } } : {}),
             });
             const created = admission.created;
             if (admission.existing) {
@@ -11426,6 +11709,9 @@ async function assistantMessage(raw, options = {}) {
   const seen = assistantUiContext(options?.context);
   const ui = seen || manner ? { ...(seen ?? {}), ...(manner ? { personality: manner } : {}) } : null;
   const user = { id: assistantMessageId(), projectId: projects.current().id, at: Date.now(), role: "user", text: text.slice(0, 16000), via: "local", intent: "chat", ...(ui ? { ui } : {}) };
+  // Sent from Discord (the "Discord remote" block): the chat gate narrows what
+  // it may do, and the work it files waits for the owner's OK.
+  if (options?.remote === true) user.remote = true;
   assistantState.messages.push(user);
   assistantTrim(assistantState.messages, assistantCaps().messages);
   assistantLog("message", user.text.slice(0, 160));
@@ -13663,7 +13949,7 @@ async function admitBacklogIdeas({ ideaIds = null } = {}) {
   return { ok: true, promoted: result.promoted ?? 0, taskIds: result.taskIds ?? [] };
 }
 
-async function backlogControl({ action, taskId, ideaId, projectId, expectedScope } = {}) {
+async function backlogControl({ action, taskId, ideaId, projectId, expectedScope, via = null } = {}) {
   if (projectId && projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Reload its backlog before continuing." };
   if (!["run", "stop", "pause", "retry", "prioritize", "promote", "approve"].includes(action)) return { ok: false, error: "Choose run, stop, pause, retry, prioritize, promote, or approve." };
   await ensureAssistant();
@@ -13715,7 +14001,7 @@ async function backlogControl({ action, taskId, ideaId, projectId, expectedScope
         if (action === "approve") {
           if (!projectId || typeof expectedScope !== "string" || expectedScope !== backlog.buildScope(task)) return { ok: false, error: "This task changed or its reviewed scope is missing. Reload its details, review the current brief, then approve again." };
           task.buildApproval = { version: 1, scope: expectedScope, approvedAt: Date.now() };
-          task.logs = [...(task.logs ?? []), { at: Date.now(), kind: "approval", text: "Build approved by you for this saved task scope" }].slice(-40);
+          task.logs = [...(task.logs ?? []), { at: Date.now(), kind: "approval", text: via === "remote" ? "Build approved by you from Discord, with your PIN, for this saved task scope" : "Build approved by you for this saved task scope" }].slice(-40);
         }
         task.pin = true;
         task.pinAt = task.updatedAt = Date.now();
@@ -21413,6 +21699,11 @@ function registerIpc() {
   ipcMain.handle("hub:friends", async (_event, payload) => friendsView(payload ?? {}));
   ipcMain.handle("hub:sharing-set", async (_event, payload) => friendsSharingSet(payload ?? {}));
   ipcMain.handle("hub:playdate", async (_event, payload) => friendsPlaydate(payload ?? {}));
+  // Friends › Your PCs › Reach this PC from Discord (the "Discord remote"
+  // block). App-wide like hub:*: the remote belongs to this PC, not a project.
+  ipcMain.handle("remote:status", async () => remoteStatus());
+  ipcMain.handle("remote:set", async (_event, patch) => remoteSet(patch && typeof patch === "object" ? patch : {}));
+  ipcMain.handle("remote:pin", async (_event, payload) => remotePin(payload && typeof payload === "object" ? payload : {}));
   // A pet or a playdate for the companion's bond (agent-brain-host companionBond).
   ipcMain.handle("companion:bond", async (_event, payload) => (agentBrain ? agentBrain.companionBond({ event: payload?.event }) : { ok: false, error: "The companion is unavailable." }));
 
@@ -22191,6 +22482,8 @@ app.whenReady().then(() => {
   if (!SMOKE && !CAPTURE && !CLI_MODE) startVaultAgentsWatch();
   // Cowork claims: the open project's room, this PC's claims renewed each minute.
   if (!SMOKE && !CAPTURE && !CLI_MODE) startCowork();
+  // The Discord remote: when the owner turned it on, this PC answers their DMs.
+  if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => { remoteApply(); }, 20000).unref?.();
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRestart().catch(() => {}));
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRelease().catch(() => {}));
   // The assistant service runs on its own clock, renderer or not; the smoke

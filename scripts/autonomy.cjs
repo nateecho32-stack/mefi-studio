@@ -62,8 +62,24 @@ function ownerWork(task, { tasks = [] } = {}, visited = new Set()) {
   return linked && ownerWork(parent, { tasks }, visited);
 }
 
+// Work asked for from Discord (origin.via "remote", docs/remote.md), or an
+// actual split or delegated slice of it: Discord is not this PC, so it waits
+// for the owner's OK in every mode, given in Studio or with their PIN.
+function remoteWork(task, { tasks = [] } = {}, visited = new Set()) {
+  if (!task || visited.has(task.id)) return false;
+  if (task.origin?.via === "remote") return true;
+  visited.add(task.id);
+  const parentId = task.splitFrom || task.parentTaskId;
+  if (!parentId) return false;
+  const parent = rows(tasks).find((row) => row?.id === parentId && sameProject(task, row));
+  if (!parent) return false;
+  const linked = task.splitFrom === parent.id || rows(parent.delegation?.childTaskIds).includes(task.id);
+  return linked && remoteWork(parent, { tasks }, visited);
+}
+
 function needsApproval(task, { level = DEFAULT_LEVEL, elevated = {}, tasks = [] } = {}) {
   if (accepted(task, { tasks })) return false;
+  if (remoteWork(task, { tasks })) return true;
   if (level === "ask" || level === "accept") return true;
   if (level === "auto") return false;
   return elevated["agent-filed"] !== false && !ownerWork(task, { tasks });
@@ -136,4 +152,4 @@ function issueOverlay(level, mapPolicy = {}, { accepted: isAccepted = false } = 
   return { ...mapPolicy, auto: level === "ask" || level === "accept" && !isAccepted ? [] : [...RETRY_KINDS] };
 }
 
-module.exports = { LEVELS, DEFAULT_LEVEL, ELEVATED, RETRY_KINDS, migrate, normalize, accepted, ownerWork, needsApproval, classify, canDelegate, route, sessionless, issueOverlay };
+module.exports = { LEVELS, DEFAULT_LEVEL, ELEVATED, RETRY_KINDS, migrate, normalize, accepted, ownerWork, remoteWork, needsApproval, classify, canDelegate, route, sessionless, issueOverlay };

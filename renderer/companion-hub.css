@@ -137,6 +137,8 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .pc-vault > :not(summary), .pc-vault-linked > *, .pc-vault-setup > *, .pc-vault-keys > :not(summary) { margin-top: 8px; }
 .pc-vault-heading { margin: 12px 0 0; font-size: 12px; font-weight: 600; }
 .pc-vault-label { display: block; font-size: 12px; color: var(--muted); }
+/* Reach this PC from Discord (pc-sync.js remoteSection): rows sit on one line. */
+.pc-remote .pc-sync-actions { align-items: center; }
 /* A PC's agents under its line (pc-vault.js agentsText). */
 .pc-vault-agents { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.45; }
 .pc-vault-code, .pc-vault-confirm, .pc-vault-shelf { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }

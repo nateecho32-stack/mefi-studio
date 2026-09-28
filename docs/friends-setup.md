@@ -103,6 +103,16 @@ In Studio:
    under Rooms on each PC and press **Use this room for this project's agents**.
    Builders then claim the files they edit there, and no two PCs' agents edit
    the same file at once.
+6. **Reach your PCs from Discord (optional).** On the hub PC, set
+   `REMOTE_ENABLED=true` in `.env`, run `npm run register` once for the
+   `/studio` command, and restart the hub. On each of your PCs, open Friends ›
+   Your PCs › **Reach this PC from Discord**, turn it on, name the PC, and set
+   an approval PIN if you want to approve from Discord. Then DM the Void Engine
+   bot: `/studio status` answers from every PC that has it on, and a plain DM
+   goes to Mefi on your default PC (`/studio use <pc>`). What it can and cannot
+   do is in [remote.md](remote.md). Turn on **Start with Windows** (Settings ›
+   General › Profile & startup) on each PC you leave working, so it comes back
+   after an update restart.
 
 ## 4. Checking it works
 

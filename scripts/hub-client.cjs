@@ -18,6 +18,11 @@
 //     meet and play. The hub only relays them. A hub without the feature is
 //     never sent one. What a card may hold is main's "Companion friends" block
 //     and scripts/companion-friends.cjs; this file passes cards on unread.
+//   - The Discord remote (docs/remote.md): when `ready` lists "remote" and
+//     the owner turned it on (setRemote), `remoteHello` names this PC, the hub
+//     hands it `remote` commands from the member's own DMs, and
+//     `remoteReply` / `remoteNotice` answer them and send alerts. What a
+//     command may do is scripts/remote.cjs and main's "Discord remote" block.
 //
 // Like scripts/discord-oauth.cjs this is a network module, and everything it
 // reaches for is injected: fetch, the WebSocket class, the clock and the
@@ -57,6 +62,13 @@ const holderOf = (value) => (HOLDERS.includes(value) ? value : "default");
 const OPAQUE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const SNOWFLAKE = /^\d{17,20}$/;
 const ONE_LINE = /^[^\x00-\x1f\x7f]*$/;
+// The Discord remote's shapes (docs/remote.md).
+const REMOTE_COMMANDS = Object.freeze(["status", "needs", "made", "digest", "say", "pause", "resume", "button"]);
+const REMOTE_NOTICES = Object.freeze(["needs-you", "done", "failed", "stuck", "digest", "info"]);
+const REMOTE_STYLES = Object.freeze(["primary", "secondary", "success", "danger"]);
+const PC_ID = /^[A-Za-z0-9_.:-]{1,64}$/;
+const BUTTON_ID = /^[A-Za-z0-9_.:-]{1,48}$/;
+const REMOTE_TEXT_MAX = 1900;
 
 const object = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const line = (value, max) => (typeof value === "string" && value.trim() && value.length <= max && ONE_LINE.test(value) ? value : null);
@@ -172,6 +184,41 @@ function nowPlayingTrack(value) {
   return { label, provider: value.provider, ...(url ? { url } : {}) };
 }
 
+// ---- the Discord remote's shapes (docs/remote.md) --------------------------
+// A reply's or alert's words: 1-1900 characters once control characters other
+// than tab and line breaks are dropped; longer ones are cut with an ellipsis.
+function remoteText(value) {
+  const body = typeof value === "string" ? value.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "").trim() : "";
+  if (!body) return null;
+  return body.length > REMOTE_TEXT_MAX ? `${body.slice(0, REMOTE_TEXT_MAX - 1)}…` : body;
+}
+// At most five buttons, each { id, label, style?, pin? }; null when one is bad.
+function remoteButtons(value) {
+  if (value == null) return [];
+  if (!Array.isArray(value) || value.length > 5) return null;
+  const out = [];
+  for (const item of value) {
+    const label = object(item) ? line(item.label, 40) : null;
+    if (!label || !BUTTON_ID.test(String(item.id ?? ""))) return null;
+    out.push({ id: item.id, label, ...(REMOTE_STYLES.includes(item.style) ? { style: item.style } : {}), ...(item.pin === true ? { pin: true } : {}) });
+  }
+  return out;
+}
+// A command from the hub, or null. main checks `from` against its own session.
+function remoteCommand(value) {
+  if (!object(value) || !OPAQUE_ID.test(String(value.requestId ?? "")) || !SNOWFLAKE.test(String(value.from ?? "")) || !REMOTE_COMMANDS.includes(value.command)) return null;
+  const out = { requestId: value.requestId, from: String(value.from), command: value.command, sentAt: Number.isFinite(value.sentAt) ? value.sentAt : null };
+  if (typeof value.text === "string") out.text = text(value.text, 2000);
+  if (BUTTON_ID.test(String(value.buttonId ?? ""))) out.buttonId = value.buttonId;
+  if (/^\d{4,12}$/.test(String(value.pin ?? ""))) out.pin = String(value.pin);
+  return out;
+}
+// The member's PCs that have the remote on, as the hub lists them.
+function remotePcs(value) {
+  if (!Array.isArray(value)) return null;
+  return value.slice(0, 8).map((item) => (object(item) && PC_ID.test(String(item.id ?? "")) && line(item.name, 40) ? { id: item.id, name: item.name, since: Number.isFinite(item.since) ? item.since : null } : null)).filter(Boolean);
+}
+
 function createHubClient(options = {}) {
   const {
     url = configuredUrl(),
@@ -204,6 +251,10 @@ function createHubClient(options = {}) {
   let opening = null;
   // What the hub said it carries in its last `ready` frame.
   let features = [];
+  // The Discord remote: this PC as main named it ({ pc: { id, name }, on }),
+  // and the member's PCs the hub last listed.
+  let remote = null;
+  let remoteList = [];
   // Subscribed rooms, each with the parts of Studio holding it open (Rooms'
   // chat, Listen together, the cowork claims). The hub hears subscribe from
   // the first holder and unsubscribe only when the last lets go, so one part
@@ -218,6 +269,7 @@ function createHubClient(options = {}) {
       user: session?.user ?? null, readOnly: Boolean(session?.readOnly), paused,
       rooms: [...rooms.keys()],
       companions: features.includes("companion"), companionDirect: features.includes("companion") && features.includes("companion.direct"),
+      remote: features.includes("remote"), remoteOn: Boolean(remote?.on) && features.includes("remote"), remotePcs: remoteList,
     };
   }
   function setState(next, nextError = null) {
@@ -374,6 +426,8 @@ function createHubClient(options = {}) {
         for (const roomId of rooms.keys()) { send({ type: "subscribe", roomId }); send({ type: "presence", roomId }); }
         // The hub forgets a share when the member's last socket closes.
         if (nowPlaying) sendNowPlaying();
+        // And which of this member's sockets is a PC the remote may reach.
+        if (remote && features.includes("remote")) sendRemoteHello();
         if (presenceTimer) stopEvery(presenceTimer);
         presenceTimer = every(() => { for (const roomId of rooms.keys()) send({ type: "presence", roomId }); }, PRESENCE_EVERY_MS);
         scheduleRenew();
@@ -431,6 +485,21 @@ function createHubClient(options = {}) {
         paused = frame.paused === true;
         emit({ type: "status", status: status() });
         return;
+      // The Discord remote: a command from the member's own DMs, only while
+      // this PC has the remote on, and the member's PCs that have it on.
+      case "remote": {
+        const command = remote?.on && features.includes("remote") ? remoteCommand(frame) : null;
+        if (command) emit({ type: "remote", command, receivedAt: now() });
+        return;
+      }
+      case "remoteState": {
+        const pcs = remotePcs(frame.pcs);
+        if (!pcs) return;
+        remoteList = pcs;
+        emit({ type: "remoteState", pcs });
+        emit({ type: "status", status: status() });
+        return;
+      }
       case "ack":
       case "nack": {
         const entry = pending.get(frame.nonce);
@@ -463,6 +532,10 @@ function createHubClient(options = {}) {
   function sendNowPlaying() {
     send(nowPlaying ? { type: "nowPlaying", track: nowPlaying } : { type: "nowPlaying", track: null });
   }
+  function sendRemoteHello() {
+    send({ type: "remoteHello", pc: { ...remote.pc }, on: remote.on === true });
+  }
+  const remoteReady = () => state === "ready" && features.includes("remote") && remote?.on === true;
 
   // An HTTP call with the hub session, renewed once when the hub says it
   // lapsed. Refusals keep the hub's own error, reason and retryAfter.
@@ -518,6 +591,8 @@ function createHubClient(options = {}) {
       rooms.clear();
       nowPlaying = null;
       features = [];
+      remote = null;
+      remoteList = [];
       setState("off");
       if (token) await request("DELETE", "/v1/session", undefined, token);
       return status();
@@ -672,6 +747,39 @@ function createHubClient(options = {}) {
       if (to != null && (!SNOWFLAKE.test(String(to)) || !features.includes("companion.direct"))) return false;
       return send({ type: "companion", roomId, card, ...(to != null ? { to: String(to) } : {}) });
     },
+    // ---- The Discord remote (docs/remote.md) ---------------------------------
+    // This PC for the remote: { pc: { id, name }, on }, kept and re-sent after
+    // each `ready`; null (or on: false) takes this PC off the remote. False
+    // when the shape is wrong.
+    setRemote(value) {
+      if (value == null) {
+        const was = remote;
+        remote = null;
+        if (was?.on && state === "ready" && features.includes("remote")) send({ type: "remoteHello", pc: { ...was.pc }, on: false });
+        return true;
+      }
+      const name = object(value) && object(value.pc) ? line(value.pc.name, 40) : null;
+      if (!name || !PC_ID.test(String(value.pc.id ?? "")) || typeof value.on !== "boolean") return false;
+      const next = { pc: { id: value.pc.id, name }, on: value.on };
+      if (JSON.stringify(next) === JSON.stringify(remote)) return true;
+      remote = next;
+      if (state === "ready" && features.includes("remote")) sendRemoteHello();
+      return true;
+    },
+    // The answer to one `remote` command: false when it could not go.
+    remoteReply(requestId, message, buttons = [], done = true) {
+      const body = remoteText(message);
+      const list = remoteButtons(buttons);
+      if (!remoteReady() || !OPAQUE_ID.test(String(requestId ?? "")) || !body || !list) return false;
+      return send({ type: "remoteReply", requestId, text: body, ...(list.length ? { buttons: list } : {}), ...(done === false ? { done: false } : {}) });
+    },
+    // An alert for the member's DMs; the hub drops a repeated key for an hour.
+    remoteNotice(key, kind, message, buttons = []) {
+      const body = remoteText(message);
+      const list = remoteButtons(buttons);
+      if (!remoteReady() || !PC_ID.test(String(key ?? "")) || !REMOTE_NOTICES.includes(kind) || !body || !list) return false;
+      return send({ type: "remoteNotice", key, kind, text: body, ...(list.length ? { buttons: list } : {}) });
+    },
     // The track /nowplaying may show, or null to stop sharing. Kept and
     // re-sent after a reconnect; only a change goes out.
     setNowPlaying(track) {
@@ -688,4 +796,5 @@ function createHubClient(options = {}) {
 module.exports = {
   PROTOCOL_VERSION, HUB_URL, LISTEN_PROVIDERS, NOW_PLAYING_PROVIDERS, LISTEN_ACTIONS, HOLDERS, BACKOFF_MS, PRESENCE_EVERY_MS, SESSION_MARGIN_MS,
   hubAddress, configuredUrl, listenSession, nowPlayingTrack, roomSummary, roomMessage, joinRequest, roomInvite, postText, createHubClient,
+  remoteText, remoteButtons, remoteCommand, remotePcs,
 };

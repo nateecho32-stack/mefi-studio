@@ -6,6 +6,26 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-27 night - Setup helper lands on 0.4.4 with the free Void collection
+
+The setup helper (renderer/setup-helper.js + .css), the walkthrough hand-off,
+per-agent habits and the host fixes for settings that saved but did nothing
+(endpoint saves no longer fork a project team, brain-map modelChoice writes
+"jev", backlog "stop", machine:set whitelist, the Jev gate preview), rebased
+onto GitHub main 052a1ec. main already carried the Void collection unlock
+(3239151 + 116d334); this change adds its finishing pieces: the dead lock-badge
+and prompt CSS, MefiMusic themes() with accent2 plus nodeStyles() and
+nodeLayouts(), and an accurate docs/community.md with its node-style table.
+The new render test found the shared permission control scrolling sideways in
+the helper at 480px (nowrap mode buttons); the helper now lets them wrap.
+
+Validation on the rebased tree: npm run check passed; audit 0 findings; Node
+fast suites 4033 passed, 0 failed; Python contracts 258 OK (1 skipped);
+Electron setup_helper_render (10 sections at 1440x900 and 480x820, focus
+trap, bridge saves, Escape), companion_hub_render, startup_render,
+command_render, node_views_render, agent_setup_render and
+unified_studio_render passed, one at a time.
+
 ## 2026-09-27 night - Work done outside Studio follow-up: keyless answer, local wording, real Electron drive
 
 Follow-up to the evening row. Codex rollouts as outside sessions and the

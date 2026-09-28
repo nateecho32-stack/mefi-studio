@@ -188,6 +188,154 @@
     return box;
   }
 
+  // Reach this PC from Discord (main.cjs "Discord remote", docs/remote.md): a
+  // DM with the Void Engine bot checks on this PC and talks to Mefi here. The
+  // switch, this PC's name, which alerts go out, quiet hours and the digest
+  // hour, and the PIN that Approve buttons ask for. The PIN goes to main once
+  // and is never shown again. Nothing runs until the section is opened.
+  const HOURS = Array.from({ length: 24 }, (_, hour) => `${String(hour).padStart(2, "0")}:00`);
+  function remoteSection(api) {
+    const box = node("details", "pc-setup pc-remote");
+    box.id = "pc-remote";
+    const status = node("p", "muted pc-setup-status", "Check on this PC and talk to Mefi from a Discord DM.");
+    status.id = "pc-remote-status";
+    status.setAttribute("role", "status");
+    const control = (label, input) => { const row = node("label", "pc-sync-follow"); row.append(input, node("span", "", label)); return row; };
+    const tick = (id) => { const input = node("input"); input.type = "checkbox"; input.id = id; return input; };
+    const onSwitch = tick("pc-remote-on");
+    onSwitch.setAttribute("role", "switch");
+    const nameInput = node("input", "pc-remote-name");
+    nameInput.id = "pc-remote-name";
+    nameInput.maxLength = 40;
+    nameInput.setAttribute("aria-label", "This PC's name in Discord");
+    const nameSave = node("button", "ghost pc-sync-run", "Save name");
+    nameSave.type = "button";
+    const nameRow = node("div", "pc-sync-actions");
+    nameRow.append(nameInput, nameSave);
+    const alerts = { needsYou: tick("pc-remote-needs"), failed: tick("pc-remote-failed"), stuck: tick("pc-remote-stuck"), done: tick("pc-remote-done") };
+    const digest = node("select", "pc-remote-digest");
+    digest.id = "pc-remote-digest";
+    digest.setAttribute("aria-label", "Daily digest");
+    digest.append(...[["", "No daily digest"], ...HOURS.map((hour, index) => [String(index), `Daily digest at ${hour}`])].map(([value, label]) => { const option = node("option", "", label); option.value = value; return option; }));
+    const quietOn = tick("pc-remote-quiet");
+    const quietFrom = node("select");
+    const quietTo = node("select");
+    quietFrom.setAttribute("aria-label", "Quiet from");
+    quietTo.setAttribute("aria-label", "Quiet until");
+    for (const select of [quietFrom, quietTo]) select.append(...HOURS.map((hour) => { const option = node("option", "", hour); option.value = hour; return option; }));
+    quietFrom.value = "23:00";
+    quietTo.value = "07:00";
+    const quietRow = node("div", "pc-sync-actions");
+    quietRow.append(control("Quiet hours", quietOn), quietFrom, node("span", "muted", "to"), quietTo);
+    const pinStatus = node("p", "muted", "");
+    pinStatus.id = "pc-remote-pin-status";
+    const pinInput = node("input", "pc-remote-pin");
+    pinInput.id = "pc-remote-pin";
+    pinInput.type = "password";
+    pinInput.inputMode = "numeric";
+    pinInput.autocomplete = "off";
+    pinInput.maxLength = 12;
+    pinInput.placeholder = "New PIN (4-12 digits)";
+    pinInput.setAttribute("aria-label", "New PIN, 4 to 12 digits");
+    const pinSave = node("button", "ghost pc-sync-run", "Save PIN");
+    pinSave.type = "button";
+    pinSave.id = "pc-remote-pin-save";
+    const pinClear = node("button", "ghost pc-sync-run", "Remove PIN");
+    pinClear.type = "button";
+    pinClear.id = "pc-remote-pin-clear";
+    const unlock = node("button", "ghost pc-sync-run", "Unlock approvals");
+    unlock.type = "button";
+    unlock.id = "pc-remote-unlock";
+    const pinRow = node("div", "pc-sync-actions");
+    pinRow.append(pinInput, pinSave, pinClear, unlock);
+    const pcs = node("ul", "pc-sync-list");
+    pcs.id = "pc-remote-pcs";
+    const log = node("ul", "pc-sync-list");
+    log.id = "pc-remote-log";
+    const details = node("div", "pc-remote-details");
+    details.append(
+      node("p", "pc-setup-links-head", "This PC in Discord"), nameRow,
+      node("p", "pc-setup-links-head", "Alerts in your DMs"),
+      control("Something needs you", alerts.needsYou), control("A task stopped", alerts.failed), control("Agents sit on work for 15 minutes", alerts.stuck), control("A task finished", alerts.done),
+      digest, quietRow,
+      node("p", "pc-setup-links-head", "Approving from Discord"), pinStatus, pinRow,
+      node("p", "pc-setup-links-head", "Your PCs in Discord"), pcs,
+      node("p", "pc-setup-links-head", "Last commands here"), log,
+    );
+    box.append(node("summary", "", "Reach this PC from Discord"), status, control("Answer my Discord DMs on this PC", onSwitch), details,
+      node("p", "muted", "From Discord you can check on this PC, see what needs you, chat with Mefi and pause or resume agents. Tasks you start there wait for your OK. Permissions, keys and settings never change from Discord."));
+    let busy = false, loaded = false;
+    const when = (at) => new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const words = { status: "status", needs: "what needs you", made: "what is being made", digest: "digest", say: "a message to Mefi", pause: "pause", resume: "resume", button: "a button" };
+    function paint(result) {
+      if (!result?.ok) { status.textContent = result?.error === "unavailable" ? "The Discord remote is not in this build." : result?.error || "The Discord remote could not be read."; return; }
+      const s = result.settings, hub = result.hub ?? {};
+      onSwitch.checked = s.on;
+      details.hidden = !s.on;
+      if (document.activeElement !== nameInput) nameInput.value = s.name;
+      for (const [key, input] of Object.entries(alerts)) input.checked = s.notify[key] === true;
+      digest.value = s.notify.digestHour == null ? "" : String(s.notify.digestHour);
+      quietOn.checked = Boolean(s.quiet);
+      if (s.quiet) { quietFrom.value = s.quiet.from; quietTo.value = s.quiet.to; }
+      quietFrom.disabled = quietTo.disabled = !s.quiet;
+      pinStatus.textContent = s.locked ? "Locked after five wrong PINs. Approvals from Discord stay off until you unlock them." : s.pinSet ? "Approve buttons in Discord ask for your PIN. It is never posted in the chat." : "No PIN yet: approvals stay in Studio. Set one to approve from Discord.";
+      pinClear.hidden = !s.pinSet;
+      unlock.hidden = !s.locked;
+      pinSave.textContent = s.pinSet ? "Change PIN" : "Save PIN";
+      pcs.replaceChildren(...(hub.pcs ?? []).map((pc) => node("li", "", `${pc.name}${pc.since ? ` · since ${when(pc.since)}` : ""}`)));
+      if (!pcs.children.length) pcs.append(node("li", "muted", "None yet. Each PC shows here once its remote is on and connected."));
+      log.replaceChildren(...(result.log ?? []).map((row) => node("li", "", `${when(row.at)} · ${words[row.command] ?? row.command}${row.note ? ` · ${row.note}` : ""}`)));
+      if (!log.children.length) log.append(node("li", "muted", "Nothing asked yet."));
+      status.textContent = !s.on ? "Off. Turn it on to check on this PC and talk to Mefi from a Discord DM."
+        : !result.linked ? "Link Discord first: Settings › General › Community."
+        : !hub.configured ? "Add the rooms hub's address first: Settings › General › Community › Connection details."
+        : hub.state === "ready" && !hub.remote ? "This rooms hub does not carry the Discord remote yet. Update the bot on the hub PC."
+        : hub.state === "ready" && hub.on ? `On. DM the Void Engine bot, or use /studio status. This PC answers as ${s.name}.`
+        : hub.state === "error" ? `The rooms hub refused this PC (${hub.error ?? "error"}). Studio tries again every ten minutes.`
+        : "Connecting to the rooms hub…";
+    }
+    const guard = async (label, work) => {
+      if (busy) return;
+      busy = true;
+      box.setAttribute("aria-busy", "true");
+      if (label) status.textContent = label;
+      try { await work(); } catch (error) { status.textContent = `That did not work: ${plain(error, "Studio did not answer.")}`; }
+      busy = false;
+      box.removeAttribute("aria-busy");
+    };
+    const save = (patch, label = "Saving…") => guard(label, async () => paint(await api.remoteSet(patch)));
+    onSwitch.addEventListener("change", () => { void save({ on: onSwitch.checked }, onSwitch.checked ? "Turning the remote on…" : "Turning the remote off…"); });
+    nameSave.addEventListener("click", () => { if (nameInput.value.trim()) void save({ name: nameInput.value.trim() }); });
+    for (const [key, input] of Object.entries(alerts)) input.addEventListener("change", () => { void save({ notify: { [key]: input.checked } }); });
+    digest.addEventListener("change", () => { void save({ notify: { digestHour: digest.value === "" ? null : Number(digest.value) } }); });
+    const quiet = () => { void save({ quiet: quietOn.checked ? { from: quietFrom.value, to: quietTo.value } : null }); };
+    quietOn.addEventListener("change", quiet);
+    quietFrom.addEventListener("change", quiet);
+    quietTo.addEventListener("change", quiet);
+    const pin = (payload, label) => guard(label, async () => {
+      const result = await api.remotePin(payload);
+      pinInput.value = "";
+      paint(result);
+      if (result?.message) status.textContent = result.message;
+      if (result?.ok === false && result.error) status.textContent = result.error;
+    });
+    pinSave.addEventListener("click", () => {
+      const value = pinInput.value.trim();
+      if (!/^\d{4,12}$/.test(value)) { status.textContent = "A PIN is 4 to 12 digits."; return; }
+      void pin({ pin: value }, "Saving the PIN…");
+    });
+    const clearPin = () => { void pin({ clear: true }, "Removing the PIN…"); };
+    if (window.MefiUi?.arm) window.MefiUi.arm(pinClear, { run: clearPin, armed: "Remove the PIN?" }); else pinClear.addEventListener("click", clearPin);
+    unlock.addEventListener("click", () => { void pin({ unlock: true }, "Unlocking…"); });
+    if (typeof api.onRemoteEvent === "function") api.onRemoteEvent((result) => { if (loaded) paint(result); });
+    box.addEventListener("toggle", () => {
+      if (!box.open || loaded) return;
+      loaded = true;
+      void guard("Reading the Discord remote…", async () => paint(await api.remoteStatus()));
+    });
+    return box;
+  }
+
   function card() {
     const root = node("section", "pc-sync");
     root.setAttribute("aria-labelledby", "pc-sync-title");
@@ -226,6 +374,8 @@
       root.append(follow);
     }
     if (typeof api?.pcSetupStatus === "function") root.append(setupSection(api));
+    // Reach this PC from Discord (the remote section above).
+    if (typeof api?.remoteStatus === "function") root.append(remoteSection(api));
     // Share between my PCs and Share with friends (renderer/pc-vault.js).
     if (window.MefiPcVault) root.append(window.MefiPcVault.section(), window.MefiPcVault.shareSection());
     if (typeof api?.syncStatus !== "function" || typeof api?.syncRun !== "function") {
