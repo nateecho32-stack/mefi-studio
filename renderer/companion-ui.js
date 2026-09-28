@@ -59,7 +59,6 @@
     const box = host.orb.getBoundingClientRect(), panel = host.panel;
     const width = Math.min(innerWidth - 24, tab === "status" ? 370 : tab === "now" ? 430 : 460);
     panel.style.width = `${width}px`;
-    const content = panel.querySelector(".companion-content");
     const cap = Math.max(180, innerHeight - 32), head = panel.querySelector(".companion-shell-head").offsetHeight + panel.querySelector(".companion-tabs").offsetHeight + 44;
     const height = Math.min(cap, head + Math.max(80, panes[tab].scrollHeight));
     panel.style.height = `${height}px`; panel.style.maxHeight = `${cap}px`;

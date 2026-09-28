@@ -48,7 +48,8 @@ const browser = {
 
 const rules = {
   "no-undef": "error",
-  "no-unused-vars": ["warn", { args: "none", caughtErrors: "none", varsIgnorePattern: "^_" }],
+  // A rest sibling is how a field is left out of a copy (`const { secret, ...rest } = row`), not dead code.
+  "no-unused-vars": ["warn", { args: "none", caughtErrors: "none", varsIgnorePattern: "^_", ignoreRestSiblings: true }],
 };
 
 export default [

@@ -924,7 +924,6 @@
     if (WORKSPACE_PAGES.has(id)) {
       const exit = document.getElementById(`${id}-close`);
       const label = exit?.querySelector(".label");
-      const origin = get(state.returnTo ?? underlyingView());
       const name = page ? `Back within ${SECTIONS.get(sectionOf(dest)) || "this section"}` : "Close";
       if (label) label.textContent = page ? "Back" : "Close";
       if (exit) { exit.title = `${name} (Esc)`; exit.setAttribute("aria-label", name); }

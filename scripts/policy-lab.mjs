@@ -20,7 +20,7 @@
 // facts are recorded in the report's budget block.
 
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { BASELINE_POLICY, POLICY_CONFIG_SPEC, defineConfigPolicy, policyIdentity } from "./policy.mjs";

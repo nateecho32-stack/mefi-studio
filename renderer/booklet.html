@@ -6975,15 +6975,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
 .ab-index-item { background: var(--tint-gold-2); color: var(--muted); border: 1px solid var(--hairline); border-radius: var(--r-pill); padding: 3px 9px; font: var(--fs-xs) var(--font-ui); cursor: pointer; }
 .ab-index-item:hover, .ab-index-item:focus-visible { color: var(--ivory); border-color: var(--gold); outline: none; }
 .ab-map-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 8px; }
-.ab-picker { height: var(--ctl-h-sm); max-width: 240px; border-radius: var(--r-sm); border: 1px solid var(--hairline); background: var(--bg); color: var(--ivory); font: var(--fs-sm) var(--font-ui); }
-.ab-picker:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 1px; }
 .ab-legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: var(--fs-2xs); color: var(--dim); }
 .ab-key { display: inline-flex; align-items: center; gap: 5px; }
 .ab-key::before { content: ""; display: inline-block; width: 12px; height: 4px; border-radius: 2px; background: var(--dim); }
 .ab-key-done::before { background: var(--good); }
 .ab-key-live::before { background: var(--live); }
-.ab-key-glow::before { height: 9px; width: 12px; background: rgba(87, 255, 154, .22); border-radius: 3px; }
-.ab-key-link::before { height: 2px; width: 16px; background: var(--gold); }
 .ab-tip { position: absolute; z-index: 3; max-width: min(260px, calc(100% - 12px)); display: grid; gap: 3px; padding: 8px 10px; border-radius: var(--r-md); border: 1px solid var(--hairline-strong); background: var(--graph-surface); color: var(--ivory); font-size: var(--fs-xs); overflow-wrap: anywhere; pointer-events: none; box-shadow: var(--shadow-1); }
 .ab-tip strong { font-size: var(--fs-sm); }
 .ab-legend-brain { padding: 8px 2px 0; }
@@ -17281,7 +17277,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (WORKSPACE_PAGES.has(id)) {
       const exit = document.getElementById(`${id}-close`);
       const label = exit?.querySelector(".label");
-      const origin = get(state.returnTo ?? underlyingView());
       const name = page ? `Back within ${SECTIONS.get(sectionOf(dest)) || "this section"}` : "Close";
       if (label) label.textContent = page ? "Back" : "Close";
       if (exit) { exit.title = `${name} (Esc)`; exit.setAttribute("aria-label", name); }
@@ -27336,7 +27331,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const maxSessions = Math.max(1, Number(org?.policy?.maxSessions) || 8);
     const maxTodos = Math.max(1, Number(org?.policy?.maxTodosPerSession) || 14);
     const foldedIds = Array.isArray(org?.folded) ? org.folded.filter((id) => byId.has(id)) : [];
-    const foldedSet = new Set(foldedIds);
     const staleSet = new Set(Array.isArray(org?.stale) ? org.stale : []);
     // The assistant's organisation decides the roots: active first, then working,
     // then stale, finished ones folded into one node. Before its first tick, or
@@ -27936,7 +27930,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 
     // nodes, far to near
     const ordered = [...nodes].sort((a, b) => projected.get(b).depth - projected.get(a).depth);
-    const running = Boolean(window.mefiStudio?.assistantState) && assistant.state?.status === "running";
     for (const node of ordered) {
       const p = projected.get(node);
       if (p.depth < 60) continue;
@@ -63627,7 +63620,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const box = host.orb.getBoundingClientRect(), panel = host.panel;
     const width = Math.min(innerWidth - 24, tab === "status" ? 370 : tab === "now" ? 430 : 460);
     panel.style.width = `${width}px`;
-    const content = panel.querySelector(".companion-content");
     const cap = Math.max(180, innerHeight - 32), head = panel.querySelector(".companion-shell-head").offsetHeight + panel.querySelector(".companion-tabs").offsetHeight + 44;
     const height = Math.min(cap, head + Math.max(80, panes[tab].scrollHeight));
     panel.style.height = `${height}px`; panel.style.maxHeight = `${cap}px`;
@@ -65488,12 +65480,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     else if ((event.kind === "file.read" || event.kind === "file.edit") && Array.isArray(event.files)) addFx("files", { dur: 3.2, files: event.files.slice(0, 4), edit: event.kind === "file.edit" });
   }
 
-  function stepPoint(layout, id) {
-    const target = layout.at.get(id);
-    if (!target) return layout.fold ?? layout.lead;
-    return target;
-  }
-
   function drawPipeline(ctx, W, H, t) {
     const P = palette();
     const pipeline = scene.taskId ? data.pipelines[scene.taskId] : null;
@@ -65732,193 +65718,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     return kept;
   }
-  function layoutMap(map, W) {
-    const systems = [...(map?.systems ?? [])].sort((a, b) => warmthOf(b) - warmthOf(a) || (b.fileCount ?? b.files?.length ?? 0) - (a.fileCount ?? a.files?.length ?? 0));
-    const links = visibleLinks(map);
-    const neighbours = new Map(systems.map((row) => [row.id, new Map()]));
-    for (const link of links) {
-      neighbours.get(link.a)?.set(link.b, link.weight ?? 1);
-      neighbours.get(link.b)?.set(link.a, link.weight ?? 1);
-    }
-    const level = new Map();
-    for (const root of systems) {
-      if (level.has(root.id)) continue;
-      level.set(root.id, level.size ? Math.max(...level.values()) + 1 : 0);
-      const queue = [root.id];
-      while (queue.length) {
-        const id = queue.shift();
-        const next = [...(neighbours.get(id) ?? new Map()).entries()].sort((a, b) => b[1] - a[1]).map(([other]) => other);
-        for (const other of next) if (!level.has(other)) { level.set(other, level.get(id) + 1); queue.push(other); }
-      }
-    }
-    const boxW = W < 520 ? Math.max(120, Math.floor((W - 36) / 2)) : 168;
-    const boxH = 64, gapX = 16, gapY = 40;
-    const perRow = Math.max(1, Math.floor((W - 24 + gapX) / (boxW + gapX)));
-    const rows = [];
-    for (const system of systems) {
-      let row = level.get(system.id) ?? 0;
-      while ((rows[row]?.length ?? 0) >= perRow) row += 1;
-      (rows[row] ??= []).push(system);
-    }
-    const at = new Map();
-    const dense = rows.filter(Boolean);
-    dense.forEach((row, index) => {
-      if (index > 0) {
-        const bary = (system) => {
-          const placed = [...(neighbours.get(system.id) ?? new Map()).entries()].filter(([other]) => at.has(other));
-          if (!placed.length) return Infinity;
-          const total = placed.reduce((sum, [, weight]) => sum + weight, 0);
-          return placed.reduce((sum, [other, weight]) => sum + at.get(other).x * weight, 0) / total;
-        };
-        row.sort((a, b) => bary(a) - bary(b));
-      }
-      const span = (row.length - 1) * (boxW + gapX);
-      row.forEach((system, i) => at.set(system.id, { x: W / 2 - span / 2 + i * (boxW + gapX), y: 26 + index * (boxH + gapY) + boxH / 2 }));
-    });
-    return { at, boxW, boxH, height: 26 + dense.length * (boxH + gapY), systems, links, neighbours };
-  }
-
-  function drawMap(ctx, W, H, t, map, selected, hovered = null) {
-    const P = palette();
-    ctx.fillStyle = P.bg; ctx.fillRect(0, 0, W, H);
-    if (!map?.systems?.length) {
-      label(ctx, "No systems yet", W / 2, H / 2 - 12, { size: 14, weight: 650, color: P.ivory });
-      label(ctx, "The map is built from the project's git history and every verified run.", W / 2, H / 2 + 12, { size: 12, color: P.muted });
-      return null;
-    }
-    const L = layoutMap(map, W);
-    // Hover dims what is not linked; a choice only lights its own links.
-    const focus = hovered ?? selected;
-    const near = hovered ? new Set([hovered, ...(L.neighbours.get(hovered)?.keys() ?? [])]) : null;
-    const maxWeight = Math.max(1, ...L.links.map((link) => link.weight ?? 1));
-    for (const link of L.links) {
-      const a = L.at.get(link.a), b = L.at.get(link.b);
-      if (!a || !b) continue;
-      const strength = link.strength != null ? Math.min(1, link.strength) : (link.weight ?? 1) / maxWeight;
-      const lit = focus && (link.a === focus || link.b === focus);
-      ctx.strokeStyle = lit ? rgba(P.bright, 0.55 + 0.4 * strength) : rgba(P.mint, focus ? 0.06 : 0.14 + 0.36 * strength);
-      ctx.lineWidth = (lit ? 1.5 : 1) + 2.2 * strength;
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.bezierCurveTo(a.x, (a.y + b.y) / 2, b.x, (a.y + b.y) / 2, b.x, b.y); ctx.stroke();
-    }
-    const maxWarmth = Math.max(1, ...L.systems.map(warmthOf));
-    for (const system of L.systems) {
-      const { x, y } = L.at.get(system.id);
-      const faded = near && !near.has(system.id);
-      ctx.save();
-      if (faded) ctx.globalAlpha = 0.45;
-      const warm = warmthOf(system) / maxWarmth;
-      if (warm > 0.05) {
-        ctx.fillStyle = rgba(P.live, 0.05 + 0.14 * warm * (still() ? 1 : 0.8 + 0.2 * Math.sin(t * 1.6 + x / 60)));
-        roundRect(ctx, x - L.boxW / 2 - 6, y - L.boxH / 2 - 6, L.boxW + 12, L.boxH + 12, 14); ctx.fill();
-      }
-      ctx.fillStyle = P.panel; roundRect(ctx, x - L.boxW / 2, y - L.boxH / 2, L.boxW, L.boxH, 10); ctx.fill();
-      const edge = selected === system.id ? P.bright : hovered === system.id ? P.mint : system.source === "cluster" ? rgba(P.mint, 0.45) : P.line;
-      ctx.strokeStyle = edge; ctx.lineWidth = selected === system.id ? 2 : 1; ctx.stroke();
-      const maxChars = Math.floor((L.boxW - 24) / 7);
-      label(ctx, clip(system.name || system.id, maxChars), x - L.boxW / 2 + 12, y - 15, { size: 12.5, weight: 650, color: P.ivory, align: "left" });
-      const where = system.source === "cluster" ? `in ${system.parent ?? ""}/` : system.path || "project root";
-      label(ctx, clip(`${system.fileCount ?? system.files?.length ?? 0} files · ${where}`, maxChars + 4), x - L.boxW / 2 + 12, y + 2, { size: 10.5, color: P.muted, align: "left" });
-      const counts = system.tasks ?? { done: 0, active: 0, open: 0 };
-      const total = counts.done + counts.active + counts.open;
-      const barW = L.boxW - 24; let cursor = x - L.boxW / 2 + 12;
-      if (!total) { ctx.fillStyle = rgba(P.dim, 0.35); ctx.fillRect(cursor, y + 18, barW, 3); }
-      for (const [key, color] of [["done", P.good], ["active", P.live], ["open", P.dim]]) {
-        const w = total ? barW * ((counts[key] ?? 0) / total) : 0;
-        if (w <= 0) continue;
-        ctx.fillStyle = color; ctx.fillRect(cursor, y + 17, w, 4); cursor += w;
-      }
-      ctx.restore();
-    }
-    return L;
-  }
-
-  function systemAt(L, x, y) {
-    if (!L) return null;
-    for (const system of L.systems) {
-      const at = L.at.get(system.id);
-      if (Math.abs(x - at.x) <= L.boxW / 2 && Math.abs(y - at.y) <= L.boxH / 2) return system;
-    }
-    return null;
-  }
-
-  // One map on a canvas, shared by the Agent brain sheet and Home: it grows
-  // to fit its systems (the stage scrolls), lights the hovered or chosen
-  // system's links, shows a card on hover, and offers a keyboard picker and a
-  // legend beside it. `onSelect` hears every choice.
-  function mountLegacyMap({ canvas, stage, tools = null, minHeight = 300, onSelect }) {
-    const widget = { layout: null, selected: null, hovered: null, view: null };
-    const tip = node("div", "ab-tip");
-    tip.hidden = true;
-    tip.setAttribute("role", "tooltip");
-    stage.append(tip);
-    let picker = null;
-    if (tools) {
-      picker = node("select", "ab-picker");
-      picker.setAttribute("aria-label", "Jump to a system");
-      picker.addEventListener("change", () => choose(picker.value || null));
-      const legend = node("div", "ab-legend");
-      legend.append(
-        node("span", "ab-key ab-key-done", "done"), node("span", "ab-key ab-key-live", "working"), node("span", "ab-key ab-key-open", "open"),
-        node("span", "ab-key ab-key-glow", "recent work"), node("span", "ab-key ab-key-link", "change together"),
-      );
-      tools.append(picker, legend);
-    }
-    const find = (id) => data.map?.systems?.find((row) => row.id === id) ?? null;
-    function choose(id) {
-      widget.selected = id;
-      if (picker) picker.value = id ?? "";
-      widget.view.paint();
-      onSelect?.(find(id));
-    }
-    function sync() {
-      if (!picker) return;
-      const systems = [...(data.map?.systems ?? [])].sort((a, b) => String(a.name).localeCompare(String(b.name)));
-      const signature = systems.map((row) => `${row.id}:${row.name}`).join("|");
-      if (picker.dataset.signature !== signature) {
-        picker.dataset.signature = signature;
-        picker.textContent = "";
-        const first = node("option", "", "Jump to a system…");
-        first.value = "";
-        picker.append(first, ...systems.map((row) => { const option = node("option", "", `${row.name} · ${row.fileCount ?? row.files?.length ?? 0} files`); option.value = row.id; return option; }));
-      }
-      picker.value = widget.selected ?? "";
-    }
-    widget.view = makeCanvas(canvas, (ctx, W, H, t) => {
-      widget.layout = drawMap(ctx, W, H, t, data.map, widget.selected, widget.hovered);
-      // The canvas is as tall as the map; the stage around it scrolls.
-      const want = Math.max(minHeight, Math.ceil((widget.layout?.height ?? 0) + 12));
-      if (Math.abs((parseFloat(canvas.style.height) || 0) - want) > 4) {
-        canvas.style.height = `${want}px`;
-        requestAnimationFrame(() => widget.view.resize());
-      }
-    });
-    widget.view.hot = () => false;
-    const point = (event) => { const box = canvas.getBoundingClientRect(); return [event.clientX - box.left, event.clientY - box.top]; };
-    canvas.addEventListener("click", (event) => choose(systemAt(widget.layout, ...point(event))?.id ?? null));
-    canvas.addEventListener("mousemove", (event) => {
-      const [x, y] = point(event);
-      const system = systemAt(widget.layout, x, y);
-      if ((system?.id ?? null) !== widget.hovered) { widget.hovered = system?.id ?? null; widget.view.paint(); }
-      if (!system) { tip.hidden = true; return; }
-      tip.textContent = "";
-      tip.append(node("strong", "", system.name || system.id));
-      if (system.what) tip.append(node("span", "", system.what));
-      const counts = system.tasks ?? {};
-      tip.append(node("span", "ab-quiet", `${system.fileCount ?? system.files?.length ?? 0} files · ${system.edits ?? 0} changes · tasks ${counts.done ?? 0} done, ${counts.active ?? 0} working, ${counts.open ?? 0} open`));
-      const top = (system.files ?? []).slice(0, 3).map((row) => row.path.split("/").pop()).join(", ");
-      if (top) tip.append(node("span", "ab-quiet", `Most changed: ${top}`));
-      tip.hidden = false;
-      const box = stage.getBoundingClientRect();
-      const left = Math.min(event.clientX - box.left + stage.scrollLeft + 14, stage.scrollWidth - 250);
-      tip.style.left = `${Math.max(6, left)}px`;
-      tip.style.top = `${event.clientY - box.top + stage.scrollTop + 14}px`;
-    });
-    canvas.addEventListener("mouseleave", () => { tip.hidden = true; if (widget.hovered) { widget.hovered = null; widget.view.paint(); } });
-    widget.choose = choose;
-    widget.sync = () => { sync(); widget.view.paint(); };
-    return widget;
-  }
-
   // The explorer presents one scale at a time. A system opens into parts,
   // then a part opens into its present files. The isometric chunks share the
   // Command tree's depth cues without forcing every project into one graph.
@@ -70232,7 +70031,6 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     return item;
   }
-  function empty(text) { return el("li", "vibe-empty", text); }
   const go = (id, params) => window.MefiNav?.go?.(id, params);
 
   // A row opens its task in the Tasks panel beside Vibe, not the Build board.

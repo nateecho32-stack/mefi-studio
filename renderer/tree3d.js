@@ -987,7 +987,6 @@
     const maxSessions = Math.max(1, Number(org?.policy?.maxSessions) || 8);
     const maxTodos = Math.max(1, Number(org?.policy?.maxTodosPerSession) || 14);
     const foldedIds = Array.isArray(org?.folded) ? org.folded.filter((id) => byId.has(id)) : [];
-    const foldedSet = new Set(foldedIds);
     const staleSet = new Set(Array.isArray(org?.stale) ? org.stale : []);
     // The assistant's organisation decides the roots: active first, then working,
     // then stale, finished ones folded into one node. Before its first tick, or
@@ -1587,7 +1586,6 @@
 
     // nodes, far to near
     const ordered = [...nodes].sort((a, b) => projected.get(b).depth - projected.get(a).depth);
-    const running = Boolean(window.mefiStudio?.assistantState) && assistant.state?.status === "running";
     for (const node of ordered) {
       const p = projected.get(node);
       if (p.depth < 60) continue;

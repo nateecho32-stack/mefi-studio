@@ -313,7 +313,6 @@
     }
     return item;
   }
-  function empty(text) { return el("li", "vibe-empty", text); }
   const go = (id, params) => window.MefiNav?.go?.(id, params);
 
   // A row opens its task in the Tasks panel beside Vibe, not the Build board.

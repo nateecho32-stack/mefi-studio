@@ -69,7 +69,6 @@ const taskOversight = require("./scripts/task-oversight.cjs");
 const companionModule = require("./scripts/companion.cjs");
 // Work done outside Studio and the queued cards it may cover.
 const outsideWork = require("./scripts/outside-work.cjs");
-const deskResolve = require("./scripts/desk-resolve.cjs");
 const executorActivity = require("./scripts/executor-activity.cjs");
 const taskHandoffs = require("./scripts/task-handoffs.cjs");
 const executorWorktrees = require("./scripts/executor-worktrees.cjs");
@@ -12266,33 +12265,6 @@ async function assistantIssueAction(action = {}, note = null, { origin = "owner"
   if (!retried?.ok) return said({ ok: true, task: taskId, decision: verb, error: retried?.error ?? null });
   assistantAskForWork("a decision was answered");
   return said({ ok: true, task: taskId, decision: verb });
-}
-
-// A card re-armed FOR the owner (a delegated answer, a parked card the desk
-// retries): backlogControl's retry guards, then backlog.delegateRetry, which
-// never lifts the owner's stop and keeps the budgets that park a loop. No pin:
-// work settled for the owner never jumps the owner's own queue.
-async function assistantDelegateRearm(taskId, { by = "desk", kind = null, liftLoop = false } = {}) {
-  if (typeof taskId !== "string" || !taskId) return { ok: false, error: "Choose a task first." };
-  const changed = await mutateBoard((board) => {
-    const index = board.tasks.findIndex((task) => task?.id === taskId);
-    if (index < 0) return { ok: false, error: "This task is no longer on the board." };
-    const task = board.tasks[index];
-    const state = backlog.workState(task, Date.now(), { tasks: board.tasks, autoBuild: autopilot.autoBuild, approve: autopilot.approve });
-    if (state.stage === "grouped") return { ok: false, error: "This task belongs to a group; it is re-armed through its plan." };
-    if (state.blockedBy === "dependencies") return { ok: false, error: state.reason };
-    if (state.stage === "running" || autopilot.jobs.some((job) => job.taskId === taskId)) return { ok: false, error: "A worker holds this task." };
-    if (state.stage === "review") return { ok: false, error: "This attempt is still being verified." };
-    const next = backlog.delegateRetry(task, Date.now(), { by, kind, liftLoop });
-    if (!next.ok) return next;
-    board.tasks[index] = next.task;
-    return { ok: true, taskId };
-  });
-  if (!changed?.ok) return { ok: false, error: changed?.error ?? "The card could not be re-armed.", held: changed?.held === true, budget: changed?.budget === true };
-  assistantAskForWork(`a card was re-armed for you by the ${by === "desk" ? "desk" : "assistant"}`);
-  await refreshAutopilotQueue();
-  emitAutopilot();
-  return { ok: true, taskId };
 }
 
 // The owner's answer to a duplicate-family ask (assistant.mjs auditPass

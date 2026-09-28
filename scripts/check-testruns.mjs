@@ -22,7 +22,6 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const GUIDE_HEADING = "## Read Before Any Tests";
 // Tested against the heading text with the "## " prefix already sliced off.
 // The working tree checks out CRLF under core.autocrlf=true, so all line
 // comparisons happen after \r\n normalization.

@@ -99,15 +99,11 @@
 .ab-index-item { background: var(--tint-gold-2); color: var(--muted); border: 1px solid var(--hairline); border-radius: var(--r-pill); padding: 3px 9px; font: var(--fs-xs) var(--font-ui); cursor: pointer; }
 .ab-index-item:hover, .ab-index-item:focus-visible { color: var(--ivory); border-color: var(--gold); outline: none; }
 .ab-map-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 8px; }
-.ab-picker { height: var(--ctl-h-sm); max-width: 240px; border-radius: var(--r-sm); border: 1px solid var(--hairline); background: var(--bg); color: var(--ivory); font: var(--fs-sm) var(--font-ui); }
-.ab-picker:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 1px; }
 .ab-legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: var(--fs-2xs); color: var(--dim); }
 .ab-key { display: inline-flex; align-items: center; gap: 5px; }
 .ab-key::before { content: ""; display: inline-block; width: 12px; height: 4px; border-radius: 2px; background: var(--dim); }
 .ab-key-done::before { background: var(--good); }
 .ab-key-live::before { background: var(--live); }
-.ab-key-glow::before { height: 9px; width: 12px; background: rgba(87, 255, 154, .22); border-radius: 3px; }
-.ab-key-link::before { height: 2px; width: 16px; background: var(--gold); }
 .ab-tip { position: absolute; z-index: 3; max-width: min(260px, calc(100% - 12px)); display: grid; gap: 3px; padding: 8px 10px; border-radius: var(--r-md); border: 1px solid var(--hairline-strong); background: var(--graph-surface); color: var(--ivory); font-size: var(--fs-xs); overflow-wrap: anywhere; pointer-events: none; box-shadow: var(--shadow-1); }
 .ab-tip strong { font-size: var(--fs-sm); }
 .ab-legend-brain { padding: 8px 2px 0; }
