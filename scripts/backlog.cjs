@@ -40,8 +40,20 @@ function buildScope(item) {
   return createHash("sha256").update(JSON.stringify(canonical(scope))).digest("hex");
 }
 
+// Whether `item` still has the scope `saved` was taken from. buildScope
+// leaves out refs that are only gathered rows, which is how a card with no
+// refs key hashed before its gather; a card made by work-admission's taskRow
+// had `refs: []` and hashed with it. Both were the card before the gather,
+// so both match: an approval or a named Start given before refs land stays.
+function scopeMatches(item, saved) {
+  if (typeof saved !== "string" || !saved) return false;
+  if (saved === buildScope(item)) return true;
+  const refs = Array.isArray(item?.refs) ? item.refs : null;
+  return Boolean(refs?.length && refs.every(gatheredRef) && saved === buildScope({ ...item, refs: [] }));
+}
+
 function hasBuildApproval(item) {
-  return item?.buildApproval?.version === 1 && item.buildApproval.scope === buildScope(item);
+  return item?.buildApproval?.version === 1 && scopeMatches(item, item.buildApproval.scope);
 }
 
 function buildAllowed(item, { autoBuild = true, approve = null, tasks = [] } = {}) {
@@ -368,4 +380,4 @@ const LOOP_HOLD = 1;
 // whose workState waits a linked card (duplicateState): hostCaps.duplicateWait.
 const DUPLICATE_WAIT = 1;
 
-module.exports = { workState, summarizeBacklog, retryTask, delegateRetry, delegatedRetries, DELEGATE_PER_DAY, dependencyState, dependencyIds, completedTask, droppedTask, validateDependencies, buildScope, hasBuildApproval, buildAllowed, LOOP_HOLD, DUPLICATE_WAIT };
+module.exports = { workState, summarizeBacklog, retryTask, delegateRetry, delegatedRetries, DELEGATE_PER_DAY, dependencyState, dependencyIds, completedTask, droppedTask, validateDependencies, buildScope, scopeMatches, hasBuildApproval, buildAllowed, LOOP_HOLD, DUPLICATE_WAIT };

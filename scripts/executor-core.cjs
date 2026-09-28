@@ -62,7 +62,7 @@ function selectCandidates({ tasks, now, liveTaskIds, liveKeys, titleKey, conflic
   // the overseer's own upkeep last, where it once took 20 of 34 slots.
   const ranked = runnable
     .map((ref) => ({ kind: "task", ref }))
-    .filter((candidate) => (!taskStart || candidate.ref.id === taskStart.taskId && backlog.buildScope(candidate.ref) === taskStart.scope)
+    .filter((candidate) => (!taskStart || candidate.ref.id === taskStart.taskId && backlog.scopeMatches(candidate.ref, taskStart.scope))
       && (!cluster || agentModes.matchesFocus(candidate, cluster))).sort((a, b) => executorResume.compare(a.ref, b.ref) || compare(a.ref, b.ref));
   return { open, ranked };
 }

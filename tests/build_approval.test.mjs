@@ -98,6 +98,41 @@ test("a reference gather landing after approval keeps it; web rows and owner row
   assert.equal(backlog.hasBuildApproval({ ...mixed, refs: gathered }), false);
 });
 
+test("a card made with refs: [] keeps its approval and named Start when a gather lands", () => {
+  // work-admission's taskRow gives every new card an empty refs list, which
+  // is part of the scope the owner approved.
+  const fresh = task("row", { refs: [] });
+  const approved = { ...fresh, buildApproval: { version: 1, scope: backlog.buildScope(fresh), approvedAt: 12 } };
+  const gathered = [
+    { kind: "file", title: "gathered.js", detail: "work tree", auto: true },
+    { kind: "context", title: "Start with gathered.js", detail: "Picked from local matches", auto: true },
+  ];
+  assert.equal(backlog.hasBuildApproval({ ...approved, refs: gathered }), true);
+  assert.equal(backlog.scopeMatches({ ...fresh, refs: gathered }, backlog.buildScope(fresh)), true, "a named Start keyed on the scope survives");
+  // Anything that is not a gathered row still changes the scope.
+  assert.equal(backlog.hasBuildApproval({ ...approved, refs: [...gathered, { kind: "web", title: "A page", detail: "https://example.com", auto: true }] }), false);
+  assert.equal(backlog.hasBuildApproval({ ...approved, refs: [{ kind: "file", title: "owner.js", detail: "work tree" }] }), false);
+  assert.equal(backlog.hasBuildApproval({ ...approved, refs: gathered, prompt: "Something else" }), false);
+  assert.equal(backlog.scopeMatches(fresh, ""), false);
+  assert.equal(backlog.scopeMatches(fresh, undefined), false);
+});
+
+test("a named Start survives a gather through selection and the host's lost check", async () => {
+  const h = executorHost({ tasks: [task("named", { refs: [] })], autoBuild: false });
+  await approve(h, "named");
+  h.edit((board) => { board.tasks[0].refs = [{ kind: "file", title: "found.js", detail: "work tree", auto: true }]; });
+  const card = h.board().tasks[0];
+  assert.equal(backlog.hasBuildApproval(card), true, "the approval outlived the gather");
+  const executorCore = (await import("../scripts/executor-core.cjs")).default;
+  const picked = executorCore.selectCandidates({
+    tasks: [card], now: h.now(), liveTaskIds: new Set(), liveKeys: new Set(), titleKey: (title) => title, conflicts: () => false,
+    autoBuild: false, taskStart: { taskId: "named", scope: backlog.buildScope({ ...card, refs: [] }) }, compare: () => 0,
+  });
+  assert.deepEqual(picked.ranked.map((candidate) => candidate.ref.id), ["named"]);
+  assert.equal(await h.env.spawnNextJob(), "spawned");
+  assert.equal(h.starts[0].taskId, "named");
+});
+
 test("approvals saved before gathered refs were stamped still match", () => {
   // Rows written before the auto stamp hash as they always did, including an
   // explicit empty list, so no stored approval is cancelled by the change.

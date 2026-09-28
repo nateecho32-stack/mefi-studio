@@ -15233,7 +15233,7 @@ async function spawnNextJob(options) {
   warmPolicyBaseline(policyModule);
   const requests = await eyes.readJson(REQUESTS_PATH, []);
   const tasks = await eyes.readJson(TASKS_PATH, []);
-  if (taskStart && !tasks.some((task) => task?.id === taskStart.taskId && backlog.buildScope(task) === taskStart.scope)) return "lost";
+  if (taskStart && !tasks.some((task) => task?.id === taskStart.taskId && backlog.scopeMatches(task, taskStart.scope))) return "lost";
   let clusterSelection = null;
   if (!modeUnchanged()) return "lost";
   if (dispatchMode === "cluster") {
