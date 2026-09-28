@@ -6,6 +6,54 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-26 - Canvas transfer applied, loaded and full gates passed
+
+The expanded isolated media renderer passed (1 test, 38.4 s), including the
+other session's new player/queue layout assertions. The previously validated
+Command and tree fixtures were unchanged. Original and candidate hashes
+were verified before copying the four candidate files into the checkout;
+the seven capability/resize tests were added as command_canvas_context.
+Other sessions' source changes were retained.
+
+Command's interactive DOM canvas elements now transfer their 2D drawing
+contexts when supported. The capability probe runs before irreversible
+transfer; existing/unsupported contexts retain the normal path. Resize
+updates the drawing bitmap rather than the placeholder. Context options,
+DPR behavior, no-op pixel retention, transparent background video and visual
+output were validated in isolation. MefiIdle.canvasContext exposes the
+actual context for diagnostics, and the three renderer fixtures use it.
+
+Validation after promotion (uncontended full run, Studio idle):
+- npm run build-booklet passed, generated booklet hash f98dd2322a01.
+- npm run check passed: 165 syntax targets, 344 unique specs, CSS and
+  TESTRUNS checks clean.
+- npm run audit passed with zero findings, errors or warnings.
+- npm test exited 0: CPU stage 3,872 passed / 4 skipped; Electron lane
+  38 passed / 1 skipped; serialized eyes test 1 passed; occlusion 2 passed.
+  Total Node: 3,913 passed, 5 skipped, 0 failed. Python: 248 tests, OK with
+  1 skip. Normalized-path checks: 6/6. Node leg 276 s, Python leg 34 s.
+- All four promoted source/fixture hashes remained unchanged after the run.
+- Standalone tools/verify_command.py pixel probes were then migrated to the
+  context accessor and bitmap dimensions. Python AST and embedded JavaScript
+  syntax passed, including both updated probe bodies; no full verifier tour
+  was launched. The initial local parser wrapper added a redundant closing
+  brace; correcting that wrapper made the syntax check pass without another
+  source change. git diff --check passed for this task's edited files.
+
+The final PID- and booklet-validated status confirms the normal automatic
+reload loaded commandCanvasTransferred=true, boot complete and recording
+false. Studio remained idle (1,461 seconds of system idle on the final
+check), so no live sample or before/after claim was made. The controlled
+29% cycle reduction and native setter timings remain component evidence.
+No further application gate is pending for this change.
+
+Logs: tools/logs/canvas-transfer-expanded-media.log, canvas-transfer-build.log,
+canvas-transfer-check.log, canvas-transfer-audit.log,
+canvas-transfer-full-test.log and live-20260926-canvas-final-status.json.
+Original promotion backups and manifest remain in ignored
+canvas-transfer-pre-promotion/. The old candidate guard correctly rejects
+the now-applied source: do not rerun its promotion or overwrite later edits.
+
 ## 2026-09-26 - Media panel redesign brings playback, background and queue together
 
 Reorganized Music & video around the current source. The video panel now

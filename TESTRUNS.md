@@ -34,6 +34,44 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-27 late - Media player controls and native browser usability
+
+Validated media changes in `93ee12e`, rebased on the incoming setup-helper and
+Command-renderer follow-up at `4fa8b96`. Floating players have reachable window
+controls and a visible minimized restore bar; dragging from the panel preserves
+position. Hover opens at the video and keeps its controls stable. Browser pages
+fit the visible panel through scrolling and overlapping notifications.
+
+- Final `npm run build-booklet`, `npm run check`, `npm run audit`: PASS, zero
+  audit findings. Combined media/music unit tests: 109/109 PASS.
+- Final real Electron rerun on the integrated source: 4/4 PASS (Command,
+  media browser, media window, tree dynamics). Media captures cover 1440/600px,
+  provider controls, native toolbar drag/minimize/restore/close, background,
+  notifications, scrolling, dialogs, history, zoom and unchanged playback.
+  The compact video retains a 200px provider area below its toolbar.
+- `npm test` initial CPU stage: 4,023 pass, four skip, zero fail. Its Electron
+  stage hit the previously recorded Command timeout and the browser fixture's
+  native-input assertion before the run stopped. The remaining renderer lane
+  was completed separately: 20 pass, one skip, one tree-dynamics native-click
+  failure. The final four-suite rerun above clears all three failed suites.
+  No single uninterrupted full-gate pass is claimed.
+- Remaining legs: Python 248 tests OK (one skip), normalized-path locks 6/6,
+  serialized eyes 1/1, occlusion one pass and one desktop-capability skip.
+- Baseline media render: PASS. Intermediate focused runs corrected obsolete
+  hover-dismissal and exact-full-viewport fixture assumptions; visual QA found
+  and fixed compact provider-menu clipping. Browser unit 4/4 and final browser
+  Electron fixture PASS. Synthetic child `sendInputEvent` produced no events
+  on unchanged HEAD as well, so browser verification exercises its actual page
+  handler plus native visibility, bounds and captures. Pointer injection into
+  that native child remains unverified here. Website clipping can reflow its
+  height but does not reload playback.
+- `npm run package`: PASS; installed media files match source hashes. Existing
+  portable data was preserved. Source landed on main and synced to GitHub.
+
+Full logs and synthetic captures remain ignored under `tools/logs/` with the
+`media-usability-` prefix; browser captures are in the temporary
+`media-player-native-captures` directory. No live user state was committed.
+
 ## 2026-09-27 - Clean-state Command renderer follow-up
 
 On unchanged `052a1ec` main, reran the remaining failing fixture alone:
@@ -318,54 +356,6 @@ Closed the obligation left by 96272eb: its scripts/build-booklet.mjs change inli
 ## 2026-09-27 early morning - ai-offline resolved: live instance healthy, recovery chain re-verified (task_dc3cbe4e9796268a, run_1790480854175_9)
 
 Verified the ai-offline issue end to end from the running Studio instance. The live data/eyes-assistant.json shows the AI back online: ai.online true, keyPresent true, model glm-5.3-flash (zai/jev team route for project_d453f6fb00cc5e2d), failures 0, backoffUntil 0, problems empty, lastOkAt 2026-09-27T04:27Z - i.e. the provider recovered after the 23:10 America/Chicago quota reset and the app's 02:39Z restart had already loaded the committed recovery fixes (cliReply exit guard 11fcebc, resetAssistantAiBackoff at all four route-change sites, the scheduleAssistantAiProbe offline-probe chain in main.cjs, and planOfflineProbe/offlineProbeDelayMs in scripts/assistant.mjs - all intact; the sibling work-tree diff on scripts/assistant.mjs touches only focusedTestsForTask/verifyCompletion, not the offline path). brains.js, boot.js and the other pinned renderer refs are the pipeline editor and UI shell - not part of the offline chain. Narrow validation this run: python tools/test_mefi_studio_offline_probe.py 12 tests OK; node --test tests/assistant_overseer_chat.test.mjs tests/role_provider_isolation.test.mjs tests/usage_tracker_host.test.mjs 73 pass / 0 fail. No code change was needed; the issue stands resolved and no owner action remains beyond watching that the warning stays clear.
-
-## 2026-09-26 - Canvas transfer applied, loaded and full gates passed
-
-The expanded isolated media renderer passed (1 test, 38.4 s), including the
-other session's new player/queue layout assertions. The previously validated
-Command and tree fixtures were unchanged. Original and candidate hashes
-were verified before copying the four candidate files into the checkout;
-the seven capability/resize tests were added as command_canvas_context.
-Other sessions' source changes were retained.
-
-Command's interactive DOM canvas elements now transfer their 2D drawing
-contexts when supported. The capability probe runs before irreversible
-transfer; existing/unsupported contexts retain the normal path. Resize
-updates the drawing bitmap rather than the placeholder. Context options,
-DPR behavior, no-op pixel retention, transparent background video and visual
-output were validated in isolation. MefiIdle.canvasContext exposes the
-actual context for diagnostics, and the three renderer fixtures use it.
-
-Validation after promotion (uncontended full run, Studio idle):
-- npm run build-booklet passed, generated booklet hash f98dd2322a01.
-- npm run check passed: 165 syntax targets, 344 unique specs, CSS and
-  TESTRUNS checks clean.
-- npm run audit passed with zero findings, errors or warnings.
-- npm test exited 0: CPU stage 3,872 passed / 4 skipped; Electron lane
-  38 passed / 1 skipped; serialized eyes test 1 passed; occlusion 2 passed.
-  Total Node: 3,913 passed, 5 skipped, 0 failed. Python: 248 tests, OK with
-  1 skip. Normalized-path checks: 6/6. Node leg 276 s, Python leg 34 s.
-- All four promoted source/fixture hashes remained unchanged after the run.
-- Standalone tools/verify_command.py pixel probes were then migrated to the
-  context accessor and bitmap dimensions. Python AST and embedded JavaScript
-  syntax passed, including both updated probe bodies; no full verifier tour
-  was launched. The initial local parser wrapper added a redundant closing
-  brace; correcting that wrapper made the syntax check pass without another
-  source change. git diff --check passed for this task's edited files.
-
-The final PID- and booklet-validated status confirms the normal automatic
-reload loaded commandCanvasTransferred=true, boot complete and recording
-false. Studio remained idle (1,461 seconds of system idle on the final
-check), so no live sample or before/after claim was made. The controlled
-29% cycle reduction and native setter timings remain component evidence.
-No further application gate is pending for this change.
-
-Logs: tools/logs/canvas-transfer-expanded-media.log, canvas-transfer-build.log,
-canvas-transfer-check.log, canvas-transfer-audit.log,
-canvas-transfer-full-test.log and live-20260926-canvas-final-status.json.
-Original promotion backups and manifest remain in ignored
-canvas-transfer-pre-promotion/. The old candidate guard correctly rejects
-the now-applied source: do not rerun its promotion or overwrite later edits.
 
 ## Read Before Any Tests
 
