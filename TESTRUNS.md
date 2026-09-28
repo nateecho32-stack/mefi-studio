@@ -34,6 +34,21 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-27 - Clean-state Command renderer follow-up
+
+On unchanged `052a1ec` main, reran the remaining failing fixture alone:
+`node --test tests/command_render.test.mjs` PASS, 1/1, 53.1s within its
+normal 80s child limit. Log: `tools/logs/mefi-clean-status-command.log`.
+No fixture settings or application code changed. The earlier Command hard
+timeouts did not preserve phase diagnostics, so their exact cause remains
+unconfirmed. Both failures from the preceding full run have now passed
+individually (tree dynamics passed in the preceding entry); this is not a
+claim that a new complete `npm test` run was performed.
+
+Verified a clean main checkout and matching SHA-256 hashes between source
+and the portable payload for main/preload, generated booklet, Vibe, map
+view/model/host and idea actions. Test-record structural check also passes.
+
 ## 2026-09-27 night - Setup helper lands on 0.4.4 with the free Void collection
 
 The setup helper (renderer/setup-helper.js + .css), the walkthrough hand-off,
@@ -351,40 +366,6 @@ canvas-transfer-full-test.log and live-20260926-canvas-final-status.json.
 Original promotion backups and manifest remain in ignored
 canvas-transfer-pre-promotion/. The old candidate guard correctly rejects
 the now-applied source: do not rerun its promotion or overwrite later edits.
-
-## 2026-09-26 - Media panel redesign brings playback, background and queue together
-
-Reorganized Music & video around the current source. The video panel now
-shows playback beside Up next, with a prominent Use as background / Return
-to player control. Narrow windows stack the queue immediately below playback
-and the background control. Audio connection and clipboard settings move
-into a disclosure below the main player; local music keeps its artwork,
-transport and queue at the top. The browser opens within this panel.
-
-The persistent player docks by geometry without reparenting its iframe.
-Opening/closing the panel, scrolling and resizing preserve playback and
-floating placement; background mode releases the dock while leaving the
-queue available. Supported video URLs viewed in the browser can switch to
-the embedded player for background mode. Generic web pages keep that action
-disabled. Player focus and pointer transitions stay within the open panel.
-
-Validation: 111 focused music/media-window tests passed, including a docking,
-background and geometry preservation contract. The isolated Electron browser
-and media-window fixtures both passed alone and in the full run. The media
-fixture verifies the same single provider load through panel/background
-switches, reachable queue controls, non-overlapping player/queue geometry at
-1440 and 600 pixels, and the new background button. Browser coverage checks
-its dock matches the preview and does not cover the queue. Seed-only captures
-of local music, video, browser and background layouts were inspected in the
-OS temporary directory. Layout review caught and fixed the browser stage's
-aspect-ratio overflow before the final checks.
-
-npm run build-booklet, npm run check and npm run audit passed (zero audit
-findings). Full npm test passed: 3,906 Node tests passed, 5 skipped; Python
-ran 248 tests, OK with 1 skip; normalized-path checks passed 6/6. The final
-focus/available-height adjustments were also covered by the focused 111-test
-rerun and a fresh build/check/audit. Logs and captures remain local in the
-OS temporary directory; no user data or portable data was changed.
 
 ## Read Before Any Tests
 
