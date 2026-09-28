@@ -351,6 +351,8 @@ html[data-motion="off"] .companion-orb, html[data-motion="off"] .companion-orb .
 .companion-clear button.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
 .companion-item { border: 1px solid var(--hairline); border-radius: var(--r-md); padding: 9px 10px; display: grid; gap: 3px; margin-bottom: 6px; }
 .companion-item strong { font-size: var(--fs-sm); font-weight: 600; }
+/* Its answer is on the way: the row takes no second click until the list is re-read. */
+.companion-item[aria-busy="true"] .ab-actions { opacity: .55; pointer-events: none; }
 .companion-kind { font-size: var(--fs-2xs); letter-spacing: .06em; text-transform: uppercase; color: var(--warn); }
 .companion-question .companion-kind { color: var(--info); }
 .companion-settings summary { cursor: pointer; color: var(--muted); font-size: var(--fs-sm); }

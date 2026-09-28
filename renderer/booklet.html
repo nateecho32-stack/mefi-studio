@@ -7238,6 +7238,8 @@ html[data-motion="off"] .companion-orb, html[data-motion="off"] .companion-orb .
 .companion-clear button.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
 .companion-item { border: 1px solid var(--hairline); border-radius: var(--r-md); padding: 9px 10px; display: grid; gap: 3px; margin-bottom: 6px; }
 .companion-item strong { font-size: var(--fs-sm); font-weight: 600; }
+/* Its answer is on the way: the row takes no second click until the list is re-read. */
+.companion-item[aria-busy="true"] .ab-actions { opacity: .55; pointer-events: none; }
 .companion-kind { font-size: var(--fs-2xs); letter-spacing: .06em; text-transform: uppercase; color: var(--warn); }
 .companion-question .companion-kind { color: var(--info); }
 .companion-settings summary { cursor: pointer; color: var(--muted); font-size: var(--fs-sm); }
@@ -64369,19 +64371,39 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (!host || !dock?.isConnected) return;
     stopTravel(); dock.before(host.orb); dock.hidden = true; host.orb.removeAttribute("data-roaming"); host.orb.classList.remove("floating"); host.orb.style.cssText = "";
   }
+  // Rows are kept by id and rebuilt when their data changes. Only a half-typed
+  // answer holds a changed row back. A row that left the list always goes: the
+  // option button just clicked keeps focus, and holding on to whatever held
+  // focus left answered asks on screen (dead, the count already 0) until
+  // another click, such as Clear list, moved focus away.
   function keyed(parent, items, make) {
     const held = document.activeElement;
+    const typing = Boolean(held?.matches?.("input:not([type=button]):not([type=checkbox]):not([type=radio]), textarea, [contenteditable=true]"));
     const old = new Map(Array.from(parent.children).map((el) => [el.dataset.itemId, el]));
     const wanted = new Set();
+    // Where keyboard focus goes when the row holding it is rebuilt or removed:
+    // the new row, else the row that took the old one's place, else the list.
+    let focusLost = false, landing = null;
     for (const item of items) {
       const id = String(item.id), signature = JSON.stringify(item); wanted.add(id);
       let el = old.get(id);
-      if (!el || el.dataset.signature !== signature && !el.contains(held)) {
+      if (!el || el.dataset.signature !== signature && !(typing && el.contains(held))) {
         const next = make(item); next.dataset.itemId = id; next.dataset.signature = signature;
-        if (el) el.replaceWith(next); else parent.append(next); el = next;
+        if (el) { if (el.contains(held)) { focusLost = true; landing = next; } el.replaceWith(next); } else parent.append(next);
+        el = next;
       }
     }
-    for (const [id, el] of old) if (!wanted.has(id) && !el.contains(held)) el.remove();
+    for (const [id, el] of old) {
+      if (wanted.has(id)) continue;
+      if (el.contains(held)) { focusLost = true; landing = el.nextElementSibling ?? el.previousElementSibling; }
+      el.remove();
+    }
+    if (focusLost && parent.isConnected && !parent.closest("[hidden]")) {
+      const controls = "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])";
+      const next = (landing?.isConnected ? landing.querySelector(controls) : null) ?? parent.querySelector(controls);
+      if (next) next.focus({ preventScroll: true });
+      else { if (!parent.hasAttribute("tabindex")) parent.tabIndex = -1; parent.focus({ preventScroll: true }); }
+    }
   }
   function render(data) {
     if (!host || !data) return;
@@ -67290,13 +67312,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         input.type = "text";
         input.placeholder = action.label;
         input.setAttribute("aria-label", action.label);
-        input.addEventListener("keydown", (event) => { if (event.key === "Enter" && input.value.trim()) act(item, action, input.value.trim()); });
+        input.addEventListener("keydown", (event) => { if (event.key === "Enter" && input.value.trim()) act(item, action, input.value.trim(), row); });
         actions.append(input);
         continue;
       }
       const button = node("button", action.recommended ? "primary mini" : "ghost mini", action.label);
       button.type = "button";
-      button.addEventListener("click", () => act(item, action));
+      button.addEventListener("click", () => act(item, action, null, row));
       actions.append(button);
     }
     row.append(actions);
@@ -67336,7 +67358,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
   // Every action goes through the same bridge the rest of the app uses; an
   // approval opens the task so its brief is read before the build is approved.
-  async function act(item, action, text = null) {
+  // A row takes one answer at a time: a second click while the first is on its
+  // way used to reach the host after the ask had closed and read as a failure.
+  // Its controls stay focusable (aria-disabled, not disabled) so the list can
+  // hand keyboard focus on when the answered row leaves.
+  async function act(item, action, text = null, row = null) {
+    if (row?.dataset.busy === "true") return;
     const api = bridge();
     const projectId = item.projectId || companion.state?.projectId || window.MefiWorkspace?.activeProjectId?.();
     if (window.MefiVibe?.mode?.() === "vibe") {
@@ -67345,18 +67372,28 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       window.MefiVibe.openNeed({ kind: item.kind === "question" ? "question" : item.kind === "approval" ? item.memberIds?.length ? "family" : "approval" : "blocked", id: item.kind === "question" ? item.id : item.taskId, projectId });
       return;
     }
+    if (item.kind !== "question" && action.id !== "retry") { toggleCompanion(false); window.MefiTasks?.open?.({ taskId: item.taskId, projectId }); return; }
+    const busy = (on) => {
+      if (!row) return;
+      row.dataset.busy = String(on);
+      row.setAttribute("aria-busy", String(on));
+      for (const control of row.querySelectorAll("button, input")) control.setAttribute("aria-disabled", String(on));
+    };
+    busy(true);
     let result = null;
     try {
       if (item.kind === "question") result = await api?.assistantAnswer?.({ id: item.id, optionId: action.id, projectId, ...(text ? { text } : {}) });
-      else if (action.id === "retry") result = await api?.tasksAction?.({ taskId: item.taskId, projectId, action: "retry" });
-      else { toggleCompanion(false); window.MefiTasks?.open?.({ taskId: item.taskId, projectId }); return; }
+      else result = await api?.tasksAction?.({ taskId: item.taskId, projectId, action: "retry" });
     } catch (error) {
       result = { ok: false, error: String(error?.message ?? error) };
     }
-    // A question whose card has left the board is cleared by the host: a
-    // notice, not a failure (refreshCompanion below drops it from the queue).
+    // A question whose card has left the board, or that closed meanwhile, is
+    // cleared by the host: a notice, not a failure (the refresh drops it).
     if (result && result.ok === false) window.MefiToast?.(result.error ?? "That did not work", result.gone ? "info" : "warn");
-    refreshCompanion(true);
+    // Locked until the list has been re-read: a handled row leaves with it,
+    // one that is still waiting takes clicks again.
+    await refreshCompanion(true).catch(() => {});
+    busy(false);
   }
 
   // Presence: while the window is in front the owner is here; when it hides

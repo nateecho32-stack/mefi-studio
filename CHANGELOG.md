@@ -7,6 +7,16 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Answered asks leave the Needs you list.** An ask you answered in the
+  companion menu used to stay on screen after it closed (the count already
+  lower), and clicking it again only said "That question is no longer
+  waiting" until Clear list moved focus away. It now leaves as soon as it is
+  handled, a second click while the first is on its way is ignored, and the
+  keyboard moves on to the next item.
+- **No dead asks after a restart.** Asks past their age (two days by
+  default) and asks whose card left the board while Studio was closed or
+  another project was open are closed when the project loads, not on your
+  click. The all-projects list leaves other projects' expired asks out.
 - **Watch Mefi think, and watch your team work.** In Vibe, **Suggest a next
   step** and **Build it** no longer wait behind one still sentence. Each shows
   a live strip: the stage it has reached (reading the project, thinking,

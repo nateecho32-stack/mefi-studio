@@ -6323,6 +6323,7 @@ async function loadAssistant() {
   // the first write, so a restart neither replays the board as news nor
   // swallows the first change after it.
   if (typeof assistantBaselineTasks === "function") await assistantBaselineTasks().catch(() => {});
+  if (typeof assistantSettleStaleAsks === "function") await assistantSettleStaleAsks().catch(() => {});
   // What was done in this folder while Studio was away (a launch or a switch
   // lands here): compared in the background, never holding the load.
   if (typeof outsideWorkScan === "function") outsideWorkScan("open").catch(() => {});
@@ -9053,6 +9054,7 @@ async function assistantTick(reason = "timer") {
     const now = Date.now();
     assistantState.tickCount += 1;
     assistantState.heartbeatAt = now;
+    if (typeof assistantExpireQuestions === "function") assistantExpireQuestions(now);
     assistantState.ai.keyPresent = await assistantKeyPresent();
     // Keep the offline-with-key probe armed on every pass; planOfflineProbe
     // decides whether the state actually calls for one.
@@ -12485,10 +12487,14 @@ async function assistantConfirmResult(action, { origin = "click", by = "owner", 
 // Questions do not stay open forever: a decision nobody made after two days is
 // history, not a prompt. The ask node's "expire after" sets the age, read from
 // the live rules as last seen (the issue lane keeps them; this runs sync).
+function assistantQuestionTtl() {
+  const hours = Number(typeof issuePolicySeen !== "undefined" ? issuePolicySeen?.expireHours : NaN);
+  return Number.isFinite(hours) && hours > 0 ? Math.min(168, hours) * 60 * 60 * 1000 : ASSISTANT_QUESTION_TTL_MS;
+}
+
 function assistantPruneQuestions(now = Date.now()) {
   if (!Array.isArray(assistantState?.questions)) return 0;
-  const hours = Number(typeof issuePolicySeen !== "undefined" ? issuePolicySeen?.expireHours : NaN);
-  const ttl = Number.isFinite(hours) && hours > 0 ? Math.min(168, hours) * 60 * 60 * 1000 : ASSISTANT_QUESTION_TTL_MS;
+  const ttl = assistantQuestionTtl();
   let pruned = 0;
   for (const question of assistantState.questions) {
     if (question.status === "open" && now - (question.at || 0) > ttl) {
@@ -12497,6 +12503,39 @@ function assistantPruneQuestions(now = Date.now()) {
     }
   }
   return pruned;
+}
+
+// The pruner used to run only when a new ask was raised or an answer was
+// clicked, so after a restart (or a quiet day) an ask past its age still sat
+// on the rail and in the companion, and the owner's click was what expired
+// it: "That question is no longer waiting." Loads, reads and ticks expire
+// them first, and every surface hears each one close.
+function assistantExpireQuestions(now = Date.now()) {
+  if (!Array.isArray(assistantState?.questions)) return 0;
+  const open = new Set(assistantState.questions.filter((question) => question?.status === "open").map((question) => question.id));
+  const pruned = assistantPruneQuestions(now);
+  if (!pruned) return 0;
+  for (const question of assistantState.questions) if (open.has(question.id) && question.status === "expired") assistantEmit({ kind: "question", ...question });
+  assistantLog("question", `expired ${pruned === 1 ? "1 question" : `${pruned} questions`} nobody answered in time`);
+  return pruned;
+}
+
+// Asks that died while nobody was looking: past their age, or about a card
+// that left the board while Studio was closed or another project was open
+// (the baseline observe runs once per project per session, so coming back
+// to a project never re-checked them). Run whenever the state loads.
+async function assistantSettleStaleAsks() {
+  if (!assistantState) return 0;
+  let settled = assistantExpireQuestions();
+  if (assistantOwnsProject(projects.current().id)) {
+    try {
+      const tasks = await (await getEyes()).readJson(TASKS_PATH, null);
+      // A board that could not be read retires nothing (assistantTaskOnBoard's rule).
+      if (Array.isArray(tasks)) settled += assistantRetireGoneAsks(tasks);
+    } catch {}
+  }
+  if (settled) await saveAssistant().catch(() => {});
+  return settled;
 }
 
 // Whether a card is on this project's board right now: null when there is no
@@ -12583,9 +12622,11 @@ function assistantQuestion(payload = {}) {
 async function assistantAnswer(payload = {}) {
   await ensureAssistant();
   if (payload.projectId && payload.projectId !== projects.current().id) return { ok: false, error: "The selected project changed." };
-  assistantPruneQuestions();
+  // An ask that aged out is closed and announced here too, so the click that
+  // found it expired also takes it off every surface.
+  if (assistantExpireQuestions()) saveAssistant().catch(() => {});
   const question = assistantState.questions.find((entry) => entry.id === payload.id && entry.status === "open");
-  if (!question) return { ok: false, error: "That question is no longer waiting.", state: assistantState };
+  if (!question) return { ok: false, gone: true, error: "That question is no longer waiting.", state: assistantState };
   const option = question.options.find((entry) => entry.id === payload.optionId) ?? null;
   const text = String(payload.text ?? "").trim().slice(0, 400);
   if (!option && !text) return { ok: false, error: "Choose an option or write an answer.", state: assistantState };
@@ -12604,7 +12645,7 @@ async function assistantAnswer(payload = {}) {
   const gone = !option?.dismiss && question.source !== "family" && await assistantTaskOnBoard(question.context?.taskId) === false;
   // Re-read after the board await on every path: two answers that both passed
   // the open check above must not both apply (a double retry or split).
-  if (question.status !== "open") return { ok: false, error: "That question is no longer waiting.", state: assistantState };
+  if (question.status !== "open") return { ok: false, gone: true, error: "That question is no longer waiting.", state: assistantState };
   if (gone) {
     question.status = "superseded";
     assistantLog("question", `cleared: ${question.title} · its card left the board`);
@@ -20720,7 +20761,11 @@ function registerIpc() {
   ipcMain.handle("assistant:backlog-control", (_event, payload) => backlogControl(payload ?? {}));
 
   // ---- the assistant service: state, thread, controls, prefs ---------------
-  ipcMain.handle("assistant:state", async () => ({ ok: true, state: await ensureAssistant() }));
+  ipcMain.handle("assistant:state", async () => {
+    await ensureAssistant();
+    if (assistantExpireQuestions()) saveAssistant().catch(() => {});
+    return { ok: true, state: assistantState };
+  });
   ipcMain.handle("assistant:message", async (_event, { text, projectId, context } = {}) => {
     if (projectId && projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Send your message again in its intended project." };
     if (!projects.open()) return { ok: false, error: "Open a project folder first - the assistant works inside a project." };
@@ -20847,11 +20892,14 @@ function registerIpc() {
   const otherProjectAsks = async () => {
     const current = projects.current().id;
     const rows = [];
+    // A saved file is only pruned when its project loads, so an ask past its
+    // age is left out here too: opening the project would only expire it.
+    const oldest = Date.now() - assistantQuestionTtl();
     for (const project of projects.list().projects ?? []) {
       if (!project?.id || project.id === current) continue;
       try {
         const saved = JSON.parse(await readFile(projects.dataPath(ASSISTANT_PATH, project), "utf8"));
-        const questions = (Array.isArray(saved?.questions) ? saved.questions : []).filter((question) => question?.status === "open");
+        const questions = (Array.isArray(saved?.questions) ? saved.questions : []).filter((question) => question?.status === "open" && (question.at || 0) >= oldest);
         if (questions.length) rows.push({ project: project.name ?? project.id, projectId: project.id, questions });
       } catch {}
     }
@@ -20859,6 +20907,7 @@ function registerIpc() {
   };
   const companionView = async () => {
     await ensureAssistant();
+    if (assistantExpireQuestions()) saveAssistant().catch(() => {});
     const running = autopilot.jobs.filter((entry) => !entry.finished).length;
     const others = (await agentBrain.companionScope()) === "all" ? await otherProjectAsks() : [];
     const view = await agentBrain.companionState({ questions: assistantState?.questions ?? [], tasks: await brainTasks(), running, project: projects.current().name ?? null, others });

@@ -434,6 +434,53 @@ test("open cards expire after the ask node's hours, as the live rules last said"
   assert.equal(d.state.questions[0].status, "open");
 });
 
+test("an ask past its age closes on the next read, not on the owner's click", async () => {
+  const h = issueHost({ policy: { ...brains.issuePolicyFor(brains.defaultMap()), expireHours: 2 } });
+  const question = await h.env.assistantRaiseIssue(workerIssue("scope", "the store has to be written too"));
+  question.at -= 3 * 60 * 60 * 1000;
+  h.events.length = 0;
+  // A restart or a quiet day: the load, a read or the tick expires it first.
+  assert.equal(h.env.assistantExpireQuestions(), 1);
+  assert.equal(h.state.questions[0].status, "expired");
+  assert.ok(h.events.some((event) => event.kind === "question" && event.id === question.id && event.status === "expired"), "every surface hears it close");
+  assert.ok(h.logs.some((row) => row.kind === "question" && row.text === "expired 1 question nobody answered in time"));
+  assert.equal(h.env.assistantExpireQuestions(), 0, "a second read finds nothing more");
+  // A click that still reaches it is told it is gone, not that the answer broke.
+  const late = await h.env.assistantAnswer({ id: question.id, optionId: "narrow" });
+  assert.deepEqual({ ok: late.ok, gone: late.gone, error: late.error }, { ok: false, gone: true, error: "That question is no longer waiting." });
+  assert.deepEqual(plain(h.backlog), []);
+});
+
+test("coming back to a project settles the asks that died while it was away", async () => {
+  const board = () => [{ id: "task_1", title: "Add the retry banner", status: "open", logs: [] }, { id: "task_2", title: "Write the store", status: "open", logs: [] }];
+  const h = issueHost({ tasks: board() });
+  // The retire rule itself, as main has it (outside the issue lane's slice).
+  vm.runInContext(section("function assistantOwnsProject(", "// Parked, held and awaiting-approval"), h.env);
+  let saves = 0;
+  h.env.saveAssistant = async () => { saves += 1; };
+  const moved = await h.env.assistantRaiseIssue(workerIssue("owner", "ratify the relocation of the five rows"));
+  const aged = await h.env.assistantRaiseIssue(workerIssue("scope", "the store has to be written too", { taskId: "task_2", taskTitle: "Write the store" }));
+  const live = await h.env.assistantRaiseIssue(workerIssue("capability", "needs a browser", { taskId: "task_2", taskTitle: "Write the store" }));
+  assert.ok(moved && aged && live);
+  // While another project was open, a worker moved task_1 away and two days passed for one ask.
+  h.board.tasks.splice(0, 1);
+  aged.at -= 3 * 24 * 60 * 60 * 1000;
+  saves = 0;
+  assert.equal(await h.env.assistantSettleStaleAsks(), 2);
+  assert.equal(moved.status, "superseded");
+  assert.equal(aged.status, "expired");
+  assert.equal(live.status, "open", "an ask about a card still on the board, inside its age, stays");
+  assert.equal(saves, 1, "the settled asks are saved");
+
+  // A board that cannot be read retires nothing: only age closes an ask then.
+  const u = issueHost({ tasks: board() });
+  vm.runInContext(section("function assistantOwnsProject(", "// Parked, held and awaiting-approval"), u.env);
+  const kept = await u.env.assistantRaiseIssue(workerIssue("owner", "ratify the relocation of the five rows"));
+  u.env.getEyes = async () => ({ readJson: async () => null });
+  assert.equal(await u.env.assistantSettleStaleAsks(), 0);
+  assert.equal(kept.status, "open");
+});
+
 test("with announce on, the thread says what your answer did", async () => {
   const h = issueHost({ policy: { ...brains.issuePolicyFor(brains.defaultMap()), announce: true } });
   await h.env.assistantIssueAction({ action: "split", payload: { taskId: "task_1", issueKind: "scope", ask: "the store" } });

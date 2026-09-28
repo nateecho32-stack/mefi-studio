@@ -318,19 +318,39 @@
     if (!host || !dock?.isConnected) return;
     stopTravel(); dock.before(host.orb); dock.hidden = true; host.orb.removeAttribute("data-roaming"); host.orb.classList.remove("floating"); host.orb.style.cssText = "";
   }
+  // Rows are kept by id and rebuilt when their data changes. Only a half-typed
+  // answer holds a changed row back. A row that left the list always goes: the
+  // option button just clicked keeps focus, and holding on to whatever held
+  // focus left answered asks on screen (dead, the count already 0) until
+  // another click, such as Clear list, moved focus away.
   function keyed(parent, items, make) {
     const held = document.activeElement;
+    const typing = Boolean(held?.matches?.("input:not([type=button]):not([type=checkbox]):not([type=radio]), textarea, [contenteditable=true]"));
     const old = new Map(Array.from(parent.children).map((el) => [el.dataset.itemId, el]));
     const wanted = new Set();
+    // Where keyboard focus goes when the row holding it is rebuilt or removed:
+    // the new row, else the row that took the old one's place, else the list.
+    let focusLost = false, landing = null;
     for (const item of items) {
       const id = String(item.id), signature = JSON.stringify(item); wanted.add(id);
       let el = old.get(id);
-      if (!el || el.dataset.signature !== signature && !el.contains(held)) {
+      if (!el || el.dataset.signature !== signature && !(typing && el.contains(held))) {
         const next = make(item); next.dataset.itemId = id; next.dataset.signature = signature;
-        if (el) el.replaceWith(next); else parent.append(next); el = next;
+        if (el) { if (el.contains(held)) { focusLost = true; landing = next; } el.replaceWith(next); } else parent.append(next);
+        el = next;
       }
     }
-    for (const [id, el] of old) if (!wanted.has(id) && !el.contains(held)) el.remove();
+    for (const [id, el] of old) {
+      if (wanted.has(id)) continue;
+      if (el.contains(held)) { focusLost = true; landing = el.nextElementSibling ?? el.previousElementSibling; }
+      el.remove();
+    }
+    if (focusLost && parent.isConnected && !parent.closest("[hidden]")) {
+      const controls = "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])";
+      const next = (landing?.isConnected ? landing.querySelector(controls) : null) ?? parent.querySelector(controls);
+      if (next) next.focus({ preventScroll: true });
+      else { if (!parent.hasAttribute("tabindex")) parent.tabIndex = -1; parent.focus({ preventScroll: true }); }
+    }
   }
   function render(data) {
     if (!host || !data) return;

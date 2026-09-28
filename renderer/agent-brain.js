@@ -1680,13 +1680,13 @@
         input.type = "text";
         input.placeholder = action.label;
         input.setAttribute("aria-label", action.label);
-        input.addEventListener("keydown", (event) => { if (event.key === "Enter" && input.value.trim()) act(item, action, input.value.trim()); });
+        input.addEventListener("keydown", (event) => { if (event.key === "Enter" && input.value.trim()) act(item, action, input.value.trim(), row); });
         actions.append(input);
         continue;
       }
       const button = node("button", action.recommended ? "primary mini" : "ghost mini", action.label);
       button.type = "button";
-      button.addEventListener("click", () => act(item, action));
+      button.addEventListener("click", () => act(item, action, null, row));
       actions.append(button);
     }
     row.append(actions);
@@ -1726,7 +1726,12 @@
 
   // Every action goes through the same bridge the rest of the app uses; an
   // approval opens the task so its brief is read before the build is approved.
-  async function act(item, action, text = null) {
+  // A row takes one answer at a time: a second click while the first is on its
+  // way used to reach the host after the ask had closed and read as a failure.
+  // Its controls stay focusable (aria-disabled, not disabled) so the list can
+  // hand keyboard focus on when the answered row leaves.
+  async function act(item, action, text = null, row = null) {
+    if (row?.dataset.busy === "true") return;
     const api = bridge();
     const projectId = item.projectId || companion.state?.projectId || window.MefiWorkspace?.activeProjectId?.();
     if (window.MefiVibe?.mode?.() === "vibe") {
@@ -1735,18 +1740,28 @@
       window.MefiVibe.openNeed({ kind: item.kind === "question" ? "question" : item.kind === "approval" ? item.memberIds?.length ? "family" : "approval" : "blocked", id: item.kind === "question" ? item.id : item.taskId, projectId });
       return;
     }
+    if (item.kind !== "question" && action.id !== "retry") { toggleCompanion(false); window.MefiTasks?.open?.({ taskId: item.taskId, projectId }); return; }
+    const busy = (on) => {
+      if (!row) return;
+      row.dataset.busy = String(on);
+      row.setAttribute("aria-busy", String(on));
+      for (const control of row.querySelectorAll("button, input")) control.setAttribute("aria-disabled", String(on));
+    };
+    busy(true);
     let result = null;
     try {
       if (item.kind === "question") result = await api?.assistantAnswer?.({ id: item.id, optionId: action.id, projectId, ...(text ? { text } : {}) });
-      else if (action.id === "retry") result = await api?.tasksAction?.({ taskId: item.taskId, projectId, action: "retry" });
-      else { toggleCompanion(false); window.MefiTasks?.open?.({ taskId: item.taskId, projectId }); return; }
+      else result = await api?.tasksAction?.({ taskId: item.taskId, projectId, action: "retry" });
     } catch (error) {
       result = { ok: false, error: String(error?.message ?? error) };
     }
-    // A question whose card has left the board is cleared by the host: a
-    // notice, not a failure (refreshCompanion below drops it from the queue).
+    // A question whose card has left the board, or that closed meanwhile, is
+    // cleared by the host: a notice, not a failure (the refresh drops it).
     if (result && result.ok === false) window.MefiToast?.(result.error ?? "That did not work", result.gone ? "info" : "warn");
-    refreshCompanion(true);
+    // Locked until the list has been re-read: a handled row leaves with it,
+    // one that is still waiting takes clicks again.
+    await refreshCompanion(true).catch(() => {});
+    busy(false);
   }
 
   // Presence: while the window is in front the owner is here; when it hides
