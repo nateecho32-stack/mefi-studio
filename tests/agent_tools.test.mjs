@@ -113,11 +113,13 @@ test("real host seat fallback keeps the seat's skills and permissions across res
     agentAddons: { instructions: async (_root, _settings, role) => { skills.push(role); return "\nCompanion skill"; } },
   });
   vm.runInContext(source.slice(source.indexOf("const SEAT_DEFAULTS"), source.indexOf("// ---- the Policy Lab's observation-only recorder")), context);
-  const result = await context.seatFetch("companion", "System", "Question", 1000, { fallback: async (system) => {
+  const heard = [];
+  const result = await context.seatFetch("companion", "System", "Question", 1000, { onTool: (tool) => heard.push(`${tool.name}:${tool.ok}`), fallback: async (system) => {
     prompts.push(system);
     return { ok: true, text: prompts.length === 1 ? '{"studio_tool_calls":[{"name":"project_read","arguments":{"path":"README.md"}}]}' : '{"answer":"Complete"}' };
   } });
   assert.deepEqual(skills, ["companion"]); assert.equal(result.ok, true); assert.equal(result.toolTrace[0].ok, true);
+  assert.deepEqual(heard, ["project_read:true"], "a caller hears each tool turn (Vibe shows the lead's while it sizes)");
   assert.match(prompts[1], /Seat research evidence/); assert.equal(prompts[1].split("Companion skill").length, 2);
 }));
 

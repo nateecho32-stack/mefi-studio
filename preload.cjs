@@ -162,6 +162,8 @@ const api = {
   tasksCreate: (task) => ipcRenderer.invoke("tasks:create", task),
   // Vibe's Build it: one card, or the owner's card split into steps (main.cjs vibeBuild).
   vibeBuild: (payload) => ipcRenderer.invoke("vibe:build", payload ?? {}),
+  // Each step of a named sizing or exploration while Vibe waits (renderer/vibe-flow.js).
+  onVibeProgress: (callback) => ipcRenderer.on("vibe:progress", (_event, payload) => callback(payload)),
   tasksDependencies: (payload) => ipcRenderer.invoke("tasks:dependencies", payload ?? {}),
   tasksHistory: (payload) => ipcRenderer.invoke("tasks:history", payload ?? {}),
   tasksHandoff: (payload) => ipcRenderer.invoke("tasks:handoff", payload ?? {}),

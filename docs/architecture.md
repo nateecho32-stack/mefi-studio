@@ -259,9 +259,29 @@ settings and per-model work-kind summaries for the shared controls.
   **Build it**. The approach and selected map area stay with that project's
   draft. **Suggest a next step** reads project context through the planner and
   returns suggestions with reasons and file references. **Add to draft**
-  appends an editable brief; **Save idea** keeps a note in the Ideas tree.
-  Asking for or saving suggestions does not queue work. The existing Build
-  action and permission settings still control execution.
+  appends an editable brief, and the rest of the set stays usable; **Save
+  idea** keeps a note in the Ideas tree; **Clear** puts the set away. A new
+  direction typed over the draft makes the set read-only until it is asked
+  again. Asking for or saving suggestions does not queue work. The existing
+  Build action and permission settings still control execution.
+- Vibe's long waits are live (`renderer/vibe-flow.js`). **Suggest a next
+  step** and Build it's sizing each show a strip: its stages (Read the
+  project, Think it over, Suggest next steps; Take a look, Plan the steps, Put
+  it on the board), the files read or the steps planned as they arrive, which
+  model is thinking, and a clock against this machine's usual time. The page
+  names each request it starts, and the host pushes each step on
+  `vibe:progress` (`main.cjs` `vibeProgress`, the planning service's
+  `onProgress`); a stage lights up only when the host reports it, and only
+  the clock and the usual time are this machine's own. A sizing that answers
+  within a blink never shows its strip. New app shows its first
+  build's sizing in its panel, and Team lists these runs under **Thinking
+  now**.
+- The agent team on a split request: the **Plan in flight** card draws the
+  steps as a track that ends in the final check, with a line naming the step
+  being built, its worker's tool and what it is doing now; **Building now**
+  rows carry the same live line. The Plans panel's plan view is a timeline
+  with who is on each step and which step each waiting one waits for. **Make
+  it one task** there is the same single host transaction as the drawer's.
 - **New app** (the + beside Vibe's project picker, `projects:create`) makes an
   empty folder under `~/Mefi Apps` (never inside Studio's own repository),
   starts git and a README in it, opens it as the project and sends the

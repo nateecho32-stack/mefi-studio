@@ -92,14 +92,16 @@
     if (ms < 86400000) return `${Math.round(ms / 3600000)} h ago`;
     return `${Math.round(ms / 86400000)} d ago`;
   }
-  // The same row the cards use, so a panel reads like the front door.
-  function row({ key, tone, title, meta, action, onOpen }) {
+  // The same row the cards use, so a panel reads like the front door;
+  // `detail` is its live line: what a worker is doing right now.
+  function row({ key, tone, title, meta, detail, action, onOpen }) {
     const item = el("li", `vibe-row${tone ? ` is-${tone}` : ""}`);
     item.dataset.key = key || title;
     const main = el("button", "vibe-row-main");
     main.type = "button";
     main.append(el("span", "vibe-row-dot"), el("span", "vibe-row-title", title));
     if (meta) main.append(el("span", "vibe-row-meta", meta));
+    if (detail) { const now = el("span", "vibe-row-now", detail); now.title = detail; main.append(now); }
     if (onOpen) main.addEventListener("click", onOpen);
     item.append(main);
     if (action) {
@@ -428,24 +430,34 @@
   const STEP_TONES = { done: "done", dropped: "", running: "live", checking: "check", approval: "ask", blocked: "bad", waiting: "next" };
   const familyTone = (family) => family.steps.some((step) => step.state === "approval") ? "ask" : family.steps.some((step) => step.state === "running") || family.final === "running" ? "live" : "next";
   const familyMeta = (family) => `${family.finished} of ${family.steps.length} steps done${family.final === "running" ? " · final check running" : family.final === "next" ? " · final check next" : ""}`;
+  // A step's line on the timeline: who is on it and what they are doing now,
+  // what it still waits for, or when it finished.
+  function stepMeta(step, family) {
+    if (step.state === "running") return [STEP_WORDS.running, step.job?.tool, step.job?.startedAt ? `started ${ago(step.job.startedAt)}` : ""].filter(Boolean).join(" · ");
+    if (step.state === "done" && step.at) return `done · ${ago(step.at)}`;
+    const open = (step.after || []).filter((index) => family.steps[index] && !["done", "dropped"].includes(family.steps[index].state));
+    if (step.state === "waiting" && open.length) return `waits for step ${open.map((index) => index + 1).join(" and ")}`;
+    return STEP_WORDS[step.state];
+  }
+  // The plan as a timeline: each step a node on one line, the worker on the
+  // step being built, and the final check where the line ends.
   function familyDetail(body, id) {
     const family = (state.data.families || []).find((item) => item.id === id);
     if (!family) { body.append(el("p", "vibe-panel-empty", "This request is finished or no longer on the board.")); return; }
-    heading(body, family.title, [chip(`${family.finished} of ${family.steps.length} done`, family.steps.some((step) => step.state === "approval") ? "decision" : "")]);
+    const building = family.steps.filter((step) => step.state === "running").length;
+    heading(body, family.title, [chip(`${family.finished} of ${family.steps.length} done`, family.steps.some((step) => step.state === "approval") ? "decision" : ""), building ? chip(`${building} building now`, "live") : null]);
     if (family.summary) body.append(el("p", "vibe-ask-detail vibe-panel-reason", family.summary));
-    const list = el("ol", "vibe-rows");
-    for (const [index, step] of family.steps.entries()) list.append(row({ key: `step:${step.id || index}`, tone: STEP_TONES[step.state], title: `${index + 1}. ${step.title}`, meta: STEP_WORDS[step.state], onOpen: () => push({ view: "task", id: step.id }) }));
-    list.append(row({ key: "then", tone: family.final === "running" ? "live" : family.final === "checking" ? "check" : "next", title: "Then: put it together and check the whole thing", meta: family.final === "running" ? "running now" : family.final === "checking" ? "checking its work" : family.final === "next" ? "up next" : "after the last step", onOpen: () => push({ view: "task", id: family.id }) }));
+    const list = el("ol", "vibe-rows vibe-timeline");
+    for (const [index, step] of family.steps.entries()) list.append(row({ key: `step:${step.id || index}`, tone: STEP_TONES[step.state], title: `${index + 1}. ${step.title}`, meta: stepMeta(step, family), detail: step.state === "running" ? step.job?.step : "", onOpen: () => push({ view: "task", id: step.id }) }));
+    list.append(row({ key: "then", tone: family.final === "running" ? "live" : family.final === "checking" ? "check" : "next", title: "Then: put it together and check the whole thing", meta: family.final === "running" ? ["running now", family.job?.tool].filter(Boolean).join(" · ") : family.final === "checking" ? "checking its work" : family.final === "next" ? "up next" : "after the last step", detail: family.final === "running" ? family.job?.step : "", onOpen: () => push({ view: "task", id: family.id }) }));
     body.append(list);
     const need = (state.data.needs || []).find((item) => item.kind === "family" && item.id === id);
     const unstarted = family.steps.filter((step) => ["approval", "waiting", "blocked"].includes(step.state));
     const buttons = [];
     if (need) buttons.push({ label: "Start all steps", primary: true, run: () => vibe()?.openNeed?.({ kind: "family", id }) });
-    if (unstarted.length) buttons.push({ label: "Make it one task", title: "Drop the steps that have not started; the request is built as one task", run: () => act(async () => {
-      let result = { ok: true };
-      for (const step of unstarted) { result = await api().tasksAction({ taskId: step.id, projectId: state.data.projectId, action: "drop" }); if (!result || result.ok === false) break; }
-      return result;
-    }, "Kept as one task. It builds as a whole.") });
+    // One host transaction, as the drawer's: dropping steps one at a time is
+    // refused for a step another one waits on.
+    if (unstarted.length) buttons.push({ label: "Make it one task", title: "Drop the steps that have not started; the request is built as one task", run: () => act(() => api().tasksAction({ taskId: id, projectId: state.data.projectId, action: "merge-steps" }), "Kept as one task. It builds as a whole.") });
     if (buttons.length) body.append(actions(buttons));
   }
 
@@ -514,7 +526,12 @@
     else if (gate && ["held", "paused"].includes(gate.key)) controls.push({ label: gate.key === "held" ? "Start agents" : "Resume", primary: true, run: () => act(() => api().assistantControl("start-work"), "Agents started. They pick up what's queued.") });
     else controls.push({ label: "Pause new work", title: "Running jobs finish; nothing new starts until you resume", disabled: !api()?.backlogControl, run: () => act(() => api().backlogControl({ action: "pause", projectId: data.projectId }), "New work paused. Running jobs finish normally.") });
     body.append(actions(controls));
-    fold(body, "working", "Working now", running.map((job, index) => row({ key: `job:${job.taskId || index}`, tone: "live", title: job.title || "A task", meta: [job.phase ? String(job.phase).replace(/_/g, " ") : "working", job.model || job.route || "", job.startedAt ? `started ${ago(job.startedAt)}` : ""].filter(Boolean).join(" · "), onOpen: () => { close({ quiet: true }); go("command", job.taskId ? { selected: `task:${job.taskId}` } : {}); } })), { empty: "Nobody is building right now." });
+    // Mefi's own thinking beside the builders: the planner looking for next
+    // steps and the lead sizing a request, at the stage each has reached
+    // (renderer/vibe-flow.js). Opening one shows its live strip in Vibe.
+    const thinking = window.MefiVibeFlow?.active?.(data.projectId) ?? [];
+    if (thinking.length) fold(body, "thinking", "Thinking now", thinking.map((run) => row({ key: `run:${run.id}`, tone: "live", title: run.kind === "size" ? `Sizing “${run.title || "your request"}”` : "Looking for next steps", meta: window.MefiVibeFlow.line(run), onOpen: () => close() })));
+    fold(body, "working", "Working now", running.map((job, index) => row({ key: `job:${job.taskId || index}`, tone: "live", title: job.title || "A task", meta: [job.model || window.MefiVibeFlow?.toolName?.(job.route) || job.route || "", job.phase ? String(job.phase).replace(/_/g, " ") : "working", job.startedAt ? `started ${ago(job.startedAt)}` : ""].filter(Boolean).join(" · "), detail: job.currentStep || job.activity || "", onOpen: () => { close({ quiet: true }); go("command", job.taskId ? { selected: `task:${job.taskId}` } : {}); } })), { empty: "Nobody is building right now." });
     const roster = [];
     const info = state.teamProject === state.data.projectId ? state.team : null;
     if (info) {
@@ -655,6 +672,9 @@
     form.append(nameField, aboutField, where, make);
     form.addEventListener("submit", (event) => { event.preventDefault(); void createApp(); });
     body.append(form);
+    // The first build being sized, live (renderer/vibe-flow.js).
+    const run = state.busy && state.appRun ? window.MefiVibeFlow?.get?.(state.appRun) : null;
+    if (run) body.append(window.MefiVibeFlow.view(run));
   }
   async function createApp() {
     const name = state.draftApp.name.trim();
@@ -662,6 +682,10 @@
     if (!name) { note("Give the new app a name.", "warn"); return; }
     if (!api()?.projectsCreate) { note("New apps can be made in the desktop app.", "warn"); return; }
     if (state.busy) return;
+    // Enter in a field submits the form but leaves the field focused, and a
+    // panel never repaints under a field being typed in: let go of it, so
+    // "Making it…" and the first build's sizing can show.
+    if (aside.contains(document.activeElement)) document.activeElement.blur?.();
     state.busy = true; state.signature = ""; render();
     note("Making the folder…");
     try {
@@ -679,8 +703,17 @@
       let said = `${name} is ready and open.`;
       if (about && api()?.vibeBuild) {
         note("Folder ready. Sizing up the first build…");
-        const built = await api().vibeBuild({ title: `Set up ${name}`.slice(0, 90), projectId: made.selectedId || made.activeId,
-          prompt: `Start this new app in its empty project folder: ${about}\n\nSet up the project so it runs, then build a first working version of what is described.` });
+        const flow = window.MefiVibeFlow;
+        const run = flow?.begin?.("size", { projectId: made.selectedId || made.activeId || null, title: `Set up ${name}` }) ?? null;
+        state.appRun = run?.id ?? null; state.signature = ""; render();
+        let built;
+        try {
+          built = await api().vibeBuild({ title: `Set up ${name}`.slice(0, 90), projectId: made.selectedId || made.activeId, ...(run ? { requestId: run.id } : {}),
+            prompt: `Start this new app in its empty project folder: ${about}\n\nSet up the project so it runs, then build a first working version of what is described.` });
+        } finally {
+          if (run) flow.end(run.id, built?.ok === false || !built ? { ok: false, error: built?.error || "No answer" } : { ok: true, steps: Number(built.steps) || 0 });
+          state.appRun = null;
+        }
         if (!built || built.ok === false) throw new Error(`The folder is ready, but the first build could not be added: ${built?.error || "no answer"}`);
         said = built.steps ? `${name} is ready, and its first build is split into ${built.steps} steps.` : `${name} is ready, and its first build is queued.`;
       }
@@ -702,20 +735,22 @@
   function digest() {
     const data = state.data;
     const need = (data.needs || []).map((item) => `${item.kind}:${item.id}:${item.title}:${item.verb}`);
-    const running = (data.running || []).map((job) => `${job.taskId}:${job.phase}:${job.title}`);
+    const running = (data.running || []).map((job) => `${job.taskId}:${job.phase}:${job.title}:${job.currentStep || job.activity || ""}`);
     if (state.kind === "tasks" || top()?.view === "task") {
       const stages = (data.backlog?.taskStates || []).map((row) => `${row.id}:${row.stage}:${row.blockedBy || ""}:${row.reason || ""}`);
       return [data.projectId, data.projectName, need, running, stages, state.taskView, data.gate, data.status?.parallel, data.status?.adaptiveParallel, data.status?.capacity, data.backlog?.waiting, (data.tasks || []).map((task) => [task.id, task.title, task.status, task.updatedAt, task.contextVersion, task.priority, task.estimateMinutes, task.acceptance, task.deferUntil, Boolean(task.dropped), task.verification?.state, String(task.lastRunError || "").length, String(task.notes || "").length, String(task.prompt || "").length])];
     }
     if (state.kind === "ideas") return [data.projectName, (data.ideas || []).map((idea) => [idea.id, idea.title, idea.read, idea.status, idea.taskId])];
-    if (state.kind === "plans") return [data.projectName, need, running, (data.plans || []).map((plan) => [plan.id, plan.title, plan.status, plan.version]), (data.families || []).map((family) => [family.id, family.title, family.final, family.steps.map((step) => `${step.id}:${step.state}`)]), (data.tasks || []).length];
-    if (state.kind === "team") return [data.projectName, running, data.gate, state.teamAt];
+    if (state.kind === "plans") return [data.projectName, need, running, (data.plans || []).map((plan) => [plan.id, plan.title, plan.status, plan.version]), (data.families || []).map((family) => [family.id, family.title, family.final, family.job?.step, family.steps.map((step) => `${step.id}:${step.state}:${step.job?.step || ""}`)]), (data.tasks || []).length];
+    if (state.kind === "team") return [data.projectName, running, data.gate, state.teamAt, (window.MefiVibeFlow?.active?.(data.projectId) ?? []).map((run) => `${run.id}:${run.stage}`)];
     if (state.kind === "settings") return [data.projectName, data.person, data.companion, document.documentElement.dataset.studioTheme];
     if (state.kind === "newapp") return [data.projectName];
     if (state.kind === "decisions") return [data.projectId, data.assistant.decisions, data.assistant.todos];
     return [];
   }
   window.addEventListener("mefi:autonomy-changed", () => { state.signature = ""; if (["settings", "decisions", "team"].includes(state.kind)) render(); });
+  // A thinking run starting, moving on or ending repaints Team's list of them.
+  window.MefiVibeFlow?.on?.(() => { if (state.kind === "team") render(); });
   function render() {
     if (aside.hidden || !state.kind) return;
     const view = top();

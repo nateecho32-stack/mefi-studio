@@ -265,9 +265,12 @@
         <button id="vibe-build" class="vibe-btn primary" type="submit"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg>Build it</button>
       </div>
     </form>
+    <!-- Build it's wait, live: the quick look, the lead planning the steps,
+         the board (renderer/vibe-flow.js). Its answer lands just below. -->
+    <div id="vibe-flow" class="vibe-flow-slot" hidden></div>
+    <p id="vibe-feedback" class="vibe-feedback" role="status" aria-live="polite"></p>
     <div id="vibe-sparks" class="vibe-sparks" role="group" aria-label="Ways to start"></div>
     <button id="vibe-decisions" class="vibe-ask-link" type="button" hidden>Decided for you · For you</button>
-    <p id="vibe-feedback" class="vibe-feedback" role="status" aria-live="polite"></p>
     <!-- What stops the agents from working on their own, and the one control
          that fixes it: Start agents, Resume, Connect an AI (vibe.js). -->
     <div id="vibe-gate" class="vibe-gate" role="status" aria-live="polite" hidden><i class="vibe-gate-dot" aria-hidden="true"></i><span class="vibe-gate-copy"><b id="vibe-gate-title"></b><span id="vibe-gate-text"></span></span><button id="vibe-gate-action" class="vibe-btn primary" type="button" hidden></button></div>

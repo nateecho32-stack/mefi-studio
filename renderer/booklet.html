@@ -8601,24 +8601,49 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-evolution-intent b, .vibe-evolution-intent small { display: block; }
 .vibe-evolution-intent b { font-size: 13px; font-weight: 600; }
 .vibe-evolution-intent small { margin-top: 4px; color: var(--v-soft); font-size: 10px; line-height: 1.35; }
-.vibe-evolution-scope { flex: 1; min-width: 150px; overflow-wrap: anywhere; color: var(--v-soft); font-size: 11px; }
+.vibe-evolution-scope { flex: 1; min-width: 150px; overflow-wrap: anywhere; color: var(--v-soft); font-size: 11.5px; }
 .vibe-evolution-foot .vibe-btn { min-height: 32px; padding: 7px 12px; font-size: 12px; }
-.vibe-evolution-results { display: grid; gap: 10px; padding-top: 10px; border-top: 1px solid var(--v-edge); }
+/* Suggest a next step: its spark turns while Mefi looks. */
+.vibe-evolution-suggest .glyph { width: 13px; height: 13px; color: var(--v-accent-hi); transition: rotate var(--motion-slow) var(--ease-spring); }
+.vibe-evolution-suggest:hover:not(:disabled) .glyph { rotate: 20deg; }
+.vibe-evolution-suggest[data-busy="yes"] { opacity: .85; cursor: progress; }
+.vibe-evolution-suggest[data-busy="yes"] .glyph { animation: vibe-turn 1.6s linear infinite; }
+.vibe-evolution-results { display: grid; gap: 12px; padding-top: 12px; border-top: 1px solid var(--v-edge); }
 .vibe-evolution-results[hidden] { display: none; }
 .vibe-evolution-note { margin: 0; color: var(--v-soft); font-size: 12px; line-height: 1.5; }
+/* What Mefi read the project as, how the look went, and Clear. */
+.vibe-evolution-summary { display: flex; align-items: flex-start; gap: 16px; animation: vibe-rise var(--motion-base) var(--ease-out) both; }
+.vibe-evolution-summary > div { display: grid; flex: 1; gap: 4px; min-width: 0; }
+.vibe-evolution-facts { color: var(--v-accent-hi); font: 600 11px/1.3 var(--font-mono); letter-spacing: .02em; }
+.vibe-evolution-summary .vibe-evolution-note { color: var(--v-ink); font-size: 12.5px; text-wrap: pretty; }
+.vibe-evolution-clear { margin-top: -4px; }
+.vibe-evolution-stale { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--warn) 7%, transparent); color: var(--v-ink); font-size: 12px; }
 .vibe-evolution-suggestions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: 10px; }
-.vibe-evolution-suggestion { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 14px; border: 1px solid var(--v-edge); border-radius: 12px; background: color-mix(in srgb, var(--panel-solid) 44%, transparent); overflow-wrap: anywhere; }
-.vibe-evolution-suggestion h3 { margin: 0; color: var(--v-ink); font-size: 13px; font-weight: 600; line-height: 1.4; }
-.vibe-evolution-suggestion > p { margin: 0; white-space: pre-wrap; font-size: 12px; line-height: 1.5; }
-.vibe-evolution-file { color: var(--v-accent-hi); font-size: 10px; overflow-wrap: anywhere; }
+.vibe-evolution-suggestion { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 14px; border: 1px solid var(--v-edge); border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 44%, transparent); overflow-wrap: anywhere; transition: border-color var(--motion-fast) var(--ease-out), transform var(--motion-base) var(--ease-out); animation: vibe-rise var(--motion-spring) var(--ease-spring) both; animation-delay: calc(var(--i, 0) * 70ms); }
+.vibe-evolution-suggestion:hover { border-color: var(--v-edge-hi); }
+.vibe-evolution-suggestion.is-used { border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+.vibe-evolution-card-head { display: flex; align-items: baseline; gap: 8px; }
+.vibe-evolution-num { flex: none; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 7px; background: color-mix(in srgb, var(--v-accent) 14%, transparent); color: var(--v-accent-hi); font: 700 11px/1 var(--font-mono); translate: 0 -1px; }
+.vibe-evolution-suggestion.is-used .vibe-evolution-num { background: color-mix(in srgb, var(--good) 20%, transparent); color: var(--good); }
+.vibe-evolution-suggestion h3 { margin: 0; color: var(--v-ink); font-size: 13.5px; font-weight: 650; line-height: 1.35; }
+.vibe-evolution-suggestion > p { margin: 0; white-space: pre-wrap; font-size: 12.5px; line-height: 1.5; }
+.vibe-evolution-why { color: var(--v-soft); font-size: 12px !important; }
+.vibe-evolution-files { display: flex; flex-wrap: wrap; gap: 5px; }
+.vibe-evolution-file { max-width: 100%; padding: 3px 8px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--v-accent) 22%, transparent); border-radius: 7px; background: color-mix(in srgb, var(--v-accent) 7%, transparent); color: var(--v-accent-hi); font: 10.5px/1.3 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
 .vibe-evolution-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: auto; padding-top: 6px; }
 .vibe-evolution-actions .vibe-btn { min-height: 30px; padding: 6px 10px; font-size: 11px; }
+.vibe-evolution-suggestion.is-used .vibe-evolution-actions .vibe-btn:disabled { opacity: 1; border-color: color-mix(in srgb, var(--good) 40%, transparent); color: var(--good); cursor: default; }
+/* The planner's live run and the placeholders where its ideas will land. */
+.vibe-evolution-results > .vibe-flow-run { margin: 0; }
+.vibe-flow-skeleton { pointer-events: none; }
 @media (max-width: 680px) {
   .vibe-evolution-intents { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .vibe-evolution { padding: 12px; }
   .vibe-evolution-head > div { flex-wrap: wrap; gap: 6px 10px; }
 }
-.vibe-feedback { min-height: 20px; margin: 10px 0 0; color: var(--v-soft); font-size: 13px; text-align: center; }
+/* Just under the box, where the eye is after Build it or Save idea. */
+.vibe-feedback { min-height: 18px; margin: 8px 0 0; color: var(--v-soft); font-size: 13px; text-align: center; text-wrap: balance; }
+.vibe-feedback + .vibe-sparks { margin-top: 6px; }
 .vibe-feedback[data-tone="good"] { color: var(--good); }
 .vibe-feedback[data-tone="warn"] { color: var(--warn); }
 .vibe-feedback[data-tone="bad"] { color: var(--bad); }
@@ -8671,7 +8696,7 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-row.is-idea .vibe-row-dot { background: var(--idea, var(--gold)); box-shadow: 0 0 8px var(--idea, var(--gold)); }
 .vibe-row-title { overflow: hidden; font-size: 14px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
 .vibe-row.is-next .vibe-row-title { color: var(--v-soft); font-weight: 450; }
-.vibe-row-meta { grid-column: 2; color: var(--v-faint); font-size: 12px; }
+.vibe-row-meta { grid-column: 2; min-width: 0; overflow: hidden; color: var(--v-faint); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .vibe-bar { grid-column: 2; position: relative; height: 3px; margin-top: 4px; border-radius: 3px; background: color-mix(in srgb, var(--ivory) 8%, transparent); overflow: hidden; }
 .vibe-bar i { position: absolute; inset: 0 auto 0 0; width: 40%; border-radius: inherit; background: linear-gradient(90deg, color-mix(in srgb, var(--live) 60%, transparent), var(--live)); transition: width var(--motion-slow) var(--ease-out); }
 .vibe-bar i::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent); transform: translateX(-100%); animation: vibe-sheen 2.2s var(--ease-in-out) infinite; }
@@ -8903,24 +8928,45 @@ button.vibe-ask-chip:hover { border-color: var(--v-edge-hi); color: var(--v-ink)
 .vibe-newapp .vibe-btn { justify-self: start; margin-top: 4px; }
 
 /* ---- a request split into steps ("Mefi sizes it") -------------------------- */
-/* The plan card: the request, how far along it is, and one mark per step. */
+/* The plan card: the request, how far along it is, then its steps as one
+   track: a numbered node per step joined by a line that fills as steps
+   finish, ending in a diamond for the final check (vibe.js paintLanes). The
+   node being built spins, in step with every other spinner (--flow-phase). */
 .vibe-lane[data-lane="plan"] { --lane: var(--info); animation-delay: 25ms; }
-.vibe-steps { display: flex; flex-wrap: wrap; gap: 5px; margin: -2px 10px 8px 32px; list-style: none; }
-.vibe-step { max-width: 100%; padding: 3px 9px 3px 20px; overflow: hidden; position: relative; border: 1px solid var(--v-edge); border-radius: 999px; color: var(--v-soft); font-size: 11.5px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
-.vibe-step::before { content: ""; position: absolute; left: 8px; top: calc(50% - 3px); width: 6px; height: 6px; border-radius: 50%; background: var(--v-faint); }
-.vibe-step.is-done { color: var(--v-ink); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
-.vibe-step.is-done::before { background: var(--good); }
-.vibe-step.is-dropped { text-decoration: line-through; opacity: .6; }
-.vibe-step.is-running { color: var(--v-ink); border-color: color-mix(in srgb, var(--live) 45%, transparent); }
-.vibe-step.is-running::before { background: var(--live); box-shadow: 0 0 6px var(--live); animation: vibe-breathe 1.8s var(--ease-in-out) infinite; }
-.vibe-step.is-checking::before { background: var(--info); }
-.vibe-step.is-approval { border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
-.vibe-step.is-approval::before { background: var(--warn); }
-.vibe-step.is-blocked::before { background: var(--bad); }
+.vibe-steps { --node: 22px; --join: 20px; display: flex; align-items: center; margin: 2px 10px 6px 32px; padding: 4px 0; list-style: none; }
+.vibe-step { position: relative; flex: none; display: grid; place-items: center; width: var(--node); height: var(--node); border: 1.5px solid color-mix(in srgb, var(--v-faint) 80%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--panel-solid) 72%, transparent); color: var(--v-soft); font: 650 10.5px/1 var(--font-mono); transition: border-color var(--motion-base) var(--ease-out), background var(--motion-base) var(--ease-out), color var(--motion-base) var(--ease-out); }
+.vibe-step + .vibe-step { margin-left: var(--join); }
+/* The join into a node takes the colour of the step before it. */
+.vibe-step + .vibe-step::before { content: ""; position: absolute; top: 50%; right: calc(100% + 1.5px); width: var(--join); height: 2px; margin-top: -1px; border-radius: 2px; background: color-mix(in srgb, var(--ivory) 12%, transparent); }
+.vibe-step.is-done + .vibe-step::before, .vibe-step.is-dropped + .vibe-step::before { background: linear-gradient(90deg, var(--good), color-mix(in srgb, var(--good) 45%, transparent)); }
+.vibe-step.is-running + .vibe-step::before { background: linear-gradient(90deg, color-mix(in srgb, var(--live) 70%, transparent), transparent); }
+.vibe-step.is-done { border-color: var(--good); background: color-mix(in srgb, var(--good) 22%, var(--panel-solid)); color: transparent; }
+.vibe-step.is-done::after { content: ""; position: absolute; width: 8px; height: 4px; margin-top: -2px; border-left: 2px solid var(--good); border-bottom: 2px solid var(--good); rotate: -45deg; }
+.vibe-step.is-dropped { opacity: .45; text-decoration: line-through; }
+.vibe-step.is-running { border-color: var(--live); background: color-mix(in srgb, var(--live) 16%, var(--panel-solid)); color: var(--v-ink); box-shadow: 0 0 14px -3px var(--live); }
+.vibe-step.is-running::after { content: ""; position: absolute; inset: -5px; border: 2px solid transparent; border-top-color: var(--live); border-right-color: color-mix(in srgb, var(--live) 40%, transparent); border-radius: 50%; animation: vibe-turn 1.2s linear infinite; animation-delay: var(--flow-phase, 0ms); }
+.vibe-step.is-checking { border-color: var(--info); color: var(--v-ink); background: conic-gradient(color-mix(in srgb, var(--info) 34%, transparent) 0 50%, color-mix(in srgb, var(--panel-solid) 72%, transparent) 0); }
+.vibe-step.is-approval { border-color: var(--warn); color: var(--v-ink); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 14%, transparent); animation: vibe-breathe 2.4s var(--ease-in-out) infinite; animation-delay: var(--flow-phase, 0ms); }
+.vibe-step.is-blocked { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 24%, var(--panel-solid)); color: var(--v-ink); }
+/* The final check: a diamond after the last step, lit once every step is in. */
+.vibe-steps::before { content: ""; order: 1; flex: none; width: var(--join); height: 0; border-top: 2px dashed color-mix(in srgb, var(--ivory) 14%, transparent); }
+.vibe-steps::after { content: ""; order: 2; flex: none; width: 13px; height: 13px; margin-left: 4px; border: 1.5px solid color-mix(in srgb, var(--v-faint) 80%, transparent); border-radius: 3px; background: color-mix(in srgb, var(--panel-solid) 72%, transparent); rotate: 45deg; }
+.vibe-steps:is([data-final="next"], [data-final="running"], [data-final="checking"])::before { border-top-style: solid; border-color: color-mix(in srgb, var(--good) 70%, transparent); }
+.vibe-steps[data-final="next"]::after { border-color: var(--info); }
+.vibe-steps:is([data-final="running"], [data-final="checking"])::after { border-color: var(--live); background: color-mix(in srgb, var(--live) 30%, var(--panel-solid)); box-shadow: 0 0 14px -2px var(--live); animation: vibe-breathe 1.8s var(--ease-in-out) infinite; }
+/* Under the track: who is on which step and what they are doing now. */
+.vibe-plan-now { display: grid; gap: 2px; margin: 0 10px 8px 32px; padding: 7px 10px; border-left: 2px solid var(--v-faint); border-radius: 0 10px 10px 0; background: color-mix(in srgb, var(--ivory) 3%, transparent); list-style: none; font-size: 12px; line-height: 1.4; animation: vibe-rise var(--motion-base) var(--ease-out) both; }
+.vibe-plan-now b { overflow: hidden; color: var(--v-ink); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.vibe-plan-now span { overflow: hidden; color: var(--v-soft); text-overflow: ellipsis; white-space: nowrap; }
+.vibe-plan-now.is-live { border-left-color: var(--live); }
+.vibe-plan-now.is-live span::before { content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 7px 1px 0; border-radius: 50%; background: var(--live); box-shadow: 0 0 8px var(--live); vertical-align: middle; animation: vibe-breathe 1.4s var(--ease-in-out) infinite; }
+.vibe-plan-now.is-check { border-left-color: var(--info); }
+.vibe-plan-now.is-bad { border-left-color: var(--bad); }
+.vibe-plan-now[data-kept] { animation: none; }
 /* The same steps in the decision drawer, numbered. */
 .vibe-ask-steps { display: grid; gap: 4px; margin: 0; padding: 10px 12px 10px 32px; border: 1px solid var(--v-edge); border-radius: 14px; background: color-mix(in srgb, var(--bg-deep) 45%, transparent); color: var(--v-ink); font-size: 13.5px; line-height: 1.45; }
 .vibe-ask-steps li.is-done { color: var(--v-soft); text-decoration: line-through; }
-@media (prefers-reduced-motion: reduce) { .vibe-step.is-running::before { animation: none; } }
+@media (prefers-reduced-motion: reduce) { #vibe-layer .vibe-step, #vibe-layer .vibe-step::after, #vibe-layer .vibe-steps::after, #vibe-layer .vibe-plan-now span::before { animation: none; } }
 
 /* ---- smaller windows ------------------------------------------------------- */
 @media (max-width: 760px) {
@@ -9165,6 +9211,120 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 #vibe-layer .autonomy-popover > .autonomy-button:not(.autonomy-mode) { margin-top: 4px; padding-top: 11px; border-top: 1px solid var(--v-edge); border-radius: 0 0 14px 14px; color: var(--v-soft); font-size: 12.5px; }
 #vibe-layer .autonomy-popover > .autonomy-button:not(.autonomy-mode):hover { color: var(--v-ink); }
 @media (max-width: 600px) { .vibe-compose-foot { flex-wrap: wrap; } #vibe-autonomy-control { margin-right: auto; } }
+/* ---- Mefi at work: the long waits, live (renderer/vibe-flow.js) ------------- */
+/* The planner looking for next steps and the lead sizing a request, as one
+   strip: what it is doing, a clock against this machine's usual time, and
+   its stages on a line, each lit as the host reports it. The strip is one
+   element per run, updated in place, so nothing here replays on a push. */
+.vibe-flow-slot { width: min(860px, 100%) !important; margin-top: 10px; opacity: 1; translate: 0 0; transition: opacity var(--motion-slow) var(--ease-out), translate var(--motion-slow) var(--ease-emphasized), display var(--motion-slow) allow-discrete; }
+@starting-style { .vibe-flow-slot { opacity: 0; translate: 0 -6px; } }
+.vibe-flow-slot[hidden] { display: none; opacity: 0; translate: 0 -4px; transition-duration: var(--motion-exit, 160ms); }
+.vibe-flow-run { --flow-tone: var(--v-accent-hi); position: relative; display: grid; gap: 14px; padding: 14px 16px 16px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--flow-tone) 26%, var(--v-edge)); border-radius: 18px; background: linear-gradient(180deg, color-mix(in srgb, var(--flow-tone) 7%, transparent), transparent 70%), var(--v-glass); backdrop-filter: var(--v-blur); box-shadow: 0 18px 40px -30px color-mix(in srgb, var(--flow-tone) 60%, transparent); transition: border-color var(--motion-slow) var(--ease-out), box-shadow var(--motion-slow) var(--ease-out); }
+.vibe-flow-run[data-state="done"] { --flow-tone: var(--good); }
+.vibe-flow-run[data-state="failed"] { --flow-tone: var(--bad); }
+/* While it runs, a light sweeps the top edge (a transform, off the main thread). */
+.vibe-flow-run::before { content: ""; position: absolute; top: 0; left: 0; width: 34%; height: 2px; background: linear-gradient(90deg, transparent, var(--flow-tone), transparent); translate: -100% 0; animation: vibe-flow-sweep 2.2s var(--ease-in-out) infinite; animation-delay: var(--flow-phase, 0ms); }
+.vibe-flow-run:not([data-state="running"])::before { display: none; }
+@keyframes vibe-flow-sweep { to { translate: 300% 0; } }
+.vibe-flow-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.vibe-flow-title { flex: 1; min-width: 0; overflow: hidden; color: var(--v-ink); font: 650 14px/1.3 var(--font-display); letter-spacing: -.003em; text-overflow: ellipsis; white-space: nowrap; }
+.vibe-flow-run[data-state="done"] .vibe-flow-title { color: var(--good); }
+.vibe-flow-run[data-state="failed"] .vibe-flow-title { color: var(--bad); }
+/* A small Vibe orb while it works (the hero's, in miniature: a breathing
+   core under a turning halo); a check once it is done. */
+.vibe-flow-spark { position: relative; flex: none; width: 22px; height: 22px; border-radius: 50%; }
+.vibe-flow-spark i { display: none; }
+.vibe-flow-run[data-state="running"] .vibe-flow-spark { background: radial-gradient(circle at 36% 32%, #fff 0 7%, var(--flow-tone) 26%, color-mix(in srgb, var(--flow-tone) 45%, transparent) 55%, transparent 70%); animation: vibe-breathe 2.2s var(--ease-in-out) infinite; animation-delay: var(--flow-phase, 0ms); }
+.vibe-flow-run[data-state="running"] .vibe-flow-spark::before { content: ""; position: absolute; inset: -4px; border-radius: 50%; background: conic-gradient(from 0deg, transparent 0 30%, color-mix(in srgb, var(--flow-tone) 75%, transparent) 55%, transparent 75%); -webkit-mask: radial-gradient(circle, transparent 58%, #000 61%); mask: radial-gradient(circle, transparent 58%, #000 61%); animation: vibe-turn 1.4s linear infinite; animation-delay: var(--flow-phase, 0ms); }
+.vibe-flow-run:not([data-state="running"]) .vibe-flow-spark { background: color-mix(in srgb, var(--flow-tone) 18%, transparent); }
+.vibe-flow-run[data-state="done"] .vibe-flow-spark::after { content: ""; position: absolute; top: 7px; left: 6px; width: 9px; height: 4px; border-left: 2px solid var(--good); border-bottom: 2px solid var(--good); rotate: -45deg; }
+.vibe-flow-run[data-state="failed"] .vibe-flow-spark::after { content: "!"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--bad); font: 800 13px/1 var(--font-ui); }
+.vibe-flow-time { display: flex; flex: none; align-items: baseline; gap: 8px; }
+.vibe-flow-clock { color: var(--v-ink); font: 600 13px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+.vibe-flow-usual { color: var(--v-faint); font-size: 11.5px; }
+.vibe-flow-usual:empty { display: none; }
+/* The stages on one line: a node each, joined, lit as they happen. */
+.vibe-flow-stages { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 14px; margin: 0; padding: 0; list-style: none; }
+.vibe-flow-stage { position: relative; display: grid; grid-template-rows: 20px auto; row-gap: 9px; min-width: 0; }
+.vibe-flow-stage:not(:last-child)::after { content: ""; position: absolute; top: 9px; left: 26px; right: -8px; height: 2px; border-radius: 2px; background: color-mix(in srgb, var(--ivory) 10%, transparent); }
+.vibe-flow-stage.is-done:not(:last-child)::after { background: linear-gradient(90deg, var(--good), color-mix(in srgb, var(--good) 55%, transparent)); }
+.vibe-flow-stage.is-now:not(:last-child)::after { background: linear-gradient(90deg, color-mix(in srgb, var(--v-accent-hi) 70%, transparent), color-mix(in srgb, var(--ivory) 10%, transparent)); }
+.vibe-flow-stage.is-skipped:not(:last-child)::after { height: 0; border-top: 2px dashed color-mix(in srgb, var(--ivory) 12%, transparent); background: none; }
+.vibe-flow-node { position: relative; width: 20px; height: 20px; border: 2px solid color-mix(in srgb, var(--v-faint) 75%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--panel-solid) 80%, transparent); transition: border-color var(--motion-base) var(--ease-out), background var(--motion-base) var(--ease-out), scale var(--motion-spring) var(--ease-spring); }
+.vibe-flow-stage.is-done .vibe-flow-node { border-color: var(--good); background: color-mix(in srgb, var(--good) 26%, var(--panel-solid)); }
+.vibe-flow-stage.is-done .vibe-flow-node::after { content: ""; position: absolute; top: 4px; left: 3.5px; width: 8px; height: 4px; border-left: 2px solid var(--good); border-bottom: 2px solid var(--good); rotate: -45deg; }
+.vibe-flow-stage.is-now .vibe-flow-node { border-color: color-mix(in srgb, var(--v-accent-hi) 45%, transparent); background: color-mix(in srgb, var(--v-accent) 18%, var(--panel-solid)); scale: 1.08; }
+.vibe-flow-stage.is-now .vibe-flow-node::before { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: var(--v-accent-hi); box-shadow: 0 0 10px var(--v-accent-hi); animation: vibe-breathe 1.4s var(--ease-in-out) infinite; animation-delay: var(--flow-phase, 0ms); }
+.vibe-flow-stage.is-now .vibe-flow-node::after { content: ""; position: absolute; inset: -6px; border: 2px solid transparent; border-top-color: var(--v-accent-hi); border-right-color: color-mix(in srgb, var(--v-accent-hi) 35%, transparent); border-radius: 50%; animation: vibe-turn 1.1s linear infinite; animation-delay: var(--flow-phase, 0ms); }
+.vibe-flow-stage.is-skipped .vibe-flow-node { border-style: dashed; opacity: .5; }
+.vibe-flow-stage.is-failed .vibe-flow-node { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 22%, var(--panel-solid)); }
+.vibe-flow-stage.is-failed .vibe-flow-node::after { content: "!"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--bad); font: 800 11px/1 var(--font-ui); }
+.vibe-flow-words { display: grid; gap: 3px; min-width: 0; }
+.vibe-flow-words b { color: var(--v-soft); font-size: 12.5px; font-weight: 600; transition: color var(--motion-base) var(--ease-out); }
+.vibe-flow-words small { color: var(--v-faint); font-size: 11.5px; line-height: 1.4; overflow-wrap: anywhere; }
+.vibe-flow-stage:is(.is-done, .is-now, .is-failed) .vibe-flow-words b { color: var(--v-ink); }
+.vibe-flow-stage.is-now .vibe-flow-words small { color: var(--v-soft); }
+.vibe-flow-stage.is-failed .vibe-flow-words small { color: var(--bad); }
+.vibe-flow-stage.is-skipped .vibe-flow-words { opacity: .55; }
+/* What it read (the planner) or planned (the lead), arriving one by one. */
+.vibe-flow-extra { display: grid; gap: 10px; }
+.vibe-flow-extra:empty { display: none; }
+.vibe-flow-files { display: flex; flex-wrap: wrap; gap: 6px; }
+.vibe-flow-file { max-width: 220px; padding: 4px 9px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--info) 28%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--info) 8%, transparent); color: var(--v-ink); font: 11px/1.3 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; animation: vibe-flow-in var(--motion-spring) var(--ease-spring) both; animation-delay: calc(var(--i, 0) * 90ms); }
+@keyframes vibe-flow-in { from { opacity: 0; translate: 0 6px; scale: .96; } to { opacity: 1; translate: 0 0; scale: 1; } }
+.vibe-flow-steps { position: relative; display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.vibe-flow-steps::before { content: ""; position: absolute; top: 12px; bottom: 12px; left: 10px; width: 2px; border-radius: 2px; background: color-mix(in srgb, var(--info) 30%, transparent); }
+.vibe-flow-step { position: relative; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 3px 0; font-size: 12.5px; animation: vibe-flow-in var(--motion-spring) var(--ease-spring) both; animation-delay: calc(var(--i, 0) * 120ms); }
+.vibe-flow-step-n { display: grid; place-items: center; width: 22px; height: 22px; border: 1.5px solid color-mix(in srgb, var(--info) 60%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--info) 14%, var(--panel-solid)); color: var(--v-ink); font: 650 10.5px/1 var(--font-mono); }
+.vibe-flow-step-title { overflow: hidden; color: var(--v-ink); text-overflow: ellipsis; white-space: nowrap; }
+.vibe-flow-step small { color: var(--v-faint); font-size: 11px; white-space: nowrap; }
+.vibe-flow-step.is-final .vibe-flow-step-n { width: 16px; height: 16px; margin-left: 3px; border-radius: 4px; rotate: 45deg; font-size: 0; }
+.vibe-flow-step.is-final .vibe-flow-step-title { color: var(--v-soft); }
+.vibe-flow-slow { margin: 0; color: var(--warn); font-size: 12px; line-height: 1.45; }
+.vibe-flow-slow[hidden] { display: none; }
+.vibe-flow-actions { display: flex; justify-content: flex-end; }
+.vibe-flow-actions:empty { display: none; }
+/* Where the planner's ideas will land. */
+.vibe-flow-ghost { position: relative; display: grid; align-content: start; gap: 9px; min-height: 128px; padding: 14px; overflow: hidden; border: 1px dashed color-mix(in srgb, var(--ivory) 11%, transparent); border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 30%, transparent); animation: vibe-rise var(--motion-spring) var(--ease-spring) both; animation-delay: calc(var(--i, 0) * 90ms); }
+.vibe-flow-ghost i { display: block; height: 9px; border-radius: 5px; background: color-mix(in srgb, var(--ivory) 7%, transparent); }
+.vibe-flow-ghost i:nth-child(1) { width: 55%; height: 11px; }
+.vibe-flow-ghost i:nth-child(2) { width: 92%; }
+.vibe-flow-ghost i:nth-child(3) { width: 74%; }
+.vibe-flow-ghost i:nth-child(4) { width: 36%; margin-top: 18px; }
+.vibe-flow-ghost::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--ivory) 7%, transparent) 50%, transparent 70%); translate: -100% 0; animation: vibe-flow-shimmer 1.9s var(--ease-in-out) infinite; animation-delay: calc(var(--i, 0) * 180ms); }
+@keyframes vibe-flow-shimmer { to { translate: 100% 0; } }
+/* What a worker is doing now, under its row on Building now. */
+.vibe-row-now { grid-column: 2; overflow: hidden; color: var(--v-soft); font: 11.5px/1.35 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+.vibe-row-now::before { content: "›"; margin-right: 6px; color: var(--live); font-weight: 700; }
+.vibe-ask-chip.is-live { border-color: color-mix(in srgb, var(--live) 45%, transparent); background: color-mix(in srgb, var(--live) 12%, transparent); color: var(--v-ink); }
+/* The plan panel's timeline: one line through every step to the final check. */
+.vibe-timeline { gap: 0 !important; }
+.vibe-timeline .vibe-row { position: relative; }
+.vibe-timeline .vibe-row-dot { position: relative; width: 12px; height: 12px; margin-left: 0; border: 2px solid color-mix(in srgb, var(--v-faint) 80%, transparent); background: color-mix(in srgb, var(--panel-solid) 80%, transparent); box-shadow: none; animation: none; }
+.vibe-timeline .vibe-row:not(:last-child)::after, .vibe-timeline .vibe-row:not(:first-child)::before { content: ""; position: absolute; left: 15px; width: 2px; background: color-mix(in srgb, var(--ivory) 11%, transparent); pointer-events: none; }
+.vibe-timeline .vibe-row:not(:last-child)::after { top: 27px; bottom: 0; }
+.vibe-timeline .vibe-row:not(:first-child)::before { top: 0; height: 13px; }
+.vibe-timeline .vibe-row.is-done::after, .vibe-timeline .vibe-row.is-done + .vibe-row::before { background: color-mix(in srgb, var(--good) 70%, transparent); }
+.vibe-timeline .vibe-row.is-live::after, .vibe-timeline .vibe-row.is-live + .vibe-row::before { background: linear-gradient(180deg, var(--live), color-mix(in srgb, var(--ivory) 11%, transparent)); }
+.vibe-timeline .vibe-row.is-done .vibe-row-dot { border-color: var(--good); background: var(--good); }
+.vibe-timeline .vibe-row.is-live .vibe-row-dot { border-color: var(--live); background: color-mix(in srgb, var(--live) 45%, var(--panel-solid)); box-shadow: 0 0 10px -1px var(--live); }
+.vibe-timeline .vibe-row.is-live .vibe-row-dot::after { content: ""; position: absolute; inset: -6px; border: 2px solid transparent; border-top-color: var(--live); border-radius: 50%; animation: vibe-turn 1.2s linear infinite; }
+.vibe-timeline .vibe-row.is-check .vibe-row-dot { border-color: var(--info); background: conic-gradient(var(--info) 0 50%, transparent 0); }
+.vibe-timeline .vibe-row.is-ask .vibe-row-dot { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 30%, var(--panel-solid)); }
+.vibe-timeline .vibe-row.is-bad .vibe-row-dot { border-color: var(--bad); background: var(--bad); }
+.vibe-timeline .vibe-row:last-child .vibe-row-dot { border-radius: 3px; rotate: 45deg; }
+.vibe-timeline .vibe-row.is-live .vibe-row-meta { color: var(--v-soft); }
+@media (max-width: 760px) {
+  .vibe-flow-stages { grid-template-columns: minmax(0, 1fr); row-gap: 10px; }
+  .vibe-flow-stage { grid-template-columns: 20px minmax(0, 1fr); grid-template-rows: auto; column-gap: 10px; }
+  .vibe-flow-stage:not(:last-child)::after { display: none; }
+  .vibe-flow-usual { display: none; }
+}
+/* Still, for reduced motion: the id outranks every state rule above. */
+@media (prefers-reduced-motion: reduce) {
+  #vibe-layer :is(.vibe-flow-run, .vibe-flow-spark)::before, #vibe-layer .vibe-flow-spark, #vibe-layer .vibe-flow-node::before, #vibe-layer .vibe-flow-node::after, #vibe-layer .vibe-flow-ghost::after, #vibe-layer .vibe-row-dot::after, #vibe-layer .vibe-evolution-suggest .glyph,
+  #vibe-layer :is(.vibe-flow-file, .vibe-flow-step, .vibe-flow-ghost, .vibe-evolution-suggestion, .vibe-evolution-summary) { animation: none; }
+}
 
 /* The setup helper (renderer/setup-helper.js): one sheet for every agent
    setting. A section rail on the left, the section on the right, Back/Next in
@@ -9584,9 +9744,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         <button id="vibe-build" class="vibe-btn primary" type="submit"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg>Build it</button>
       </div>
     </form>
+    <!-- Build it's wait, live: the quick look, the lead planning the steps,
+         the board (renderer/vibe-flow.js). Its answer lands just below. -->
+    <div id="vibe-flow" class="vibe-flow-slot" hidden></div>
+    <p id="vibe-feedback" class="vibe-feedback" role="status" aria-live="polite"></p>
     <div id="vibe-sparks" class="vibe-sparks" role="group" aria-label="Ways to start"></div>
     <button id="vibe-decisions" class="vibe-ask-link" type="button" hidden>Decided for you · For you</button>
-    <p id="vibe-feedback" class="vibe-feedback" role="status" aria-live="polite"></p>
     <!-- What stops the agents from working on their own, and the one control
          that fixes it: Start agents, Resume, Connect an AI (vibe.js). -->
     <div id="vibe-gate" class="vibe-gate" role="status" aria-live="polite" hidden><i class="vibe-gate-dot" aria-hidden="true"></i><span class="vibe-gate-copy"><b id="vibe-gate-title"></b><span id="vibe-gate-text"></span></span><button id="vibe-gate-action" class="vibe-btn primary" type="button" hidden></button></div>
@@ -69330,6 +69493,375 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   };
 })();
 
+// Vibe's live view of its long waits (window.MefiVibeFlow): the planner
+// looking for next steps (MEFI's Suggest a next step, planning:explore) and
+// the lead sizing a request (Build it, vibe:build). Both can take a minute,
+// and before this they showed one still sentence.
+//
+// A run is one such wait. vibe.js starts it, passes its id with the host call,
+// and the host pushes each step it takes on vibe:progress (main.cjs
+// vibeProgress, scripts/planning-service.cjs): reading, read and asking for
+// the planner; quick, sizing, tool, sized and adding for sizing. The call's
+// own reply ends the run. Every stage shown is one the host reported; the
+// only local reckoning is the clock and "usually about 20 s", which come from
+// this machine's own finished runs (localStorage, last seven of each kind).
+//
+// Each run has one view element, built once and updated in place, so a push
+// never replays an entrance: a caller places view(run) where it belongs and
+// leaves it there. Clocks tick once a second while one is on the page. The
+// Team panel lists the runs still going (active()), and on() hears every
+// change. Without the host's steps (an older host) a run still shows its
+// clock and first stage; without layout (the tests' fake DOM) nothing ticks.
+(function () {
+  "use strict";
+  const TIMES_KEY = "mefiStudio.vibe.flowTimes";
+  const KINDS = { explore: ["reading", "read", "asking"], size: ["quick", "sizing", "tool", "sized", "adding"] };
+  const now = () => Date.now();
+  const clip = (value, max) => (typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "");
+  const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = String(text); return node; };
+  // The tests' stand-in elements have a plain style object.
+  const setVar = (node, name, value) => { try { node.style.setProperty(name, value); } catch { /* no CSSOM */ } };
+  const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
+
+  // ---- names --------------------------------------------------------------------
+  const PROVIDERS = { zen: "OpenCode Zen", opencode: "OpenCode", claude: "Claude Code", codex: "Codex", grok: "Grok", antigravity: "Antigravity", zai: "Z.ai", openrouter: "OpenRouter", lmstudio: "LM Studio", ollama: "Ollama", anthropic: "Anthropic", openai: "OpenAI", gemini: "Gemini", deepseek: "DeepSeek", custom: "your own endpoint" };
+  // The coding tools a worker runs in (executor routes).
+  const TOOLS = { opencode: "OpenCode", claude: "Claude Code", codex: "Codex", grok: "Grok", antigravity: "Antigravity" };
+  let catalog = null;
+  function modelName(id) {
+    const raw = clip(typeof id === "string" ? id : "", 120);
+    if (!raw) return "";
+    if (!catalog) {
+      catalog = new Map();
+      try {
+        const data = JSON.parse(document.getElementById("booklet-data")?.textContent || "{}");
+        for (const model of Array.isArray(data.models) ? data.models : []) if (model?.id && model.name) catalog.set(String(model.id), String(model.name));
+      } catch { /* the words below */ }
+    }
+    const bare = raw.replace(/^.*\//, "");
+    if (catalog.get(raw) || catalog.get(bare)) return catalog.get(raw) || catalog.get(bare);
+    // gpt-6-luna → GPT 6 Luna, deepseek-v4.1-flash → Deepseek V4.1 Flash
+    return bare.split(/[-_\s]+/).filter(Boolean).map((part) => (/^(gpt|glm|ai|api|ui)$/i.test(part) ? part.toUpperCase() : /^v?\d/i.test(part) ? part.toUpperCase() : part[0].toUpperCase() + part.slice(1))).join(" ");
+  }
+  const providerName = (id) => PROVIDERS[id] || (typeof id === "string" && id && id !== "auto" ? id[0].toUpperCase() + id.slice(1) : "");
+  // Who is thinking, in a word or two: the model, or its tool when it runs the tool's default.
+  const who = (seen) => (seen ? modelName(seen.model) || providerName(seen.provider) : "");
+  const toolName = (route) => TOOLS[route] || providerName(route);
+
+  // ---- how long a run usually takes ---------------------------------------------------
+  function readTimes() {
+    try { const parsed = JSON.parse(localStorage.getItem(TIMES_KEY) || "{}"); return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}; } catch { return {}; }
+  }
+  function remember(kind, ms) {
+    if (!(ms > 500) || ms > 30 * 60000) return;
+    const times = readTimes();
+    times[kind] = [...(Array.isArray(times[kind]) ? times[kind] : []), Math.round(ms)].slice(-7);
+    try { localStorage.setItem(TIMES_KEY, JSON.stringify(times)); } catch { /* private store */ }
+  }
+  // The median of this machine's recent runs, once there are two of them.
+  function typical(kind) {
+    const list = (readTimes()[kind] || []).filter((ms) => Number.isFinite(ms) && ms > 0).sort((a, b) => a - b);
+    return list.length >= 2 ? list[Math.floor(list.length / 2)] : null;
+  }
+  const seconds = (ms) => Math.max(0, Math.round(ms / 1000));
+  const clock = (ms) => { const total = seconds(ms); return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`; };
+  const roughly = (ms) => (ms >= 90000 ? `${Math.round(ms / 60000)} min` : `${Math.max(5, Math.round(ms / 5000) * 5)} s`);
+  const took = (ms) => (ms < 60000 ? `${seconds(ms)} s` : `${Math.floor(ms / 60000)} min ${seconds(ms % 60000)} s`);
+
+  // ---- runs -------------------------------------------------------------------------
+  const runs = new Map();
+  const views = new Map();
+  const listeners = new Set();
+  function emit(run) {
+    for (const listener of [...listeners]) {
+      try { listener(run); } catch (error) { console.error(error); }
+    }
+  }
+  // Finished runs linger ten minutes (a view may still be settling), and only
+  // the newest two dozen are kept.
+  function prune() {
+    const cutoff = now() - 10 * 60000;
+    for (const [id, run] of runs) if (run.endedAt && run.endedAt < cutoff) { runs.delete(id); views.delete(id); }
+    while (runs.size > 24) { const [id] = runs.keys(); runs.delete(id); views.delete(id); }
+  }
+  function begin(kind, { projectId = null, title = "" } = {}) {
+    if (!KINDS[kind]) return null;
+    prune();
+    const startedAt = now();
+    const run = { id: `vibe-${kind}-${startedAt.toString(36)}-${Math.random().toString(36).slice(2, 8)}`, kind, projectId, title: clip(title, 120), startedAt, stage: "start", seen: {}, tools: [], endedAt: null, outcome: null };
+    runs.set(run.id, run);
+    emit(run);
+    return run;
+  }
+  // Only what the page can show is kept from a push, trimmed to size.
+  function facts(payload) {
+    const out = {};
+    if (Number.isFinite(payload.scanned)) out.scanned = Math.max(0, Math.round(payload.scanned));
+    if (Array.isArray(payload.files)) out.files = payload.files.filter((file) => typeof file === "string").map((file) => clip(file, 200)).filter(Boolean).slice(0, 8);
+    for (const key of ["seat", "provider", "model", "verdict", "reason", "size"]) if (typeof payload[key] === "string") out[key] = clip(payload[key], 120);
+    if (typeof payload.cli === "boolean") out.cli = payload.cli;
+    if (typeof payload.summary === "string") out.summary = clip(payload.summary, 400);
+    if (Array.isArray(payload.steps)) out.steps = payload.steps.slice(0, 6).map((step) => ({ title: clip(step?.title, 90) || "A step", after: (Array.isArray(step?.after) ? step.after : []).filter(Number.isInteger).slice(0, 6) }));
+    return out;
+  }
+  function event(payload) {
+    const run = payload && typeof payload === "object" ? runs.get(payload.requestId) : null;
+    if (!run || run.endedAt || !KINDS[run.kind].includes(payload.stage)) return false;
+    if (payload.projectId && run.projectId && payload.projectId !== run.projectId) return false;
+    const at = Number(payload.at) || now();
+    if (payload.stage === "tool") run.tools = [...run.tools, { name: clip(String(payload.name ?? ""), 80), ok: payload.ok === true, at }].slice(-6);
+    else run.seen[payload.stage] = { ...facts(payload), at };
+    run.stage = payload.stage;
+    refresh(run);
+    emit(run);
+    return true;
+  }
+  function end(id, { ok = true, error = "", count = null, steps = null } = {}) {
+    const run = runs.get(id);
+    if (!run || run.endedAt) return run || null;
+    run.endedAt = now();
+    run.outcome = { ok: ok !== false, error: clip(error, 300), count: Number.isFinite(count) ? count : null, steps: Number.isFinite(steps) ? steps : null };
+    // A request sized without a model call says nothing about how long one takes.
+    if (run.outcome.ok && (run.kind === "explore" || run.seen.sizing)) remember(run.kind, run.endedAt - run.startedAt);
+    refresh(run);
+    emit(run);
+    return run;
+  }
+  const get = (id) => runs.get(id) || null;
+  const active = (projectId) => [...runs.values()].filter((run) => !run.endedAt && (!projectId || !run.projectId || run.projectId === projectId));
+  function on(listener) { if (typeof listener === "function") listeners.add(listener); return () => listeners.delete(listener); }
+
+  // ---- what a run has done, stage by stage ------------------------------------------------
+  const TOOL_WORDS = { web_search: "searched the web", project_read: "read a file" };
+  const toolWords = (run) => [...new Set(run.tools.map((tool) => TOOL_WORDS[tool.name] || (tool.name.startsWith("mcp__") ? `used ${tool.name.split("__").pop().replace(/_/g, " ")}` : "used a tool")))].join(" · ");
+  function readText(read) {
+    const files = read.files?.length ?? 0;
+    const found = files ? `${plural(files, "file")} look${files === 1 ? "s" : ""} relevant` : "no file stood out";
+    return read.scanned ? `${read.scanned} files scanned · ${found}` : found;
+  }
+  function stages(run) {
+    const seen = run.seen, out = run.outcome;
+    const done = Boolean(out?.ok), failed = Boolean(out && !out.ok);
+    let list;
+    if (run.kind === "explore") {
+      const { read, asking } = seen;
+      list = [
+        { key: "read", label: "Read the project", state: read || asking || done ? "done" : "now", detail: read ? readText(read) : "Finding the files that matter" },
+        { key: "think", label: "Think it over", state: done ? "done" : read || asking ? "now" : "next", detail: asking ? `${who(asking) || "The model"} ${done ? "answered" : "is thinking"}` : read ? "Choosing a model" : "" },
+        { key: "suggest", label: "Suggest next steps", state: done ? "done" : "next", detail: done ? (out.count ? plural(out.count, "idea") : "Nothing new this time") : "Up to three, with reasons" },
+      ];
+    } else {
+      const { quick, sizing, sized, adding } = seen;
+      const single = quick?.verdict === "one";
+      const split = sized?.size === "steps" ? sized.steps.length : 0;
+      const tools = run.tools.length ? toolWords(run) : "";
+      list = [
+        { key: "look", label: "Take a look", state: quick || done ? "done" : "now", detail: quick ? (single ? "One change, no split needed" : "Big enough to plan in steps") : "Reading your request" },
+        { key: "split", label: "Plan the steps", state: single ? "skipped" : sized || adding || done ? "done" : sizing ? "now" : "next",
+          detail: single ? "Not needed" : sized ? (split ? `${plural(split, "step")}, then a final check` : "Best as one task") : sizing ? [`${who(sizing) || "The lead"} is splitting it`, tools].filter(Boolean).join(" · ") : "" },
+        { key: "board", label: "Put it on the board", state: done ? "done" : adding ? "now" : "next", detail: done ? (out.steps ? `${plural(out.steps, "step")} and a final check` : "One task") : adding ? "Adding it" : "" },
+      ];
+    }
+    if (failed) {
+      const at = list.find((stage) => stage.state === "now") || [...list].reverse().find((stage) => stage.state !== "skipped");
+      if (at) { at.state = "failed"; at.detail = out.error || "It stopped here"; }
+    }
+    return list;
+  }
+  function headline(run) {
+    const out = run.outcome;
+    if (run.kind === "explore") return !out ? "Mefi is looking for next steps" : !out.ok ? "Mefi couldn't finish looking" : out.count ? `Found ${plural(out.count, "next step")}` : "Nothing new to suggest";
+    const sized = run.seen.sized;
+    if (out) return !out.ok ? "Sizing stopped" : out.steps ? `Split into ${plural(out.steps, "step")}` : "Added as one task";
+    return sized?.size === "steps" ? `Splitting it into ${plural(sized.steps.length, "step")}` : "Mefi is sizing your request";
+  }
+  // One line for the Team panel and the page's status: the stage now running.
+  function line(run) {
+    const current = stages(run).find((stage) => stage.state === "now" || stage.state === "failed");
+    return current ? [current.label, current.detail].filter(Boolean).join(": ") : headline(run);
+  }
+
+  // ---- the view ---------------------------------------------------------------------
+  function view(run) {
+    if (!run) return null;
+    let root = views.get(run.id);
+    if (!root) { root = build(run); views.set(run.id, root); }
+    update(root, run);
+    return root;
+  }
+  function refresh(run) { const root = views.get(run.id); if (root) update(root, run); }
+  function build(run) {
+    const root = el("section", `vibe-flow-run is-${run.kind}`);
+    root.dataset.run = run.id;
+    // Keyed, so a menu repainting around it (MefiMotion.keep) keeps it still.
+    root.dataset.key = `run:${run.id}`;
+    root.setAttribute("aria-label", run.kind === "explore" ? "Mefi looking for next steps" : "Mefi sizing your request");
+    // Continuous motion runs off the page clock, so every view spins in step.
+    setVar(root, "--flow-phase", `-${now() % 2400}ms`);
+    const head = el("div", "vibe-flow-head");
+    const spark = el("span", "vibe-flow-spark");
+    spark.setAttribute("aria-hidden", "true");
+    spark.append(el("i"), el("i"), el("i"));
+    const title = el("b", "vibe-flow-title");
+    title.setAttribute("role", "status");
+    const time = el("span", "vibe-flow-time");
+    time.setAttribute("aria-hidden", "true");
+    time.append(el("span", "vibe-flow-clock"), el("span", "vibe-flow-usual"));
+    head.append(spark, title, time);
+    const track = el("ol", "vibe-flow-stages");
+    for (const stage of stages(run)) {
+      const item = el("li", "vibe-flow-stage");
+      item.dataset.stage = stage.key;
+      const words = el("span", "vibe-flow-words");
+      words.append(el("b", "", stage.label), el("small"));
+      item.append(el("i", "vibe-flow-node"), words);
+      track.append(item);
+    }
+    const extra = el("div", "vibe-flow-extra");
+    const slow = el("p", "vibe-flow-slow", run.kind === "explore" ? "Taking longer than usual. It keeps going on its own, and the rest of Studio stays yours." : "Taking longer than usual. If the lead doesn't answer, your request goes on as one task.");
+    slow.hidden = true;
+    const actions = el("div", "vibe-flow-actions");
+    root.append(head, track, extra, slow, actions);
+    return root;
+  }
+  function update(root, run) {
+    const out = run.outcome;
+    root.dataset.state = !out ? "running" : out.ok ? "done" : "failed";
+    root.querySelector(".vibe-flow-title").textContent = headline(run);
+    const face = root.querySelector(".vibe-flow-clock");
+    const usual = root.querySelector(".vibe-flow-usual");
+    const expect = typical(run.kind);
+    if (!out) {
+      face.dataset.flowSince = String(run.startedAt);
+      // Late is well past this machine's usual time, or a minute without one.
+      face.dataset.flowSlowAfter = String(run.startedAt + (expect ? Math.max(expect * 1.8, expect + 20000) : run.kind === "explore" ? 75000 : 50000));
+      face.textContent = clock(now() - run.startedAt);
+      usual.textContent = expect ? `usually about ${roughly(expect)}` : "";
+      tick();
+    } else {
+      delete face.dataset.flowSince;
+      delete face.dataset.flowSlowAfter;
+      face.textContent = took(run.endedAt - run.startedAt);
+      usual.textContent = "";
+      root.dataset.slow = "no";
+      root.querySelector(".vibe-flow-slow").hidden = true;
+    }
+    const list = stages(run);
+    const items = root.querySelectorAll(".vibe-flow-stage");
+    for (const [index, stage] of list.entries()) {
+      const item = items[index];
+      if (!item) continue;
+      item.className = `vibe-flow-stage is-${stage.state}`;
+      item.querySelector("small").textContent = stage.detail;
+      item.setAttribute("aria-label", `${stage.label}: ${stage.state === "now" ? "in progress" : stage.state === "next" ? "next" : stage.state}${stage.detail ? `. ${stage.detail}` : ""}`);
+    }
+    const extra = root.querySelector(".vibe-flow-extra");
+    if (run.kind === "explore") files(extra, run.seen.read?.files ?? []);
+    else steps(extra, run.seen.sized?.steps ?? []);
+  }
+  // The files the planner read, each arriving once, in order.
+  function files(extra, list) {
+    let row = extra.querySelector(".vibe-flow-files");
+    if (!list.length) { if (row) row.remove(); return; }
+    if (!row) { row = el("div", "vibe-flow-files"); row.setAttribute("aria-label", "Files Mefi is reading"); extra.append(row); }
+    const have = new Set([...row.querySelectorAll(".vibe-flow-file")].map((chip) => chip.dataset.file));
+    for (const [index, file] of list.entries()) {
+      if (have.has(file)) continue;
+      const chip = el("code", "vibe-flow-file", file.split("/").pop());
+      chip.dataset.file = file;
+      chip.title = file;
+      setVar(chip, "--i", String(index));
+      row.append(chip);
+    }
+  }
+  // The steps the lead planned, as they will go on the board.
+  function steps(extra, list) {
+    let box = extra.querySelector(".vibe-flow-steps");
+    if (!list.length) { if (box) box.remove(); return; }
+    if (!box) { box = el("ol", "vibe-flow-steps"); box.setAttribute("aria-label", "The planned steps"); extra.append(box); }
+    const count = [...box.querySelectorAll(".vibe-flow-step")].filter((item) => !item.classList.contains("is-final")).length;
+    for (const [index, step] of list.entries()) {
+      if (index < count) continue;
+      const item = el("li", "vibe-flow-step");
+      setVar(item, "--i", String(index));
+      item.append(el("span", "vibe-flow-step-n", String(index + 1)), el("span", "vibe-flow-step-title", step.title));
+      if (step.after.length) item.append(el("small", "", `after ${step.after.map((at) => at + 1).join(" and ")}`));
+      box.append(item);
+    }
+    if (!box.querySelector(".vibe-flow-step.is-final")) {
+      const final = el("li", "vibe-flow-step is-final");
+      setVar(final, "--i", String(list.length));
+      final.append(el("span", "vibe-flow-step-n", "✓"), el("span", "vibe-flow-step-title", "Then: put it together and check the whole thing"));
+      box.append(final);
+    } else box.append(box.querySelector(".vibe-flow-step.is-final"));
+  }
+  // A button under a finished run (Show the plan), replacing any before it.
+  function action(run, { label, run: act } = {}) {
+    const root = run ? views.get(run.id) : null;
+    const holder = root?.querySelector(".vibe-flow-actions");
+    if (!holder) return null;
+    holder.replaceChildren();
+    if (!label || typeof act !== "function") return null;
+    const button = el("button", "vibe-ask-link vibe-flow-action", label);
+    button.type = "button";
+    button.addEventListener("click", () => act());
+    holder.append(button);
+    return button;
+  }
+
+  // Placeholder cards where the suggestions will land.
+  function skeleton(count = 3) {
+    const grid = el("div", "vibe-evolution-suggestions vibe-flow-skeleton");
+    grid.setAttribute("aria-hidden", "true");
+    for (let index = 0; index < count; index += 1) {
+      const card = el("div", "vibe-flow-ghost");
+      setVar(card, "--i", String(index));
+      card.append(el("i"), el("i"), el("i"), el("i"));
+      grid.append(card);
+    }
+    return grid;
+  }
+
+  // What a worker is doing now: its tool and its current step or last output.
+  function doing(job) {
+    if (!job || typeof job !== "object") return { tool: "", step: "" };
+    return { tool: toolName(job.route), step: clip(job.currentStep || job.activity || "", 140) };
+  }
+
+  // ---- clocks -------------------------------------------------------------------------
+  // One timer for every clock on the page, alive only while one is.
+  let timer = 0;
+  function paintClocks() {
+    const at = now();
+    for (const face of document.querySelectorAll?.("[data-flow-since]") ?? []) {
+      const since = Number(face.dataset.flowSince);
+      if (!since) continue;
+      face.textContent = clock(at - since);
+      const root = face.closest?.(".vibe-flow-run");
+      const late = Number(face.dataset.flowSlowAfter);
+      if (!root || !late) continue;
+      const slow = at > late;
+      if ((root.dataset.slow === "yes") === slow) continue;
+      root.dataset.slow = slow ? "yes" : "no";
+      const note = root.querySelector(".vibe-flow-slow");
+      if (note) note.hidden = !slow;
+    }
+  }
+  function tick() {
+    if (timer || typeof setTimeout !== "function") return;
+    timer = setTimeout(function step() {
+      timer = 0;
+      if (!document.hidden) paintClocks();
+      if (document.querySelector?.("[data-flow-since]")) timer = setTimeout(step, 1000) || 0;
+    }, 1000) || 0;
+  }
+
+  // The host's steps arrive here once, for every view and listener.
+  window.mefiStudio?.onVibeProgress?.((payload) => { event(payload); });
+
+  window.MefiVibeFlow = { begin, event, end, get, active, on, stages, headline, line, typical, view, action, skeleton, doing, modelName, providerName, toolName, who, took };
+})();
+
 // Vibe's menus: Tasks, Plans, Ideas, Team and Settings as compact panels
 // beside the front door, in place of Build's full sheets. renderer/vibe.js
 // opens them (from the dock, the cards, the pill and the settings button) and
@@ -69424,14 +69956,16 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (ms < 86400000) return `${Math.round(ms / 3600000)} h ago`;
     return `${Math.round(ms / 86400000)} d ago`;
   }
-  // The same row the cards use, so a panel reads like the front door.
-  function row({ key, tone, title, meta, action, onOpen }) {
+  // The same row the cards use, so a panel reads like the front door;
+  // `detail` is its live line: what a worker is doing right now.
+  function row({ key, tone, title, meta, detail, action, onOpen }) {
     const item = el("li", `vibe-row${tone ? ` is-${tone}` : ""}`);
     item.dataset.key = key || title;
     const main = el("button", "vibe-row-main");
     main.type = "button";
     main.append(el("span", "vibe-row-dot"), el("span", "vibe-row-title", title));
     if (meta) main.append(el("span", "vibe-row-meta", meta));
+    if (detail) { const now = el("span", "vibe-row-now", detail); now.title = detail; main.append(now); }
     if (onOpen) main.addEventListener("click", onOpen);
     item.append(main);
     if (action) {
@@ -69760,24 +70294,34 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const STEP_TONES = { done: "done", dropped: "", running: "live", checking: "check", approval: "ask", blocked: "bad", waiting: "next" };
   const familyTone = (family) => family.steps.some((step) => step.state === "approval") ? "ask" : family.steps.some((step) => step.state === "running") || family.final === "running" ? "live" : "next";
   const familyMeta = (family) => `${family.finished} of ${family.steps.length} steps done${family.final === "running" ? " · final check running" : family.final === "next" ? " · final check next" : ""}`;
+  // A step's line on the timeline: who is on it and what they are doing now,
+  // what it still waits for, or when it finished.
+  function stepMeta(step, family) {
+    if (step.state === "running") return [STEP_WORDS.running, step.job?.tool, step.job?.startedAt ? `started ${ago(step.job.startedAt)}` : ""].filter(Boolean).join(" · ");
+    if (step.state === "done" && step.at) return `done · ${ago(step.at)}`;
+    const open = (step.after || []).filter((index) => family.steps[index] && !["done", "dropped"].includes(family.steps[index].state));
+    if (step.state === "waiting" && open.length) return `waits for step ${open.map((index) => index + 1).join(" and ")}`;
+    return STEP_WORDS[step.state];
+  }
+  // The plan as a timeline: each step a node on one line, the worker on the
+  // step being built, and the final check where the line ends.
   function familyDetail(body, id) {
     const family = (state.data.families || []).find((item) => item.id === id);
     if (!family) { body.append(el("p", "vibe-panel-empty", "This request is finished or no longer on the board.")); return; }
-    heading(body, family.title, [chip(`${family.finished} of ${family.steps.length} done`, family.steps.some((step) => step.state === "approval") ? "decision" : "")]);
+    const building = family.steps.filter((step) => step.state === "running").length;
+    heading(body, family.title, [chip(`${family.finished} of ${family.steps.length} done`, family.steps.some((step) => step.state === "approval") ? "decision" : ""), building ? chip(`${building} building now`, "live") : null]);
     if (family.summary) body.append(el("p", "vibe-ask-detail vibe-panel-reason", family.summary));
-    const list = el("ol", "vibe-rows");
-    for (const [index, step] of family.steps.entries()) list.append(row({ key: `step:${step.id || index}`, tone: STEP_TONES[step.state], title: `${index + 1}. ${step.title}`, meta: STEP_WORDS[step.state], onOpen: () => push({ view: "task", id: step.id }) }));
-    list.append(row({ key: "then", tone: family.final === "running" ? "live" : family.final === "checking" ? "check" : "next", title: "Then: put it together and check the whole thing", meta: family.final === "running" ? "running now" : family.final === "checking" ? "checking its work" : family.final === "next" ? "up next" : "after the last step", onOpen: () => push({ view: "task", id: family.id }) }));
+    const list = el("ol", "vibe-rows vibe-timeline");
+    for (const [index, step] of family.steps.entries()) list.append(row({ key: `step:${step.id || index}`, tone: STEP_TONES[step.state], title: `${index + 1}. ${step.title}`, meta: stepMeta(step, family), detail: step.state === "running" ? step.job?.step : "", onOpen: () => push({ view: "task", id: step.id }) }));
+    list.append(row({ key: "then", tone: family.final === "running" ? "live" : family.final === "checking" ? "check" : "next", title: "Then: put it together and check the whole thing", meta: family.final === "running" ? ["running now", family.job?.tool].filter(Boolean).join(" · ") : family.final === "checking" ? "checking its work" : family.final === "next" ? "up next" : "after the last step", detail: family.final === "running" ? family.job?.step : "", onOpen: () => push({ view: "task", id: family.id }) }));
     body.append(list);
     const need = (state.data.needs || []).find((item) => item.kind === "family" && item.id === id);
     const unstarted = family.steps.filter((step) => ["approval", "waiting", "blocked"].includes(step.state));
     const buttons = [];
     if (need) buttons.push({ label: "Start all steps", primary: true, run: () => vibe()?.openNeed?.({ kind: "family", id }) });
-    if (unstarted.length) buttons.push({ label: "Make it one task", title: "Drop the steps that have not started; the request is built as one task", run: () => act(async () => {
-      let result = { ok: true };
-      for (const step of unstarted) { result = await api().tasksAction({ taskId: step.id, projectId: state.data.projectId, action: "drop" }); if (!result || result.ok === false) break; }
-      return result;
-    }, "Kept as one task. It builds as a whole.") });
+    // One host transaction, as the drawer's: dropping steps one at a time is
+    // refused for a step another one waits on.
+    if (unstarted.length) buttons.push({ label: "Make it one task", title: "Drop the steps that have not started; the request is built as one task", run: () => act(() => api().tasksAction({ taskId: id, projectId: state.data.projectId, action: "merge-steps" }), "Kept as one task. It builds as a whole.") });
     if (buttons.length) body.append(actions(buttons));
   }
 
@@ -69846,7 +70390,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     else if (gate && ["held", "paused"].includes(gate.key)) controls.push({ label: gate.key === "held" ? "Start agents" : "Resume", primary: true, run: () => act(() => api().assistantControl("start-work"), "Agents started. They pick up what's queued.") });
     else controls.push({ label: "Pause new work", title: "Running jobs finish; nothing new starts until you resume", disabled: !api()?.backlogControl, run: () => act(() => api().backlogControl({ action: "pause", projectId: data.projectId }), "New work paused. Running jobs finish normally.") });
     body.append(actions(controls));
-    fold(body, "working", "Working now", running.map((job, index) => row({ key: `job:${job.taskId || index}`, tone: "live", title: job.title || "A task", meta: [job.phase ? String(job.phase).replace(/_/g, " ") : "working", job.model || job.route || "", job.startedAt ? `started ${ago(job.startedAt)}` : ""].filter(Boolean).join(" · "), onOpen: () => { close({ quiet: true }); go("command", job.taskId ? { selected: `task:${job.taskId}` } : {}); } })), { empty: "Nobody is building right now." });
+    // Mefi's own thinking beside the builders: the planner looking for next
+    // steps and the lead sizing a request, at the stage each has reached
+    // (renderer/vibe-flow.js). Opening one shows its live strip in Vibe.
+    const thinking = window.MefiVibeFlow?.active?.(data.projectId) ?? [];
+    if (thinking.length) fold(body, "thinking", "Thinking now", thinking.map((run) => row({ key: `run:${run.id}`, tone: "live", title: run.kind === "size" ? `Sizing “${run.title || "your request"}”` : "Looking for next steps", meta: window.MefiVibeFlow.line(run), onOpen: () => close() })));
+    fold(body, "working", "Working now", running.map((job, index) => row({ key: `job:${job.taskId || index}`, tone: "live", title: job.title || "A task", meta: [job.model || window.MefiVibeFlow?.toolName?.(job.route) || job.route || "", job.phase ? String(job.phase).replace(/_/g, " ") : "working", job.startedAt ? `started ${ago(job.startedAt)}` : ""].filter(Boolean).join(" · "), detail: job.currentStep || job.activity || "", onOpen: () => { close({ quiet: true }); go("command", job.taskId ? { selected: `task:${job.taskId}` } : {}); } })), { empty: "Nobody is building right now." });
     const roster = [];
     const info = state.teamProject === state.data.projectId ? state.team : null;
     if (info) {
@@ -69987,6 +70536,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     form.append(nameField, aboutField, where, make);
     form.addEventListener("submit", (event) => { event.preventDefault(); void createApp(); });
     body.append(form);
+    // The first build being sized, live (renderer/vibe-flow.js).
+    const run = state.busy && state.appRun ? window.MefiVibeFlow?.get?.(state.appRun) : null;
+    if (run) body.append(window.MefiVibeFlow.view(run));
   }
   async function createApp() {
     const name = state.draftApp.name.trim();
@@ -69994,6 +70546,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (!name) { note("Give the new app a name.", "warn"); return; }
     if (!api()?.projectsCreate) { note("New apps can be made in the desktop app.", "warn"); return; }
     if (state.busy) return;
+    // Enter in a field submits the form but leaves the field focused, and a
+    // panel never repaints under a field being typed in: let go of it, so
+    // "Making it…" and the first build's sizing can show.
+    if (aside.contains(document.activeElement)) document.activeElement.blur?.();
     state.busy = true; state.signature = ""; render();
     note("Making the folder…");
     try {
@@ -70011,8 +70567,17 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       let said = `${name} is ready and open.`;
       if (about && api()?.vibeBuild) {
         note("Folder ready. Sizing up the first build…");
-        const built = await api().vibeBuild({ title: `Set up ${name}`.slice(0, 90), projectId: made.selectedId || made.activeId,
-          prompt: `Start this new app in its empty project folder: ${about}\n\nSet up the project so it runs, then build a first working version of what is described.` });
+        const flow = window.MefiVibeFlow;
+        const run = flow?.begin?.("size", { projectId: made.selectedId || made.activeId || null, title: `Set up ${name}` }) ?? null;
+        state.appRun = run?.id ?? null; state.signature = ""; render();
+        let built;
+        try {
+          built = await api().vibeBuild({ title: `Set up ${name}`.slice(0, 90), projectId: made.selectedId || made.activeId, ...(run ? { requestId: run.id } : {}),
+            prompt: `Start this new app in its empty project folder: ${about}\n\nSet up the project so it runs, then build a first working version of what is described.` });
+        } finally {
+          if (run) flow.end(run.id, built?.ok === false || !built ? { ok: false, error: built?.error || "No answer" } : { ok: true, steps: Number(built.steps) || 0 });
+          state.appRun = null;
+        }
         if (!built || built.ok === false) throw new Error(`The folder is ready, but the first build could not be added: ${built?.error || "no answer"}`);
         said = built.steps ? `${name} is ready, and its first build is split into ${built.steps} steps.` : `${name} is ready, and its first build is queued.`;
       }
@@ -70034,20 +70599,22 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function digest() {
     const data = state.data;
     const need = (data.needs || []).map((item) => `${item.kind}:${item.id}:${item.title}:${item.verb}`);
-    const running = (data.running || []).map((job) => `${job.taskId}:${job.phase}:${job.title}`);
+    const running = (data.running || []).map((job) => `${job.taskId}:${job.phase}:${job.title}:${job.currentStep || job.activity || ""}`);
     if (state.kind === "tasks" || top()?.view === "task") {
       const stages = (data.backlog?.taskStates || []).map((row) => `${row.id}:${row.stage}:${row.blockedBy || ""}:${row.reason || ""}`);
       return [data.projectId, data.projectName, need, running, stages, state.taskView, data.gate, data.status?.parallel, data.status?.adaptiveParallel, data.status?.capacity, data.backlog?.waiting, (data.tasks || []).map((task) => [task.id, task.title, task.status, task.updatedAt, task.contextVersion, task.priority, task.estimateMinutes, task.acceptance, task.deferUntil, Boolean(task.dropped), task.verification?.state, String(task.lastRunError || "").length, String(task.notes || "").length, String(task.prompt || "").length])];
     }
     if (state.kind === "ideas") return [data.projectName, (data.ideas || []).map((idea) => [idea.id, idea.title, idea.read, idea.status, idea.taskId])];
-    if (state.kind === "plans") return [data.projectName, need, running, (data.plans || []).map((plan) => [plan.id, plan.title, plan.status, plan.version]), (data.families || []).map((family) => [family.id, family.title, family.final, family.steps.map((step) => `${step.id}:${step.state}`)]), (data.tasks || []).length];
-    if (state.kind === "team") return [data.projectName, running, data.gate, state.teamAt];
+    if (state.kind === "plans") return [data.projectName, need, running, (data.plans || []).map((plan) => [plan.id, plan.title, plan.status, plan.version]), (data.families || []).map((family) => [family.id, family.title, family.final, family.job?.step, family.steps.map((step) => `${step.id}:${step.state}:${step.job?.step || ""}`)]), (data.tasks || []).length];
+    if (state.kind === "team") return [data.projectName, running, data.gate, state.teamAt, (window.MefiVibeFlow?.active?.(data.projectId) ?? []).map((run) => `${run.id}:${run.stage}`)];
     if (state.kind === "settings") return [data.projectName, data.person, data.companion, document.documentElement.dataset.studioTheme];
     if (state.kind === "newapp") return [data.projectName];
     if (state.kind === "decisions") return [data.projectId, data.assistant.decisions, data.assistant.todos];
     return [];
   }
   window.addEventListener("mefi:autonomy-changed", () => { state.signature = ""; if (["settings", "decisions", "team"].includes(state.kind)) render(); });
+  // A thinking run starting, moving on or ending repaints Team's list of them.
+  window.MefiVibeFlow?.on?.(() => { if (state.kind === "team") render(); });
   function render() {
     if (aside.hidden || !state.kind) return;
     const view = top();
@@ -70304,19 +70871,25 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // as the final integration and check. Finished families leave the plan card
   // for Freshly done.
   const STEP_STATES = { done: "done", dropped: "dropped", running: "building", checking: "checking its work", approval: "waiting for your go-ahead", blocked: "stuck", waiting: "waiting its turn" };
+  // Each step also carries the worker on it (its tool and what it is doing
+  // now) and which earlier steps it waits on, for the plan card's track and
+  // the plan panel's timeline.
   function families() {
     const tasks = scoped(state.tasks);
     const byId = new Map(tasks.map((task) => [task.id, task]));
-    const runningIds = new Set(scoped(state.status.running).map((job) => job.taskId).filter(Boolean));
+    const jobs = new Map(scoped(state.status.running).filter((job) => job.taskId).map((job) => [job.taskId, job]));
     const stages = new Map((Array.isArray(state.backlog?.taskStates) ? state.backlog.taskStates : []).map((row) => [row.id, row]));
-    const stepState = (step) => step.dropped ? "dropped" : done(step) ? "done" : runningIds.has(step.id) ? "running"
+    const stepState = (step) => step.dropped ? "dropped" : done(step) ? "done" : jobs.has(step.id) ? "running"
       : ["awaiting_verification", "verifying"].includes(step.status) ? "checking" : stages.get(step.id)?.stage === "approval" ? "approval" : stages.get(step.id)?.stage === "blocked" ? "blocked" : "waiting";
+    const worker = (job) => job ? { ...(window.MefiVibeFlow?.doing?.(job) ?? { tool: "", step: "" }), phase: job.phase || "", startedAt: Number(job.startedAt) || null, progress: Number.isFinite(job.progress) ? job.progress : null } : null;
     return tasks.filter((task) => task.delegation?.intake && Array.isArray(task.delegation.childTaskIds) && !done(task))
       .map((parent) => {
-        const steps = parent.delegation.childTaskIds.map((id) => byId.get(id)).filter(Boolean).map((step) => ({ id: step.id, title: step.title || "A step", state: stepState(step), buildScope: step.buildScope ?? null }));
+        const ids = parent.delegation.childTaskIds;
+        const steps = ids.map((id) => byId.get(id)).filter(Boolean).map((step) => ({ id: step.id, title: step.title || "A step", state: stepState(step), buildScope: step.buildScope ?? null,
+          after: (Array.isArray(step.dependsOn) ? step.dependsOn : []).map((id) => ids.indexOf(id)).filter((index) => index >= 0), job: worker(jobs.get(step.id)), at: stamp(step) }));
         const finished = steps.filter((step) => ["done", "dropped"].includes(step.state)).length;
-        const final = runningIds.has(parent.id) ? "running" : ["awaiting_verification", "verifying"].includes(parent.status) ? "checking" : finished === steps.length ? "next" : "waiting";
-        return { id: parent.id, title: parent.title || "Your request", summary: parent.delegation.summary || "", steps, finished, final, updatedAt: stamp(parent) };
+        const final = jobs.has(parent.id) ? "running" : ["awaiting_verification", "verifying"].includes(parent.status) ? "checking" : finished === steps.length ? "next" : "waiting";
+        return { id: parent.id, title: parent.title || "Your request", summary: parent.delegation.summary || "", steps, finished, final, job: worker(jobs.get(parent.id)), updatedAt: stamp(parent) };
       })
       .sort((a, b) => b.updatedAt - a.updatedAt);
   }
@@ -70396,13 +70969,15 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       button.onclick = () => void gate.action.run();
     }
   }
-  function row({ key, tone, title, meta, progress, action, onOpen }) {
+  // `detail` is one live line under the meta: what a worker is doing now.
+  function row({ key, tone, title, meta, detail, progress, action, onOpen }) {
     const item = el("li", `vibe-row${tone ? ` is-${tone}` : ""}`);
     item.dataset.key = key || title;
     const open = el("button", "vibe-row-main");
     open.type = "button";
     open.append(el("span", "vibe-row-dot"), el("span", "vibe-row-title", title));
     if (meta) open.append(el("span", "vibe-row-meta", meta));
+    if (detail) { const now = el("span", "vibe-row-now", detail); now.title = detail; open.append(now); }
     if (progress !== undefined) {
       const bar = el("span", "vibe-bar");
       const fill = el("i");
@@ -70447,7 +71022,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     building.replaceChildren();
     for (const job of data.running.slice(0, 3)) {
       const phase = job.phase ? String(job.phase).replace(/_/g, " ") : "working";
-      building.append(row({ key: `building:${job.taskId || job.title}`, tone: "live", title: job.title || "A task", meta: `${phase} · started ${ago(job.startedAt)}`, progress: job.progress, onOpen: () => go("command", job.taskId ? { selected: `task:${job.taskId}` } : {}) }));
+      // The worker's tool, and under it what the worker is doing right now.
+      const now = window.MefiVibeFlow?.doing?.(job) ?? { tool: "", step: "" };
+      building.append(row({ key: `building:${job.taskId || job.title}`, tone: "live", title: job.title || "A task", meta: `${now.tool ? `${now.tool} · ` : ""}${phase} · started ${ago(job.startedAt)}`, detail: now.step, progress: job.progress, onOpen: () => go("command", job.taskId ? { selected: `task:${job.taskId}` } : {}) }));
     }
     for (const task of data.checking.slice(0, Math.max(0, 4 - building.children.length))) building.append(row({ key: `building:${task.id}`, tone: "check", title: task.title || "A finished task", meta: "checking its work", onOpen: () => openTask(task.id) }));
     const heldBack = data.gate && ["held", "paused", "key"].includes(data.gate.key);
@@ -70475,21 +71052,27 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     for (const idea of data.ideas.slice(0, 3)) ideas.append(row({ key: `ideas:${idea.id}`, tone: "idea", title: idea.title || idea.detail || "An idea", meta: [idea.source, idea.at ? ago(idea.at) : ""].filter(Boolean).join(" · ") || "new idea", action: { label: "Build it", run: () => void promoteIdea(idea) }, onOpen: () => openPanel("ideas", { ideaId: idea.id }) }));
     $("count-ideas").textContent = data.ideas.length > 3 ? String(data.ideas.length) : "";
 
-    // A request split into steps: where it stands, its steps as marks, and
-    // Start all while they wait for a go-ahead under Verify first.
+    // A request split into steps: where it stands, its steps as a track that
+    // ends in the final check, who is on which step and what they are doing,
+    // and Start all while the steps wait for a go-ahead under Verify first.
     const plan = $("lane-plan");
     plan.replaceChildren();
     for (const family of data.families.slice(0, 2)) {
       const waiting = data.needs.find((need) => need.kind === "family" && need.id === family.id);
       const current = family.steps.find((step) => step.state === "running") || family.steps.find((step) => step.state === "checking");
-      const meta = `${family.finished} of ${family.steps.length} steps done${current ? ` · ${STEP_STATES[current.state]}: ${current.title}` : waiting ? " · waiting for your go-ahead" : family.final === "running" ? " · final check running" : family.final === "next" ? " · final check next" : ""}`;
+      const meta = `${family.finished} of ${family.steps.length} steps done${waiting ? " · waiting for your go-ahead" : family.final === "running" || family.final === "checking" ? " · final check running" : family.final === "next" ? " · final check next" : ""}`;
       plan.append(row({ key: `plan:${family.id}`, tone: waiting ? "ask" : current || family.final === "running" ? "live" : "next", title: family.title, meta, progress: family.steps.length ? family.finished / family.steps.length : undefined,
         action: waiting ? { label: "Start all", run: () => openNeed(waiting) } : null, onOpen: () => openPanel("plans", { familyId: family.id }) }));
       const marks = el("li", "vibe-steps");
       marks.dataset.key = `plan:${family.id}:steps`;
-      marks.setAttribute("aria-label", `Steps of ${family.title}`);
-      for (const step of family.steps) { const mark = el("span", `vibe-step is-${step.state}`, step.title); mark.title = `${step.title}: ${STEP_STATES[step.state]}`; marks.append(mark); }
+      marks.dataset.final = family.final;
+      marks.setAttribute("aria-label", `Steps of ${family.title}: ${family.finished} of ${family.steps.length} done, then a final check`);
+      // A rebuilt track keeps its spinner turning where the last one was.
+      try { marks.style.setProperty("--flow-phase", `-${Date.now() % 2400}ms`); } catch { /* no CSSOM in tests */ }
+      for (const [index, step] of family.steps.entries()) { const mark = el("span", `vibe-step is-${step.state}`, String(index + 1)); mark.title = `${index + 1}. ${step.title}: ${STEP_STATES[step.state]}`; marks.append(mark); }
       plan.append(marks);
+      const line = planLine(family, waiting);
+      if (line) plan.append(line);
     }
     $("count-plan").textContent = data.families.length > 2 ? String(data.families.length) : "";
 
@@ -70500,6 +71083,31 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const visible = Object.values(shown).filter(Boolean).length;
     layer.dataset.cards = visible ? "some" : "none";
     $("quiet").hidden = visible > 0 || Boolean(data.gate);
+  }
+  // The line under a plan's track: the final check, the steps being built and
+  // what their workers are doing, a check, a stuck step, or what comes next.
+  // A plan waiting for your go-ahead already says so on its row.
+  function planLine(family, waiting) {
+    const indexes = (state) => family.steps.flatMap((step, index) => (step.state === state ? [index] : []));
+    const doing = (job, fallback) => [job?.tool, job?.step].filter(Boolean).join(" · ") || fallback;
+    const building = indexes("running"), checking = indexes("checking"), stuck = indexes("blocked");
+    let lead, text, tone;
+    if (["running", "checking"].includes(family.final)) [lead, text, tone] = ["Final check", doing(family.job, "putting the steps together and checking the whole thing"), "live"];
+    else if (building.length === 1) [lead, text, tone] = [`Step ${building[0] + 1} · ${family.steps[building[0]].title}`, doing(family.steps[building[0]].job, "building"), "live"];
+    else if (building.length > 1) [lead, text, tone] = [`Steps ${building.map((index) => index + 1).join(" and ")} building side by side`, building.map((index) => family.steps[index].title).join(" · "), "live"];
+    else if (checking.length) [lead, text, tone] = [`Step ${checking[0] + 1} · ${family.steps[checking[0]].title}`, "checking its work", "check"];
+    else if (stuck.length) [lead, text, tone] = [`Step ${stuck[0] + 1} is stuck`, family.steps[stuck[0]].title, "bad"];
+    else if (waiting) return null;
+    else {
+      const next = family.steps.findIndex((step) => step.state === "waiting");
+      if (next < 0) return null;
+      [lead, text, tone] = [`Next · step ${next + 1}`, family.steps[next].title, "next"];
+    }
+    const item = el("li", `vibe-plan-now is-${tone}`);
+    item.dataset.key = `plan:${family.id}:now`;
+    item.append(el("b", "", lead), el("span", "", text));
+    item.title = `${lead}: ${text}`;
+    return item;
   }
 
   // ---- the dock ---------------------------------------------------------------
@@ -70665,7 +71273,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // ---- composer -------------------------------------------------------------
   let draftProject = null, draftEpoch = 0;
   const draftKey = (id) => `mefiStudio.vibe.draft.${id}`;
-  const evolution = { intent: null, context: null, result: null, signature: null, loading: false, request: 0, error: "" };
+  // `run` is the planner's live run (renderer/vibe-flow.js) while it looks.
+  const evolution = { intent: null, context: null, result: null, signature: null, loading: false, request: 0, error: "", run: null };
+  const flow = () => window.MefiVibeFlow;
   const evolutionView = {};
   const INTENTS = {
     modify: { label: "Modify", hint: "Shape an existing feature", starter: "Change this project so that ", guide: "Adapt the existing behavior to the requested outcome. Reuse the systems already in this project." },
@@ -70687,7 +71297,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     try { saved = id ? JSON.parse(read(evolutionKey(id)) || "null") : null; } catch { /* older or damaged local draft */ }
     evolution.intent = Object.hasOwn(INTENTS, saved?.intent) ? saved.intent : null;
     evolution.context = normalizeEvolution(saved?.context);
-    evolution.request++; evolution.loading = false; evolution.result = null; evolution.error = ""; evolution.signature = null;
+    evolution.request++; evolution.loading = false; evolution.result = null; evolution.error = ""; evolution.signature = null; evolution.run = null;
+    hideSizing(); // the strip speaks for a request in the project just left
     $("input").value = id ? read(draftKey(id)) || "" : ""; grow();
     renderEvolution();
   }
@@ -70702,6 +71313,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     return { system: shortText(typeof system === "string" ? system : system?.name || context.systemName, 180), systemId: shortText(system?.id || context.systemId, 180), files, ideaIds, ideaId: ideaIds.length === 1 ? ideaIds[0] : null };
   }
   const evolutionSignature = () => JSON.stringify([draftProject, $("input").value, evolution.intent, evolution.context]);
+  // Suggestions answer the draft they were asked for: a newer direction typed
+  // over it makes them read-only. An empty box (just built, or cleared) has no
+  // direction to overwrite, so they stay usable to start the next draft.
+  const evolutionStale = () => evolution.signature !== evolutionSignature() && Boolean($("input").value.trim());
   function chooseIntent(intent) {
     if (!Object.hasOwn(INTENTS, intent)) return;
     syncDraft();
@@ -70765,42 +71380,107 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     const foot = el("div", "vibe-evolution-foot");
     evolutionView.scope = el("span", "vibe-evolution-scope");
-    const suggest = el("button", "vibe-btn quiet", "Suggest a next step"); suggest.type = "button"; suggest.dataset.evolutionAction = "suggest";
+    const suggest = el("button", "vibe-btn quiet vibe-evolution-suggest"); suggest.type = "button"; suggest.dataset.evolutionAction = "suggest";
+    evolutionView.suggestLabel = el("span", "", "Suggest a next step");
+    suggest.append(glyph("g-spark"), evolutionView.suggestLabel);
     suggest.addEventListener("click", () => void suggestEvolution()); evolutionView.suggest = suggest;
     foot.append(evolutionView.scope, suggest);
-    evolutionView.results = el("div", "vibe-evolution-results"); evolutionView.results.setAttribute("aria-live", "polite");
-    holder.append(head, choices, foot, evolutionView.results); renderEvolution();
+    evolutionView.results = el("div", "vibe-evolution-results");
+    // One quiet status for screen readers: looking, found, or why it stopped.
+    evolutionView.status = el("p", "sr-only"); evolutionView.status.setAttribute("role", "status");
+    holder.append(head, choices, foot, evolutionView.results, evolutionView.status); renderEvolution();
+  }
+  function glyph(id) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "glyph"); svg.setAttribute("aria-hidden", "true");
+    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", `#${id}`); svg.append(use);
+    return svg;
+  }
+  // Brings a new result into view inside the stage, without jumping when it already shows.
+  function reveal(node) {
+    if (!node || node.hidden || !active()) return;
+    try { node.scrollIntoView?.({ block: "nearest", behavior: window.MefiNav?.noMotion?.() ? "auto" : "smooth" }); } catch { /* no layout */ }
   }
   function renderEvolution() {
     if (!evolutionView.results) return;
     for (const button of evolutionView.choices) button.setAttribute("aria-pressed", String(button.dataset.intent === evolution.intent));
-    evolutionView.scope.textContent = evolution.context?.system || evolution.context?.files[0] || "This project · choose an approach or ask Mefi for ideas";
-    evolutionView.suggest.textContent = evolution.loading ? "Exploring the project…" : evolution.result ? "Refresh suggestions" : "Suggest a next step";
+    const where = evolution.context?.system || evolution.context?.files[0];
+    evolutionView.scope.textContent = where ? `Scope: ${where}` : "Scope: the whole project. Pick an approach, or let Mefi suggest one.";
+    evolutionView.suggestLabel.textContent = evolution.loading ? "Looking…" : evolution.result ? "Suggest again" : "Suggest a next step";
     evolutionView.suggest.disabled = evolution.loading || state.pending || !projectId();
-    const body = evolutionView.results; body.replaceChildren(); body.hidden = !evolution.loading && !evolution.result && !evolution.error;
+    evolutionView.suggest.dataset.busy = evolution.loading ? "yes" : "no";
+    const said = evolution.loading ? "Mefi is looking for next steps." : evolution.error || (evolution.result ? `${evolution.result.suggestions?.length || "No"} suggestion${evolution.result.suggestions?.length === 1 ? "" : "s"} ready.` : "");
+    if (evolutionView.status.textContent !== said) evolutionView.status.textContent = said;
+    const body = evolutionView.results;
+    body.hidden = !evolution.loading && !evolution.result && !evolution.error;
+    // While Mefi looks: its live run (renderer/vibe-flow.js) over placeholders
+    // where the ideas will land. The run's view updates itself as the host
+    // reports each step, so a repaint here leaves it where it is.
+    if (evolution.loading) {
+      const run = evolution.run ? flow()?.get?.(evolution.run) : null;
+      const view = run ? flow().view(run) : null;
+      if (!view) body.replaceChildren(el("p", "vibe-evolution-note", "Mefi is reading relevant files and looking for a useful next step."));
+      else if (view.parentNode !== body) body.replaceChildren(view, flow().skeleton(3));
+      return;
+    }
+    body.replaceChildren();
     if (evolution.error) body.append(el("p", "vibe-inline-error", evolution.error));
-    if (evolution.loading) { body.append(el("p", "vibe-evolution-note", "Mefi is reading relevant files and looking for a useful next step.")); return; }
     if (!evolution.result) return;
-    if (evolution.result.summary) body.append(el("p", "vibe-evolution-note", evolution.result.summary));
-    const stale = evolution.signature !== evolutionSignature();
-    if (stale) body.append(el("p", "vibe-evolution-note", "Your draft changed. Refresh to get suggestions for the current direction."));
+    const suggestions = Array.isArray(evolution.result.suggestions) ? evolution.result.suggestions : [];
+    // What Mefi read the project as, and how the look went.
+    const run = evolution.run ? flow()?.get?.(evolution.run) : null;
+    const head = el("div", "vibe-evolution-summary");
+    const facts = [suggestions.length ? `${suggestions.length} idea${suggestions.length === 1 ? "" : "s"}` : "", run?.endedAt ? `found in ${flow().took(run.endedAt - run.startedAt)}` : "", run?.seen?.read?.scanned ? `${run.seen.read.scanned} files scanned` : ""].filter(Boolean).join(" · ");
+    const words = el("div");
+    if (facts) words.append(el("span", "vibe-evolution-facts", facts));
+    if (evolution.result.summary) words.append(el("p", "vibe-evolution-note", evolution.result.summary));
+    const clear = el("button", "vibe-ask-link vibe-evolution-clear", "Clear"); clear.type = "button"; clear.title = "Put these suggestions away";
+    clear.addEventListener("click", () => { evolution.result = null; evolution.error = ""; renderEvolution(); evolutionView.suggest.focus?.(); });
+    head.append(words, clear);
+    body.append(head);
+    const stale = evolutionStale();
+    if (stale) {
+      const note = el("div", "vibe-evolution-stale");
+      const again = el("button", "vibe-ask-link", "Suggest again"); again.type = "button";
+      again.addEventListener("click", () => void suggestEvolution());
+      note.append(el("span", "", "Your draft changed. Refresh to get suggestions for the current direction."), again);
+      body.append(note);
+    }
     const cards = el("div", "vibe-evolution-suggestions");
-    for (const suggestion of evolution.result.suggestions || []) {
-      const card = el("article", "vibe-evolution-suggestion");
-      card.append(el("h3", "", suggestion.label), el("p", "", suggestion.text));
-      if (suggestion.reason) card.append(el("p", "vibe-evolution-note", suggestion.reason));
-      for (const file of suggestion.files || []) card.append(el("code", "vibe-evolution-file", file));
+    for (const [index, suggestion] of suggestions.entries()) {
+      const card = el("article", `vibe-evolution-suggestion${suggestion.used ? " is-used" : ""}`);
+      try { card.style.setProperty("--i", String(index)); } catch { /* no CSSOM in tests */ }
+      const top = el("div", "vibe-evolution-card-head");
+      top.append(el("span", "vibe-evolution-num", String(index + 1)), el("h3", "", suggestion.label));
+      card.append(top, el("p", "", suggestion.text));
+      if (suggestion.reason) card.append(el("p", "vibe-evolution-why", suggestion.reason));
+      if (suggestion.files?.length) {
+        const list = el("div", "vibe-evolution-files");
+        for (const file of suggestion.files) { const chip = el("code", "vibe-evolution-file", file); chip.title = file; list.append(chip); }
+        card.append(list);
+      }
       const actions = el("div", "vibe-evolution-actions");
-      const use = el("button", "vibe-btn quiet", "Add to draft"); use.type = "button"; use.disabled = stale || state.pending;
-      // A planning reply has a transient suggestion-0 id. Only a saved board
-      // idea may follow this draft into a task and advance the ideas tree.
-      use.addEventListener("click", () => composeEvolution({ projectId: draftProject, intent: evolution.intent || "improve", ...evolution.context, ideaId: suggestion.savedId || null, idea: { title: suggestion.label, text: suggestion.text }, files: suggestion.files }));
+      const use = el("button", "vibe-btn quiet", suggestion.used ? "Added to draft" : "Add to draft"); use.type = "button"; use.disabled = stale || state.pending || Boolean(suggestion.used);
+      use.addEventListener("click", () => useSuggestion(suggestion));
       const keep = el("button", "vibe-ask-link", suggestion.saved ? "Idea saved" : suggestion.saving ? "Saving…" : "Save idea"); keep.type = "button"; keep.disabled = stale || Boolean(suggestion.saved || suggestion.saving);
       keep.addEventListener("click", () => void keepEvolutionIdea(suggestion));
       actions.append(use, keep); card.append(actions); cards.append(card);
     }
     body.append(cards);
     if (!cards.children.length) body.append(el("p", "vibe-evolution-note", "No extra changes suggested yet. Shape an idea above and try again."));
+  }
+  // A planning reply has a transient suggestion-0 id. Only a saved board idea
+  // may follow this draft into a task and advance the ideas tree. Adding one
+  // suggestion keeps the rest of its set usable: the draft moved because of
+  // this set, not away from it.
+  function useSuggestion(suggestion) {
+    const usable = !evolutionStale();
+    const added = composeEvolution({ projectId: draftProject, intent: evolution.intent || "improve", ...evolution.context, ideaId: suggestion.savedId || null, idea: { title: suggestion.label, text: suggestion.text }, files: suggestion.files });
+    if (!added) return;
+    suggestion.used = true;
+    if (usable) evolution.signature = evolutionSignature();
+    renderEvolution();
   }
   async function suggestEvolution() {
     init(); syncDraft();
@@ -70812,18 +71492,26 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const value = $("input").value.trim();
     const destination = [value || "Suggest a few small, useful next steps for the existing application in this project.", `Approach: ${intent.label}. ${intent.guide}`, scope?.system ? `System: ${scope.system}` : "", scope?.files.length ? `Relevant files: ${scope.files.join(", ")}` : ""].filter(Boolean).join("\n\n");
     if (destination.length > 16000) { evolution.error = "Shorten the draft a little before asking for suggestions."; renderEvolution(); return; }
+    // The host reports each step of this look under the run's id.
+    const run = flow()?.begin?.("explore", { projectId: id, title: `${intent.label} this project` }) ?? null;
+    evolution.run = run?.id ?? null;
     evolution.loading = true; evolution.error = ""; renderEvolution();
+    reveal(evolutionView.results);
     const current = () => id === projectId() && epoch === draftEpoch && request === evolution.request;
     try {
-      const result = await api().planningExplore({ projectId: id, draft: { title: `${intent.label} this project`, destination, outOfScope: "Suggestions for review only. Do not implement, create tasks, or approve work." }, focus: "destination", intent: "suggest" });
-      if (!current()) return;
+      const result = await api().planningExplore({ projectId: id, draft: { title: `${intent.label} this project`, destination, outOfScope: "Suggestions for review only. Do not implement, create tasks, or approve work." }, focus: "destination", intent: "suggest", ...(run ? { requestId: run.id } : {}) });
+      if (!current()) { if (run) flow().end(run.id, { ok: false, error: "Set aside: the project or the draft changed." }); return; }
       if (result?.projectId !== id || !result?.ok) throw new Error(result?.error || "Mefi could not explore this project. Try again.");
       evolution.result = result; evolution.signature = signature;
-    } catch (error) { if (current()) evolution.error = error?.message || "Suggestions are unavailable. Try again."; }
-    finally { if (current()) { evolution.loading = false; renderEvolution(); } }
+      if (run) flow().end(run.id, { ok: true, count: Array.isArray(result.suggestions) ? result.suggestions.length : 0 });
+    } catch (error) {
+      if (run) flow().end(run.id, { ok: false, error: error?.message || "Suggestions are unavailable." });
+      if (current()) evolution.error = error?.message || "Suggestions are unavailable. Try again.";
+    }
+    finally { if (current()) { evolution.loading = false; renderEvolution(); reveal(evolutionView.results); } }
   }
   async function keepEvolutionIdea(suggestion) {
-    if (suggestion.saved || suggestion.saving || evolution.signature !== evolutionSignature()) return;
+    if (suggestion.saved || suggestion.saving || evolutionStale()) return;
     const id = projectId(), epoch = draftEpoch, context = evolution.context;
     suggestion.saving = true; renderEvolution();
     try {
@@ -70840,6 +71528,38 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   function grow() { const input = $("input"); input.style.height = "auto"; input.style.height = `${Math.min(220, input.scrollHeight)}px`; }
   function feedback(text, tone = "") { const node = $("feedback"); node.textContent = text; node.dataset.tone = tone; }
+  // ---- the sizing strip -------------------------------------------------------
+  // Build it's wait, live under the box (renderer/vibe-flow.js): the quick
+  // look, the lead planning the steps, then the board. It shows only when the
+  // wait outlasts a blink, stays a moment on how it ended, then steps away.
+  const sizingView = { run: null, timer: 0 };
+  function showSizing(run) {
+    const slot = $("flow");
+    if (!slot || !run || !flow()) return;
+    clearTimeout(sizingView.timer);
+    sizingView.run = run.id;
+    sizingView.timer = setTimeout(() => {
+      if (sizingView.run !== run.id || run.endedAt) return;
+      slot.replaceChildren(flow().view(run));
+      slot.hidden = false;
+      reveal(slot);
+    }, 350);
+  }
+  function settleSizing(run, { familyId = null } = {}) {
+    const slot = $("flow");
+    if (!slot || !run || sizingView.run !== run.id) return;
+    clearTimeout(sizingView.timer);
+    if (slot.hidden || !slot.querySelector?.(`.vibe-flow-run[data-run="${run.id}"]`)) { sizingView.run = null; return; }
+    if (run.outcome?.ok && familyId) flow().action(run, { label: "Show the plan →", run: () => { hideSizing(); openPanel("plans", { familyId }); } });
+    sizingView.timer = setTimeout(() => hideSizing(run.id), run.outcome?.ok ? 7000 : 1600);
+  }
+  function hideSizing(id = null) {
+    const slot = $("flow");
+    if (!slot || (id && sizingView.run !== id)) return;
+    clearTimeout(sizingView.timer);
+    sizingView.timer = 0; sizingView.run = null;
+    slot.hidden = true;
+  }
   function busy(on) {
     state.pending = on;
     layer.dataset.pending = on ? "yes" : "no";
@@ -70859,9 +71579,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     busy(true);
     if (intent === "talk") openChat();
     // Build it asks the host to size the request (vibeBuild): one card, or the
-    // card split into steps; an older host only knows the one card.
+    // card split into steps; an older host only knows the one card. The
+    // sizing strip speaks while it waits; without it, one line does.
     const sizing = intent === "build" && Boolean(api().vibeBuild);
-    feedback(intent === "build" ? (sizing ? "Sizing it up…" : "Adding it to the build queue…") : `${companion()} is thinking…`);
+    const run = sizing ? flow()?.begin?.("size", { projectId: id, title: value.split("\n")[0] }) ?? null : null;
+    if (run) showSizing(run);
+    feedback(intent === "build" ? (run ? "" : sizing ? "Sizing it up…" : "Adding it to the build queue…") : `${companion()} is thinking…`);
     renderChat();
     try {
       const title = value.split("\n")[0].slice(0, 180);
@@ -70870,9 +71593,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const ideaIds = evolutionIdeas(evolution.context);
       const linkedIdeas = ideaIds.length > 1 ? { ideaIds } : ideaIds.length ? { ideaId: ideaIds[0] } : {};
       const result = intent === "build"
-        ? await (sizing ? api().vibeBuild({ title, prompt, projectId: id, ...linkedIdeas }) : api().tasksCreate({ title, prompt, projectId: id }))
+        ? await (sizing ? api().vibeBuild({ title, prompt, projectId: id, ...linkedIdeas, ...(run ? { requestId: run.id } : {}) }) : api().tasksCreate({ title, prompt, projectId: id }))
         : await api().assistantMessage(value, id, { view: "Vibe", companion: companion(), mode: "talk" });
       if (!result || result.ok === false) throw new Error(result?.error || "That didn't go through.");
+      if (run) { flow().end(run.id, { ok: true, steps: Number(result.steps) || 0 }); settleSizing(run, { familyId: Number(result.steps) > 0 ? result.task?.id ?? null : null }); }
       if (projectId() !== id || draftEpoch !== epoch) return;
       if (input.value.trim() === value) { input.value = ""; evolution.context = null; grow(); saveDraft(); renderEvolution(); }
       if (result.state) state.assistant = result.state;
@@ -70890,6 +71614,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       } else feedback("");
       await refresh();
     } catch (error) {
+      if (run && !run.endedAt) { flow().end(run.id, { ok: false, error: error?.message || "That didn't go through." }); settleSizing(run); }
       if (projectId() === id && draftEpoch === epoch) feedback(`${error?.message || "That didn't go through."} Your text is still in the box.`, "bad");
     } finally { busy(false); renderChat(); }
   }

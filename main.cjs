@@ -13189,14 +13189,18 @@ function seatChoice(settings, seat) {
   const fast = provider === "zen" && (typeof saved?.fast === "boolean" ? saved.fast : base.fast);
   return { provider, model, effort, fast };
 }
-async function seatFetch(seat, system, user, maxTokens = 2400, { fallback = null, timeoutMs = 120000 } = {}) {
-  if (typeof agentProfiles !== "undefined" && !agentProfiles.current()) return agentProfiles.run(agentProfiles.capture(await readSettings(), projects.current().id), () => seatFetch(seat, system, user, maxTokens, { fallback, timeoutMs }));
+// `onTool` also hears each tool turn (Vibe shows the lead's while it sizes).
+async function seatFetch(seat, system, user, maxTokens = 2400, { fallback = null, timeoutMs = 120000, onTool = null } = {}) {
+  if (typeof agentProfiles !== "undefined" && !agentProfiles.current()) return agentProfiles.run(agentProfiles.capture(await readSettings(), projects.current().id), () => seatFetch(seat, system, user, maxTokens, { fallback, timeoutMs, onTool }));
   const settings = await (typeof readAgentSettings === "function" ? readAgentSettings() : readSettings());
   const chosen = seatChoice(settings, seat);
   if (typeof agentAddons !== "undefined" && (typeof agentTools === "undefined" || !agentTools.active.getStore())) system += scrubOutbound(await agentAddons.instructions(projectRoot(), settings, seat));
   if (typeof agentTools !== "undefined" && !agentTools.active.getStore()) {
     return agentTools.run({ system, user, root: projectRoot(), settings, role: seat, scrub: scrubOutbound,
-      onTool: (tool) => logLine(`[tools:${seat}] ${tool.name}: ${tool.ok ? "completed" : "failed"}`),
+      onTool: (tool) => {
+        logLine(`[tools:${seat}] ${tool.name}: ${tool.ok ? "completed" : "failed"}`);
+        try { onTool?.(tool); } catch { /* a listener never breaks the call */ }
+      },
       call: (prompt, input) => seatFetch(seat, prompt, input, maxTokens, { fallback, timeoutMs }) });
   }
   if (chosen.provider === "zen") {
@@ -13573,14 +13577,18 @@ function planningService() {
         await refreshAutopilotQueue();
         assistantAskForWork("you created tasks from an approved plan");
       },
-      complete: async ({ system, user }, { kind }) => {
+      complete: async ({ system, user }, { kind, progress = null }) => {
         // Planning replies are data-only. A CLI's implicit tools must never
         // turn discussion into production changes, so only a tool-less CLI
         // (Claude Code with --tools=) may answer; the rest stay on HTTP.
         const route = await resolveAiRoute(kind === "spec" ? "heavy" : "routine", { allowCli: DATA_ONLY_CLIS });
         if (!route.ok) return { ok: false, error: "Connect and check your provider in Agents setup. Codex, Claude Code, Grok or Antigravity can handle planning through their own login. You can create questions, record decisions, and write the specification manually." };
+        // Vibe's planner names who is thinking (renderer/vibe-flow.js).
+        if (typeof progress === "function") progress({ seat: kind === "spec" ? "heavy" : "routine", provider: route.provider || null, model: route.model || null, cli: Boolean(route.cli) });
         return (route.cli ? cliAssistantCall : httpAssistantCall)(route, system, user, kind === "spec" ? 7000 : 2500, { taskType: `planning-${kind}`, source: "planning", role: kind === "spec" ? "heavy" : "routine" });
       },
+      // Each step of a named exploration goes to the page that asked.
+      onProgress: (event) => send("vibe:progress", event),
       gatherContext: async ({ plan, questionId, useWeb }) => {
         const question = plan.questions.find((item) => item.id === questionId);
         const latestAnswer = (question?.notes || []).filter((note) => note.author === "user").at(-1)?.text || "";
@@ -13598,6 +13606,24 @@ function planningService() {
 async function planningRequest(method, payload) {
   try { return await planningService()[method](payload ?? {}); }
   catch (error) { return { ok: false, projectId: projects.current().id, error: error.message }; }
+}
+
+// Vibe's long waits, step by step (renderer/vibe-flow.js): the page names each
+// request it starts, and each step goes out tagged with that name. Advisory:
+// an unnamed request reports nothing, and a failed push never holds work back.
+function vibeProgress(requestId, kind) {
+  if (typeof requestId !== "string" || !/^[\w:.-]{1,80}$/.test(requestId)) return () => {};
+  const projectId = projects.current().id;
+  return (stage, extra = {}) => {
+    try { send("vibe:progress", { ...extra, requestId, projectId, kind, stage, at: Date.now() }); } catch { /* advisory */ }
+  };
+}
+// Who holds a seat, for the page to name while it thinks (seatFetch's choice).
+async function seatLabel(seat) {
+  try {
+    const chosen = seatChoice(await (typeof readAgentSettings === "function" ? readAgentSettings() : readSettings()), seat);
+    return { seat, provider: chosen.provider || null, model: chosen.model || (chosen.provider === "zen" ? SEAT_DEFAULTS[seat]?.model || null : null) };
+  } catch { return { seat, provider: null, model: null }; }
 }
 
 function taskView(task) {
@@ -19593,11 +19619,14 @@ function registerIpc() {
   // six steps admitted under the owner's card (scripts/request-sizing.cjs,
   // task-delegation.cjs admitIntake). No model, a slow one or a reply that
   // cannot be trusted keeps it one card: sizing never holds a request back.
-  async function vibeBuild({ prompt, title, projectId, ideaId = null, ideaIds = null } = {}) {
+  async function vibeBuild({ prompt, title, projectId, ideaId = null, ideaIds = null, requestId = null } = {}) {
     const text = String(prompt ?? "").trim();
     if (projectId && projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Add this again in its intended project." };
     if (!text) return { ok: false, error: "Describe what to build." };
+    // The page shows each step: the quick look, the lead's split, the board.
+    const report = vibeProgress(requestId, "size");
     const first = requestSizing.quickSize(text);
+    report("quick", { verdict: first.verdict, reason: first.reason });
     let plan = null;
     let sized = first.verdict === "one" ? "one" : "unsized";
     if (first.verdict === "maybe") {
@@ -19605,7 +19634,8 @@ function registerIpc() {
         const board = await (await getEyes()).readJson(TASKS_PATH, []);
         const recent = board.filter((task) => task && !["done", "archived"].includes(task.status)).slice(0, 12).map((task) => task.title);
         const ask = requestSizing.breakdownPrompt(text, { project: projects.current().name, recent });
-        const result = await seatFetch("lead", ask.system, ask.user, 2400, { timeoutMs: 60000 });
+        report("sizing", await seatLabel("lead"));
+        const result = await seatFetch("lead", ask.system, ask.user, 2400, { timeoutMs: 60000, onTool: (tool) => report("tool", { name: tool.name, ok: tool.ok === true }) });
         const parsed = result?.ok ? requestSizing.parseBreakdown(result.text) : null;
         if (parsed?.size === "steps") { plan = parsed; sized = "steps"; }
         else if (parsed?.size === "one") sized = "one";
@@ -19613,7 +19643,12 @@ function registerIpc() {
       } catch (error) {
         logError(`sizing failed: ${error.message}`);
       }
+      // Step titles and which earlier steps each waits on, by position.
+      report("sized", plan
+        ? { size: "steps", summary: plan.summary, steps: plan.steps.map((step) => ({ title: step.title, after: step.dependsOn.map((id) => plan.steps.findIndex((row) => row.id === id)).filter((index) => index >= 0) })) }
+        : { size: sized === "one" ? "one" : "kept" });
     }
+    report("adding");
     const created = await composerTask({ title: String(title ?? "").trim() || text.split(/\r?\n/)[0].slice(0, 180), prompt: text, projectId, intake: plan, ideaId, ideaIds });
     return { ...created, sized, ...(plan && created.ok && created.steps ? { summary: plan.summary } : {}) };
   }

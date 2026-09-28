@@ -7,6 +7,23 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Watch Mefi think, and watch your team work.** In Vibe, **Suggest a next
+  step** and **Build it** no longer wait behind one still sentence. Each shows
+  a live strip: the stage it has reached (reading the project, thinking,
+  planning the steps), the files it read or the steps it planned as they
+  arrive, which model is thinking, and a clock against how long it usually
+  takes on this PC. A split request's plan card draws its steps as a track
+  to the final check and names the step being built, its agent's tool and
+  what it is doing now. **Building now** rows and the plan panel's new
+  timeline show the same, and **Team** lists what Mefi is thinking about.
+  Build it's messages now show just under the box instead of below the
+  suggestions.
+- **Suggestions stay usable.** Adding one suggestion to your draft no longer
+  locks the others, a built draft leaves the rest ready for the next one, and
+  **Clear** puts a set away. The plan panel's **Make it one task** is now the
+  same single action as the drawer's; dropping steps one at a time was
+  refused for a step another one waits on. Pressing Enter in a New app field
+  now shows "Making it…" and its first build being sized.
 - **Menus say what they mean.** Vibe › Tasks counts the same Needs you list
   it shows. Trace's chips no longer read "All undefined" and keep keyboard
   focus while Follow updates them. Performance, Usage and Context each have

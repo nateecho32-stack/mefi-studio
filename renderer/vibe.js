@@ -198,19 +198,25 @@
   // as the final integration and check. Finished families leave the plan card
   // for Freshly done.
   const STEP_STATES = { done: "done", dropped: "dropped", running: "building", checking: "checking its work", approval: "waiting for your go-ahead", blocked: "stuck", waiting: "waiting its turn" };
+  // Each step also carries the worker on it (its tool and what it is doing
+  // now) and which earlier steps it waits on, for the plan card's track and
+  // the plan panel's timeline.
   function families() {
     const tasks = scoped(state.tasks);
     const byId = new Map(tasks.map((task) => [task.id, task]));
-    const runningIds = new Set(scoped(state.status.running).map((job) => job.taskId).filter(Boolean));
+    const jobs = new Map(scoped(state.status.running).filter((job) => job.taskId).map((job) => [job.taskId, job]));
     const stages = new Map((Array.isArray(state.backlog?.taskStates) ? state.backlog.taskStates : []).map((row) => [row.id, row]));
-    const stepState = (step) => step.dropped ? "dropped" : done(step) ? "done" : runningIds.has(step.id) ? "running"
+    const stepState = (step) => step.dropped ? "dropped" : done(step) ? "done" : jobs.has(step.id) ? "running"
       : ["awaiting_verification", "verifying"].includes(step.status) ? "checking" : stages.get(step.id)?.stage === "approval" ? "approval" : stages.get(step.id)?.stage === "blocked" ? "blocked" : "waiting";
+    const worker = (job) => job ? { ...(window.MefiVibeFlow?.doing?.(job) ?? { tool: "", step: "" }), phase: job.phase || "", startedAt: Number(job.startedAt) || null, progress: Number.isFinite(job.progress) ? job.progress : null } : null;
     return tasks.filter((task) => task.delegation?.intake && Array.isArray(task.delegation.childTaskIds) && !done(task))
       .map((parent) => {
-        const steps = parent.delegation.childTaskIds.map((id) => byId.get(id)).filter(Boolean).map((step) => ({ id: step.id, title: step.title || "A step", state: stepState(step), buildScope: step.buildScope ?? null }));
+        const ids = parent.delegation.childTaskIds;
+        const steps = ids.map((id) => byId.get(id)).filter(Boolean).map((step) => ({ id: step.id, title: step.title || "A step", state: stepState(step), buildScope: step.buildScope ?? null,
+          after: (Array.isArray(step.dependsOn) ? step.dependsOn : []).map((id) => ids.indexOf(id)).filter((index) => index >= 0), job: worker(jobs.get(step.id)), at: stamp(step) }));
         const finished = steps.filter((step) => ["done", "dropped"].includes(step.state)).length;
-        const final = runningIds.has(parent.id) ? "running" : ["awaiting_verification", "verifying"].includes(parent.status) ? "checking" : finished === steps.length ? "next" : "waiting";
-        return { id: parent.id, title: parent.title || "Your request", summary: parent.delegation.summary || "", steps, finished, final, updatedAt: stamp(parent) };
+        const final = jobs.has(parent.id) ? "running" : ["awaiting_verification", "verifying"].includes(parent.status) ? "checking" : finished === steps.length ? "next" : "waiting";
+        return { id: parent.id, title: parent.title || "Your request", summary: parent.delegation.summary || "", steps, finished, final, job: worker(jobs.get(parent.id)), updatedAt: stamp(parent) };
       })
       .sort((a, b) => b.updatedAt - a.updatedAt);
   }
@@ -290,13 +296,15 @@
       button.onclick = () => void gate.action.run();
     }
   }
-  function row({ key, tone, title, meta, progress, action, onOpen }) {
+  // `detail` is one live line under the meta: what a worker is doing now.
+  function row({ key, tone, title, meta, detail, progress, action, onOpen }) {
     const item = el("li", `vibe-row${tone ? ` is-${tone}` : ""}`);
     item.dataset.key = key || title;
     const open = el("button", "vibe-row-main");
     open.type = "button";
     open.append(el("span", "vibe-row-dot"), el("span", "vibe-row-title", title));
     if (meta) open.append(el("span", "vibe-row-meta", meta));
+    if (detail) { const now = el("span", "vibe-row-now", detail); now.title = detail; open.append(now); }
     if (progress !== undefined) {
       const bar = el("span", "vibe-bar");
       const fill = el("i");
@@ -341,7 +349,9 @@
     building.replaceChildren();
     for (const job of data.running.slice(0, 3)) {
       const phase = job.phase ? String(job.phase).replace(/_/g, " ") : "working";
-      building.append(row({ key: `building:${job.taskId || job.title}`, tone: "live", title: job.title || "A task", meta: `${phase} · started ${ago(job.startedAt)}`, progress: job.progress, onOpen: () => go("command", job.taskId ? { selected: `task:${job.taskId}` } : {}) }));
+      // The worker's tool, and under it what the worker is doing right now.
+      const now = window.MefiVibeFlow?.doing?.(job) ?? { tool: "", step: "" };
+      building.append(row({ key: `building:${job.taskId || job.title}`, tone: "live", title: job.title || "A task", meta: `${now.tool ? `${now.tool} · ` : ""}${phase} · started ${ago(job.startedAt)}`, detail: now.step, progress: job.progress, onOpen: () => go("command", job.taskId ? { selected: `task:${job.taskId}` } : {}) }));
     }
     for (const task of data.checking.slice(0, Math.max(0, 4 - building.children.length))) building.append(row({ key: `building:${task.id}`, tone: "check", title: task.title || "A finished task", meta: "checking its work", onOpen: () => openTask(task.id) }));
     const heldBack = data.gate && ["held", "paused", "key"].includes(data.gate.key);
@@ -369,21 +379,27 @@
     for (const idea of data.ideas.slice(0, 3)) ideas.append(row({ key: `ideas:${idea.id}`, tone: "idea", title: idea.title || idea.detail || "An idea", meta: [idea.source, idea.at ? ago(idea.at) : ""].filter(Boolean).join(" · ") || "new idea", action: { label: "Build it", run: () => void promoteIdea(idea) }, onOpen: () => openPanel("ideas", { ideaId: idea.id }) }));
     $("count-ideas").textContent = data.ideas.length > 3 ? String(data.ideas.length) : "";
 
-    // A request split into steps: where it stands, its steps as marks, and
-    // Start all while they wait for a go-ahead under Verify first.
+    // A request split into steps: where it stands, its steps as a track that
+    // ends in the final check, who is on which step and what they are doing,
+    // and Start all while the steps wait for a go-ahead under Verify first.
     const plan = $("lane-plan");
     plan.replaceChildren();
     for (const family of data.families.slice(0, 2)) {
       const waiting = data.needs.find((need) => need.kind === "family" && need.id === family.id);
       const current = family.steps.find((step) => step.state === "running") || family.steps.find((step) => step.state === "checking");
-      const meta = `${family.finished} of ${family.steps.length} steps done${current ? ` · ${STEP_STATES[current.state]}: ${current.title}` : waiting ? " · waiting for your go-ahead" : family.final === "running" ? " · final check running" : family.final === "next" ? " · final check next" : ""}`;
+      const meta = `${family.finished} of ${family.steps.length} steps done${waiting ? " · waiting for your go-ahead" : family.final === "running" || family.final === "checking" ? " · final check running" : family.final === "next" ? " · final check next" : ""}`;
       plan.append(row({ key: `plan:${family.id}`, tone: waiting ? "ask" : current || family.final === "running" ? "live" : "next", title: family.title, meta, progress: family.steps.length ? family.finished / family.steps.length : undefined,
         action: waiting ? { label: "Start all", run: () => openNeed(waiting) } : null, onOpen: () => openPanel("plans", { familyId: family.id }) }));
       const marks = el("li", "vibe-steps");
       marks.dataset.key = `plan:${family.id}:steps`;
-      marks.setAttribute("aria-label", `Steps of ${family.title}`);
-      for (const step of family.steps) { const mark = el("span", `vibe-step is-${step.state}`, step.title); mark.title = `${step.title}: ${STEP_STATES[step.state]}`; marks.append(mark); }
+      marks.dataset.final = family.final;
+      marks.setAttribute("aria-label", `Steps of ${family.title}: ${family.finished} of ${family.steps.length} done, then a final check`);
+      // A rebuilt track keeps its spinner turning where the last one was.
+      try { marks.style.setProperty("--flow-phase", `-${Date.now() % 2400}ms`); } catch { /* no CSSOM in tests */ }
+      for (const [index, step] of family.steps.entries()) { const mark = el("span", `vibe-step is-${step.state}`, String(index + 1)); mark.title = `${index + 1}. ${step.title}: ${STEP_STATES[step.state]}`; marks.append(mark); }
       plan.append(marks);
+      const line = planLine(family, waiting);
+      if (line) plan.append(line);
     }
     $("count-plan").textContent = data.families.length > 2 ? String(data.families.length) : "";
 
@@ -394,6 +410,31 @@
     const visible = Object.values(shown).filter(Boolean).length;
     layer.dataset.cards = visible ? "some" : "none";
     $("quiet").hidden = visible > 0 || Boolean(data.gate);
+  }
+  // The line under a plan's track: the final check, the steps being built and
+  // what their workers are doing, a check, a stuck step, or what comes next.
+  // A plan waiting for your go-ahead already says so on its row.
+  function planLine(family, waiting) {
+    const indexes = (state) => family.steps.flatMap((step, index) => (step.state === state ? [index] : []));
+    const doing = (job, fallback) => [job?.tool, job?.step].filter(Boolean).join(" · ") || fallback;
+    const building = indexes("running"), checking = indexes("checking"), stuck = indexes("blocked");
+    let lead, text, tone;
+    if (["running", "checking"].includes(family.final)) [lead, text, tone] = ["Final check", doing(family.job, "putting the steps together and checking the whole thing"), "live"];
+    else if (building.length === 1) [lead, text, tone] = [`Step ${building[0] + 1} · ${family.steps[building[0]].title}`, doing(family.steps[building[0]].job, "building"), "live"];
+    else if (building.length > 1) [lead, text, tone] = [`Steps ${building.map((index) => index + 1).join(" and ")} building side by side`, building.map((index) => family.steps[index].title).join(" · "), "live"];
+    else if (checking.length) [lead, text, tone] = [`Step ${checking[0] + 1} · ${family.steps[checking[0]].title}`, "checking its work", "check"];
+    else if (stuck.length) [lead, text, tone] = [`Step ${stuck[0] + 1} is stuck`, family.steps[stuck[0]].title, "bad"];
+    else if (waiting) return null;
+    else {
+      const next = family.steps.findIndex((step) => step.state === "waiting");
+      if (next < 0) return null;
+      [lead, text, tone] = [`Next · step ${next + 1}`, family.steps[next].title, "next"];
+    }
+    const item = el("li", `vibe-plan-now is-${tone}`);
+    item.dataset.key = `plan:${family.id}:now`;
+    item.append(el("b", "", lead), el("span", "", text));
+    item.title = `${lead}: ${text}`;
+    return item;
   }
 
   // ---- the dock ---------------------------------------------------------------
@@ -559,7 +600,9 @@
   // ---- composer -------------------------------------------------------------
   let draftProject = null, draftEpoch = 0;
   const draftKey = (id) => `mefiStudio.vibe.draft.${id}`;
-  const evolution = { intent: null, context: null, result: null, signature: null, loading: false, request: 0, error: "" };
+  // `run` is the planner's live run (renderer/vibe-flow.js) while it looks.
+  const evolution = { intent: null, context: null, result: null, signature: null, loading: false, request: 0, error: "", run: null };
+  const flow = () => window.MefiVibeFlow;
   const evolutionView = {};
   const INTENTS = {
     modify: { label: "Modify", hint: "Shape an existing feature", starter: "Change this project so that ", guide: "Adapt the existing behavior to the requested outcome. Reuse the systems already in this project." },
@@ -581,7 +624,8 @@
     try { saved = id ? JSON.parse(read(evolutionKey(id)) || "null") : null; } catch { /* older or damaged local draft */ }
     evolution.intent = Object.hasOwn(INTENTS, saved?.intent) ? saved.intent : null;
     evolution.context = normalizeEvolution(saved?.context);
-    evolution.request++; evolution.loading = false; evolution.result = null; evolution.error = ""; evolution.signature = null;
+    evolution.request++; evolution.loading = false; evolution.result = null; evolution.error = ""; evolution.signature = null; evolution.run = null;
+    hideSizing(); // the strip speaks for a request in the project just left
     $("input").value = id ? read(draftKey(id)) || "" : ""; grow();
     renderEvolution();
   }
@@ -596,6 +640,10 @@
     return { system: shortText(typeof system === "string" ? system : system?.name || context.systemName, 180), systemId: shortText(system?.id || context.systemId, 180), files, ideaIds, ideaId: ideaIds.length === 1 ? ideaIds[0] : null };
   }
   const evolutionSignature = () => JSON.stringify([draftProject, $("input").value, evolution.intent, evolution.context]);
+  // Suggestions answer the draft they were asked for: a newer direction typed
+  // over it makes them read-only. An empty box (just built, or cleared) has no
+  // direction to overwrite, so they stay usable to start the next draft.
+  const evolutionStale = () => evolution.signature !== evolutionSignature() && Boolean($("input").value.trim());
   function chooseIntent(intent) {
     if (!Object.hasOwn(INTENTS, intent)) return;
     syncDraft();
@@ -659,42 +707,107 @@
     }
     const foot = el("div", "vibe-evolution-foot");
     evolutionView.scope = el("span", "vibe-evolution-scope");
-    const suggest = el("button", "vibe-btn quiet", "Suggest a next step"); suggest.type = "button"; suggest.dataset.evolutionAction = "suggest";
+    const suggest = el("button", "vibe-btn quiet vibe-evolution-suggest"); suggest.type = "button"; suggest.dataset.evolutionAction = "suggest";
+    evolutionView.suggestLabel = el("span", "", "Suggest a next step");
+    suggest.append(glyph("g-spark"), evolutionView.suggestLabel);
     suggest.addEventListener("click", () => void suggestEvolution()); evolutionView.suggest = suggest;
     foot.append(evolutionView.scope, suggest);
-    evolutionView.results = el("div", "vibe-evolution-results"); evolutionView.results.setAttribute("aria-live", "polite");
-    holder.append(head, choices, foot, evolutionView.results); renderEvolution();
+    evolutionView.results = el("div", "vibe-evolution-results");
+    // One quiet status for screen readers: looking, found, or why it stopped.
+    evolutionView.status = el("p", "sr-only"); evolutionView.status.setAttribute("role", "status");
+    holder.append(head, choices, foot, evolutionView.results, evolutionView.status); renderEvolution();
+  }
+  function glyph(id) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "glyph"); svg.setAttribute("aria-hidden", "true");
+    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", `#${id}`); svg.append(use);
+    return svg;
+  }
+  // Brings a new result into view inside the stage, without jumping when it already shows.
+  function reveal(node) {
+    if (!node || node.hidden || !active()) return;
+    try { node.scrollIntoView?.({ block: "nearest", behavior: window.MefiNav?.noMotion?.() ? "auto" : "smooth" }); } catch { /* no layout */ }
   }
   function renderEvolution() {
     if (!evolutionView.results) return;
     for (const button of evolutionView.choices) button.setAttribute("aria-pressed", String(button.dataset.intent === evolution.intent));
-    evolutionView.scope.textContent = evolution.context?.system || evolution.context?.files[0] || "This project · choose an approach or ask Mefi for ideas";
-    evolutionView.suggest.textContent = evolution.loading ? "Exploring the project…" : evolution.result ? "Refresh suggestions" : "Suggest a next step";
+    const where = evolution.context?.system || evolution.context?.files[0];
+    evolutionView.scope.textContent = where ? `Scope: ${where}` : "Scope: the whole project. Pick an approach, or let Mefi suggest one.";
+    evolutionView.suggestLabel.textContent = evolution.loading ? "Looking…" : evolution.result ? "Suggest again" : "Suggest a next step";
     evolutionView.suggest.disabled = evolution.loading || state.pending || !projectId();
-    const body = evolutionView.results; body.replaceChildren(); body.hidden = !evolution.loading && !evolution.result && !evolution.error;
+    evolutionView.suggest.dataset.busy = evolution.loading ? "yes" : "no";
+    const said = evolution.loading ? "Mefi is looking for next steps." : evolution.error || (evolution.result ? `${evolution.result.suggestions?.length || "No"} suggestion${evolution.result.suggestions?.length === 1 ? "" : "s"} ready.` : "");
+    if (evolutionView.status.textContent !== said) evolutionView.status.textContent = said;
+    const body = evolutionView.results;
+    body.hidden = !evolution.loading && !evolution.result && !evolution.error;
+    // While Mefi looks: its live run (renderer/vibe-flow.js) over placeholders
+    // where the ideas will land. The run's view updates itself as the host
+    // reports each step, so a repaint here leaves it where it is.
+    if (evolution.loading) {
+      const run = evolution.run ? flow()?.get?.(evolution.run) : null;
+      const view = run ? flow().view(run) : null;
+      if (!view) body.replaceChildren(el("p", "vibe-evolution-note", "Mefi is reading relevant files and looking for a useful next step."));
+      else if (view.parentNode !== body) body.replaceChildren(view, flow().skeleton(3));
+      return;
+    }
+    body.replaceChildren();
     if (evolution.error) body.append(el("p", "vibe-inline-error", evolution.error));
-    if (evolution.loading) { body.append(el("p", "vibe-evolution-note", "Mefi is reading relevant files and looking for a useful next step.")); return; }
     if (!evolution.result) return;
-    if (evolution.result.summary) body.append(el("p", "vibe-evolution-note", evolution.result.summary));
-    const stale = evolution.signature !== evolutionSignature();
-    if (stale) body.append(el("p", "vibe-evolution-note", "Your draft changed. Refresh to get suggestions for the current direction."));
+    const suggestions = Array.isArray(evolution.result.suggestions) ? evolution.result.suggestions : [];
+    // What Mefi read the project as, and how the look went.
+    const run = evolution.run ? flow()?.get?.(evolution.run) : null;
+    const head = el("div", "vibe-evolution-summary");
+    const facts = [suggestions.length ? `${suggestions.length} idea${suggestions.length === 1 ? "" : "s"}` : "", run?.endedAt ? `found in ${flow().took(run.endedAt - run.startedAt)}` : "", run?.seen?.read?.scanned ? `${run.seen.read.scanned} files scanned` : ""].filter(Boolean).join(" · ");
+    const words = el("div");
+    if (facts) words.append(el("span", "vibe-evolution-facts", facts));
+    if (evolution.result.summary) words.append(el("p", "vibe-evolution-note", evolution.result.summary));
+    const clear = el("button", "vibe-ask-link vibe-evolution-clear", "Clear"); clear.type = "button"; clear.title = "Put these suggestions away";
+    clear.addEventListener("click", () => { evolution.result = null; evolution.error = ""; renderEvolution(); evolutionView.suggest.focus?.(); });
+    head.append(words, clear);
+    body.append(head);
+    const stale = evolutionStale();
+    if (stale) {
+      const note = el("div", "vibe-evolution-stale");
+      const again = el("button", "vibe-ask-link", "Suggest again"); again.type = "button";
+      again.addEventListener("click", () => void suggestEvolution());
+      note.append(el("span", "", "Your draft changed. Refresh to get suggestions for the current direction."), again);
+      body.append(note);
+    }
     const cards = el("div", "vibe-evolution-suggestions");
-    for (const suggestion of evolution.result.suggestions || []) {
-      const card = el("article", "vibe-evolution-suggestion");
-      card.append(el("h3", "", suggestion.label), el("p", "", suggestion.text));
-      if (suggestion.reason) card.append(el("p", "vibe-evolution-note", suggestion.reason));
-      for (const file of suggestion.files || []) card.append(el("code", "vibe-evolution-file", file));
+    for (const [index, suggestion] of suggestions.entries()) {
+      const card = el("article", `vibe-evolution-suggestion${suggestion.used ? " is-used" : ""}`);
+      try { card.style.setProperty("--i", String(index)); } catch { /* no CSSOM in tests */ }
+      const top = el("div", "vibe-evolution-card-head");
+      top.append(el("span", "vibe-evolution-num", String(index + 1)), el("h3", "", suggestion.label));
+      card.append(top, el("p", "", suggestion.text));
+      if (suggestion.reason) card.append(el("p", "vibe-evolution-why", suggestion.reason));
+      if (suggestion.files?.length) {
+        const list = el("div", "vibe-evolution-files");
+        for (const file of suggestion.files) { const chip = el("code", "vibe-evolution-file", file); chip.title = file; list.append(chip); }
+        card.append(list);
+      }
       const actions = el("div", "vibe-evolution-actions");
-      const use = el("button", "vibe-btn quiet", "Add to draft"); use.type = "button"; use.disabled = stale || state.pending;
-      // A planning reply has a transient suggestion-0 id. Only a saved board
-      // idea may follow this draft into a task and advance the ideas tree.
-      use.addEventListener("click", () => composeEvolution({ projectId: draftProject, intent: evolution.intent || "improve", ...evolution.context, ideaId: suggestion.savedId || null, idea: { title: suggestion.label, text: suggestion.text }, files: suggestion.files }));
+      const use = el("button", "vibe-btn quiet", suggestion.used ? "Added to draft" : "Add to draft"); use.type = "button"; use.disabled = stale || state.pending || Boolean(suggestion.used);
+      use.addEventListener("click", () => useSuggestion(suggestion));
       const keep = el("button", "vibe-ask-link", suggestion.saved ? "Idea saved" : suggestion.saving ? "Saving…" : "Save idea"); keep.type = "button"; keep.disabled = stale || Boolean(suggestion.saved || suggestion.saving);
       keep.addEventListener("click", () => void keepEvolutionIdea(suggestion));
       actions.append(use, keep); card.append(actions); cards.append(card);
     }
     body.append(cards);
     if (!cards.children.length) body.append(el("p", "vibe-evolution-note", "No extra changes suggested yet. Shape an idea above and try again."));
+  }
+  // A planning reply has a transient suggestion-0 id. Only a saved board idea
+  // may follow this draft into a task and advance the ideas tree. Adding one
+  // suggestion keeps the rest of its set usable: the draft moved because of
+  // this set, not away from it.
+  function useSuggestion(suggestion) {
+    const usable = !evolutionStale();
+    const added = composeEvolution({ projectId: draftProject, intent: evolution.intent || "improve", ...evolution.context, ideaId: suggestion.savedId || null, idea: { title: suggestion.label, text: suggestion.text }, files: suggestion.files });
+    if (!added) return;
+    suggestion.used = true;
+    if (usable) evolution.signature = evolutionSignature();
+    renderEvolution();
   }
   async function suggestEvolution() {
     init(); syncDraft();
@@ -706,18 +819,26 @@
     const value = $("input").value.trim();
     const destination = [value || "Suggest a few small, useful next steps for the existing application in this project.", `Approach: ${intent.label}. ${intent.guide}`, scope?.system ? `System: ${scope.system}` : "", scope?.files.length ? `Relevant files: ${scope.files.join(", ")}` : ""].filter(Boolean).join("\n\n");
     if (destination.length > 16000) { evolution.error = "Shorten the draft a little before asking for suggestions."; renderEvolution(); return; }
+    // The host reports each step of this look under the run's id.
+    const run = flow()?.begin?.("explore", { projectId: id, title: `${intent.label} this project` }) ?? null;
+    evolution.run = run?.id ?? null;
     evolution.loading = true; evolution.error = ""; renderEvolution();
+    reveal(evolutionView.results);
     const current = () => id === projectId() && epoch === draftEpoch && request === evolution.request;
     try {
-      const result = await api().planningExplore({ projectId: id, draft: { title: `${intent.label} this project`, destination, outOfScope: "Suggestions for review only. Do not implement, create tasks, or approve work." }, focus: "destination", intent: "suggest" });
-      if (!current()) return;
+      const result = await api().planningExplore({ projectId: id, draft: { title: `${intent.label} this project`, destination, outOfScope: "Suggestions for review only. Do not implement, create tasks, or approve work." }, focus: "destination", intent: "suggest", ...(run ? { requestId: run.id } : {}) });
+      if (!current()) { if (run) flow().end(run.id, { ok: false, error: "Set aside: the project or the draft changed." }); return; }
       if (result?.projectId !== id || !result?.ok) throw new Error(result?.error || "Mefi could not explore this project. Try again.");
       evolution.result = result; evolution.signature = signature;
-    } catch (error) { if (current()) evolution.error = error?.message || "Suggestions are unavailable. Try again."; }
-    finally { if (current()) { evolution.loading = false; renderEvolution(); } }
+      if (run) flow().end(run.id, { ok: true, count: Array.isArray(result.suggestions) ? result.suggestions.length : 0 });
+    } catch (error) {
+      if (run) flow().end(run.id, { ok: false, error: error?.message || "Suggestions are unavailable." });
+      if (current()) evolution.error = error?.message || "Suggestions are unavailable. Try again.";
+    }
+    finally { if (current()) { evolution.loading = false; renderEvolution(); reveal(evolutionView.results); } }
   }
   async function keepEvolutionIdea(suggestion) {
-    if (suggestion.saved || suggestion.saving || evolution.signature !== evolutionSignature()) return;
+    if (suggestion.saved || suggestion.saving || evolutionStale()) return;
     const id = projectId(), epoch = draftEpoch, context = evolution.context;
     suggestion.saving = true; renderEvolution();
     try {
@@ -734,6 +855,38 @@
   }
   function grow() { const input = $("input"); input.style.height = "auto"; input.style.height = `${Math.min(220, input.scrollHeight)}px`; }
   function feedback(text, tone = "") { const node = $("feedback"); node.textContent = text; node.dataset.tone = tone; }
+  // ---- the sizing strip -------------------------------------------------------
+  // Build it's wait, live under the box (renderer/vibe-flow.js): the quick
+  // look, the lead planning the steps, then the board. It shows only when the
+  // wait outlasts a blink, stays a moment on how it ended, then steps away.
+  const sizingView = { run: null, timer: 0 };
+  function showSizing(run) {
+    const slot = $("flow");
+    if (!slot || !run || !flow()) return;
+    clearTimeout(sizingView.timer);
+    sizingView.run = run.id;
+    sizingView.timer = setTimeout(() => {
+      if (sizingView.run !== run.id || run.endedAt) return;
+      slot.replaceChildren(flow().view(run));
+      slot.hidden = false;
+      reveal(slot);
+    }, 350);
+  }
+  function settleSizing(run, { familyId = null } = {}) {
+    const slot = $("flow");
+    if (!slot || !run || sizingView.run !== run.id) return;
+    clearTimeout(sizingView.timer);
+    if (slot.hidden || !slot.querySelector?.(`.vibe-flow-run[data-run="${run.id}"]`)) { sizingView.run = null; return; }
+    if (run.outcome?.ok && familyId) flow().action(run, { label: "Show the plan →", run: () => { hideSizing(); openPanel("plans", { familyId }); } });
+    sizingView.timer = setTimeout(() => hideSizing(run.id), run.outcome?.ok ? 7000 : 1600);
+  }
+  function hideSizing(id = null) {
+    const slot = $("flow");
+    if (!slot || (id && sizingView.run !== id)) return;
+    clearTimeout(sizingView.timer);
+    sizingView.timer = 0; sizingView.run = null;
+    slot.hidden = true;
+  }
   function busy(on) {
     state.pending = on;
     layer.dataset.pending = on ? "yes" : "no";
@@ -753,9 +906,12 @@
     busy(true);
     if (intent === "talk") openChat();
     // Build it asks the host to size the request (vibeBuild): one card, or the
-    // card split into steps; an older host only knows the one card.
+    // card split into steps; an older host only knows the one card. The
+    // sizing strip speaks while it waits; without it, one line does.
     const sizing = intent === "build" && Boolean(api().vibeBuild);
-    feedback(intent === "build" ? (sizing ? "Sizing it up…" : "Adding it to the build queue…") : `${companion()} is thinking…`);
+    const run = sizing ? flow()?.begin?.("size", { projectId: id, title: value.split("\n")[0] }) ?? null : null;
+    if (run) showSizing(run);
+    feedback(intent === "build" ? (run ? "" : sizing ? "Sizing it up…" : "Adding it to the build queue…") : `${companion()} is thinking…`);
     renderChat();
     try {
       const title = value.split("\n")[0].slice(0, 180);
@@ -764,9 +920,10 @@
       const ideaIds = evolutionIdeas(evolution.context);
       const linkedIdeas = ideaIds.length > 1 ? { ideaIds } : ideaIds.length ? { ideaId: ideaIds[0] } : {};
       const result = intent === "build"
-        ? await (sizing ? api().vibeBuild({ title, prompt, projectId: id, ...linkedIdeas }) : api().tasksCreate({ title, prompt, projectId: id }))
+        ? await (sizing ? api().vibeBuild({ title, prompt, projectId: id, ...linkedIdeas, ...(run ? { requestId: run.id } : {}) }) : api().tasksCreate({ title, prompt, projectId: id }))
         : await api().assistantMessage(value, id, { view: "Vibe", companion: companion(), mode: "talk" });
       if (!result || result.ok === false) throw new Error(result?.error || "That didn't go through.");
+      if (run) { flow().end(run.id, { ok: true, steps: Number(result.steps) || 0 }); settleSizing(run, { familyId: Number(result.steps) > 0 ? result.task?.id ?? null : null }); }
       if (projectId() !== id || draftEpoch !== epoch) return;
       if (input.value.trim() === value) { input.value = ""; evolution.context = null; grow(); saveDraft(); renderEvolution(); }
       if (result.state) state.assistant = result.state;
@@ -784,6 +941,7 @@
       } else feedback("");
       await refresh();
     } catch (error) {
+      if (run && !run.endedAt) { flow().end(run.id, { ok: false, error: error?.message || "That didn't go through." }); settleSizing(run); }
       if (projectId() === id && draftEpoch === epoch) feedback(`${error?.message || "That didn't go through."} Your text is still in the box.`, "bad");
     } finally { busy(false); renderChat(); }
   }

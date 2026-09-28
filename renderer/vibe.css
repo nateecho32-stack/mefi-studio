@@ -166,24 +166,49 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-evolution-intent b, .vibe-evolution-intent small { display: block; }
 .vibe-evolution-intent b { font-size: 13px; font-weight: 600; }
 .vibe-evolution-intent small { margin-top: 4px; color: var(--v-soft); font-size: 10px; line-height: 1.35; }
-.vibe-evolution-scope { flex: 1; min-width: 150px; overflow-wrap: anywhere; color: var(--v-soft); font-size: 11px; }
+.vibe-evolution-scope { flex: 1; min-width: 150px; overflow-wrap: anywhere; color: var(--v-soft); font-size: 11.5px; }
 .vibe-evolution-foot .vibe-btn { min-height: 32px; padding: 7px 12px; font-size: 12px; }
-.vibe-evolution-results { display: grid; gap: 10px; padding-top: 10px; border-top: 1px solid var(--v-edge); }
+/* Suggest a next step: its spark turns while Mefi looks. */
+.vibe-evolution-suggest .glyph { width: 13px; height: 13px; color: var(--v-accent-hi); transition: rotate var(--motion-slow) var(--ease-spring); }
+.vibe-evolution-suggest:hover:not(:disabled) .glyph { rotate: 20deg; }
+.vibe-evolution-suggest[data-busy="yes"] { opacity: .85; cursor: progress; }
+.vibe-evolution-suggest[data-busy="yes"] .glyph { animation: vibe-turn 1.6s linear infinite; }
+.vibe-evolution-results { display: grid; gap: 12px; padding-top: 12px; border-top: 1px solid var(--v-edge); }
 .vibe-evolution-results[hidden] { display: none; }
 .vibe-evolution-note { margin: 0; color: var(--v-soft); font-size: 12px; line-height: 1.5; }
+/* What Mefi read the project as, how the look went, and Clear. */
+.vibe-evolution-summary { display: flex; align-items: flex-start; gap: 16px; animation: vibe-rise var(--motion-base) var(--ease-out) both; }
+.vibe-evolution-summary > div { display: grid; flex: 1; gap: 4px; min-width: 0; }
+.vibe-evolution-facts { color: var(--v-accent-hi); font: 600 11px/1.3 var(--font-mono); letter-spacing: .02em; }
+.vibe-evolution-summary .vibe-evolution-note { color: var(--v-ink); font-size: 12.5px; text-wrap: pretty; }
+.vibe-evolution-clear { margin-top: -4px; }
+.vibe-evolution-stale { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--warn) 7%, transparent); color: var(--v-ink); font-size: 12px; }
 .vibe-evolution-suggestions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: 10px; }
-.vibe-evolution-suggestion { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 14px; border: 1px solid var(--v-edge); border-radius: 12px; background: color-mix(in srgb, var(--panel-solid) 44%, transparent); overflow-wrap: anywhere; }
-.vibe-evolution-suggestion h3 { margin: 0; color: var(--v-ink); font-size: 13px; font-weight: 600; line-height: 1.4; }
-.vibe-evolution-suggestion > p { margin: 0; white-space: pre-wrap; font-size: 12px; line-height: 1.5; }
-.vibe-evolution-file { color: var(--v-accent-hi); font-size: 10px; overflow-wrap: anywhere; }
+.vibe-evolution-suggestion { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 14px; border: 1px solid var(--v-edge); border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 44%, transparent); overflow-wrap: anywhere; transition: border-color var(--motion-fast) var(--ease-out), transform var(--motion-base) var(--ease-out); animation: vibe-rise var(--motion-spring) var(--ease-spring) both; animation-delay: calc(var(--i, 0) * 70ms); }
+.vibe-evolution-suggestion:hover { border-color: var(--v-edge-hi); }
+.vibe-evolution-suggestion.is-used { border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+.vibe-evolution-card-head { display: flex; align-items: baseline; gap: 8px; }
+.vibe-evolution-num { flex: none; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 7px; background: color-mix(in srgb, var(--v-accent) 14%, transparent); color: var(--v-accent-hi); font: 700 11px/1 var(--font-mono); translate: 0 -1px; }
+.vibe-evolution-suggestion.is-used .vibe-evolution-num { background: color-mix(in srgb, var(--good) 20%, transparent); color: var(--good); }
+.vibe-evolution-suggestion h3 { margin: 0; color: var(--v-ink); font-size: 13.5px; font-weight: 650; line-height: 1.35; }
+.vibe-evolution-suggestion > p { margin: 0; white-space: pre-wrap; font-size: 12.5px; line-height: 1.5; }
+.vibe-evolution-why { color: var(--v-soft); font-size: 12px !important; }
+.vibe-evolution-files { display: flex; flex-wrap: wrap; gap: 5px; }
+.vibe-evolution-file { max-width: 100%; padding: 3px 8px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--v-accent) 22%, transparent); border-radius: 7px; background: color-mix(in srgb, var(--v-accent) 7%, transparent); color: var(--v-accent-hi); font: 10.5px/1.3 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
 .vibe-evolution-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: auto; padding-top: 6px; }
 .vibe-evolution-actions .vibe-btn { min-height: 30px; padding: 6px 10px; font-size: 11px; }
+.vibe-evolution-suggestion.is-used .vibe-evolution-actions .vibe-btn:disabled { opacity: 1; border-color: color-mix(in srgb, var(--good) 40%, transparent); color: var(--good); cursor: default; }
+/* The planner's live run and the placeholders where its ideas will land. */
+.vibe-evolution-results > .vibe-flow-run { margin: 0; }
+.vibe-flow-skeleton { pointer-events: none; }
 @media (max-width: 680px) {
   .vibe-evolution-intents { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .vibe-evolution { padding: 12px; }
   .vibe-evolution-head > div { flex-wrap: wrap; gap: 6px 10px; }
 }
-.vibe-feedback { min-height: 20px; margin: 10px 0 0; color: var(--v-soft); font-size: 13px; text-align: center; }
+/* Just under the box, where the eye is after Build it or Save idea. */
+.vibe-feedback { min-height: 18px; margin: 8px 0 0; color: var(--v-soft); font-size: 13px; text-align: center; text-wrap: balance; }
+.vibe-feedback + .vibe-sparks { margin-top: 6px; }
 .vibe-feedback[data-tone="good"] { color: var(--good); }
 .vibe-feedback[data-tone="warn"] { color: var(--warn); }
 .vibe-feedback[data-tone="bad"] { color: var(--bad); }
@@ -236,7 +261,7 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-row.is-idea .vibe-row-dot { background: var(--idea, var(--gold)); box-shadow: 0 0 8px var(--idea, var(--gold)); }
 .vibe-row-title { overflow: hidden; font-size: 14px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
 .vibe-row.is-next .vibe-row-title { color: var(--v-soft); font-weight: 450; }
-.vibe-row-meta { grid-column: 2; color: var(--v-faint); font-size: 12px; }
+.vibe-row-meta { grid-column: 2; min-width: 0; overflow: hidden; color: var(--v-faint); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .vibe-bar { grid-column: 2; position: relative; height: 3px; margin-top: 4px; border-radius: 3px; background: color-mix(in srgb, var(--ivory) 8%, transparent); overflow: hidden; }
 .vibe-bar i { position: absolute; inset: 0 auto 0 0; width: 40%; border-radius: inherit; background: linear-gradient(90deg, color-mix(in srgb, var(--live) 60%, transparent), var(--live)); transition: width var(--motion-slow) var(--ease-out); }
 .vibe-bar i::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent); transform: translateX(-100%); animation: vibe-sheen 2.2s var(--ease-in-out) infinite; }
@@ -468,24 +493,45 @@ button.vibe-ask-chip:hover { border-color: var(--v-edge-hi); color: var(--v-ink)
 .vibe-newapp .vibe-btn { justify-self: start; margin-top: 4px; }
 
 /* ---- a request split into steps ("Mefi sizes it") -------------------------- */
-/* The plan card: the request, how far along it is, and one mark per step. */
+/* The plan card: the request, how far along it is, then its steps as one
+   track: a numbered node per step joined by a line that fills as steps
+   finish, ending in a diamond for the final check (vibe.js paintLanes). The
+   node being built spins, in step with every other spinner (--flow-phase). */
 .vibe-lane[data-lane="plan"] { --lane: var(--info); animation-delay: 25ms; }
-.vibe-steps { display: flex; flex-wrap: wrap; gap: 5px; margin: -2px 10px 8px 32px; list-style: none; }
-.vibe-step { max-width: 100%; padding: 3px 9px 3px 20px; overflow: hidden; position: relative; border: 1px solid var(--v-edge); border-radius: 999px; color: var(--v-soft); font-size: 11.5px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
-.vibe-step::before { content: ""; position: absolute; left: 8px; top: calc(50% - 3px); width: 6px; height: 6px; border-radius: 50%; background: var(--v-faint); }
-.vibe-step.is-done { color: var(--v-ink); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
-.vibe-step.is-done::before { background: var(--good); }
-.vibe-step.is-dropped { text-decoration: line-through; opacity: .6; }
-.vibe-step.is-running { color: var(--v-ink); border-color: color-mix(in srgb, var(--live) 45%, transparent); }
-.vibe-step.is-running::before { background: var(--live); box-shadow: 0 0 6px var(--live); animation: vibe-breathe 1.8s var(--ease-in-out) infinite; }
-.vibe-step.is-checking::before { background: var(--info); }
-.vibe-step.is-approval { border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
-.vibe-step.is-approval::before { background: var(--warn); }
-.vibe-step.is-blocked::before { background: var(--bad); }
+.vibe-steps { --node: 22px; --join: 20px; display: flex; align-items: center; margin: 2px 10px 6px 32px; padding: 4px 0; list-style: none; }
+.vibe-step { position: relative; flex: none; display: grid; place-items: center; width: var(--node); height: var(--node); border: 1.5px solid color-mix(in srgb, var(--v-faint) 80%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--panel-solid) 72%, transparent); color: var(--v-soft); font: 650 10.5px/1 var(--font-mono); transition: border-color var(--motion-base) var(--ease-out), background var(--motion-base) var(--ease-out), color var(--motion-base) var(--ease-out); }
+.vibe-step + .vibe-step { margin-left: var(--join); }
+/* The join into a node takes the colour of the step before it. */
+.vibe-step + .vibe-step::before { content: ""; position: absolute; top: 50%; right: calc(100% + 1.5px); width: var(--join); height: 2px; margin-top: -1px; border-radius: 2px; background: color-mix(in srgb, var(--ivory) 12%, transparent); }
+.vibe-step.is-done + .vibe-step::before, .vibe-step.is-dropped + .vibe-step::before { background: linear-gradient(90deg, var(--good), color-mix(in srgb, var(--good) 45%, transparent)); }
+.vibe-step.is-running + .vibe-step::before { background: linear-gradient(90deg, color-mix(in srgb, var(--live) 70%, transparent), transparent); }
+.vibe-step.is-done { border-color: var(--good); background: color-mix(in srgb, var(--good) 22%, var(--panel-solid)); color: transparent; }
+.vibe-step.is-done::after { content: ""; position: absolute; width: 8px; height: 4px; margin-top: -2px; border-left: 2px solid var(--good); border-bottom: 2px solid var(--good); rotate: -45deg; }
+.vibe-step.is-dropped { opacity: .45; text-decoration: line-through; }
+.vibe-step.is-running { border-color: var(--live); background: color-mix(in srgb, var(--live) 16%, var(--panel-solid)); color: var(--v-ink); box-shadow: 0 0 14px -3px var(--live); }
+.vibe-step.is-running::after { content: ""; position: absolute; inset: -5px; border: 2px solid transparent; border-top-color: var(--live); border-right-color: color-mix(in srgb, var(--live) 40%, transparent); border-radius: 50%; animation: vibe-turn 1.2s linear infinite; animation-delay: var(--flow-phase, 0ms); }
+.vibe-step.is-checking { border-color: var(--info); color: var(--v-ink); background: conic-gradient(color-mix(in srgb, var(--info) 34%, transparent) 0 50%, color-mix(in srgb, var(--panel-solid) 72%, transparent) 0); }
+.vibe-step.is-approval { border-color: var(--warn); color: var(--v-ink); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 14%, transparent); animation: vibe-breathe 2.4s var(--ease-in-out) infinite; animation-delay: var(--flow-phase, 0ms); }
+.vibe-step.is-blocked { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 24%, var(--panel-solid)); color: var(--v-ink); }
+/* The final check: a diamond after the last step, lit once every step is in. */
+.vibe-steps::before { content: ""; order: 1; flex: none; width: var(--join); height: 0; border-top: 2px dashed color-mix(in srgb, var(--ivory) 14%, transparent); }
+.vibe-steps::after { content: ""; order: 2; flex: none; width: 13px; height: 13px; margin-left: 4px; border: 1.5px solid color-mix(in srgb, var(--v-faint) 80%, transparent); border-radius: 3px; background: color-mix(in srgb, var(--panel-solid) 72%, transparent); rotate: 45deg; }
+.vibe-steps:is([data-final="next"], [data-final="running"], [data-final="checking"])::before { border-top-style: solid; border-color: color-mix(in srgb, var(--good) 70%, transparent); }
+.vibe-steps[data-final="next"]::after { border-color: var(--info); }
+.vibe-steps:is([data-final="running"], [data-final="checking"])::after { border-color: var(--live); background: color-mix(in srgb, var(--live) 30%, var(--panel-solid)); box-shadow: 0 0 14px -2px var(--live); animation: vibe-breathe 1.8s var(--ease-in-out) infinite; }
+/* Under the track: who is on which step and what they are doing now. */
+.vibe-plan-now { display: grid; gap: 2px; margin: 0 10px 8px 32px; padding: 7px 10px; border-left: 2px solid var(--v-faint); border-radius: 0 10px 10px 0; background: color-mix(in srgb, var(--ivory) 3%, transparent); list-style: none; font-size: 12px; line-height: 1.4; animation: vibe-rise var(--motion-base) var(--ease-out) both; }
+.vibe-plan-now b { overflow: hidden; color: var(--v-ink); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.vibe-plan-now span { overflow: hidden; color: var(--v-soft); text-overflow: ellipsis; white-space: nowrap; }
+.vibe-plan-now.is-live { border-left-color: var(--live); }
+.vibe-plan-now.is-live span::before { content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 7px 1px 0; border-radius: 50%; background: var(--live); box-shadow: 0 0 8px var(--live); vertical-align: middle; animation: vibe-breathe 1.4s var(--ease-in-out) infinite; }
+.vibe-plan-now.is-check { border-left-color: var(--info); }
+.vibe-plan-now.is-bad { border-left-color: var(--bad); }
+.vibe-plan-now[data-kept] { animation: none; }
 /* The same steps in the decision drawer, numbered. */
 .vibe-ask-steps { display: grid; gap: 4px; margin: 0; padding: 10px 12px 10px 32px; border: 1px solid var(--v-edge); border-radius: 14px; background: color-mix(in srgb, var(--bg-deep) 45%, transparent); color: var(--v-ink); font-size: 13.5px; line-height: 1.45; }
 .vibe-ask-steps li.is-done { color: var(--v-soft); text-decoration: line-through; }
-@media (prefers-reduced-motion: reduce) { .vibe-step.is-running::before { animation: none; } }
+@media (prefers-reduced-motion: reduce) { #vibe-layer .vibe-step, #vibe-layer .vibe-step::after, #vibe-layer .vibe-steps::after, #vibe-layer .vibe-plan-now span::before { animation: none; } }
 
 /* ---- smaller windows ------------------------------------------------------- */
 @media (max-width: 760px) {
@@ -730,3 +776,117 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 #vibe-layer .autonomy-popover > .autonomy-button:not(.autonomy-mode) { margin-top: 4px; padding-top: 11px; border-top: 1px solid var(--v-edge); border-radius: 0 0 14px 14px; color: var(--v-soft); font-size: 12.5px; }
 #vibe-layer .autonomy-popover > .autonomy-button:not(.autonomy-mode):hover { color: var(--v-ink); }
 @media (max-width: 600px) { .vibe-compose-foot { flex-wrap: wrap; } #vibe-autonomy-control { margin-right: auto; } }
+/* ---- Mefi at work: the long waits, live (renderer/vibe-flow.js) ------------- */
+/* The planner looking for next steps and the lead sizing a request, as one
+   strip: what it is doing, a clock against this machine's usual time, and
+   its stages on a line, each lit as the host reports it. The strip is one
+   element per run, updated in place, so nothing here replays on a push. */
+.vibe-flow-slot { width: min(860px, 100%) !important; margin-top: 10px; opacity: 1; translate: 0 0; transition: opacity var(--motion-slow) var(--ease-out), translate var(--motion-slow) var(--ease-emphasized), display var(--motion-slow) allow-discrete; }
+@starting-style { .vibe-flow-slot { opacity: 0; translate: 0 -6px; } }
+.vibe-flow-slot[hidden] { display: none; opacity: 0; translate: 0 -4px; transition-duration: var(--motion-exit, 160ms); }
+.vibe-flow-run { --flow-tone: var(--v-accent-hi); position: relative; display: grid; gap: 14px; padding: 14px 16px 16px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--flow-tone) 26%, var(--v-edge)); border-radius: 18px; background: linear-gradient(180deg, color-mix(in srgb, var(--flow-tone) 7%, transparent), transparent 70%), var(--v-glass); backdrop-filter: var(--v-blur); box-shadow: 0 18px 40px -30px color-mix(in srgb, var(--flow-tone) 60%, transparent); transition: border-color var(--motion-slow) var(--ease-out), box-shadow var(--motion-slow) var(--ease-out); }
+.vibe-flow-run[data-state="done"] { --flow-tone: var(--good); }
+.vibe-flow-run[data-state="failed"] { --flow-tone: var(--bad); }
+/* While it runs, a light sweeps the top edge (a transform, off the main thread). */
+.vibe-flow-run::before { content: ""; position: absolute; top: 0; left: 0; width: 34%; height: 2px; background: linear-gradient(90deg, transparent, var(--flow-tone), transparent); translate: -100% 0; animation: vibe-flow-sweep 2.2s var(--ease-in-out) infinite; animation-delay: var(--flow-phase, 0ms); }
+.vibe-flow-run:not([data-state="running"])::before { display: none; }
+@keyframes vibe-flow-sweep { to { translate: 300% 0; } }
+.vibe-flow-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.vibe-flow-title { flex: 1; min-width: 0; overflow: hidden; color: var(--v-ink); font: 650 14px/1.3 var(--font-display); letter-spacing: -.003em; text-overflow: ellipsis; white-space: nowrap; }
+.vibe-flow-run[data-state="done"] .vibe-flow-title { color: var(--good); }
+.vibe-flow-run[data-state="failed"] .vibe-flow-title { color: var(--bad); }
+/* A small Vibe orb while it works (the hero's, in miniature: a breathing
+   core under a turning halo); a check once it is done. */
+.vibe-flow-spark { position: relative; flex: none; width: 22px; height: 22px; border-radius: 50%; }
+.vibe-flow-spark i { display: none; }
+.vibe-flow-run[data-state="running"] .vibe-flow-spark { background: radial-gradient(circle at 36% 32%, #fff 0 7%, var(--flow-tone) 26%, color-mix(in srgb, var(--flow-tone) 45%, transparent) 55%, transparent 70%); animation: vibe-breathe 2.2s var(--ease-in-out) infinite; animation-delay: var(--flow-phase, 0ms); }
+.vibe-flow-run[data-state="running"] .vibe-flow-spark::before { content: ""; position: absolute; inset: -4px; border-radius: 50%; background: conic-gradient(from 0deg, transparent 0 30%, color-mix(in srgb, var(--flow-tone) 75%, transparent) 55%, transparent 75%); -webkit-mask: radial-gradient(circle, transparent 58%, #000 61%); mask: radial-gradient(circle, transparent 58%, #000 61%); animation: vibe-turn 1.4s linear infinite; animation-delay: var(--flow-phase, 0ms); }
+.vibe-flow-run:not([data-state="running"]) .vibe-flow-spark { background: color-mix(in srgb, var(--flow-tone) 18%, transparent); }
+.vibe-flow-run[data-state="done"] .vibe-flow-spark::after { content: ""; position: absolute; top: 7px; left: 6px; width: 9px; height: 4px; border-left: 2px solid var(--good); border-bottom: 2px solid var(--good); rotate: -45deg; }
+.vibe-flow-run[data-state="failed"] .vibe-flow-spark::after { content: "!"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--bad); font: 800 13px/1 var(--font-ui); }
+.vibe-flow-time { display: flex; flex: none; align-items: baseline; gap: 8px; }
+.vibe-flow-clock { color: var(--v-ink); font: 600 13px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+.vibe-flow-usual { color: var(--v-faint); font-size: 11.5px; }
+.vibe-flow-usual:empty { display: none; }
+/* The stages on one line: a node each, joined, lit as they happen. */
+.vibe-flow-stages { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 14px; margin: 0; padding: 0; list-style: none; }
+.vibe-flow-stage { position: relative; display: grid; grid-template-rows: 20px auto; row-gap: 9px; min-width: 0; }
+.vibe-flow-stage:not(:last-child)::after { content: ""; position: absolute; top: 9px; left: 26px; right: -8px; height: 2px; border-radius: 2px; background: color-mix(in srgb, var(--ivory) 10%, transparent); }
+.vibe-flow-stage.is-done:not(:last-child)::after { background: linear-gradient(90deg, var(--good), color-mix(in srgb, var(--good) 55%, transparent)); }
+.vibe-flow-stage.is-now:not(:last-child)::after { background: linear-gradient(90deg, color-mix(in srgb, var(--v-accent-hi) 70%, transparent), color-mix(in srgb, var(--ivory) 10%, transparent)); }
+.vibe-flow-stage.is-skipped:not(:last-child)::after { height: 0; border-top: 2px dashed color-mix(in srgb, var(--ivory) 12%, transparent); background: none; }
+.vibe-flow-node { position: relative; width: 20px; height: 20px; border: 2px solid color-mix(in srgb, var(--v-faint) 75%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--panel-solid) 80%, transparent); transition: border-color var(--motion-base) var(--ease-out), background var(--motion-base) var(--ease-out), scale var(--motion-spring) var(--ease-spring); }
+.vibe-flow-stage.is-done .vibe-flow-node { border-color: var(--good); background: color-mix(in srgb, var(--good) 26%, var(--panel-solid)); }
+.vibe-flow-stage.is-done .vibe-flow-node::after { content: ""; position: absolute; top: 4px; left: 3.5px; width: 8px; height: 4px; border-left: 2px solid var(--good); border-bottom: 2px solid var(--good); rotate: -45deg; }
+.vibe-flow-stage.is-now .vibe-flow-node { border-color: color-mix(in srgb, var(--v-accent-hi) 45%, transparent); background: color-mix(in srgb, var(--v-accent) 18%, var(--panel-solid)); scale: 1.08; }
+.vibe-flow-stage.is-now .vibe-flow-node::before { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: var(--v-accent-hi); box-shadow: 0 0 10px var(--v-accent-hi); animation: vibe-breathe 1.4s var(--ease-in-out) infinite; animation-delay: var(--flow-phase, 0ms); }
+.vibe-flow-stage.is-now .vibe-flow-node::after { content: ""; position: absolute; inset: -6px; border: 2px solid transparent; border-top-color: var(--v-accent-hi); border-right-color: color-mix(in srgb, var(--v-accent-hi) 35%, transparent); border-radius: 50%; animation: vibe-turn 1.1s linear infinite; animation-delay: var(--flow-phase, 0ms); }
+.vibe-flow-stage.is-skipped .vibe-flow-node { border-style: dashed; opacity: .5; }
+.vibe-flow-stage.is-failed .vibe-flow-node { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 22%, var(--panel-solid)); }
+.vibe-flow-stage.is-failed .vibe-flow-node::after { content: "!"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--bad); font: 800 11px/1 var(--font-ui); }
+.vibe-flow-words { display: grid; gap: 3px; min-width: 0; }
+.vibe-flow-words b { color: var(--v-soft); font-size: 12.5px; font-weight: 600; transition: color var(--motion-base) var(--ease-out); }
+.vibe-flow-words small { color: var(--v-faint); font-size: 11.5px; line-height: 1.4; overflow-wrap: anywhere; }
+.vibe-flow-stage:is(.is-done, .is-now, .is-failed) .vibe-flow-words b { color: var(--v-ink); }
+.vibe-flow-stage.is-now .vibe-flow-words small { color: var(--v-soft); }
+.vibe-flow-stage.is-failed .vibe-flow-words small { color: var(--bad); }
+.vibe-flow-stage.is-skipped .vibe-flow-words { opacity: .55; }
+/* What it read (the planner) or planned (the lead), arriving one by one. */
+.vibe-flow-extra { display: grid; gap: 10px; }
+.vibe-flow-extra:empty { display: none; }
+.vibe-flow-files { display: flex; flex-wrap: wrap; gap: 6px; }
+.vibe-flow-file { max-width: 220px; padding: 4px 9px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--info) 28%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--info) 8%, transparent); color: var(--v-ink); font: 11px/1.3 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; animation: vibe-flow-in var(--motion-spring) var(--ease-spring) both; animation-delay: calc(var(--i, 0) * 90ms); }
+@keyframes vibe-flow-in { from { opacity: 0; translate: 0 6px; scale: .96; } to { opacity: 1; translate: 0 0; scale: 1; } }
+.vibe-flow-steps { position: relative; display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.vibe-flow-steps::before { content: ""; position: absolute; top: 12px; bottom: 12px; left: 10px; width: 2px; border-radius: 2px; background: color-mix(in srgb, var(--info) 30%, transparent); }
+.vibe-flow-step { position: relative; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 3px 0; font-size: 12.5px; animation: vibe-flow-in var(--motion-spring) var(--ease-spring) both; animation-delay: calc(var(--i, 0) * 120ms); }
+.vibe-flow-step-n { display: grid; place-items: center; width: 22px; height: 22px; border: 1.5px solid color-mix(in srgb, var(--info) 60%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--info) 14%, var(--panel-solid)); color: var(--v-ink); font: 650 10.5px/1 var(--font-mono); }
+.vibe-flow-step-title { overflow: hidden; color: var(--v-ink); text-overflow: ellipsis; white-space: nowrap; }
+.vibe-flow-step small { color: var(--v-faint); font-size: 11px; white-space: nowrap; }
+.vibe-flow-step.is-final .vibe-flow-step-n { width: 16px; height: 16px; margin-left: 3px; border-radius: 4px; rotate: 45deg; font-size: 0; }
+.vibe-flow-step.is-final .vibe-flow-step-title { color: var(--v-soft); }
+.vibe-flow-slow { margin: 0; color: var(--warn); font-size: 12px; line-height: 1.45; }
+.vibe-flow-slow[hidden] { display: none; }
+.vibe-flow-actions { display: flex; justify-content: flex-end; }
+.vibe-flow-actions:empty { display: none; }
+/* Where the planner's ideas will land. */
+.vibe-flow-ghost { position: relative; display: grid; align-content: start; gap: 9px; min-height: 128px; padding: 14px; overflow: hidden; border: 1px dashed color-mix(in srgb, var(--ivory) 11%, transparent); border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 30%, transparent); animation: vibe-rise var(--motion-spring) var(--ease-spring) both; animation-delay: calc(var(--i, 0) * 90ms); }
+.vibe-flow-ghost i { display: block; height: 9px; border-radius: 5px; background: color-mix(in srgb, var(--ivory) 7%, transparent); }
+.vibe-flow-ghost i:nth-child(1) { width: 55%; height: 11px; }
+.vibe-flow-ghost i:nth-child(2) { width: 92%; }
+.vibe-flow-ghost i:nth-child(3) { width: 74%; }
+.vibe-flow-ghost i:nth-child(4) { width: 36%; margin-top: 18px; }
+.vibe-flow-ghost::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--ivory) 7%, transparent) 50%, transparent 70%); translate: -100% 0; animation: vibe-flow-shimmer 1.9s var(--ease-in-out) infinite; animation-delay: calc(var(--i, 0) * 180ms); }
+@keyframes vibe-flow-shimmer { to { translate: 100% 0; } }
+/* What a worker is doing now, under its row on Building now. */
+.vibe-row-now { grid-column: 2; overflow: hidden; color: var(--v-soft); font: 11.5px/1.35 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+.vibe-row-now::before { content: "›"; margin-right: 6px; color: var(--live); font-weight: 700; }
+.vibe-ask-chip.is-live { border-color: color-mix(in srgb, var(--live) 45%, transparent); background: color-mix(in srgb, var(--live) 12%, transparent); color: var(--v-ink); }
+/* The plan panel's timeline: one line through every step to the final check. */
+.vibe-timeline { gap: 0 !important; }
+.vibe-timeline .vibe-row { position: relative; }
+.vibe-timeline .vibe-row-dot { position: relative; width: 12px; height: 12px; margin-left: 0; border: 2px solid color-mix(in srgb, var(--v-faint) 80%, transparent); background: color-mix(in srgb, var(--panel-solid) 80%, transparent); box-shadow: none; animation: none; }
+.vibe-timeline .vibe-row:not(:last-child)::after, .vibe-timeline .vibe-row:not(:first-child)::before { content: ""; position: absolute; left: 15px; width: 2px; background: color-mix(in srgb, var(--ivory) 11%, transparent); pointer-events: none; }
+.vibe-timeline .vibe-row:not(:last-child)::after { top: 27px; bottom: 0; }
+.vibe-timeline .vibe-row:not(:first-child)::before { top: 0; height: 13px; }
+.vibe-timeline .vibe-row.is-done::after, .vibe-timeline .vibe-row.is-done + .vibe-row::before { background: color-mix(in srgb, var(--good) 70%, transparent); }
+.vibe-timeline .vibe-row.is-live::after, .vibe-timeline .vibe-row.is-live + .vibe-row::before { background: linear-gradient(180deg, var(--live), color-mix(in srgb, var(--ivory) 11%, transparent)); }
+.vibe-timeline .vibe-row.is-done .vibe-row-dot { border-color: var(--good); background: var(--good); }
+.vibe-timeline .vibe-row.is-live .vibe-row-dot { border-color: var(--live); background: color-mix(in srgb, var(--live) 45%, var(--panel-solid)); box-shadow: 0 0 10px -1px var(--live); }
+.vibe-timeline .vibe-row.is-live .vibe-row-dot::after { content: ""; position: absolute; inset: -6px; border: 2px solid transparent; border-top-color: var(--live); border-radius: 50%; animation: vibe-turn 1.2s linear infinite; }
+.vibe-timeline .vibe-row.is-check .vibe-row-dot { border-color: var(--info); background: conic-gradient(var(--info) 0 50%, transparent 0); }
+.vibe-timeline .vibe-row.is-ask .vibe-row-dot { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 30%, var(--panel-solid)); }
+.vibe-timeline .vibe-row.is-bad .vibe-row-dot { border-color: var(--bad); background: var(--bad); }
+.vibe-timeline .vibe-row:last-child .vibe-row-dot { border-radius: 3px; rotate: 45deg; }
+.vibe-timeline .vibe-row.is-live .vibe-row-meta { color: var(--v-soft); }
+@media (max-width: 760px) {
+  .vibe-flow-stages { grid-template-columns: minmax(0, 1fr); row-gap: 10px; }
+  .vibe-flow-stage { grid-template-columns: 20px minmax(0, 1fr); grid-template-rows: auto; column-gap: 10px; }
+  .vibe-flow-stage:not(:last-child)::after { display: none; }
+  .vibe-flow-usual { display: none; }
+}
+/* Still, for reduced motion: the id outranks every state rule above. */
+@media (prefers-reduced-motion: reduce) {
+  #vibe-layer :is(.vibe-flow-run, .vibe-flow-spark)::before, #vibe-layer .vibe-flow-spark, #vibe-layer .vibe-flow-node::before, #vibe-layer .vibe-flow-node::after, #vibe-layer .vibe-flow-ghost::after, #vibe-layer .vibe-row-dot::after, #vibe-layer .vibe-evolution-suggest .glyph,
+  #vibe-layer :is(.vibe-flow-file, .vibe-flow-step, .vibe-flow-ghost, .vibe-evolution-suggestion, .vibe-evolution-summary) { animation: none; }
+}
