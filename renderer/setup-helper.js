@@ -950,15 +950,23 @@
     intro: "How Studio behaves on this machine while agents work: staying awake, the tray, stopping runaway test runs, updates and GitHub access.",
     status: () => (seenAndLeft("system") ? "done" : ""),
     async render(body, context) {
-      const [prefs, machine, update, companion] = await Promise.all([
+      const [prefs, machine, update, companion, ui] = await Promise.all([
         assistantPrefs(), api()?.machineGet?.().catch?.(() => null) ?? null, api()?.updateStatus?.().catch?.(() => null) ?? null,
-        api()?.companionState?.().catch?.(() => null) ?? null, refreshKeys(["github"]),
+        api()?.companionState?.().catch?.(() => null) ?? null, api()?.prefsGet?.().catch?.(() => null) ?? null, refreshKeys(["github"]),
       ]);
       if (!context.current()) return;
       const pref = (key, message) => (value, input) => void run(input, () => need("assistantPrefs")({ [key]: value }), message);
       const app = card("While agents work");
       app.append(toggle("Keep this computer awake", prefs.keepAwake !== false, pref("keepAwake", "Saved."), "Only while work is running."));
       app.append(toggle("Keep running in the tray when the window closes", prefs.background !== false, pref("background", "Saved."), "Agents keep working in the background."));
+      // main.cjs "Start with Windows": Windows holds the real switch.
+      if (ui?.loginItem?.supported) {
+        app.append(toggle("Start with Windows", ui.loginItem.on === true, (value, input) => void run(input, async () => {
+          const result = await need("prefsSet")({ openAtLogin: value });
+          if (result?.ok && result.loginItem?.on !== value) return { ok: false, error: "Windows did not take that change. Check Task Manager › Startup apps." };
+          return result;
+        }, value ? "Studio will start in the tray when you sign in." : "Studio will no longer start with Windows."), ui.loginItem.blocked ? "Task Manager › Startup apps has Studio switched off." : "Opens in the tray on your last project, so agents keep working after an update restart."));
+      }
       body.append(app);
 
       const m = machine?.machine || {};

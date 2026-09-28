@@ -16,6 +16,18 @@
   const KEY_NAMES = { opencode: "OpenCode Go", zai: "z.ai", zen: "OpenCode Zen", openrouter: "OpenRouter", gateway: "AI gateway", jev: "Jev", custom: "Custom endpoint key", github: "GitHub token", customEndpoint: "Custom endpoint address", lmStudioEndpoint: "LM Studio address" };
   const when = (at) => (Number.isFinite(at) ? new Date(at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "");
   const count = (n, one) => `${n} ${n === 1 ? one : `${one}s`}`;
+  // A PC's agents in one line (scripts/pc-vault.cjs agentsLine): what they are
+  // building, or why they are not, then what waits on the owner and today's tally.
+  function agentsText(agents) {
+    if (!agents) return "";
+    const parts = [];
+    if (agents.working?.length) parts.push(`Working on ${agents.working.map((row) => row.title).join(", ")}`);
+    else if (agents.headline) parts.push(agents.headline);
+    if (agents.needsYou) parts.push(`${agents.needsYou} need${agents.needsYou === 1 ? "s" : ""} you`);
+    const today = [agents.done ? `${agents.done} done` : "", agents.failed ? `${agents.failed} stopped` : ""].filter(Boolean).join(", ");
+    if (today) parts.push(`${today} today${agents.recent?.length ? ` (last: ${agents.recent[0]})` : ""}`);
+    return `${agents.project ? `${agents.project}: ` : ""}${parts.join(" · ")}`;
+  }
   // A failure in words (MefiUi.plainError, studio-ui.js); unit suites load
   // this file alone, where a plain Error's own message stands in.
   const plain = (error, fallback) => (window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : (error?.name === "Error" && error.message) || fallback);
@@ -190,7 +202,10 @@
       status.textContent = `Paired with ${result.repo}${result.offline ? " (offline: showing the last copy)" : ""}.${result.keyMatches === false ? " This PC's key does not match the vault; pair again." : ""}${dropped}`;
       pcs.replaceChildren(...(result.pcs ?? []).map((pc) => {
         const waiting = (pc.projects ?? []).filter((item) => item.risk || item.behind).map((item) => `${item.repo}: ${[item.risk ? `${item.risk} not on GitHub` : "", item.behind ? `${item.behind} to pull` : ""].filter(Boolean).join(", ")}`);
-        return node("li", "", `${pc.self ? "This PC" : pc.name} · ${when(pc.at) || "not seen yet"}${waiting.length ? ` · ${waiting.join("; ")}` : " · in step"}`);
+        const row = node("li", "", `${pc.self ? "This PC" : pc.name} · ${when(pc.at) || "not seen yet"}${waiting.length ? ` · ${waiting.join("; ")}` : " · in step"}`);
+        const agents = agentsText(pc.agents);
+        if (agents) row.append(node("span", "pc-vault-agents", agents));
+        return row;
       }));
       if (!pcs.children.length) pcs.append(node("li", "muted", "No PC has checked in yet. Each PC checks in after its next sync."));
       const chosen = shelf.value;

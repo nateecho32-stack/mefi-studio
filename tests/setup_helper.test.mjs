@@ -263,6 +263,38 @@ test("machine limits save one validated field at a time", async () => {
   assert.equal(calls.filter((row) => row[0] === "machineSet").length, 1, "an out-of-range value is refused before it reaches the host");
 });
 
+test("Start with Windows shows what Windows holds and saves through prefs; hidden where it cannot be set", async () => {
+  const unsupported = load();
+  unsupported.helper.open("system");
+  await settle();
+  assert.equal(unsupported.toggleNamed("Start with Windows"), undefined, "no switch without the host's say-so");
+
+  const { window, helper, calls, toggleNamed, overlay } = load();
+  const status = () => overlay().querySelector("#setup-helper-status").textContent;
+  let on = false, refuse = false;
+  window.mefiStudio.prefsGet = async () => ({ ok: true, prefs: {}, loginItem: { supported: true, on, blocked: false } });
+  window.mefiStudio.prefsSet = async (patch) => {
+    calls.push(["prefsSet", patch]);
+    if (!refuse) on = patch.openAtLogin === true;
+    return { ok: true, prefs: {}, loginItem: { supported: true, on, blocked: false } };
+  };
+  helper.open("system");
+  await settle();
+  const input = toggleNamed("Start with Windows");
+  assert.equal(input.checked, false);
+  input.checked = true;
+  await input.trigger("change");
+  await settle();
+  assert.deepEqual(calls.filter((row) => row[0] === "prefsSet").at(-1), ["prefsSet", { openAtLogin: true }]);
+  assert.match(status(), /Studio will start in the tray when you sign in/);
+
+  refuse = true;
+  input.checked = false;
+  await input.trigger("change");
+  await settle();
+  assert.match(status(), /Windows did not take that change/, "a change Windows kept out is not reported as saved");
+});
+
 test("quick setup walks only connect, permissions and finish; Next on the last step closes", async () => {
   const { helper, overlay, content } = load();
   helper.open("welcome");

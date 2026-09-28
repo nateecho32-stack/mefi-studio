@@ -610,6 +610,11 @@
           <p class="muted" id="idle-home-hint">When disabled, Studio opens Command view after the project chooser.</p>
           <!-- settings.ui.launchAgents (main.cjs launchAgentsInfo); the launch screen's default button follows it. -->
           <label class="field"><span class="field-label">When Studio opens</span><select id="launch-agents" aria-describedby="launch-agents-hint"><option value="resume">Resume what I had</option><option value="start">Start agents</option><option value="off">Keep agents off</option></select><span class="field-hint" id="launch-agents-hint">Resume starts agents on a project where they were running when you closed Studio. The launch screen still offers both choices.</span></label>
+          <!-- settings.ui.openAtLogin (main.cjs "Start with Windows"); Windows holds the real switch. -->
+          <div class="settings-you-switches" id="open-at-login-row" hidden>
+            <label class="switch" title="Studio opens in the tray when you sign in to Windows, on the project you had open."><input type="checkbox" id="open-at-login"><span class="track"></span><span>Start with Windows</span></label>
+          </div>
+          <p class="muted" id="open-at-login-hint" hidden>Studio opens in the tray when you sign in, on the project you had open, and agents follow When Studio opens. A PC you leave working keeps working after an update restart.</p>
           <!-- The Vibe / Build choice, switched in place (vibe.js keeps you on Settings). -->
           <div class="settings-mode-row" id="settings-mode">
             <span class="settings-mode-text"><b>Studio mode</b><span id="settings-mode-hint">Vibe is the calm front door. Build is the full studio.</span></span>

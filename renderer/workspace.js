@@ -1220,6 +1220,36 @@
         } catch (error) { feedback(error.message, true); }
       });
     }
+    // "Start with Windows" (settings.ui.openAtLogin): the host reads back what
+    // Windows holds, so the switch shows the truth, including Task Manager
+    // turning Studio off. Hidden where the host cannot set it (not Windows).
+    const openAtLogin = document.getElementById("open-at-login");
+    if (openAtLogin) {
+      const row = document.getElementById("open-at-login-row");
+      const hint = document.getElementById("open-at-login-hint");
+      const showLoginItem = (item) => {
+        const supported = item?.supported === true;
+        if (row) row.hidden = !supported;
+        if (hint) {
+          hint.hidden = !supported;
+          hint.textContent = item?.blocked
+            ? "Windows has Studio switched off in Task Manager › Startup apps. Turn it on there, or switch this off and on again."
+            : "Studio opens in the tray when you sign in, on the project you had open, and agents follow When Studio opens. A PC you leave working keeps working after an update restart.";
+        }
+        openAtLogin.checked = item?.on === true;
+      };
+      Promise.resolve(api()?.prefsGet?.()).then((result) => showLoginItem(result?.loginItem)).catch(() => {});
+      openAtLogin.addEventListener("change", async () => {
+        const wanted = openAtLogin.checked;
+        try {
+          const result = await api()?.prefsSet?.({ openAtLogin: wanted });
+          if (!result?.ok) throw new Error(result?.error || "Start with Windows could not be saved.");
+          showLoginItem(result.loginItem);
+          if (result.loginItem?.on !== wanted) throw new Error(wanted ? "Windows did not take the startup entry. Try again, or check Task Manager › Startup apps." : "Windows still has the startup entry. Check Task Manager › Startup apps.");
+          feedback(wanted ? "Studio will start in the tray when you sign in to Windows." : "Studio will no longer start with Windows.");
+        } catch (error) { feedback(error.message, true); }
+      });
+    }
     for (const [id, key, fallback] of [["person-name", "person", ""], ["agent-name", "companion", "Mefi"], ["accent", "accent", "aurora"]]) {
       $(id).value = storage.get(key, fallback);
       $(id).addEventListener("input", () => {

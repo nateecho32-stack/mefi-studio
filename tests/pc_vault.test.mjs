@@ -102,6 +102,30 @@ test("the first PC makes the private vault; the second pairs with its code; both
   assert.equal((await wrong.vault.status()).linked, false);
 });
 
+test("each PC's line says what its agents are doing, kept to counts and clipped titles", async (t) => {
+  const w = world(t);
+  const deskPc = w.pc("DESK"), laptop = w.pc("LAPTOP");
+  const made = await deskPc.vault.create();
+  await laptop.vault.pair(made.pairingCode);
+  await deskPc.vault.heartbeat([], {
+    project: "Ruins Runner", state: "running", headline: "2 agents working",
+    working: [{ title: "Add the login page", since: 1_799_999_000_000, prompt: "the whole brief" }, { title: `${"x".repeat(300)}\nsecond line`, since: "yesterday" }, { title: "" }, { title: "4" }, { title: "5" }],
+    needsYou: 2, done: 5, failed: -1, recent: ["Fix the tests", 42, "B", "C"], extra: "dropped",
+  });
+  await laptop.vault.heartbeat([]);
+  const seen = await laptop.vault.status();
+  const line = seen.pcs.find((row) => row.name === "DESK").agents;
+  assert.deepEqual(JSON.parse(JSON.stringify(line)), {
+    project: "Ruins Runner", state: "running", headline: "2 agents working",
+    working: [{ title: "Add the login page", since: 1_799_999_000_000 }, { title: "x".repeat(80), since: null }, { title: "4", since: null }, { title: "5", since: null }],
+    needsYou: 2, done: 5, failed: 0, recent: ["Fix the tests", "B", "C"],
+  }, "only the line's own fields, clipped: no brief, no extra keys, no bad counts");
+  assert.equal(seen.pcs.find((row) => row.name === "LAPTOP").agents, null, "a PC that sent no agents has none");
+  const mirror = path.join(w.root, "mirror");
+  await exec("git", ["clone", "-q", w.hub, mirror]);
+  assert.ok(!everyFile(mirror).map((file) => readFileSync(file, "utf8")).join("\n").includes("Add the login page"), "the titles are sealed like everything else");
+});
+
 test("a code for another vault is refused and nothing is kept", async (t) => {
   const w = world(t);
   const desk = w.pc("DESK"), stranger = w.pc("STRANGER");

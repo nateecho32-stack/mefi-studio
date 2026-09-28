@@ -8258,6 +8258,8 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .pc-vault > :not(summary), .pc-vault-linked > *, .pc-vault-setup > *, .pc-vault-keys > :not(summary) { margin-top: 8px; }
 .pc-vault-heading { margin: 12px 0 0; font-size: 12px; font-weight: 600; }
 .pc-vault-label { display: block; font-size: 12px; color: var(--muted); }
+/* A PC's agents under its line (pc-vault.js agentsText). */
+.pc-vault-agents { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.45; }
 .pc-vault-code, .pc-vault-confirm, .pc-vault-shelf { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
 .pc-vault-code-text { display: block; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 8px; font-size: 13px; letter-spacing: .04em; overflow-wrap: anywhere; user-select: all; }
 .pc-vault-danger { margin: 0; font-size: 12px; font-weight: 600; color: var(--bad); overflow-wrap: anywhere; }
@@ -10091,6 +10093,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
           <p class="muted" id="idle-home-hint">When disabled, Studio opens Command view after the project chooser.</p>
           <!-- settings.ui.launchAgents (main.cjs launchAgentsInfo); the launch screen's default button follows it. -->
           <label class="field"><span class="field-label">When Studio opens</span><select id="launch-agents" aria-describedby="launch-agents-hint"><option value="resume">Resume what I had</option><option value="start">Start agents</option><option value="off">Keep agents off</option></select><span class="field-hint" id="launch-agents-hint">Resume starts agents on a project where they were running when you closed Studio. The launch screen still offers both choices.</span></label>
+          <!-- settings.ui.openAtLogin (main.cjs "Start with Windows"); Windows holds the real switch. -->
+          <div class="settings-you-switches" id="open-at-login-row" hidden>
+            <label class="switch" title="Studio opens in the tray when you sign in to Windows, on the project you had open."><input type="checkbox" id="open-at-login"><span class="track"></span><span>Start with Windows</span></label>
+          </div>
+          <p class="muted" id="open-at-login-hint" hidden>Studio opens in the tray when you sign in, on the project you had open, and agents follow When Studio opens. A PC you leave working keeps working after an update restart.</p>
           <!-- The Vibe / Build choice, switched in place (vibe.js keeps you on Settings). -->
           <div class="settings-mode-row" id="settings-mode">
             <span class="settings-mode-text"><b>Studio mode</b><span id="settings-mode-hint">Vibe is the calm front door. Build is the full studio.</span></span>
@@ -55809,6 +55816,36 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         } catch (error) { feedback(error.message, true); }
       });
     }
+    // "Start with Windows" (settings.ui.openAtLogin): the host reads back what
+    // Windows holds, so the switch shows the truth, including Task Manager
+    // turning Studio off. Hidden where the host cannot set it (not Windows).
+    const openAtLogin = document.getElementById("open-at-login");
+    if (openAtLogin) {
+      const row = document.getElementById("open-at-login-row");
+      const hint = document.getElementById("open-at-login-hint");
+      const showLoginItem = (item) => {
+        const supported = item?.supported === true;
+        if (row) row.hidden = !supported;
+        if (hint) {
+          hint.hidden = !supported;
+          hint.textContent = item?.blocked
+            ? "Windows has Studio switched off in Task Manager › Startup apps. Turn it on there, or switch this off and on again."
+            : "Studio opens in the tray when you sign in, on the project you had open, and agents follow When Studio opens. A PC you leave working keeps working after an update restart.";
+        }
+        openAtLogin.checked = item?.on === true;
+      };
+      Promise.resolve(api()?.prefsGet?.()).then((result) => showLoginItem(result?.loginItem)).catch(() => {});
+      openAtLogin.addEventListener("change", async () => {
+        const wanted = openAtLogin.checked;
+        try {
+          const result = await api()?.prefsSet?.({ openAtLogin: wanted });
+          if (!result?.ok) throw new Error(result?.error || "Start with Windows could not be saved.");
+          showLoginItem(result.loginItem);
+          if (result.loginItem?.on !== wanted) throw new Error(wanted ? "Windows did not take the startup entry. Try again, or check Task Manager › Startup apps." : "Windows still has the startup entry. Check Task Manager › Startup apps.");
+          feedback(wanted ? "Studio will start in the tray when you sign in to Windows." : "Studio will no longer start with Windows.");
+        } catch (error) { feedback(error.message, true); }
+      });
+    }
     for (const [id, key, fallback] of [["person-name", "person", ""], ["agent-name", "companion", "Mefi"], ["accent", "accent", "aurora"]]) {
       $(id).value = storage.get(key, fallback);
       $(id).addEventListener("input", () => {
@@ -59442,6 +59479,18 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   const KEY_NAMES = { opencode: "OpenCode Go", zai: "z.ai", zen: "OpenCode Zen", openrouter: "OpenRouter", gateway: "AI gateway", jev: "Jev", custom: "Custom endpoint key", github: "GitHub token", customEndpoint: "Custom endpoint address", lmStudioEndpoint: "LM Studio address" };
   const when = (at) => (Number.isFinite(at) ? new Date(at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "");
   const count = (n, one) => `${n} ${n === 1 ? one : `${one}s`}`;
+  // A PC's agents in one line (scripts/pc-vault.cjs agentsLine): what they are
+  // building, or why they are not, then what waits on the owner and today's tally.
+  function agentsText(agents) {
+    if (!agents) return "";
+    const parts = [];
+    if (agents.working?.length) parts.push(`Working on ${agents.working.map((row) => row.title).join(", ")}`);
+    else if (agents.headline) parts.push(agents.headline);
+    if (agents.needsYou) parts.push(`${agents.needsYou} need${agents.needsYou === 1 ? "s" : ""} you`);
+    const today = [agents.done ? `${agents.done} done` : "", agents.failed ? `${agents.failed} stopped` : ""].filter(Boolean).join(", ");
+    if (today) parts.push(`${today} today${agents.recent?.length ? ` (last: ${agents.recent[0]})` : ""}`);
+    return `${agents.project ? `${agents.project}: ` : ""}${parts.join(" · ")}`;
+  }
   // A failure in words (MefiUi.plainError, studio-ui.js); unit suites load
   // this file alone, where a plain Error's own message stands in.
   const plain = (error, fallback) => (window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : (error?.name === "Error" && error.message) || fallback);
@@ -59616,7 +59665,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       status.textContent = `Paired with ${result.repo}${result.offline ? " (offline: showing the last copy)" : ""}.${result.keyMatches === false ? " This PC's key does not match the vault; pair again." : ""}${dropped}`;
       pcs.replaceChildren(...(result.pcs ?? []).map((pc) => {
         const waiting = (pc.projects ?? []).filter((item) => item.risk || item.behind).map((item) => `${item.repo}: ${[item.risk ? `${item.risk} not on GitHub` : "", item.behind ? `${item.behind} to pull` : ""].filter(Boolean).join(", ")}`);
-        return node("li", "", `${pc.self ? "This PC" : pc.name} · ${when(pc.at) || "not seen yet"}${waiting.length ? ` · ${waiting.join("; ")}` : " · in step"}`);
+        const row = node("li", "", `${pc.self ? "This PC" : pc.name} · ${when(pc.at) || "not seen yet"}${waiting.length ? ` · ${waiting.join("; ")}` : " · in step"}`);
+        const agents = agentsText(pc.agents);
+        if (agents) row.append(node("span", "pc-vault-agents", agents));
+        return row;
       }));
       if (!pcs.children.length) pcs.append(node("li", "muted", "No PC has checked in yet. Each PC checks in after its next sync."));
       const chosen = shelf.value;
@@ -69291,15 +69343,23 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     intro: "How Studio behaves on this machine while agents work: staying awake, the tray, stopping runaway test runs, updates and GitHub access.",
     status: () => (seenAndLeft("system") ? "done" : ""),
     async render(body, context) {
-      const [prefs, machine, update, companion] = await Promise.all([
+      const [prefs, machine, update, companion, ui] = await Promise.all([
         assistantPrefs(), api()?.machineGet?.().catch?.(() => null) ?? null, api()?.updateStatus?.().catch?.(() => null) ?? null,
-        api()?.companionState?.().catch?.(() => null) ?? null, refreshKeys(["github"]),
+        api()?.companionState?.().catch?.(() => null) ?? null, api()?.prefsGet?.().catch?.(() => null) ?? null, refreshKeys(["github"]),
       ]);
       if (!context.current()) return;
       const pref = (key, message) => (value, input) => void run(input, () => need("assistantPrefs")({ [key]: value }), message);
       const app = card("While agents work");
       app.append(toggle("Keep this computer awake", prefs.keepAwake !== false, pref("keepAwake", "Saved."), "Only while work is running."));
       app.append(toggle("Keep running in the tray when the window closes", prefs.background !== false, pref("background", "Saved."), "Agents keep working in the background."));
+      // main.cjs "Start with Windows": Windows holds the real switch.
+      if (ui?.loginItem?.supported) {
+        app.append(toggle("Start with Windows", ui.loginItem.on === true, (value, input) => void run(input, async () => {
+          const result = await need("prefsSet")({ openAtLogin: value });
+          if (result?.ok && result.loginItem?.on !== value) return { ok: false, error: "Windows did not take that change. Check Task Manager › Startup apps." };
+          return result;
+        }, value ? "Studio will start in the tray when you sign in." : "Studio will no longer start with Windows."), ui.loginItem.blocked ? "Task Manager › Startup apps has Studio switched off." : "Opens in the tray on your last project, so agents keep working after an update restart."));
+      }
       body.append(app);
 
       const m = machine?.machine || {};

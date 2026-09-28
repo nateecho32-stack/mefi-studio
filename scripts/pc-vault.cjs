@@ -137,7 +137,10 @@ function createVault({ dir, run, files, protect, unprotect, hostname, now = () =
     const pcs = [];
     for (const name of await files.list(path.join(dir, "pcs")).catch(() => [])) {
       if (!name.endsWith(".json")) continue;
-      try { pcs.push({ ...sealing.open(key, `pcs/${name}`, await files.read(path.join(dir, "pcs", name))), self: name === `${config.pcId}.json` }); } catch {}
+      try {
+        const line = sealing.open(key, `pcs/${name}`, await files.read(path.join(dir, "pcs", name)));
+        pcs.push({ ...line, agents: agentsLine(line?.agents), self: name === `${config.pcId}.json` });
+      } catch {}
     }
     pcs.sort((a, b) => (b.at ?? 0) - (a.at ?? 0));
     return { ok: true, linked: true, offline: !fresh, repo: config.repo, pcId: config.pcId, name: config.name, keyMatches: manifest?.fingerprint === sealing.fingerprint(key), pcs, dropped, shelves: Object.entries(SHELVES).map(([id, shelf]) => ({ id, label: shelf.label })) };
@@ -200,13 +203,16 @@ function createVault({ dir, run, files, protect, unprotect, hostname, now = () =
     return key ? { ok: true, pairingCode: sealing.pairingCode(key) } : { ok: false, error: "This PC is not paired with a vault." };
   }
 
-  // This PC's line in Your PCs: its name, when, and what waits per project.
-  async function heartbeat(projects = []) {
+  // This PC's line in Your PCs: its name, when, what waits per project, and
+  // what its agents are doing (agentsLine keeps only counts and clipped titles).
+  async function heartbeat(projects = [], agents = null) {
     await load();
     if (!key || !config.repo) return { ok: false, error: "not-linked" };
     await pull();
     const at = now();
     const entry = { name: config.name, at, projects: (Array.isArray(projects) ? projects : []).slice(0, 50).map((item) => ({ repo: REPO.test(String(item?.repo ?? "")) ? item.repo : null, risk: Number.isInteger(item?.risk) ? item.risk : 0, behind: Number.isInteger(item?.behind) ? item.behind : 0 })).filter((item) => item.repo) };
+    const line = agentsLine(agents);
+    if (line) entry.agents = line;
     await files.write(path.join(dir, "pcs", `${config.pcId}.json`), sealing.seal(key, `pcs/${config.pcId}.json`, entry));
     return commitAndPush(`${config.name}: status`);
   }
@@ -326,4 +332,23 @@ function lines(text) {
   return String(text ?? "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 }
 
-module.exports = { REPO_NAME, SHELVES, SECRETS_CONFIRMATION, createVault };
+// A PC's agents as its line carries them: the loop's state and headline, up to
+// four titles being built (each with when it started), how many things wait on
+// the owner, how many finished or stopped today, and up to three finished
+// titles. Anything else is dropped; null when nothing usable arrived.
+const AGENT_STATE = /^[a-z-]{1,24}$/;
+function agentsLine(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const text = (item, max) => (typeof item === "string" ? item.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max) : "");
+  const count = (item) => (Number.isInteger(item) && item >= 0 ? Math.min(item, 9999) : 0);
+  return {
+    project: text(value.project, 60) || null,
+    state: AGENT_STATE.test(String(value.state ?? "")) ? value.state : null,
+    headline: text(value.headline, 120),
+    working: (Array.isArray(value.working) ? value.working : []).slice(0, 20).map((row) => ({ title: text(row?.title, 80), since: Number.isFinite(row?.since) ? row.since : null })).filter((row) => row.title).slice(0, 4),
+    needsYou: count(value.needsYou), done: count(value.done), failed: count(value.failed),
+    recent: (Array.isArray(value.recent) ? value.recent : []).slice(0, 20).map((title) => text(title, 80)).filter(Boolean).slice(0, 3),
+  };
+}
+
+module.exports = { REPO_NAME, SHELVES, SECRETS_CONFIRMATION, createVault, agentsLine };

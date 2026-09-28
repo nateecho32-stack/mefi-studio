@@ -6,6 +6,22 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-27 - Community website and plain-language 0.4.4 guide
+
+Published static-site commit 3fdf4b9 to gh-pages: Mefi Studio public branding,
+community and Discord invitations, a 1200x630 social preview, and all 21 guide
+pages rewritten plus a new media/community page. Application code and installed
+package names are unchanged. The main-branch changes align the README and
+release introduction and record the future voice direction in docs/public-site.md.
+
+Validation: all 22 wiki routes render in hidden Electron; 8 desktop/mobile
+captures include 320px and 390px widths, with no overflow or browser console
+errors. Search finds the new voice/community text; mobile navigation opens;
+Skip to content preserves the route and focuses the article. Local HTML,
+Markdown, section-anchor and image references pass after fixing an obsolete
+social-post link. JavaScript syntax and git diff --check pass. No application
+suite was run for these static website and documentation changes.
+
 ## 2026-09-27 evening - Work done outside Studio: last look, report and relevance check
 
 New scripts/outside-work.cjs (pure) and main.cjs's "work done outside Studio"

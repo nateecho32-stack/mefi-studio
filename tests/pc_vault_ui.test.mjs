@@ -132,6 +132,23 @@ test("paired: every PC's line, stopped items cannot be ticked, and only ticked o
   assert.equal(box.find("pc-vault-status").textContent, "Sent 1 item.");
 });
 
+test("each PC's line says what its agents are doing, or why they are not", async () => {
+  const pcs = [
+    { name: "DESK", self: false, at: Date.UTC(2026, 8, 28, 9), projects: [], agents: { project: "Ruins Runner", state: "running", headline: "2 agents working", working: [{ title: "Add the login page", since: 1 }, { title: "Fix the tests", since: 2 }], needsYou: 1, done: 3, failed: 1, recent: ["Tidy the menu"] } },
+    { name: "SPARE", self: false, at: Date.UTC(2026, 8, 28, 8), projects: [], agents: { project: null, state: "paused", headline: "Agents paused", working: [], needsYou: 0, done: 0, failed: 0, recent: [] } },
+    { name: "OLD", self: false, at: Date.UTC(2026, 8, 27, 8), projects: [] },
+  ];
+  const env = environment({ status: { ...linkedStatus, pcs } });
+  const box = env.vault.section();
+  box.toggle(); await flush();
+  const rows = box.find("pc-vault-pcs").children;
+  assert.deepEqual(rows.map((row) => row.byClass("pc-vault-agents").map((item) => item.textContent)), [
+    ["Ruins Runner: Working on Add the login page, Fix the tests · 1 needs you · 3 done, 1 stopped today (last: Tidy the menu)"],
+    ["Agents paused"],
+    [],
+  ], "a PC from before this build still shows its plain line");
+});
+
 test("received items are used by name; the ones that cannot be used say why; quarantined ones stay out", async () => {
   const env = environment({ status: linkedStatus, replies: { vaultRead: { ok: true, items: [
     { id: "b1", from: "LAPTOP", at: 1, title: "Reviewer", usable: true, preview: "{}" },

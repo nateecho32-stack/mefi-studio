@@ -7,6 +7,22 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Start with Windows.** Settings › General › Profile & startup (and the
+  setup helper's Machine & app) has a **Start with Windows** switch. Studio
+  then opens in the tray when you sign in, on the project you had open,
+  without the launch screen's question, and the agents follow **When Studio
+  opens**. A PC you leave working keeps working after an update restart. The
+  switch shows what Windows really holds, including Task Manager › Startup
+  apps turning Studio off, and Studio points the entry at its own folder
+  again if the app moved. With the tray off, a login launch opens minimized
+  instead.
+- **Your PCs shows what each PC's agents are doing.** Each PC's line in
+  Friends › Your PCs › Share between my PCs now says what its agents are
+  building (or why they are not), how many things wait for you there, and
+  what finished or stopped today, for example "Working on Add the login
+  page · 1 needs you · 4 done today". The line travels sealed in the vault
+  like the rest, holds only clipped titles and counts, and is refreshed when
+  the agents' work changes, at most every ten minutes.
 - **Answered asks leave the Needs you list.** An ask you answered in the
   companion menu used to stay on screen after it closed (the count already
   lower), and clicking it again only said "That question is no longer

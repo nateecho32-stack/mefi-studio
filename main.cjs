@@ -148,6 +148,11 @@ const CAPTURE = process.argv.includes("--capture") || process.argv.includes("--c
 const CLI_MODE = process.argv.some((arg) =>
   ["--set-key", "--set-zai-key", "--set-custom-key", "--set-gateway-key", "--set-jev-key", "--set-zen-key", "--set-openrouter-key", "--jev-probe", "--jev-status", "--jev-models", "--speed-probe", "--assistant-brief", "--assistant-improve", "--assistant-grow", "--assistant-audit", "--assistant-proactive", "--assistant-all"].includes(arg)
 );
+// Windows started Studio as the owner signed in (the "Start with Windows"
+// block): it opens in the tray, on the last project, without the launch
+// screen's question.
+const LOGIN_ARG = "--at-login";
+const AT_LOGIN = !SMOKE && !CAPTURE && !CLI_MODE && process.argv.includes(LOGIN_ARG);
 
 // GUI launches are single-instance: two windows would fight over the same
 // userData cache and double every watcher. CLI runs skip the lock so headless
@@ -2303,13 +2308,74 @@ async function vaultLibraryView() {
   return { ok: true, items: library.items.map((item) => ({ shelf: item.shelf, id: item.id, from: item.from, source: item.source, title: item.title, at: item.at, keptAt: item.keptAt, learns: ["insights", "learned"].includes(item.shelf) })) };
 }
 
-// This PC's line in the vault: its name, when, and per project what waits.
-async function vaultHeartbeat(result) {
+// This PC's agents in one read, for its line in Your PCs: what the loop says
+// (scripts/loop-status.cjs), what is being built, what waits on the owner (the
+// companion's own count) and what finished or stopped since midnight (the
+// companion's digest of the work events). Titles only, clipped; null when the
+// board cannot be read.
+const agentsTitle = (value, max = 80) => { const text = String(value ?? "").replace(/\s+/g, " ").trim(); return text.length > max ? `${text.slice(0, max - 1)}…` : text; };
+async function agentsSnapshot(now = Date.now()) {
+  try {
+    const loop = typeof autopilotLoop === "function" ? autopilotLoop() : null;
+    const working = (autopilot.jobs ?? []).filter((job) => job && !job.finished)
+      .map((job) => ({ title: agentsTitle(job.title), since: Number(job.startedAt) || null, step: agentsTitle(executorActivity.workerActivity(job, now).currentStep ?? "", 120) || null }));
+    const needs = await assistantNeedsYouDigest(now);
+    const midnight = new Date(now);
+    midnight.setHours(0, 0, 0, 0);
+    const tasks = (await (await getEyes()).readJson(TASKS_PATH, [])).filter((task) => task && !task.archived);
+    const events = typeof agentBrain !== "undefined" && agentBrain?.events ? ((await agentBrain.events({ since: midnight.getTime() }).catch(() => null))?.events ?? []) : [];
+    const today = companionModule.digest({ events, tasks, since: midnight.getTime(), now });
+    return {
+      at: now, project: agentsTitle(projects.open()?.name ?? "", 60) || null,
+      state: loop?.state ?? null, headline: agentsTitle(loop?.headline ?? "", 120),
+      working, needsYou: needs?.total ?? 0, needs: (needs?.items ?? []).map((item) => ({ kind: item.kind, title: agentsTitle(item.title) })),
+      done: today.finished.map((row) => agentsTitle(row.title)), failed: today.failed.map((row) => agentsTitle(row.title)),
+    };
+  } catch {
+    return null;
+  }
+}
+// The agents' part of this PC's line in the vault: counts, and up to four
+// titles being built and three finished today.
+function vaultAgentsLine(snapshot) {
+  if (!snapshot) return null;
+  return {
+    project: snapshot.project, state: snapshot.state, headline: snapshot.headline,
+    working: snapshot.working.slice(0, 4).map(({ title, since }) => ({ title, since })),
+    needsYou: snapshot.needsYou, done: snapshot.done.length, failed: snapshot.failed.length, recent: snapshot.done.slice(0, 3),
+  };
+}
+// What would make the line worth sending again: not the clock.
+const vaultAgentsKey = (line) => (line ? JSON.stringify([line.project, line.state, line.working.map((row) => row.title), line.needsYou, line.done, line.failed]) : "");
+let vaultAgentsSent = null;
+
+// This PC's line in the vault: its name, when, per project what waits, and
+// what its agents are doing. After a sync look (with its `result`) and when
+// the agents' line changes (vaultAgentsWatch), at most every ten minutes.
+async function vaultHeartbeat(result = null) {
   if (SMOKE || CAPTURE || CLI_MODE || Date.now() - vaultHeartbeatAt < VAULT_HEARTBEAT_MS) return;
   vaultHeartbeatAt = Date.now();
-  const repo = await vaultProjectRepo().catch(() => null);
-  if (repo) vaultLines.set(repo, { repo, risk: Array.isArray(result?.risk) ? result.risk.length : 0, behind: Number.isInteger(result?.state?.behind) ? result.state.behind : 0 });
-  await vault().heartbeat([...vaultLines.values()]).catch(() => null);
+  if (result) {
+    const repo = await vaultProjectRepo().catch(() => null);
+    if (repo) vaultLines.set(repo, { repo, risk: Array.isArray(result?.risk) ? result.risk.length : 0, behind: Number.isInteger(result?.state?.behind) ? result.state.behind : 0 });
+  }
+  const agents = vaultAgentsLine(await agentsSnapshot());
+  vaultAgentsSent = vaultAgentsKey(agents);
+  await vault().heartbeat([...vaultLines.values()], agents).catch(() => null);
+}
+
+// While agents work, this PC's line follows them: a look every two minutes,
+// and a heartbeat when what they do changed (never more often than above).
+const VAULT_AGENTS_LOOK_MS = 2 * 60 * 1000;
+let vaultAgentsTimer = null;
+async function vaultAgentsWatch() {
+  if (SMOKE || CAPTURE || CLI_MODE || vaultAgentsSent === null || Date.now() - vaultHeartbeatAt < VAULT_HEARTBEAT_MS) return;
+  if (vaultAgentsKey(vaultAgentsLine(await agentsSnapshot())) !== vaultAgentsSent) await vaultHeartbeat();
+}
+function startVaultAgentsWatch() {
+  if (vaultAgentsTimer || SMOKE || CAPTURE || CLI_MODE) return;
+  vaultAgentsTimer = setInterval(() => { vaultAgentsWatch().catch(() => {}); }, VAULT_AGENTS_LOOK_MS);
+  vaultAgentsTimer.unref?.();
 }
 
 // ---- friend shares (.mefishare) ----
@@ -9314,6 +9380,26 @@ function startupResume(now = Date.now()) {
   return { projectId: open.id, name: open.name, path: open.path, activityAt: at, agents: saved.agents === true };
 }
 
+// Started with Windows (AT_LOGIN): the owner asked for Studio to be working
+// when they sign in, so the open project comes back without the folder
+// question, even after a deliberate quit or a night switched off. The agents
+// follow "When Studio opens": "start" starts them, "off" keeps them held, and
+// "resume" brings them back when the last session in this folder ended with
+// them running.
+function startupAtLogin(now = Date.now()) {
+  if (!AT_LOGIN || SMOKE || CAPTURE || CLI_MODE) return null;
+  const open = projects.open();
+  if (!open) return null;
+  let settings = null;
+  try { settings = JSON.parse(readFileSync(SETTINGS_PATH, "utf8")); } catch {}
+  const choice = LAUNCH_AGENTS.includes(settings?.ui?.launchAgents) ? settings.ui.launchAgents : "resume";
+  const saved = readSessionRecord();
+  const ranHere = saved?.projectId === open.id && saved.agents === true;
+  const agents = choice === "start" || (choice === "resume" && ranHere);
+  const at = Number(saved?.activityAt) || 0;
+  return { projectId: open.id, name: open.name, path: open.path, activityAt: at > 0 && at <= now ? at : now, agents, atLogin: true };
+}
+
 // ---- work done outside Studio ---------------------------------------------
 // The owner works in a folder without Studio too: commits by hand, another
 // editor, a Claude Code or OpenCode session. Studio keeps a small "last look"
@@ -10037,6 +10123,61 @@ function applyTray() {
   } catch (error) {
     logLine(`[assistant] tray unavailable: ${error.message}`);
   }
+  if (typeof showLoginWindowWithoutTray === "function") showLoginWindowWithoutTray();
+}
+
+// ---- Start with Windows ------------------------------------------------------
+// settings.ui.openAtLogin, from Settings › General › Profile & startup and the
+// setup helper's Machine & app. On, Windows starts Studio as the owner signs in,
+// with LOGIN_ARG: it opens in the tray on the last project (startupAtLogin), so
+// a PC left working is working again after an update restart. Windows holds the
+// real switch (the Run entry app.setLoginItemSettings writes), and the owner can
+// also turn it off in Task Manager › Startup apps; the saved choice only says
+// that Studio should keep that entry pointed at this copy of the app, which
+// moving the folder would otherwise break (syncLoginItem, at launch).
+const LOGIN_ITEM_NAME = "Mefi's Studio AI+";
+let loginWindowShown = false;
+function loginItemTarget() {
+  // A source checkout runs electron.exe with the app folder, quoted: the path
+  // has spaces. A build runs its own executable.
+  return app.isPackaged ? { path: process.execPath, args: [LOGIN_ARG] } : { path: process.execPath, args: [`"${STUDIO_ROOT}"`, LOGIN_ARG] };
+}
+function loginItemState() {
+  if (process.platform !== "win32" || SMOKE || CAPTURE || CLI_MODE) return { supported: false, on: false, blocked: false };
+  try {
+    const state = app.getLoginItemSettings(loginItemTarget());
+    // Registered, but switched off in Task Manager › Startup apps.
+    const blocked = state.openAtLogin === true && state.executableWillLaunchAtLogin === false;
+    return { supported: true, on: state.openAtLogin === true && !blocked, blocked };
+  } catch {
+    return { supported: false, on: false, blocked: false };
+  }
+}
+function applyLoginItem(on) {
+  if (!loginItemState().supported) return loginItemState();
+  try {
+    app.setLoginItemSettings({ ...loginItemTarget(), openAtLogin: Boolean(on), name: LOGIN_ITEM_NAME });
+    logLine(`[startup] Start with Windows ${on ? "on" : "off"}`);
+  } catch (error) {
+    logLine(`[startup] Start with Windows could not be turned ${on ? "on" : "off"}: ${error?.message ?? error}`);
+  }
+  return loginItemState();
+}
+// At launch: an owner who chose it gets an entry for this copy of the app,
+// even after the folder moved. Nothing is written while Windows already has it,
+// or when Task Manager switched it off (that is the owner's word too).
+function syncLoginItem(settings) {
+  if (settings?.ui?.openAtLogin !== true) return;
+  const state = loginItemState();
+  if (state.supported && !state.on && !state.blocked) applyLoginItem(true);
+}
+// A login launch opens hidden in the tray. Without a tray (Background mode off)
+// there would be no way back to the window, so it shows minimized instead.
+function showLoginWindowWithoutTray() {
+  if (!AT_LOGIN || loginWindowShown || tray || !window || window.isDestroyed() || window.isVisible()) return;
+  loginWindowShown = true;
+  window.showInactive();
+  window.minimize();
 }
 
 function refreshTray() {
@@ -21105,15 +21246,25 @@ function registerIpc() {
       targets: task ? [taskTarget(task)] : null,
     });
   });
+  // openAtLogin reads back what Windows holds (the "Start with Windows" block),
+  // and loginItem says whether this PC can have it and whether Task Manager
+  // switched it off.
   ipcMain.handle("prefs:get", async () => {
     const settings = await readSettings();
-    return { ok: true, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, proactive: true, ...(settings.ui ?? {}) } };
+    const loginItem = loginItemState();
+    return { ok: true, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, proactive: true, ...(settings.ui ?? {}), openAtLogin: loginItem.on }, loginItem };
   });
   ipcMain.handle("prefs:set", async (_event, prefs) => {
-    const settings = await updateSettings((next) => {
-      next.ui = { ...(next.ui ?? {}), ...(prefs ?? {}) };
+    const next = { ...(prefs ?? {}) };
+    let loginItem;
+    if ("openAtLogin" in next) {
+      next.openAtLogin = next.openAtLogin === true;
+      loginItem = applyLoginItem(next.openAtLogin);
+    }
+    const settings = await updateSettings((saved) => {
+      saved.ui = { ...(saved.ui ?? {}), ...next };
     });
-    return { ok: true, prefs: settings.ui };
+    return { ok: true, prefs: settings.ui, ...(loginItem ? { loginItem } : {}) };
   });
 
   // ---- machine coordination + resource manager ----------------------------
@@ -21470,7 +21621,8 @@ function createWindow() {
     minWidth: MIN_WINDOW.width,
     minHeight: MIN_WINDOW.height,
     ...(saved ? { x: saved.x, y: saved.y } : {}),
-    show: !SMOKE && !CAPTURE,
+    // A login launch starts in the tray (the "Start with Windows" block).
+    show: !SMOKE && !CAPTURE && !AT_LOGIN,
     backgroundColor: "#0d1118",
     autoHideMenuBar: true,
     title: "Mefi's Studio AI+",
@@ -21494,7 +21646,9 @@ function createWindow() {
       backgroundThrottling: !SMOKE && !CAPTURE,
     },
   });
-  if (saved?.maximized) window.maximize();
+  // maximize() also shows the window, so a login launch keeps it for later.
+  if (saved?.maximized && !AT_LOGIN) window.maximize();
+  else if (saved?.maximized) { const created = window; created.once("show", () => { if (!created.isDestroyed()) created.maximize(); }); }
   guardWindowNavigation(window.webContents, page);
   // The page's bridge (preload.cjs) says it is listening and holds no
   // assistant state yet, on its first onAssistant: send whole keys again.
@@ -22000,13 +22154,21 @@ app.whenReady().then(() => {
   // follows what the last session left (launchAgentsInfo).
   startupLastSession = SMOKE || CAPTURE || CLI_MODE ? null : readSessionRecord();
   startupResumed = startupResume();
+  // Started with Windows: the open project, without the question (startupAtLogin).
+  if (!startupResumed && typeof startupAtLogin === "function") startupResumed = startupAtLogin();
   if (startupResumed) {
     startupChosen = true;
-    logLine(`[startup] resuming ${startupResumed.name} · work ${Math.round((Date.now() - startupResumed.activityAt) / 1000)}s ago${startupResumed.agents ? " · agents were running" : " · agents stay held"}`);
+    logLine(startupResumed.atLogin
+      ? `[startup] started with Windows · ${startupResumed.name}${startupResumed.agents ? " · agents start" : " · agents stay held"}`
+      : `[startup] resuming ${startupResumed.name} · work ${Math.round((Date.now() - startupResumed.activityAt) / 1000)}s ago${startupResumed.agents ? " · agents were running" : " · agents stay held"}`);
   }
   autopilot.held = !SMOKE && !CAPTURE && !CLI_MODE && startupResumed?.agents !== true;
   if (!SMOKE && !CAPTURE && !CLI_MODE) startSessionBeat();
   createWindow();
+  // Start with Windows: keep the entry pointed at this copy of the app, and a
+  // login launch whose tray never came up shows its window after all.
+  if (!SMOKE && !CAPTURE && !CLI_MODE) readSettings().then((settings) => syncLoginItem(settings)).catch(() => {});
+  if (AT_LOGIN) setTimeout(() => showLoginWindowWithoutTray(), 15000).unref?.();
   // Watchers start after the window is up so first paint is never delayed.
   setTimeout(() => startMachineWatch(), 2500);
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => bootAutopilot(), 8000);
@@ -22017,6 +22179,8 @@ app.whenReady().then(() => {
   if (!SMOKE && !CAPTURE && !CLI_MODE) startCommunityWatch();
   // Friends › Your PCs badge: a fetch-only look 45 s in, then every 15 minutes.
   if (!SMOKE && !CAPTURE && !CLI_MODE) startSyncWatch();
+  // Your PCs: this PC's line follows its agents between sync looks.
+  if (!SMOKE && !CAPTURE && !CLI_MODE) startVaultAgentsWatch();
   // Cowork claims: the open project's room, this PC's claims renewed each minute.
   if (!SMOKE && !CAPTURE && !CLI_MODE) startCowork();
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRestart().catch(() => {}));

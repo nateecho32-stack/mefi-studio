@@ -396,7 +396,11 @@ settings and per-model work-kind summaries for the shared controls.
   agentProfiles, the Playbook's importRecipe, a new memory file, the idea
   add action) and never overwrite; kept model results and decisions are
   read beside this PC's own in modelLearningSnapshot and the decision
-  profile. Keys cross only with the typed confirmation and a native prompt,
+  profile. Each PC's sealed status line also carries what its agents are
+  doing (main.cjs agentsSnapshot: the loop status, running titles, the
+  companion's needs-you count and today's finished and stopped work), sent
+  after a sync look and when that line changes, at most every ten minutes,
+  so Your PCs shows what a PC left working is building. Keys cross only with the typed confirmation and a native prompt,
   and their values stay in main. A `.mefishare` friend file is always
   scrubbed, names no repository or PC, and is reviewed before it is kept.
   Vault calls take turns; a rebase is undone without loss unless two PCs
@@ -793,6 +797,12 @@ failed process stays an error and cannot produce briefing requests.
 - Closing the window hides Studio to a tray icon and the loop keeps running;
   builders journal their progress and checkpoint before quit, and interrupted
   work resumes on the next start instead of being duplicated.
+- **Start with Windows** (main.cjs "Start with Windows", settings.ui.openAtLogin)
+  keeps a Run entry pointed at this copy of the app with `--at-login`. That
+  launch (startupAtLogin) opens the open project in the tray without the
+  launch screen, and the agents follow When Studio opens, so a PC left
+  working is working again after an update restart. prefs:get reads back
+  what Windows holds, including Task Manager switching it off.
 - Builders can run in **per-session worktrees** (opt-in,
   `MEFI_STUDIO_WORKTREE_RUNS=1`): each dispatch gets its own checkout and its
   own git index under `.mefi/worktrees/<runId>` on a `mefi/<runId>` branch, so
