@@ -1,5 +1,83 @@
 # Agent loop and startup measurements
 
+
+## Work for surfaces nobody can see, September 27, 2026
+
+A read-only audit of the push paths found per-push work aimed at hidden
+surfaces. These changes were not profiled; the costs quoted come from the
+measurements earlier in this file.
+
+- **Command's chat log and Ask cards while Command is closed.**
+  `onAssistantEvent` ran `paintChatLog` and `renderAsks` on every assistant
+  push, but both live in `#idle-hud`, which is hidden unless Command is
+  open. On Home the rebuilt thread and the shared-controls observer walking
+  it were the 40 + 41 ms of a 97 ms push measured on September 25. Both now
+  return while `state.active` is false, and `enter()` paints them.
+- **`mefi:queue-settings` on every push.** `adoptQueue` (renderer/agents.js)
+  dispatched it on every assistant and status push; its listeners re-render
+  the companion panel and walk the document for queue controls. It now goes
+  out only when the snapshot changes. idle.js already deduplicated its own.
+- **Pushes to a window in the tray or minimized.** `eyes:tasks`,
+  `eyes:requests`, `eyes:ideas` and `machine:status` are whole snapshots.
+  While the real window is hidden or minimized, `send` keeps only the newest
+  of each and sends them on `show` or `restore`; a board list held for a
+  project the owner has since left is dropped. Harness windows (smoke,
+  capture) are never shown and are not held. Assistant pushes still go out,
+  because listeners act on each event's kind (`seedHeard`, agent, mail and
+  reply handling in `onAssistantEvent`), not just on the state.
+- **Select labels.** studio-ui's `labelOf` spread `el.labels` for every
+  enhanced select on every refresh, and Chromium walks the whole document
+  for that list again after any DOM change. It now keeps which
+  `<label for>` names each select, reads its text live, and looks again when
+  that label leaves the page, stops naming the select, or the user navigates.
+- **Vibe's flow bar** animated `left`, a layout per frame while anything
+  builds. It animates `transform` over the same sweep (`translateX(-100%)`
+  to `294.12%` of its 34% width).
+- **Explorer while closed.** Every `machine:status` push rebuilt the Machine
+  panel and every checkpoints push rebuilt the session tree and detail, with
+  the sheet closed. A closed sheet now only keeps them; opening already reads
+  both afresh (`load`). An open sheet repaints checkpoints through
+  `paintTreeAndDetail`, whose signature includes them, so an unchanged push
+  paints nothing and a changed one keeps a half-typed detail draft and the
+  focused row, which the direct `renderTree`/`renderDetail` did not.
+- **`assistant:status` bursts.** `emitAutopilot` has 37 callers, several on
+  each running job's output timer and tool changes, and five renderer
+  listeners rebuild from every copy. It now coalesces like `assistantEmit`:
+  the first call of a quiet 250 ms goes at once, later ones share one
+  trailing push built when it goes.
+
+Tests: tests/command_closed_pushes.test.mjs, tests/studio_select_labels.test.mjs,
+the hidden-window and autopilot cases in tests/host_push_batching.test.mjs, and
+the closed-sheet case in tests/explorer_ui.test.mjs.
+
+Left alone on purpose, with what was measured:
+
+- The board read's row cache still reads the whole file and compares bytes.
+  A `stat` check first would skip the read and the byte compare, but the
+  cache exists to never trust a timestamp, and the exFAT volume this tree
+  lives on keeps modification times to 10 ms.
+- `logs` stays in task-context.cjs's snapshot fields. It carries the owner's
+  own notes (Tasks' Log box) as well as run lines. On this machine's live
+  board (1.25 MB, 36 tasks, 194 revisions) 15 revisions changed nothing but
+  `logs`, 0.05 MB, and logs inside snapshots total 0.11 MB: dropping them
+  would save under a tenth and lose the notes' history.
+- Node's compile cache (`module.enableCompileCache`) works in Electron 44's
+  main process, but loading main.cjs's 64 local modules took 55–64 ms cold
+  and 49–58 ms warm, and assistant.mjs plus eyes.mjs 18–25 ms against
+  16–18 ms: inside the noise, and the first launch after each update pays
+  about 90 ms to write the cache. V8 compiles lazily; the time is execution.
+- A renderer code cache would pay more. Compiling the booklet's 2.9 MB inline
+  script took 42–55 ms (six runs, Node 24's V8), and 2–3 ms from V8 cached
+  data. Chromium keeps no code cache for inline scripts or `file://`, so
+  getting it means external script files served from a privileged scheme
+  with `codeCache: true`, and changes to the booklet build, the updater's
+  swap, `guardWindowNavigation` and the fixtures that load the file directly.
+- Vibe's aurora (three 90 px blurs drifting under about ten backdrop-blurred
+  panels) and the composer's spinning ring (a `conic-gradient` driven by a
+  registered property, repainted every frame) are decorative loops the
+  Motion setting already stops under Calm. Pausing them otherwise is a
+  design decision.
+
 ## Command canvas transfer, September 26, 2026
 
 Following the native-font probe below, an isolated Electron 44.4.1 experiment

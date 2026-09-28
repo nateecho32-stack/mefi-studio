@@ -15539,17 +15539,20 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
   const quiet = () => ["off", "calm"].includes(document.documentElement.dataset.motion) || document.body.classList.contains("no-motion") || matchMedia("(prefers-reduced-motion: reduce)").matches;
   const visible = (el) => el.isConnected && !el.closest("[hidden], [inert]") && el.getClientRects().length > 0;
-  const findLabel = (el) => el.getAttribute("aria-label") || (el.id && [...(el.labels || [])].find((label) => label.htmlFor === el.id)?.textContent?.trim()) || labelTitle(el.closest("label")) || el.title || "Options";
-  // A select's label rarely changes, and `labels` is a document-wide lookup:
-  // each refresh reads it again at most every two seconds per select.
-  const labelCache = new WeakMap();
-  const labelOf = (el) => {
-    const at = performance.now(), cached = labelCache.get(el);
-    if (cached && at - cached.at < 2000) return cached.label;
-    const label = findLabel(el);
-    labelCache.set(el, { label, at });
+  const labelOf = (el) => el.getAttribute("aria-label") || (el.id && forLabel(el)?.textContent?.trim()) || labelTitle(el.closest("label")) || el.title || "Options";
+  // el.labels walks the whole document again after any DOM change, and every
+  // enhanced select asked on every refresh (a few a second while pushes churn
+  // the page). Which <label for> names a select is kept; its text is read
+  // live. A select with none is asked again after navigation.
+  let forLabels = new WeakMap();
+  function forLabel(el) {
+    let label = forLabels.get(el);
+    if (label === undefined || label && (!label.isConnected || label.htmlFor !== el.id)) {
+      label = [...(el.labels || [])].find((item) => item.htmlFor === el.id) ?? null;
+      forLabels.set(el, label);
+    }
     return label;
-  };
+  }
   // Writes only on change: an unchanged `hidden` or `title` still queues a
   // mutation record and a style invalidation on every refresh.
   const setHidden = (el, hidden) => { if (el.hidden !== hidden) el.hidden = hidden; };
@@ -15993,7 +15996,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       if (changed) scheduleSoon();
     });
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "disabled", "open", "class", "selected"] });
-    window.addEventListener("mefi:nav", () => { closeSelect(); schedule(); });
+    window.addEventListener("mefi:nav", () => { forLabels = new WeakMap(); closeSelect(); schedule(); });
     document.addEventListener("pointerover", (event) => {
       if (event.pointerType === "touch") return;
       const item = event.target.closest?.(GLIDE_ITEMS);
