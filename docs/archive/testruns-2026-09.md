@@ -6,6 +6,24 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-27 - Configuration, Habits and menu motion: gates on a private worktree of 8b4ab00
+
+Detached worktree C:\wt\build-e at 8b4ab00 plus 5d47154 only: Configuration
+(renderer/config-dialog.js and .css, the ui:zoom host reads, nav.js's
+record), Habits (scripts/habits.cjs, agent-addons, agent-profiles, the
+Agents panel), renderer/motion.js and its users (vibe.js, vibe-panels.js,
+config-dialog.js, trace.js, agents.js, autonomy-ui.js's outside click),
+booklet.js's choice-button names, the build and fixture lists, docs.
+`npm run check` and `npm run audit` passed. `npm test`: Node suites 3828
+tests with 0 failing; the Electron fixture stage 37 passed with 1 skipped;
+the Python contracts failed once on
+test_build_exports_build_and_keeps_cli_and_auditor_literals, which pins the
+booklet's codeParts literal and now lists motion; after the pin, all 248
+contracts pass (1 skipped) and the normalized-path lock passed. Offscreen
+Electron frame captures of 13 menu transitions at 1920x1080: the worst
+frame gap for opening a task detail fell from 133 ms to 67 ms, and
+Configuration's category switch now holds 33 ms.
+
 ## 2026-09-27 - Whole-app bug hunt: host, tooling, renderer and design fixes
 
 Parallel review of main.cjs, preload, every host script, the build and
