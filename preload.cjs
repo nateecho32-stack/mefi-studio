@@ -80,6 +80,14 @@ const api = {
   cliSetupUse: (id) => ipcRenderer.invoke("setup:cli-use", id),
   // A guided setup window closed and PATH was re-read (main.cjs guidedCliSetup).
   onCliSetupClosed: (callback) => ipcRenderer.on("setup:cli-closed", (_event, data) => callback(data)),
+  // Several Claude Code / Codex logins (main.cjs "Several logins per coding
+  // CLI"): logins are named by id and a label only; main makes the folders.
+  cliAccounts: () => ipcRenderer.invoke("accounts:list"),
+  cliAccountAdd: (payload) => ipcRenderer.invoke("accounts:add", { provider: String(payload?.provider ?? ""), label: String(payload?.label ?? "").slice(0, 40) }),
+  cliAccountLogin: (id) => ipcRenderer.invoke("accounts:login", { id: String(id ?? "") }),
+  cliAccountCheck: (id) => ipcRenderer.invoke("accounts:check", { id: String(id ?? "") }),
+  cliAccountRemove: (id) => ipcRenderer.invoke("accounts:remove", { id: String(id ?? "") }),
+  onCliAccounts: (callback) => ipcRenderer.on("accounts:changed", (_event, data) => callback(data)),
   launchCli: (id) => ipcRenderer.invoke("studio:launch-cli", id),
   testZai: () => ipcRenderer.invoke("studio:test-zai"),
   speedProbe: (modelId) => ipcRenderer.invoke("speed:probe", { modelId }),

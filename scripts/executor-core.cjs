@@ -236,7 +236,7 @@ function attemptLedgerOutcome(end, { providerSaid = false, errorMessage = null, 
 // re-anchored file scope, and `queuedJob` the overseer verification the
 // caller queued for a done report. `clip` is the host's title clipper.
 function settleAttemptRow(task, outcome, { now, maxHandoffs, startGrace, clip }) {
-  const { ok, userStop = false, providerOutage: outage = false, providerSaid = false, code, errorMessage = null, lastWords = null, attempt, run, scopeHeal = null, queuedJob = null } = outcome;
+  const { ok, userStop = false, providerOutage: outage = false, providerSaid = false, code, errorMessage = null, lastWords = null, attempt, run, scopeHeal = null, queuedJob = null, accountLimit = null } = outcome;
   const row = { ...task };
   row.updatedAt = now;
   if (!userStop) row.lastAttempt = attempt;
@@ -324,14 +324,23 @@ function settleAttemptRow(task, outcome, { now, maxHandoffs, startGrace, clip })
   } else if (branch === "outage") {
     // The provider was down, not the card: the outage backoff, uncharged.
     release();
-    row.providerFailures = (Number(row.providerFailures) || 0) + 1;
     // The runner did start (it spoke or bound a session): the run of
     // consecutive start kills is over, as the ok branch already says.
     if (!run.startKilled && (run.spoke || run.sessionId)) delete row.startFailures;
-    const cooldown = providerCooldownMs(row.providerFailures);
-    row.nextRunAt = now + cooldown;
     row.lastRunError = String(lastWords || errorMessage || `exit ${code ?? "?"}`).slice(0, 160);
-    executorResume.appendLog(row, `provider unavailable (exit ${code ?? "?"}) · ${row.lastRunError} · requeued in ${Math.round(cooldown / 60000)}m, no attempt charged`, { at: now });
+    if (accountLimit) {
+      // One subscription login topped out (`accountLimit`: the host's
+      // { tag, until, next } words): the provider is fine and the card goes
+      // straight back for the next login, or for whatever route the host
+      // picks once none is left. Uncharged, and off the outage streak.
+      delete row.nextRunAt;
+      executorResume.appendLog(row, `provider unavailable (exit ${code ?? "?"}) · ${accountLimit.tag} topped out until ${accountLimit.until} · requeued now ${accountLimit.next ? `on ${accountLimit.next}` : "for the next route"}, no attempt charged`, { at: now });
+    } else {
+      row.providerFailures = (Number(row.providerFailures) || 0) + 1;
+      const cooldown = providerCooldownMs(row.providerFailures);
+      row.nextRunAt = now + cooldown;
+      executorResume.appendLog(row, `provider unavailable (exit ${code ?? "?"}) · ${row.lastRunError} · requeued in ${Math.round(cooldown / 60000)}m, no attempt charged`, { at: now });
+    }
   } else {
     // Failure isolation: the card cools down on its own backoff while the
     // pool keeps running, and the fifth failure parks it (no nextRunAt).

@@ -61,30 +61,42 @@ function setupScript(id, action) {
 
 // `closed` hears about a finished setup window once `refresh` has re-read
 // PATH, so the host can tell the guide to re-detect tools at the right time.
-function createCliSetup({ spawn, openExternal, refresh = async () => {}, closed = () => {}, platform = process.platform, cwd, env = () => process.env }) {
+// A sign-in may name one of the extra logins (`account`, an id only): the
+// host's `loginEnv` answers with that login's folder variable, so the CLI
+// signs in there and the renderer never hands over a path.
+function createCliSetup({ spawn, openExternal, refresh = async () => {}, closed = () => {}, platform = process.platform, cwd, env = () => process.env, loginEnv = async () => null }) {
   const running = new Set();
   async function action(payload) {
-    const { id, action } = payload || {};
+    const { id, action, account = null } = payload || {};
     const cli = CLIS.find((item) => item.id === id);
     if (!cli || !["install", "login", "docs"].includes(action)) return { ok: false, error: "Unknown CLI setup action." };
     if (action === "docs") { await openExternal(cli.docs); return { ok: true }; }
     if (platform !== "win32") return { ok: false, error: "Guided installation currently runs on Windows. Open the setup instructions for this platform." };
-    if (running.has(id)) return { ok: false, error: "A setup window for this tool is already open. Finish or close that window first." };
-    running.add(id);
+    let extra = null;
+    if (account) {
+      if (action !== "login") return { ok: false, error: "An added login can only be signed in; install the tool itself from its main login." };
+      extra = await loginEnv(id, account);
+      if (!extra) return { ok: false, error: "That login is not saved." };
+    }
+    const key = account ? `${id}:${account}` : id;
+    if (running.has(key)) return { ok: false, error: "A setup window for this tool is already open. Finish or close that window first." };
+    running.add(key);
     try {
       const script = `try {\n${setupScript(id, action)}\n} catch { Write-Host $_.Exception.Message -ForegroundColor Red }\nRead-Host 'Press Enter to close this setup window'`;
-      const child = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { cwd, env: env(), windowsHide: false, stdio: "ignore" });
+      const child = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { cwd, env: extra ? { ...env(), ...extra } : env(), windowsHide: false, stdio: "ignore" });
       // Not detached: a detached PowerShell gets no console and exits at once
       // without running the script. From Studio (no console of its own) this
       // child opens its own visible terminal, and its close still re-checks.
       await new Promise((resolve, reject) => { child.once("spawn", resolve); child.once("error", reject); });
       child.once("close", () => {
-        running.delete(id);
-        void Promise.resolve().then(() => refresh()).catch(() => {}).then(() => { try { closed({ id, action }); } catch {} });
+        running.delete(key);
+        void Promise.resolve().then(() => refresh()).catch(() => {}).then(() => { try { closed({ id, action, ...(account ? { account } : {}) }); } catch {} });
       });
       child.unref();
-      return { ok: true, launched: true, message: `Finish ${cli.name} setup in the setup window and browser, then close that window. Studio refreshes your installed tools when it closes (or choose Refresh installed tools); then choose Check connection.` };
-    } catch (error) { running.delete(id); return { ok: false, error: `Could not open setup: ${error.message}` }; }
+      return { ok: true, launched: true, message: account
+        ? `Sign in to the other ${cli.name} account in the setup window and browser, then close that window and choose Check.`
+        : `Finish ${cli.name} setup in the setup window and browser, then close that window. Studio refreshes your installed tools when it closes (or choose Refresh installed tools); then choose Check connection.` };
+    } catch (error) { running.delete(key); return { ok: false, error: `Could not open setup: ${error.message}` }; }
   }
   return { action };
 }

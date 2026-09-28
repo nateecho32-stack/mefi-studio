@@ -81,6 +81,7 @@ const agentToolConfigs = require("./scripts/agent-tool-configs.cjs");
 const agentModels = require("./scripts/agent-models.cjs");
 const cliSetup = require("./scripts/cli-setup.cjs");
 const cliText = require("./scripts/cli-text.cjs");
+const cliAccounts = require("./scripts/cli-accounts.cjs");
 const agentIssues = require("./scripts/agent-issues.cjs");
 const brains = require("./scripts/brains.cjs");
 const taskDelegation = require("./scripts/task-delegation.cjs");
@@ -4418,12 +4419,13 @@ function endCliTree(child) {
 // One exchange of JSON lines with a CLI. `onLine` sees each parsed line with
 // `send` to answer on and `done` to settle the probe; the CLI is then asked
 // to leave (stdin closed) and its tree is ended if it lingers - at once with
-// `killAfterAnswer`, for a CLI that never exits on end of input.
-function cliExchange({ label, command, args = [], shell = false, start, onLine, killAfterAnswer = false, timeoutMs = CLI_PLAN_TIMEOUT_MS }) {
+// `killAfterAnswer`, for a CLI that never exits on end of input. `env` adds
+// to the inherited environment: a second login's folder.
+function cliExchange({ label, command, args = [], shell = false, start, onLine, killAfterAnswer = false, timeoutMs = CLI_PLAN_TIMEOUT_MS, env = null }) {
   return new Promise((resolve) => {
     let child;
     try {
-      const options = { cwd: os.tmpdir(), windowsHide: true, stdio: ["pipe", "pipe", "ignore"] };
+      const options = { cwd: os.tmpdir(), windowsHide: true, stdio: ["pipe", "pipe", "ignore"], ...(env && Object.keys(env).length ? { env: { ...process.env, ...env } } : {}) };
       child = shell ? spawn("cmd.exe", ["/d", "/s", "/c", command], options) : spawn(command, args, options);
     } catch (error) {
       resolve({ ok: false, code: "spawn", error: `${label} could not be started: ${cliErrorText(error?.message ?? error)}` });
@@ -4473,11 +4475,12 @@ const parsedLimits = (label, parse) => {
 };
 
 const CLAUDE_USAGE_COMMAND = "claude -p --input-format stream-json --output-format stream-json --verbose --no-session-persistence --strict-mcp-config --tools= --permission-mode dontAsk";
-function probeClaudeUsage() {
+function probeClaudeUsage(env = null) {
   return cliExchange({
     label: "Claude Code",
     shell: true,
     command: CLAUDE_USAGE_COMMAND,
+    env,
     start: (send) => send({ type: "control_request", request_id: "mefi-usage", request: { subtype: "get_usage", skip_behaviors: true } }),
     onLine: (message, { done }) => {
       if (message.type !== "control_response" || message.response?.request_id !== "mefi-usage") return;
@@ -4496,10 +4499,11 @@ function codexProbeError(error) {
     ? { ok: false, code: "auth", error: `Codex needs a ChatGPT login to report plan windows (${message}).` }
     : { ok: false, code: "unavailable", error: `Codex could not report usage: ${message}` };
 }
-function probeCodexLimits() {
+function probeCodexLimits(env = null) {
   return cliExchange({
     label: "Codex",
     shell: true,
+    env,
     command: "codex app-server",
     start: (send) => send({ id: 1, method: "initialize", params: { clientInfo: { name: "mefi-studio", title: null, version: "1" } } }),
     onLine: (message, { send, done }) => {
@@ -4688,22 +4692,274 @@ async function usageAccounts({ probe = false } = {}) {
   const [grok, claude, codex, antigravity] = await installed;
   for (const [id, present] of [["claude", claude], ["codex", codex], ["grok", grok], ["antigravity", antigravity]]) {
     if (!present) continue;
-    const { result, refreshing } = cliPlanReading(id, CLI_PLAN_PROBES[id], { allow: probe });
-    if (refreshing) pending.push(id);
-    let entry = result?.ok
-      ? { read: "limits", ok: true, fetchedAt: result.at, limits: result.limits }
-      : result
-        ? { read: "limits", ok: false, fetchedAt: result.at, code: result.code ?? "unavailable", error: result.error }
-        : { read: "limits", ok: false, fetchedAt: null, code: refreshing ? "pending" : "idle", error: refreshing ? "Reading plan windows…" : "Open the Usage panel to read plan windows." };
-    // Codex's own rollouts stand in until, or unless, the live read answers.
-    if (id === "codex" && !entry.ok) {
-      const rollout = await cachedAccountRead("codex-rollout", () => readCodexRollouts());
-      if (rollout.ok) entry = { read: "limits", ok: true, fetchedAt: rollout.limits.asOf, limits: rollout.limits, ...(result && !result.ok ? { liveError: result.error } : {}) };
+    // Claude Code and Codex read once per login (the "Several logins per
+    // coding CLI" block), each under its own folder and each named when there
+    // is more than one; the readings also keep each login's limit mark true.
+    const logins = cliAccounts.isProvider(id) ? cliAccounts.accountsFor(settings, id) : [null];
+    for (const login of logins) {
+      const key = login ? cliAccountPlanKey(login) : id;
+      const { result, refreshing } = cliPlanReading(key, login ? cliAccountProbe(login) : CLI_PLAN_PROBES[id], { allow: probe });
+      if (refreshing) pending.push(key);
+      let entry = result?.ok
+        ? { read: "limits", ok: true, fetchedAt: result.at, limits: result.limits }
+        : result
+          ? { read: "limits", ok: false, fetchedAt: result.at, code: result.code ?? "unavailable", error: result.error }
+          : { read: "limits", ok: false, fetchedAt: null, code: refreshing ? "pending" : "idle", error: refreshing ? "Reading plan windows…" : "Open the Usage panel to read plan windows." };
+      // Codex's own rollouts stand in until, or unless, the live read answers.
+      if (id === "codex" && !entry.ok) {
+        const rollout = await cachedAccountRead(login?.main === false ? `codex-rollout:${login.id}` : "codex-rollout", () => readCodexRollouts(login?.main === false ? { root: login.home } : undefined));
+        if (rollout.ok) entry = { read: "limits", ok: true, fetchedAt: rollout.limits.asOf, limits: rollout.limits, ...(result && !result.ok ? { liveError: result.error } : {}) };
+      }
+      const named = logins.length > 1 ? { label: `${providerInfo(id).label} · ${login.label}`, login: { id: login.id, label: login.label, main: login.main } } : {};
+      add(id, { ...entry, refreshing, ...named });
     }
-    add(id, { ...entry, refreshing });
   }
   const ordered = accounts.sort((a, b) => Number(b.read !== "none") - Number(a.read !== "none") || a.label.localeCompare(b.label));
   return { ok: true, at: Date.now(), accounts: ordered, pending };
+}
+
+// ---- Several logins per coding CLI --------------------------------------------
+// Claude Code and Codex can hold more than one subscription login: the CLI's
+// own folder is the main login, and each login added in Setup gets a folder of
+// its own under Studio's user data, handed to the CLI as CLAUDE_CONFIG_DIR or
+// CODEX_HOME (scripts/cli-accounts.cjs holds the rules). Work runs on the first
+// login that is not topped out. A login that reports its usage limit is set
+// aside until the reset its message or its usage reading names: an assistant
+// call asks the next login at once (cliAccountTurn), and a coding worker's card
+// goes straight back to the queue for it (cliAccountLimitHit in finish).
+// Only when every login is topped out does any other route answer, and only
+// through the fallbacks the owner already allowed. The marks outlive a
+// restart in cli-account-limits.json; the logins' credentials stay in their
+// folders, which Studio never reads.
+const CLI_LOGINS_ROOT = path.join(app.getPath("userData"), "cli-logins");
+const CLI_ACCOUNT_MARKS_PATH = path.join(app.getPath("userData"), "cli-account-limits.json");
+let cliAccountMarks = {};
+let cliAccountMarksLoad = null;
+let cliAccountMarksWrite = Promise.resolve();
+
+// The file is read once. A mark set before that read finished (a limit hit
+// at startup) is kept over the file's copy of the same login, and the file's
+// other marks are kept too.
+async function loadCliAccountMarks() {
+  cliAccountMarksLoad ??= (async () => {
+    let saved = {};
+    try { saved = JSON.parse(await readFile(CLI_ACCOUNT_MARKS_PATH, "utf8")); } catch {}
+    cliAccountMarks = { ...cliAccounts.pruneMarks(saved, Date.now()), ...cliAccountMarks };
+  })();
+  await cliAccountMarksLoad;
+  return cliAccountMarks;
+}
+
+// Writes wait for that read, so a save can never replace marks it never saw.
+function saveCliAccountMarks() {
+  cliAccountMarksWrite = cliAccountMarksWrite
+    .then(() => loadCliAccountMarks())
+    .then(() => authStore.atomicWriteJson(CLI_ACCOUNT_MARKS_PATH, cliAccounts.pruneMarks(cliAccountMarks, Date.now())))
+    .catch((error) => logLine(`[accounts] limit marks not saved: ${String(error?.message ?? error).slice(0, 160)}`));
+}
+
+// When a topped-out login comes back, in the owner's words: a time today, or
+// a day and a time further out.
+function cliAccountWhen(ms) {
+  if (!Number.isFinite(ms)) return "its reset";
+  const at = new Date(ms);
+  const time = at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return ms - Date.now() > 20 * 3600000 ? `${at.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })} ${time}` : time;
+}
+
+// Every login for a provider and which one answers now.
+async function cliAccountPool(provider, settings = null) {
+  const saved = settings ?? await readSettings();
+  const marks = await loadCliAccountMarks();
+  const accounts = cliAccounts.accountsFor(saved, provider);
+  return { accounts, extra: accounts.length > 1, ...cliAccounts.pick(accounts, marks, Date.now()) };
+}
+
+// What a coding worker runs on: the login's environment, the login itself
+// (so finish can set it aside), and the pool it came from. With a
+// single login the route reads exactly as it did before logins were added.
+async function cliAccountRoute(provider, settings) {
+  const pool = await cliAccountPool(provider, settings);
+  const name = cliAccounts.PROVIDERS[provider].name;
+  return {
+    account: pool.account,
+    logins: pool.accounts,
+    env: cliAccounts.accountEnv(pool.account),
+    tag: pool.extra && pool.account ? pool.account.label : "",
+    toppedOut: !pool.account,
+    note: pool.account ? "" : `${pool.extra ? `every ${name} login is` : `${name} is`} topped out until ${cliAccountWhen(pool.soonest)}`,
+  };
+}
+
+// A line said once while it stays true: every dispatch asks for a route, and
+// "every login is topped out" holds for hours.
+let cliAccountSaid = null;
+function cliAccountSay(line) {
+  if (cliAccountSaid === line) return;
+  cliAccountSaid = line;
+  logLine(line);
+}
+
+// The login a route would move to after its own, when one is ready.
+function cliAccountNext(route) {
+  if (!route?.account || !Array.isArray(route.logins)) return null;
+  const next = cliAccounts.pick(route.logins, cliAccountMarks ?? {}, Date.now()).account;
+  return next && next.id !== route.account.id ? next : null;
+}
+
+// A login's own words, read for its usage limit: a match sets the login aside
+// until the reset the words name (half an hour when they name none, with a
+// usage reading asked for to learn the real one). Rate limits and outages are
+// not a login's limit and return null.
+function cliAccountLimitHit(account, texts, { source = "run" } = {}) {
+  if (!account || !cliAccounts.isProvider(account.provider)) return null;
+  const line = (Array.isArray(texts) ? texts : [texts]).filter((text) => text != null).map(String).find((text) => cliAccounts.isUsageLimit(text));
+  if (!line) return null;
+  const now = Date.now();
+  cliAccountMarks = cliAccounts.markLimited(cliAccountMarks ?? {}, account.id, { now, until: cliAccounts.resetFrom(line, now), reason: line, source });
+  saveCliAccountMarks();
+  const mark = cliAccountMarks[account.id];
+  logLine(`[accounts] ${cliAccounts.accountTag(account)} topped out until ${cliAccountWhen(mark.until)}${mark.known ? "" : " (no reset named; trying again then)"}`);
+  if (!mark.known) cliAccountProbeSoon(account);
+  if (typeof send === "function") send("accounts:changed", { id: account.id });
+  return { account, until: mark.until, known: mark.known };
+}
+
+// What a finished run's settle line says about a topped-out login.
+function cliAccountLimitNote(limit) {
+  return {
+    tag: cliAccounts.accountTag(limit.account),
+    until: cliAccountWhen(limit.until),
+    next: limit.next ? cliAccounts.accountTag(limit.next) : null,
+  };
+}
+
+// A usage reading taken on a login keeps its mark honest: a full window sets
+// the login aside until that window resets, and a reading taken after a mark
+// that shows room again lifts it.
+function cliAccountReading(account, result) {
+  if (!account || !result?.ok || !result.limits) return;
+  const now = Date.now();
+  const at = Number(result.at) || now;
+  const reading = cliAccounts.readingLimit(result.limits, now);
+  const mark = cliAccountMarks?.[account.id];
+  if (reading.limited) {
+    if (mark && mark.known && !reading.until) return;
+    if (mark && reading.until === mark.until) return;
+    cliAccountMarks = cliAccounts.markLimited(cliAccountMarks ?? {}, account.id, { now, until: reading.until, reason: mark?.reason || "usage reading: a plan window is full", source: "reading" });
+  } else if (mark && at > Number(mark.since)) {
+    cliAccountMarks = cliAccounts.clearLimit(cliAccountMarks, account.id);
+    logLine(`[accounts] ${cliAccounts.accountTag(account)} has room again`);
+  } else return;
+  saveCliAccountMarks();
+  if (typeof send === "function") send("accounts:changed", { id: account.id });
+}
+
+// The usage probe for one login: the same plan-window read, under that
+// login's folder, feeding its mark.
+function cliAccountPlanKey(account) {
+  return account.main ? account.provider : `${account.provider}:${account.id}`;
+}
+function cliAccountProbe(account) {
+  const env = cliAccounts.accountEnv(account);
+  const probe = account.provider === "claude" ? () => probeClaudeUsage(env) : () => probeCodexLimits(env);
+  return async () => {
+    const result = await probe();
+    cliAccountReading(account, { at: Date.now(), ...result });
+    return result;
+  };
+}
+function cliAccountProbeSoon(account) {
+  const entry = cliPlanState.get(cliAccountPlanKey(account));
+  if (entry?.result && !entry.inFlight) entry.result = { ...entry.result, at: 0 };
+  cliPlanReading(cliAccountPlanKey(account), cliAccountProbe(account), { allow: true });
+}
+
+// One assistant call over a provider's logins: the first login that is not
+// topped out answers, and one that reports its usage limit hands the same
+// call to the next at once. Any other failure is the call's own and ends it.
+async function cliAccountTurn(provider, call) {
+  if (!cliAccounts.isProvider(provider)) return call({});
+  const pool = await cliAccountPool(provider);
+  const name = cliAccounts.PROVIDERS[provider].name;
+  if (!pool.account) {
+    return { ok: false, error: `${pool.extra ? `every ${name} login is` : `${name} is`} topped out until ${cliAccountWhen(pool.soonest)}`, toppedOut: true };
+  }
+  let reply = null;
+  for (const [index, account] of pool.ready.entries()) {
+    reply = await call({ env: cliAccounts.accountEnv(account) });
+    if (reply?.ok || !cliAccountLimitHit(account, reply?.error)) return reply;
+    const next = pool.ready[index + 1];
+    if (next) logLine(`[assistant] ${cliAccounts.accountTag(account)} topped out — asking ${next.label}`);
+  }
+  return reply;
+}
+
+// A new login's folder. Claude Code keeps its sessions and the per-project
+// memory under projects/, which is linked to the main login's so every login
+// works from the same transcripts and memory; the login itself stays apart.
+async function makeCliAccountHome(provider, id) {
+  const home = path.join(CLI_LOGINS_ROOT, id);
+  await mkdir(home, { recursive: true });
+  if (provider === "claude") {
+    const mainProjects = path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude"), "projects");
+    try {
+      await mkdir(mainProjects, { recursive: true });
+      await require("node:fs/promises").symlink(mainProjects, path.join(home, "projects"), "junction");
+    } catch (error) {
+      logLine(`[accounts] ${id} keeps its own projects folder: ${String(error?.message ?? error).slice(0, 160)}`);
+    }
+  }
+  return home;
+}
+
+// A removed login's folder goes, its sign-in with it. The link to the main
+// login's projects/ is taken away first and checked gone, so the delete can
+// never reach through it; any other link inside leaves the folder in place.
+async function removeCliAccountHome(home) {
+  const fsp = require("node:fs/promises");
+  const resolved = path.resolve(home);
+  if (path.dirname(resolved) !== path.resolve(CLI_LOGINS_ROOT)) return { removed: false, reason: "outside Studio's login folders" };
+  let entries = [];
+  try { entries = await fsp.readdir(resolved, { withFileTypes: true }); } catch { return { removed: true }; }
+  for (const entry of entries) {
+    const target = path.join(resolved, entry.name);
+    let stat;
+    try { stat = await fsp.lstat(target); } catch { continue; }
+    if (!stat.isSymbolicLink()) continue;
+    try { await fsp.unlink(target); } catch { try { await fsp.rmdir(target); } catch {} }
+    try { await fsp.lstat(target); return { removed: false, reason: `${entry.name} is a link Studio could not take away` }; } catch {}
+  }
+  await fsp.rm(resolved, { recursive: true, force: true });
+  return { removed: true };
+}
+
+// One login by id, the main ones included, from saved settings.
+function cliAccountFind(settings, id) {
+  return Object.keys(cliAccounts.PROVIDERS).flatMap((provider) => cliAccounts.accountsFor(settings, provider)).find((account) => account.id === id) ?? null;
+}
+
+// Settings' view of every login: which is answering, which are topped out
+// and until when.
+async function cliAccountsView() {
+  const settings = await readSettings();
+  const marks = await loadCliAccountMarks();
+  const [claude, codex] = await Promise.all([claudeCliAvailable(), codexCliAvailable()]);
+  const installed = { claude, codex };
+  const now = Date.now();
+  return {
+    ok: true,
+    providers: Object.keys(cliAccounts.PROVIDERS).map((id) => {
+      const accounts = cliAccounts.accountsFor(settings, id);
+      const answering = cliAccounts.pick(accounts, marks, now).account;
+      return {
+        id, name: cliAccounts.PROVIDERS[id].name,
+        installed: installed[id] === true,
+        max: cliAccounts.MAX_EXTRA + 1,
+        accounts: cliAccounts.describe(accounts, marks, now).map((row) => ({ ...row, answering: row.id === answering?.id, untilText: row.until ? cliAccountWhen(row.until) : "" })),
+      };
+    }),
+  };
 }
 
 async function chatCompletion(endpoint, apiKey, model, body, { sessionHeader = null, provider = "unknown", taskType = "routine", source = "request", escalationOf = null, timeoutMs = 120000 } = {}) {
@@ -4840,8 +5096,8 @@ function cliModelArg(value) {
 // line, and --tools= keeps a reply request from touching the repo. The npm
 // install is a .cmd shim, so the CLI is reached through cmd.exe like opencode
 // run is. Auth is the CLI's own login, so no key is stored or read.
-async function claudeCompletion(system, user, model, { timeoutMs = 180000, onSpawn } = {}) {
-  const result = await cliText.run({ provider: "claude", system, user, model: model || "", timeoutMs, onSpawn });
+async function claudeCompletion(system, user, model, { timeoutMs = 180000, onSpawn, env = null } = {}) {
+  const result = await cliText.run({ provider: "claude", system, user, model: model || "", timeoutMs, onSpawn, env });
   if (result.error) return { ok: false, error: result.error };
   return cliReply("claude", parseClaudeCliResult(result.stdout), result.stdout, { code: result.code, err: result.stderr, model });
 }
@@ -4854,8 +5110,8 @@ async function claudeCompletion(system, user, model, { timeoutMs = 180000, onSpa
 // reads: the agent message plus the turn's token usage. The npm install is a
 // .cmd shim, so the CLI is reached through cmd.exe like claude is. Auth is
 // the CLI's own login, so no key is stored or read.
-async function codexCompletion(system, user, model, { timeoutMs = 180000, onSpawn } = {}) {
-  const result = await cliText.run({ provider: "codex", system, user, model: model || "", timeoutMs, onSpawn });
+async function codexCompletion(system, user, model, { timeoutMs = 180000, onSpawn, env = null } = {}) {
+  const result = await cliText.run({ provider: "codex", system, user, model: model || "", timeoutMs, onSpawn, env });
   if (result.error) return { ok: false, error: result.error };
   return cliReply("codex", parseCodexCliResult(result.stdout), result.stdout, { code: result.code, err: result.stderr, model });
 }
@@ -5095,6 +5351,21 @@ async function executorRunEnv({ cliOverride = null } = {}) {
     if (tier === "free" && !pick.model) return { error: `Coding tier is Free but no free model is saved for ${cli} - choose Fast or Heavy, or save a free model id in Settings` };
     return { model: pick.model, note: `${tier} tier${pick.model ? ` (${pick.model})` : " (CLI default)"}` };
   };
+  // Which Claude Code or Codex login the builders run on: the first one not
+  // topped out (the "Several logins per coding CLI" block). With every login
+  // topped out, builders move to the OpenCode route only where the owner
+  // allowed fallbacks and the team is not held to that one account; otherwise
+  // they wait for the first reset, with the reason on the feed.
+  const cliLoginRoute = async (cli, opencode) => {
+    if (typeof cliAccountRoute !== "function") return { env: {}, account: null, logins: null, tag: "" };
+    const login = await cliAccountRoute(cli, settings);
+    if (!login.toppedOut) return { env: login.env, account: login.account, logins: login.logins, tag: login.tag ? ` · ${login.tag}` : "" };
+    if (!singleAccount && autoFallbackEnabled(settings) && opencode && !opencode.error) {
+      cliAccountSay(`[autopilot] ${login.note} — builders on opencode until then`);
+      return { route: { ...opencode, via: `${opencode.via} · ${login.note}` } };
+    }
+    return { route: { error: `${login.note}; coding workers wait for it` } };
+  };
   // The opencode half: the default runner, with the mefi-zai provider when a
   // z.ai key is saved. Computed once and reused as the CLI fallback route.
   const opencodeRoute = async () => {
@@ -5215,7 +5486,9 @@ async function executorRunEnv({ cliOverride = null } = {}) {
       if (!opencode.error) opencode.via += " · claude missing";
       return opencode;
     }
-    return { cli: "claude", env: {}, modelArgs: "", via: `claude cli${buildModel.note ? ` · ${buildModel.note}` : ""}`, claude: true, model: buildModel.model, tier, opencode };
+    const login = await cliLoginRoute("claude", opencode);
+    if (login.route) return login.route;
+    return { cli: "claude", env: login.env, account: login.account, logins: login.logins, modelArgs: "", via: `claude cli${login.tag}${buildModel.note ? ` · ${buildModel.note}` : ""}`, claude: true, model: buildModel.model, tier, opencode };
   }
   if (chosenCli === "codex") {
     const buildModel = cliBuildModel("codex");
@@ -5228,7 +5501,9 @@ async function executorRunEnv({ cliOverride = null } = {}) {
       if (!opencode.error) opencode.via += " · codex missing";
       return opencode;
     }
-    return { cli: "codex", env: {}, modelArgs: "", via: `codex cli${buildModel.note ? ` · ${buildModel.note}` : ""}`, codex: true, model: buildModel.model, tier, opencode };
+    const login = await cliLoginRoute("codex", opencode);
+    if (login.route) return login.route;
+    return { cli: "codex", env: login.env, account: login.account, logins: login.logins, modelArgs: "", via: `codex cli${login.tag}${buildModel.note ? ` · ${buildModel.note}` : ""}`, codex: true, model: buildModel.model, tier, opencode };
   }
   if (chosenCli === "antigravity") {
     const buildModel = cliBuildModel("antigravity");
@@ -5296,18 +5571,26 @@ async function cliAssistantCall(route, system, user, maxTokens, { role = "routin
   let cli = gate.allowed ? null : providerSkipped(route.provider, gate);
   if (gate.allowed) {
     const startedAt = Date.now();
+    // Claude Code and Codex answer on their first login that is not topped
+    // out, and a login that reports its usage limit hands the call to the
+    // next (cliAccountTurn): every subscription login answers before the
+    // keyed fallback below. Sliced hosts without the block run one login.
+    const turn = typeof cliAccountTurn === "function" ? cliAccountTurn : (_provider, call) => call({});
     try {
-      cli = route.provider === "grok" ? await grokCompletion(system, user, route.model)
-        : route.provider === "claude" ? await claudeCompletion(system, user, route.model)
-          : route.provider === "codex" ? await codexCompletion(system, user, route.model)
-            : await antigravityCompletion(system, user, route.model);
+      cli = await turn(route.provider, (login) => route.provider === "grok" ? grokCompletion(system, user, route.model)
+        : route.provider === "claude" ? claudeCompletion(system, user, route.model, login)
+          : route.provider === "codex" ? codexCompletion(system, user, route.model, login)
+            : antigravityCompletion(system, user, route.model));
     } finally {
       settleProvider(route.provider, gate, cli);
     }
-    const observationId = crypto.randomUUID();
-    await recordModelCall({ id: observationId, model: cli.model || route.model || `${route.provider}-default`, provider: route.provider, taskType, source,
-      at: startedAt, elapsedMs: Date.now() - startedAt, status: cli.ok ? "ok" : "error", errorKind: cli.ok ? null : "cli", tokenUsage: cli.tokenUsage ?? {}, costUsd: cli.costUsd ?? null });
-    cli.observationId = observationId;
+    // A turn that found every login topped out made no call to record.
+    if (!cli.toppedOut) {
+      const observationId = crypto.randomUUID();
+      await recordModelCall({ id: observationId, model: cli.model || route.model || `${route.provider}-default`, provider: route.provider, taskType, source,
+        at: startedAt, elapsedMs: Date.now() - startedAt, status: cli.ok ? "ok" : "error", errorKind: cli.ok ? null : "cli", tokenUsage: cli.tokenUsage ?? {}, costUsd: cli.costUsd ?? null });
+      cli.observationId = observationId;
+    }
     if (cli.ok) {
       if (assistantState?.ai && projects.current().id === projects.active().id) assistantState.ai.model = cli.model;
       return cli;
@@ -5422,7 +5705,9 @@ const providerLastFailure = new Map();
 const providerName = (provider) => AUTO_PROVIDER_NAMES[provider] ?? provider;
 
 function settleProvider(provider, gate, result) {
-  const failed = !result || (!result.ok && result.errorKind !== "validation");
+  // Every login known to be topped out started no call and broke nothing:
+  // pausing the provider for it would outlast the reset.
+  const failed = !result || (!result.ok && result.errorKind !== "validation" && result.toppedOut !== true);
   const before = providerBreaker.state(provider);
   if (failed) providerLastFailure.set(provider, String(result?.error ?? "the call threw").slice(0, 160));
   gate.settle(!failed);
@@ -15726,7 +16011,16 @@ async function spawnNextJob(options) {
     }
     const providerSaid = !ok && !userStop && typeof assistantModule !== "undefined" && typeof assistantModule?.isProviderOutage === "function"
       && assistantModule.isProviderOutage({ error: errorMessage, lastWords, sawDone: entry.sawDone, resultNote: entry.resultNote }) === true;
-    const providerDown = executorCore.providerOutage({
+    // A Claude Code or Codex login that reported its usage limit, read from
+    // the same words the outage test reads, is set aside until its reset
+    // (cliAccountLimitHit). That is neither the card's failure nor its
+    // provider's outage: the card goes back at once, uncharged, for the next
+    // login. A run that fell back to OpenCode rode no login and settles as that run.
+    const ranOn = entry.ranRoute ?? (typeof runRoute !== "undefined" ? runRoute : null);
+    const loginHit = !ok && !userStop && !entry.sawDone && !entry.resultNote && ranOn?.account && typeof cliAccountLimitHit === "function"
+      ? cliAccountLimitHit(ranOn.account, [errorMessage, lastWords]) : null;
+    const accountLimit = loginHit ? cliAccountLimitNote({ ...loginHit, next: cliAccountNext(ranOn) }) : null;
+    const providerDown = Boolean(accountLimit) || executorCore.providerOutage({
       said: providerSaid, streak: Number(job.ref?.providerFailures) || 0, lastAttemptAt: Number(job.ref?.lastAttempt?.at) || 0,
       upAt: Number(autopilot.providerUpAt instanceof Map ? autopilot.providerUpAt.get(providerRoute) : 0) || 0,
     });
@@ -15880,7 +16174,7 @@ async function spawnNextJob(options) {
       // stop with saved progress, an uncharged start-kill or outage requeue,
       // or a charged failure on its backoff (executorCore.settleAttemptRow).
       board.tasks[board.tasks.indexOf(task)] = executorCore.settleAttemptRow(task,
-        { ok, userStop, providerOutage: providerDown, providerSaid, code, errorMessage, lastWords, attempt, run: entry, scopeHeal, queuedJob },
+        { ok, userStop, providerOutage: providerDown, providerSaid, accountLimit, code, errorMessage, lastWords, attempt, run: entry, scopeHeal, queuedJob },
         { now: Date.now(), maxHandoffs: EXECUTOR_MAX_HANDOFFS, startGrace: EXECUTOR_START_FAILURE_GRACE, clip: assistantClip });
       if (ok) board.requests = executorCore.releaseInboxCopies(board.requests, task.title, workTitleKey);
       return { settled: true };
@@ -19329,7 +19623,12 @@ function registerIpc() {
   }
   // A closed setup window is pushed to the guide after the PATH re-read, so
   // Sign in and Check connection come alive without a manual refresh.
-  const guidedCliSetup = cliSetup.createCliSetup({ spawn, openExternal: (url) => shell.openExternal(url), cwd: os.homedir(), refresh: refreshSetupPaths, closed: (detail) => send("setup:cli-closed", detail) });
+  const guidedCliSetup = cliSetup.createCliSetup({ spawn, openExternal: (url) => shell.openExternal(url), cwd: os.homedir(), refresh: refreshSetupPaths, closed: (detail) => send("setup:cli-closed", detail),
+    // An added login signs in under its own folder; the renderer names it by id.
+    loginEnv: async (provider, id) => {
+      const account = cliAccountFind(await readSettings(), id);
+      return account && !account.main && account.provider === provider ? cliAccounts.accountEnv(account) : null;
+    } });
   // Setup describes this machine, not one folder. First-run and subscription
   // setup write Studio defaults, so the next folder added inherits the route,
   // and also the open project's own team when it keeps one (a project that
@@ -19379,6 +19678,71 @@ function registerIpc() {
     providerBreaker.reset();
     send("settings:changed", { source: "subscription-setup" });
     return { ok: true, provider: id, message: "Your subscription now handles chat, mapping, planning, agent roles and coding. Its model access and usage limits still apply." };
+  });
+
+  // Several logins per coding CLI (the block beside cliAccountTurn): Setup
+  // lists them, adds one (its folder, then a sign-in window), checks one with
+  // a tiny call, and removes one with its folder. Logins belong to this PC,
+  // not to a project's team, so they are saved outside agent profiles.
+  ipcMain.handle("accounts:list", async () => cliAccountsView());
+  ipcMain.handle("accounts:add", async (_event, payload) => {
+    const provider = String(payload?.provider ?? "");
+    if (!cliAccounts.isProvider(provider)) return { ok: false, error: "Only Claude Code and Codex can hold more than one login." };
+    const id = `${provider}-${crypto.randomBytes(4).toString("hex")}`;
+    let home;
+    try { home = await makeCliAccountHome(provider, id); }
+    catch (error) { return { ok: false, error: `The login's folder could not be made: ${String(error?.message ?? error).slice(0, 160)}` }; }
+    let added = null;
+    await updateSettings((settings) => {
+      added = cliAccounts.addAccount(settings.cliAccounts, { provider, id, home, label: payload?.label });
+      if (!added.ok) return false;
+      settings.cliAccounts = added.accounts;
+    });
+    if (!added?.ok) {
+      await removeCliAccountHome(home).catch(() => {});
+      return added ?? { ok: false, error: "That login could not be added." };
+    }
+    logLine(`[accounts] added ${cliAccounts.accountTag(added.account)}`);
+    send("accounts:changed", { id });
+    return { ...(await cliAccountsView()), ok: true, account: { id, provider, label: added.account.label } };
+  });
+  ipcMain.handle("accounts:login", async (_event, payload) => {
+    if (SMOKE || CAPTURE || CLI_MODE) return { ok: false, error: "Signing in runs in the interactive desktop app." };
+    const account = cliAccountFind(await readSettings(), String(payload?.id ?? ""));
+    if (!account) return { ok: false, error: "That login is not saved." };
+    return guidedCliSetup.action(account.main ? { id: account.provider, action: "login" } : { id: account.provider, action: "login", account: account.id });
+  });
+  ipcMain.handle("accounts:check", async (_event, payload) => {
+    const account = cliAccountFind(await readSettings(), String(payload?.id ?? ""));
+    if (!account) return { ok: false, error: "That login is not saved." };
+    const complete = account.provider === "claude" ? claudeCompletion : codexCompletion;
+    const result = await complete("Connection check. Reply with READY only. Do not use tools.", "Reply READY.", "", { timeoutMs: 60000, env: cliAccounts.accountEnv(account) });
+    if (result.ok) {
+      if (cliAccountMarks?.[account.id]) {
+        cliAccountMarks = cliAccounts.clearLimit(cliAccountMarks, account.id);
+        saveCliAccountMarks();
+      }
+      send("accounts:changed", { id: account.id });
+      return { ...(await cliAccountsView()), ok: true, message: `${account.label} answered. Studio uses it in turn.` };
+    }
+    const hit = cliAccountLimitHit(account, result.error, { source: "check" });
+    return { ok: false, error: hit ? `${account.label} is signed in but topped out until ${cliAccountWhen(hit.until)}.` : result.error || `${account.label} did not answer. Sign in, then check again.` };
+  });
+  ipcMain.handle("accounts:remove", async (_event, payload) => {
+    const id = String(payload?.id ?? "");
+    let removed = null;
+    await updateSettings((settings) => {
+      removed = cliAccounts.removeAccount(settings.cliAccounts, id);
+      if (!removed.ok) return false;
+      settings.cliAccounts = removed.accounts;
+    });
+    if (!removed?.ok) return removed ?? { ok: false, error: "That login is not saved." };
+    cliAccountMarks = cliAccounts.clearLimit(cliAccountMarks ?? {}, id);
+    saveCliAccountMarks();
+    const folder = await removeCliAccountHome(removed.account.home).catch((error) => ({ removed: false, reason: String(error?.message ?? error).slice(0, 120) }));
+    logLine(`[accounts] removed ${cliAccounts.accountTag(removed.account)}${folder.removed ? " and its folder" : `; its folder stays (${folder.reason})`}`);
+    send("accounts:changed", { id });
+    return { ...(await cliAccountsView()), ok: true, message: folder.removed ? `${removed.account.label} removed, with its sign-in on this PC.` : `${removed.account.label} removed. Its folder stays at ${removed.account.home} (${folder.reason}).` };
   });
 
   ipcMain.handle("studio:launch-cli", async (_event, id) => {

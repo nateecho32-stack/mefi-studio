@@ -312,7 +312,9 @@ class MefiStudioRoutingTests(unittest.TestCase):
         # drafts, the analyzer read), which may ride Claude Code alone.
         cli = _function_body(self.main, "cliAssistantCall")
         self.assertIn("cliAssistantCall(route, system, user, maxTokens", fetch)
-        self.assertIn("claudeCompletion(system, user, route.model)", cli)
+        # The call rides whichever Claude Code login answers (cliAccountTurn).
+        self.assertIn("claudeCompletion(system, user, route.model, login)", cli)
+        self.assertIn("cliAccountTurn", cli, "a topped-out login hands the call to the next")
         # Only CLIs whose reply path runs outside the project with native
         # action tools off may answer data-only calls: every text CLI in
         # cli-text.cjs, and no other.
@@ -346,7 +348,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         body = _function_body(self.main, "resolveAiRoute")
         self.assertIn('provider === "codex"', body)
         cli = _function_body(self.main, "cliAssistantCall")
-        self.assertIn("codexCompletion(system, user, route.model)", cli)
+        self.assertIn("codexCompletion(system, user, route.model, login)", cli)
         # Builders: approvals and the sandbox bypassed because nobody is at the
         # keyboard, plain stdout so the sentinel protocol stays readable.
         spawn = _function_body(self.main, "spawnNextJob")

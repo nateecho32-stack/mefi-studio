@@ -186,6 +186,56 @@ test("connections save keys and endpoints on their own calls, and a subscription
   assert.deepEqual(calls.filter((row) => row[0] === "setApiKey").at(-1), ["setApiKey", "zai", "set"]);
 });
 
+test("more than one login: each login's state, add then sign in, check and remove through the accounts calls", async () => {
+  const { window, helper, calls, content, byText } = load();
+  const view = { ok: true, providers: [
+    { id: "claude", name: "Claude Code", installed: true, max: 6, accounts: [
+      { id: "claude-main", label: "Main login", main: true, limited: true, untilText: "3:00 PM", answering: false },
+      { id: "claude-a1b2", label: "Work", main: false, limited: false, answering: true },
+    ] },
+    { id: "codex", name: "Codex", installed: false, max: 6, accounts: [{ id: "codex-main", label: "Main login", main: true, limited: false, answering: true }] },
+  ] };
+  Object.assign(window.mefiStudio, {
+    cliAccounts: async () => view,
+    cliAccountAdd: async (payload) => { calls.push(["cliAccountAdd", payload]); return { ...view, ok: true, account: { id: "claude-c3d4", provider: "claude", label: payload.label } }; },
+    cliAccountLogin: async (id) => { calls.push(["cliAccountLogin", id]); return { ok: true, message: "Sign-in window opened." }; },
+    cliAccountCheck: async (id) => { calls.push(["cliAccountCheck", id]); return { ok: true, message: "Work answered." }; },
+    cliAccountRemove: async (id) => { calls.push(["cliAccountRemove", id]); return { ok: true, message: "Work removed." }; },
+  });
+  helper.open("providers");
+  await settle();
+  const card = () => content().querySelectorAll("section").find((node) => node.textContent.includes("More than one login"));
+  assert.ok(card(), "the card shows for an installed Claude Code");
+  assert.doesNotMatch(card().textContent, /Codex/, "a tool that is not installed and holds one login is left out");
+  const rows = () => card().querySelectorAll(".setup-helper-login");
+  assert.deepEqual(rows().map((row) => row.dataset.state), ["limited", "answering"]);
+  assert.match(rows()[0].textContent, /Topped out until 3:00 PM/);
+  assert.match(rows()[1].textContent, /Answering now/);
+  assert.equal(byText(rows()[0], "Remove"), undefined, "the main login cannot be removed");
+  const name = card().querySelectorAll("input").find((input) => input.getAttribute("aria-label") === "Name for the new Claude Code login");
+  name.value = "Side";
+  await byText(card(), "Add a Claude Code login").click();
+  await settle();
+  assert.deepEqual(calls.filter((row) => row[0] === "cliAccountAdd").at(-1), ["cliAccountAdd", { provider: "claude", label: "Side" }]);
+  assert.deepEqual(calls.filter((row) => row[0] === "cliAccountLogin").at(-1), ["cliAccountLogin", "claude-c3d4"], "a new login goes straight to its sign-in window");
+  await byText(rows()[1], "Check").click();
+  await settle();
+  assert.deepEqual(calls.filter((row) => row[0] === "cliAccountCheck").at(-1), ["cliAccountCheck", "claude-a1b2"]);
+  await byText(rows()[1], "Remove").click();
+  await settle();
+  assert.deepEqual(calls.filter((row) => row[0] === "cliAccountRemove").at(-1), ["cliAccountRemove", "claude-a1b2"]);
+  await byText(rows()[0], "Sign in").click();
+  await settle();
+  assert.deepEqual(calls.filter((row) => row[0] === "cliAccountLogin").at(-1), ["cliAccountLogin", "claude-main"]);
+});
+
+test("without the accounts bridge the connections page reads as before", async () => {
+  const { helper, content } = load();
+  helper.open("providers");
+  await settle();
+  assert.equal(content().querySelectorAll("section").some((node) => node.textContent.includes("More than one login")), false);
+});
+
 test("machine limits save one validated field at a time", async () => {
   const { helper, calls, content } = load();
   helper.open("system");

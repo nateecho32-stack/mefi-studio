@@ -110,6 +110,16 @@
 .setup-helper-summary li[data-tone="good"] strong { color: var(--good); }
 .setup-helper-summary li[data-tone="warn"] strong { color: var(--warn); }
 
+/* Connect an AI › More than one login: one row per login, its state beside it. */
+.setup-helper-logins { display: grid; gap: var(--s2); }
+.setup-helper-logins h4 { margin: 0; font: 600 var(--fs-base)/1.3 var(--font-display); color: var(--ivory); }
+.setup-helper-login-list { display: grid; margin: 0; padding: 0; list-style: none; }
+.setup-helper-login { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s2) var(--s4); padding: var(--s2) 0; border-bottom: 1px solid var(--frost-edge-soft); }
+.setup-helper-login-words { display: grid; gap: 2px; min-width: 0; }
+.setup-helper-login-words strong { color: var(--ivory); font-size: var(--fs-md); }
+.setup-helper-login[data-state="answering"] .setup-helper-login-words small { color: var(--good); }
+.setup-helper-login[data-state="limited"] .setup-helper-login-words small { color: var(--warn); }
+
 .setup-helper-order { display: grid; gap: var(--s1); margin: 0; padding-left: var(--s5); }
 .setup-helper-order li { display: flex; align-items: center; gap: var(--s2); color: var(--ivory); }
 .setup-helper-order li > span { flex: 1; }

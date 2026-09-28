@@ -68,3 +68,30 @@ test("setup reports launch errors, prevents duplicate windows, and refreshes on 
   const broken = createCliSetup({ platform: "win32", spawn: () => { const c = new EventEmitter(); queueMicrotask(() => c.emit("error", new Error("missing shell"))); return c; } });
   assert.match((await broken.action({ id: "grok", action: "login" })).error, /missing shell/);
 });
+
+test("an added login signs in under its own folder, named by id and resolved by the host", async () => {
+  const calls = [], closed = [], asked = [];
+  const children = [];
+  const setup = createCliSetup({ platform: "win32", cwd: "C:/fixture", env: () => ({ PATH: "C:/bin" }), closed: (detail) => closed.push({ ...detail }), openExternal: async () => {},
+    loginEnv: async (id, account) => { asked.push([id, account]); return account === "claude-a1b2" ? { CLAUDE_CONFIG_DIR: "C:/logins/claude-a1b2" } : null; },
+    spawn: (command, args, options) => {
+      calls.push({ command, args, options }); const child = Object.assign(new EventEmitter(), { unref() {} }); children.push(child);
+      queueMicrotask(() => child.emit("spawn")); return child;
+    } });
+  const main = await setup.action({ id: "claude", action: "login" });
+  assert.equal(main.ok, true);
+  assert.deepEqual(calls[0].options.env, { PATH: "C:/bin" }, "the main login signs in where it always has");
+  const added = await setup.action({ id: "claude", action: "login", account: "claude-a1b2" });
+  assert.equal(added.ok, true, "the main login's open window does not block another login's");
+  assert.match(added.message, /Sign in to the other Claude Code account/);
+  assert.deepEqual(calls[1].options.env, { PATH: "C:/bin", CLAUDE_CONFIG_DIR: "C:/logins/claude-a1b2" });
+  assert.match(Buffer.from(calls[1].args.at(-1), "base64").toString("utf16le"), /claude auth login/);
+  assert.doesNotMatch(Buffer.from(calls[1].args.at(-1), "base64").toString("utf16le"), /logins/, "the folder never rides the script");
+  assert.equal((await setup.action({ id: "claude", action: "login", account: "claude-a1b2" })).ok, false, "one window per login");
+  assert.equal((await setup.action({ id: "claude", action: "login", account: "claude-gone" })).error, "That login is not saved.");
+  assert.match((await setup.action({ id: "claude", action: "install", account: "claude-a1b2" })).error, /can only be signed in/);
+  assert.deepEqual(asked, [["claude", "claude-a1b2"], ["claude", "claude-a1b2"], ["claude", "claude-gone"]]);
+  children[1].emit("close", 0);
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  assert.deepEqual(closed, [{ id: "claude", action: "login", account: "claude-a1b2" }]);
+});

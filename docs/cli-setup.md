@@ -33,6 +33,47 @@ sends a new user back through the walkthrough.
    The scan's **Use this setup** and Settings' **Auto setup** save to the same
    places, so folders added later inherit the route.
 
+## More than one login
+
+Two Claude or ChatGPT subscriptions work side by side. Under **Setup › Connect
+an AI › More than one login**, **Add a Claude Code login** (or Codex) makes the
+login a folder of its own under Studio's user data
+(`cli-logins/<id>`), then opens the vendor's sign-in window with
+`CLAUDE_CONFIG_DIR` (Codex: `CODEX_HOME`) pointed at it; sign in there with the
+other account. The CLI's own folder stays the **Main login** and always comes
+first. **Check** sends the same small prompt as Check connection on that login,
+**Sign in** reopens its window, and **Remove** forgets it and deletes its folder
+with the sign-in in it.
+
+- Every Claude Code or Codex call (chat, planning, seats, coding workers and
+  the usage read) runs on the first login that is not topped out.
+- A login that reports its usage limit ("5-hour limit reached ∙ resets 3pm",
+  "You've hit your limit", Codex's "try again in 4 days 3 hours") is set
+  aside until the reset it names, or for half an hour while a usage reading
+  learns the real one. Rate limits and outages are not a login's limit and
+  move nothing. An assistant call is asked again on the next login at once;
+  a coding worker's card goes back to the queue with no backoff and no
+  attempt charged, and runs on the next login.
+- Only when every login is topped out does anything else answer, and only
+  through fallbacks you already allowed (the fallback switch in routing, and
+  not a team set up with **Use for the whole studio**). Otherwise workers wait
+  for the first reset, and the reason is on the feed.
+- The marks outlive a restart (`cli-account-limits.json`), and a usage reading
+  that shows room again lifts one early. Usage › Provider accounts shows one
+  row per login.
+- A Claude Code login links its `projects/` folder to the main login's, so
+  every login works from the same session transcripts and project memory.
+  Removing a login takes the link away first and checks it is gone, so the
+  delete never reaches the main login's folder. Codex logins keep their own
+  `sessions/`: those carry that login's plan windows.
+- Your own settings, plugins and `CLAUDE.md` in the main folder are not
+  copied; Studio passes what its runs need on the command line.
+
+Implementation: `scripts/cli-accounts.cjs` (pure: the logins, which one
+answers, the reset readings) and main.cjs's "Several logins per coding CLI"
+block (the folders, the marks file, `cliAccountTurn` for assistant calls,
+`cliAccountLimitHit` in the executor's `finish`).
+
 No subscription tool? **I have an API key or a local model server** walks to
 Agents › Setup › Connections, where a z.ai, OpenRouter, OpenCode Go or Zen key,
 a custom endpoint or LM Studio can be set up. A saved key that gives the

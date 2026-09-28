@@ -194,7 +194,7 @@
   };
 
   // ---- the host's view, read per visit --------------------------------------
-  const data = { team: null, scope: null, routing: null, keys: {}, cli: null, scan: null };
+  const data = { team: null, scope: null, routing: null, keys: {}, cli: null, scan: null, logins: null };
   const projectId = () => window.MefiWorkspace?.activeProjectId?.() || window.MefiTasks?.state?.projectId || null;
   const projectName = () => window.MefiWorkspace?.activeProject?.()?.name || window.MefiWorkspace?.state?.projects?.find?.((item) => item.id === projectId())?.name || "this project";
   async function loadTeam() {
@@ -388,6 +388,56 @@
     input.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault?.(); save.click(); } });
     return row;
   }
+  // More than one Claude Code or Codex login (main.cjs "Several logins per
+  // coding CLI"). Studio fills the first login that is not topped out and
+  // moves to the next when one reports its usage limit; this lists them in
+  // that order, adds one (a folder, then its sign-in window), checks, signs
+  // in and removes. Shown for a tool that is installed or already has more.
+  function loginsCard(rerender) {
+    const providers = (data.logins?.ok ? data.logins.providers || [] : []).filter((provider) => provider.installed || provider.accounts?.length > 1);
+    if (!providers.length) return null;
+    const box = card("More than one login", "Have two Claude or ChatGPT subscriptions? Add the other login here. Studio uses the first login until it hits its usage limit, moves to the next, and goes back when the limit resets. Other providers answer only once every login is topped out.");
+    const after = () => rerender();
+    for (const provider of providers) {
+      const group = node("div", "setup-helper-logins");
+      group.append(node("h4", "", provider.name));
+      const list = node("ul", "setup-helper-login-list");
+      for (const account of provider.accounts || []) {
+        const row = node("li", "setup-helper-login");
+        row.dataset.state = account.limited ? "limited" : account.answering ? "answering" : "ready";
+        const words = node("span", "setup-helper-login-words");
+        words.append(node("strong", "", account.label),
+          node("small", "setup-helper-hint", account.limited ? `Topped out until ${account.untilText || "its reset"}` : account.answering ? "Answering now" : "Ready, next in line"));
+        const actions = node("span", "setup-helper-row");
+        actions.append(
+          button("Sign in", async (event) => { await run(event.currentTarget, () => need("cliAccountLogin")(account.id), (reply) => reply?.message || "Sign-in window opened."); }, "ghost mini"),
+          button("Check", async (event) => { await run(event.currentTarget, () => need("cliAccountCheck")(account.id), (reply) => reply?.message || `${account.label} answered.`); after(); }, "ghost mini"),
+        );
+        if (!account.main) {
+          // Removing a login deletes its sign-in on this PC: a second press
+          // confirms where the shared two-step control is loaded.
+          const remove = async (event) => { await run(event.currentTarget, () => need("cliAccountRemove")(account.id), (reply) => reply?.message || `${account.label} removed.`); after(); };
+          actions.append(window.MefiUi?.arm ? window.MefiUi.arm(button("Remove", () => {}, "ghost mini"), { run: remove, armed: "Remove this login?" }) : button("Remove", remove, "ghost mini"));
+        }
+        row.append(words, actions);
+        list.append(row);
+      }
+      group.append(list);
+      if ((provider.accounts || []).length < (provider.max || 6)) {
+        const label = textInput("", { placeholder: `Login ${(provider.accounts || []).length + 1}`, label: `Name for the new ${provider.name} login`, max: 40 });
+        const add = button(`Add a ${provider.name} login`, async (event) => {
+          const result = await run([event.currentTarget, label], () => need("cliAccountAdd")({ provider: provider.id, label: label.value.trim() }), (reply) => `${reply?.account?.label || "The login"} added. Sign in with the other account in the window that opens.`);
+          if (result?.account?.id) await run(null, () => need("cliAccountLogin")(result.account.id), (reply) => reply?.message || "Sign-in window opened.");
+          after();
+        }, "ghost");
+        const addRow = node("div", "setup-helper-row");
+        addRow.append(label, add);
+        group.append(addRow);
+      }
+      box.append(group);
+    }
+    return box;
+  }
   async function refreshKeys(which = ["opencode", "zen", "zai", "openrouter", "custom", "github", "gateway", "jev"]) {
     const fn = api()?.getApiKey;
     if (typeof fn !== "function") return;
@@ -399,7 +449,8 @@
     status: () => (data.routing ? routeReady() ? "done" : "attention" : ""),
     async render(body, context) {
       const rerender = () => { if (context.current()) void show("providers", { focus: false }); };
-      await Promise.all([loadRouting().catch(() => {}), refreshKeys(), (async () => { try { data.cli = await api()?.cliSetupStatus?.(); } catch { data.cli = null; } })()]);
+      await Promise.all([loadRouting().catch(() => {}), refreshKeys(), (async () => { try { data.cli = await api()?.cliSetupStatus?.(); } catch { data.cli = null; } })(),
+        (async () => { try { data.logins = await api()?.cliAccounts?.(); } catch { data.logins = null; } })()]);
       if (!context.current()) return;
       const routing = data.routing || {};
 
@@ -462,6 +513,8 @@
       }
       subscription.append(button("Setup instructions", cliAction("docs"), "ghost mini"));
       body.append(subscription);
+      const logins = loginsCard(rerender);
+      if (logins) body.append(logins);
 
       const keys = card("API keys", "Keys are encrypted with this computer's keystore and never leave it except to their own provider. Saving one does not switch any agent to it; choose providers in Team & models.");
       for (const [which, title, detail] of KEYS) keys.append(keyRow(which, title, detail, rerender));
@@ -1064,6 +1117,10 @@
       data.team = null;
       if (["team", "routing", "run", "tools", "finish", "providers"].includes(state.section)) rerenderSoon();
     });
+    // A login topped out, came back, or finished signing in: repaint its row.
+    const loginsMoved = () => { if (state.open && state.section === "providers") rerenderSoon(); };
+    api()?.onCliAccounts?.(loginsMoved);
+    api()?.onCliSetupClosed?.((detail) => { if (detail?.account) loginsMoved(); });
     window.addEventListener("mefi:queue-settings", () => { if (state.open && ["run", "finish"].includes(state.section) && queueKey() !== state.queueShown) rerenderSoon(); });
     window.MefiScroll?.scan?.(overlay);
   }

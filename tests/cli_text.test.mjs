@@ -33,6 +33,17 @@ test("Codex sends prompts through stdin in a disposable directory and cleans it"
   assert.doesNotMatch(f.calls[0].args.join(" "), /private/);
   await assert.rejects(access(f.calls[0].options.cwd));
 });
+test("a second login's folder rides the child's environment, and without one the environment is inherited", async () => {
+  for (const platform of ["win32", "linux"]) {
+    const f = fixture((child) => { child.stdout.write('{"type":"result","result":"READY"}'); child.emit("close", 0); });
+    await run({ provider: "claude", system: "system", user: "private", platform, spawnImpl: f.spawnImpl, env: { CLAUDE_CONFIG_DIR: "C:/logins/claude-a1b2" } });
+    assert.equal(f.calls[0].options.env.CLAUDE_CONFIG_DIR, "C:/logins/claude-a1b2", platform);
+    assert.equal(f.calls[0].options.env.PATH ?? f.calls[0].options.env.Path, process.env.PATH ?? process.env.Path, "the rest of the environment comes along");
+    const inherited = fixture((child) => { child.emit("close", 0); });
+    await run({ provider: "claude", system: "system", user: "private", platform, spawnImpl: inherited.spawnImpl });
+    assert.equal(inherited.calls[0].options.env, undefined, `${platform}: no env option at all for the main login`);
+  }
+});
 test("Antigravity with inherited tools receives no project prompt", async () => {
   const f = fixture((child) => { child.stdout.write(JSON.stringify({ event: "init", init: { agent: "mefi-text", tools: ["write_to_file"] } }) + "\n"); });
   const result = await run({ provider: "antigravity", system: "system", user: "private", platform: "linux", spawnImpl: f.spawnImpl });

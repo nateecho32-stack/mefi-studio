@@ -21,7 +21,9 @@ function argumentsFor(provider, model = "") {
 // Text calls never run in the project directory. Antigravity receives no
 // prompt until its init event confirms the no-tools agent actually loaded.
 // A CLI too old for these controls fails visibly; never retry without them.
-async function run({ provider, system, user, model = "", timeoutMs = 180000, onSpawn, spawnImpl = spawn, tempRoot = os.tmpdir(), platform = process.platform }) {
+// `env` adds to the inherited environment: the folder of a second Claude
+// Code or Codex login (scripts/cli-accounts.cjs).
+async function run({ provider, system, user, model = "", timeoutMs = 180000, onSpawn, spawnImpl = spawn, tempRoot = os.tmpdir(), platform = process.platform, env = null }) {
   let root;
   try {
     const args = argumentsFor(provider, model);
@@ -45,9 +47,10 @@ async function run({ provider, system, user, model = "", timeoutMs = 180000, onS
         else child.kill("SIGKILL");
       };
       const finish = (result) => { if (done) return; done = true; clearTimeout(timer); resolve({ stdout, stderr, ...result }); };
+      const extra = env && Object.keys(env).length ? { env: { ...process.env, ...env } } : {};
       try {
-        child = platform === "win32" ? spawnImpl("cmd.exe", buildWindowsCmdArgs(command, args), { cwd: root, windowsHide: true, windowsVerbatimArguments: true, stdio: ["pipe", "pipe", "pipe"] })
-          : spawnImpl(command, args, { cwd: root, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+        child = platform === "win32" ? spawnImpl("cmd.exe", buildWindowsCmdArgs(command, args), { cwd: root, windowsHide: true, windowsVerbatimArguments: true, stdio: ["pipe", "pipe", "pipe"], ...extra })
+          : spawnImpl(command, args, { cwd: root, windowsHide: true, stdio: ["pipe", "pipe", "pipe"], ...extra });
         onSpawn?.(child);
         timer = setTimeout(() => { stop(); finish({ code: null, error: `${provider} timed out. Check its sign-in and usage limit in Connections.`, timedOut: true }); }, timeoutMs);
         child.on("error", (error) => finish({ code: null, error: error.message }));

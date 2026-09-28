@@ -7,6 +7,20 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **More than one Claude Code or Codex login.** Setup › Connect an AI › **More
+  than one login** adds a second (up to a sixth) subscription login for
+  Claude Code or Codex: Studio makes the login its own folder, opens the
+  sign-in window there, and hands the folder to the CLI as `CLAUDE_CONFIG_DIR`
+  or `CODEX_HOME`. Work fills the first login that is not topped out. When one
+  reports its usage limit, it is set aside until the reset its message or its
+  usage reading names: an assistant call asks the next login at once, and a
+  coding worker's card goes straight back to the queue for it, uncharged and
+  with no outage backoff. Other providers answer only once every login is
+  topped out, and only through the fallbacks already allowed; otherwise the
+  workers wait for the first reset and say so. Each login gets its own row
+  in Usage › Provider accounts, the limit marks survive a restart, and a
+  Claude Code login shares the main login's `projects/` (sessions and memory)
+  through a link that removing the login never deletes through.
 - **Agents on several PCs never edit the same file at once.** Link a cowork
   room to a project (Friends › Rooms, open the room, **Use this room for this
   project's agents**). Before a builder starts, Studio claims the files it will

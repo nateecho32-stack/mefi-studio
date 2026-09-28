@@ -316,6 +316,19 @@ test("a provider outage is requeued on the outage backoff with no attempt charge
   assert.equal(lastLog(row), "provider unavailable (exit 1) · Usage limit reached · requeued in 20m, no attempt charged");
 });
 
+test("a topped-out subscription login sends the card straight back for the next login, off the outage streak", () => {
+  const accountLimit = { tag: "Claude Code · Main login", until: "3:00 PM", next: "Claude Code · Work" };
+  const row = settle(owned({ providerFailures: 2, nextRunAt: NOW - MINUTE }), { ok: false, providerOutage: true, providerSaid: true, lastWords: "You've hit your limit · resets 3pm", accountLimit });
+  assert.equal(row.status, "open");
+  assert.equal(row.nextRunAt, undefined, "no backoff: the next login is ready now");
+  assert.equal(row.providerFailures, 2, "the provider answered; its outage streak stands still");
+  assert.equal(row.runFailures, undefined, "no attempt charged");
+  assert.equal(row.lastRunError, "You've hit your limit · resets 3pm");
+  assert.equal(lastLog(row), "provider unavailable (exit 1) · Claude Code · Main login topped out until 3:00 PM · requeued now on Claude Code · Work, no attempt charged");
+  const last = settle(owned(), { ok: false, providerOutage: true, providerSaid: true, lastWords: "limit", accountLimit: { ...accountLimit, next: null } });
+  assert.equal(lastLog(last), "provider unavailable (exit 1) · Claude Code · Main login topped out until 3:00 PM · requeued now for the next route, no attempt charged");
+});
+
 test("a charged failure backs off 1m, 20m, 40m, 80m and parks on the fifth", () => {
   const seen = [];
   for (let prior = 0; prior < 5; prior += 1) {

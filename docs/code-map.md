@@ -152,6 +152,7 @@ one-line hooks; the rules live in the pure modules it composes. See
 | `provider-breaker.cjs` | 194 | A circuit breaker per provider for the host's own model calls, adapted from BetterC0de. `httpAssistantCall` and `assistantFetch` gate every call on it. |
 | `redaction.cjs` | 92 | `scrubOutbound`, the gate every outbound payload passes through, and `safeExcerpt`. |
 | `credentials.cjs` | 93 | Which environment variables may back each saved key: Studio's own `MEFI_STUDIO_*` names and the names other tools share. |
+| `cli-accounts.cjs` | 234 | Several logins per coding CLI: Claude Code's and Codex's main login plus the ones added in Setup (each a folder handed over as `CLAUDE_CONFIG_DIR` / `CODEX_HOME`), which one answers (the first not topped out), a login's usage-limit words and when they say it resets, and what a usage reading says. Pure; main.cjs's "Several logins per coding CLI" block keeps the folders and the limit marks, runs assistant calls over the logins (`cliAccountTurn`) and sets a worker's topped-out login aside in `finish`. See [cli-setup.md](cli-setup.md#more-than-one-login). |
 | `auth-store.cjs` | 93 | Keeps the key ciphertext in `auth.json`, apart from the `settings.json` preferences: splits a settings view into the two, merges them back into one view for callers, and writes the auth file atomically. |
 | `decision-client.mjs` | 631 | The Jev classifier client over its four routes. |
 | `model-routing.mjs` | 285 | The builder-model evaluator: each candidate's verified record on this kind of work, cost, speed and strengths become a win probability (`estimateWinProbability`); Jev or the stand-in judge answers one probability per candidate, and the highest wins. See [agent-loop.md §12](agent-loop.md#12-choosing-a-builders-model-the-win-probability-evaluator). |
@@ -186,7 +187,7 @@ one-line hooks; the rules live in the pure modules it composes. See
 | `planning.cjs` · `planning-service.cjs` | | Decision planning and read-only live drafting, kept apart from board work until a specification is approved. Live exploration uses the Analyzer's bounded file inventory and returns proposals without writing the plan journal. |
 | `analyzer.mjs` · `reference.mjs` | 588 · 188 | Local analysis of a file or an idea; exact context gathered before something becomes a task. |
 | `first-scan.mjs` · `first-map.mjs` · `first-run-service.mjs` · `setup-assist.mjs` | 510 · 228 · 328 · 121 | The first-run scan of the machine, the first map of a folder, the service behind the walkthrough's stops, and the setup assistant. |
-| `cli-setup.cjs` · `cli-text.cjs` | | Guided vendor installation/sign-in, single-subscription configuration, and restricted CLI text sessions for mapping, planning and agent roles. |
+| `cli-setup.cjs` · `cli-text.cjs` | | Guided vendor installation/sign-in (an added login signs in under its own folder, named by id), single-subscription configuration, and restricted CLI text sessions for mapping, planning and agent roles (a login's folder rides their environment). |
 | `auditor.mjs` | 224 | Local wiring and gap checks, with no network and no key. |
 
 ### Policy Lab
