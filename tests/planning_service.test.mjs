@@ -533,3 +533,55 @@ test("resuming an interview retains early human answers and complete attached te
   assert.equal(prompt.questions[0].earlierNotesOmitted, 3);
   assert.equal(prompt.questions[0].interview.length, 12);
 });
+
+test("the plans list can answer before the folder scan, and prepare brings the scan and a warm project read", async (t) => {
+  const reads = [];
+  const { service, project } = await fixture(t, {
+    scanWork: async () => ({ ok: true, tracker: { kind: "local" }, efforts: [], remote: null, tooling: null, counts: { maps: 0, specs: 0, open: 0, frontier: 0, resolved: 0 } }),
+    prepareContext: async ({ query, fresh }) => { reads.push({ query, fresh }); return { scanned: 42, structure: ["src/", "docs/", "README.md"], limitations: ["one folder was unreadable"] }; },
+  });
+  const quick = await service.list({ projectId: project.id, skipExisting: true });
+  assert.equal(quick.ok, true);
+  assert.equal(quick.plans.length, 1);
+  assert.equal("existing" in quick, false, "no scan rides the quick list");
+  const ready = await service.prepare({ projectId: project.id, query: "Export reports" });
+  assert.equal(ready.ok, true);
+  assert.equal(ready.existing.tracker.kind, "local");
+  assert.deepEqual({ scanned: ready.index.scanned, structure: ready.index.structure, limitations: ready.index.limitations }, { scanned: 42, structure: ["src/", "docs/", "README.md"], limitations: 1 });
+  assert.deepEqual(reads, [{ query: "Export reports", fresh: false }]);
+  await service.prepare({ projectId: project.id, fresh: true });
+  assert.equal(reads.at(-1).fresh, true, "the Project ready chip can ask for a fresh read");
+  const failed = await fixture(t, { prepareContext: async () => { throw new Error("folder gone"); } });
+  const broken = await failed.service.prepare({ projectId: failed.project.id });
+  assert.equal(broken.ok, true, "a failed read never fails the plans");
+  assert.equal(broken.index.error, "folder gone");
+  assert.equal((await service.prepare({ projectId: "another" })).ok, false, "a switched project is refused");
+});
+
+test("the quick model answers first, and a reply it fumbles is asked once more of the deep model", async (t) => {
+  const f = await fixture(t);
+  const replies = [{ ok: true, text: "not json at all" }, { ok: true, text: JSON.stringify({ understood: null, conflict: null, question: "Which rows should the export contain?", type: "discussion", dependsOn: [], followUp: false, complete: false, note: "" }) }];
+  f.state.reply = null;
+  const seats = [];
+  const service = createPlanningService({ project: f.project, store: f.store, mutateBoard: async () => ({ ok: true }), complete: async (_prompt, options) => { seats.push(options.seat); return replies.shift(); } });
+  const plan = await f.plan();
+  const result = await service.assist({ projectId: f.project.id, planId: plan.id, version: plan.version, kind: "interview" });
+  assert.equal(result.ok, true, result.error);
+  assert.deepEqual(seats, ["routine", "heavy"]);
+  assert.equal(result.seat, "heavy");
+  assert.match(result.note, /deep model answered/);
+  assert.equal(result.plan.questions.length, 1);
+  // Asked to think harder, the deep model answers straight away.
+  const deeper = [];
+  const deep = createPlanningService({ project: f.project, store: f.store, mutateBoard: async () => ({ ok: true }), complete: async (_prompt, options) => { deeper.push(options.seat); return { ok: true, text: "Weigh speed against clarity." }; } });
+  const saved = await f.plan();
+  const explained = await deep.assist({ projectId: f.project.id, planId: saved.id, version: saved.version, kind: "question", questionId: saved.questions[0].id, deep: true });
+  assert.equal(explained.ok, true, explained.error);
+  assert.deepEqual(deeper, ["heavy"]);
+  // When both seats fail, the quick model's own error is the one shown.
+  const failing = createPlanningService({ project: f.project, store: f.store, mutateBoard: async () => ({ ok: true }), complete: async (_prompt, options) => ({ ok: false, error: options.seat === "routine" ? "Quick seat offline" : "Deep seat offline" }) });
+  const latest = await f.plan();
+  const failed = await failing.assist({ projectId: f.project.id, planId: latest.id, version: latest.version, kind: "interview" });
+  assert.equal(failed.ok, false);
+  assert.equal(failed.error, "Quick seat offline");
+});

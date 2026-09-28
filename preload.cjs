@@ -159,6 +159,8 @@ const api = {
   planningAction: (payload) => ipcRenderer.invoke("planning:action", payload ?? {}),
   planningAssist: (payload) => ipcRenderer.invoke("planning:assist", payload ?? {}),
   planningExplore: (payload) => ipcRenderer.invoke("planning:explore", payload ?? {}),
+  // The folder scan and a warm project read, fetched after the plans list.
+  planningPrepare: (payload) => ipcRenderer.invoke("planning:prepare", payload ?? {}),
   tasksCreate: (task) => ipcRenderer.invoke("tasks:create", task),
   // Vibe's Build it: one card, or the owner's card split into steps (main.cjs vibeBuild).
   vibeBuild: (payload) => ipcRenderer.invoke("vibe:build", payload ?? {}),

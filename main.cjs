@@ -13751,6 +13751,7 @@ function planningService() {
       // issues on the repo's tracker plus the agents, skills and commands
       // its coding tools can reach. Read-only, cached a minute per folder.
       scanWork: ({ root, fresh = false } = {}) => projectWork.scanProjectWork(root, { fresh }),
+      prepareContext: async ({ query, fresh }) => (await getAnalyzer()).explorePlanningFiles(query, { root: project.path, fresh, maxAge: 120000 }),
       onConverted: async (admitted = []) => {
         // Only durable new task rows reach advisory intake. A retry of an
         // already admitted specification must not classify its tasks twice.
@@ -13759,15 +13760,18 @@ function planningService() {
         await refreshAutopilotQueue();
         assistantAskForWork("you created tasks from an approved plan");
       },
-      complete: async ({ system, user }, { kind, progress = null }) => {
+      complete: async ({ system, user }, { kind, seat = null, progress = null }) => {
         // Planning replies are data-only. A CLI's implicit tools must never
         // turn discussion into production changes, so only a tool-less CLI
         // (Claude Code with --tools=) may answer; the rest stay on HTTP.
-        const route = await resolveAiRoute(kind === "spec" ? "heavy" : "routine", { allowCli: DATA_ONLY_CLIS });
+        // The quick (routine) seat answers first; the service asks for the
+        // heavy seat for a spec, a "think harder" turn, or a retry.
+        const role = seat === "heavy" || seat === "routine" ? seat : kind === "spec" ? "heavy" : "routine";
+        const route = await resolveAiRoute(role, { allowCli: DATA_ONLY_CLIS });
         if (!route.ok) return { ok: false, error: "Connect and check your provider in Agents setup. Codex, Claude Code, Grok or Antigravity can handle planning through their own login. You can create questions, record decisions, and write the specification manually." };
         // Vibe's planner names who is thinking (renderer/vibe-flow.js).
-        if (typeof progress === "function") progress({ seat: kind === "spec" ? "heavy" : "routine", provider: route.provider || null, model: route.model || null, cli: Boolean(route.cli) });
-        return (route.cli ? cliAssistantCall : httpAssistantCall)(route, system, user, kind === "spec" ? 7000 : 2500, { taskType: `planning-${kind}`, source: "planning", role: kind === "spec" ? "heavy" : "routine" });
+        if (typeof progress === "function") progress({ seat: role, provider: route.provider || null, model: route.model || null, cli: Boolean(route.cli) });
+        return (route.cli ? cliAssistantCall : httpAssistantCall)(route, system, user, kind === "spec" ? 7000 : 2500, { taskType: `planning-${kind}`, source: "planning", role });
       },
       // Each step of a named exploration goes to the page that asked.
       onProgress: (event) => send("vibe:progress", event),
@@ -13776,7 +13780,10 @@ function planningService() {
         const latestAnswer = (question?.notes || []).filter((note) => note.author === "user").at(-1)?.text || "";
         const query = `${plan.title}\n${question?.question || ""}\n${latestAnswer.slice(0, 2000)}\n${plan.destination.slice(0, 4000)}`;
         const analyzer = await getAnalyzer();
-        const references = await analyzer.explorePlanningFiles(query, { root: project.path, fresh: true });
+        // Plans warms this read when it opens (prepare below); a turn answers
+        // from it and refreshes it behind the reply instead of waiting seconds
+        // on a cold scan of the whole folder.
+        const references = await analyzer.explorePlanningFiles(query, { root: project.path, maxAge: 120000, stale: true });
         const web = useWeb ? await (await getReference()).webSearch(`${plan.title} ${question?.question || plan.destination}`.slice(0, 2000), { limit: 5 }) : [];
         return { ...references, web, webRequested: useWeb };
       },
@@ -19769,6 +19776,7 @@ function registerIpc() {
   ipcMain.handle("planning:action", (_event, payload) => planningRequest("action", payload));
   ipcMain.handle("planning:assist", (_event, payload) => planningRequest("assist", payload));
   ipcMain.handle("planning:explore", (_event, payload) => planningRequest("explore", payload));
+  ipcMain.handle("planning:prepare", (_event, payload) => planningRequest("prepare", payload));
   ipcMain.handle("tasks:create", (_event, payload = {}) => composerTask(payload ?? {}));
   ipcMain.handle("vibe:build", (_event, payload = {}) => vibeBuild(payload ?? {}));
   async function composerTask({ title, prompt, projectId, intake = null, ideaId = null, ideaIds = null } = {}) {

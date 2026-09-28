@@ -49,21 +49,30 @@ body:has(#plans-overlay:not([hidden])) #idle-layer { opacity: .18; }
 .planning-library-empty p { margin: 7px 0 0; font-size: 11px; }
 .planning-detail { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 20px; overflow: hidden; background: transparent; }
 .planning-workflow { flex: none; width: 100%; max-width: 1340px; max-height: 36%; overflow: auto; margin: 0 auto 14px; padding: 0 0 10px; border-bottom: 1px solid var(--planning-edge); }
-.planning-flow-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 10px; }
-.planning-flow-head > div { min-width: 0; }
+.planning-flow-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.planning-flow-head > div { flex: 1; min-width: 0; }
 .planning-flow-kicker { display: block; font-size: 11px; line-height: 1.5; color: var(--muted); }
-.planning-flow-head h3 { font-size: 20px; line-height: 1.35; margin: 2px 0 0; letter-spacing: -.025em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.planning-flow-head h3 { font-size: 22px; line-height: 1.35; margin: 2px 0 0; letter-spacing: -.025em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .planning-flow-head p { margin: 0; max-width: 470px; }
 .planning-flow-badge { flex: none; max-width: 145px; border: 1px solid var(--hairline); border-radius: 20px; padding: 6px 10px; font-size: 10px; line-height: 1.5; color: var(--muted); }
 .planning-flow-badge[data-state="complete"] { color: var(--good); }
-.planning-flow-rail { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; }
+/* The steps sit on one track; the fill under them is how far the plan has come. */
+.planning-flow-rail { position: relative; list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; }
+.planning-flow-rail::after { content: ""; position: absolute; left: 0; right: 0; bottom: -6px; height: 3px; border-radius: 3px; background: linear-gradient(90deg, var(--gold-bright) calc(var(--planning-progress, 0) * 100%), var(--hairline) 0); opacity: .8; }
 .planning-flow-rail li { position: relative; display: flex; min-width: 0; }
-.planning-flow-stage { position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; width: 100%; min-height: 54px; padding: 8px; border: 1px solid var(--planning-edge); border-radius: 10px; background: var(--planning-sheen), var(--planning-inset); color: var(--muted); text-align: left; white-space: normal; transition: background .18s, border-color .18s, box-shadow .18s; }
+.planning-flow-stage { position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; width: 100%; min-height: 46px; padding: 6px 8px; border: 1px solid var(--planning-edge); border-radius: 10px; background: var(--planning-sheen), var(--planning-inset); color: var(--muted); text-align: left; white-space: normal; transition: background .18s, border-color .18s, box-shadow .18s; }
 .planning-flow-stage strong { color: var(--ivory); font-size: 11px; line-height: 1.4; font-weight: 600; }
 .planning-stage-copy { display: grid; gap: 3px; min-width: 0; }
 .planning-stage-copy > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .planning-stage-detail { display: none; }
 .planning-stage-number { font-size: 9px; line-height: 1.4; color: var(--muted); font-variant-numeric: tabular-nums; }
+.planning-flow-stage[data-state="complete"] { color: var(--ivory); background: linear-gradient(115deg, color-mix(in srgb, var(--good) 9%, transparent), transparent 70%), var(--planning-inset); }
+.planning-flow-stage[data-state="complete"] .planning-step-icon { color: var(--theme-bg, #0b1512); background: var(--planning-step-accent); border-color: transparent; }
+.planning-flow-stage[data-state="waiting"] { opacity: .78; }
+.planning-flow-stage[data-celebrate="true"] .planning-step-icon { animation: planning-pop .8s cubic-bezier(.2, 1.4, .4, 1); }
+.planning-flow-stage[data-celebrate="true"]::before { content: ""; position: absolute; inset: -1px; border-radius: inherit; border: 1px solid var(--planning-step-accent); opacity: 0; pointer-events: none; animation: planning-ring 1s ease-out; }
+@keyframes planning-pop { 0% { transform: scale(.6); } 60% { transform: scale(1.18); } 100% { transform: scale(1); } }
+@keyframes planning-ring { 0% { opacity: .9; transform: scale(1); } 100% { opacity: 0; transform: scale(1.08); } }
 .planning-flow-stage[data-state="current"]::after { content: ""; position: absolute; top: 5px; right: 6px; width: 4px; height: 4px; border-radius: 50%; background: var(--planning-step-accent); }
 .planning-flow-stage[data-selected="true"] { border-color: color-mix(in srgb, var(--planning-step-accent) 45%, transparent); background: linear-gradient(115deg, color-mix(in srgb, var(--planning-step-accent) 12%, transparent), transparent), var(--planning-inset); box-shadow: inset 0 -2px color-mix(in srgb, var(--planning-step-accent) 60%, transparent), 0 0 12px var(--tint-gold-1); }
 .planning-flow-stage[data-selected="true"] .planning-stage-number, .planning-flow-stage[data-state="complete"] .planning-stage-number { color: var(--planning-step-accent); }
@@ -81,9 +90,13 @@ body:has(#plans-overlay:not([hidden])) #idle-layer { opacity: .18; }
 .planning-flow-stage[data-step="decisions"] .planning-step-icon, .planning-flow-stage[data-step="approval"] .planning-step-icon { border-radius: 5px 11px 5px 11px; }
 .planning-flow-stage[data-step="spec"] .planning-step-icon, .planning-flow-stage[data-step="build"] .planning-step-icon { border-radius: 5px; }
 .planning-flow-stage:hover, .planning-map-question:hover, .planning-work-task:hover { border-color: var(--hairline-strong); background: var(--tint-gold-2); }
-.planning-flow-status { display: flex; align-items: flex-start; gap: 8px; margin-top: 10px; color: var(--muted); font-size: 11px; line-height: 1.6; }
+/* Up next: what the plan is waiting on, with one button that goes there. */
+.planning-flow-status { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 4px 6px 4px 12px; border: 1px solid var(--planning-edge); border-radius: 11px; background: var(--planning-inset); color: var(--muted); font-size: 12px; line-height: 1.5; }
+.planning-flow-status > span:not(.planning-flow-dot) { flex: 1; min-width: 0; }
+.planning-next { flex: none; padding: 6px 12px; border: 1px solid var(--planning-edge-active); border-radius: 8px; background: linear-gradient(150deg, var(--tint-gold-3), var(--tint-gold-1)); color: var(--ivory); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.planning-next:hover { border-color: color-mix(in srgb, var(--gold) 60%, transparent); background: var(--tint-gold-3); }
 .planning-flow-status[data-active="true"] { color: var(--gold-bright); }
-.planning-flow-dot { flex: none; height: 5px; width: 5px; border-radius: 50%; margin-top: 6px; background: var(--hairline-strong); }
+.planning-flow-dot { flex: none; height: 6px; width: 6px; border-radius: 50%; background: var(--gold-bright); }
 /* The thinking dot breathes on opacity alone; its halo is a fixed ring on a
    pseudo-element that fades in with it (the dot's .6 dims it too, as it did
    the animated box-shadow), so the compositor runs the loop, not paint. */
@@ -129,8 +142,8 @@ body:has(#plans-overlay:not([hidden])) #idle-layer { opacity: .18; }
 .planning-section[open] > summary .planning-section-chevron { transform: rotate(180deg); }
 .planning-section[open] > summary { margin-bottom: 7px; }
 .planning-section > h3 { margin: 0 0 9px; font-size: 20px; }
-.planning-section > p { margin: 0 0 16px; color: var(--muted); font-size: 12px; line-height: 1.6; }
-.planning-form { display: grid; gap: 16px; }
+.planning-section > p { margin: 0 0 12px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.planning-form { display: grid; gap: 13px; }
 .planning-field { display: grid; gap: 9px; min-width: 0; color: var(--muted); font-size: 13px; border-radius: 10px; transition: color .18s; }
 .planning-field:focus-within { color: var(--gold-bright); }
 .planning-field-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 26px; }
@@ -164,17 +177,25 @@ body:has(#plans-overlay:not([hidden])) #idle-layer { opacity: .18; }
 .planning-dependencies legend { margin-bottom: 7px; color: var(--muted); font-size: 12px; }
 .planning-check { display: flex; gap: 9px; align-items: flex-start; font-size: 13px; line-height: 1.4; color: var(--muted); }
 .planning-check input { accent-color: var(--gold); margin-top: 2px; }
-.planning-notes { max-height: 320px; overflow: auto; }
-.planning-note { padding: 10px 12px; margin: 8px 0; background: var(--planning-inset); border-left: 2px solid var(--hairline-strong); border-radius: 0 8px 8px 0; }
+.planning-notes { max-height: 360px; overflow: auto; }
+/* The interview reads like a chat: your words on the right, Mefi's on the left. */
+.planning-notes { display: flex; flex-direction: column; gap: 8px; padding: 4px 2px; }
+.planning-note { max-width: 86%; padding: 9px 13px; margin: 0; background: var(--planning-inset); border: 1px solid var(--planning-edge); border-left: 2px solid var(--hairline-strong); border-radius: 4px 13px 13px 13px; }
+.planning-note:is([data-note-kind="answer"], [data-note-kind="note"]) { align-self: flex-end; border-left-width: 1px; border-left-color: var(--planning-edge); border-right: 2px solid var(--gold); border-radius: 13px 4px 13px 13px; background: var(--tint-gold-2); }
 .planning-note strong { font-size: 12px; color: var(--gold-bright); }
 .planning-note p { margin: 5px 0; white-space: pre-wrap; font-size: 13px; }
 /* Where a line came from. Your own words read as settled; anything Mefi
    proposed stays visibly unconfirmed until you record it as a decision. */
-.planning-note[data-note-kind="answer"] { border-left-color: var(--gold); }
 .planning-note[data-note-kind="interpretation"], .planning-note[data-note-kind="conflict"] { border-left-style: dashed; }
 .planning-note[data-note-kind="conflict"] strong { color: #f0c073; }
 .planning-interview { border-color: var(--hairline-strong); background: var(--tint-gold-2); }
-.planning-interview-ask { margin: 8px 0 14px; font-size: 16px; line-height: 1.55; }
+.planning-interview-ask { margin: 10px 0 14px; padding-left: 12px; border-left: 3px solid var(--gold-bright); font-size: 18px; line-height: 1.5; color: var(--ivory); letter-spacing: -.01em; }
+/* Mefi's reading of your answer, with the one-click way to make it yours. */
+.planning-reading { margin: 4px 0 16px; padding: 12px 14px; border: 1px dashed color-mix(in srgb, var(--gold) 45%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--gold) 6%, transparent); }
+.planning-reading-label { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--gold-bright); }
+.planning-reading p { margin: 6px 0 2px; font-size: 14px; line-height: 1.6; color: var(--ivory); }
+.planning-reading .planning-actions { margin-top: 8px; }
+.planning-options { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 10px; }
 .planning-confirm { padding: 18px; border: 1px solid var(--hairline-strong); border-radius: 12px; background: var(--tint-gold-2); }
 .planning-confirm p { line-height: 1.6; margin: 0 0 10px; font-size: 13px; }
 .planning-handoff-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; color: var(--planning-step-accent); font-size: 14px; }
@@ -327,3 +348,36 @@ html[data-no-blur] #plans-overlay { --planning-blur: none; --planning-page-blur:
 :is(.no-motion, .ws-still, html[data-motion="off"]) :is(.planning-field, .planning-field input, .planning-field textarea, .planning-field select, .planning-flow-stage) { animation: none !important; transition: none !important; }
 :is(.no-motion, .ws-still, html[data-motion="off"]) .planning-copilot-status::before { animation: none !important; }
 :is(.no-motion, .ws-still, html[data-motion="off"]) .planning-section-chevron { transition: none; }
+
+/* One step at a time: only the sections of the step in view, unless you ask
+   for the whole plan. The Already-in-this-project panel belongs to the idea. */
+.planning-editor[data-show-all="false"][data-focus="idea"] > .planning-section[data-step]:not([data-step="idea"]),
+.planning-editor[data-show-all="false"][data-focus="explore"] > .planning-section[data-step]:not([data-step="explore"]),
+.planning-editor[data-show-all="false"][data-focus="decisions"] > .planning-section[data-step]:not([data-step="decisions"]),
+.planning-editor[data-show-all="false"][data-focus="review"] > .planning-section[data-step]:not([data-step="review"]),
+.planning-editor[data-show-all="false"][data-focus="spec"] > .planning-section[data-step]:not([data-step="spec"]) { display: none; }
+.planning-editor[data-show-all="false"] > .planning-section[data-empty="true"] { display: none; }
+.planning-show-all { display: block; margin: 0 0 8px auto; padding: 4px 10px; font-size: 11px; color: var(--muted); }
+.planning-show-all[aria-pressed="true"] { color: var(--gold-bright); }
+
+/* Idea starters and where the plan lives: small pills you tap. */
+.planning-starters, .planning-where-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.planning-starters { margin-top: -5px; }
+.planning-starter, .planning-where-chip { padding: 5px 11px; border: 1px solid var(--planning-edge); border-radius: 999px; background: var(--planning-inset); color: var(--muted); font-size: 12px; white-space: nowrap; transition: border-color .18s, color .18s, background .18s; }
+.planning-starter:hover, .planning-where-chip:hover { border-color: var(--hairline-strong); color: var(--ivory); background: var(--tint-gold-1); }
+.planning-where-chip[aria-pressed="true"] { border-color: var(--planning-edge-active); color: var(--gold-bright); background: var(--tint-gold-2); }
+.planning-where { display: grid; gap: 9px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--hairline); }
+.planning-where-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.planning-where-head strong { color: var(--ivory); font-size: 13px; font-weight: 600; }
+.planning-where-head .planning-subtle { font-size: 11px; }
+
+/* Whether the project has been read and mapped for this plan. */
+.planning-ready { display: inline-flex; align-items: center; gap: 7px; flex: none; padding: 5px 10px; border: 1px solid var(--hairline); border-radius: 999px; background: transparent; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.planning-ready::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--hairline-strong); }
+.planning-ready[data-state="ready"]::before { background: var(--good); }
+.planning-ready[data-state="error"] { color: var(--bad); }
+.planning-ready[data-state="error"]::before { background: var(--bad); }
+.planning-ready[data-state="working"]::before { background: var(--gold-bright); animation: planning-think 1.8s ease-in-out infinite; }
+.planning-ready:hover { border-color: var(--hairline-strong); color: var(--ivory); }
+@media (prefers-reduced-motion: reduce) { .planning-ready::before, .planning-flow-stage[data-celebrate="true"] .planning-step-icon, .planning-flow-stage[data-celebrate="true"]::before { animation: none !important; } }
+:is(.no-motion, .ws-still, html[data-motion="off"]) .planning-ready::before, :is(.no-motion, .ws-still, html[data-motion="off"]) .planning-flow-stage[data-celebrate="true"] .planning-step-icon, :is(.no-motion, .ws-still, html[data-motion="off"]) .planning-flow-stage[data-celebrate="true"]::before { animation: none !important; }

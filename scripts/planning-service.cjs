@@ -141,7 +141,25 @@ function progressReporter(onProgress, requestId, projectId) {
   };
 }
 
-function createPlanningService({ project, store, mutateBoard, onConverted = async () => {}, complete, gatherContext = async () => null, exploreContext = null, scanWork = null, onProgress = null }) {
+// Quick seat first, deep seat when needed: the routine model answers the
+// interview, and a reply it could not shape into a usable turn is asked once
+// more of the heavy model. The spec, and any turn the human asks to think
+// harder about, go to the heavy model straight away.
+function firstSeat(kind, deep) { return kind === "spec" || deep === true ? "heavy" : "routine"; }
+function usableInterview(draft) {
+  return Boolean(draft && ["understood", "conflict", "question"].some((key) => typeof draft[key] === "string" && draft[key].trim()) || draft?.complete === true);
+}
+function usableQuestions(draft) { return Boolean(draft && (Array.isArray(draft.questions) || Array.isArray(draft.unknowns))); }
+
+// The project read a plan leans on, ready before a step needs it: how many
+// files Studio can see and the top-level folders, from the same bounded
+// inventory the interview and the writing partner read.
+function readiness(references) {
+  if (!references) return null;
+  return { scanned: Number(references.scanned) || 0, structure: Array.isArray(references.structure) ? references.structure.slice(0, 16) : [], limitations: Array.isArray(references.limitations) ? references.limitations.length : 0, at: Date.now() };
+}
+
+function createPlanningService({ project, store, mutateBoard, onConverted = async () => {}, complete, gatherContext = async () => null, exploreContext = null, prepareContext = null, scanWork = null, onProgress = null }) {
   let assisting = false;
   let exploring = false;
   const scoped = (payload) => payload?.projectId === project.id;
@@ -227,7 +245,7 @@ function createPlanningService({ project, store, mutateBoard, onConverted = asyn
         const query = `${draft.title}\n${draft.destination}\n${draft[focus]}`.slice(0, 24000);
         const report = progressReporter(onProgress, payload.requestId, project.id);
         report("reading");
-        references = exploreContext ? await exploreContext({ query, project }) : await (await import("./analyzer.mjs")).explorePlanningFiles(query, { root: project.path });
+        references = exploreContext ? await exploreContext({ query, project }) : await (await import("./analyzer.mjs")).explorePlanningFiles(query, { root: project.path, maxAge: 600000, stale: true });
         report("read", { scanned: Number(references?.scanned) || 0, files: [...new Set((references?.code || []).map((hit) => hit.file).filter((file) => typeof file === "string"))].slice(0, 8) });
         const context = {
           draft, focus, intent: payload.intent === "write" ? "Offer useful wording for the focused field" : "Suggest useful additions as the human writes",
@@ -253,8 +271,24 @@ function createPlanningService({ project, store, mutateBoard, onConverted = asyn
       checkProject(payload);
       return summarizePlanning(await store.list(), payload.query);
     },
+    // `skipExisting` answers with the plans alone, at once; the page then asks
+    // `prepare` for the folder scan and the project read behind it.
     async list(payload) {
-      try { checkProject(payload); return await snapshot({ existing: await existing(payload) }); } catch (error) { return errorResult(error); }
+      try { checkProject(payload); return await snapshot(payload?.skipExisting === true ? {} : { existing: await existing(payload) }); } catch (error) { return errorResult(error); }
+    },
+    // Gets the project ready while you write: the folder's maps, tickets and
+    // tooling, and a warm read of its files, so the first interview turn and
+    // the first writing suggestion do not wait on a cold scan.
+    async prepare(payload) {
+      try { checkProject(payload); } catch (error) { return errorResult(error); }
+      const read = async () => {
+        try {
+          const query = String(payload?.query ?? "").slice(0, 4000);
+          return readiness(prepareContext ? await prepareContext({ query, project, fresh: payload?.fresh === true }) : await (await import("./analyzer.mjs")).explorePlanningFiles(query, { root: project.path, fresh: payload?.fresh === true, maxAge: 120000 }));
+        } catch (error) { return { error: error.message || String(error) }; }
+      };
+      const [work, index] = await Promise.all([existing(payload), read()]);
+      return { ok: true, projectId: project.id, existing: work, index };
     },
     async action(payload) {
       try {
@@ -305,11 +339,26 @@ function createPlanningService({ project, store, mutateBoard, onConverted = asyn
         }
         const references = await gatherContext({ plan, questionId: payload.questionId, useWeb: payload.useWeb === true });
         const prompt = planningPrompt(plan, payload.kind, { ...payload, message, references });
-        const reply = await complete(prompt, { kind: payload.kind });
-        if (!reply?.ok) throw new Error(reply?.error || "The AI provider could not return a planning reply. You can continue manually.");
-        const text = String(reply.text || "").trim();
-        if (!text || text.length > 100000) throw new Error("The AI reply was empty or too large to save. Your decisions remain unchanged.");
-        const draft = payload.kind === "question" ? null : parseReply(text);
+        const ask = async (seat) => {
+          const reply = await complete(prompt, { kind: payload.kind, seat });
+          if (!reply?.ok) throw new Error(reply?.error || "The AI provider could not return a planning reply. You can continue manually.");
+          const text = String(reply.text || "").trim();
+          if (!text || text.length > 100000) throw new Error("The AI reply was empty or too large to save. Your decisions remain unchanged.");
+          const draft = payload.kind === "question" ? null : parseReply(text);
+          if (payload.kind === "interview" && !usableInterview(draft)) throw new Error("The AI reply contained neither a question nor anything it understood. Your saved plan has not changed.");
+          if (payload.kind === "questions" && !usableQuestions(draft)) throw new Error("The AI draft did not contain a list of questions or unknowns.");
+          return { text, draft };
+        };
+        let seat = firstSeat(payload.kind, payload.deep), escalated = false, answer;
+        try { answer = await ask(seat); }
+        catch (error) {
+          // One retry, one seat up. When the deep model fails too, the quick
+          // model's own error is the honest one to show.
+          if (seat !== "routine") throw error;
+          seat = "heavy"; escalated = true;
+          try { answer = await ask(seat); } catch { throw error; }
+        }
+        const { text, draft } = answer;
         const result = await store.transaction((plans) => {
           let current = plans.find((item) => item.id === plan.id);
           if (!current || current.version !== plan.version) throw new Error("The plan changed while the AI was replying. Reload it and ask again; the reply was not applied.");
@@ -356,7 +405,9 @@ function createPlanningService({ project, store, mutateBoard, onConverted = asyn
           const note = [typeof draft?.note === "string" ? draft.note.slice(0, 2000) : "", skipped ? `${skipped} of Mefi's suggestions ${skipped === 1 ? "was" : "were"} unusable and left out.` : ""].filter(Boolean).join(" ");
           return { ok: true, plan: current, ...(note ? { note } : {}) };
         });
-        return snapshot(result);
+        // Which model answered, for the page to name; an escalation says why.
+        const handoff = escalated ? "The quick model's reply wasn't usable, so the deep model answered." : "";
+        return snapshot({ ...result, seat, ...(handoff ? { note: [result.note, handoff].filter(Boolean).join(" ") } : {}) });
       } catch (error) {
         // A user's discussion message may already have been saved before a
         // transport failure. Return fresh state so retry uses its current

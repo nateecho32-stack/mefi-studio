@@ -10,7 +10,17 @@
   const announce = (name, detail) => {
     try { if (typeof CustomEvent === "function" && typeof window.dispatchEvent === "function") window.dispatchEvent(new CustomEvent(name, { detail })); } catch {}
   };
-  const state = { projectId: null, projectName: "Your project", plans: [], selected: "new", busy: false, pending: null, tasks: null, workError: null, epoch: 0, opened: false, readId: 0, workReadId: 0, existing: null, existingOpen: false, showArchived: false };
+  // `index` is the project read Plans warms on open (files Studio can see);
+  // `systems` and `places` come from the Project map, so a plan knows which
+  // part of the project it lives in before its spec and tasks need it.
+  const state = { projectId: null, projectName: "Your project", plans: [], selected: "new", busy: false, pending: null, tasks: null, workError: null, epoch: 0, opened: false, readId: 0, workReadId: 0, existing: null, existingOpen: false, showArchived: false, index: null, preparing: false, systems: null, places: null, loaded: false };
+  // Mefi carries the conversation: it asks as soon as a plan exists and again
+  // after each decision you record. One switch, remembered on this PC.
+  const autoAskKey = "mefiStudio.planning.autoAsk.v1";
+  const autoAsk = () => { try { return localStorage.getItem(autoAskKey) !== "0"; } catch { return true; } };
+  const setAutoAsk = (on) => { try { localStorage.setItem(autoAskKey, on ? "1" : "0"); } catch {} };
+  // A name from the first words of the idea, for a plan started without one.
+  const nameFrom = (text) => { const line = String(text || "").trim().split(/\r?\n/)[0].replace(/\s+/g, " "); const words = line.split(" ").slice(0, 8).join(" "); return (words.length > 60 ? `${words.slice(0, 57).trimEnd()}…` : words).replace(/[.,;:!?]+$/, ""); };
   let initialized = false;
   let workTimer = null;
   let workFlight = null;
@@ -41,6 +51,7 @@
   let viewedStepKey = null;
   let lastWorkflowStep = null;
   const stepAnimations = new WeakMap();
+  const celebrated = new Map();
   const fieldTargets = { title: "title", destination: "destination", "out-of-scope": "outOfScope", "question-text": "question", "draft-question": "question", "unknown-text": "unknown", "draft-unknown": "unknown", "spec-text": "specText" };
   const targetLabels = { title: "Plan name", destination: "Outcome", outOfScope: "Outside this plan", question: "Open question", unknown: "Uncertainty", specText: "Specification" };
   const draftFieldId = (target) => ({ title: "title", destination: "destination", outOfScope: "out-of-scope", question: plan() ? "question-text" : "draft-question", unknown: plan() ? "unknown-text" : "draft-unknown", specText: "spec-text" })[target];
@@ -206,10 +217,15 @@
     const animation = element.animate([{ opacity: .45, transform: `translateX(${direction * 12}px)` }, { opacity: 1, transform: "translateX(0)" }], { duration: 260, delay, easing: "cubic-bezier(.2,.75,.25,1)" });
     stepAnimations.set(element, animation);
   }
+  // One step at a time: the editor shows the sections of the step you are
+  // looking at (approval and the build steps live in the spec section), and
+  // "Show every step" lays the whole plan out again.
+  const focusGroup = (step) => (["approval", "build", "verify"].includes(step) ? "spec" : step || "idea");
   function selectStep(id) {
     viewedStep = id;
     draft().viewedStep = id; draft().workflowStep = workflowState(plan()).current; persist();
     if ($("workflow")) $("workflow").dataset.viewedStep = id;
+    if ($("editor")) $("editor").dataset.focus = focusGroup(id);
     for (const [key] of flowStages) {
       const stage = $(`stage-${key}`); if (!stage) continue;
       stage.dataset.selected = String(key === id); stage.setAttribute("aria-pressed", String(key === id));
@@ -481,6 +497,17 @@
     if (complete) { completed.add("build"); completed.add("verify"); }
     return { current, completed, questions, resolved, frontier, blocked, unknowns, work, complete, ask: pendingAsk(item) };
   }
+  // Whether the project is read and mapped yet. Plans starts that read when it
+  // opens, so it is ready before the interview or the spec leans on it; the
+  // chip says how it went and reads the folder again on a click.
+  function readinessChip(parent) {
+    if (!api()?.planningPrepare) return;
+    const index = state.index;
+    const text = state.preparing && !index ? "Reading your project…" : index?.error ? "Project read failed · retry" : index ? `Project ready · ${countLabel(index.scanned, "file")}${state.systems?.length ? ` · ${countLabel(state.systems.length, "area")}` : ""}` : "Get the project ready";
+    const chip = navigation(text, parent, () => { void prepare({ fresh: true }); }, "ready", "planning-ready");
+    chip.dataset.state = state.preparing ? "working" : index?.error ? "error" : index ? "ready" : "idle";
+    chip.title = index?.structure?.length ? `Top level: ${index.structure.join("  ")}\nClick to read the folder again.` : "Read the project's files so Mefi can point at real code.";
+  }
   function renderWorkflow(item) {
     let area = $("workflow");
     const entering = !area;
@@ -504,8 +531,15 @@
         : button("Archive plan", head, () => act("archive", {}, null, "Plan archived. Find it under Archived in the list; restoring brings it back as it was."), "archive");
       shelf.classList.add("mini");
     }
+    readinessChip(head);
     if (item && !archived(item)) navigation("Continue where you left off", head, () => $(`stage-${viewedStep}`)?.click?.(), "resume");
     const rail = node("ol", "planning-flow-rail", undefined, area); rail.setAttribute("aria-label", "Planning and work stages");
+    // How far along, as a fill behind the steps; a step you just finished
+    // gets a short flourish the first time it reads as complete.
+    const doneCount = flowStages.filter(([id]) => flow.completed.has(id)).length;
+    rail.style?.setProperty?.("--planning-progress", String(doneCount / flowStages.length));
+    const seen = celebrated.get(draftKey());
+    celebrated.set(draftKey(), new Set(flow.completed));
     const decided = `${flow.resolved.length}/${flow.questions.length} recorded`;
     const subtitles = { idea: item ? "Destination saved" : "Set a destination", explore: flow.ask?.awaiting ? "Waiting for your answer" : `${flow.frontier.length} ready · ${flow.blocked.length} blocked`, decisions: decided, review: confirmed(item) ? "Confirmed by you" : "Review decisions", spec: item?.spec?.stale ? "Needs revision" : item?.spec ? "Draft saved" : "Draft specification", approval: item?.spec?.approvedAt ? "Approved by you" : "Review specification", build: frozen(item) ? `${flow.work.filter((task) => task.stage === "running").length} working · ${countLabel(item.taskIds?.length || 0, "task")}` : "Create tasks", verify: frozen(item) ? `${flow.work.filter((task) => task.stage === "done").length}/${flow.work.length} confirmed` : "Check the result" };
     for (const [index, [id, label]] of flowStages.entries()) {
@@ -522,6 +556,7 @@
       };
       const stage = navigation("", row, jump, `stage-${id}`, "planning-flow-stage");
       stage.dataset.state = flow.completed.has(id) && id !== flow.current ? "complete" : id === flow.current ? "current" : "waiting";
+      if (seen && flow.completed.has(id) && !seen.has(id)) stage.dataset.celebrate = "true";
       stage.dataset.step = id; stage.dataset.selected = String(id === viewedStep);
       stage.setAttribute("aria-pressed", String(id === viewedStep)); stage.title = `${label} · ${subtitles[id]}`;
       stage.setAttribute("aria-label", `${label}: ${subtitles[id]}`);
@@ -539,6 +574,12 @@
     const next = { idea: "Start with the outcome. Build work begins after your approval.", explore: flow.ask?.awaiting ? "Mefi is waiting for your answer. Reply in your own words; it reads your answer back before moving on." : flow.unknowns ? `${flow.unknowns} unknown${flow.unknowns === 1 ? " needs" : "s need"} a question or a reason to set aside.` : "Let Mefi ask you the next question, or add one yourself.", decisions: "Read the interview back, then record your own decisions.", review: "Read what this plan now says the feature is. Nothing is drafted until you confirm it.", spec: "The decisions are settled. Draft the specification and its small implementation tasks.", approval: "Review the saved specification, task briefs, and acceptance checks before approving.", build: item?.status === "converted" ? "Tasks follow the current queue and Pause settings. Their board status is shown below." : item?.status === "converting" ? "Finish creating the approved tasks. Existing tasks will be reused." : "Your specification is approved. Create its tasks when you are ready.", verify: flow.complete ? "Every linked task has verified evidence or your recorded confirmation." : "A worker result is ready for verification. Open the task to inspect its evidence." };
     const pendingQuestion = flow.questions.find((question) => question.id === state.pending?.questionId);
     node("span", "", state.pending?.assist ? state.pending.kind === "spec" ? "Mefi is drafting the specification from your saved decisions…" : state.pending.kind === "interview" ? "Mefi is reading your answer and working out what to ask next…" : state.pending.kind === "question" ? `Mefi is exploring: ${pendingQuestion?.question || "the selected question"}` : "Mefi is looking for questions in your saved destination…" : archived(item) ? "This plan is archived. Restore it to pick up where you left off." : next[flow.current], status);
+    // Up next: one button to the step that is waiting on you.
+    if (item && !archived(item) && !state.pending?.assist) {
+      const labels = { idea: "Describe your idea", explore: flow.ask?.awaiting ? "Answer Mefi" : flow.unknowns ? "Sort the unknowns" : "Talk it through", decisions: "Record your decisions", review: "Read it back", spec: "Draft the build plan", approval: "Approve the plan", build: item.status === "converting" ? "Finish creating tasks" : item.status === "converted" ? "Follow the tasks" : "Create the tasks", verify: "Check the results" };
+      const go = navigation(`${labels[flow.current]} →`, status, () => $(`stage-${flow.current}`)?.click?.(), "next", "planning-next");
+      go.dataset.step = flow.current;
+    }
     if (item && !frozen(item)) renderQuestionMap(area, item, flow);
     if (onBoard(item)) renderExecution(area, item, flow.work);
   }
@@ -625,7 +666,9 @@
       const result = guard(reply);
       if (epoch !== state.epoch || projectId !== state.projectId || selected !== state.selected) return false;
       accept(result); if (clean) clean(savedDraft); if (action === "create") { drafts[draftKey()] = savedDraft; delete drafts[key]; } persist();
-      render(); note(result.note || success);
+      // Which seat answered: the quick model by default, the deep one for a
+      // spec, a "think harder" turn, or a reply the quick model fumbled.
+      render(); note(`${result.note || success}${assist && result.seat ? ` · ${result.seat === "heavy" ? "Deep" : "Quick"} model` : ""}`);
       if (action === "create") announce("mefi:plan-created", { planId: result.plan?.id || current?.id || null, projectId });
       if (action === "convert") announce("mefi:task-created", { planId: current?.id || null, projectId });
       if (action === "convert") window.MefiWorkspace?.refresh?.(true);
@@ -667,19 +710,70 @@
       node("p", "planning-subtle", state.projectId ? "Your saved plans will live here, with this project." : "Choose a project to start a plan.", empty);
     }
   }
+  // Where a saved plan lives on the Project map. Studio suggests the area the
+  // matching files belong to; one click pins it, another lifts it off.
+  function suggestedSystem() {
+    const files = (copilot.result?.references?.code || []).map((hit) => hit.file).filter(Boolean);
+    let best = null, bestScore = 0;
+    for (const system of state.systems || []) {
+      const paths = new Set((system.files || []).map((file) => file?.path).filter(Boolean));
+      const score = files.filter((file) => paths.has(file) || (system.path && file.startsWith(system.path))).length;
+      if (score > bestScore) { best = system; bestScore = score; }
+    }
+    return best;
+  }
+  function whereItLives(area, item) {
+    area.hidden = !item || !state.systems?.length || !api()?.brainMapPlace;
+    if (area.hidden) return;
+    const placed = state.places?.plans?.[item.id] || null;
+    const suggested = suggestedSystem();
+    const head = node("div", "planning-where-head", undefined, area);
+    node("strong", "", "Where this lives", head);
+    node("span", "planning-subtle", placed ? "Pinned on your Project map." : suggested ? `Mefi's guess from the files it read: ${suggested.name || suggested.id}.` : "Pin it to an area of your Project map.", head);
+    const chips = node("div", "planning-where-chips", undefined, area);
+    const order = [...state.systems].sort((a, b) => Number(b.id === placed) - Number(a.id === placed) || Number(b.id === suggested?.id) - Number(a.id === suggested?.id));
+    for (const system of order.slice(0, 8)) {
+      const here = system.id === placed;
+      const chip = navigation(`${here ? "✓ " : system.id === suggested?.id ? "✦ " : ""}${system.name || system.id}`, chips, async () => {
+        if (state.busy || frozen(item)) return;
+        const result = await api().brainMapPlace({ kind: "plan", id: item.id, systemId: here ? null : system.id }).catch((error) => ({ ok: false, error: error.message }));
+        if (!result?.ok) { note(result?.error || "That area could not be pinned.", true); return; }
+        state.places = result.places ?? state.places; note(here ? "Lifted off the map." : `Pinned to ${system.name || system.id}.`); repaintReadiness();
+      }, `where-${system.id}`, "planning-where-chip");
+      chip.setAttribute("aria-pressed", String(here)); chip.title = [system.path, system.what].filter(Boolean).join(" · ") || system.id;
+      chip.dataset.locked = String(frozen(item)); chip.disabled = frozen(item);
+    }
+  }
+  // Starters for a blank idea: one tap puts the opening words in the box.
+  const starters = [["+ A new feature", "Add a way for people to "], ["✦ Polish something", "Make the "], ["↯ Make it faster", "Speed up "], ["✓ Fix a problem", "Fix the problem where "]];
   function details(item) {
     // "New plan" already heads the workflow card above; the section names its part.
-    const area = section("1. The destination", "Describe the intended outcome and what is outside the scope.");
+    const area = section(item ? "1. The destination" : "1. What do you want to make?", item ? "What should be true when this is done, and what it leaves for later." : "Say it in a sentence or two. Mefi reads your project and asks the questions that matter.");
     area.id = "plans-destination-section"; area.tabIndex = -1;
     const local = draft();
     if (item && (!local.detailsDirty || frozen(item))) { local.details = { title: item.title, destination: item.destination, outOfScope: item.outOfScope }; delete local.detailsDirty; }
     const values = local.details ||= { title: item?.title || "", destination: item?.destination || "", outOfScope: item?.outOfScope || "" };
     const locked = frozen(item);
-    const edit = form(area, "details-form", () => act(item ? "update" : "create", { ...values }, (saved) => { delete saved.details; delete saved.detailsDirty; }, item ? "Destination saved. Changed scope reopens earlier decisions for review." : "Plan created. Add questions or start the interview."), "Plan destination", locked);
+    const edit = form(area, "details-form", async () => {
+      // No name yet: the first words of the idea name the plan.
+      const payload = { ...values, title: values.title.trim() || nameFrom(values.destination) };
+      const created = await act(item ? "update" : "create", payload, (saved) => { delete saved.details; delete saved.detailsDirty; }, item ? "Destination saved. Changed scope reopens earlier decisions for review." : "Plan created. Mefi will ask its first question.");
+      // A new plan goes straight into the conversation when Mefi can talk.
+      if (created && !item && autoAsk() && api()?.planningAssist && plan()) { if (await act("interview", { kind: "interview" }, null, "Mefi asked its first question. Answer in your own words.", true)) navigateTo("interview-answer"); }
+    }, "Plan destination", locked);
     const changed = (key, value) => { values[key] = value; local.detailsDirty = true; if (key === "title" && $("draft-title")) $("draft-title").textContent = value || "New plan"; if (item) holdHandoff(); };
-    field(edit, "Plan name", "title", values.title, (value) => changed("title", value), { step: "01", required: true, maxLength: 180, locked, placeholder: "Improve first-time setup" });
+    field(edit, "Plan name", "title", values.title, (value) => changed("title", value), { step: "01", required: Boolean(item), maxLength: 180, locked, placeholder: item ? "Improve first-time setup" : "Optional — Mefi names it from your idea" });
     field(edit, "What should be true when this is finished?", "destination", values.destination, (value) => changed("destination", value), { step: "02", required: true, rows: 3, locked, maxLength: 16000, placeholder: "Who is this for? What can they do or understand afterward?" });
+    if (!item && !locked) {
+      const row = node("div", "planning-starters", undefined, edit); row.setAttribute("aria-label", "Idea starters");
+      for (const [label, words] of starters) navigation(label, row, () => {
+        if (values.destination.trim()) return navigateTo("destination");
+        changed("destination", words); persist();
+        const box = $("destination"); if (box) { box.value = words; box.focus?.(); try { box.setSelectionRange?.(words.length, words.length); } catch {} }
+      }, null, "planning-starter");
+    }
     field(edit, "Outside this plan", "out-of-scope", values.outOfScope, (value) => changed("outOfScope", value), { step: "03", optional: true, rows: 2, locked, maxLength: 12000, placeholder: "Things we are choosing to leave for later" });
+    if (item) { const where = node("div", "planning-where", undefined, area); where.id = "plans-where-section"; whereItLives(where, item); }
     if (!item && local.question?.question) field(edit, "A question to carry forward", "draft-question", local.question.question, (value) => { local.question.question = value; }, { rows: 2, maxLength: 4000 });
     if (!item && local.unknown) field(edit, "An uncertainty to carry forward", "draft-unknown", local.unknown, (value) => { local.unknown = value; }, { rows: 2, maxLength: 4000 });
     if (!locked) {
@@ -690,6 +784,8 @@
   }
   function unknowns(item) {
     const area = section("3. Unknowns", "Turn each uncertainty into a question, or explain why it no longer needs an answer.");
+    // Nothing unsure yet: the step view leaves it out; "Show every step" keeps it.
+    area.dataset.empty = String(!(item.unknowns || []).length && !draft().unknown);
     const local = draft(); const locked = frozen(item);
     for (const unknown of item.unknowns || []) {
       const card = node("article", "planning-card", undefined, area); node("p", "", unknown.text, card);
@@ -711,15 +807,16 @@
     }
   }
   // The interview, shown wherever a question appears. Each line says where it
-  // came from, and Mefi's reading of your answer can only ever be copied into
-  // your decision box for you to edit and record yourself.
-  function transcript(parent, item, question, locked = false) {
+  // came from, and Mefi's reading of your answer becomes a decision only when
+  // you say so: copied into your decision box to edit, or recorded as-is when
+  // you press "That's right" on it.
+  function transcript(parent, item, question, locked = false, offered = null) {
     const local = draft(); const wrap = node("div", "planning-notes", undefined, parent);
     for (const entry of question.notes || []) {
       const row = node("div", "planning-note", undefined, wrap);
       row.dataset.noteKind = entry.kind || (entry.author === "user" ? "note" : "advice");
       node("strong", "", noteLabel(entry), row); node("p", "", entry.text, row);
-      if (entry.kind === "interpretation" && question.status !== "resolved" && !locked) button("Use as my decision", row, () => {
+      if (entry.kind === "interpretation" && question.status !== "resolved" && !locked && entry.id !== offered) button("Use as my decision", row, () => {
         local.answers ||= {}; (local.answers[question.id] ||= { resolution: "", evidence: "" }).resolution = entry.text;
         persist(); render(); navigateTo(`resolution-${question.id}`, `question-card-${question.id}`);
         note("Mefi's reading is in your decision box. Edit it until it says what you mean, then record it.");
@@ -746,26 +843,52 @@
     const index = item.questions.indexOf(ask.question) + 1;
     node("span", "planning-pill", ask.followUp ? `Follow-up on Q${index}` : ask.answered ? `Q${index} · Your answer is saved` : `Q${index} · ${typeChoices.find(([type]) => type === ask.question.type)?.[1] || ask.question.type}`, card).dataset.state = "ready";
     node("p", "planning-interview-ask", ask.ask, card).id = "plans-interview-ask";
-    const talk = node("details", "", undefined, card); talk.open = local.interviewOpen !== false;
+    const talk = node("details", "planning-chat", undefined, card); talk.open = local.interviewOpen !== false;
     node("summary", "", `What we've said about this${ask.question.notes?.length ? ` · ${countLabel(ask.question.notes.length, "line")}` : ""}`, talk);
     talk.addEventListener("toggle", () => { local.interviewOpen = talk.open; persist(); });
-    transcript(talk, item, ask.question);
-    field(card, "Your answer", "interview-answer", values.message, (value) => { values.message = value; }, { rows: 4, maxLength: 16000, placeholder: "Answer in your own words. Say what you want to be true, not how to build it." });
-    const checkLabel = node("label", "planning-check", undefined, card); const check = node("input", "", undefined, checkLabel); check.type = "checkbox"; check.checked = Boolean(values.useWeb);
-    node("span", "", "Let Mefi cite web references", checkLabel);
+    // Mefi's newest reading of what you said. When it is right, one click
+    // records those words as your decision; anything else, edit it below.
+    const reading = [...(ask.question.notes || [])].reverse().find((entry) => entry.kind === "interpretation");
+    const quick = reading && ["discussion", "prerequisite"].includes(ask.question.type) && ready(item, ask.question);
+    transcript(talk, item, ask.question, false, quick ? reading.id : null);
+    if (quick) {
+      const confirm = node("div", "planning-reading", undefined, card);
+      node("span", "planning-reading-label", "Mefi understood", confirm);
+      node("p", "", reading.text, confirm);
+      const row = node("div", "planning-actions", undefined, confirm);
+      button("✓ That's right — record it", row, async () => {
+        const recorded = await act("resolve", { questionId: ask.question.id, resolution: reading.text, evidence: "" }, (saved) => { delete saved.answers?.[ask.question.id]; }, "Recorded as your decision.");
+        // Mefi either asks what is still open or says it has nothing more.
+        if (recorded && autoAsk() && plan()) { if (await act("interview", { kind: "interview" }, null, "Decision recorded. Mefi asked the next question.", true)) navigateTo(pendingAsk(plan()) ? "interview-answer" : "confirm-understanding", "interview-start", "review-section"); }
+        else if (recorded && plan() && settled(plan())) navigateTo("confirm-understanding", "review-section");
+      }, "accept-reading", true, pending);
+      navigation("Edit it first ↓", row, () => { local.answers ||= {}; (local.answers[ask.question.id] ||= { resolution: "", evidence: "" }).resolution = reading.text; persist(); render(); navigateTo(`resolution-${ask.question.id}`, `question-card-${ask.question.id}`); }, "edit-reading", "ghost mini");
+    }
+    const answer = field(card, "Your answer", "interview-answer", values.message, (value) => { values.message = value; }, { rows: 4, maxLength: 16000, placeholder: "Answer in your own words. Say what you want to be true, not how to build it.  Ctrl+Enter sends." });
+    // Ctrl+Enter sends, like a chat box; plain Enter keeps writing.
+    answer.addEventListener("keydown", (event) => { if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && !event.isComposing) { event.preventDefault(); $(ask.answered && !values.message.trim() ? "interview-continue" : "interview-send")?.click?.(); } });
+    const options = node("div", "planning-options", undefined, card);
+    const checkLabel = node("label", "planning-check", undefined, options); const check = node("input", "", undefined, checkLabel); check.type = "checkbox"; check.checked = Boolean(values.useWeb);
+    node("span", "", "Cite web references", checkLabel);
     check.addEventListener("change", () => { values.useWeb = check.checked; persist(); });
+    const deepLabel = node("label", "planning-check", undefined, options); const deep = node("input", "", undefined, deepLabel); deep.type = "checkbox"; deep.checked = Boolean(values.deep); deep.id = "plans-think-harder";
+    node("span", "", "Think harder (deep model, slower)", deepLabel);
+    deep.addEventListener("change", () => { values.deep = deep.checked; persist(); });
+    const carryLabel = node("label", "planning-check", undefined, options); const carry = node("input", "", undefined, carryLabel); carry.type = "checkbox"; carry.checked = autoAsk(); carry.id = "plans-auto-ask";
+    node("span", "", "Mefi keeps the conversation going", carryLabel);
+    carry.addEventListener("change", () => setAutoAsk(carry.checked));
     const actions = node("div", "planning-actions", undefined, card);
     const clean = (saved) => { delete saved.interview; };
     // Your answer is on the record but Mefi has not replied: ask it to read
     // what you said and carry on, without sending the words a second time.
     if (ask.answered) button("Continue with Mefi", actions, async () => {
-      if (await act("interview", { kind: "interview", questionId: ask.question.id, useWeb: values.useWeb }, null, "Mefi read your answer back. Check what it understood, then answer the next question.", true)) navigateTo("interview-answer", "interview-start");
+      if (await act("interview", { kind: "interview", questionId: ask.question.id, useWeb: values.useWeb, deep: values.deep === true }, null, "Mefi read your answer back. Check what it understood, then answer the next question.", true)) navigateTo("interview-answer", "interview-start");
     }, "interview-continue", true, pending);
     button(ask.answered ? "Add to my answer" : "Send answer", actions, async () => {
       if (!values.message.trim()) { note("Type your answer first, or ask Mefi to explain the tradeoffs.", true); navigateTo("interview-answer"); return; }
-      if (await act("interview", { kind: "interview", questionId: ask.question.id, message: values.message, useWeb: values.useWeb }, clean, "Mefi read your answer back. Check what it understood, then answer the next question.", true)) navigateTo("interview-answer", "interview-start");
+      if (await act("interview", { kind: "interview", questionId: ask.question.id, message: values.message, useWeb: values.useWeb, deep: values.deep === true }, clean, "Mefi read your answer back. Check what it understood, then answer the next question.", true)) navigateTo("interview-answer", "interview-start");
     }, "interview-send", !ask.answered, pending);
-    button("Explain the tradeoffs", actions, () => act("question", { kind: "question", questionId: ask.question.id, message: values.message, useWeb: values.useWeb }, clean, "Mefi explained the tradeoffs. It still needs your answer.", true), "interview-explain", false, pending);
+    button("Explain the tradeoffs", actions, () => act("question", { kind: "question", questionId: ask.question.id, message: values.message, useWeb: values.useWeb, deep: values.deep === true }, clean, "Mefi explained the tradeoffs. It still needs your answer.", true), "interview-explain", false, pending);
     navigation("Record my decision ↓", actions, () => navigateTo(`resolution-${ask.question.id}`, `question-card-${ask.question.id}`), "interview-to-decision", "ghost mini");
     node("p", "planning-subtle", pending ? "Save your destination, unknown, or question edits first." : "Uses your configured assistant connection. Mefi does the asking and the organizing; every decision stays yours.", card);
   }
@@ -1060,7 +1183,16 @@
     renderWorkflow(item);
     const canvas = node("div", "planning-canvas", undefined, $("detail"));
     const editor = node("div", "planning-editor", undefined, canvas); editor.id = "plans-editor";
+    editor.dataset.focus = focusGroup(item ? viewedStep : "idea"); editor.dataset.showAll = String(draft().showAll === true);
     const feedback = node("div", "planning-draft-feedback", undefined, editor); feedback.id = "plans-draft-feedback"; feedback.setAttribute("role", "status"); feedback.hidden = true;
+    if (item) {
+      const all = navigation(draft().showAll ? "Focus on one step" : "Show every step", editor, () => {
+        draft().showAll = !draft().showAll; persist();
+        editor.dataset.showAll = String(draft().showAll); all.textContent = draft().showAll ? "Focus on one step" : "Show every step";
+        all.setAttribute("aria-pressed", String(draft().showAll));
+      }, "show-all", "planning-show-all ghost mini");
+      all.setAttribute("aria-pressed", String(draft().showAll === true));
+    }
     const assistant = node("aside", "planning-copilot", undefined, canvas); assistant.id = "plans-copilot"; assistant.setAttribute("aria-label", "AI planning partner");
     details(item); if (item) { interviewPanel(item); unknowns(item); questions(item); review(item); specification(item); history(item); }
     existingWork(item);
@@ -1103,6 +1235,38 @@
     else if (typeof setInterval === "function") workTimer = setInterval(refreshWork, 30000);
     void refreshWork();
   }
+  // Repaint what the project read changed without rebuilding the editor, so
+  // a field you are typing in keeps its caret.
+  function repaintReadiness() {
+    if (!state.opened || !state.projectId) return;
+    renderWorkflow(plan()); controls();
+    const old = $("existing-section");
+    if (old && $("editor")) { const open = state.existingOpen; old.remove(); existingWork(plan()); state.existingOpen = open; }
+    else if (!old && state.existing && $("editor")) existingWork(plan());
+    const where = $("where-section");
+    if (where) { where.replaceChildren(); whereItLives(where, plan()); }
+  }
+  // The folder scan, a warm read of its files and the Project map's areas,
+  // fetched after the plans list so opening Plans never waits on them.
+  let prepareFlight = null;
+  async function prepare({ fresh = false } = {}) {
+    if (!api()?.planningPrepare || !state.projectId) return;
+    if (prepareFlight && !fresh) return prepareFlight;
+    const epoch = state.epoch, projectId = state.projectId;
+    state.preparing = true; repaintReadiness();
+    const flight = (async () => {
+      const query = [composeSnapshot().title, composeSnapshot().destination].join("\n").slice(0, 4000);
+      const [ready, map] = await Promise.all([
+        api().planningPrepare({ projectId, fresh, query }).catch((error) => ({ ok: false, error: error.message })),
+        api().brainMap ? api().brainMap(false).catch(() => null) : null,
+      ]);
+      if (epoch !== state.epoch || projectId !== state.projectId) return;
+      if (ready?.ok && (!ready.projectId || ready.projectId === projectId)) { state.existing = ready.existing ?? null; state.index = ready.index ?? null; }
+      else state.index = { error: ready?.error || "The project could not be read." };
+      if (map?.ok && (!map.projectId || map.projectId === projectId)) { state.systems = (map.map?.systems || []).filter((system) => system?.id).slice(0, 24); state.places = map.places || null; }
+    })().finally(() => { if (prepareFlight === flight) prepareFlight = null; if (epoch === state.epoch) { state.preparing = false; repaintReadiness(); } });
+    prepareFlight = flight; return flight;
+  }
   async function refresh({ refreshTasks = true } = {}) {
     if (state.busy) return;
     const epoch = state.epoch; const readId = ++state.readId;
@@ -1110,17 +1274,21 @@
       if (!api()?.projectsList || !api()?.planningList) { render(); note("Planning is available in the desktop app."); return; }
       const projects = guard(await api().projectsList());
       if (epoch !== state.epoch || readId !== state.readId) return;
-      if (state.projectId !== projects.activeId) { restoreSelection = true; state.projectId = projects.activeId; state.plans = []; state.selected = "new"; state.tasks = null; state.workError = null; state.existing = null; state.workReadId += 1; }
+      if (state.projectId !== projects.activeId) { restoreSelection = true; state.projectId = projects.activeId; state.plans = []; state.selected = "new"; state.tasks = null; state.workError = null; state.existing = null; state.index = null; state.systems = null; state.places = null; state.loaded = false; state.workReadId += 1; }
       const projectId = state.projectId; state.projectName = projects.projects.find((item) => item.id === projectId)?.name || "No project selected";
       if (!projectId) { render(); note(); return; }
-      const result = guard(await api().planningList({ projectId }));
+      const prepared = Boolean(api().planningPrepare);
+      const result = guard(await api().planningList({ projectId, ...(prepared ? { skipExisting: true } : {}) }));
       if (epoch !== state.epoch || readId !== state.readId || projectId !== state.projectId || (result.projectId && result.projectId !== projectId)) return;
-      state.plans = result.plans || []; state.existing = result.existing ?? null; restoreProjectPlan(); render(); if (refreshTasks) void refreshWork();
+      state.plans = result.plans || []; if (!prepared) state.existing = result.existing ?? null; state.loaded = true; restoreProjectPlan(); render(); if (refreshTasks) void refreshWork();
+      if (prepared) void prepare();
     } catch (error) { if (epoch === state.epoch && readId === state.readId) { render(); note(error.message, true); } }
   }
   async function open(options = {}) {
     init(); priorFocus = document.activeElement; state.opened = true; $("overlay").hidden = false;
-    window.MefiNav?.claim?.("plans"); note("Opening this project's plans…");
+    window.MefiNav?.claim?.("plans");
+    // Plans read before paint at once; the fresh list replaces them a moment later.
+    if (state.loaded && state.projectId) render(); else note("Opening this project's plans…");
     await refresh({ refreshTasks: false });
     if (!state.opened) return;
     if (options.create) { state.selected = "new"; if (options.destination && !draft().details?.destination) { draft().details = { title: "", destination: String(options.destination), outOfScope: "" }; persist(); } }
@@ -1155,7 +1323,7 @@
       const projectId = event.detail?.projectId; if (projectId === state.projectId) return;
       stopExploration();
       rememberSelection(); restoreSelection = true;
-      persist(); state.epoch += 1; state.readId += 1; state.workReadId += 1; state.projectId = projectId; state.selected = "new"; state.plans = []; state.tasks = null; state.workError = null; state.existing = null; state.busy = false; state.pending = null;
+      persist(); state.epoch += 1; state.readId += 1; state.workReadId += 1; state.projectId = projectId; state.selected = "new"; state.plans = []; state.tasks = null; state.workError = null; state.existing = null; state.index = null; state.systems = null; state.places = null; state.loaded = false; state.preparing = false; state.busy = false; state.pending = null;
       if (state.opened) { render(); note("Opening this project's plans…"); void refresh(); }
     });
     document.addEventListener("visibilitychange", () => { if (document.hidden) { stopExploration(); copilot.status = "idle"; } else if (state.opened) void refreshWork(); });

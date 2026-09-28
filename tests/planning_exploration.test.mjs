@@ -100,3 +100,17 @@ test("project reads include orientation, modern sources and exact file paths eve
   await writeFile(path.join(root, "src", "a.tsx"), "export const View = () => <div>Changed screen</div>;");
   assert.match((await explorePlanningFiles("src/a.tsx", { root, fresh: true })).code[0].snippet, /Changed screen/);
 });
+
+test("a planning turn answers from the last finished read and refreshes it behind the answer", async (t) => {
+  const root = await fixture(t);
+  await explorePlanningFiles("report", { root, fresh: true });
+  await writeFile(path.join(root, "src", "zebra.js"), "export const zebra = true;");
+  // Past its age, a stale-ok read answers at once from the earlier inventory...
+  assert.equal((await explorePlanningFiles("zebra", { root, maxAge: 0, stale: true })).code.length, 0);
+  // ...while the refresh it started lands for the next read.
+  const next = await explorePlanningFiles("zebra", { root, maxAge: 60000 });
+  assert.equal(next.code[0].file, "src/zebra.js");
+  // A fresh request always waits for a new read.
+  await writeFile(path.join(root, "src", "yak.js"), "export const yak = true;");
+  assert.equal((await explorePlanningFiles("yak", { root, fresh: true, stale: true })).code[0].file, "src/yak.js");
+});

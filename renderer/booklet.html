@@ -5964,21 +5964,30 @@ body:has(#plans-overlay:not([hidden])) #idle-layer { opacity: .18; }
 .planning-library-empty p { margin: 7px 0 0; font-size: 11px; }
 .planning-detail { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 20px; overflow: hidden; background: transparent; }
 .planning-workflow { flex: none; width: 100%; max-width: 1340px; max-height: 36%; overflow: auto; margin: 0 auto 14px; padding: 0 0 10px; border-bottom: 1px solid var(--planning-edge); }
-.planning-flow-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 10px; }
-.planning-flow-head > div { min-width: 0; }
+.planning-flow-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.planning-flow-head > div { flex: 1; min-width: 0; }
 .planning-flow-kicker { display: block; font-size: 11px; line-height: 1.5; color: var(--muted); }
-.planning-flow-head h3 { font-size: 20px; line-height: 1.35; margin: 2px 0 0; letter-spacing: -.025em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.planning-flow-head h3 { font-size: 22px; line-height: 1.35; margin: 2px 0 0; letter-spacing: -.025em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .planning-flow-head p { margin: 0; max-width: 470px; }
 .planning-flow-badge { flex: none; max-width: 145px; border: 1px solid var(--hairline); border-radius: 20px; padding: 6px 10px; font-size: 10px; line-height: 1.5; color: var(--muted); }
 .planning-flow-badge[data-state="complete"] { color: var(--good); }
-.planning-flow-rail { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; }
+/* The steps sit on one track; the fill under them is how far the plan has come. */
+.planning-flow-rail { position: relative; list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; }
+.planning-flow-rail::after { content: ""; position: absolute; left: 0; right: 0; bottom: -6px; height: 3px; border-radius: 3px; background: linear-gradient(90deg, var(--gold-bright) calc(var(--planning-progress, 0) * 100%), var(--hairline) 0); opacity: .8; }
 .planning-flow-rail li { position: relative; display: flex; min-width: 0; }
-.planning-flow-stage { position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; width: 100%; min-height: 54px; padding: 8px; border: 1px solid var(--planning-edge); border-radius: 10px; background: var(--planning-sheen), var(--planning-inset); color: var(--muted); text-align: left; white-space: normal; transition: background .18s, border-color .18s, box-shadow .18s; }
+.planning-flow-stage { position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; width: 100%; min-height: 46px; padding: 6px 8px; border: 1px solid var(--planning-edge); border-radius: 10px; background: var(--planning-sheen), var(--planning-inset); color: var(--muted); text-align: left; white-space: normal; transition: background .18s, border-color .18s, box-shadow .18s; }
 .planning-flow-stage strong { color: var(--ivory); font-size: 11px; line-height: 1.4; font-weight: 600; }
 .planning-stage-copy { display: grid; gap: 3px; min-width: 0; }
 .planning-stage-copy > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .planning-stage-detail { display: none; }
 .planning-stage-number { font-size: 9px; line-height: 1.4; color: var(--muted); font-variant-numeric: tabular-nums; }
+.planning-flow-stage[data-state="complete"] { color: var(--ivory); background: linear-gradient(115deg, color-mix(in srgb, var(--good) 9%, transparent), transparent 70%), var(--planning-inset); }
+.planning-flow-stage[data-state="complete"] .planning-step-icon { color: var(--theme-bg, #0b1512); background: var(--planning-step-accent); border-color: transparent; }
+.planning-flow-stage[data-state="waiting"] { opacity: .78; }
+.planning-flow-stage[data-celebrate="true"] .planning-step-icon { animation: planning-pop .8s cubic-bezier(.2, 1.4, .4, 1); }
+.planning-flow-stage[data-celebrate="true"]::before { content: ""; position: absolute; inset: -1px; border-radius: inherit; border: 1px solid var(--planning-step-accent); opacity: 0; pointer-events: none; animation: planning-ring 1s ease-out; }
+@keyframes planning-pop { 0% { transform: scale(.6); } 60% { transform: scale(1.18); } 100% { transform: scale(1); } }
+@keyframes planning-ring { 0% { opacity: .9; transform: scale(1); } 100% { opacity: 0; transform: scale(1.08); } }
 .planning-flow-stage[data-state="current"]::after { content: ""; position: absolute; top: 5px; right: 6px; width: 4px; height: 4px; border-radius: 50%; background: var(--planning-step-accent); }
 .planning-flow-stage[data-selected="true"] { border-color: color-mix(in srgb, var(--planning-step-accent) 45%, transparent); background: linear-gradient(115deg, color-mix(in srgb, var(--planning-step-accent) 12%, transparent), transparent), var(--planning-inset); box-shadow: inset 0 -2px color-mix(in srgb, var(--planning-step-accent) 60%, transparent), 0 0 12px var(--tint-gold-1); }
 .planning-flow-stage[data-selected="true"] .planning-stage-number, .planning-flow-stage[data-state="complete"] .planning-stage-number { color: var(--planning-step-accent); }
@@ -5996,9 +6005,13 @@ body:has(#plans-overlay:not([hidden])) #idle-layer { opacity: .18; }
 .planning-flow-stage[data-step="decisions"] .planning-step-icon, .planning-flow-stage[data-step="approval"] .planning-step-icon { border-radius: 5px 11px 5px 11px; }
 .planning-flow-stage[data-step="spec"] .planning-step-icon, .planning-flow-stage[data-step="build"] .planning-step-icon { border-radius: 5px; }
 .planning-flow-stage:hover, .planning-map-question:hover, .planning-work-task:hover { border-color: var(--hairline-strong); background: var(--tint-gold-2); }
-.planning-flow-status { display: flex; align-items: flex-start; gap: 8px; margin-top: 10px; color: var(--muted); font-size: 11px; line-height: 1.6; }
+/* Up next: what the plan is waiting on, with one button that goes there. */
+.planning-flow-status { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 4px 6px 4px 12px; border: 1px solid var(--planning-edge); border-radius: 11px; background: var(--planning-inset); color: var(--muted); font-size: 12px; line-height: 1.5; }
+.planning-flow-status > span:not(.planning-flow-dot) { flex: 1; min-width: 0; }
+.planning-next { flex: none; padding: 6px 12px; border: 1px solid var(--planning-edge-active); border-radius: 8px; background: linear-gradient(150deg, var(--tint-gold-3), var(--tint-gold-1)); color: var(--ivory); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.planning-next:hover { border-color: color-mix(in srgb, var(--gold) 60%, transparent); background: var(--tint-gold-3); }
 .planning-flow-status[data-active="true"] { color: var(--gold-bright); }
-.planning-flow-dot { flex: none; height: 5px; width: 5px; border-radius: 50%; margin-top: 6px; background: var(--hairline-strong); }
+.planning-flow-dot { flex: none; height: 6px; width: 6px; border-radius: 50%; background: var(--gold-bright); }
 /* The thinking dot breathes on opacity alone; its halo is a fixed ring on a
    pseudo-element that fades in with it (the dot's .6 dims it too, as it did
    the animated box-shadow), so the compositor runs the loop, not paint. */
@@ -6044,8 +6057,8 @@ body:has(#plans-overlay:not([hidden])) #idle-layer { opacity: .18; }
 .planning-section[open] > summary .planning-section-chevron { transform: rotate(180deg); }
 .planning-section[open] > summary { margin-bottom: 7px; }
 .planning-section > h3 { margin: 0 0 9px; font-size: 20px; }
-.planning-section > p { margin: 0 0 16px; color: var(--muted); font-size: 12px; line-height: 1.6; }
-.planning-form { display: grid; gap: 16px; }
+.planning-section > p { margin: 0 0 12px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.planning-form { display: grid; gap: 13px; }
 .planning-field { display: grid; gap: 9px; min-width: 0; color: var(--muted); font-size: 13px; border-radius: 10px; transition: color .18s; }
 .planning-field:focus-within { color: var(--gold-bright); }
 .planning-field-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 26px; }
@@ -6079,17 +6092,25 @@ body:has(#plans-overlay:not([hidden])) #idle-layer { opacity: .18; }
 .planning-dependencies legend { margin-bottom: 7px; color: var(--muted); font-size: 12px; }
 .planning-check { display: flex; gap: 9px; align-items: flex-start; font-size: 13px; line-height: 1.4; color: var(--muted); }
 .planning-check input { accent-color: var(--gold); margin-top: 2px; }
-.planning-notes { max-height: 320px; overflow: auto; }
-.planning-note { padding: 10px 12px; margin: 8px 0; background: var(--planning-inset); border-left: 2px solid var(--hairline-strong); border-radius: 0 8px 8px 0; }
+.planning-notes { max-height: 360px; overflow: auto; }
+/* The interview reads like a chat: your words on the right, Mefi's on the left. */
+.planning-notes { display: flex; flex-direction: column; gap: 8px; padding: 4px 2px; }
+.planning-note { max-width: 86%; padding: 9px 13px; margin: 0; background: var(--planning-inset); border: 1px solid var(--planning-edge); border-left: 2px solid var(--hairline-strong); border-radius: 4px 13px 13px 13px; }
+.planning-note:is([data-note-kind="answer"], [data-note-kind="note"]) { align-self: flex-end; border-left-width: 1px; border-left-color: var(--planning-edge); border-right: 2px solid var(--gold); border-radius: 13px 4px 13px 13px; background: var(--tint-gold-2); }
 .planning-note strong { font-size: 12px; color: var(--gold-bright); }
 .planning-note p { margin: 5px 0; white-space: pre-wrap; font-size: 13px; }
 /* Where a line came from. Your own words read as settled; anything Mefi
    proposed stays visibly unconfirmed until you record it as a decision. */
-.planning-note[data-note-kind="answer"] { border-left-color: var(--gold); }
 .planning-note[data-note-kind="interpretation"], .planning-note[data-note-kind="conflict"] { border-left-style: dashed; }
 .planning-note[data-note-kind="conflict"] strong { color: #f0c073; }
 .planning-interview { border-color: var(--hairline-strong); background: var(--tint-gold-2); }
-.planning-interview-ask { margin: 8px 0 14px; font-size: 16px; line-height: 1.55; }
+.planning-interview-ask { margin: 10px 0 14px; padding-left: 12px; border-left: 3px solid var(--gold-bright); font-size: 18px; line-height: 1.5; color: var(--ivory); letter-spacing: -.01em; }
+/* Mefi's reading of your answer, with the one-click way to make it yours. */
+.planning-reading { margin: 4px 0 16px; padding: 12px 14px; border: 1px dashed color-mix(in srgb, var(--gold) 45%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--gold) 6%, transparent); }
+.planning-reading-label { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--gold-bright); }
+.planning-reading p { margin: 6px 0 2px; font-size: 14px; line-height: 1.6; color: var(--ivory); }
+.planning-reading .planning-actions { margin-top: 8px; }
+.planning-options { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 10px; }
 .planning-confirm { padding: 18px; border: 1px solid var(--hairline-strong); border-radius: 12px; background: var(--tint-gold-2); }
 .planning-confirm p { line-height: 1.6; margin: 0 0 10px; font-size: 13px; }
 .planning-handoff-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; color: var(--planning-step-accent); font-size: 14px; }
@@ -6242,6 +6263,39 @@ html[data-no-blur] #plans-overlay { --planning-blur: none; --planning-page-blur:
 :is(.no-motion, .ws-still, html[data-motion="off"]) :is(.planning-field, .planning-field input, .planning-field textarea, .planning-field select, .planning-flow-stage) { animation: none !important; transition: none !important; }
 :is(.no-motion, .ws-still, html[data-motion="off"]) .planning-copilot-status::before { animation: none !important; }
 :is(.no-motion, .ws-still, html[data-motion="off"]) .planning-section-chevron { transition: none; }
+
+/* One step at a time: only the sections of the step in view, unless you ask
+   for the whole plan. The Already-in-this-project panel belongs to the idea. */
+.planning-editor[data-show-all="false"][data-focus="idea"] > .planning-section[data-step]:not([data-step="idea"]),
+.planning-editor[data-show-all="false"][data-focus="explore"] > .planning-section[data-step]:not([data-step="explore"]),
+.planning-editor[data-show-all="false"][data-focus="decisions"] > .planning-section[data-step]:not([data-step="decisions"]),
+.planning-editor[data-show-all="false"][data-focus="review"] > .planning-section[data-step]:not([data-step="review"]),
+.planning-editor[data-show-all="false"][data-focus="spec"] > .planning-section[data-step]:not([data-step="spec"]) { display: none; }
+.planning-editor[data-show-all="false"] > .planning-section[data-empty="true"] { display: none; }
+.planning-show-all { display: block; margin: 0 0 8px auto; padding: 4px 10px; font-size: 11px; color: var(--muted); }
+.planning-show-all[aria-pressed="true"] { color: var(--gold-bright); }
+
+/* Idea starters and where the plan lives: small pills you tap. */
+.planning-starters, .planning-where-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.planning-starters { margin-top: -5px; }
+.planning-starter, .planning-where-chip { padding: 5px 11px; border: 1px solid var(--planning-edge); border-radius: 999px; background: var(--planning-inset); color: var(--muted); font-size: 12px; white-space: nowrap; transition: border-color .18s, color .18s, background .18s; }
+.planning-starter:hover, .planning-where-chip:hover { border-color: var(--hairline-strong); color: var(--ivory); background: var(--tint-gold-1); }
+.planning-where-chip[aria-pressed="true"] { border-color: var(--planning-edge-active); color: var(--gold-bright); background: var(--tint-gold-2); }
+.planning-where { display: grid; gap: 9px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--hairline); }
+.planning-where-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.planning-where-head strong { color: var(--ivory); font-size: 13px; font-weight: 600; }
+.planning-where-head .planning-subtle { font-size: 11px; }
+
+/* Whether the project has been read and mapped for this plan. */
+.planning-ready { display: inline-flex; align-items: center; gap: 7px; flex: none; padding: 5px 10px; border: 1px solid var(--hairline); border-radius: 999px; background: transparent; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.planning-ready::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--hairline-strong); }
+.planning-ready[data-state="ready"]::before { background: var(--good); }
+.planning-ready[data-state="error"] { color: var(--bad); }
+.planning-ready[data-state="error"]::before { background: var(--bad); }
+.planning-ready[data-state="working"]::before { background: var(--gold-bright); animation: planning-think 1.8s ease-in-out infinite; }
+.planning-ready:hover { border-color: var(--hairline-strong); color: var(--ivory); }
+@media (prefers-reduced-motion: reduce) { .planning-ready::before, .planning-flow-stage[data-celebrate="true"] .planning-step-icon, .planning-flow-stage[data-celebrate="true"]::before { animation: none !important; } }
+:is(.no-motion, .ws-still, html[data-motion="off"]) .planning-ready::before, :is(.no-motion, .ws-still, html[data-motion="off"]) .planning-flow-stage[data-celebrate="true"] .planning-step-icon, :is(.no-motion, .ws-still, html[data-motion="off"]) .planning-flow-stage[data-celebrate="true"]::before { animation: none !important; }
 
 /* Brain maps — the pipeline editor: parts rail, wiring canvas, inspector. */
 .brains-overlay { position: fixed; inset: 0; z-index: var(--z-sheet); padding: 22px; display: grid; place-items: center; background: rgba(0,0,0,.78); backdrop-filter: blur(14px); }
@@ -60818,7 +60872,17 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   const announce = (name, detail) => {
     try { if (typeof CustomEvent === "function" && typeof window.dispatchEvent === "function") window.dispatchEvent(new CustomEvent(name, { detail })); } catch {}
   };
-  const state = { projectId: null, projectName: "Your project", plans: [], selected: "new", busy: false, pending: null, tasks: null, workError: null, epoch: 0, opened: false, readId: 0, workReadId: 0, existing: null, existingOpen: false, showArchived: false };
+  // `index` is the project read Plans warms on open (files Studio can see);
+  // `systems` and `places` come from the Project map, so a plan knows which
+  // part of the project it lives in before its spec and tasks need it.
+  const state = { projectId: null, projectName: "Your project", plans: [], selected: "new", busy: false, pending: null, tasks: null, workError: null, epoch: 0, opened: false, readId: 0, workReadId: 0, existing: null, existingOpen: false, showArchived: false, index: null, preparing: false, systems: null, places: null, loaded: false };
+  // Mefi carries the conversation: it asks as soon as a plan exists and again
+  // after each decision you record. One switch, remembered on this PC.
+  const autoAskKey = "mefiStudio.planning.autoAsk.v1";
+  const autoAsk = () => { try { return localStorage.getItem(autoAskKey) !== "0"; } catch { return true; } };
+  const setAutoAsk = (on) => { try { localStorage.setItem(autoAskKey, on ? "1" : "0"); } catch {} };
+  // A name from the first words of the idea, for a plan started without one.
+  const nameFrom = (text) => { const line = String(text || "").trim().split(/\r?\n/)[0].replace(/\s+/g, " "); const words = line.split(" ").slice(0, 8).join(" "); return (words.length > 60 ? `${words.slice(0, 57).trimEnd()}…` : words).replace(/[.,;:!?]+$/, ""); };
   let initialized = false;
   let workTimer = null;
   let workFlight = null;
@@ -60849,6 +60913,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   let viewedStepKey = null;
   let lastWorkflowStep = null;
   const stepAnimations = new WeakMap();
+  const celebrated = new Map();
   const fieldTargets = { title: "title", destination: "destination", "out-of-scope": "outOfScope", "question-text": "question", "draft-question": "question", "unknown-text": "unknown", "draft-unknown": "unknown", "spec-text": "specText" };
   const targetLabels = { title: "Plan name", destination: "Outcome", outOfScope: "Outside this plan", question: "Open question", unknown: "Uncertainty", specText: "Specification" };
   const draftFieldId = (target) => ({ title: "title", destination: "destination", outOfScope: "out-of-scope", question: plan() ? "question-text" : "draft-question", unknown: plan() ? "unknown-text" : "draft-unknown", specText: "spec-text" })[target];
@@ -61014,10 +61079,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const animation = element.animate([{ opacity: .45, transform: `translateX(${direction * 12}px)` }, { opacity: 1, transform: "translateX(0)" }], { duration: 260, delay, easing: "cubic-bezier(.2,.75,.25,1)" });
     stepAnimations.set(element, animation);
   }
+  // One step at a time: the editor shows the sections of the step you are
+  // looking at (approval and the build steps live in the spec section), and
+  // "Show every step" lays the whole plan out again.
+  const focusGroup = (step) => (["approval", "build", "verify"].includes(step) ? "spec" : step || "idea");
   function selectStep(id) {
     viewedStep = id;
     draft().viewedStep = id; draft().workflowStep = workflowState(plan()).current; persist();
     if ($("workflow")) $("workflow").dataset.viewedStep = id;
+    if ($("editor")) $("editor").dataset.focus = focusGroup(id);
     for (const [key] of flowStages) {
       const stage = $(`stage-${key}`); if (!stage) continue;
       stage.dataset.selected = String(key === id); stage.setAttribute("aria-pressed", String(key === id));
@@ -61289,6 +61359,17 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (complete) { completed.add("build"); completed.add("verify"); }
     return { current, completed, questions, resolved, frontier, blocked, unknowns, work, complete, ask: pendingAsk(item) };
   }
+  // Whether the project is read and mapped yet. Plans starts that read when it
+  // opens, so it is ready before the interview or the spec leans on it; the
+  // chip says how it went and reads the folder again on a click.
+  function readinessChip(parent) {
+    if (!api()?.planningPrepare) return;
+    const index = state.index;
+    const text = state.preparing && !index ? "Reading your project…" : index?.error ? "Project read failed · retry" : index ? `Project ready · ${countLabel(index.scanned, "file")}${state.systems?.length ? ` · ${countLabel(state.systems.length, "area")}` : ""}` : "Get the project ready";
+    const chip = navigation(text, parent, () => { void prepare({ fresh: true }); }, "ready", "planning-ready");
+    chip.dataset.state = state.preparing ? "working" : index?.error ? "error" : index ? "ready" : "idle";
+    chip.title = index?.structure?.length ? `Top level: ${index.structure.join("  ")}\nClick to read the folder again.` : "Read the project's files so Mefi can point at real code.";
+  }
   function renderWorkflow(item) {
     let area = $("workflow");
     const entering = !area;
@@ -61312,8 +61393,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         : button("Archive plan", head, () => act("archive", {}, null, "Plan archived. Find it under Archived in the list; restoring brings it back as it was."), "archive");
       shelf.classList.add("mini");
     }
+    readinessChip(head);
     if (item && !archived(item)) navigation("Continue where you left off", head, () => $(`stage-${viewedStep}`)?.click?.(), "resume");
     const rail = node("ol", "planning-flow-rail", undefined, area); rail.setAttribute("aria-label", "Planning and work stages");
+    // How far along, as a fill behind the steps; a step you just finished
+    // gets a short flourish the first time it reads as complete.
+    const doneCount = flowStages.filter(([id]) => flow.completed.has(id)).length;
+    rail.style?.setProperty?.("--planning-progress", String(doneCount / flowStages.length));
+    const seen = celebrated.get(draftKey());
+    celebrated.set(draftKey(), new Set(flow.completed));
     const decided = `${flow.resolved.length}/${flow.questions.length} recorded`;
     const subtitles = { idea: item ? "Destination saved" : "Set a destination", explore: flow.ask?.awaiting ? "Waiting for your answer" : `${flow.frontier.length} ready · ${flow.blocked.length} blocked`, decisions: decided, review: confirmed(item) ? "Confirmed by you" : "Review decisions", spec: item?.spec?.stale ? "Needs revision" : item?.spec ? "Draft saved" : "Draft specification", approval: item?.spec?.approvedAt ? "Approved by you" : "Review specification", build: frozen(item) ? `${flow.work.filter((task) => task.stage === "running").length} working · ${countLabel(item.taskIds?.length || 0, "task")}` : "Create tasks", verify: frozen(item) ? `${flow.work.filter((task) => task.stage === "done").length}/${flow.work.length} confirmed` : "Check the result" };
     for (const [index, [id, label]] of flowStages.entries()) {
@@ -61330,6 +61418,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       };
       const stage = navigation("", row, jump, `stage-${id}`, "planning-flow-stage");
       stage.dataset.state = flow.completed.has(id) && id !== flow.current ? "complete" : id === flow.current ? "current" : "waiting";
+      if (seen && flow.completed.has(id) && !seen.has(id)) stage.dataset.celebrate = "true";
       stage.dataset.step = id; stage.dataset.selected = String(id === viewedStep);
       stage.setAttribute("aria-pressed", String(id === viewedStep)); stage.title = `${label} · ${subtitles[id]}`;
       stage.setAttribute("aria-label", `${label}: ${subtitles[id]}`);
@@ -61347,6 +61436,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const next = { idea: "Start with the outcome. Build work begins after your approval.", explore: flow.ask?.awaiting ? "Mefi is waiting for your answer. Reply in your own words; it reads your answer back before moving on." : flow.unknowns ? `${flow.unknowns} unknown${flow.unknowns === 1 ? " needs" : "s need"} a question or a reason to set aside.` : "Let Mefi ask you the next question, or add one yourself.", decisions: "Read the interview back, then record your own decisions.", review: "Read what this plan now says the feature is. Nothing is drafted until you confirm it.", spec: "The decisions are settled. Draft the specification and its small implementation tasks.", approval: "Review the saved specification, task briefs, and acceptance checks before approving.", build: item?.status === "converted" ? "Tasks follow the current queue and Pause settings. Their board status is shown below." : item?.status === "converting" ? "Finish creating the approved tasks. Existing tasks will be reused." : "Your specification is approved. Create its tasks when you are ready.", verify: flow.complete ? "Every linked task has verified evidence or your recorded confirmation." : "A worker result is ready for verification. Open the task to inspect its evidence." };
     const pendingQuestion = flow.questions.find((question) => question.id === state.pending?.questionId);
     node("span", "", state.pending?.assist ? state.pending.kind === "spec" ? "Mefi is drafting the specification from your saved decisions…" : state.pending.kind === "interview" ? "Mefi is reading your answer and working out what to ask next…" : state.pending.kind === "question" ? `Mefi is exploring: ${pendingQuestion?.question || "the selected question"}` : "Mefi is looking for questions in your saved destination…" : archived(item) ? "This plan is archived. Restore it to pick up where you left off." : next[flow.current], status);
+    // Up next: one button to the step that is waiting on you.
+    if (item && !archived(item) && !state.pending?.assist) {
+      const labels = { idea: "Describe your idea", explore: flow.ask?.awaiting ? "Answer Mefi" : flow.unknowns ? "Sort the unknowns" : "Talk it through", decisions: "Record your decisions", review: "Read it back", spec: "Draft the build plan", approval: "Approve the plan", build: item.status === "converting" ? "Finish creating tasks" : item.status === "converted" ? "Follow the tasks" : "Create the tasks", verify: "Check the results" };
+      const go = navigation(`${labels[flow.current]} →`, status, () => $(`stage-${flow.current}`)?.click?.(), "next", "planning-next");
+      go.dataset.step = flow.current;
+    }
     if (item && !frozen(item)) renderQuestionMap(area, item, flow);
     if (onBoard(item)) renderExecution(area, item, flow.work);
   }
@@ -61433,7 +61528,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       const result = guard(reply);
       if (epoch !== state.epoch || projectId !== state.projectId || selected !== state.selected) return false;
       accept(result); if (clean) clean(savedDraft); if (action === "create") { drafts[draftKey()] = savedDraft; delete drafts[key]; } persist();
-      render(); note(result.note || success);
+      // Which seat answered: the quick model by default, the deep one for a
+      // spec, a "think harder" turn, or a reply the quick model fumbled.
+      render(); note(`${result.note || success}${assist && result.seat ? ` · ${result.seat === "heavy" ? "Deep" : "Quick"} model` : ""}`);
       if (action === "create") announce("mefi:plan-created", { planId: result.plan?.id || current?.id || null, projectId });
       if (action === "convert") announce("mefi:task-created", { planId: current?.id || null, projectId });
       if (action === "convert") window.MefiWorkspace?.refresh?.(true);
@@ -61475,19 +61572,70 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       node("p", "planning-subtle", state.projectId ? "Your saved plans will live here, with this project." : "Choose a project to start a plan.", empty);
     }
   }
+  // Where a saved plan lives on the Project map. Studio suggests the area the
+  // matching files belong to; one click pins it, another lifts it off.
+  function suggestedSystem() {
+    const files = (copilot.result?.references?.code || []).map((hit) => hit.file).filter(Boolean);
+    let best = null, bestScore = 0;
+    for (const system of state.systems || []) {
+      const paths = new Set((system.files || []).map((file) => file?.path).filter(Boolean));
+      const score = files.filter((file) => paths.has(file) || (system.path && file.startsWith(system.path))).length;
+      if (score > bestScore) { best = system; bestScore = score; }
+    }
+    return best;
+  }
+  function whereItLives(area, item) {
+    area.hidden = !item || !state.systems?.length || !api()?.brainMapPlace;
+    if (area.hidden) return;
+    const placed = state.places?.plans?.[item.id] || null;
+    const suggested = suggestedSystem();
+    const head = node("div", "planning-where-head", undefined, area);
+    node("strong", "", "Where this lives", head);
+    node("span", "planning-subtle", placed ? "Pinned on your Project map." : suggested ? `Mefi's guess from the files it read: ${suggested.name || suggested.id}.` : "Pin it to an area of your Project map.", head);
+    const chips = node("div", "planning-where-chips", undefined, area);
+    const order = [...state.systems].sort((a, b) => Number(b.id === placed) - Number(a.id === placed) || Number(b.id === suggested?.id) - Number(a.id === suggested?.id));
+    for (const system of order.slice(0, 8)) {
+      const here = system.id === placed;
+      const chip = navigation(`${here ? "✓ " : system.id === suggested?.id ? "✦ " : ""}${system.name || system.id}`, chips, async () => {
+        if (state.busy || frozen(item)) return;
+        const result = await api().brainMapPlace({ kind: "plan", id: item.id, systemId: here ? null : system.id }).catch((error) => ({ ok: false, error: error.message }));
+        if (!result?.ok) { note(result?.error || "That area could not be pinned.", true); return; }
+        state.places = result.places ?? state.places; note(here ? "Lifted off the map." : `Pinned to ${system.name || system.id}.`); repaintReadiness();
+      }, `where-${system.id}`, "planning-where-chip");
+      chip.setAttribute("aria-pressed", String(here)); chip.title = [system.path, system.what].filter(Boolean).join(" · ") || system.id;
+      chip.dataset.locked = String(frozen(item)); chip.disabled = frozen(item);
+    }
+  }
+  // Starters for a blank idea: one tap puts the opening words in the box.
+  const starters = [["+ A new feature", "Add a way for people to "], ["✦ Polish something", "Make the "], ["↯ Make it faster", "Speed up "], ["✓ Fix a problem", "Fix the problem where "]];
   function details(item) {
     // "New plan" already heads the workflow card above; the section names its part.
-    const area = section("1. The destination", "Describe the intended outcome and what is outside the scope.");
+    const area = section(item ? "1. The destination" : "1. What do you want to make?", item ? "What should be true when this is done, and what it leaves for later." : "Say it in a sentence or two. Mefi reads your project and asks the questions that matter.");
     area.id = "plans-destination-section"; area.tabIndex = -1;
     const local = draft();
     if (item && (!local.detailsDirty || frozen(item))) { local.details = { title: item.title, destination: item.destination, outOfScope: item.outOfScope }; delete local.detailsDirty; }
     const values = local.details ||= { title: item?.title || "", destination: item?.destination || "", outOfScope: item?.outOfScope || "" };
     const locked = frozen(item);
-    const edit = form(area, "details-form", () => act(item ? "update" : "create", { ...values }, (saved) => { delete saved.details; delete saved.detailsDirty; }, item ? "Destination saved. Changed scope reopens earlier decisions for review." : "Plan created. Add questions or start the interview."), "Plan destination", locked);
+    const edit = form(area, "details-form", async () => {
+      // No name yet: the first words of the idea name the plan.
+      const payload = { ...values, title: values.title.trim() || nameFrom(values.destination) };
+      const created = await act(item ? "update" : "create", payload, (saved) => { delete saved.details; delete saved.detailsDirty; }, item ? "Destination saved. Changed scope reopens earlier decisions for review." : "Plan created. Mefi will ask its first question.");
+      // A new plan goes straight into the conversation when Mefi can talk.
+      if (created && !item && autoAsk() && api()?.planningAssist && plan()) { if (await act("interview", { kind: "interview" }, null, "Mefi asked its first question. Answer in your own words.", true)) navigateTo("interview-answer"); }
+    }, "Plan destination", locked);
     const changed = (key, value) => { values[key] = value; local.detailsDirty = true; if (key === "title" && $("draft-title")) $("draft-title").textContent = value || "New plan"; if (item) holdHandoff(); };
-    field(edit, "Plan name", "title", values.title, (value) => changed("title", value), { step: "01", required: true, maxLength: 180, locked, placeholder: "Improve first-time setup" });
+    field(edit, "Plan name", "title", values.title, (value) => changed("title", value), { step: "01", required: Boolean(item), maxLength: 180, locked, placeholder: item ? "Improve first-time setup" : "Optional — Mefi names it from your idea" });
     field(edit, "What should be true when this is finished?", "destination", values.destination, (value) => changed("destination", value), { step: "02", required: true, rows: 3, locked, maxLength: 16000, placeholder: "Who is this for? What can they do or understand afterward?" });
+    if (!item && !locked) {
+      const row = node("div", "planning-starters", undefined, edit); row.setAttribute("aria-label", "Idea starters");
+      for (const [label, words] of starters) navigation(label, row, () => {
+        if (values.destination.trim()) return navigateTo("destination");
+        changed("destination", words); persist();
+        const box = $("destination"); if (box) { box.value = words; box.focus?.(); try { box.setSelectionRange?.(words.length, words.length); } catch {} }
+      }, null, "planning-starter");
+    }
     field(edit, "Outside this plan", "out-of-scope", values.outOfScope, (value) => changed("outOfScope", value), { step: "03", optional: true, rows: 2, locked, maxLength: 12000, placeholder: "Things we are choosing to leave for later" });
+    if (item) { const where = node("div", "planning-where", undefined, area); where.id = "plans-where-section"; whereItLives(where, item); }
     if (!item && local.question?.question) field(edit, "A question to carry forward", "draft-question", local.question.question, (value) => { local.question.question = value; }, { rows: 2, maxLength: 4000 });
     if (!item && local.unknown) field(edit, "An uncertainty to carry forward", "draft-unknown", local.unknown, (value) => { local.unknown = value; }, { rows: 2, maxLength: 4000 });
     if (!locked) {
@@ -61498,6 +61646,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
   function unknowns(item) {
     const area = section("3. Unknowns", "Turn each uncertainty into a question, or explain why it no longer needs an answer.");
+    // Nothing unsure yet: the step view leaves it out; "Show every step" keeps it.
+    area.dataset.empty = String(!(item.unknowns || []).length && !draft().unknown);
     const local = draft(); const locked = frozen(item);
     for (const unknown of item.unknowns || []) {
       const card = node("article", "planning-card", undefined, area); node("p", "", unknown.text, card);
@@ -61519,15 +61669,16 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     }
   }
   // The interview, shown wherever a question appears. Each line says where it
-  // came from, and Mefi's reading of your answer can only ever be copied into
-  // your decision box for you to edit and record yourself.
-  function transcript(parent, item, question, locked = false) {
+  // came from, and Mefi's reading of your answer becomes a decision only when
+  // you say so: copied into your decision box to edit, or recorded as-is when
+  // you press "That's right" on it.
+  function transcript(parent, item, question, locked = false, offered = null) {
     const local = draft(); const wrap = node("div", "planning-notes", undefined, parent);
     for (const entry of question.notes || []) {
       const row = node("div", "planning-note", undefined, wrap);
       row.dataset.noteKind = entry.kind || (entry.author === "user" ? "note" : "advice");
       node("strong", "", noteLabel(entry), row); node("p", "", entry.text, row);
-      if (entry.kind === "interpretation" && question.status !== "resolved" && !locked) button("Use as my decision", row, () => {
+      if (entry.kind === "interpretation" && question.status !== "resolved" && !locked && entry.id !== offered) button("Use as my decision", row, () => {
         local.answers ||= {}; (local.answers[question.id] ||= { resolution: "", evidence: "" }).resolution = entry.text;
         persist(); render(); navigateTo(`resolution-${question.id}`, `question-card-${question.id}`);
         note("Mefi's reading is in your decision box. Edit it until it says what you mean, then record it.");
@@ -61554,26 +61705,52 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const index = item.questions.indexOf(ask.question) + 1;
     node("span", "planning-pill", ask.followUp ? `Follow-up on Q${index}` : ask.answered ? `Q${index} · Your answer is saved` : `Q${index} · ${typeChoices.find(([type]) => type === ask.question.type)?.[1] || ask.question.type}`, card).dataset.state = "ready";
     node("p", "planning-interview-ask", ask.ask, card).id = "plans-interview-ask";
-    const talk = node("details", "", undefined, card); talk.open = local.interviewOpen !== false;
+    const talk = node("details", "planning-chat", undefined, card); talk.open = local.interviewOpen !== false;
     node("summary", "", `What we've said about this${ask.question.notes?.length ? ` · ${countLabel(ask.question.notes.length, "line")}` : ""}`, talk);
     talk.addEventListener("toggle", () => { local.interviewOpen = talk.open; persist(); });
-    transcript(talk, item, ask.question);
-    field(card, "Your answer", "interview-answer", values.message, (value) => { values.message = value; }, { rows: 4, maxLength: 16000, placeholder: "Answer in your own words. Say what you want to be true, not how to build it." });
-    const checkLabel = node("label", "planning-check", undefined, card); const check = node("input", "", undefined, checkLabel); check.type = "checkbox"; check.checked = Boolean(values.useWeb);
-    node("span", "", "Let Mefi cite web references", checkLabel);
+    // Mefi's newest reading of what you said. When it is right, one click
+    // records those words as your decision; anything else, edit it below.
+    const reading = [...(ask.question.notes || [])].reverse().find((entry) => entry.kind === "interpretation");
+    const quick = reading && ["discussion", "prerequisite"].includes(ask.question.type) && ready(item, ask.question);
+    transcript(talk, item, ask.question, false, quick ? reading.id : null);
+    if (quick) {
+      const confirm = node("div", "planning-reading", undefined, card);
+      node("span", "planning-reading-label", "Mefi understood", confirm);
+      node("p", "", reading.text, confirm);
+      const row = node("div", "planning-actions", undefined, confirm);
+      button("✓ That's right — record it", row, async () => {
+        const recorded = await act("resolve", { questionId: ask.question.id, resolution: reading.text, evidence: "" }, (saved) => { delete saved.answers?.[ask.question.id]; }, "Recorded as your decision.");
+        // Mefi either asks what is still open or says it has nothing more.
+        if (recorded && autoAsk() && plan()) { if (await act("interview", { kind: "interview" }, null, "Decision recorded. Mefi asked the next question.", true)) navigateTo(pendingAsk(plan()) ? "interview-answer" : "confirm-understanding", "interview-start", "review-section"); }
+        else if (recorded && plan() && settled(plan())) navigateTo("confirm-understanding", "review-section");
+      }, "accept-reading", true, pending);
+      navigation("Edit it first ↓", row, () => { local.answers ||= {}; (local.answers[ask.question.id] ||= { resolution: "", evidence: "" }).resolution = reading.text; persist(); render(); navigateTo(`resolution-${ask.question.id}`, `question-card-${ask.question.id}`); }, "edit-reading", "ghost mini");
+    }
+    const answer = field(card, "Your answer", "interview-answer", values.message, (value) => { values.message = value; }, { rows: 4, maxLength: 16000, placeholder: "Answer in your own words. Say what you want to be true, not how to build it.  Ctrl+Enter sends." });
+    // Ctrl+Enter sends, like a chat box; plain Enter keeps writing.
+    answer.addEventListener("keydown", (event) => { if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && !event.isComposing) { event.preventDefault(); $(ask.answered && !values.message.trim() ? "interview-continue" : "interview-send")?.click?.(); } });
+    const options = node("div", "planning-options", undefined, card);
+    const checkLabel = node("label", "planning-check", undefined, options); const check = node("input", "", undefined, checkLabel); check.type = "checkbox"; check.checked = Boolean(values.useWeb);
+    node("span", "", "Cite web references", checkLabel);
     check.addEventListener("change", () => { values.useWeb = check.checked; persist(); });
+    const deepLabel = node("label", "planning-check", undefined, options); const deep = node("input", "", undefined, deepLabel); deep.type = "checkbox"; deep.checked = Boolean(values.deep); deep.id = "plans-think-harder";
+    node("span", "", "Think harder (deep model, slower)", deepLabel);
+    deep.addEventListener("change", () => { values.deep = deep.checked; persist(); });
+    const carryLabel = node("label", "planning-check", undefined, options); const carry = node("input", "", undefined, carryLabel); carry.type = "checkbox"; carry.checked = autoAsk(); carry.id = "plans-auto-ask";
+    node("span", "", "Mefi keeps the conversation going", carryLabel);
+    carry.addEventListener("change", () => setAutoAsk(carry.checked));
     const actions = node("div", "planning-actions", undefined, card);
     const clean = (saved) => { delete saved.interview; };
     // Your answer is on the record but Mefi has not replied: ask it to read
     // what you said and carry on, without sending the words a second time.
     if (ask.answered) button("Continue with Mefi", actions, async () => {
-      if (await act("interview", { kind: "interview", questionId: ask.question.id, useWeb: values.useWeb }, null, "Mefi read your answer back. Check what it understood, then answer the next question.", true)) navigateTo("interview-answer", "interview-start");
+      if (await act("interview", { kind: "interview", questionId: ask.question.id, useWeb: values.useWeb, deep: values.deep === true }, null, "Mefi read your answer back. Check what it understood, then answer the next question.", true)) navigateTo("interview-answer", "interview-start");
     }, "interview-continue", true, pending);
     button(ask.answered ? "Add to my answer" : "Send answer", actions, async () => {
       if (!values.message.trim()) { note("Type your answer first, or ask Mefi to explain the tradeoffs.", true); navigateTo("interview-answer"); return; }
-      if (await act("interview", { kind: "interview", questionId: ask.question.id, message: values.message, useWeb: values.useWeb }, clean, "Mefi read your answer back. Check what it understood, then answer the next question.", true)) navigateTo("interview-answer", "interview-start");
+      if (await act("interview", { kind: "interview", questionId: ask.question.id, message: values.message, useWeb: values.useWeb, deep: values.deep === true }, clean, "Mefi read your answer back. Check what it understood, then answer the next question.", true)) navigateTo("interview-answer", "interview-start");
     }, "interview-send", !ask.answered, pending);
-    button("Explain the tradeoffs", actions, () => act("question", { kind: "question", questionId: ask.question.id, message: values.message, useWeb: values.useWeb }, clean, "Mefi explained the tradeoffs. It still needs your answer.", true), "interview-explain", false, pending);
+    button("Explain the tradeoffs", actions, () => act("question", { kind: "question", questionId: ask.question.id, message: values.message, useWeb: values.useWeb, deep: values.deep === true }, clean, "Mefi explained the tradeoffs. It still needs your answer.", true), "interview-explain", false, pending);
     navigation("Record my decision ↓", actions, () => navigateTo(`resolution-${ask.question.id}`, `question-card-${ask.question.id}`), "interview-to-decision", "ghost mini");
     node("p", "planning-subtle", pending ? "Save your destination, unknown, or question edits first." : "Uses your configured assistant connection. Mefi does the asking and the organizing; every decision stays yours.", card);
   }
@@ -61868,7 +62045,16 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     renderWorkflow(item);
     const canvas = node("div", "planning-canvas", undefined, $("detail"));
     const editor = node("div", "planning-editor", undefined, canvas); editor.id = "plans-editor";
+    editor.dataset.focus = focusGroup(item ? viewedStep : "idea"); editor.dataset.showAll = String(draft().showAll === true);
     const feedback = node("div", "planning-draft-feedback", undefined, editor); feedback.id = "plans-draft-feedback"; feedback.setAttribute("role", "status"); feedback.hidden = true;
+    if (item) {
+      const all = navigation(draft().showAll ? "Focus on one step" : "Show every step", editor, () => {
+        draft().showAll = !draft().showAll; persist();
+        editor.dataset.showAll = String(draft().showAll); all.textContent = draft().showAll ? "Focus on one step" : "Show every step";
+        all.setAttribute("aria-pressed", String(draft().showAll));
+      }, "show-all", "planning-show-all ghost mini");
+      all.setAttribute("aria-pressed", String(draft().showAll === true));
+    }
     const assistant = node("aside", "planning-copilot", undefined, canvas); assistant.id = "plans-copilot"; assistant.setAttribute("aria-label", "AI planning partner");
     details(item); if (item) { interviewPanel(item); unknowns(item); questions(item); review(item); specification(item); history(item); }
     existingWork(item);
@@ -61911,6 +62097,38 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     else if (typeof setInterval === "function") workTimer = setInterval(refreshWork, 30000);
     void refreshWork();
   }
+  // Repaint what the project read changed without rebuilding the editor, so
+  // a field you are typing in keeps its caret.
+  function repaintReadiness() {
+    if (!state.opened || !state.projectId) return;
+    renderWorkflow(plan()); controls();
+    const old = $("existing-section");
+    if (old && $("editor")) { const open = state.existingOpen; old.remove(); existingWork(plan()); state.existingOpen = open; }
+    else if (!old && state.existing && $("editor")) existingWork(plan());
+    const where = $("where-section");
+    if (where) { where.replaceChildren(); whereItLives(where, plan()); }
+  }
+  // The folder scan, a warm read of its files and the Project map's areas,
+  // fetched after the plans list so opening Plans never waits on them.
+  let prepareFlight = null;
+  async function prepare({ fresh = false } = {}) {
+    if (!api()?.planningPrepare || !state.projectId) return;
+    if (prepareFlight && !fresh) return prepareFlight;
+    const epoch = state.epoch, projectId = state.projectId;
+    state.preparing = true; repaintReadiness();
+    const flight = (async () => {
+      const query = [composeSnapshot().title, composeSnapshot().destination].join("\n").slice(0, 4000);
+      const [ready, map] = await Promise.all([
+        api().planningPrepare({ projectId, fresh, query }).catch((error) => ({ ok: false, error: error.message })),
+        api().brainMap ? api().brainMap(false).catch(() => null) : null,
+      ]);
+      if (epoch !== state.epoch || projectId !== state.projectId) return;
+      if (ready?.ok && (!ready.projectId || ready.projectId === projectId)) { state.existing = ready.existing ?? null; state.index = ready.index ?? null; }
+      else state.index = { error: ready?.error || "The project could not be read." };
+      if (map?.ok && (!map.projectId || map.projectId === projectId)) { state.systems = (map.map?.systems || []).filter((system) => system?.id).slice(0, 24); state.places = map.places || null; }
+    })().finally(() => { if (prepareFlight === flight) prepareFlight = null; if (epoch === state.epoch) { state.preparing = false; repaintReadiness(); } });
+    prepareFlight = flight; return flight;
+  }
   async function refresh({ refreshTasks = true } = {}) {
     if (state.busy) return;
     const epoch = state.epoch; const readId = ++state.readId;
@@ -61918,17 +62136,21 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       if (!api()?.projectsList || !api()?.planningList) { render(); note("Planning is available in the desktop app."); return; }
       const projects = guard(await api().projectsList());
       if (epoch !== state.epoch || readId !== state.readId) return;
-      if (state.projectId !== projects.activeId) { restoreSelection = true; state.projectId = projects.activeId; state.plans = []; state.selected = "new"; state.tasks = null; state.workError = null; state.existing = null; state.workReadId += 1; }
+      if (state.projectId !== projects.activeId) { restoreSelection = true; state.projectId = projects.activeId; state.plans = []; state.selected = "new"; state.tasks = null; state.workError = null; state.existing = null; state.index = null; state.systems = null; state.places = null; state.loaded = false; state.workReadId += 1; }
       const projectId = state.projectId; state.projectName = projects.projects.find((item) => item.id === projectId)?.name || "No project selected";
       if (!projectId) { render(); note(); return; }
-      const result = guard(await api().planningList({ projectId }));
+      const prepared = Boolean(api().planningPrepare);
+      const result = guard(await api().planningList({ projectId, ...(prepared ? { skipExisting: true } : {}) }));
       if (epoch !== state.epoch || readId !== state.readId || projectId !== state.projectId || (result.projectId && result.projectId !== projectId)) return;
-      state.plans = result.plans || []; state.existing = result.existing ?? null; restoreProjectPlan(); render(); if (refreshTasks) void refreshWork();
+      state.plans = result.plans || []; if (!prepared) state.existing = result.existing ?? null; state.loaded = true; restoreProjectPlan(); render(); if (refreshTasks) void refreshWork();
+      if (prepared) void prepare();
     } catch (error) { if (epoch === state.epoch && readId === state.readId) { render(); note(error.message, true); } }
   }
   async function open(options = {}) {
     init(); priorFocus = document.activeElement; state.opened = true; $("overlay").hidden = false;
-    window.MefiNav?.claim?.("plans"); note("Opening this project's plans…");
+    window.MefiNav?.claim?.("plans");
+    // Plans read before paint at once; the fresh list replaces them a moment later.
+    if (state.loaded && state.projectId) render(); else note("Opening this project's plans…");
     await refresh({ refreshTasks: false });
     if (!state.opened) return;
     if (options.create) { state.selected = "new"; if (options.destination && !draft().details?.destination) { draft().details = { title: "", destination: String(options.destination), outOfScope: "" }; persist(); } }
@@ -61963,7 +62185,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       const projectId = event.detail?.projectId; if (projectId === state.projectId) return;
       stopExploration();
       rememberSelection(); restoreSelection = true;
-      persist(); state.epoch += 1; state.readId += 1; state.workReadId += 1; state.projectId = projectId; state.selected = "new"; state.plans = []; state.tasks = null; state.workError = null; state.existing = null; state.busy = false; state.pending = null;
+      persist(); state.epoch += 1; state.readId += 1; state.workReadId += 1; state.projectId = projectId; state.selected = "new"; state.plans = []; state.tasks = null; state.workError = null; state.existing = null; state.index = null; state.systems = null; state.places = null; state.loaded = false; state.preparing = false; state.busy = false; state.pending = null;
       if (state.opened) { render(); note("Opening this project's plans…"); void refresh(); }
     });
     document.addEventListener("visibilitychange", () => { if (document.hidden) { stopExploration(); copilot.status = "idle"; } else if (state.opened) void refreshWork(); });

@@ -394,19 +394,28 @@ async function projectInventory(root, limitations) {
 
 // Planning uses the bounded, private-file-aware inventory. Cache the local
 // read briefly while someone types; only matching, redacted excerpts leave it.
+// `stale` answers from an older finished read at once and refreshes it behind
+// the answer, so a planning turn never waits seconds on a re-read.
 const planningInventories = new Map();
-export async function explorePlanningFiles(query, { root = DEFAULT_ROOT, fresh = false } = {}) {
+function readPlanningInventory(root) {
+  const limitations = new Set();
+  const entry = { at: Date.now(), value: null };
+  entry.promise = projectInventory(root, limitations).then((inventory) => (entry.value = { ...inventory, limitations: [...limitations] }));
+  planningInventories.set(root, entry);
+  if (planningInventories.size > 3) planningInventories.delete(planningInventories.keys().next().value);
+  entry.promise.catch(() => { if (planningInventories.get(root) === entry) planningInventories.delete(root); });
+  return entry;
+}
+export async function explorePlanningFiles(query, { root = DEFAULT_ROOT, fresh = false, maxAge = 30000, stale = false } = {}) {
   root = await realpath(root);
   let entry = planningInventories.get(root);
-  if (fresh || !entry || Date.now() - entry.at > 30000) {
-    const limitations = new Set();
-    entry = { at: Date.now(), promise: projectInventory(root, limitations).then((inventory) => ({ ...inventory, limitations: [...limitations] })) };
-    planningInventories.set(root, entry);
-    if (planningInventories.size > 3) planningInventories.delete(planningInventories.keys().next().value);
+  let inventory = null;
+  if (fresh || !entry || Date.now() - entry.at > maxAge) {
+    const previous = entry?.value;
+    entry = readPlanningInventory(root);
+    if (stale && !fresh && previous) inventory = previous;
   }
-  let inventory;
-  try { inventory = await entry.promise; }
-  catch (error) { if (planningInventories.get(root) === entry) planningInventories.delete(root); throw error; }
+  inventory ??= await entry.promise;
   const words = projectKeywords(String(query).slice(0, 24000));
   // Exact paths remain useful even when the wording has no keyword overlap.
   const mentioned = new Set((String(query).match(/[\w@./\\-]+\.[a-z0-9]+/gi) || []).map((name) => name.replace(/\\/g, "/").replace(/^\.\//, "").toLowerCase()));

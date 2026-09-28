@@ -21,6 +21,7 @@ class Element {
   async trigger(name, extra = {}) { if (name === "click" && this.disabled) return; for (const callback of this.listeners[name] || []) await callback({ target: this, preventDefault() {}, stopPropagation() {}, ...extra }); await flush(); }
   querySelectorAll(selector) { const tags = selector.split(",").map((tag) => tag.trim()); return this.children.flatMap((child) => [...(tags.includes(child.tagName) ? [child] : []), ...child.querySelectorAll(selector)]); }
   focus() { this.focused = true; }
+  remove() { const siblings = this.parentElement?.children; const index = siblings ? siblings.indexOf(this) : -1; if (index >= 0) siblings.splice(index, 1); }
   scrollIntoView() { this.scrolled = true; }
 }
 
@@ -764,4 +765,58 @@ test("project switches restore each project's selection and discard an unavailab
   env.events["mefi:project-changed"]({ detail: { projectId: "project-a" } });
   await flush();
   assert.equal(env.el("title").value, first.title);
+});
+
+test("Mefi's reading can be recorded in one click, and Mefi then asks the next question", async () => {
+  const env = await environment(interviewPlan());
+  env.bridge.planningAssist = async (payload) => { env.calls.push(structuredClone(payload)); return { ok: true, projectId: "project-a", plans: structuredClone(env.data["project-a"]), plan: structuredClone(env.data["project-a"][0]) }; };
+  assert.match(env.el("interview-section").textContent, /Mefi understood/);
+  await env.el("accept-reading").trigger("click");
+  const [resolve, ask] = env.calls.slice(-2);
+  assert.equal(resolve.action, "resolve");
+  assert.equal(resolve.resolution, "Only the rows left after the active filters.");
+  assert.equal(env.data["project-a"][0].questions[0].resolvedBy, "user", "you pressed it, so the decision is yours");
+  assert.equal(ask.kind, "interview");
+  assert.equal(ask.action, undefined);
+});
+
+test("with Mefi's conversation switched off, recording a reading asks nothing more", async () => {
+  const storage = new Map([["mefiStudio.planning.autoAsk.v1", "0"]]);
+  const env = await environment(interviewPlan(), storage);
+  assert.equal(env.el("auto-ask").checked, false);
+  await env.el("accept-reading").trigger("click");
+  assert.equal(env.calls.at(-1).action, "resolve");
+  assert.equal(env.calls.filter((call) => call.kind === "interview").length, 0);
+});
+
+test("a new idea needs no name, and Mefi starts the conversation as soon as the plan exists", async () => {
+  const env = await environment();
+  await env.ui.open({ create: true });
+  await env.input("destination", "Let people export the visible report rows as a CSV file");
+  await env.el("details-form").trigger("submit");
+  const create = env.calls.find((call) => call.action === "create");
+  assert.equal(create.title, "Let people export the visible report rows as");
+  assert.equal(env.calls.at(-1).kind, "interview", "Mefi asks its first question right away");
+  assert.equal(env.calls.at(-1).planId, env.data["project-a"].at(-1).id);
+});
+
+test("Plans lists at once, then fills in the project read, the folder scan and where the plan lives", async () => {
+  const env = await environment();
+  const lists = [], places = [];
+  let finishPrepare;
+  env.bridge.planningList = async (payload) => { lists.push(structuredClone(payload)); return { ok: true, projectId: payload.projectId, plans: structuredClone(env.data[payload.projectId]) }; };
+  env.bridge.planningPrepare = (payload) => new Promise((resolve) => { finishPrepare = () => resolve({ ok: true, projectId: payload.projectId, existing: { ok: true, tracker: { kind: "local" }, efforts: [], remote: null, tooling: null, counts: { maps: 0, specs: 0, open: 0, frontier: 0, resolved: 0 } }, index: { scanned: 12, structure: ["src/"], limitations: 0, at: 1 } }); });
+  env.bridge.brainMap = async () => ({ ok: true, projectId: "project-a", places: { ideas: {}, plans: {} }, map: { systems: [{ id: "export", name: "Export", path: "src/export/", files: [] }, { id: "ui", name: "Screens", path: "src/ui/", files: [] }] } });
+  env.bridge.brainMapPlace = async (payload) => { places.push(structuredClone(payload)); return { ok: true, places: { ideas: {}, plans: { [payload.id]: payload.systemId } } }; };
+  env.ui.close(); await env.ui.open({ planId: env.data["project-a"][0].id });
+  assert.equal(lists.at(-1).skipExisting, true, "the list never waits on the folder scan");
+  assert.ok(env.el("detail").textContent.includes("Saved idea"), "the plan is on screen before the scan returns");
+  assert.match(env.el("ready").textContent, /Reading your project/);
+  finishPrepare(); await flush();
+  assert.match(env.el("ready").textContent, /Project ready · 12 files · 2 areas/);
+  assert.ok(env.el("existing-section"), "the folder scan lands once prepared");
+  await env.el("where-export").trigger("click");
+  assert.deepEqual(places.at(-1), { kind: "plan", id: env.data["project-a"][0].id, systemId: "export" });
+  assert.equal(env.el("where-export").attributes["aria-pressed"], "true");
+  assert.equal(env.calls.length, 0, "pinning a plan to the map is not a plan save");
 });
