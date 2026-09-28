@@ -19159,6 +19159,8 @@ async function adoptProject(previous, next, { savedAgents = 0, selected = false 
   await updateSettings();
   const eyes = await getEyes();
   const [tasks, requests, ideas] = await Promise.all([eyes.readJson(TASKS_PATH, []), eyes.readJson(REQUESTS_PATH, []), eyes.readJson(IDEAS_PATH, [])]);
+  // The loop status counts this board now, not the one just left ("2 tasks need your OK").
+  autopilot.queueCounts = typeof boardCounts === "function" ? boardCounts(tasks) : null;
   send("projects:changed", projects.list());
   send("eyes:tasks", tasks.map(taskView));
   send("eyes:requests", requests);

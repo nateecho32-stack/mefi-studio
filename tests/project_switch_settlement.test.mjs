@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
 function section(from, to) {
@@ -52,6 +53,31 @@ test("Save & switch waits through a slow normal settlement after the worker exit
   assert.equal(result.saved, 1);
   assert.equal(h.now(), 15000);
   assert.equal(h.env.projectSwitching, false);
+});
+
+test("adopting a project recounts the loop status from the new board, not the one just left", async () => {
+  const require = createRequire(import.meta.url);
+  const sent = [], emitted = [];
+  const board = [
+    { id: "held", title: "Held", status: "open", ownerHold: { reason: "wait" } },
+    { id: "failing", title: "Failing", status: "open", runFailures: 5 },
+    { id: "done", title: "Done", status: "done" },
+  ];
+  const env = vm.createContext({
+    backlog: require("../scripts/backlog.cjs"), path: { dirname: (value) => value }, mkdir: async () => {},
+    autopilot: { jobs: [], autoBuild: true, approve: null, queueCounts: { ready: 0, approval: 2, blocked: 0 } },
+    assistantTimer: null, assistantSaveTimer: null, assistantEmitTimer: null, assistantState: null, assistantCache: {},
+    projects: { run: async (_project, callback) => callback(), dataPath: (file) => file, select() {}, list: () => ({ activeId: "next" }) },
+    ensureAssistant() { env.assistantState = {}; }, updateSettings: async () => {}, kickProjectScan() {},
+    getEyes: async () => ({ readJson: async (file, fallback) => file === "tasks" ? board : fallback }),
+    TASKS_PATH: "tasks", REQUESTS_PATH: "requests", IDEAS_PATH: "ideas", taskView: (task) => task,
+    send: (...args) => sent.push(args), emitAutopilot: () => emitted.push({ ...env.autopilot.queueCounts }),
+  });
+  vm.runInContext(section("function boardCounts(", "// A changed count can change") + section("async function adoptProject(", "// Only a running build"), env);
+  await env.adoptProject({ id: "old", path: "/old" }, { id: "next", path: "/next", name: "Next" }, { selected: true });
+  assert.deepEqual({ ...env.autopilot.queueCounts }, { ready: 0, approval: 0, blocked: 2 });
+  assert.deepEqual(emitted, [{ ready: 0, approval: 0, blocked: 2 }], "the status sent after the switch already carries the new counts");
+  assert.ok(sent.some(([channel]) => channel === "eyes:tasks"));
 });
 
 test("an unsaved stopped worker keeps the original project after the bounded wait", async () => {
