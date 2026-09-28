@@ -1,5 +1,11 @@
 blank_issues_enabled: true
 contact_links:
+  - name: Roadmap
+    url: https://nateecho32-stack.github.io/mefi-studio/roadmap.html
+    about: What is done, being worked on and planned. Check it before asking for something new.
+  - name: Chat in the Discord
+    url: https://discord.gg/xgfKc5pVxG
+    about: Talk an idea through with the community first, share your work, or ask a question.
   - name: Getting started guide
     url: https://github.com/nateecho32-stack/mefi-studio/blob/main/GETTING_STARTED.md
     about: First launch, connecting a provider, and your first task.
