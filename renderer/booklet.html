@@ -59283,8 +59283,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       const out = view.friends.length;
       status.textContent = !hub.configured ? "Friends' companions meet through the rooms hub, which this build does not have yet. Pip is here to practice."
         : !hub.linked ? "Link Discord under Community to meet friends' companions. Pip, the practice buddy, is always here."
-        : hub.state !== "ready" ? "Join a room under Friends & listening rooms, and friends' companions can visit."
+        : hub.state !== "ready" ? "Connect under Rooms below, then open a room, and friends' companions there can visit."
         : !hub.companions ? "This rooms hub does not carry companions yet, so friends cannot visit. Pip is here to practice."
+        : !hub.rooms.length ? "Open a room under Rooms below, and friends' companions there can visit."
         : out ? `${out} friend${out === 1 ? "'s companion is" : "s' companions are"} out in your rooms.`
         : "No friends' companions are out in your rooms right now.";
       preview.textContent = `Friends see: ${view.preview.summary} (${levelLabel(view.preview.level)} · ${view.preview.why}).`;

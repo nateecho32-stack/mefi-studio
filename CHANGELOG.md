@@ -7,6 +7,12 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Friends across PCs.** With the rooms hub's companion relay, companions on
+  different PCs and Discord accounts meet in an open room and play;
+  `docs/friends-setup.md` sets up the hub and each PC, and
+  `tests/companion_e2e.test.mjs` runs three accounts through the real hub
+  (make a room, ask, let in, share rules, a mirrored playdate, stay home).
+  Friends says which step is missing (connect, open a room).
 - **Share between my PCs** (Friends › Your PCs). One private GitHub
   repository, `<you>/mefi-studio-vault`, carries what you choose between
   your own PCs, sealed with AES-256-GCM under a key only your paired PCs
