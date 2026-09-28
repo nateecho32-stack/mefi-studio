@@ -1,53 +1,48 @@
-# Models, Model Lab and usage
+# Models, performance and usage
 
-Studio keeps a catalog of models, measures the ones you use, and adds up what they cost. Opening any of these views never runs a paid measurement.
+Use **Agents › Models** to browse models and compare how they perform on your work. **Agents › Usage** shows recorded calls and any account limits Studio can read.
 
-## Model catalog (1)
+Opening these pages does not run a paid model test.
 
-The **Model catalog** is the part of the app that kept the old name "booklet". Each model gets a card with cost per typical request, a quality index, requests per window, context size, privacy retention and fit tags such as "hard problems" or "anything private".
+## Browse the catalog
 
-![The Model catalog with cost, quality, pool, context and privacy for each model](../../assets/screens/catalog.webp)
+Open **Agents › Models › Catalog**, or press `1`. Search by name, filter the cards and sort them by the qualities that matter to your project.
 
-- Filter by documented, free, vision, benchmarked or "trains on data", sort by quality or cost, and press `/` to search.
-- `R` refreshes the catalog; **Print / PDF** makes a printable booklet.
-- From a source checkout, `npm run data` refreshes the model data and `npm run data:offline` rebuilds it without network.
-- Only the two public catalogs, `data/curated.json` and `data/models.json`, are in the repository.
+A card brings together model information such as context size, supported inputs, published benchmarks, pricing and privacy notes. Expand a model for more detail. **Print / PDF** makes a printable copy of the catalog.
 
-Prices, pools and quotas are catalog data, not verified pricing. Check your provider before relying on a number, and read the privacy tags before routing private code to a model that trains on prompts.
+Catalog entries are a reference. They do not determine your provider's bill, and prices or plan limits can change. Use your provider's current account page to confirm what your account includes.
 
-## Model Lab (2)
+## Compare your results
 
-**Model Lab** records, per project:
+Open **Agents › Models › Performance**, or press `2`. This page uses calls Studio has recorded, including response time, token speed, errors and available usage figures.
 
-- observed latency, delivered tokens per second and error rates;
-- usage and USD cost as the provider reported them;
-- human ratings and model ratings, kept separate;
-- task-type filters and effort breakdowns, including the effort requested versus the effort the provider confirmed.
+Filter by task type to make the comparison more relevant. A model that works well for short summaries may behave differently on a long coding task.
 
-Unknown values stay unknown and are left out of every score, and a successful call is not a verified task result. **Context** previews the current task brief within a chosen token budget and reports what was included, shortened and left out, without changing the saved originals.
+You can add your own rating and a note to a recorded call. Your ratings remain separate from model-generated ratings. Missing measurements stay blank instead of counting as zero.
 
-A **speed probe** sends one small request to a chosen model and puts the result in the log. It is the only measurement that costs anything, and only when you press it.
+Performance results help you choose a model; browsing them does not change the models assigned to your team. Change those in **Agents › Setup**. [Connections and providers](connections.md) covers the setup.
 
-## Usage tracker
+## Check usage
 
-The usage tracker adds up two ledgers per day, provider and model:
+**Agents › Usage** has two views:
 
-1. the calls Studio made itself: assistant HTTP and CLI routes, Jev and speed probes;
-2. every coding-session turn OpenCode's own store recorded for the project, whichever route the builders used.
+- **Recorded calls** shows the usage Studio has captured from its own requests and supported coding sessions.
+- **Provider accounts** shows quota, balance or usage returned by supported provider APIs.
 
-Each connected provider also gets its own account reading over its saved key: OpenCode Go's 5-hour, weekly and monthly windows, z.ai's plan quota, OpenRouter's key usage and limit, and the Vercel AI Gateway balance. A provider with no account API, such as Zen, TypeSafe, the CLIs or a local server, says so plainly.
+The two views answer different questions. Recorded calls describe the work Studio can see. Account readings describe the provider's account and may include other activity.
 
-- Live readings and the local estimate stay separate.
-- A plan or subscription reports no per-call cost, so those calls show as **unpriced**, never as free.
-- The CLI assistant routes run in their JSON output mode so their token counts reach the ledger. Builder runs on the Grok, Claude and Antigravity CLIs report no tokens.
-- The **Usage** tile on the workspace, the **Usage** pill in Command view and the Model Lab **Tracker** tab all read the same report. Accounts are asked when a view opens and every five minutes while it is visible. No prompts are sent.
+Some CLI routes and subscription services do not report tokens or a per-call price. **Unpriced** means no price was reported; it does not mean the call was free.
 
-## Routing and model choice
+You can also open a compact summary from **Usage** in Command view.
 
-**AI routing** picks who answers, **Model selection** picks the model (Jev or fixed defaults), and the **coding tier** caps what a build may cost. All three are saved per provider or per builder CLI so switching never mixes them. The route table, Jev routes and tiers are on [Connections and providers](connections.md).
+## Preview a task's context
 
-Model Lab measures and rates; it does not change your route. Heavy calls request low effort first, and an auth, quota or transport failure never raises reasoning effort.
+Open **Agents › Workflows › Context**, choose a task and select a preview budget. **Preview context** shows what saved material fits, what is shortened and what is left out.
 
-## Jev intake
+Token counts are estimates. Changing the preview budget does not alter the original task notes.
 
-The **Jev intake classifier** runs in shadow mode when work is admitted and records `jev-proposal` events. It is advisory: it can never suppress work, merge tasks or start agents. Its kill switch is `settings.jevShadow === false`.
+## Run a speed probe
+
+For a quick timing measurement, open **Settings › System › Diagnostics**, choose a model under **Speed probe**, then press **Measure tokens/s**.
+
+This sends one small request through the selected provider. It may use your quota or incur a charge. The result appears on the model's catalog card, with details in the Connection log.

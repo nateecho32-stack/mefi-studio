@@ -1,88 +1,75 @@
 # Getting around and shortcuts
 
-Every destination in Studio has a place in the navigation, an entry in the `Ctrl K` palette and, for most, a single key. All three are built from one registry, so a destination cannot appear in one and be missing from another. Press `?` inside Studio for the full sheet.
+Press `Ctrl K` to search for a page, task or setting. Press `?` for Studio's current shortcut sheet.
 
-## The rail (in source)
+## Vibe and Build
 
-One rail down the left edge is the whole app's navigation:
+**Vibe** keeps the conversation, current work and decisions together. Its Tasks, Plans, Ideas, Team and Settings controls open compact panels. **Full view** opens the larger page inside Vibe; the spark at the top returns to the conversation.
 
-| Section | Destinations |
-| --- | --- |
-| **Home** | the workspace |
-| **Work** | Task board, Plans, Ideas, Brain maps |
-| **Live** | Command view, Activity, Explorer, Overhead, Profiler, Analyzer |
-| **Models** | Model catalog, Model Lab |
-| **Settings** | Settings & connections, Style & sound |
+**Build** uses the main menu:
 
-At rest the rail shows five icons with their names. Hover it or Tab into it and it opens over the page, listing every destination with its key, without moving anything underneath. **Keep open** pins it and the page makes room. **M+** at the top opens the project panel; **Key commands**, **Start here** and **Shortcuts** sit at the foot.
+- **Home** opens the workspace.
+- **Work** contains tasks, plans, ideas and related project views.
+- **Agents** contains team setup, live work, models and usage.
+- **Settings**, **Search** and **Help** remain at the foot.
 
-![The rail opened over the workspace, listing every destination and its key](../../assets/screens/rail.webp)
-
-**Switch navigation: rail or classic** in `Ctrl K` brings the older menus back for anyone who prefers them.
-
-**In v0.2.0** the same destinations live in the tabs row, the Command view dock and the hover sidebar, and the project panel opens from the left edge of the window.
+Use the project picker at the top to switch projects. **Help › Start here** reopens the walkthrough.
 
 ## Single keys
 
-Single keys work whenever no text field has focus.
+These work when you are not typing in a text field.
 
 | Key | Opens |
 | --- | --- |
-| `H` | Your workspace |
+| `H` | Home, or Vibe in Vibe mode |
 | `D` | Command view |
 | `T` | Task board |
 | `P` | Plans |
 | `I` | Feature ideas |
 | `B` | Brain maps |
+| `J` | Agent brain |
 | `E` | Session explorer |
 | `O` | Overhead |
 | `A` | Analyzer |
 | `1` | Model catalog |
-| `2` | Model Lab |
+| `2` | Performance |
 | `3` | Activity & evidence |
-| `4` | Settings & connections |
-| `U` | Style & sound |
+| `4` | Settings |
+| `U` | Appearance |
 
-| Key | Does |
+| Key | Action |
 | --- | --- |
-| `Ctrl K` | Key commands: find any tool, task or setting by name |
+| `Ctrl K` | Search Studio |
+| `Ctrl ,` | Open Settings, including while typing |
 | `/` | Search the model catalog |
 | `R` | Refresh the model catalog |
-| `G` | Pin the node tree |
-| `?` | The shortcut sheet |
-| `Esc` | Close the top-most layer, one level at a time |
+| `G` | Pin the node-tree preview |
+| `?` | Show shortcuts |
+| `Esc` | Close the current menu or layer |
 
 ## In Command view
 
-| Key | Does |
+`Space` pauses or resumes the tree's orbit. `F` fits the tree to the view. Click a node to inspect it and click empty canvas to release it. `Esc` backs out of the current selection or layer.
+
+See [Command view and the node tree](command-center.md).
+
+## In Brain maps
+
+| Key | Action |
 | --- | --- |
-| `Space` | Pause or resume the orbit |
-| `F` | Fit the tree to the view |
-| `Esc` | Step out of inspect mode: first the menus return, then the node closes |
-
-Clicking a node focuses it; clicking empty canvas lets go. See [Command view and the node tree](command-center.md).
-
-## In Brain maps (in source)
-
-| Key | Does |
-| --- | --- |
-| `F` | Fit the whole map |
-| `Space` | Open the parts search where the canvas is looking |
-| `Ctrl F` | Find a part already on the map |
-| `Ctrl A` | Select every part |
-| `Ctrl D` | Copy the selected parts with the wires between them |
-| `Delete` | Remove the selected parts |
-| Arrow keys | Nudge the selected parts |
-| `Ctrl Z` / `Ctrl Shift Z` | Undo / redo any edit |
-| `F8` | Walk the problems part by part |
-| `[` / `]` | Hide or show the parts rail / the inspector |
-| `?` | Legend and every shortcut |
-| `Esc` | Cancel a wire or gesture, then clear the selection, then close |
-
-## In the walkthrough
-
-**Walk with me** opens the matching menu with a coach in the corner. **Done — next stop** moves on; **Esc** or **End tour** ends it. Your place is remembered.
+| `F` | Fit the map |
+| `Space` | Search for a part to add |
+| `Ctrl F` | Find a part on the map |
+| `Ctrl A` | Select all parts |
+| `Ctrl D` | Duplicate selected parts and their connecting wires |
+| `Delete` | Remove selected parts |
+| Arrow keys | Nudge selected parts |
+| `Ctrl Z` / `Ctrl Shift Z` | Undo / redo |
+| `F8` | Go to the next reported problem |
+| `[` / `]` | Toggle the parts panel / inspector |
+| `?` | Open the map's help |
+| `Esc` | Cancel the current gesture or selection |
 
 ## On this site
 
-Press `/` on any wiki page to jump to the search box.
+Press `/` on a wiki page to focus its search box.

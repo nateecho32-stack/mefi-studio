@@ -1,61 +1,55 @@
 # FAQ
 
-## Is it free?
+## Is Studio free?
 
-Yes. Mefi's Studio AI+ is MIT-licensed and the portable build is a free download. The AI providers you connect have their own plans and prices; Studio pays for nothing on your behalf.
+Yes. Mefi Studio is free and open source under the MIT license. Every theme and node style is included in 0.4.4, including the Void collection. AI services may charge for the account or API you connect.
 
-## Does it run on macOS or Linux?
+## Can I join the community without using the app?
 
-Studio is built and tested on Windows 10 and 11, and saved keys rely on the Windows keystore. Other platforms are untested.
+Yes. Join the [Void Engine Discord](https://discord.gg/xgfKc5pVxG) to share an idea, show a work in progress, ask a question or hang out. You can also meet Studio, the new Discord bot, and help shape what it becomes.
 
 ## Do I need an API key?
 
-Not to open it. The model catalog, manual planning and saved work function with no connection. To chat you need one assistant route: a key, a signed-in CLI or a local LM Studio server. To build anything you also need a builder CLI installed and signed in. See [Connections and providers](connections.md).
+Not necessarily. You can use a supported coding CLI login, an API key or a local model for the assistant. Building tasks also needs a coding CLI installed and signed in. **Start here** guides you through setup; [Connections and providers](connections.md) explains the choices.
 
-## Which coding CLIs does it drive?
+You can open the app, browse the catalog and use saved work without an AI connection.
 
-OpenCode (preferred), Claude Code, Codex, Grok and Antigravity. Studio detects which are installed; you choose one in **Settings › Coding workers**.
+## Which coding agents work with it?
 
-## Which provider should I use?
+OpenCode, Claude Code, Codex, Grok and Antigravity. Start with one you already use and check its connection before creating a task.
 
-Whichever you already pay for. **Run auto setup** applies the best match for the keys, CLIs and local servers it finds, sends no request and changes no key. The [Model catalog](model-lab.md) helps you compare models on a route, and the **Free** coding tier costs nothing.
+## Does it work on macOS or Linux?
 
-## Does it send my code anywhere?
+Studio is built and tested for Windows 10 and 11. Other platforms are untested. The portable Windows download needs no installer or Node.js.
 
-Only to the providers you configured, when the assistant or a builder works on it. There is no telemetry and no hosted account. See [Privacy and security](privacy.md).
+## Does my code leave my computer?
 
-## Can several agents work at once without breaking each other's work?
+It may, when a connected AI provider or coding agent needs project context. Studio keeps its records locally and has no usage telemetry. Media, Discord and shared-room features use their own connected services. See [Privacy and security](privacy.md).
 
-Yes, within limits. File claims give one writer per path, **Parallel builds** follows measured responsiveness, and opt-in per-session worktrees give each run its own checkout. The locks are cooperative, so unrelated tools editing the same files can still collide. See [Tasks and the board](workflow.md#keeping-workers-apart).
+## Can we watch videos together?
 
-## Can it keep working while I am away?
+Studio 0.4.4 has a personal media player. Synced watch-and-listen rooms are rolling out and depend on the app's Discord and room services being available. The Discord community is open now; see [Community](../../community.html) for what's available and what's planned.
 
-While the computer is on and Studio is running, yes: closing the window hides it to the tray and the service loop keeps going. Work interrupted by a crash or restart resumes on the next launch. It cannot work through a shutdown.
+## Can I say “Hey Studio” to open it?
 
-## Why does a finished task say "Awaiting verification" instead of Done?
+Not in 0.4.4. An optional voice popup, transcription through a service you choose, and optional spoken replies are ideas for the future.
 
-Because a worker's exit alone does not prove the change works. The attempt carries its evidence, and completion is established by recorded checks or by you confirming it. See [Verification and storage](verification.md).
+## Can several agents work on my project?
 
-## Why does my download look different from the screenshots?
+Yes. Studio can run several builders and coordinates their file access. Start with a small worker limit, and avoid having unrelated tools edit the same files at the same time. See [Tasks and the board](workflow.md).
 
-The screenshots show the current source, which has a navigation rail down the left edge. v0.2.0 puts the same destinations in a tabs row and the Command view dock. The next release brings the rail. See [What's new](whats-new.md).
+## Will it keep working when I close the window?
 
-## Can I use it on two machines?
+With background mode enabled, closing the window hides Studio to the tray; active work can continue while the computer is on and awake. Quit from the tray when you want to close the app. A sleeping or shut-down computer cannot keep running agents.
 
-Install it on each. Settings, keys, tasks and conversations are local state and do not travel, and saved keys cannot be decrypted on another machine.
+## Why is a task waiting for verification?
 
-## Where are my tasks stored?
+The worker has finished its attempt, but Studio still needs evidence that it works. Open **Review** to read the checks and results. See [Verification](verification.md) before confirming it yourself.
 
-In the app's local `data/` folder; a portable build keeps its own inside its folder. Plans live in the project's ignored `planning.json`. None of it is committed or uploaded.
+## Can I use Studio on several PCs?
 
-## How do I update?
+Install it on each PC. **Friends → Your PCs** helps sync project Git commits through GitHub. Tasks, conversations and local settings do not sync that way; set up your connections on each computer.
 
-A portable build offers **Update to vX.Y.Z** in **Settings › Updates & diagnostics** when a newer release exists and installs it in place. A source checkout follows its files live. See [Live update and release updates](updates.md).
+## How do I update or get help?
 
-## What is Ruins Runner?
-
-An optional, separate LÖVE game project that Studio can launch from **Settings › Integrations**. A fresh install works without it. See [Ruins Runner](ruins-runner.md).
-
-## How do I contribute?
-
-Code through pull requests that pass the three gates, wiki pages through this site's repository, and bugs through the issue templates. See [Contributing](contributing.md) and the [community page](../../community.html).
+Check **App updates** in Settings, or use the [download page](../../download.html). For a problem, start with [Troubleshooting](troubleshooting.md). To help improve Studio, see [Contributing](contributing.md).

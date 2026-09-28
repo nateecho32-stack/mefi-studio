@@ -123,6 +123,9 @@
 .home .fcard img { border-radius: 12px; border: 1px solid var(--hairline-strong); box-shadow: 0 24px 60px -20px rgba(0, 0, 0, .9); cursor: zoom-in; }
 .home .fcard-media { display: flex; flex-direction: column; gap: 18px; }
 .home .fcard-media img { margin-top: auto; }
+.home .bot-card { background: radial-gradient(ellipse at top right, rgba(124, 108, 255, .18), transparent 70%), var(--panel); }
+.home .bot-mark { display: flex; align-items: center; gap: 14px; margin-top: 22px; color: var(--accent-bright); font-size: 1.4rem; font-weight: 650; }
+.home .bot-mark img { border-radius: 14px; cursor: default; }
 .home .roadmap { border-style: dashed; background: rgba(8, 24, 32, .4); }
 .home .roadmap .ticks { margin-bottom: 0; }
 .home .roadmap .ticks li { font-size: .95rem; }
@@ -203,7 +206,7 @@
   .home .grid3 { grid-template-columns: 1fr 1fr; }
   .home .trust { grid-template-columns: 1fr 1fr; }
   .home .themes { grid-template-columns: 1fr 1fr; }
-  .home .nav-links a:not(.nav-cta):not([href="wiki/"]) { display: none; }
+  .home .nav-links a:not(.nav-cta):not([href="#friends"]) { display: none; }
 }
 @media (max-width: 640px) {
   .home section { padding: 56px 0; }

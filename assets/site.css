@@ -229,7 +229,7 @@ hr { border: 0; border-top: 1px solid var(--hairline); margin: 2em 0; }
 .links-grid a.card[hidden] { display: none; }
 
 /* ---- wiki ---- */
-.wiki { display: grid; grid-template-columns: 250px minmax(0, 1fr) 200px; gap: 36px; padding: 32px 0 80px; align-items: start; }
+.wiki { display: grid; grid-template-columns: 250px minmax(0, 1fr) 200px; gap: 36px; padding: 32px var(--gutter) 80px; align-items: start; }
 .wiki-side { position: sticky; top: 76px; max-height: calc(100vh - 92px); overflow: auto; padding-right: 6px; }
 .wiki-side h4 { font-family: var(--font-ui); font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); margin: 18px 0 8px; }
 .wiki-side ul { list-style: none; margin: 0; padding: 0; }
@@ -267,7 +267,7 @@ hr { border: 0; border-top: 1px solid var(--hairline); margin: 2em 0; }
 .wiki-nav a.next { text-align: right; }
 .wiki-toggle { display: none; }
 
-.prose { font-size: 1.02rem; }
+.prose { font-size: 1.02rem; scroll-margin-top: 140px; }
 .prose h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); margin-bottom: 0.4em; }
 .prose h1, .prose h2, .prose h3, .prose h4 { scroll-margin-top: 80px; }
 .prose h2 { margin-top: 1.8em; padding-top: 0.6em; border-top: 1px solid var(--hairline); font-size: 1.6rem; }

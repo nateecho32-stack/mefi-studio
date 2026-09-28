@@ -100,7 +100,7 @@
   const box = document.querySelector(".lightbox");
   if (box && typeof box.showModal === "function") {
     const big = box.querySelector("img");
-    document.querySelectorAll(".frame img, .fcard img, .themes img").forEach((img) => {
+    document.querySelectorAll(".frame img, .fcard-media img, .themes img").forEach((img) => {
       img.tabIndex = 0;
       img.setAttribute("role", "button");
       img.setAttribute("aria-label", `Enlarge: ${img.alt || "screenshot"}`);

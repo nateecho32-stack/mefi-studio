@@ -1,39 +1,38 @@
 # Privacy and security
 
-Studio is local-first. There is no telemetry and no hosted account, and nothing leaves your machine except to the providers and CLIs you connect and to GitHub's release API. The repository's [SECURITY.md](https://github.com/nateecho32-stack/mefi-studio/blob/main/SECURITY.md) is the policy this page summarises.
+Mefi Studio stores your work locally and has no usage telemetry or required Studio account. Connected services still receive the information they need to do the work you request.
 
-## Keys
+## What stays local
 
-- Keys are encrypted with the OS keystore (`safeStorage`, which is DPAPI on Windows) and bound to the Windows account that saved them. They cannot be decrypted on another machine or account.
-- **In source**, the encrypted keys live in `%APPDATA%\Mefi's Studio AI+\auth.json`, a credentials file kept apart from the `settings.json` preferences, so the two never travel together. **In v0.2.0**, they live inside `settings.json`.
-- Only "saved" or "not saved" crosses into the interface. The UI never sees a key.
-- Each Jev route keeps its own encrypted key.
-- Keys passed as `MEFI_STUDIO_*_KEY` variables for headless setup are read once and copied into the keystore. Clear them from your shell afterwards. **In source**, child processes, including the coding workers, never inherit them.
+Tasks, conversations, plans and project history are saved on your computer. A source install and a portable install have separate project stores. They can share settings and saved connections when run under the same Windows account.
 
-## What stays on your computer
+API keys are encrypted with the Windows keystore and saved separately from preferences. Saved credentials are tied to the Windows account that created them; copying the files to another computer does not transfer a working login.
 
-Tasks, conversations, plans (`planning.json`), brain maps, settings, databases, captures, profiler reports and build output all live locally. Git tracks only `data/curated.json` and `data/models.json`, and packaging never seeds a build with personal state. Profiler reports hold measurements, never task text or paths.
+## What uses the network
 
-## What leaves your computer
+| When you use… | What happens |
+| --- | --- |
+| An AI provider or coding agent | Prompts and relevant project context may go to that service. Check its terms before sending confidential work. |
+| Web search or browsing | Requests go to the sites and search services being used. |
+| Online video or music | The player connects to the media provider or the host of the file. |
+| App updates | Studio checks GitHub for releases and downloads an update when you choose to install it. |
+| An optional Discord link | Discord provides your account identity and membership details for the community server. This link does not read your messages or projects. |
+| Shared listening, where available | The room service receives your shared media link and Discord name. Now-playing sharing is off until you enable it. Local music is labeled “Local music,” without its filename or path. |
 
-- Prompts to the assistant and builder routes you selected, sent to those providers.
-- Account readings from the usage tracker, over your own saved key, only while a usage view is open.
-- A release check to GitHub's API every 20 minutes from a portable build.
-- Web pages the assistant fetches while **useWeb** is on. Turn it off in Settings if you prefer.
+Discord linking and shared rooms are still rolling out. Joining the [Discord community](https://discord.gg/xgfKc5pVxG) is separate from connecting your desktop app.
 
-The Analyzer and the Auditor run locally; the Analyzer's optional AI read sends bounded excerpts only when you ask. Activity & evidence only reads the OpenCode session store. The first-run scan never opens OpenCode's credential store and never sends a prompt. **Audio link** listens to desktop audio or the microphone only when you turn it on.
+**Audio link** uses desktop audio or the microphone only when you turn it on. A “Hey Studio” voice shortcut is a future idea, not a feature of 0.4.4.
 
-## Things to keep in mind
+## Keep control of your project
 
-- **Agents run real commands.** Coding workers (`opencode`, `claude`, `codex`, `grok`, `agy`) edit files in the folder you chose. Start with a small project, and turn **Auto build** off (**Verify first**) to approve each task before it runs.
-- **The scheduler is cooperative.** File claims prevent known collisions between Studio's own workers; it is not a filesystem sandbox.
-- **Free models may learn from your prompts.** Free-tier models may use prompts to improve the model, so keep confidential work on a paid model. The catalog's privacy tags say which models train on prompts and how long they retain them.
-- **The browser preview is plain HTTP.** `npm run start:web` serves the renderer on localhost and cannot launch workers; never expose that port.
+Coding agents run real commands and can edit files in the folder you open. Choose **Always ask** if you want to approve work before it runs, and read the requested action before accepting it. Keep a backup or use Git for work you care about.
 
-## Asking for help safely
+Studio coordinates its own workers to reduce conflicting edits. It does not prevent another editor or program from changing those files.
 
-Never share `settings.json`, `auth.json`, your `data/` folder, or screenshots that show private paths. The [community page](../../community.html) lists what a useful bug report contains instead.
+## Sharing a bug report
 
-## Reporting a vulnerability
+Include the app version, what you tried and the error you saw. Remove keys, tokens, private paths and project content from screenshots and log excerpts. Do not post `auth.json`, `community-auth.json`, `settings.json` or your `data/` folder.
 
-Please do not open a public issue for anything that could expose keys, project files or the machine Studio runs on. Follow [SECURITY.md](https://github.com/nateecho32-stack/mefi-studio/blob/main/SECURITY.md) to reach the maintainer privately, and include the Studio version, the install kind and steps to reproduce. Expect an acknowledgement within a week; fixes ship as a normal release and the changelog credits the reporter unless they ask otherwise.
+## Report a security problem privately
+
+Use the repository's **Security → Report a vulnerability** option, or follow the contact instructions in [SECURITY.md](https://github.com/nateecho32-stack/mefi-studio/blob/main/SECURITY.md). Include the version, whether you use the portable app or source, and steps to reproduce. Keep details out of public issues until the maintainer has reviewed them.

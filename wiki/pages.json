@@ -1,33 +1,33 @@
 {
-  "title": "Mefi's Studio AI+ wiki",
+  "title": "Mefi Studio guide",
   "sections": [
     {
       "title": "Start here",
       "pages": [
         {
           "slug": "home",
-          "title": "Wiki home",
-          "summary": "What Studio is, where to start, and release versus source"
+          "title": "Start here",
+          "summary": "Install Studio, connect a tool and try your first task"
         },
         {
           "slug": "installation",
-          "title": "Installation",
-          "summary": "Portable build, source install, requirements, environment variables"
+          "title": "Install Studio",
+          "summary": "Download the Windows app or run it from source"
         },
         {
           "slug": "getting-started",
           "title": "Your first project",
-          "summary": "The launch screen, the seven-stop walkthrough and the first task"
+          "summary": "Choose a folder, describe a small task and review it"
         },
         {
           "slug": "connections",
-          "title": "Connections and providers",
-          "summary": "Assistant routes, builder CLIs, coding tiers, Jev and keys"
+          "title": "Connect your tools",
+          "summary": "Set up a coding CLI, API key or local model"
         },
         {
           "slug": "whats-new",
-          "title": "What's new",
-          "summary": "0.4.4: one-subscription setup, work done outside Studio, plans in steps and PC sync"
+          "title": "What's new in 0.4.4",
+          "summary": "Setup, task planning, PC sync and free themes"
         }
       ]
     },
@@ -36,48 +36,53 @@
       "pages": [
         {
           "slug": "shortcuts",
-          "title": "Getting around and shortcuts",
-          "summary": "The rail, the classic menus and every key"
+          "title": "Navigation and shortcuts",
+          "summary": "Find screens, search and keyboard controls"
         },
         {
           "slug": "workflow",
-          "title": "Tasks and the board",
-          "summary": "Give a task, task states, Verify first, backlog and parallel builds"
+          "title": "Tasks",
+          "summary": "Create work, answer questions and follow task states"
         },
         {
           "slug": "planning",
-          "title": "Plan an idea",
-          "summary": "The interview, What we understand, specification and tasks"
+          "title": "Plans",
+          "summary": "Turn an idea into a plan before building"
         },
         {
           "slug": "assistant",
-          "title": "The assistant and the agent loop",
-          "summary": "Service loop, roles, agent mail, the overseer and the tray"
+          "title": "Assistant and agents",
+          "summary": "Understand who does what and pause the work"
+        },
+        {
+          "slug": "community",
+          "title": "Media and community",
+          "summary": "Use the player, join Discord and check shared-room availability"
         },
         {
           "slug": "command-center",
-          "title": "Command view and the node tree",
-          "summary": "Live work, the rail tabs, Ask, inspect mode and styles"
+          "title": "Command view",
+          "summary": "Follow agents and tasks in the live tree"
         },
         {
           "slug": "brain-maps",
-          "title": "Brain maps and the decision lane",
-          "summary": "The pipeline as a map, gates, agent issues and answers"
+          "title": "Brain maps",
+          "summary": "Inspect and change the steps agents follow"
         },
         {
           "slug": "model-lab",
-          "title": "Models, Model Lab and usage",
-          "summary": "The catalog, measurements, the usage tracker and Jev intake"
+          "title": "Models and usage",
+          "summary": "Compare models, measure response time and check usage"
         },
         {
           "slug": "tools",
-          "title": "Activity, Explorer, Analyzer and tools",
-          "summary": "The observation surfaces, Settings sections and developer tools"
+          "title": "Project tools",
+          "summary": "Find activity, files, logs and performance tools"
         },
         {
           "slug": "updates",
-          "title": "Live update and release updates",
-          "summary": "Source hot reload, in-place portable updates, publishing"
+          "title": "Update Studio",
+          "summary": "Update a portable install or a source checkout"
         }
       ]
     },
@@ -86,23 +91,23 @@
       "pages": [
         {
           "slug": "verification",
-          "title": "Verification and storage",
-          "summary": "Evidence, awaiting verification, the board store, Policy Lab"
+          "title": "Reviewing work",
+          "summary": "Read checks and evidence before accepting a result"
         },
         {
           "slug": "privacy",
-          "title": "Privacy and security",
-          "summary": "Keys, local data, what leaves the machine, reporting problems"
+          "title": "Privacy",
+          "summary": "Where data is stored and what connected services receive"
         },
         {
           "slug": "troubleshooting",
           "title": "Troubleshooting",
-          "summary": "Start-up refusals, stuck work, connection errors and recovery"
+          "summary": "Fix startup, connection and task problems"
         },
         {
           "slug": "faq",
-          "title": "FAQ",
-          "summary": "Short answers to the questions that come up first"
+          "title": "Common questions",
+          "summary": "Cost, requirements, community and supported tools"
         }
       ]
     },
@@ -111,18 +116,18 @@
       "pages": [
         {
           "slug": "contributing",
-          "title": "Contributing",
-          "summary": "Repository map, check gates, test trees and conventions"
+          "title": "Contribute",
+          "summary": "Report a bug, improve the docs or submit a change"
         },
         {
           "slug": "ruins-runner",
-          "title": "Ruins Runner (optional)",
-          "summary": "The LÖVE game integration in Settings › Integrations"
+          "title": "Ruins Runner",
+          "summary": "Set up the optional game integration"
         },
         {
           "slug": "about-this-wiki",
-          "title": "About this wiki",
-          "summary": "Where pages live, how to add one and how the site is hosted"
+          "title": "Edit this guide",
+          "summary": "Fix a page or add one"
         }
       ]
     }

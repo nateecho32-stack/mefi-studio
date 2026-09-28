@@ -1,111 +1,80 @@
 # Troubleshooting
 
-Short entries, most common first. If yours is missing, the [community page](../../community.html) explains how to report it.
+Start with the message Studio shows for the task or connection. If these steps do not help, [report the problem](https://github.com/nateecho32-stack/mefi-studio/issues/new?template=bug_report.md) with your version, install type and steps to reproduce.
 
-## Studio refuses to start and prints a fix
+## The portable app will not open
 
-`npm start` needs a normal shell. If `ELECTRON_RUN_AS_NODE` is set, as some agent harnesses do, Studio refuses to start and prints the fix. Clear the variable and start again:
+1. Extract the entire ZIP with **Extract All…**. Do not run the app from inside the ZIP.
+2. Open `Mefi Studio AI+.exe` in the extracted folder, keeping the supporting files beside it.
+3. If Windows SmartScreen blocks it, check that you downloaded the official release and [verify its SHA-256](../../download.html#verify). The build is not code-signed; after checking it, **More info → Run anyway** lets you open it.
 
-```powershell
-Remove-Item Env:ELECTRON_RUN_AS_NODE
-npm start
-```
+## “Agents are waiting for you”
 
-## The portable exe does nothing or complains about missing files
+**Open studio** opens the project with agents off. Press **Start agents** when you are ready. If you previously paused work, use **Resume**.
 
-Extract the whole zip first. Right-click it, choose **Extract All…**, and open `Mefi Studio AI+.exe` from the extracted folder with its supporting folders beside it.
+## A connection or coding agent is not ready
 
-## Windows SmartScreen blocks the exe
+Open **Start here** and use **Check connection** for the agent you selected. Complete its sign-in if needed. You can also search Studio with `Ctrl+K` to find its connection settings.
 
-The build is not code-signed, so SmartScreen may show "Windows protected your PC" once. Verify the `.sha256` digest as described on the [download page](../../download.html#verify); if it matches, choose **More info → Run anyway**.
+A working assistant connection does not prove the builder is ready. Check the coding agent separately. If it still fails, try that CLI directly in a terminal and read its error before retrying in Studio.
 
-## "Agents are waiting for you"
+## A task stays Ready
 
-You chose **Open studio**, which keeps the assistant and the coding workers off. Press **Start agents** in the companion bar or the tray menu. A pause you saved earlier asks for **Resume** instead.
+Open the task and read its waiting reason. Then check:
 
-## Studio reopened a folder without asking
+1. Agents are running and new work is not paused.
+2. The selected builder is connected.
+3. Any required build approval has been given.
+4. Prerequisite tasks are complete.
+5. Another worker is not already using the same files, and the worker limit has room for another run.
 
-That is session continuity: work was interrupted less than ten minutes ago by a crash, a reboot or an update restart, so Studio picked up where it left off. Closing Studio yourself ends the sitting, and the next launch asks again.
+Studio may wait while the machine is busy or a failed connection cools down. Repeatedly recreating the task will not clear that wait.
 
-## I created a task but the board did not update
+## I created a task but it did not appear
 
-A failed board refresh does not mean creation failed. Use **Retry loading** before adding the same work again, or the task will be duplicated.
+Use **Retry loading** before creating it again. A failed board refresh can hide a task that was saved successfully.
 
-## A task stays Ready and nothing starts
+## A task says Needs attention
 
-Check, in order:
+Read the failure and the agent's question. Answer it in **Needs you** or **Ask**, fix the reported cause, then retry. Check the selected project and connection before running the same attempt again.
 
-1. Is new work **paused**? The workspace strip and Command view's **New work** switch share one hold.
-2. Is a **builder** actually ready? A saved assistant key alone never proves a builder can start; read the readiness line in **Settings & connections**.
-3. Is **Verify first** on? The task waits for **Approve build** in Review.
-4. Is **Machine managed** admission holding starts because Studio is laggy? Wait, or set a manual worker limit.
-5. Does the task share files with a running worker, or wait on a prerequisite? Open the task; the reason is shown.
-6. On the **Free** coding tier, workers run one at a time.
-7. **In source**, a provider that failed three times in a row is paused for 30 seconds; the connection log names it.
+If a prerequisite cycle is reported, edit the tasks so they no longer depend on each other in a loop.
 
-## A task says Waiting on prerequisites or reports a cycle
+## A task is Awaiting verification
 
-Open the named prerequisite and finish or correct it. Dependency cycles are surfaced on the board; break one by editing the prerequisites.
-
-## A task Needs attention
-
-A blocker or the retry limit needs a decision. Read the failure and correct the cause before retrying; retrying unchanged repeats the failure. If an agent asked a question, answer it in **Ask**.
-
-## An attempt sits in Awaiting verification
-
-Completion is not established until its checks have a recorded successful run in that attempt's session and time window. Unavailable evidence waits without spending a retry. Read the checks and evidence in **Review**, run the project's checks yourself, and confirm the task if it is genuinely done.
-
-## A worker never starts, or a slow CLI keeps getting killed
-
-A run that prints nothing and registers no session within the start budget is killed. That does not spend one of the task's five tries: start failures requeue on a cooldown of 1, 2, 4 and up to 30 minutes. **In source**, the budget learns from runs that do start, so a CLI that reliably needs a few minutes to speak is no longer killed every time. Check that the builder CLI is signed in and works on its own first.
-
-## My manual worker limit dropped to one
-
-In v0.2.0, each stalled worker start in manual mode lowered the pool by one and saved it as your setting. **In source**, the pool narrows for the session only and steps back up after three normal starts, and your saved limit is never touched. A limit an earlier version already lowered stays saved: set it back once in the workspace, under **Parallel builds**.
-
-## A chain of handed-off tasks never finishes
-
-**In source** this is fixed: a run at the chain's depth limit that still asks to hand off has the request declined and named on the card's log, instead of leaving an obligation nothing can discharge. On v0.2.0, confirm or re-plan the stuck parent by hand.
+Open **Review** and read the checks and evidence. A worker saying it finished is not enough to mark a task done. If automatic verification cannot run, test the result yourself and confirm only after it meets the request. See [Verification](verification.md).
 
 ## A worker will not stop
 
-A worker that cannot be confirmed stopped keeps its file ownership so no other attempt writes over its files. Follow the reported recovery steps; do not delete task records or ownership files to force another run. If an external operation is unresponsive, stop that process first, then restart Studio.
+Follow the recovery steps shown by Studio. Do not delete task or ownership records to start a second worker on the same files. If an external process is stuck, stop that process before restarting Studio.
 
 ## The window went blank or disappeared
 
-If the renderer process dies while the host is alive, bounded renderer recovery restores the saved workspace. If it does not, restart Studio; the saved workspace comes back. The failure diagnostics hold no content and are safe to attach to a bug report.
+If you closed the window, look for Studio in the Windows tray. If the window went blank, allow the app a moment to recover, then restart it if needed. Do not delete its data folder as a repair step. Include the error and what you were doing in a bug report if it repeats.
 
-## Live update says it is on hold
+## My saved connection does not work on another PC
 
-A broken file, or three restarts within a minute, holds the update instead of crashing the app. Fix the file; changed scripts are syntax-checked first, so the log names it. Then apply the update from **Settings › Updates & diagnostics**.
+Sign in or enter the key again on that PC. Saved credentials are protected by the Windows account that created them. Copying `auth.json` or `settings.json` is not a way to transfer a login.
 
-## The board or stores misbehave inside OneDrive
+## The app behaves oddly in OneDrive
 
-Synced folders can lock files while they upload. Keep the board's SQLite store outside the synced tree with `MEFI_STUDIO_BOARD_DB`, or keep the installation itself outside OneDrive.
+A synced folder can lock files while uploading them. Try keeping the Studio installation outside OneDrive. Back up local data before moving an installation; a new copy has its own project store.
 
-## My keys stopped working on another machine or account
+## I cannot join a shared listening room
 
-Keys are bound to the Windows account that saved them and cannot be decrypted elsewhere. Enter them again on the new machine; never copy `auth.json` or `settings.json`.
+The personal media player is available in 0.4.4. Synced rooms and the app's Discord connection are still rolling out, so those controls may be unavailable in your build. Reinstalling does not enable a service that has not been configured for that release.
 
-## The usage tracker says "unpriced"
+## `npm start` says Electron is running as Node
 
-A plan or subscription reports no per-call cost, so those calls are unpriced rather than free. Builder runs on the Grok, Claude and Antigravity CLIs report no tokens at all.
+For a source install, clear the variable in the same PowerShell window and start again:
 
-## Launching Ruins Runner fails with "is not recognized"
+```powershell
+Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
+npm start
+```
 
-This was a quoting bug in how the launch line reached `cmd.exe`, and it is fixed in source. On v0.2.0, launch the game with its own `.cmd` files for now. See [Ruins Runner](ruins-runner.md).
+Run the command from the Studio application folder. The browser preview from `npm run start:web` cannot launch coding agents; use the desktop app for that.
 
-## `npm test` stops before running anything
+## Application tests stop before they start
 
-`npm test` needs Python 3 on PATH as `python` and says so when it is missing. Use `npm run test:fast` for the Node suites alone. The two Electron fixtures are timing-sensitive and need a real, unlocked desktop.
-
-## The browser preview cannot start builders
-
-`npm run start:web` is a browser-only preview. It cannot run desktop workflows such as launching builders or the game. Use `npm start` or the portable build.
-
-## Where to look next
-
-- **Settings & connections** for connection errors, and **Settings › Log** for what the assistant did last.
-- **Task board** for prerequisites and retry limits.
-- **Session explorer** for session details, the Auditor and the inbox.
-- **Command view › Ask** for questions waiting on you.
+`npm test` needs Python 3 available as `python`, and Electron tests need a usable desktop. Read the repository's [TESTRUNS.md](https://github.com/nateecho32-stack/mefi-studio/blob/main/TESTRUNS.md) for setup and known environmental failures. `npm run test:fast` runs the Node suites without Electron while you iterate; it does not replace the full checks.

@@ -1,23 +1,26 @@
-# Ruins Runner (optional)
+# Ruins Runner
 
-Ruins Runner is the author's separate LÖVE game project. Studio grew up beside it and can launch it, but a fresh Studio install works without the game and never needs it.
+Ruins Runner is a separate LÖVE game project that Studio can launch. You do not need it to use Studio.
 
-## Launching it from Studio
+## Connect a game checkout
 
-**Settings › Integrations** holds the launcher when a game checkout is found. It starts the game's dev tool exactly like the game's own `Run Dev Tool (LOVE2D).cmd`, runs its smoke session, or starts the game itself.
+Studio looks for a sibling folder named `2d-Trippy-Hell` or `2d Trippy Hell`. If your checkout is elsewhere, set `MEFI_STUDIO_GAME_ROOT` to its full path before launching Studio.
 
-**In source**, the launch line is built for `cmd.exe` properly, so **Run smoke** and **Launch Ruins Runner** work from any folder, and a game path `cmd.exe` cannot carry is refused with a message. In v0.2.0 both could fail with an error ending in "is not recognized"; launch the game with its own `.cmd` files until you update.
+For a source install, set it in the same PowerShell window:
 
-## Finding the checkout
+```powershell
+$env:MEFI_STUDIO_GAME_ROOT = 'C:\Projects\2d-Trippy-Hell'
+npm start
+```
 
-Studio looks for a sibling `2d Trippy Hell` folder. Set `MEFI_STUDIO_GAME_ROOT` when the checkout lives somewhere else. If the LÖVE runtime is missing, run `tools/build-windows.ps1` once from the game's root.
+Replace the example path with your checkout. Run `npm start` from the Studio application folder.
 
-## Rules
+## Launch or test the game
 
-- Never move the game's files into the Studio repository. `MEFI_STUDIO_GAME_ROOT` selects the game checkout and `MEFI_STUDIO_REPO` another working repository.
-- Game tests run through the game repository's own pipeline, not Studio's.
-- Studio can also work on the game as a project like any other; each job records which repository it belongs to.
+Open **Settings → System → Integrations** for the available game launchers. If Studio reports that the LÖVE runtime is missing, follow the setup instructions in the game's repository. Stop an existing game run before starting another.
 
-## History
+Keep the game files in their own checkout. Game tests use the game's documented pipeline, not Studio's application tests. You can also open the game folder as a normal Studio project.
 
-Mefi's Studio AI+ was extracted on 19 September 2026 from `nateecho32-stack/2d-Trippy-Hell`. The old `mefi-studio/` folder became the Studio repository's root; the game and its other tools stayed in the original repository. See [docs/migration.md](https://github.com/nateecho32-stack/mefi-studio/blob/main/docs/migration.md).
+## Why is it here?
+
+Studio started alongside Ruins Runner and became a separate application in September 2026. The optional launcher remains for people working on the game. The [migration notes](https://github.com/nateecho32-stack/mefi-studio/blob/main/docs/migration.md) record that history.

@@ -1,108 +1,73 @@
 # Connections and providers
 
-Studio never bundles an AI account. You connect what you already have, in **Settings & connections** (`4`), and two capabilities are configured separately:
+One supported CLI sign-in can run Mefi Studio's conversation, planning, agents and coding. Start there if you already use Codex, Claude Code, Grok or Antigravity.
 
-- the **assistant**: conversation, briefings and planning help;
-- the **builder**: the coding CLI that changes files in your project.
+## Use an existing sign-in
 
-A saved key alone never proves a build can start. The readiness line names what the selected option has, and missing one option never blocks the others.
+Open **Help › Start here** or **Agents › Setup › Providers**.
 
-![Settings and connections with auto setup, provider tiles and CLI logins](../../assets/screens/settings.webp)
+1. Choose the CLI you want to use.
+2. Select **Install and sign in** if it is missing, or **Sign in** to connect an existing installation.
+3. Complete the provider's setup window.
+4. Return to Studio and choose **Refresh installed tools**, then **Check connection**.
+5. Select **Use for the whole studio**.
 
-## Pick a route
+The connection check sends a small prompt using the selected account. Detection alone only confirms that a tool is installed.
 
-| What you have | Choose | What it needs |
-| --- | --- | --- |
-| z.ai coding plan | **z.ai GLM** | a saved z.ai key |
-| OpenCode Go subscription | **OpenCode Go** | its saved key |
-| Grok, Claude Code, Codex or Antigravity login | that CLI | the CLI on PATH, no key |
-| A local model server | **LM Studio (local)** | LM Studio running with a loaded model |
-| Another OpenAI-compatible server | **Custom endpoint** | endpoint URL and key |
+**Use for the whole studio** applies the account to Studio's defaults and the current project. Projects with their own saved teams keep those choices. It also turns cross-provider fallback off, so another provider is not selected when that account fails.
 
-**AI routing** decides who answers:
+Model access, usage limits and charges come from your provider. Studio does not supply an AI subscription.
 
-- **Auto** walks an ordered provider list you edit in Settings; the first usable provider answers, and the opt-in fallback walks down the list.
-- **z.ai only** or **OpenCode Go only** pin a keyed route.
-- The Grok, Claude Code, Codex or Antigravity CLIs answer on their own logins.
-- **LM Studio** talks to a local server, and **Custom endpoint** uses your own URL and key.
+## Other connection options
 
-**In source:** three failures in a row from one provider, whether a refused key, an exhausted quota, a transport error, a timeout or a CLI that did not answer, pause that route for 30 seconds. The next route in the auto order answers meanwhile, and the connection log names the paused route and its last error. Saving a key, changing routing or running auto setup lifts every pause.
+| What you use | Choose in Studio |
+| --- | --- |
+| OpenCode with linked providers | **OpenCode** |
+| z.ai coding plan | **z.ai GLM** and your key |
+| OpenCode Go | **OpenCode Go** and your key |
+| OpenRouter | **OpenRouter** and your key |
+| A running LM Studio server | **LM Studio (local)** |
+| Another compatible model server | **Custom endpoint**, its URL and any required key |
+
+Find provider forms under **Agents › Setup › Providers**. **Routing & fallback** controls which provider answers and whether Studio may try another.
+
+Chat and coding have separate requirements. A local chat server, for example, does not install a coding worker. Check the setup status for both before submitting a build.
 
 ## Auto setup
 
-**Run auto setup** reads saved-key flags, installed CLIs and, only when nothing else is available, a live local server. It then applies the matching provider, model selection and builder in one pass. It sends no paid request, changes no key, keeps model overrides and reports every choice. A fresh install runs it once by itself on the first launch.
+**Run auto setup** chooses from saved keys, installed tools and available local servers. A fresh installation runs it once; you can run it again after adding a connection.
 
-## Builders
+Auto setup reports what it selected. It does not send a paid test prompt or replace your saved keys. Use **Check connection** when you want to verify an account.
 
-Builders run through:
+## Models and coding tiers
 
-- `opencode run`, the preferred coding worker, with a Studio-managed z.ai provider when that key is saved, or OpenCode's own linked and free models;
-- Claude Code, as `claude -p` on your subscription login;
-- Codex, as `codex exec` on your ChatGPT login;
-- the Grok CLI;
-- Antigravity, as `agy` on your Google account.
+Model choices are saved per provider and per builder. Leaving a model blank uses that provider's default. You can assign different models to team roles in **Agents › Setup**.
 
-A failed run gets one automatic fallback, chosen by the kind of failure.
+Coding tiers select the model used for a build:
 
-## Coding tiers
+- **Auto** chooses for the task.
+- **Free** restricts the build to a free route and one worker at a time.
+- **Fast** uses the configured economical model.
+- **Heavy** uses the configured higher-capability model.
 
-A **coding tier** in **Settings › Coding workers** decides what each build may cost:
-
-| Tier | What it runs |
-| --- | --- |
-| **Auto** | Per-task selection: Jev or the stand-in judge within your provider, otherwise the CLI default. |
-| **Free** | A free model, one worker at a time, and never a billed fallback. |
-| **Fast** | The quick economical model: GLM 5.3 Flash on the z.ai plan, `sonnet` on Claude Code. |
-| **Heavy** | The high-end model: GLM 5.3, or `opus` on Claude Code. |
-
-Tier models are saved per builder CLI, and the Settings line shows what each tier resolves to before anything runs. Free-tier models may use your prompts to improve the model, so keep confidential work on a paid one.
-
-## Models are saved per provider
-
-Models are saved per provider and per builder CLI, so switching routes never carries one provider's model id into another. A provider with nothing saved uses its own default, and the keyed routes keep the role-wide Routine and Heavy overrides.
-
-## Jev model selection
-
-**Jev** is a third-party classifier model that Studio can use to pick a model per task and to classify incoming work. It is optional: without a key for its route, Studio uses fixed model defaults. Each route keeps its own encrypted key.
-
-| Route | Model id |
-| --- | --- |
-| Vercel AI Gateway | `typesafe-ai/jev` |
-| TypeSafe's Jev API directly | `jev-1.13.0` |
-| OpenCode Zen, including its free tier | `jev-1.13` |
-| OpenRouter | `typesafe/jev-1.13` |
-
-`MEFI_JEV_ROUTE` set to `vercel`, `typesafe`, `zen` or `openrouter` picks the route for headless launches.
+Read the resolved model beside the tier before running work. Jev is an optional model-selection service; you do not need to configure it to use Studio.
 
 ## Keys and where they live
 
-Keys are entered once in Settings and encrypted with the OS keystore (`safeStorage`, which is DPAPI on Windows). Only "saved" or "not saved" reaches the interface. They are bound to the Windows account that saved them.
+Studio encrypts saved keys with the Windows keystore. The interface shows whether a key is saved without returning its value. CLI sign-ins remain with their respective tools.
 
-- **In source:** the encrypted keys live in `%APPDATA%\Mefi's Studio AI+\auth.json`, a credentials file kept apart from the `settings.json` preferences.
-- **In v0.2.0:** they live inside `settings.json` in the same folder.
-
-A new user or a new machine enters its own keys. Copying the file does not work.
+In a source installation, Studio credentials live in `%APPDATA%\Mefi's Studio AI+\auth.json`, separate from preferences. They belong to the Windows account that saved them. Enter keys again on another machine.
 
 ### Headless key setup
 
-Each key can be saved without the interface by pairing a variable with a one-shot flag. The value is copied into the keystore once and never read again, so clear it from your shell afterwards.
+For scripted setup, pair an environment variable with the matching one-shot flag. For example, from a source checkout with dependencies installed:
 
 ```powershell
-$env:MEFI_STUDIO_KEY = "..."            ; electron . --set-key             # OpenCode Go
-$env:MEFI_STUDIO_ZAI_KEY = "..."        ; electron . --set-zai-key         # z.ai coding plan
-$env:MEFI_STUDIO_CUSTOM_KEY = "..."     ; electron . --set-custom-key      # custom endpoint
-$env:MEFI_STUDIO_GATEWAY_KEY = "..."    ; electron . --set-gateway-key     # Vercel AI Gateway (Jev)
-$env:MEFI_STUDIO_JEV_KEY = "..."        ; electron . --set-jev-key         # TypeSafe Jev API
-$env:MEFI_STUDIO_ZEN_KEY = "..."        ; electron . --set-zen-key         # OpenCode Zen (Jev)
-$env:MEFI_STUDIO_OPENROUTER_KEY = "..." ; electron . --set-openrouter-key  # OpenRouter (Jev)
+$env:MEFI_STUDIO_ZAI_KEY = "your-key"
+npx electron . --set-zai-key
+Remove-Item Env:MEFI_STUDIO_ZAI_KEY
 ```
 
-**In source**, child processes never inherit these variables, so a coding worker cannot read Studio's keys from its environment.
+The [.env.example](https://github.com/nateecho32-stack/mefi-studio/blob/main/.env.example) lists flags for the other providers. Clear the variable afterwards; while it is set, Studio can use it instead of the saved key.
 
-## Account readings
-
-The usage tracker reads each connected provider's own account over its saved key: OpenCode Go's 5-hour, weekly and monthly windows, z.ai's plan quota, OpenRouter's key usage and limit, and the Vercel AI Gateway balance. A provider with no account API says so plainly. Accounts are asked only while the tracker is open, and no prompts are sent. See [Models, Model Lab and usage](model-lab.md).
-
-## Private release updates
-
-The public repository needs no token. A private one needs a read-only token: save it in **App updates**, set `MEFI_STUDIO_GITHUB_TOKEN`, or let Studio reuse `gh auth token`.
+See [Models, Model Lab and usage](model-lab.md) for account readings, or [Troubleshooting](troubleshooting.md) if a connection fails.

@@ -32,6 +32,13 @@
   const cache = new Map();
   let scrollSpy = null;
 
+  // Keep the skip link out of the hash router while moving keyboard focus.
+  document.querySelector(".skip-link")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    el.article.focus({ preventScroll: true });
+    el.article.scrollIntoView({ block: "start" });
+  });
+
   // ---------- helpers ----------
   function loadScript(src) {
     return new Promise((resolve, reject) => {
@@ -213,7 +220,7 @@
       const body = `Page: ${page.slug} (wiki/pages/${page.file})\n\nWhat should change:\n`;
       edit = `<a href="${S.urls.newIssue(`wiki: ${page.title}`, body)}" rel="noopener">Suggest a change to this page</a>`;
     }
-    el.foot.innerHTML = `<span>${edit}</span><span>Source of truth: the <a href="${S.urls.repo}" rel="noopener">repository docs</a>. Found a mismatch? The docs win.</span>`;
+    el.foot.innerHTML = `<span>${edit}</span><span>Studio 0.4.4 · <a href="${S.urls.architecture}" rel="noopener">Technical reference</a></span>`;
   }
 
   function renderMissing(slug) {

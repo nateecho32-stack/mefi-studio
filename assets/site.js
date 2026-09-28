@@ -4,7 +4,7 @@
   "use strict";
 
   const SITE = {
-    appName: "Mefi's Studio AI+",
+    appName: "Mefi Studio",
     // The application repository (releases, issues, source).
     repo: "nateecho32-stack/mefi-studio",
     // The repository that hosts THIS website. When set, every wiki page gets

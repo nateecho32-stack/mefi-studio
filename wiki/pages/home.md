@@ -1,68 +1,36 @@
-# Mefi's Studio AI+ wiki
+# Mefi Studio guide
 
-Mefi's Studio AI+ is a local-first Windows workspace where you talk an idea through with an AI companion, hand it over as a task, watch coding agents build it and verify the result. It runs coding CLIs in parallel on your own folders, with whichever provider you already have, and keeps them from writing over each other.
+Mefi Studio is a Windows app for working on projects with coding agents. Use it to discuss an idea, turn it into tasks, follow the work and review the result. This guide covers **0.4.4**.
 
-![Command view with the assistant, its agents and the sample project's sessions and tasks](../../assets/screens/command.webp)
+## Get your first project running
 
-This wiki is the community companion to the repository docs. When the two disagree, the repository wins: the [README](https://github.com/nateecho32-stack/mefi-studio#readme), [GETTING_STARTED.md](https://github.com/nateecho32-stack/mefi-studio/blob/main/GETTING_STARTED.md), [docs/architecture.md](https://github.com/nateecho32-stack/mefi-studio/blob/main/docs/architecture.md) and the [CHANGELOG](https://github.com/nateecho32-stack/mefi-studio/blob/main/CHANGELOG.md).
+1. [Download and open Studio](installation.md). The portable build needs no installer.
+2. [Connect a coding tool](connections.md). Setup can use a supported CLI login, an API key or a local model.
+3. [Try a small task](getting-started.md). Start with a change you can easily check.
 
-## Where to start
+Already installed? Read [what's new in 0.4.4](whats-new.md).
 
-| If you want to… | Read |
+## Find what you need
+
+| You want to… | Open |
 | --- | --- |
-| Install it | [Installation](installation.md) |
-| Run your first task | [Your first project](getting-started.md) |
-| Connect a provider or a coding CLI | [Connections and providers](connections.md) |
-| See what changed recently | [What's new](whats-new.md) |
-| Find your way around | [Getting around and shortcuts](shortcuts.md) |
-| Understand what the board is telling you | [Tasks and the board](workflow.md) |
-| Fix something | [Troubleshooting](troubleshooting.md) |
-| Improve this wiki | [About this wiki](about-this-wiki.md) |
+| Describe work and follow its progress | [Tasks](workflow.md) |
+| Work out an approach before building | [Plans](planning.md) |
+| Understand the agent tree | [Command view](command-center.md) |
+| Change your model or coding tool | [Connections](connections.md) |
+| Put on music or join a shared session | [Media and community](community.md) |
+| Check a result before accepting it | [Reviewing work](verification.md) |
+| Fix a connection or a stuck task | [Troubleshooting](troubleshooting.md) |
+| Find a screen or keyboard shortcut | [Navigation and shortcuts](shortcuts.md) |
 
-## Release and source
+## Share what you're making
 
-**v0.2.0**, published on 22 September 2026, is the first public release: a portable Windows zip that later updates itself in place. The source on `main` moves ahead every day. Pages describe the current source and say so when the release behaves differently.
+The [Void Engine Discord](https://discord.gg/xgfKc5pVxG) is where we share projects, ask questions and hang out. Unfinished work is welcome. You can also meet Studio, the community's new Discord bot.
 
-These are in source but not yet in a release:
+The desktop app's shared rooms are still rolling out. In-app cowork spaces and “Hey Studio” voice activation are future ideas. [Media and community](community.md) explains what's available now.
 
-- one navigation **rail** down the left edge, replacing the tabs row, the Command dock and the hover sidebar's menus;
-- saved keys in their own `auth.json` beside `settings.json`;
-- **Brain maps** as a full node editor with pan, zoom, undo and multi-select;
-- ad-free radio in **Style & sound**;
-- a 30-second pause for a provider that fails three times in a row.
+## About this guide
 
-[What's new](whats-new.md) has the full list.
+Mefi Studio is free and open source. Connected AI services may have their own costs. Project records stay on your PC; providers can receive the context you send them. See [privacy](privacy.md) for details.
 
-## The pieces
-
-- **Workspace** (`H`). The home screen: *Studio at a glance*, the conversation with your companion, and **Your work**.
-- **Task board** (`T`), **Plans** (`P`) and **Ideas** (`I`). Work with briefs, prerequisites, attempts and evidence; plans that interview you; an inbox of ideas.
-- **Command view** (`D`). Every session, task and agent as a live node tree, with a rail for Work, Agents, Assistant, Done and Ask.
-- **Brain maps** (`B`). The agent pipeline drawn as a map you can rewire, and the decision lane that brings agents' questions to you.
-- **The service loop.** Watcher, machine, auditor, keeper, thinker, briefer, responder, foreman, compactor, overseer and scout roles keep working from the tray.
-- **Model catalog** (`1`), **Model Lab** (`2`) and the usage tracker. Cost, quality and privacy side by side, measured latency, and readings from your provider accounts.
-- **Activity & evidence** (`3`), **Session explorer** (`E`), **Analyzer** (`A`), **Overhead** (`O`) and the profiler. Read-only views of what the work did.
-- **Settings & connections** (`4`) and **Style & sound** (`U`).
-
-## Honest scope
-
-The repository is careful to separate what works from what is promised, and so is this wiki.
-
-- **The scheduler is cooperative, not a sandbox.** File claims give one writer per path, and live-editor observations block known collisions. Unannounced files and unrelated tools can still collide. Opt-in per-session worktrees give each run its own checkout.
-- **Verification reads evidence.** A finished attempt waits until its checks pass or you confirm it. It does not certify every acceptance criterion by itself.
-- **It runs while your computer runs.** Studio keeps working from the tray, but it is not a cloud service and cannot work through a shutdown.
-- **Model Lab measures; it does not pick your route.** Routing follows your settings, Jev or the coding tier.
-- **Jev intake is advisory.** It runs in shadow mode and can never suppress, merge or start work.
-
-A dated, claim-by-claim audit from 19 September 2026 is kept as a [historical record](https://github.com/nateecho32-stack/mefi-studio/blob/main/docs/archive/feature-audit-2026-09-19.md).
-
-## Quick facts
-
-| | |
-| --- | --- |
-| Platform | Windows 10/11; other platforms untested |
-| License | MIT |
-| Runtime | Electron 44; Node 24 for source installs |
-| Telemetry | None, and no hosted account |
-| Keys | Encrypted with the Windows keystore (DPAPI) |
-| Repository | [nateecho32-stack/mefi-studio](https://github.com/nateecho32-stack/mefi-studio) |
+Pages use the app's control names where possible. Some screenshots show earlier layouts with sample projects. If a step doesn't match your version, [report it](https://github.com/nateecho32-stack/mefi-studio/issues) or use **Edit this page** below. More technical detail lives in the repository's [architecture guide](https://github.com/nateecho32-stack/mefi-studio/blob/main/docs/architecture.md).

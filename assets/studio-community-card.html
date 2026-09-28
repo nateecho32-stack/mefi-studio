@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1200, initial-scale=1">
+  <title>Mefi Studio — community social preview</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+    body { color: #f0f4ee; font-family: "Segoe UI Variable Display", "Segoe UI", Arial, sans-serif; background: #08151e; }
+    .card { position: relative; width: 1200px; height: 630px; overflow: hidden; background: radial-gradient(ellipse at 82% 48%, #153940 0, transparent 36%), radial-gradient(ellipse at 90% 97%, #24233e 0, transparent 38%), #08151e; }
+    .card::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(#89cece 1px, transparent 1px); background-size: 28px 28px; opacity: .1; mask-image: linear-gradient(90deg, transparent 46%, #000); }
+    .card::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 5px; background: linear-gradient(90deg, #a8efd4, #62cde2 55%, #a18eed); }
+    .brand { position: absolute; left: 62px; top: 47px; display: flex; align-items: center; gap: 14px; font-size: 28px; font-weight: 650; letter-spacing: -.7px; }
+    .brand img { width: 46px; height: 46px; border-radius: 12px; box-shadow: 0 0 0 1px #d8b36a40; }
+    .eyebrow { position: absolute; left: 64px; top: 145px; margin: 0; color: #9ce5cc; font-size: 14px; letter-spacing: 2.8px; font-weight: 700; text-transform: uppercase; }
+    h1 { position: absolute; left: 60px; top: 180px; margin: 0; font-size: 65px; line-height: 1.08; letter-spacing: -2.8px; font-weight: 750; }
+    h1 span { display: block; }
+    h1 .together { background: linear-gradient(100deg, #aff2d8, #70d4e3 70%, #b4a3fb); color: transparent; background-clip: text; }
+    .support { position: absolute; left: 64px; top: 414px; margin: 0; font-size: 21px; color: #b8cbc9; letter-spacing: -.15px; }
+    .footer { position: absolute; inset: auto 62px 44px; display: flex; align-items: center; justify-content: space-between; padding-top: 25px; border-top: 1px solid #a9dad722; }
+    .availability { color: #b1c2c3; font-size: 17px; }
+    .discord { display: flex; align-items: center; gap: 18px; color: #aff2d8; font-weight: 650; font-size: 19px; }
+    .discord .arrow { font-size: 27px; line-height: 1; }
+    .constellation { position: absolute; left: 725px; top: 99px; width: 425px; height: 397px; }
+    .network { position: absolute; inset: 0; overflow: visible; }
+    .orbit { fill: none; stroke: #8ed3cf; stroke-width: 1; opacity: .16; }
+    .line { fill: none; stroke-width: 2; opacity: .6; }
+    .mint { color: #a8efd4; }
+    .cyan { color: #76daea; }
+    .lavender { color: #b4a1ff; }
+    .node { position: absolute; display: flex; align-items: center; justify-content: center; border: 1px solid #93dfd846; background: linear-gradient(145deg, #23434d, #11272f); box-shadow: 0 14px 32px #0004, inset 0 1px 0 #c4ffed12; }
+    .node svg { width: 34px; height: 34px; }
+    .person-a { width: 78px; height: 78px; left: 32px; top: 41px; border-radius: 25px; transform: rotate(-10deg); }
+    .person-b { width: 70px; height: 70px; left: 321px; top: 179px; border-radius: 23px; transform: rotate(10deg); border-color: #a993f855; background: linear-gradient(145deg, #383356, #20253c); }
+    .person-c { width: 64px; height: 64px; left: 124px; top: 319px; border-radius: 21px; transform: rotate(-7deg); }
+    .play { width: 99px; height: 73px; left: 283px; top: 45px; border-radius: 20px; transform: rotate(8deg); border-color: #a993f855; background: linear-gradient(145deg, #393656, #202b3c); }
+    .play svg { width: 32px; height: 32px; }
+    .agent { width: 65px; height: 65px; left: 8px; top: 233px; border-radius: 21px; transform: rotate(-8deg); }
+    .agent svg { width: 31px; height: 31px; }
+    .center { width: 116px; height: 116px; left: 154px; top: 152px; border-radius: 37px; background: linear-gradient(145deg, #3d6964, #203b44); box-shadow: 0 0 0 11px #93edcf07, 0 0 0 12px #93edcf14, 0 18px 55px #0005, 0 0 65px #5ed7c52b; }
+    .center svg { width: 68px; height: 68px; }
+    .spark { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: #b0f3d6; box-shadow: 0 0 15px #9ce5cc55; }
+    .spark.one { left: 196px; top: 57px; width: 6px; height: 6px; }
+    .spark.two { left: 310px; top: 329px; background: #b4a1ff; }
+    .spark.three { left: 94px; top: 178px; width: 5px; height: 5px; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="brand"><img src="icon-256.png" alt="">Mefi Studio</div>
+    <p class="eyebrow">A place for people who make things</p>
+    <h1><span>Bring an idea.</span><span>Find your people.</span><span class="together">Make it together.</span></h1>
+    <p class="support">Share ideas · Build with agents · Hang out</p>
+    <div class="constellation" aria-hidden="true">
+      <svg class="network" width="425" height="397" viewBox="0 0 425 397">
+        <ellipse class="orbit" cx="211" cy="210" rx="165" ry="163" transform="rotate(-19 211 210)"/>
+        <ellipse class="orbit" cx="211" cy="210" rx="114" ry="114" stroke-dasharray="3 10"/>
+        <path class="line" stroke="#a8efd4" d="M72 83 C117 77 149 128 205 195 M43 265 C88 281 125 261 182 229 M155 352 C190 330 205 302 212 250"/>
+        <path class="line" stroke="#aa98eb" d="M334 84 C282 91 259 140 232 182 M353 213 C315 192 294 198 251 210"/>
+        <circle cx="124" cy="99" r="4" fill="#a8efd4"/>
+        <circle cx="289" cy="126" r="4" fill="#b4a1ff"/>
+        <circle cx="113" cy="267" r="3" fill="#76daea"/>
+        <circle cx="196" cy="302" r="4" fill="#a8efd4"/>
+      </svg>
+      <div class="node person-a mint"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><circle cx="16" cy="10" r="5"/><path d="M6 28v-3a10 10 0 0 1 20 0v3"/></svg></div>
+      <div class="node person-b lavender"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><circle cx="16" cy="10" r="5"/><path d="M6 28v-3a10 10 0 0 1 20 0v3"/></svg></div>
+      <div class="node person-c cyan"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><circle cx="16" cy="10" r="5"/><path d="M6 28v-3a10 10 0 0 1 20 0v3"/></svg></div>
+      <div class="node play lavender"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 6l17 10-17 10z" stroke-linejoin="round"/></svg></div>
+      <div class="node agent cyan"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3l3.5 9.5L29 16l-9.5 3.5L16 29l-3.5-9.5L3 16l9.5-3.5z" stroke-linejoin="round"/></svg></div>
+      <div class="node center mint"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M49 11H15a7 7 0 0 0-7 7v22a7 7 0 0 0 7 7h6l-1 10 14-10h15a7 7 0 0 0 7-7V18a7 7 0 0 0-7-7Z"/><path d="M22 30h.1M32 30h.1M42 30h.1" stroke-width="5"/></svg></div>
+      <i class="spark one"></i><i class="spark two"></i><i class="spark three"></i>
+    </div>
+    <footer class="footer"><span class="availability">Free &amp; open source · Windows</span><span class="discord">Join us on Discord <span class="arrow">↗</span></span></footer>
+  </main>
+</body>
+</html>

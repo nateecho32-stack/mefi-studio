@@ -1,44 +1,52 @@
 # Plan an idea
 
-**Plan an idea** opens **Plans** (`P`) for work whose route is unclear or that has several dependent steps. A plan turns an idea into decisions, the decisions into a specification, and the specification into tasks, with your explicit approval between each step. Planning itself never starts a build.
+Open **Plans** with `P` when a change needs decisions before someone starts building. You can write a plan yourself or ask Mefi to help develop it.
 
-![Plans showing the eight steps from the idea to verification](../../assets/screens/plans.webp)
+A plan moves from your goal to recorded decisions, then a reviewed specification and tasks. Creating those tasks is a separate action.
+
+## Start with the outcome
+
+Give the plan a short name and describe what should be true when it is finished. Add constraints and questions you have not settled.
+
+For example:
+
+> Let friends share a project link and a short progress update. Start with text and links. Decide who can see an update before choosing how to store it.
+
+You can attach text or code files for context. Plans remember the stage you last opened.
 
 ## The eight steps
 
-| Step | What happens |
+| Step | Your part |
 | --- | --- |
-| **The idea** | Name the outcome in your own words, what should be true when it is finished, and what is out of scope. |
-| **Mefi asks** | The interview: Mefi asks the one question that would most change what gets built. |
-| **Your decisions** | You record the decisions. Only a decision you record becomes a requirement. |
-| **Your review** | **What we understand** reads the whole plan back and waits for your confirmation. |
-| **Specification** | Small tasks with acceptance checks and prerequisites, written by you or requested from the assistant. |
-| **Your approval** | You approve the specification draft. |
-| **Build** | You explicitly create its tasks on the board. |
-| **Verify** | The tasks run and settle like any other; see [Verification and storage](verification.md). |
+| **The idea** | Describe the outcome and boundaries. |
+| **Mefi asks** | Discuss the questions that affect the approach. |
+| **Your decisions** | Record the requirements you want to keep. |
+| **Your review** | Check **What we understand** and confirm it. |
+| **Specification** | Write or request tasks, acceptance checks and prerequisites. |
+| **Your approval** | Approve the specification after reviewing it. |
+| **Build** | Create the tasks on the board. |
+| **Verify** | Follow their results and check the finished work. |
 
 ## The interview
 
-Mefi asks one question at a time and waits for your answer. It reads your answer back as an unconfirmed interpretation, raises a conflict when a new answer contradicts an earlier one, and follows what you actually said into the next question.
+Mefi normally asks one question at a time. It separates your answer from its interpretation and recommendation. Copy a useful suggestion into the decision field, edit it and record it.
 
-- Every line is labelled by origin: your answer, Mefi's reading, its recommendation or its question.
-- A reading can only be copied into your decision box, for you to edit and record.
-- You can still ask for a batch of questions, ask Mefi to explain the tradeoffs on one, or write the whole plan by hand.
+You can ask for several questions at once or an explanation of the tradeoffs. If a reply fails, your submitted answer stays saved; **Continue with Mefi** resumes the interview.
 
 ## What we understand
 
-Once every unknown is settled and every question decided, **What we understand** reads the plan back and waits for your confirmation. Nothing is drafted or approved before you give it. Changing the destination, an unknown or any decision withdraws the confirmation, so a specification never rests on a plan that has since changed.
+Review this summary after resolving the open questions. Confirm it before drafting the specification.
 
-## What planning cannot do
+Changing the goal or a decision makes the previous confirmation outdated. Renaming the plan or saving an unchanged specification keeps existing approval.
 
-- Assistant suggestions and interview lines never resolve a question, confirm the understanding or approve work. Only you do.
-- Planning cannot launch coding workers. Tasks it creates behave like any other task, including **Verify first** if it is on.
-- A plan with unsaved edits is not converted to tasks until the edits are saved.
+## Create and follow the tasks
 
-## Without an AI key
+Save your edits, review the specification and approve it. Then use the Build stage to create its tasks. They follow the same permissions, dependencies and queue controls as other work.
 
-The manual controls work without any connection: collect unknowns, record decisions, write the specification yourself, approve it and create the tasks. The interview and a requested specification need a connected assistant route.
+Planning does not start coding workers by itself. [Tasks and the board](workflow.md) explains what happens after task creation, and [Verification and storage](verification.md) covers completion.
 
-## Where plans live
+## Set a plan aside
 
-Plans and their revision history stay in the project's local `planning.json`, which Git ignores. They are never committed or packaged. See [Privacy and security](privacy.md).
+**Archive plan** makes a plan read-only and moves it under **Show archived**. **Restore plan** brings it back with its saved content.
+
+Manual planning works without an AI connection. The interview and generated specification need a connected assistant. Plans and revision history stay in the project's local `planning.json`; see [Privacy and security](privacy.md).

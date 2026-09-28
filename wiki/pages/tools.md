@@ -1,73 +1,49 @@
-# Activity, Explorer, Analyzer and tools
+# Find the right tool
 
-Besides the workspace and Command view, Studio has a set of views that show what the work did. None of them start work.
+Most day-to-day work fits in Home or Vibe. Use the other views when you need to inspect a session, find a change or understand why a task is waiting.
 
-## Activity & evidence (3)
+Press `Ctrl K` to search Studio by a tool's name. Press `?` for shortcuts. Single-letter shortcuts work when you are not typing in a text field.
 
-**Activity & evidence**, once called A-Eyes, reads the OpenCode session store read-only, on a worker thread so the app stays responsive:
+## Inspect what changed
 
-- a **change feed** with diffs, filterable by session, agent and time;
-- per-session totals;
-- **PNG** evidence you can drop pins on;
-- a **log** tail.
+**Agents › Live › Activity** (`3`) opens **Activity & evidence**. Choose a session and use the change feed, diff, image or log view to inspect what it recorded. Filters help narrow the results by session, agent and time.
 
-Sessions are scoped to the project's folder. Clicking a node in the tree filters the feed and focuses the assistant on that session. The inspector shows the file, tool, line counts, agent, model, session and time, with **Reveal file** and **Copy path**.
+The file inspector includes **Reveal file** and **Copy path**. PNG evidence supports pins when you need to point at a particular part of an image.
 
-## Session explorer (E)
+Activity reads supported session records for the open project. If a worker's tool does not provide those records, use the task's evidence and attempt history instead.
 
-The **Session explorer** holds the always-on assistant thread, the collateral watch, the local **Auditor** and the request **inbox**. Checkpoint actions are **Reference**, **Explore**, **Restore** and **Expand**.
+## Look through a session
 
-## Analyzer (A)
+Open **Agents › Live › Sessions** (`E`) and select a session in the tree. Its details show the work and saved context.
 
-The **Analyzer** compares plans and notes with the current source and lists `file:line` evidence, missing references and unverified completion claims. It runs locally on the folder Studio scanned when you opened it. The optional AI read sends bounded excerpts only when you ask.
+**Session tools** opens the Assistant, Activity and Diagnostics tabs. These include briefings, the request inbox and local checks. Keep the panel closed when you only need the session details.
 
-## Task board (T), Ideas (I), Overhead (O)
+For a different overview, **Agents › Live › Overhead** (`O`) shows how tasks relate to sessions.
 
-- The **Task board** holds briefs, prerequisites, attempts, evidence and history. See [Tasks and the board](workflow.md).
-- **Ideas** is the feature-idea inbox and graph. Idea scanning reads the available OpenCode text messages, filters candidates and can ask the configured AI to curate them. An idea becomes a task only when you or **Work through backlog** promote it.
-- **Overhead** maps tasks to sessions.
+## Compare plans with the project
 
-## Performance profiler
+Open **Analyzer** (`A`) to compare project plans and notes with the source. Its findings point to files and lines, missing references or completion claims that need checking.
 
-The in-app **Performance profiler**, under **Live** in the rail, captures frames, scopes and hitches and exports JSON. Reports hold measurements, never task text or paths. The repository's [performance.md](https://github.com/nateecho32-stack/mefi-studio/blob/main/docs/performance.md) has the measurements and how to reproduce them.
+Start with the local analysis. The optional AI analysis uses your configured connection and sends selected excerpts when you request it.
 
-## Key commands (Ctrl K)
+Use the findings to decide what to inspect or turn into a task. [Tasks and the board](workflow.md) covers creating work; [Verification](verification.md) covers reviewing the result.
 
-The palette finds any tool, task or setting by familiar terms. Type what you would call it, not necessarily what Studio calls it. It also holds commands with no key, such as **Run auditor**, **Scan chats for ideas** and **Switch navigation: rail or classic**.
+## Find logs and performance problems
 
-## Settings & connections (4)
+**Agents › Live › Trace** puts Studio's logs in one viewer. Select a channel and inspect the messages around the problem you saw.
 
-Settings is split into sections down its left side:
+The **Performance profiler** is under **Settings › System › Diagnostics**. Start a recording, reproduce the slowdown, stop, then use **Export JSON** if you want to share the measurements in a bug report.
 
-| Section | Holds |
+The **Connection log** under **Agents › Setup › Providers** helps explain failed provider calls or speed probes.
+
+## Change the workspace
+
+| Where | What you can change |
 | --- | --- |
-| **Auto setup** | One pass over what this machine already has |
-| **Providers** | Keys, local servers and CLI logins, each with its status |
-| **Model routing** | Who answers, the auto order and fallback, model selection |
-| **Coding workers** | The builder CLI, coding tiers and per-CLI models |
-| **Jev** | Jev routes and their keys |
-| **Studio** | Whether a launch lands on the workspace or in Command view, and other app preferences |
-| **Updates & diagnostics** | **App updates** and live update |
-| **Integrations** | Optional tools, such as the [Ruins Runner](ruins-runner.md) launcher |
-| **Log** | The studio log: what the assistant and the loop did last |
+| **Agents › Setup** | Team, providers, models, routing and run behavior. |
+| **Settings › General** | Names and startup preferences. |
+| **Settings › Appearance** (`U`) | Themes, node styles, layouts and interface effects. |
+| **Settings › Audio** | Music, video and sound effects. |
+| **Settings › System** | Updates, diagnostics and optional integrations. |
 
-## Style & sound (U)
-
-Recolours Studio with seven preset themes or your own colours, and plays local files, Spotify links and, in source, ad-free radio. See [Command view and the node tree](command-center.md#style-sound).
-
-## Machine coordination
-
-The machine role watches test leases and live processes, holds new starts when Studio becomes laggy, and auto-kills strays, hangs and over-age runs; every kill is logged and queued to the inbox. See [The assistant and the agent loop](assistant.md#machine-coordination).
-
-## Developer tools
-
-From a source checkout:
-
-| Command | What it does |
-| --- | --- |
-| `node tools/monitor_loop.mjs` | Runs the real agent loop against a virtual clock, an hour in about a second, and reports where each card's time went |
-| `node tools/profile_studio.mjs --help` | Reproducible renderer workloads for profiling |
-| `python tools/verify_workspace.py --output tools/logs/workspace-ui` | Drives the real Electron workspace through the walkthrough and screenshots each step |
-| `python tools/benchmark_startup.py` | Startup timing |
-| `npm run capture` | Screenshot tour into `tools/logs/`; it uses your live data, so never publish those images |
-| `npm run policy-lab` | Replays recorded dispatch episodes against candidate policies |
+All themes and node styles are free in 0.4.4. For the live tree's controls and media, see [Command view](command-center.md).

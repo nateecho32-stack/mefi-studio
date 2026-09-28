@@ -1,89 +1,64 @@
 # Your first project
 
-Studio opens with no project at all: nothing is read, built or spent until you choose a folder and start the agents. This page follows the repository's [GETTING_STARTED.md](https://github.com/nateecho32-stack/mefi-studio/blob/main/GETTING_STARTED.md).
-
-## The Start here walkthrough
-
-The walkthrough opens by itself on your first launch. It has seven stops: **Scan**, **Your workspace**, **First map**, **Connections**, **Create**, **Monitor** and **Review**. Close it whenever you like; it remembers your place per device. Open it again from **Start here** at the foot of the left rail, or from Help.
-
-![The Start here walkthrough on its fifth stop, Create](../../assets/screens/walkthrough.webp)
-
-Each stop has a **Walk with me** button, or a specific one such as **Walk me to the task box**. It keeps a small coach in the corner while it opens the matching menu and highlights the exact control. Press **Done — next stop** and the coach moves on; **Esc** or **End tour** puts it away. Reading the guide never creates or starts work.
-
-The **Scan** stop reads what this computer already has: the OpenCode command line, the providers linked in it, the free models it can reach and the keys saved in Studio. It never opens OpenCode's credential store, never sends a prompt and never changes OpenCode's own configuration.
-
-## Every launch: choose the project, then start the agents
-
-Studio opens on a launch screen before it reads anything. Pick the project (the last one is preselected) or **Open another folder…**, then choose:
-
-- **Open studio** keeps the assistant and the coding workers off. The companion bar reads *Agents are waiting for you*; **Start agents** there or in the tray menu releases them.
-- **Open and start agents** starts everything at once.
-
-One launch skips the question. If Studio went away while work was going, after a crash, a reboot or its own update restart, and that work was under ten minutes old, the next launch reopens the same folder and says *Picking up where you left off*. Agents that were running come back; agents that were held stay held. Closing Studio yourself, with Alt+F4, the close button or **Quit** in the tray, ends the sitting, so the next launch asks again.
+Start with a small change in a project you can inspect. Mefi Studio can help you discuss the idea, turn it into work and follow the result.
 
 ## 1. Choose the folder you want to work on
 
-Open **Projects** with **M+** at the top of the left rail and choose **+**, or choose **Open a folder**. The first folder becomes the active project, and Studio scans it locally, with no AI request, showing old plans and starting points in **Analyzer**. Later folders are added alongside; select one to switch. **Remove project** drops a folder from the list without touching its files.
+At launch, choose an existing project or **Open another folder…**.
 
-For a first run, pick a small project whose changes you can inspect easily. In v0.2.0 the project panel opens from the left edge of the window instead of **M+**.
+- **Open studio** opens the workspace with agents held. Select **Start agents** when you are ready.
+- **Open and start agents** opens the workspace and starts the agents.
+
+Check the project name above the conversation before sending work. Use the project picker to add or switch folders. Removing a project from the list leaves its files in place.
+
+For a new project, **New app** beside Vibe's project picker asks for a name and description. Studio creates a folder under **Mefi Apps**, initializes Git and sends the description as the first build request.
 
 ## 2. Connect your tools
 
-A fresh install runs **auto setup** once by itself on its first launch, from the keys, CLIs and local servers already on the machine, and **Settings & connections** says what it chose. Open it to review that choice, press **Run auto setup** again after adding a key or CLI, or pick a route yourself. [Connections and providers](connections.md) has the route table.
+Open **Help › Start here**, or **Agents › Setup › Providers**.
 
-Conversation and coding are separate capabilities: a saved assistant key alone never proves a builder can start. Read the readiness line before starting a task. The catalog, manual planning and saved work all work with no connection at all.
+1. Choose Codex, Claude Code, Grok or Antigravity.
+2. Select **Install and sign in**, or **Sign in** if it is already installed.
+3. Return to Studio, choose **Refresh installed tools**, then **Check connection**.
+4. Select **Use for the whole studio** to use that account for chat, mapping, planning and coding.
+
+The connection check uses a small amount of your account's allowance. Your provider's subscription and limits still apply. OpenCode, API keys and local models are other options; [Connections and providers](connections.md) explains them.
+
+The **Start here** walkthrough remembers your place. Its **Walk with me** controls take you to the relevant part of the app.
 
 ## 3. Give one clear task
 
-Choose **Give a task**, describe the change and what would count as done, then **Create task**. **Use a task outline** adds room for the goal, acceptance checks and boundaries:
+In Vibe, use **Talk it over** to discuss an idea or **Build it** to create work. In Build mode's Home composer, the corresponding choices are **Chat** and **Create task**.
+
+Describe the result and how you will check it:
 
 ```text
-Add a clear empty state to the saved notes list.
+Add an empty state to the saved notes list.
 
 Done when:
-- With no saved notes, show a short explanation and a Create note button.
-- Creating a note replaces the empty state with the normal list.
-- The layout works in the smallest supported window.
+- An empty list explains that there are no notes yet.
+- A Create note button opens the existing note editor.
+- Saving a note replaces the empty state with the list.
 
-Keep unchanged:
-The existing note format and save location.
+Keep the existing note format and save location.
 ```
 
-- Chat and task drafts are saved separately for each project. **View task** opens the saved brief and status.
-- A failed board refresh does not mean creation failed. Use **Retry loading** before adding the same work again.
-- **Auto build** is on by default. Turn it off for **Verify first**, and each task waits in **Review** until you choose **Approve build**. Editing the scope or retrying needs approval again.
-- Use **Talk together** for discussion, and [Plan an idea](planning.md) when the approach is unclear.
+A larger **Build it** request may become several steps. The **Plan in flight** card shows their progress. Use [Plans](planning.md) when you want to work through the decisions before creating tasks.
+
+Review the permission setting before starting. **Always ask**, or turning **Auto build** off, holds new work for your approval. **Auto** allows eligible work to start.
 
 ## 4. Follow the work
 
-The **Studio at a glance** strip at the top of the workspace shows the service, running workers, what needs you, what is next, the machine and today's usage. Its **Pause** holds all new work until **Resume**.
+Vibe shows **Building now** and **Needs you**. Open a task to read its brief, activity and result. Answer questions under **Needs you** when an agent requires a decision.
 
-![The workspace with the Studio at a glance strip, the conversation and Your work](../../assets/screens/workspace.webp)
+**Watch** opens the live tree. Tasks, agents and their reported steps appear as work progresses. The [task board](workflow.md) gives a list of work and its status.
 
-**Your work** has **All**, **Queue**, **Ideas**, **Review** and **Done**. **Live** in the rail opens Command view, where **Live work** shows running workers and their reported steps, and the **Agents** tab holds Autopilot, Parallel builds, Build mode and Agent mode.
-
-| What you see | What it means | Next step |
-| --- | --- | --- |
-| Ready | Eligible for scheduling | Check Pause, the coding connection and any dispatcher hold |
-| Awaiting build approval | Verify first is holding unapproved work | Review the task and choose Approve build, or leave it waiting |
-| Working | A worker has started | Follow its activity and inspect the result when it finishes |
-| Waiting on prerequisites | Required tasks are unfinished | Open the named prerequisite |
-| Retry scheduled | A failed attempt is cooling down | Inspect the failure and the displayed retry time |
-| Needs attention | A blocker or retry limit needs a decision | Open the task and correct the cause before retrying |
-| Awaiting verification | The attempt finished but completion is not established | Review checks, evidence and delegated work |
-| Done | Verified or explicitly confirmed complete | Read the result and inspect the actual change |
+**Pause** holds new starts while running jobs finish. If a task is waiting, read the reason shown on its card.
 
 ## 5. Review and recover
 
-Open **Review** for unfinished verification and blocked tasks. A worker's exit alone does not prove the change works: read the evidence, run the project's own checks and try the changed workflow before accepting it.
+Read the finished task's evidence, inspect the changed files and try the new behavior. Run your project's checks before accepting the result.
 
-**Pause** stops new scheduling while current jobs finish; it does not cancel them. A worker that cannot be confirmed stopped keeps its file ownership so no other attempt writes over it. Follow the reported recovery steps, and never delete task records or ownership files to force a run. More in [Troubleshooting](troubleshooting.md).
+Use **Ask for a change** on a finished task if it needs another pass. For blocked work, open the task and address the reported problem before retrying. [Troubleshooting](troubleshooting.md) covers connection and scheduling problems.
 
-## Review the defaults
-
-These ship on and are worth a look on a new machine. All stay editable.
-
-- **Auto build** is on. Turn it off for **Verify first** when each task should wait for approval.
-- **Parallel builds** follows **Machine managed** admission; manual limits of one to three workers suit a machine dedicated to Studio.
-- **Proactive** briefings, **useWeb**, **auto reference** and the machine guards (auto-kill strays, 240 idle seconds, 20-minute age, 1.5 GB) are on. Relax the guards on a small or busy machine rather than switching them off.
-- **Your name**, the **companion name**, the theme and the motion preference live under **Make yourself at home** in the project panel and stay per machine.
+After a crash or interrupted update, Studio may resume recent work automatically. A normal new session asks which project to open.
