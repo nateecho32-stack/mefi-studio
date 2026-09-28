@@ -62,13 +62,17 @@ function localNames({ hostname = os.hostname(), username = safeUser() } = {}) {
 function safeUser() { try { return os.userInfo().username; } catch { return ""; } }
 
 // Every string in a value with where it sits ("brain.steps[2].prompt").
-function strings(value, where = "", out = [], depth = 0) {
-  if (out.length >= MAX_STRINGS || depth > MAX_DEPTH) return out;
+// `walk.cut` says the walk stopped at a limit with text left unread: 20,000
+// padding strings or a deep nest in front of a note would otherwise hide it.
+function strings(value, where = "", out = [], depth = 0, walk = { cut: false }) {
+  const nested = value && typeof value === "object";
+  if (typeof value !== "string" && !(nested && Object.keys(value).length)) return out;
+  if (out.length >= MAX_STRINGS || depth > MAX_DEPTH) { walk.cut = true; return out; }
   if (typeof value === "string") out.push([where || "(text)", value]);
-  else if (Array.isArray(value)) value.forEach((item, index) => strings(item, `${where}[${index}]`, out, depth + 1));
-  else if (value && typeof value === "object") for (const [key, item] of Object.entries(value)) {
-    strings(key, `${where}${where ? "." : ""}(key ${key.slice(0, 40)})`, out, depth + 1);
-    strings(item, `${where}${where ? "." : ""}${key}`, out, depth + 1);
+  else if (Array.isArray(value)) value.forEach((item, index) => strings(item, `${where}[${index}]`, out, depth + 1, walk));
+  else for (const [key, item] of Object.entries(value)) {
+    strings(key, `${where}${where ? "." : ""}(key ${key.slice(0, 40)})`, out, depth + 1, walk);
+    strings(item, `${where}${where ? "." : ""}${key}`, out, depth + 1, walk);
   }
   return out;
 }
@@ -83,10 +87,13 @@ function scan(value, { received = true, names = localNames() } = {}) {
     if (!seen.has(key)) { seen.add(key); findings.push(finding); }
   };
   const nameRules = names.map((name) => ({ id: "this-pc", level: "warn", label: "this PC's name or your user name", re: new RegExp(`\\b${escapeRegExp(name)}\\b`, "i") }));
-  for (const [where, text] of strings(value)) {
+  const walk = { cut: false };
+  for (const [where, text] of strings(value, "", [], 0, walk)) {
     for (const rule of [...RULES, ...nameRules]) if (rule.re.test(text)) add({ id: rule.id, level: rule.level, label: rule.label, where });
     if (received) for (const rule of INJECTION) if (rule.re.test(text)) add({ id: rule.id, level: "block", label: rule.label, where });
   }
+  // What was never read cannot pass as checked.
+  if (walk.cut) add({ id: "unchecked", level: "block", label: "more text or deeper nesting than Studio checks", where: "the whole item" });
   const order = { block: 0, warn: 1 };
   findings.sort((a, b) => order[a.level] - order[b.level] || a.where.localeCompare(b.where));
   return { ok: !findings.some((item) => item.level === "block"), findings };
