@@ -35,6 +35,42 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-28 - Vibe shows its planner and agent team at work
+
+Suggest a next step and Build it's sizing each show a live strip
+(`renderer/vibe-flow.js`) fed by the host's `vibe:progress` steps: the
+planning service's `onProgress` (reading, read, asking) and `vibeBuild`
+through `vibeProgress` (quick, sizing, tool, sized, adding), with
+`seatFetch`'s new `onTool`. The plan card draws a split request as a track
+with a live "now" line, Building now rows and the plan panel's timeline carry
+each worker's tool and current step, and Team lists Thinking now. Fixes:
+adding one suggestion no longer locks the rest, the plan panel's Make it one
+task uses `merge-steps`, and Enter in a New app field paints Making it….
+Build it's feedback moved under the box.
+
+- `npm run build-booklet` then `git diff --exit-code renderer/booklet.html`:
+  clean.
+- `npm run check` (189 targets, 389 specs), `npm run audit` (0 errors, 0
+  warnings), eslint on the changed files (no findings of theirs): PASS.
+- New tests fail on the old code: vibe_flow ("adding one suggestion keeps the
+  rest of its set usable", "Make it one task is one host call", "New app shows
+  its first build being sized"). New suites: vibe_flow (15),
+  vibe_progress_host (5); agent_tools asserts `onTool`.
+- `npm test` in C:\wt\vibe-flow on 77ad3bd: Node parallel stage 4351 tests,
+  4346 passed, 5 skipped, 0 failures. Electron lane 41 tests, 39 passed, 1
+  skipped, 1 failed: `media_browser_render` "Browser fixture timed out:
+  scroll clipping", a suite this change does not touch; it passed solo on
+  rerun in 14.4 s. `command_render` 1/1 in 50.4 s, `eyes_toggle_electron`
+  1/1, `occlusion_probe` 1 pass 1 skip. Python contracts OK (248, 1 skip).
+  Normalized-path lock passed.
+- Rebased onto c85cf60 (the menu polish): build-booklet clean, check,
+  audit, and 243 focused tests (the vibe, planning, sizing, agent tool and
+  onboarding suites plus every suite the menu polish changed): PASS.
+- Offscreen Electron captures at 1920x1080 and 1280x720 of every stage (fake
+  bridge replaying the host's steps): planner strip over placeholder cards,
+  sizing strip under the box, plan track and now line, plan timeline, Team,
+  New app; a light custom palette too.
+
 ## 2026-09-28 - Menu polish pass: plain words, two-step confirms, steadier menus
 
 The "Menu polish review" session's uncommitted work in C:\wt\menu-polish,
@@ -523,10 +559,6 @@ Validation on the merged tree: npm run check passed, npm run audit returned
 leg green: Node 4033 passed and 4 skipped, Electron 43 passed and 1 skipped,
 and all 248 Python contracts passed (routing contracts updated for the new
 builder launch; grok's headless guide documents --prompt-file as headless -p).
-
-## 2026-09-27 - Companion as pet and friend: six-bubble menu, personality, Suggest work, Friends playground with sharing rules
-
-Built in a separate clone on origin/main 3e0e1e0. New pure modules scripts/companion-pet.cjs (personalities, presets, bond) and scripts/companion-friends.cjs (sharing levels and rules, broadcast level, scrubbed cards, card reading, share-back ask, mirrored scripted playdates); main's "Companion friends" block and hub-client `companion` frames (sent only when the hub's ready lists the feature; one-member delivery only with companion.direct); renderer/companion-friends.js playground; companion-hub/ui menu rework. New tests: companion_friends (13), companion_friends_host (8, vm slice of the main block), companion_personality_copy, plus additions to agent_brain_host, hub_client, module_purity and the companion-hub Electron fixture (playground, share-back, practice playdate, petting, plain check, Suggest work, Now, Personality). Full npm test: Node 4015 tests, 4008 pass, 5 skipped, 2 failed: pc_sync_ui's Friends-branch source pin (fixed by restoring an explicit friends branch; 6/6 solo) and command_render (known load-sensitive; passed solo in 52 s). Python contracts and path lock passed. Solo reruns: companion_hub_render, unified_studio_render, autonomy_render all pass. npm run check ok (172 targets), audit 0 errors, lint 0 errors with no new warnings. Rebased onto 215b7d9 (booklet rebuilt; companion-hub and fixture conflicts kept both sides): check ok (175 targets), audit 0 errors, the 11 touched Node suites 117/117, and companion_hub_render, unified_studio_render and autonomy_render pass.
 
 ## Read Before Any Tests
 

@@ -6,6 +6,10 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-27 - Companion as pet and friend: six-bubble menu, personality, Suggest work, Friends playground with sharing rules
+
+Built in a separate clone on origin/main 3e0e1e0. New pure modules scripts/companion-pet.cjs (personalities, presets, bond) and scripts/companion-friends.cjs (sharing levels and rules, broadcast level, scrubbed cards, card reading, share-back ask, mirrored scripted playdates); main's "Companion friends" block and hub-client `companion` frames (sent only when the hub's ready lists the feature; one-member delivery only with companion.direct); renderer/companion-friends.js playground; companion-hub/ui menu rework. New tests: companion_friends (13), companion_friends_host (8, vm slice of the main block), companion_personality_copy, plus additions to agent_brain_host, hub_client, module_purity and the companion-hub Electron fixture (playground, share-back, practice playdate, petting, plain check, Suggest work, Now, Personality). Full npm test: Node 4015 tests, 4008 pass, 5 skipped, 2 failed: pc_sync_ui's Friends-branch source pin (fixed by restoring an explicit friends branch; 6/6 solo) and command_render (known load-sensitive; passed solo in 52 s). Python contracts and path lock passed. Solo reruns: companion_hub_render, unified_studio_render, autonomy_render all pass. npm run check ok (172 targets), audit 0 errors, lint 0 errors with no new warnings. Rebased onto 215b7d9 (booklet rebuilt; companion-hub and fixture conflicts kept both sides): check ok (175 targets), audit 0 errors, the 11 touched Node suites 117/117, and companion_hub_render, unified_studio_render and autonomy_render pass.
+
 ## 2026-09-27 - Second bug-hunt pass: CLI setup, release helper, media browser, Vibe, autonomy
 
 Reviewed the modules that landed since the first pass (media browser, CLI
