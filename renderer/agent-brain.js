@@ -156,57 +156,37 @@
     if (style === "halo") { ctx.strokeStyle = rgba(color, 0.7); ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(x, y, r * 1.6, t * 2, t * 2 + Math.PI * 1.4); ctx.stroke(); }
   }
 
-  // The done beat at the step, drawn by the pack itself: node-styles.js
-  // exports no done or absorb painter for it to defer to.
-  function popFx(ctx, x, y, r, p, t, P, ok = true) {
-    const style = nodeStyle();
-    const tint = ok ? P.good : P.bad;
-    if (style === "singularity") {
-      ctx.strokeStyle = rgba(P.ember, 1 - p); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, r * (1.4 + p * 2.6), 0, Math.PI * 2); ctx.stroke();
-      body(ctx, x, y, r * (1 + 0.35 * Math.sin(p * Math.PI)), tint, t, P, { rot: p * 9, style });
-    } else if (style === "prism" || style === "crystal") {
-      for (let i = 0; i < 6; i += 1) {
-        const a = i * Math.PI / 3 + p * 0.8, d = r * (1 + 3.4 * Math.sin(p * Math.PI));
-        const sx = x + Math.cos(a) * d, sy = y + Math.sin(a) * d;
-        ctx.fillStyle = [P.bright, P.info, P.violet][i % 3]; ctx.globalAlpha = 1 - p * 0.6;
-        ctx.beginPath(); ctx.moveTo(sx, sy - 4); ctx.lineTo(sx + 3, sy + 3); ctx.lineTo(sx - 3, sy + 3); ctx.closePath(); ctx.fill();
-        ctx.globalAlpha = 1;
-      }
-      body(ctx, x, y, r * (1 + 0.25 * Math.sin(p * Math.PI)), tint, t, P, { rot: p * 2, style });
-    } else if (style === "sigil") {
-      ctx.save(); ctx.translate(x, y); ctx.rotate(p * Math.PI / 3);
-      ctx.strokeStyle = rgba(tint, 0.95); ctx.lineWidth = 1.6; hexPath(ctx, 0, 0, r * 2.5, easeOut(Math.min(1, p * 1.4))); ctx.stroke();
-      ctx.restore();
-      body(ctx, x, y, r, tint, t, P, { style });
-    } else if (style === "minimal") {
-      ctx.strokeStyle = tint; ctx.lineWidth = 2; ctx.beginPath();
-      ctx.moveTo(x - r, y); ctx.lineTo(x - r * 0.2, y + r * 0.8 * easeOut(p * 2)); ctx.lineTo(x + r * 1.2 * easeOut(p * 1.5), y - r); ctx.stroke();
-    } else {
-      const bounce = 1 + 0.65 * Math.sin(p * Math.PI * 2.4) * Math.exp(-2.8 * p);
-      ctx.strokeStyle = rgba(tint, (1 - p) * 0.9); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, r * (1.2 + p * 3.2), 0, Math.PI * 2); ctx.stroke();
-      body(ctx, x, y - Math.sin(p * Math.PI) * 6, r * bounce, tint, t, P, { style });
+  // The finish beats in the owner's node style, through node-styles.js's
+  // done and absorb hooks: the step's pop as its agent's work comes back
+  // (over the view's own springy body), and the lead taking the agent in.
+  // A plain ring stands in where the style module is missing.
+  const triples = new Map();
+  function triple(color) {
+    let value = triples.get(color);
+    if (!value) {
+      const m = rgba(color, 1).match(/rgba\((\d+),(\d+),(\d+)/);
+      value = Object.freeze(m ? [Number(m[1]), Number(m[2]), Number(m[3])] : [113, 203, 183]);
+      if (triples.size >= 64) triples.clear();
+      triples.set(color, value);
     }
+    return value;
   }
-  function absorbFx(ctx, lead, leadR, p, t, P) {
-    const style = nodeStyle();
-    if (style === "singularity") {
-      ctx.strokeStyle = rgba(P.ember, (1 - p) * 0.9); ctx.lineWidth = 1.4;
-      for (let i = 0; i < 3; i += 1) { ctx.beginPath(); ctx.arc(lead[0], lead[1], leadR * (2.2 - p * 1.1 - i * 0.28), p * 6 + i, p * 6 + i + 2.2); ctx.stroke(); }
-    } else if (style === "prism" || style === "crystal") {
-      for (let i = 0; i < 6; i += 1) {
-        const a = i * Math.PI / 3 + 0.3, d = leadR * (2.6 * (1 - easeOut(p)) + 0.4);
-        ctx.fillStyle = [P.bright, P.info, P.violet][i % 3]; ctx.globalAlpha = 1 - p * 0.5;
-        const sx = lead[0] + Math.cos(a) * d, sy = lead[1] + Math.sin(a) * d;
-        ctx.beginPath(); ctx.moveTo(sx, sy - 4); ctx.lineTo(sx + 3, sy + 3); ctx.lineTo(sx - 3, sy + 3); ctx.closePath(); ctx.fill();
-        ctx.globalAlpha = 1;
-      }
-    } else if (style === "sigil") {
-      ctx.save(); ctx.translate(lead[0], lead[1]); ctx.rotate(-p * Math.PI);
-      ctx.strokeStyle = rgba(P.bright, 1 - p); ctx.lineWidth = 1.4; hexPath(ctx, 0, 0, leadR * (1.9 - p * 0.6)); ctx.stroke();
-      ctx.restore();
-    } else {
-      ctx.strokeStyle = rgba(P.live, (1 - p) * 0.8); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(lead[0], lead[1], leadR * (1 + p * 1.2), 0, Math.PI * 2); ctx.stroke();
-    }
+  const beatOptions = (P, ok) => ({ ok, still: still(), theme: window.MefiNodeStyles?.theme?.({ background: P.bg, text: P.ivory, accent2: P.info, done: P.live, amber: P.warn }) ?? null });
+  const beatPoint = { x: 0, y: 0 };
+  function popFx(ctx, x, y, r, p, t, P, ok = true) {
+    const style = nodeStyle(), tint = ok ? P.good : P.bad;
+    const bounce = 1 + 0.65 * Math.sin(p * Math.PI * 2.4) * Math.exp(-2.8 * p), lift = Math.sin(p * Math.PI) * 6;
+    body(ctx, x, y - lift, r * bounce, tint, t, P, { style });
+    // the marks go round the body as it hops and swells
+    beatPoint.x = x; beatPoint.y = y - lift;
+    if (window.MefiNodeStyles?.done?.(ctx, style, beatPoint, r * bounce, triple(tint), p, beatOptions(P, ok))) return;
+    ctx.strokeStyle = rgba(tint, (1 - p) * 0.9); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, r * (1.2 + p * 3.2), 0, Math.PI * 2); ctx.stroke();
+  }
+  function absorbFx(ctx, lead, leadR, p, t, P, ok = true) {
+    const tint = ok ? P.live : P.bad;
+    beatPoint.x = lead[0]; beatPoint.y = lead[1];
+    if (window.MefiNodeStyles?.absorb?.(ctx, nodeStyle(), beatPoint, leadR, triple(tint), p, beatOptions(P, ok))) return;
+    ctx.strokeStyle = rgba(tint, (1 - p) * 0.8); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(lead[0], lead[1], leadR * (1 + p * 1.2), 0, Math.PI * 2); ctx.stroke();
   }
 
   // A canvas that fits its box and paints on demand; `loop` keeps it moving
@@ -539,7 +519,7 @@
           body(ctx, lead[0] + R * Math.cos(a), lead[1] + R * Math.sin(a), 6, fx.ok ? P.live : P.bad, t, P);
         } else {
           const p = (u - FX.pop - FX.back - FX.lap) / FX.absorb;
-          absorbFx(ctx, lead, 12, clamp(p), t, P);
+          absorbFx(ctx, lead, 12, clamp(p), t, P, fx.ok);
           const k = 1 - easeOut(p);
           if (k > 0.05) body(ctx, lead[0] + R * (1 - p), lead[1], 6 * k, fx.ok ? P.live : P.bad, t, P);
         }
@@ -1205,7 +1185,7 @@
       li.append(node("span", `ab-dot ab-dot-${event.kind.replace(/\./g, "-")}`), node("span", "", words), node("time", "ab-quiet", ago(event.at)));
       el.feed.append(li);
     }
-    if (!el.feed.children.length) el.feed.append(node("li", "ab-quiet ab-feed-empty", scene.taskId ? "Nothing has happened on this task yet." : "Events appear here as agents work."));
+    if (!el.feed.children.length) el.feed.append(node("li", "ab-quiet ab-feed-empty", scene.taskId ? "Nothing new on this task since Studio opened. Replay today plays back today's events." : "Events appear here as agents work."));
   }
 
   // Today's recorded events for the watched task, played back at up to a

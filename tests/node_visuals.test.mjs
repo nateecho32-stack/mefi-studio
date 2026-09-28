@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFile } from "node:fs/promises";
+import { loadNodeStyles, recordingContext } from "./fixtures/node-styles-harness.mjs";
 
 const source = await readFile(new URL("../renderer/node-visuals.js", import.meta.url), "utf8");
 function fixture() {
@@ -120,4 +121,35 @@ test("every MefiNodeStyles member a renderer script probes is one node-styles.js
   }
   assert.ok(probes.some(([name, member]) => name === "node-visuals.js" && member === "shapes"), "the prism reads the shared shapes");
   for (const [name, member] of probes) assert.ok(exported.has(member), `${name} probes MefiNodeStyles.${member}, which node-styles.js does not export`);
+});
+
+test("the Agent brain's finish marks go round the body as it hops and swells, and round the lead it joins", async () => {
+  const brain = (await readFile(new URL("../renderer/agent-brain.js", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+  const start = brain.indexOf("  const triples = new Map();"), absorb = brain.indexOf("  function absorbFx(", start);
+  assert.ok(start > 0 && absorb > start, "the finish-beat block is where this test expects it");
+  const styles = loadNodeStyles();
+  let style = "orbs";
+  const bodies = [], beats = [];
+  const record = (hook) => (ctx, name, at, radius, tint, u, o) => { beats.push({ x: at.x, y: at.y, r: radius }); return styles[hook](ctx, name, at, radius, tint, u, o); };
+  const env = vm.createContext({
+    window: { MefiNodeStyles: { theme: styles.theme, done: record("done"), absorb: record("absorb") } },
+    rgba: (color, alpha) => `rgba(${color.join(",")},${alpha})`,
+    still: () => false,
+    nodeStyle: () => style,
+    body: (ctx, x, y, r) => bodies.push({ x, y, r }),
+  });
+  vm.runInContext(brain.slice(start, brain.indexOf("\n  }\n", absorb) + 5), env);
+  const P = { good: [90, 200, 120], bad: [255, 100, 100], live: [87, 255, 154], bg: "#0b0b10", ivory: "#eee", info: "#7db2ff", warn: "#ffd479" };
+  for (const name of ["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil"]) {
+    style = name;
+    for (const p of [0.05, 0.17, 0.35, 0.5, 0.7, 0.95]) {
+      bodies.length = beats.length = 0;
+      env.popFx(recordingContext(), 50, 50, 6, p, 0, P, true);
+      assert.deepEqual([bodies.length, beats.length], [1, 1], `${name}: the pop draws one body and one beat`);
+      assert.deepEqual(beats[0], bodies[0], `${name} at p ${p}: the marks sit on the body, hopped and swollen as it is`);
+    }
+    beats.length = 0;
+    env.absorbFx(recordingContext(), [70, 40], 12, 0.4, 0, P, true);
+    assert.deepEqual(beats, [{ x: 70, y: 40, r: 12 }], `${name}: the absorb marks sit on the lead`);
+  }
 });

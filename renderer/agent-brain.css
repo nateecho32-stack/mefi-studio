@@ -17,9 +17,10 @@
 .ab-live-detail .agent-brain-stage { flex: 1; min-height: 0; }
 .ab-live-detail .agent-brain-feed { flex-shrink: 0; max-height: 22%; }
 .agent-brain-list { display: flex; flex-direction: column; gap: 6px; overflow: auto; min-height: 0; }
-.ab-pipe { display: grid; gap: 2px; text-align: left; padding: 9px 11px; border-radius: var(--r-md); border: 1px solid var(--hairline); background: transparent; color: var(--ivory); cursor: pointer; font: 500 var(--fs-sm) var(--font-ui); }
+.ab-pipe { flex-shrink: 0; display: grid; grid-template-columns: minmax(0, 1fr); justify-content: stretch; align-content: start; gap: 2px; text-align: left; white-space: normal; padding: 9px 11px; border-radius: var(--r-md); border: 1px solid var(--hairline); background: transparent; color: var(--ivory); cursor: pointer; font: 500 var(--fs-sm) var(--font-ui); }
 .ab-pipe[aria-pressed="true"] { border-color: var(--gold); background: var(--tint-gold-2); }
 .ab-pipe:hover { border-color: var(--hairline-strong); }
+.ab-pipe > strong, .ab-pipe > .ab-quiet { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-brain-stage { position: relative; min-height: 320px; border: 1px solid var(--hairline); border-radius: var(--graph-card-radius); overflow: auto; display: block; background: var(--bg); }
 .agent-brain-stage canvas { display: block; width: 100%; min-height: 300px; }
 .agent-brain-caption { margin: 0; padding: 8px 12px; border-top: 1px solid var(--hairline); color: var(--ivory); font-size: var(--fs-sm); min-height: 34px; display: flex; align-items: center; gap: 10px; }
@@ -48,8 +49,10 @@
 /* the Playbook shelf: one spine per recipe, thickness by runs, colour by how it did */
 .agent-brain-playbook-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(280px, 1fr); gap: 18px; flex: 1; min-height: 0; }
 .agent-brain-playbook-grid > div { min-height: 0; overflow: auto; }
-.agent-brain-shelf { display: flex; align-items: flex-end; gap: 6px; flex-wrap: wrap; min-height: 200px; padding: 16px 12px 0; border-bottom: 3px solid var(--hairline-strong); }
+/* each spine carries its own plank, so a wrapped shelf gets one plank per row */
+.agent-brain-shelf { display: flex; align-items: flex-end; align-content: flex-start; gap: 26px 6px; flex-wrap: wrap; padding: 16px 12px 10px; }
 .ab-book { --thick: 1; position: relative; width: calc(22px + var(--thick) * 6px); height: calc(96px + var(--thick) * 16px); border-radius: 4px 4px 2px 2px; border: 1px solid var(--hairline-strong); background: linear-gradient(90deg, rgba(255,255,255,.06), transparent 40%), var(--panel-solid); color: var(--ivory); cursor: pointer; padding: 6px 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
+.ab-book::after { content: ""; position: absolute; left: -4px; right: -4px; bottom: -5px; height: 3px; background: var(--hairline-strong); pointer-events: none; }
 .ab-book[aria-pressed="true"] { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
 .ab-book-title { writing-mode: vertical-rl; transform: rotate(180deg); font: 600 var(--fs-xs) var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-height: 80%; }
 .ab-book-runs { font: 600 var(--fs-2xs) var(--font-mono); color: var(--muted); }

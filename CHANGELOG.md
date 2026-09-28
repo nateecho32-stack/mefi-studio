@@ -64,6 +64,18 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   default) and asks whose card left the board while Studio was closed or
   another project was open are closed when the project loads, not on your
   click. The all-projects list leaves other projects' expired asks out.
+- **Every node style finishes in its own way.** In the Agent brain, a step
+  whose work came back and the lead taking its agent in now play the chosen
+  style's own beat: Classic orbs' ring bursts, Soft glass ripples like a drop
+  on water, Minimal draws a check, Halo flares and slips its ring over the
+  lead, Crystal glints across its facets, Singularity's disc flares and the
+  agent spirals in, Prism shatters and fuses back from six angles, and
+  Sigil's rune writes itself shut and stamps the lead. A failed check
+  finishes in amber. With reduced motion on, the Agent brain plays no beats.
+  The Agent brain's pipeline list no longer cuts long titles off on the left
+  or squeezes its rows together, the Playbook shelf keeps its books in tight
+  rows, and the feed no longer says nothing happened on a task that finished
+  steps before Studio opened.
 - **Watch Mefi think, and watch your team work.** In Vibe, **Suggest a next
   step** and **Build it** no longer wait behind one still sentence. Each shows
   a live strip: the stage it has reached (reading the project, thinking,

@@ -35,6 +35,53 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-28 (afternoon) - Every node style's finish beats, and Agent brain list/shelf fixes
+
+Gated in an isolated worktree (`C:\wt\land-beats`, GitHub main `f85681b`,
+whose successor `79d892d` changes only `continuing.md`, plus
+only `renderer/node-styles.js`, `renderer/agent-brain.js`,
+`renderer/agent-brain.css`, `tests/node_styles.test.mjs`,
+`tests/node_visuals.test.mjs`, three doc rows and a rebuilt
+`renderer/booklet.html`), because the shared tree held another session's
+unfinished menu work.
+
+- Before landing, four reviewers read the diff (one per look group, one for
+  agent-brain, one for tests and docs) and two skeptics tried to refute each
+  finding; 9 of 17 survived both, six distinct issues, all fixed: every beat
+  now fades over its last fifth (Sigil, Singularity, Prism, Halo and Minimal
+  ended bright and were cut by the caller), absorb marks lift toward the
+  highlight on a light theme (the raw pale green was about 1.1:1 on a pale
+  page), Prism's shards and Crystal's glint follow a failed check's amber
+  (only 2 of 6 shards did), `popFx` hands the marks the hopped point and
+  swollen radius it draws the body at, the Playbook shelf scrolls again
+  (`align-self: start` had clipped it), and the CHANGELOG no longer claims a
+  still pose under reduced motion where the Agent brain plays no beats.
+  The changed test assertions (all-amber failed check, nothing bright at
+  u = 1, no raw pale tint on a light page) and the new `node_visuals` test
+  (marks on the body, sliced from `agent-brain.js`) each fail on the
+  pre-fix code and pass on the fix.
+- `npm run check` and `npm run audit`: clean. `node --test tests/node_styles*.test.mjs`:
+  151/151, including the finish-beats tests (every look's `done` and
+  `absorb` draw in their own save with no gradient, stay near the node, hold
+  one pose when still, finish a failed check wholly in amber and a passing
+  one never, fade out by the end of their window, and no two looks share a
+  beat).
+- `npm test` (8.7 min, no failures, no reruns): Node parallel stage 4447
+  tests (4442 pass, 5 skipped), Electron stage 41 (40 pass, 1 skipped),
+  `command_render` serialized at 48 s with no cold-boot retry, Python
+  contracts 248 OK (1 skipped), normalized-path lock passes. An earlier
+  identical run on the first build (10.5 min) was also clean. None of the
+  known-flaky rows fired.
+- Rendered check: a contact sheet of every look's done and absorb frames
+  (real `node-styles.js` on a canvas in headless Edge, dark, light and a
+  failed check) shows the marks on the hopping body, all beats gone by the
+  last frame and the failed check amber throughout. The earlier real-app
+  staging of `agent.home` (scratch copy on a copy of the live Studio
+  project, 143 pipelines) ran on the first build, before the review fixes,
+  and was not repeated.
+- The Command view never calls the new hooks yet (child sessions on the
+  Command tree are still open), so `command_render` is unaffected by design.
+
 ## 2026-09-28 - Task board cleanup
 
 The owner said the Task board was a mess nobody knew how to use. The left
@@ -563,44 +610,6 @@ morning's floating-player redesign from 95bd61c is not carried over.
   on an unattended desktop and solo gave 1 pass plus the capability skip.
   Earlier runs of the same restore on 052a1ec and 937e244 differed only in
   those two timing-sensitive fixtures.
-
-## 2026-09-27 late - Media player controls and native browser usability
-
-Validated media changes in `93ee12e`, rebased on the incoming setup-helper and
-Command-renderer follow-up at `4fa8b96`. Floating players have reachable window
-controls and a visible minimized restore bar; dragging from the panel preserves
-position. Hover opens at the video and keeps its controls stable. Browser pages
-fit the visible panel through scrolling and overlapping notifications.
-
-- Final `npm run build-booklet`, `npm run check`, `npm run audit`: PASS, zero
-  audit findings. Combined media/music unit tests: 109/109 PASS.
-- Final real Electron rerun on the integrated source: 4/4 PASS (Command,
-  media browser, media window, tree dynamics). Media captures cover 1440/600px,
-  provider controls, native toolbar drag/minimize/restore/close, background,
-  notifications, scrolling, dialogs, history, zoom and unchanged playback.
-  The compact video retains a 200px provider area below its toolbar.
-- `npm test` initial CPU stage: 4,023 pass, four skip, zero fail. Its Electron
-  stage hit the previously recorded Command timeout and the browser fixture's
-  native-input assertion before the run stopped. The remaining renderer lane
-  was completed separately: 20 pass, one skip, one tree-dynamics native-click
-  failure. The final four-suite rerun above clears all three failed suites.
-  No single uninterrupted full-gate pass is claimed.
-- Remaining legs: Python 248 tests OK (one skip), normalized-path locks 6/6,
-  serialized eyes 1/1, occlusion one pass and one desktop-capability skip.
-- Baseline media render: PASS. Intermediate focused runs corrected obsolete
-  hover-dismissal and exact-full-viewport fixture assumptions; visual QA found
-  and fixed compact provider-menu clipping. Browser unit 4/4 and final browser
-  Electron fixture PASS. Synthetic child `sendInputEvent` produced no events
-  on unchanged HEAD as well, so browser verification exercises its actual page
-  handler plus native visibility, bounds and captures. Pointer injection into
-  that native child remains unverified here. Website clipping can reflow its
-  height but does not reload playback.
-- `npm run package`: PASS; installed media files match source hashes. Existing
-  portable data was preserved. Source landed on main and synced to GitHub.
-
-Full logs and synthetic captures remain ignored under `tools/logs/` with the
-`media-usability-` prefix; browser captures are in the temporary
-`media-player-native-captures` directory. No live user state was committed.
 
 ## Read Before Any Tests
 

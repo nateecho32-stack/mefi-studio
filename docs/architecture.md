@@ -198,7 +198,7 @@ settings and per-model work-kind summaries for the shared controls.
 | **Agent brain** | The Live view (`J`) that draws a task's **pipeline** from recorded **work events**: the head (the companion), the lead, the steps and the sub-agents; plus the **Playbook** of recipes and **project map** under Agents › Workflows. The seats live under Agents › Setup. See [roadmap-0.4.0.md](roadmap-0.4.0.md) and [agent-loop.md §13](agent-loop.md#13-the-agent-brain). |
 | **Companion** | The roaming character (named under General): click it to talk, see what it and the team are doing, handle its needs-you queue, suggest work or take its picks, meet friends' companions, or set its personality (Straight work, Balanced, Friendly & expressive). It also gives a welcome-back digest, can be petted, and covers this project or all of them. Its default model is GPT-6 Luna on Zen at medium reasoning and fast service when Zen is connected. |
 | **Orb, callout, absorb** | Command-view vocabulary: an orb is a node, a callout is its floating card, and absorb is a finished node collapsing into its host. |
-| **Node style / `MefiNodeStyles`** | How a node is drawn: one of eight looks (five classic, three in the two-tone Void collection), painted on both the Command view and the tree rail by `renderer/node-styles.js`. Each look owns its body and may take over the agent ring, hub dress, work orbit, arrival, selection, wires, pulses and landing; per-node motion records keep every node animating, and reduced motion freezes each look to a still pose. |
+| **Node style / `MefiNodeStyles`** | How a node is drawn: one of eight looks (five classic, three in the two-tone Void collection), painted on both the Command view and the tree rail by `renderer/node-styles.js`. Each look owns its body and may take over the agent ring, hub dress, work orbit, arrival, selection, the finish beats (`done` at a step whose work came back, `absorb` at the lead taking an agent in), wires, pulses and landing; per-node motion records keep every node animating, and reduced motion freezes each look to a still pose. |
 | **Ruins Runner** | The author's LÖVE game, an optional external project Studio can launch. A fresh clone works without it. |
 | **Discord Server Styler** | An optional separate bot and local dashboard. Settings can start it, open its dashboard or folder, show its status and stop a process Studio started. |
 | **Void collection** | Four two-tone themes (Void, Eclipse, Abyss, Neon Dusk) and three node styles (Singularity, Prism, Sigil), free for everyone like every other look. Settings › Appearance lists them under their own small heading, and a choice saves like any other. A theme with a second hue sets `data-studio-theme-tier="duo"`, which the stylesheets paint with. |
@@ -1129,7 +1129,8 @@ failed process stays an error and cannot produce briefing requests.
   (at most 12 steps, 3 new ones per run) and folds finished steps.
 - **Agent brain** (`J`) draws it: the companion as the head, the lead, the
   steps, the sub-agents circling the steps they work. A finished sub-agent
-  pops, flies home, circles the lead and is absorbed in the chosen node style;
+  pops, flies home, circles the lead and is absorbed in the chosen node style
+  (that look's `done` and `absorb` hooks);
   a report climbs to the head; a desk answer is carried over. **Replay today**
   plays the day back. Its other tabs are the **Playbook** shelf (recipes as
   spines: thickness is runs, colour is how often they verified), the

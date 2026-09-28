@@ -15,7 +15,7 @@ const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 const [idle, tree, build, bookletTest] = await Promise.all([read("../renderer/idle.js"), read("../renderer/tree3d.js"), read("../scripts/build-booklet.mjs"), read("./booklet_build.test.mjs")]);
 const STYLES = ["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil"];
 const BANNERS = ["infra", "shapes: void", "style: orbs", "style: glass", "style: minimal", "style: halo", "style: crystal", "style: singularity", "style: prism", "style: sigil", "overlays", "wires", "export"];
-const HOOKS = ["speedup", "paint", "glyph", "ring", "hubDress", "orbit", "arrival", "select", "wire", "surge", "land", "reach"];
+const HOOKS = ["speedup", "paint", "glyph", "ring", "hubDress", "orbit", "arrival", "select", "done", "absorb", "wire", "surge", "land", "reach"];
 const lines = source.replace(/\r\n/g, "\n").split("\n");
 
 // The text of one banner section, banner line excluded.
@@ -33,7 +33,7 @@ test("node-styles.js loads into a bare vm and exports one frozen contract", () =
   const styles = loadNodeStyles();
   assert.ok(styles, "window.MefiNodeStyles is set");
   assert.ok(Object.isFrozen(styles));
-  assert.deepEqual(Object.keys(styles), ["version", "STYLES", "PREMIUM", "shapes", "seed", "hash", "approach", "motionRecord", "stepMotion", "shownTint", "theme", "inkOf", "tier", "paint", "glyph", "ring", "hubDress", "orbit", "arrival", "select", "wire", "surge", "land", "reach", "cacheStats", "outline"]);
+  assert.deepEqual(Object.keys(styles), ["version", "STYLES", "PREMIUM", "shapes", "seed", "hash", "approach", "motionRecord", "stepMotion", "shownTint", "theme", "inkOf", "tier", "paint", "glyph", "ring", "hubDress", "orbit", "arrival", "select", "done", "absorb", "wire", "surge", "land", "reach", "cacheStats", "outline"]);
   assert.equal(styles.version, 1);
   assert.deepEqual(plain(styles.STYLES), STYLES);
   assert.deepEqual(plain(styles.PREMIUM), ["singularity", "prism", "sigil"]);
@@ -528,6 +528,8 @@ test("style hooks a look leaves null keep the caller's own drawing", () => {
     assert.equal(styles.orbit(ctx, style, p, 12, tint, {}), false);
     assert.equal(styles.arrival(ctx, style, p, 12, tint, 0.5, {}), false);
     assert.equal(styles.select(ctx, style, p, 12, tint, {}), false);
+    assert.equal(styles.done(ctx, style, p, 12, tint, 0.5, {}), false);
+    assert.equal(styles.absorb(ctx, style, p, 12, tint, 0.5, {}), false);
     assert.equal(styles.wire(ctx, style, p, { x: 90, y: 90 }, {}), false);
     assert.equal(styles.surge(ctx, style, p, { x: 90, y: 90 }, 0.5, {}, {}), false);
     assert.equal(styles.land(ctx, style, p, 12, tint, 0.5, {}), false);
@@ -544,6 +546,68 @@ test("style hooks a look leaves null keep the caller's own drawing", () => {
     if (glyph) assert.ok(typeof glyph.ink === "string" && glyph.scale > 0 && glyph.scale <= 1 && Number.isFinite(glyph.ringGap), `${style}: glyph dress`);
     const reach = styles.reach(style, null);
     assert.ok(reach >= 1 && reach <= 2.25, `${style}: reach ${reach}`);
+  }
+});
+
+test("every look has its own finish beats: done and absorb draw bounded marks in their own save, hold one pose when still, and a failed check finishes in amber", () => {
+  const styles = loadNodeStyles();
+  const p = { x: 50, y: 50 }, tint = [120, 180, 220], beats = new Map();
+  for (const style of STYLES) {
+    for (const hook of ["done", "absorb"]) {
+      for (const u of [0, 0.1, 0.5, 0.9, 1]) {
+        const ctx = recordingContext();
+        assert.equal(styles[hook](ctx, style, p, 12, tint, u, {}), true, `${style}.${hook} draws at u ${u}`);
+        assert.equal(ctx.calls.saves, ctx.calls.restores, `${style}.${hook} hands the context back as it was`);
+        assert.equal(ctx.calls.radial + ctx.calls.linear + ctx.calls.conic, 0, `${style}.${hook} builds no gradient`);
+        assert.deepEqual(ctx.calls.shadowBlurs, [], `${style}.${hook} never sets shadowBlur`);
+        assert.ok(ctx.calls.reach <= 12 * 4.4, `${style}.${hook} stays round its node (${ctx.calls.reach.toFixed(1)}px)`);
+      }
+      const poses = [0.05, 0.95].map((u) => { const ctx = recordingContext(); styles[hook](ctx, style, p, 12, tint, u, { still: true }); return JSON.stringify(ctx.calls.log); });
+      assert.equal(poses[0], poses[1], `${style}.${hook} holds one designed pose under reduced motion`);
+      const ctx = recordingContext();
+      styles[hook](ctx, style, p, 12, tint, 0.5, {});
+      beats.set(`${style}.${hook}`, JSON.stringify(ctx.calls.log));
+    }
+    const amber = ({ style: ink }) => typeof ink === "string" && ink.startsWith("rgba(255,212,121,");
+    const failed = recordingContext(), passed = recordingContext();
+    styles.done(failed, style, p, 12, tint, 0.5, { ok: false });
+    styles.done(passed, style, p, 12, tint, 0.5, {});
+    const failedMarks = [...failed.calls.strokes, ...failed.calls.fills];
+    assert.ok(failedMarks.length > 0 && failedMarks.every(amber), `${style}: every mark of a failed check is the theme's amber`);
+    assert.ok(![...passed.calls.strokes, ...passed.calls.fills].some(amber), `${style}: a passing check is never amber`);
+  }
+  assert.equal(new Set(beats.values()).size, beats.size, "no two looks share a beat");
+});
+
+test("finish beats fade out before their window ends: nothing is still bright at u = 1, so the caller's cut never shows", () => {
+  const styles = loadNodeStyles();
+  const p = { x: 50, y: 50 }, tint = [120, 180, 220];
+  // The brightest mark on the canvas: its colour's alpha times globalAlpha.
+  const brightest = (ctx) => Math.max(0, ...[...ctx.calls.strokes, ...ctx.calls.fills].map(({ style: ink, alpha }) => Number(/,([\d.]+)\)$/.exec(ink)?.[1] ?? 1) * alpha));
+  for (const style of STYLES) {
+    for (const hook of ["done", "absorb"]) {
+      const end = recordingContext(), middle = recordingContext();
+      styles[hook](end, style, p, 12, tint, 1, {});
+      styles[hook](middle, style, p, 12, tint, 0.5, {});
+      assert.ok(brightest(end) <= 0.02, `${style}.${hook} is gone at the end of its window (${brightest(end).toFixed(2)})`);
+      assert.ok(brightest(middle) > 0.15, `${style}.${hook} is plainly visible half way (${brightest(middle).toFixed(2)})`);
+    }
+  }
+});
+
+test("on a light theme the finish beats lift the agent's pale tint, so a thin mark still reads on a pale page", () => {
+  const styles = loadNodeStyles();
+  const light = styles.theme({ background: "#F3F0E8", text: "#1D2330" });
+  const p = { x: 50, y: 50 }, tint = Object.freeze([87, 255, 154]);
+  for (const style of STYLES) {
+    for (const hook of ["done", "absorb"]) {
+      for (const u of [0.2, 0.5, 0.8]) {
+        const ctx = recordingContext();
+        styles[hook](ctx, style, p, 12, tint, u, { theme: light });
+        const raw = [...ctx.calls.strokes, ...ctx.calls.fills].filter(({ style: ink }) => typeof ink === "string" && ink.startsWith("rgba(87,255,154,"));
+        assert.equal(raw.length, 0, `${style}.${hook} at u ${u}: no mark is the raw pale tint on a light page`);
+      }
+    }
   }
 });
 

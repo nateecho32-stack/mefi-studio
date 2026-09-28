@@ -6,6 +6,44 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-27 late - Media player controls and native browser usability
+
+Validated media changes in `93ee12e`, rebased on the incoming setup-helper and
+Command-renderer follow-up at `4fa8b96`. Floating players have reachable window
+controls and a visible minimized restore bar; dragging from the panel preserves
+position. Hover opens at the video and keeps its controls stable. Browser pages
+fit the visible panel through scrolling and overlapping notifications.
+
+- Final `npm run build-booklet`, `npm run check`, `npm run audit`: PASS, zero
+  audit findings. Combined media/music unit tests: 109/109 PASS.
+- Final real Electron rerun on the integrated source: 4/4 PASS (Command,
+  media browser, media window, tree dynamics). Media captures cover 1440/600px,
+  provider controls, native toolbar drag/minimize/restore/close, background,
+  notifications, scrolling, dialogs, history, zoom and unchanged playback.
+  The compact video retains a 200px provider area below its toolbar.
+- `npm test` initial CPU stage: 4,023 pass, four skip, zero fail. Its Electron
+  stage hit the previously recorded Command timeout and the browser fixture's
+  native-input assertion before the run stopped. The remaining renderer lane
+  was completed separately: 20 pass, one skip, one tree-dynamics native-click
+  failure. The final four-suite rerun above clears all three failed suites.
+  No single uninterrupted full-gate pass is claimed.
+- Remaining legs: Python 248 tests OK (one skip), normalized-path locks 6/6,
+  serialized eyes 1/1, occlusion one pass and one desktop-capability skip.
+- Baseline media render: PASS. Intermediate focused runs corrected obsolete
+  hover-dismissal and exact-full-viewport fixture assumptions; visual QA found
+  and fixed compact provider-menu clipping. Browser unit 4/4 and final browser
+  Electron fixture PASS. Synthetic child `sendInputEvent` produced no events
+  on unchanged HEAD as well, so browser verification exercises its actual page
+  handler plus native visibility, bounds and captures. Pointer injection into
+  that native child remains unverified here. Website clipping can reflow its
+  height but does not reload playback.
+- `npm run package`: PASS; installed media files match source hashes. Existing
+  portable data was preserved. Source landed on main and synced to GitHub.
+
+Full logs and synthetic captures remain ignored under `tools/logs/` with the
+`media-usability-` prefix; browser captures are in the temporary
+`media-player-native-captures` directory. No live user state was committed.
+
 ## 2026-09-27 - Clean-state Command renderer follow-up
 
 On unchanged `052a1ec` main, reran the remaining failing fixture alone:

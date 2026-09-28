@@ -297,6 +297,31 @@
     return value;
   }
 
+  // The finish beats (each look's done and absorb hooks, see overlays) share
+  // these. finishInk: the theme's done green, or its amber for a failed check
+  // (o.ok false), lifted toward the highlight on a light theme so a thin mark
+  // still reads there; cached per theme. finishAt: the beat's progress, or
+  // the look's one designed pose under reduced motion.
+  const finishInks = new WeakMap();
+  function finishInk(o) {
+    const currentTheme = o.theme ?? INK_DEFAULTS;
+    let record = finishInks.get(currentTheme);
+    if (!record) {
+      const { light, done, amber, hi } = currentTheme;
+      record = Object.freeze({ done: light ? Object.freeze(mix(done, hi, 0.35)) : done, amber: light ? Object.freeze(mix(amber, hi, 0.35)) : amber });
+      finishInks.set(currentTheme, record);
+    }
+    return o.ok === false ? record.amber : record.done;
+  }
+  const finishAt = (u, o, pose) => o.still === true ? pose : clamp01(u);
+  // A beat's tail: every mark fades over the last fifth, so the caller
+  // ending its window at u = 1 never cuts a mark that is still bright.
+  // The one still pose holds.
+  const finishFade = (t, o) => o.still === true ? 1 : 1 - clamp01((t - 0.8) / 0.2);
+  // The agent's tint as a thin mark: itself, or lifted toward the
+  // highlight on a light theme, where a pale role colour would wash out.
+  const finishTint = (tint, o) => overlayTintInk(tint, o.theme ?? INK_DEFAULTS);
+
   // A tint's derived tones under a theme, cached per triple and rebuilt when
   // the theme changes: core/deep sink toward the background (only halfway on
   // a light theme, so a body keeps its state's hue off a pale page instead of
@@ -672,7 +697,7 @@
     // undoing only when the monogram still has to be written.
     if (n.monogram) { ctx.globalAlpha = base; freeMonogram(ctx, p, n, freeInks(tint, n.theme).orbsText); }
   }
-  LOOKS.orbs = { speedup: 2.6, paint: paintOrbs, glyph: { scale: 0.7, ringGap: 3.5, ink: (tint, currentTheme) => freeInks(tint, currentTheme).orbs }, ring: null, hubDress: null, orbit: null, arrival: null, select: null, wire: null, surge: null, land: null, reach: 1 };
+  LOOKS.orbs = { speedup: 2.6, paint: paintOrbs, glyph: { scale: 0.7, ringGap: 3.5, ink: (tint, currentTheme) => freeInks(tint, currentTheme).orbs }, ring: null, hubDress: null, orbit: null, arrival: null, select: null, done: null, absorb: null, wire: null, surge: null, land: null, reach: 1 };
 
 // ===== style: glass =====
 
@@ -783,7 +808,31 @@
     }
     if (n.monogram) { ctx.globalAlpha = base; freeMonogram(ctx, p, n, freeInks(tint, n.theme).glass); }
   }
-  LOOKS.glass = { speedup: 2.6, paint: paintGlass, glyph: { scale: 0.66, ringGap: 3.5, ink: (tint, currentTheme) => freeInks(tint, currentTheme).glass }, ring: null, hubDress: null, orbit: null, arrival: null, select: null, wire: null, surge: null, land: null, reach: 1 };
+  // Soft glass finish beats: done, a drop landing on water, three thin
+  // ripples spreading one after another; absorb, two droplets joining, the
+  // receiving rim wobbling once as it settles.
+  function glassDone(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 0.42), ink = finishInk(o);
+    ctx.save();
+    ctx.lineWidth = 1.1;
+    for (let k = 0; k < 3; k += 1) {
+      const w = clamp01((t - 0.16 * k) / 0.68);
+      if (w <= 0 || w >= 1) continue;
+      ctx.strokeStyle = rgba(ink, qa(0.8 * (1 - w) * (1 - 0.25 * k)));
+      ctx.beginPath(); ctx.arc(p.x, p.y, radius * (1.1 + 2.1 * easeOut(w)), 0, TAU); ctx.stroke();
+    }
+    ctx.restore();
+    return true;
+  }
+  function glassAbsorb(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 0.2), wobble = 0.16 * Math.sin(3 * Math.PI * t) * (1 - t);
+    ctx.save();
+    ctx.strokeStyle = rgba(finishTint(tint, o), qa(0.8 * (1 - t))); ctx.lineWidth = 1.3;
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, radius * (1.12 + wobble), radius * (1.12 - wobble), 0, 0, TAU); ctx.stroke();
+    ctx.restore();
+    return true;
+  }
+  LOOKS.glass = { speedup: 2.6, paint: paintGlass, glyph: { scale: 0.66, ringGap: 3.5, ink: (tint, currentTheme) => freeInks(tint, currentTheme).glass }, ring: null, hubDress: null, orbit: null, arrival: null, select: null, done: glassDone, absorb: glassAbsorb, wire: null, surge: null, land: null, reach: 1 };
 
 // ===== style: minimal =====
 
@@ -833,7 +882,35 @@
     // (a dot too small to hold the 10 px glyph goes without it)
     if (n.monogram && dot >= 4.5) freeMonogram(ctx, p, n, inks.minimalText);
   }
-  LOOKS.minimal = { speedup: 2.6, paint: paintMinimal, glyph: { scale: 0.62, ringGap: 2, ink: (tint, currentTheme) => freeInks(tint, currentTheme).minimal }, ring: null, hubDress: null, orbit: null, arrival: null, select: null, wire: null, surge: null, land: null, reach: 1 };
+  // Minimal finish beats, no burst: done, a check mark drawing itself over
+  // the dot (a failed check draws a level stroke instead); absorb, one tick
+  // snapping onto the receiving node's side, then fading.
+  function minimalDone(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 1), ink = finishInk(o), s = Math.max(radius, 5) * 1.1, w = clamp01(t / 0.75);
+    ctx.save();
+    ctx.strokeStyle = rgba(ink, qa(finishFade(t, o))); ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.beginPath();
+    if (o.ok === false) {
+      ctx.moveTo(p.x - s * 0.6, p.y); ctx.lineTo(p.x - s * 0.6 + s * 1.2 * easeOut(w), p.y);
+    } else {
+      const first = clamp01(w / 0.35), second = clamp01((w - 0.35) / 0.65);
+      ctx.moveTo(p.x - s * 0.55, p.y + s * 0.02);
+      ctx.lineTo(p.x - s * 0.55 + s * 0.43 * first, p.y + s * 0.02 + s * 0.48 * first);
+      if (second > 0) ctx.lineTo(p.x - s * 0.12 + s * 0.74 * second, p.y + s * 0.5 - s * 0.95 * second);
+    }
+    ctx.stroke();
+    ctx.restore();
+    return true;
+  }
+  function minimalAbsorb(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 0.4), h = radius * 0.7 * easeOutBack(clamp01(t / 0.3)), x = p.x + radius + 5;
+    ctx.save();
+    ctx.strokeStyle = rgba(finishTint(tint, o), qa(1 - clamp01((t - 0.55) / 0.45))); ctx.lineWidth = 1.6; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(x, p.y - h); ctx.lineTo(x, p.y + h); ctx.stroke();
+    ctx.restore();
+    return true;
+  }
+  LOOKS.minimal = { speedup: 2.6, paint: paintMinimal, glyph: { scale: 0.62, ringGap: 2, ink: (tint, currentTheme) => freeInks(tint, currentTheme).minimal }, ring: null, hubDress: null, orbit: null, arrival: null, select: null, done: minimalDone, absorb: minimalAbsorb, wire: null, surge: null, land: null, reach: 1 };
 
 // ===== style: halo =====
 
@@ -947,7 +1024,29 @@
     }
     if (n.monogram) freeMonogram(ctx, p, n, freeInks(tint, n.theme).halo);
   }
-  LOOKS.halo = { speedup: 2.6, paint: paintHalo, glyph: { scale: 0.6, ringGap: 3.5, ink: (tint, currentTheme) => freeInks(tint, currentTheme).halo }, ring: null, hubDress: null, orbit: null, arrival: null, select: null, wire: null, surge: null, land: null, reach: 1 };
+  // Halo finish beats: done, the halo flaring and spinning up; absorb, the
+  // agent's halo slipping over the receiving node like a ring on a finger,
+  // then fading.
+  function haloDone(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 0.5), ink = finishInk(o), flare = Math.sin(Math.PI * t), fade = finishFade(t, o);
+    const spin = 3 * Math.PI * easeOut(t), r = radius * (1.55 + 0.35 * flare);
+    ctx.save();
+    ctx.strokeStyle = rgba(ink, qa(0.9 * (1 - 0.7 * t) * fade)); ctx.lineWidth = 1.2 + 1.6 * flare; ctx.lineCap = "round";
+    for (let k = 0; k < 2; k += 1) {
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, spin + k * Math.PI, spin + k * Math.PI + 0.7 * Math.PI); ctx.stroke();
+    }
+    ctx.restore();
+    return true;
+  }
+  function haloAbsorb(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 0.6), slide = easeOut(t / 0.6), fade = 1 - clamp01((t - 0.6) / 0.4);
+    ctx.save();
+    ctx.strokeStyle = rgba(finishTint(tint, o), qa(0.9 * fade)); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.ellipse(p.x, p.y - radius * 2.2 * (1 - slide), radius * 1.45, radius * (0.4 + 0.25 * slide), 0, 0, TAU); ctx.stroke();
+    ctx.restore();
+    return true;
+  }
+  LOOKS.halo = { speedup: 2.6, paint: paintHalo, glyph: { scale: 0.6, ringGap: 3.5, ink: (tint, currentTheme) => freeInks(tint, currentTheme).halo }, ring: null, hubDress: null, orbit: null, arrival: null, select: null, done: haloDone, absorb: haloAbsorb, wire: null, surge: null, land: null, reach: 1 };
 
 // ===== style: crystal =====
 
@@ -1121,10 +1220,36 @@
     }
     if (n.monogram) { freeLeave(ctx, p, radius); freeMonogram(ctx, p, n, freeInks(tint, n.theme).crystal); }
   }
+  // Crystal finish beats, on the octagon's rest turn: done, a glint running
+  // across the facets inside the rim; absorb, the agent docking into the
+  // receiving gem's upper-right facet, which glints once.
+  function crystalDone(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 0.5), ink = finishInk(o), glow = Math.sin(Math.PI * t), r = radius * 1.04;
+    const x = p.x + r * (0.9 * smooth01(t) - 0.45);
+    ctx.save();
+    ctx.strokeStyle = rgba(ink, qa(0.9 * glow)); ctx.lineWidth = 1.3;
+    ctx.beginPath(); polyPath(ctx, p.x, p.y, r, 8, Math.PI / 8); ctx.stroke();
+    ctx.strokeStyle = rgba(o.ok === false ? ink : (o.theme ?? INK_DEFAULTS).hi, qa(0.75 * glow)); ctx.lineWidth = Math.max(1.2, radius * 0.22); ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(x - r * 0.28, p.y + r * 0.5); ctx.lineTo(x + r * 0.28, p.y - r * 0.5); ctx.stroke();
+    ctx.restore();
+    return true;
+  }
+  function crystalAbsorb(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 0.55), glint = Math.sin(Math.PI * t), r = radius * 1.08;
+    const a0 = Math.PI / 8 + 1.5 * Math.PI, a1 = a0 + Math.PI / 4;
+    ctx.save();
+    ctx.strokeStyle = rgba(finishTint(tint, o), qa(0.35 * glint)); ctx.lineWidth = 1;
+    ctx.beginPath(); polyPath(ctx, p.x, p.y, r, 8, Math.PI / 8); ctx.stroke();
+    ctx.strokeStyle = rgba((o.theme ?? INK_DEFAULTS).hi, qa(0.95 * glint)); ctx.lineWidth = 2.2; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(p.x + Math.cos(a0) * r, p.y + Math.sin(a0) * r); ctx.lineTo(p.x + Math.cos(a1) * r, p.y + Math.sin(a1) * r); ctx.stroke();
+    ctx.restore();
+    return true;
+  }
+
   // The gem's outline for the caller's rims: the octagon, turned with the gem
   // (its breathing tilt, under 7%, left out).
   OUTLINES.crystal = (ctx, x, y, r, m) => { polyPath(ctx, x, y, r, 8, Math.PI / 8 + (m ? turn(m, 40) : 0)); return 8; };
-  LOOKS.crystal = { speedup: 2.6, paint: paintCrystal, glyph: { scale: 0.56, ringGap: 3.5, ink: (tint, currentTheme) => freeInks(tint, currentTheme).crystal }, ring: null, hubDress: null, orbit: null, arrival: null, select: null, wire: null, surge: null, land: null, reach: 1 };
+  LOOKS.crystal = { speedup: 2.6, paint: paintCrystal, glyph: { scale: 0.56, ringGap: 3.5, ink: (tint, currentTheme) => freeInks(tint, currentTheme).crystal }, ring: null, hubDress: null, orbit: null, arrival: null, select: null, done: crystalDone, absorb: crystalAbsorb, wire: null, surge: null, land: null, reach: 1 };
 
 // ===== style: singularity =====
 
@@ -2167,6 +2292,43 @@
     return true;
   }
 
+  // Singularity finish beats: done, the accretion disc flaring and spinning
+  // faster; absorb, the agent spiralling in past the event horizon while the
+  // receiving disc brightens. Ember on a dark theme; the theme's done green
+  // (amber for a failed check) on a light one, where ember would wash out.
+  const HOLE_FLARE = Object.freeze([255, 179, 107]);
+  const holeFinishInk = (o) => o.ok === false || (o.theme ?? INK_DEFAULTS).light ? finishInk(o) : HOLE_FLARE;
+  function singularityDone(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 0.5), flare = Math.sin(Math.PI * t), ink = holeFinishInk(o), fade = finishFade(t, o);
+    const rx = radius * (1.9 + 0.5 * flare), ry = radius * 0.55, spin = 4 * Math.PI * easeOut(t);
+    ctx.save();
+    ctx.strokeStyle = rgba(ink, qa((0.25 + 0.35 * flare) * fade)); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, rx, ry, -0.35, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = rgba(ink, qa(0.95 * (1 - 0.6 * t) * fade)); ctx.lineWidth = 1.2 + 1.8 * flare; ctx.lineCap = "round";
+    for (let k = 0; k < 2; k += 1) {
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, rx, ry, -0.35, spin + k * Math.PI, spin + k * Math.PI + 1.1); ctx.stroke();
+    }
+    ctx.restore();
+    return true;
+  }
+  function singularityAbsorb(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 0.45), ink = holeFinishInk(o), fade = finishFade(t, o);
+    ctx.save();
+    ctx.fillStyle = rgba(finishTint(tint, o), 1);
+    for (let k = 0; k < 3; k += 1) {
+      const s = clamp01(t - 0.08 * k);
+      if (s >= 1) continue;
+      const d = radius * (0.2 + 2.2 * (1 - easeOut(s))), a = 1.6 * TAU * s + 0.5 * k;
+      ctx.globalAlpha = qa((1 - s) * (1 - 0.25 * k) * fade);
+      ctx.beginPath(); ctx.arc(p.x + Math.cos(a) * d, p.y + Math.sin(a) * d * 0.55, Math.max(1.2, radius * 0.18 * (1 - 0.5 * s)), 0, TAU); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = rgba(ink, qa(0.85 * Math.sin(Math.PI * t))); ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, radius * 1.9, radius * 0.55, -0.35, 0, TAU); ctx.stroke();
+    ctx.restore();
+    return true;
+  }
+
   // reach: the disc spans 1.08 radii; the jets 1.58 while it works.
   LOOKS.singularity = {
     speedup: 4,
@@ -2177,6 +2339,8 @@
     orbit: orbitSingularity,
     arrival: arrivalSingularity,
     select: selectSingularity,
+    done: singularityDone,
+    absorb: singularityAbsorb,
     wire: wireSingularity,
     surge: surgeSingularity,
     land: landSingularity,
@@ -3189,7 +3353,46 @@
     ctx.lineTo(x, y + PRISM_BOTTOM * r); ctx.lineTo(x - PRISM_GIRDLE * r, y + PRISM_GIRDLE_Y * r); ctx.closePath();
     return 4;
   };
-  LOOKS.prism = { speedup: 2.5, paint: paintPrism, glyph: { scale: 0.56, ringGap: 3.5, ink: lightInk }, ring: prismRing, hubDress: prismHub, orbit: prismOrbit, arrival: prismArrival, select: prismSelect, wire: prismWire, surge: prismSurge, land: prismLand, reach: prismReach };
+  // Prism finish beats: done, the gem shattering into six shards that spray
+  // out and snap back; absorb, six shards closing in on the receiving gem
+  // from six angles and fusing into its outline. The shards take the beat's
+  // ink, the node's tint and the theme's second hue by turns.
+  function prismShard(ctx, x, y, s, a) {
+    const c = Math.cos(a), n = Math.sin(a);
+    ctx.moveTo(x + c * s, y + n * s);
+    ctx.lineTo(x - c * s * 0.6 - n * s * 0.7, y - n * s * 0.6 + c * s * 0.7);
+    ctx.lineTo(x - c * s * 0.6 + n * s * 0.7, y - n * s * 0.6 - c * s * 0.7);
+    ctx.closePath();
+  }
+  const prismShardInk = (k, ink, tint, o) => k % 3 === 0 || o.ok === false ? ink : k % 3 === 1 ? finishTint(tint, o) : (o.theme ?? INK_DEFAULTS).orbit;
+  function prismDone(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 0.5), ink = finishInk(o), d = radius * (1 + 2.8 * Math.sin(Math.PI * t)), s = Math.max(3, radius * 0.4), fade = finishFade(t, o);
+    ctx.save();
+    for (let k = 0; k < 6; k += 1) {
+      const a = k * Math.PI / 3 + 0.8 * t;
+      ctx.fillStyle = rgba(prismShardInk(k, ink, tint, o), qa((1 - 0.5 * t) * fade));
+      ctx.beginPath(); prismShard(ctx, p.x + Math.cos(a) * d, p.y + Math.sin(a) * d, s, a); ctx.fill();
+    }
+    ctx.restore();
+    return true;
+  }
+  function prismAbsorb(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 0.6), ink = finishInk(o), s = Math.max(3, radius * 0.36), d = radius * (0.35 + 2.8 * (1 - easeOut(t))), fade = finishFade(t, o);
+    const fuse = clamp01((t - 0.7) / 0.3);
+    ctx.save();
+    for (let k = 0; k < 6; k += 1) {
+      const a = k * Math.PI / 3 + 0.3;
+      ctx.fillStyle = rgba(prismShardInk(k, ink, tint, o), qa((1 - 0.6 * t) * fade));
+      ctx.beginPath(); prismShard(ctx, p.x + Math.cos(a) * d, p.y + Math.sin(a) * d, s, a + Math.PI); ctx.fill();
+    }
+    if (fuse > 0) {
+      ctx.strokeStyle = rgba(finishTint(tint, o), qa(0.9 * Math.sin(Math.PI * fuse))); ctx.lineWidth = 1.4;
+      ctx.beginPath(); OUTLINES.prism(ctx, p.x, p.y, radius * 1.12); ctx.stroke();
+    }
+    ctx.restore();
+    return true;
+  }
+  LOOKS.prism = { speedup: 2.5, paint: paintPrism, glyph: { scale: 0.56, ringGap: 3.5, ink: lightInk }, ring: prismRing, hubDress: prismHub, orbit: prismOrbit, arrival: prismArrival, select: prismSelect, done: prismDone, absorb: prismAbsorb, wire: prismWire, surge: prismSurge, land: prismLand, reach: prismReach };
 
 // ===== style: sigil =====
 
@@ -4164,9 +4367,45 @@
     return 1 + Math.max(0.55 * work, sel * (0.3 + 0.4 * work));
   }
 
+  // Sigil finish beats: done, the hex rune writing itself shut round the
+  // seal, then six marks lighting up around it in turn; absorb, the agent's
+  // rune folding shut onto the receiving seal and stamping it, the stamp
+  // fading.
+  function sigilDone(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 1), ink = finishInk(o), r = radius * 1.5, drawn = 6 * clamp01(t / 0.6), fade = finishFade(t, o);
+    ctx.save();
+    ctx.strokeStyle = rgba(ink, qa(0.95 * fade)); ctx.lineWidth = 1.6; ctx.lineJoin = "round"; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(p.x + SIGIL_HEX[0] * r, p.y + SIGIL_HEX[1] * r);
+    for (let k = 1; k <= 6 && k - 1 < drawn; k += 1) {
+      const f = Math.min(1, drawn - (k - 1)), a = 2 * (k - 1), b = 2 * (k % 6);
+      ctx.lineTo(p.x + (SIGIL_HEX[a] + (SIGIL_HEX[b] - SIGIL_HEX[a]) * f) * r, p.y + (SIGIL_HEX[a + 1] + (SIGIL_HEX[b + 1] - SIGIL_HEX[a + 1]) * f) * r);
+    }
+    ctx.stroke();
+    ctx.lineWidth = 1.3;
+    for (let k = 0; k < 6; k += 1) {
+      const lit = clamp01((t - 0.45 - 0.05 * k) / 0.14);
+      if (lit <= 0) continue;
+      const hx = SIGIL_HEX[2 * k], hy = SIGIL_HEX[2 * k + 1];
+      ctx.strokeStyle = rgba(ink, qa(0.9 * lit * fade));
+      ctx.beginPath(); ctx.moveTo(p.x + hx * radius * 1.8, p.y + hy * radius * 1.8); ctx.lineTo(p.x + hx * radius * 2.2, p.y + hy * radius * 2.2); ctx.stroke();
+    }
+    ctx.restore();
+    return true;
+  }
+  function sigilAbsorb(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 0.7), fold = easeOut(clamp01(t / 0.55)), stamp = clamp01((t - 0.55) / 0.45), mark = finishTint(tint, o);
+    const twist = -Math.PI / 3 * (1 - fold);
+    ctx.save();
+    ctx.beginPath(); sigilHexTurned(ctx, p.x, p.y, radius * (2.2 - 1.15 * fold), Math.cos(twist), Math.sin(twist));
+    if (stamp > 0) { ctx.fillStyle = rgba(mark, qa(0.35 * (1 - stamp))); ctx.fill(); }
+    ctx.strokeStyle = rgba(mark, qa(0.95 * (1 - stamp))); ctx.lineWidth = 1.4; ctx.stroke();
+    ctx.restore();
+    return true;
+  }
+
   // The seal's outline for the caller's rims: a pointy-top hexagon at .98.
   OUTLINES.sigil = (ctx, x, y, r) => { sigilHex(ctx, x, y, SIGIL_SEAL * r); return 6; };
-  LOOKS.sigil = { speedup: 3, paint: paintSigil, glyph: { scale: 0.52, ringGap: 3.5, ink: sigilGlyphInk }, ring: sigilRing, hubDress: sigilHub, orbit: sigilOrbit, arrival: sigilArrival, select: sigilSelect, wire: sigilWire, surge: sigilSurge, land: sigilLand, reach: sigilReach };
+  LOOKS.sigil = { speedup: 3, paint: paintSigil, glyph: { scale: 0.52, ringGap: 3.5, ink: sigilGlyphInk }, ring: sigilRing, hubDress: sigilHub, orbit: sigilOrbit, arrival: sigilArrival, select: sigilSelect, done: sigilDone, absorb: sigilAbsorb, wire: sigilWire, surge: sigilSurge, land: sigilLand, reach: sigilReach };
 
 // ===== overlays =====
 
@@ -4182,7 +4421,32 @@
   // gradient, no shadow, no array or object per call. Selection needs no
   // mark of its own: the free styles show it through their rim (Minimal
   // rings its own dot), so `select` stays null and answers false.
-  const OVERLAY_DEFAULTS = { ring: overlayRing, hubDress: overlayHubDress, orbit: overlayOrbit, arrival: overlayArrival, select: null };
+  const OVERLAY_DEFAULTS = { ring: overlayRing, hubDress: overlayHubDress, orbit: overlayOrbit, arrival: overlayArrival, select: null, done: overlayDone, absorb: overlayAbsorb };
+
+  // The finish beats a look without its own shares (Classic orbs'): done, a
+  // springy pop, a ring bursting outward with a fainter one after it;
+  // absorb, the receiving node's rim sending out one pulse as the agent
+  // shrinks in. Still poses: the rings part way out; the pulse near its rim.
+  function overlayDone(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 0.45), ink = finishInk(o), late = clamp01((t - 0.25) / 0.75);
+    ctx.save();
+    ctx.strokeStyle = rgba(ink, qa(0.9 * (1 - t))); ctx.lineWidth = 2 - t;
+    ctx.beginPath(); ctx.arc(p.x, p.y, radius * (1.2 + 2.2 * easeOut(t)), 0, TAU); ctx.stroke();
+    if (late > 0) {
+      ctx.strokeStyle = rgba(ink, qa(0.55 * (1 - late))); ctx.lineWidth = 1.1;
+      ctx.beginPath(); ctx.arc(p.x, p.y, radius * (1.1 + 1.4 * easeOut(late)), 0, TAU); ctx.stroke();
+    }
+    ctx.restore();
+    return true;
+  }
+  function overlayAbsorb(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 0.3);
+    ctx.save();
+    ctx.strokeStyle = rgba(finishTint(tint, o), qa(0.85 * (1 - t))); ctx.lineWidth = 1 + 1.2 * (1 - t);
+    ctx.beginPath(); ctx.arc(p.x, p.y, radius * (1.05 + 1.2 * easeOut(t)), 0, TAU); ctx.stroke();
+    ctx.restore();
+    return true;
+  }
 
   const OVERLAY_NO_DASH = Object.freeze([]);
   const QUEUED_DASH = Object.freeze([2, 3]); // 5 px period: the march wraps there
@@ -4515,6 +4779,19 @@
   function select(ctx, style, p, radius, tint, o) {
     const hook = hookOf(style, "select", OVERLAY_DEFAULTS);
     return hook !== null && hook(ctx, p, radius, tint, o ?? EMPTY, style) !== false;
+  }
+  // The finish beat at a node whose work just came back (u runs 0 → 1 over
+  // the beat): marks only, round a body the caller paints. o.ok false is a
+  // failed check (amber); o.still holds the look's designed still pose.
+  function done(ctx, style, p, radius, tint, u, o) {
+    const hook = hookOf(style, "done", OVERLAY_DEFAULTS);
+    return hook !== null && hook(ctx, p, radius, tint, u, o ?? EMPTY, style) !== false;
+  }
+  // The receiving node (a lead) taking a returning agent in, u 0 → 1; the
+  // tint is the returning agent's.
+  function absorb(ctx, style, p, radius, tint, u, o) {
+    const hook = hookOf(style, "absorb", OVERLAY_DEFAULTS);
+    return hook !== null && hook(ctx, p, radius, tint, u, o ?? EMPTY, style) !== false;
   }
   // A node's silhouette at radius r round (x, y), for the rims a caller draws
   // around a node (the collision rim, the done echo): one closed subpath
@@ -5317,7 +5594,7 @@
   window.MefiNodeStyles = Object.freeze({
     version: 1, STYLES, PREMIUM, shapes: SHAPES,
     seed, hash, approach, motionRecord, stepMotion, shownTint, theme, inkOf, tier,
-    paint, glyph, ring, hubDress, orbit, arrival, select,
+    paint, glyph, ring, hubDress, orbit, arrival, select, done, absorb,
     wire, surge, land, reach, cacheStats, outline,
   });
 })();
