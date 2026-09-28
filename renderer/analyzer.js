@@ -23,6 +23,8 @@
   // #analyzer-open binds straight to open(), so arg 0 can be a click Event.
   const optionsOf = (value) =>
     value && typeof value === "object" && typeof value.preventDefault !== "function" ? value : {};
+  // studio-ui.js supplies the wording in the app; the vm suites load this file alone.
+  const plain = (error, fallback) => (window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : (error?.name === "Error" && error.message) || fallback);
 
   function status(text, isError) {
     if (!els.status) return;
@@ -357,8 +359,8 @@
   function finish(token) {
     if (!current(token)) return;
     state.pending = null;
-    // A cancelled picker or a failed read leaves no result: drop the "Reading…" note.
-    if (!state.result) emptyState();
+    // A cancelled picker or a failed read leaves no result: drop the "Reading…" note and heading.
+    if (!state.result) { els.title.textContent = "Findings"; emptyState(); }
     controls();
   }
 
@@ -420,12 +422,12 @@
     try {
       const response = await window.mefiStudio.analyzerRun("file", { path: filePath, projectId: token.projectId || undefined });
       if (!current(token, response)) return;
-      if (!response?.ok) throw new Error(response?.error || "File analysis unavailable");
+      if (!response?.ok || !response.result) throw new Error(response?.error || "File analysis unavailable");
       const result = response.result;
       present(result);
       if (els.ai.checked) await runAi("file", { name: result.name, language: result.language, composition: result.composition, outline: result.outline, markers: result.markers, references: result.references, findings: result.findings }, token);
     } catch (error) {
-      if (current(token)) status(error.message, true);
+      if (current(token)) status(plain(error, "The file could not be analyzed. Try again or pick another file."), true);
     } finally {
       finish(token);
     }
@@ -438,12 +440,12 @@
     try {
       const response = await window.mefiStudio.analyzerRun("idea", { text, projectId: token.projectId || undefined });
       if (!current(token, response)) return;
-      if (!response?.ok) throw new Error(response?.error || "Idea analysis unavailable");
+      if (!response?.ok || !response.result) throw new Error(response?.error || "Idea analysis unavailable");
       const result = response.result;
       present(result);
       if (els.ai.checked) await runAi("idea", { text: result.text, verdict: result.verdict, coverage: result.coverage, keywords: result.keywords, hits: result.hits.slice(0, 20), uncovered: result.uncovered }, token);
     } catch (error) {
-      if (current(token)) status(error.message, true);
+      if (current(token)) status(plain(error, "The idea could not be compared with the project. Try again."), true);
     } finally {
       finish(token);
     }
@@ -462,11 +464,11 @@
     try {
       const response = await window.mefiStudio.analyzerRun("project", { projectId: token.projectId || undefined });
       if (!current(token, response)) return;
-      if (!response?.ok) throw new Error(response?.error || "Project analysis unavailable");
+      if (!response?.ok || !response.result) throw new Error(response?.error || "Project analysis unavailable");
       if (!state.projectId) state.projectId = response.projectId || response.result?.projectId || null;
       present(response.result);
     } catch (error) {
-      if (current(token)) status(`Project scan unavailable: ${error.message}`, true);
+      if (current(token)) status(plain(error, "The project scan did not finish. Try Analyze project again."), true);
     } finally {
       finish(token);
     }
@@ -565,7 +567,7 @@
         if (picked?.ok && picked.path) await runFile(picked.path, token);
         else status(picked?.error || "File selection cancelled.", Boolean(picked?.error));
       } catch (error) {
-        if (current(token)) status(error.message, true);
+        if (current(token)) status(plain(error, "The file picker did not open. Try again."), true);
       } finally { finish(token); }
     });
     els.ideaRun?.addEventListener("click", () => runIdea(els.idea.value.trim()));

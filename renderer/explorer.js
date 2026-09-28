@@ -91,6 +91,12 @@
     if (minutes < 1440) return `${Math.round(minutes / 60)}h ago`;
     return `${Math.round(minutes / 1440)}d ago`;
   };
+  // studio-ui.js supplies these in the app; the vm suites load this file alone.
+  const plain = (error, fallback) => (window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : fallback);
+  const arm = (button, run, armed) => (window.MefiUi?.arm ? window.MefiUi.arm(button, { run, armed }) : (button?.addEventListener("click", run), button));
+  // Agent and model, leaving out whichever the session did not report.
+  const agentModel = (session) => [session.agent, session.model?.id].filter(Boolean).join(" · ");
+  const timeOf = (time) => { const date = new Date(time); return Number.isFinite(date.getTime()) ? date.toLocaleTimeString() : "—"; };
 
   function status(text, isError) {
     for (const target of [els.status, els.detailStatus]) {
@@ -126,7 +132,7 @@
       // result instead of clobbering the content it already rendered.
       if (seq !== loadSeq) return;
       if (!stateResult?.ok) {
-        status(`session store unavailable: ${stateResult?.error ?? "unknown error"}`, true);
+        status(plain(stateResult?.error, "The session store could not be read. Retrying on the next poll."), true);
       }
       state.sessions = stateResult?.sessions ?? [];
       state.todos = stateResult?.todos ?? [];
@@ -148,7 +154,7 @@
       // A failed store read must not read as "nothing here": name the failure
       // in the tree too, and let the next poll tick retry.
       if (!stateResult?.ok && !state.sessions.length) {
-        treeNote(`session store unavailable: ${stateResult?.error ?? "unknown error"}`);
+        treeNote(plain(stateResult?.error, "The session store could not be read. Retrying on the next poll."));
       }
       if (!state.audit) runAudit();
       // Once per open (or an explicit refresh), never per poll tick: the
@@ -162,11 +168,11 @@
           // A failed scan must read as degraded, never as a free machine.
           if (result?.ok) renderMachine(result.status);
           else if (els.machineLines) {
-            els.machineLines.textContent = `machine scan unavailable: ${result?.error ?? "unknown error"}`;
+            els.machineLines.textContent = plain(result?.error, "The machine scan is unavailable right now.");
             els.machineLines.style.color = "var(--bad)";
           }
         }).catch((error) => {
-          if (els.machineLines) els.machineLines.textContent = `machine scan failed: ${String(error?.message ?? error)}`;
+          if (els.machineLines) els.machineLines.textContent = plain(error, "The machine scan failed. Refresh to try again.");
         });
       }
       // Read once per open, and read-only: machineSet({}) as a read rewrote
@@ -182,8 +188,9 @@
       // Never leave the pending "Loading sessions…" note stuck: render the
       // failure and let the poll retry.
       if (seq !== loadSeq) return;
-      status(`explorer failed: ${String(error?.message ?? error)}`, true);
-      treeNote(`explorer failed: ${String(error?.message ?? error)} — retrying on the next poll`);
+      const text = plain(error, "Sessions could not be loaded.");
+      status(text, true);
+      treeNote(`${text.replace(/[.!?]?$/, ".")} Retrying on the next poll.`);
     }
   }
 
@@ -194,8 +201,8 @@
   function checkpointReference(session, note) {
     const files = (note.files ?? []).join(", ") || "n/a";
     return [
-      `A-EYES CHECKPOINT ${new Date(note.at).toISOString()}`,
-      `session: ${session.title} (${session.agent ?? "?"} · ${session.model?.id ?? "?"})`,
+      `A-EYES CHECKPOINT ${Number.isFinite(new Date(note.at).getTime()) ? new Date(note.at).toISOString() : "(no time)"}`,
+      `session: ${session.title}${agentModel(session) ? ` (${agentModel(session)})` : ""}`,
       `note: ${note.note}`,
       `files: ${files}`,
       note.png ? `visual: ${note.png}` : "visual: n/a",
@@ -251,7 +258,7 @@
     });
     const head = document.createElement("div");
     head.className = "cp-head";
-    head.textContent = `#${index + 1} · ${new Date(note.at).toLocaleTimeString()} · ${note.source ?? "manual"}`;
+    head.textContent = `#${index + 1} · ${timeOf(note.at)} · ${note.source ?? "manual"}`;
     const body = document.createElement("div");
     body.className = "cp-note";
     body.textContent = note.note;
@@ -419,7 +426,7 @@
       const classes = [depth ? "indent" : "", stale ? "stale" : "", extra].filter(Boolean).join(" ");
       row(
         session.title || session.id,
-        `${session.agent ?? "?"} · ${session.model?.id ?? "?"} · ${ago(session.timeUpdated)}`,
+        [agentModel(session), ago(session.timeUpdated)].filter(Boolean).join(" · "),
         classes,
         () => select(session.id),
         session.id,
@@ -559,13 +566,14 @@
     };
     section("Session", (list) => {
       for (const [key, value] of [
-        ["agent", session.agent ?? "?"],
-        ["model", session.model?.id ?? "?"],
+        ["agent", session.agent],
+        ["model", session.model?.id],
         ["updated", ago(session.timeUpdated)],
         ["cost", `$${Number(session.cost ?? 0).toFixed(3)}`],
         ["tokens in/out", `${session.tokens?.input ?? 0} / ${session.tokens?.output ?? 0}`],
         ["id", session.id],
       ]) {
+        if (value == null || value === "") continue;
         const li = document.createElement("li");
         const k = document.createElement("span");
         k.textContent = key;
@@ -669,34 +677,8 @@
       els.machineBadge.className = `badge ${status?.wait || memoryCapped ? "trains" : "free"}`;
       els.machineBadge.title = memoryCapped ? "Severe-memory parallelism cap latched — worker starts stay capped until free memory recovers past the release band." : "";
     }
-    els.machineList.textContent = "";
-    for (const entry of status?.running ?? []) {
-      const li = document.createElement("li");
-      li.append(Object.assign(document.createElement("span"), { className: `src-tag ${entry.status === "healthy" ? "improver" : "fix"}`, textContent: entry.status.toUpperCase() }));
-      li.append(document.createTextNode(` pid ${entry.pid} · ${entry.ageMinutes}m · ${entry.memMB}MB`));
-      const killButton = document.createElement("button");
-      killButton.className = "ghost mini";
-      killButton.textContent = "×";
-      killButton.title = "Kill this run";
-      killButton.addEventListener("click", async (event) => {
-        event.stopPropagation();
-        await window.mefiStudio?.machineKill?.(entry.pid);
-        window.MefiToast?.(`kill sent for pid ${entry.pid}`, "bad");
-      });
-      li.append(killButton);
-      els.machineList.append(li);
-    }
-    for (const holder of status?.leases?.holders ?? []) {
-      const li = document.createElement("li");
-      li.textContent = `lease: ${holder.label || holder.agent} · width ${holder.width}${holder.exclusive ? " · EXCLUSIVE" : ""} · ${holder.ageMinutes}m`;
-      els.machineList.append(li);
-    }
-    if (!els.machineList.children.length) {
-      const li = document.createElement("li");
-      li.className = "muted";
-      li.textContent = "No test leases or LOVE runs — machine is free.";
-      els.machineList.append(li);
-    }
+    // A push while a kill is armed keeps the list, so its second press still lands.
+    if (!els.machineList.querySelector?.(".danger-armed")) renderMachineList(status);
     els.machineEvents.textContent = "";
     for (const event of (status?.actions ?? []).slice(0, 5)) {
       const li = document.createElement("li");
@@ -709,6 +691,36 @@
       li.className = "muted";
       li.textContent = "No resource actions yet.";
       els.machineEvents.append(li);
+    }
+  }
+
+  function renderMachineList(status) {
+    els.machineList.textContent = "";
+    for (const entry of status?.running ?? []) {
+      const li = document.createElement("li");
+      li.append(Object.assign(document.createElement("span"), { className: `src-tag ${entry.status === "healthy" ? "improver" : "fix"}`, textContent: entry.status.toUpperCase() }));
+      li.append(document.createTextNode(` pid ${entry.pid} · ${entry.ageMinutes}m · ${entry.memMB}MB`));
+      const killButton = document.createElement("button");
+      killButton.className = "ghost mini";
+      killButton.textContent = "×";
+      killButton.title = "Kill this run";
+      li.append(arm(killButton, async (event) => {
+        event?.stopPropagation?.();
+        await window.mefiStudio?.machineKill?.(entry.pid);
+        window.MefiToast?.(`kill sent for pid ${entry.pid}`, "bad");
+      }, "Stop this run?"));
+      els.machineList.append(li);
+    }
+    for (const holder of status?.leases?.holders ?? []) {
+      const li = document.createElement("li");
+      li.textContent = `lease: ${holder.label || holder.agent} · width ${holder.width}${holder.exclusive ? " · EXCLUSIVE" : ""} · ${holder.ageMinutes}m`;
+      els.machineList.append(li);
+    }
+    if (!els.machineList.children.length) {
+      const li = document.createElement("li");
+      li.className = "muted";
+      li.textContent = "No test leases or LOVE runs — machine is free.";
+      els.machineList.append(li);
     }
   }
 
@@ -911,7 +923,9 @@
         const working = roster.filter((agent) => agent.status === "running").length;
         const queued = roster.filter((agent) => agent.status === "queued").length;
         const pool = service.pool ?? {};
-        head.textContent = `${roster.length} agents · ${working} working${queued ? ` · ${queued} queued` : ""} · ${pool.parallel ?? service.prefs?.parallel ?? "?"} in parallel · ${pool.aiParallel ?? service.prefs?.aiParallel ?? "?"} on AI`;
+        const parallel = pool.parallel ?? service.prefs?.parallel;
+        const aiParallel = pool.aiParallel ?? service.prefs?.aiParallel;
+        head.textContent = [`${roster.length} agents`, `${working} working`, queued ? `${queued} queued` : "", parallel != null ? `${parallel} in parallel` : "", aiParallel != null ? `${aiParallel} on AI` : ""].filter(Boolean).join(" · ");
       }
       els.agents.append(head);
       for (const agent of roster) {
@@ -1528,8 +1542,8 @@
     // Resume is the same start-work every surface sends, so a Workspace pause
     // (which also holds new work) is fully lifted from here too.
     els.pause?.addEventListener("click", () => control(state.assistant?.status === "paused" ? "start-work" : "pause"));
-    els.stopAll?.addEventListener("click", () => control("stop-all"));
-    els.restart?.addEventListener("click", () => restartStudio());
+    if (els.stopAll) arm(els.stopAll, () => control("stop-all"), "Stop every run?");
+    if (els.restart) arm(els.restart, () => restartStudio(), "Restart Studio?");
     // No MefiTree.applyAssistant here: nav.js's listener (registered first, as
     // nav.js loads first) and tree3d.js's own already apply every push, and a
     // third state-only apply only rewrote the rail's stats line again. This

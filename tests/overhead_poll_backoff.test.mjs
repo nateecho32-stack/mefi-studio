@@ -119,7 +119,7 @@ test("Overhead exposes tasks as native buttons and preserves keyboard focus thro
   const button=env.get("overhead-legend").children[0].children[0];
   assert.equal(button.tagName,"button");
   assert.equal(button.type,"button","native buttons support Enter and Space without canvas input");
-  assert.equal(button.attributes["aria-label"],"Open task: Overhead poll backoff (open)");
+  assert.equal(button.attributes["aria-label"],"Open task: Overhead poll backoff (Open)");
   button.focus(); button.dispatch("click");
   assert.deepEqual(env.navigations,[["tasks",{taskId:"task-1"}]]);
   await env.poll().run();

@@ -28,14 +28,17 @@
   const api = () => window.mefiStudio;
   const rows = (value) => Array.isArray(value) ? value : [];
   const finite = (value) => typeof value === "number" && Number.isFinite(value);
-  const number = (value, digits = 0) => finite(value) ? value.toLocaleString("en-US", { maximumFractionDigits: digits }) : "Unknown";
+  // A value the provider never reported reads as a dash; sentences leave it out instead.
+  const UNREPORTED = "—";
+  const UNREPORTED_TITLE = "Not reported by the provider";
+  const number = (value, digits = 0) => finite(value) ? value.toLocaleString("en-US", { maximumFractionDigits: digits }) : UNREPORTED;
   const money = (value, digits = 2) => {
-    if (!finite(value)) return "Unknown";
+    if (!finite(value)) return UNREPORTED;
     const text = `$${Math.abs(value).toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: value !== 0 && Math.abs(value) < 0.01 ? 4 : digits })}`;
     return value < 0 ? `−${text}` : text;
   };
-  const percent = (value) => finite(value) ? `${number(value, 1)}%` : "Unknown";
-  const compact = (value) => !finite(value) ? "?" : value >= 1e6 ? `${(value / 1e6).toLocaleString(undefined, { maximumFractionDigits: 1 })}M` : value >= 1e4 ? `${Math.round(value / 1e3)}k` : number(value);
+  const percent = (value) => finite(value) ? `${number(value, 1)}%` : UNREPORTED;
+  const compact = (value) => !finite(value) ? UNREPORTED : value >= 1e6 ? `${(value / 1e6).toLocaleString(undefined, { maximumFractionDigits: 1 })}M` : value >= 1e4 ? `${Math.round(value / 1e3)}k` : number(value);
   const calls = (value) => `${number(value)} ${value === 1 ? "call" : "calls"}`;
   const titled = (value) => {
     const text = String(value ?? "").trim();
@@ -86,12 +89,22 @@
     const node = element("table", "lab-table");
     const head = element("thead");
     const headRow = element("tr");
-    for (const title of headers) { const th = element("th", "", title); th.scope = "col"; headRow.append(th); }
+    const cells = entries.map(rowOf);
+    // A column no row has a value for says nothing: it is left out.
+    const shown = headers.map((_, index) => !cells.length || cells.some((values) => values[index] !== UNREPORTED));
+    headers.forEach((title, index) => { if (!shown[index]) return; const th = element("th", "", title); th.scope = "col"; headRow.append(th); });
     head.append(headRow);
     const body = element("tbody");
-    entries.forEach((entry) => {
+    cells.forEach((values) => {
       const tr = element("tr");
-      for (const value of rowOf(entry)) { const cell = element("td"); cell.append(typeof value === "object" ? value : element("span", "", String(value))); tr.append(cell); }
+      values.forEach((value, index) => {
+        if (!shown[index]) return;
+        const cell = element("td");
+        const span = typeof value === "object" ? value : element("span", "", String(value));
+        if (value === UNREPORTED) span.title = UNREPORTED_TITLE;
+        cell.append(span);
+        tr.append(cell);
+      });
       body.append(tr);
     });
     node.append(head, body);
@@ -127,7 +140,9 @@
     if (record && record.knownRecords > 0) return money(record.spentUsd);
     return record?.unknownRecords > 0 ? "unpriced" : money(0);
   }
-  const origins = (record) => `Studio ${number(record?.origins?.studio)} · coding ${number(record?.origins?.["opencode-cli"])}`;
+  const origins = (record) => [finite(record?.origins?.studio) ? `Studio ${number(record.origins.studio)}` : "", finite(record?.origins?.["opencode-cli"]) ? `coding ${number(record.origins["opencode-cli"])}` : ""].filter(Boolean).join(" · ");
+  // "$a of $b", just "$a" when the whole was not reported, "" when the part was not.
+  const moneyOf = (part, whole, digits = 2) => !finite(part) ? "" : finite(whole) ? `${money(part, digits)} of ${money(whole, digits)}` : money(part, digits);
 
   // One gauge row: label, bar, value and, with `reset`, the reset moment.
   function windowBar(label, record, { resets = false, reset = false } = {}) {
@@ -272,7 +287,7 @@
       let tone = "";
       let bar = null;
       if (finite(key.limit) && key.limit > 0) {
-        parts.push(`${money(key.limitRemaining)} left of ${money(key.limit)}`);
+        parts.push(finite(key.limitRemaining) ? `${money(key.limitRemaining)} left of ${money(key.limit)}` : `${money(key.limit)} key limit`);
         bar = key;
         if (finite(key.limitRemaining) && key.limitRemaining <= 0) tone = "warn";
       } else if (credits) {
@@ -280,7 +295,7 @@
         if (credits.totalCredits === 0) parts.push(key.freeDaily ? `free models · ${number(key.freeDaily.used)}/${number(key.freeDaily.limit)} today` : "free models only");
         else if (finite(balance) && balance < -0.005) { parts.push(`${money(balance)} balance`); tone = "warn"; }
         else if (finite(balance) && balance < 0.005) { parts.push("out of credits"); tone = "warn"; }
-        else parts.push(`${money(balance)} credit left`);
+        else parts.push(finite(balance) ? `${money(balance)} credit left` : "credit balance not reported");
       } else if (key.freeDaily) {
         parts.push(`free models · ${number(key.freeDaily.used)}/${number(key.freeDaily.limit)} today`);
       } else {
@@ -288,18 +303,19 @@
       }
       // Today's spend only when there is some; a free key reads cleaner without "$0.00 today".
       if (finite(key.usageDaily) && key.usageDaily > 0) parts.push(`${money(key.usageDaily)} today`);
-      const detail = [`${money(key.usage)} spent on this key to date`, `week ${money(key.usageWeekly)}`, `month ${money(key.usageMonthly)}`];
-      if (credits) detail.push(`${money(credits.totalUsage)} of ${money(credits.totalCredits)} account credit used`);
+      const detail = [finite(key.usage) ? `${money(key.usage)} spent on this key to date` : "", finite(key.usageWeekly) ? `week ${money(key.usageWeekly)}` : "", finite(key.usageMonthly) ? `month ${money(key.usageMonthly)}` : ""].filter(Boolean);
+      if (credits && moneyOf(credits.totalUsage, credits.totalCredits)) detail.push(`${moneyOf(credits.totalUsage, credits.totalCredits)} account credit used`);
       if (key.limitReset) detail.push(`key limit resets ${key.limitReset}`);
       return { label: account.label, value: parts.join(" · "), tone, bar, title: detail.join(" · ") };
     }
     if (account.read === "credits") {
       const credits = account.credits ?? {};
-      return { label: account.label, value: `${money(credits.balance)} left · ${money(credits.totalUsed)} used`, tone: finite(credits.balance) && credits.balance <= 0 ? "warn" : "", title: "The gateway team's balance" };
+      const value = [finite(credits.balance) ? `${money(credits.balance)} left` : "", finite(credits.totalUsed) ? `${money(credits.totalUsed)} used` : ""].filter(Boolean).join(" · ");
+      return { label: account.label, value: value || "balance not reported", tone: finite(credits.balance) && credits.balance <= 0 ? "warn" : "", title: "The gateway team's balance" };
     }
     if (account.read === "local") {
       const local = account.local ?? {};
-      return { label: account.label, value: local.reachable ? `running · ${local.model}` : "no model answering", tone: local.reachable ? "" : "idle", title: local.host ? `Local server at ${local.host}` : "" };
+      return { label: account.label, value: local.reachable ? (local.model ? `running · ${local.model}` : "running") : "no model answering", tone: local.reachable ? "" : "idle", title: local.host ? `Local server at ${local.host}` : "" };
     }
     return null;
   }
@@ -351,7 +367,7 @@
     } else if (PLAN_READS.has(account.read)) {
       const plan = planOf(account);
       const first = plan.windows[0];
-      card.append(element("strong", "", plan.reading ? "Not read yet" : first ? `${percent(first.percent)} of the ${first.label.toLowerCase()}` : "No plan windows"));
+      card.append(element("strong", "", plan.reading ? "Not read yet" : !first ? "No plan windows" : finite(first.percent) ? `${percent(first.percent)} of the ${first.label.toLowerCase()}` : `${titled(first.label)}: use not reported`));
       if (plan.windows.length) {
         const bars = element("div", "tracker-windows tracker-account-windows");
         for (const window of plan.windows) bars.append(windowBar(window.label, window, { resets: true }));
@@ -372,18 +388,19 @@
       const balance = balanceOf(account);
       if (account.read === "key") {
         const key = account.key ?? {};
-        card.append(element("strong", "", `${money(key.usage)} spent`));
+        card.append(element("strong", "", finite(key.usage) ? `${money(key.usage)} spent` : "Spend not reported"));
         const detail = [];
-        if (account.credits) detail.push(`${money(finite(account.credits.balance) ? account.credits.balance : account.credits.remaining)} of ${money(account.credits.totalCredits)} credits left`);
-        if (finite(key.limit)) detail.push(`${money(key.limitRemaining)} left of the ${money(key.limit)} key limit${key.limitReset ? ` (${key.limitReset})` : ""}`);
+        const creditsLeft = account.credits ? moneyOf(finite(account.credits.balance) ? account.credits.balance : account.credits.remaining, account.credits.totalCredits) : "";
+        if (creditsLeft) detail.push(`${creditsLeft} credits left`);
+        if (finite(key.limit)) detail.push(`${finite(key.limitRemaining) ? `${money(key.limitRemaining)} left of the ` : ""}${money(key.limit)} key limit${key.limitReset ? ` (${key.limitReset})` : ""}`);
         if (key.freeDaily) detail.push(`free models ${number(key.freeDaily.used)} of ${number(key.freeDaily.limit)} requests today`);
-        detail.push(`today ${money(key.usageDaily)} · week ${money(key.usageWeekly)} · month ${money(key.usageMonthly)}`);
+        for (const [span, value] of [["today", key.usageDaily], ["week", key.usageWeekly], ["month", key.usageMonthly]]) if (finite(value)) detail.push(`${span} ${money(value)}`);
         if (key.isFreeTier) detail.push("free tier");
         if (finite(key.percent)) card.append(windowBar("Key limit", key));
         card.append(element("small", "muted", detail.join(" · ")));
       } else if (account.read === "credits") {
         const credits = account.credits ?? {};
-        card.append(element("strong", "", `${money(credits.balance)} left`));
+        card.append(element("strong", "", finite(credits.balance) ? `${money(credits.balance)} left` : "Balance not reported"));
         card.append(element("small", "muted", finite(credits.totalUsed) ? `${money(credits.totalUsed)} used to date` : "Balance read from the gateway"));
       } else {
         card.append(element("strong", "", balance.value));
@@ -417,7 +434,8 @@
     for (const [key, , short] of WINDOW_LABELS) {
       const record = credits?.[key];
       if (!record) continue;
-      detail.append(element("p", "muted", `${short === "Wk" ? "Week" : short === "Mo" ? "Month" : short}: ${localCost(record)} of ${money(record.limitUsd, 2)} · ${number(record.calls)} calls · ${number(record.unknownRecords)} without reported cost`));
+      const parts = [`${localCost(record)}${finite(record.limitUsd) ? ` of ${money(record.limitUsd, 2)}` : ""}`, finite(record.calls) ? `${number(record.calls)} calls` : "", finite(record.unknownRecords) ? `${number(record.unknownRecords)} without reported cost` : ""];
+      detail.append(element("p", "muted", `${short === "Wk" ? "Week" : short === "Mo" ? "Month" : short}: ${parts.filter(Boolean).join(" · ")}`));
     }
     stack.append(detail);
     return section("Recorded OpenCode Go spend (local estimate)", note, stack);
@@ -428,9 +446,9 @@
     const connected = accountsOf(report).length;
     const stats = [
       ["Calls recorded", number(local.totals.calls), origins(local.totals)],
-      ["Calls today", number(local.today.calls), `${compact(local.today.usage?.totalTokens?.known)} tokens · ${costText(local.today.usage?.costUsd)}`],
-      ["Recorded cost", costText(local.totals.usage.costUsd), `${number(local.totals.usage.costUsd?.unknownRecords)} calls without a reported cost`],
-      ["Providers", number(rows(local.providers).length), `${number(connected)} connected · lifetime ${number(local.lifetime?.calls)} Studio calls`],
+      ["Calls today", number(local.today.calls), [finite(local.today.usage?.totalTokens?.known) ? `${compact(local.today.usage.totalTokens.known)} tokens` : "", costText(local.today.usage?.costUsd)].filter(Boolean).join(" · ")],
+      ["Recorded cost", costText(local.totals.usage.costUsd), finite(local.totals.usage.costUsd?.unknownRecords) ? `${number(local.totals.usage.costUsd.unknownRecords)} calls without a reported cost` : ""],
+      ["Providers", number(rows(local.providers).length), [`${number(connected)} connected`, finite(local.lifetime?.calls) ? `lifetime ${number(local.lifetime.calls)} Studio calls` : ""].filter(Boolean).join(" · ")],
     ];
     for (const [label, value, detail] of stats) {
       const card = element("div", "lab-usage-card");
@@ -442,7 +460,7 @@
   function providersTable(local) {
     if (!rows(local.providers).length) return emptyBox("No providers observed", "Provider totals appear after the first recorded call or coding turn.");
     return table(["Provider", "Calls", "Errors", "Input tokens", "Output tokens", "Cache read", "Reported cost", "Unpriced calls"], local.providers, (row) => [
-      twoLine(row.label || row.provider, `${row.kind || "unknown"}${row.providerIds?.length ? ` · ids ${row.providerIds.join(", ")}` : ""}`),
+      twoLine(row.label || row.provider, [row.kind && row.kind !== "unknown" ? row.kind : "", row.providerIds?.length ? `ids ${row.providerIds.join(", ")}` : ""].filter(Boolean).join(" · ")),
       twoLine(number(row.calls), origins(row)),
       number(row.errors), number(row.usage.inputTokens.known), number(row.usage.outputTokens.known), number(row.usage.cacheReadTokens?.known),
       costText(row.usage.costUsd), number(row.usage.costUsd.unknownRecords),

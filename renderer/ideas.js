@@ -96,6 +96,9 @@
     el.list.textContent = "";
     const ordered = [...state.ideas].sort((a, b) => Number(a.read) - Number(b.read) || (Number(b.at) || 0) - (Number(a.at) || 0));
     const filtered = state.clusterFilter ? ordered.filter((idea) => (idea.tags ?? []).includes(state.clusterFilter)) : ordered;
+    // An empty detail pane beside a list says nothing: open the first unread
+    // idea (else the first) there, without marking it read until it is chosen.
+    if (filtered.length && !state.ideas.some((idea) => idea.id === state.selected)) state.selected = (filtered.find((idea) => !idea.read) ?? filtered[0]).id;
     if (!filtered.length) {
       const li = document.createElement("li");
       li.className = "muted";
@@ -109,13 +112,14 @@
       li.style.setProperty("--task-color", idea.read ? "var(--gold-dim)" : "var(--gold-bright)");
       if (idea.id === state.selected) li.classList.add("selected");
       li.append(statusTag(idea));
-      li.append(document.createTextNode(` ${idea.title ?? idea.detail}`));
+      li.append(document.createTextNode(` ${idea.title || idea.detail || "Untitled idea"}`));
       const meta = document.createElement("div");
       meta.className = "who";
       // A sparse row (no source, no time) leaves those parts out rather than
-      // printing "undefined · Invalid Date".
+      // printing "undefined · Invalid Date"; the New badge already says unread.
       const at = idea.at == null || idea.at === "" ? NaN : new Date(idea.at).getTime();
-      meta.textContent = [idea.source, Number.isFinite(at) ? new Date(at).toLocaleString() : "", idea.read ? "" : "unread"].filter(Boolean).join(" · ");
+      const saysNew = String(idea.status || "new") === "new";
+      meta.textContent = [idea.source, Number.isFinite(at) ? new Date(at).toLocaleString() : "", idea.read || saysNew ? "" : "unread"].filter(Boolean).join(" · ");
       li.append(meta);
       // Focusable because nav's claim() focuses "#ideas-list li".
       li.tabIndex = 0;
@@ -196,6 +200,7 @@
       button.textContent = label;
       button.addEventListener("click", handler);
       actions.append(button);
+      return button;
     };
     action("Keep", () => {
       if (window.mefiStudio?.ideasAction) { act("keep", { ideaId: idea.id }); return; }
@@ -244,7 +249,7 @@
       state.selected = null;
       save();
       renderDetail();
-    });
+    }).className = "ghost danger";
     el.detail.append(actions);
   }
 
@@ -397,12 +402,11 @@
       return;
     }
     state.ideas = result.ideas ?? state.ideas;
-    updateBadge();
-    renderList();
-    drawGraph();
+    renderAll();
     // The pass writes its own summary line (ideas added, what the AI review
     // compacted); the composed fallback only covers older main processes.
-    el.status.textContent = result.text || `${result.added} new idea${result.added === 1 ? "" : "s"} · ${result.scanned} lines considered${result.aiError ? ` · ${result.aiError}` : ""}`;
+    const added = Number(result.added) || 0;
+    el.status.textContent = result.text || [`${added} new idea${added === 1 ? "" : "s"}`, Number.isFinite(result.scanned) ? `${result.scanned} lines considered` : "", result.aiError || ""].filter(Boolean).join(" · ");
     if (result.added) window.MefiToast?.(`${result.added} new idea${result.added === 1 ? "" : "s"} captured`, "good");
   }
 
@@ -453,13 +457,14 @@
     });
     el.scan?.addEventListener("click", () => scan(false));
     el.ai?.addEventListener("click", () => scan(true));
-    el.tools?.addEventListener("click", (event) => { if (event.target.closest?.("button")) el.tools.open = false; });
+    // A button that just armed (Clear finished ideas) keeps the menu open for its second press.
+    el.tools?.addEventListener("click", (event) => { const button = event.target.closest?.("button"); if (button && !button.classList?.contains?.("danger-armed")) el.tools.open = false; });
     el.tools?.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && el.tools.open) { event.preventDefault(); event.stopPropagation(); el.tools.open = false; el.tools.querySelector("summary")?.focus(); }
     });
     document.addEventListener("pointerdown", (event) => { if (el.tools?.open && !el.tools.contains(event.target)) el.tools.open = false; });
     el.back?.addEventListener("click", () => { el.overlay.dataset.detail = "false"; el.list?.querySelector("li.selected")?.focus(); });
-    el.clean?.addEventListener("click", async () => {
+    const clean = async () => {
       if (window.mefiStudio?.ideasAction) {
         if (await act("clean", { ideaIds: state.ideas.filter((idea) => idea.status === "done").map((idea) => idea.id) })) el.status.textContent = "Removed finished ideas; accepted work stays available.";
         return;
@@ -467,7 +472,10 @@
       state.ideas = state.ideas.filter((idea) => idea.status !== "done");
       save();
       el.status.textContent = "Removed finished ideas; accepted work stays available.";
-    });
+    };
+    // studio-ui.js's two-step confirm; a bare harness without it runs on one press.
+    if (el.clean && window.MefiUi?.arm) window.MefiUi.arm(el.clean, { run: clean, armed: "Remove finished ideas?" });
+    else el.clean?.addEventListener("click", clean);
     el.view?.addEventListener("click", () => {
       state.view = state.view === "graph" ? "list" : "graph";
       el.view.textContent = state.view === "graph" ? "List" : "Graph";

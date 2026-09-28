@@ -116,6 +116,7 @@ test("a sparse idea row leaves out its missing source and time instead of printi
   const text = env.get("list").textContent;
   assert.doesNotMatch(text, /undefined|Invalid Date|NaN/);
   assert.match(text, /Sync notes between devices/);
-  assert.match(text, /unread/);
+  assert.match(text, /New/, "the New badge marks an unread new idea");
+  assert.doesNotMatch(text, /unread/, "so its row does not repeat it");
   assert.match(text, /chat · /);
 });

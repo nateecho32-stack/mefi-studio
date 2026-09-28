@@ -23,6 +23,7 @@
 
   const base = (file) => (file ? file.split(/[\\/]/).pop() : "(unknown)");
   const ago = (time) => {
+    if (!Number.isFinite(Number(time)) || !time) return "";
     const seconds = Math.max(0, (Date.now() - time) / 1000);
     if (seconds < 60) return `${Math.round(seconds)}s`;
     if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
@@ -66,8 +67,8 @@
   }
 
   function updateSummary(items) {
-    const additions = items.reduce((sum, change) => sum + change.additions, 0);
-    const deletions = items.reduce((sum, change) => sum + change.deletions, 0);
+    const additions = items.reduce((sum, change) => sum + (Number(change.additions) || 0), 0);
+    const deletions = items.reduce((sum, change) => sum + (Number(change.deletions) || 0), 0);
     const files = new Set(items.map((change) => change.file).filter(Boolean)).size;
     const session = state.sessionId ? state.sessions.find((item) => item.id === state.sessionId) : null;
     const cost = session ? ` · session cost $${Number(session.cost ?? 0).toFixed(3)}` : "";
@@ -75,10 +76,11 @@
   }
 
   const GLYPHS = { edit: "✎", write: "✎", patch: "⚑", bash: "⌘", read: "◇", grep: "◌", glob: "◌", websearch: "☍", webfetch: "☍", task: "◆" };
-  const FTYPE_COLORS = { lua: "#e6c98d", py: "#9db7ff", js: "#57ff9a", mjs: "#57ff9a", cjs: "#57ff9a", md: "#ece5d8", json: "#a8e6cf", css: "#86d1d6", htm: "#ffb38a", html: "#ffb38a", ps1: "#c9a8ff", cmd: "#c9a8ff" };
+  // The dots are DOM fills, so var() follows the palette live; the hexes stay as fallbacks.
+  const FTYPE_COLORS = { lua: "var(--gold, #e6c98d)", py: "var(--info, #9db7ff)", js: "var(--live, #57ff9a)", mjs: "var(--live, #57ff9a)", cjs: "var(--live, #57ff9a)", md: "var(--ivory, #ece5d8)", json: "var(--good, #a8e6cf)", css: "#86d1d6", htm: "var(--warn, #ffb38a)", html: "var(--warn, #ffb38a)", ps1: "var(--idea, #c9a8ff)", cmd: "var(--idea, #c9a8ff)" };
   const ftypeColor = (file) => {
     const ext = (file ?? "").split(".").pop()?.toLowerCase() ?? "";
-    return FTYPE_COLORS[ext] ?? "#6c6455";
+    return FTYPE_COLORS[ext] ?? "var(--dim, #6c6455)";
   };
 
   function renderFeed() {
@@ -113,12 +115,12 @@
       tag.textContent = `${GLYPHS[change.tool] ?? "·"} ${change.tool}`;
       const plus = document.createElement("span");
       plus.className = "plus";
-      plus.textContent = change.tool === "patch" ? `${change.files?.length ?? 0} file${(change.files?.length ?? 0) === 1 ? "" : "s"}` : `+${change.additions}`;
+      plus.textContent = change.tool === "patch" ? `${change.files?.length ?? 0} file${(change.files?.length ?? 0) === 1 ? "" : "s"}` : Number.isFinite(change.additions) ? `+${change.additions}` : "";
       const minus = document.createElement("span");
       minus.className = "minus";
-      minus.textContent = change.tool === "patch" ? "" : `-${change.deletions}`;
+      minus.textContent = change.tool === "patch" || !Number.isFinite(change.deletions) ? "" : `-${change.deletions}`;
       const when = document.createElement("span");
-      when.textContent = ago(change.time) + " ago";
+      when.textContent = ago(change.time) ? `${ago(change.time)} ago` : "";
       meta.append(tag, plus, minus, when);
       const button = document.createElement("button");
       button.type = "button";
@@ -206,16 +208,20 @@
       return;
     }
     const session = state.sessions.find((item) => item.id === change.sessionId);
+    const counted = Number.isFinite(change.additions) || Number.isFinite(change.deletions);
+    const when = new Date(change.time);
     const rows = [
       ["File", change.file ?? "Unknown"],
       ["Tool", change.tool],
-      ["Lines", `+${change.additions} / −${change.deletions}`],
+      ["Lines", counted ? `+${change.additions ?? 0} / −${change.deletions ?? 0}` : null],
       ["Agent", session?.agent ?? "Unknown"],
       ["Model", session?.model?.id ?? "Unknown"],
       ["Session", session?.title ?? change.sessionId],
-      ["When", `${new Date(change.time).toLocaleString()} · ${ago(change.time)} ago`],
+      ["When", Number.isFinite(when.getTime()) && change.time ? `${when.toLocaleString()} · ${ago(change.time)} ago` : null],
     ];
     for (const [key, value] of rows) {
+      // A value the store did not record leaves its row out.
+      if (value == null || value === "") continue;
       const k = document.createElement("span");
       k.className = "k";
       k.textContent = key;
@@ -415,8 +421,10 @@
     if (els.tab?.hidden) return;
     if (!window.mefiStudio?.eyesLog) return;
     const result = await window.mefiStudio.eyesLog(220);
-    els.log.textContent = result.ok ? (result.text || "The Studio log is empty so far.") : `Log unavailable: ${result.error}`;
-    els.log.scrollTop = els.log.scrollHeight;
+    // Follow the tail only when the reader was already at it; scrolled up, they are reading.
+    const atEnd = els.log.scrollHeight - els.log.scrollTop - (els.log.clientHeight || 0) <= 24;
+    els.log.textContent = result.ok ? (result.text || "The Studio log is empty so far.") : (window.MefiUi?.plainError ? window.MefiUi.plainError(result.error, "The Studio log could not be read.") : "The Studio log could not be read.");
+    if (atEnd) els.log.scrollTop = els.log.scrollHeight;
   }
 
   // eyesState is scoped to the session asked for, so a newer read (a session
@@ -432,7 +440,7 @@
     const result = await window.mefiStudio.eyesState(state.sessionId);
     if (seq !== refreshSeq) return;
     if (!result.ok) {
-      status(`Couldn't read the OpenCode session store: ${result.error}`, true);
+      status(window.MefiUi?.plainError ? window.MefiUi.plainError(result.error, "Couldn't read the OpenCode session store.") : "Couldn't read the OpenCode session store.", true);
       return;
     }
     state.sessions = result.sessions;

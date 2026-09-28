@@ -182,6 +182,8 @@
   // Catalog text is fetched (models.dev names, roster ids), so every data
   // field is escaped before it reaches innerHTML.
   const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[c]);
+  // A stored moment as local text, or "" when it is missing or unreadable.
+  const dateText = (value) => { const date = new Date(value ?? NaN); return Number.isFinite(date.getTime()) ? date.toLocaleString() : ""; };
 
   function badgeHtml(model) {
     const badges = [];
@@ -226,9 +228,9 @@
       <div class="stat-grid">
         ${statHtml("$ / request", fmt.money(model.typicalCostUSD), "typical mix")}
         ${statHtml("Quality", model.quality?.index ?? "—", model.quality?.declared === "AA" ? `AA II ${model.quality.indexVersion ?? ""}`.trim() : "unmeasured")}
-        ${statHtml("req / 5h", req5, pool)}
+        ${statHtml("Requests / 5h", req5, pool)}
         ${statHtml("Context", fmt.ctx(model.limits?.context), model.limits?.output ? fmt.ctx(model.limits.output) + " out" : "")}
-        ${statHtml("privacy", model.privacy?.training ? "trains" : model.privacy?.retentionDays === 0 ? "0-day" : model.privacy?.retentionDays != null ? model.privacy.retentionDays + "d" : "—", "retention")}
+        ${statHtml("Privacy", model.privacy?.training ? "trains" : model.privacy?.retentionDays === 0 ? "0-day" : model.privacy?.retentionDays != null ? model.privacy.retentionDays + "d" : "—", "retention")}
         ${statHtml("$/1M", price ? fmt.money(price.input) + " in" : "—", price ? fmt.money(price.output) + " out" : "")}
       </div>
       <div class="use-avoid">
@@ -238,16 +240,16 @@
       <details>
         <summary>All specifications</summary>
         <table class="detail">
-          <tr><th>standard price</th><td class="num">${price ? fmt.money(price.input) + " in / " + fmt.money(price.output) + " out / " + fmt.money(price.cacheRead) + " cached" : "—"}</td></tr>
-          ${variantRows ? `<tr><th>variants</th><td class="num"><table class="detail"><tr><th>condition</th><th class="num">in</th><th class="num">out</th><th class="num">cached</th></tr>${variantRows}</table></td></tr>` : ""}
-          <tr><th>requests</th><td>${requests ? `5h ${fmt.int(requests.h5)} · week ${fmt.int(requests.week)} · month ${fmt.int(requests.month)}` : "—"}</td></tr>
-          <tr><th>privacy</th><td>${esc(privacyLabel(model))}${model.privacy?.note ? " — " + esc(model.privacy.note) : ""}</td></tr>
-          <tr><th>input</th><td>${modalities}</td></tr>
-          <tr><th>endpoint</th><td>${model.endpoint ? esc(model.endpoint.label) + " · " + esc(model.endpoint.sdk) : "—"}</td></tr>
-          <tr><th>tools / reasoning</th><td>${model.capabilities?.toolCall === false ? "no" : "yes"} / ${model.capabilities?.reasoning === false ? "no" : "yes"}</td></tr>
-          ${benchmarks ? `<tr><th>benchmarks</th><td><ul>${benchmarks}</ul></td></tr>` : ""}
-          <tr><th>released</th><td>${esc(model.releaseDate ?? "—")}${model.knowledge ? " · knowledge " + esc(model.knowledge) : ""}</td></tr>
-          ${state.speeds[model.id] ? `<tr><th>measured</th><td>${state.speeds[model.id].tokensPerSecond ?? "—"} t/s · ${new Date(state.speeds[model.id].measuredAt).toLocaleString()} · measured on your machine</td></tr>` : ""}
+          <tr><th>Standard price</th><td class="num">${price ? fmt.money(price.input) + " in / " + fmt.money(price.output) + " out / " + fmt.money(price.cacheRead) + " cached" : "—"}</td></tr>
+          ${variantRows ? `<tr><th>Variants</th><td class="num"><table class="detail"><tr><th>Condition</th><th class="num">In</th><th class="num">Out</th><th class="num">Cached</th></tr>${variantRows}</table></td></tr>` : ""}
+          <tr><th>Requests</th><td>${requests ? `5h ${fmt.int(requests.h5)} · week ${fmt.int(requests.week)} · month ${fmt.int(requests.month)}` : "—"}</td></tr>
+          <tr><th>Privacy</th><td>${esc(privacyLabel(model))}${model.privacy?.note ? " — " + esc(model.privacy.note) : ""}</td></tr>
+          <tr><th>Input</th><td>${modalities}</td></tr>
+          <tr><th>Endpoint</th><td>${model.endpoint ? esc(model.endpoint.label) + " · " + esc(model.endpoint.sdk) : "—"}</td></tr>
+          <tr><th>Tools / reasoning</th><td>${model.capabilities?.toolCall === false ? "no" : "yes"} / ${model.capabilities?.reasoning === false ? "no" : "yes"}</td></tr>
+          ${benchmarks ? `<tr><th>Benchmarks</th><td><ul>${benchmarks}</ul></td></tr>` : ""}
+          <tr><th>Released</th><td>${esc(model.releaseDate ?? "—")}${model.knowledge ? " · knowledge " + esc(model.knowledge) : ""}</td></tr>
+          ${state.speeds[model.id] ? `<tr><th>Measured</th><td>${[`${state.speeds[model.id].tokensPerSecond ?? "—"} t/s`, dateText(state.speeds[model.id].measuredAt)].filter(Boolean).join(" · ")} · measured on your machine</td></tr>` : ""}
         </table>
       </details>
       </div></details>
@@ -278,8 +280,9 @@
     return models;
   }
 
+  // Native toggle buttons, so Tab, Enter and Space reach every filter.
   function renderChips() {
-    els.chips.innerHTML = FILTERS.map((f) => `<span class="chip ${state.filters.has(f.id) ? "on" : ""}" data-id="${f.id}">${f.label}</span>`).join("");
+    els.chips.innerHTML = FILTERS.map((f) => `<button type="button" class="chip ${state.filters.has(f.id) ? "on" : ""}" data-id="${f.id}" aria-pressed="${state.filters.has(f.id)}">${f.label}</button>`).join("");
   }
 
   function renderPlan() {
@@ -293,17 +296,19 @@
   function renderStatus() {
     const doc = state.doc;
     const roster = doc.models.filter((m) => m.onRoster).length;
-    els.status.textContent = `${doc.models.length} models (${roster} live) · data: ${state.source} · built ${new Date(doc.generatedAt).toLocaleString()} · hash ${doc.hash.slice(0, 8)}`;
+    const built = dateText(doc.generatedAt);
+    els.status.textContent = `${doc.models.length} models (${roster} live) · data: ${state.source}${built ? ` · built ${built}` : ""} · hash ${doc.hash.slice(0, 8)}`;
     els.footer.textContent = `catalog hash ${doc.hash.slice(0, 12)} · roster ${doc.rosterHash.slice(0, 12)}`;
   }
 
   function renderCards() {
     if (cardFrame !== null) { cancelAnimationFrame(cardFrame); cardFrame = null; }
     const models = visibleModels();
-    const markup = models.map((model) => {
+    // No match says what to change instead of leaving an empty grid.
+    const markup = models.length ? models.map((model) => {
       if (!cardCache.has(model)) cardCache.set(model, cardHtml(model));
       return cardCache.get(model);
-    }).join("");
+    }).join("") : `<p class="muted catalog-empty">${state.doc.models.length ? "No models match. Clear a filter or search for something shorter." : "The catalog has no models yet."}</p>`;
     // Keep expanded details and focus when a refresh returns identical data.
     if (renderedCardMarkup !== markup) {
       const expanded = new Set(Array.from(els.cards.querySelectorAll?.(".catalog-model[open]") ?? []).map((fold) => fold.closest("[data-id]").dataset.id));
@@ -1857,6 +1862,8 @@
     if (state.filters.has(chip.dataset.id)) state.filters.delete(chip.dataset.id);
     else state.filters.add(chip.dataset.id);
     renderChips();
+    // The chips are rebuilt: keep keyboard focus on the one just toggled.
+    els.chips.querySelector?.(`.chip[data-id="${chip.dataset.id}"]`)?.focus?.();
     renderCards();
   });
   els.sort.addEventListener("change", (event) => {

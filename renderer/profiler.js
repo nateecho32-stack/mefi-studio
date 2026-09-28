@@ -6,7 +6,7 @@
   const api = () => window.mefiStudio;
   let host = null, hostState = "Host metrics require the desktop app.", busy = false, epoch = 0;
   let raf = 0, timer = 0, observer = null, longTasksSupported = false, pendingRead = null, lastRead = -Infinity;
-  let initialized = false, samplingEpoch = 0;
+  let initialized = false, samplingEpoch = 0, exported = false;
   const finite = (value) => typeof value === "number" && Number.isFinite(value);
   const number = (value, digits = 1) => finite(value) ? value.toFixed(digits) : "—";
   const ms = (value) => finite(value) ? `${number(value)} ms` : "—";
@@ -75,6 +75,7 @@
       }
       if (action === "start") core.start();
       if (action === "reset") core.reset();
+      if (action !== "stop") exported = false;
       if (action !== "stop") startSampling();
       return true;
     } finally { busy = false; paint(); }
@@ -97,6 +98,8 @@
     link.href = url; link.download = `studio-performance-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
     document.body.append(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
+    // A capture still recording keeps growing past what this file holds.
+    exported = !core.isRecording();
     text("notice", "Capture exported as JSON. Record another run to compare after a fix.");
     return capture;
   }
@@ -189,7 +192,17 @@
     initialized = true;
     $("start").addEventListener("click", () => { text("notice", "Recording continues when you close this panel. Reproduce the slowdown, then stop and export."); void control("start"); });
     $("stop").addEventListener("click", () => void control("stop"));
-    $("reset").addEventListener("click", () => void control("reset"));
+    // Reset asks twice only when it would discard recorded frames nobody exported;
+    // otherwise the capture-phase listener resets at once and skips the confirm.
+    const reset = () => void control("reset");
+    $("reset").addEventListener("click", (event) => {
+      const data = core.snapshot();
+      if (data.startedAt && data.frames?.length && !exported) return;
+      event.stopImmediatePropagation?.();
+      reset();
+    }, true);
+    if (window.MefiUi?.arm) window.MefiUi.arm($("reset"), { run: reset, armed: "Discard this capture?" });
+    else $("reset").addEventListener("click", reset);
     $("export").addEventListener("click", () => void exportCapture());
     $("close").addEventListener("click", close);
     $("hud").addEventListener("click", () => window.MefiNav ? window.MefiNav.go("profiler") : open());

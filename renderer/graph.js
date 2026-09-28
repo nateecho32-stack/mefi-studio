@@ -41,7 +41,7 @@
   const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[c]);
 
   function privacyLabel(model) {
-    if (!model.privacy) return "unknown";
+    if (!model.privacy) return "—";
     if (model.privacy.training) return "trains on data";
     if (model.privacy.retentionDays === 0) return "0-day, no training";
     if (typeof model.privacy.retentionDays === "number") return model.privacy.retentionDays + "-day retention";
@@ -105,7 +105,7 @@
       },
       quality: () => (model.quality?.index != null ? `AA II ${model.quality.index}` : "no published index"),
       context: () => `${fmt.ctx(model.limits?.context)} context`,
-      privacy: () => privacyLabel(model),
+      privacy: () => (model.privacy ? privacyLabel(model) : "privacy not published"),
     };
     const factors = Object.keys(preset.weights)
       .map((key) => ({ key, contribution: preset.weights[key] * norms[key](model) }))
@@ -146,12 +146,34 @@
     return { ctx, w: width, h: height };
   }
 
-  const PALETTE = ["#e6c98d", "#9db7ff", "#c9a8ff", "#57ff9a", "#ffb38a", "#86d1d6", "#f2a2e8", "#a8e6cf", "#ffd479", "#b8c0ff"];
+  // Canvas colours are read from the active theme at paint time, so light
+  // palettes stay readable; the original gold-theme values are the fallbacks.
+  function theme() {
+    const root = document.documentElement;
+    const css = root && typeof getComputedStyle === "function" ? getComputedStyle(root) : null;
+    const read = (name, fallback) => css?.getPropertyValue(name)?.trim() || fallback;
+    return {
+      text: read("--ivory", "#ece5d8"), muted: read("--muted", "#9a8f7d"), accent: read("--gold", "#e6c98d"),
+      line: read("--line", "rgba(201, 168, 106, 0.12)"), sunk: read("--bg-deep", "#0b0b10"), ink: read("--ink", "#0b0b10"),
+      empty: read("--hairline", "#2a2a32"),
+      series: [read("--gold", "#e6c98d"), read("--info", "#9db7ff"), read("--idea", "#c9a8ff"), read("--live", "#57ff9a"), "#ffb38a", "#86d1d6", "#f2a2e8", read("--good", "#a8e6cf"), read("--warn", "#ffd479"), "#b8c0ff"],
+    };
+  }
 
   function drawValueMap(canvas, tip, doc) {
     const models = doc.models.filter((m) => m.quality?.index != null && m.typicalCostUSD != null);
     const { ctx, w, h } = prep(canvas, 460);
     ctx.clearRect(0, 0, w, h);
+    const colors = theme();
+    // No measured model leaves no axis range: say so instead of a blank frame.
+    if (!models.length) {
+      ctx.fillStyle = colors.muted;
+      ctx.font = "13px system-ui";
+      ctx.textAlign = "center";
+      ctx.fillText("No measured models yet", w / 2, h / 2);
+      ctx.textAlign = "left";
+      return [];
+    }
     const pad = { l: 56, r: 26, t: 26, b: 48 };
     const costs = models.map((m) => Math.max(m.typicalCostUSD, 0.00005));
     const xMin = Math.log10(Math.min(...costs)) - 0.15;
@@ -161,8 +183,8 @@
     const X = (v) => pad.l + ((Math.log10(Math.max(v, 0.00005)) - xMin) / (xMax - xMin)) * (w - pad.l - pad.r);
     const Y = (v) => pad.t + (1 - (v - yMin) / (yMax - yMin)) * (h - pad.t - pad.b);
 
-    ctx.strokeStyle = "rgba(201, 168, 106, 0.12)";
-    ctx.fillStyle = "#9a8f7d";
+    ctx.strokeStyle = colors.line;
+    ctx.fillStyle = colors.muted;
     ctx.font = "11px system-ui";
     for (let q = 30; q <= 60; q += 5) {
       const y = Y(q);
@@ -196,14 +218,14 @@
       const x = X(model.typicalCostUSD);
       const y = Y(model.quality.index);
       const r = 5 + 16 * Math.sqrt(Math.min(1, (reqH5(model) === Infinity ? rMax : reqH5(model)) / rMax));
-      const color = PALETTE[vendors.indexOf(model.vendor) % PALETTE.length];
+      const color = colors.series[vendors.indexOf(model.vendor) % colors.series.length];
       ctx.globalAlpha = 0.75;
       ctx.fillStyle = color;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
-      ctx.strokeStyle = "#050507";
+      ctx.strokeStyle = colors.sunk;
       ctx.stroke();
       points.push({ x, y, r, model });
     }
@@ -223,7 +245,7 @@
         [x - width / 2, y - r - 14],
         [x - width / 2, y + r + 5],
       ];
-      ctx.fillStyle = "#ece5d8";
+      ctx.fillStyle = colors.text;
       for (const [lx, ly] of candidates) {
         const rect = { x: lx - 1, y: ly - 1, w: width + 2, h: 15 };
         if (lx < pad.l || lx + width > w - pad.r || ly < pad.t - 10 || ly > h - pad.b) continue;
@@ -251,17 +273,18 @@
     const rows = [...best.values()].sort((a, b) => b.score - a.score).slice(0, 14);
     const { ctx, w, h } = prep(canvas, Math.max(240, 64 + rows.length * 28));
     ctx.clearRect(0, 0, w, h);
+    const colors = theme();
     const labelW = 190;
     const cellW = (w - labelW - 10) / presets.length;
     ctx.font = "11.5px system-ui";
-    ctx.fillStyle = "#9a8f7d";
+    ctx.fillStyle = colors.muted;
     ctx.textAlign = "left";
     presets.forEach((p, i) => {
       ctx.fillText(p.short ?? p.name, labelW + i * cellW + 8, 22);
     });
     rows.forEach((row, r) => {
       const y = 44 + r * 28;
-      ctx.fillStyle = "#ece5d8";
+      ctx.fillStyle = colors.text;
       ctx.textAlign = "right";
       ctx.fillText(row.model.name, labelW - 8, y + 16);
       ctx.textAlign = "left";
@@ -269,13 +292,16 @@
         const score = row.ranks[p.id];
         const x = labelW + i * cellW;
         if (score == null) {
-          ctx.fillStyle = "#0b0b10";
+          ctx.fillStyle = colors.sunk;
           ctx.fillRect(x + 1, y, cellW - 2, 22);
           return;
         }
-        ctx.fillStyle = `rgba(230, 201, 141, ${0.12 + score * 0.78})`;
+        // The heat is the accent at the score's strength (a token may be any colour syntax).
+        ctx.globalAlpha = 0.12 + score * 0.78;
+        ctx.fillStyle = colors.accent;
         ctx.fillRect(x + 1, y, cellW - 2, 22);
-        ctx.fillStyle = score > 0.55 ? "#0b0b10" : "#b3a98f";
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = score > 0.55 ? colors.ink : colors.muted;
         ctx.fillText(String(Math.round(score * 100)), x + 6, y + 15);
       });
     });
@@ -298,22 +324,25 @@
     const barsW = w - labelW - valueW;
     const maxLog = Math.log10(Math.max(...rows.map((r) => (r.month === Infinity ? 300000 : r.month)), 1000));
     const minLog = Math.log10(100);
+    const colors = theme();
     ctx.font = "11.5px system-ui";
     rows.forEach((row, i) => {
       const y = 14 + i * 26;
       const isInf = row.month === Infinity;
       const log = isInf ? maxLog : Math.log10(Math.max(row.month, 100));
       const bw = Math.max(6, ((log - minLog) / (maxLog - minLog)) * barsW);
-      ctx.fillStyle = "#ece5d8";
+      ctx.fillStyle = colors.text;
       ctx.textAlign = "right";
       ctx.fillText(row.model.name, labelW - 8, y + 13);
       ctx.textAlign = "left";
       const q = row.model.quality?.index;
-      ctx.fillStyle = q != null ? `rgba(230, 201, 141, ${0.25 + Math.min(1, q / 60) * 0.7})` : "#2a2a32";
+      ctx.globalAlpha = q != null ? 0.25 + Math.min(1, q / 60) * 0.7 : 1;
+      ctx.fillStyle = q != null ? colors.accent : colors.empty;
       ctx.beginPath();
       ctx.roundRect(labelW, y, bw, 17, 4);
       ctx.fill();
-      ctx.fillStyle = "#9a8f7d";
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = colors.muted;
       ctx.fillText(isInf ? "∞ unlimited" : fmt.int(row.month) + " req/mo", labelW + bw + 6, y + 13);
     });
   }
@@ -423,10 +452,12 @@
       }
       const m = hit.model;
       const measured = speeds[m.id]?.tokensPerSecond;
-      tip.innerHTML = `<b>${esc(m.name)}</b><br>${esc(m.vendor)} · ${fmt.money(m.typicalCostUSD)}/req · AA ${esc(m.quality.index)}${m.quality.indexVersion ? " " + esc(m.quality.indexVersion) : ""}<br>${fmt.int(reqH5(m) === Infinity ? "unlimited" : reqH5(m))} req/5h · ${fmt.ctx(m.limits?.context)} ctx<br>${privacyLabel(m)}${measured ? `<br>measured ${measured} t/s on your machine` : ""}`;
-      tip.style.left = Math.min(window.innerWidth - 300, event.clientX + 14) + "px";
-      tip.style.top = event.clientY + 12 + "px";
+      tip.innerHTML = `<b>${esc(m.name)}</b><br>${esc(m.vendor)} · ${fmt.money(m.typicalCostUSD)}/req · AA ${esc(m.quality.index)}${m.quality.indexVersion ? " " + esc(m.quality.indexVersion) : ""}<br>${fmt.int(reqH5(m) === Infinity ? "unlimited" : reqH5(m))} req/5h · ${fmt.ctx(m.limits?.context)} ctx${m.privacy ? `<br>${privacyLabel(m)}` : ""}${measured ? `<br>measured ${measured} t/s on your machine` : ""}`;
       tip.hidden = false;
+      // Kept inside the window both ways: near the bottom edge it opens above the pointer.
+      const tipH = tip.offsetHeight || 0;
+      tip.style.left = Math.max(8, Math.min(window.innerWidth - (tip.offsetWidth || 300) - 8, event.clientX + 14)) + "px";
+      tip.style.top = Math.max(8, event.clientY + 12 + tipH > window.innerHeight - 8 ? event.clientY - tipH - 12 : event.clientY + 12) + "px";
     });
     mapCanvas.addEventListener("mouseleave", () => {
       tip.hidden = true;

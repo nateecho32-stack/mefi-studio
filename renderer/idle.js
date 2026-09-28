@@ -10969,7 +10969,7 @@
       if (overseer && Number(overseer.reviews) > 0) {
         const line = document.createElement("p");
         line.className = "muted assistant-overseer";
-        line.textContent = `overseer · ${overseer.health ?? "?"} ${overseer.score ?? "?"}/100 · ${overseer.lessons?.length ?? 0} lesson(s) — ${overseer.lastSummary || "no summary"}`;
+        line.textContent = `${["overseer", [overseer.health, overseer.score != null ? `${overseer.score}/100` : ""].filter(Boolean).join(" ")].filter(Boolean).join(" · ")} · ${overseer.lessons?.length ?? 0} lesson(s) — ${overseer.lastSummary || "no summary"}`;
         info.append(line);
       }
 

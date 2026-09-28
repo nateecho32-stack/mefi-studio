@@ -102,6 +102,8 @@
     if (content !== undefined && content !== null) element.textContent = String(content);
     if (parent) parent.append(element); return element;
   };
+  // A stored moment as local text, or "" when it is missing or unreadable.
+  const dateOf = (value) => { const date = new Date(value ?? NaN); return Number.isFinite(date.getTime()) ? date.toLocaleString() : ""; };
   function note(message = "", error = false) { $("notice").textContent = message; $("notice").dataset.error = String(error); }
   function button(label, parent, run, id, primary = false, locked = false) {
     const result = node("button", primary ? "primary" : "ghost", label, parent);
@@ -791,7 +793,7 @@
     if (open.length) node("p", "planning-subtle", `Still unresolved: ${open.join(" · ")}`, area);
     if (frozen(item)) return;
     const confirm = node("div", "planning-confirm", undefined, area);
-    node("p", "", confirmed(item) ? `You confirmed this on ${new Date(item.reviewedAt).toLocaleString()}. Changing the destination, an unknown, or any decision asks you to read it again.`
+    node("p", "", confirmed(item) ? `You confirmed this${dateOf(item.reviewedAt) ? ` on ${dateOf(item.reviewedAt)}` : ""}. Changing the destination, an unknown, or any decision asks you to read it again.`
       : settled(item) ? "Confirm this is the feature you meant. Mefi drafts the specification only from what you confirm here."
       : "Finish the interview first: every question needs your decision, and every unknown a question or a reason to set it aside.", confirm);
     button(confirmed(item) ? "Understanding confirmed" : "Yes, this is what I meant", confirm, () => act("confirm-understanding", {}, null, "Understanding confirmed. You can draft the specification now."), "confirm-understanding", true, !settled(item) || confirmed(item) || unsavedPlan(item));
@@ -885,7 +887,13 @@
       field(card, "Brief for the builder", `task-prompt-${index}`, task.prompt, (value) => { task.prompt = value; markDirty(); }, { required: true, locked, rows: 3, maxLength: 16000 });
       field(card, "Acceptance checks — one per line", `task-acceptance-${index}`, task.acceptance, (value) => { task.acceptance = value; markDirty(); }, { required: true, locked, rows: 3 });
       dependencies(card, values.tasks.filter((other) => other.id !== task.id), task.dependsOn, (value) => { task.dependsOn = value; markDirty(); }, "Start after these tasks finish", locked);
-      if (!locked) button("Remove task", card, () => { values.tasks = values.tasks.filter((other) => other.id !== task.id).map((other) => ({ ...other, dependsOn: other.dependsOn.filter((id) => id !== task.id) })); markDirty(); persist(); render(); }, `remove-slice-${index}`);
+      if (!locked) {
+        const remove = () => { values.tasks = values.tasks.filter((other) => other.id !== task.id).map((other) => ({ ...other, dependsOn: other.dependsOn.filter((id) => id !== task.id) })); markDirty(); persist(); render(); };
+        // Two presses remove a written task (studio-ui.js); a bare harness removes on one.
+        const armed = window.MefiUi?.arm;
+        const removeButton = button("Remove task", card, armed ? () => {} : remove, `remove-slice-${index}`);
+        if (armed) window.MefiUi.arm(removeButton, { run: remove, armed: "Remove this task?" });
+      }
     }
     if (!locked) {
       const actions = node("div", "planning-actions", undefined, edit);
@@ -925,7 +933,7 @@
     const limit = local.historyLimit || 12;
     for (const entry of [...item.history].reverse().slice(0, limit)) {
       const row = node("details", "", undefined, area);
-      node("summary", "", `Revision ${entry.version} · ${labels[entry.action] || "Plan updated"} · ${new Date(entry.at).toLocaleString()}`, row);
+      node("summary", "", [`Revision ${entry.version}`, labels[entry.action] || "Plan updated", dateOf(entry.at)].filter(Boolean).join(" · "), row);
       let loaded = false;
       row.addEventListener("toggle", () => {
         if (!row.open || loaded) return; loaded = true;

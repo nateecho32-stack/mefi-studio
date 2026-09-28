@@ -1531,7 +1531,7 @@
       note.className = "muted";
       const retryIn = task.nextRunAt && task.nextRunAt > Date.now() ? ` · retries in ${Math.ceil((task.nextRunAt - Date.now()) / 60000)}m` : "";
       const gaveUp = (task.runFailures ?? 0) >= 5 ? " · automatic attempts paused; review the error and choose Retry" : "";
-      note.textContent = `autopilot: last run failed (${task.lastRunError ?? "?"})${retryIn}${gaveUp}`;
+      note.textContent = `autopilot: last run failed${task.lastRunError ? ` (${task.lastRunError})` : ""}${retryIn}${gaveUp}`;
       body.append(note);
     }
     if (isDone(task)) {
@@ -1646,8 +1646,10 @@
     renderTaskAttempts(task);
     if (!body.children.length) body.append(node("p", "muted", "Evidence appears here after a worker runs and completion checks finish."));
     body = detailPanels.history;
+    // An entry saved without a usable time shows no stamp rather than "[Invalid Date]".
+    const stamp = (at) => { const date = new Date(at ?? NaN); return Number.isFinite(date.getTime()) ? `[${date.toLocaleTimeString()}] ` : ""; };
     section(`Log (${(task.logs ?? []).length})`);
-    entryList(task.logs ?? [], (log) => Object.assign(document.createElement("li"), { textContent: `[${new Date(log.at).toLocaleTimeString()}] ${log.text}` }));
+    entryList(task.logs ?? [], (log) => Object.assign(document.createElement("li"), { textContent: `${stamp(log.at)}${log.text}` }));
     const logRow = document.createElement("div");
     logRow.className = "row tight";
     const logInput = document.createElement("input");
@@ -1665,7 +1667,7 @@
     body.append(logRow);
 
     section(`Thoughts / ideas (${(task.ideas ?? []).length})`);
-    entryList(task.ideas ?? [], (idea) => Object.assign(document.createElement("li"), { textContent: typeof idea === "string" ? `Linked idea: ${idea}` : `[${new Date(idea.at).toLocaleTimeString()}] ${idea.text}` }));
+    entryList(task.ideas ?? [], (idea) => Object.assign(document.createElement("li"), { textContent: typeof idea === "string" ? `Linked idea: ${idea}` : `${stamp(idea.at)}${idea.text}` }));
     const ideaRow = document.createElement("div");
     ideaRow.className = "row tight";
     const ideaInput = document.createElement("input");

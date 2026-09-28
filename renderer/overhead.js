@@ -51,6 +51,7 @@
     } catch {
       // One refused read must not end polling for good: the sheet keeps what
       // it last showed and retries at the slowest cadence.
+      state.failed = true;
       if (!initialized || el.overlay.hidden) return;
       pollDelay = POLL_MAX_MS;
       schedulePoll();
@@ -64,6 +65,8 @@
   // The live test is task-groups.js's, shared by every view; the fallback
   // keeps a bare harness (no task-groups.js) on the same statuses.
   const isLive = (task) => window.MefiTaskGroups?.isLiveTask?.(task) ?? ["open", "active", "awaiting_verification"].includes(task?.status);
+  // The board's shared stage words (stage-labels.js); a bare harness gets the status tidied.
+  const stageOf = (task) => window.MefiStage?.label?.(task.status, task, { short: true }) ?? String(task.status ?? "open").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 
   const keywords = (text) => new Set((String(text).toLowerCase().match(/[a-z][a-z0-9_-]{3,}/g) ?? []).slice(0, 10));
 
@@ -250,7 +253,7 @@
       ctx.stroke();
       ctx.fillStyle = task.status === "active" ? P.live : P.muted;
       ctx.font = "600 11px system-ui";
-      ctx.fillText(`${task.status.toUpperCase()}`, left + 10, top + 15);
+      ctx.fillText(stageOf(task), left + 10, top + 15);
       ctx.fillStyle = P.text;
       ctx.font = "600 13px system-ui";
       ctx.fillText(fitTitle(task.title), left + 12, top + 34);
@@ -266,6 +269,19 @@
       ctx.globalAlpha = 1;
       boxes.set(task.id, { x: left, y: top, w: BOX_WIDTH, h: BOX_HEIGHT });
     });
+    // An empty board says so instead of showing a bare canvas.
+    ctx.textAlign = "center";
+    if (!active.length) {
+      ctx.fillStyle = P.muted;
+      ctx.font = "500 14px system-ui";
+      ctx.fillText("No open tasks. Add one in Tasks to see it here.", el.width / 2, el.height / 2);
+    }
+    if (state.failed) {
+      ctx.fillStyle = P.muted;
+      ctx.font = "500 12px system-ui";
+      ctx.fillText("Tasks could not be read. Showing the last board; retrying shortly.", el.width / 2, el.height - 16);
+    }
+    ctx.textAlign = "start";
 
     if (!still) state.angle += TURN_PER_MS * elapsed;
     raf = requestAnimationFrame(draw);
@@ -277,6 +293,7 @@
     state.nodes = snapshot.nodes;
     state.edges = snapshot.edges;
     state.tasks = tasks?.tasks ?? [];
+    state.failed = false;
     renderLegend();
   }
 
@@ -301,9 +318,9 @@
       button.type = "button";
       button.className = "overhead-task-button";
       button.dataset.overheadTask = task.id;
-      button.textContent = `${task.status}: ${task.title}`;
+      button.textContent = `${stageOf(task)} · ${task.title}`;
       button.title = task.prompt ?? "";
-      button.setAttribute("aria-label", `Open task: ${task.title} (${task.status})`);
+      button.setAttribute("aria-label", `Open task: ${task.title} (${stageOf(task)})`);
       button.addEventListener("click", () => openTask(task.id));
       button.addEventListener("focus", () => { state.hover = task.id; });
       button.addEventListener("blur", () => { if (state.hover === task.id) state.hover = null; });
@@ -350,6 +367,7 @@
       await load();
     } catch {
       loaded = false;
+      state.failed = true;
     }
     // Esc, O, the backdrop or another sheet's claim() can close us while load()
     // is still awaiting: starting the loop then leaves it drawing forever.
