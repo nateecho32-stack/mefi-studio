@@ -40,7 +40,10 @@ import { fileURLToPath } from "node:url";
 
 const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const testsRoot = path.join(studio, "tests");
-const serialized = new Set(["occlusion_probe.test.mjs", "eyes_toggle_electron.test.mjs"]);
+// command_render is one fixture of 60 routes, 16 settings categories, 12
+// session tabs, audio and motion: 45-53s alone, and killed at its bound when
+// it shared the two-file lane in a loaded full run (TESTRUNS, 2026-09-28).
+const serialized = new Set(["occlusion_probe.test.mjs", "eyes_toggle_electron.test.mjs", "command_render.test.mjs"]);
 
 const all = [];
 for (const entry of await readdir(testsRoot, { recursive: true })) {

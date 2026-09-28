@@ -61,8 +61,11 @@ app.whenReady().then(async () => {
   await run("document.body.classList.add('command-zen');");
   assert.equal(await run("return getComputedStyle(document.querySelector('.media-window-toolbar')).visibility==='hidden'&&getComputedStyle(window.fixtureMedia).visibility==='visible';"), true, "Zen hides floating window controls while preserving playback");
   await run("document.body.classList.remove('command-zen');");
-  let before = await rect(); await mouse(before.x + 50, before.y + 80); await sleep(220);
-  report.hover = await run("return getComputedStyle(document.querySelector('.media-window-controls')).opacity==='1';"); assert.ok(report.hover);
+  let before = await rect(); await mouse(before.x + 50, before.y + 80);
+  // The controls fade in; a loaded run sampled them mid-fade after a fixed wait, so wait for the settled value.
+  const hoverDeadline = Date.now() + 3000;
+  while (!(report.hover = await run("return getComputedStyle(document.querySelector('.media-window-controls')).opacity==='1';")) && Date.now() < hoverDeadline) await sleep(50);
+  assert.ok(report.hover, "hovering the player shows its controls within 3 s");
   await capture("media-window-hover.png");
   await run("window.fixtureQuality=0;window.addEventListener('message',event=>{if(event.source===window.fixtureMedia.contentWindow&&event.data==='fixture-quality-clicked')window.fixtureQuality++;});");
   let embedded;

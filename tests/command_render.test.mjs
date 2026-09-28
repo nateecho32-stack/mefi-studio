@@ -32,9 +32,10 @@ const runFixture = async () => {
     let output = "";
     child.stdout.on("data", (chunk) => { output = (output + chunk).slice(-10000); });
     child.stderr.on("data", (chunk) => { output = (output + chunk).slice(-10000); });
-    // The fixture's full pass takes ~45s under load; keep the kill bound well
-    // clear of a legitimate run (occlusion_probe uses the same 80s convention).
-    const timer = setTimeout(() => child.kill(), process.env.MEFI_MENU_CAPTURE_DIR ? 120000 : 80000);
+    // The fixture's full pass takes 45-53s alone and hit 81.7s in a loaded
+    // sequential run on clean main (TESTRUNS, 2026-09-28), so the kill bound
+    // sits well clear of a legitimate run. It runs in the serialized stage.
+    const timer = setTimeout(() => child.kill(), process.env.MEFI_MENU_CAPTURE_DIR ? 180000 : 120000);
     const code = await new Promise((resolve, reject) => { child.once("error", reject); child.once("close", resolve); }).finally(() => clearTimeout(timer));
     // Electron can exit before its error stream flushes. Read its synchronously
     // saved report before asserting the exit code or deleting the fixture.
@@ -128,7 +129,9 @@ const runFixture = async () => {
   }
 };
 
-test("real Command renderer paints finite task nodes, continues frames, and survives exit/reentry", { skip: !canRun, timeout: 140000 }, async () => {
+// The timeout covers the cold-boot retry below, which can run the fixture twice.
+test("real Command renderer paints finite task nodes, continues frames, and survives exit/reentry", { skip: !canRun, timeout: 200000 }, async (t) => {
+  const started = Date.now();
   try {
     await runFixture();
   } catch (error) {
@@ -137,6 +140,9 @@ test("real Command renderer paints finite task nodes, continues frames, and surv
     // so retry exactly that cold-boot signature once instead of failing the
     // suite. Any other failure, or a repeated one, still propagates.
     if (!String(error?.message ?? "").includes(coldBootMarker)) throw error;
+    t.diagnostic(`cold-boot retry after ${Date.now() - started} ms: ${String(error.message).split("\n")[0].slice(0, 200)}`);
     await runFixture();
+  } finally {
+    t.diagnostic(`command render fixture took ${Date.now() - started} ms`);
   }
 });
