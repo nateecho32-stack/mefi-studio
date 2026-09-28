@@ -6,6 +6,38 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-27 - Whole-app bug hunt: host, tooling, renderer and design fixes
+
+Parallel review of main.cjs, preload, every host script, the build and
+release tooling, tools/ verifiers and the renderer found about 60 defects that
+were confirmed by reading the code and, for most, reproduced. They were fixed in one
+commit built in a separate clone on origin/main. Highlights: project switches no longer write another
+project's assistant state, reply or verification result; Stop all closes a
+continuation whose work finished; salvageJson counts both bracket kinds;
+release apply cannot run twice and --released is dropped on relaunch; tool
+transcripts are scrubbed before JSON escaping and Bearer tokens are masked;
+merge-back never aborts a merge it did not start; PowerShell CIM dates parse,
+so hung tests are detected; git porcelain paths are unquoted; MCP .cmd shims
+start on Windows; check-syntax compiles renderer files as classic scripts;
+release zips exclude local data; Home work cards show their stripe again.
+The CLI completion tree-kill and stdin fixes were superseded by
+scripts/cli-text.cjs (bc18748), which already does both.
+
+Validation on the rebased commit: npm run check passed, npm run audit returned 0
+findings, and lint had 0 errors with no new warnings in changed files. The previously red
+suites (role_provider_isolation, briefer_cli_failure, assistant_issue_host,
+usage_tracker, usage_tracker_host) passed, 103/103, and the updater Python
+contracts passed. Full npm test on the same change over bc18748: Node 3888
+passed, 4 skipped, and 9 failed, all nine being the known-red tests db15d74 fixed; they also fail
+on untouched aef5dfe. Electron stage: 37 passed, 1 skipped, and 1 failed: Unified
+Agents "keyboard scrolling remains native", which passed solo in 26 s (the
+known load-sensitive fixture). An earlier full run on aef5dfe had the tree-dynamics
+render fixture as its one Electron failure, and it also passed solo. Python contracts:
+the only failure was the known-red updater contract fixed by db15d74. New
+regression tests are porcelain_paths plus additions to salvage_json,
+outbound_privacy, verification_command_quoting, scope_heal_walk and
+check_syntax.
+
 ## 2026-09-27 afternoon - Node tree follow-up: resize re-seed, rest sleep, touch, band spill
 
 Second node-tree pass over the items the first one left open, all in

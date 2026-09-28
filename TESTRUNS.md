@@ -35,6 +35,38 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-28 - Fixes from the improvements plan: setup windows, shares, Rooms, booklet line endings
+
+The owner-approved "Fixes + hand-offs" plan, 14 commits on 7a5ff81. Set up
+this PC's PowerShell windows open attached. share-review blocks a share it
+could not read to the end. A friend's preferences carry only behaviour
+fields, and other PCs' settings pass the settings checks. Approvals and
+named Starts survive a gather on `refs: []` cards (`backlog.scopeMatches`).
+Rooms keeps the open room's chat, drafts and a fair hub subscription per
+holder. The media player focuses only on the owner's own minimize.
+adoptProject recounts `autopilot.queueCounts`. The keyless away answer says
+"may already be done" for local guesses and ignores "when the user logs
+out". build-booklet reads every input as LF and writes the template's own
+line ending. command_render runs serialized (120 s kill, 200 s timeout,
+duration and retry diagnostics), and media_window_render polls the hover
+fade. Lint lost 36 warnings (ignoreRestSiblings plus dead code). The MCP
+servers read their version from package.json, and docs/code-map.md was
+reorganized.
+
+- `npm run build-booklet` then `git diff --exit-code renderer/booklet.html`:
+  clean. After a fresh checkout, a rebuild leaves `git status` clean.
+- `npm run check` (188 targets, 387 specs), `npm run audit` (0 errors, 0
+  warnings), `npm run lint` (0 errors, 41 warnings, down from 77): PASS.
+- New or changed tests fail on the old code: media_window (code-driven
+  un-minimize keeps focus), project_switch_settlement (adoptProject counts),
+  booklet_build (CRLF inputs give all-CRLF output and a no-op rebuild), plus
+  outside_work, desk_tool and agent_tools additions.
+- `npm test` in C:\wt\fixes, exit 0: Node parallel stage 4331 tests, 4326
+  passed, 5 skipped, 0 failures. Electron lane 41 tests, 40 passed, 1
+  skipped. `command_render` serialized 1/1 in 49.8 s (no cold-boot retry).
+  `eyes_toggle_electron` 1/1, `occlusion_probe` 2/2. Python contracts OK
+  (248, 1 skip). Normalized-path lock passed.
+
 ## 2026-09-28 - Sync counts only real local work; vault calls take turns
 
 Follow-ups from the Plan session's review. sync.mjs recounts a non-empty
@@ -467,37 +499,6 @@ Electron frame captures of 13 menu transitions at 1920x1080: the worst
 frame gap for opening a task detail fell from 133 ms to 67 ms, and
 Configuration's category switch now holds 33 ms.
 
-## 2026-09-27 - Whole-app bug hunt: host, tooling, renderer and design fixes
-
-Parallel review of main.cjs, preload, every host script, the build and
-release tooling, tools/ verifiers and the renderer found about 60 defects that
-were confirmed by reading the code and, for most, reproduced. They were fixed in one
-commit built in a separate clone on origin/main. Highlights: project switches no longer write another
-project's assistant state, reply or verification result; Stop all closes a
-continuation whose work finished; salvageJson counts both bracket kinds;
-release apply cannot run twice and --released is dropped on relaunch; tool
-transcripts are scrubbed before JSON escaping and Bearer tokens are masked;
-merge-back never aborts a merge it did not start; PowerShell CIM dates parse,
-so hung tests are detected; git porcelain paths are unquoted; MCP .cmd shims
-start on Windows; check-syntax compiles renderer files as classic scripts;
-release zips exclude local data; Home work cards show their stripe again.
-The CLI completion tree-kill and stdin fixes were superseded by
-scripts/cli-text.cjs (bc18748), which already does both.
-
-Validation on the rebased commit: npm run check passed, npm run audit returned 0
-findings, and lint had 0 errors with no new warnings in changed files. The previously red
-suites (role_provider_isolation, briefer_cli_failure, assistant_issue_host,
-usage_tracker, usage_tracker_host) passed, 103/103, and the updater Python
-contracts passed. Full npm test on the same change over bc18748: Node 3888
-passed, 4 skipped, and 9 failed, all nine being the known-red tests db15d74 fixed; they also fail
-on untouched aef5dfe. Electron stage: 37 passed, 1 skipped, and 1 failed: Unified
-Agents "keyboard scrolling remains native", which passed solo in 26 s (the
-known load-sensitive fixture). An earlier full run on aef5dfe had the tree-dynamics
-render fixture as its one Electron failure, and it also passed solo. Python contracts:
-the only failure was the known-red updater contract fixed by db15d74. New
-regression tests are porcelain_paths plus additions to salvage_json,
-outbound_privacy, verification_command_quoting, scope_heal_walk and
-check_syntax.
 ## Read Before Any Tests
 
 This is the test guide for the standalone Mefi's Studio AI+ repository. Run all commands from this repository root.
