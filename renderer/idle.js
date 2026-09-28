@@ -2115,6 +2115,10 @@
   // function has landed. A missing painter must never fail Work on it: the
   // main process has already queued the job by then.
   function paintChatLog() {
+    // The log sits in Command's HUD, which is hidden while Command is closed;
+    // rebuilding it on every assistant push there only fed the shared-controls
+    // observer. enter() paints it on the way back in.
+    if (!state.active) return;
     try {
       renderChatLog();
     } catch (error) {
@@ -2384,7 +2388,8 @@
   // list that would read the same is left alone (force: after an answer).
   let asksPainted = null;
   function renderAsks(full = null, force = false) {
-    if (!el.askList) return;
+    // Hidden with the rest of the HUD while Command is closed; enter() repaints.
+    if (!el.askList || !state.active) return;
     const questions = railQuestions(full);
     const open = questions.filter((question) => question.status === "open");
     const closed = questions.filter((question) => question.status !== "open").slice(-5);
@@ -12151,6 +12156,10 @@
       if (state.active) renderFeed();
     }).catch(() => {});
     renderFeed();
+    // Assistant pushes skip the chat log and the Ask cards while Command is
+    // closed (paintChatLog, renderAsks); bring both up to date.
+    paintChatLog();
+    if (state.railTab === "ask" && typeof renderAsks === "function") renderAsks();
     renderHint();
     window.MefiUsageTracker?.open?.();
     bumpHud();

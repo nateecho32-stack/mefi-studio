@@ -12,7 +12,15 @@
   let queueRead, queueVersion = 0;
   let liveStatus = null, liveAssistant = null;
   const queueSnapshot = () => ({ ...queue });
-  const publishQueue = () => window.dispatchEvent(new CustomEvent("mefi:queue-settings", { detail: queueSnapshot() }));
+  // adoptQueue runs on every assistant push (up to four a second); the event
+  // re-renders the companion and re-walks the document's queue controls, so it
+  // goes out only when the settings it carries changed.
+  let queueSignature = "";
+  const publishQueue = () => {
+    const snapshot = queueSnapshot(), signature = JSON.stringify(snapshot);
+    if (signature === queueSignature) return;
+    queueSignature = signature; window.dispatchEvent(new CustomEvent("mefi:queue-settings", { detail: snapshot }));
+  };
   function adoptQueue(status, full) {
     if (status) liveStatus = status;
     if (full) liveAssistant = full;

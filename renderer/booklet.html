@@ -8640,7 +8640,9 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-bar i::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent); transform: translateX(-100%); animation: vibe-sheen 2.2s var(--ease-in-out) infinite; }
 .vibe-bar.is-flowing i { width: 34%; animation: vibe-flow 1.8s var(--ease-in-out) infinite; }
 @keyframes vibe-sheen { to { transform: translateX(260%); } }
-@keyframes vibe-flow { 0% { left: -34%; } 100% { left: 100%; } }
+/* The same sweep as left: -34% → 100% of the bar, in the bar's own width
+   (34%): a transform runs on the compositor instead of a layout per frame. */
+@keyframes vibe-flow { 0% { transform: translateX(-100%); } 100% { transform: translateX(294.12%); } }
 .vibe-row-action { flex: none; height: 30px; margin-right: 8px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--lane) 45%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--lane) 12%, transparent); color: var(--v-ink); font-size: 12px; font-weight: 600; cursor: pointer; transition: background var(--motion-fast) var(--ease-out); }
 .vibe-row-action:hover { background: color-mix(in srgb, var(--lane) 24%, transparent); }
 .vibe-empty { padding: 14px 10px; color: var(--v-faint); font-size: 13px; line-height: 1.5; list-style: none; }
@@ -31181,6 +31183,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   // function has landed. A missing painter must never fail Work on it: the
   // main process has already queued the job by then.
   function paintChatLog() {
+    // The log sits in Command's HUD, which is hidden while Command is closed;
+    // rebuilding it on every assistant push there only fed the shared-controls
+    // observer. enter() paints it on the way back in.
+    if (!state.active) return;
     try {
       renderChatLog();
     } catch (error) {
@@ -31450,7 +31456,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   // list that would read the same is left alone (force: after an answer).
   let asksPainted = null;
   function renderAsks(full = null, force = false) {
-    if (!el.askList) return;
+    // Hidden with the rest of the HUD while Command is closed; enter() repaints.
+    if (!el.askList || !state.active) return;
     const questions = railQuestions(full);
     const open = questions.filter((question) => question.status === "open");
     const closed = questions.filter((question) => question.status !== "open").slice(-5);
@@ -41217,6 +41224,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       if (state.active) renderFeed();
     }).catch(() => {});
     renderFeed();
+    // Assistant pushes skip the chat log and the Ask cards while Command is
+    // closed (paintChatLog, renderAsks); bring both up to date.
+    paintChatLog();
+    if (state.railTab === "ask" && typeof renderAsks === "function") renderAsks();
     renderHint();
     window.MefiUsageTracker?.open?.();
     bumpHud();
@@ -44225,7 +44236,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       const result = await window.mefiStudio?.machineSet?.({ memoryWarnOverride: els.machineMemoryOverride.checked === true });
       status(`memory warn override ${result?.machine?.memoryWarnOverride === true ? "on" : "off"}`);
     });
-    window.mefiStudio?.onMachineStatus?.((status) => renderMachine(status));
+    // The panel is on this sheet, and opening it reads the machine afresh
+    // (load); a closed sheet keeps the status without rebuilding the panel.
+    window.mefiStudio?.onMachineStatus?.((status) => {
+      if (els.overlay?.hidden) { state.machine = status; return; }
+      renderMachine(status);
+    });
     // A quiet backstop poll: the push subscriptions above carry live updates,
     // and the browser fallback has none. boot.js's shared guard clears the
     // interval the moment the window hides and restarts it when it shows, so
@@ -44315,10 +44331,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         status(value ? words.on : words.off);
       });
     }
+    // Checkpoints are part of the tree's signature: an open sheet repaints
+    // only when they changed, keeping a half-typed detail draft and the
+    // focused row; a closed one repaints when load() runs on open.
     window.mefiStudio?.onCheckpoints?.((data) => {
       state.checkpoints = data ?? {};
-      renderTree();
-      renderDetail();
+      if (!els.overlay?.hidden) paintTreeAndDetail();
     });
     window.mefiStudio?.onBriefing?.((briefing) => {
       state.briefing = briefing;
@@ -66709,7 +66727,15 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   let queueRead, queueVersion = 0;
   let liveStatus = null, liveAssistant = null;
   const queueSnapshot = () => ({ ...queue });
-  const publishQueue = () => window.dispatchEvent(new CustomEvent("mefi:queue-settings", { detail: queueSnapshot() }));
+  // adoptQueue runs on every assistant push (up to four a second); the event
+  // re-renders the companion and re-walks the document's queue controls, so it
+  // goes out only when the settings it carries changed.
+  let queueSignature = "";
+  const publishQueue = () => {
+    const snapshot = queueSnapshot(), signature = JSON.stringify(snapshot);
+    if (signature === queueSignature) return;
+    queueSignature = signature; window.dispatchEvent(new CustomEvent("mefi:queue-settings", { detail: snapshot }));
+  };
   function adoptQueue(status, full) {
     if (status) liveStatus = status;
     if (full) liveAssistant = full;

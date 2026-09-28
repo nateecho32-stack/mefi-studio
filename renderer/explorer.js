@@ -1562,7 +1562,12 @@
       const result = await window.mefiStudio?.machineSet?.({ memoryWarnOverride: els.machineMemoryOverride.checked === true });
       status(`memory warn override ${result?.machine?.memoryWarnOverride === true ? "on" : "off"}`);
     });
-    window.mefiStudio?.onMachineStatus?.((status) => renderMachine(status));
+    // The panel is on this sheet, and opening it reads the machine afresh
+    // (load); a closed sheet keeps the status without rebuilding the panel.
+    window.mefiStudio?.onMachineStatus?.((status) => {
+      if (els.overlay?.hidden) { state.machine = status; return; }
+      renderMachine(status);
+    });
     // A quiet backstop poll: the push subscriptions above carry live updates,
     // and the browser fallback has none. boot.js's shared guard clears the
     // interval the moment the window hides and restarts it when it shows, so
@@ -1652,10 +1657,12 @@
         status(value ? words.on : words.off);
       });
     }
+    // Checkpoints are part of the tree's signature: an open sheet repaints
+    // only when they changed, keeping a half-typed detail draft and the
+    // focused row; a closed one repaints when load() runs on open.
     window.mefiStudio?.onCheckpoints?.((data) => {
       state.checkpoints = data ?? {};
-      renderTree();
-      renderDetail();
+      if (!els.overlay?.hidden) paintTreeAndDetail();
     });
     window.mefiStudio?.onBriefing?.((briefing) => {
       state.briefing = briefing;

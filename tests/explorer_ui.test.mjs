@@ -548,3 +548,39 @@ test("the Machine panel scans once per open, then follows the machine:status pus
   await env.explorer.refresh(); await flush();
   assert.equal(scans, 3, "an explicit refresh rescans");
 });
+
+test("a closed sheet keeps machine and checkpoint pushes without repainting, and opening paints them", async () => {
+  let scans = 0;
+  const machineFeeds = [], checkpointFeeds = [];
+  const status = (lines) => ({ lines, wait: false, leases: { exclusive: false, busy: false, holders: [] }, running: [], processes: [], actions: [], capacity: { canStart: true, resources: {} } });
+  let stored = {};
+  const env = environment({
+    machineStatus: async () => { scans += 1; return { ok: true, status: status(`scan ${scans}`) }; },
+    onMachineStatus: (fn) => machineFeeds.push(fn),
+    onCheckpoints: (fn) => checkpointFeeds.push(fn),
+    eyesCheckpointsRead: async () => ({ checkpoints: stored }),
+  });
+  await env.open();
+  const lines = env.element("machine-lines");
+  const firstRow = env.rows()[0];
+  assert.ok(firstRow, "the open sheet painted its tree");
+  // Open: an unchanged checkpoint set leaves the tree alone, a new note repaints it.
+  checkpointFeeds.forEach((fn) => fn({}));
+  assert.equal(env.rows()[0], firstRow, "an unchanged push keeps the painted rows");
+  stored = { "ses-root": [{ note: "halfway" }] };
+  checkpointFeeds.forEach((fn) => fn(stored));
+  assert.notEqual(env.rows()[0], firstRow, "a changed checkpoint repaints the tree");
+  // Closed: pushes are kept, nothing is rebuilt.
+  env.explorer.close();
+  const closedRow = env.rows()[0];
+  machineFeeds.forEach((fn) => fn(status("while closed")));
+  stored = { "ses-root": [{ note: "done" }, { note: "halfway" }] };
+  checkpointFeeds.forEach((fn) => fn(stored));
+  assert.equal(lines.text, "scan 1", "the closed panel is not rebuilt");
+  assert.equal(env.rows()[0], closedRow, "the closed tree is not rebuilt");
+  // Opening reads the machine afresh and repaints the changed tree.
+  await env.open();
+  assert.equal(scans, 2);
+  assert.equal(lines.text, "scan 2");
+  assert.notEqual(env.rows()[0], closedRow, "opening repaints what changed while closed");
+});
