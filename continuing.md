@@ -1,11 +1,12 @@
 # Continuing: handoff (2026-09-28, afternoon)
 
-Five things are open:
+Six things are open:
 1. **The 0.4.5 build.** It started today and paused at about 13:10, when the account hit its usage limit (it resets at 2:10 pm Central). The work is partial and uncommitted, in worktrees on this PC only.
 2. **Home PCs that keep working, and reaching them from Discord** (the co-work session). Start with Windows, the Your PCs agent lines and the Studio side of the Discord remote are on main. The bot side is parked as `wip/remote-dms`. The end-to-end test, the owner's setup and subscriptions-first routing are left (section 2).
 3. **Menu Batch 3.** This is the owner's decision, unchanged (section 3).
 4. **The website rebuild** (the "Continuing fixes" session). It is parked on the pushed branch `wip/site-rebuild` and is not published: the build agents hit the same usage limit (section 4).
 5. **Model tracker, community model ratings and probes** (the "Discord bot model feedback integration" session). The Studio half is gated on `wip/model-community`; the bot half is built and tested on the bot's `wip/model-reviews`, but not documented or wired yet (section 5).
+6. **Build as a coding-agent desktop.** Built but untested, on the pushed branch `wip/builder-mode`. Vibe as the social mode is not started (section 6).
 
 ## 1. 0.4.5: agents send only what's new, logging, load times, Friends 2.0
 
@@ -323,7 +324,7 @@ It wasn't done, because the first step contradicts a pinned contract: `tests/fix
 - Either way, capture before and after (the seeded fake-bridge preview at 1920x1080).
 - Leave `styles.css` ~4833 (the `data-nav-section` padding) and the `studio-ui.css` `@media (max-height: 600px)` rail block alone.
 
-Remove this section once that is decided, and delete the file when all four sections are done.
+Remove this section once that is decided, and delete the file when all six sections are done.
 
 
 ## 4. The website rebuild (not published)
@@ -499,3 +500,44 @@ The contract between the two repos is `docs/model-community.md` on the Studio br
   - the Message Content intent;
   - a fine-grained GitHub token with Contents read/write on `mefi-studio` only, pasted into the bot's `.env` by the owner;
   - a bot restart.
+
+## 6. Build as a coding-agent desktop (branch `wip/builder-mode`)
+
+The owner asked, with a screenshot of the Claude Code desktop app, for Build mode to manage work the way Claude Code and Codex do, with windows that pop in and out when needed. Vibe should become the social mode, and Home should bring Vibe back.
+
+**Where it is.** Branch `builder-mode`, pushed as `origin/wip/builder-mode` (`dfc0891`, one commit on `704ef0d`). The worktree is `C:\wt\builder` on this PC; its `node_modules` is a junction, so `rmdir` it before `git worktree remove`. Nothing is on main, and nothing has been run yet: not `check`, not `npm test`.
+
+**What is built.**
+- **Menu** (Build mode, rail shell): a Vibe | Build switch on top (Vibe has the home glyph), then the project's tasks listed like sessions: Chat with Mefi, Pinned, Needs you, Working, then the rest by the day each last moved, with status dots and a filter. Your name and what needs you sit at the foot.
+- **New task page:** "What's up next, <name>?" over a stats card with Tasks, Runs, Total tokens, Active days, Peak hour and Top model, a 22-week heatmap, a Models tab and All / 30d / 7d ranges.
+- **Task sessions:** the brief, every run and what it said, Mefi's notices, live output, open questions with their answer buttons, and a composer for a Note (the next run reads it), Ask (Mefi answers inline) or Change (a linked follow-up task).
+- **Composer chips:** project, branch with its uncommitted count, a Worktree switch, the permission mode, and the coding worker with its tier.
+- **Panes:** Activity, Output, Checks, Preview, Queue and Status dock beside the page, or pop out as windows you can move and resize. Drag one off the dock to pop it out, and back over the dock to dock it.
+- **Code:**
+  - New files: `renderer/panes.js` (`MefiPanes`), `renderer/builder.js` (`MefiBuilder`), `renderer/builder.css` and `scripts/work-stats.cjs` (pure).
+  - Host: `work:stats`, `work:where` and `work:worktrees` in main.cjs after `usage:task`, exposed in preload as `workStats`, `workWhere` and `workWorktrees`. `codingSessionUsage(now, days)` takes a reach, and `executor-worktrees.cjs` gained `prefer()` for `settings.executor.worktreeRuns`.
+  - Hooks: nav.js `renderRail` calls `MefiBuilder.decorateRail`, and `paintRecentTasks` defers to `MefiBuilder.paintRail`. workspace.js gained `snapshot()`, `setComposerMode` and the `mefi:workspace-state` event; its `composeTask`, `openTask` and `requestChange` go to the builder while it is active.
+- **Layout switch:** `mefiStudio.homeLayout` (`sessions` | `classic`), the `?home=` parameter, and Search's "Switch Home layout" (it reloads). `?capture=1` and `?smoke=1` keep the classic Home, so the Electron fixtures still see the page they pin. Closed panes wait in a hidden `.pane-shelf`, so Home's own code still finds their parts by id.
+
+**What is left, in order.**
+1. **Gates.**
+   - Rebase onto the current `origin/main` first. The Discord remote and the 0.4.5 slices change main.cjs and preload.cjs near the new handlers.
+   - `tests/booklet_build.test.mjs`: add `panes.js` and `builder.js` to `INLINE_SCRIPTS`, and `builder.css` to the stylesheet loop. `tests/module_purity.test.mjs`: add `scripts/work-stats.cjs`.
+   - New tests: work-stats (ranges, the heatmap window, model names read from `via`, tokens), the builder's grouping (fake DOM), and the panes (dock, float, close, shelf).
+   - Run `check` (`check-css --unused`, the auditor), `audit` and the full `npm test`; rebuild and commit `renderer/booklet.html`; add a TESTRUNS row, `docs/code-map.md` rows, Getting around in `docs/architecture.md`, and a CHANGELOG entry.
+2. **Fixes seen at 1920x1080.**
+   - The composer's bottom row wraps: the tier picker and Send drop to a second line. Fold "Use a task outline" and "Plan an idea" into a "+" menu, or let the tier chip shrink.
+   - The Start here invitation sits under the stats card on New task. Decide whether it belongs there.
+3. **Vibe as the social mode.** Not started.
+   - Cards that mount into any container: `MefiCompanionFriends.card()`, `MefiRooms.panel()` (call `dispose()` on removal) and `MefiPcSync.card()`, which includes the vault sections. Counts: `MefiRooms.pending()`, `MefiPcSync.badge()`, `MefiTogether.status().session`, `MefiMusic.status()` and `MefiCommunity.status()`.
+   - Each card is single-instance (fixed ids), and the companion hub's Friends bubble mounts the same ones. Listen together paints only inside the music dropdown (`MefiMusic.togetherHost()`).
+   - Friends 2.0 (section 1, wave 3, FS3) plans a Friends section: build on it rather than beside it, and leave `vibe.css`'s glass tokens to the "In-app performance" session.
+4. **Ask the owner.**
+   - Does Vibe keep its Build it box and work cards, or go social-first with work as one compact card?
+   - The Worktree chip turns per-run worktrees on from the UI. The module's header says they stay opt-in "until the owner flips the default".
+   - The worker and tier pickers save through `setAiRouting`, which copies the defaults into a Project team when the project inherits them.
+   - Should sessions become the only Home? Then the Electron fixtures that pin the classic Home need rewriting; `workflow-render` pins the pinned rail at 256 px, and the sessions layout uses 272.
+
+**How to look at it.** Use the seeded fake-bridge preview (a copy of `website/tools/screenshots` `make_preview.cjs` and `capture.cjs`, offscreen Electron at 1920x1080) with extra seeds for `workStats`, `workWhere`, `tasksAttempts` and `getAiRouting`. On this PC the copy is in the scratchpad of Claude session c568012b (`shots/`).
+
+Remove this section once the branch lands and the owner has answered.
