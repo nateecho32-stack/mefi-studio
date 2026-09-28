@@ -34,6 +34,33 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-28 - Cowork file claims between PCs; keep this PC up to date
+
+A cowork room linked to the project (settings.cowork) carries live file
+claims through the rooms hub: the dispatch's write-lock step also claims the
+run's files there, and claimWork treats other PCs' exclusive claims as
+in-flight jobs, so a pick on those files defers. Claims are renewed every
+minute and held until this PC's next push (or 30 minutes) when the run did
+its work. Keep this PC up to date asks GitHub once a minute (sync.mjs
+remoteMoved) and fast-forwards when nothing is in the way and no builder
+runs. Rooms say moderators can read them; Set up this PC lists what links
+this PC; a hub naming its studioAppId fills the link app ID.
+
+- `npm run build-booklet` (no change), `npm run check` (187 targets, 382
+  specs) and `npm run audit` (zero findings): PASS.
+- New suites: cowork (claim paths, overlap, leases, held jobs, settings),
+  cowork_host (claim before a run, defer on conflict, hub silent in 5 s
+  never holds work, release and hold until push, renew and drop gone),
+  sync_follow (remoteMoved and the follow pull's conditions). Additions to
+  hub_rooms (claims calls and frame, a refusal's conflict list), hub_host
+  (studioAppId fill), rooms_ui (privacy line, cowork link and claims),
+  pc_sync_ui (follow switch, Linking this PC) and sync_host (follow timer,
+  release on push).
+- `npm test` in a private worktree, exit 0: Node parallel stage 4273 tests,
+  4268 passed, 5 skipped, 0 failures; Electron stage 42 tests, 41 passed, 1
+  skipped; `eyes_toggle_electron` 1/1; `occlusion_probe` 1 passed, 1
+  capability skip; Python contracts OK (248); normalized-path lock passed.
+
 ## 2026-09-28 - Discord linking without environment variables; vault kept in step
 
 Settings › Community › Connection details saves the Mefi Studio Link
@@ -470,10 +497,6 @@ fail; Python 248 OK, 1 skipped; normalized-path lock 6/6). Before the pass,
 (mid 0.743 against bass 0.535 x 1.4) and once on its 80 s kill bound while
 five audits ran; it passed in this run.
 
-
-## 2026-09-27 morning - Handout rebroadcast dedupe: a heard note is not re-sent; AI-link retirement re-verified (task_plan_mujom5h3_0, run_1790505348418_7)
-
-Grouped A-Eyes alerts "Compactor rebroadcasts finished work item" (task_6e3c0afebf8489ff) and "Queue handout broadcast spam" (task_9645fd821b9d03bc). Member 1 is the stale work broadcast loop the sibling session already retired: inspected HEAD before touching anything and adopted 6f1ef62 as it stands (assistant.mjs aiLinkTicket/aiLinkHealthy/aiLinkResolved, the compact()/tidy() ai-block absorb, the resolvedAiLinkWork promotion guard); all four board.test.mjs retirement tests green and the live data/eyes-assistant.json read read-only confirms the loop is over (ai online true, failures 0, backoffUntil 0, requests 0), so no further piece was owed there. Member 2's general spam had a second half the retirement did not cover: sendMail only deduped identical UNREAD notes, so once the foreman read a handout (it reads its inbox every start) the compactor's next identical "N work item(s) ready — yours to hand out" landed as a fresh row, packet and chatter line every pass — the seven handouts in eleven minutes that kept coming after the briefer's rebuke. Fix: assistant.mjs exports MAIL_REBROADCAST_MS (15 min) and sendMail now returns the state unchanged for a repeat of the same note from the same seat while a read copy sits within that window, so host assistantSendMail reports it unsent and pushes nothing; changed handouts (a different count or next pick) and repeats after the window still go out, and the unread-refresh path is untouched. Tests: new module and host cases in tests/assistant_mail.test.mjs; node --test tests/assistant_mail.test.mjs tests/board.test.mjs tests/briefing_fix_requests.test.mjs 57 pass / 0 fail; node --test tests/request_dedupe tests/task_delegation tests/task_grouping_cleanup tests/idea_backlog tests/task_history tests/work_admission_host tests/request_admission tests/board_growth tests/assistant_loop tests/role_provider_isolation 137 pass / 0 fail; python tools/test_mefi_studio_assistant.py 66 OK; npm run check ok (165 targets); npm test all gates pass; npm run audit 0 errors / 0 warnings. Sibling work-tree hunks preserved untouched.
 
 ## Read Before Any Tests
 
