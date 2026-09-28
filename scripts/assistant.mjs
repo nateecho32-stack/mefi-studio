@@ -3592,7 +3592,11 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
   const ideaSeen = new Set();
   const dedupedIdeas = [];
   for (const idea of outIdeas) {
-    const key = `${compactKey(idea.title)}|${compactKey(idea.detail)}`;
+    // Mefi's saved suggestions can use the same wording for different
+    // owner-selected systems. Their scope is part of their obligation;
+    // compaction must not erase it after the save path kept it distinct.
+    const scope = idea.suggestedBy === "mefi" ? `|mefi:${JSON.stringify([str(idea.systemId), str(idea.intent), uniqueStrings(idea.files).sort()])}` : "";
+    const key = `${compactKey(idea.title)}|${compactKey(idea.detail)}${scope}`;
     if (key && ideaSeen.has(key) && idea.status === "new" && !idea.taskId) {
       report.duplicateIdeas += 1;
       continue;

@@ -301,7 +301,9 @@
   }
   async function loadWorkItems() {
     const api = bridge();
+    const project = window.MefiWorkspace?.activeProjectId?.() ?? null;
     const [ideas, plans] = await Promise.all([api?.ideasList?.().catch(() => null), api?.planningList?.({}).catch(() => null)]);
+    if (project !== (window.MefiWorkspace?.activeProjectId?.() ?? null)) return;
     data.ideas = Array.isArray(ideas?.ideas) ? ideas.ideas : Array.isArray(ideas) ? ideas : [];
     data.plans = Array.isArray(plans?.plans) ? plans.plans : [];
     changed("work");
@@ -878,6 +880,10 @@
       ...options, getMap: () => data.map, getProject: () => data.mapProject,
       partsOf: mapParts, rankSystems: rankedSystems, linksOf: visibleLinks,
       makeCanvas, drawChunk, palette, rgba, label, still,
+      onIdeaSelect: (item, group) => {
+        const system = data.map?.systems?.find(row => row.id === group.systemId) ?? null;
+        window.MefiVibe?.composeEvolution?.({ projectId: data.mapProject, intent: item.intent || "improve", system, ...(item.kind === "idea" && !item.taskId ? { ideaId: item.sourceId } : {}), idea: { title: item.title || item.name, text: item.detail || item.text || "" }, files: item.files ?? [] });
+      },
     });
   }
 
@@ -909,6 +915,10 @@
 
   function workOnRegion(system, part = null, file = null) {
     if (!system) return;
+    if (window.MefiVibe?.mode?.() === "vibe") {
+      window.MefiVibe.composeEvolution?.({ projectId: data.mapProject, intent: "modify", system, file, files: part?.files ?? system.files ?? [] });
+      return;
+    }
     window.MefiNav?.go?.("workspace");
     setTimeout(() => {
       const input = $("workspace-input");
@@ -928,7 +938,7 @@
     target.textContent = "";
     const explorer = () => compact ? hub.map : sheetMap;
     if (!system) {
-      target.append(node("p", "pm-region-kicker", "Project overview"), node("h3", "", "Find your next starting point"), node("p", "ab-quiet", "Inspect a system, follow what connects it, or search for a file. Double-click a chunk to explore inside."));
+      target.append(node("p", "pm-region-kicker", "Project overview"), node("h3", "", "Find your next starting point"), node("p", "ab-quiet", "Follow systems that change together, explore their files, or switch to the Ideas tree to see work grow. Double-click a node to explore inside."));
       const stats = node("div", "pm-overview-stats");
       const systems = data.map?.systems ?? [];
       for (const [value, name] of [[systems.length, "systems"], [data.map?.sources?.present ?? systems.reduce((sum, row) => sum + (row.fileCount ?? 0), 0), "present files"]]) {
@@ -971,6 +981,15 @@
       }); actions.append(copy);
     }
     target.append(actions);
+    const evolve = node("div", "pm-region-actions");
+    evolve.setAttribute("aria-label", "Work with Mefi in this area");
+    for (const intent of ["modify", "experiment", "fix", "improve"]) {
+      const action = node("button", "ghost mini", intent[0].toUpperCase() + intent.slice(1)); action.type = "button";
+      action.title = `Prepare a ${intent} brief for ${file?.path || system.name || system.id}`;
+      action.addEventListener("click", () => window.MefiVibe?.composeEvolution?.({ projectId: data.mapProject, intent, system, file, files: part?.files ?? system.files ?? [] }));
+      evolve.append(action);
+    }
+    target.append(evolve);
     const { tasks, ideas, plans, loose } = regionItems(system);
     const place = async (kind, id, systemId) => {
       const result = await bridge()?.brainMapPlace?.({ kind, id, systemId }).catch(() => null);
@@ -1518,6 +1537,8 @@
     await loadBrain();
     scene.taskId = pickTask();
     showTab(typeof params.tab === "string" ? params.tab : sheetTab);
+    if (sheetTab === "map" && params.mapMode === "ideas") { await loadMap(false); sheetMap?.showIdeas?.(); }
+    if (sheetTab === "map" && params.mapMode === "systems") sheetMap?.showSystems?.();
     renderList();
     renderFeed();
     if (typeof params.taskId === "string" && sheetTab === "live") showDetails("live", true, el.list.querySelector('[aria-pressed="true"]'));
@@ -1969,7 +1990,8 @@
   const wanted = () => isOpen() || $("ws-hub")?.hidden === false;
   const reloadBrain = () => { if (wanted()) loadBrain(); };
   const reloadCompanion = () => refreshCompanion();
-  const reloadAll = () => { reloadBrain(); refreshCompanion(); };
+  const reloadMapWork = () => { if (wanted()) { loadMap(false); loadWorkItems(); } };
+  const reloadAll = () => { reloadBrain(); reloadMapWork(); refreshCompanion(); };
   function wire() {
     const api = bridge();
     if (!api) return;
@@ -1987,11 +2009,12 @@
       soon(reloadCompanion, 900);
     });
     api.onTasks?.(() => soon(reloadAll, 900));
+    api.onIdeas?.(() => soon(reloadMapWork, 400));
     api.onAssistant?.(() => soon(reloadCompanion, 900));
     api.onProjects?.((result) => {
       if (!result?.activeId || result.activeId === data.mapProject) return;
       ++mapRequest; data.mapProject = result.activeId; data.map = null;
-      data.places = { ideas: {}, plans: {} }; changed("map");
+      data.places = { ideas: {}, plans: {} }; data.tasks = []; data.ideas = []; data.plans = []; changed("map");
       if (isOpen() && sheetTab === "map") { loadMap(false); loadWorkItems(); }
     });
   }

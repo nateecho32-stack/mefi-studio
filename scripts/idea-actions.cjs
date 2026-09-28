@@ -1,9 +1,28 @@
 const { OWNER_REQUEST_SOURCES, requestTitle } = require("./work-admission.cjs");
+const { createHash } = require("node:crypto");
+const { normalizePath } = require("./project-map.cjs");
 
 // Apply one UI intent to the latest board, so reading or keeping an idea
 // cannot replace a promotion or erase ideas that arrived in the meantime.
-function applyIdeaAction(ideas, { action, ideaId, ideaIds } = {}, now = Date.now()) {
+function applyIdeaAction(ideas, payload = {}, now = Date.now()) {
+  const { action, ideaId, ideaIds } = payload;
   const rows = Array.isArray(ideas) ? ideas : [];
+  if (action === "add") {
+    const clean = (value, max) => typeof value === "string" ? value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim().slice(0, max) : "";
+    if (typeof payload.detail === "string" && payload.detail.trim().length > 16000) return { ok: false, error: "Shorten the idea to 16,000 characters before saving; no text was saved." };
+    const title = clean(payload.title, 200), detail = clean(payload.detail, 16000);
+    if (!title || !detail) return { ok: false, error: "Give the idea a title and describe the change." };
+    const files = [...new Set((Array.isArray(payload.files) ? payload.files : []).slice(0, 30).map(file => normalizePath(file)).filter(Boolean))];
+    const intent = ["modify", "experiment", "fix", "improve"].includes(payload.intent) ? payload.intent : "improve";
+    const systemId = clean(payload.systemId, 120), systemName = clean(payload.systemName, 180);
+    const id = `idea_mefi_${createHash("sha256").update(JSON.stringify([title, detail, [...files].sort(), intent, systemId])).digest("hex").slice(0, 24)}`;
+    const existing = rows.find(row => row.id === id);
+    if (existing) return { ok: true, idea: existing, ideas: rows, added: false };
+    // Chat notes are excluded from automatic admission until the owner
+    // chooses Keep or Build. Saving a suggestion must not launch a worker.
+    const idea = { id, title, detail, files, intent, ...(systemId ? { systemId, systemName } : {}), source: "chat", suggestedBy: "mefi", status: "new", read: false, at: now, updatedAt: now };
+    return { ok: true, idea, ideas: [idea, ...rows], added: true };
+  }
   if (action === "clean") {
     const ids = new Set(Array.isArray(ideaIds) ? ideaIds : []);
     return { ok: true, ideas: rows.filter((idea) => !(ids.has(idea.id) && idea.status === "done")) };

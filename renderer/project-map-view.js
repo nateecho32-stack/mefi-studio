@@ -1,6 +1,5 @@
-// Project map navigation: a searchable atlas, spatial selection and a camera
-// that preserves each stop. Data and the shared isometric painter come from
-// agent-brain.js; this view never reads files or starts work itself.
+// Project map navigation: evidence-backed relationships and a living work tree.
+// The host owns discovery and grouping; this view never starts work itself.
 (() => {
   "use strict";
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
@@ -15,7 +14,43 @@
   };
   const keyOf = (location) => JSON.stringify([location.systemId, location.partId]);
 
-  function create({ canvas, stage, tools, minHeight, getMap, getProject, partsOf, rankSystems, linksOf, makeCanvas, drawChunk, palette, rgba, label, still, onSelect, onNavigate }) {
+  // Connected systems share a branch. Activity and scan ordering never shuffle
+  // the geometry; only new relationship evidence can change the topology.
+  function relationshipLayout(rows, links) {
+    const byId = new Map(rows.map(row => [row.id, row]));
+    const adjacent = new Map(rows.map(row => [row.id, new Set()]));
+    const edges = links.filter(link => link.a !== link.b && byId.has(link.a) && byId.has(link.b));
+    for (const edge of edges) { adjacent.get(edge.a).add(edge.b); adjacent.get(edge.b).add(edge.a); }
+    const order = (a, b) => adjacent.get(b).size - adjacent.get(a).size || String(a).localeCompare(String(b));
+    const visited = new Set(), nodes = [], regions = [];
+    let top = 46, maxX = 250;
+    for (const root of [...byId.keys()].filter(id => adjacent.get(id).size).sort(order)) {
+      if (visited.has(root)) continue;
+      const levels = [], queue = [[root, 0]]; visited.add(root);
+      for (let index = 0; index < queue.length; index++) {
+        const [id, depth] = queue[index]; (levels[depth] ??= []).push(id);
+        for (const next of [...adjacent.get(id)].sort(order)) if (!visited.has(next)) { visited.add(next); queue.push([next, depth + 1]); }
+      }
+      const height = Math.max(...levels.map(items => items.length)) * 134;
+      regions.push({ name: `Connected around ${byId.get(root).name}`, x: 16, y: top - 24 });
+      for (let depth = 0; depth < levels.length; depth++) {
+        const bucket = levels[depth].sort((a, b) => String(a).localeCompare(String(b)));
+        bucket.forEach((id, index) => nodes.push({ row: byId.get(id), x: 125 + depth * 292, y: top + (height - bucket.length * 134) / 2 + index * 134 + 44 }));
+        maxX = Math.max(maxX, 250 + depth * 292);
+      }
+      top += height + 56;
+    }
+    const unconnected = [...byId.keys()].filter(id => !visited.has(id)).sort((a, b) => String(a).localeCompare(String(b)));
+    if (unconnected.length) {
+      regions.push({ name: "Connections still to discover", x: 16, y: top - 24 });
+      unconnected.forEach((id, index) => nodes.push({ row: byId.get(id), x: 125 + index % 3 * 292, y: top + Math.floor(index / 3) * 134 + 44 }));
+      top += Math.ceil(unconnected.length / 3) * 134;
+      maxX = Math.max(maxX, 250 + (Math.min(3, unconnected.length) - 1) * 292);
+    }
+    return { nodes, edges, regions, bounds: { w: maxX + 14, h: Math.max(160, top + 14) } };
+  }
+
+  function create({ canvas, stage, tools, minHeight, getMap, getProject, partsOf, rankSystems, linksOf, makeCanvas, palette, rgba, label, still, onSelect, onNavigate, onIdeaSelect }) {
     const widget = { systemId: null, partId: null, file: null, selected: null, hovered: null, view: null, layout: [] };
     const camera = { x: 0, y: 0, scale: 1 }, target = { ...camera };
     let focusId = null, filter = "all", query = "", rows = [], catalog = [], systems = new Map(), parts = new Map();
@@ -24,6 +59,8 @@
     let transition = null, needsFit = true, fitMode = true, suppressClick = false, moving = false, hoverMoving = false;
     const lifts = new Map();
     let navigatorOpen = false, navigatorTouched = false, width = 0, height = 0;
+    let mode = "systems", ideaQuery = "", graphEdges = [], graphRegions = [], hierarchyRoot = null;
+    const ideaExpansion = new Map();
     const motion = () => !still() && document.documentElement.dataset.motion !== "off";
     const level = () => widget.partId ? "files" : widget.systemId ? "parts" : "systems";
     const system = () => systems.get(widget.systemId) ?? null;
@@ -41,7 +78,11 @@
     const up = button("ghost mini pm-history", "↑", "Go up one level (Backspace)", () => parent());
     const trail = element("nav", "ab-map-breadcrumb"); trail.setAttribute("aria-label", "Project map location");
     const browse = button("ghost mini pm-browse", "Browse", "Show or hide map contents", () => setNavigator(!navigatorOpen, true));
-    navigation.append(back, forward, up, trail, browse);
+    const modes = element("div", "pm-modes"); modes.setAttribute("aria-label", "Map view");
+    for (const [id, title] of [["systems", "Systems"], ["ideas", "Ideas tree"]]) {
+      const pick = button("pm-mode", title, `Show ${title.toLowerCase()}`, () => setMode(id)); pick.dataset.mode = id; modes.append(pick);
+    }
+    navigation.append(modes, back, forward, up, trail, browse);
     tools?.prepend(navigation);
 
     const navigator = element("aside", "pm-navigator"); navigator.setAttribute("aria-label", "Map contents");
@@ -60,6 +101,17 @@
     navigator.append(searchBox, filters, listTitle, index); stage.append(navigator);
     const heading = element("div", "pm-scene-heading"); const headingTitle = element("strong", ""), headingMeta = element("span", "");
     heading.append(headingTitle, headingMeta); stage.append(heading);
+    const legend = element("div", "pm-legend"); legend.setAttribute("aria-label", "Map relationship legend");
+    legend.append(element("span", "pm-legend-link", "Changed together"), element("span", "pm-legend-branch", "Contains"), element("span", "pm-legend-observed", "Agent explored")); stage.append(legend);
+    const relationships = element("div", "pm-relationships"); relationships.setAttribute("aria-live", "polite"); navigator.append(relationships);
+    const ideaPanel = element("section", "pm-ideas"); ideaPanel.hidden = true; ideaPanel.setAttribute("aria-label", "Ideas and work tree");
+    const ideaIntro = element("div", "pm-ideas-intro");
+    const ideaHeading = element("div", ""); ideaHeading.append(element("p", "pm-region-kicker", "Growing with your project"), element("h3", "", "Ideas become branches of work"), element("p", "ab-quiet", "Grouped by system, then by progress. Branches move as agents discover files and work moves forward."));
+    const ideaSearch = element("input", "pm-search pm-idea-search"); ideaSearch.type = "search"; ideaSearch.placeholder = "Find an idea or task…"; ideaSearch.setAttribute("aria-label", "Search the ideas tree");
+    ideaSearch.addEventListener("input", () => { ideaQuery = ideaSearch.value; renderIdeas(); });
+    ideaIntro.append(ideaHeading, ideaSearch);
+    const ideaRoot = element("div", "pm-idea-root"), ideaBranches = element("div", "pm-idea-branches");
+    ideaPanel.append(ideaIntro, ideaRoot, ideaBranches); stage.append(ideaPanel);
     const status = element("span", "pm-status"); status.setAttribute("role", "status"); stage.append(status);
     const controls = element("div", "pm-camera"); controls.setAttribute("aria-label", "Map camera");
     const zoomOut = button("ghost mini", "−", "Zoom out", () => zoomAt(target.scale / 1.25));
@@ -75,6 +127,63 @@
     const tooltip = element("div", "ab-tip pm-tooltip"); tooltip.hidden = true; stage.append(tooltip);
     const empty = element("div", "pm-empty"); empty.hidden = true; stage.append(empty);
 
+    function setMode(next) {
+      mode = next === "ideas" ? "ideas" : "systems"; stage.dataset.mode = mode; navigation.dataset.mode = mode;
+      const pane = stage.closest(".agent-brain-pane"); if (pane) pane.dataset.mapMode = mode;
+      ideaPanel.hidden = mode !== "ideas"; tooltip.hidden = true;
+      for (const pick of modes.children) pick.setAttribute("aria-pressed", String(pick.dataset.mode === mode));
+      syncControls(); if (mode === "ideas") renderIdeas(); else wake();
+      onNavigate?.();
+    }
+    function renderIdeas() {
+      const tree = map?.ideaTree ?? { groups: [], counts: {} }, words = ideaQuery.toLowerCase().trim().split(/\s+/).filter(Boolean);
+      const matches = item => words.every(word => `${item.title} ${item.summary ?? ""} ${item.status ?? ""}`.toLowerCase().includes(word)) || (item.children ?? []).some(matches);
+      const groups = tree.groups ?? [], counts = tree.counts ?? {};
+      const active = document.activeElement, focusKey = ideaBranches.contains(active) ? active?.dataset.ideaAction : null;
+      ideaRoot.replaceChildren(element("strong", "", "Your next version"), element("span", "", `${counts.ideas ?? 0} ideas · ${counts.queued ?? 0} queued · ${counts.active ?? 0} in progress · ${counts.done ?? 0} completed`));
+      if (tree.truncated) ideaRoot.append(element("small", "pm-idea-match", `${tree.truncated} older items are available in Work.`));
+      ideaBranches.replaceChildren();
+      const disclosure = (name, title, key, count, open = true) => {
+        const branch = element("details", name); branch.open = words.length > 0 || (ideaExpansion.get(key) ?? open);
+        const summary = element("summary", ""); summary.append(element("span", "", title), element("small", "", String(count))); branch.append(summary);
+        branch.addEventListener("toggle", () => { if (!words.length && branch.isConnected) ideaExpansion.set(key, branch.open); }); return branch;
+      };
+      function appendItem(parent, item, group, seen = new Set()) {
+        if (seen.has(item.id)) return;
+        const nextSeen = new Set(seen); nextSeen.add(item.id);
+        const li = element("li", "pm-idea-node"); li.dataset.stage = item.stage || "ideas";
+        const card = element("article", "pm-idea-card");
+        const meta = element("div", "pm-idea-meta"); meta.append(element("span", "", item.kind === "task" ? "Task" : "Idea"), element("span", "", String(item.status || item.stage || "idea").replace(/[-_]/g, " ")));
+        card.append(meta, element("strong", "pm-idea-title", item.title || "Untitled idea"));
+        if (item.summary) card.append(element("p", "", item.summary));
+        const matchLabel = { inferred: "Suggested grouping", placed: "Placed by you", files: "Matched to files", observed: "Agent discovered", linked: "Linked to work", unmapped: "Still finding its place" }[item.match];
+        if (matchLabel) card.append(element("small", "pm-idea-match", matchLabel));
+        if (onIdeaSelect) {
+          const act = button("ghost mini pm-idea-action", "Work with Mefi", `Work with Mefi on ${item.title || "this idea"}`, () => onIdeaSelect(item, group)); act.dataset.ideaAction = item.id; card.append(act);
+        }
+        li.append(card);
+        const children = (item.children ?? []).filter(child => !words.length || matches(child));
+        if (children.length) {
+          const branch = disclosure("pm-idea-children", "Related work", `node:${item.id}`, children.length);
+          const list = element("ul", "pm-idea-items"); for (const child of children) appendItem(list, child, group, nextSeen); branch.append(list); li.append(branch);
+        }
+        parent.append(li);
+      }
+      for (const group of groups) {
+        const stages = (group.stages ?? []).map(row => ({ ...row, items: (row.items ?? []).filter(item => !words.length || matches(item)) })).filter(row => row.items.length);
+        if (!stages.length) continue;
+        const branch = disclosure("pm-idea-group", group.name, `group:${group.id}`, stages.reduce((count, row) => count + row.items.length, 0)); branch.dataset.group = group.id;
+        if (group.systemId && systems.has(group.systemId)) branch.append(button("ab-link pm-idea-system", "Explore system →", `Explore ${group.name}`, () => { setMode("systems"); go({ systemId: group.systemId }); }));
+        for (const row of stages) {
+          const stageBranch = disclosure("pm-idea-phase", row.name, `stage:${group.id}:${row.id}`, row.items.length, row.id !== "done"); stageBranch.dataset.stage = row.id;
+          const items = element("ul", "pm-idea-items"); for (const item of row.items) appendItem(items, item, group); stageBranch.append(items); branch.append(stageBranch);
+        }
+        ideaBranches.append(branch);
+      }
+      if (!ideaBranches.children.length) ideaBranches.append(element("p", "pm-ideas-empty", words.length ? "No ideas or tasks match this search." : "Your first idea starts a branch. Ask Mefi in Vibe to modify, experiment, fix or improve something; saved ideas and tasks will grow here."));
+      if (focusKey) [...ideaBranches.querySelectorAll("[data-idea-action]")].find(item => item.dataset.ideaAction === focusKey)?.focus({ preventScroll: true });
+    }
+
     function wake() {
       if (!motion()) { Object.assign(camera, target); transition = null; glide = { x: 0, y: 0 }; lifts.clear(); hoverMoving = false; }
       widget.view?.paint(); widget.view?.kick();
@@ -86,7 +195,7 @@
     }
     function visibleArea() {
       const left = navigatorOpen && width > 650 ? 230 : 18;
-      const top = height < 280 ? 57 : 84, bottom = height < 280 ? 55 : 80;
+      const top = height < 280 ? 66 : 112, bottom = height < 280 ? 55 : 80;
       return { left, top, w: Math.max(80, width - left - 22), h: Math.max(35, height - top - bottom) };
     }
     function buildCatalog() {
@@ -116,12 +225,19 @@
       shown = 60; layout();
     }
     function layout() {
-      // Stable world geometry: resizing the window moves the camera, never
-      // shuffles the same files into different rows underneath the pointer.
-      const columns = Math.min(7, Math.max(2, Math.ceil(Math.sqrt(rows.length * 1.35))));
-      const used = Math.min(columns, rows.length);
-      bounds = { w: Math.max(220, used * 198 + 28), h: Math.max(180, Math.ceil(rows.length / columns) * 156 + 48) };
-      widget.layout = rows.map((row, i) => ({ row, x: 112 + i % columns * 198 + (Math.floor(i / columns) % 2 ? 16 : 0), y: 64 + Math.floor(i / columns) * 156 }));
+      hierarchyRoot = null;
+      if (level() === "systems") {
+        const graph = relationshipLayout(rows, linksOf(map));
+        widget.layout = graph.nodes; graphEdges = graph.edges; graphRegions = graph.regions; bounds = graph.bounds; return;
+      }
+      // The parent and its visible containment branches stay on the map when
+      // drilling down. Large folders grow vertically and remain searchable.
+      const ordered = [...rows].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+      const columns = Math.min(5, Math.max(1, Math.ceil(Math.sqrt(rows.length))));
+      bounds = { w: Math.max(264, Math.min(columns, rows.length) * 254 + 20), h: Math.max(220, Math.ceil(rows.length / columns) * 146 + 150) };
+      hierarchyRoot = { x: bounds.w / 2, y: 45, name: part()?.name || system()?.name || "Project", kind: level() === "files" ? "Part" : "System" };
+      widget.layout = ordered.map((row, index) => ({ row, x: 137 + index % columns * 254, y: 184 + Math.floor(index / columns) * 146 }));
+      graphEdges = []; graphRegions = [];
     }
     function inform() {
       const row = focused();
@@ -132,6 +248,7 @@
     }
     function saveStop() { if (cursor >= 0) history[cursor] = location(); }
     function go(next, { restore = false, direction = 1 } = {}) {
+      if (mode !== "systems") setMode("systems");
       if (next.systemId && !systems.has(next.systemId)) return;
       if (next.partId && !(parts.get(next.systemId) ?? []).some(row => row.id === next.partId)) return;
       saveStop();
@@ -187,6 +304,17 @@
     }
     function updateSelection() {
       for (const el of index.querySelectorAll(".ab-index-item")) el.setAttribute("aria-pressed", String(!query && el.dataset.id === focusId));
+      relationships.replaceChildren();
+      const row = focused();
+      relationships.hidden = !row || level() !== "systems";
+      if (!row || level() !== "systems") return;
+      relationships.append(element("strong", "", "Connected systems"));
+      const adjacent = graphEdges.filter(edge => edge.a === row.id || edge.b === row.id);
+      for (const edge of adjacent) {
+        const other = systems.get(edge.a === row.id ? edge.b : edge.a); if (!other) continue;
+        relationships.append(button("ab-link pm-related", `${other.name || other.id} · ${edge.label || "Changed together"}`, `Inspect ${other.name || other.id}: ${edge.label || "Changed together"}`, () => select(rows.find(item => item.id === other.id), true)));
+      }
+      if (!adjacent.length) relationships.append(element("span", "ab-quiet", "No relationship evidence yet. Connections appear as work touches these systems together."));
     }
     function listRows() {
       if (!query.trim()) return rows;
@@ -221,7 +349,7 @@
       if (previousId) [...index.querySelectorAll(".ab-index-item")].find(el => el.dataset.key === previousId)?.focus({ preventScroll: true });
     }
     function syncControls() {
-      back.disabled = cursor <= 0; forward.disabled = cursor >= history.length - 1; up.disabled = !widget.systemId;
+      back.disabled = mode === "ideas" || cursor <= 0; forward.disabled = mode === "ideas" || cursor >= history.length - 1; up.disabled = mode === "ideas" || !widget.systemId;
       trail.replaceChildren();
       const crumb = (text, action, current) => {
         const el = button("ab-crumb", text, text, action);
@@ -234,7 +362,7 @@
       filters.hidden = Boolean(query.trim());
       headingTitle.textContent = part()?.name || system()?.name || "Your project";
       const working = rows.filter(row => row.active).length;
-      headingMeta.textContent = `${rows.length} ${level()}${filter !== "all" ? ` · ${filter}` : working ? ` · ${working} working` : ""}`;
+      headingMeta.textContent = `${rows.length} ${level()}${filter !== "all" ? ` · ${filter}` : working ? ` · ${working} working` : ""}${level() === "systems" ? ` · ${graphEdges.length} observed connections` : " · contains the branches below"}`;
       heading.title = part()?.name || system()?.name || "Your project";
       empty.hidden = rows.length > 0; empty.replaceChildren();
       if (!rows.length) {
@@ -245,6 +373,7 @@
         }));
       }
       renderIndex();
+      for (const pick of modes.children) pick.setAttribute("aria-pressed", String(pick.dataset.mode === mode));
     }
     search.addEventListener("input", () => { query = search.value; shown = 60; filters.hidden = Boolean(query.trim()); renderIndex(); });
     search.addEventListener("keydown", event => {
@@ -282,6 +411,12 @@
     function drawMini(P) {
       const ctx = mini.getContext("2d"), m = miniGeometry(), area = visibleArea();
       ctx.clearRect(0, 0, 152, 98);
+      const points = new Map(widget.layout.map(item => [item.row.id, item]));
+      ctx.strokeStyle = rgba(P.mint, .7); ctx.lineWidth = 1;
+      for (const edge of graphEdges) {
+        const a = points.get(edge.a), b = points.get(edge.b); if (!a || !b) continue;
+        ctx.beginPath(); ctx.moveTo(m.x + a.x * m.scale, m.y + a.y * m.scale); ctx.lineTo(m.x + b.x * m.scale, m.y + b.y * m.scale); ctx.stroke();
+      }
       for (const item of widget.layout) {
         ctx.fillStyle = item.row.id === focusId ? P.bright : item.row.active ? P.live : rgba(P.mint, .48);
         ctx.fillRect(m.x + (item.x - 50) * m.scale, m.y + (item.y - 20) * m.scale, Math.max(3, 100 * m.scale), Math.max(2, 55 * m.scale));
@@ -300,22 +435,71 @@
     mini.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); fit(true); } });
     function drawScene(ctx, layoutRows, pose, P, alpha = 1, offset = 0) {
       ctx.save(); ctx.globalAlpha = alpha; ctx.translate(pose.x, pose.y + offset); ctx.scale(pose.scale, pose.scale);
-      if (level() === "systems" && !transition) {
+      const fontScale = clamp(1 / pose.scale, 1, 1.5);
+      if (layoutRows === widget.layout) {
         const positions = new Map(layoutRows.map(item => [item.row.id, item]));
-        for (const link of linksOf(map)) {
+        for (const region of graphRegions) label(ctx, region.name, region.x, region.y, { size: 10 * fontScale, weight: 600, color: P.muted, align: "left" });
+        for (const link of graphEdges) {
           const a = positions.get(link.a), b = positions.get(link.b); if (!a || !b) continue;
           const lit = [link.a, link.b].includes(widget.hovered || focusId);
-          ctx.strokeStyle = rgba(lit ? P.bright : P.mint, lit ? .58 : .14); ctx.lineWidth = lit ? 1.8 : 1;
-          ctx.beginPath(); ctx.moveTo(a.x, a.y + 20); ctx.bezierCurveTo(a.x, (a.y + b.y) / 2 + 45, b.x, (a.y + b.y) / 2 + 45, b.x, b.y + 20); ctx.stroke();
+          const direction = b.x >= a.x ? 1 : -1, sameColumn = a.x === b.x;
+          const startX = a.x + 108 * direction, endX = b.x - 108 * direction;
+          const midX = sameColumn ? a.x + 142 : (startX + endX) / 2, midY = (a.y + b.y) / 2;
+          ctx.strokeStyle = rgba(lit ? P.bright : P.mint, lit ? .95 : .58); ctx.lineWidth = (lit ? 2.4 : 1.5) / pose.scale;
+          ctx.beginPath(); ctx.moveTo(startX, a.y); ctx.bezierCurveTo(midX, a.y, midX, b.y, sameColumn ? b.x + 108 : endX, b.y); ctx.stroke();
+          // All current edges mean shared change evidence, not dependency flow.
+          if (pose.scale >= .5 || lit) {
+            const text = link.label || "Changed together", size = 9 * fontScale;
+            const lines = text === "Changed together" ? ["Changed", "together"] : [text];
+            ctx.font = `500 ${size}px system-ui`; const textWidth = Math.max(...lines.map(line => ctx.measureText(line).width)) + 12;
+            ctx.fillStyle = P.panel; ctx.beginPath(); ctx.roundRect(midX - textWidth / 2, midY - 15 * fontScale, textWidth, 30 * fontScale, 6); ctx.fill();
+            for (let index = 0; index < lines.length; index++) label(ctx, lines[index], midX, midY + (index - (lines.length - 1) / 2) * 11 * fontScale, { size, color: lit ? P.bright : P.muted });
+          }
+        }
+        if (hierarchyRoot && layoutRows.length) {
+          const root = hierarchyRoot;
+          ctx.strokeStyle = rgba(P.info, .55); ctx.lineWidth = 1.2 / pose.scale; ctx.setLineDash([4, 5]);
+          for (const item of layoutRows) {
+            ctx.beginPath(); ctx.moveTo(root.x, root.y + 32); ctx.lineTo(root.x, 104); ctx.lineTo(item.x - 120, 104); ctx.lineTo(item.x - 120, item.y); ctx.lineTo(item.x - 108, item.y); ctx.stroke();
+          }
+          ctx.setLineDash([]); ctx.fillStyle = P.panel; ctx.strokeStyle = rgba(P.info, .7);
+          ctx.beginPath(); ctx.roundRect(root.x - 108, root.y - 30, 216, 62, 12); ctx.fill(); ctx.stroke();
+          label(ctx, root.kind, root.x, root.y - 11, { size: 10 * fontScale, color: P.info });
+          label(ctx, fitText(ctx, root.name, 192, 12 * fontScale), root.x, root.y + 10, { size: 12 * fontScale, weight: 650, color: P.ivory });
+          label(ctx, "contains", root.x + 34, 91, { size: 9 * fontScale, color: P.muted });
         }
       }
       for (const item of layoutRows) {
         const screenX = item.x * pose.scale + pose.x, screenY = item.y * pose.scale + pose.y;
         if (screenX < -180 || screenX > width + 180 || screenY < -160 || screenY > height + 100) continue;
-        const hovered = widget.hovered === item.row.id;
-        drawChunk(ctx, item.row, item.x, item.y - (lifts.get(item.row.id) || 0), 1, P, { selected: focusId === item.row.id, hovered, muted: item.row.present === 0, labelScale: 1 / pose.scale, showLabels: pose.scale >= .4 });
+        const row = item.row, selected = focusId === row.id, hovered = widget.hovered === row.id;
+        const tint = row.active ? P.live : row.hot ? P.mint : P.info;
+        const x = item.x, y = item.y - (lifts.get(row.id) || 0);
+        ctx.save(); if (!row.present) ctx.globalAlpha *= .55;
+        ctx.fillStyle = P.panel; ctx.strokeStyle = selected ? P.bright : rgba(tint, hovered ? .95 : .5); ctx.lineWidth = (selected ? 2 : 1) / pose.scale;
+        ctx.beginPath(); ctx.roundRect(x - 108, y - 44, 216, 88, 12); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = rgba(tint, selected || hovered ? .15 : .07); ctx.fill();
+        ctx.fillStyle = tint; ctx.beginPath(); ctx.arc(x - 93, y - 22, row.active ? 4 : 3, 0, Math.PI * 2); ctx.fill();
+        if (pose.scale >= .35) {
+          label(ctx, fitText(ctx, row.name, 179, 12 * fontScale), x - 82, y - 22, { size: 12 * fontScale, weight: 650, color: P.ivory, align: "left" });
+          label(ctx, fitText(ctx, row.subtitle, 190, 10 * fontScale), x - 93, y + 1, { size: 10 * fontScale, color: P.muted, align: "left" });
+          const explored = row.value.exploration;
+          const detail = explored ? `${explored.observedFiles} / ${explored.knownFiles} files explored` : row.kind === "system" ? "Explore to see its parts" : row.kind === "part" ? "Explore to see its files" : row.value.reads ? "Agent read this file" : row.hot ? "Work recorded here" : "Not explored yet";
+          label(ctx, fitText(ctx, detail, 190, 9 * fontScale), x - 93, y + 24, { size: 9 * fontScale, color: explored?.observedFiles || row.hot ? tint : P.dim, align: "left" });
+          if (explored?.knownFiles) {
+            ctx.fillStyle = rgba(tint, .14); ctx.fillRect(x - 96, y + 38, 192, 2);
+            ctx.fillStyle = tint; ctx.fillRect(x - 96, y + 38, 192 * clamp(explored.observedFiles / explored.knownFiles, 0, 1), 2);
+          }
+        }
+        ctx.restore();
       }
       ctx.restore();
+    }
+    function fitText(ctx, text, maxWidth, size) {
+      let value = String(text ?? ""); ctx.font = `600 ${size}px system-ui`;
+      if (ctx.measureText(value).width <= maxWidth) return value;
+      while (value.length > 1 && ctx.measureText(value + "…").width > maxWidth) value = value.slice(0, -1);
+      return value + "…";
     }
     function draw(ctx, W, H) {
       const now = performance.now(), dt = Math.min(32, now - (lastFrame || now - 16)); lastFrame = now;
@@ -374,7 +558,7 @@
     const point = event => { const box = canvas.getBoundingClientRect(); return { x: event.clientX - box.left, y: event.clientY - box.top }; };
     const hit = event => {
       const p = point(event), x = (p.x - camera.x) / camera.scale, y = (p.y - camera.y) / camera.scale;
-      return widget.layout.find(item => Math.abs(item.x - x) < 88 && y > item.y - 38 && y < item.y + 101)?.row ?? null;
+      return widget.layout.find(item => Math.abs(item.x - x) < 108 && Math.abs(item.y - y) < 44)?.row ?? null;
     };
     canvas.addEventListener("click", event => { if (suppressClick) { suppressClick = false; return; } select(hit(event)); });
     canvas.addEventListener("dblclick", event => { if (!suppressClick) activate(hit(event)); });
@@ -453,6 +637,7 @@
       if (project !== nextProject) {
         project = nextProject; history = []; cursor = -1; widget.systemId = null; widget.partId = null; focusId = null; filter = "all"; query = ""; search.value = "";
         transition = null; glide = { x: 0, y: 0 }; map = null; signature = ""; needsFit = true; fitMode = true;
+        ideaQuery = ""; ideaSearch.value = ""; ideaExpansion.clear(); setMode("systems");
       }
       const nextMap = getMap();
       if (map !== nextMap) { map = nextMap; buildCatalog(); }
@@ -460,9 +645,9 @@
       if (!systems.has(widget.systemId)) { widget.systemId = null; widget.partId = null; }
       if (widget.partId && !part()) widget.partId = null;
       if (previousLocation !== keyOf(widget)) { needsFit = true; fitMode = true; transition = null; }
-      const nextSignature = JSON.stringify([project, widget.systemId, widget.partId, catalog.map(row => [row.id, row.kind, row.subtitle, row.name])]);
+      const nextSignature = JSON.stringify([project, widget.systemId, widget.partId, catalog.map(row => [row.id, row.kind, row.subtitle, row.name, row.value.exploration]), map?.links, map?.ideaTree]);
       if (signature !== nextSignature) {
-        signature = nextSignature; rebuildRows(); syncControls();
+        signature = nextSignature; rebuildRows(); syncControls(); renderIdeas();
         const valid = stop => (!stop.systemId || systems.has(stop.systemId)) && (!stop.partId || (parts.get(stop.systemId) ?? []).some(row => row.id === stop.partId));
         cursor = history.slice(0, cursor + 1).filter(valid).length - 1; history = history.filter(valid);
       }
@@ -470,8 +655,10 @@
       inform(); resize();
     };
     // Read-only geometry also lets renderer fixtures verify real camera motion.
-    widget.inspect = () => ({ level: level(), systemId: widget.systemId, partId: widget.partId, selected: focusId, camera: { ...camera }, target: { ...target }, moving: Boolean(widget.view.hot()), history: { index: cursor, length: history.length }, count: rows.length, bounds: { ...bounds }, nodes: widget.layout.map(item => ({ id: item.row.id, x: item.x * camera.scale + camera.x, y: item.y * camera.scale + camera.y })) });
-    setNavigator(false); widget.sync(); return widget;
+    widget.showIdeas = () => setMode("ideas");
+    widget.showSystems = () => setMode("systems");
+    widget.inspect = () => ({ mode, level: level(), systemId: widget.systemId, partId: widget.partId, selected: focusId, camera: { ...camera }, target: { ...target }, moving: Boolean(widget.view.hot()), history: { index: cursor, length: history.length }, count: rows.length, bounds: { ...bounds }, edges: graphEdges.map(edge => ({ a: edge.a, b: edge.b, label: edge.label || "Changed together" })), nodes: widget.layout.map(item => ({ id: item.row.id, x: item.x * camera.scale + camera.x, y: item.y * camera.scale + camera.y, worldX: item.x, worldY: item.y })) });
+    setNavigator(false); stage.dataset.mode = mode; widget.sync(); return widget;
   }
-  window.MefiProjectMap = { create };
+  window.MefiProjectMap = { create, relationshipLayout };
 })();

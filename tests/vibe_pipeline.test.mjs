@@ -163,6 +163,200 @@ test("Vibe restores unsent file text after restart and keeps drafts separate acr
   assert.deepEqual(reopened.calls, []);
 });
 
+test("Mefi stages map context beside the owner's draft without sending or creating work", async () => {
+  const h = await load();
+  h.get("vibe-input").value = "Keep my existing requirement.";
+  h.fire(h.get("vibe-input"), "input");
+  assert.equal(h.vibe.composeEvolution({ projectId: P, intent: "fix", system: { id: "auth", name: "Account access" }, file: { path: "renderer/login.js" }, idea: { title: "Repair the redirect", detail: "Return to the page after signing in." } }), true);
+  assert.match(h.get("vibe-input").value, /^Keep my existing requirement\.\n\nFix: Repair the redirect/);
+  assert.match(h.get("vibe-input").value, /System: Account access/);
+  assert.match(h.get("vibe-input").value, /renderer\/login\.js/);
+  assert.deepEqual(h.calls, []);
+  assert.equal(h.vibe.composeEvolution({ projectId: "other", prompt: "Wrong project" }), false);
+  assert.doesNotMatch(h.get("vibe-input").value, /Wrong project/);
+  const reopened = await load({ storage: h.storage });
+  assert.equal(reopened.get("vibe-input").value, h.get("vibe-input").value);
+  assert.match(reopened.get("vibe-sparks").querySelector(".vibe-evolution-scope").textContent, /Account access/);
+  assert.equal(reopened.get("vibe-sparks").querySelector('[data-intent="fix"]').getAttribute("aria-pressed"), "true");
+});
+
+test("Mefi's four approaches preserve custom draft text and carry intent to an explicit build", async () => {
+  const h = await load();
+  h.get("vibe-input").value = "Make the preview easier to read.";
+  h.get("vibe-sparks").querySelector('[data-intent="experiment"]').click();
+  assert.equal(h.get("vibe-input").value, "Make the preview easier to read.");
+  const builds = [];
+  h.window.mefiStudio.vibeBuild = async payload => { builds.push(plain(payload)); return { ok: true, task: { id: "created" } }; };
+  assert.equal(builds.length, 0);
+  h.fire(h.get("vibe-compose"), "submit"); await settle();
+  assert.equal(builds.length, 1);
+  assert.match(builds[0].prompt, /MEFI · Experiment/);
+  assert.match(builds[0].prompt, /bounded, reversible experiment/);
+  assert.match(builds[0].prompt, /Make the preview easier to read/);
+  assert.equal(builds[0].projectId, P);
+  assert.equal(Object.hasOwn(builds[0], "ideaId"), false);
+});
+
+test("a saved map idea retains its identity across draft restoration and explicit building", async () => {
+  const h = await load();
+  h.vibe.composeEvolution({ projectId: P, intent: "improve", idea: { sourceId: "idea-original", id: "map-node", title: "Readable preview", text: "Increase the preview contrast." } });
+  const reopened = await load({ storage: h.storage });
+  const builds = [];
+  reopened.window.mefiStudio.vibeBuild = async payload => { builds.push(plain(payload)); return { ok: true, task: { id: "built" } }; };
+  reopened.fire(reopened.get("vibe-compose"), "submit"); await settle();
+  assert.equal(builds[0].ideaId, "idea-original");
+  assert.equal(builds[0].projectId, P);
+  reopened.get("vibe-input").value = "Add a different feature.";
+  reopened.fire(reopened.get("vibe-input"), "input"); reopened.fire(reopened.get("vibe-compose"), "submit"); await settle();
+  assert.equal(Object.hasOwn(builds[1], "ideaId"), false, "a finished handoff does not label unrelated future work");
+});
+
+test("an explicit idea identity stays out of another project's draft and older-host task payloads", async () => {
+  const h = await load();
+  const tasks = [];
+  h.window.mefiStudio.tasksCreate = async payload => { tasks.push(plain(payload)); return { ok: true, task: { id: "created" } }; };
+  h.vibe.composeEvolution({ projectId: P, ideaId: "idea-1", title: "Add a filter" });
+  h.fire(h.get("vibe-compose"), "submit"); await settle();
+  assert.equal(Object.hasOwn(tasks[0], "ideaId"), false, "an older host cannot perform a linked handoff");
+  h.vibe.composeEvolution({ projectId: P, idea: { id: "idea-2", title: "Add a chart" } });
+  h.window.MefiWorkspace = { activeProjectId: () => "p2" };
+  h.window.dispatchEvent({ type: "mefi:project-changed", detail: { projectId: "p2" } });
+  const builds = [];
+  h.window.mefiStudio.vibeBuild = async payload => { builds.push(plain(payload)); return { ok: true, task: { id: "created-p2" } }; };
+  h.get("vibe-input").value = "A different project task."; h.fire(h.get("vibe-compose"), "submit"); await settle();
+  assert.equal(builds[0].projectId, "p2");
+  assert.equal(Object.hasOwn(builds[0], "ideaId"), false);
+});
+
+test("appending several saved ideas preserves every identity through unsaved additions and draft restoration", async () => {
+  const h = await load();
+  h.vibe.composeEvolution({ projectId: P, ideaId: "idea-first", title: "Improve contrast" });
+  h.vibe.composeEvolution({ projectId: P, idea: { id: "idea-second", title: "Increase target size" } });
+  h.vibe.composeEvolution({ projectId: P, ideaId: "idea-first", title: "Add a keyboard check" });
+  h.vibe.composeEvolution({ projectId: P, idea: { title: "Unsaved related thought", text: "Consider the empty state too." } });
+  const reopened = await load({ storage: h.storage });
+  const builds = [];
+  reopened.window.mefiStudio.vibeBuild = async payload => { builds.push(plain(payload)); return { ok: true, task: { id: "combined" } }; };
+  reopened.fire(reopened.get("vibe-compose"), "submit"); await settle();
+  assert.deepEqual(builds[0].ideaIds, ["idea-first", "idea-second"]);
+  assert.match(builds[0].prompt, /Improve contrast/);
+  assert.match(builds[0].prompt, /Increase target size/);
+  assert.match(builds[0].prompt, /Consider the empty state too/);
+});
+
+test("clearing the draft clears saved idea identities before unrelated typing or staging", async () => {
+  const h = await load();
+  h.vibe.composeEvolution({ projectId: P, ideaId: "discarded", title: "An abandoned direction" });
+  h.get("vibe-input").value = ""; h.fire(h.get("vibe-input"), "input");
+  const reopened = await load({ storage: h.storage });
+  reopened.get("vibe-input").value = "A completely different feature."; reopened.fire(reopened.get("vibe-input"), "input");
+  const builds = [];
+  reopened.window.mefiStudio.vibeBuild = async payload => { builds.push(plain(payload)); return { ok: true, task: { id: "new-direction" } }; };
+  reopened.fire(reopened.get("vibe-compose"), "submit"); await settle();
+  assert.equal(Object.hasOwn(builds[0], "ideaId"), false);
+  assert.equal(Object.hasOwn(builds[0], "ideaIds"), false);
+  reopened.vibe.composeEvolution({ projectId: P, ideaId: "fresh", title: "A fresh idea" });
+  reopened.fire(reopened.get("vibe-compose"), "submit"); await settle();
+  assert.equal(builds[1].ideaId, "fresh");
+});
+
+test("oversized map additions reveal the preserved draft and refuse a seventeenth saved identity", async () => {
+  const h = await load();
+  h.get("vibe-input").value = "Keep the original draft."; h.fire(h.get("vibe-input"), "input");
+  h.vibe.exit();
+  assert.equal(h.vibe.composeEvolution({ projectId: P, ideaId: "too-long", prompt: "x".repeat(16000) }), false);
+  assert.deepEqual(h.gone.at(-1), ["vibe", null]);
+  assert.equal(h.get("vibe-input").value, "Keep the original draft.");
+  assert.match(h.get("vibe-feedback").textContent, /will not fit/);
+  const ids = Array.from({ length: 16 }, (_, index) => `idea-${index}`);
+  assert.equal(h.vibe.composeEvolution({ projectId: P, ideaIds: ids, title: "Sixteen related ideas" }), true);
+  const before = h.get("vibe-input").value;
+  assert.equal(h.vibe.composeEvolution({ projectId: P, ideaId: "idea-17", title: "One too many" }), false);
+  assert.equal(h.get("vibe-input").value, before);
+  assert.match(h.get("vibe-feedback").textContent, /16 saved ideas/);
+  const builds = [];
+  h.window.mefiStudio.vibeBuild = async payload => { builds.push(plain(payload)); return { ok: true, task: { id: "sixteen" } }; };
+  h.fire(h.get("vibe-compose"), "submit"); await settle();
+  assert.deepEqual(builds[0].ideaIds, ids);
+});
+
+test("suggesting a next step only explores, and an accepted suggestion appends to the editable draft", async () => {
+  const h = await load();
+  const requests = [];
+  h.window.mefiStudio.planningExplore = async payload => {
+    requests.push(plain(payload));
+    return { ok: true, projectId: P, summary: "The preview already has a toolbar.", suggestions: [{ id: "suggestion-0", label: "Preview contrast", text: "Increase preview text contrast.", reason: "Makes small text readable.", files: ["renderer/preview.js"] }] };
+  };
+  h.get("vibe-input").value = "Improve the preview."; h.fire(h.get("vibe-input"), "input");
+  await h.vibe.suggestEvolution();
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].projectId, P);
+  assert.match(requests[0].draft.destination, /Improve the preview/);
+  assert.deepEqual(h.calls, [], "a suggestion cannot build, promote, or start agents");
+  const card = h.get("vibe-sparks").querySelector(".vibe-evolution-suggestion");
+  assert.match(card.textContent, /renderer\/preview.js/);
+  card.querySelector(".vibe-btn").click();
+  assert.match(h.get("vibe-input").value, /^Improve the preview\.\n\nImprove: Preview contrast/);
+  assert.match(h.get("vibe-input").value, /Increase preview text contrast/);
+  assert.deepEqual(h.calls, []);
+  const builds = [];
+  h.window.mefiStudio.vibeBuild = async payload => { builds.push(plain(payload)); return { ok: true, task: { id: "created" } }; };
+  h.fire(h.get("vibe-compose"), "submit"); await settle();
+  assert.equal(Object.hasOwn(builds[0], "ideaId"), false, "a transient suggestion id never becomes a board idea id");
+});
+
+test("saving a suggested idea uses the scoped append action without promoting it", async () => {
+  const h = await load();
+  const additions = [];
+  h.window.mefiStudio.planningExplore = async () => ({ ok: true, projectId: P, summary: "A small improvement.", suggestions: [{ label: "Readable preview", text: "Increase preview contrast.", files: ["preview.js"] }] });
+  h.window.mefiStudio.ideasAction = async payload => { additions.push(plain(payload)); return { ok: true, projectId: P, idea: { id: "idea-1" }, ideas: [] }; };
+  await h.vibe.suggestEvolution();
+  h.get("vibe-sparks").querySelector(".vibe-evolution-actions").querySelector(".vibe-ask-link").click();
+  await settle();
+  assert.equal(additions.length, 1);
+  assert.equal(additions[0].action, "add");
+  assert.equal(additions[0].projectId, P);
+  assert.equal(additions[0].title, "Readable preview");
+  assert.deepEqual(additions[0].files, ["preview.js"]);
+  assert.deepEqual(h.calls, []);
+  assert.match(h.get("vibe-feedback").textContent, /saved for later/);
+  h.get("vibe-sparks").querySelector(".vibe-evolution-actions").querySelector(".vibe-btn").click();
+  const builds = [];
+  h.window.mefiStudio.vibeBuild = async payload => { builds.push(plain(payload)); return { ok: true, task: { id: "created" } }; };
+  h.fire(h.get("vibe-compose"), "submit"); await settle();
+  assert.equal(builds[0].ideaId, "idea-1", "the saved suggestion follows its draft into the new task");
+});
+
+test("late suggestions never enter another project's draft or results", async () => {
+  const h = await load();
+  let resolve;
+  h.window.mefiStudio.planningExplore = () => new Promise(done => { resolve = done; });
+  const pending = h.vibe.suggestEvolution();
+  h.window.MefiWorkspace = { activeProjectId: () => "p2" };
+  h.window.dispatchEvent({ type: "mefi:project-changed", detail: { projectId: "p2" } });
+  h.get("vibe-input").value = "The second project's direction."; h.fire(h.get("vibe-input"), "input");
+  resolve({ ok: true, projectId: P, summary: "Old project reply", suggestions: [{ label: "Old idea", text: "Old idea text" }] });
+  await pending;
+  assert.equal(h.get("vibe-input").value, "The second project's direction.");
+  assert.doesNotMatch(h.get("vibe-sparks").textContent, /Old project reply|Old idea/);
+  assert.deepEqual(h.calls, []);
+});
+
+test("suggestions for a changed draft remain readable but cannot overwrite its newer direction", async () => {
+  const h = await load();
+  let resolve;
+  h.window.mefiStudio.planningExplore = () => new Promise(done => { resolve = done; });
+  h.get("vibe-input").value = "Improve login."; h.fire(h.get("vibe-input"), "input");
+  const pending = h.vibe.suggestEvolution();
+  h.get("vibe-input").value = "Improve the dashboard instead."; h.fire(h.get("vibe-input"), "input");
+  resolve({ ok: true, projectId: P, summary: "Login suggestion", suggestions: [{ label: "Login", text: "Add login help" }] }); await pending;
+  const actions = h.get("vibe-sparks").querySelector(".vibe-evolution-actions");
+  assert.equal(actions.querySelector(".vibe-btn").disabled, true);
+  assert.equal(actions.querySelector(".vibe-ask-link").disabled, true);
+  assert.match(h.get("vibe-sparks").textContent, /Your draft changed/);
+  assert.equal(h.get("vibe-input").value, "Improve the dashboard instead.");
+});
+
 test("late errors stay on their question, and a suggested one-line option waits for the owner's text", async () => {
   const h = await load({ approvals: false, stuck: false });
   const questions = [{ id: "one", projectId: P, status: "open", title: "First question", context: { suggestion: { optionId: "line", reason: "Name the intended scope." } }, options: [{ id: "retry", label: "Retry" }, { id: "line", label: "Answer it in one line", text: true }] }, { id: "two", projectId: P, status: "open", title: "Second question", options: [{ id: "yes", label: "Yes" }] }];

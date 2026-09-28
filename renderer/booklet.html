@@ -6920,6 +6920,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
 
 /* Project explorer: travel above, contents within the canvas, context beside it. */
 .pm-navigation { display: flex; align-items: center; flex: 1; min-width: 0; gap: 4px; }
+.pm-modes { display: flex; flex-shrink: 0; gap: 2px; padding: 3px; border: 1px solid var(--hairline); border-radius: var(--r-pill); background: var(--graph-surface); }
+.pm-mode { padding: 6px 10px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--muted); font: 600 var(--fs-xs) var(--font-ui); white-space: nowrap; cursor: pointer; }
+.pm-mode[aria-pressed="true"] { color: var(--gold-bright); background: var(--tint-gold-3); }
+.pm-mode:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+.pm-navigation[data-mode="ideas"] :is(.pm-history, .ab-map-breadcrumb, .pm-browse) { display: none; }
 .pm-history { flex-shrink: 0; min-width: 28px; padding-inline: 6px; font-size: 16px; }
 .pm-navigation .ab-map-breadcrumb { flex: 1; overflow: hidden; gap: 0; }
 .pm-navigation .ab-crumb { min-width: 30px; flex-shrink: 1; padding: 5px 7px; }
@@ -6959,6 +6964,15 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
 .pm-scene-heading strong { font: 600 clamp(17px, 2.2cqw, 23px) var(--font-display, var(--font-ui)); color: var(--ivory); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .pm-scene-heading span { color: var(--muted); font: var(--fs-xs) var(--font-ui); }
 .pm-stage[data-browse="true"] .pm-scene-heading { left: 242px; }
+.pm-legend { position: absolute; top: 78px; left: 24px; right: 18px; display: flex; flex-wrap: wrap; gap: 6px 14px; font: var(--fs-2xs) var(--font-ui); color: var(--muted); pointer-events: none; }
+.pm-stage[data-browse="true"] .pm-legend { left: 242px; }
+.pm-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.pm-legend-link::before { content: ""; width: 20px; border-top: 2px solid var(--gold); }
+.pm-legend-branch::before { content: ""; width: 20px; border-top: 1px dashed var(--info); }
+.pm-legend-observed::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--live); }
+.pm-relationships { display: grid; gap: 8px; flex: 0 1 auto; max-height: 35%; overflow: auto; margin: 0 10px; padding: 12px 0; border-top: 1px solid var(--hairline); font-size: var(--fs-2xs); line-height: 1.5; }
+.pm-relationships[hidden] { display: none; }
+.pm-related { text-align: left; font-size: var(--fs-2xs); }
 .pm-camera { position: absolute; z-index: 2; bottom: 16px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 2px; padding: 4px 6px; background: var(--glass-hard); backdrop-filter: var(--blur); border: 1px solid var(--hairline); border-radius: var(--r-pill); box-shadow: var(--shadow-1); white-space: nowrap; }
 .pm-camera .ghost { min-width: 28px; padding-inline: 7px; }
 .pm-camera .ab-map-zoom { width: 62px; height: 20px; }
@@ -6982,11 +6996,12 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
 .pm-stage[data-short="true"] :is(.pm-minimap, .pm-hint) { display: none; }
 .pm-stage[data-short="true"] .pm-scene-heading { top: 12px; }
 .pm-stage[data-short="true"] .pm-scene-heading strong { font-size: 16px; }
+.pm-stage[data-short="true"] .pm-legend { display: none; }
 .pm-stage[data-short="true"] .pm-navigator { top: 6px; bottom: 6px; }
 .pm-stage[data-short="true"][data-browse="true"] .pm-camera { visibility: hidden; }
 @keyframes pm-panel-in { from { opacity: 0; transform: translateX(-7px); } to { opacity: 1; transform: translateX(0); } }
 @container (max-width: 650px) {
-  .pm-stage[data-browse="true"] .pm-scene-heading { visibility: hidden; }
+  .pm-stage[data-browse="true"] :is(.pm-scene-heading, .pm-legend) { visibility: hidden; }
   .pm-stage[data-browse="true"] .pm-empty { left: 20px; }
   .pm-minimap { width: 106px !important; height: 68px !important; bottom: 68px; }
   .pm-hint { display: none; }
@@ -6999,6 +7014,58 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   .pm-navigation .ab-map-breadcrumb { flex-basis: auto; }
   .pm-navigation .ab-crumb { max-width: 150px; }
   .pm-actions { margin-left: auto; }
+}
+@media (max-width: 600px) {
+  .pm-navigation { flex-wrap: wrap; }
+  .pm-modes { margin-right: auto; }
+  .pm-navigation .ab-map-breadcrumb { order: 1; flex-basis: 100%; }
+  .pm-navigation .ab-crumb { max-width: 200px; }
+}
+
+/* Ideas keep their provenance and real workflow states in a separate tree. */
+.agent-brain-pane[data-map-mode="ideas"] .agent-brain-map-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "map"; }
+.agent-brain-pane[data-map-mode="ideas"] :is(.agent-brain-map-detail, .ab-narrow-open) { display: none; }
+.pm-stage[data-mode="ideas"] > :not(.pm-ideas) { visibility: hidden; pointer-events: none; }
+.pm-ideas { position: absolute; inset: 0; overflow: auto; overscroll-behavior: contain; padding: 22px 24px 40px; background: var(--graph-surface); }
+.pm-ideas[hidden] { display: none; }
+.pm-ideas-intro { display: flex; align-items: center; justify-content: space-between; gap: 20px; max-width: 1060px; margin: 0 auto 24px; }
+.pm-ideas-intro h3 { margin: 0 0 8px; color: var(--ivory); font: 600 clamp(19px, 2.5cqw, 28px) var(--font-display, var(--font-ui)); }
+.pm-ideas-intro p { margin: 0 0 8px; line-height: 1.6; max-width: 580px; }
+.pm-idea-search { max-width: 240px; flex-shrink: 0; }
+.pm-idea-root { position: relative; display: grid; gap: 6px; width: fit-content; max-width: 100%; box-sizing: border-box; margin: 0 auto 30px; padding: 15px 25px; border: 1px solid var(--gold); border-radius: var(--r-lg); text-align: center; background: var(--tint-gold-2); }
+.pm-idea-root strong { font-size: var(--fs-md); color: var(--gold-bright); }
+.pm-idea-root span { color: var(--muted); font-size: var(--fs-xs); }
+.pm-idea-root::after { content: ""; position: absolute; left: 50%; top: 100%; height: 30px; border-left: 1px solid var(--gold); }
+.pm-idea-branches { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(290px, 100%), 1fr)); align-items: start; gap: 24px; max-width: 1060px; margin: 0 auto; padding-top: 20px; border-top: 1px solid var(--hairline-strong); }
+.pm-idea-group { position: relative; min-width: 0; padding: 12px; border: 1px solid var(--hairline); border-radius: var(--r-lg); background: color-mix(in srgb, var(--panel-solid) 65%, transparent); }
+.pm-idea-group::before { content: ""; position: absolute; top: -21px; left: 50%; height: 20px; border-left: 1px solid var(--hairline-strong); }
+.pm-ideas summary { cursor: pointer; padding: 5px 3px; color: var(--ivory); font-weight: 600; }
+.pm-ideas summary::marker { color: var(--gold); }
+.pm-ideas summary small { float: right; min-width: 20px; padding: 1px 5px; background: var(--tint-gold-2); border-radius: var(--r-pill); text-align: center; font: var(--fs-2xs) var(--font-ui); color: var(--muted); }
+.pm-ideas summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: var(--r-sm); }
+.pm-idea-system { margin: 5px 0 5px 16px; font-size: var(--fs-xs); }
+.pm-idea-phase { margin: 10px 0 4px 6px; padding-left: 12px; border-left: 1px solid var(--hairline-strong); }
+.pm-idea-phase > summary { font-size: var(--fs-xs); }
+.pm-idea-items { margin: 8px 0 0; padding: 0; list-style: none; }
+.pm-idea-node { position: relative; min-width: 0; margin: 9px 0; }
+.pm-idea-node::before { content: ""; position: absolute; left: -13px; top: 20px; width: 13px; border-top: 1px solid var(--hairline-strong); }
+.pm-idea-card { display: grid; gap: 8px; padding: 11px; border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--graph-surface); overflow-wrap: anywhere; }
+.pm-idea-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px; color: var(--muted); font-size: var(--fs-2xs); }
+.pm-idea-node[data-stage="active"] > .pm-idea-card { border-left: 3px solid var(--live); }
+.pm-idea-node[data-stage="done"] > .pm-idea-card { border-left: 3px solid var(--good); }
+.pm-idea-node[data-stage="ideas"] > .pm-idea-card { border-left: 3px solid var(--gold); }
+.pm-idea-title { font-size: var(--fs-sm); line-height: 1.5; color: var(--ivory); }
+.pm-idea-card p { margin: 0; color: var(--muted); font-size: var(--fs-xs); line-height: 1.6; }
+.pm-idea-match { color: var(--dim); font-size: var(--fs-2xs); }
+.pm-idea-action { justify-self: start; margin-top: 2px; }
+.pm-idea-children { margin: 10px 0 0 9px; padding-left: 12px; border-left: 1px solid var(--hairline-strong); }
+.pm-idea-children > summary { font-size: var(--fs-2xs); }
+.pm-ideas-empty { grid-column: 1 / -1; max-width: 540px; margin: 20px auto; text-align: center; color: var(--muted); line-height: 1.7; }
+@container (max-width: 650px) {
+  .pm-ideas { padding: 16px 12px 30px; }
+  .pm-ideas-intro { display: block; }
+  .pm-idea-search { max-width: none; margin-top: 8px; }
+  .pm-idea-branches { grid-template-columns: minmax(0, 1fr); }
 }
 html[data-motion="off"] .pm-stage *, html[data-motion="off"] .pm-navigation * { animation: none !important; transition: none !important; }
 @media (prefers-reduced-motion: reduce) { .pm-stage *, .pm-navigation * { animation: none !important; transition: none !important; } }
@@ -8235,6 +8302,40 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-sparks { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: min(860px, 100%) !important; margin-top: 14px; animation: vibe-rise var(--motion-spring) var(--ease-spring) 120ms both; }
 .vibe-spark { height: 34px; padding: 0 15px; border: 1px solid var(--v-edge); border-radius: 999px; background: color-mix(in srgb, var(--panel-solid) 38%, transparent); backdrop-filter: var(--v-blur); color: var(--v-soft); font-size: 13px; cursor: pointer; transition: color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out); }
 .vibe-spark:hover { color: var(--v-ink); border-color: var(--v-edge-hi); transform: translateY(-1px); }
+
+/* Mefi keeps the project's next possibilities beside its editable brief. */
+.vibe-evolution { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--v-edge); border-radius: 18px; background: var(--v-glass); backdrop-filter: var(--v-blur); }
+.vibe-evolution-head, .vibe-evolution-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
+.vibe-evolution-head > div { display: flex; align-items: baseline; gap: 12px; }
+.vibe-evolution-links { flex-wrap: wrap; }
+.vibe-evolution-brand { color: var(--v-accent-hi); font: 700 12px/1 var(--font-display); letter-spacing: .2em; }
+.vibe-evolution-subtitle { color: var(--v-soft); font-size: 12px; }
+.vibe-evolution-intents { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.vibe-evolution-intent { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 12px 10px; border: 1px solid var(--v-edge); border-radius: 12px; background: color-mix(in srgb, var(--panel-solid) 44%, transparent); color: var(--v-ink); text-align: left; cursor: pointer; }
+.vibe-evolution-intent:hover, .vibe-evolution-intent[aria-pressed="true"] { border-color: var(--v-edge-hi); background: var(--v-glass-hi); }
+.vibe-evolution-intent:focus-visible { outline: 2px solid var(--v-accent-hi); outline-offset: 2px; }
+.vibe-evolution-letter { display: grid; place-items: center; flex: none; width: 28px; height: 32px; border-radius: 8px; background: color-mix(in srgb, var(--v-accent) 10%, transparent); color: var(--v-accent-hi); font: 600 17px/1 var(--font-display); }
+.vibe-evolution-intent[aria-pressed="true"] .vibe-evolution-letter { background: var(--v-accent); color: var(--ink); }
+.vibe-evolution-intent b, .vibe-evolution-intent small { display: block; }
+.vibe-evolution-intent b { font-size: 13px; font-weight: 600; }
+.vibe-evolution-intent small { margin-top: 4px; color: var(--v-soft); font-size: 10px; line-height: 1.35; }
+.vibe-evolution-scope { flex: 1; min-width: 150px; overflow-wrap: anywhere; color: var(--v-soft); font-size: 11px; }
+.vibe-evolution-foot .vibe-btn { min-height: 32px; padding: 7px 12px; font-size: 12px; }
+.vibe-evolution-results { display: grid; gap: 10px; padding-top: 10px; border-top: 1px solid var(--v-edge); }
+.vibe-evolution-results[hidden] { display: none; }
+.vibe-evolution-note { margin: 0; color: var(--v-soft); font-size: 12px; line-height: 1.5; }
+.vibe-evolution-suggestions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: 10px; }
+.vibe-evolution-suggestion { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 14px; border: 1px solid var(--v-edge); border-radius: 12px; background: color-mix(in srgb, var(--panel-solid) 44%, transparent); overflow-wrap: anywhere; }
+.vibe-evolution-suggestion h3 { margin: 0; color: var(--v-ink); font-size: 13px; font-weight: 600; line-height: 1.4; }
+.vibe-evolution-suggestion > p { margin: 0; white-space: pre-wrap; font-size: 12px; line-height: 1.5; }
+.vibe-evolution-file { color: var(--v-accent-hi); font-size: 10px; overflow-wrap: anywhere; }
+.vibe-evolution-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: auto; padding-top: 6px; }
+.vibe-evolution-actions .vibe-btn { min-height: 30px; padding: 6px 10px; font-size: 11px; }
+@media (max-width: 680px) {
+  .vibe-evolution-intents { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .vibe-evolution { padding: 12px; }
+  .vibe-evolution-head > div { flex-wrap: wrap; gap: 6px 10px; }
+}
 .vibe-feedback { min-height: 20px; margin: 10px 0 0; color: var(--v-soft); font-size: 13px; text-align: center; }
 .vibe-feedback[data-tone="good"] { color: var(--good); }
 .vibe-feedback[data-tone="warn"] { color: var(--warn); }
@@ -8309,10 +8410,9 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-orb, .vibe-hero h1 { transition: width var(--motion-slow) var(--ease-out), height var(--motion-slow) var(--ease-out), margin var(--motion-slow) var(--ease-out), font-size var(--motion-slow) var(--ease-out); }
 #vibe-layer[data-cards="some"] .vibe-orb { width: 54px; height: 54px; margin-bottom: 4px; }
 #vibe-layer[data-cards="some"] .vibe-hero h1 { font-size: clamp(26px, 2.2vw, 38px); }
-/* On a short window with cards up, the greeting and the starter chips step
-   aside so the cards start above the fold. */
+/* Short windows keep Mefi's workbench available while the greeting shrinks. */
 @media (max-height: 900px) {
-  #vibe-layer[data-cards="some"] :is(.vibe-kicker, .vibe-sparks) { display: none; }
+  #vibe-layer[data-cards="some"] .vibe-kicker { display: none; }
   #vibe-layer[data-cards="some"] .vibe-orb { width: 40px; height: 40px; margin-bottom: 2px; }
   #vibe-layer[data-cards="some"] .vibe-hero h1 { font-size: clamp(22px, 2vw, 30px); }
   #vibe-layer[data-cards="some"] .vibe-compose { margin-top: 14px; }
@@ -61015,9 +61115,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   window.MefiCompanionHub = { attach, face, play, thinking, boot, handoff, guide, open, close, update, resize, back: () => select(null), isOpen: () => hub.open, contains: (target) => Boolean(hub.open && el.layer?.contains(target)) };
 })();
 
-// Project map navigation: a searchable atlas, spatial selection and a camera
-// that preserves each stop. Data and the shared isometric painter come from
-// agent-brain.js; this view never reads files or starts work itself.
+// Project map navigation: evidence-backed relationships and a living work tree.
+// The host owns discovery and grouping; this view never starts work itself.
 (() => {
   "use strict";
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
@@ -61032,7 +61131,43 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   };
   const keyOf = (location) => JSON.stringify([location.systemId, location.partId]);
 
-  function create({ canvas, stage, tools, minHeight, getMap, getProject, partsOf, rankSystems, linksOf, makeCanvas, drawChunk, palette, rgba, label, still, onSelect, onNavigate }) {
+  // Connected systems share a branch. Activity and scan ordering never shuffle
+  // the geometry; only new relationship evidence can change the topology.
+  function relationshipLayout(rows, links) {
+    const byId = new Map(rows.map(row => [row.id, row]));
+    const adjacent = new Map(rows.map(row => [row.id, new Set()]));
+    const edges = links.filter(link => link.a !== link.b && byId.has(link.a) && byId.has(link.b));
+    for (const edge of edges) { adjacent.get(edge.a).add(edge.b); adjacent.get(edge.b).add(edge.a); }
+    const order = (a, b) => adjacent.get(b).size - adjacent.get(a).size || String(a).localeCompare(String(b));
+    const visited = new Set(), nodes = [], regions = [];
+    let top = 46, maxX = 250;
+    for (const root of [...byId.keys()].filter(id => adjacent.get(id).size).sort(order)) {
+      if (visited.has(root)) continue;
+      const levels = [], queue = [[root, 0]]; visited.add(root);
+      for (let index = 0; index < queue.length; index++) {
+        const [id, depth] = queue[index]; (levels[depth] ??= []).push(id);
+        for (const next of [...adjacent.get(id)].sort(order)) if (!visited.has(next)) { visited.add(next); queue.push([next, depth + 1]); }
+      }
+      const height = Math.max(...levels.map(items => items.length)) * 134;
+      regions.push({ name: `Connected around ${byId.get(root).name}`, x: 16, y: top - 24 });
+      for (let depth = 0; depth < levels.length; depth++) {
+        const bucket = levels[depth].sort((a, b) => String(a).localeCompare(String(b)));
+        bucket.forEach((id, index) => nodes.push({ row: byId.get(id), x: 125 + depth * 292, y: top + (height - bucket.length * 134) / 2 + index * 134 + 44 }));
+        maxX = Math.max(maxX, 250 + depth * 292);
+      }
+      top += height + 56;
+    }
+    const unconnected = [...byId.keys()].filter(id => !visited.has(id)).sort((a, b) => String(a).localeCompare(String(b)));
+    if (unconnected.length) {
+      regions.push({ name: "Connections still to discover", x: 16, y: top - 24 });
+      unconnected.forEach((id, index) => nodes.push({ row: byId.get(id), x: 125 + index % 3 * 292, y: top + Math.floor(index / 3) * 134 + 44 }));
+      top += Math.ceil(unconnected.length / 3) * 134;
+      maxX = Math.max(maxX, 250 + (Math.min(3, unconnected.length) - 1) * 292);
+    }
+    return { nodes, edges, regions, bounds: { w: maxX + 14, h: Math.max(160, top + 14) } };
+  }
+
+  function create({ canvas, stage, tools, minHeight, getMap, getProject, partsOf, rankSystems, linksOf, makeCanvas, palette, rgba, label, still, onSelect, onNavigate, onIdeaSelect }) {
     const widget = { systemId: null, partId: null, file: null, selected: null, hovered: null, view: null, layout: [] };
     const camera = { x: 0, y: 0, scale: 1 }, target = { ...camera };
     let focusId = null, filter = "all", query = "", rows = [], catalog = [], systems = new Map(), parts = new Map();
@@ -61041,6 +61176,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     let transition = null, needsFit = true, fitMode = true, suppressClick = false, moving = false, hoverMoving = false;
     const lifts = new Map();
     let navigatorOpen = false, navigatorTouched = false, width = 0, height = 0;
+    let mode = "systems", ideaQuery = "", graphEdges = [], graphRegions = [], hierarchyRoot = null;
+    const ideaExpansion = new Map();
     const motion = () => !still() && document.documentElement.dataset.motion !== "off";
     const level = () => widget.partId ? "files" : widget.systemId ? "parts" : "systems";
     const system = () => systems.get(widget.systemId) ?? null;
@@ -61058,7 +61195,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const up = button("ghost mini pm-history", "↑", "Go up one level (Backspace)", () => parent());
     const trail = element("nav", "ab-map-breadcrumb"); trail.setAttribute("aria-label", "Project map location");
     const browse = button("ghost mini pm-browse", "Browse", "Show or hide map contents", () => setNavigator(!navigatorOpen, true));
-    navigation.append(back, forward, up, trail, browse);
+    const modes = element("div", "pm-modes"); modes.setAttribute("aria-label", "Map view");
+    for (const [id, title] of [["systems", "Systems"], ["ideas", "Ideas tree"]]) {
+      const pick = button("pm-mode", title, `Show ${title.toLowerCase()}`, () => setMode(id)); pick.dataset.mode = id; modes.append(pick);
+    }
+    navigation.append(modes, back, forward, up, trail, browse);
     tools?.prepend(navigation);
 
     const navigator = element("aside", "pm-navigator"); navigator.setAttribute("aria-label", "Map contents");
@@ -61077,6 +61218,17 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     navigator.append(searchBox, filters, listTitle, index); stage.append(navigator);
     const heading = element("div", "pm-scene-heading"); const headingTitle = element("strong", ""), headingMeta = element("span", "");
     heading.append(headingTitle, headingMeta); stage.append(heading);
+    const legend = element("div", "pm-legend"); legend.setAttribute("aria-label", "Map relationship legend");
+    legend.append(element("span", "pm-legend-link", "Changed together"), element("span", "pm-legend-branch", "Contains"), element("span", "pm-legend-observed", "Agent explored")); stage.append(legend);
+    const relationships = element("div", "pm-relationships"); relationships.setAttribute("aria-live", "polite"); navigator.append(relationships);
+    const ideaPanel = element("section", "pm-ideas"); ideaPanel.hidden = true; ideaPanel.setAttribute("aria-label", "Ideas and work tree");
+    const ideaIntro = element("div", "pm-ideas-intro");
+    const ideaHeading = element("div", ""); ideaHeading.append(element("p", "pm-region-kicker", "Growing with your project"), element("h3", "", "Ideas become branches of work"), element("p", "ab-quiet", "Grouped by system, then by progress. Branches move as agents discover files and work moves forward."));
+    const ideaSearch = element("input", "pm-search pm-idea-search"); ideaSearch.type = "search"; ideaSearch.placeholder = "Find an idea or task…"; ideaSearch.setAttribute("aria-label", "Search the ideas tree");
+    ideaSearch.addEventListener("input", () => { ideaQuery = ideaSearch.value; renderIdeas(); });
+    ideaIntro.append(ideaHeading, ideaSearch);
+    const ideaRoot = element("div", "pm-idea-root"), ideaBranches = element("div", "pm-idea-branches");
+    ideaPanel.append(ideaIntro, ideaRoot, ideaBranches); stage.append(ideaPanel);
     const status = element("span", "pm-status"); status.setAttribute("role", "status"); stage.append(status);
     const controls = element("div", "pm-camera"); controls.setAttribute("aria-label", "Map camera");
     const zoomOut = button("ghost mini", "−", "Zoom out", () => zoomAt(target.scale / 1.25));
@@ -61092,6 +61244,63 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const tooltip = element("div", "ab-tip pm-tooltip"); tooltip.hidden = true; stage.append(tooltip);
     const empty = element("div", "pm-empty"); empty.hidden = true; stage.append(empty);
 
+    function setMode(next) {
+      mode = next === "ideas" ? "ideas" : "systems"; stage.dataset.mode = mode; navigation.dataset.mode = mode;
+      const pane = stage.closest(".agent-brain-pane"); if (pane) pane.dataset.mapMode = mode;
+      ideaPanel.hidden = mode !== "ideas"; tooltip.hidden = true;
+      for (const pick of modes.children) pick.setAttribute("aria-pressed", String(pick.dataset.mode === mode));
+      syncControls(); if (mode === "ideas") renderIdeas(); else wake();
+      onNavigate?.();
+    }
+    function renderIdeas() {
+      const tree = map?.ideaTree ?? { groups: [], counts: {} }, words = ideaQuery.toLowerCase().trim().split(/\s+/).filter(Boolean);
+      const matches = item => words.every(word => `${item.title} ${item.summary ?? ""} ${item.status ?? ""}`.toLowerCase().includes(word)) || (item.children ?? []).some(matches);
+      const groups = tree.groups ?? [], counts = tree.counts ?? {};
+      const active = document.activeElement, focusKey = ideaBranches.contains(active) ? active?.dataset.ideaAction : null;
+      ideaRoot.replaceChildren(element("strong", "", "Your next version"), element("span", "", `${counts.ideas ?? 0} ideas · ${counts.queued ?? 0} queued · ${counts.active ?? 0} in progress · ${counts.done ?? 0} completed`));
+      if (tree.truncated) ideaRoot.append(element("small", "pm-idea-match", `${tree.truncated} older items are available in Work.`));
+      ideaBranches.replaceChildren();
+      const disclosure = (name, title, key, count, open = true) => {
+        const branch = element("details", name); branch.open = words.length > 0 || (ideaExpansion.get(key) ?? open);
+        const summary = element("summary", ""); summary.append(element("span", "", title), element("small", "", String(count))); branch.append(summary);
+        branch.addEventListener("toggle", () => { if (!words.length && branch.isConnected) ideaExpansion.set(key, branch.open); }); return branch;
+      };
+      function appendItem(parent, item, group, seen = new Set()) {
+        if (seen.has(item.id)) return;
+        const nextSeen = new Set(seen); nextSeen.add(item.id);
+        const li = element("li", "pm-idea-node"); li.dataset.stage = item.stage || "ideas";
+        const card = element("article", "pm-idea-card");
+        const meta = element("div", "pm-idea-meta"); meta.append(element("span", "", item.kind === "task" ? "Task" : "Idea"), element("span", "", String(item.status || item.stage || "idea").replace(/[-_]/g, " ")));
+        card.append(meta, element("strong", "pm-idea-title", item.title || "Untitled idea"));
+        if (item.summary) card.append(element("p", "", item.summary));
+        const matchLabel = { inferred: "Suggested grouping", placed: "Placed by you", files: "Matched to files", observed: "Agent discovered", linked: "Linked to work", unmapped: "Still finding its place" }[item.match];
+        if (matchLabel) card.append(element("small", "pm-idea-match", matchLabel));
+        if (onIdeaSelect) {
+          const act = button("ghost mini pm-idea-action", "Work with Mefi", `Work with Mefi on ${item.title || "this idea"}`, () => onIdeaSelect(item, group)); act.dataset.ideaAction = item.id; card.append(act);
+        }
+        li.append(card);
+        const children = (item.children ?? []).filter(child => !words.length || matches(child));
+        if (children.length) {
+          const branch = disclosure("pm-idea-children", "Related work", `node:${item.id}`, children.length);
+          const list = element("ul", "pm-idea-items"); for (const child of children) appendItem(list, child, group, nextSeen); branch.append(list); li.append(branch);
+        }
+        parent.append(li);
+      }
+      for (const group of groups) {
+        const stages = (group.stages ?? []).map(row => ({ ...row, items: (row.items ?? []).filter(item => !words.length || matches(item)) })).filter(row => row.items.length);
+        if (!stages.length) continue;
+        const branch = disclosure("pm-idea-group", group.name, `group:${group.id}`, stages.reduce((count, row) => count + row.items.length, 0)); branch.dataset.group = group.id;
+        if (group.systemId && systems.has(group.systemId)) branch.append(button("ab-link pm-idea-system", "Explore system →", `Explore ${group.name}`, () => { setMode("systems"); go({ systemId: group.systemId }); }));
+        for (const row of stages) {
+          const stageBranch = disclosure("pm-idea-phase", row.name, `stage:${group.id}:${row.id}`, row.items.length, row.id !== "done"); stageBranch.dataset.stage = row.id;
+          const items = element("ul", "pm-idea-items"); for (const item of row.items) appendItem(items, item, group); stageBranch.append(items); branch.append(stageBranch);
+        }
+        ideaBranches.append(branch);
+      }
+      if (!ideaBranches.children.length) ideaBranches.append(element("p", "pm-ideas-empty", words.length ? "No ideas or tasks match this search." : "Your first idea starts a branch. Ask Mefi in Vibe to modify, experiment, fix or improve something; saved ideas and tasks will grow here."));
+      if (focusKey) [...ideaBranches.querySelectorAll("[data-idea-action]")].find(item => item.dataset.ideaAction === focusKey)?.focus({ preventScroll: true });
+    }
+
     function wake() {
       if (!motion()) { Object.assign(camera, target); transition = null; glide = { x: 0, y: 0 }; lifts.clear(); hoverMoving = false; }
       widget.view?.paint(); widget.view?.kick();
@@ -61103,7 +61312,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     function visibleArea() {
       const left = navigatorOpen && width > 650 ? 230 : 18;
-      const top = height < 280 ? 57 : 84, bottom = height < 280 ? 55 : 80;
+      const top = height < 280 ? 66 : 112, bottom = height < 280 ? 55 : 80;
       return { left, top, w: Math.max(80, width - left - 22), h: Math.max(35, height - top - bottom) };
     }
     function buildCatalog() {
@@ -61133,12 +61342,19 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       shown = 60; layout();
     }
     function layout() {
-      // Stable world geometry: resizing the window moves the camera, never
-      // shuffles the same files into different rows underneath the pointer.
-      const columns = Math.min(7, Math.max(2, Math.ceil(Math.sqrt(rows.length * 1.35))));
-      const used = Math.min(columns, rows.length);
-      bounds = { w: Math.max(220, used * 198 + 28), h: Math.max(180, Math.ceil(rows.length / columns) * 156 + 48) };
-      widget.layout = rows.map((row, i) => ({ row, x: 112 + i % columns * 198 + (Math.floor(i / columns) % 2 ? 16 : 0), y: 64 + Math.floor(i / columns) * 156 }));
+      hierarchyRoot = null;
+      if (level() === "systems") {
+        const graph = relationshipLayout(rows, linksOf(map));
+        widget.layout = graph.nodes; graphEdges = graph.edges; graphRegions = graph.regions; bounds = graph.bounds; return;
+      }
+      // The parent and its visible containment branches stay on the map when
+      // drilling down. Large folders grow vertically and remain searchable.
+      const ordered = [...rows].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+      const columns = Math.min(5, Math.max(1, Math.ceil(Math.sqrt(rows.length))));
+      bounds = { w: Math.max(264, Math.min(columns, rows.length) * 254 + 20), h: Math.max(220, Math.ceil(rows.length / columns) * 146 + 150) };
+      hierarchyRoot = { x: bounds.w / 2, y: 45, name: part()?.name || system()?.name || "Project", kind: level() === "files" ? "Part" : "System" };
+      widget.layout = ordered.map((row, index) => ({ row, x: 137 + index % columns * 254, y: 184 + Math.floor(index / columns) * 146 }));
+      graphEdges = []; graphRegions = [];
     }
     function inform() {
       const row = focused();
@@ -61149,6 +61365,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     function saveStop() { if (cursor >= 0) history[cursor] = location(); }
     function go(next, { restore = false, direction = 1 } = {}) {
+      if (mode !== "systems") setMode("systems");
       if (next.systemId && !systems.has(next.systemId)) return;
       if (next.partId && !(parts.get(next.systemId) ?? []).some(row => row.id === next.partId)) return;
       saveStop();
@@ -61204,6 +61421,17 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     function updateSelection() {
       for (const el of index.querySelectorAll(".ab-index-item")) el.setAttribute("aria-pressed", String(!query && el.dataset.id === focusId));
+      relationships.replaceChildren();
+      const row = focused();
+      relationships.hidden = !row || level() !== "systems";
+      if (!row || level() !== "systems") return;
+      relationships.append(element("strong", "", "Connected systems"));
+      const adjacent = graphEdges.filter(edge => edge.a === row.id || edge.b === row.id);
+      for (const edge of adjacent) {
+        const other = systems.get(edge.a === row.id ? edge.b : edge.a); if (!other) continue;
+        relationships.append(button("ab-link pm-related", `${other.name || other.id} · ${edge.label || "Changed together"}`, `Inspect ${other.name || other.id}: ${edge.label || "Changed together"}`, () => select(rows.find(item => item.id === other.id), true)));
+      }
+      if (!adjacent.length) relationships.append(element("span", "ab-quiet", "No relationship evidence yet. Connections appear as work touches these systems together."));
     }
     function listRows() {
       if (!query.trim()) return rows;
@@ -61238,7 +61466,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (previousId) [...index.querySelectorAll(".ab-index-item")].find(el => el.dataset.key === previousId)?.focus({ preventScroll: true });
     }
     function syncControls() {
-      back.disabled = cursor <= 0; forward.disabled = cursor >= history.length - 1; up.disabled = !widget.systemId;
+      back.disabled = mode === "ideas" || cursor <= 0; forward.disabled = mode === "ideas" || cursor >= history.length - 1; up.disabled = mode === "ideas" || !widget.systemId;
       trail.replaceChildren();
       const crumb = (text, action, current) => {
         const el = button("ab-crumb", text, text, action);
@@ -61251,7 +61479,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       filters.hidden = Boolean(query.trim());
       headingTitle.textContent = part()?.name || system()?.name || "Your project";
       const working = rows.filter(row => row.active).length;
-      headingMeta.textContent = `${rows.length} ${level()}${filter !== "all" ? ` · ${filter}` : working ? ` · ${working} working` : ""}`;
+      headingMeta.textContent = `${rows.length} ${level()}${filter !== "all" ? ` · ${filter}` : working ? ` · ${working} working` : ""}${level() === "systems" ? ` · ${graphEdges.length} observed connections` : " · contains the branches below"}`;
       heading.title = part()?.name || system()?.name || "Your project";
       empty.hidden = rows.length > 0; empty.replaceChildren();
       if (!rows.length) {
@@ -61262,6 +61490,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         }));
       }
       renderIndex();
+      for (const pick of modes.children) pick.setAttribute("aria-pressed", String(pick.dataset.mode === mode));
     }
     search.addEventListener("input", () => { query = search.value; shown = 60; filters.hidden = Boolean(query.trim()); renderIndex(); });
     search.addEventListener("keydown", event => {
@@ -61299,6 +61528,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     function drawMini(P) {
       const ctx = mini.getContext("2d"), m = miniGeometry(), area = visibleArea();
       ctx.clearRect(0, 0, 152, 98);
+      const points = new Map(widget.layout.map(item => [item.row.id, item]));
+      ctx.strokeStyle = rgba(P.mint, .7); ctx.lineWidth = 1;
+      for (const edge of graphEdges) {
+        const a = points.get(edge.a), b = points.get(edge.b); if (!a || !b) continue;
+        ctx.beginPath(); ctx.moveTo(m.x + a.x * m.scale, m.y + a.y * m.scale); ctx.lineTo(m.x + b.x * m.scale, m.y + b.y * m.scale); ctx.stroke();
+      }
       for (const item of widget.layout) {
         ctx.fillStyle = item.row.id === focusId ? P.bright : item.row.active ? P.live : rgba(P.mint, .48);
         ctx.fillRect(m.x + (item.x - 50) * m.scale, m.y + (item.y - 20) * m.scale, Math.max(3, 100 * m.scale), Math.max(2, 55 * m.scale));
@@ -61317,22 +61552,71 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     mini.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); fit(true); } });
     function drawScene(ctx, layoutRows, pose, P, alpha = 1, offset = 0) {
       ctx.save(); ctx.globalAlpha = alpha; ctx.translate(pose.x, pose.y + offset); ctx.scale(pose.scale, pose.scale);
-      if (level() === "systems" && !transition) {
+      const fontScale = clamp(1 / pose.scale, 1, 1.5);
+      if (layoutRows === widget.layout) {
         const positions = new Map(layoutRows.map(item => [item.row.id, item]));
-        for (const link of linksOf(map)) {
+        for (const region of graphRegions) label(ctx, region.name, region.x, region.y, { size: 10 * fontScale, weight: 600, color: P.muted, align: "left" });
+        for (const link of graphEdges) {
           const a = positions.get(link.a), b = positions.get(link.b); if (!a || !b) continue;
           const lit = [link.a, link.b].includes(widget.hovered || focusId);
-          ctx.strokeStyle = rgba(lit ? P.bright : P.mint, lit ? .58 : .14); ctx.lineWidth = lit ? 1.8 : 1;
-          ctx.beginPath(); ctx.moveTo(a.x, a.y + 20); ctx.bezierCurveTo(a.x, (a.y + b.y) / 2 + 45, b.x, (a.y + b.y) / 2 + 45, b.x, b.y + 20); ctx.stroke();
+          const direction = b.x >= a.x ? 1 : -1, sameColumn = a.x === b.x;
+          const startX = a.x + 108 * direction, endX = b.x - 108 * direction;
+          const midX = sameColumn ? a.x + 142 : (startX + endX) / 2, midY = (a.y + b.y) / 2;
+          ctx.strokeStyle = rgba(lit ? P.bright : P.mint, lit ? .95 : .58); ctx.lineWidth = (lit ? 2.4 : 1.5) / pose.scale;
+          ctx.beginPath(); ctx.moveTo(startX, a.y); ctx.bezierCurveTo(midX, a.y, midX, b.y, sameColumn ? b.x + 108 : endX, b.y); ctx.stroke();
+          // All current edges mean shared change evidence, not dependency flow.
+          if (pose.scale >= .5 || lit) {
+            const text = link.label || "Changed together", size = 9 * fontScale;
+            const lines = text === "Changed together" ? ["Changed", "together"] : [text];
+            ctx.font = `500 ${size}px system-ui`; const textWidth = Math.max(...lines.map(line => ctx.measureText(line).width)) + 12;
+            ctx.fillStyle = P.panel; ctx.beginPath(); ctx.roundRect(midX - textWidth / 2, midY - 15 * fontScale, textWidth, 30 * fontScale, 6); ctx.fill();
+            for (let index = 0; index < lines.length; index++) label(ctx, lines[index], midX, midY + (index - (lines.length - 1) / 2) * 11 * fontScale, { size, color: lit ? P.bright : P.muted });
+          }
+        }
+        if (hierarchyRoot && layoutRows.length) {
+          const root = hierarchyRoot;
+          ctx.strokeStyle = rgba(P.info, .55); ctx.lineWidth = 1.2 / pose.scale; ctx.setLineDash([4, 5]);
+          for (const item of layoutRows) {
+            ctx.beginPath(); ctx.moveTo(root.x, root.y + 32); ctx.lineTo(root.x, 104); ctx.lineTo(item.x - 120, 104); ctx.lineTo(item.x - 120, item.y); ctx.lineTo(item.x - 108, item.y); ctx.stroke();
+          }
+          ctx.setLineDash([]); ctx.fillStyle = P.panel; ctx.strokeStyle = rgba(P.info, .7);
+          ctx.beginPath(); ctx.roundRect(root.x - 108, root.y - 30, 216, 62, 12); ctx.fill(); ctx.stroke();
+          label(ctx, root.kind, root.x, root.y - 11, { size: 10 * fontScale, color: P.info });
+          label(ctx, fitText(ctx, root.name, 192, 12 * fontScale), root.x, root.y + 10, { size: 12 * fontScale, weight: 650, color: P.ivory });
+          label(ctx, "contains", root.x + 34, 91, { size: 9 * fontScale, color: P.muted });
         }
       }
       for (const item of layoutRows) {
         const screenX = item.x * pose.scale + pose.x, screenY = item.y * pose.scale + pose.y;
         if (screenX < -180 || screenX > width + 180 || screenY < -160 || screenY > height + 100) continue;
-        const hovered = widget.hovered === item.row.id;
-        drawChunk(ctx, item.row, item.x, item.y - (lifts.get(item.row.id) || 0), 1, P, { selected: focusId === item.row.id, hovered, muted: item.row.present === 0, labelScale: 1 / pose.scale, showLabels: pose.scale >= .4 });
+        const row = item.row, selected = focusId === row.id, hovered = widget.hovered === row.id;
+        const tint = row.active ? P.live : row.hot ? P.mint : P.info;
+        const x = item.x, y = item.y - (lifts.get(row.id) || 0);
+        ctx.save(); if (!row.present) ctx.globalAlpha *= .55;
+        ctx.fillStyle = P.panel; ctx.strokeStyle = selected ? P.bright : rgba(tint, hovered ? .95 : .5); ctx.lineWidth = (selected ? 2 : 1) / pose.scale;
+        ctx.beginPath(); ctx.roundRect(x - 108, y - 44, 216, 88, 12); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = rgba(tint, selected || hovered ? .15 : .07); ctx.fill();
+        ctx.fillStyle = tint; ctx.beginPath(); ctx.arc(x - 93, y - 22, row.active ? 4 : 3, 0, Math.PI * 2); ctx.fill();
+        if (pose.scale >= .35) {
+          label(ctx, fitText(ctx, row.name, 179, 12 * fontScale), x - 82, y - 22, { size: 12 * fontScale, weight: 650, color: P.ivory, align: "left" });
+          label(ctx, fitText(ctx, row.subtitle, 190, 10 * fontScale), x - 93, y + 1, { size: 10 * fontScale, color: P.muted, align: "left" });
+          const explored = row.value.exploration;
+          const detail = explored ? `${explored.observedFiles} / ${explored.knownFiles} files explored` : row.kind === "system" ? "Explore to see its parts" : row.kind === "part" ? "Explore to see its files" : row.value.reads ? "Agent read this file" : row.hot ? "Work recorded here" : "Not explored yet";
+          label(ctx, fitText(ctx, detail, 190, 9 * fontScale), x - 93, y + 24, { size: 9 * fontScale, color: explored?.observedFiles || row.hot ? tint : P.dim, align: "left" });
+          if (explored?.knownFiles) {
+            ctx.fillStyle = rgba(tint, .14); ctx.fillRect(x - 96, y + 38, 192, 2);
+            ctx.fillStyle = tint; ctx.fillRect(x - 96, y + 38, 192 * clamp(explored.observedFiles / explored.knownFiles, 0, 1), 2);
+          }
+        }
+        ctx.restore();
       }
       ctx.restore();
+    }
+    function fitText(ctx, text, maxWidth, size) {
+      let value = String(text ?? ""); ctx.font = `600 ${size}px system-ui`;
+      if (ctx.measureText(value).width <= maxWidth) return value;
+      while (value.length > 1 && ctx.measureText(value + "…").width > maxWidth) value = value.slice(0, -1);
+      return value + "…";
     }
     function draw(ctx, W, H) {
       const now = performance.now(), dt = Math.min(32, now - (lastFrame || now - 16)); lastFrame = now;
@@ -61391,7 +61675,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const point = event => { const box = canvas.getBoundingClientRect(); return { x: event.clientX - box.left, y: event.clientY - box.top }; };
     const hit = event => {
       const p = point(event), x = (p.x - camera.x) / camera.scale, y = (p.y - camera.y) / camera.scale;
-      return widget.layout.find(item => Math.abs(item.x - x) < 88 && y > item.y - 38 && y < item.y + 101)?.row ?? null;
+      return widget.layout.find(item => Math.abs(item.x - x) < 108 && Math.abs(item.y - y) < 44)?.row ?? null;
     };
     canvas.addEventListener("click", event => { if (suppressClick) { suppressClick = false; return; } select(hit(event)); });
     canvas.addEventListener("dblclick", event => { if (!suppressClick) activate(hit(event)); });
@@ -61470,6 +61754,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (project !== nextProject) {
         project = nextProject; history = []; cursor = -1; widget.systemId = null; widget.partId = null; focusId = null; filter = "all"; query = ""; search.value = "";
         transition = null; glide = { x: 0, y: 0 }; map = null; signature = ""; needsFit = true; fitMode = true;
+        ideaQuery = ""; ideaSearch.value = ""; ideaExpansion.clear(); setMode("systems");
       }
       const nextMap = getMap();
       if (map !== nextMap) { map = nextMap; buildCatalog(); }
@@ -61477,9 +61762,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (!systems.has(widget.systemId)) { widget.systemId = null; widget.partId = null; }
       if (widget.partId && !part()) widget.partId = null;
       if (previousLocation !== keyOf(widget)) { needsFit = true; fitMode = true; transition = null; }
-      const nextSignature = JSON.stringify([project, widget.systemId, widget.partId, catalog.map(row => [row.id, row.kind, row.subtitle, row.name])]);
+      const nextSignature = JSON.stringify([project, widget.systemId, widget.partId, catalog.map(row => [row.id, row.kind, row.subtitle, row.name, row.value.exploration]), map?.links, map?.ideaTree]);
       if (signature !== nextSignature) {
-        signature = nextSignature; rebuildRows(); syncControls();
+        signature = nextSignature; rebuildRows(); syncControls(); renderIdeas();
         const valid = stop => (!stop.systemId || systems.has(stop.systemId)) && (!stop.partId || (parts.get(stop.systemId) ?? []).some(row => row.id === stop.partId));
         cursor = history.slice(0, cursor + 1).filter(valid).length - 1; history = history.filter(valid);
       }
@@ -61487,10 +61772,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       inform(); resize();
     };
     // Read-only geometry also lets renderer fixtures verify real camera motion.
-    widget.inspect = () => ({ level: level(), systemId: widget.systemId, partId: widget.partId, selected: focusId, camera: { ...camera }, target: { ...target }, moving: Boolean(widget.view.hot()), history: { index: cursor, length: history.length }, count: rows.length, bounds: { ...bounds }, nodes: widget.layout.map(item => ({ id: item.row.id, x: item.x * camera.scale + camera.x, y: item.y * camera.scale + camera.y })) });
-    setNavigator(false); widget.sync(); return widget;
+    widget.showIdeas = () => setMode("ideas");
+    widget.showSystems = () => setMode("systems");
+    widget.inspect = () => ({ mode, level: level(), systemId: widget.systemId, partId: widget.partId, selected: focusId, camera: { ...camera }, target: { ...target }, moving: Boolean(widget.view.hot()), history: { index: cursor, length: history.length }, count: rows.length, bounds: { ...bounds }, edges: graphEdges.map(edge => ({ a: edge.a, b: edge.b, label: edge.label || "Changed together" })), nodes: widget.layout.map(item => ({ id: item.row.id, x: item.x * camera.scale + camera.x, y: item.y * camera.scale + camera.y, worldX: item.x, worldY: item.y })) });
+    setNavigator(false); stage.dataset.mode = mode; widget.sync(); return widget;
   }
-  window.MefiProjectMap = { create };
+  window.MefiProjectMap = { create, relationshipLayout };
 })();
 
 // The Agent Brain's surfaces (docs/roadmap-0.4.0.md, M5-M9): the Agent brain
@@ -61796,7 +62083,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   async function loadWorkItems() {
     const api = bridge();
+    const project = window.MefiWorkspace?.activeProjectId?.() ?? null;
     const [ideas, plans] = await Promise.all([api?.ideasList?.().catch(() => null), api?.planningList?.({}).catch(() => null)]);
+    if (project !== (window.MefiWorkspace?.activeProjectId?.() ?? null)) return;
     data.ideas = Array.isArray(ideas?.ideas) ? ideas.ideas : Array.isArray(ideas) ? ideas : [];
     data.plans = Array.isArray(plans?.plans) ? plans.plans : [];
     changed("work");
@@ -62373,6 +62662,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       ...options, getMap: () => data.map, getProject: () => data.mapProject,
       partsOf: mapParts, rankSystems: rankedSystems, linksOf: visibleLinks,
       makeCanvas, drawChunk, palette, rgba, label, still,
+      onIdeaSelect: (item, group) => {
+        const system = data.map?.systems?.find(row => row.id === group.systemId) ?? null;
+        window.MefiVibe?.composeEvolution?.({ projectId: data.mapProject, intent: item.intent || "improve", system, ...(item.kind === "idea" && !item.taskId ? { ideaId: item.sourceId } : {}), idea: { title: item.title || item.name, text: item.detail || item.text || "" }, files: item.files ?? [] });
+      },
     });
   }
 
@@ -62404,6 +62697,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
   function workOnRegion(system, part = null, file = null) {
     if (!system) return;
+    if (window.MefiVibe?.mode?.() === "vibe") {
+      window.MefiVibe.composeEvolution?.({ projectId: data.mapProject, intent: "modify", system, file, files: part?.files ?? system.files ?? [] });
+      return;
+    }
     window.MefiNav?.go?.("workspace");
     setTimeout(() => {
       const input = $("workspace-input");
@@ -62423,7 +62720,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     target.textContent = "";
     const explorer = () => compact ? hub.map : sheetMap;
     if (!system) {
-      target.append(node("p", "pm-region-kicker", "Project overview"), node("h3", "", "Find your next starting point"), node("p", "ab-quiet", "Inspect a system, follow what connects it, or search for a file. Double-click a chunk to explore inside."));
+      target.append(node("p", "pm-region-kicker", "Project overview"), node("h3", "", "Find your next starting point"), node("p", "ab-quiet", "Follow systems that change together, explore their files, or switch to the Ideas tree to see work grow. Double-click a node to explore inside."));
       const stats = node("div", "pm-overview-stats");
       const systems = data.map?.systems ?? [];
       for (const [value, name] of [[systems.length, "systems"], [data.map?.sources?.present ?? systems.reduce((sum, row) => sum + (row.fileCount ?? 0), 0), "present files"]]) {
@@ -62466,6 +62763,15 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       }); actions.append(copy);
     }
     target.append(actions);
+    const evolve = node("div", "pm-region-actions");
+    evolve.setAttribute("aria-label", "Work with Mefi in this area");
+    for (const intent of ["modify", "experiment", "fix", "improve"]) {
+      const action = node("button", "ghost mini", intent[0].toUpperCase() + intent.slice(1)); action.type = "button";
+      action.title = `Prepare a ${intent} brief for ${file?.path || system.name || system.id}`;
+      action.addEventListener("click", () => window.MefiVibe?.composeEvolution?.({ projectId: data.mapProject, intent, system, file, files: part?.files ?? system.files ?? [] }));
+      evolve.append(action);
+    }
+    target.append(evolve);
     const { tasks, ideas, plans, loose } = regionItems(system);
     const place = async (kind, id, systemId) => {
       const result = await bridge()?.brainMapPlace?.({ kind, id, systemId }).catch(() => null);
@@ -63013,6 +63319,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     await loadBrain();
     scene.taskId = pickTask();
     showTab(typeof params.tab === "string" ? params.tab : sheetTab);
+    if (sheetTab === "map" && params.mapMode === "ideas") { await loadMap(false); sheetMap?.showIdeas?.(); }
+    if (sheetTab === "map" && params.mapMode === "systems") sheetMap?.showSystems?.();
     renderList();
     renderFeed();
     if (typeof params.taskId === "string" && sheetTab === "live") showDetails("live", true, el.list.querySelector('[aria-pressed="true"]'));
@@ -63464,7 +63772,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const wanted = () => isOpen() || $("ws-hub")?.hidden === false;
   const reloadBrain = () => { if (wanted()) loadBrain(); };
   const reloadCompanion = () => refreshCompanion();
-  const reloadAll = () => { reloadBrain(); refreshCompanion(); };
+  const reloadMapWork = () => { if (wanted()) { loadMap(false); loadWorkItems(); } };
+  const reloadAll = () => { reloadBrain(); reloadMapWork(); refreshCompanion(); };
   function wire() {
     const api = bridge();
     if (!api) return;
@@ -63482,11 +63791,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       soon(reloadCompanion, 900);
     });
     api.onTasks?.(() => soon(reloadAll, 900));
+    api.onIdeas?.(() => soon(reloadMapWork, 400));
     api.onAssistant?.(() => soon(reloadCompanion, 900));
     api.onProjects?.((result) => {
       if (!result?.activeId || result.activeId === data.mapProject) return;
       ++mapRequest; data.mapProject = result.activeId; data.map = null;
-      data.places = { ideas: {}, plans: {} }; changed("map");
+      data.places = { ideas: {}, plans: {} }; data.tasks = []; data.ideas = []; data.plans = []; changed("map");
       if (isOpen() && sheetTab === "map") { loadMap(false); loadWorkItems(); }
     });
   }
@@ -65400,28 +65710,178 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // ---- composer -------------------------------------------------------------
   let draftProject = null, draftEpoch = 0;
   const draftKey = (id) => `mefiStudio.vibe.draft.${id}`;
-  function saveDraft() { if (draftProject) write(draftKey(draftProject), $("input").value); }
+  const evolution = { intent: null, context: null, result: null, signature: null, loading: false, request: 0, error: "" };
+  const evolutionView = {};
+  const INTENTS = {
+    modify: { label: "Modify", hint: "Shape an existing feature", starter: "Change this project so that ", guide: "Adapt the existing behavior to the requested outcome. Reuse the systems already in this project." },
+    experiment: { label: "Experiment", hint: "Try a small possibility", starter: "Try a small experiment: ", guide: "Build a bounded, reversible experiment. Say what to compare and how to decide whether to keep it." },
+    fix: { label: "Fix", hint: "Make something work again", starter: "Something is broken: ", guide: "Investigate the cause, make a focused correction, and verify the behavior that was broken." },
+    improve: { label: "Improve", hint: "Polish what is already here", starter: "Improve this project by ", guide: "Improve the existing experience with a small, useful change and a clear way to check the result." },
+  };
+  const evolutionKey = (id) => `mefiStudio.vibe.evolution.${id}`;
+  function saveDraft() {
+    if (!draftProject) return;
+    write(draftKey(draftProject), $("input").value);
+    write(evolutionKey(draftProject), JSON.stringify({ intent: evolution.intent, context: evolution.context }));
+  }
   function syncDraft(id = projectId()) {
     if (id === draftProject) return;
     saveDraft(); draftProject = id; draftEpoch++;
     state.seenMessageId = id ? read(`mefiStudio.vibe.seen.${id}`) : null; state.askErrors = {};
+    let saved = null;
+    try { saved = id ? JSON.parse(read(evolutionKey(id)) || "null") : null; } catch { /* older or damaged local draft */ }
+    evolution.intent = Object.hasOwn(INTENTS, saved?.intent) ? saved.intent : null;
+    evolution.context = normalizeEvolution(saved?.context);
+    evolution.request++; evolution.loading = false; evolution.result = null; evolution.error = ""; evolution.signature = null;
     $("input").value = id ? read(draftKey(id)) || "" : ""; grow();
+    renderEvolution();
   }
-  const SPARKS = [
-    ["Fix something broken", "Something is broken: "],
-    ["Add a feature", "Add a feature: "],
-    ["Polish the look", "Polish the look of "],
-    ["What should we do next?", "What should we work on next in this project?"],
-  ];
+  const shortText = (value, max = 600) => typeof value === "string" ? value.trim().slice(0, max) : "";
+  const evolutionIdeas = (context) => [...new Set([...(Array.isArray(context?.ideaIds) ? context.ideaIds : []), context?.ideaId, context?.idea?.sourceId || context?.idea?.id].map((id) => shortText(id, 180)).filter(Boolean))];
+  function normalizeEvolution(context) {
+    if (!context || typeof context !== "object") return null;
+    const system = context.system;
+    const files = [...new Set([context.file, ...(Array.isArray(context.files) ? context.files : [])].map((file) => shortText(typeof file === "string" ? file : file?.path || file?.file, 600)).filter(Boolean))].slice(0, 8);
+    const ideaIds = evolutionIdeas(context);
+    if (ideaIds.length > 16) return null;
+    return { system: shortText(typeof system === "string" ? system : system?.name || context.systemName, 180), systemId: shortText(system?.id || context.systemId, 180), files, ideaIds, ideaId: ideaIds.length === 1 ? ideaIds[0] : null };
+  }
+  const evolutionSignature = () => JSON.stringify([draftProject, $("input").value, evolution.intent, evolution.context]);
+  function chooseIntent(intent) {
+    if (!Object.hasOwn(INTENTS, intent)) return;
+    syncDraft();
+    const input = $("input"), previous = INTENTS[evolution.intent];
+    if (!input.value.trim()) input.value = INTENTS[intent].starter;
+    else if (previous && input.value.startsWith(previous.starter)) input.value = INTENTS[intent].starter + input.value.slice(previous.starter.length);
+    evolution.intent = intent;
+    grow(); saveDraft(); renderEvolution(); input.focus();
+  }
+  // The map hands over an editable, project-scoped brief. Existing owner text
+  // is appended to, never replaced, and staging cannot send or create work.
+  function composeEvolution(options = {}) {
+    const id = projectId();
+    if (!id || options.projectId && options.projectId !== id) return false;
+    init(); syncDraft();
+    const intent = Object.hasOwn(INTENTS, options.intent) ? options.intent : "improve";
+    const current = $("input").value.trim();
+    const ideaIds = [...new Set([...(current ? evolutionIdeas(evolution.context) : []), ...evolutionIdeas(options)])];
+    const refuse = (text) => { go("vibe"); $("input").focus(); feedback(text, "warn"); return false; };
+    if (ideaIds.length > 16) return refuse("This draft already has 16 saved ideas. Build these together or clear the draft before adding another.");
+    const context = normalizeEvolution({ ...options, ideaIds });
+    const idea = typeof options.idea === "string" ? options.idea : options.idea?.text || options.idea?.detail;
+    const title = shortText(options.title || options.idea?.title || options.idea?.label, 180);
+    const rawText = options.prompt || idea;
+    const text = typeof rawText === "string" ? rawText.trim() : "";
+    const subject = context?.system || context?.files[0] || "this project";
+    const lines = [`${INTENTS[intent].label}: ${title || (text ? text.split("\n")[0].slice(0, 180) : subject)}`];
+    if (text) lines.push(text);
+    if (context?.system) lines.push(`System: ${context.system}`);
+    if (context?.files.length) lines.push(`Relevant files:\n${context.files.map((file) => `- ${file}`).join("\n")}`);
+    const block = lines.join("\n\n");
+    const next = current ? `${current}\n\n${block}` : block;
+    if (next.length > 16000) return refuse("This brief will not fit beside your current draft. Shorten the draft before adding it.");
+    evolution.intent = intent; evolution.context = context;
+    $("input").value = next; grow(); saveDraft(); renderEvolution();
+    if (!active()) go("vibe");
+    $("input").focus();
+    feedback(current ? "Added to your draft. Review it, then talk it over or build it." : "Ready to shape. Review the brief, then talk it over or build it.");
+    return true;
+  }
   function renderSparks() {
     const holder = $("sparks");
     holder.replaceChildren();
-    for (const [label, prompt] of SPARKS) {
-      const chip = el("button", "vibe-spark", label);
-      chip.type = "button";
-      chip.addEventListener("click", () => { const input = $("input"); input.value = prompt; input.focus(); input.setSelectionRange(prompt.length, prompt.length); grow(); saveDraft(); });
-      holder.append(chip);
+    holder.className = "vibe-sparks vibe-evolution";
+    holder.setAttribute("role", "region"); holder.setAttribute("aria-label", "Mefi: Modify, Experiment, Fix, Improve");
+    const head = el("div", "vibe-evolution-head"), caption = el("div");
+    caption.append(el("b", "vibe-evolution-brand", "MEFI"), el("span", "vibe-evolution-subtitle", "Build on what is here"));
+    const links = el("div", "vibe-evolution-links");
+    const map = el("button", "vibe-ask-link", "System map ↗"); map.type = "button";
+    map.addEventListener("click", () => go("agent-brain", { tab: "map", mapMode: "systems" }));
+    const ideas = el("button", "vibe-ask-link", "Ideas tree ↗"); ideas.type = "button";
+    ideas.addEventListener("click", () => go("agent-brain", { tab: "map", mapMode: "ideas" }));
+    links.append(map, ideas); head.append(caption, links);
+    const choices = el("div", "vibe-evolution-intents"); choices.setAttribute("role", "group"); choices.setAttribute("aria-label", "How to build on this project");
+    evolutionView.choices = [];
+    for (const [intent, entry] of Object.entries(INTENTS)) {
+      const chip = el("button", "vibe-evolution-intent"); chip.type = "button"; chip.dataset.intent = intent;
+      const words = el("span"); words.append(el("b", "", entry.label), el("small", "", entry.hint));
+      chip.append(el("span", "vibe-evolution-letter", entry.label[0]), words);
+      chip.addEventListener("click", () => chooseIntent(intent)); choices.append(chip); evolutionView.choices.push(chip);
     }
+    const foot = el("div", "vibe-evolution-foot");
+    evolutionView.scope = el("span", "vibe-evolution-scope");
+    const suggest = el("button", "vibe-btn quiet", "Suggest a next step"); suggest.type = "button"; suggest.dataset.evolutionAction = "suggest";
+    suggest.addEventListener("click", () => void suggestEvolution()); evolutionView.suggest = suggest;
+    foot.append(evolutionView.scope, suggest);
+    evolutionView.results = el("div", "vibe-evolution-results"); evolutionView.results.setAttribute("aria-live", "polite");
+    holder.append(head, choices, foot, evolutionView.results); renderEvolution();
+  }
+  function renderEvolution() {
+    if (!evolutionView.results) return;
+    for (const button of evolutionView.choices) button.setAttribute("aria-pressed", String(button.dataset.intent === evolution.intent));
+    evolutionView.scope.textContent = evolution.context?.system || evolution.context?.files[0] || "This project · choose an approach or ask Mefi for ideas";
+    evolutionView.suggest.textContent = evolution.loading ? "Exploring the project…" : evolution.result ? "Refresh suggestions" : "Suggest a next step";
+    evolutionView.suggest.disabled = evolution.loading || state.pending || !projectId();
+    const body = evolutionView.results; body.replaceChildren(); body.hidden = !evolution.loading && !evolution.result && !evolution.error;
+    if (evolution.error) body.append(el("p", "vibe-inline-error", evolution.error));
+    if (evolution.loading) { body.append(el("p", "vibe-evolution-note", "Mefi is reading relevant files and looking for a useful next step.")); return; }
+    if (!evolution.result) return;
+    if (evolution.result.summary) body.append(el("p", "vibe-evolution-note", evolution.result.summary));
+    const stale = evolution.signature !== evolutionSignature();
+    if (stale) body.append(el("p", "vibe-evolution-note", "Your draft changed. Refresh to get suggestions for the current direction."));
+    const cards = el("div", "vibe-evolution-suggestions");
+    for (const suggestion of evolution.result.suggestions || []) {
+      const card = el("article", "vibe-evolution-suggestion");
+      card.append(el("h3", "", suggestion.label), el("p", "", suggestion.text));
+      if (suggestion.reason) card.append(el("p", "vibe-evolution-note", suggestion.reason));
+      for (const file of suggestion.files || []) card.append(el("code", "vibe-evolution-file", file));
+      const actions = el("div", "vibe-evolution-actions");
+      const use = el("button", "vibe-btn quiet", "Add to draft"); use.type = "button"; use.disabled = stale || state.pending;
+      // A planning reply has a transient suggestion-0 id. Only a saved board
+      // idea may follow this draft into a task and advance the ideas tree.
+      use.addEventListener("click", () => composeEvolution({ projectId: draftProject, intent: evolution.intent || "improve", ...evolution.context, ideaId: suggestion.savedId || null, idea: { title: suggestion.label, text: suggestion.text }, files: suggestion.files }));
+      const keep = el("button", "vibe-ask-link", suggestion.saved ? "Idea saved" : suggestion.saving ? "Saving…" : "Save idea"); keep.type = "button"; keep.disabled = stale || Boolean(suggestion.saved || suggestion.saving);
+      keep.addEventListener("click", () => void keepEvolutionIdea(suggestion));
+      actions.append(use, keep); card.append(actions); cards.append(card);
+    }
+    body.append(cards);
+    if (!cards.children.length) body.append(el("p", "vibe-evolution-note", "No extra changes suggested yet. Shape an idea above and try again."));
+  }
+  async function suggestEvolution() {
+    init(); syncDraft();
+    if (evolution.loading || state.pending) return;
+    if (!projectId() || !api()?.planningExplore) { evolution.error = "Choose a project in the desktop app to ask Mefi for suggestions."; renderEvolution(); return; }
+    const id = projectId(), epoch = draftEpoch, request = ++evolution.request, signature = evolutionSignature();
+    const intent = INTENTS[evolution.intent || "improve"];
+    const scope = evolution.context;
+    const value = $("input").value.trim();
+    const destination = [value || "Suggest a few small, useful next steps for the existing application in this project.", `Approach: ${intent.label}. ${intent.guide}`, scope?.system ? `System: ${scope.system}` : "", scope?.files.length ? `Relevant files: ${scope.files.join(", ")}` : ""].filter(Boolean).join("\n\n");
+    if (destination.length > 16000) { evolution.error = "Shorten the draft a little before asking for suggestions."; renderEvolution(); return; }
+    evolution.loading = true; evolution.error = ""; renderEvolution();
+    const current = () => id === projectId() && epoch === draftEpoch && request === evolution.request;
+    try {
+      const result = await api().planningExplore({ projectId: id, draft: { title: `${intent.label} this project`, destination, outOfScope: "Suggestions for review only. Do not implement, create tasks, or approve work." }, focus: "destination", intent: "suggest" });
+      if (!current()) return;
+      if (result?.projectId !== id || !result?.ok) throw new Error(result?.error || "Mefi could not explore this project. Try again.");
+      evolution.result = result; evolution.signature = signature;
+    } catch (error) { if (current()) evolution.error = error?.message || "Suggestions are unavailable. Try again."; }
+    finally { if (current()) { evolution.loading = false; renderEvolution(); } }
+  }
+  async function keepEvolutionIdea(suggestion) {
+    if (suggestion.saved || suggestion.saving || evolution.signature !== evolutionSignature()) return;
+    const id = projectId(), epoch = draftEpoch, context = evolution.context;
+    suggestion.saving = true; renderEvolution();
+    try {
+      if (!api()?.ideasAction) throw new Error("Keeping ideas requires the desktop app.");
+      const result = await api().ideasAction({ action: "add", projectId: id, title: suggestion.label, detail: suggestion.text, files: suggestion.files || [], tags: ["mefi", evolution.intent || "improve"], systemId: context?.systemId || undefined, systemName: context?.system || undefined, intent: evolution.intent || "improve" });
+      if (id !== projectId() || epoch !== draftEpoch) return;
+      if (!result?.ok || result.projectId !== id) throw new Error(result?.error || "The idea could not be kept. Try again.");
+      suggestion.saved = true;
+      suggestion.savedId = shortText(result.idea?.id, 180) || null;
+      if (Array.isArray(result.ideas)) state.ideas = result.ideas;
+      feedback("Idea saved for later. Find it in the idea tree or add it to your draft when you are ready.", "good"); renderLanes();
+    } catch (error) { if (id === projectId() && epoch === draftEpoch) feedback(error?.message || "The idea could not be kept.", "bad"); }
+    finally { suggestion.saving = false; if (id === projectId() && epoch === draftEpoch) renderEvolution(); }
   }
   function grow() { const input = $("input"); input.style.height = "auto"; input.style.height = `${Math.min(220, input.scrollHeight)}px`; }
   function feedback(text, tone = "") { const node = $("feedback"); node.textContent = text; node.dataset.tone = tone; }
@@ -65429,6 +65889,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     state.pending = on;
     layer.dataset.pending = on ? "yes" : "no";
     for (const id of ["talk", "build"]) $(id).disabled = on;
+    renderEvolution();
   }
   async function send(intent) {
     const input = $("input");
@@ -65449,12 +65910,16 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     renderChat();
     try {
       const title = value.split("\n")[0].slice(0, 180);
+      const approach = INTENTS[evolution.intent];
+      const prompt = approach ? `MEFI · ${approach.label}\n${approach.guide}\n\n${value}` : value;
+      const ideaIds = evolutionIdeas(evolution.context);
+      const linkedIdeas = ideaIds.length > 1 ? { ideaIds } : ideaIds.length ? { ideaId: ideaIds[0] } : {};
       const result = intent === "build"
-        ? await (sizing ? api().vibeBuild({ title, prompt: value, projectId: id }) : api().tasksCreate({ title, prompt: value, projectId: id }))
+        ? await (sizing ? api().vibeBuild({ title, prompt, projectId: id, ...linkedIdeas }) : api().tasksCreate({ title, prompt, projectId: id }))
         : await api().assistantMessage(value, id, { view: "Vibe", companion: companion() });
       if (!result || result.ok === false) throw new Error(result?.error || "That didn't go through.");
       if (projectId() !== id || draftEpoch !== epoch) return;
-      if (input.value.trim() === value) { input.value = ""; grow(); saveDraft(); }
+      if (input.value.trim() === value) { input.value = ""; evolution.context = null; grow(); saveDraft(); renderEvolution(); }
       if (result.state) state.assistant = result.state;
       if (intent === "build") {
         // Say where it really goes: a held or paused queue, or no AI, keeps
@@ -65823,7 +66288,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     window.MefiFileInputs?.bind($("input"), { scope: () => `${draftEpoch}:${projectId()}`, blocked: () => state.pending || !projectId() });
     $("talk").addEventListener("click", () => void send("talk"));
     $("decisions")?.addEventListener("click", () => openPanel("decisions"));
-    $("input").addEventListener("input", () => { grow(); saveDraft(); if ($("feedback").textContent && !state.pending) feedback(""); });
+    $("input").addEventListener("input", () => { if (!$("input").value.trim()) evolution.context = null; grow(); saveDraft(); renderEvolution(); if ($("feedback").textContent && !state.pending) feedback(""); });
     window.addEventListener("mefi:project-changed", (event) => syncDraft(event.detail?.projectId));
     window.addEventListener("beforeunload", saveDraft);
     $("input").addEventListener("keydown", (event) => {
@@ -65993,7 +66458,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     void refresh().then(() => { const late = needs().find((item) => item.kind === (wanted.kind || "question") && item.id === wanted.id); if (late) openNeed(late); });
     return false;
   }
-  window.MefiVibe = { enter, exit, isActive: active, refresh, mode, setMode, landing, startup, showNotes, closeNotes, snapshot, openPanel, closeDrawers, openNeed: openNeedById, paintDock: () => renderDock(lanes()), promoteIdea: (idea) => promoteIdea(idea), feedback: (text, tone) => feedback(text, tone), ready: () => refreshFlight ?? Promise.resolve() };
+  window.MefiVibe = { enter, exit, isActive: active, refresh, mode, setMode, landing, startup, showNotes, closeNotes, snapshot, openPanel, closeDrawers, composeEvolution, suggestEvolution, openNeed: openNeedById, paintDock: () => renderDock(lanes()), promoteIdea: (idea) => promoteIdea(idea), feedback: (text, tone) => feedback(text, tone), ready: () => refreshFlight ?? Promise.resolve() };
 })();
 
 // Mefi's Studio AI+ — booklet renderer, filters, refresh-on-open, studio launcher UI.

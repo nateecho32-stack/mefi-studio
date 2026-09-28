@@ -1,6 +1,36 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { applyIdeaAction, applyRequestAction } from "../scripts/idea-actions.cjs";
+import { backlogIdeaEligible } from "../scripts/assistant.mjs";
+
+test("saving a Mefi suggestion is idempotent, preserves concurrent work and cannot schedule it", () => {
+  const existing = { id: "old", status: "planned", taskId: "task-existing" };
+  const payload = { action: "add", title: " Map controls ", detail: "Show connected systems", intent: "improve", files: ["renderer/nav.js", "../outside.js", "data/secret.json", "renderer/nav.js"], status: "done", taskId: "forged", buildApproval: { approvedAt: 1 } };
+  const saved = applyIdeaAction([existing], payload, 42);
+  assert.equal(saved.ok, true);
+  assert.equal(saved.ideas[1], existing);
+  assert.deepEqual(saved.idea.files, ["renderer/nav.js"]);
+  assert.equal(saved.idea.title, "Map controls");
+  assert.equal(saved.idea.status, "new");
+  assert.equal(saved.idea.source, "chat");
+  assert.equal(saved.idea.taskId, undefined);
+  assert.equal(saved.idea.buildApproval, undefined);
+  assert.equal(backlogIdeaEligible(saved.idea), false, "Save idea never starts automatic work");
+  assert.equal(backlogIdeaEligible(saved.idea, { explicit: true }), true, "the owner can still build it");
+  const promoted = { ...saved.idea, taskId: "task-new", status: "accepted" };
+  const again = applyIdeaAction([promoted, existing], payload, 50);
+  assert.equal(again.added, false);
+  assert.equal(again.idea, promoted, "a double click or retry preserves the newest board row");
+  assert.equal(again.ideas.length, 2);
+  const scoped = applyIdeaAction(saved.ideas, { ...payload, systemId: "renderer", systemName: "Interface" }, 55);
+  assert.equal(scoped.idea.systemId, "renderer");
+  assert.equal(scoped.idea.systemName, "Interface");
+  assert.notEqual(scoped.idea.id, saved.idea.id, "the same proposal in another area retains its own scope");
+  assert.equal(applyIdeaAction([], { action: "add", title: " ", detail: "text" }).ok, false);
+  const long = applyIdeaAction([], { action: "add", title: "Detailed idea", detail: "x".repeat(12000) });
+  assert.equal(long.idea.detail.length, 12000, "saving retains a long suggestion's requirements");
+  assert.equal(applyIdeaAction([], { action: "add", title: "Too long", detail: "x".repeat(16001) }).ok, false, "oversized ideas fail explicitly instead of silently losing text");
+});
 
 test("reading or keeping a concurrently promoted idea retains its task and newer backlog entries", () => {
   const ideas = [{ id: "seen", status: "planned", taskId: "task-a", read: false, detail: "Full requirements" }, { id: "new", status: "new" }];

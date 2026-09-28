@@ -7,6 +7,25 @@ const HOUR = 3600000;
 const now = 100 * HOUR;
 const idea = (id, extra = {}) => ({ id, title: `Idea ${id}`, detail: `Requirements for ${id}`, at: 1, status: "new", ...extra });
 
+test("compaction preserves Mefi suggestions with different selected scopes while collapsing exact duplicates", () => {
+  const note = { title: "Improve feedback", detail: "Show progress clearly", source: "chat", suggestedBy: "mefi", status: "new", systemId: "renderer", intent: "improve", files: ["renderer/a.js", "renderer/b.js"] };
+  const ideas = [
+    { ...note, id: "first" },
+    { ...note, id: "duplicate", files: ["renderer/b.js", "renderer/a.js"] },
+    { ...note, id: "system", systemId: "scripts" },
+    { ...note, id: "files", files: ["renderer/c.js"] },
+    { ...note, id: "intent", intent: "experiment" },
+    { id: "legacy", title: "Legacy", detail: "Original rules", status: "new", source: "chat", files: ["a.js"] },
+    { id: "legacy-duplicate", title: "Legacy", detail: "Original rules", status: "new", source: "chat", files: ["b.js"] },
+  ];
+  const before = structuredClone(ideas);
+  const out = compact({ ideas, now });
+  assert.deepEqual(out.ideas.map((row) => row.id), ["first", "system", "files", "intent", "legacy"]);
+  assert.equal(out.report.duplicateIdeas, 2);
+  assert.equal(out.tasks.length, 0, "saved chat notes remain proposals");
+  assert.deepEqual(ideas, before);
+});
+
 test("backlog admission handles oldest singleton ideas, keeps full context, and is idempotent", () => {
   const ideas = [idea("new", { at: now }), idea("old", { detail: "x".repeat(1800), foldAttempts: 7, refs: [{ kind: "file", detail: "src/a.js" }], files: ["src/a.js"], projectId: "a" })];
   const input = structuredClone(ideas);

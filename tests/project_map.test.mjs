@@ -5,7 +5,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  IGNORED, normalizePath, indexEntry, parseIndex, systemKeyFor, buildMap, relatedFor, briefLine, namePrompt, applyNames,
+  IGNORED, normalizePath, indexEntry, parseIndex, systemKeyFor, buildMap, buildIdeaTree, relatedFor, briefLine, namePrompt, applyNames,
 } from "../scripts/project-map.cjs";
 
 const HOUR = 60 * 60 * 1000;
@@ -455,4 +455,164 @@ test("a large flat folder splits into the groups of files that change together, 
   assert.ok(area.systems.every((row) => row.source !== "cluster"));
   // Deterministic: the same input builds the same map.
   assert.deepEqual(buildMap({ history, now: NOW, cluster: {} }), grouped);
+});
+
+const treeNodes = (tree) => {
+  const out = [];
+  const visit = (node) => { out.push(node); node.children.forEach(visit); };
+  for (const group of tree.groups) for (const stage of group.stages) stage.items.forEach(visit);
+  return out;
+};
+
+test("idea branches regroup from exploration evidence without changing board records or node identity", () => {
+  const tasks = [{ id: "build", title: "Make the first sketch", status: "open" }];
+  const ideas = [{ id: "seed", title: "A small first sketch", status: "new" }];
+  const before = structuredClone({ tasks, ideas });
+  const initial = buildIdeaTree({ map: buildMap({ now: NOW }), tasks, ideas });
+  assert.equal(initial.groups[0].name, "To explore");
+  assert.deepEqual(initial.counts, { ideas: 1, queued: 1, active: 0, done: 0, total: 2 });
+
+  const growingTasks = [{ ...tasks[0], status: "running", ideas: ["seed"] }];
+  const map = buildMap({ index: [{ taskId: "build", at: NOW, edits: ["renderer/sketch.js"] }], tasks: growingTasks, now: NOW });
+  const growing = buildIdeaTree({ map, tasks: growingTasks, ideas });
+  assert.equal(growing.groups[0].systemId, "renderer");
+  const branch = growing.groups[0].stages.find((stage) => stage.id === "active").items[0];
+  assert.equal(branch.id, "task:build");
+  assert.equal(branch.match, "observed");
+  assert.equal(branch.children[0].id, "idea:seed");
+  assert.equal(branch.children[0].match, "linked");
+  assert.equal(branch.children[0].stage, "active");
+  assert.deepEqual(treeNodes(initial).map((node) => node.id).sort(), treeNodes(growing).map((node) => node.id).sort());
+  assert.deepEqual({ tasks, ideas }, before);
+
+  const completed = buildIdeaTree({ map, tasks: [{ ...growingTasks[0], status: "done" }], ideas });
+  assert.equal(completed.groups[0].stages.find((stage) => stage.id === "done").items[0].children[0].id, "idea:seed");
+  assert.equal(completed.counts.done, 2);
+});
+
+test("idea placement is authoritative, files outrank prose, and inferred matches are identified", () => {
+  const map = buildMap({ inventory: ["renderer/list.js", "scripts/engine.cjs"], areas, now: NOW });
+  const ideas = [
+    { id: "placed", title: "Renderer list", files: ["renderer/list.js"] },
+    { id: "file", title: "Renderer renderer renderer", files: ["scripts/engine.cjs"] },
+    { id: "words", title: "Improve the renderer" },
+    { id: "unknown", title: "An unexplored possibility" },
+  ];
+  const places = { ideas: { placed: "scripts", unknown: "removed-system" } };
+  const tree = buildIdeaTree({ map, ideas, places });
+  const nodes = Object.fromEntries(treeNodes(tree).map((node) => [node.sourceId, node]));
+  assert.equal(nodes.placed.systemId, "scripts");
+  assert.equal(nodes.placed.match, "placed");
+  assert.equal(nodes.file.systemId, "scripts");
+  assert.equal(nodes.file.match, "files");
+  assert.equal(nodes.words.systemId, "renderer");
+  assert.equal(nodes.words.match, "inferred");
+  assert.equal(nodes.unknown.systemId, null);
+  assert.equal(nodes.unknown.match, "unmapped");
+  assert.equal(tree.groups.at(-1).id, "unmapped");
+  assert.deepEqual(places, { ideas: { placed: "scripts", unknown: "removed-system" } });
+});
+
+test("linked ideas appear once, newer duplicate records win and manual cross-system placement survives", () => {
+  const map = buildMap({ inventory: ["renderer/a.js", "scripts/a.cjs"], now: NOW });
+  const tasks = [
+    { id: "build", title: "Old task", status: "open", updatedAt: 1 },
+    { id: "build", title: "Current task", status: "active", files: ["renderer/a.js"], ideas: ["seed", "seed", "pinned"], updatedAt: 2 },
+    { id: "archived", title: "Old work", status: "archived" },
+  ];
+  const ideas = [
+    { id: "seed", title: "Old seed", status: "new", taskId: "build", updatedAt: 1 },
+    { id: "seed", title: "Current seed", status: "planned", taskId: "build", updatedAt: 2 },
+    { id: "pinned", title: "Keep this here", taskId: "build" },
+    { id: "gone", title: "Dismissed", status: "dismissed" },
+  ];
+  const tree = buildIdeaTree({ map, tasks, ideas, places: { ideas: { pinned: "scripts" } } });
+  const nodes = treeNodes(tree);
+  assert.equal(nodes.length, 3);
+  assert.equal(new Set(nodes.map((node) => node.id)).size, 3);
+  assert.equal(nodes.find((node) => node.id === "task:build").title, "Current task");
+  assert.equal(nodes.find((node) => node.id === "idea:seed").title, "Current seed");
+  assert.equal(nodes.find((node) => node.id === "task:build").children.length, 1);
+  const pinned = tree.groups.find((group) => group.systemId === "scripts").stages.find((stage) => stage.id === "active").items[0];
+  assert.equal(pinned.id, "idea:pinned");
+  assert.equal(pinned.taskId, "build");
+  assert.equal(pinned.match, "placed");
+});
+
+test("saved map context retains an idea's system through promotion and later owner placement wins", () => {
+  const map = buildMap({ inventory: ["renderer/a.js", "scripts/a.cjs"], now: NOW });
+  const ideas = [{ id: "scoped", title: "A useful next step", detail: "Make it easier to use", systemId: "scripts", systemName: "Host scripts", files: ["renderer/a.js"] }];
+  const saved = treeNodes(buildIdeaTree({ map, ideas }))[0];
+  assert.equal(saved.systemId, "scripts");
+  assert.equal(saved.match, "placed");
+  const tasks = [{ id: "task", title: "Build the step", status: "active", files: ["renderer/a.js"], ideas: ["scoped"] }];
+  const promoted = buildIdeaTree({ map, ideas, tasks });
+  const scoped = promoted.groups.find((group) => group.systemId === "scripts").stages.find((stage) => stage.id === "active").items[0];
+  assert.equal(scoped.id, "idea:scoped");
+  assert.equal(scoped.taskId, "task");
+  const moved = buildIdeaTree({ map, ideas, tasks, places: { ideas: { scoped: "renderer" } } });
+  assert.equal(moved.groups.length, 1);
+  assert.equal(moved.groups[0].systemId, "renderer");
+  assert.equal(treeNodes(moved).find((node) => node.kind === "task").children[0].sourceId, "scoped");
+  assert.deepEqual(ideas[0].files, ["renderer/a.js"], "projection preserves source evidence");
+});
+
+test("real task lineage nests, while cyclic and excessively deep lineage stays finite and complete", () => {
+  const tasks = [
+    { id: "plan", title: "Plan", members: [{ id: "member" }] },
+    { id: "member", title: "Member", status: "absorbed", absorbedInto: "plan" },
+    { id: "kid", title: "Child", parentTaskId: "member" },
+    { id: "cycle-a", title: "Cycle A", parentTaskId: "cycle-b" },
+    { id: "cycle-b", title: "Cycle B", parentTaskId: "cycle-a" },
+    ...Array.from({ length: 40 }, (_, n) => ({ id: `deep-${n}`, title: `Deep ${n}`, parentTaskId: n ? `deep-${n - 1}` : null })),
+  ];
+  const tree = buildIdeaTree({ tasks });
+  const nodes = treeNodes(tree);
+  assert.equal(nodes.length, tasks.length);
+  assert.equal(new Set(nodes.map((node) => node.id)).size, tasks.length);
+  assert.equal(nodes.find((node) => node.sourceId === "plan").children[0].sourceId, "member");
+  assert.equal(nodes.find((node) => node.sourceId === "member").children[0].sourceId, "kid");
+  const depth = (node) => 1 + Math.max(0, ...node.children.map(depth));
+  assert.ok(Math.max(...nodes.map(depth)) <= 13);
+  assert.deepEqual(buildIdeaTree({ tasks: [...tasks].reverse() }), tree, "reordering equivalent source rows does not reorganize the tree");
+});
+
+test("catalog ownership is exact for discovered clusters and unsafe paths never attach a branch", () => {
+  const map = { systems: [
+    { id: "scripts/engine", name: "Engine", source: "cluster", path: "scripts/", files: [{ path: "scripts/engine.cjs" }], catalog: [{ path: "scripts/engine.cjs" }, { path: "scripts/deeper.cjs" }] },
+    { id: "scripts", name: "Scripts", source: "folder", path: "scripts/", files: [] },
+  ] };
+  const tree = buildIdeaTree({ map, root: "C:/proj", ideas: [
+    { id: "known", title: "An update", files: ["C:/proj/scripts/deeper.cjs"] },
+    { id: "new", title: "Another update", files: ["scripts/brand-new.cjs"] },
+    { id: "unsafe", title: "A possibility", files: ["C:/other/passwords.txt", "data/keys.json", "../escape.js"] },
+  ] });
+  const nodes = Object.fromEntries(treeNodes(tree).map((node) => [node.sourceId, node]));
+  assert.equal(nodes.known.systemId, "scripts/engine");
+  assert.equal(nodes.new.systemId, "scripts");
+  assert.equal(nodes.unsafe.systemId, null);
+  assert.deepEqual(nodes.unsafe.files, []);
+});
+
+test("exploration counts distinguish current unseen files and relationship labels state their evidence", () => {
+  const map = buildMap({
+    index: [
+      { taskId: "a", at: NOW - HOUR, edits: ["scripts/gone.cjs", "renderer/a.js"], reads: ["scripts/read.cjs"] },
+      { taskId: "b", at: NOW, edits: ["scripts/core.cjs", "renderer/a.js"] },
+    ],
+    inventory: ["scripts/core.cjs", "scripts/read.cjs", "scripts/new.cjs", "renderer/a.js"], now: NOW,
+  });
+  assert.deepEqual(map.systems.find((system) => system.id === "scripts").exploration, { knownFiles: 3, observedFiles: 2, unexploredFiles: 1, lastAt: NOW });
+  assert.equal(map.links[0].kind, "co-change");
+  assert.equal(map.links[0].label, "Changed together");
+});
+
+test("oversized idea trees prioritize live work and disclose omitted nodes", () => {
+  const ideas = Array.from({ length: 1020 }, (_, n) => ({ id: `idea-${n}`, title: `Idea ${n}`, status: n < 30 ? "done" : "new", updatedAt: n }));
+  const tree = buildIdeaTree({ ideas });
+  assert.equal(tree.counts.total, 1000);
+  assert.equal(tree.counts.ideas, 990);
+  assert.equal(tree.counts.done, 10);
+  assert.equal(tree.truncated, 20);
+  assert.equal(treeNodes(tree).length, 1000);
 });

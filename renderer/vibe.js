@@ -508,28 +508,178 @@
   // ---- composer -------------------------------------------------------------
   let draftProject = null, draftEpoch = 0;
   const draftKey = (id) => `mefiStudio.vibe.draft.${id}`;
-  function saveDraft() { if (draftProject) write(draftKey(draftProject), $("input").value); }
+  const evolution = { intent: null, context: null, result: null, signature: null, loading: false, request: 0, error: "" };
+  const evolutionView = {};
+  const INTENTS = {
+    modify: { label: "Modify", hint: "Shape an existing feature", starter: "Change this project so that ", guide: "Adapt the existing behavior to the requested outcome. Reuse the systems already in this project." },
+    experiment: { label: "Experiment", hint: "Try a small possibility", starter: "Try a small experiment: ", guide: "Build a bounded, reversible experiment. Say what to compare and how to decide whether to keep it." },
+    fix: { label: "Fix", hint: "Make something work again", starter: "Something is broken: ", guide: "Investigate the cause, make a focused correction, and verify the behavior that was broken." },
+    improve: { label: "Improve", hint: "Polish what is already here", starter: "Improve this project by ", guide: "Improve the existing experience with a small, useful change and a clear way to check the result." },
+  };
+  const evolutionKey = (id) => `mefiStudio.vibe.evolution.${id}`;
+  function saveDraft() {
+    if (!draftProject) return;
+    write(draftKey(draftProject), $("input").value);
+    write(evolutionKey(draftProject), JSON.stringify({ intent: evolution.intent, context: evolution.context }));
+  }
   function syncDraft(id = projectId()) {
     if (id === draftProject) return;
     saveDraft(); draftProject = id; draftEpoch++;
     state.seenMessageId = id ? read(`mefiStudio.vibe.seen.${id}`) : null; state.askErrors = {};
+    let saved = null;
+    try { saved = id ? JSON.parse(read(evolutionKey(id)) || "null") : null; } catch { /* older or damaged local draft */ }
+    evolution.intent = Object.hasOwn(INTENTS, saved?.intent) ? saved.intent : null;
+    evolution.context = normalizeEvolution(saved?.context);
+    evolution.request++; evolution.loading = false; evolution.result = null; evolution.error = ""; evolution.signature = null;
     $("input").value = id ? read(draftKey(id)) || "" : ""; grow();
+    renderEvolution();
   }
-  const SPARKS = [
-    ["Fix something broken", "Something is broken: "],
-    ["Add a feature", "Add a feature: "],
-    ["Polish the look", "Polish the look of "],
-    ["What should we do next?", "What should we work on next in this project?"],
-  ];
+  const shortText = (value, max = 600) => typeof value === "string" ? value.trim().slice(0, max) : "";
+  const evolutionIdeas = (context) => [...new Set([...(Array.isArray(context?.ideaIds) ? context.ideaIds : []), context?.ideaId, context?.idea?.sourceId || context?.idea?.id].map((id) => shortText(id, 180)).filter(Boolean))];
+  function normalizeEvolution(context) {
+    if (!context || typeof context !== "object") return null;
+    const system = context.system;
+    const files = [...new Set([context.file, ...(Array.isArray(context.files) ? context.files : [])].map((file) => shortText(typeof file === "string" ? file : file?.path || file?.file, 600)).filter(Boolean))].slice(0, 8);
+    const ideaIds = evolutionIdeas(context);
+    if (ideaIds.length > 16) return null;
+    return { system: shortText(typeof system === "string" ? system : system?.name || context.systemName, 180), systemId: shortText(system?.id || context.systemId, 180), files, ideaIds, ideaId: ideaIds.length === 1 ? ideaIds[0] : null };
+  }
+  const evolutionSignature = () => JSON.stringify([draftProject, $("input").value, evolution.intent, evolution.context]);
+  function chooseIntent(intent) {
+    if (!Object.hasOwn(INTENTS, intent)) return;
+    syncDraft();
+    const input = $("input"), previous = INTENTS[evolution.intent];
+    if (!input.value.trim()) input.value = INTENTS[intent].starter;
+    else if (previous && input.value.startsWith(previous.starter)) input.value = INTENTS[intent].starter + input.value.slice(previous.starter.length);
+    evolution.intent = intent;
+    grow(); saveDraft(); renderEvolution(); input.focus();
+  }
+  // The map hands over an editable, project-scoped brief. Existing owner text
+  // is appended to, never replaced, and staging cannot send or create work.
+  function composeEvolution(options = {}) {
+    const id = projectId();
+    if (!id || options.projectId && options.projectId !== id) return false;
+    init(); syncDraft();
+    const intent = Object.hasOwn(INTENTS, options.intent) ? options.intent : "improve";
+    const current = $("input").value.trim();
+    const ideaIds = [...new Set([...(current ? evolutionIdeas(evolution.context) : []), ...evolutionIdeas(options)])];
+    const refuse = (text) => { go("vibe"); $("input").focus(); feedback(text, "warn"); return false; };
+    if (ideaIds.length > 16) return refuse("This draft already has 16 saved ideas. Build these together or clear the draft before adding another.");
+    const context = normalizeEvolution({ ...options, ideaIds });
+    const idea = typeof options.idea === "string" ? options.idea : options.idea?.text || options.idea?.detail;
+    const title = shortText(options.title || options.idea?.title || options.idea?.label, 180);
+    const rawText = options.prompt || idea;
+    const text = typeof rawText === "string" ? rawText.trim() : "";
+    const subject = context?.system || context?.files[0] || "this project";
+    const lines = [`${INTENTS[intent].label}: ${title || (text ? text.split("\n")[0].slice(0, 180) : subject)}`];
+    if (text) lines.push(text);
+    if (context?.system) lines.push(`System: ${context.system}`);
+    if (context?.files.length) lines.push(`Relevant files:\n${context.files.map((file) => `- ${file}`).join("\n")}`);
+    const block = lines.join("\n\n");
+    const next = current ? `${current}\n\n${block}` : block;
+    if (next.length > 16000) return refuse("This brief will not fit beside your current draft. Shorten the draft before adding it.");
+    evolution.intent = intent; evolution.context = context;
+    $("input").value = next; grow(); saveDraft(); renderEvolution();
+    if (!active()) go("vibe");
+    $("input").focus();
+    feedback(current ? "Added to your draft. Review it, then talk it over or build it." : "Ready to shape. Review the brief, then talk it over or build it.");
+    return true;
+  }
   function renderSparks() {
     const holder = $("sparks");
     holder.replaceChildren();
-    for (const [label, prompt] of SPARKS) {
-      const chip = el("button", "vibe-spark", label);
-      chip.type = "button";
-      chip.addEventListener("click", () => { const input = $("input"); input.value = prompt; input.focus(); input.setSelectionRange(prompt.length, prompt.length); grow(); saveDraft(); });
-      holder.append(chip);
+    holder.className = "vibe-sparks vibe-evolution";
+    holder.setAttribute("role", "region"); holder.setAttribute("aria-label", "Mefi: Modify, Experiment, Fix, Improve");
+    const head = el("div", "vibe-evolution-head"), caption = el("div");
+    caption.append(el("b", "vibe-evolution-brand", "MEFI"), el("span", "vibe-evolution-subtitle", "Build on what is here"));
+    const links = el("div", "vibe-evolution-links");
+    const map = el("button", "vibe-ask-link", "System map ↗"); map.type = "button";
+    map.addEventListener("click", () => go("agent-brain", { tab: "map", mapMode: "systems" }));
+    const ideas = el("button", "vibe-ask-link", "Ideas tree ↗"); ideas.type = "button";
+    ideas.addEventListener("click", () => go("agent-brain", { tab: "map", mapMode: "ideas" }));
+    links.append(map, ideas); head.append(caption, links);
+    const choices = el("div", "vibe-evolution-intents"); choices.setAttribute("role", "group"); choices.setAttribute("aria-label", "How to build on this project");
+    evolutionView.choices = [];
+    for (const [intent, entry] of Object.entries(INTENTS)) {
+      const chip = el("button", "vibe-evolution-intent"); chip.type = "button"; chip.dataset.intent = intent;
+      const words = el("span"); words.append(el("b", "", entry.label), el("small", "", entry.hint));
+      chip.append(el("span", "vibe-evolution-letter", entry.label[0]), words);
+      chip.addEventListener("click", () => chooseIntent(intent)); choices.append(chip); evolutionView.choices.push(chip);
     }
+    const foot = el("div", "vibe-evolution-foot");
+    evolutionView.scope = el("span", "vibe-evolution-scope");
+    const suggest = el("button", "vibe-btn quiet", "Suggest a next step"); suggest.type = "button"; suggest.dataset.evolutionAction = "suggest";
+    suggest.addEventListener("click", () => void suggestEvolution()); evolutionView.suggest = suggest;
+    foot.append(evolutionView.scope, suggest);
+    evolutionView.results = el("div", "vibe-evolution-results"); evolutionView.results.setAttribute("aria-live", "polite");
+    holder.append(head, choices, foot, evolutionView.results); renderEvolution();
+  }
+  function renderEvolution() {
+    if (!evolutionView.results) return;
+    for (const button of evolutionView.choices) button.setAttribute("aria-pressed", String(button.dataset.intent === evolution.intent));
+    evolutionView.scope.textContent = evolution.context?.system || evolution.context?.files[0] || "This project · choose an approach or ask Mefi for ideas";
+    evolutionView.suggest.textContent = evolution.loading ? "Exploring the project…" : evolution.result ? "Refresh suggestions" : "Suggest a next step";
+    evolutionView.suggest.disabled = evolution.loading || state.pending || !projectId();
+    const body = evolutionView.results; body.replaceChildren(); body.hidden = !evolution.loading && !evolution.result && !evolution.error;
+    if (evolution.error) body.append(el("p", "vibe-inline-error", evolution.error));
+    if (evolution.loading) { body.append(el("p", "vibe-evolution-note", "Mefi is reading relevant files and looking for a useful next step.")); return; }
+    if (!evolution.result) return;
+    if (evolution.result.summary) body.append(el("p", "vibe-evolution-note", evolution.result.summary));
+    const stale = evolution.signature !== evolutionSignature();
+    if (stale) body.append(el("p", "vibe-evolution-note", "Your draft changed. Refresh to get suggestions for the current direction."));
+    const cards = el("div", "vibe-evolution-suggestions");
+    for (const suggestion of evolution.result.suggestions || []) {
+      const card = el("article", "vibe-evolution-suggestion");
+      card.append(el("h3", "", suggestion.label), el("p", "", suggestion.text));
+      if (suggestion.reason) card.append(el("p", "vibe-evolution-note", suggestion.reason));
+      for (const file of suggestion.files || []) card.append(el("code", "vibe-evolution-file", file));
+      const actions = el("div", "vibe-evolution-actions");
+      const use = el("button", "vibe-btn quiet", "Add to draft"); use.type = "button"; use.disabled = stale || state.pending;
+      // A planning reply has a transient suggestion-0 id. Only a saved board
+      // idea may follow this draft into a task and advance the ideas tree.
+      use.addEventListener("click", () => composeEvolution({ projectId: draftProject, intent: evolution.intent || "improve", ...evolution.context, ideaId: suggestion.savedId || null, idea: { title: suggestion.label, text: suggestion.text }, files: suggestion.files }));
+      const keep = el("button", "vibe-ask-link", suggestion.saved ? "Idea saved" : suggestion.saving ? "Saving…" : "Save idea"); keep.type = "button"; keep.disabled = stale || Boolean(suggestion.saved || suggestion.saving);
+      keep.addEventListener("click", () => void keepEvolutionIdea(suggestion));
+      actions.append(use, keep); card.append(actions); cards.append(card);
+    }
+    body.append(cards);
+    if (!cards.children.length) body.append(el("p", "vibe-evolution-note", "No extra changes suggested yet. Shape an idea above and try again."));
+  }
+  async function suggestEvolution() {
+    init(); syncDraft();
+    if (evolution.loading || state.pending) return;
+    if (!projectId() || !api()?.planningExplore) { evolution.error = "Choose a project in the desktop app to ask Mefi for suggestions."; renderEvolution(); return; }
+    const id = projectId(), epoch = draftEpoch, request = ++evolution.request, signature = evolutionSignature();
+    const intent = INTENTS[evolution.intent || "improve"];
+    const scope = evolution.context;
+    const value = $("input").value.trim();
+    const destination = [value || "Suggest a few small, useful next steps for the existing application in this project.", `Approach: ${intent.label}. ${intent.guide}`, scope?.system ? `System: ${scope.system}` : "", scope?.files.length ? `Relevant files: ${scope.files.join(", ")}` : ""].filter(Boolean).join("\n\n");
+    if (destination.length > 16000) { evolution.error = "Shorten the draft a little before asking for suggestions."; renderEvolution(); return; }
+    evolution.loading = true; evolution.error = ""; renderEvolution();
+    const current = () => id === projectId() && epoch === draftEpoch && request === evolution.request;
+    try {
+      const result = await api().planningExplore({ projectId: id, draft: { title: `${intent.label} this project`, destination, outOfScope: "Suggestions for review only. Do not implement, create tasks, or approve work." }, focus: "destination", intent: "suggest" });
+      if (!current()) return;
+      if (result?.projectId !== id || !result?.ok) throw new Error(result?.error || "Mefi could not explore this project. Try again.");
+      evolution.result = result; evolution.signature = signature;
+    } catch (error) { if (current()) evolution.error = error?.message || "Suggestions are unavailable. Try again."; }
+    finally { if (current()) { evolution.loading = false; renderEvolution(); } }
+  }
+  async function keepEvolutionIdea(suggestion) {
+    if (suggestion.saved || suggestion.saving || evolution.signature !== evolutionSignature()) return;
+    const id = projectId(), epoch = draftEpoch, context = evolution.context;
+    suggestion.saving = true; renderEvolution();
+    try {
+      if (!api()?.ideasAction) throw new Error("Keeping ideas requires the desktop app.");
+      const result = await api().ideasAction({ action: "add", projectId: id, title: suggestion.label, detail: suggestion.text, files: suggestion.files || [], tags: ["mefi", evolution.intent || "improve"], systemId: context?.systemId || undefined, systemName: context?.system || undefined, intent: evolution.intent || "improve" });
+      if (id !== projectId() || epoch !== draftEpoch) return;
+      if (!result?.ok || result.projectId !== id) throw new Error(result?.error || "The idea could not be kept. Try again.");
+      suggestion.saved = true;
+      suggestion.savedId = shortText(result.idea?.id, 180) || null;
+      if (Array.isArray(result.ideas)) state.ideas = result.ideas;
+      feedback("Idea saved for later. Find it in the idea tree or add it to your draft when you are ready.", "good"); renderLanes();
+    } catch (error) { if (id === projectId() && epoch === draftEpoch) feedback(error?.message || "The idea could not be kept.", "bad"); }
+    finally { suggestion.saving = false; if (id === projectId() && epoch === draftEpoch) renderEvolution(); }
   }
   function grow() { const input = $("input"); input.style.height = "auto"; input.style.height = `${Math.min(220, input.scrollHeight)}px`; }
   function feedback(text, tone = "") { const node = $("feedback"); node.textContent = text; node.dataset.tone = tone; }
@@ -537,6 +687,7 @@
     state.pending = on;
     layer.dataset.pending = on ? "yes" : "no";
     for (const id of ["talk", "build"]) $(id).disabled = on;
+    renderEvolution();
   }
   async function send(intent) {
     const input = $("input");
@@ -557,12 +708,16 @@
     renderChat();
     try {
       const title = value.split("\n")[0].slice(0, 180);
+      const approach = INTENTS[evolution.intent];
+      const prompt = approach ? `MEFI · ${approach.label}\n${approach.guide}\n\n${value}` : value;
+      const ideaIds = evolutionIdeas(evolution.context);
+      const linkedIdeas = ideaIds.length > 1 ? { ideaIds } : ideaIds.length ? { ideaId: ideaIds[0] } : {};
       const result = intent === "build"
-        ? await (sizing ? api().vibeBuild({ title, prompt: value, projectId: id }) : api().tasksCreate({ title, prompt: value, projectId: id }))
+        ? await (sizing ? api().vibeBuild({ title, prompt, projectId: id, ...linkedIdeas }) : api().tasksCreate({ title, prompt, projectId: id }))
         : await api().assistantMessage(value, id, { view: "Vibe", companion: companion() });
       if (!result || result.ok === false) throw new Error(result?.error || "That didn't go through.");
       if (projectId() !== id || draftEpoch !== epoch) return;
-      if (input.value.trim() === value) { input.value = ""; grow(); saveDraft(); }
+      if (input.value.trim() === value) { input.value = ""; evolution.context = null; grow(); saveDraft(); renderEvolution(); }
       if (result.state) state.assistant = result.state;
       if (intent === "build") {
         // Say where it really goes: a held or paused queue, or no AI, keeps
@@ -931,7 +1086,7 @@
     window.MefiFileInputs?.bind($("input"), { scope: () => `${draftEpoch}:${projectId()}`, blocked: () => state.pending || !projectId() });
     $("talk").addEventListener("click", () => void send("talk"));
     $("decisions")?.addEventListener("click", () => openPanel("decisions"));
-    $("input").addEventListener("input", () => { grow(); saveDraft(); if ($("feedback").textContent && !state.pending) feedback(""); });
+    $("input").addEventListener("input", () => { if (!$("input").value.trim()) evolution.context = null; grow(); saveDraft(); renderEvolution(); if ($("feedback").textContent && !state.pending) feedback(""); });
     window.addEventListener("mefi:project-changed", (event) => syncDraft(event.detail?.projectId));
     window.addEventListener("beforeunload", saveDraft);
     $("input").addEventListener("keydown", (event) => {
@@ -1101,5 +1256,5 @@
     void refresh().then(() => { const late = needs().find((item) => item.kind === (wanted.kind || "question") && item.id === wanted.id); if (late) openNeed(late); });
     return false;
   }
-  window.MefiVibe = { enter, exit, isActive: active, refresh, mode, setMode, landing, startup, showNotes, closeNotes, snapshot, openPanel, closeDrawers, openNeed: openNeedById, paintDock: () => renderDock(lanes()), promoteIdea: (idea) => promoteIdea(idea), feedback: (text, tone) => feedback(text, tone), ready: () => refreshFlight ?? Promise.resolve() };
+  window.MefiVibe = { enter, exit, isActive: active, refresh, mode, setMode, landing, startup, showNotes, closeNotes, snapshot, openPanel, closeDrawers, composeEvolution, suggestEvolution, openNeed: openNeedById, paintDock: () => renderDock(lanes()), promoteIdea: (idea) => promoteIdea(idea), feedback: (text, tone) => feedback(text, tone), ready: () => refreshFlight ?? Promise.resolve() };
 })();

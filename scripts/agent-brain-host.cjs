@@ -127,6 +127,7 @@ function createAgentBrain(options = {}) {
     // shows the project's systems before any agent has worked in it.
     readHistory = null,
     readInventory = null,
+    readMapWork = null,
     random = Math.random,
     // The companion is one character across projects: its look, reach, the
     // owner's last-seen time and the decisions it learns from live in one
@@ -999,11 +1000,23 @@ function createAgentBrain(options = {}) {
 
   async function mapState({ rebuild = false } = {}) {
     const s = scope();
+    // Start the read while the caller's project context is still captured;
+    // never resolve it from the active project after an inventory await.
+    let workRead = null;
+    if (typeof readMapWork === "function") {
+      try { workRead = Promise.resolve(readMapWork()).catch(error => { warn("map work", error); return null; }); }
+      catch (error) { warn("map work", error); }
+    }
+    const root = projectRoot() || "";
     await ready(s);
     // Opening the map asks for a current inventory; the history remains
     // cached, so this is cheap compared with rereading the commit log.
     const map = rebuild || !s.map || (typeof readInventory === "function" && now() - (s.mapInventoryAt ?? 0) > 30000) ? await rebuildMap(s) : s.map;
-    return { ok: true, map, places: s.places };
+    const work = await workRead;
+    const tasks = Array.isArray(work?.tasks) ? work.tasks.filter(task => task && (!task.projectId || task.projectId === s.id)) : [...s.tasks.values()];
+    const ideas = Array.isArray(work?.ideas) ? work.ideas.filter(idea => idea && (!idea.projectId || idea.projectId === s.id)) : [];
+    const ideaTree = mods.projectMap.buildIdeaTree({ map, ideas, tasks, places: s.places, root });
+    return { ok: true, map: { ...map, ideaTree }, places: s.places, projectId: s.id };
   }
 
   // The owner places an idea or a plan on a system of the map (or lifts it

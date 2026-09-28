@@ -291,8 +291,48 @@ function composer(board) {
     section("async function assistantCreateTask(", "function executorProcessAlive("),
     section('  ipcMain.handle("tasks:create",', "  // The committed catalog is available immediately"),
   ].join("\n"), env);
-  return { create: (title, prompt = title) => handler(null, { title, prompt }), jev, asked };
+  return { create: (title, prompt = title, options = {}) => handler(null, { title, prompt, ...options }), jev, asked };
 }
+
+test("building a saved Mefi idea links the new task atomically and refuses a second build", async () => {
+  const idea = { id: "idea_mefi_one", title: "Map controls", detail: "Connect the map", source: "chat", status: "new", files: ["renderer/nav.js"], systemId: "renderer", intent: "improve" };
+  const board = { tasks: [], requests: [], ideas: [idea] }, h = composer(board);
+  const result = await h.create("Improve map controls", "Show the system connections", { ideaId: idea.id });
+  assert.equal(result.ok, true, result.error);
+  assert.equal(board.tasks.length, 1);
+  assert.equal(idea.taskId, board.tasks[0].id);
+  assert.equal(idea.status, "accepted");
+  assert.deepEqual(plain(board.tasks[0].ideas), [idea.id]);
+  assert.deepEqual(plain(board.tasks[0].files), idea.files);
+  assert.equal(board.tasks[0].systemId, "renderer");
+  assert.equal(board.tasks[0].intent, "improve");
+  const again = await h.create("A differently worded map change", "Do the same idea", { ideaId: idea.id });
+  assert.equal(again.ok, false);
+  assert.match(again.error, /already has a task/);
+  assert.equal(board.tasks.length, 1);
+  assert.equal(h.asked.length, 1);
+  const missing = await h.create("Missing idea", "Should never start", { ideaId: "gone" });
+  assert.equal(missing.ok, false);
+  assert.equal(board.tasks.length, 1);
+});
+
+test("saved idea admission compares file scope, links all selected ideas and detects legacy one-way links", async () => {
+  const one = { id: "one", title: "Add a toggle", status: "new", files: ["renderer/one.js"] };
+  const two = { id: "two", title: "Add a toggle", status: "new", files: ["renderer/two.js"] };
+  const third = { id: "third", title: "Explain the toggle", status: "new", files: ["docs/toggle.md"] };
+  const board = { tasks: [], requests: [], ideas: [one, two, third] }, h = composer(board);
+  assert.equal((await h.create("Add a toggle", "Add a toggle", { ideaId: "one" })).ok, true);
+  const second = await h.create("Add a toggle", "Add a toggle", { ideaIds: ["two", "third"] });
+  assert.equal(second.ok, true, second.error);
+  assert.equal(board.tasks.length, 2, "different file scopes remain separate work");
+  assert.equal(two.taskId, third.taskId, "every idea in the draft follows its saved task");
+  assert.deepEqual(plain(board.tasks[0].ideas).sort(), ["third", "two"]);
+  delete one.taskId;
+  const legacy = await h.create("A new wording", "Another wording for the same idea", { ideaId: "one" });
+  assert.equal(legacy.ok, false);
+  assert.match(legacy.error, /already has a task/);
+  assert.equal(board.tasks.length, 2);
+});
 
 test("a Fix: request is compared by fix theme against fix work only, as compaction compares it", async () => {
   const [fix] = eyesModule.requestsFromBriefing({ alerts: [{ severity: "warn", title: "stale lock file blocks the updater", detail: "The updater waits on a stale lock.", sessionIds: ["ses_u"] }] });

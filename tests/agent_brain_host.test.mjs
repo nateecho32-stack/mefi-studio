@@ -332,6 +332,41 @@ test("ideas and plans placed on a system survive a map rebuild", async () => {
   } finally { await h.brain.flush(); await h.cleanup(); }
 });
 
+test("the ideas tree refreshes cached maps from the latest project board and isolates a pending project read", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "brain-map-work-"));
+  let current = "one", release;
+  const boards = {
+    one: { ideas: [{ id: "i1", title: "Explore renderer", detail: "Improve renderer controls", files: ["renderer/nav.js"], projectId: "one" }], tasks: [] },
+    two: { ideas: [{ id: "i2", title: "Second project idea", projectId: "two" }], tasks: [] },
+  };
+  let pending = false;
+  const brain = host.createAgentBrain({
+    dataFile: name => path.join(root, current, name), projectId: () => current, now: () => 1000000,
+    projectRoot: () => `C:/projects/${current}`, readInventory: async () => ["renderer/nav.js"],
+    readMapWork: () => { const board = boards[current]; return pending ? new Promise(resolve => { release = () => resolve(board); }) : board; },
+  });
+  try {
+    const first = await brain.mapState();
+    assert.match(JSON.stringify(first.map.ideaTree), /Explore renderer/);
+    boards.one.ideas[0] = { ...boards.one.ideas[0], taskId: "t1" };
+    boards.one.tasks = [{ id: "t1", title: "Build renderer controls", status: "active", files: ["renderer/nav.js"], projectId: "one" }];
+    const active = await brain.mapState();
+    assert.equal(active.map.builtAt, first.map.builtAt, "no inventory rescan is needed to refresh the work tree");
+    assert.match(JSON.stringify(active.map.ideaTree), /Build renderer controls/);
+    assert.equal(active.map.ideaTree.counts.active, 2, "the linked idea and task move together into progress");
+    pending = true;
+    const oldRead = brain.mapState();
+    current = "two"; pending = false;
+    const second = await brain.mapState();
+    release();
+    const old = await oldRead;
+    assert.equal(old.projectId, "one");
+    assert.doesNotMatch(JSON.stringify(old.map.ideaTree), /Second project idea/);
+    assert.equal(second.projectId, "two");
+    assert.doesNotMatch(JSON.stringify(second.map.ideaTree), /Build renderer controls|Explore renderer/);
+  } finally { await brain.flush(); await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 }); }
+});
+
 test("the head drafts a complex task's pipeline when no recipe fits, once, and never under a moving run", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "brain-draft-"));
   const calls = [];

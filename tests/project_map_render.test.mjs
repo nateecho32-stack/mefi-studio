@@ -34,7 +34,7 @@ test("Project map explores files with restorable camera history, search, gesture
       t.diagnostic(`Project map screenshots: ${artifacts}`);
     }
     assert.equal(code, 0, `${report?.failure || "No renderer report"}\n${output}`);
-    assert.equal(report.layouts.length, 4); assert.ok(report.reducedMotion && report.history && report.search && report.gestures && report.projectIsolation);
+    assert.equal(report.layouts.length, 4); assert.ok(report.reducedMotion && report.history && report.search && report.gestures && report.projectIsolation && report.relationships && report.ideasTree);
   } finally {
     assert.equal(path.dirname(fixture), path.resolve(tmpdir())); assert.ok(path.basename(fixture).startsWith("mefi-project-map-render-"));
     await rm(fixture, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });

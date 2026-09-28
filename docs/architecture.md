@@ -250,6 +250,15 @@ settings and per-model work-kind summaries for the shared controls.
   permission settings require approval, waiting steps are one Needs you row, started together
   with their reviewed scopes, and **Make it one task** drops the unstarted
   steps so the card runs whole. Anything that cannot be sized keeps it one card.
+- **MEFI — Modify, Experiment, Fix, Improve** gives Vibe four starting points
+  for evolving the open project, including Studio itself when its repository
+  is selected. Pick an approach, describe the change, then talk it over or
+  **Build it**. The approach and selected map area stay with that project's
+  draft. **Suggest a next step** reads project context through the planner and
+  returns suggestions with reasons and file references. **Add to draft**
+  appends an editable brief; **Save idea** keeps a note in the Ideas tree.
+  Asking for or saving suggestions does not queue work. The existing Build
+  action and permission settings still control execution.
 - **New app** (the + beside Vibe's project picker, `projects:create`) makes an
   empty folder under `~/Mefi Apps` (never inside Studio's own repository),
   starts git and a README in it, opens it as the project and sends the
@@ -711,8 +720,8 @@ failed process stays an error and cannot produce briefing requests.
   on a fresh layout or Fit; live additions keep their established branch.
   Command, the rail, Appearance preview, Agent brain and Overhead use the same
   eight finishes. Brain maps retains its card nodes and exact port geometry,
-  with matching surfaces and typography. The project map keeps its isometric
-  blocks, with measured titles and full names available on hover.
+  with matching surfaces and typography. The project map uses readable cards
+  with labeled relationships and separate branches for undiscovered connections.
 - Agent brain wraps wide parallel stages into readable rows and scrolls long
   pipelines. Hover still exposes the full step title and details. Reduced
   motion freezes the scene; hidden canvases suspend their animation loops.
@@ -945,7 +954,9 @@ failed process stays an error and cannot produce briefing requests.
   tool** on, OpenCode and Claude Code runs get a local MCP tool that waits for
   the answer mid-run.
 - **Project map**, under Agents › Workflows, explores systems, parts and files
-  as isometric chunks. Click to inspect a chunk; double-click, press Enter or
+  as connected cards. Systems with observed co-changes share a branch;
+  systems without that evidence stay under **Connections still to discover**.
+  Click to inspect a node; double-click, press Enter or
   use **Explore** to enter it. **Back/Forward** restores the selected item and
   camera, while breadcrumbs and **Up** change the level. **Browse** opens a
   keyboard-accessible contents panel: search spans the whole project, including
@@ -963,6 +974,17 @@ failed process stays an error and cannot produce briefing requests.
   Every system carries its files, its tasks (done, working, open) and a warmth
   that halves each week. The inspector shows related systems as navigable
   links, tasks, ideas and plans; ideas and plans can be placed on a system.
+  Edges mean **Changed together**, not an inferred import or runtime dependency.
+  **Contains** branches show the system's parts and files, and exploration
+  counts distinguish observed files from files waiting to be explored.
+  **Ideas tree** groups saved ideas and tasks by system and progress. Linked
+  ideas sit beneath their tasks, and subtasks beneath their parents. Owner
+  placements take precedence over observed files and suggested word matches;
+  each card names its grouping evidence. Unmatched work stays in **To explore**.
+  Branches can be collapsed and searched, and regroup as files are discovered
+  or work changes status without editing the original idea or task.
+  **Work with Mefi** prepares a contextual Vibe draft. The system inspector's
+  **Modify / Experiment / Fix / Improve** buttons do the same for a chosen area.
   **Work here** prepares a task draft with the selected system, part or file;
   selected files also have **Copy path**. A pipeline names the systems it touches.
   Drag or wheel to pan, Control/Command-wheel to zoom at the pointer, or click

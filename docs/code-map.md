@@ -235,7 +235,7 @@ imports.
 | `node-styles.js` | 5,303 | `window.MefiNodeStyles`: the node-style painters the Command view and the tree rail share (the eight looks, their motion records, detail tiers and theme tones, and the overlay and wire hooks each style may take over). Bundled before `tree3d.js`, which with `idle.js` falls back to a plain disc when it is absent. |
 | `brains.js` | 3,777 | The brain-map editor over the data `scripts/brains.cjs` validates. |
 | `agent-brain.js` | 1,410 | `window.MefiAgentBrain`, `MefiHub` and `MefiCompanion`: the Agent brain sheet (`J`: a task's pipeline drawn from work events, the Playbook shelf, the project map, the seats), the map hub on Home, and the companion orb and panel in the menu foot. |
-| `project-map-view.js` | | `window.MefiProjectMap`: the project explorer's contents/search, filters, history, selection, minimap, pointer and keyboard navigation, camera easing and level transitions. Uses the map data and shared isometric painter supplied by `agent-brain.js`; styles live in `agent-brain.css`. |
+| `project-map-view.js` | | `window.MefiProjectMap`: connected system cards and the expandable Ideas tree, plus contents/search, filters, history, selection, minimap, pointer and keyboard navigation, camera easing and level transitions. Uses the map and work projection supplied by `agent-brain.js`; styles live in `agent-brain.css`. |
 | `nav.js` | 2,133 | The navigation registry behind Home/Work/Live/Models, New task, project-scoped recent tasks, the local view row, workspace-page presentation, Search, Help and shortcuts. Historical destination IDs resolve here. |
 | `tree3d.js` | 2,290 | The 3D task-tree rail. |
 | `tasks.js` | 1,571 | The task board, per-task logs and ideas, and the reference menu. |

@@ -7,6 +7,14 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Build on your app with MEFI.** Vibe offers Modify, Experiment, Fix and
+  Improve, contextual briefs from the map, and suggestions that can be added
+  to a draft or saved as ideas. Saving a suggestion does not start work.
+- **A map that shows relationships.** Connected system cards show observed
+  co-changes, parts and files. The separate Ideas tree groups ideas and tasks
+  by system and progress, keeps their lineage, and reorganizes as agents
+  discover files and work advances.
+
 ## [0.4.4] - 2026-09-27
 
 - **The Void collection is free.** Its four themes and three node styles sit

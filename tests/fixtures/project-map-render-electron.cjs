@@ -28,9 +28,12 @@ app.whenReady().then(async () => {
   const systems = ["Game engine", "World & terrain", "Player movement", "Interface", "Audio", "Story & quests", "Verification", "Build tools"].map((name, i) => {
     const files = ["core", "effects", "state"].flatMap(folder => Array.from({ length: folder === "core" && i === 0 ? 130 : 5 }, (_, j) => ({ path: `src/system-${i}/${folder}/${j === 129 ? "distant-module" : `module-${j}`}.js`, present: j !== 3, edits: j % 4, lastAt: Date.now() - j * 3600000 })));
     if (i === 0) files.push({ path: "src/system-0/index.js", present: true, edits: 1 }, { path: "src/system-0/Files/readme.md", present: true, edits: 0 });
-    return { id: `system-${i}`, name, path: `src/system-${i}/`, what: `The ${name.toLowerCase()} system and its supporting parts.`, fileCount: files.filter(file => file.present).length, historicalCount: 3, catalog: files, files: files.slice(0, 10), tasks: { done: i, active: i < 2 ? 1 : 0, open: 2 }, edits: 10 - i, heat: 8 - i, taskIds: ["task-1"] };
+    return { id: `system-${i}`, name, path: `src/system-${i}/`, what: `The ${name.toLowerCase()} system and its supporting parts.`, fileCount: files.filter(file => file.present).length, historicalCount: 3, catalog: files, files: files.slice(0, 10), tasks: { done: i, active: i < 2 ? 1 : 0, open: 2 }, edits: 10 - i, heat: 8 - i, taskIds: ["task-1"], exploration: { observedFiles: i + 2, knownFiles: files.length, unexploredFiles: files.length - i - 2 } };
   });
   const map = { systems, links: [{ a: "system-0", b: "system-1", strength: .8, weight: 8 }, { a: "system-0", b: "system-2", strength: .65, weight: 6 }, { a: "system-1", b: "system-3", strength: .4, weight: 3 }], sources: { present: 224, commits: 48, runs: 7 }, builtAt: Date.now() };
+  const idea = { id: "idea:movement", kind: "idea", sourceId: "movement", title: "Make movement feel weightless", summary: "Experiment with gentler acceleration and clearer landing feedback.", status: "new", stage: "ideas", systemId: "system-0", match: "inferred", children: [] };
+  const task = { id: "task:motion", kind: "task", sourceId: "motion", title: "Refine movement through the world", summary: "Keep the existing controls while testing acceleration.", status: "active", stage: "active", systemId: "system-0", match: "files", children: [] };
+  map.ideaTree = { v: 1, counts: { ideas: 1, active: 1, queued: 0, done: 0, total: 2 }, groups: [{ id: "system:system-0", name: "Game engine", systemId: "system-0", stages: [{ id: "ideas", name: "Ideas", items: [idea] }, { id: "active", name: "In progress", items: [task] }] }] };
   const responses = {
     projectsList: { ok: true, activeId: "map-demo", projects: [{ id: "map-demo", name: "Wanderlight", path: root }, { id: "map-other", name: "Second project", path: root + "/other" }] },
     prefsGet: { ok: true, prefs: { commandHome: false } },
@@ -49,7 +52,7 @@ app.whenReady().then(async () => {
     const bridge=Object.fromEntries(Object.keys(responses).map(key=>[key,async()=>responses[key]]));
     for(const name of ['onProjects','onBrainUpdate'])bridge[name]=fn=>(listeners[name]??=[]).push(fn);
     contextBridge.exposeInMainWorld('mefiStudio',bridge);
-    contextBridge.exposeInMainWorld('mapFixture',{project:()=>{responses.projectsList.activeId='map-other';responses.brainMap.map={systems:[],links:[],sources:{present:0}};for(const fn of listeners.onProjects||[])fn(responses.projectsList);},refresh:()=>{responses.brainMap.map.systems[0].name='Renamed engine';for(const fn of listeners.onBrainUpdate||[])fn({what:'map'});},empty:()=>{responses.brainMap.map.systems=[];for(const fn of listeners.onBrainUpdate||[])fn({what:'map'});}});
+    contextBridge.exposeInMainWorld('mapFixture',{project:()=>{responses.projectsList.activeId='map-other';responses.brainMap.map={systems:[],links:[],sources:{present:0}};for(const fn of listeners.onProjects||[])fn(responses.projectsList);},refresh:()=>{responses.brainMap.map.systems[0].name='Renamed engine';for(const fn of listeners.onBrainUpdate||[])fn({what:'map'});},evolve:()=>{const g=responses.brainMap.map.ideaTree.groups[0],idea=g.stages[0].items.pop();idea.match='linked';g.stages[1].items[0].children.push(idea);for(const fn of listeners.onBrainUpdate||[])fn({what:'map'});},empty:()=>{responses.brainMap.map.systems=[];for(const fn of listeners.onBrainUpdate||[])fn({what:'map'});}});
     localStorage.setItem('mefiStudio.commandHome','0');localStorage.setItem('mefiStudio.zen','0');localStorage.setItem('mefiStudio.keyHint.v1','1');localStorage.setItem('mefiStudio.walkthrough.v1',JSON.stringify({version:1,status:'complete'}));
   `);
   const window = new BrowserWindow({ show: false, width: 1440, height: 900, frame: false, webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: true, backgroundThrottling: false } });
@@ -76,6 +79,24 @@ app.whenReady().then(async () => {
   await run("await window.MefiNav.go('agent-brain',{tab:'map'});");
   await until("window.MefiAgentBrain.mapState()?.count===8"); await settle();
   await capture("map-overview.png");
+  const initial = await state();
+  assert.equal(initial.edges.length, 3, "observed relationships are drawn and exposed to the accessible list");
+  assert.ok(initial.edges.every(edge => edge.label === "Changed together"));
+  await click('.pm-mode[data-mode="ideas"]');
+  assert.equal((await state()).mode, "ideas");
+  assert.equal(await run("return document.querySelectorAll('.pm-idea-card').length;"), 2);
+  assert.ok(await run("return document.querySelector('.pm-ideas').textContent.includes('Suggested grouping');"));
+  await capture("map-ideas.png");
+  await run("window.mapFixture.evolve();");
+  await until("document.querySelectorAll('.pm-idea-children .pm-idea-card').length===1");
+  assert.equal(await run("return document.querySelectorAll('.pm-idea-card').length;"), 2, "an idea moves under its task without duplication");
+  await run("const group=document.querySelector('.pm-idea-group');group.open=false;await new Promise(r=>setTimeout(r,20));window.mapFixture.refresh();");
+  await until("document.querySelector('.ab-index-item[data-id=\"system-0\"]').textContent.includes('Renamed engine')");
+  assert.equal(await run("return document.querySelector('.pm-idea-group').open;"), false, "live refresh preserves collapsed branches");
+  await run("document.querySelector('.pm-idea-group').open=true;");
+  await click('.pm-mode[data-mode="systems"]'); await settle();
+  assert.deepEqual((await state()).nodes.map(node => [node.id, node.worldX, node.worldY]), initial.nodes.map(node => [node.id, node.worldX, node.worldY]), "new work metadata keeps system positions stable");
+  report.relationships = true; report.ideasTree = true;
   await click('.ab-index-item[data-id="system-0"]');
   assert.equal((await state()).level, "systems", "single selection inspects without losing the overview");
   await settle();
@@ -141,11 +162,30 @@ app.whenReady().then(async () => {
     const layout = await run("const p=document.getElementById('agent-brain-map'),s=p.querySelector('.pm-stage'),c=p.querySelector('.pm-camera'),r=c.getBoundingClientRect();return {height:s.clientHeight,scroll:s.scrollHeight-s.clientHeight,inside:r.left>=0&&r.right<=innerWidth&&r.bottom<=innerHeight,body:document.documentElement.scrollWidth<=innerWidth+2};");
     assert.ok(layout.height > 35 && layout.scroll <= 2 && layout.inside && layout.body, JSON.stringify({w,h,zoom,...layout}));
     report.layouts.push({ w, h, zoom, ...layout }); await capture(`map-${w}-${zoom}.png`);
+    await click('.pm-mode[data-mode="ideas"]');
+    assert.ok(await run("const p=document.querySelector('.pm-ideas');return p.scrollWidth<=p.clientWidth+2 && p.clientHeight>35;"), "ideas tree stays within the map at every window size");
+    if (w === 600 && zoom === 1) await capture("map-ideas-narrow.png");
+    await click('.pm-mode[data-mode="systems"]');
   }
   await click('.ab-index-item[data-id="system-0"]');
   await click('.ab-narrow-open');
   assert.ok(await run("return document.getElementById('agent-brain-map-detail').getClientRects().length>0&&!document.querySelector('.pm-stage').getClientRects().length;"));
-  await click('.ab-narrow-back');
+  // An explicit Vibe map destination must escape a previous narrow detail
+  // pane, otherwise the details and Ideas view both become hidden.
+  await run("await window.MefiNav.go('vibe');await window.MefiNav.go('agent-brain',{tab:'map',mapMode:'ideas'});");
+  await until("window.MefiAgentBrain.mapState().mode==='ideas'");
+  assert.ok(await run("const p=document.querySelector('.pm-ideas');return p.getClientRects().length>0&&p.clientHeight>35&&document.querySelector('.pm-stage').getClientRects().length>0&&p.querySelectorAll('.pm-idea-card').length===2;"), "Ideas opens visibly after leaving narrow details");
+  assert.match(await run("return document.querySelector('.pm-idea-root').textContent;"), /0 queued/, "root includes queued work in its summary");
+  await run("await window.MefiNav.go('vibe');await window.MefiNav.go('agent-brain',{tab:'map',mapMode:'systems'});");
+  await until("window.MefiAgentBrain.mapState().mode==='systems'"); await settle();
+  assert.ok(await run("return document.getElementById('agent-brain-map-canvas').getClientRects().length>0&&getComputedStyle(document.getElementById('agent-brain-map-canvas')).visibility==='visible';"), "System map route leaves Ideas mode");
+  for (const [w, h] of [[1440, 900], [390, 844]]) {
+    window.setContentSize(w, h); contents.setZoomFactor(1);
+    await run("await window.MefiNav.go('vibe');"); await sleep(180);
+    await capture(`vibe-${w}.png`);
+    assert.ok(await run("return document.documentElement.scrollWidth<=innerWidth+2;"), "Vibe has no horizontal page overflow");
+  }
+  await run("await window.MefiNav.go('agent-brain',{tab:'map'});");
   await run("window.mapFixture.project();");
   await until("window.MefiWorkspace.activeProjectId()==='map-other' && window.MefiAgentBrain.mapState().count===0");
   assert.equal((await state()).history.length, 1); assert.equal((await state()).systemId, null); assert.equal((await state()).selected, null); report.projectIsolation = true;

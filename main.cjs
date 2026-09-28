@@ -11745,6 +11745,11 @@ const agentBrain = (() => {
       readAreas: () => readFirstMapAreas(),
       readHistory: () => readProjectHistory(),
       readInventory: () => readProjectInventory(),
+      readMapWork: async () => {
+        const eyes = await getEyes();
+        const [ideas, tasks] = await Promise.all([eyes.readJson(IDEAS_PATH, []), eyes.readJson(TASKS_PATH, [])]);
+        return { ideas, tasks };
+      },
       appDataFile: (name) => path.join(STUDIO_ROOT, "data", name),
     });
   } catch (error) {
@@ -12703,7 +12708,7 @@ async function promotableRequestsWaiting() {
 // returned as `created` with `adopted`. Refusing the ask in its favour left the
 // request unpinned in its filed band, and lost the ask whenever promotion
 // would refuse that request.
-async function assistantCreateTask({ title, prompt = "", source = "chat", focused = null, pin = false, conversation = null, splitFrom = null, splitDepth = null, details = null, origin = null, adoptRequest = false, intake = null } = {}) {
+async function assistantCreateTask({ title, prompt = "", source = "chat", focused = null, pin = false, conversation = null, splitFrom = null, splitDepth = null, details = null, origin = null, adoptRequest = false, intake = null, ideaId = null, ideaIds = null } = {}) {
   const cleanTitle = String(title ?? "").trim().slice(0, 90);
   if (!cleanTitle) return conversation ? { created: null, existing: null } : null;
   const now = Date.now();
@@ -12738,6 +12743,30 @@ async function assistantCreateTask({ title, prompt = "", source = "chat", focuse
   const allocateId = () => "task_" + crypto.randomBytes(8).toString("hex");
   const project = { id: projects.current().id, path: projectRoot() };
   const created = await mutateBoard((board) => {
+    const ids = [...new Set([...(Array.isArray(ideaIds) ? ideaIds : []), ...(ideaId ? [ideaId] : [])])];
+    if (ids.length > 16 || ids.some(id => typeof id !== "string" || !id || id.length > 180)) return { created: null, error: "Choose up to 16 saved ideas for this brief." };
+    const ideas = [];
+    for (const id of ids) {
+      const idea = board.ideas?.find(row => row?.id === id);
+      const linked = idea?.taskId || board.tasks.some(row => Array.isArray(row.ideas) && row.ideas.includes(id));
+      if (!idea || linked || ["done", "archived", "dismissed", "rejected"].includes(idea.status)) {
+        return { created: null, error: linked ? "This idea already has a task. Open it in Tasks to continue its work." : "This idea is no longer available. Refresh the Ideas tree before building it." };
+      }
+      ideas.push(idea);
+    }
+    if (ideas.length) {
+      task.files = [...new Set(ideas.flatMap(idea => Array.isArray(idea.files) ? idea.files : []))];
+      if (ideas.every(idea => idea.systemId === ideas[0].systemId) && ideas[0].systemId) task.systemId = ideas[0].systemId;
+      if (ideas.every(idea => idea.intent === ideas[0].intent) && ideas[0].intent) task.intent = ideas[0].intent;
+    }
+    const linkIdea = row => {
+      if (!ideas.length) return;
+      row.ideas = [...new Set([...(row.ideas ?? []), ...ids])];
+      row.files = [...new Set([...(row.files ?? []), ...task.files])];
+      if (task.systemId) row.systemId = task.systemId;
+      if (task.intent) row.intent = task.intent;
+      for (const idea of ideas) Object.assign(idea, { taskId: row.id, status: "accepted", planned: true, read: true, updatedAt: now });
+    };
     // The model's reading (details) differs on every call; only the owner's
     // own words decide whether this is work already on the board (the ladder
     // never compares details).
@@ -12748,11 +12777,12 @@ async function assistantCreateTask({ title, prompt = "", source = "chat", focuse
       log: "task created by the assistant",
     });
     if (admitted.created) {
+      linkIdea(admitted.created);
       // Vibe's sized request (vibeBuild): its steps are admitted under the new
       // card in this same write, before any worker can claim the card whole.
       const split = intake ? taskDelegation.admitIntake(board, { parentId: admitted.created.id, plan: intake, now }) : null;
       if (split && !split.admitted) logLine(`[agents] request kept as one card: ${split.reason}`);
-      return { tasks: board.tasks, created: admitted.created, ...(split?.admitted ? { split: { childTaskIds: split.childTaskIds } } : {}) };
+      return { tasks: board.tasks, ...(ideas.length ? { ideas: board.ideas } : {}), created: admitted.created, ...(split?.admitted ? { split: { childTaskIds: split.childTaskIds } } : {}) };
     }
     const request = admitted.existing?.kind === "request" ? admitted.existing.item : null;
     // Only a row promotion itself could take: never one a run or a pending
@@ -12768,12 +12798,13 @@ async function assistantCreateTask({ title, prompt = "", source = "chat", focuse
         ...(pin ? { pin: true, pinAt: now } : {}),
       }, { now, allocateId, origin: owner ?? workAdmission.requestOrigin(request), log: "task created from the request inbox by you", project });
       request.promotedTo = row.id;
+      linkIdea(row);
       board.tasks = [row, ...board.tasks];
-      return { tasks: board.tasks, requests: board.requests, created: row, adopted: true };
+      return { tasks: board.tasks, requests: board.requests, ...(ideas.length ? { ideas: board.ideas } : {}), created: row, adopted: true };
     }
     return { created: null, existing: admitted.existing ?? null };
   });
-  if (!created.created) return conversation ? { created: null, existing: created.existing ?? null } : null;
+  if (!created.created) return conversation ? { created: null, existing: created.existing ?? null, ...(created.error ? { error: created.error } : {}) } : null;
   // An adopted request was classified when it was filed.
   await assistantTaskAdmitted(created.created, { target, pin, classify: !created.adopted });
   return conversation ? { created: created.created, existing: null, ...(created.adopted ? { adopted: true } : {}), ...(created.split ? { split: created.split } : {}) } : created.created;
@@ -17833,7 +17864,7 @@ function registerIpc() {
   ipcMain.handle("planning:explore", (_event, payload) => planningRequest("explore", payload));
   ipcMain.handle("tasks:create", (_event, payload = {}) => composerTask(payload ?? {}));
   ipcMain.handle("vibe:build", (_event, payload = {}) => vibeBuild(payload ?? {}));
-  async function composerTask({ title, prompt, projectId, intake = null } = {}) {
+  async function composerTask({ title, prompt, projectId, intake = null, ideaId = null, ideaIds = null } = {}) {
     if (projectId && projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Add this task again in its intended project." };
     if (!String(title ?? "").trim()) return { ok: false, error: "Give your task a title." };
     await ensureAssistant();
@@ -17842,7 +17873,8 @@ function registerIpc() {
     // one card, not two keyed on differently clipped titles. An inbox request
     // with this brief becomes the card now, pinned as the owner's
     // (adoptRequest), instead of the ask being refused in its favour.
-    const admission = await assistantCreateTask({ title, prompt: prompt ?? title, source: "chat", pin: true, conversation: {}, origin: { kind: "composer", by: "owner" }, adoptRequest: true, intake });
+    const admission = await assistantCreateTask({ title, prompt: prompt ?? title, source: "chat", pin: true, conversation: {}, origin: { kind: "composer", by: "owner" }, adoptRequest: true, intake, ideaId, ideaIds });
+    if (admission?.error) return { ok: false, error: admission.error, projectId: projects.current().id };
     const task = admission?.created ?? null;
     const eyes = await getEyes();
     const tasks = await eyes.readJson(TASKS_PATH, []);
@@ -17862,7 +17894,7 @@ function registerIpc() {
   // six steps admitted under the owner's card (scripts/request-sizing.cjs,
   // task-delegation.cjs admitIntake). No model, a slow one or a reply that
   // cannot be trusted keeps it one card: sizing never holds a request back.
-  async function vibeBuild({ prompt, title, projectId } = {}) {
+  async function vibeBuild({ prompt, title, projectId, ideaId = null, ideaIds = null } = {}) {
     const text = String(prompt ?? "").trim();
     if (projectId && projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Add this again in its intended project." };
     if (!text) return { ok: false, error: "Describe what to build." };
@@ -17883,7 +17915,7 @@ function registerIpc() {
         logError(`sizing failed: ${error.message}`);
       }
     }
-    const created = await composerTask({ title: String(title ?? "").trim() || text.split(/\r?\n/)[0].slice(0, 180), prompt: text, projectId, intake: plan });
+    const created = await composerTask({ title: String(title ?? "").trim() || text.split(/\r?\n/)[0].slice(0, 180), prompt: text, projectId, intake: plan, ideaId, ideaIds });
     return { ...created, sized, ...(plan && created.ok && created.steps ? { summary: plan.summary } : {}) };
   }
   // The committed catalog is available immediately, without a network refresh.
@@ -19070,7 +19102,7 @@ function registerIpc() {
   ipcMain.handle("ideas:action", async (_event, payload = {}) => {
     if (!payload.projectId || payload.projectId !== projects.current().id) return { ok: false, error: "Reload this project's ideas before changing them." };
     const result = await mutateBoard((board) => applyIdeaAction(board.ideas, payload));
-    return { ok: result.ok, error: result.error, projectId: projects.current().id, ideas: result.ideas };
+    return { ok: result.ok, error: result.error, projectId: projects.current().id, ideas: result.ideas, ...(result.idea ? { idea: result.idea, added: result.added } : {}) };
   });
   // A view's list is merged by id onto the latest ideas inside the board
   // gateway: only what a view may change (read, and the status it chose) is

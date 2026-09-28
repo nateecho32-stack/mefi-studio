@@ -8,7 +8,8 @@
 // file inventory. Systems are seeded from the first map's areas and otherwise
 // grouped by folder, with present and historical files kept distinct, a
 // 24-hour heat, co-change links and an overlay of the tasks that changed
-// them. Briefs read it back through
+// them. A read-only idea tree projects the current board onto those systems,
+// preserving idea-to-task and parent-to-child links as work changes. Briefs read it back through
 // relatedFor / briefLine, which replace pathsForArea's top-folder guess.
 //
 // Pure module: no Electron, no filesystem, no network, no clock reads (time
@@ -32,6 +33,7 @@ const LIMITS = Object.freeze({
   what: 120,
   promptSystems: 40,
   promptFiles: 8,
+  treeItems: 1000,
 });
 const ROOT_ID = "root";
 // Warmth: every edit counts, halving each week, so a map built from git
@@ -381,6 +383,12 @@ function buildMap({ index = [], history = [], inventory = null, areas = [], task
       ...(present ? { historicalCount: files.filter((file) => !file.present).length, catalog: files.slice(0, 3000).sort((a, b) => Number(b.present) - Number(a.present) || a.path.localeCompare(b.path)) } : {}),
       edits: files.reduce((sum, file) => sum + file.edits, 0),
       reads: files.reduce((sum, file) => sum + file.reads, 0),
+      exploration: {
+        knownFiles: files.filter((file) => file.present !== false).length,
+        observedFiles: files.filter((file) => file.present !== false && (file.reads || file.edits)).length,
+        unexploredFiles: files.filter((file) => file.present !== false && !file.reads && !file.edits).length,
+        lastAt: files.reduce((latest, file) => Math.max(latest, file.lastAt), 0),
+      },
     });
   }
   out.sort((a, b) => b.heat - a.heat || b.warmth - a.warmth || b.edits - a.edits || b.reads - a.reads || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -393,7 +401,8 @@ function buildMap({ index = [], history = [], inventory = null, areas = [], task
       // every commit links to everything with a high weight but a low
       // strength, which is what a drawing should use.
       const strength = Math.round((weight / Math.sqrt(Math.max(1, active.get(a) ?? 1) * Math.max(1, active.get(b) ?? 1))) * 100) / 100;
-      return { a, b, weight, strength };
+      // A shared edit is evidence of working together, never a dependency.
+      return { a, b, weight, strength, kind: "co-change", label: "Changed together" };
     })
     .filter((link) => link.weight >= 2 && keptIds.has(link.a) && keptIds.has(link.b))
     .sort((x, y) => y.weight - x.weight || (x.a < y.a ? -1 : x.a > y.a ? 1 : 0) || (x.b < y.b ? -1 : x.b > y.b ? 1 : 0))
@@ -519,10 +528,13 @@ const wordsOf = (text) => new Set(String(text ?? "").toLowerCase().split(/[^a-z0
 // the one whose path prefixes it (longest), else its folder's or the root's.
 function ownerOf(file, systems) {
   const lower = file.toLowerCase();
-  const listed = systems.find((system) => asArray(system.files).some((row) => String(row?.path ?? "").toLowerCase() === lower));
+  const listed = systems.find((system) => [...asArray(system.catalog), ...asArray(system.files)].some((row) => String(row?.path ?? "").toLowerCase() === lower));
   if (listed) return listed;
   let best = null;
   for (const system of systems) {
+    // A cluster shares its parent's folder path, but does not own every
+    // unobserved file in that folder. Only its catalog proves membership.
+    if (system.source === "cluster") continue;
     const path = String(system.path ?? "").toLowerCase().replace(/\/+$/, "");
     if (!path || !(lower === path || lower.startsWith(`${path}/`))) continue;
     if (!best || path.length > String(best.path).length) best = system;
@@ -531,6 +543,143 @@ function ownerOf(file, systems) {
   const parts = file.split("/");
   const id = parts.length === 1 ? ROOT_ID : parts[0];
   return systems.find((system) => String(system.id).toLowerCase() === id.toLowerCase()) ?? null;
+}
+
+// ---- the evolving idea/work tree ------------------------------------------------
+
+const TREE_STAGES = Object.freeze([
+  ["ideas", "Ideas"], ["queued", "Ready to grow"], ["active", "In progress"], ["done", "Completed"],
+]);
+const treeId = (value) => typeof value === "string" && value.trim() && value.length <= 160 && !CONTROL.test(value) ? value : null;
+const treeStamp = (row) => Math.max(num(row?.updatedAt), num(row?.createdAt), num(row?.at));
+
+/**
+ * A fresh projection, not another work store. Manual idea placement wins;
+ * then files, recorded agent work and finally labelled text inference attach
+ * work to a system. Unmatched work stays in To explore. Existing board links
+ * make the branches; no model guesses a dependency or changes a task here.
+ */
+function buildIdeaTree({ map = null, ideas = [], tasks = [], places = {}, root = "" } = {}) {
+  const systems = asArray(map?.systems).filter((system) => isObject(system) && treeId(system.id));
+  const bySystem = new Map(systems.map((system) => [system.id, system]));
+  const uniqueRows = (rows, kind) => {
+    const unique = new Map();
+    for (const row of asArray(rows)) {
+      if (!isObject(row) || !treeId(row.id)) continue;
+      const previous = unique.get(row.id);
+      if (!previous || treeStamp(row) > treeStamp(previous)) unique.set(row.id, row);
+    }
+    return [...unique.values()].filter((row) => kind === "task"
+      ? row.status !== "archived"
+      : !["archived", "dismissed", "rejected", "dropped"].includes(row.status));
+  };
+  const allTasks = uniqueRows(tasks, "task");
+  const allIdeas = uniqueRows(ideas, "idea");
+  // Keep live work ahead of completed history when a very large board needs
+  // a bound. The newest duplicate wins before applying it.
+  const candidates = [
+    ...allTasks.map((row) => ({ row, kind: "task" })),
+    ...allIdeas.map((row) => ({ row, kind: "idea" })),
+  ].sort((a, b) => Number(a.row.status === "done") - Number(b.row.status === "done") || treeStamp(b.row) - treeStamp(a.row) || `${a.kind}:${a.row.id}`.localeCompare(`${b.kind}:${b.row.id}`));
+  const kept = candidates.slice(0, LIMITS.treeItems);
+  const taskRows = new Map(kept.filter((item) => item.kind === "task").map(({ row }) => [row.id, row]));
+  const ideaRows = new Map(kept.filter((item) => item.kind === "idea").map(({ row }) => [row.id, row]));
+  const rankSystems = (ids) => [...new Set(ids)].filter((id) => bySystem.has(id)).sort();
+  const filesFor = (row) => pathsOf([row.file, ...asArray(row.files), ...asArray(row.problemFiles)], root).slice(0, LIMITS.files);
+  const locate = (row, kind) => {
+    const files = filesFor(row);
+    const explicit = kind === "idea" ? places?.ideas?.[row.id] : null;
+    if (bySystem.has(explicit)) return { systemId: explicit, relatedSystemIds: [explicit], match: "placed", files };
+    // Saving a suggestion from a selected map system preserves that owner-
+    // chosen scope even when the suggestion does not repeat a file name.
+    // An explicit later placement above remains authoritative.
+    if (kind === "idea" && bySystem.has(row.systemId)) return { systemId: row.systemId, relatedSystemIds: [row.systemId], match: "placed", files };
+    const exact = rankSystems(files.map((file) => ownerOf(file, systems)?.id));
+    if (exact.length) return { systemId: exact[0], relatedSystemIds: exact, match: "files", files };
+    const observed = kind === "task" ? rankSystems(systems.filter((system) => asArray(system.taskIds).includes(row.id)).map((system) => system.id)) : [];
+    if (observed.length) return { systemId: observed[0], relatedSystemIds: observed, match: "observed", files };
+    const inferred = relatedFor({ systems }, { text: `${row.title ?? ""} ${row.detail ?? row.prompt ?? ""} ${asArray(row.tags).join(" ")}`, limit: 3 }).systems.map((system) => system.id);
+    return { systemId: inferred[0] ?? null, relatedSystemIds: inferred, match: inferred.length ? "inferred" : "unmapped", files };
+  };
+  const stageFor = (row, kind) => {
+    if (row.status === "done") return "done";
+    if (["active", "running", "awaiting_verification", "verifying"].includes(row.status)) return "active";
+    return kind === "task" || ["accepted", "planned"].includes(row.status) ? "queued" : "ideas";
+  };
+  const nodes = new Map();
+  for (const { row, kind } of kept) {
+    const id = `${kind}:${row.id}`;
+    nodes.set(id, {
+      id, kind, sourceId: row.id, title: clip(row.title ?? row.text, 180) || (kind === "idea" ? "Untitled idea" : "Untitled task"),
+      summary: clip(row.detail ?? row.ideaDetail ?? row.prompt, 260), status: clip(row.status, 40) || (kind === "idea" ? "new" : "open"),
+      detail: String(row.detail ?? row.ideaDetail ?? row.prompt ?? "").slice(0, 16000),
+      intent: ["modify", "experiment", "fix", "improve"].includes(row.intent) ? row.intent : null,
+      stage: stageFor(row, kind), ...(kind === "task" ? { taskId: row.id } : {}),
+      ...locate(row, kind), children: [],
+    });
+  }
+  const parents = new Map();
+  // Grouped task snapshots are also durable lineage, even after the original
+  // card was absorbed. Keep the still-present original as its own node.
+  for (const row of [...taskRows.values()].sort((a, b) => a.id.localeCompare(b.id))) {
+    const parentId = treeId(row.parentTaskId) || treeId(row.absorbedInto);
+    if (parentId && taskRows.has(parentId)) parents.set(`task:${row.id}`, `task:${parentId}`);
+    for (const member of asArray(row.members)) if (taskRows.has(member?.id) && !parents.has(`task:${member.id}`)) parents.set(`task:${member.id}`, `task:${row.id}`);
+  }
+  const ideaOwners = new Map();
+  for (const row of [...taskRows.values()].sort((a, b) => a.id.localeCompare(b.id))) {
+    for (const id of asArray(row.ideas)) if (ideaRows.has(id) && !ideaOwners.has(id)) ideaOwners.set(id, row.id);
+  }
+  for (const row of ideaRows.values()) {
+    const taskId = taskRows.has(row.taskId) ? row.taskId : ideaOwners.get(row.id);
+    if (!taskId) continue;
+    const node = nodes.get(`idea:${row.id}`);
+    const target = nodes.get(`task:${taskId}`);
+    node.taskId = taskId;
+    node.stage = target.stage;
+    // An owner can keep an idea on another system while following its task.
+    // Otherwise it grows beneath that task as stronger work evidence arrives.
+    if (node.match === "placed" && node.systemId !== target.systemId) continue;
+    if (node.match !== "placed") {
+      node.systemId = target.systemId;
+      node.relatedSystemIds = [...target.relatedSystemIds];
+      node.match = "linked";
+    }
+    parents.set(node.id, target.id);
+  }
+  // Drop malformed cyclic lineage deterministically, keeping every card.
+  // Bound nesting so a corrupt board cannot overflow a recursive renderer.
+  for (const id of [...parents.keys()].sort()) {
+    const seen = new Set([id]);
+    let ancestor = parents.get(id), depth = 0;
+    while (ancestor) {
+      if (seen.has(ancestor) || ++depth > 12) { parents.delete(id); break; }
+      seen.add(ancestor);
+      ancestor = parents.get(ancestor);
+    }
+  }
+  const groups = new Map();
+  const counts = { ideas: 0, queued: 0, active: 0, done: 0, total: nodes.size };
+  for (const node of nodes.values()) {
+    counts[node.stage] += 1;
+    const parent = nodes.get(parents.get(node.id));
+    if (parent) { parent.children.push(node); continue; }
+    const groupId = node.systemId ? `system:${node.systemId}` : "unmapped";
+    if (!groups.has(groupId)) groups.set(groupId, {
+      id: groupId, name: bySystem.get(node.systemId)?.name || node.systemId || "To explore", systemId: node.systemId,
+      stages: TREE_STAGES.map(([id, name]) => ({ id, name, items: [] })),
+    });
+    groups.get(groupId).stages.find((stage) => stage.id === node.stage).items.push(node);
+  }
+  const sortNodes = (items) => {
+    items.sort((a, b) => a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
+    for (const item of items) sortNodes(item.children);
+  };
+  for (const group of groups.values()) for (const stage of group.stages) sortNodes(stage.items);
+  return {
+    v: 1, counts, truncated: Math.max(0, candidates.length - kept.length),
+    groups: [...groups.values()].sort((a, b) => Number(a.systemId === null) - Number(b.systemId === null) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id)),
+  };
 }
 
 /**
@@ -699,6 +848,7 @@ module.exports = {
   parseIndex,
   systemKeyFor,
   buildMap,
+  buildIdeaTree,
   parseGitLog,
   relatedFor,
   briefLine,

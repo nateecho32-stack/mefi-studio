@@ -149,6 +149,40 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-sparks { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: min(860px, 100%) !important; margin-top: 14px; animation: vibe-rise var(--motion-spring) var(--ease-spring) 120ms both; }
 .vibe-spark { height: 34px; padding: 0 15px; border: 1px solid var(--v-edge); border-radius: 999px; background: color-mix(in srgb, var(--panel-solid) 38%, transparent); backdrop-filter: var(--v-blur); color: var(--v-soft); font-size: 13px; cursor: pointer; transition: color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out); }
 .vibe-spark:hover { color: var(--v-ink); border-color: var(--v-edge-hi); transform: translateY(-1px); }
+
+/* Mefi keeps the project's next possibilities beside its editable brief. */
+.vibe-evolution { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--v-edge); border-radius: 18px; background: var(--v-glass); backdrop-filter: var(--v-blur); }
+.vibe-evolution-head, .vibe-evolution-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
+.vibe-evolution-head > div { display: flex; align-items: baseline; gap: 12px; }
+.vibe-evolution-links { flex-wrap: wrap; }
+.vibe-evolution-brand { color: var(--v-accent-hi); font: 700 12px/1 var(--font-display); letter-spacing: .2em; }
+.vibe-evolution-subtitle { color: var(--v-soft); font-size: 12px; }
+.vibe-evolution-intents { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.vibe-evolution-intent { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 12px 10px; border: 1px solid var(--v-edge); border-radius: 12px; background: color-mix(in srgb, var(--panel-solid) 44%, transparent); color: var(--v-ink); text-align: left; cursor: pointer; }
+.vibe-evolution-intent:hover, .vibe-evolution-intent[aria-pressed="true"] { border-color: var(--v-edge-hi); background: var(--v-glass-hi); }
+.vibe-evolution-intent:focus-visible { outline: 2px solid var(--v-accent-hi); outline-offset: 2px; }
+.vibe-evolution-letter { display: grid; place-items: center; flex: none; width: 28px; height: 32px; border-radius: 8px; background: color-mix(in srgb, var(--v-accent) 10%, transparent); color: var(--v-accent-hi); font: 600 17px/1 var(--font-display); }
+.vibe-evolution-intent[aria-pressed="true"] .vibe-evolution-letter { background: var(--v-accent); color: var(--ink); }
+.vibe-evolution-intent b, .vibe-evolution-intent small { display: block; }
+.vibe-evolution-intent b { font-size: 13px; font-weight: 600; }
+.vibe-evolution-intent small { margin-top: 4px; color: var(--v-soft); font-size: 10px; line-height: 1.35; }
+.vibe-evolution-scope { flex: 1; min-width: 150px; overflow-wrap: anywhere; color: var(--v-soft); font-size: 11px; }
+.vibe-evolution-foot .vibe-btn { min-height: 32px; padding: 7px 12px; font-size: 12px; }
+.vibe-evolution-results { display: grid; gap: 10px; padding-top: 10px; border-top: 1px solid var(--v-edge); }
+.vibe-evolution-results[hidden] { display: none; }
+.vibe-evolution-note { margin: 0; color: var(--v-soft); font-size: 12px; line-height: 1.5; }
+.vibe-evolution-suggestions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: 10px; }
+.vibe-evolution-suggestion { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 14px; border: 1px solid var(--v-edge); border-radius: 12px; background: color-mix(in srgb, var(--panel-solid) 44%, transparent); overflow-wrap: anywhere; }
+.vibe-evolution-suggestion h3 { margin: 0; color: var(--v-ink); font-size: 13px; font-weight: 600; line-height: 1.4; }
+.vibe-evolution-suggestion > p { margin: 0; white-space: pre-wrap; font-size: 12px; line-height: 1.5; }
+.vibe-evolution-file { color: var(--v-accent-hi); font-size: 10px; overflow-wrap: anywhere; }
+.vibe-evolution-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: auto; padding-top: 6px; }
+.vibe-evolution-actions .vibe-btn { min-height: 30px; padding: 6px 10px; font-size: 11px; }
+@media (max-width: 680px) {
+  .vibe-evolution-intents { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .vibe-evolution { padding: 12px; }
+  .vibe-evolution-head > div { flex-wrap: wrap; gap: 6px 10px; }
+}
 .vibe-feedback { min-height: 20px; margin: 10px 0 0; color: var(--v-soft); font-size: 13px; text-align: center; }
 .vibe-feedback[data-tone="good"] { color: var(--good); }
 .vibe-feedback[data-tone="warn"] { color: var(--warn); }
@@ -223,10 +257,9 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-orb, .vibe-hero h1 { transition: width var(--motion-slow) var(--ease-out), height var(--motion-slow) var(--ease-out), margin var(--motion-slow) var(--ease-out), font-size var(--motion-slow) var(--ease-out); }
 #vibe-layer[data-cards="some"] .vibe-orb { width: 54px; height: 54px; margin-bottom: 4px; }
 #vibe-layer[data-cards="some"] .vibe-hero h1 { font-size: clamp(26px, 2.2vw, 38px); }
-/* On a short window with cards up, the greeting and the starter chips step
-   aside so the cards start above the fold. */
+/* Short windows keep Mefi's workbench available while the greeting shrinks. */
 @media (max-height: 900px) {
-  #vibe-layer[data-cards="some"] :is(.vibe-kicker, .vibe-sparks) { display: none; }
+  #vibe-layer[data-cards="some"] .vibe-kicker { display: none; }
   #vibe-layer[data-cards="some"] .vibe-orb { width: 40px; height: 40px; margin-bottom: 2px; }
   #vibe-layer[data-cards="some"] .vibe-hero h1 { font-size: clamp(22px, 2vw, 30px); }
   #vibe-layer[data-cards="some"] .vibe-compose { margin-top: 14px; }
