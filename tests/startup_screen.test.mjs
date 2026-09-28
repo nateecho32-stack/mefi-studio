@@ -205,7 +205,7 @@ test("Open another folder adopts the folder the host added and a cancelled picke
   assert.deepEqual(calls, [["add"], ["add"], ["choose", projectC.id]]);
 });
 
-test("with no project yet the screen offers to continue without one and never shows the agents choice", async () => {
+test("with no project yet the screen leads with Open a folder, offers to continue without one, and never shows the agents choice", async () => {
   const { api, calls } = bridge({ startupState: async () => ({ ok: true, interactive: true, chosen: false, projects: [], activeId: null }), startupChoose: async (id) => { calls.push(["choose", id]); return { ok: true, projects: [], activeId: null }; } });
   const env = environment(api);
   const choice = env.startup.choose();
@@ -213,8 +213,12 @@ test("with no project yet the screen offers to continue without one and never sh
   assert.equal(env.rows().length, 0);
   assert.match(env.get("boot-projects").textContent, /No project is open yet/);
   assert.equal(env.get("boot-open").textContent, "Continue without a project");
+  assert.equal(env.get("boot-open").className, "ghost", "continuing without a project is the quiet choice");
+  assert.equal(env.get("boot-add-project").textContent, "Open a folder…");
+  assert.equal(env.get("boot-add-project").className, "primary boot-add");
   assert.equal(env.get("boot-open-start").hidden, true);
-  assert.equal(env.get("boot-open").focused, true);
+  assert.equal(env.get("boot-add-project").focused, true, "the way in has the focus");
+  assert.match(env.get("boot-choose-note").textContent, /M\+ menu/);
   await env.get("boot-open").click();
   assert.deepEqual(plain(await choice), { projectId: null, startAgents: false, changed: false });
   assert.deepEqual(calls, [["choose", null]]);

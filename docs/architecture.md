@@ -438,15 +438,20 @@ settings and per-model work-kind summaries for the shared controls.
   skills, plus task-context gathering), Machine & app (keep awake, tray,
   resource manager limits, updates, companion reach, GitHub token), Look and
   Finish. It opens by itself before the Start here walkthrough on a fresh
-  profile, and once after an update that raises its `REVISION`; Next and
-  Back walk every section, and Quick setup walks Connect, Permissions and
-  Finish only. It owns no settings: each control saves through the host call
+  profile, and once after an update that raises its `REVISION`. Quick setup
+  (the default) walks Connect, Permissions and Finish only; Everything walks
+  every section with Next and Back. Connect an AI leads with **Set up
+  automatically** and **Start free with OpenCode**, and counts a subscription
+  CLI as connected only once it is signed in (`codingCliStatus` reads each
+  login's file, `cliSignedIn`) or answers its check. It owns no settings: each control saves through the host call
   its setting already had, and team fields are saved for one scope (this
   project, or the Studio defaults every inheriting project uses) with the same
   revision check the Agents workspace uses. Search reaches each section
   (`Setup helper › Routing`), and `MefiSetupHelper.open(section)` deep-links
-  it. When the helper has connected an AI, the walkthrough starts at Your
-  workspace instead of its scan stop.
+  it. Only **Continue to the guided tour** opens the walkthrough; any other
+  close leaves it waiting as the Start here card (`MefiOnboarding.invite()`)
+  with one toast to start it. When the helper has connected an AI, the
+  walkthrough starts at Your workspace instead of its scan stop.
 - The menu stays open by default at widths of 1100px or more, with the page
   beside it. **Keep menu open** saves your choice across launches. When unpinned
   or narrower than 1100px, it opens over the page on hover or keyboard focus;

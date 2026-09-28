@@ -2031,7 +2031,13 @@
       // update that brings it something new (renderer/setup-helper.js). The
       // walkthrough's own first open waits until the helper closes.
       const walkthrough = () => window.MefiOnboarding?.startup?.({ automatic: true });
-      if (!window.MefiSetupHelper?.startup?.({ then: walkthrough })) walkthrough();
+      // The helper hands on: its "Continue to the guided tour" opens the tour;
+      // any other close leaves it waiting in Start here, with one toast to start it.
+      const afterHelper = ({ tour = false } = {}) => {
+        if (tour) { walkthrough(); return; }
+        if (window.MefiOnboarding?.invite?.()) window.MefiToast?.("The guided tour waits in Start here whenever you want it.", "info", { action: { label: "Start the tour", run: () => window.MefiOnboarding?.open?.() } });
+      };
+      if (!window.MefiSetupHelper?.startup?.({ then: afterHelper })) walkthrough();
       // The one-time "what's new" card for a returning profile (renderer/vibe.js).
       window.MefiVibe?.startup?.();
       // Community status and the weekly Discord card's quiet schedule

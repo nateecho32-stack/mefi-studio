@@ -244,3 +244,37 @@ test("a Zen key is a second usable leg for the armed fallback", () => {
   const plan = planAutoSetup({ settings: { aiProvider: "zai", modelSelection: "fixed", executorCli: "opencode", aiAutoFallback: true, aiAutoProviders: ["zai", "zen"] }, keys: { zai: true, zen: true }, clis: [cli("opencode", true)] });
   assert.equal(plan.changes.autoFallback, undefined);
 });
+
+// A subscription CLI answers through its own login, so an installed but
+// signed-out one used to be picked (Grok first) and then failed every call.
+test("with no key saved, a signed-in subscription CLI leads; otherwise Claude Code, Codex, Grok, Antigravity", () => {
+  const login = (id, signedIn) => ({ ...cli(id, true), signedIn });
+  const all = ["grok", "codex", "claude", "antigravity"];
+  assert.equal(planAutoSetup({ settings: {}, keys: {}, clis: all.map((id) => cli(id, true)) }).active.provider, "claude", "unknown logins keep the fixed order");
+  const grokIn = planAutoSetup({ settings: {}, keys: {}, clis: [login("claude", false), login("codex", false), login("grok", true)] });
+  assert.equal(grokIn.active.provider, "grok");
+  assert.doesNotMatch(grokIn.notes.join(" "), /not signed in/);
+  assert.equal(planAutoSetup({ settings: {}, keys: {}, clis: [login("claude", false), login("codex", null)] }).active.provider, "codex", "an unknown login outranks a missing one");
+  const out = planAutoSetup({ settings: {}, keys: {}, clis: [login("claude", false), login("codex", false)] });
+  assert.equal(out.active.provider, "claude");
+  assert.match(out.notes.join(" "), /Claude Code is installed but not signed in yet: sign in under Agents › Setup › Connect an AI/);
+  assert.equal(planAutoSetup({ settings: {}, keys: { zai: true }, clis: [login("claude", true)] }).active.provider, "zai", "a saved key still outranks every CLI");
+});
+
+test("a CLI's login is read from the file its sign-in writes, or its API key", () => {
+  const signedIn = context.cliSignedIn;
+  context.path = { join: (...parts) => parts.join("/") };
+  const files = new Set(["/home/me/.claude/.credentials.json", "/cfg/codex/auth.json", "/home/me/.grok/auth.json"]);
+  const at = (extra = {}) => ({ env: {}, home: "/home/me", exists: (file) => files.has(file), platform: "win32", ...extra });
+  assert.equal(signedIn("claude", at()), true);
+  assert.equal(signedIn("claude", at({ env: { CLAUDE_CONFIG_DIR: "/elsewhere" } })), false, "an added login's folder is its own");
+  assert.equal(signedIn("claude", at({ platform: "darwin" })), null, "macOS keeps it in the Keychain: unknown, not signed out");
+  assert.equal(signedIn("claude", at({ home: "/nobody", env: { ANTHROPIC_API_KEY: "k" } })), true);
+  assert.equal(signedIn("codex", at()), false);
+  assert.equal(signedIn("codex", at({ env: { CODEX_HOME: "/cfg/codex" } })), true);
+  assert.equal(signedIn("grok", at()), true);
+  assert.equal(signedIn("grok", at({ home: "/nobody" })), false);
+  assert.equal(signedIn("antigravity", at()), null);
+  assert.equal(signedIn("opencode", at()), null);
+  assert.equal(signedIn("claude", at({ exists: () => { throw new Error("EACCES"); } })), false, "an unreadable folder reads as no login");
+});

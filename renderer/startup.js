@@ -30,7 +30,7 @@
   function note(text, error = false) {
     const target = $("choose-note");
     if (!target) return;
-    const why = !state.selectedId ? "You can add a folder later from the sidebar."
+    const why = !state.selectedId ? "You can add a folder later from the M+ menu."
       : !startsAgents() ? "Agents stay off until you start them."
       : state.launch.choice === "start" ? "Agents start when the studio opens. Change this in Settings › General."
       : "Agents were running here when you left, so they start again.";
@@ -66,7 +66,12 @@
       list.append(row);
     }
     const start = startsAgents();
-    if ($("open")) { $("open").textContent = state.selectedId ? start ? "Open with agents off" : "Open studio" : "Continue without a project"; $("open").className = start ? "ghost" : "primary"; }
+    // With no project yet, opening a folder is the way in, and continuing
+    // without one is the quiet choice beside it.
+    const empty = !state.projects.length;
+    const add = $("add-project");
+    if (add) { add.textContent = empty ? "Open a folder…" : "Open another folder…"; add.className = empty ? "primary boot-add" : "ghost boot-add"; }
+    if ($("open")) { $("open").textContent = state.selectedId ? start ? "Open with agents off" : "Open studio" : "Continue without a project"; $("open").className = start || empty ? "ghost" : "primary"; }
     if ($("open-start")) { $("open-start").hidden = !state.selectedId; $("open-start").className = start ? "primary" : "ghost"; }
     // The default leads.
     const lead = $(start ? "open-start" : "open");
@@ -80,7 +85,7 @@
   }
   function focusSelected() {
     const row = $("projects")?.querySelector?.('[aria-checked="true"]');
-    (row || $("open"))?.focus?.({ preventScroll: true });
+    (row || (!state.projects.length && $("add-project")) || $("open"))?.focus?.({ preventScroll: true });
   }
   // The gate captures keyboard events before they reach the rows, so it
   // delegates radio navigation here while keeping workspace shortcuts locked.

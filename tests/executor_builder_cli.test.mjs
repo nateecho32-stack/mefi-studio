@@ -76,6 +76,26 @@ test("a grok that is a native binary still spawns directly, with the same prompt
   assert.equal(direct[0].options.windowsVerbatimArguments, undefined);
 });
 
+// A machine with no coding CLI at all routes to OpenCode, and every start
+// failed "'opencode' is not recognized…" until the card parked.
+test("with no coding tool installed the OpenCode route refuses before the claim and says what to install", async () => {
+  for (const installed of [false, true]) {
+    const h = executorHost({ tasks: [boardTask("bare")] });
+    h.env.executorRunEnv = async () => ({ ...opencodeFallback });
+    h.env.opencodeCliAvailable = async () => installed;
+    const seen = recordSpawns(h);
+    if (installed) {
+      assert.equal(await h.env.spawnNextJob(), "spawned");
+      continue;
+    }
+    assert.equal(await h.env.spawnNextJob(), "route");
+    assert.deepEqual(seen, [], "nothing was started");
+    assert.equal(h.board().tasks[0].status, "open", "the card was never claimed");
+    assert.equal(h.board().tasks[0].runFailures ?? 0, 0, "and no attempt was charged");
+    assert.match(h.autopilot.lastError, /^No coding tool is installed\. Install OpenCode, Claude Code or Codex under Agents › Setup\.$/);
+  }
+});
+
 // For a Claude- or Codex-only owner the fallback ran `opencode run`, failed
 // with "'opencode' is not recognized", and that line replaced the real error.
 test("without OpenCode installed a CLI builder has no fallback, and its own error stays on the card", async () => {

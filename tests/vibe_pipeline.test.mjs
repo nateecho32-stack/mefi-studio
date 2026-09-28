@@ -82,7 +82,7 @@ test("a held launch shows Start agents in Vibe, and it releases the agents", asy
   assert.equal(vibe.snapshot().gate, "held");
   assert.equal(get("vibe-gate").hidden, false, "the banner shows");
   assert.equal(get("vibe-gate-action").textContent, "Start agents");
-  assert.equal(get("vibe-pulse-text").textContent, "Waiting for you");
+  assert.equal(get("vibe-pulse-text").textContent, "Agents off");
   get("vibe-gate-action").onclick();
   await settle();
   assert.deepEqual(calls, [["assistantControl", "start-work"]], "the same call as Build's Start agents");

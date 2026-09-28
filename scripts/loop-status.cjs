@@ -44,6 +44,13 @@ function loopStatus(input = {}) {
   if (input.project === false) {
     return result("no-project", "warn", "No project open", "Open a project folder so agents have somewhere to work.", { id: "open-project", label: "Open a project" });
   }
+  // With no AI connected, starting the agents only starts workers that fail,
+  // so a held launch names the missing connection first. It is still the
+  // launch hold: the switch reads off, and launchHold says so for the views
+  // that label Start agents.
+  if (input.held === true && !running && input.aiConnected === false) {
+    return { ...result("setup", "warn", "No AI connected", `Connect an AI so agents can plan, chat and build.${ready || approval ? ` ${plural(ready + approval, "task")} will wait until then.` : ""} Agents stay off until you start them.`, { id: "connect-ai", label: "Connect an AI" }, false), launchHold: true };
+  }
   if (input.held === true && !running) {
     return result("held", "warn", "Agents are off", `Studio opened with agents off.${ready || approval ? ` ${plural(ready + approval, "task")} will wait until you start them.` : " Nothing starts until you turn them on."}`, { id: "start", label: "Start agents" }, false);
   }

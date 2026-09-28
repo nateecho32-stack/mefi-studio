@@ -3612,6 +3612,24 @@ function firstLaunchNeedsSetup(settings = {}) {
   return !settings.aiProvider && !settings.executorCli && !settings.modelSelection && !settings.firstRun && !settings.autoSetup;
 }
 
+// Whether a subscription CLI has a login on this machine, from the file its
+// login writes or the API key it would use instead: true, false, or null when
+// Studio cannot tell (Antigravity keeps no file Studio knows; macOS keeps
+// Claude Code's login in the Keychain). Only a file's presence is read, never
+// its contents. An installed but signed-out CLI used to count as a connected
+// AI in Setup, and auto setup picked it.
+function cliSignedIn(id, { env = process.env, home = os.homedir(), exists = existsSync, platform = process.platform } = {}) {
+  const has = (file) => { try { return exists(file) === true; } catch { return false; } };
+  if (id === "claude") {
+    if (env.ANTHROPIC_API_KEY) return true;
+    if (platform === "darwin") return null;
+    return has(path.join(env.CLAUDE_CONFIG_DIR || path.join(home, ".claude"), ".credentials.json"));
+  }
+  if (id === "codex") return Boolean(env.OPENAI_API_KEY) || has(path.join(env.CODEX_HOME || path.join(home, ".codex"), "auth.json"));
+  if (id === "grok") return Boolean(env.XAI_API_KEY || env.GROK_API_KEY) || has(path.join(home, ".grok", "auth.json"));
+  return null;
+}
+
 // Auto setup: one pass that turns what this machine already has into a working
 // configuration. Saved keys choose the assistant route, an installed CLI
 // chooses the builders, and a saved Jev key (any of its four routes) enables
@@ -3623,6 +3641,12 @@ function firstLaunchNeedsSetup(settings = {}) {
 const OLLAMA_ENDPOINT = "http://127.0.0.1:11434/v1";
 function planAutoSetup({ settings = {}, keys = {}, clis = [], local = {} } = {}) {
   const installed = (id) => clis.some((cli) => cli.id === id && cli.installed === true);
+  // A subscription CLI answers through its own login, so a signed-in one
+  // leads; otherwise Claude Code, Codex, Grok, then Antigravity (a sort keeps
+  // that order within each rank). signedIn is null when it cannot be told.
+  const signedIn = (id) => clis.find((cli) => cli.id === id)?.signedIn;
+  const loginRank = (id) => (signedIn(id) === true ? 0 : signedIn(id) === false ? 2 : 1);
+  const subscriptionPick = ["claude", "codex", "grok", "antigravity"].filter(installed).sort((a, b) => loginRank(a) - loginRank(b))[0] ?? null;
   const preferred = ["grok", "claude", "codex", "antigravity"].includes(settings.aiProvider) && installed(settings.aiProvider) ? settings.aiProvider : null;
   // A keyed route answers ahead of a CLI: HTTP is quicker per call and the
   // key was saved for this. Zen bills its balance per call, so the flat z.ai
@@ -3631,13 +3655,10 @@ function planAutoSetup({ settings = {}, keys = {}, clis = [], local = {} } = {})
     : keys.opencode ? "opencode"
       : keys.zen ? "zen"
         : keys.openrouter ? "openrouter"
-          : installed("grok") ? "grok"
-            : installed("claude") ? "claude"
-              : installed("codex") ? "codex"
-                : installed("antigravity") ? "antigravity"
-                  : local.lmstudio ? "lmstudio"
-                    : local.custom || local.ollama ? "custom"
-                      : null);
+          : subscriptionPick ? subscriptionPick
+            : local.lmstudio ? "lmstudio"
+              : local.custom || local.ollama ? "custom"
+                : null);
   if (!provider) {
     return { ok: false, error: "Nothing to set up yet - save a z.ai, OpenCode Go, OpenCode Zen, OpenRouter or custom-endpoint key, install a coding CLI, or start LM Studio or Ollama, then run auto setup again." };
   }
@@ -3690,6 +3711,7 @@ function planAutoSetup({ settings = {}, keys = {}, clis = [], local = {} } = {})
   else if (provider === "claude") notes.push("The assistant answers through the Claude Code CLI's own subscription login.");
   else if (provider === "codex") notes.push("The assistant answers through the Codex CLI's own ChatGPT login.");
   else if (provider === "antigravity") notes.push("The assistant answers through the Antigravity CLI's own Google account login.");
+  if (subscription && signedIn(provider) === false) notes.push(`${{ grok: "Grok", claude: "Claude Code", codex: "Codex" }[provider]} is installed but not signed in yet: sign in under Agents › Setup › Connect an AI before it can answer.`);
   else if (provider === "lmstudio") notes.push("No key saved: LM Studio is reachable on this machine, so the assistant answers from the local server.");
   else if (ollama) notes.push(`No key saved: Ollama is running on this machine (${OLLAMA_ENDPOINT}), so it is saved as the custom endpoint and the assistant answers from it.`);
   else notes.push("No key saved: the saved custom endpoint answers for the assistant.");
@@ -10884,7 +10906,16 @@ async function assistantOverseerTurn({ user, text, intent, facts, did, slot, foc
   // A clear yes or Undo still works if the model returns no actions. A model
   // cannot replace that explicit choice with its own interpretation.
   const proposed = localDecisions.length ? localDecisions : envelope.actions;
-  const checked = taskOversight.validateChatActions(proposed, context);
+  let checked = taskOversight.validateChatActions(proposed, context);
+  // Talk it over is a conversation: a card the model would file becomes an
+  // offer the owner can take (a yes, or Build it), never work filed unasked.
+  if (user?.ui?.mode === "talk") {
+    const filing = [...(checked.run ?? []), ...(checked.confirm ?? [])].filter((action) => action.kind === "create_task");
+    if (filing.length) checked = { ...checked,
+      run: (checked.run ?? []).filter((action) => action.kind !== "create_task"),
+      confirm: (checked.confirm ?? []).filter((action) => action.kind !== "create_task"),
+      offer: [...(checked.offer ?? []), ...filing.map((action) => ({ title: action.title }))] };
+  }
   for (const refused of checked.rejected ?? []) assistantLog("chat", `left out ${refused.action?.kind ?? "an action"}: ${refused.reason}`);
   const results = assistantRefusalLines(checked.rejected);
   let created = false;
@@ -10996,6 +11027,11 @@ async function assistantRespond(user, entry = null) {
     try {
       intent = (await getAssistant()).classifyIntent(text) || "chat";
     } catch {}
+    // Talk it over asked for a conversation. "Add a search box" reads as an
+    // instruction, and the keyless reply filed it as a task while the owner
+    // had chosen to talk; Build it, or a yes to the offer below, files it.
+    const talkRequest = user.ui?.mode === "talk" && intent === "request";
+    if (talkRequest) intent = "chat";
     user.intent = intent;
     assistantThink(`reading the log for "${assistantClip(text, 40)}"`, "responder");
     const facts = await assistantMessageFacts(now, text);
@@ -11019,6 +11055,17 @@ async function assistantRespond(user, entry = null) {
     // report even when no model can: the keyless reply leads with it.
     const away = typeof outsideWork !== "undefined" ? outsideWork.awayAnswer(text, facts?.outside) : "";
     if (away) local = { ...local, text: local?.text ? `${away}\n\n${local.text}` : away };
+    // With no model to talk to, say so plainly instead of the keyless reply's
+    // status summary, and offer the board: a yes files it (the offer rides the
+    // reply, as the keyless picks do).
+    if (talkRequest && !assistantAiUsable()) {
+      const title = assistantClip(text.replace(/\s+/g, " ").trim(), 60);
+      const ai = assistantState?.ai ?? {};
+      local = { ...local, actions: [], text: ai.keyPresent === false
+        ? `No AI is connected yet, so I can't talk this through. Connect one under Agents › Setup › Connect an AI. To build it anyway, press Build it, or say yes and I'll put "${title}" on the task board.`
+        : `The AI isn't answering right now${ai.lastError ? ` (${assistantClip(ai.lastError, 60)})` : ""}, so I can't talk this through yet. Try again in a minute, or say yes and I'll put "${title}" on the task board.` };
+      offers = [{ title }];
+    }
     // The brake, instantly and locally.
     const brake = CHAT_BRAKE.test(text.trim()) ? "pause" : CHAT_UNBRAKE.test(text.trim()) ? "resume" : null;
     if (brake) {
@@ -11138,8 +11185,10 @@ async function assistantRespond(user, entry = null) {
             if (created) {
               assistantAskForWork("chat instruction");
             }
-            const executorNote = autopilot.execute && assistantState.status !== "paused"
-              ? "put it on the task board and requested dispatch; the next eligible worker will pick it up"
+            const executorNote = autopilot.held === true
+              ? "put it on the task board; it starts once you start the agents"
+              : autopilot.execute && assistantState.status !== "paused"
+              ? "put it on the task board; an agent picks it up when one is free"
               : autopilot.parkedUntil
                 ? `put it on the task board (executor parked until ~${new Date(autopilot.parkedUntil).toLocaleTimeString()}: ${assistantClip(autopilot.lastError ?? "opencode is not starting", 90)})`
                 : "put it on the task board (new workers are paused)";
@@ -11219,7 +11268,9 @@ function assistantUiContext(value) {
   if (!value || typeof value !== "object") return null;
   const view = String(value.view ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
   const companion = String(value.companion ?? "").replace(/\s+/g, " ").trim().slice(0, 30);
-  return view || companion ? { ...(view ? { view } : {}), ...(companion ? { companion } : {}) } : null;
+  // "talk": the owner pressed Talk it over, so nothing is filed from it.
+  const mode = value.mode === "talk" ? "talk" : "";
+  return view || companion || mode ? { ...(view ? { view } : {}), ...(companion ? { companion } : {}), ...(mode ? { mode } : {}) } : null;
 }
 
 async function assistantMessage(raw, options = {}) {
@@ -15410,6 +15461,19 @@ async function spawnNextJob(options) {
     }
     return "route";
   }
+  // With no coding CLI connected the route is OpenCode, and on a machine
+  // without it every start failed with "'opencode' is not recognized…" until
+  // the card parked after five tries. Refuse before the claim instead, as a
+  // route fault the loop status and the log name once.
+  if (runRoute.cli === "opencode" && typeof opencodeCliAvailable === "function" && !(await opencodeCliAvailable())) {
+    const reason = "No coding tool is installed. Install OpenCode, Claude Code or Codex under Agents › Setup.";
+    autopilot.lastError = reason;
+    if (autopilot.routeFaultLogged !== reason) {
+      logLine(`[autopilot] executor route failed: ${reason}`);
+      autopilot.routeFaultLogged = reason;
+    }
+    return "route";
+  }
   autopilot.routeFaultLogged = null;
   // A CLI route carries the OpenCode route as its per-job fallback
   // (executorRunEnv), but only a machine with OpenCode on it can take one:
@@ -19592,8 +19656,11 @@ function registerIpc() {
             child.stdout.on("data", (chunk) => {
               if (!first) first = String(chunk).split(/\r?\n/)[0];
             });
-            child.on("error", () => resolve({ id: cli.id, name: cli.name, installed: false, source: null }));
-            child.on("close", (code) => resolve({ id: cli.id, name: cli.name, installed: code === 0 && Boolean(first), source: first }));
+            child.on("error", () => resolve({ id: cli.id, name: cli.name, installed: false, source: null, signedIn: null }));
+            child.on("close", (code) => {
+              const installed = code === 0 && Boolean(first);
+              resolve({ id: cli.id, name: cli.name, installed, source: first, signedIn: installed ? cliSignedIn(cli.id) : null });
+            });
           })
       )
     );
@@ -19647,7 +19714,10 @@ function registerIpc() {
     await refreshSetupPaths();
     const installed = await codingCliStatus();
     const settings = await readAgentSettings();
-    return { ok: true, selected: settings.aiProvider, clis: cliSetup.CLIS.map((cli) => ({ id: cli.id, name: cli.name, installed: installed.some((row) => row.id === cli.id && row.installed), subscription: cliSetup.SUBSCRIPTIONS.includes(cli.id) })) };
+    return { ok: true, selected: settings.aiProvider, clis: cliSetup.CLIS.map((cli) => {
+      const row = installed.find((entry) => entry.id === cli.id && entry.installed);
+      return { id: cli.id, name: cli.name, installed: Boolean(row), signedIn: row?.signedIn ?? null, subscription: cliSetup.SUBSCRIPTIONS.includes(cli.id) };
+    }) };
   });
   ipcMain.handle("setup:cli-check", async (_event, id) => {
     if (!cliSetup.SUBSCRIPTIONS.includes(id)) return { ok: false, error: "Choose a subscription CLI to check." };

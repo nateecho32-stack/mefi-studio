@@ -248,7 +248,7 @@ function workState(item, now = Date.now(), { tasks = null, autoBuild = true, app
 // The loop states that stop or hold every card (scripts/loop-status.cjs). When
 // the host passes its loop answer, the summary leads with it, so a launch hold
 // no longer reads "3 ready to work on" while nothing can start.
-const LOOP_HOLDS = new Set(["no-project", "held", "paused", "parked", "draining", "stuck"]);
+const LOOP_HOLDS = new Set(["no-project", "held", "setup", "paused", "parked", "draining", "stuck"]);
 
 function summarizeBacklog({ tasks = [], requests = [], ideas = [], jobs = [], compare, ideaEligible, now = Date.now(), paused = false, draining = false, waiting = null, lastError = null, parkedUntil = 0, autoBuild = true, approve = null, loop = null } = {}) {
   const board = rows(tasks);

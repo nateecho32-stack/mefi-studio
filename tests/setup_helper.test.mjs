@@ -116,6 +116,18 @@ test("a fresh profile gets the helper first; closing it marks this revision seen
   assert.equal(walked, 1);
 });
 
+test("only Continue to the guided tour opens the tour; any other close lets the hand-off wait", async () => {
+  for (const how of ["close", "tour"]) {
+    const { helper, content, byText } = load();
+    const handed = [];
+    helper.startup({ then: (detail) => handed.push(JSON.parse(JSON.stringify(detail))) });
+    await settle();
+    if (how === "close") helper.close();
+    else { helper.open("finish"); await settle(); await byText(content(), "Continue to the guided tour").click(); }
+    assert.deepEqual(handed, [{ tour: how === "tour" }], how);
+  }
+});
+
 test("a returning profile sees it once after the update; diagnostic launches never do", async () => {
   const returning = load({ store: { "mefiStudio.commandHome": "1" } });
   assert.equal(returning.helper.startup(), true);
@@ -264,6 +276,59 @@ test("quick setup walks only connect, permissions and finish; Next on the last s
   }
   assert.deepEqual(walked, ["providers", "permissions", "finish", null]);
   assert.equal(helper.isOpen(), false);
+});
+
+test("a first run takes the quick path without choosing it", async () => {
+  const { helper, overlay } = load();
+  helper.open("welcome");
+  await settle();
+  const walked = [];
+  for (let step = 0; step < 4 && helper.isOpen(); step += 1) {
+    await overlay().querySelector("#setup-helper-next").click(); await settle();
+    walked.push(helper.section());
+  }
+  assert.deepEqual(walked, ["providers", "permissions", "finish", null]);
+});
+
+test("an installed but signed-out subscription is not a connected AI until it signs in or answers a check", async () => {
+  const { window, helper, content, byText } = load();
+  window.mefiStudio.getAiRouting = async () => ({ provider: "codex", executorCli: "codex", autoProviders: [], lmStudioEndpoint: "", customEndpoint: "" });
+  window.mefiStudio.cliSetupStatus = async () => ({ ok: true, selected: "codex", clis: [{ id: "codex", name: "Codex", installed: true, signedIn: false, subscription: true }, { id: "opencode", name: "OpenCode", installed: false, signedIn: null }] });
+  helper.open("providers");
+  await settle();
+  assert.equal(helper.connected(), false, "installed alone is not connected");
+  assert.match(content().querySelectorAll("p").map((node) => node.textContent).join(" "), /Installed, but not signed in yet\. Choose Sign in, then check the connection\./);
+  assert.ok(content().querySelectorAll("option").some((option) => option.textContent === "Codex · installed, not signed in"));
+  await byText(content(), "Check connection").click();
+  await settle();
+  assert.equal(helper.connected(), true, "a passing check counts: the login may live where Studio cannot see it");
+  window.mefiStudio.cliSetupStatus = async () => ({ ok: true, selected: "codex", clis: [{ id: "codex", name: "Codex", installed: true, signedIn: true, subscription: true }] });
+  const fresh = load();
+  fresh.window.mefiStudio.getAiRouting = window.mefiStudio.getAiRouting;
+  fresh.window.mefiStudio.cliSetupStatus = window.mefiStudio.cliSetupStatus;
+  fresh.helper.open("providers");
+  await settle();
+  assert.equal(fresh.helper.connected(), true, "signed in counts without a check");
+});
+
+test("Connect an AI leads with Studio's own finder and a free way in, and a saved key keeps its confirmation", async () => {
+  const { helper, overlay, content, byText } = load();
+  helper.open("providers");
+  await settle();
+  assert.match(content().children[0].textContent, /Let Studio find what you have/, "the finder is the first card");
+  await byText(content(), "Start free with OpenCode").click();
+  await settle();
+  const tool = content().querySelectorAll("select").find((select) => select.getAttribute("aria-label") === "Coding tool");
+  assert.equal(tool.value, "opencode");
+  assert.ok(byText(content(), "Scan OpenCode"), "OpenCode's own scan is offered");
+  const main = overlay().querySelector("#setup-helper-main");
+  main.scrollTop = 420;
+  const zai = content().querySelectorAll("input").find((input) => input.getAttribute("aria-label") === "z.ai key");
+  zai.value = "zai-test-key";
+  await byText(zai.parentNode, "Save key").click();
+  await settle();
+  assert.match(overlay().querySelector("#setup-helper-status").textContent, /^z\.ai key saved\./, "the repaint keeps the save's own words");
+  assert.equal(main.scrollTop, 420, "and the place on the page");
 });
 
 test("connected() reports the last connections read so the walkthrough can skip its scan stop", async () => {

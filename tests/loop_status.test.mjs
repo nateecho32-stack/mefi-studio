@@ -34,6 +34,22 @@ test("the first gate a person would fix wins, and every stop names its one contr
   }
 });
 
+// A fresh install with nothing connected read "Agents are off → Start
+// agents", and starting them only ran workers that failed.
+test("a held launch with no AI connected asks for a connection first, still held", () => {
+  const result = status({ held: true, aiConnected: false, counts: { ready: 1 } });
+  assert.equal(result.state, "setup");
+  assert.equal(result.action.id, "connect-ai");
+  assert.equal(result.on, false, "the switch still reads off");
+  assert.equal(result.launchHold, true);
+  assert.match(result.reason, /1 task will wait until then\. Agents stay off/);
+  // Connected, or unknown, keeps the plain launch hold.
+  assert.equal(status({ held: true, aiConnected: true }).state, "held");
+  assert.equal(status({ held: true, aiConnected: null }).state, "held");
+  // Running work is never hidden behind the setup line.
+  assert.equal(status({ held: true, aiConnected: false, running: 1 }).state, "running");
+});
+
 test("the Agents switch reads off only for the launch hold and the owner's pause or stop", () => {
   assert.equal(status({ held: true }).on, false);
   assert.equal(status({ assistantPaused: true }).on, false);

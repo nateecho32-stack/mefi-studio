@@ -357,11 +357,17 @@
   });
 
   // ---- providers ----
+  // A subscription route counts only while its CLI is signed in (or Studio
+  // cannot tell) or it answered a check: an installed, signed-out CLI read as
+  // "Connect an AI ✓" and every call then failed.
+  function loggedIn(id) {
+    return Boolean(state.checked?.[id]) || data.cli?.clis?.find?.((cli) => cli.id === id)?.signedIn !== false;
+  }
   function routeReady() {
     const routing = data.routing || {};
+    const subscription = (id) => SUBSCRIPTIONS.includes(id) && loggedIn(id);
     return Boolean(routing.hasZai || routing.hasOpenCode || routing.hasZen || routing.hasOpenRouter || routing.hasCustom
-      || SUBSCRIPTIONS.includes(routing.provider) || routing.provider === "lmstudio" || SUBSCRIPTIONS.includes(routing.executorCli)
-      || data.cli?.clis?.some?.((cli) => cli.installed && SUBSCRIPTIONS.includes(cli.id) && cli.id === routing.executorCli));
+      || subscription(routing.provider) || routing.provider === "lmstudio" || subscription(routing.executorCli));
   }
   function keyRow(which, title, detail, rerender) {
     const row = node("div", "setup-helper-key");
@@ -448,7 +454,7 @@
     intro: "Studio needs at least one AI to talk to. The simplest is a subscription you already have, used through its own command-line login. API keys and local models work too, and you can mix them.",
     status: () => (data.routing ? routeReady() ? "done" : "attention" : ""),
     async render(body, context) {
-      const rerender = () => { if (context.current()) void show("providers", { focus: false }); };
+      const rerender = () => { if (context.current()) void show("providers", { focus: false, keepScroll: true }); };
       await Promise.all([loadRouting().catch(() => {}), refreshKeys(), (async () => { try { data.cli = await api()?.cliSetupStatus?.(); } catch { data.cli = null; } })(),
         (async () => { try { data.logins = await api()?.cliAccounts?.(); } catch { data.logins = null; } })()]);
       if (!context.current()) return;
@@ -458,13 +464,14 @@
       const clis = data.cli?.ok ? data.cli.clis || [] : CLIS.map(([id, name]) => ({ id, name, installed: false }));
       const firstInstalled = clis.find((cli) => cli.installed && SUBSCRIPTIONS.includes(cli.id))?.id;
       let chosen = state.cli || (SUBSCRIPTIONS.includes(routing.executorCli) ? routing.executorCli : firstInstalled || "codex");
-      const pick = select(clis.map((cli) => [cli.id, `${cli.name}${cli.installed ? " · installed" : ""}`]), chosen, (value) => { state.cli = value; rerender(); }, "Coding tool");
+      const pick = select(clis.map((cli) => [cli.id, `${cli.name}${cli.installed ? cli.signedIn === false ? " · installed, not signed in" : " · installed" : ""}`]), chosen, (value) => { state.cli = value; rerender(); }, "Coding tool");
       const cli = clis.find((item) => item.id === chosen) || { id: chosen, installed: false };
       const actions = node("div", "setup-helper-row");
       const cliStatus = node("p", "setup-helper-hint");
       cliStatus.textContent = !data.cli?.ok ? "Guided installation runs in the desktop app on Windows." : chosen === "opencode"
         ? `${cli.installed ? "Installed." : "Not installed yet."} After signing in, scan OpenCode for its linked and free models.`
         : state.checked?.[chosen] ? `${cli.name} answered the connection check. Choose “Use for the whole studio”.`
+        : cli.installed && cli.signedIn === false ? "Installed, but not signed in yet. Choose Sign in, then check the connection."
         : cli.installed ? "Installed. Sign in if you haven't, then check the connection." : "Not installed. Install and sign in opens a setup window.";
       const cliAction = (action) => async (event) => {
         const result = await run(event.currentTarget, () => need("cliSetupAction")({ id: chosen, action }), (reply) => reply?.message || "Setup opened. Finish it in the window, then check the connection.");
@@ -540,10 +547,17 @@
         const result = await run(event.currentTarget, () => need("autoSetup")(), (reply) => reply?.summary || reply?.message || "Automatic setup finished.");
         if (result) { data.team = null; await loadRouting().catch(() => {}); rerender(); }
       }, "ghost");
-      auto.append(autoButton);
+      // No subscription and no key: OpenCode's free models are a way in.
+      const free = button("Start free with OpenCode", () => { state.cli = "opencode"; rerender(); }, "ghost");
+      free.title = "Picks OpenCode above: install it, then scan for its free models";
+      const autoRow = node("div", "setup-helper-row");
+      autoRow.append(autoButton, free);
+      auto.append(autoRow);
       if (routing.autoSetup?.summary) auto.append(node("p", "setup-helper-hint", `Last run: ${routing.autoSetup.summary}`));
-      body.append(auto);
-      if (!routeReady()) say("No AI is connected yet. Sign in with a tool, or save a key.", "");
+      body.prepend(auto);
+      // A repaint after a save keeps that save's own words (show() clears the
+      // line on a fresh open), so saving a key no longer reads as nothing done.
+      if (!routeReady() && !els.status?.textContent) say("No AI is connected yet. Sign in with a tool, or save a key.", "");
     },
   });
 
@@ -1054,7 +1068,7 @@
       const row = node("div", "setup-helper-row");
       row.append(button(state.reason === "first-run" ? "Continue to the guided tour" : "Take the guided tour", () => {
         const tour = state.reason !== "first-run";
-        close();
+        close({ tour: true });
         if (tour) window.MefiOnboarding?.open?.();
       }, "primary"), button("Close", () => close(), "ghost"));
       next.append(row); body.append(next);
@@ -1063,7 +1077,7 @@
 
   // ---- the sheet ------------------------------------------------------------
   const els = {};
-  const state = { open: false, built: false, section: null, reason: "manual", then: null, path: "full", cli: null, checked: {}, allowFree: true, toolRole: "routine", queue: null };
+  const state = { open: false, built: false, section: null, reason: "manual", then: null, path: "quick", cli: null, checked: {}, allowFree: true, toolRole: "routine", queue: null };
   const QUICK = ["welcome", "providers", "permissions", "finish"];
   const route = () => (state.path === "quick" ? SECTIONS.filter((item) => QUICK.includes(item.id)) : SECTIONS);
 
@@ -1223,7 +1237,9 @@
     void show(section(id) ? id : state.section || SECTIONS[0].id);
     return true;
   }
-  function close() {
+  // `tour` is the owner's own "Continue to the guided tour"; every other close
+  // (Close, Esc, Finish) tells `then` so, and the tour waits to be asked for.
+  function close({ tour = false } = {}) {
     if (!state.open) return;
     state.open = false;
     renderSerial += 1;
@@ -1232,14 +1248,15 @@
     window.MefiNav?.release?.("setup-helper");
     window.dispatchEvent(new CustomEvent("mefi-setup-helper", { detail: { open: false, section: state.section } }));
     const then = state.then; state.then = null;
-    if (typeof then === "function") { try { then(); } catch { /* the next prompt is a nicety */ } }
+    if (typeof then === "function") { try { then({ tour: tour === true }); } catch { /* the next prompt is a nicety */ } }
   }
   const isOpen = () => state.open;
   const seen = () => read(SEEN_KEY) === REVISION;
 
   // Called once the studio is up (booklet.js), before the walkthrough. A
-  // helper that opens takes `then` (the walkthrough's own startup) and runs it
-  // when it closes, so the two never stack. Diagnostic launches never open it.
+  // helper that opens takes `then` (booklet.js's hand-off to the walkthrough)
+  // and runs it when it closes, with { tour }, so the two never stack.
+  // Diagnostic launches never open it.
   function startup({ then = null } = {}) {
     if (headless || seen()) return false;
     state.then = then;

@@ -226,7 +226,7 @@
   // The host's one answer (status.loop, scripts/loop-status.cjs) is read
   // first. Only states that hold the agents back get the banner; tasks that
   // need an OK or a review already show under Needs you.
-  const LOOP_PILLS = { held: "Waiting for you", paused: "Paused", parked: "Cooling down", draining: "Updating", stuck: "Stuck", waiting: "Waiting", setup: "No AI connected", "no-project": "No project" };
+  const LOOP_PILLS = { held: "Agents off", paused: "Paused", parked: "Cooling down", draining: "Updating", stuck: "Stuck", waiting: "Waiting", setup: "No AI connected", "no-project": "No project" };
   const LOOP_KEYS = { held: "held", paused: "paused", setup: "key" };
   function loopAction(action) {
     if (!action) return null;
@@ -249,9 +249,10 @@
     }
     const running = scoped(status.running).length;
     const start = { label: "Start agents", run: startWork };
-    if (status.held === true && !running) return { key: "held", tone: "warn", pill: "Waiting for you", title: "Agents are off until you start them.", text: "Anything you build waits in the queue until then.", action: start };
+    const connect = { key: "key", tone: "warn", pill: "No AI connected", title: "No AI is connected yet.", text: `${companion()} needs one before anything can be built.`, action: { label: "Connect an AI", run: () => go("agents", { section: "setup", pane: "connections" }) } };
+    if (status.held === true && !running) return assistant.ai?.keyPresent === false ? connect : { key: "held", tone: "warn", pill: "Agents off", title: "Agents are off until you start them.", text: "Anything you build waits in the queue until then.", action: start };
     if (assistant.status === "paused" || assistant.prefs?.paused === true || status.execute === false) return { key: "paused", tone: "held", pill: "Paused", title: "New work is paused.", text: running ? "Running jobs finish; queued work waits." : "Queued work waits until you resume.", action: { label: "Resume", run: startWork } };
-    if (assistant.ai?.keyPresent === false) return { key: "key", tone: "warn", pill: "No AI connected", title: "No AI is connected yet.", text: `${companion()} needs one before anything can be built.`, action: { label: "Connect an AI", run: () => go("agents", { section: "setup", pane: "connections" }) } };
+    if (assistant.ai?.keyPresent === false) return connect;
     const waiting = status.waiting;
     if (waiting && !running && Number(state.backlog?.counts?.ready) > 0) return { key: "waiting", tone: "quiet", pill: "Waiting", title: "Queued work is waiting.", text: typeof waiting === "string" ? waiting : waiting.text || waiting.reason || "", action: null };
     return null;
@@ -764,7 +765,7 @@
       const linkedIdeas = ideaIds.length > 1 ? { ideaIds } : ideaIds.length ? { ideaId: ideaIds[0] } : {};
       const result = intent === "build"
         ? await (sizing ? api().vibeBuild({ title, prompt, projectId: id, ...linkedIdeas }) : api().tasksCreate({ title, prompt, projectId: id }))
-        : await api().assistantMessage(value, id, { view: "Vibe", companion: companion() });
+        : await api().assistantMessage(value, id, { view: "Vibe", companion: companion(), mode: "talk" });
       if (!result || result.ok === false) throw new Error(result?.error || "That didn't go through.");
       if (projectId() !== id || draftEpoch !== epoch) return;
       if (input.value.trim() === value) { input.value = ""; evolution.context = null; grow(); saveDraft(); renderEvolution(); }

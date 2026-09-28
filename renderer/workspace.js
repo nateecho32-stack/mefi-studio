@@ -765,7 +765,7 @@
   function runState() {
     const loop = state.status.loop;
     if (api() && loop && typeof loop === "object" && typeof loop.state === "string") {
-      const launchHold = loop.state === "held";
+      const launchHold = loop.state === "held" || loop.launchHold === true;
       return { held: loop.on === false && !launchHold, launchHold, label: loop.headline, note: loop.reason || loop.headline, running: state.status.running || [], tone: LOOP_TONES[loop.tone] || "idle", loop };
     }
     const assistant = state.assistant;
@@ -777,7 +777,7 @@
     const launchHold = state.status.held === true && !running.length;
     const held = assistantPaused || admissionOff;
     const keyMissing = assistant.ai?.keyPresent === false;
-    const label = !api() ? "Browser preview" : launchHold ? "Waiting for you" : assistantPaused && admissionOff ? "Paused" : assistantPaused ? "Assistant paused" : admissionOff ? "New work held" : keyMissing ? "No AI connected" : running.length ? "Working" : "Ready";
+    const label = !api() ? "Browser preview" : launchHold ? "Agents off" : assistantPaused && admissionOff ? "Paused" : assistantPaused ? "Assistant paused" : admissionOff ? "New work held" : keyMissing ? "No AI connected" : running.length ? "Working" : "Ready";
     const note = !api() ? "Live status needs the desktop app." : launchHold ? "Automatic work is waiting for you." : assistantPaused && admissionOff ? "All new work is held. Running jobs finish normally." : assistantPaused ? "Queued tasks remain held while existing workers finish." : admissionOff ? "Queued tasks wait; the assistant still replies and takes answers." : keyMissing ? "Connect an AI in Settings to start." : state.status.waiting ? String(state.status.waiting) : running.length ? `${running.length} job${running.length === 1 ? "" : "s"} running` : "Waiting for work.";
     return { held, launchHold, label, note, running, tone: !api() ? "idle" : launchHold ? "warn" : held ? "held" : keyMissing ? "warn" : running.length ? "busy" : "ok" };
   }

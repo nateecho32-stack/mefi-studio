@@ -89,6 +89,22 @@ test("first launch opens the guide once, at the scan stop, and closing it keeps 
   assert.equal(reloaded.el("invitation").hidden, false);
 });
 
+test("invite() leaves a new guide waiting in Start here instead of opening a second sheet", () => {
+  const env = environment();
+  assert.equal(env.guide.invite(), true);
+  assert.equal(env.el("overlay").hidden, true, "no sheet opens over the studio");
+  assert.equal(JSON.parse(env.storage.get(KEY)).status, "reading");
+  assert.equal(env.el("invitation").hidden, false);
+  assert.equal(env.guide.startup(), false, "a waiting guide never opens by itself later");
+  assert.equal(env.guide.invite(), false, "only a new guide is invited");
+  const connected = environment();
+  connected.context.window.MefiSetupHelper = { connected: () => true };
+  connected.guide.invite();
+  const saved = JSON.parse(connected.storage.get(KEY));
+  assert.equal(saved.step, 1, "with an AI connected it waits at the workspace stop");
+  assert.equal(saved.done[0], true);
+});
+
 test("the workspace and create stops offer the saved build choice and only an explicit toggle writes it", async () => {
   const env = environment(); const calls = []; let autoBuild = true;
   env.context.window.MefiWorkspace = {

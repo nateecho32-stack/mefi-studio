@@ -226,3 +226,43 @@ test("task context reads persisted selection only for its exact project", () => 
   const context = env.taskContext("p"); context.taskId = "mutated";
   assert.equal(env.taskContext("p").taskId, "saved", "callers cannot change the saved navigation state by reference");
 });
+
+// The keyboard tip used to pop up over the setup helper (a sheet) and the
+// moment the walkthrough closed. It waits for every sheet and transient to
+// close, then for 30 s with nothing open.
+test("the one-time keyboard tip waits for 30 quiet seconds with no sheet or transient open", () => {
+  let now = 0;
+  const timers = [], toasts = [], store = new Map();
+  const state = { sheet: "setup-helper", transient: null };
+  const env = vm.createContext({
+    state, readStore: (key) => store.get(key) ?? null, vibeMode: () => true, go() {},
+    localStorage: { setItem: (key, value) => store.set(key, value) },
+    document: { getElementById: () => null }, getComputedStyle: () => ({ display: "block" }),
+    Date: { now: () => now }, setTimeout: (fn, ms) => timers.push({ fn, at: now + ms }),
+    window: { MefiToast: (text) => toasts.push(text) },
+  });
+  vm.runInContext(source.slice(source.indexOf("  const KEY_HINT_STORE"), source.indexOf("  window.MefiNav = {")), env);
+  const run = (until) => {
+    for (;;) {
+      timers.sort((a, b) => a.at - b.at);
+      if (!timers.length || timers[0].at > until) { now = until; return; }
+      const next = timers.shift();
+      now = next.at;
+      next.fn();
+    }
+  };
+  env.keyHint();
+  run(60000);
+  assert.deepEqual(toasts, [], "not while the setup helper is open");
+  state.sheet = null; state.transient = "onboarding";
+  run(120000);
+  assert.deepEqual(toasts, [], "nor while the walkthrough is");
+  state.transient = null;
+  const closedAt = now;
+  run(closedAt + 20000);
+  assert.deepEqual(toasts, [], "nor in the first moments after it closes");
+  run(closedAt + 45000);
+  assert.equal(toasts.length, 1);
+  assert.match(toasts[0], /^Tip: outside a text field, single keys move around Studio\. H Vibe/);
+  assert.equal(store.get("mefiStudio.keyHint.v1"), "1");
+});

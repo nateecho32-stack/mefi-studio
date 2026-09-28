@@ -2903,18 +2903,24 @@
 
   // One-time tip, once per device: outside a text field, single letters move
   // around Studio, and nothing on screen says so. It waits for the first
-  // launch's walkthrough (or any other transient) to close, then points at
-  // the shortcut sheet.
+  // launch's setup helper and walkthrough (any sheet or transient) to close,
+  // and then for 30 s with nothing open, so it never lands on top of them or
+  // the moment one closes; then it points at the shortcut sheet.
   const KEY_HINT_STORE = "mefiStudio.keyHint.v1";
+  const KEY_HINT_QUIET_MS = 30000;
   function keyHint() {
     if (readStore(KEY_HINT_STORE) === "1" || typeof window.MefiToast !== "function") return;
-    let tries = 0;
+    let tries = 0, quietSince = 0;
     const booting = () => {
       const gate = document.getElementById("boot-layer");
       return Boolean(gate) && !gate.hidden && getComputedStyle(gate).display !== "none";
     };
     const attempt = () => {
-      if ((state.transient !== null || booting()) && tries++ < 120) { setTimeout(attempt, booting() ? 1500 : 5000); return; }
+      const busy = state.transient !== null || state.sheet !== null || booting();
+      const now = Date.now();
+      quietSince = busy ? 0 : quietSince || now;
+      const wait = booting() ? 1500 : busy ? 5000 : KEY_HINT_QUIET_MS - (now - quietSince);
+      if (wait > 0 && tries++ < 120) { setTimeout(attempt, wait); return; }
       try { localStorage.setItem(KEY_HINT_STORE, "1"); } catch { /* the tip may show again next launch */ }
       const home = vibeMode() ? "Vibe" : "workspace";
       window.MefiToast(`Tip: outside a text field, single keys move around Studio. H ${home}, D Command view, T task board. Press ? for the full list.`, "info", {

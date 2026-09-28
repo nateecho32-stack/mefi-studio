@@ -917,7 +917,23 @@
     if (!state.done[SCAN] && !scanStarted && hostApi("firstScan")) void runScan({ automatic: true });
     return true;
   }
+  // The setup helper closed without "Continue to the guided tour": a second
+  // sheet opening over the studio read as another "Welcome". The guide waits
+  // as the Start here card instead, at the workspace stop when an AI is
+  // already connected. True when it was still new.
+  function invite() {
+    init();
+    if (state.status !== "new") return false;
+    if (window.MefiSetupHelper?.connected?.() === true && !state.done[SCAN]) {
+      state.done[SCAN] = true;
+      state.step = WORKSPACE;
+    }
+    state = { ...state, status: "reading" };
+    save();
+    renderInvitation();
+    return true;
+  }
   // status() lets other quiet prompts (the weekly community card) stay out of
   // the way while the guide is new or still being read.
-  window.MefiOnboarding = { init, startup, open, close, coach, status: () => state.status, lessons: () => lessons.map((lesson) => ({ title: lesson.title, short: lesson.short, panel: lesson.panel || null })) };
+  window.MefiOnboarding = { init, startup, invite, open, close, coach, status: () => state.status, lessons: () => lessons.map((lesson) => ({ title: lesson.title, short: lesson.short, panel: lesson.panel || null })) };
 })();

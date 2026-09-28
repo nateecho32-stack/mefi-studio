@@ -307,6 +307,19 @@ test("a runner that never started is requeued on its own cooldown until the star
   assert.equal(row.lastRunError, "wedged", "a start kill names its error, not its silence");
 });
 
+test("cmd.exe's 'is not recognized' reaches the card as a program that is not installed", () => {
+  const first = "'opencode' is not recognized as an internal or external command,", second = "operable program or batch file.";
+  assert.equal(core.readableRunError(first), "opencode is not installed or not on PATH");
+  assert.equal(core.readableRunError(second, ["starting", first, second]), "opencode is not installed or not on PATH", "the name comes from the line before");
+  assert.equal(core.readableRunError(second), "a program this run needed is not installed or not on PATH");
+  assert.equal(core.readableRunError("Error: tests failed"), "Error: tests failed", "anything else is left as it was");
+  const failed = settle(owned(), { ok: false, lastWords: second, run: run({ spoke: true, outputTail: [first, second] }) });
+  assert.equal(failed.lastRunError, "opencode is not installed or not on PATH");
+  assert.match(lastLog(failed), /· opencode is not installed or not on PATH · retry 1\/5$/);
+  const killed = settle(owned(), { ok: false, errorMessage: first, run: run({ startKilled: true, outputTail: [] }) });
+  assert.equal(killed.lastRunError, "opencode is not installed or not on PATH");
+});
+
 test("a provider outage is requeued on the outage backoff with no attempt charged", () => {
   const row = settle(owned({ providerFailures: 2 }), { ok: false, providerOutage: true, providerSaid: true, lastWords: "Usage limit reached" });
   assert.equal(row.status, "open");

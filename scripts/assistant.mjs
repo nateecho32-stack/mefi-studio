@@ -5935,7 +5935,7 @@ function executorLine(executor, readiness = null) {
   } else if (num(source.queued, 0)) lines.push(`${plural(num(source.queued), "work item")} queued; detailed readiness is unavailable.`);
   // A loop that is off or held back names itself first (the launch hold, the
   // owner's pause, a cooldown, an update, a stuck scheduler, no project).
-  const loop = isObject(source.loop) && ["no-project", "held", "paused", "parked", "draining", "stuck"].includes(str(source.loop.state)) ? source.loop : null;
+  const loop = isObject(source.loop) && ["no-project", "held", "setup", "paused", "parked", "draining", "stuck"].includes(str(source.loop.state)) ? source.loop : null;
   if (loop) lines.push(`${clip(str(loop.headline), 120)}: ${clip(str(loop.reason), 240)}`.replace(/: $/, "."));
   else if (readiness?.paused || source.enabled === false) lines.push(`New workers are paused${running.length ? "; current workers can finish" : ""}.`);
   else if (machineManaged && source.capacity?.canStart === false) {
@@ -6609,7 +6609,7 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
         lines.push(aiNote(current).trim());
       } else {
         const related = relatedFacts(text, { sessions, tasks, collisions, requests });
-        lines.push(`Kept in the thread and put on the task board as the next piece of work: "${clip(text, 80)}". The foreman starts it when a worker is free.`);
+        lines.push(`Kept in the thread and put on the task board as the next piece of work: "${clip(text, 80)}".`);
         lines.push(related.length ? `Related right now: ${related.join(" · ")}.` : (focusLine ?? "Nothing in the current sessions matches it yet."));
         if (folderLine) lines.push(folderLine);
         if (memoryLine) lines.push(memoryLine);

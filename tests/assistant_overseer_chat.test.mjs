@@ -215,6 +215,37 @@ test("an instruction the model filed nothing for becomes a confirm card instead 
   assert.equal(h.effects.questions[0].options[0].action.action.ownerText, "add a dark mode toggle to settings");
 });
 
+// Vibe's Talk it over sends ui.mode "talk": a conversation, so nothing is filed from it.
+const talk = (h, text) => {
+  const user = { id: `u_${crypto.randomUUID()}`, role: "user", text, at: Date.now(), ui: { mode: "talk" } };
+  h.state.messages.push(user);
+  return h.env.assistantRespond(user);
+};
+
+test("Talk it over with no AI connected files nothing: it says so and offers the board", async () => {
+  const h = host({ aiUsable: false });
+  h.state.ai = { keyPresent: false };
+  const reply = await talk(h, "Add a search box");
+  assert.deepEqual(h.effects.created, [], "no task is filed from a conversation");
+  assert.deepEqual(h.effects.questions, [], "and no confirm card either");
+  assert.match(reply.text, /^No AI is connected yet, so I can't talk this through\./);
+  assert.match(reply.text, /Agents › Setup › Connect an AI/);
+  assert.deepEqual(plain(reply.offers), [{ title: "Add a search box" }], "a yes can still put it on the board");
+  // The same words outside Talk it over are an instruction, as before.
+  const g = host({ aiUsable: false });
+  g.state.ai = { keyPresent: false };
+  await g.send("Add a search box");
+  assert.equal(g.effects.created.length, 1);
+});
+
+test("Talk it over turns a model's create_task into an offer instead of filing it", async () => {
+  const h = host({ model: envelope("Here's how I'd approach it.", [{ kind: "create_task", title: "Search box", brief: "Add a search box to the header." }]) });
+  const reply = await talk(h, "Add a search box");
+  assert.deepEqual(h.effects.created, []);
+  assert.deepEqual(h.effects.questions, []);
+  assert.deepEqual(plain(reply.offers), [{ title: "Search box" }]);
+});
+
 test("a bare brake holds new work at once, before any model call", async () => {
   let paused = null;
   const h = host({ model: (payload) => { paused = h.effects.pauses; return envelope("Paused.")(payload); } });

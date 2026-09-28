@@ -227,6 +227,19 @@ function attemptLedgerOutcome(end, { providerSaid = false, errorMessage = null, 
   return [errorMessage, lastWords].some((line) => line != null && MODEL_UNREACHABLE.test(String(line))) ? null : "failed";
 }
 
+// cmd.exe's words for a program that is not there reach the card as the run's
+// last words, over two lines ("'opencode' is not recognized as an internal or
+// external command," then "operable program or batch file."). Say what they
+// mean; `tail` is the output around them, for the program's name.
+function readableRunError(text, tail = []) {
+  const value = String(text ?? "");
+  const lines = [value, ...(Array.isArray(tail) ? tail.map(String) : [])];
+  const named = lines.map((line) => line.match(/'([^'\r\n]{1,80})' is not recognized as an internal or external command/i)).find(Boolean);
+  if (named) return `${named[1]} is not installed or not on PATH`;
+  if (/^\s*operable program or batch file\.?\s*$/i.test(value)) return "a program this run needed is not installed or not on PATH";
+  return value;
+}
+
 // The card one finished attempt leaves behind: its settle state machine. The
 // caller has already fenced ownership (the row still names this run) inside
 // its board transaction and writes the returned row back there; `task` itself
@@ -319,7 +332,7 @@ function settleAttemptRow(task, outcome, { now, maxHandoffs, startGrace, clip })
     row.startFailures = (row.startFailures ?? 0) + 1;
     const startCooldown = startKillCooldownMs(row.startFailures);
     row.nextRunAt = now + startCooldown;
-    row.lastRunError = String(errorMessage ?? "the worker never started").slice(0, 160);
+    row.lastRunError = readableRunError(errorMessage ?? "the worker never started", run.outputTail).slice(0, 160);
     executorResume.appendLog(row, `worker never started — ${row.lastRunError} · requeued in ${Math.round(startCooldown / 60000)}m, no attempt charged (start ${row.startFailures}/${startGrace})`, { at: now });
   } else if (branch === "outage") {
     // The provider was down, not the card: the outage backoff, uncharged.
@@ -356,7 +369,7 @@ function settleAttemptRow(task, outcome, { now, maxHandoffs, startGrace, clip })
     if (row.runFailures < MAX_RUN_FAILURES) row.nextRunAt = now + failureBackoffMs(row.runFailures);
     else delete row.nextRunAt;
     const failTail = run.startKilled ? errorMessage : lastWords;
-    row.lastRunError = failTail ? String(failTail).slice(0, 160) : `exit ${code ?? "?"}`;
+    row.lastRunError = failTail ? readableRunError(failTail, run.outputTail).slice(0, 160) : `exit ${code ?? "?"}`;
     executorResume.appendLog(row, `autopilot run failed (exit ${code ?? "?"})${row.lastRunError && row.lastRunError !== `exit ${code ?? "?"}` ? ` · ${row.lastRunError}` : ""} · ${row.runFailures < MAX_RUN_FAILURES ? `retry ${row.runFailures}/5` : "gave up after 5 tries"}`, { at: now });
   }
   return row;
@@ -760,6 +773,7 @@ module.exports = {
   providerOutage,
   classifyRunEnd,
   attemptLedgerOutcome,
+  readableRunError,
   settleAttemptRow,
   releaseInboxCopies,
   saidLine,

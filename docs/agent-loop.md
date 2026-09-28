@@ -658,7 +658,9 @@ collections its mutation returned (`refreshAutopilotQueue(eyes, result)`).
   sent as `loop` on every `assistant:status` push and in the chat facts
   (`facts.executor.loop`), and passed to `summarizeBacklog`, which leads its
   summary with a loop hold. The first gate that applies wins: no project →
-  launch hold → pause or stopped executor (`on: false`) → breaker cooldown →
+  launch hold with no AI connected (`setup`, still `launchHold: true`, so the
+  views label Start agents) → launch hold → pause or stopped executor
+  (`on: false`) → breaker cooldown →
   update drain → a foreman that timed out and still holds its slot → running →
   ready but waiting → approvals → cards needing review → no AI connected →
   idle. Board counts (ready, approval, blocked) are cached by

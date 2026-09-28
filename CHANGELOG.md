@@ -7,6 +7,27 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **A first run with no AI connected says so.** Home, Vibe and the agents'
+  status read "No AI connected" with **Connect an AI** instead of "Waiting for
+  you", and the held switch reads "Agents off". With no coding tool installed,
+  Start agents no longer burns five tries on "'opencode' is not recognized";
+  it says to install OpenCode, Claude Code or Codex. A run that fails that way
+  reads "x is not installed or not on PATH".
+- **Talk it over talks.** Vibe's Talk it over no longer files a task from "Add
+  a search box". The reply offers the board instead, and says plainly when no
+  AI is connected. Replies no longer mention "the foreman".
+- **Setup finds the login you have.** Setup opens on Quick setup, leads Connect
+  an AI with **Set up automatically** and **Start free with OpenCode**, and
+  marks a coding tool that is installed but not signed in. Such a tool no
+  longer counts as a connected AI until it signs in or passes its check, and
+  automatic setup picks a signed-in Claude Code, Codex, Grok or Antigravity
+  login first (Claude Code, then Codex, when none says). Saving a key keeps
+  its confirmation and your place on the page.
+- **One welcome at a time.** Closing the setup helper leaves the guided tour
+  waiting in Start here, with a toast to start it, instead of opening a
+  second welcome sheet. The keyboard tip waits until nothing has been open
+  for 30 seconds. With no project yet, the launch screen leads with **Open a
+  folder…**.
 - **Set up this PC's setup windows open again.** Install Git, the GitHub
   CLI or Node.js, Sign in to GitHub and Install packages started a
   PowerShell window that closed before it ran, while Studio said "Finish in
