@@ -6,6 +6,27 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-27 - First-time setup and agent-choice blockers: install, any builder, any AI route, Start here
+
+Audit of a fresh clone (npm ci, launcher, onboarding) and of every place a
+non-default agent or AI route was locked out. Fixed: npm ci left no Electron
+binary (Electron 44), so the launcher looped on "not installed" and CI's
+render suites skipped silently; sessionless builders (Claude Code, Codex,
+Grok, Antigravity) always parked as failed, now verified by the overseer's
+own checks; npm-installed Grok/agy shims failed ENOENT; late failures were
+re-run on OpenCode (even when not installed); retry-deep changed nothing on
+most routes; Auto with a CLI login or an OpenRouter/Zen/custom key read as
+unconfigured; Start here counted "no folder" as a project and dead-ended
+key-only users. run-node-tests hit Windows' command-line limit from deep
+clones (ENAMETOOLONG, no output). Built in four parallel clones, merged over
+origin/main 215b7d9.
+
+Validation on the merged tree: npm run check passed, npm run audit returned
+0 findings, lint gained no warnings over main. Full npm test passed with every
+leg green: Node 4033 passed and 4 skipped, Electron 43 passed and 1 skipped,
+and all 248 Python contracts passed (routing contracts updated for the new
+builder launch; grok's headless guide documents --prompt-file as headless -p).
+
 ## 2026-09-27 - Companion as pet and friend: six-bubble menu, personality, Suggest work, Friends playground with sharing rules
 
 Built in a separate clone on origin/main 3e0e1e0. New pure modules scripts/companion-pet.cjs (personalities, presets, bond) and scripts/companion-friends.cjs (sharing levels and rules, broadcast level, scrubbed cards, card reading, share-back ask, mirrored scripted playdates); main's "Companion friends" block and hub-client `companion` frames (sent only when the hub's ready lists the feature; one-member delivery only with companion.direct); renderer/companion-friends.js playground; companion-hub/ui menu rework. New tests: companion_friends (13), companion_friends_host (8, vm slice of the main block), companion_personality_copy, plus additions to agent_brain_host, hub_client, module_purity and the companion-hub Electron fixture (playground, share-back, practice playdate, petting, plain check, Suggest work, Now, Personality). Full npm test: Node 4015 tests, 4008 pass, 5 skipped, 2 failed: pc_sync_ui's Friends-branch source pin (fixed by restoring an explicit friends branch; 6/6 solo) and command_render (known load-sensitive; passed solo in 52 s). Python contracts and path lock passed. Solo reruns: companion_hub_render, unified_studio_render, autonomy_render all pass. npm run check ok (172 targets), audit 0 errors, lint 0 errors with no new warnings. Rebased onto 215b7d9 (booklet rebuilt; companion-hub and fixture conflicts kept both sides): check ok (175 targets), audit 0 errors, the 11 touched Node suites 117/117, and companion_hub_render, unified_studio_render and autonomy_render pass.

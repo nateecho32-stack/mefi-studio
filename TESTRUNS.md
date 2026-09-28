@@ -35,6 +35,33 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-28 - Needs you: answered asks leave the list, no dead asks after a reload
+
+The owner reported that answered asks in the companion's Needs you list hung
+around until Clear list, and that a reload showed asks whose clicks only
+failed. companion-ui.js keyed() kept any row holding focus (the clicked
+option button), so a row that left the list stayed on screen. It now holds
+back only a row with a focused text field and moves focus to the next row.
+agent-brain.js act() locks a row (aria-busy) until the re-read lands. The
+48 h question pruner ran only on a new ask or a click. assistantExpireQuestions
+now runs on loads, on the assistant:state and companion reads, on ticks and
+on answers. assistantSettleStaleAsks retires asks whose card is gone on every
+loadAssistant, the all-projects list drops expired asks, and a stale click
+comes back as gone. Asks about done or archived cards stay, as tests pin.
+
+- `npm run build-booklet`, `npm run check` (189 targets) and `npm run audit`
+  (0 findings): PASS on e53a572, rebased onto 897c2ec.
+- `npm test`: PASS (Node suites 497 s, Python contracts, normalized-path
+  lock). The first run, before the rebase, failed 5 assistant_loop cases:
+  the tick called the new helper outside the suite's vm slice. It is now
+  guarded with typeof, like the other cross-section helpers.
+- New tests: companion_queue_rows (4, keyed() in a vm with a small fake DOM;
+  all 4 fail on the old keyed()), assistant_issue_host (2: expiry on a read
+  with a gone reply, and a project load settling gone and expired asks).
+- Clicked through a booklet copy with a stub bridge: three fast clicks sent
+  one answer, the row left at once, and an Enter answer moved focus to the
+  next row's Try again.
+
 ## 2026-09-28 - Vibe shows its planner and agent team at work
 
 Suggest a next step and Build it's sizing each show a live strip
@@ -539,27 +566,6 @@ Full npm test on the change: Node 3993 passed, 0 failed, 6 skipped (Electron
 fixtures included), Python contracts 248 OK (1 skipped), normalized-path lock
 passed. A final npm run check and test:fast (3954 passed, 0 failed) followed
 the last edits (a refresh race fix and Vibe's stage words).
-## 2026-09-27 - First-time setup and agent-choice blockers: install, any builder, any AI route, Start here
-
-Audit of a fresh clone (npm ci, launcher, onboarding) and of every place a
-non-default agent or AI route was locked out. Fixed: npm ci left no Electron
-binary (Electron 44), so the launcher looped on "not installed" and CI's
-render suites skipped silently; sessionless builders (Claude Code, Codex,
-Grok, Antigravity) always parked as failed, now verified by the overseer's
-own checks; npm-installed Grok/agy shims failed ENOENT; late failures were
-re-run on OpenCode (even when not installed); retry-deep changed nothing on
-most routes; Auto with a CLI login or an OpenRouter/Zen/custom key read as
-unconfigured; Start here counted "no folder" as a project and dead-ended
-key-only users. run-node-tests hit Windows' command-line limit from deep
-clones (ENAMETOOLONG, no output). Built in four parallel clones, merged over
-origin/main 215b7d9.
-
-Validation on the merged tree: npm run check passed, npm run audit returned
-0 findings, lint gained no warnings over main. Full npm test passed with every
-leg green: Node 4033 passed and 4 skipped, Electron 43 passed and 1 skipped,
-and all 248 Python contracts passed (routing contracts updated for the new
-builder launch; grok's headless guide documents --prompt-file as headless -p).
-
 ## Read Before Any Tests
 
 This is the test guide for the standalone Mefi's Studio AI+ repository. Run all commands from this repository root.
