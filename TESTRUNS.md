@@ -34,6 +34,10 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-28 - Merge all branches: hidden-surfaces onto the restored main; Friends across PCs verified end to end; 0.4.5
+
+Surveyed every branch and tree. gh-pages is the website (no shared history; not merged). perf/quick-wins is content-identical to aef5dfe on main (skipped). worktree-* branches and the cli-path-refresh clone are already in main. The 16:57 merge (65703a6) and "fixes" (7ba162c) losses were already restored on GitHub main by dc85f68, which keeps the docked video player the other PC is developing; this merge keeps that and the fuller Friends › Rooms (4ee6891). Merged perf/hidden-surfaces (docs/performance.md kept both). Added tests/companion_e2e.test.mjs: three Studios (main's real Companion friends block and hub client, three Discord accounts) against the Void Engine Bot's real hub with its companion relay: make a room, ask, let in, play-only default, a friend rule keeping a token-bearing title home, share-back ask, mirrored playdate, stay home; 1/1 with MEFI_STUDIO_BOT_ROOT set (hub relay patch, 462/462 bot tests). Version 0.4.5. Full npm test: 4209 passed, 1 failed (command_render, known load-sensitive; passed solo in 51 s); Python contracts and path lock passed. check ok, audit 0 errors.
+
 ## 2026-09-27 night - Share between my PCs and with friends: vault, shelves and share files
 
 Friends › Your PCs gains Share between my PCs (a private
@@ -445,10 +449,6 @@ Follow-up verification for the A-Eyes "Errors rising after AI-link fix" alert (o
 ## 2026-09-27 - Verifier deferral fix: remaining prose owed by sibling sessions no longer reopens a finished card (task_2b0634e6823e8b0d)
 
 Root cause of the triple-landed media-browser work: run_1790480592972_8 finished task_b5026aa2c68858d0 correctly (fixture 08c677c + TESTRUNS row), but its MEFI_RESULT remaining note attributed the stale committed booklet to sibling sessions; verifyCompletion read that prose as an outstanding obligation of the card, reopened it, and run_1790481107523_10 rebuilt the same booklet byte-identical. scripts/assistant.mjs now treats remaining prose that names its owner as other work (owed by sibling/other/parent sessions, cards, tasks) as a deferral, not an obligation; imperatives and unattributed leftovers still bind, tracked remaining lists still bind, and all positive-evidence gates are unchanged. Also verified the three landed diffs dedupe: renderer/booklet.html carries exactly one media-browser inline, npm run build-booklet is byte-idempotent (hash f98dd2322a01, no working-tree diff). Tests: node --test tests/verification_checks.test.mjs (20/20, new deferral case), tests/executor_result_protocol + model_win_evaluator + executor_continuation (55/55), npm run check green.
-
-## 2026-09-27 morning - ai-offline follow-up re-verified: link healthy, recovery chain intact (task_6a1b319e87e8ad32, run_1790504373646_5)
-
-Follow-up verification for the ai-offline alert ("failed 5 consecutive times, backoff 48m"). The live data/eyes-assistant.json shows the link healthy and the warning retired: ai.online true, keyPresent true, failures 0, backoffUntil 0, lastError null, problems empty, lastOkAt 2026-09-27T10:42Z - recent successful replies, so the follow-up completes. Root cause stands as triaged earlier: real provider quota/session-limit failures escalated the backoff; the committed recovery chain is intact in the work tree and unchanged by it (git diff on main.cjs and scripts/assistant.mjs is empty): cliReply exit guard, resetAssistantAiBackoff (main.cjs:5294) at all four route-change sites, the scheduleAssistantAiProbe offline-probe chain (main.cjs:5340-5402, armed in assistantTick), planOfflineProbe/offlineProbeDelayMs (scripts/assistant.mjs), and quota-vs-offline classification with quota regexes (scripts/assistant.mjs:4767). No code change was needed this run. Narrow validation: python tools/test_mefi_studio_offline_probe.py 12 tests OK; node --test tests/assistant_overseer_chat.test.mjs tests/role_provider_isolation.test.mjs tests/usage_tracker_host.test.mjs 73 pass / 0 fail (includes the offline-warning retirement, quota-backoff release on route change, and probe-contract pins).
 
 ## Read Before Any Tests
 
