@@ -98,10 +98,11 @@ To finish:
    - Give Agent brain the same band.
    - Keep one Settings category nav: Appearance swaps to pills today.
 2. **Rooms** (rooms.js): wait for "Plan improvements and fixes" to land its rooms.js rewrite; it will message. Then add:
+   - *2026-09-28 update:* the rewrite is on main ("Rooms: show the right room's chat, keep what you type, share rooms fairly"). Rebase onto main, then go ahead. Line numbers moved: find the error sentences by `REASONS` and the actions by their button labels.
    - REASONS entries for auth, version and unsupported;
    - plainError at ~89 and ~397;
    - arm() on Close room, Leave room and message Delete.
-3. **companion-hub.js select()** must keep the peer's line `for (const child of el.extra.children) child.dispose?.();` just before the children are replaced.
+3. **companion-hub.js select()** must keep the peer's line `for (const child of [...el.extra.children]) child.dispose?.();` just before the children are replaced (as landed on main, with the spread copy).
 4. **Gates**, in the worktree:
    - `npm run build-booklet`, `npm run check`, `npm test`, `npm run audit`.
    - Known flakes: command_render and media_window_render. Control them against clean main.
