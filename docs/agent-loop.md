@@ -1398,9 +1398,13 @@ the "work done outside Studio" block in `main.cjs` (`outsideWork*`).
   ancestor (a rebase, reset or branch switch: `rewritten`); uncommitted paths
   edited after the look (by mtime, or newly uncommitted and unreadable, like a
   deletion); and agent sessions in the folder since then: OpenCode's store,
-  minus sessions Studio's attempts recorded, and Claude Code transcripts under
+  minus sessions Studio's attempts recorded; Claude Code transcripts under
   `~/.claude/projects/<path with non-alphanumerics as dashes>`, titled by their
-  first user line (only the first 64 KB is read). A first open with this build
+  first user line (`claudeTitle`; only the first 64 KB is read); and Codex
+  rollouts under `~/.codex/sessions/YYYY/MM/DD` for the days since the look
+  (at most a month), whose `session_meta` line names the working folder
+  (`codexSession`, `withinFolder`; the first 256 KB is read, since that line
+  carries the instructions). A first open with this build
   has no look; the assistant's last heartbeat (`closedAt`) stands in, so
   commits after it still count by date. A folder that is not a git checkout
   still reports outside sessions.
@@ -1408,9 +1412,13 @@ the "work done outside Studio" block in `main.cjs` (`outsideWork*`).
   the first commits and sessions); the chat payload's `outside` section
   (`chatFacts`, packed after `events` with a 2,600-character budget, and named
   in `ASSISTANT_CHAT_SYSTEM`) while the report is under a day old or one of its
-  cards still waits for the owner; and the companion's welcome-back digest
-  (`digestPart`, greeted once per report).
-- **Every queued card is checked.** The scan stamps each queued card
+  cards still waits for the owner; the companion's welcome-back digest
+  (`digestPart`, greeted once per report); and, with no model to answer, the
+  keyless reply to "what changed while I was away?" (`asksAboutAway`,
+  `awayAnswer`, placed ahead of `localReply`'s text in `assistantRespond`).
+- **Every queued card is checked** when the report changed code
+  (`changesCode`: commits, edits, a moved checkout; an outside session that
+  left nothing behind is news but holds nothing). The scan stamps each queued card
   (`candidates`: open, not grouped, not already checked against this report)
   with `relevance: { state: "checking" }` (`checkingStamp`).
   `backlog.workState` reads it as `deferred` / `blockedBy: "relevance-check"`,
@@ -1433,8 +1441,9 @@ the "work done outside Studio" block in `main.cjs` (`outsideWork*`).
   keep the card held (`state: "ask"`, `blockedBy: "relevance"`, needsYou) and
   raise an Ask card (`question`, source `relevance`) with **Mark it done**,
   **Drop it**, **Build it anyway** and **Leave it for review**. A local match
-  asks "may already be done", never "looks already done". The thread gets one
-  line for the whole check (`verdictNotice`).
+  says "may already be done", never "looks already done", on its Ask card, its
+  hold reason, the task's Evidence tab and the thread's one line for the whole
+  check (`verdictNotice`).
 - **Only the owner answers.** `outsideWorkDecide` handles the Ask card's
   options (owner only; `autonomy.canDelegate` refuses source `relevance` in
   every mode, `delegateRetry` refuses the hold, and the decide pass skips the
@@ -1442,6 +1451,14 @@ the "work done outside Studio" block in `main.cjs` (`outsideWork*`).
   the hold, keeping the evidence for the worker; an ask whose card no longer
   waits on it is retired (`assistantRetireGoneAsks`). `decision-ledger` keeps
   `relevance` among its restorable fields.
+- **What it cannot tell apart.** Git records no marker for Studio's own
+  commits, so attribution is by time: whatever lands while Studio watches the
+  folder (window shown, or before a settle's refresh) is folded into the look
+  as Studio's. Work the owner does in another window while Studio is shown, or
+  commits during the 15 s after a run settles, are therefore not reported. A
+  crash skips the quit write, so a worker's last few minutes before it can
+  read as outside work on the next launch (the check then mostly finds its
+  cards still needed).
 
 Tests: `tests/outside_work.test.mjs` (the module, and how backlog, companion,
 executor-core and autonomy read its stamps) and

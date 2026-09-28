@@ -45625,7 +45625,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (outside?.state && outside.state !== "closed") {
       section("Work done outside Studio");
       const verdict = outside.state === "checking" ? "Being checked against work done while Studio was away."
-        : outside.verdict === "done" ? "Looks already done outside Studio."
+        : outside.verdict === "done" ? (outside.by === "local" ? "May already be done outside Studio (matched from files and commit subjects)." : "Looks already done outside Studio.")
           : outside.verdict === "obsolete" ? "May no longer be needed after work done outside Studio."
             : outside.verdict === "partial" ? "Partly done outside Studio; its worker is told what changed."
               : "Still needed after work done outside Studio.";

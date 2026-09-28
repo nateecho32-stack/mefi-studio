@@ -9655,6 +9655,10 @@ async function assistantRespond(user, entry = null) {
     } catch (error) {
       local = { text: `I kept your message in the thread. (assistant logic unavailable: ${error.message})`, actions: [] };
     }
+    // "What changed while I was away?" is answered from the outside-work
+    // report even when no model can: the keyless reply leads with it.
+    const away = typeof outsideWork !== "undefined" ? outsideWork.awayAnswer(text, facts?.outside) : "";
+    if (away) local = { ...local, text: local?.text ? `${away}\n\n${local.text}` : away };
     // The brake, instantly and locally.
     const brake = CHAT_BRAKE.test(text.trim()) ? "pause" : CHAT_UNBRAKE.test(text.trim()) ? "resume" : null;
     if (brake) {

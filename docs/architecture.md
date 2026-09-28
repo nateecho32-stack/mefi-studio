@@ -190,7 +190,7 @@ settings and per-model work-kind summaries for the shared controls.
 | **Delegated decision** | An answer Mefi gives for you, attributed as **Mefi decided**. A retry preserves your stop, loop guard, loop history, duplicate link and approval. Its two-per-task daily budget survives restarts. |
 | **Swarm / Cluster** | Agent mode: Swarm spreads workers across the queue, Cluster keeps them on one goal at a time. |
 | **Awaiting verification** | A finished attempt whose completion is not yet established; housekeeping checks the evidence before it becomes **Done**. |
-| **Work done outside Studio** | What changed in the open folder while Studio was closed, on another folder or hidden: commits, uncommitted edits and Claude Code or OpenCode sessions, compared with Studio's **last look** at the folder. The thread, the chat assistant and the welcome-back digest report it, and every queued card is **checked** against it before a worker takes it: still needed, partly done (its worker is told what changed), or already done / no longer needed, which waits for your answer on an Ask card. See [agent-loop.md §14](agent-loop.md#14-work-done-outside-studio). |
+| **Work done outside Studio** | What changed in the open folder while Studio was closed, on another folder or hidden: commits, uncommitted edits and Claude Code, Codex or OpenCode sessions, compared with Studio's **last look** at the folder. The thread, the chat assistant (even without a model) and the welcome-back digest report it, and when the code changed every queued card is **checked** against it before a worker takes it: still needed, partly done (its worker is told what changed), or already done / no longer needed, which waits for your answer on an Ask card. See [agent-loop.md §14](agent-loop.md#14-work-done-outside-studio). |
 | **Agent brain** | The Live view (`J`) that draws a task's **pipeline** from recorded **work events**: the head (the companion), the lead, the steps and the sub-agents; plus the **Playbook** of recipes and **project map** under Agents › Workflows. The seats live under Agents › Setup. See [roadmap-0.4.0.md](roadmap-0.4.0.md) and [agent-loop.md §13](agent-loop.md#13-the-agent-brain). |
 | **Companion** | The roaming character (named under General): click it to ask questions, create tasks, navigate, see the team and its messages, change settings, or handle its needs-you queue. It also gives a welcome-back digest and covers this project or all of them. Its default model is GPT-6 Luna on Zen at medium reasoning and fast service when Zen is connected. |
 | **Orb, callout, absorb** | Command-view vocabulary: an orb is a node, a callout is its floating card, and absorb is a finished node collapsing into its host. |
@@ -588,7 +588,7 @@ failed process stays an error and cannot produce briefing requests.
 - **Work done outside Studio.** Studio keeps a last look at each folder (its
   git HEAD, branch and uncommitted files) while it watches it. Open the
   folder again after committing by hand, editing elsewhere or running Claude
-  Code or OpenCode in it, and the thread says what changed ("While Studio was
+  Code, Codex or OpenCode in it, and the thread says what changed ("While Studio was
   away (3 h): 4 commits, 12 files changed, 1 outside agent session"). The
   assistant can answer "what did I do while Studio was closed?", and the
   welcome-back digest leads with it. Every queued card waits while it is

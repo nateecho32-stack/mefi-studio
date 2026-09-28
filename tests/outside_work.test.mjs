@@ -199,6 +199,7 @@ test("a checking hold defers the card until its limit; a done or obsolete verdic
   assert.equal(blocked.blockedBy, "relevance");
   assert.match(blocked.reason, /Looks already done outside Studio/);
   assert.match(backlog.workState(card("t", "Title", { relevance: { ...done, verdict: "obsolete" } }), NOW).reason, /May no longer be needed/);
+  assert.match(backlog.workState(card("t", "Title", { relevance: { ...done, by: "local" } }), NOW).reason, /^May already be done outside Studio/, "a local match is only a maybe");
 
   const partial = outside.verdictStamp({ stamp: checking, verdict: "partial", reason: "the toggle exists; persistence is missing", rep: REP, now: NOW });
   assert.equal(partial.state, "clear");
@@ -326,6 +327,7 @@ test("the thread, the chat and the welcome-back digest each get their own words"
   assert.match(verdicts, /^Checked 4 queued cards against the work done outside Studio: 1 still needed, 1 partly done/);
   assert.match(verdicts, /"Dark theme toggle" and "Old exporter" wait for you in Needs you\./);
   assert.match(outside.verdictNotice([{ verdict: "needed", title: "A", by: "local" }]), /no model answered/);
+  assert.match(outside.verdictNotice([{ verdict: "done", title: "A", by: "local" }, { verdict: "done", title: "B", by: "model" }]), /1 looks already done, 1 may already be done\./, "a local match is only a maybe, as on its card");
 
   const stamped = [card("t1", "Dark theme toggle", { relevance: { ...outside.verdictStamp({ verdict: "done", reason: "done by ccccccc", rep: REP, now: NOW }) } })];
   const facts = outside.chatFacts(REP, stamped, NOW + HOUR);
@@ -334,6 +336,19 @@ test("the thread, the chat and the welcome-back digest each get their own words"
   assert.deepEqual(facts.cards, [{ taskId: "t1", title: "Dark theme toggle", check: "done", waitsForOwner: true, reason: "done by ccccccc" }]);
   assert.ok(outside.chatFacts(REP, stamped, NOW + 3 * 24 * HOUR), "an answer still owed keeps an old report in view");
   assert.equal(outside.chatFacts(REP, [], NOW + 3 * 24 * HOUR), null, "a stale report with nothing owed is gone");
+
+  for (const question of ["what did I do while Studio was closed?", "What changed while I was away", "anything happen outside studio?", "what have we worked on since I left", "what's changed"]) {
+    assert.equal(outside.asksAboutAway(question), true, question);
+  }
+  for (const other of ["start the export task", "why is the login card parked?", "what's next"]) assert.equal(outside.asksAboutAway(other), false, other);
+  const answer = outside.awayAnswer("what changed while I was away?", facts);
+  assert.ok(answer.startsWith(REP.headline));
+  assert.match(answer, /Commits: ccccccc "Add the dark theme toggle to settings", fffffff "Refactor the router"\./);
+  assert.match(answer, /Uncommitted: new src\/new\.js\./);
+  assert.match(answer, /Other agents: Claude Code "Remove the legacy exporter entirely"\./);
+  assert.match(answer, /Waiting for you: "Dark theme toggle" \(looks already done\)\./);
+  assert.equal(outside.awayAnswer("start the export task", facts), "", "not the question: no answer");
+  assert.equal(outside.awayAnswer("what changed while I was away?", null), "", "no report: no answer");
 
   const part = outside.digestPart(REP);
   const digest = companion.digest({ events: [], tasks: [], since: SINCE, now: NOW, outside: part });

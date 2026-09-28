@@ -14,6 +14,10 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   co-changes, parts and files. The separate Ideas tree groups ideas and tasks
   by system and progress, keeps their lineage, and reorganizes as agents
   discover files and work advances.
+- **Asking what changed while you were away works without a model.** The
+  chat answers from the report of work done outside Studio. A card that only
+  matched on files and commit subjects now says "may already be done" on its
+  hold, its Evidence tab and the thread, as its Ask card already did.
 
 ## [0.4.4] - 2026-09-27
 
@@ -24,10 +28,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   music module.
 - **Work done outside Studio.** Studio now keeps a last look at each project
   folder while it watches it, and when you open the folder again it reports
-  what changed meanwhile: commits, uncommitted edits, and Claude Code or
-  OpenCode sessions run in the folder. The thread, the chat assistant ("what
+  what changed meanwhile: commits, uncommitted edits, and Claude Code, Codex
+  or OpenCode sessions run in the folder. The thread, the chat assistant ("what
   did I do while Studio was closed?") and the welcome-back digest all see it.
-  Every queued card is checked against that work before a worker takes it.
+  When the code changed, every queued card is checked against that work
+  before a worker takes it.
   Cards that are still needed run as before; partly done ones run with their
   worker told what changed; cards that look already done or no longer needed
   wait in Needs you with Mark it done, Drop it or Build it anyway. Only you

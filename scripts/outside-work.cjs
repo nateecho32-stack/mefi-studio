@@ -489,7 +489,7 @@ function holdState(stamp, now) {
     const why = clip(stamp.reason, 140).replace(/[.\s]+$/, "");
     return stamp.verdict === "obsolete"
       ? { stage: "blocked", blockedBy: "relevance", reason: `May no longer be needed after work done outside Studio${why ? ` (${why})` : ""}. Drop it, or choose Build it anyway.` }
-      : { stage: "blocked", blockedBy: "relevance", reason: `Looks already done outside Studio${why ? ` (${why})` : ""}. Mark it done, or choose Build it anyway.` };
+      : { stage: "blocked", blockedBy: "relevance", reason: `${stamp.by === "local" ? "May already be done" : "Looks already done"} outside Studio${why ? ` (${why})` : ""}. Mark it done, or choose Build it anyway.` };
   }
   return null;
 }
@@ -651,7 +651,11 @@ function verdictNotice(results = []) {
   if (count("partial")) parts.push(`${count("partial")} partly done (their workers will see what changed)`);
   const asks = rows.filter((row) => ASK_VERDICTS.has(row.verdict));
   const named = asks.slice(0, 2).map((row) => `"${clip(row.title, 50)}"`).join(" and ");
-  if (count("done")) parts.push(`${count("done")} look${count("done") === 1 ? "s" : ""} already done`);
+  // A local match is only a maybe, as its Ask card says.
+  const guessed = rows.filter((row) => row.verdict === "done" && row.by === "local").length;
+  const judged = count("done") - guessed;
+  if (judged) parts.push(`${judged} look${judged === 1 ? "s" : ""} already done`);
+  if (guessed) parts.push(`${guessed} may already be done`);
   if (count("obsolete")) parts.push(`${count("obsolete")} may no longer be needed`);
   const local = rows.every((row) => row.by === "local") ? " (no model answered, so this is from matching files and commit subjects)" : "";
   return `Checked ${plural(rows.length, "queued card")} against the work done outside Studio${local}: ${parts.join(", ")}.${asks.length ? ` ${named}${asks.length > 2 ? ` and ${asks.length - 2} more` : ""} wait${asks.length === 1 ? "s" : ""} for you in Needs you.` : ""}`;
@@ -685,6 +689,37 @@ function chatFacts(rep, tasks = [], now) {
       reason: task.relevance.reason || undefined,
     })),
   };
+}
+
+// "What changed while I was away?", "what did we do while Studio was closed",
+// "anything happen outside Studio": a question about the report.
+const AWAY_QUESTION = /\b(?:while|when)\b.{0,40}\b(?:away|closed|gone|out|offline|off)\b|\bsince (?:i|we)\b.{0,20}\b(?:left|closed|was|were|last)\b|\boutside (?:of )?studio\b|\bwhat (?:did|have) (?:i|we) (?:do|done|change|changed|work(?:ed)? on)\b|\bwhat(?:'s| has)? changed\b/i;
+function asksAboutAway(text) {
+  return AWAY_QUESTION.test(String(text ?? ""));
+}
+
+/**
+ * The keyless answer to such a question, from chatFacts: the headline, the
+ * first commits, uncommitted files and sessions, and the cards waiting on the
+ * owner's word. "" when the message is not that question or there is no
+ * report, so the ordinary local reply stands alone.
+ */
+function awayAnswer(text, facts) {
+  if (!isObject(facts) || !asksAboutAway(text)) return "";
+  const lines = [facts.headline || "Work was done in this folder while Studio was away."];
+  const commits = asArray(facts.commits);
+  if (commits.length) lines.push(`Commits: ${commits.slice(0, 3).map((row) => `${row.commit} "${clip(row.subject, 60)}"`).join(", ")}${commits.length > 3 || facts.moreCommits ? ` and ${commits.length - 3 + num(facts.moreCommits)} more` : ""}.`);
+  const uncommitted = asArray(facts.uncommitted);
+  if (uncommitted.length) lines.push(`Uncommitted: ${uncommitted.slice(0, 3).join(", ")}${uncommitted.length > 3 ? ` +${uncommitted.length - 3} more` : ""}.`);
+  const sessions = asArray(facts.sessions);
+  if (sessions.length) lines.push(`Other agents: ${sessions.slice(0, 2).map((row) => `${row.tool} "${clip(row.title, 50)}"`).join(", ")}.`);
+  const cards = asArray(facts.cards);
+  const waiting = cards.filter((row) => row.waitsForOwner);
+  const checking = cards.filter((row) => row.check === "checking");
+  if (waiting.length) lines.push(`Waiting for you: ${waiting.slice(0, 3).map((row) => `"${clip(row.title, 50)}" (${row.check === "obsolete" ? "may no longer be needed" : "looks already done"})`).join(", ")}.`);
+  else if (checking.length) lines.push(`${plural(checking.length, "queued card")} ${checking.length === 1 ? "is" : "are"} being checked against it.`);
+  else if (cards.length) lines.push(`All ${plural(cards.length, "queued card")} checked against it still stand${cards.length === 1 ? "s" : ""}.`);
+  return clip(lines.join(" "), 700);
 }
 
 /** The welcome-back digest's part: one phrase for the headline, lines to list. */
@@ -730,5 +765,7 @@ module.exports = {
   reportNotice,
   verdictNotice,
   chatFacts,
+  asksAboutAway,
+  awayAnswer,
   digestPart,
 };
