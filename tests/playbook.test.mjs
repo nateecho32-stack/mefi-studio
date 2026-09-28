@@ -371,3 +371,24 @@ test("a pipeline filed as a recipe is picked for the next task and rebuilds the 
   assert.deepEqual(next.steps.map((step) => step.title), ["Read the ask", "Build", "store tests", "Test", "Verify", "Land"]);
   assert.ok(next.steps.every((step) => step.status === "queued" && step.grown === false));
 });
+
+test("a recipe from another PC joins with its evidence, never pinned, and a matching one is left alone", () => {
+  const { importRecipe } = playbook;
+  const shared = { name: "Ship a feature", shape: SHAPE, steps: STEPS, runs: 7, verified: 6, failed: 1, pinned: true, lastTaskId: "their-task" };
+  const added = importRecipe(emptyPlaybook(), shared, NOW);
+  assert.equal(added.ok, true);
+  assert.equal(added.added, true);
+  const recipe = only(added.playbook);
+  assert.equal(recipe.name, "Ship a feature");
+  assert.deepEqual([recipe.runs, recipe.verified, recipe.failed], [7, 6, 1], "its evidence counts here too");
+  assert.equal(recipe.pinned, false);
+  assert.equal(recipe.lastTaskId, null, "another PC's task id stays there");
+  assert.equal(recipe.id, only(withRuns(emptyPlaybook(), { verified: 1 })).id, "the same id a local run of that shape and steps gets");
+  const again = importRecipe(added.playbook, { ...shared, name: "Renamed" }, NOW + 1);
+  assert.equal(again.added, false);
+  assert.equal(only(again.playbook).name, "Ship a feature", "a recipe already here is not overwritten");
+  const local = withRuns(emptyPlaybook(), { verified: 2 });
+  assert.equal(importRecipe(local, shared, NOW).added, false, "nor is one this PC built itself");
+  assert.equal(importRecipe(emptyPlaybook(), { ...shared, steps: [{ kind: "nonsense" }] }).ok, false);
+  assert.equal(importRecipe(emptyPlaybook(), "not a recipe").ok, false);
+});

@@ -58,6 +58,9 @@ app.whenReady().then(async () => {
     hubStatus: { ok: true, status: { configured: true, linked: true, state: "ready", user: { id: "123456789012345678", name: "Mefi" }, paused: false, rooms: [] } },
     companionBond: { ok: true, changed: true, bond: "We just met · 1 pet" }, eyesRequestsAction: { ok: true, requests: [] }, assistantWorkOn: { ok: true },
     pcSetupStatus: { ok: true, ready: false, account: "fixture-owner", tools: [{ id: "git", name: "Git", installed: true, version: "2.47.1" }, { id: "gh", name: "GitHub CLI", installed: true, version: "2.63.0" }, { id: "node", name: "Node.js", installed: true, version: "24.21.0" }], project: { root: "C:/Sample/Little planet", github: "fixture-owner/little-planet", hook: true }, steps: [{ id: "install-deps", label: "Install the project's packages", why: "Not installed on this PC yet." }], notes: ["This project is on an exFAT drive. Git cannot keep separate worktrees there, so sessions end up sharing one folder. Move the project to an NTFS drive when you can."] },
+    vaultStatus: { ok: true, linked: true, repo: "fixture-owner/mefi-studio-vault", keyMatches: true, encryption: true, confirmation: "I understand this shares my keys", pcs: [{ name: "DESKTOP-FIXTURE", self: true, at: 1790000000000, projects: [{ repo: "fixture-owner/little-planet", risk: 1, behind: 0 }] }, { name: "LAPTOP-FIXTURE", self: false, at: 1789990000000, projects: [] }], shelves: [{ id: "brains", label: "Agent brains" }, { id: "insights", label: "How models did, by kind of task" }] },
+    vaultLibrary: { ok: true, items: [{ shelf: "insights", id: "models", from: "LAPTOP-FIXTURE", source: "vault", title: "How 3 models did", at: 1, keptAt: 1, learns: true }] },
+    vaultKeys: { ok: true, confirmation: "I understand this shares my keys", keys: ["openrouter", "zai"], setup: [] },
     syncRun: { ok: true, checkedAt: 1790000060000, headline: "This PC matches GitHub main.", lines: ["This PC matches GitHub main.", "Pulled 2 commits from GitHub."], pending: [], state: { repo: true, remote: true, device: "DESKTOP-FIXTURE", behind: 0 } },
   };
   const preload = path.join(root, "preload.cjs");
@@ -154,6 +157,18 @@ app.whenReady().then(async () => {
   assert.equal(await run("return document.querySelectorAll('#pc-setup .pc-setup-list li').length;"), 7);
   assert.ok(await run("const el=document.querySelector('#pc-setup [data-step=\"install-deps\"]');el.scrollIntoView({block:'nearest'});const r=el.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return r.width>0&&(hit===el||el.contains(hit));"), "the setup step is clickable");
   await capture("09b-friends-setup"); report.setup = true;
+  // Share between my PCs: every PC's line and the library; keys stay locked
+  // until the exact phrase is typed, under the warning in capitals.
+  await run("document.querySelector('#pc-vault > summary').scrollIntoView({block:'center'});"); await sleep(150);
+  await click("#pc-vault > summary");
+  await until("document.getElementById('pc-vault')?.dataset.state==='linked' && document.querySelectorAll('#pc-vault-pcs li').length===2 && document.querySelector('#pc-vault-library li')?.textContent.includes('counts in learning')", "the vault lists both PCs and the library");
+  await run("document.querySelector('#pc-vault-keys > summary').scrollIntoView({block:'center'});"); await sleep(150);
+  await click("#pc-vault-keys > summary");
+  await until("document.querySelectorAll('#pc-vault-keys-list input[type=checkbox]').length===2", "saved keys are listed by name");
+  assert.equal(await run("return document.getElementById('pc-vault-keys-share').disabled;"), true, "keys stay locked until the phrase is typed");
+  assert.match(await run("return document.getElementById('pc-vault-keys').textContent;"), /YOU ARE SHARING KEYS AND SETUP INFORMATION/);
+  assert.ok(await run("const box=document.getElementById('pc-vault');return box.scrollWidth<=box.clientWidth+1;"), "the vault fits the panel");
+  await capture("09d-friends-vault"); report.vault = true;
   // Friends › Rooms: the request tab counts, the room opens with its chat as
   // text, and a message goes out through hub:room.
   await until("document.getElementById('rooms')?.dataset.state==='ready' && document.getElementById('rooms-tab-requests')?.textContent==='Requests (1)'", "Rooms lists the room and its request");

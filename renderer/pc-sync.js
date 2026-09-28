@@ -7,7 +7,8 @@
 // uncommitted. A push waits for the project's own check. badge() is what the
 // Friends bubble shows: work only this PC holds, plus commits waiting on
 // GitHub, plus a GitHub that could not be checked. renderer/companion-hub.js
-// mounts the card in the Friends section and draws the badge.
+// mounts the card in the Friends section and draws the badge; the card holds
+// Set up this PC and renderer/pc-vault.js's two sharing sections.
 (function () {
   "use strict";
   const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
@@ -181,6 +182,8 @@
     root.append(title, status, list, actions, meta, note);
     const api = bridge();
     if (typeof api?.pcSetupStatus === "function") root.append(setupSection(api));
+    // Share between my PCs and Share with friends (renderer/pc-vault.js).
+    if (window.MefiPcVault) root.append(window.MefiPcVault.section(), window.MefiPcVault.shareSection());
     if (typeof api?.syncStatus !== "function" || typeof api?.syncRun !== "function") {
       status.textContent = "Syncing your PCs works in the desktop app.";
       actions.hidden = true;

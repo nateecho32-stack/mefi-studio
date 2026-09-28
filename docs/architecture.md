@@ -360,6 +360,20 @@ settings and per-model work-kind summaries for the shared controls.
   clipped and shown as text, never sent to a model. Playdates need the rooms
   hub to relay `companion` frames (see [community.md](community.md)); until it
   does, Friends says so and Pip is there to practice.
+- **Share between my PCs** (renderer/pc-vault.js; main.cjs "Your PCs vault";
+  scripts/pc-vault.cjs, vault-crypto.cjs, vault-shelves.cjs, share-review.cjs).
+  A private `<account>/mefi-studio-vault` repository, every file sealed
+  (AES-256-GCM, the file's path as associated data) with a key kept only
+  through safeStorage on the paired PCs; the pairing code carries it and is
+  shown only when asked. Shelves are reviewed going in and coming out, and
+  what fails is quarantined. Received brains, teams, recipes, notes and
+  ideas are added through the same paths the app uses (brainsSave,
+  agentProfiles, the Playbook's importRecipe, a new memory file, the idea
+  add action) and never overwrite; kept model results and decisions are
+  read beside this PC's own in modelLearningSnapshot and the decision
+  profile. Keys cross only with the typed confirmation and a native prompt,
+  and their values stay in main. A `.mefishare` friend file is always
+  scrubbed, names no repository or PC, and is reviewed before it is kept.
 - The same glowing wisp wakes in the launch box, responds to pointer play with
   floating ASCII expressions and a few sparks, and accompanies the first-run
   guide. During setup, a pending chat reply or reported agent work, little lights

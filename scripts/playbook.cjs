@@ -278,6 +278,29 @@ function shelf(playbook) {
     });
 }
 
+/**
+ * A recipe shared from one of the owner's other PCs (scripts/vault-shelves.cjs).
+ * It joins with the runs and verdicts it had there, so that evidence counts
+ * here too. When a recipe of the same shape and steps is already here, it is
+ * left as it is. A shared recipe is never pinned.
+ */
+function importRecipe(playbook, raw, now = null) {
+  const book = normalizePlaybook(playbook);
+  if (!object(raw)) return { ok: false, playbook: book, added: false, error: "That is not a recipe." };
+  const { steps, error } = checkSteps(raw.steps);
+  if (!steps) return { ok: false, playbook: book, added: false, error };
+  const shape = shapeOf(raw.shape);
+  const signature = clip(raw.signature, MAX_SIGNATURE) || signatureOf(steps);
+  const existing = book.recipes.find((recipe) => recipe.signature === signature && sameShape(recipe.shape, shape));
+  if (existing) return { ok: true, playbook: book, added: false, recipe: existing, error: null };
+  let id = recipeId(shape, signature);
+  for (let next = 2; book.recipes.some((recipe) => recipe.id === id); next += 1) id = recipeId(shape, `${signature}#${next}`);
+  const at = stamp(now);
+  const recipe = normalizeRecipe({ id, name: raw.name, shape, signature, steps, runs: raw.runs, verified: raw.verified, failed: raw.failed,
+    durations: [], pinned: false, retired: false, createdAt: at, updatedAt: at, lastTaskId: null });
+  return { ok: true, playbook: { v: 1, recipes: evict([...book.recipes, recipe], id) }, added: true, recipe, error: null };
+}
+
 module.exports = {
-  emptyPlaybook, normalizePlaybook, record, winProbability, pick, act, shelf,
+  emptyPlaybook, normalizePlaybook, record, winProbability, pick, act, shelf, importRecipe,
 };

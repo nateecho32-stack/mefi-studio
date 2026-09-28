@@ -7,6 +7,27 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Share between my PCs** (Friends › Your PCs). One private GitHub
+  repository, `<you>/mefi-studio-vault`, carries what you choose between
+  your own PCs, sealed with AES-256-GCM under a key only your paired PCs
+  hold; the first PC makes it and shows a pairing code, and each other PC
+  types it. Shelves: how models did by kind of task, decisions Studio
+  learned from, team setups, brains, Playbook recipes, Claude Code memory
+  notes, preferences without keys or addresses, and open tasks and ideas.
+  Every item is checked going out (keys, tokens, passwords and logins in
+  links stop it; paths, names, emails and addresses are removed) and again
+  coming in, where instructions aimed at an agent, downloaded scripts and
+  paste or webhook hosts keep it out. Received items are added beside yours
+  and never overwrite; kept model results and decisions count as another
+  PC's experience until you remove them. Keys and setup need the exact typed
+  confirmation under a warning that they can be stolen, then a native
+  prompt, and land straight in protected storage. Each PC's line shows when
+  it last synced and what waits on it.
+- **Share with friends**: one brain, recipe, team setup, set of model
+  results, memory note or preferences in a `.mefishare` file, scrubbed and
+  previewed before you save it; a friend's file is reviewed before it can go
+  to your library, and a risky one is kept out.
+
 - **Setup helper**: one menu for every setting that decides what the agents
   do. It opens first on a new install, and once after updating to this
   version: Connect an AI (subscription logins, API keys, LM Studio and custom

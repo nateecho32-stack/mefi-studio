@@ -122,6 +122,29 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .pc-setup > :not(summary) { margin-top: 8px; }
 .pc-setup-repos { flex: 1 1 180px; min-width: 0; max-width: 100%; }
 .pc-setup-list { list-style: none; padding-left: 0; }
+/* Friends › Your PCs › Share between my PCs and Share with friends (renderer/pc-vault.js). */
+.pc-vault { border-top: 1px solid var(--hairline); padding-top: 8px; }
+.pc-vault > summary { cursor: pointer; font-size: 12px; font-weight: 600; }
+.pc-vault > :not(summary), .pc-vault-linked > *, .pc-vault-setup > *, .pc-vault-keys > :not(summary) { margin-top: 8px; }
+.pc-vault-heading { margin: 12px 0 0; font-size: 12px; font-weight: 600; }
+.pc-vault-label { display: block; font-size: 12px; color: var(--muted); }
+.pc-vault-code, .pc-vault-confirm, .pc-vault-shelf { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
+.pc-vault-code-text { display: block; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 8px; font-size: 13px; letter-spacing: .04em; overflow-wrap: anywhere; user-select: all; }
+.pc-vault-danger { margin: 0; font-size: 12px; font-weight: 600; color: var(--bad); overflow-wrap: anywhere; }
+.pc-vault-danger-summary { color: var(--bad); }
+.pc-vault-keys { padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--bad) 45%, transparent); border-radius: 10px; }
+.pc-vault-keys > summary { cursor: pointer; font-size: 12px; font-weight: 600; }
+.pc-vault-items, .pc-vault-reasons { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.pc-vault-item { display: grid; gap: 4px; padding: 6px 8px; border: 1px solid var(--hairline); border-radius: 8px; font-size: 12px; overflow-wrap: anywhere; }
+.pc-vault-item > button { justify-self: start; }
+.pc-vault-quarantined { border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+.pc-vault-reasons li { font-size: 11px; }
+.pc-vault-stop { color: var(--bad); }
+.pc-vault-pick { display: flex; align-items: center; gap: 6px; font-size: 12px; min-width: 0; }
+.pc-vault-keylist { display: grid; gap: 4px; }
+.pc-vault-preview > summary { cursor: pointer; font-size: 11px; color: var(--muted); }
+.pc-vault-preview pre, .pc-share-text { max-height: 180px; overflow: auto; margin: 4px 0 0; padding: 6px 8px; border-radius: 6px; background: color-mix(in srgb, var(--gold) 3%, transparent); font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pc-share-out, .pc-share-in { display: grid; gap: 6px; }
 /* Friends › Rooms (renderer/rooms.js). */
 .rooms { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 14px; }
 .rooms-title { margin: 0; font-size: 13px; font-weight: 600; }

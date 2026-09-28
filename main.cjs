@@ -1879,7 +1879,7 @@ async function syncProject(push, { rebase = false } = {}) {
   const promise = loadModule("scripts/sync.mjs")
     .then(async (sync) => sync.sync(root, { pull: push, push, rebase: push && rebase === true, check: push ? await sync.projectCheck(root) : null }))
     .catch((error) => ({ ok: false, headline: `Sync could not run: ${error?.message || error}`, lines: [], pending: [], actions: [], problems: [{ kind: "error" }], risk: 0 }))
-    .then((result) => { send("sync:event", result); return result; })
+    .then((result) => { send("sync:event", result); if (typeof vaultHeartbeat === "function") vaultHeartbeat(result).catch(() => {}); return result; })
     .finally(() => { if (syncFlight?.promise === promise) syncFlight = null; });
   syncFlight = { root, promise };
   return promise;
@@ -1951,6 +1951,288 @@ function syncWindowClose(event) {
   requestQuit();
 }
 // ---- end of multi-PC sync -----------------------------------------------------
+
+// ---- Your PCs vault: memory and setup between the owner's PCs ------------------
+// Friends › Your PCs › Share between my PCs (renderer/pc-vault.js). One private
+// GitHub repository per owner (scripts/pc-vault.cjs), every file in it sealed
+// with a key only the paired PCs hold, kept here through safeStorage. What each
+// shelf offers and what a received item may do come from
+// scripts/vault-shelves.cjs; every item passes scripts/share-review.cjs on the
+// way out and again on the way in, and what fails comes back quarantined,
+// never used. Kept items live in the library (userData/vault/library.json):
+// kept model results and decisions join this PC's learning as another PC's
+// evidence (modelLearningSnapshot, assistantDecisionPreferences,
+// learningState) and stop counting when they are removed. Keys and setup
+// cross only with the exact confirmation typed and a native warning answered
+// (registerIpc's vault:keys), and their values never reach the renderer. A
+// friend share (.mefishare) is always scrubbed, names no repository and no
+// PC, and is reviewed as received before it can be kept. After each sync
+// look, at most every ten minutes, this PC's line in the vault is refreshed.
+const vaultShelves = require("./scripts/vault-shelves.cjs");
+const shareReview = require("./scripts/share-review.cjs");
+const pcVaultModule = require("./scripts/pc-vault.cjs");
+const VAULT_HEARTBEAT_MS = 10 * 60 * 1000;
+const SHARE_FORMAT = "mefishare/1";
+const SHARE_SHELVES = Object.freeze(["insights", "presets", "brains", "recipes", "claude-memory", "settings"]);
+const SHARE_MAX_BYTES = 2 * 1024 * 1024;
+let vaultInstance = null;
+let vaultHeartbeatAt = 0;
+let vaultLibraryMemo = null;
+const vaultLines = new Map();
+const sharePending = new Map();
+
+const vaultHome = () => path.join(app.getPath("userData"), "vault");
+function vaultRun(command, args, { timeout = 60000 } = {}) {
+  return new Promise((resolve) => {
+    require("node:child_process").execFile(command, args, { windowsHide: true, timeout, maxBuffer: 8 * 1024 * 1024, env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GH_PROMPT_DISABLED: "1" } },
+      (error, stdout, stderr) => resolve({ ok: !error, stdout: String(stdout ?? ""), stderr: String(stderr ?? "") }));
+  });
+}
+async function vaultAccount() {
+  const out = await vaultRun("gh", ["auth", "status", "--hostname", "github.com"], { timeout: 20000 });
+  return require("./scripts/pc-setup.cjs").signedInAccount(`${out.stdout}\n${out.stderr}`);
+}
+function vault() {
+  vaultInstance ??= pcVaultModule.createVault({
+    dir: path.join(vaultHome(), "repo"), run: vaultRun, account: vaultAccount, hostname: () => os.hostname(),
+    files: {
+      read: (file) => readFile(file, "utf8"),
+      write: async (file, text) => { await mkdir(path.dirname(file), { recursive: true }); await writeFile(file, text); },
+      list: (dir) => readdir(dir),
+      remove: (file) => rm(file, { force: true }),
+      removeDir: (dir) => rm(dir, { recursive: true, force: true, maxRetries: 4 }),
+    },
+    protect: (text) => safeStorage.encryptString(text).toString("base64"),
+    unprotect: (text) => safeStorage.decryptString(Buffer.from(String(text), "base64")),
+  });
+  return vaultInstance;
+}
+
+async function vaultLibrary() {
+  if (!vaultLibraryMemo) {
+    let raw = null;
+    try { raw = JSON.parse(await readFile(path.join(vaultHome(), "library.json"), "utf8")); } catch {}
+    vaultLibraryMemo = vaultShelves.library(raw);
+  }
+  return vaultLibraryMemo;
+}
+async function vaultLibrarySave(next) {
+  vaultLibraryMemo = vaultShelves.library(next);
+  await mkdir(vaultHome(), { recursive: true });
+  const file = path.join(vaultHome(), "library.json"), temp = `${file}.${process.pid}.tmp`;
+  await writeFile(temp, JSON.stringify(vaultLibraryMemo));
+  await rename(temp, file);
+  return vaultLibraryMemo;
+}
+// Read by the learning hooks: nothing kept means nothing added.
+const vaultLearningSnapshots = async () => vaultShelves.learningSnapshots(await vaultLibrary().catch(() => null));
+const vaultLearnedRows = async () => vaultShelves.learnedRows(await vaultLibrary().catch(() => null));
+
+// The open project's GitHub repository (owner/name), the key project shelves
+// use, since a project's id differs from PC to PC.
+async function vaultProjectRepo() {
+  if (!projects.open()) return null;
+  const out = await vaultRun("git", ["-C", projectRoot(), "remote", "get-url", "origin"], { timeout: 10000 });
+  return out.ok ? require("./scripts/pc-setup.cjs").githubRemote(out.stdout.trim()) : null;
+}
+// Claude Code keeps a project's memory under a folder named after its path.
+const claudeMemoryDir = (root) => path.join(os.homedir(), ".claude", "projects", String(root).replace(/[^A-Za-z0-9]/g, "-"), "memory");
+async function claudeMemoryFiles(root) {
+  const dir = claudeMemoryDir(root);
+  const names = (await readdir(dir).catch(() => [])).filter((name) => /^[A-Za-z0-9._-]{1,80}\.md$/.test(name)).slice(0, 200);
+  return Promise.all(names.map(async (name) => ({ name, text: (await readFile(path.join(dir, name), "utf8").catch(() => "")).slice(0, 40000) })));
+}
+
+// What this PC offers on a shelf, from its own stores only: shared results
+// kept in the library never go back out as this PC's.
+async function vaultOffer(shelf) {
+  const repo = await vaultProjectRepo().catch(() => null);
+  switch (shelf) {
+    case "insights": return vaultShelves.insights(modelLearning.aggregate(await localModelSnapshots()));
+    case "learned": return vaultShelves.learned(agentBrain ? await agentBrain.decisionRows() : []);
+    case "presets": return vaultShelves.presets((await readSettings()).agentTeams);
+    case "brains": return vaultShelves.brains((await readBrainStore()).maps, repo);
+    case "recipes": return vaultShelves.recipes(agentBrain ? (await agentBrain.playbookState()).recipes : [], repo);
+    case "claude-memory": return projects.open() ? vaultShelves.memory(await claudeMemoryFiles(projectRoot()), repo) : [];
+    case "settings": return vaultShelves.preferences(await readSettings());
+    case "work": {
+      const eyes = await getEyes();
+      return vaultShelves.work({ ideas: await eyes.readJson(IDEAS_PATH, []), tasks: await eyes.readJson(TASKS_PATH, []) }, repo);
+    }
+    default: return [];
+  }
+}
+// What the owner reads before anything goes: the value as it would leave,
+// and every finding. The value itself stays in main.
+function vaultPreview(item, { scrub }) {
+  const value = scrub ? shareReview.scrub(item.value) : item.value;
+  const scan = shareReview.scan(value, { received: true });
+  const text = JSON.stringify(value, null, 2) ?? "";
+  return { id: item.id, title: scrub ? shareReview.scrub(item.title) : item.title, ok: scan.ok, reasons: shareReview.explain(scan.findings), preview: text.length > 4000 ? `${text.slice(0, 4000)}\n…` : text, value };
+}
+const withoutValue = ({ value, ...rest }) => rest;
+
+async function vaultStatus() {
+  await refreshProcessPath().catch(() => false);
+  const status = await vault().status().catch(() => ({ ok: false, error: "The vault could not be read." }));
+  const library = await vaultLibrary().catch(() => ({ items: [] }));
+  return { ...status, encryption: safeStorage.isEncryptionAvailable(), confirmation: pcVaultModule.SECRETS_CONFIRMATION, library: library.items.length };
+}
+function vaultReady() {
+  return safeStorage.isEncryptionAvailable() ? null : { ok: false, error: "This PC cannot keep the vault key safely (the OS keystore is unavailable), so nothing was set up." };
+}
+async function vaultOfferView(shelf) {
+  const rule = pcVaultModule.SHELVES[shelf];
+  if (!rule) return { ok: false, error: "Unknown shelf." };
+  const items = (await vaultOffer(shelf)).map((item) => withoutValue(vaultPreview(item, { scrub: rule.scrub })));
+  return { ok: true, shelf, label: rule.label, items, project: vaultShelves.PROJECT_SHELVES.includes(shelf) ? await vaultProjectRepo().catch(() => null) : null };
+}
+async function vaultPublish(shelf, ids) {
+  const wanted = new Set((Array.isArray(ids) ? ids : []).map(String));
+  if (!wanted.size) return { ok: false, error: "Choose at least one item." };
+  const items = (await vaultOffer(shelf)).filter((item) => wanted.has(item.id));
+  return vault().publish(shelf, items);
+}
+// What the owner's other PCs put on a shelf, with whether each can be used
+// here. This PC's own items are left out.
+async function vaultReadView(shelf) {
+  const read = await vault().read(shelf);
+  if (!read.ok) return read;
+  const repo = await vaultProjectRepo().catch(() => null);
+  const items = read.items.filter((item) => !item.mine).map((item) => {
+    const check = vaultShelves.plan(shelf, item, { repo });
+    return { id: item.id, from: item.from, at: item.at, title: vaultShelves.titleOf(shelf, item.value), usable: check.ok, reason: check.ok ? null : check.error, preview: vaultPreview(item, { scrub: false }).preview };
+  });
+  return { ok: true, shelf, items, quarantined: read.quarantined };
+}
+
+// Carries out a received item's plan. Everything is added beside what is
+// here; nothing is overwritten. Used items are kept in the library.
+async function vaultUse(entry, { anyProject = false } = {}) {
+  const shelf = entry.shelf;
+  const brainStore = await readBrainStore();
+  const names = {
+    presets: ((await readSettings()).agentTeams?.presets ?? []).map((preset) => preset.name),
+    brains: brainStore.maps.map((map) => map.name),
+    recipes: agentBrain ? (await agentBrain.playbookState()).recipes.map((recipe) => recipe.name) : [],
+    memory: projects.open() ? await readdir(claudeMemoryDir(projectRoot())).catch(() => []) : [],
+  };
+  const step = vaultShelves.plan(shelf, entry, { repo: await vaultProjectRepo().catch(() => null), names, anyProject });
+  if (!step.ok) return step;
+  if (step.step === "preset") {
+    let result = null;
+    const projectId = projects.active().id;
+    await updateSettings((settings) => {
+      result = agentProfiles.mutate(settings, { action: "preset-save", name: step.preset.name, configuration: step.preset.configuration }, { projectId, id: `team_${crypto.randomUUID()}` });
+      return result.ok;
+    });
+    if (!result?.ok) return result ?? { ok: false, error: "The team setup could not be saved." };
+    send("settings:changed", { agents: true, projectId, revision: result.revision });
+  } else if (step.step === "brain") {
+    const saved = await brainsSave({ map: step.map });
+    if (!saved.ok) return saved;
+  } else if (step.step === "recipe") {
+    if (!agentBrain) return { ok: false, error: "The Playbook is unavailable while the Agent Brain is off." };
+    const saved = await agentBrain.playbookImport(step.recipe);
+    if (!saved.ok) return saved;
+  } else if (step.step === "memory") {
+    if (!projects.open()) return { ok: false, error: "Open the project first." };
+    const dir = claudeMemoryDir(projectRoot());
+    await mkdir(dir, { recursive: true });
+    try { await writeFile(path.join(dir, step.file), step.text, { flag: "wx" }); }
+    catch { return { ok: false, error: `A note called ${step.file} is already on this PC; it was left as it is.` }; }
+  } else if (step.step === "idea") {
+    const result = await mutateBoard((board) => applyIdeaAction(board.ideas, { action: "add", ...step.idea }));
+    if (!result.ok) return { ok: false, error: result.error || "The idea could not be added." };
+  } else if (step.step === "settings") {
+    await updateSettings((settings) => { Object.assign(settings, step.settings); });
+    providerBreaker.reset();
+    resetAssistantAiBackoff();
+    send("settings:changed", { agents: true });
+  }
+  await vaultLibrarySave(vaultShelves.keep(await vaultLibrary(), { ...entry, title: entry.title ?? vaultShelves.titleOf(shelf, entry.value) }));
+  assistantLog("vault", `used ${shelf} "${entry.title ?? vaultShelves.titleOf(shelf, entry.value)}" from ${entry.from ?? "a share file"}`);
+  return { ok: true, step: step.step };
+}
+async function vaultUseReceived(shelf, id, from) {
+  const read = await vault().read(shelf);
+  if (!read.ok) return read;
+  const item = read.items.find((row) => row.id === id && row.from === from);
+  if (!item) return { ok: false, error: "That item is no longer in the vault." };
+  return vaultUse({ shelf, ...item, source: "vault" });
+}
+async function vaultLibraryView() {
+  const library = await vaultLibrary();
+  return { ok: true, items: library.items.map((item) => ({ shelf: item.shelf, id: item.id, from: item.from, source: item.source, title: item.title, at: item.at, keptAt: item.keptAt, learns: ["insights", "learned"].includes(item.shelf) })) };
+}
+
+// This PC's line in the vault: its name, when, and per project what waits.
+async function vaultHeartbeat(result) {
+  if (SMOKE || CAPTURE || CLI_MODE || Date.now() - vaultHeartbeatAt < VAULT_HEARTBEAT_MS) return;
+  vaultHeartbeatAt = Date.now();
+  const repo = await vaultProjectRepo().catch(() => null);
+  if (repo) vaultLines.set(repo, { repo, risk: Array.isArray(result?.risk) ? result.risk.length : 0, behind: Number.isInteger(result?.state?.behind) ? result.state.behind : 0 });
+  await vault().heartbeat([...vaultLines.values()]).catch(() => null);
+}
+
+// ---- friend shares (.mefishare) ----
+async function shareBuild(shelf, id) {
+  if (!SHARE_SHELVES.includes(shelf)) return { ok: false, error: "That shelf is not for sharing with friends." };
+  const item = (await vaultOffer(shelf)).find((row) => row.id === id);
+  if (!item) return { ok: false, error: "That item is no longer here." };
+  // A friend never learns which repository it came from.
+  const { repo, ...value } = item.value ?? {};
+  return { ok: true, shelf, preview: vaultPreview({ ...item, value }, { scrub: true }) };
+}
+async function shareExport(shelf, id) {
+  const built = await shareBuild(shelf, id);
+  if (!built.ok) return built;
+  const { preview } = built;
+  if (!preview.ok) return { ok: false, blocked: true, reasons: preview.reasons, error: "Studio stopped this share. Remove what it found first." };
+  const name = String(preview.title || "shared").replace(/[^A-Za-z0-9 _-]+/g, "").trim().slice(0, 60) || "shared";
+  const picked = await dialog.showSaveDialog(window, { title: "Save a share file", defaultPath: path.join(app.getPath("documents"), `${name}.mefishare`), filters: [{ name: "Mefi share", extensions: ["mefishare"] }] });
+  if (picked.canceled || !picked.filePath) return { ok: false, canceled: true };
+  await writeFile(picked.filePath, `${JSON.stringify({ format: SHARE_FORMAT, shelf, title: preview.title, value: preview.value, sharedAt: Date.now() }, null, 2)}\n`);
+  return { ok: true, file: path.basename(picked.filePath) };
+}
+// A friend's file, reviewed as received. Only a clean one can be kept.
+async function shareOpen() {
+  const picked = await dialog.showOpenDialog(window, { title: "Open a share file", properties: ["openFile"], filters: [{ name: "Mefi share", extensions: ["mefishare", "json"] }] });
+  if (picked.canceled || !picked.filePaths?.[0]) return { ok: false, canceled: true };
+  const file = picked.filePaths[0];
+  const size = (await stat(file).catch(() => null))?.size ?? Infinity;
+  if (size > SHARE_MAX_BYTES) return { ok: false, error: "That file is too large to be a share file." };
+  let data = null;
+  try { data = JSON.parse(await readFile(file, "utf8")); } catch {}
+  if (data?.format !== SHARE_FORMAT || !SHARE_SHELVES.includes(data.shelf) || !data.value || typeof data.value !== "object") return { ok: false, error: "That is not a Mefi share file." };
+  const title = String(data.title ?? "").slice(0, 160);
+  const scan = shareReview.scan({ title, value: data.value }, { received: true });
+  const reasons = shareReview.explain(scan.findings);
+  if (!scan.ok) {
+    assistantLog("vault", `quarantined a share file (${data.shelf}): ${reasons.length} finding(s)`);
+    return { ok: false, quarantined: true, shelf: data.shelf, title: shareReview.scrub(title), reasons };
+  }
+  const entry = { shelf: data.shelf, id: `file-${crypto.createHash("sha256").update(JSON.stringify(data.value)).digest("hex").slice(0, 16)}`, from: "a share file", source: "file", title: title || vaultShelves.titleOf(data.shelf, data.value), at: Number.isFinite(data.sharedAt) ? data.sharedAt : Date.now(), value: data.value };
+  const token = crypto.randomUUID();
+  sharePending.clear();
+  sharePending.set(token, entry);
+  const check = vaultShelves.plan(entry.shelf, entry, { anyProject: true });
+  const text = JSON.stringify(data.value, null, 2);
+  return { ok: true, token, shelf: entry.shelf, title: entry.title, reasons, usable: check.ok, reason: check.ok ? null : check.error, preview: text.length > 4000 ? `${text.slice(0, 4000)}\n…` : text };
+}
+async function shareKeep(token) {
+  const entry = sharePending.get(String(token ?? ""));
+  if (!entry) return { ok: false, error: "Open the file again to keep it." };
+  sharePending.delete(token);
+  await vaultLibrarySave(vaultShelves.keep(await vaultLibrary(), entry));
+  return { ok: true };
+}
+async function libraryUse(shelf, id, from) {
+  const entry = (await vaultLibrary()).items.find((item) => item.shelf === shelf && item.id === id && item.from === from);
+  if (!entry) return { ok: false, error: "That item is no longer in your library." };
+  return vaultUse(entry, { anyProject: entry.source === "file" });
+}
+// ---- end of the Your PCs vault ---------------------------------------------------
 
 // ---- Companion friends: playdates in rooms -------------------------------------
 // scripts/companion-friends.cjs decides what the companion may tell a friend's
@@ -3398,19 +3680,25 @@ function modelPerformanceStore(project = null) {
 
 // Read the existing local ledgers without moving or rewriting user data. Old
 // records with no project id participate only in overall evidence.
+// Every model-performance ledger on this PC, the open project's and each
+// saved project's.
+async function localModelSnapshots() {
+  const source = path.join(STUDIO_ROOT, "data", "model-performance.json");
+  const files = new Set([source, projectDataPath(source)]);
+  for (const saved of projects.list().projects) files.add(projects.dataPath(source, saved));
+  return Promise.all([...files].map((filePath) => {
+    if (!modelPerformanceStores.has(filePath)) modelPerformanceStores.set(filePath, createModelPerformanceStore({ filePath }));
+    return modelPerformanceStores.get(filePath).snapshot();
+  }));
+}
 async function modelLearningSnapshot({ scope = null, projectId = projects.current().id } = {}) {
   const mode = scope ?? decisionMemory.settings((await readSettings()).learning).models;
   if (mode === "off") return { models: [], scope: mode, projectId };
   const project = await modelPerformanceStore().snapshot({ projectId });
   if (mode === "project") return { ...modelLearning.blend({ project, global: project, scope: mode }), scope: mode, projectId };
-  const source = path.join(STUDIO_ROOT, "data", "model-performance.json");
-  const files = new Set([source, projectDataPath(source)]);
-  for (const saved of projects.list().projects) files.add(projects.dataPath(source, saved));
-  const snapshots = await Promise.all([...files].map((filePath) => {
-    if (!modelPerformanceStores.has(filePath)) modelPerformanceStores.set(filePath, createModelPerformanceStore({ filePath }));
-    return modelPerformanceStores.get(filePath).snapshot();
-  }));
-  const global = modelLearning.aggregate(snapshots);
+  // Model results kept from the owner's other PCs count as more evidence
+  // overall (the "Your PCs vault" block); never in the project scope.
+  const global = modelLearning.aggregate([...await localModelSnapshots(), ...(typeof vaultLearningSnapshots === "function" ? await vaultLearningSnapshots() : [])]);
   const measured = mode === "project" ? project : await modelPerformanceStore().snapshot();
   return { ...modelLearning.blend({ project, global, scope: mode, measured }), scope: mode, projectId };
 }
@@ -9440,12 +9728,12 @@ async function assistantDecisionContext(taskId = null) {
 async function assistantDecisionPreferences() {
   const config = decisionMemory.settings((await readSettings()).learning).decisions;
   if (!config.enabled) return [];
-  return decisionMemory.profile({ rows: await agentBrain.decisionRows(), projectId: projects.current().id, scope: config.scope, now: Date.now() });
+  return decisionMemory.profile({ rows: [...await agentBrain.decisionRows(), ...(typeof vaultLearnedRows === "function" ? await vaultLearnedRows() : [])], projectId: projects.current().id, scope: config.scope, now: Date.now() });
 }
 async function learningState() {
   const config = decisionMemory.settings((await readSettings()).learning);
   const projectId = projects.current().id;
-  const rows = await agentBrain.decisionRows();
+  const rows = [...await agentBrain.decisionRows(), ...(typeof vaultLearnedRows === "function" ? await vaultLearnedRows() : [])];
   const profiles = Object.fromEntries(["project", "global", "blend"].map((scope) => [scope, decisionMemory.profile({ rows, projectId, scope, now: Date.now() })]));
   const skills = {};
   for (const scope of ["project", "global"]) skills[scope] = modelLearning.skills(await modelLearningSnapshot({ scope, projectId }));
@@ -20057,6 +20345,102 @@ function registerIpc() {
     const opened = await registerProjectFolder(cloned.folder);
     return opened.ok === false ? { ok: false, folder: cloned.folder, error: `Got ${repo}, but Studio could not open it: ${opened.error}` } : { ok: true, folder: cloned.folder };
   });
+
+  // ---- Your PCs vault (the "Your PCs vault" block) ----------------------------
+  // Friends › Your PCs › Share between my PCs. Project-gated: brains, recipes,
+  // notes and ideas act on the open project, so a switch waits for them.
+  ipcMain.handle("vault:status", async () => vaultStatus());
+  ipcMain.handle("vault:create", async () => vaultReady() ?? vault().create());
+  ipcMain.handle("vault:pair", async (_event, payload) => vaultReady() ?? vault().pair(String(payload?.code ?? "")));
+  // The pairing code is the vault key; it is shown only when the owner asks.
+  ipcMain.handle("vault:code", async () => vault().pairingCode());
+  ipcMain.handle("vault:unpair", async () => {
+    const answer = await dialog.showMessageBox(window, { type: "question", buttons: ["Unpair this PC", "Cancel"], defaultId: 1, cancelId: 1, noLink: true, title: "Unpair this PC",
+      message: "Forget the vault on this PC?", detail: "This PC's key and its copy of the vault are removed. The vault and your other PCs are not changed, and this PC can pair again with the code." });
+    if (answer.response !== 0) return { ok: false, canceled: true };
+    vaultLines.clear();
+    return vault().unpair();
+  });
+  ipcMain.handle("vault:offer", async (_event, payload) => vaultOfferView(String(payload?.shelf ?? "")));
+  ipcMain.handle("vault:publish", async (_event, payload) => vaultPublish(String(payload?.shelf ?? ""), payload?.ids));
+  ipcMain.handle("vault:read", async (_event, payload) => vaultReadView(String(payload?.shelf ?? "")));
+  ipcMain.handle("vault:use", async (_event, payload) => vaultUseReceived(String(payload?.shelf ?? ""), String(payload?.id ?? ""), String(payload?.from ?? "")));
+  ipcMain.handle("vault:library", async () => vaultLibraryView());
+  ipcMain.handle("vault:library-use", async (_event, payload) => libraryUse(String(payload?.shelf ?? ""), String(payload?.id ?? ""), payload?.from == null ? null : String(payload.from)));
+  ipcMain.handle("vault:forget", async (_event, payload) => {
+    await vaultLibrarySave(vaultShelves.forget(await vaultLibrary(), { shelf: String(payload?.shelf ?? ""), id: String(payload?.id ?? ""), from: payload?.from == null ? null : String(payload.from) }));
+    return vaultLibraryView();
+  });
+  // Keys and setup. Values are read and written here only: the renderer gets
+  // names. Sharing takes the exact phrase and a native warning; using them
+  // saves each through safeStorage, replacing that kind of key here.
+  ipcMain.handle("vault:keys", async (_event, payload = {}) => {
+    const action = String(payload?.action ?? "");
+    const settings = await readSettings();
+    const fields = { opencode: "apiKeyEncrypted", ...KEY_FIELDS };
+    const setupFields = ["customEndpoint", "lmStudioEndpoint"];
+    const savedKeys = () => Object.keys(fields).filter((name) => decryptKey(settings, fields[name]));
+    const names = (Array.isArray(payload?.names) ? payload.names : []).map(String);
+    if (action === "offer") {
+      return { ok: true, confirmation: pcVaultModule.SECRETS_CONFIRMATION, keys: savedKeys(), setup: setupFields.filter((name) => typeof settings[name] === "string" && settings[name]) };
+    }
+    if (action === "share") {
+      if (payload.confirmation !== pcVaultModule.SECRETS_CONFIRMATION) return { ok: false, error: "Type the confirmation exactly to share keys." };
+      const values = {};
+      for (const name of names) {
+        if (fields[name]) { const value = decryptKey(settings, fields[name]); if (value) values[`key.${name}`] = value; }
+        else if (setupFields.includes(name) && typeof settings[name] === "string" && settings[name]) values[`setup.${name}`] = settings[name];
+      }
+      if (!Object.keys(values).length) return { ok: false, error: "Choose at least one saved key or address." };
+      const answer = await dialog.showMessageBox(window, { type: "warning", buttons: ["Share them", "Cancel"], defaultId: 1, cancelId: 1, noLink: true, title: "Share keys and setup",
+        message: "You are sharing API keys and setup information.",
+        detail: `${Object.keys(values).length} item(s) go sealed to your private vault. Anyone who gets them can spend your money and use your accounts. Only PCs that hold your pairing code can open them. Take them back out with "Remove shared keys" once your other PCs have them, and replace any key you think has leaked at its provider.` });
+      if (answer.response !== 0) return { ok: false, canceled: true };
+      const shared = await vault().shareSecrets(payload.confirmation, values);
+      if (shared.ok) assistantLog("vault", `shared ${shared.shared.length} key(s) and setup item(s) to the vault`);
+      return shared.ok ? { ok: true, shared: shared.shared.map((name) => name.replace(/^(key|setup)\./, "")) } : shared;
+    }
+    if (action === "list") {
+      const got = await vault().readSecrets();
+      if (!got.ok) return got;
+      const present = Object.keys(got.values ?? {});
+      return { ok: true, from: got.from ?? null, at: got.at ?? null,
+        keys: present.filter((name) => name.startsWith("key.")).map((name) => name.slice(4)).filter((name) => fields[name]),
+        setup: present.filter((name) => name.startsWith("setup.")).map((name) => name.slice(6)).filter((name) => setupFields.includes(name)),
+        here: savedKeys() };
+    }
+    if (action === "use") {
+      if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: "The OS keystore is unavailable, so received keys could not be kept safely. Nothing was used." };
+      if (!names.length) return { ok: false, error: "Choose the keys to use on this PC." };
+      const got = await vault().readSecrets();
+      if (!got.ok) return got;
+      const answer = await dialog.showMessageBox(window, { type: "warning", buttons: ["Use them here", "Cancel"], defaultId: 1, cancelId: 1, noLink: true, title: "Use shared keys",
+        message: `Save ${names.length} shared key(s) and setup item(s) on this PC?`,
+        detail: "They are kept encrypted for your Windows account, replace any key of the same kind saved here, and are never shown." });
+      if (answer.response !== 0) return { ok: false, canceled: true };
+      const used = [];
+      await updateSettings((next) => {
+        for (const name of names) {
+          const key = got.values?.[`key.${name}`], setup = got.values?.[`setup.${name}`];
+          if (fields[name] && typeof key === "string" && key) { next[fields[name]] = safeStorage.encryptString(key).toString("base64"); used.push(name); }
+          else if (setupFields.includes(name) && typeof setup === "string" && setup) { next[name] = setup; used.push(name); }
+        }
+        return used.length > 0;
+      });
+      if (used.length) { providerBreaker.reset(); resetAssistantAiBackoff(); send("settings:changed", { keys: true }); assistantLog("vault", `used ${used.length} shared key(s) and setup item(s)`); }
+      return { ok: true, used };
+    }
+    if (action === "clear") return vault().clearSecrets();
+    return { ok: false, error: "Unknown keys action." };
+  });
+  // Friend shares (.mefishare): always scrubbed going out, reviewed coming in.
+  ipcMain.handle("share:preview", async (_event, payload) => {
+    const built = await shareBuild(String(payload?.shelf ?? ""), String(payload?.id ?? ""));
+    return built.ok ? { ok: true, shelf: built.shelf, ...withoutValue(built.preview) } : built;
+  });
+  ipcMain.handle("share:export", async (_event, payload) => shareExport(String(payload?.shelf ?? ""), String(payload?.id ?? "")));
+  ipcMain.handle("share:open", async () => shareOpen());
+  ipcMain.handle("share:keep", async (_event, payload) => shareKeep(payload?.token));
 }
 
 // Bounds a restart saved, when they still land on a display that exists.

@@ -1039,6 +1039,21 @@ function createAgentBrain(options = {}) {
     return { ok: true, shelf: mods.playbook.shelf(s.playbook), recipes: s.playbook.recipes };
   }
 
+  // A recipe from the owner's other PC (main's "Your PCs vault"): added
+  // beside this project's own, or left out when the same one is here.
+  async function playbookImport(recipe) {
+    const s = scope();
+    await ready(s);
+    const result = mods.playbook.importRecipe(s.playbook, recipe, now());
+    if (!result.ok) return result;
+    if (result.added) {
+      s.playbook = result.playbook;
+      await persist(s, s.files.playbook, s.playbook);
+      notify(s, "playbook");
+    }
+    return { ok: true, added: result.added, recipe: result.recipe };
+  }
+
   async function mapState({ rebuild = false } = {}) {
     const s = scope();
     // Start the read while the caller's project context is still captured;
@@ -1137,6 +1152,7 @@ function createAgentBrain(options = {}) {
     events,
     playbookState,
     playbookAction,
+    playbookImport,
     mapState,
     placeOnMap,
     nameSystems,
