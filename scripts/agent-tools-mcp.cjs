@@ -2,6 +2,8 @@
 "use strict";
 const fs = require("node:fs/promises");
 const tools = require("./agent-tools.cjs");
+// The app's own version, from the package.json beside scripts/.
+const VERSION = (() => { try { return String(require("../package.json").version || "0.0.0"); } catch { return "0.0.0"; } })();
 async function serve() {
   const config = JSON.parse(await fs.readFile(process.env.MEFI_TOOLS_CONFIG, "utf8"));
   const context = { root: config.root, settings: { agentTools: { builder: config.policy } }, role: "builder" };
@@ -11,7 +13,7 @@ async function serve() {
   async function handle(message) {
     if (message.id === undefined) return;
     let result;
-    if (message.method === "initialize") result = { protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "mefi-tools", version: "0.4.5" } };
+    if (message.method === "initialize") result = { protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "mefi-tools", version: VERSION } };
     else if (message.method === "ping") result = {};
     else if (message.method === "tools/list") result = { tools: definitions.map(({ mcpId, ...tool }) => tool) };
     else if (message.method === "tools/call") {

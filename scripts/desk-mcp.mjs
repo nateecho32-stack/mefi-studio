@@ -9,6 +9,7 @@
 // Studio passes where to reach it in the environment: MEFI_DESK_URL (always a
 // 127.0.0.1 address), MEFI_DESK_TOKEN, and the run it serves (MEFI_DESK_TASK,
 // MEFI_DESK_RUN). MCP's stdio transport is newline-delimited JSON-RPC 2.0.
+import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 export const TOOL = Object.freeze({
@@ -25,6 +26,8 @@ export const TOOL = Object.freeze({
 });
 
 const PROTOCOL = "2024-11-05";
+// The app's own version, from the package.json beside scripts/.
+export const VERSION = (() => { try { return String(JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version || "0.0.0"); } catch { return "0.0.0"; } })();
 const ASK_TIMEOUT_MS = 150000;
 
 export function loopbackUrl(value) {
@@ -44,7 +47,7 @@ export async function handleMessage(message, { ask }) {
   const reply = (result) => (id === undefined || id === null ? null : { jsonrpc: "2.0", id, result });
   const fail = (code, text) => (id === undefined || id === null ? null : { jsonrpc: "2.0", id, error: { code, message: text } });
   if (method === "initialize") {
-    return reply({ protocolVersion: typeof params?.protocolVersion === "string" ? params.protocolVersion : PROTOCOL, capabilities: { tools: { listChanged: false } }, serverInfo: { name: "mefi-desk", version: "0.4.0" } });
+    return reply({ protocolVersion: typeof params?.protocolVersion === "string" ? params.protocolVersion : PROTOCOL, capabilities: { tools: { listChanged: false } }, serverInfo: { name: "mefi-desk", version: VERSION } });
   }
   if (typeof method === "string" && method.startsWith("notifications/")) return null;
   if (method === "ping") return reply({});

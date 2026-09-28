@@ -87,7 +87,9 @@ test("a worker CLI reaches the desk end to end through the stdio MCP server", as
     child.stdout.on("data", (chunk) => { buffer += chunk; let at; while ((at = buffer.indexOf("\n")) >= 0) { replies.push(JSON.parse(buffer.slice(0, at))); buffer = buffer.slice(at + 1); } });
     const send = (message) => child.stdin.write(`${JSON.stringify(message)}\n`);
     send({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "test", version: "1" } } });
-    assert.equal((await waitFor(1)).result.serverInfo.name, "mefi-desk");
+    const { serverInfo } = (await waitFor(1)).result;
+    assert.equal(serverInfo.name, "mefi-desk");
+    assert.equal(serverInfo.version, JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")).version, "the desk reports the app's own version");
     send({ jsonrpc: "2.0", method: "notifications/initialized" });
     send({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "ask_desk", arguments: { question: "which part first?" } } });
     assert.equal((await waitFor(2)).result.content[0].text, "desk: which part first? (t9/run_9)");

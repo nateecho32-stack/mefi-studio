@@ -8,6 +8,8 @@ const os = require("node:os");
 const { existsSync } = require("node:fs");
 const { buildWindowsCmdArgs, resolveComSpec } = require("./windows-command-line.cjs");
 const CONFIG = path.join(os.homedir(), ".mefi-studio", "mcp.json");
+// The app's own version, from the package.json beside scripts/.
+const VERSION = (() => { try { return String(require("../package.json").version || "0.0.0"); } catch { return "0.0.0"; } })();
 const safeName = (value) => typeof value === "string" && /^[a-zA-Z0-9_-]{1,48}$/.test(value);
 async function servers(file = CONFIG) {
   try {
@@ -84,7 +86,7 @@ async function call(server, name, args, { timeoutMs = 20000 } = {}) {
   });
   const timer = setTimeout(() => { fail(new Error("MCP request timed out.")); end(); }, timeoutMs);
   try {
-    const init = await request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "mefi-studio", version: "0.4.5" } });
+    const init = await request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "mefi-studio", version: VERSION } });
     if (!["2024-11-05", "2025-03-26", "2025-06-18"].includes(init?.protocolVersion)) throw new Error("Unsupported MCP protocol version.");
     write({ method: "notifications/initialized" });
     let cursor, found = false;

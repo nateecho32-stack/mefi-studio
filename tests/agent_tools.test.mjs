@@ -8,6 +8,7 @@ import profiles from "../scripts/agent-profiles.cjs";
 import configs from "../scripts/agent-tool-configs.cjs";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { spawn } from "node:child_process";
 
 async function fixture(fn) {
   const temp = await fs.realpath(os.tmpdir());
@@ -131,6 +132,27 @@ test("the coding worker MCP adapter executes the captured policy over real stdio
     assert.match(result.content[0].text, /Worker research evidence/);
     await assert.rejects(tools.mcp.call(server, "web_search", { query: "docs" }), /unavailable/);
   } finally { if (previous === undefined) delete process.env.MEFI_TOOLS_CONFIG; else process.env.MEFI_TOOLS_CONFIG = previous; }
+}));
+
+test("the Studio MCP server and client report the app's own version", () => fixture(async (root) => {
+  const { version } = JSON.parse(await fs.readFile(new URL("../package.json", import.meta.url), "utf8"));
+  const file = path.join(root, "policy.json");
+  await fs.writeFile(file, JSON.stringify({ root, policy: { webSearch: false, projectRead: true, mcpTools: [] } }));
+  const child = spawn(process.execPath, [fileURLToPath(new URL("../scripts/agent-tools-mcp.cjs", import.meta.url))], { env: { ...process.env, MEFI_TOOLS_CONFIG: file }, stdio: ["pipe", "pipe", "ignore"] });
+  try {
+    const reply = new Promise((resolve, reject) => {
+      let buffer = "";
+      child.stdout.on("data", (chunk) => { buffer += chunk; const at = buffer.indexOf("\n"); if (at >= 0) resolve(JSON.parse(buffer.slice(0, at))); });
+      child.once("error", reject);
+      setTimeout(() => reject(new Error("no initialize reply")), 10000).unref();
+    });
+    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } } })}\n`);
+    assert.deepEqual((await reply).result.serverInfo, { name: "mefi-tools", version });
+  } finally { child.kill(); }
+  // The client's initialize names the app too (agent-mcp.cjs, for every configured server).
+  const client = await fs.readFile(new URL("../scripts/agent-mcp.cjs", import.meta.url), "utf8");
+  assert.match(client, /clientInfo: \{ name: "mefi-studio", version: VERSION \}/);
+  assert.doesNotMatch(client, /version: "\d+\.\d+\.\d+"/, "no hard-coded version");
 }));
 
 test("real direct HTTP path executes tool turns through provider fallback and keeps final JSON", () => fixture(async (root) => {
