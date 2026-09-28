@@ -47,9 +47,7 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   hold, its Evidence tab and the thread, as its Ask card already did.
 - First-time setup and agent choice. **Install**: `npm ci` fetches the
   Electron binary again (Electron 44 stopped doing it), the launcher fetches
-  it itself when missing, `npm ci` stops on a Node older than 24, CI's
-  Electron render suites run again (they skipped silently without the binary),
-  and
+  it itself when missing, `npm ci` stops on a Node older than 24, and
   `npm test` finds Python 3 as `python`, `py -3` or `python3`. The test
   runner works from deep folders (Windows' command-line limit). **Any
   builder**: Claude Code, Codex, Grok and Antigravity builds are verified by
