@@ -484,6 +484,48 @@
     document.addEventListener("transitionend", (event) => { if (event.target === glideHost && event.propertyName === "width") glideFollow(); });
     window.addEventListener("mefi:nav", glideRest);
   }
+  // A destructive button asks twice: the first press arms it (the label
+  // turns into the question, .danger-armed), a second press within `ms`
+  // runs it. Leaving the button, Escape or the timeout disarms. Returns the
+  // button so callers can append it in one expression.
+  function arm(button, { run, armed = "Really?", ms = 3000 } = {}) {
+    if (!button || typeof run !== "function") return button;
+    button.classList.add("danger");
+    let timer = 0, resting = null;
+    const disarm = () => {
+      if (!timer) return;
+      clearTimeout(timer); timer = 0;
+      button.classList.remove("danger-armed");
+      if (resting != null) button.textContent = resting;
+    };
+    button.addEventListener("click", (event) => {
+      if (!timer) {
+        resting = button.children.length ? null : button.textContent;
+        if (resting != null) button.textContent = armed;
+        button.classList.add("danger-armed");
+        timer = setTimeout(disarm, ms);
+        return;
+      }
+      disarm();
+      run(event);
+    });
+    button.addEventListener("blur", disarm);
+    button.addEventListener("keydown", (event) => { if (event.key === "Escape" && timer) { event.stopPropagation(); disarm(); } });
+    return button;
+  }
+  // The sentence to show for a failure. Host refusals already read as
+  // sentences and pass through (minus Electron's "Error invoking remote
+  // method" wrapper); programming errors and bare codes such as "auth" read
+  // as the caller's fallback instead of leaking a stack message.
+  function plainError(error, fallback = "That did not work. Try again.") {
+    if (error && typeof error === "object" && ["TypeError", "SyntaxError", "ReferenceError", "RangeError"].includes(error.name)) return fallback;
+    let text = typeof error === "string" ? error : error?.message || error?.error || "";
+    text = String(text).replace(/^Error invoking remote method '[^']*':\s*/i, "").replace(/^(Error|TypeError|SyntaxError):\s*/, "").trim();
+    if (!text || /^[a-z0-9_.-]+$/.test(text)) return fallback;
+    if (/cannot read propert|is not a function|is not defined|is not valid json|unexpected (token|end)|\bundefined\b|\[object /i.test(text)) return fallback;
+    return text[0].toUpperCase() + text.slice(1);
+  }
+  window.MefiUi = Object.assign(window.MefiUi || {}, { arm, plainError });
   window.MefiScroll = { attach: track, scan, refresh: schedule, owns: (parent, target) => [...regions.values()].some(({ el, hint }) => parent?.contains(el) && hint.contains(target)) };
   window.MefiSelect = { enhance: enhanceSelect, refresh: schedule, close: closeSelect, owns: (parent) => Boolean(popup && parent?.contains(popup.select)), contains: (target) => Boolean(popup?.root.contains(target)), near: (parent, x, y) => { if (!popup || !parent?.contains(popup.select)) return false; const box = popup.root.getBoundingClientRect(); return x >= box.left - 16 && x <= box.right + 16 && y >= box.top - 16 && y <= box.bottom + 16; } };
   window.MefiAppearance = { get: () => ({ ...appearance }), apply: applyAppearance, mount: mountAppearance };

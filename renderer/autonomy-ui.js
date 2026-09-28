@@ -17,6 +17,8 @@
   const mounts = new Map(), skillMounts = new Set();
   const el = (tag, cls, text) => { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; };
   const label = () => MODES.find(([id]) => id === current?.level)?.[1] || "Auto";
+  // Learned kinds and task types are host ids ("bug-fix"); show them as words.
+  const words = (value) => String(value ?? "").replace(/[-_]+/g, " ");
   const button = (text, action, cls = "") => { const node = el("button", `autonomy-button ${cls}`.trim(), text); node.type = "button"; node.addEventListener("click", action); return node; };
   const outcome = (result, fallback = "Saved.") => result?.dispatch?.message || result?.message || (result?.dispatch?.paused || result?.paused ? "Saved. New work is paused." : result?.dispatch?.held || result?.held ? "Saved. The task is waiting for its next check." : fallback);
   function announce() {
@@ -53,7 +55,7 @@
       if (learning) learned = null;
       await refresh({ learning });
     } catch (error) {
-      if (mine === epoch && expected === project()) { if (mounts.has(root)) paint(root, mounts.get(root)); const errorNote = root.querySelector(".autonomy-note") || note; if (errorNote) { errorNote.textContent = error.message; errorNote.dataset.tone = "bad"; } }
+      if (mine === epoch && expected === project()) { if (mounts.has(root)) paint(root, mounts.get(root)); const errorNote = root.querySelector(".autonomy-note") || note; if (errorNote) { errorNote.textContent = window.MefiUi?.plainError ? window.MefiUi.plainError(error, "This setting could not be saved.") : error.message; errorNote.dataset.tone = "bad"; } }
     } finally {
       root.removeAttribute("aria-busy");
       for (const control of root.querySelectorAll("button, input, select")) control.disabled = control.dataset.autonomyLocked === "true";
@@ -65,7 +67,9 @@
       let dialog = document.getElementById("autonomy-settings-dialog");
       if (!dialog) {
         dialog = el("dialog", "autonomy-settings-dialog"); dialog.id = "autonomy-settings-dialog"; dialog.setAttribute("aria-label", "Mefi's permissions");
-        const close = button("Close", () => dialog.close());
+        const close = button("", () => dialog.close(), "ghost sheet-close");
+        close.setAttribute("aria-label", "Close"); close.title = "Close (Esc)";
+        close.innerHTML = '<svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg>';
         const body = el("div"); dialog.append(close, body); document.body.append(dialog); mount(body, { full: true });
       }
       if (!dialog.open) dialog.showModal();
@@ -75,14 +79,14 @@
     holder.setAttribute("role", "radiogroup"); holder.setAttribute("aria-label", "Permission mode");
     for (const [id, title, description] of MODES) {
       const choice = button(title, () => void change(root, () => api().autonomySet({ level: id })), "autonomy-mode");
-      choice.setAttribute("role", "radio"); choice.setAttribute("aria-checked", String(current?.level === id));
+      choice.setAttribute("role", "radio"); choice.setAttribute("aria-checked", String(current?.level === id)); choice.dataset.focusKey = `mode:${id}`;
       choice.append(el("small", "", description)); choice.disabled = !current;
       holder.append(choice);
     }
   }
   function field(root, title, options, value, save) {
     const row = el("label", "autonomy-field"); row.append(el("span", "", title));
-    const select = el("select"); select.setAttribute("aria-label", title);
+    const select = el("select"); select.setAttribute("aria-label", title); select.dataset.focusKey = `field:${title}`;
     for (const [id, text] of options) { const option = el("option", "", text); option.value = id; select.append(option); }
     select.value = value; select.addEventListener("change", () => void change(root, () => save(select.value), { learning: true }));
     row.append(select); return row;
@@ -93,7 +97,7 @@
     elevated.append(el("p", "autonomy-hint", "Checked requests stay yours. Turn one off to let Mefi handle it under your mode."));
     for (const category of current?.categories || []) {
       const row = el("label", "autonomy-check");
-      const input = el("input"); input.type = "checkbox"; input.checked = current.elevated?.[category.id] !== false;
+      const input = el("input"); input.type = "checkbox"; input.checked = current.elevated?.[category.id] !== false; input.dataset.focusKey = `elevated:${category.id}`;
       if (category.id === "agent-filed" && current.level === "auto") { input.checked = false; input.disabled = true; input.dataset.autonomyLocked = "true"; }
       const words = el("span", "", category.label); words.append(el("small", "", category.blurb)); row.append(input, words);
       input.addEventListener("change", () => {
@@ -108,7 +112,7 @@
     }
     root.append(elevated);
     const memory = el("section", "autonomy-learning"); memory.append(el("h4", "", "Learning"));
-    const enabled = el("label", "autonomy-check"), box = el("input"); box.type = "checkbox"; box.checked = learned?.decisions?.enabled !== false;
+    const enabled = el("label", "autonomy-check"), box = el("input"); box.type = "checkbox"; box.checked = learned?.decisions?.enabled !== false; box.dataset.focusKey = "learn";
     box.addEventListener("change", () => void change(root, () => api().learningSet({ decisions: { enabled: box.checked } }), { learning: true }));
     enabled.append(box, el("span", "", "Learn from my answers")); memory.append(enabled);
     memory.append(field(root, "Use my decisions from", SCOPE, learned?.decisions?.scope || "blend", (scope) => api().learningSet({ decisions: { scope } })));
@@ -122,14 +126,20 @@
       const preferences = learned?.profiles?.[scope] || [];
       if (!preferences.length) list.append(el("p", "autonomy-hint", "No learned preferences here yet."));
       for (const group of preferences) for (const verb of group.verbs || []) {
-        const item = el("div", "autonomy-preference"); item.append(el("span", "", `${group.kind}: ${verb.verb} · ${Math.round(verb.share * 100)}% of weighted choices (${group.n} answers)`), button("Forget", () => void change(root, () => api().learningForget({ projectId: current?.projectId, scope, kind: group.kind, verb: verb.verb }), { learning: true }))); list.append(item);
+        const item = el("div", "autonomy-preference"); item.append(el("span", "", `${words(group.kind)}: ${words(verb.verb)} · ${Math.round(verb.share * 100)}% of weighted choices (${group.n} answers)`), button("Forget", () => void change(root, () => api().learningForget({ projectId: current?.projectId, scope, kind: group.kind, verb: verb.verb }), { learning: true }))); list.append(item);
       }
-      if (preferences.length) list.append(button("Forget all in this view", () => void change(root, () => api().learningForget({ projectId: current?.projectId, scope, all: true }), { learning: true })));
+      if (!preferences.length) return;
+      const forgetAll = () => void change(root, () => api().learningForget({ projectId: current?.projectId, scope, all: true }), { learning: true });
+      list.append(window.MefiUi?.arm ? window.MefiUi.arm(button("Forget all in this view", () => {}), { run: forgetAll, armed: "Forget everything here?" }) : button("Forget all in this view", forgetAll));
     };
     for (const [id, title] of [["project", "This project"], ["global", "All projects"]]) { const pick = button(title, () => { scope = id; render(); }); pick.dataset.scope = id; picks.append(pick); }
     render(); memory.append(picks, list); root.append(memory);
   }
   function paint(root, options) {
+    // Every save repaints the control: keep the keyboard on the same choice
+    // and an open menu open, instead of dropping focus to the page.
+    const focused = root.contains(document.activeElement) ? document.activeElement.dataset.focusKey : null;
+    const wasOpen = Boolean(root.querySelector(".autonomy-popover:not([hidden])"));
     root.replaceChildren(); root.classList.add("autonomy-control");
     const note = el("p", "autonomy-note"); note.setAttribute("role", "status");
     if (options.full) { root.append(el("h3", "", "Mefi's permissions")); settings(root); }
@@ -139,9 +149,12 @@
       toggle.setAttribute("aria-haspopup", "true"); toggle.setAttribute("aria-expanded", "false"); toggle.title = "Choose how much Mefi handles for you";
       const menu = el("div", "autonomy-popover"); menu.hidden = true; modeChoices(root, menu); menu.append(button("Elevated requests…", () => { menu.hidden = true; toggle.setAttribute("aria-expanded", "false"); openSettings(); }));
       menu.addEventListener("keydown", (event) => { if (event.key === "Escape") { event.preventDefault(); menu.hidden = true; toggle.setAttribute("aria-expanded", "false"); toggle.focus(); } });
+      toggle.dataset.focusKey = "chip";
+      if (wasOpen) { menu.hidden = false; toggle.setAttribute("aria-expanded", "true"); }
       root.append(toggle, menu);
     }
     root.append(note);
+    if (focused) root.querySelector(`[data-focus-key="${focused}"]`)?.focus({ preventScroll: true });
   }
   // A click anywhere else closes an open permissions menu, like every other menu.
   document.addEventListener?.("pointerdown", (event) => {
@@ -185,7 +198,7 @@
       const rows = learned?.skills?.[scope] || [];
       if (!rows.length) { body.append(el("p", "autonomy-hint", "Model strengths appear after observed outcomes.")); return; }
       const table = el("table"), head = el("tr"); for (const title of ["Task", "Model", "Win estimate", "Runs"]) head.append(el("th", "", title)); table.append(head);
-      for (const row of rows) { const tr = el("tr"); for (const value of [row.taskType, row.model, `${Math.round(row.p * 100)}%`, String(row.n)]) tr.append(el("td", "", value)); table.append(tr); } body.append(table);
+      for (const row of rows) { const tr = el("tr"); for (const value of [words(row.taskType), row.model, `${Math.round(row.p * 100)}%`, String(row.n)]) tr.append(el("td", "", value)); table.append(tr); } body.append(table);
     };
     for (const [id, title] of [["project", "This project"], ["global", "All projects"]]) { const pick = button(title, () => { scope = id; paint(); }); pick.dataset.scope = id; tabs.append(pick); }
     root.append(tabs, body); paint();

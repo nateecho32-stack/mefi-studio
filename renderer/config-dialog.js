@@ -281,7 +281,16 @@
       if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); step(event.key === "ArrowDown" ? 1 : -1); }
     });
     $("overlay").addEventListener("click", (event) => { if (event.target === $("overlay")) close(); });
-    $("overlay").addEventListener("keydown", (event) => { if (event.key === "Escape" && event.target !== $("search")) { event.preventDefault(); event.stopPropagation(); close(); } });
+    $("overlay").addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && event.target !== $("search")) { event.preventDefault(); event.stopPropagation(); close(); return; }
+      // A modal keeps Tab inside it: past the last control it wraps to the first.
+      if (event.key !== "Tab") return;
+      const stops = [...$("overlay").querySelectorAll("button, input, select, textarea, [tabindex]:not([tabindex='-1'])")].filter((item) => !item.disabled && item.getClientRects().length);
+      if (!stops.length) return;
+      const first = stops[0], last = stops.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    });
   }
 
   window.MefiConfig = { open, close, isOpen, categories: () => CATEGORIES.map(({ id, title }) => ({ id, title })), records: () => records().map(({ id, title, where, category }) => ({ id, title, where, category })) };
