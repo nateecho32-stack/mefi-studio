@@ -72,6 +72,8 @@ const outsideWork = require("./scripts/outside-work.cjs");
 const executorActivity = require("./scripts/executor-activity.cjs");
 const taskHandoffs = require("./scripts/task-handoffs.cjs");
 const executorWorktrees = require("./scripts/executor-worktrees.cjs");
+// Build's Home greeting card: the work one project's ledgers record.
+const workStats = require("./scripts/work-stats.cjs");
 const agentModes = require("./scripts/agent-modes.cjs");
 const agentProfiles = require("./scripts/agent-profiles.cjs");
 const agentAddons = require("./scripts/agent-addons.cjs");
@@ -4283,11 +4285,11 @@ async function usageTrackerLimits() {
 // the eyes worker and covers the month the account windows span; a store that
 // cannot be read leaves the Studio ledger standing and says so.
 const USAGE_LEDGER_DAYS = 35;
-async function codingSessionUsage(now) {
+async function codingSessionUsage(now, days = USAGE_LEDGER_DAYS) {
   try {
     const eyes = await getEyes();
     if (typeof eyes.usageLedger !== "function") return { ok: false, rows: [], error: "The store reader has no usage ledger." };
-    const result = await eyes.usageLedger({ since: now - USAGE_LEDGER_DAYS * 86400000, now });
+    const result = await eyes.usageLedger({ since: now - days * 86400000, now });
     const rows = Array.isArray(result?.rows) ? result.rows : [];
     // An empty ledger from a store without its session schema is not "no
     // coding turns": the panel says what the store is missing instead.
@@ -20563,6 +20565,56 @@ function registerIpc() {
       return { ok: false, error: error.message };
     }
   });
+
+  // Build's Home (renderer/builder.js). The greeting card counts tasks, runs,
+  // tokens, active days, the peak hour and the models that ran, for this
+  // project over one range, from the executor ledger, both usage ledgers and
+  // the board (scripts/work-stats.cjs). Home asks on every visit, so each
+  // range is kept a minute per project; the coding-turn read reaches back the
+  // twenty-two weeks the card's heatmap draws.
+  const workStatsCache = new Map();
+  ipcMain.handle("work:stats", async (_event, { range = "all" } = {}) => {
+    try {
+      const now = Date.now();
+      const project = projects.current();
+      const key = `${project.id}:${range}`;
+      const cached = workStatsCache.get(key);
+      if (cached && now - cached.at < 60000) return cached.value;
+      let ledger = "";
+      try { ledger = await readFile(projectDataPath(EXECUTOR_LOG_PATH), "utf8"); } catch (failure) { if (failure?.code !== "ENOENT") throw failure; }
+      const eyes = await getEyes();
+      const [state, store, tasks] = await Promise.all([modelPerformanceStore().read(), codingSessionUsage(now, Math.max(USAGE_LEDGER_DAYS, workStats.HEAT_DAYS)), eyes.readJson(TASKS_PATH, [])]);
+      const usage = mergeLedgers({ studio: state.observations, store: store.rows });
+      const value = { ok: true, projectId: project.id, ...workStats.workStats({ ledger, observations: state.observations, usage, tasks, now, range }), store: { ok: store.ok, error: store.error ?? null } };
+      workStatsCache.set(key, { at: now, value });
+      return value;
+    } catch (error) {
+      return { ok: false, error: `The work stats could not be read: ${String(error?.message ?? error).slice(0, 160)}` };
+    }
+  });
+  // Where Build's composer runs: the open folder's branch and how many paths
+  // are uncommitted, from the read-only look "work done outside Studio" takes
+  // (no fetch, no lock), and whether each run gets its own worktree.
+  const worktreeView = () => ({ on: executorWorktrees.enabled(), forced: process.env.MEFI_STUDIO_WORKTREE_RUNS === "1" });
+  ipcMain.handle("work:where", async () => {
+    try {
+      const project = projects.current();
+      const seen = await outsideWorkLook(project?.path);
+      if (!seen?.top) return { ok: true, projectId: project?.id ?? null, repo: false, branch: null, dirty: 0, worktrees: worktreeView() };
+      return { ok: true, projectId: project.id, repo: true, branch: seen.look.branch, head: seen.look.head ? seen.look.head.slice(0, 7) : null, dirty: seen.statuses.length, worktrees: worktreeView() };
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error).slice(0, 160) };
+    }
+  });
+  // The Worktree chip: the owner's saved choice (settings.executor
+  // .worktreeRuns) for runs in their own checkout; the environment switch
+  // (MEFI_STUDIO_WORKTREE_RUNS=1) still forces it on.
+  ipcMain.handle("work:worktrees", async (_event, { on } = {}) => {
+    const settings = await updateSettings((next) => { next.executor = { ...(next.executor ?? {}), worktreeRuns: on === true }; });
+    executorWorktrees.prefer(settings.executor?.worktreeRuns === true);
+    return { ok: true, worktrees: worktreeView() };
+  });
+  readSettings().then((settings) => executorWorktrees.prefer(settings?.executor?.worktreeRuns === true), () => {});
 
   // The account read is separate from the ledger: it can be unavailable while
   // local totals stay exact, and it never borrows numbers from either side.

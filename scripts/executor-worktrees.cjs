@@ -62,8 +62,16 @@ function runGit(root, args) {
   return runProcess("git", root, args);
 }
 
+// The environment switch, or the owner's saved choice (settings.executor
+// .worktreeRuns, the Build composer's Worktree chip), which main.cjs hands
+// over through prefer() at launch and whenever it changes.
+let preferred = false;
+function prefer(on) {
+  preferred = on === true;
+  return preferred;
+}
 function enabled(env = process.env) {
-  return Boolean(env && env.MEFI_STUDIO_WORKTREE_RUNS === "1");
+  return Boolean(env && env.MEFI_STUDIO_WORKTREE_RUNS === "1") || preferred;
 }
 
 // Run ids reach the filesystem (worktree dir) and a branch name; anything
@@ -258,4 +266,4 @@ function settle(worktree) {
 
 const queues = new Map();
 
-module.exports = { enabled, prepare, settle, discard, safeRunId };
+module.exports = { enabled, prefer, prepare, settle, discard, safeRunId };

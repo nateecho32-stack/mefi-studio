@@ -97,6 +97,10 @@ const api = {
   modelLabContext: (payload) => ipcRenderer.invoke("model-lab:context", payload ?? {}),
   usageTracker: () => ipcRenderer.invoke("usage:tracker", {}),
   usageForTask: (taskId) => ipcRenderer.invoke("usage:task", { taskId }),
+  // Build's Home: the greeting card's counts, and where the composer runs.
+  workStats: (options = {}) => ipcRenderer.invoke("work:stats", { range: ["all", "30d", "7d"].includes(options?.range) ? options.range : "all" }),
+  workWhere: () => ipcRenderer.invoke("work:where", {}),
+  workWorktrees: (on) => ipcRenderer.invoke("work:worktrees", { on: on === true }),
   opencodeCredits: () => ipcRenderer.invoke("opencode:credits", {}),
   usageAccounts: (options = {}) => ipcRenderer.invoke("usage:accounts", { probe: options?.probe === true }),
   openExternal: (url) => ipcRenderer.invoke("shell:open", url),
