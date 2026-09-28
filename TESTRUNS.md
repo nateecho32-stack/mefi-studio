@@ -35,6 +35,31 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-28 - Vibe opens by default, answers more, shows a new project's tree, key tips
+
+Every launch starts in Vibe (`mefiStudio.uiMode.launch`, Settings › Always
+start in Vibe; a live-update reload resumes) and the Start here walk stays in
+Vibe. Needs you gains `review` (Confirm done / Send it back), `plan`
+(interview follow-ups answered through `planning:assist`, spec approval and
+task creation open the plan in Vibe's rail) and Build it anyway for relevance
+holds; `#vibe-update` mirrors the rail's update pill. Watch always stands in
+the dock and Command shows a low "Nothing started yet" card on an empty
+project. New `renderer/key-tips.js` (first-run keycap tips, click or key to
+dismiss, off from the tip, Settings, Vibe settings or Search) and Vibe's own
+keys / N C T P I M S, which stand down in a drawer (nav.js typeInto).
+
+- `npm run build-booklet`: built; `npm run check` (190 targets) and
+  `npm run audit` (0 errors, 0 warnings): PASS.
+- New suites: vibe_home (6), key_tips (3); onboarding's Vibe walk and
+  vibe_panels' dock test updated. 140 focused tests across vibe_*,
+  key_tips, onboarding, nav_startup, booklet_build and type_into_menu: PASS.
+- `npm test` in C:\wt\vibe-tips rebased on 39a153d: Node suites, Python
+  contracts and the normalized-path lock: PASS. An earlier run on e53a572
+  failed only `occlusion_probe` (lag samples 1–3 s on a loaded desktop, the
+  known environmental row); solo rerun: PASS.
+- Offscreen Electron captures (fake bridge, 1920x1080): fresh project in
+  Vibe with tips, Watch's fresh card, plan and review drawers, Build tips.
+
 ## 2026-09-28 - Start with Windows; Your PCs shows what each PC's agents are doing
 
 Two pieces for leaving home PCs working. **Start with Windows** (Settings ›
@@ -535,54 +560,6 @@ found 0 findings, the Python contracts gave 248 OK (1 skipped), and test:fast
 had 4017 passed, 0 failed, 4 skipped. The previous full npm test on 3239151
 failed only in community_ui and music, whose files another session was
 editing during the run; they passed solo, 112/112.
-
-## 2026-09-27 - MEFI Vibe workbench and evolving project map
-
-Validated `codex/mefi-evolution` at `75de5a4`, rebased on the current
-`da669cc` main. Added Modify/Experiment/Fix/Improve briefs, planner-backed
-suggestions, saved idea lineage through task admission, connected system
-cards and a separate live Ideas tree. Source board data remains authoritative;
-map groups are projections. All renderer screenshots use synthetic fixture data.
-
-- `npm run build-booklet`, `npm run check` and `npm run audit`: PASS.
-  Check covered 170 targets, 355 spec names and 12 stylesheets; audit had zero
-  findings. Targeted ESLint on changed JavaScript passed with zero errors and
-  24 existing unused-variable warnings (`tools/logs/mefi-evolution-lint.log`).
-- Focused Node batches: map/model plus idea backlog 42/42; Vibe pipeline,
-  frame and panels 48/48; host brain and idea actions 26/26; final work
-  admission, assistant admission and idea actions 40/40. These cover draft
-  persistence, suggestion failure and project switches, explicit saving,
-  multiple source ideas, duplicate task adoption, file-scoped identity,
-  reverse legacy links, stale map reads and pure, cycle-bounded tree grouping.
-  An initial host expectation was corrected from `building` to the existing
-  canonical `active` stage before the passing rerun.
-- Map layout plus real Electron map fixture: final 4/4 PASS. An initial
-  scaled/narrow legend overflow was fixed; final captures cover desktop,
-  600px, 150% scaling, narrow Ideas navigation and Vibe at 390px/1440px.
-  Captures/report are under `tools/logs/mefi-evolution-map/`; final report has
-  no renderer errors or network attempts. Visual inspection confirmed system
-  links, file drilldown, grouped idea lineage and readable narrow layouts.
-- Initial `npm test` was stopped after its CPU stage (4,013 pass, four skip)
-  to integrate review fixes; it is not a full-gate pass. Log:
-  `tools/logs/mefi-evolution-full-test.log`.
-- Final `npm test`: FAIL only in two existing Electron fixtures. CPU stage:
-  4,017 pass, zero fail, four skip. Parallel Electron stage: 36 pass, two
-  fail, one skip; the new map fixture passed. Serialized eyes test passed;
-  occlusion had one pass and one desktop-capability skip. Python: 248 tests,
-  OK with one skip. All six normalized-path lock checks passed. Node leg
-  took 714s; full output is `tools/logs/mefi-evolution-final-test.log`.
-- Failure triage: `command_render` hit its 80s child limit without a report;
-  `tree_dynamics_render` missed its native click. Sequential rerun on this
-  branch repeated Command's timeout and hit a missing painted node in tree
-  dynamics (`tools/logs/mefi-evolution-solo-render.log`). The same sequential
-  command on unchanged `da669cc` main reproduced Command's timeout (81.7s),
-  while tree dynamics passed (24.4s); baseline log lives in the primary
-  checkout at `tools/logs/mefi-evolution-baseline-render.log`. A final isolated
-  tree-dynamics rerun on `75de5a4` passed (24.9s), recorded in
-  `tools/logs/mefi-evolution-tree-final.log`. Command drawing, hit testing and
-  both fixtures are unchanged. These signatures have prior entries in the
-  known-failure table/archive. The remaining Command timeout is baseline
-  reproducible; the full gate is not claimed green.
 
 ## Read Before Any Tests
 

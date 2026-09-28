@@ -1977,6 +1977,13 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 .cmd-empty-actions { margin: 0; justify-content: center; }
 #cmd-empty[data-variant="desktop-only"] [data-variant="store"],
 #cmd-empty[data-variant="store"] [data-variant="desktop-only"] { display: none; }
+#cmd-empty:not([data-variant="fresh"]) [data-variant="fresh"],
+#cmd-empty[data-variant="fresh"] :is([data-variant="store"], [data-variant="desktop-only"]) { display: none; }
+/* A new project: the card sits under the tree, so the root and the
+   assistant stay in view above it. */
+#cmd-empty[data-variant="fresh"] { top: auto; bottom: 16vh; transform: translateX(-50%); width: min(420px, 88vw); padding: var(--s5) var(--s6); }
+#cmd-empty[data-variant="fresh"] h3 { font-size: 16px; }
+#cmd-empty[data-variant="fresh"] p { font-size: var(--fs-sm); }
 
 /* --- hover tooltip (reuses the rail's .tree-tip face; must come after .tree-tip) --- */
 .cmd-tip {
@@ -8119,6 +8126,48 @@ html[data-studio-style] .catalog-model { border-radius: var(--r-lg); }
 .autonomy-settings-dialog > .sheet-close { position: sticky; top: 0; float: right; margin: -8px -8px 0 8px; z-index: 1; }
 .autonomy-settings-dialog::backdrop { background: var(--scrim); backdrop-filter: var(--scrim-blur); }
 
+/* --- key tips (renderer/key-tips.js) ---------------------------------------------
+   A small glass card beside a control, naming its keys as keycaps, with an
+   arrow at the control. It springs in and fades out; click it to dismiss. */
+.key-tip {
+  position: fixed; z-index: 9000; left: 0; top: 0;
+  display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 6px 10px;
+  max-width: 300px; padding: 10px 10px 8px 14px;
+  border: 1px solid color-mix(in srgb, var(--gold) 34%, transparent); border-radius: 14px;
+  background: color-mix(in srgb, var(--panel-solid) 92%, transparent); backdrop-filter: var(--blur-hard);
+  box-shadow: var(--studio-float-shadow), 0 0 36px -16px color-mix(in srgb, var(--gold) 60%, transparent);
+  color: var(--ivory); font: 500 12.5px/1.35 var(--font-ui);
+  cursor: pointer; opacity: 1; translate: 0 0; scale: 1;
+  transition: opacity 180ms var(--ease-out, ease-out), translate 260ms var(--ease-spring, ease-out), scale 260ms var(--ease-spring, ease-out);
+  transition-delay: var(--tip-delay, 0ms);
+}
+@starting-style { .key-tip { opacity: 0; scale: .92; translate: 0 6px; } }
+.key-tip[data-side="bottom"] { transform-origin: 50% 0; }
+.key-tip[data-side="top"] { transform-origin: 50% 100%; }
+.key-tip[data-side="right"] { transform-origin: 0 50%; }
+@starting-style { .key-tip[data-side="bottom"] { translate: 0 -6px; } .key-tip[data-side="right"] { translate: -6px 0; } }
+.key-tip.is-leaving { opacity: 0; scale: .96; transition-delay: 0ms; pointer-events: none; }
+.key-tip:hover { border-color: color-mix(in srgb, var(--gold) 55%, transparent); }
+.key-tip::after {
+  content: ""; position: absolute; width: 10px; height: 10px; rotate: 45deg;
+  background: inherit; border: inherit; border-radius: 2px;
+}
+.key-tip[data-side="top"]::after { bottom: -6px; left: calc(var(--arrow, 50%) - 5px); border-top: 0; border-left: 0; }
+.key-tip[data-side="bottom"]::after { top: -6px; left: calc(var(--arrow, 50%) - 5px); border-bottom: 0; border-right: 0; }
+.key-tip[data-side="right"]::after { left: -6px; top: calc(var(--arrow, 50%) - 5px); border-top: 0; border-right: 0; }
+.key-tip[data-side="left"]::after { right: -6px; top: calc(var(--arrow, 50%) - 5px); border-bottom: 0; border-left: 0; }
+.key-tip-list { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.key-tip-list li { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.key-tip-keys { display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; min-width: 64px; color: var(--muted); font-size: 11px; }
+.key-tip .key { min-width: 22px; height: 20px; padding: 0 6px; font-size: 10.5px; line-height: 17px; border-radius: 6px; opacity: 1; color: var(--gold-bright); background: color-mix(in srgb, var(--gold) 12%, transparent); border-color: color-mix(in srgb, var(--gold) 36%, transparent); border-bottom-width: 2px; }
+.key-tip-close { width: 22px; height: 22px; padding: 0; border: 0; border-radius: 7px; background: none; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; }
+.key-tip-close:hover, .key-tip-close:focus-visible { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 8%, transparent); }
+.key-tip-off { grid-column: 1 / -1; justify-self: start; padding: 0; border: 0; background: none; color: var(--muted); font-size: 11px; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.key-tip-off:hover, .key-tip-off:focus-visible { color: var(--ivory); }
+.key-tip :is(button):focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 1px; }
+html[data-motion="off"] .key-tip { transition: none; }
+@media (max-width: 720px) { .key-tip { display: none; } }
+
 /* A little light, a trailing wisp, and expressions made of floating text. */
 .agent-creature { display: block; width: 100%; height: 100%; overflow: visible; color: var(--gold-bright); pointer-events: none; }
 .agent-body { transform-origin: 40px 44px; animation: agent-float 5.6s ease-in-out infinite; translate: var(--agent-look-x, 0px) var(--agent-look-y, 0px); transition: translate var(--motion-slow) var(--ease-out), opacity var(--motion-ambient) var(--ease-out), scale var(--motion-ambient) var(--ease-emphasized); }
@@ -8785,6 +8834,19 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-dock[data-marked="yes"] .vibe-dock-mark { opacity: 1; scale: 1; }
 .vibe-dock button[aria-pressed="true"] { color: var(--v-ink); }
 .vibe-dock button[aria-pressed="true"] .glyph { color: var(--v-accent-hi); }
+/* The key each stop answers to, as a small cap in its corner; it lights with the stop. */
+.vibe-dock .vibe-stop-key { position: absolute; top: 5px; left: 7px; min-width: 0; height: 17px; padding: 0 5px; border-width: 1px; border-radius: 5px; font: 600 10px/15px var(--font-mono); letter-spacing: .02em; color: var(--v-soft); background: color-mix(in srgb, var(--ivory) 6%, transparent); border-color: color-mix(in srgb, var(--ivory) 16%, transparent); opacity: .72; transition: opacity var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out); }
+.vibe-dock button:is(:hover, :focus-visible, [aria-pressed="true"]) .vibe-stop-key { opacity: 1; color: var(--v-accent-hi); border-color: color-mix(in srgb, var(--gold) 34%, transparent); }
+/* Enter · Ctrl+Enter under the box, as keycaps. */
+.vibe-hint { display: inline-flex; align-items: center; gap: 5px; }
+.vibe-hint .key { min-width: 0; height: 18px; padding: 0 6px; font-size: 10px; line-height: 16px; border-radius: 6px; color: var(--v-soft); background: color-mix(in srgb, var(--ivory) 5%, transparent); border-color: color-mix(in srgb, var(--ivory) 14%, transparent); }
+.vibe-compose:focus-within .vibe-hint .key { color: var(--v-ink); border-color: color-mix(in srgb, var(--gold) 34%, transparent); }
+.vibe-hint-sep { margin: 0 3px; }
+/* Build's update pill, mirrored into Vibe's top bar while it needs you. */
+.vibe-update .glyph { width: 15px; height: 15px; }
+.vibe-update[data-tone="bad"] { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 36%, transparent); }
+.vibe-update[hidden] { display: none; }
+.vibe-ask-note-inline { margin: 8px 0 0; color: var(--v-faint); font-size: 12px; }
 
 /* ---- conversation --------------------------------------------------------- */
 .vibe-chat { position: absolute; top: 84px; right: 24px; bottom: 24px; z-index: 2; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(420px, calc(100vw - 48px)); border: 1px solid var(--v-edge); border-radius: 24px; background: var(--studio-float-fill); backdrop-filter: var(--v-blur); box-shadow: -30px 0 80px -40px color-mix(in srgb, var(--bg-deep) 90%, transparent), inset 0 1px 0 color-mix(in srgb, var(--ivory) 7%, transparent); opacity: 1; transform: none; transition: opacity var(--motion-slow) var(--ease-out), transform var(--motion-slow) var(--ease-emphasized), display var(--motion-slow) allow-discrete; }
@@ -9726,10 +9788,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       <button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button>
     </div>
     <div class="vibe-top-actions">
-      <button id="vibe-pulse" class="vibe-pulse" type="button" data-tone="quiet" title="What needs you and what is building"><i aria-hidden="true"></i><span id="vibe-pulse-text" role="status">All quiet</span></button>
+      <button id="vibe-update" class="vibe-pulse vibe-update" type="button" data-tone="ask" title="An update is ready" hidden><svg class="glyph" aria-hidden="true"><use href="#g-update"/></svg><span id="vibe-update-text">Update ready</span></button>
+      <button id="vibe-pulse" class="vibe-pulse" type="button" data-tone="quiet" title="What needs you and what is building (N)"><i aria-hidden="true"></i><span id="vibe-pulse-text" role="status">All quiet</span></button>
       <button class="vibe-icon" type="button" data-nav="palette" title="Search everything (Ctrl K)" aria-label="Search everything"><svg class="glyph" aria-hidden="true"><use href="#g-search"/></svg></button>
-      <button id="vibe-chat-toggle" class="vibe-icon" type="button" aria-controls="vibe-chat" aria-expanded="false" title="Conversation" aria-label="Conversation"><svg class="glyph" aria-hidden="true"><use href="#g-plane"/></svg><i id="vibe-chat-dot" class="vibe-dot" hidden></i></button>
-      <button class="vibe-icon" type="button" data-vibe-panel="settings" title="Settings" aria-label="Settings"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg></button>
+      <button id="vibe-chat-toggle" class="vibe-icon" type="button" aria-controls="vibe-chat" aria-expanded="false" title="Conversation (C)" aria-label="Conversation"><svg class="glyph" aria-hidden="true"><use href="#g-plane"/></svg><i id="vibe-chat-dot" class="vibe-dot" hidden></i></button>
+      <button class="vibe-icon" type="button" data-vibe-panel="settings" title="Settings (S)" aria-label="Settings"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg></button>
     </div>
   </header>
   <div class="vibe-stage">
@@ -9742,7 +9805,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       <label for="vibe-input" class="sr-only">Describe what you want</label>
       <textarea id="vibe-input" rows="2" placeholder="Describe an idea, a fix or a question…"></textarea>
       <div class="vibe-compose-foot">
-        <span id="vibe-hint" class="vibe-hint">Enter to talk · Ctrl + Enter to build</span>
+        <span id="vibe-hint" class="vibe-hint"><kbd class="key">Enter</kbd> talk <span class="vibe-hint-sep" aria-hidden="true">·</span> <kbd class="key">Ctrl</kbd>+<kbd class="key">Enter</kbd> build</span>
         <span id="vibe-autonomy-control"></span>
         <button id="vibe-talk" class="vibe-btn quiet" type="button"><svg class="glyph" aria-hidden="true"><use href="#g-plane"/></svg>Talk it over</button>
         <button id="vibe-build" class="vibe-btn primary" type="submit"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg>Build it</button>
@@ -9790,12 +9853,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   <!-- Watch, Plans and Ideas step in only while they have something to show. -->
   <nav id="vibe-dock" class="vibe-dock" aria-label="Go to">
     <span class="vibe-dock-mark" aria-hidden="true"></span>
-    <button id="vibe-stop-watch" type="button" data-nav="command" data-vibe-stop="watch" title="Watch the agents work on the live node tree (D)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span></button>
-    <button id="vibe-stop-tasks" type="button" data-vibe-panel="tasks" data-vibe-stop="tasks" title="Your tasks and results"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
-    <button id="vibe-stop-plans" type="button" data-vibe-panel="plans" data-vibe-stop="plans" title="Plans in progress" hidden><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span></button>
-    <button id="vibe-stop-ideas" type="button" data-vibe-panel="ideas" data-vibe-stop="ideas" title="Ideas the agents noticed" hidden><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg><span>Ideas</span><span class="count" data-badge="ideas" hidden></span></button>
-    <button id="vibe-stop-team" type="button" data-vibe-panel="team" data-vibe-stop="team" title="Who is working, and on which models"><svg class="glyph" aria-hidden="true"><use href="#g-agents"/></svg><span>Team</span></button>
-    <button id="vibe-stop-more" type="button" data-nav="palette" data-vibe-stop="more" title="Everything else (Ctrl K)"><svg class="glyph" aria-hidden="true"><use href="#g-more"/></svg><span>More</span></button>
+    <button id="vibe-stop-watch" type="button" data-nav="command" data-vibe-stop="watch" title="Watch the live node tree, even before anything has started (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span><kbd class="key vibe-stop-key" aria-hidden="true" title="D">D</kbd></button>
+    <button id="vibe-stop-tasks" type="button" data-vibe-panel="tasks" data-vibe-stop="tasks" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span><kbd class="key vibe-stop-key" aria-hidden="true" title="T">T</kbd></button>
+    <button id="vibe-stop-plans" type="button" data-vibe-panel="plans" data-vibe-stop="plans" title="Plans in progress (P)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span><kbd class="key vibe-stop-key" aria-hidden="true" title="P">P</kbd></button>
+    <button id="vibe-stop-ideas" type="button" data-vibe-panel="ideas" data-vibe-stop="ideas" title="Ideas the agents noticed (I)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg><span>Ideas</span><span class="count" data-badge="ideas" hidden></span><kbd class="key vibe-stop-key" aria-hidden="true" title="I">I</kbd></button>
+    <button id="vibe-stop-team" type="button" data-vibe-panel="team" data-vibe-stop="team" title="Who is working, and on which models (M)"><svg class="glyph" aria-hidden="true"><use href="#g-agents"/></svg><span>Team</span><kbd class="key vibe-stop-key" aria-hidden="true" title="M">M</kbd></button>
+    <button id="vibe-stop-more" type="button" data-nav="palette" data-vibe-stop="more" title="Everything else (Ctrl K)"><svg class="glyph" aria-hidden="true"><use href="#g-more"/></svg><span>More</span><kbd class="key vibe-stop-key" aria-hidden="true" title="Ctrl K">⌃K</kbd></button>
   </nav>
   <aside id="vibe-chat" class="vibe-chat" aria-labelledby="vibe-chat-title" hidden>
     <header class="vibe-chat-head"><div><small>Conversation</small><h2 id="vibe-chat-title">Mefi</h2></div><button id="vibe-chat-close" class="vibe-icon" type="button" aria-label="Close the conversation" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
@@ -10087,10 +10150,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
           <div class="settings-you-switches">
             <label class="switch" id="settings-companion-motion" title="Your companion floats and blinks beside the conversation. Calm and Off keep it still."><input id="workspace-motion" type="checkbox" checked><span class="track"></span><span>Let your companion move</span></label>
             <label class="switch" title="Blur what sits behind every sheet, menu and Home panel. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
-            <label class="switch" id="idle-home-switch" title="On: every launch lands on Home. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Home on launch</span></label>
+            <label class="switch" id="idle-home-switch" title="On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Home on launch</span></label>
+            <label class="switch" id="settings-start-vibe-switch" title="On: every launch starts in Vibe, even if you closed Studio in Build. Off: Studio keeps the mode you closed it in."><input type="checkbox" id="settings-start-vibe" checked><span class="track"></span><span>Always start in Vibe</span></label>
+            <label class="switch" id="settings-key-tips-switch" title="Small pop-ups beside buttons and tabs that show the key that does the same thing. Click one to fade it away."><input type="checkbox" id="settings-key-tips" checked><span class="track"></span><span>Show key tips</span></label>
             <label class="switch" title="On: after five minutes without input, Studio switches to Command view. Off: it stays on the page you left open."><input type="checkbox" id="idle-command-idle"><span class="track"></span><span>Show Command view after 5 quiet minutes</span></label>
           </div>
-          <p class="muted" id="idle-home-hint">When disabled, Studio opens Command view after the project chooser.</p>
+          <p class="muted" id="idle-home-hint">When disabled, Studio reopens the last tab page you used after the project chooser.</p>
           <!-- settings.ui.launchAgents (main.cjs launchAgentsInfo); the launch screen's default button follows it. -->
           <label class="field"><span class="field-label">When Studio opens</span><select id="launch-agents" aria-describedby="launch-agents-hint"><option value="resume">Resume what I had</option><option value="start">Start agents</option><option value="off">Keep agents off</option></select><span class="field-hint" id="launch-agents-hint">Resume starts agents on a project where they were running when you closed Studio. The launch screen still offers both choices.</span></label>
           <!-- settings.ui.openAtLogin (main.cjs "Start with Windows"); Windows holds the real switch. -->
@@ -10779,6 +10844,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       <button class="ghost" data-nav="help" data-variant="desktop-only">Shortcuts</button>
       <button id="cmd-empty-retry" class="primary" data-variant="store">Retry</button>
       <button class="ghost" data-nav="tasks" data-variant="store">Open the Task board</button>
+      <button id="cmd-empty-start" class="primary" data-variant="fresh" title="Describe the first thing to build">Start the first task</button>
+      <button class="ghost" data-nav="plans" data-variant="fresh" title="Plan an idea before anything is built (P)">Plan an idea</button>
       <button id="cmd-empty-assistant" class="ghost" title="Open your companion to ask or create a task" hidden>Ask your companion</button>
     </div>
   </div>
@@ -33236,6 +33303,22 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     // not an empty one: the card only speaks up for a store problem.
     const storeFine = !!window.mefiStudio && state.treeStatus !== "unavailable" &&
       !(typeof window.MefiTree?.note?.() === "string" && window.MefiTree.note());
+    // A project with nothing on its board yet still gets its tree: the root
+    // and the assistant stand, and a small card under them says how the first
+    // branch grows. It sits low, so the tree stays in view above it.
+    const fresh = storeFine && !constellationHasWork() && !(state.allTasks?.length || state.tasks?.length) && assistantNode();
+    if (fresh) {
+      const wasHidden = el.empty.hidden;
+      el.empty.hidden = false;
+      if (wasHidden) state.hudRectsAt = 0;
+      if (state.emptyVariant !== "fresh") { state.emptyVariant = "fresh"; el.empty.dataset.variant = "fresh"; }
+      const name = (document.getElementById("vibe-project-name")?.textContent || document.getElementById("workspace-project-name")?.textContent || "").trim();
+      const named = name && !/^(Choose a project|Your workspace|Workspace|Loading)/.test(name);
+      if (el.emptyTitle) el.emptyTitle.textContent = named ? `Nothing started in ${name} yet` : "Nothing started here yet";
+      if (el.emptyCopy) el.emptyCopy.textContent = "This is the project's tree. Every task you add grows a branch from the root, and agents fly out to the work they pick up.";
+      if (el.emptyAssistant) el.emptyAssistant.hidden = true;
+      return;
+    }
     if (constellationHasWork() || (storeFine && assistantNode())) {
       if (!el.empty.hidden) state.hudRectsAt = 0;
       el.empty.hidden = true;
@@ -42338,6 +42421,16 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     pillOf("progress")?.addEventListener("click", () => focusNextInProgress());
     pillOf("assistant")?.addEventListener("click", () => selectAssistant({ focus: true }));
     el.emptyAssistant?.addEventListener("click", () => window.MefiCompanion?.open?.());
+    // The fresh card's first step: Vibe's box in Vibe, Command's own task box in Build.
+    document.getElementById("cmd-empty-start")?.addEventListener("click", () => {
+      if (window.MefiVibe?.mode?.() === "vibe") {
+        window.MefiNav?.go?.("vibe");
+        const box = document.getElementById("vibe-input");
+        setTimeout(() => box?.focus?.({ preventScroll: true }), 0);
+        return;
+      }
+      document.getElementById("idle-task-input")?.focus?.();
+    });
 
     // The broadcast carries the list that was just written. Using it skips a
     // second read that could land inside the next save and come back empty.
@@ -62670,18 +62763,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   // approved or started from a lesson.
   // Returns the real control it focused, if any, so the coach knows whether it
   // still needs to hand focus to its own primary button.
-  // The project, task and review stops live on Build's Home. In Vibe, Home is
-  // Vibe and those controls are hidden, so the walk switches to Build first
-  // (the mode switch on the rail goes back) rather than highlight nothing.
-  function buildHome() {
-    if (window.MefiVibe?.mode?.() !== "vibe" || typeof window.MefiVibe.setMode !== "function") return;
-    window.MefiVibe.setMode("build", { go: false });
-    window.MefiToast?.("The tour uses Build mode's Home. Switch back to Vibe any time from the menu.", "info");
-  }
+  // The walk stays in the mode you are in. In Vibe the project stop opens the
+  // same project menu (Vibe's project button), the task stop is Vibe's box
+  // and the review stop is Vibe's Tasks panel (targetOf / reachWorkspace).
   function routeTo(lesson) {
     const route = lesson.route;
     let focused = null;
-    if (["project", "task", "review"].includes(route)) { buildHome(); focused = reachWorkspace(route); }
+    if (["project", "task", "review"].includes(route)) focused = reachWorkspace(route);
     else window.MefiNav?.go?.(route, lesson.params);
     if (lesson.menu) window.MefiSidebar?.open?.();
     highlight(targetOf(lesson));
@@ -62696,7 +62784,6 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   }
   function visit(route) {
     close();
-    if (["project", "task", "review"].includes(route)) buildHome();
     if (route === "project") {
       window.MefiNav?.go?.("workspace");
       const add = document.getElementById("workspace-add-project");
@@ -70677,8 +70764,38 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     box.type = "checkbox"; box.setAttribute("role", "switch");
     box.checked = read("mefiStudio.commandHome") !== "0";
     box.addEventListener("change", () => setLaunch(box.checked));
-    launch.append(el("span", "vibe-set-label", "Open Vibe on launch"), box, el("span", "vibe-set-hint", "Off opens Watch, the live node tree, instead."));
+    launch.append(el("span", "vibe-set-label", "Open Vibe on launch"), box, el("span", "vibe-set-hint", "Off reopens the last page you used instead."));
     body.append(launch);
+
+    // Vibe even after a day in Build (vibe.js LAUNCH_KEY), mirrored by
+    // Settings' own switch.
+    const start = el("label", "vibe-set vibe-set-toggle");
+    const startBox = el("input");
+    startBox.type = "checkbox"; startBox.setAttribute("role", "switch");
+    startBox.checked = read("mefiStudio.uiMode.launch") !== "last";
+    startBox.addEventListener("change", () => {
+      const own = document.getElementById("settings-start-vibe");
+      if (own && own.type === "checkbox") { own.checked = startBox.checked; own.dispatchEvent?.(new Event("change", { bubbles: true })); }
+      else { try { localStorage.setItem("mefiStudio.uiMode.launch", startBox.checked ? "vibe" : "last"); } catch { /* private store */ } }
+      note(startBox.checked ? "Studio starts in Vibe every launch." : "Studio keeps the mode you close it in.", "good");
+    });
+    start.append(el("span", "vibe-set-label", "Always start in Vibe"), startBox, el("span", "vibe-set-hint", "Off keeps Build if you closed Studio in Build."));
+    body.append(start);
+
+    // Key tips (renderer/key-tips.js): the small pop-ups naming each button's key.
+    const tips = window.MefiKeyTips;
+    if (tips) {
+      const row = el("label", "vibe-set vibe-set-toggle");
+      const tipsBox = el("input");
+      tipsBox.type = "checkbox"; tipsBox.setAttribute("role", "switch");
+      tipsBox.checked = tips.enabled();
+      tipsBox.addEventListener("change", () => { tips.setEnabled(tipsBox.checked); note(tipsBox.checked ? "Key tips are on." : "Key tips are off.", "good"); });
+      const again = el("button", "vibe-ask-link", "Show them again");
+      again.type = "button";
+      again.addEventListener("click", (event) => { event.preventDefault(); tips.reset(); tipsBox.checked = true; close({ quiet: true }); });
+      row.append(el("span", "vibe-set-label", "Key tips"), tipsBox, el("span", "vibe-set-hint", "Small pop-ups beside buttons with the key that does the same. Click one to fade it away."), again);
+      body.append(row);
+    }
 
     const links = el("div", "vibe-set-links");
     for (const [label, id, params] of [["Appearance and effects", "studio", { category: "appearance" }], ["AI connections", "agents", { section: "setup", pane: "connections" }]]) {
@@ -70715,7 +70832,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       void api()?.prefsSet?.({ commandHome: on });
       try { localStorage.setItem("mefiStudio.commandHome", on ? "1" : "0"); } catch { /* private store */ }
     }
-    note(on ? "Studio opens on Vibe." : "Studio opens on Watch.", "good");
+    note(on ? "Studio opens on Vibe." : "Studio reopens the last page you used.", "good");
   }
 
   // ---- a new app ----------------------------------------------------------------------
@@ -70928,6 +71045,17 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (saved === "vibe" || saved === "build") return saved;
     return headless ? "build" : "vibe";
   };
+  // Every launch opens in Vibe, even after a day spent in Build, unless the
+  // owner asked Studio to keep the mode it closed in (LAUNCH_KEY "last"). A
+  // renderer reload (a live update, a crash restore) resumes where it was:
+  // nav.js leaves a resume note for up to a minute, and that keeps Build.
+  const LAUNCH_KEY = "mefiStudio.uiMode.launch";
+  const startsInVibe = () => read(LAUNCH_KEY) !== "last";
+  const resuming = (() => {
+    try { const saved = JSON.parse(read("mefiStudio.resume") || "null"); return typeof saved?.at === "number" && Date.now() - saved.at <= 60000; } catch { return false; }
+  })();
+  if (!headless && !resuming && startsInVibe() && read(MODE_KEY) === "build") write(MODE_KEY, "vibe");
+  function setStartsInVibe(on) { write(LAUNCH_KEY, on ? "vibe" : "last"); return on; }
   function paintMode() {
     const current = mode();
     document.documentElement.dataset.uiMode = current;
@@ -70947,9 +71075,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const label = document.getElementById("idle-home-label");
     if (label) label.textContent = vibe ? "Open Vibe on launch" : "Open Home on launch";
     const hint = document.getElementById("idle-home-hint");
-    if (hint) hint.textContent = vibe ? "When disabled, Studio opens Watch, the live node tree, after the project chooser." : "When disabled, Studio opens Command view after the project chooser.";
+    if (hint) hint.textContent = vibe ? "When disabled, Studio reopens the last page you used after the project chooser." : "When disabled, Studio reopens the last tab page you used after the project chooser.";
     const toggle = document.getElementById("idle-home-switch");
-    if (toggle) toggle.title = vibe ? "On: every launch lands on Vibe. Off: Studio opens straight into Watch. The project chooser comes first either way." : "On: every launch lands on Home. Off: Studio opens straight into Command view. The project chooser comes first either way.";
+    if (toggle) toggle.title = vibe ? "On: every launch lands on Vibe. Off: Studio reopens the last page you used. The project chooser comes first either way." : "On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way.";
     const modeHint = document.getElementById("settings-mode-hint");
     if (modeHint) modeHint.textContent = vibe ? "Vibe: the calm front door, where every page opens in Vibe's rail." : "Build: the full studio, with Home, the menu and every tool.";
   }
@@ -71324,13 +71452,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
 
   // ---- the dock ---------------------------------------------------------------
-  // Tasks, Team and More always stand; Watch steps in while agents work, Plans
-  // while a plan is in play, Ideas while fresh ones wait. The stop whose panel
-  // is open is marked, so the dock doubles as the panel's tab strip.
+  // Watch, Tasks, Team and More always stand: the tree is there from a
+  // project's first minute, before anything has started. Plans step in while
+  // a plan is in play, Ideas while fresh ones wait. The stop whose panel is
+  // open is marked, so the dock doubles as the panel's tab strip.
   const STOPS = ["watch", "tasks", "plans", "ideas", "team", "more"];
   const PANEL_STOPS = new Set(["tasks", "plans", "ideas", "team"]);
   function dockStops(data = lanes()) {
-    return { watch: data.running.length > 0 || data.checking.length > 0, tasks: true, plans: data.plans.length > 0 || data.families.length > 0, ideas: data.ideas.length > 0, team: true, more: true };
+    return { watch: true, tasks: true, plans: data.plans.length > 0 || data.families.length > 0, ideas: data.ideas.length > 0, team: true, more: true };
   }
   function renderDock(data) {
     const stops = dockStops(data);
@@ -71860,7 +71989,27 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // uses. Acting moves on to the next thing waiting, and closes when none is.
   const openQuestions = () => (Array.isArray(state.assistant.questions) ? state.assistant.questions : []).filter((question) => question?.status === "open" && belongs(question));
   const taskById = (id) => scoped(state.tasks).find((task) => task.id === id) || null;
-  const HOLD_VERBS = { loop: "Try again", owner: "Resume", duplicate: "Run anyway" };
+  const HOLD_VERBS = { loop: "Try again", owner: "Resume", duplicate: "Run anyway", relevance: "Build it anyway" };
+  const HOLD_CHIPS = { owner: "Stopped by you", loop: "Same failure repeating", duplicate: "Looks like a duplicate", relevance: "Maybe done outside Studio" };
+  // A plan waits on you only at its own turns (renderer/planning.js reads the
+  // same notes): Mefi asked a follow-up in the interview, the specification
+  // waits for your approval, or an approved plan still has to become tasks.
+  // Questions nobody has started exploring stay on the Plans page.
+  function planNeed(plan) {
+    const open = (Array.isArray(plan.questions) ? plan.questions : []).filter((question) => question?.status === "open");
+    for (const question of [...open].reverse()) {
+      const last = (question.notes || []).at(-1);
+      if (last?.author === "assistant" && ["question", "conflict"].includes(last.kind)) return { what: "ask", question, ask: last.text, verb: "Answer", meta: last.kind === "conflict" ? "the plan flagged a conflict" : "the plan asks you something" };
+    }
+    if (plan.status === "converting") return { what: "open", verb: "Finish", meta: "its tasks still need creating" };
+    if (plan.spec?.approvedAt && plan.status !== "converted") return { what: "open", verb: "Create tasks", meta: "approved · ready to become tasks" };
+    if (plan.spec && !plan.spec.stale && !plan.spec.approvedAt) return { what: "open", verb: "Review", meta: "its specification waits for your approval" };
+    return null;
+  }
+  const planNeeds = () => activePlans().flatMap((plan) => {
+    const need = planNeed(plan);
+    return need ? [{ kind: "plan", id: plan.id, tone: "ask", title: plan.title || "A plan", plan, ...need }] : [];
+  });
   function needs() {
     const list = [];
     for (const question of openQuestions()) list.push({ kind: "question", id: question.id, tone: "ask", verb: "Answer", title: question.title || "A decision", meta: question.context?.severity === "blocker" ? "blocking a task" : "decision", question });
@@ -71875,14 +72024,17 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       list.push({ kind: "approval", id: item.id, tone: "ask", verb: "Review", title: item.title || taskById(item.id)?.title || "A task", meta: "waiting for your go-ahead", row: item });
     }
     for (const [parentId, items] of grouped) list.push({ kind: "family", id: parentId, tone: "ask", verb: "Review", title: taskById(parentId)?.title || "Your request", meta: `${items.length} step${items.length === 1 ? "" : "s"} waiting for your go-ahead`, rows: items });
-    for (const item of rows("blocked")) list.push({ kind: "blocked", id: item.id, tone: "bad", verb: HOLD_VERBS[item.blockedBy] || "See why", title: item.title || taskById(item.id)?.title || "A task", meta: item.blockedBy === "owner" ? "stopped by you" : "stuck", row: item });
+    for (const item of rows("blocked")) list.push({ kind: "blocked", id: item.id, tone: "bad", verb: HOLD_VERBS[item.blockedBy] || "See why", title: item.title || taskById(item.id)?.title || "A task", meta: item.blockedBy === "owner" ? "stopped by you" : item.blockedBy === "relevance" ? "maybe done outside Studio" : "stuck", row: item });
     const shared = state.assistant.needsYou;
-    if (shared?.items && belongs(state.assistant)) return shared.items.map((item) => {
+    // A finished task whose check has not settled for a while: yours to confirm.
+    const review = (item) => ({ kind: "review", id: item.taskId, tone: "check", verb: "Review", title: item.title || taskById(item.taskId)?.title || "A finished task", meta: "finished · check the result" });
+    if (shared?.items && belongs(state.assistant)) return [...shared.items.map((item) => {
       if (item.kind === "question") return list.find((row) => row.kind === "question" && row.id === item.id);
       const grouped = item.memberIds?.length ? list.find((row) => row.kind === "family" && row.id === item.taskId) : null;
-      return grouped || list.find((row) => row.id === item.taskId && row.kind !== "question") || { kind: item.kind === "approval" ? "approval" : "blocked", id: item.taskId, tone: "ask", verb: "Review", title: item.title, meta: item.kind === "review" ? "check the result" : "waiting for your review", row: { canRetry: false, reason: item.title } };
-    }).filter(Boolean);
-    return list;
+      if (!grouped && item.kind === "review" && item.taskId) return review(item);
+      return grouped || list.find((row) => row.id === item.taskId && row.kind !== "question") || { kind: item.kind === "approval" ? "approval" : "blocked", id: item.taskId, tone: "ask", verb: "Review", title: item.title, meta: "waiting for your review", row: { canRetry: false, reason: item.title } };
+    }).filter(Boolean), ...planNeeds()];
+    return [...list, ...planNeeds()];
   }
   const needKey = (need) => need ? `${need.kind}:${need.id}` : "";
   function openNeed(need) {
@@ -71935,13 +72087,86 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       renderQuestion(body, need.question);
       return;
     }
+    $("ask-title").textContent = need.title;
+    // A plan opens on its own page, in Vibe's rail: Vibe stays the frame.
+    if (need.kind === "plan") {
+      $("ask-kicker").textContent = `Plan${position}`;
+      watch.textContent = "Open the plan";
+      watch.onclick = () => { closeAsk({ quiet: true }); go("plans", { planId: need.id }); };
+      renderPlanNeed(body, need);
+      return;
+    }
     watch.textContent = "Open on the task board";
     watch.onclick = () => { closeAsk({ quiet: true }); go("tasks", { taskId: need.id, filter: "all" }); };
-    $("ask-kicker").textContent = `${["approval", "family"].includes(need.kind) ? "Waiting for your go-ahead" : need.row?.blockedBy === "owner" ? "Stopped by you" : "Stuck"}${position}`;
-    $("ask-title").textContent = need.title;
+    $("ask-kicker").textContent = `${["approval", "family"].includes(need.kind) ? "Waiting for your go-ahead" : need.kind === "review" ? "Finished · yours to check" : need.row?.blockedBy === "owner" ? "Stopped by you" : "Stuck"}${position}`;
     if (need.kind === "family") renderFamily(body, need);
     else if (need.kind === "approval") renderApproval(body, need, task);
+    else if (need.kind === "review") renderReview(body, need, task);
     else renderBlocked(body, need, task);
+  }
+  // A result whose check has not settled: read what it did, then confirm it
+  // yourself or send it back. The same host calls as the task board's
+  // Confirm done and Retry.
+  function renderReview(body, need, task) {
+    const verdict = task?.verification?.state;
+    body.append(chips([chip(verdict === "failed" ? "Its check failed" : verdict === "unverified" ? "Could not be checked" : "Check still running", verdict === "failed" ? "blocker" : ""), task?.updatedAt ? el("span", "vibe-ask-when", `finished ${ago(task.updatedAt)}`) : null]));
+    const said = String(task?.verification?.reason || task?.result?.summary || task?.summary || task?.lastAttempt?.summary || "").trim();
+    body.append(el("p", "vibe-ask-detail", said || "The worker finished and its check has not settled yet. Look at the result in your project, then confirm it or send it back."));
+    const text = brief(task);
+    if (text) body.append(text);
+    const checking = ["verifying"].includes(task?.status);
+    body.append(actions([
+      { label: "Confirm done", primary: true, title: "You checked the result yourself: mark it complete", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "status", status: "done" }), "Confirmed. It's marked done.") },
+      { label: "Send it back", disabled: checking, title: checking ? "Its check is running right now; try again when it settles" : "Return it to the queue for another attempt", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "retry" }), "Sent back. It builds again when a worker is free.") },
+    ]));
+  }
+  // What a plan waits for. Mefi's follow-up in the interview is answered
+  // right here, through the same planning:assist call the Plans page makes;
+  // the plan's other turns (approve, create tasks) open the plan itself.
+  const PLAN_COPY = {
+    Finish: "Creating this plan's tasks stopped part way. Open the plan to finish; tasks it already made are reused.",
+    "Create tasks": "You approved this plan. Open it to create its tasks; they join the queue under your permission settings.",
+    Review: "The plan's specification and task briefs are written. Read them, then approve the plan or send it back with changes.",
+  };
+  function renderPlanNeed(body, need) {
+    const plan = need.plan || {};
+    const questions = Array.isArray(plan.questions) ? plan.questions : [];
+    const decided = questions.filter((question) => question?.status === "resolved").length;
+    body.append(chips([chip("Plan", "decision"), questions.length ? chip(`${decided} of ${questions.length} decided`) : null, plan.updatedAt ? el("span", "vibe-ask-when", ago(plan.updatedAt)) : null]));
+    const open = () => { closeAsk({ quiet: true }); go("plans", { planId: plan.id }); };
+    if (need.what !== "ask") {
+      body.append(el("p", "vibe-ask-detail", PLAN_COPY[need.verb] || "This plan is waiting on you."));
+      body.append(actions([{ label: need.verb === "Review" ? "Review the plan" : need.verb === "Finish" ? "Finish creating tasks" : "Create its tasks", primary: true, run: open }]));
+      return;
+    }
+    const asked = el("div", "vibe-ask-brief");
+    asked.append(el("span", "vibe-ask-label", need.question.question || "The question"), el("p", "vibe-ask-detail", need.ask));
+    body.append(asked);
+    const key = `plan:${plan.id}:${need.question.id}`;
+    const own = el("form", "vibe-ask-own");
+    const input = el("textarea");
+    input.rows = 3; input.placeholder = "Answer in your own words…";
+    input.setAttribute("aria-label", "Your answer to the plan");
+    input.value = askDrafts.get(key)?.text || "";
+    input.addEventListener("input", () => askDrafts.set(key, { text: input.value, optionId: null }));
+    const send = el("button", "vibe-btn primary", "Send");
+    send.type = "submit"; send.disabled = state.askSending;
+    own.append(input, send);
+    own.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const message = input.value.trim();
+      if (!message) { input.focus(); return; }
+      if (!api()?.planningAssist) { open(); return; }
+      void act(need, async () => {
+        const result = await api().planningAssist({ projectId: projectId(), planId: plan.id, version: plan.version, kind: "interview", questionId: need.question.id, message, useWeb: false });
+        if (result?.ok !== false) askDrafts.delete(key);
+        return result ?? { ok: true };
+      }, "Answered. Mefi reads it back on the plan.");
+    });
+    input.addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); own.requestSubmit(); } });
+    body.append(own);
+    body.append(el("p", "vibe-ask-note-inline", "Only the decision you record on the plan is a requirement; your answer helps Mefi shape it."));
+    if (askRefocus) { askRefocus = false; input.focus(); }
   }
   // A request split into steps under Verify first: its steps start together.
   function renderFamily(body, need) {
@@ -72087,7 +72312,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const row = need.row || {};
     const hold = row.blockedBy;
     const reason = row.reason || task?.verification?.reason || task?.lastRunError || "The last attempt could not be confirmed.";
-    body.append(chips([chip(hold === "owner" ? "Stopped by you" : hold === "loop" ? "Same failure repeating" : hold === "duplicate" ? "Looks like a duplicate" : "Stuck", hold === "owner" ? "" : "blocker"), task?.updatedAt ? el("span", "vibe-ask-when", ago(task.updatedAt)) : null]));
+    body.append(chips([chip(HOLD_CHIPS[hold] || "Stuck", hold === "owner" ? "" : "blocker"), task?.updatedAt ? el("span", "vibe-ask-when", ago(task.updatedAt)) : null]));
     body.append(el("p", "vibe-ask-detail", reason));
     const lastError = String(task?.lastRunError || "").trim();
     if (lastError && lastError !== reason) body.append(el("pre", "vibe-ask-evidence", lastError.split("\n").slice(-4).join("\n")));
@@ -72121,6 +72346,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (result.backlog && belongs(result.backlog)) state.backlog = { ...result.backlog, ok: true };
       if (result.task) state.tasks = state.tasks.map((item) => item.id === result.task.id ? result.task : item);
       if (result.state && belongs(result.state)) state.assistant = result.state;
+      if (result.plan?.id && belongs(result)) state.plans = state.plans.map((plan) => plan.id === result.plan.id ? result.plan : plan);
       // Until the next read, what was just handled stays out of Needs you.
       if (state.backlog && Array.isArray(state.backlog[need.kind])) state.backlog = { ...state.backlog, [need.kind]: state.backlog[need.kind].filter((item) => item.id !== need.id) };
       if (requestProject !== projectId()) { state.askSending = false; signatures.delete("ask"); return; }
@@ -72131,7 +72357,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     } catch (error) {
       state.askSending = false;
       if (requestProject !== projectId()) return;
-      state.askErrors[requestKey] = error.gone ? error.message : `${error?.message || "That didn't go through."} You can also open it on the task board.`;
+      state.askErrors[requestKey] = error.gone ? error.message : `${error?.message || "That didn't go through."} You can also open it ${need.kind === "plan" ? "on its plan" : "on the task board"}.`;
       if (needKey(state.need) === requestKey) { note.textContent = state.askErrors[requestKey]; note.dataset.tone = error.gone ? "" : "bad"; }
       signatures.delete("ask"); renderAsk();
     }
@@ -72266,6 +72492,46 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     target?.click();
   });
 
+  // ---- Vibe's own keys ----------------------------------------------------------
+  // On the front door, outside a text field, single keys open what the dock
+  // and the top bar hold. They run before nav.js's global keys (capture), so
+  // T here opens Vibe's Tasks panel instead of Build's task board; D (Watch),
+  // H, ? and Ctrl K stay nav.js's. The dock and the box wear them as keycaps.
+  const togglePanel = (kind) => (window.MefiVibePanels?.current?.() === kind ? window.MefiVibePanels.close() : openPanel(kind));
+  const VIBE_KEYS = [
+    ["/", "vibe-key-box", "Vibe: type in the box", () => { const input = $("input"); input.focus({ preventScroll: true }); try { input.setSelectionRange(input.value.length, input.value.length); } catch { /* not a text field */ } }],
+    ["N", "vibe-key-needs", "Vibe: what needs you", () => { const waiting = needs(); if (waiting.length) openNeed(waiting[0]); else feedback("Nothing needs you right now.", "good"); }],
+    ["C", "vibe-key-chat", "Vibe: the conversation", () => (state.chatOpen ? closeChat() : openChat())],
+    ["T", "vibe-key-tasks", "Vibe: your tasks", () => togglePanel("tasks")],
+    ["P", "vibe-key-plans", "Vibe: plans", () => togglePanel("plans")],
+    ["I", "vibe-key-ideas", "Vibe: ideas", () => togglePanel("ideas")],
+    ["M", "vibe-key-team", "Vibe: the team (who works on which model)", () => togglePanel("team")],
+    ["S", "vibe-key-settings", "Vibe: settings", () => togglePanel("settings")],
+  ];
+  function vibeKeysOpen() {
+    const nav = window.MefiNav?.state;
+    if (!active() || nav?.sheet || nav?.transient || window.MefiBoot?.isActive?.()) return false;
+    if (window.MefiCompanionHub?.isOpen?.() || window.MefiSidebar?.isOpen?.() || (notes && !notes.hidden)) return false;
+    // A drawer you are in (focus inside it, or the pointer on it) takes what
+    // you type (nav.js typeInto): its letters are writing, not these keys.
+    for (const id of ["panel", "ask", "chat"]) {
+      const drawer = $(id);
+      if (!drawer || drawer.hidden) continue;
+      let hovered = false;
+      try { hovered = Boolean(drawer.matches?.(":hover")); } catch { /* no :hover outside a browser */ }
+      if (hovered || (document.activeElement && drawer.contains?.(document.activeElement))) return false;
+    }
+    return true;
+  }
+  window.addEventListener("keydown", (event) => {
+    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.isComposing || String(event.key || "").length !== 1) return;
+    const entry = VIBE_KEYS.find(([key]) => key === event.key.toUpperCase());
+    if (!entry || event.target?.closest?.("input, textarea, select, [contenteditable]") || !vibeKeysOpen()) return;
+    event.preventDefault();
+    init();
+    entry[3]();
+  }, true);
+
   // ---- what's new -----------------------------------------------------------
   const notes = document.getElementById("vibe-notes");
   let notesReturn = null;
@@ -72344,8 +72610,47 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
     run: () => showNotes({ force: true }),
   });
+  // Vibe's keys on the shortcut sheet, under Home: display-only rows
+  // (nav.js's handleKey skips the "command" group; the listener above acts).
+  for (const [key, id, label] of [...VIBE_KEYS, ["Enter", "vibe-key-talk", "Vibe: talk it over (in the box)"], ["Ctrl Enter", "vibe-key-build", "Vibe: build it (in the box)"]]) {
+    window.MefiNav?.register?.({
+      id, label, short: label, desc: label, kind: "action", layer: null, section: "home", group: "command", key, glyph: null, badge: null,
+      showIn: { tabs: false, tools: false, dock: false, palette: false, help: true, footer: false },
+      hidden: () => mode() !== "vibe",
+    });
+  }
+
+  // ---- updates ----------------------------------------------------------------
+  // Build's update pill sits on the app rail, which Vibe hides. Vibe mirrors
+  // it while it asks for you (an update waiting to apply, one held, a new
+  // release), and a click does what the pill does (nav.js initUpdates).
+  function mirrorUpdate() {
+    const pill = document.getElementById("update-pill");
+    const button = $("update");
+    if (!pill || !button) return;
+    const paint = () => {
+      const release = pill.dataset.release === "1";
+      const show = !pill.hidden && (release || ["pending", "held"].includes(pill.dataset.state));
+      button.hidden = !show;
+      if (!show) return;
+      button.dataset.tone = pill.dataset.state === "held" ? "bad" : "ask";
+      $("update-text").textContent = pill.querySelector(".label")?.textContent || "Update ready";
+      button.title = pill.title || "An update is ready";
+    };
+    paint();
+    if (typeof MutationObserver === "function") new MutationObserver(paint).observe(pill, { attributes: true, attributeFilter: ["hidden", "data-state", "data-release", "title"] });
+    button.addEventListener("click", () => pill.click());
+  }
+
+  // ---- Settings' launch switch ---------------------------------------------------
+  const startSwitch = document.getElementById("settings-start-vibe");
+  if (startSwitch) {
+    startSwitch.checked = startsInVibe();
+    startSwitch.addEventListener("change", () => { setStartsInVibe(startSwitch.checked); window.MefiToast?.(startSwitch.checked ? "Studio starts in Vibe every launch." : "Studio keeps the mode you close it in.", "info"); });
+  }
 
   window.addEventListener("mefi:nav", paintRail);
+  mirrorUpdate();
   paintMode();
   // A plain read of where the vibe stands, for tests and anything driving
   // Studio: what holds the agents back, what waits on you, what is building.
@@ -72369,6 +72674,258 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     return false;
   }
   window.MefiVibe = { enter, exit, isActive: active, refresh, mode, setMode, landing, startup, showNotes, closeNotes, snapshot, openPanel, closeDrawers, composeEvolution, suggestEvolution, openNeed: openNeedById, paintDock: () => renderDock(lanes()), promoteIdea: (idea) => promoteIdea(idea), feedback: (text, tone) => feedback(text, tone), ready: () => refreshFlight ?? Promise.resolve() };
+})();
+
+// Key tips: small pop-ups beside a button, tab or box that name the key doing
+// the same thing, as keycaps. A first launch meets them one or two at a time,
+// once the setup helper, the walkthrough and every sheet are out of the way.
+// Clicking a tip (or pressing the key it names) fades it away for good; its
+// "Turn tips off" link, Settings (#settings-key-tips), Vibe's settings panel
+// and Search all switch them off, and "Show key tips again" brings every one
+// back. What was seen lives in localStorage, per device, like the other
+// first-run notes (mefiStudio.keyHint.v1, mefiStudio.setupHelper.seen).
+(function () {
+  "use strict";
+  const OFF_KEY = "mefiStudio.keyTips";
+  const SEEN_KEY = "mefiStudio.keyTips.seen";
+  const HOLD_MS = 5000; // quiet after launch before the first tip
+  const TICK_MS = 2000;
+  const MAX_SHOWN = 2;
+  const headless = /[?&](?:smoke|capture)=1(?:&|$)/.test(String(window.location?.search || ""));
+  const read = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
+  const write = (key, value) => { try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch { /* private store */ } };
+
+  const vibeMode = () => { try { return window.MefiVibe?.mode?.() === "vibe"; } catch { return false; } };
+  const onVibe = () => Boolean(window.MefiVibe?.isActive?.());
+  const onCommand = () => Boolean(window.MefiIdle?.isActive?.()) && !window.MefiNav?.state?.sheet;
+  const onBuild = () => !vibeMode() && !onCommand();
+  // Each tip: where it applies, the control it points at (the first visible
+  // match), which side it sits on, and its keys with what they do.
+  const TIPS = [
+    { id: "vibe-box", when: onVibe, target: "#vibe-compose", side: "right", parts: [["/", "jump into the box"], ["Enter", "talk it over"], ["Ctrl+Enter", "build it"]] },
+    { id: "vibe-dock", when: onVibe, target: "#vibe-dock", side: "right", parts: [["D", "watch the tree"], ["T", "tasks"], ["M", "team"]] },
+    { id: "vibe-pulse", when: onVibe, target: "#vibe-pulse", side: "bottom", parts: [["N", "what needs you"], ["C", "the conversation"]] },
+    { id: "vibe-search", when: onVibe, target: "#vibe-layer .vibe-top-actions [data-nav='palette']", side: "bottom", parts: [["Ctrl+K", "find anything"], ["?", "every shortcut"]] },
+    { id: "build-home", when: onBuild, target: "#app-rail-sections, #tabs", side: "right", parts: [["H", "Home"], ["D", "Command view"], ["T", "task board"]] },
+    { id: "build-search", when: onBuild, target: "#app-rail-foot [data-nav='palette'], .tools-cluster [data-nav='palette'], [data-nav='palette']", side: "right", parts: [["Ctrl+K", "jump anywhere"], ["?", "every shortcut"], ["Ctrl+,", "Settings"]] },
+    { id: "command-walk", when: onCommand, target: "#idle-task-input", side: "bottom", parts: [["← →", "walk the tree"], ["Enter", "open a node"], ["F", "fit it all"]] },
+    { id: "command-leave", when: onCommand, target: "#cmd-dock, .cmd-dock", side: "top", parts: [["Esc", "step back out"], ["V", "3D or flat map"], ["?", "every key"]] },
+  ];
+
+  const state = { shown: new Map(), timer: null, started: false, seen: readSeen() };
+  function readSeen() {
+    try { const list = JSON.parse(read(SEEN_KEY) || "[]"); return new Set(Array.isArray(list) ? list.map(String) : []); } catch { return new Set(); }
+  }
+  const saveSeen = () => write(SEEN_KEY, JSON.stringify([...state.seen]));
+  const enabled = () => read(OFF_KEY) !== "off";
+  const remaining = () => TIPS.filter((tip) => !state.seen.has(tip.id));
+
+  // Nothing pops over the boot gate, the setup helper, the walkthrough,
+  // What's new, an open sheet or dialog, the companion or a menu.
+  function busy() {
+    const nav = window.MefiNav?.state;
+    if (nav?.sheet || nav?.transient) return true;
+    if (window.MefiBoot?.isActive?.() || window.MefiSetupHelper?.isOpen?.() || window.MefiCompanionHub?.isOpen?.() || window.MefiSidebar?.isOpen?.()) return true;
+    for (const id of ["walkthrough-overlay", "walkthrough-coach", "vibe-notes", "boot-layer"]) {
+      const node = document.getElementById(id);
+      if (node && !node.hidden && node.getClientRects?.().length) return true;
+    }
+    return document.hidden === true;
+  }
+  function targetOf(tip) {
+    for (const selector of tip.target.split(/,\s*/)) {
+      for (const node of document.querySelectorAll(selector)) {
+        const rect = node.getBoundingClientRect?.();
+        if (rect && rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.right > 0 && rect.top < window.innerHeight && rect.left < window.innerWidth) return node;
+      }
+    }
+    return null;
+  }
+
+  // ---- the pop-up -----------------------------------------------------------------
+  function keyCaps(combo) {
+    const holder = document.createElement("span");
+    holder.className = "key-tip-keys";
+    combo.split("+").forEach((part, index) => {
+      if (index) holder.append(document.createTextNode("+"));
+      const cap = document.createElement("kbd");
+      cap.className = "key";
+      cap.textContent = part;
+      holder.append(cap);
+    });
+    return holder;
+  }
+  function build(tip) {
+    const box = document.createElement("div");
+    box.className = "key-tip";
+    box.dataset.tip = tip.id;
+    box.dataset.side = tip.side;
+    box.setAttribute("role", "note");
+    box.setAttribute("aria-label", `Key tip: ${tip.parts.map(([keys, text]) => `${keys.replace("+", " ")} ${text}`).join(", ")}`);
+    box.title = "Click to fade this tip away";
+    const list = document.createElement("ul");
+    list.className = "key-tip-list";
+    for (const [keys, text] of tip.parts) {
+      const item = document.createElement("li");
+      const label = document.createElement("span");
+      label.textContent = text;
+      item.append(keyCaps(keys), label);
+      list.append(item);
+    }
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "key-tip-close";
+    close.setAttribute("aria-label", "Hide this tip");
+    close.textContent = "×";
+    const off = document.createElement("button");
+    off.type = "button";
+    off.className = "key-tip-off";
+    off.textContent = "Turn tips off";
+    off.addEventListener("click", (event) => { event.stopPropagation(); setEnabled(false); window.MefiToast?.("Key tips are off. Turn them back on in Settings.", "info"); });
+    box.append(list, close, off);
+    box.addEventListener("click", () => dismiss(tip.id));
+    return box;
+  }
+  function place(box, target, wanted) {
+    const rect = target.getBoundingClientRect();
+    const width = box.offsetWidth, height = box.offsetHeight, gap = 12, pad = 10;
+    // No room beside it on the right: the other side, arrow and all.
+    const side = wanted === "right" && rect.right + gap + width > window.innerWidth - pad && rect.left - gap - width >= pad ? "left" : wanted;
+    if (box.dataset.side !== side) box.dataset.side = side;
+    let left, top;
+    if (side === "right") { left = rect.right + gap; top = rect.top + Math.min(rect.height, 160) / 2 - height / 2; }
+    else if (side === "left") { left = rect.left - gap - width; top = rect.top + Math.min(rect.height, 160) / 2 - height / 2; }
+    else { left = rect.left + rect.width / 2 - width / 2; top = side === "bottom" ? rect.bottom + gap : rect.top - gap - height; }
+    const clampedLeft = Math.max(pad, Math.min(window.innerWidth - width - pad, left));
+    const clampedTop = Math.max(pad, Math.min(window.innerHeight - height - pad, top));
+    box.style.left = `${Math.round(clampedLeft)}px`;
+    box.style.top = `${Math.round(clampedTop)}px`;
+    // The little arrow keeps pointing at the control when the box is clamped.
+    if (side === "top" || side === "bottom") box.style.setProperty?.("--arrow", `${Math.round(rect.left + rect.width / 2 - clampedLeft)}px`);
+    else box.style.setProperty?.("--arrow", `${Math.round(Math.max(14, Math.min(height - 14, rect.top + Math.min(rect.height, 160) / 2 - clampedTop)))}px`);
+    return { left: clampedLeft, top: clampedTop, right: clampedLeft + width, bottom: clampedTop + height };
+  }
+  const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+  function hide(id, { seen = false } = {}) {
+    const entry = state.shown.get(id);
+    if (seen && !state.seen.has(id)) { state.seen.add(id); saveSeen(); }
+    if (!entry) return;
+    state.shown.delete(id);
+    const box = entry.box;
+    box.classList.add("is-leaving");
+    const gone = () => box.remove();
+    const still = window.MefiNav?.noMotion?.();
+    if (still) gone(); else { box.addEventListener("transitionend", gone, { once: true }); setTimeout(gone, 400); }
+  }
+  function dismiss(id) {
+    hide(id, { seen: true });
+    // The next tip waits a beat instead of popping into the same place.
+    schedule(900);
+  }
+
+  // One pass: drop tips whose place is gone, move the rest, then add unseen
+  // ones for what is on screen until MAX_SHOWN stand.
+  function tick() {
+    state.timer = null;
+    if (!enabled() || headless) { clear(); return; }
+    if (busy()) { for (const id of [...state.shown.keys()]) hide(id); schedule(TICK_MS); return; }
+    const rects = [];
+    for (const [id, entry] of [...state.shown]) {
+      const target = entry.tip.when() ? targetOf(entry.tip) : null;
+      if (!target) { hide(id); continue; }
+      rects.push(place(entry.box, target, entry.tip.side));
+    }
+    for (const tip of remaining()) {
+      if (state.shown.size >= MAX_SHOWN) break;
+      if (state.shown.has(tip.id) || !tip.when()) continue;
+      const target = targetOf(tip);
+      if (!target) continue;
+      const box = build(tip);
+      if (state.shown.size) box.style.setProperty?.("--tip-delay", "420ms");
+      document.body.append(box);
+      const rect = place(box, target, tip.side);
+      if (rects.some((other) => overlaps(other, rect))) { box.remove(); continue; }
+      rects.push(rect);
+      state.shown.set(tip.id, { tip, box });
+    }
+    if (remaining().length) schedule(TICK_MS);
+  }
+  function schedule(ms) {
+    if (state.timer) clearTimeout(state.timer);
+    state.timer = setTimeout(tick, ms);
+  }
+  function clear() {
+    if (state.timer) clearTimeout(state.timer);
+    state.timer = null;
+    for (const id of [...state.shown.keys()]) hide(id);
+  }
+
+  // Pressing the key a tip names means it landed: that tip fades for good.
+  const comboOf = (event) => {
+    const key = event.key === " " ? "Space" : event.key?.length === 1 ? event.key.toUpperCase() : event.key;
+    const arrows = { ArrowLeft: "← →", ArrowRight: "← →" };
+    return [(event.ctrlKey || event.metaKey) && key !== "Control" ? "Ctrl" : null, arrows[key] || (key === "Escape" ? "Esc" : key)].filter(Boolean).join("+");
+  };
+  function learned(event) {
+    if (!state.shown.size) return;
+    const combo = comboOf(event);
+    // Letters typed into a field are writing, not the shortcut; Enter and
+    // Ctrl chords in the box are the keys the box tip names.
+    const typing = event.target?.closest?.("input, textarea, select, [contenteditable]");
+    if (typing && !combo.startsWith("Ctrl+") && !["Enter", "Esc"].includes(combo)) return;
+    for (const [id, entry] of [...state.shown]) if (entry.tip.parts.some(([keys]) => keys.toUpperCase() === combo.toUpperCase())) dismiss(id);
+  }
+
+  function setEnabled(on) {
+    write(OFF_KEY, on ? null : "off");
+    const box = document.getElementById("settings-key-tips");
+    if (box) box.checked = on;
+    if (on) start(true); else clear();
+    return on;
+  }
+  // Every tip back, as for a first launch.
+  function reset() {
+    state.seen = new Set();
+    write(SEEN_KEY, null);
+    setEnabled(true);
+    schedule(600);
+  }
+  function start(soon = false) {
+    if (headless) return;
+    if (!state.started) {
+      state.started = true;
+      window.addEventListener("keydown", learned, true);
+      window.addEventListener("resize", () => { if (state.shown.size) schedule(60); });
+      window.addEventListener("mefi:nav", () => { if (enabled() && remaining().length) schedule(state.shown.size ? 60 : 1200); });
+      window.addEventListener("mefi:project-changed", () => schedule(1200));
+      const box = document.getElementById("settings-key-tips");
+      if (box) { box.checked = enabled(); box.addEventListener("change", () => { setEnabled(box.checked); window.MefiToast?.(box.checked ? "Key tips are on." : "Key tips are off.", "info"); }); }
+    }
+    if (enabled() && remaining().length) schedule(soon ? 600 : HOLD_MS);
+  }
+
+  // The key tips cover what nav.js's one-time "single keys move around" toast
+  // says, so a device that will see them skips that toast.
+  if (!headless && enabled() && remaining().length) write("mefiStudio.keyHint.v1", "1");
+
+  window.MefiNav?.register?.({
+    id: "keyTipsToggle", get label() { return enabled() ? "Turn key tips off" : "Turn key tips on"; }, short: "Key tips", kind: "action", layer: null, section: "help", group: "system",
+    key: null, glyph: "g-help", badge: null, desc: "Small pop-ups beside buttons that name the key doing the same thing",
+    searchTerms: "key tips hints hotkeys shortcuts keyboard popups help first time", showIn: { palette: true },
+    run: () => { const on = setEnabled(!enabled()); window.MefiToast?.(on ? "Key tips are on." : "Key tips are off.", "info"); },
+  });
+  window.MefiNav?.register?.({
+    id: "keyTipsAgain", label: "Show key tips again", short: "Key tips again", kind: "action", layer: null, section: "help", group: "system",
+    key: null, glyph: "g-help", badge: null, desc: "Bring back every key tip you faded away",
+    searchTerms: "key tips hints hotkeys shortcuts keyboard reset again", showIn: { palette: true },
+    run: () => reset(),
+  });
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => start(), { once: true });
+  else start();
+
+  window.MefiKeyTips = { enabled, setEnabled, reset, tick, shown: () => [...state.shown.keys()], seen: () => [...state.seen], tips: () => TIPS.map(({ id, parts }) => ({ id, parts })) };
 })();
 
 // Mefi's Studio AI+ — booklet renderer, filters, refresh-on-open, studio launcher UI.

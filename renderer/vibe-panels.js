@@ -604,8 +604,38 @@
     box.type = "checkbox"; box.setAttribute("role", "switch");
     box.checked = read("mefiStudio.commandHome") !== "0";
     box.addEventListener("change", () => setLaunch(box.checked));
-    launch.append(el("span", "vibe-set-label", "Open Vibe on launch"), box, el("span", "vibe-set-hint", "Off opens Watch, the live node tree, instead."));
+    launch.append(el("span", "vibe-set-label", "Open Vibe on launch"), box, el("span", "vibe-set-hint", "Off reopens the last page you used instead."));
     body.append(launch);
+
+    // Vibe even after a day in Build (vibe.js LAUNCH_KEY), mirrored by
+    // Settings' own switch.
+    const start = el("label", "vibe-set vibe-set-toggle");
+    const startBox = el("input");
+    startBox.type = "checkbox"; startBox.setAttribute("role", "switch");
+    startBox.checked = read("mefiStudio.uiMode.launch") !== "last";
+    startBox.addEventListener("change", () => {
+      const own = document.getElementById("settings-start-vibe");
+      if (own && own.type === "checkbox") { own.checked = startBox.checked; own.dispatchEvent?.(new Event("change", { bubbles: true })); }
+      else { try { localStorage.setItem("mefiStudio.uiMode.launch", startBox.checked ? "vibe" : "last"); } catch { /* private store */ } }
+      note(startBox.checked ? "Studio starts in Vibe every launch." : "Studio keeps the mode you close it in.", "good");
+    });
+    start.append(el("span", "vibe-set-label", "Always start in Vibe"), startBox, el("span", "vibe-set-hint", "Off keeps Build if you closed Studio in Build."));
+    body.append(start);
+
+    // Key tips (renderer/key-tips.js): the small pop-ups naming each button's key.
+    const tips = window.MefiKeyTips;
+    if (tips) {
+      const row = el("label", "vibe-set vibe-set-toggle");
+      const tipsBox = el("input");
+      tipsBox.type = "checkbox"; tipsBox.setAttribute("role", "switch");
+      tipsBox.checked = tips.enabled();
+      tipsBox.addEventListener("change", () => { tips.setEnabled(tipsBox.checked); note(tipsBox.checked ? "Key tips are on." : "Key tips are off.", "good"); });
+      const again = el("button", "vibe-ask-link", "Show them again");
+      again.type = "button";
+      again.addEventListener("click", (event) => { event.preventDefault(); tips.reset(); tipsBox.checked = true; close({ quiet: true }); });
+      row.append(el("span", "vibe-set-label", "Key tips"), tipsBox, el("span", "vibe-set-hint", "Small pop-ups beside buttons with the key that does the same. Click one to fade it away."), again);
+      body.append(row);
+    }
 
     const links = el("div", "vibe-set-links");
     for (const [label, id, params] of [["Appearance and effects", "studio", { category: "appearance" }], ["AI connections", "agents", { section: "setup", pane: "connections" }]]) {
@@ -642,7 +672,7 @@
       void api()?.prefsSet?.({ commandHome: on });
       try { localStorage.setItem("mefiStudio.commandHome", on ? "1" : "0"); } catch { /* private store */ }
     }
-    note(on ? "Studio opens on Vibe." : "Studio opens on Watch.", "good");
+    note(on ? "Studio opens on Vibe." : "Studio reopens the last page you used.", "good");
   }
 
   // ---- a new app ----------------------------------------------------------------------

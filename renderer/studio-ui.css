@@ -622,3 +622,45 @@ html[data-studio-style] .catalog-model { border-radius: var(--r-lg); }
 .autonomy-settings-dialog { width: min(560px, 92vw); max-height: 85vh; overflow-y: auto; background: var(--panel-solid); color: var(--ivory); border: 1px solid var(--line-strong); border-radius: 18px; padding: 22px; box-shadow: var(--shadow-3); }
 .autonomy-settings-dialog > .sheet-close { position: sticky; top: 0; float: right; margin: -8px -8px 0 8px; z-index: 1; }
 .autonomy-settings-dialog::backdrop { background: var(--scrim); backdrop-filter: var(--scrim-blur); }
+
+/* --- key tips (renderer/key-tips.js) ---------------------------------------------
+   A small glass card beside a control, naming its keys as keycaps, with an
+   arrow at the control. It springs in and fades out; click it to dismiss. */
+.key-tip {
+  position: fixed; z-index: 9000; left: 0; top: 0;
+  display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 6px 10px;
+  max-width: 300px; padding: 10px 10px 8px 14px;
+  border: 1px solid color-mix(in srgb, var(--gold) 34%, transparent); border-radius: 14px;
+  background: color-mix(in srgb, var(--panel-solid) 92%, transparent); backdrop-filter: var(--blur-hard);
+  box-shadow: var(--studio-float-shadow), 0 0 36px -16px color-mix(in srgb, var(--gold) 60%, transparent);
+  color: var(--ivory); font: 500 12.5px/1.35 var(--font-ui);
+  cursor: pointer; opacity: 1; translate: 0 0; scale: 1;
+  transition: opacity 180ms var(--ease-out, ease-out), translate 260ms var(--ease-spring, ease-out), scale 260ms var(--ease-spring, ease-out);
+  transition-delay: var(--tip-delay, 0ms);
+}
+@starting-style { .key-tip { opacity: 0; scale: .92; translate: 0 6px; } }
+.key-tip[data-side="bottom"] { transform-origin: 50% 0; }
+.key-tip[data-side="top"] { transform-origin: 50% 100%; }
+.key-tip[data-side="right"] { transform-origin: 0 50%; }
+@starting-style { .key-tip[data-side="bottom"] { translate: 0 -6px; } .key-tip[data-side="right"] { translate: -6px 0; } }
+.key-tip.is-leaving { opacity: 0; scale: .96; transition-delay: 0ms; pointer-events: none; }
+.key-tip:hover { border-color: color-mix(in srgb, var(--gold) 55%, transparent); }
+.key-tip::after {
+  content: ""; position: absolute; width: 10px; height: 10px; rotate: 45deg;
+  background: inherit; border: inherit; border-radius: 2px;
+}
+.key-tip[data-side="top"]::after { bottom: -6px; left: calc(var(--arrow, 50%) - 5px); border-top: 0; border-left: 0; }
+.key-tip[data-side="bottom"]::after { top: -6px; left: calc(var(--arrow, 50%) - 5px); border-bottom: 0; border-right: 0; }
+.key-tip[data-side="right"]::after { left: -6px; top: calc(var(--arrow, 50%) - 5px); border-top: 0; border-right: 0; }
+.key-tip[data-side="left"]::after { right: -6px; top: calc(var(--arrow, 50%) - 5px); border-bottom: 0; border-left: 0; }
+.key-tip-list { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.key-tip-list li { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.key-tip-keys { display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; min-width: 64px; color: var(--muted); font-size: 11px; }
+.key-tip .key { min-width: 22px; height: 20px; padding: 0 6px; font-size: 10.5px; line-height: 17px; border-radius: 6px; opacity: 1; color: var(--gold-bright); background: color-mix(in srgb, var(--gold) 12%, transparent); border-color: color-mix(in srgb, var(--gold) 36%, transparent); border-bottom-width: 2px; }
+.key-tip-close { width: 22px; height: 22px; padding: 0; border: 0; border-radius: 7px; background: none; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; }
+.key-tip-close:hover, .key-tip-close:focus-visible { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 8%, transparent); }
+.key-tip-off { grid-column: 1 / -1; justify-self: start; padding: 0; border: 0; background: none; color: var(--muted); font-size: 11px; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.key-tip-off:hover, .key-tip-off:focus-visible { color: var(--ivory); }
+.key-tip :is(button):focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 1px; }
+html[data-motion="off"] .key-tip { transition: none; }
+@media (max-width: 720px) { .key-tip { display: none; } }

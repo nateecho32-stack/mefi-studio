@@ -68,6 +68,7 @@ const INLINE_SCRIPTS = [
   "vibe-flow.js",
   "vibe-panels.js",
   "vibe.js",
+  "key-tips.js",
   "booklet.js",
 ];
 
