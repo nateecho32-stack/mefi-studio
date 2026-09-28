@@ -100,7 +100,7 @@ test("stranded work is listed: uncommitted files, stashes, branches and worktree
   await run(second, "fetch", "-q", "origin");
   await run(second, "switch", "-q", "-c", "local-only");
   await commit(second, "draft.txt");
-  await run(second, "switch", "-q", "-c", "published");
+  await run(second, "switch", "-q", "-c", "published", "main");
   await commit(second, "shared.txt");
   await run(second, "push", "-q", "origin", "published");
   await run(second, "switch", "-q", "main");
@@ -117,7 +117,7 @@ test("stranded work is listed: uncommitted files, stashes, branches and worktree
     "Worktree pc2-tree (claude/tree): 1 uncommitted file.",
     "Branch local-only on this PC: 1 commit not on main.",
     "Branch claude/cloud-work on GitHub: 1 commit not on main.",
-    "Branch published on GitHub: 2 commits not on main.",
+    "Branch published on GitHub: 1 commit not on main.",
   ]);
   const result = await sync(second);
   assert.equal(result.headline, "Some work on this PC is not on GitHub yet.");
