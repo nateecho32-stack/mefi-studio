@@ -46,18 +46,20 @@
     move.className = "media-window-move";
     const pin = button("pin", "Pin", "Pin media in place", () => { pinned = !pinned; root.dataset.dodging = "false"; paintToggles(); persist(); });
     const dodge = button("avoid", "Move aside", "Move aside near the pointer in menus", () => { avoid = !avoid; yielded = false; paintToggles(); persist(); });
-    const minimize = button("minimize", "−", "Minimize media", () => {
-      minimized = !minimized; root.dataset.minimized = String(minimized);
+    const minimize = button("minimize", "−", "Minimize media", () => setMinimized(!minimized));
+    // Only the owner's own minimize moves focus; code that un-minimizes on the way to something else leaves it alone.
+    function setMinimized(value, { focus = true } = {}) {
+      minimized = Boolean(value); root.dataset.minimized = String(minimized);
       minimize.textContent = minimized ? "↗" : "−";
       minimize.title = minimized ? "Restore media" : "Minimize media";
       minimize.setAttribute("aria-label", minimize.title); minimize.setAttribute("aria-pressed", String(minimized));
       root.setAttribute("aria-label", minimized ? "Media player minimized" : "Media player");
-      layout(); focusPlayer();
-    });
+      layout(); if (focus) focusPlayer();
+    }
     const close = button("close", "×", "Close media and stop playback", () => { hide(); onClose(); });
     const backgroundButton = button("background", "Background", "Use video as Studio background", () => {
       end(); background = !background;
-      if (minimized) minimize.click();
+      if (minimized) setMinimized(false, { focus: false });
       paintVideo(); layout(); persist();
     });
     const opacityLabel = document.createElement("label"); opacityLabel.className = "media-window-transparency";
@@ -296,11 +298,11 @@
       graceUntil = now() + 1600;
     }
     function hide() {
-      if (minimized) minimize.click();
+      if (minimized) setMinimized(false, { focus: false });
       end(); visible = false; root.hidden = true; hovered = false; yielded = false; awaySince = 0; faded = false; paintVideo();
     }
     function reveal() {
-      if (minimized) minimize.click();
+      if (minimized) setMinimized(false, { focus: false });
       graceUntil = now() + 1600;
       focusPlayer();
     }
@@ -417,7 +419,7 @@
     return { show, hide, reveal, dock: value => { if (!value) dockDetached = false; if (value && dockDetached || JSON.stringify(value) === JSON.stringify(dockBox)) return; dockBox = value; layout(); },
       setBackground: value => { if (Boolean(value) !== background) backgroundButton.click(); },
       beginMove: start, moveKey: event => keyboard(event, "move"), minimize: () => minimize.click(),
-      snapshot: () => ({ minimized }), restore: (value) => { if (Boolean(value?.minimized) !== minimized) minimize.click(); } };
+      snapshot: () => ({ minimized }), restore: (value) => { if (Boolean(value?.minimized) !== minimized) setMinimized(value?.minimized, { focus: false }); } };
   }
   window.MefiMediaWindow = { create };
 })();

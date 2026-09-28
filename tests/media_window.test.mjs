@@ -219,6 +219,24 @@ test("Browser and provider minimize, restore and reveal focus the visible player
   }
 });
 
+test("Code that un-minimizes the player on its way elsewhere leaves focus where it was", () => {
+  const env = environment(); env.show();
+  const elsewhere = env.document.createElement("button"); env.document.body.append(elsewhere);
+  const minimized = () => env.root.dataset.minimized === "true";
+  for (const [name, run] of [
+    ["hide", () => env.controller.hide()],
+    ["setBackground", () => env.controller.setBackground(true)],
+    ["restore", () => env.controller.restore({ minimized: false })],
+  ]) {
+    env.controller.setBackground(false); env.show(); env.controller.minimize(); assert.equal(minimized(), true, name);
+    elsewhere.focus(); run();
+    assert.equal(minimized(), false, name);
+    assert.equal(env.document.activeElement, elsewhere, `${name} must not pull focus into the player`);
+  }
+  elsewhere.focus(); env.controller.restore({ minimized: true });
+  assert.equal(minimized(), true); assert.equal(env.document.activeElement, elsewhere, "restoring a saved minimized state does not focus either");
+});
+
 test("Keyboard adjustments and pointer cancellation are bounded and preference corruption is harmless", () => {
   const env = environment({ x: 900, y: -55, size: { video: { width: "bad", height: -500 } }, avoid: "false", pinned: "true" }); env.show();
   const before = env.rect(); assert.equal(before.width, 600); assert.equal(before.y, 16); assert.equal(before.height, 260);
