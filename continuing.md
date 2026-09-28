@@ -1,6 +1,6 @@
 # Continuing: handoff (2026-09-28, afternoon)
 
-Seven things are open:
+Eight things are open:
 1. **The 0.4.5 build.** It started today and paused at about 13:10, when the account hit its usage limit (it resets at 2:10 pm Central). The work is partial and uncommitted, in worktrees on this PC only.
 2. **Home PCs that keep working, and reaching them from Discord** (the co-work session). Start with Windows, the Your PCs agent lines and the Studio side of the Discord remote are on main. The bot side is parked as `wip/remote-dms`. The end-to-end test, the owner's setup and subscriptions-first routing are left (section 2).
 3. **Menu Batch 3.** This is the owner's decision, unchanged (section 3).
@@ -8,6 +8,7 @@ Seven things are open:
 5. **Model tracker, community model ratings and probes** (the "Discord bot model feedback integration" session). The Studio half is gated on `wip/model-community`; the bot half is built and tested on the bot's `wip/model-reviews`, but not documented or wired yet (section 5).
 6. **Build as a coding-agent desktop.** Built but untested, on the pushed branch `wip/builder-mode`. Vibe as the social mode is not started (section 6).
 7. **In-app performance: tree brightness** (the "In-app performance" session). The owner's 200% tree brightness keeps the GPU at 98–100% (Vibe 4.6 fps, Command 8.8, Home 4.1). A fix that brings them to 42, 36 and 43 fps is parked on the pushed branch `wip/tree-brightness-gpu`. It waits on the outline step and an owner look check (section 7).
+8. **The media player redesign** (the "Media player UI and performance improvements" session). A mini player with a transport, quick tree switches and a YouTube feed, on the pushed branch `wip/media-player-redesign`. It works in the offscreen probe; its tests aren't updated and it isn't landed (section 8).
 
 ## 1. 0.4.5: agents send only what's new, logging, load times, Friends 2.0
 
@@ -629,3 +630,60 @@ and closing idle sessions helps more than any code change.
 
 This work no longer holds `vibe.css`, `styles.css` or the idle.js frame pacing. Remove this section
 once the branch lands and the owner has answered item 2.
+
+## 8. Media player redesign: on `wip/media-player-redesign`, not landed
+
+**The owner's ask (2026-09-28).** A smaller hover dropdown that grows as you go deeper. Play, pause, back, forward and a volume slider. Quick switches for the node tree's visuals. A docked YouTube video that moves smoothly when the box scrolls (it jittered). A better-looking menu. An easy way to scroll through YouTube videos without the full website: click one to add it, or drag it into the queue "if it's your own or nobody is queued behind you".
+
+**Where the code is.** Commit `79ea63f` on `origin/wip/media-player-redesign`, based on `39a153d`. The worktree `C:\wt\media-player` (with a `node_modules` junction) is on this PC only.
+
+**What's in it:**
+- **The menu is a mini player** (`renderer/music.js`, `renderer/music.css`), 396 px wide under the toolbar button. It holds:
+  - a header with a Music / Radio / Video switch, Unfold and Close;
+  - the video's stage, then the title, channel, seek bar, previous / play-pause / next, mute and volume;
+  - eight quick tree switches: React (the audio link), Waves, Glow, Motion, Drums, Aura, Trails and Halos;
+  - an "Up next" line and section chips.
+- **It unfolds** (an eased resize, `morph()`) into one section beside the card: Browse, Picture, Tree and More for video; Tracks for local files; Stations for radio. Every visit starts folded.
+- **No more jitter.** `renderer/media-window.js` carries the whole player into the card's stage with `moveBefore()`, a state-preserving move, instead of a floating overlay chased by JavaScript. The docked player hides its own bar; a docked website gets `clip()`; a floating player steps clear of the open menu with `avoid()`.
+- **One transport for every source**, both in the card and on the floating player's bar:
+  - local files and radio (previous / next station);
+  - YouTube and Vimeo through their message APIs, which also supply the real title, channel and length;
+  - plain video files.
+  - Back restarts, or goes to the link played before. Volume reports that echo Studio's own change are ignored for 1.5 s.
+- **Browse** is one box: words search YouTube, and a link plays. It shows "More like this video" for the playing video and scrolls without end. `scripts/youtube-explorer.cjs` now answers `{ related }` and `{ more }`: pages come through `youtubei/v1` search and next; only tokens it issued are accepted; a new request replaces the old one. Each card shows a thumbnail, and the template's CSP `img-src` gains `https://i.ytimg.com`.
+  - A click queues the video, or plays it when nothing is on.
+  - Drag a card onto Up next to place it, or onto the card to play it. Drag Up next rows to reorder them.
+  - Cards are marked "In Up next" or "Playing".
+- **Smaller changes:** passing notices fade after 7 s. `MefiMusic.openSection()` is new, and companion-hub's "Friends & listening rooms" opens More, where Listen together now lives. `tools/media-probe/` holds the offscreen probe.
+
+**Verified** with `node tools/media-probe/probe.mjs <checkout> <outDir> after probe-after.cjs` (1920×1080, a fake YouTube embed that speaks the widget protocol, a stub search):
+- the player docks with one provider load and drifts 0 px on every frame while the card scrolls;
+- pause, seek (a preview while dragging, final on release) and volume reach the embed;
+- Browse loaded related videos and two more pages (12 → 36 cards);
+- click-to-add, drop at the top and drag-to-reorder all work.
+
+The live explorer was also called against YouTube: search pages of about 20, and related pages of 26 and then 40.
+
+**What's left:**
+1. **Update the tests to the new contract.**
+   - `tests/music.test.mjs`: 10 tests fail.
+     - `music-radio-volume`, `music-link-volume` and `music-link-mute` become `music-volume` (a 0–100 scale) and `music-mute`; `music-link-next` becomes `music-next`.
+     - Search types into `music-link-url` and clicks `music-link-load`; `music-youtube-query` and `music-youtube-search` are gone.
+     - Advance the clock 1.5 s before a YouTube volume report that should be adopted.
+     - The box clears after Add to queue, so set it inside the 55× loop.
+     - The tabs are in the header now, not `sound.children[2]`.
+     - Reveal local controls through `music-add-files`, and radio through `music-radio-state`.
+     - On hover the card starts at the top, with no 142 px scroll.
+   - `tests/media_window.test.mjs`: 2 tests fail. Docking is `dock(element)`, so the fake `Element` needs `moveBefore` and `getBoundingClientRect`.
+   - Rewrite `tests/fixtures/media-window-render-electron.cjs` and `tests/fixtures/media-browser-electron.cjs`. They measure the old 1,080 px panel. Check `aria-pressed`, not the "Return to player" text, and note that a website now widens the card (`data-shape="browser"`).
+   - Add tests for:
+     - the transport per source and the quick switches;
+     - sections and unfolding;
+     - feed paging, marks and drops (`queueDropIndex`, `moveQueued`);
+     - the explorer's related, more, forged-token and superseded paths.
+2. **Gates and records.** Run `npm run build-booklet`, `check`, `lint` and `audit`, and the full `npm test`. Add a CHANGELOG entry, a `docs/code-map.md` line for each touched file, and a TESTRUNS row.
+3. **Land it.** Rebase onto `origin/main`, gate the exact commit in the worktree, and push fast-forward only (`git push origin HEAD:main`), as in section 1's recipe. The "Menu text input behavior" session's `data-type-scope` lines are already on main and carried into the new layout. The Browse box is `[data-type-here]`, and typing on the folded card opens Browse.
+4. **Decide with the owner:**
+   - **The "your own, or nobody behind you" rule.** Up next is personal today; there is no shared queue yet. That rule belongs to the fair room queue in the 0.4.5 plan: FH2 and FH4 on the hub, FS5's `renderer/room-queue.js` in Studio (its jump and box rules, section D). Dragging into a room queue should follow those rules.
+   - **SoundCloud and Spotify** keep their own play buttons (Studio's is disabled for them). SoundCloud's widget API could be wired later.
+   - **Titles for links queued by URL.** They read "YouTube video" until they play. oEmbed, or the hub's metadata (FH3), could fill them in.
