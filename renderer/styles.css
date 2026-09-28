@@ -3774,9 +3774,6 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
   .community-waiting::before { animation: community-waiting 1.6s ease-in-out infinite; }
 }
 @keyframes community-waiting { 50% { opacity: 0.3; } }
-/* Copy agent prompt, and beside it the disclosure that shows what it copies. */
-.community-prompt-code { margin: var(--s1) 0 0; padding: var(--s2) var(--s3); border: 1px solid var(--hairline); border-radius: var(--r-xs); background: rgba(0, 0, 0, 0.35); color: var(--ivory); font: var(--fs-xs)/1.6 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
-.community-prompt-code > code { padding: 0; border: 0; border-radius: 0; background: none; color: inherit; font: inherit; }
 /* The privacy note: smaller, muted, in a readable measure. */
 #community-privacy { max-width: 70ch; margin: var(--s3) 0 0; color: var(--muted); font-size: var(--fs-xs); line-height: 1.6; }
 /* Busy Settings › Community buttons stay focusable (aria-disabled, not

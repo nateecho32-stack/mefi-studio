@@ -6,6 +6,49 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-26 - Canvas candidate passes isolated renderer checks; expanded media retry pending
+
+Ran candidate fixtures sequentially with separate private renderer overlays,
+a fake host bridge and temporary user data. Studio was visible but the
+system had been idle almost six minutes before testing; no other suite was
+active at each launch. No user app navigation, prompts or state changes.
+
+- Command renderer: 1 pass, 0 failures, 49.5 s. Drawing, finite positions,
+  menus, audio visuals and exit/reentry assertions passed.
+- Media renderer: 1 pass, 0 failures, 33.5 s. Transparency, movement,
+  background and navigation assertions passed.
+- Tree dynamics renderer: 1 pass, 0 failures, 11.3 s. Shape, music and video
+  controls retained their graph anchors.
+- A separate isolated native-font probe measured 900 assignments per run:
+  median accumulated setter elapsed time 46.7 ms (DOM) versus 0.6 ms
+  (direct transfer), with equal call counts and both descriptors restored.
+  Uninstrumented synthetic cycles were 5.14 ms versus 3.71 ms, style passes
+  two versus one, layouts one for both. All 96 pixel-buffer comparisons
+  and browser captures matched. No live speedup claim.
+
+The native experiment finished at 22:48:16 Chicago; a sibling media test
+started at 22:48:35, after this run. Another session added media layout
+assertions after our isolated media pass, and started a full npm test gate.
+The guarded candidate rejected that changed fixture. Regenerated the
+candidate preserving the new assertions; idle.js, Command fixture and tree
+fixture hashes are unchanged. Private overlay preparation passes. The
+expanded media fixture must still be retried solo before promotion. No
+candidate application source is applied, and no application gate has been
+run for it. Existing scroll gates are not repeated.
+
+Logs: tools/logs/canvas-transfer-command-integration.log,
+canvas-transfer-media-integration.log, canvas-transfer-tree-integration.log,
+and font-style-native-trial.json (all under tools/logs). The pre-rebase
+manifest is canvas-transfer-validated-manifest-20260926-2248.json. Current
+manifest is canvas-transfer-candidate/manifest.json. Resume with
+node tools/logs/validate-canvas-transfer-candidate.mjs --suite media_window_render --run
+when tests clear and Studio is inactive, then validate hashes before applying.
+
+The live status helper now also reports transferred-context state, window
+focus and system idle seconds. Its PID/booklet validation and read-only
+status path succeeded: existing app remains on the DOM context, recording
+false, with 601 seconds of system idle time. No live capture was started.
+
 ## 2026-09-26 - Media-browser booklet inlining verified and fixture line landed (task_b5026aa2c68858d0, run_1790480592972_8)
 
 Verified the media-browser inlining this task owes. The build wiring was already committed at 962078: scripts/build-booklet.mjs reads renderer/media-browser.js into CODE_SOURCES and codeParts (after media-window.js, before music.js), and renderer/booklet.sources.json lists renderer/media-browser.js among its 46 segments. The work-tree booklet.html inlines the source verbatim exactly once with zero external script refs, and npm.cmd run build-booklet rebuilt cleanly (39 models). The missing piece was test coverage: HEAD's tests/booklet_build.test.mjs INLINE_SCRIPTS omitted media-browser.js, so a fixture build at HEAD died ENOENT; landed the one-line fixture addition as 08c677c. Narrow validation: node --test tests/booklet_build.test.mjs 4/4 pass; node --test --test-name-pattern browser tests/music.test.mjs 3/3 pass. The committed renderer/booklet.html predates the media-browser work (last rebuilt at 436a5a4) and stays uncommitted in the work tree because it folds sibling sessions' in-flight renderer edits; the sessions landing those edits owe the rebuild+commit.

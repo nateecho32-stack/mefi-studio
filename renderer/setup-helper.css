@@ -128,6 +128,10 @@
 .setup-helper-habit { display: grid; gap: var(--s1); padding-top: var(--s2); border-top: 1px solid var(--frost-edge-soft); }
 .setup-helper-habit > strong { color: var(--ivory); font-size: var(--fs-md); }
 .setup-helper-autonomy { display: grid; gap: var(--s3); }
+/* The shared permission control keeps one nowrap line per mode; in the
+   helper a narrow window must wrap it instead of scrolling sideways. */
+.setup-helper-autonomy, .setup-helper-autonomy > * { min-width: 0; }
+.setup-helper-autonomy .autonomy-mode { min-height: 0; height: auto; white-space: normal; }
 
 .setup-helper-foot {
   display: flex; align-items: center; gap: var(--s2); padding: var(--s3) var(--s6);

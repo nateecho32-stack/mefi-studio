@@ -22,6 +22,12 @@ its own small heading, and saves like any other choice. The link is what
 **Listen together** and the Void Engine rooms use, and it keeps a member from
 being asked to join.
 
+| Node style | Key | What it looks like |
+| --- | --- | --- |
+| **Singularity** | `singularity` | A black hole with a turning disc |
+| **Prism** | `prism` | A turning crystal that splits light |
+| **Sigil** | `sigil` | Hex runes that assemble as it works |
+
 Earlier builds kept the collection for Discord members. What they left behind
 is cleaned up on the first launch of a build without the lock:
 

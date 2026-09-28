@@ -34,6 +34,26 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-27 night - Setup helper lands on 0.4.4 with the free Void collection
+
+The setup helper (renderer/setup-helper.js + .css), the walkthrough hand-off,
+per-agent habits and the host fixes for settings that saved but did nothing
+(endpoint saves no longer fork a project team, brain-map modelChoice writes
+"jev", backlog "stop", machine:set whitelist, the Jev gate preview), rebased
+onto GitHub main 052a1ec. main already carried the Void collection unlock
+(3239151 + 116d334); this change adds its finishing pieces: the dead lock-badge
+and prompt CSS, MefiMusic themes() with accent2 plus nodeStyles() and
+nodeLayouts(), and an accurate docs/community.md with its node-style table.
+The new render test found the shared permission control scrolling sideways in
+the helper at 480px (nowrap mode buttons); the helper now lets them wrap.
+
+Validation on the rebased tree: npm run check passed; audit 0 findings; Node
+fast suites 4033 passed, 0 failed; Python contracts 258 OK (1 skipped);
+Electron setup_helper_render (10 sections at 1440x900 and 480x820, focus
+trap, bridge saves, Escape), companion_hub_render, startup_render,
+command_render, node_views_render, agent_setup_render and
+unified_studio_render passed, one at a time.
+
 ## 2026-09-27 night - Work done outside Studio follow-up: keyless answer, local wording, real Electron drive
 
 Follow-up to the evening row. Codex rollouts as outside sessions and the
@@ -365,49 +385,6 @@ ran 248 tests, OK with 1 skip; normalized-path checks passed 6/6. The final
 focus/available-height adjustments were also covered by the focused 111-test
 rerun and a fresh build/check/audit. Logs and captures remain local in the
 OS temporary directory; no user data or portable data was changed.
-
-## 2026-09-26 - Canvas candidate passes isolated renderer checks; expanded media retry pending
-
-Ran candidate fixtures sequentially with separate private renderer overlays,
-a fake host bridge and temporary user data. Studio was visible but the
-system had been idle almost six minutes before testing; no other suite was
-active at each launch. No user app navigation, prompts or state changes.
-
-- Command renderer: 1 pass, 0 failures, 49.5 s. Drawing, finite positions,
-  menus, audio visuals and exit/reentry assertions passed.
-- Media renderer: 1 pass, 0 failures, 33.5 s. Transparency, movement,
-  background and navigation assertions passed.
-- Tree dynamics renderer: 1 pass, 0 failures, 11.3 s. Shape, music and video
-  controls retained their graph anchors.
-- A separate isolated native-font probe measured 900 assignments per run:
-  median accumulated setter elapsed time 46.7 ms (DOM) versus 0.6 ms
-  (direct transfer), with equal call counts and both descriptors restored.
-  Uninstrumented synthetic cycles were 5.14 ms versus 3.71 ms, style passes
-  two versus one, layouts one for both. All 96 pixel-buffer comparisons
-  and browser captures matched. No live speedup claim.
-
-The native experiment finished at 22:48:16 Chicago; a sibling media test
-started at 22:48:35, after this run. Another session added media layout
-assertions after our isolated media pass, and started a full npm test gate.
-The guarded candidate rejected that changed fixture. Regenerated the
-candidate preserving the new assertions; idle.js, Command fixture and tree
-fixture hashes are unchanged. Private overlay preparation passes. The
-expanded media fixture must still be retried solo before promotion. No
-candidate application source is applied, and no application gate has been
-run for it. Existing scroll gates are not repeated.
-
-Logs: tools/logs/canvas-transfer-command-integration.log,
-canvas-transfer-media-integration.log, canvas-transfer-tree-integration.log,
-and font-style-native-trial.json (all under tools/logs). The pre-rebase
-manifest is canvas-transfer-validated-manifest-20260926-2248.json. Current
-manifest is canvas-transfer-candidate/manifest.json. Resume with
-node tools/logs/validate-canvas-transfer-candidate.mjs --suite media_window_render --run
-when tests clear and Studio is inactive, then validate hashes before applying.
-
-The live status helper now also reports transferred-context state, window
-focus and system idle seconds. Its PID/booklet validation and read-only
-status path succeeded: existing app remains on the DOM context, recording
-false, with 601 seconds of system idle time. No live capture was started.
 
 ## Read Before Any Tests
 
