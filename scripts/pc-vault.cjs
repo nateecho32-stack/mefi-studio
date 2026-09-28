@@ -59,7 +59,9 @@ function createVault({ dir, run, files, protect, unprotect, hostname, now = () =
   const keyFile = path.join(dir, "..", "vault-key.bin");
   let key = null, config = null;
 
-  const git = (args, options) => run("git", ["-C", dir, ...args], options);
+  // Studio's own identity on every call: a commit and a rebase both need one,
+  // and a new PC may have no git identity set up at all.
+  const git = (args, options) => run("git", ["-C", dir, "-c", "user.name=Mefi's Studio", "-c", "user.email=vault@mefi-studio.invalid", ...args], options);
   const readJson = async (file) => { try { return JSON.parse(await files.read(file)); } catch { return null; } };
   async function load() {
     if (config === null) config = (await readJson(configFile)) ?? {};
@@ -78,7 +80,7 @@ function createVault({ dir, run, files, protect, unprotect, hostname, now = () =
     await git(["add", "-A"]);
     const staged = await git(["diff", "--cached", "--quiet"]);
     if (staged.ok) return { ok: true, pushed: false };
-    const committed = await git(["-c", "user.name=Mefi's Studio", "-c", "user.email=vault@mefi-studio.invalid", "commit", "-q", "-m", message]);
+    const committed = await git(["commit", "-q", "-m", message]);
     if (!committed.ok) return { ok: false, error: "The vault change could not be saved." };
     let pushed = await git(["push", "-q", "origin", "HEAD:main"], { timeout: 60000 });
     if (!pushed.ok) {

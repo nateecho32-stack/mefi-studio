@@ -9,7 +9,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
@@ -18,8 +18,12 @@ import path from "node:path";
 const require = createRequire(import.meta.url);
 const { createVault, SECRETS_CONFIRMATION } = require("../scripts/pc-vault.cjs");
 
+// No global git config either, as on CI and a new PC: nothing here may lean
+// on the owner's git identity (a rebase needs one; the vault brings its own).
+const NO_GLOBAL_CONFIG = path.join(mkdtempSync(path.join(tmpdir(), "mefi-vault-git-")), "empty.gitconfig");
+writeFileSync(NO_GLOBAL_CONFIG, "");
 const exec = (command, args, options = {}) => new Promise((resolve) => {
-  execFile(command, args, { windowsHide: true, timeout: options.timeout ?? 60000, env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_CONFIG_NOSYSTEM: "1" } }, (error, stdout, stderr) => resolve({ ok: !error, stdout: String(stdout ?? ""), stderr: String(stderr ?? "") }));
+  execFile(command, args, { windowsHide: true, timeout: options.timeout ?? 60000, env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: NO_GLOBAL_CONFIG } }, (error, stdout, stderr) => resolve({ ok: !error, stdout: String(stdout ?? ""), stderr: String(stderr ?? "") }));
 });
 
 function world(t) {
