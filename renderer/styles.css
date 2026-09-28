@@ -3125,6 +3125,9 @@ html[data-no-blur] {
 #tasks-overlay.task-overview-mode:not(.task-detail-open) .explorer-grid > section.explorer-col { display: none; }
 #tasks-overlay.task-overview-mode #task-list { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,320px),1fr)); gap: 12px; align-content: start; align-items: start; }
 #tasks-overlay.task-detail-open #task-list { grid-template-columns: minmax(0,1fr); }
+/* Masonry: 4px rows that tasks.js spans per card (MASONRY_ROW, with the
+   12px gap folded into the span), so cards slide up into free space. */
+#tasks-overlay.task-overview-mode:not(.task-detail-open) :is(#task-list, .task-overview-finished-list) { grid-auto-rows: 4px; row-gap: 0; }
 #task-list > .task-overview-summary { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; border: 0; padding: 2px 0 2px; color: var(--muted); font-size: 11px; cursor: default; }
 #task-list > .task-overview-summary strong { color: var(--ivory); font-size: 12px; font-weight: 600; }
 /* A card is one goal: what it is, how far it got, and the step it is on.

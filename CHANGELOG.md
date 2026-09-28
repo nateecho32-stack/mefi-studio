@@ -14,8 +14,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   tasks the cards group when the two differ. Cards are tighter and open
   their current task when you click anywhere on them (the separate "Open
   current task" button is gone), the open card is ringed, and the task you
-  are reading is highlighted in its list. Task rows drop the ref and log
-  counts. In the detail, **← All cards** closes the task at any width, the
+  are reading is highlighted in its list. Cards no longer wait below the
+  tallest card in their row: each slides up into the free space under the
+  card above it, and cards glide to their new place when a card's task
+  list opens or the window resizes (not when motion is off). Task rows drop
+  the ref and log counts. In the detail, **← All cards** closes the task at any width, the
   status box sits at the top of Details only, with a stage pill, the facts
   as fine print, the hold as a callout and a plain **Next** line (its
   redundant Home button is gone), the brief has a heading, and the

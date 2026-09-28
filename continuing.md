@@ -1,6 +1,6 @@
 # Continuing: handoff (2026-09-28, afternoon)
 
-Eight things are open:
+Nine things are open:
 1. **The 0.4.5 build.** It started today and paused at about 13:10, when the account hit its usage limit (it resets at 2:10 pm Central). The work is partial and uncommitted, in worktrees on this PC only.
 2. **Home PCs that keep working, and reaching them from Discord** (the co-work session). Start with Windows, the Your PCs agent lines and the Studio side of the Discord remote are on main. The bot side is parked as `wip/remote-dms`. The end-to-end test, the owner's setup and subscriptions-first routing are left (section 2).
 3. **Menu Batch 3.** This is the owner's decision, unchanged (section 3).
@@ -9,6 +9,7 @@ Eight things are open:
 6. **Build as a coding-agent desktop.** Built but untested, on the pushed branch `wip/builder-mode`. Vibe as the social mode is not started (section 6).
 7. **In-app performance: tree brightness** (the "In-app performance" session). The owner's 200% tree brightness keeps the GPU at 98–100% (Vibe 4.6 fps, Command 8.8, Home 4.1). A fix that brings them to 42, 36 and 43 fps is parked on the pushed branch `wip/tree-brightness-gpu`. It waits on the outline step and an owner look check (section 7).
 8. **The media player redesign** (the "Media player UI and performance improvements" session). A mini player with a transport, quick tree switches and a YouTube feed, on the pushed branch `wip/media-player-redesign`. It works in the offscreen probe; its tests aren't updated and it isn't landed (section 8).
+9. **The Task board's cleanup and masonry cards, carried to other menus** (the "Menu cleanup" session). The Task board part is on main; Ideas, Settings › Providers, Plans, Vibe and the Project map are next, starting with a shared masonry helper. The owner asked for this (section 9).
 
 ## 1. 0.4.5: agents send only what's new, logging, load times, Friends 2.0
 
@@ -326,7 +327,7 @@ It wasn't done, because the first step contradicts a pinned contract: `tests/fix
 - Either way, capture before and after (the seeded fake-bridge preview at 1920x1080).
 - Leave `styles.css` ~4833 (the `data-nav-section` padding) and the `studio-ui.css` `@media (max-height: 600px)` rail block alone.
 
-Remove this section once that is decided, and delete the file when all six sections are done.
+Remove this section once that is decided, and delete the file when every section is done.
 
 
 ## 4. The website rebuild (not published)
@@ -687,3 +688,24 @@ The live explorer was also called against YouTube: search pages of about 20, and
    - **The "your own, or nobody behind you" rule.** Up next is personal today; there is no shared queue yet. That rule belongs to the fair room queue in the 0.4.5 plan: FH2 and FH4 on the hub, FS5's `renderer/room-queue.js` in Studio (its jump and box rules, section D). Dragging into a room queue should follow those rules.
    - **SoundCloud and Spotify** keep their own play buttons (Studio's is disabled for them). SoundCloud's widget API could be wired later.
    - **Titles for links queued by URL.** They read "YouTube video" until they play. oEmbed, or the hub's metadata (FH3), could fill them in.
+
+## 9. Menu cleanup: the Task board's pattern on other menus
+
+On main: "Clean up the Task board" and the masonry follow-up (`renderer/tasks.js`, the task-board block in `renderer/styles.css`, `#tasks-overlay` in the template). The owner liked it and asked where else it fits. Two ideas carry over separately:
+- **Declutter.** Tools come first: add, then search with the state picker on the same row, then segmented chips. No explainer paragraphs. The whole card opens on a click or on Enter, the open card is ringed, "← All cards" shows at every width, and the status box appears on Details only.
+- **Masonry.** Styles give a grid 4px rows (`grid-auto-rows: 4px; row-gap: 0`). `layoutMasonry`/`watchMasonry` in tasks.js span each child to its height plus the 12px gap, and a ResizeObserver keeps the spans right. Cards that move glide for 260 ms unless `MefiMotion.off()` or reduced motion. A card with no span yet appears without a glide.
+
+Order of work:
+1. **Make masonry a shared helper,** e.g. `MefiMotion.masonry(list)` in `renderer/motion.js`, and have tasks.js call it. Keep these behaviours: spans clear when the CSS rule is off, and the code is guarded with `typeof`, because the vm suites' fake DOM has no `ResizeObserver`, `getComputedStyle` or `requestAnimationFrame`.
+2. **Ideas sheet** (`#ideas-overlay`) needs the declutter pass. Drop the "Unread" heading and bring the Tools menu's actions forward. Idea rows should open on a click. The "Selected idea" pane and "Back to ideas" should work like the Task board detail. Use masonry if ideas become cards.
+3. **Settings › Providers** (`.provider-grid`, styles.css ~4010) needs masonry only: expanded tiles leave holes.
+4. **Plans** (`.planning-map-columns`, `.planning-existing-grid` in planning.css). Read 16544dd "Plans face lift" first. The declutter may already be done, which leaves only masonry.
+5. **Vibe and the Project map** need masonry only: `.vibe-lanes` and `.vibe-evolution-suggestions` (vibe.css; vibe.css also has the "In-app performance" session's glass edits, so coordinate with it), and `.pm-idea-branches` (agent-brain.css).
+6. **Optional:** the Task board detail tabs are still busy (the Prerequisites fold, handoff and brief history, the delegated-subtasks block). The owner hasn't asked for this.
+
+Pins to know:
+- `tests/tasks_ui.test.mjs` pins card text ("Current step" + "Working on: …", "1/2 confirmed (50%)"). Status-row buttons must stay direct children of `#task-status-row`.
+- `tests/fixtures/workflow-render-electron.cjs` returns Home through `#app-task-context button` and checks `.task-overview-card.opens-task`.
+- For captures, use `tests/task_overview_render.test.mjs` with `MEFI_TASK_OVERVIEW_CAPTURE_DIR=<abs dir>`. For 1920x1080, copy the fixture, change the window size, and switch tasks with `MefiTasks.selectTask(id)` between captures.
+
+Remove this section once items 1–5 are done or the owner drops them.

@@ -747,6 +747,54 @@
       details.append(list); row.append(details); els.list.append(row);
     }
     if (!models.length) els.list.append(mutedLi(emptyListMessage(0)));
+    watchMasonry();
+  }
+
+  // Masonry for the card grid: while styles.css gives a list 4px rows (the
+  // full-width overview), each child spans the rows its height needs plus
+  // the gap, so a card slides up under a short neighbour instead of waiting
+  // below the tallest card in its row. A ResizeObserver keeps the spans
+  // right as folds open, text wraps or the window resizes, and a card that
+  // moves glides to its new place. Elsewhere the spans are cleared.
+  const MASONRY_ROW = 4, MASONRY_GAP = 12;
+  let masonryObserver = null, masonryFrame = 0;
+  const masonryLists = () => [els.list, ...(els.list?.querySelectorAll?.(".task-overview-finished-list") ?? [])].filter(Boolean);
+  function layoutMasonry() {
+    masonryFrame = 0;
+    const glide = !window.MefiMotion?.off?.() && !window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    // Where every placed card sits now: one card's new span moves the cards
+    // below it too. A card with no span yet is new and just appears.
+    const placed = [];
+    const spans = [];
+    for (const list of masonryLists()) {
+      const on = getComputedStyle(list).gridAutoRows === `${MASONRY_ROW}px`;
+      for (const item of list.children) {
+        if (glide && on && item.style.gridRowEnd) placed.push({ item, before: item.getBoundingClientRect() });
+        spans.push([item, on ? `span ${Math.max(1, Math.ceil((item.getBoundingClientRect().height + MASONRY_GAP) / MASONRY_ROW))}` : ""]);
+      }
+    }
+    let changed = false;
+    for (const [item, value] of spans) if (item.style.gridRowEnd !== value) { item.style.gridRowEnd = value; changed = true; }
+    if (!changed) return;
+    for (const { item, before } of placed) {
+      if (typeof item.animate !== "function") continue;
+      const after = item.getBoundingClientRect();
+      const dx = before.left - after.left, dy = before.top - after.top;
+      if (Math.abs(dx) > 1 || Math.abs(dy) > 1) item.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }], { duration: 260, easing: "cubic-bezier(.2,.8,.2,1)" });
+    }
+  }
+  function scheduleMasonry() {
+    if (!masonryFrame && typeof requestAnimationFrame === "function") masonryFrame = requestAnimationFrame(layoutMasonry);
+  }
+  function watchMasonry() {
+    if (typeof ResizeObserver !== "function" || typeof getComputedStyle !== "function") return;
+    masonryObserver ??= new ResizeObserver(scheduleMasonry);
+    masonryObserver.disconnect();
+    for (const list of masonryLists()) {
+      masonryObserver.observe(list);
+      for (const item of list.children) masonryObserver.observe(item);
+    }
+    scheduleMasonry();
   }
 
   async function loadPlans() {
