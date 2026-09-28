@@ -7,6 +7,37 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Set up this PC's setup windows open again.** Install Git, the GitHub
+  CLI or Node.js, Sign in to GitHub and Install packages started a
+  PowerShell window that closed before it ran, while Studio said "Finish in
+  the setup window". They now open attached, like CLI setup.
+- **A share the review cannot read to the end is blocked.** A `.mefishare`
+  padded with thousands of empty strings or deep nesting could hide an
+  instruction to your agents past the point the review stops reading. Such an
+  item is now blocked as "more text or deeper nesting than Studio checks".
+- **A friend's preferences cannot change your permissions.** A friend's
+  `.mefishare` now carries only how agents behave and learn (learning,
+  habits, efforts, subtasks). Preferences from your other PCs are checked like
+  the Settings controls that write them, and an ask that needs your
+  confirmation to switch off stays on.
+- **Approvals survive the references gathered after them.** Approving a new
+  task before its automatic file, session and context references landed no
+  longer drops the approval or a named Start as "the brief changed".
+- **Rooms show the right room.** Opening one room right after another no
+  longer shows the first one's chat (or reports and deletes its messages).
+  Leaving a room in Rooms no longer stops Listen together, and the reverse.
+  A new message or room update keeps what you were typing, the room name and
+  a report reason. The Friends badge counts invites while Friends is closed.
+- **The media player takes focus only when you minimize it.** Switching to
+  Radio, Background or a restored layout no longer pulls keyboard focus into a
+  player that is about to hide.
+- **The loop status follows a project switch.** Home, Vibe and the tray count
+  the new project's board at once, instead of saying "2 tasks need your OK"
+  about the old one until the next board change.
+- **"What changed while I was away?" is more careful.** Without a key, a card
+  matched only by file and commit names now says it "may already be done",
+  as its Ask card does, and a task like "When the user logs out, clear the
+  cache" is no longer answered with the away report.
 - **Your PCs is more exact about what is only on this PC.** A file whose only
   difference is line endings Git would undo no longer counts as uncommitted
   work, and a branch whose commits are all on GitHub already (on another
