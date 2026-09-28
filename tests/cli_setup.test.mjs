@@ -55,6 +55,7 @@ test("setup reports launch errors, prevents duplicate windows, and refreshes on 
   assert.equal(launched.launched, true);
   assert.match(launched.message, /Studio refreshes your installed tools when it closes \(or choose Refresh installed tools\)/);
   assert.equal(calls[0].options.windowsHide, false, "the user explicitly opened interactive setup");
+  assert.notEqual(calls[0].options.detached, true, "a detached PowerShell gets no console and exits before its script runs");
   assert.match(Buffer.from(calls[0].args.at(-1), "base64").toString("utf16le"), /@openai\/codex/);
   assert.equal((await setup.action({ id: "codex", action: "login" })).ok, false);
   child.emit("close", 0);

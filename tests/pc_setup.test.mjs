@@ -94,6 +94,7 @@ test("setup windows run only Studio's fixed commands, one at a time", async () =
   assert.match(script, /gh auth login --hostname github\.com --web --git-protocol https/);
   assert.match(script, /gh auth setup-git/);
   assert.equal(spawned[0].options.windowsHide, false, "the owner sees the window");
+  assert.notEqual(spawned[0].options.detached, true, "a detached PowerShell gets no console and exits before its script runs");
   assert.match((await setup.action("github-login")).error, /already open/);
   spawned[0].close();
   assert.equal((await setup.action("github-login")).ok, true, "it can open again once closed");

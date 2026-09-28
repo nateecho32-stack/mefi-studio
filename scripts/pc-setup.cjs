@@ -119,7 +119,10 @@ function createPcSetup({ execFile, spawn, platform = process.platform, env = () 
     running.add(name);
     try {
       const script = `try {\n${setupScript(name)}\n} catch { Write-Host $_.Exception.Message -ForegroundColor Red }\nRead-Host 'Press Enter to close this setup window'`;
-      const child = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { cwd: name === "install-deps" ? cwd : undefined, env: env(), windowsHide: false, detached: true, stdio: "ignore" });
+      const child = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { cwd: name === "install-deps" ? cwd : undefined, env: env(), windowsHide: false, stdio: "ignore" });
+      // Not detached, as in cli-setup.cjs: a detached PowerShell gets no
+      // console and exits at once without running the script. From Studio (no
+      // console of its own) this child opens its own visible terminal.
       await new Promise((resolve, reject) => { child.once("spawn", resolve); child.once("error", reject); });
       child.once("close", () => running.delete(name));
       child.unref?.();
