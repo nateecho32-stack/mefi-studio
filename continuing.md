@@ -1,12 +1,13 @@
 # Continuing: handoff (2026-09-28, afternoon)
 
-Six things are open:
+Seven things are open:
 1. **The 0.4.5 build.** It started today and paused at about 13:10, when the account hit its usage limit (it resets at 2:10 pm Central). The work is partial and uncommitted, in worktrees on this PC only.
 2. **Home PCs that keep working, and reaching them from Discord** (the co-work session). Start with Windows, the Your PCs agent lines and the Studio side of the Discord remote are on main. The bot side is parked as `wip/remote-dms`. The end-to-end test, the owner's setup and subscriptions-first routing are left (section 2).
 3. **Menu Batch 3.** This is the owner's decision, unchanged (section 3).
 4. **The website rebuild** (the "Continuing fixes" session). It is parked on the pushed branch `wip/site-rebuild` and is not published: the build agents hit the same usage limit (section 4).
 5. **Model tracker, community model ratings and probes** (the "Discord bot model feedback integration" session). The Studio half is gated on `wip/model-community`; the bot half is built and tested on the bot's `wip/model-reviews`, but not documented or wired yet (section 5).
 6. **Build as a coding-agent desktop.** Built but untested, on the pushed branch `wip/builder-mode`. Vibe as the social mode is not started (section 6).
+7. **In-app performance: tree brightness** (the "In-app performance" session). The owner's 200% tree brightness keeps the GPU at 98–100% (Vibe 4.6 fps, Command 8.8, Home 4.1). A fix that brings them to 42, 36 and 43 fps is parked on the pushed branch `wip/tree-brightness-gpu`. It waits on the outline step and an owner look check (section 7).
 
 ## 1. 0.4.5: agents send only what's new, logging, load times, Friends 2.0
 
@@ -69,7 +70,7 @@ Landing recipe for each slice:
 
 - **The public site** ("Continuing fixes"): it is rebuilding gh-pages in `C:\wt\site` and publishing now, not tied to 0.4.5. gh-pages was still `3fdf4b9` at 13:10.
 - **The boot fade and release, C3** ("App loading screen animation"): boot.js, startup.js, the #boot-layer markup and the boot CSS.
-- **GPU and paint cost** ("In-app performance"): vibe.css, the glass/material tokens in styles.css, and idle.js frame pacing.
+- **GPU and paint cost** ("In-app performance"): released. vibe.css, styles.css and the idle.js frame pacing are free. The parked fix touches only idle.js's brightness passes and tree-dynamics.js (section 7).
 - **The bot repo** has a set order:
   1. "Discord community perks and verification" pushes its integrator commit first (chat, persona, memory, fun, releases, models-watch).
   2. Then the co-work session's `remote-dms` branch (in `C:\wt\veb-remote`, and parked on GitHub as `wip/remote-dms`; see section 2).
@@ -531,7 +532,7 @@ The owner asked, with a screenshot of the Claude Code desktop app, for Build mod
 3. **Vibe as the social mode.** Not started.
    - Cards that mount into any container: `MefiCompanionFriends.card()`, `MefiRooms.panel()` (call `dispose()` on removal) and `MefiPcSync.card()`, which includes the vault sections. Counts: `MefiRooms.pending()`, `MefiPcSync.badge()`, `MefiTogether.status().session`, `MefiMusic.status()` and `MefiCommunity.status()`.
    - Each card is single-instance (fixed ids), and the companion hub's Friends bubble mounts the same ones. Listen together paints only inside the music dropdown (`MefiMusic.togetherHost()`).
-   - Friends 2.0 (section 1, wave 3, FS3) plans a Friends section: build on it rather than beside it, and leave `vibe.css`'s glass tokens to the "In-app performance" session.
+   - Friends 2.0 (section 1, wave 3, FS3) plans a Friends section: build on it rather than beside it. `vibe.css`'s glass tokens are free now (section 7).
 4. **Ask the owner.**
    - Does Vibe keep its Build it box and work cards, or go social-first with work as one compact card?
    - The Worktree chip turns per-run worktrees on from the UI. The module's header says they stay opt-in "until the owner flips the default".
@@ -541,3 +542,90 @@ The owner asked, with a screenshot of the Claude Code desktop app, for Build mod
 **How to look at it.** Use the seeded fake-bridge preview (a copy of `website/tools/screenshots` `make_preview.cjs` and `capture.cjs`, offscreen Electron at 1920x1080) with extra seeds for `workStats`, `workWhere`, `tasksAttempts` and `getAiRouting`. On this PC the copy is in the scratchpad of Claude session c568012b (`shots/`).
 
 Remove this section once the branch lands and the owner has answered.
+
+## 7. In-app performance: tree brightness costs the GPU (parked on `wip/tree-brightness-gpu`)
+
+The owner asked for smoother in-app performance. The main cause is found and a fix is written. It is not
+landed yet, because it changes how the brightened tree looks in places (item 1 below).
+
+### What makes it choppy
+
+- **The owner's look:** Atmosphere with glass and glow at 100, Singularity, helix, orbit trails, extra
+  glow, the deep-space sky, and **Tree brightness at 200%** for nodes and lines, with outlines on
+  (Appearance › Tree brightness & outlines, saved in `mefiStudio.treeDynamics.v1`).
+- **The result:** the laptop's integrated GPU (Radeon 860M) runs at 98–100%. Vibe draws about 4.6 fps,
+  Command 8.8 and Home 4.1, because the tree draws under all three. Scripts take about 13 ms a frame;
+  the rest is waiting on the GPU.
+- **The cause:** `MefiTreeDynamics.beginPaint` sets `ctx.filter = "brightness(2)"` around the whole
+  wires and nodes passes (idle.js `drawGraphConnections` and the node loop). Chromium draws every shape
+  made under a canvas filter through its own layer the size of the canvas.
+- **What was ruled out:** node brightness is most of the cost and line brightness some. Outlines cost
+  almost nothing. Turning off Vibe's aurora, its glass blur or its animations changed nothing.
+- **A side effect:** at that speed the detail governor (`state.frameCost`, which counts JS time only)
+  holds nodes at tiers 1–2, so the owner has been seeing simplified nodes.
+
+### The fix so far
+
+- **Where:** `wip/tree-brightness-gpu` (`a3789e4`, on `6c1c940`; worktree `C:\wt\perf` on the laptop).
+- **How:** idle.js `toneBegin` paints each pass plain into a scratch `OffscreenCanvas` per layer. One
+  filtered `drawImage` then lays it down. The scratch starts with its layer's drawing state and hands
+  back the state the pass left. tree-dynamics.js exports `brightness(kind)`; `beginPaint` is unchanged.
+- **Measured** in the probe below: Vibe 42 fps (GPU 50%), Command 36 (37%), Home 43 (20%).
+- **Tests:** 211 pass (tree_dynamics, command_graph, command_audio_response, command_visuals,
+  command_node_tree, command_director), and `npm run check` passes. Not run yet: `npm test`,
+  `npm run audit` and the Electron fixtures (tree_dynamics_render, command_render, node_paint_cache).
+
+### Left, in order
+
+1. **Draw outlines outside the brightened layer.** Brightness at or above 100% leaves black and white
+   unchanged. With a filter per shape, a node's colored rim over its black outline therefore stayed
+   washed-out white. In one shared layer the rim comes out gold or teal instead. At brightness ≥ 1:
+   - Draw `MefiTreeDynamics.outline` (called at the top of `drawNodeSurface`) on the real layer.
+   - Before an outline that overlaps nodes already in the scratch, flush the scratch: composite it,
+     then clear it, clipped to the pending area. A front node's ring then stays above the nodes
+     behind it.
+   - Below 100%, keep outlines in the layer. Nothing clamps there, so the result is exact.
+   - In a probe experiment this dropped the pixels that differ by more than 8 levels from 0.71% to
+     0.15% (at equal detail tiers).
+2. **Ask the owner about the rest.** At 200%, small colored accents over dark cores keep more of their
+   color: Singularity's crescent, the progress meter's fill, glyph edges. Exact per-shape results
+   would need either of these:
+   - Pre-brightened paints. Solid colors are exact. Gradients are exact with a stop added at each
+     clamp point, since canvas gradients interpolate unpremultiplied. Sprites become brightened
+     copies.
+   - Per-shape filters inside node-sized clips.
+3. **Finish and land.**
+   - Add a `toneBegin` test: filters go back to `none`, and the pen state is handed back (`lineCap`
+     after the wires pass).
+   - Run the full gates, and add the docs/performance.md, CHANGELOG and TESTRUNS entries.
+   - Rebase onto main. `704ef0d` changed idle.js elsewhere, with no overlap.
+4. **Check the owner's live app.** `tools/profile_live_studio.mjs` refuses it, because the live window
+   loads `dist\Mefi Studio AI+\resources\app\renderer\booklet.html`, not the repo's booklet.
+
+### How to measure
+
+`tools/perf-probe` on the branch is scratch tooling, not meant for main as it is. It opens a seeded
+fake-bridge booklet in a hardware-rendered window placed off every display. It samples frames, long
+animation frames, and CPU and GPU 3D use per process, and it diffs screenshots.
+- **Pages:** `node tools/perf-probe/make_probe.cjs <booklet.html> data/models.json
+  tools/perf-probe/look.json <pages>\fix1.html`, plus `base.html` from
+  `git show 6c1c940:renderer/booklet.html`.
+- **Run:** `powershell -File tools/perf-probe/run.ps1 -Plan tools/perf-probe/plans/before-after.json
+  -Pages <pages> -Out <scratch>\result.json`.
+- `look.json` is the owner's look without their links or other personal data.
+
+### Next levers after this
+
+- At 100% brightness, Vibe still costs about half the GPU, and the GPU process uses 1.3–1.7 cores. The
+  aurora's `blur(90px)` with `mix-blend-mode` sits under about ten `backdrop-filter` panels, over the
+  live tree.
+- The detail governor sees JS time only, so it can't tell when the GPU is the bottleneck.
+
+### Not the app
+
+While this was measured, the laptop had about 400 MB free, with 44.8 of 47.2 GB committed. It was paging
+about 25,000 pages a second, and 42 `claude` processes held 13.8 GB. Every app stutters under that,
+and closing idle sessions helps more than any code change.
+
+This work no longer holds `vibe.css`, `styles.css` or the idle.js frame pacing. Remove this section
+once the branch lands and the owner has answered item 2.
