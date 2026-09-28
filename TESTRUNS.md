@@ -34,6 +34,33 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-27 night - Share between my PCs and with friends: vault, shelves and share files
+
+Friends › Your PCs gains Share between my PCs (a private
+`<account>/mefi-studio-vault` repository sealed with AES-256-GCM under a key
+only paired PCs hold, shelves reviewed both ways, a library whose kept model
+results and decisions join learning, keys behind the exact typed phrase and a
+native prompt) and Share with friends (scrubbed, previewed `.mefishare`
+files; opened ones reviewed before they can be kept).
+
+- `npm run build-booklet`, `npm run check` (185 targets, 375 specs) and
+  `npm run audit` (zero findings): PASS.
+- New suites: vault_crypto (pairing codes, 200 rounds of last-character
+  typos, sealing bound to path and key), share_review, pc_vault (real git,
+  a bare repository standing in for GitHub, a faked gh: pairing, refusing
+  another vault's code, nothing readable in the repository, stopped and
+  scrubbed items, quarantine of edited and planted files, keys only with the
+  exact phrase and taken back out, unpairing one PC), vault_shelves,
+  pc_vault_ui (fake DOM; the keys handler returns no value), playbook
+  importRecipe, and a vault step in the companion hub Electron fixture
+  (both PCs, the library, keys locked until the phrase, no overflow).
+- `npm test` on 553bcaa in a private worktree, exit 0: Node parallel stage
+  4214 tests, 4210 passed, 4 skipped, 0 failures; Electron stage 42 tests,
+  41 passed, 1 skipped; `eyes_toggle_electron` 1/1; `occlusion_probe` 1
+  passed, 1 capability skip; Python contracts OK; normalized-path lock
+  passed. Rebased onto aacf276 as d516312 with check and the booklet,
+  first-install and vault UI suites passing again.
+
 ## 2026-09-27 night - Restore the work the 16:57 merge dropped: full gate on dc85f68
 
 The 16:57 merge of GitHub main (65703a6) kept this PC's copy of 15 conflicted
@@ -422,10 +449,6 @@ Root cause of the triple-landed media-browser work: run_1790480592972_8 finished
 ## 2026-09-27 morning - ai-offline follow-up re-verified: link healthy, recovery chain intact (task_6a1b319e87e8ad32, run_1790504373646_5)
 
 Follow-up verification for the ai-offline alert ("failed 5 consecutive times, backoff 48m"). The live data/eyes-assistant.json shows the link healthy and the warning retired: ai.online true, keyPresent true, failures 0, backoffUntil 0, lastError null, problems empty, lastOkAt 2026-09-27T10:42Z - recent successful replies, so the follow-up completes. Root cause stands as triaged earlier: real provider quota/session-limit failures escalated the backoff; the committed recovery chain is intact in the work tree and unchanged by it (git diff on main.cjs and scripts/assistant.mjs is empty): cliReply exit guard, resetAssistantAiBackoff (main.cjs:5294) at all four route-change sites, the scheduleAssistantAiProbe offline-probe chain (main.cjs:5340-5402, armed in assistantTick), planOfflineProbe/offlineProbeDelayMs (scripts/assistant.mjs), and quota-vs-offline classification with quota regexes (scripts/assistant.mjs:4767). No code change was needed this run. Narrow validation: python tools/test_mefi_studio_offline_probe.py 12 tests OK; node --test tests/assistant_overseer_chat.test.mjs tests/role_provider_isolation.test.mjs tests/usage_tracker_host.test.mjs 73 pass / 0 fail (includes the offline-warning retirement, quota-backoff release on route change, and probe-contract pins).
-
-## 2026-09-27 morning - AI-link alert re-verified against the landed retirement fix (task_8e7e835ea0dcfe56, run_1790504205051_2)
-
-Continuation of the A-Eyes "AI link failing, backoff escalating" alert after the sibling's retirement fix. Inspected the work tree before touching anything: HEAD 6f1ef62 carries aiLinkTicket/aiLinkHealthy/aiLinkResolved (scripts/assistant.mjs), the compact()/tidy() ai-block absorb and the resolvedAiLinkWork promotion guard (main.cjs), all wired; the sibling session's uncommitted fix-family alignment (eyes.mjs FIX_BRIEF_CLOSING plus its two tests) stands untouched alongside. The live store confirms the stale work broadcast loop is over: data/eyes-assistant.json ai block online true, keyPresent true, failures 0, backoffUntil 0, lastOkAt 2026-09-27T10:15Z, problems empty, requests 0, work queue 0 - the fix-loaded restart (resource-manager.json touched 10:10Z, right after the commit) let the compactor absorb the stale AI-link tickets. No code change was needed this run; root cause and fix stand as recorded in the sibling row. Narrow validation this run: node --test tests/board.test.mjs tests/briefing_fix_requests.test.mjs 43 pass / 0 fail (4 AI-link retirement tests plus both fix-family tests); node --test tests/request_dedupe tests/task_delegation tests/task_grouping_cleanup tests/idea_backlog tests/task_history tests/work_admission_host tests/request_admission tests/board_growth tests/assistant_loop 123 pass / 0 fail; python tools/test_mefi_studio_assistant.py 66 OK; python tools/test_mefi_studio_eyes.py 18 OK; npm.cmd run check ok. No source, settings, task store or portable data was changed; this row is the run's attributable record.
 
 ## Read Before Any Tests
 
