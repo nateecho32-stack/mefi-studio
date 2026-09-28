@@ -83,6 +83,55 @@ test("a received item is used only in its own project, beside what is here, unde
   assert.equal(shelves.plan("unknown", {}).ok, false);
 });
 
+test("a friend's preferences file changes only how agents behave and learn", () => {
+  const settings = { learning: { models: "blend" }, agentHabits: { brief: "full" }, autonomy: { level: "elevated", elevated: { grant: false, risk: false } }, executorCli: "codex", aiProvider: "openrouter", aiModels: { heavy: "big-model" } };
+  const friend = shelves.plan("settings", { source: "file", value: { settings } }, { anyProject: true });
+  assert.deepEqual(Object.keys(friend.settings).sort(), ["agentHabits", "learning"], "no permission mode, builder, provider or model from a friend");
+  const onlyPermissions = shelves.plan("settings", { source: "file", value: { settings: { autonomy: { level: "elevated" } } } }, { anyProject: true });
+  assert.equal(onlyPermissions.ok, false);
+  assert.match(onlyPermissions.error, /only change how your agents behave and learn/);
+  const own = shelves.plan("settings", { source: "vault", value: { settings } });
+  assert.deepEqual(Object.keys(own.settings).sort(), Object.keys(settings).sort(), "the owner's own PCs carry every portable field");
+  // What a friend's file holds is what it can change, so the preview shows all of it.
+  assert.deepEqual(Object.keys(shelves.friendValue("settings", { settings }).settings).sort(), ["agentHabits", "learning"]);
+  const brain = { map: { name: "Helper", nodes: [{ id: "a" }] } };
+  assert.equal(shelves.friendValue("brains", brain), brain);
+});
+
+test("preferences from another PC are checked like the controls that write them", () => {
+  const allowed = { providers: ["auto", "zai", "claude"], clis: ["opencode", "codex"], tiers: ["auto", "heavy"] };
+  const checked = shelves.checkedSettings({
+    aiProvider: "made-up", executorCli: "codex", executorTier: "gigantic", modelSelection: "fixed",
+    aiAutoFallback: "yes", aiSubscriptionFirst: true,
+    aiRoleProviders: { heavy: "claude", routine: "made-up" },
+    aiModels: { heavy: `  ${"m".repeat(200)}  `, weird: "x" },
+    aiModelsByProvider: { zai: { routine: "glm" }, unknown: { routine: "x" } },
+    executorModels: { opencode: "model-a", "bad key!": "x", codex: 7 },
+    learning: { models: "blend" }, agentHabits: ["not", "an", "object"],
+  }, allowed);
+  assert.deepEqual(checked, {
+    executorCli: "codex", modelSelection: "fixed", aiSubscriptionFirst: true,
+    aiRoleProviders: { heavy: "claude" }, aiModels: { heavy: "m".repeat(120) },
+    aiModelsByProvider: { zai: { routine: "glm" } }, executorModels: { opencode: "model-a" },
+    learning: { models: "blend" },
+  });
+});
+
+test("the permission mode from another PC never switches off an ask that needs the owner's confirmation", () => {
+  const here = { level: "auto", elevated: { grant: true, risk: true, "drop-owned": true, "agent-filed": true, "pricier-model": true, "real-world": true } };
+  const merged = shelves.permissionsFrom(here, { level: "elevated", elevated: { grant: false, risk: false, "pricier-model": false } });
+  assert.equal(merged.level, "elevated", "the mode itself carries over");
+  assert.equal(merged.elevated.grant, true);
+  assert.equal(merged.elevated.risk, true);
+  assert.equal(merged.elevated["pricier-model"], false, "asks without a warning follow the other PC");
+  assert.deepEqual(merged.kept, ["Granting reach", "Irreversible changes"]);
+  // An ask this PC already switched off stays off; an ask the other PC adds is added.
+  const relaxed = shelves.permissionsFrom({ ...here, elevated: { ...here.elevated, grant: false } }, { level: "auto", elevated: { grant: false, "real-world": true } });
+  assert.equal(relaxed.elevated.grant, false);
+  assert.deepEqual(relaxed.kept, []);
+  assert.equal(shelves.permissionsFrom(here, { level: "sideways" }).level, "auto", "an unknown mode falls back to the default");
+});
+
 test("the library keeps one copy per item and source, and feeds learning as another PC's evidence", () => {
   let book = shelves.library(null);
   book = shelves.keep(book, { shelf: "insights", id: "models", from: "DESK", value: { models: [{ provider: "zai", model: "glm-5", wins: 3, losses: 1, taskStrengths: [] }] } }, 10);

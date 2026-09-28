@@ -15,11 +15,16 @@
 // - Claude Code memory notes are written only where no note has that name;
 // - ideas are added as new ideas, which never start work by themselves;
 // - preferences are applied only when the owner asks, and only the portable
-//   fields below.
+//   fields below, checked the way the controls that write them check them. A
+//   friend's share file carries only how agents behave and learn: never the
+//   permission mode, nor which builders, providers and models run. From the
+//   owner's other PCs the permission mode carries over, but never switches
+//   off an ask that needs the owner's confirmation (permissionsFrom).
 // Project shelves are keyed by the GitHub repository, since a project's id
 // is a hash of its folder and differs from PC to PC.
 // Guarded by tests/vault_shelves.test.mjs.
 const crypto = require("node:crypto");
+const autonomy = require("./autonomy.cjs");
 
 const REPO = /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/;
 const PROJECT_SHELVES = Object.freeze(["brains", "recipes", "claude-memory", "work"]);
@@ -31,6 +36,8 @@ const SETTINGS_FIELDS = Object.freeze([
   "aiSubscriptionFirst", "aiFallbackOpenCode", "aiAutoFallback",
   "executorCli", "executorModel", "executorModels", "executorTier", "executorTierModels",
 ]);
+// What a friend's file may set: how this PC's agents behave and learn.
+const FRIEND_SETTINGS_FIELDS = Object.freeze(["learning", "agentHabits", "agentEfforts", "agentSubtasks"]);
 const MAX_ITEMS = 200;
 const LIBRARY_MAX = 400;
 
@@ -185,12 +192,70 @@ function plan(shelf, item, { repo = null, names = {}, anyProject = false } = {})
       return { ok: true, step: "idea", idea: { title, detail: `${detail}\n\n(Shared from ${from}.)`.slice(0, 16000), intent: ["modify", "experiment", "fix", "improve"].includes(value.intent) ? value.intent : "improve" } };
     }
     case "settings": {
+      const friend = item?.source === "file";
       const settings = {};
-      for (const field of SETTINGS_FIELDS) if (value.settings?.[field] !== undefined) settings[field] = plain(value.settings[field]);
-      return Object.keys(settings).length ? { ok: true, step: "settings", settings } : { ok: false, error: "There are no preferences in this item." };
+      for (const field of friend ? FRIEND_SETTINGS_FIELDS : SETTINGS_FIELDS) if (value.settings?.[field] !== undefined) settings[field] = plain(value.settings[field]);
+      if (Object.keys(settings).length) return { ok: true, step: "settings", settings };
+      return { ok: false, error: friend ? "A friend's file can only change how your agents behave and learn, and this one has none of that." : "There are no preferences in this item." };
     }
     default: return { ok: false, error: "Unknown shelf." };
   }
+}
+
+// What a friend's share file carries: for preferences, only the fields a
+// friend's file may set, so the preview shows everything it can change.
+function friendValue(shelf, value) {
+  if (shelf !== "settings" || !value?.settings || typeof value.settings !== "object") return value;
+  const settings = {};
+  for (const field of FRIEND_SETTINGS_FIELDS) if (value.settings[field] !== undefined) settings[field] = plain(value.settings[field]);
+  return { ...value, settings };
+}
+
+// Preferences from another PC, checked the way the controls that write them
+// check them: a provider, builder, tier or model mode this PC does not know is
+// dropped, switches must be switches and model ids are clipped. The allowed
+// lists come from main.cjs.
+function checkedSettings(values = {}, { providers = [], clis = [], tiers = [] } = {}) {
+  const out = {};
+  const model = (value) => (typeof value === "string" ? value.trim().slice(0, 120) : "");
+  const roles = (value, check) => {
+    const kept = {};
+    for (const role of ["routine", "heavy"]) if (typeof value?.[role] === "string" && check(value[role])) kept[role] = model(value[role]);
+    return kept;
+  };
+  const byKey = (value, keys, check) => Object.fromEntries(Object.entries(value && typeof value === "object" ? value : {})
+    .filter(([key, entry]) => keys(key) && check(entry)));
+  for (const [field, value] of Object.entries(values && typeof values === "object" ? values : {})) {
+    if (field === "aiProvider") { if (providers.includes(value)) out[field] = value; }
+    else if (field === "executorCli") { if (clis.includes(value)) out[field] = value; }
+    else if (field === "executorTier") { if (tiers.includes(value)) out[field] = value; }
+    else if (field === "modelSelection") { if (["jev", "fixed"].includes(value)) out[field] = value; }
+    else if (["aiSubscriptionFirst", "aiFallbackOpenCode", "aiAutoFallback"].includes(field)) { if (typeof value === "boolean") out[field] = value; }
+    else if (field === "aiRoleProviders") out[field] = roles(value, (id) => providers.includes(id));
+    else if (field === "aiModels") out[field] = roles(value, () => true);
+    else if (field === "aiModelsByProvider") out[field] = Object.fromEntries(Object.entries(byKey(value, (id) => providers.includes(id), (entry) => entry && typeof entry === "object")).map(([id, entry]) => [id, roles(entry, () => true)]));
+    else if (field === "executorModel") { if (model(value)) out[field] = model(value); }
+    else if (["executorModels", "executorTierModels"].includes(field)) out[field] = Object.fromEntries(Object.entries(byKey(value, (key) => /^[A-Za-z0-9._-]{1,40}$/.test(key), (entry) => typeof entry === "string")).map(([key, entry]) => [key, model(entry)]));
+    else if (FRIEND_SETTINGS_FIELDS.includes(field)) { if (value && typeof value === "object" && !Array.isArray(value)) out[field] = plain(value); }
+  }
+  return out;
+}
+
+// The permission mode from another of the owner's PCs, merged onto this PC's
+// (`current` is autonomy.migrate of this PC's settings). The mode carries over,
+// and so does every ask the other PC added. Switching off the asks that warn
+// (granting reach, irreversible changes) takes the owner's confirmation in
+// Settings, so a shared preference keeps them on; `kept` names them.
+function permissionsFrom(current, incoming) {
+  const now = autonomy.normalize(current);
+  const next = autonomy.normalize(incoming);
+  const elevated = {}, kept = [];
+  for (const category of autonomy.ELEVATED) {
+    const off = next.elevated[category.id] === false;
+    if (category.warn && off && now.elevated[category.id]) { elevated[category.id] = true; kept.push(category.label); }
+    else elevated[category.id] = !off;
+  }
+  return { level: next.level, elevated, kept };
 }
 
 // ---- the library: what the owner kept -------------------------------------
@@ -220,7 +285,7 @@ function learnedRows(book) {
 }
 
 module.exports = {
-  PROJECT_SHELVES, SETTINGS_FIELDS, repoKey, itemId,
+  PROJECT_SHELVES, SETTINGS_FIELDS, FRIEND_SETTINGS_FIELDS, repoKey, itemId,
   insights, learned, presets, brains, recipes, memory, memoryNote, memoryText, preferences, work,
-  titleOf, plan, library, keep, forget, learningSnapshots, learnedRows,
+  titleOf, plan, friendValue, checkedSettings, permissionsFrom, library, keep, forget, learningSnapshots, learnedRows,
 };

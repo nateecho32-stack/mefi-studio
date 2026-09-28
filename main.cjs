@@ -2241,6 +2241,7 @@ async function vaultUse(entry, { anyProject = false } = {}) {
   };
   const step = vaultShelves.plan(shelf, entry, { repo: await vaultProjectRepo().catch(() => null), names, anyProject });
   if (!step.ok) return step;
+  let kept = [];
   if (step.step === "preset") {
     let result = null;
     const projectId = projects.active().id;
@@ -2267,14 +2268,25 @@ async function vaultUse(entry, { anyProject = false } = {}) {
     const result = await mutateBoard((board) => applyIdeaAction(board.ideas, { action: "add", ...step.idea }));
     if (!result.ok) return { ok: false, error: result.error || "The idea could not be added." };
   } else if (step.step === "settings") {
-    await updateSettings((settings) => { Object.assign(settings, step.settings); });
+    // Checked the way the controls that write them check them; the permission
+    // mode goes through the autonomy host, which never switches off a
+    // warning ask without the owner's confirmation (permissionsFrom keeps them).
+    const { autonomy: permissions, ...portable } = step.settings;
+    const checked = vaultShelves.checkedSettings(portable, { providers: AI_PROVIDERS, clis: EXECUTOR_CLIS, tiers: EXECUTOR_TIERS });
+    if (Object.keys(checked).length) await updateSettings((settings) => { Object.assign(settings, checked); });
+    if (permissions !== undefined) {
+      const merged = vaultShelves.permissionsFrom(autonomy.migrate(await readSettings()), permissions);
+      const set = await autonomySet({ level: merged.level, elevated: merged.elevated });
+      if (!set?.ok) return { ok: false, error: set?.error || "The permission mode could not be set." };
+      kept = merged.kept;
+    }
     providerBreaker.reset();
     resetAssistantAiBackoff();
     send("settings:changed", { agents: true });
   }
   await vaultLibrarySave(vaultShelves.keep(await vaultLibrary(), { ...entry, title: entry.title ?? vaultShelves.titleOf(shelf, entry.value) }));
-  assistantLog("vault", `used ${shelf} "${entry.title ?? vaultShelves.titleOf(shelf, entry.value)}" from ${entry.from ?? "a share file"}`);
-  return { ok: true, step: step.step };
+  assistantLog("vault", `used ${shelf} "${entry.title ?? vaultShelves.titleOf(shelf, entry.value)}" from ${entry.from ?? "a share file"}${kept.length ? `; kept this PC's asks for ${kept.join(" and ")}` : ""}`);
+  return { ok: true, step: step.step, ...(kept.length ? { kept } : {}) };
 }
 async function vaultUseReceived(shelf, id, from) {
   const read = await vault().read(shelf);
@@ -2302,9 +2314,10 @@ async function shareBuild(shelf, id) {
   if (!SHARE_SHELVES.includes(shelf)) return { ok: false, error: "That shelf is not for sharing with friends." };
   const item = (await vaultOffer(shelf)).find((row) => row.id === id);
   if (!item) return { ok: false, error: "That item is no longer here." };
-  // A friend never learns which repository it came from.
+  // A friend never learns which repository it came from, and a friend's file
+  // carries only what a friend's file may change (vaultShelves.friendValue).
   const { repo, ...value } = item.value ?? {};
-  return { ok: true, shelf, preview: vaultPreview({ ...item, value }, { scrub: true }) };
+  return { ok: true, shelf, preview: vaultPreview({ ...item, value: vaultShelves.friendValue(shelf, value) }, { scrub: true }) };
 }
 async function shareExport(shelf, id) {
   const built = await shareBuild(shelf, id);
