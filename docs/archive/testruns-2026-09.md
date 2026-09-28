@@ -6,6 +6,123 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-27 morning - Fix-family keys aligned: the briefing closing no longer reads as the dup family (task_be106669b70fb5b0, run_1790503845970_1)
+
+Aligned eyes.mjs problemFamilyOf with assistant.mjs fixThemeKey: problemText now strips the briefing's closing instruction (FIX_BRIEF_CLOSING copy, word-for-word with assistant.mjs) before family classification, so a filed brief whose alert names no dup/stale word carries no family instead of the boilerplate 'root cause' dup. Reproduced first: alertProblem(filed brief).family was 'dup' while fixThemeKey said null, requestsFromBriefing refused an unrelated dup-worded alert against it, and promotion's sameFixProblem(request, task) refused the same pair. After the strip the refile is admitted. Regression tests: tests/briefing_fix_requests.test.mjs (boilerplate closing does not refuse an unrelated dup-worded alert) and tests/board.test.mjs (problemFamilyOf and fixThemeKey read one filed brief the same way). Narrow validation: node --test tests/briefing_fix_requests tests/board tests/work_admission_host tests/work_admission tests/request_admission tests/request_dedupe tests/board_growth tests/eyes_collision_lifecycle tests/assistant_chat_admission 120 pass / 0 fail; node --test tests/task_delegation tests/task_grouping_cleanup tests/idea_backlog tests/task_history tests/assistant_loop tests/family_decisions 110 pass / 0 fail; python tools/test_mefi_studio_eyes.py 18 OK (simulate themeDedup/problemFamily expectations intact); python tools/test_mefi_studio_assistant.py 66 OK; npm run check ok.
+
+## 2026-09-27 morning - Stale AI-link fix tickets leave the handout queue (task_165e3985f8675e47, run_1790502825074_13)
+
+Root-causes the stale work broadcast loop: briefing fix tickets about the assistant's own AI link lingered unclaimed in the handout queue after the link recovered (ai.online true, failures 0) because promotion refused them on the boilerplate "root cause" dup family while compaction's stripped fixThemeKey never absorbed them, so every compactor pass re-broadcast "Fix: AI link failing, backoff escalating" as the next handout. Fix: assistant.mjs exports aiLinkTicket/aiLinkHealthy/aiLinkResolved; compact() and tidy() take the store's ai block and retire unclaimed briefing AI-link tickets (report.resolved) when the link is provably healthy, and promotion skips them (resolvedAiLinkWork guard) so the foreman cannot build one ahead of the absorb. Verified against the live store read-only: the fix drops 4 stale AI-link tickets including the reported one and keeps the 4 unrelated ones. Narrow validation: node --test tests/board.test.mjs 39 pass (4 new: purge on healthy, keep on down/unknown/claimed, chat never purged, tidy parity); node --test tests/request_dedupe tests/task_delegation tests/task_grouping_cleanup tests/idea_backlog tests/task_history tests/work_admission_host tests/request_admission tests/board_growth tests/assistant_loop 162 pass / 0 fail; python tools/test_mefi_studio_assistant.py 66 OK; python tools/test_mefi_studio_eyes.py 18 OK; npm run check ok. The live app loads the fix on its next start; the two stale rows also age out on the 12h clock.
+
+## 2026-09-27 early morning - Booklet refresh landed with the sibling canvas-transfer idle change (task_b1133e8672733a6b, run_1790481393330_11)
+
+Landed the booklet refresh task_b1133e8672733a6b owes. The work-tree renderer/booklet.html (36 insertions / 5 deletions vs HEAD) folds the sibling canvas-transfer perf edit in renderer/idle.js: createDrawingContext resolves canvas fonts offscreen when supported, resize writes the transferred bitmap, and MefiIdle.canvasContext exposes the paint target. Verified end to end on a quiet tree: renderer sources held still across a 20 s hash watch; npm.cmd run build-booklet reproduced renderer/booklet.html byte-for-byte (SHA-256 prefix 1520FE87240B, 39 models, catalog hash f98dd2322a01) with the media browser still inlined (16 mediaBrowser references; booklet.sources.json stays ignored). node --test tests/booklet_build.test.mjs 4 pass / 0 fail. No renderer source or script was edited by this run; sibling work-tree edits were left untouched and committed nothing else.
+
+## 2026-09-27 early morning - booklet rebuilt with the inlined media browser (task_b5026aa2c68858d0, run_1790481107523_10)
+
+Closed the obligation left by 96272eb: its scripts/build-booklet.mjs change inlined renderer/media-browser.js, but the committed renderer/booklet.html predated it and carried no media-browser code. The work tree already held a fresh build; this run verified it end to end and landed it. Evidence: build-booklet.mjs lists media-browser.js in CODE_SOURCES (46 segments) and reads it at the mediaBrowser slot; npm run build-booklet over the quiet tree reproduced renderer/booklet.html byte-for-byte (hash f98dd2322a01, 39 models) with 15 mediaBrowser references in the artifact and renderer/media-browser.js in the booklet.sources.json manifest; the renderer sources held still across a 20 s watch before committing. node --test tests/booklet_build.test.mjs 4 pass / 0 fail. Committed path-limited as fb2b29c (renderer/booklet.html only, 615 insertions); no renderer source or script was edited by this run, and sibling work-tree edits were left untouched.
+
+## 2026-09-27 early morning - ai-offline resolved: live instance healthy, recovery chain re-verified (task_dc3cbe4e9796268a, run_1790480854175_9)
+
+Verified the ai-offline issue end to end from the running Studio instance. The live data/eyes-assistant.json shows the AI back online: ai.online true, keyPresent true, model glm-5.3-flash (zai/jev team route for project_d453f6fb00cc5e2d), failures 0, backoffUntil 0, problems empty, lastOkAt 2026-09-27T04:27Z - i.e. the provider recovered after the 23:10 America/Chicago quota reset and the app's 02:39Z restart had already loaded the committed recovery fixes (cliReply exit guard 11fcebc, resetAssistantAiBackoff at all four route-change sites, the scheduleAssistantAiProbe offline-probe chain in main.cjs, and planOfflineProbe/offlineProbeDelayMs in scripts/assistant.mjs - all intact; the sibling work-tree diff on scripts/assistant.mjs touches only focusedTestsForTask/verifyCompletion, not the offline path). brains.js, boot.js and the other pinned renderer refs are the pipeline editor and UI shell - not part of the offline chain. Narrow validation this run: python tools/test_mefi_studio_offline_probe.py 12 tests OK; node --test tests/assistant_overseer_chat.test.mjs tests/role_provider_isolation.test.mjs tests/usage_tracker_host.test.mjs 73 pass / 0 fail. No code change was needed; the issue stands resolved and no owner action remains beyond watching that the warning stays clear.
+
+## 2026-09-26 - Push readiness validation interrupted by concurrent music edits
+
+Before validation, main matched origin/main. The renderer booklet rebuild,
+npm run check and npm run audit passed (zero audit findings); npm run lint
+passed with zero errors and 72 warnings. Full npm test completed with exit 1:
+Node CPU stage 3825 tests, 3821 passed, 4 skipped, no failures; Electron
+fixtures failed with renderer startup errors including toggleLink not defined.
+The runner detected source changes during the Electron stage. renderer/music.js
+was rewritten during the run, so this is not a stable-tree regression verdict
+or approval to publish the current files. Both exclusive Electron stages passed
+(3 tests); Python passed all 248 tests; all six normalized-path checks passed.
+No commit or push was made. A quiet-tree rebuild and validation are required
+once the concurrent music edits finish. The unrelated game plan.md stays local.
+Full output is in the OS temporary mefi-push-validation-20260926.log; lint output
+is in mefi-push-lint-20260926.log. Live stores and portable data were untouched.
+
+## 2026-09-26 - c655647 solo Command and committed companion panel follow-up
+
+After the other chats released the Electron lane, preflight found no running
+full suites, unittest processes or Electron fixtures. In the clean, unchanged
+C:/wt/assist-g0 checkout at c655647dd5fea2024cc72dbb6f26be35b4c76b96,
+`node --test tests/command_render.test.mjs` passed 1/1 in 57.6 seconds with
+its normal 80-second child kill bound. This supports the documented load
+flake diagnosis for the preceding full run's Command timeout; no source or
+timeout was changed. The previously reproduced Unified Studio navigation
+assertion at 600px/150% remains the outstanding rendering failure.
+
+The isolated synthetic companion panel verifier then rebuilt this exact
+commit's renderer and passed at 1440x900 and 600x700 (7.4 seconds). It
+verified owner/held/parked labels, project name, Clear list placement and
+reachability, confirmation before the bridge call, exactly one clear call,
+and the empty state. Both screenshots were visually inspected. No renderer
+errors, network attempts or child-process attempts were recorded, and no
+live data was used. The checkout remained clean at the same commit.
+Logs: OS temporary mefi-owner-command-solo.log and
+mefi-owner-panel-committed.log; panel report/captures in
+mefi-owner-panel-vXgCJM. This focused follow-up does not replace the recorded
+full npm-test result with a claimed all-green run.
+
+## 2026-09-26 - Music mode polish: static backgrounds, player chrome and menu validation
+
+Completed the existing music-menu pass in the shared checkout. The player now
+has a draggable title bar and a reachable minimized strip, steps aside for the
+music menu, and stays below it when a narrow viewport has no spare room. Links
+puts Now playing, Stop and video settings first. Static, paused and pictureless
+backgrounds dim without reducing tree opacity or changing saved brightness.
+The local scene sampler compares finer brightness cells so motion within a
+mostly stationary video is not mistaken for album art; pending results are
+discarded after playback/source/paint changes.
+
+Focused music/media tests: 116/116 passed. A seeded offscreen Electron preview
+using the real scene sampler and local still/moving MP4 files verified automatic
+still dimming (0.72 scrim), moving video at full chosen brightness (0 scrim),
+pause dimming, a visible minimized Restore control, and a reachable Stop button
+with the floating video under a 600x780 music menu. Captures were visually
+inspected. This preview used synthetic project/task data and isolated profiles.
+The media-window Electron fixture passed solo (48.6 s) and in the full suite
+(33.2 s), including provider hit testing, drag/resize, restoration, volume,
+queue, hover, clipboard offers, tree visibility, Zen and a single iframe load.
+An earlier fixture failure exposed clipped provider corners; removing that
+clipping fixed it. Its drag check now uses the player's title bar and it also
+checks the minimized Restore button. Earlier full attempts were stopped while
+these fixes were being made; the final completed run below supersedes them.
+
+Final gates: booklet rebuilt; npm run check passed; npm run audit returned no
+findings. Full npm test completed all legs: Node parallel stage 3718 tests,
+3714 passed, 4 skipped, 0 failures; Electron stage 37 tests, 35 passed, 1 skipped,
+1 failure; both serialized files passed (3 tests). Python: 248 tests passed.
+Normalized-path lock: all 6 checks passed. No source-fingerprint warning occurred
+in this final run. The sole failure was unified_studio_render's existing
+"primary destinations stay visible at 600 / 1.5" assertion, already reproduced
+on clean HEAD in the earlier Command performance and Vibe validation rows.
+The music, media and real painted tree suites passed. Full npm test therefore
+exited 1; this is not recorded as a green full gate.
+
+Local-only evidence: tools/logs/music-polish-full-test.log,
+music-polish-unit.log, music-polish-media-render.log, music-polish-check.log,
+music-polish-audit.log and the music-polish/ preview and integration captures.
+
+Validation: 111 focused music/media-window tests passed, including a docking,
+background and geometry preservation contract. The isolated Electron browser
+and media-window fixtures both passed alone and in the full run. The media
+fixture verifies the same single provider load through panel/background
+switches, reachable queue controls, non-overlapping player/queue geometry at
+1440 and 600 pixels, and the new background button. Browser coverage checks
+its dock matches the preview and does not cover the queue. Seed-only captures
+of local music, video, browser and background layouts were inspected in the
+OS temporary directory. Layout review caught and fixed the browser stage's
+aspect-ratio overflow before the final checks.
+
+npm run build-booklet, npm run check and npm run audit passed (zero audit
+findings). Full npm test passed: 3,906 Node tests passed, 5 skipped; Python
+ran 248 tests, OK with 1 skip; normalized-path checks passed 6/6. The final
+focus/available-height adjustments were also covered by the focused 111-test
+rerun and a fresh build/check/audit. Logs and captures remain local in the
+OS temporary directory; no user data or portable data was changed.
+
 ## 2026-09-26 - Committed owner-ask and desk safeguards gate on c655647
 
 Full post-commit validation ran in the clean, unchanged C:/wt/assist-g0
