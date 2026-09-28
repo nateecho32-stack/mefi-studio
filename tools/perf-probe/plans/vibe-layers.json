@@ -1,0 +1,66 @@
+[
+ {
+  "page": "base.html",
+  "query": "state=family&mode=vibe",
+  "settleMs": 4000,
+  "measureMs": 9000,
+  "name": "vibe",
+  "setup": "if (!window.MefiVibe.isActive()) await window.MefiVibe.enter(); return window.MefiVibe.isActive();"
+ },
+ {
+  "page": "base.html",
+  "query": "state=family&mode=vibe",
+  "settleMs": 4000,
+  "measureMs": 9000,
+  "name": "vibe-no-aurora",
+  "setup": "if (!window.MefiVibe.isActive()) await window.MefiVibe.enter(); const s = document.createElement(\"style\"); s.textContent = \".vibe-aurora{display:none!important}\"; document.head.append(s); return window.MefiVibe.isActive();"
+ },
+ {
+  "page": "base.html",
+  "query": "state=family&mode=vibe",
+  "settleMs": 4000,
+  "measureMs": 9000,
+  "name": "vibe-aurora-paused",
+  "setup": "if (!window.MefiVibe.isActive()) await window.MefiVibe.enter(); const s = document.createElement(\"style\"); s.textContent = \".vibe-aurora{animation-play-state:paused!important}\"; document.head.append(s); return window.MefiVibe.isActive();"
+ },
+ {
+  "page": "base.html",
+  "query": "state=family&mode=vibe",
+  "settleMs": 4000,
+  "measureMs": 9000,
+  "name": "vibe-no-backdrop",
+  "setup": "if (!window.MefiVibe.isActive()) await window.MefiVibe.enter(); const s = document.createElement(\"style\"); s.textContent = \"*,*::before,*::after{backdrop-filter:none!important}\"; document.head.append(s); return window.MefiVibe.isActive();"
+ },
+ {
+  "page": "base.html",
+  "query": "state=family&mode=vibe",
+  "settleMs": 4000,
+  "measureMs": 9000,
+  "name": "vibe-anims-paused",
+  "setup": "if (!window.MefiVibe.isActive()) await window.MefiVibe.enter(); const s = document.createElement(\"style\"); s.textContent = \"#vibe-layer *,#vibe-layer *::before,#vibe-layer *::after{animation-play-state:paused!important}\"; document.head.append(s); return window.MefiVibe.isActive();"
+ },
+ {
+  "page": "base.html",
+  "query": "state=family&mode=vibe",
+  "settleMs": 4000,
+  "measureMs": 9000,
+  "name": "vibe-no-tree",
+  "setup": "if (!window.MefiVibe.isActive()) await window.MefiVibe.enter(); window.MefiIdle.setHomeBackdrop(false); return true;"
+ },
+ {
+  "page": "base.html",
+  "query": "state=family&mode=build",
+  "settleMs": 4000,
+  "measureMs": 9000,
+  "name": "command",
+  "setup": "window.MefiNav.go(\"command\"); await window.MefiIdle.ready(); return window.MefiIdle.isActive();"
+ },
+ {
+  "page": "base.html",
+  "query": "state=family&mode=build",
+  "settleMs": 4000,
+  "measureMs": 9000,
+  "name": "home",
+  "setup": "window.MefiNav.go(\"workspace\"); return window.MefiWorkspace.isActive();"
+ }
+]

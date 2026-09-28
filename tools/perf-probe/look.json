@@ -1,0 +1,14 @@
+{
+ "mefiStudio.appearance": "{\"preset\":\"atmosphere\",\"density\":\"comfortable\",\"glass\":100,\"glow\":100}",
+ "mefiStudio.music.v1": "{\"theme\":\"abyss\",\"nodeStyle\":\"singularity\",\"nodeLayout\":\"helix\",\"orbitTrails\":true,\"extraGlow\":true,\"radioOn\":false}",
+ "mefiStudio.treeDynamics.v1": "{\"mode\":\"hybrid\",\"shape\":\"layout\",\"width\":1,\"height\":1,\"rotation\":0,\"x\":0,\"y\":0,\"nodeSize\":1,\"adaptCount\":true,\"nodeMotion\":0.25,\"shapeMotion\":0.25,\"positionMotion\":0.2,\"videoTarget\":\"dark\",\"videoStrength\":0.7,\"videoShape\":true,\"smoothing\":2,\"dwell\":15,\"nodeBrightness\":2,\"lineBrightness\":2,\"nodeBrightnessEnabled\":true,\"lineBrightnessEnabled\":true,\"outlines\":true}",
+ "mefiStudio.audioVisuals.v1": "{\"response\":2,\"waves\":true,\"nodes\":true,\"percussion\":true,\"background\":true,\"splitBands\":true,\"motion\":true}",
+ "mefiStudio.cmdView": "3d",
+ "mefiStudio.cmdBackdrop": "deepspace",
+ "mefiStudio.cmdCam": "orbit",
+ "mefiStudio.cmdOrbit": "auto",
+ "mefiStudio.motion": "1",
+ "mefiStudio.cmdLabels": "auto",
+ "mefiStudio.commandHome": "1",
+ "mefiStudio.workspace.accent": "abyss"
+}

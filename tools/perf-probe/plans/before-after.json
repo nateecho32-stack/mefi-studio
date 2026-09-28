@@ -1,0 +1,50 @@
+[
+ {
+  "page": "fix1.html",
+  "name": "fix-vibe",
+  "query": "state=family&mode=vibe",
+  "setup": "if (!window.MefiVibe.isActive()) await window.MefiVibe.enter(); return window.MefiVibe.isActive();",
+  "settleMs": 4000,
+  "measureMs": 8000
+ },
+ {
+  "page": "fix1.html",
+  "name": "fix-command",
+  "query": "state=family&mode=build",
+  "setup": "window.MefiNav.go(\"command\"); await window.MefiIdle.ready(); return window.MefiIdle.isActive();",
+  "settleMs": 4000,
+  "measureMs": 8000
+ },
+ {
+  "page": "fix1.html",
+  "name": "fix-home",
+  "query": "state=family&mode=build",
+  "setup": "window.MefiNav.go(\"workspace\"); return window.MefiWorkspace.isActive();",
+  "settleMs": 4000,
+  "measureMs": 8000
+ },
+ {
+  "page": "base.html",
+  "name": "head-vibe",
+  "query": "state=family&mode=vibe",
+  "setup": "if (!window.MefiVibe.isActive()) await window.MefiVibe.enter(); return window.MefiVibe.isActive();",
+  "settleMs": 4000,
+  "measureMs": 8000
+ },
+ {
+  "page": "base.html",
+  "name": "head-command",
+  "query": "state=family&mode=build",
+  "setup": "window.MefiNav.go(\"command\"); await window.MefiIdle.ready(); return window.MefiIdle.isActive();",
+  "settleMs": 4000,
+  "measureMs": 8000
+ },
+ {
+  "page": "base.html",
+  "name": "head-home",
+  "query": "state=family&mode=build",
+  "setup": "window.MefiNav.go(\"workspace\"); return window.MefiWorkspace.isActive();",
+  "settleMs": 4000,
+  "measureMs": 8000
+ }
+]

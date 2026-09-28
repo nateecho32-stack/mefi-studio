@@ -1,0 +1,66 @@
+[
+ {
+  "page": "base.html",
+  "settleMs": 4000,
+  "measureMs": 8000,
+  "setup": "window.MefiNav.go(\"command\"); await window.MefiIdle.ready(); return window.MefiIdle.isActive();",
+  "name": "cmd",
+  "query": "state=family&mode=build&"
+ },
+ {
+  "page": "base.html",
+  "settleMs": 4000,
+  "measureMs": 8000,
+  "setup": "window.MefiNav.go(\"command\"); await window.MefiIdle.ready(); return window.MefiIdle.isActive();",
+  "name": "cmd-orbs",
+  "query": "state=family&mode=build&music=%7B%22nodeStyle%22%3A%22orbs%22%7D"
+ },
+ {
+  "page": "base.html",
+  "settleMs": 4000,
+  "measureMs": 8000,
+  "setup": "window.MefiNav.go(\"command\"); await window.MefiIdle.ready(); return window.MefiIdle.isActive();",
+  "name": "cmd-no-trails",
+  "query": "state=family&mode=build&music=%7B%22orbitTrails%22%3Afalse%7D"
+ },
+ {
+  "page": "base.html",
+  "settleMs": 4000,
+  "measureMs": 8000,
+  "setup": "window.MefiNav.go(\"command\"); await window.MefiIdle.ready(); return window.MefiIdle.isActive();",
+  "name": "cmd-no-glow",
+  "query": "state=family&mode=build&music=%7B%22extraGlow%22%3Afalse%7D"
+ },
+ {
+  "page": "base.html",
+  "settleMs": 4000,
+  "measureMs": 8000,
+  "setup": "window.MefiNav.go(\"command\"); await window.MefiIdle.ready(); return window.MefiIdle.isActive();",
+  "name": "cmd-backdrop-minimal",
+  "query": "state=family&mode=build&ls=%7B%22mefiStudio.cmdBackdrop%22%3A%22minimal%22%7D"
+ },
+ {
+  "page": "base.html",
+  "settleMs": 4000,
+  "measureMs": 8000,
+  "setup": "window.MefiNav.go(\"command\"); await window.MefiIdle.ready(); return window.MefiIdle.isActive();",
+  "name": "cmd-dyn-plain",
+  "query": "state=family&mode=build&dyn=%7B%22nodeBrightness%22%3A1%2C%22lineBrightness%22%3A1%2C%22outlines%22%3Afalse%7D"
+ },
+ {
+  "page": "base.html",
+  "settleMs": 4000,
+  "measureMs": 8000,
+  "setup": "window.MefiNav.go(\"command\"); await window.MefiIdle.ready(); return window.MefiIdle.isActive();",
+  "name": "cmd-layout-default",
+  "query": "state=family&mode=build&music=%7B%22nodeLayout%22%3A%22constellation%22%7D"
+ },
+ {
+  "page": "base.html",
+  "settleMs": 4000,
+  "measureMs": 8000,
+  "setup": "window.MefiNav.go(\"command\"); await window.MefiIdle.ready(); return window.MefiIdle.isActive();",
+  "name": "cmd-motion-off",
+  "query": "state=family&mode=build&ls=%7B%22mefiStudio.motion%22%3A%220%22%7D"
+ }
+]

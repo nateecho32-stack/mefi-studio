@@ -1,0 +1,42 @@
+[
+ {
+  "page": "base.html",
+  "settleMs": 4000,
+  "measureMs": 8000,
+  "setup": "window.MefiNav.go(\"command\"); await window.MefiIdle.ready(); return window.MefiIdle.isActive();",
+  "name": "cmd-bright1-outlines",
+  "query": "state=family&mode=build&dyn=%7B%22nodeBrightness%22%3A1%2C%22lineBrightness%22%3A1%7D"
+ },
+ {
+  "page": "base.html",
+  "settleMs": 4000,
+  "measureMs": 8000,
+  "setup": "window.MefiNav.go(\"command\"); await window.MefiIdle.ready(); return window.MefiIdle.isActive();",
+  "name": "cmd-bright2-no-outlines",
+  "query": "state=family&mode=build&dyn=%7B%22outlines%22%3Afalse%7D"
+ },
+ {
+  "page": "base.html",
+  "settleMs": 4000,
+  "measureMs": 8000,
+  "setup": "window.MefiNav.go(\"command\"); await window.MefiIdle.ready(); return window.MefiIdle.isActive();",
+  "name": "cmd-node2-line1",
+  "query": "state=family&mode=build&dyn=%7B%22lineBrightness%22%3A1%2C%22outlines%22%3Afalse%7D"
+ },
+ {
+  "page": "base.html",
+  "settleMs": 4000,
+  "measureMs": 8000,
+  "setup": "window.MefiNav.go(\"command\"); await window.MefiIdle.ready(); return window.MefiIdle.isActive();",
+  "name": "cmd-node1-line2",
+  "query": "state=family&mode=build&dyn=%7B%22nodeBrightness%22%3A1%2C%22outlines%22%3Afalse%7D"
+ },
+ {
+  "page": "base.html",
+  "settleMs": 4000,
+  "measureMs": 8000,
+  "setup": "if (!window.MefiVibe.isActive()) await window.MefiVibe.enter(); return window.MefiVibe.isActive();",
+  "name": "vibe-bright1",
+  "query": "state=family&mode=vibe&dyn=%7B%22nodeBrightness%22%3A1%2C%22lineBrightness%22%3A1%7D"
+ }
+]

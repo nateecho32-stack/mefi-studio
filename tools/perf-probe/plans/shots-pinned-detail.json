@@ -1,0 +1,40 @@
+[
+ {
+  "page": "base.html",
+  "name": "pin-head-cmd",
+  "query": "state=family&mode=build&ls=%7B%22mefiStudio.motion%22%3A%220%22%2C%22mefiStudio.cmdOrbit%22%3A%22paused%22%7D",
+  "setup": "window.MefiNav.go(\"command\"); await window.MefiIdle.ready(); window.MefiIdle.setOrbit?.(\"paused\", { quiet: true }); const o = window.MefiNodeStyles; window.MefiNodeStyles = Object.freeze({ ...o, tier(r) { return o.tier(r, 3); } });  return true;",
+  "settleMs": 4000,
+  "shotOnly": true,
+  "shot": "pin-head-cmd"
+ },
+ {
+  "page": "fix1.html",
+  "name": "pin-fix-cmd",
+  "query": "state=family&mode=build&ls=%7B%22mefiStudio.motion%22%3A%220%22%2C%22mefiStudio.cmdOrbit%22%3A%22paused%22%7D",
+  "setup": "window.MefiNav.go(\"command\"); await window.MefiIdle.ready(); window.MefiIdle.setOrbit?.(\"paused\", { quiet: true }); const o = window.MefiNodeStyles; window.MefiNodeStyles = Object.freeze({ ...o, tier(r) { return o.tier(r, 3); } });  return true;",
+  "settleMs": 4000,
+  "shotOnly": true,
+  "shot": "pin-fix-cmd",
+  "compare": "pin-head-cmd"
+ },
+ {
+  "page": "base.html",
+  "name": "pin-head-vibe",
+  "query": "state=family&mode=vibe&ls=%7B%22mefiStudio.motion%22%3A%220%22%2C%22mefiStudio.cmdOrbit%22%3A%22paused%22%7D",
+  "setup": "if (!window.MefiVibe.isActive()) await window.MefiVibe.enter(); const o = window.MefiNodeStyles; window.MefiNodeStyles = Object.freeze({ ...o, tier(r) { return o.tier(r, 3); } });  return true;",
+  "settleMs": 4000,
+  "shotOnly": true,
+  "shot": "pin-head-vibe"
+ },
+ {
+  "page": "fix1.html",
+  "name": "pin-fix-vibe",
+  "query": "state=family&mode=vibe&ls=%7B%22mefiStudio.motion%22%3A%220%22%2C%22mefiStudio.cmdOrbit%22%3A%22paused%22%7D",
+  "setup": "if (!window.MefiVibe.isActive()) await window.MefiVibe.enter(); const o = window.MefiNodeStyles; window.MefiNodeStyles = Object.freeze({ ...o, tier(r) { return o.tier(r, 3); } });  return true;",
+  "settleMs": 4000,
+  "shotOnly": true,
+  "shot": "pin-fix-vibe",
+  "compare": "pin-head-vibe"
+ }
+]
