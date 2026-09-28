@@ -6,6 +6,28 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-27 - Second bug-hunt pass: CLI setup, release helper, media browser, Vibe, autonomy
+
+Reviewed the modules that landed since the first pass (media browser, CLI
+setup, decision ledger/memory, desk resolve, autonomy host, request sizing,
+model learning, new app, PC sync, Vibe panels, onboarding, Agents). Fixed:
+guided CLI setup and the release apply helper, which never ran because a detached PowerShell gets no
+console (reproduced: the marker was never written; attached, or through `cmd /c
+start`, it ran and outlived the parent); the media browser closing on refused
+Studio navigations and blocking blob/data subframes; the Vibe drawer stuck
+after a mid-action project switch; Vibe answer and note drafts; the Team roster
+per project; Agents setup after outside settings pushes; the walkthrough's
+suggested task and coach Escape; autonomy undo markers, ledger flooding,
+Elevated budget holds and undo of failed decisions. Two findings were handed
+to the sync session, which owns sync.mjs (--no-autostash, fetch-failed). One
+was a false positive (Agents overview selection: nav maps taskId to selected).
+
+Validation on the rebased commit over 997b7aa: npm run check passed, npm run audit returned 0
+findings, and lint was unchanged at 0 errors. Full npm test passed with every leg green: Node 3963
+passed and 4 skipped, Electron 38 passed and 1 skipped, and all Python contracts passed. New or updated tests are
+decision_ledger (kept split loses its marker), autonomy_host (failed decision
+not undoable) and media_browser (a refused Studio navigation keeps playback).
+
 ## 2026-09-27 - Configuration, Habits and menu motion: gates on a private worktree of 8b4ab00
 
 Detached worktree C:\wt\build-e at 8b4ab00 plus 5d47154 only: Configuration

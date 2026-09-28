@@ -35,6 +35,41 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-28 - Menu polish pass: plain words, two-step confirms, steadier menus
+
+The "Menu polish review" session's uncommitted work in C:\wt\menu-polish,
+finished and landed as six commits on efdc015. Its stuck ux-clarity port was
+resolved: the fixture and test halves no longer apply, since the startup
+fixture has no Projects-menu check now, and sidebar.test pins the behaviour.
+The branch was rebased over the Rooms rewrite (companion-hub select() keeps the
+dispose over a copy, media-window keeps setMinimized with the SVG close, and
+Your PCs sends the previewed shelf with the count in words), then over the
+onboarding landing (setup-helper merged cleanly). Rooms got REASONS for auth,
+version and unsupported, plainError, and two-step Close, Leave and Delete.
+Connection details are named as Settings › General › Community. Batch 3 (one
+page frame) was not done: hiding #tree-rail outside Command conflicts with
+command_render's "visible rail resumes painting" contract, so it waits for
+the owner.
+
+- `npm run build-booklet` (fresh), `npm run check`, `npm run lint` (0
+  errors, 41 warnings, none new) and `npm run audit` (0 findings): PASS.
+- New tests: rooms_ui (hub codes as sentences; Delete and Leave ask twice)
+  and sidebar (M+ focuses the selected project). The session's pins were
+  updated in ideas_ui, overhead_poll_backoff, pc_vault_ui, together_ui,
+  vibe_panels and the companion-hub render fixture.
+- `npm test` in C:\wt\menu-polish, exit 0: Node parallel stage 4348 tests,
+  4343 passed, 5 skipped, 0 failures. Electron lane 41 tests, 40 passed, 1
+  skipped. `command_render` 1/1 in 53.8 s, `eyes_toggle_electron` 1/1.
+  `occlusion_probe` skipped because its window was closed externally during
+  the cover wait (desktop in use). Python contracts OK (248, 1 skip). The
+  normalized-path lock passed.
+- Visual: the seeded fake-bridge preview was captured offscreen at 1920x1080,
+  48 menus each from efdc015 and from this branch. The same single
+  fake-bridge console error appears in both. The largest pixel change is
+  2.1% (the live tree preview). Trace reads "All 0" with its empty state in
+  the log pane, Context shows its own subtitle and "4,000 token budget", and
+  Friends shows the new Settings path.
+
 ## 2026-09-28 - New-user onboarding: no AI connected, real logins, one welcome
 
 The "New user onboarding experience" session's fresh-profile findings,
@@ -492,28 +527,6 @@ builder launch; grok's headless guide documents --prompt-file as headless -p).
 ## 2026-09-27 - Companion as pet and friend: six-bubble menu, personality, Suggest work, Friends playground with sharing rules
 
 Built in a separate clone on origin/main 3e0e1e0. New pure modules scripts/companion-pet.cjs (personalities, presets, bond) and scripts/companion-friends.cjs (sharing levels and rules, broadcast level, scrubbed cards, card reading, share-back ask, mirrored scripted playdates); main's "Companion friends" block and hub-client `companion` frames (sent only when the hub's ready lists the feature; one-member delivery only with companion.direct); renderer/companion-friends.js playground; companion-hub/ui menu rework. New tests: companion_friends (13), companion_friends_host (8, vm slice of the main block), companion_personality_copy, plus additions to agent_brain_host, hub_client, module_purity and the companion-hub Electron fixture (playground, share-back, practice playdate, petting, plain check, Suggest work, Now, Personality). Full npm test: Node 4015 tests, 4008 pass, 5 skipped, 2 failed: pc_sync_ui's Friends-branch source pin (fixed by restoring an explicit friends branch; 6/6 solo) and command_render (known load-sensitive; passed solo in 52 s). Python contracts and path lock passed. Solo reruns: companion_hub_render, unified_studio_render, autonomy_render all pass. npm run check ok (172 targets), audit 0 errors, lint 0 errors with no new warnings. Rebased onto 215b7d9 (booklet rebuilt; companion-hub and fixture conflicts kept both sides): check ok (175 targets), audit 0 errors, the 11 touched Node suites 117/117, and companion_hub_render, unified_studio_render and autonomy_render pass.
-
-## 2026-09-27 - Second bug-hunt pass: CLI setup, release helper, media browser, Vibe, autonomy
-
-Reviewed the modules that landed since the first pass (media browser, CLI
-setup, decision ledger/memory, desk resolve, autonomy host, request sizing,
-model learning, new app, PC sync, Vibe panels, onboarding, Agents). Fixed:
-guided CLI setup and the release apply helper, which never ran because a detached PowerShell gets no
-console (reproduced: the marker was never written; attached, or through `cmd /c
-start`, it ran and outlived the parent); the media browser closing on refused
-Studio navigations and blocking blob/data subframes; the Vibe drawer stuck
-after a mid-action project switch; Vibe answer and note drafts; the Team roster
-per project; Agents setup after outside settings pushes; the walkthrough's
-suggested task and coach Escape; autonomy undo markers, ledger flooding,
-Elevated budget holds and undo of failed decisions. Two findings were handed
-to the sync session, which owns sync.mjs (--no-autostash, fetch-failed). One
-was a false positive (Agents overview selection: nav maps taskId to selected).
-
-Validation on the rebased commit over 997b7aa: npm run check passed, npm run audit returned 0
-findings, and lint was unchanged at 0 errors. Full npm test passed with every leg green: Node 3963
-passed and 4 skipped, Electron 38 passed and 1 skipped, and all Python contracts passed. New or updated tests are
-decision_ledger (kept split loses its marker), autonomy_host (failed decision
-not undoable) and media_browser (a refused Studio navigation keeps playback).
 
 ## Read Before Any Tests
 
