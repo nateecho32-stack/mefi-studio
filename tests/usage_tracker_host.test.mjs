@@ -290,7 +290,7 @@ test("both surfaces exist in the template and are driven by the tracker module",
   assert.match(trackerSource, /bridge\.usageTracker\(\)/);
   assert.match(trackerSource, /bridge\.opencodeCredits/);
   assert.match(trackerSource, /bridge\.usageAccounts/);
-  assert.match(modelLabSource, /\["rankings", "usage", "context", "tracker", "compare"\]/);
+  assert.match(modelLabSource, /\["rankings", "usage", "context", "tracker", "community", "compare"\]/);
   assert.match(modelLabSource, /window\.MefiUsageTracker\?\.refresh\?\.\(\)/);
   assert.match(idleSource, /window\.MefiUsageTracker\?\.open\?\.\(\)/);
   assert.match(idleSource, /MefiUsageTracker\?\.tick\?\.\(\)/);

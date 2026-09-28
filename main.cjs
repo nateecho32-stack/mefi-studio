@@ -221,9 +221,11 @@ function handleProjectIpc(channel, handler) {
 // the app's. update:apply, release:apply and app:restart stay gated, so a
 // restart never lands in the middle of a switch. Set up this PC (pc-setup:)
 // is the PC's own and may open a freshly cloned project, which a gated
-// handler would wait on. (Declared beside the wrapper so the tests that load
-// it from here up to app.setName see it.)
-const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:"];
+// handler would wait on. The community model feed and the probe results
+// (models:) live in this PC's user data, and a probe run lasts minutes, which
+// a gated handler would hold every project switch for. (Declared beside the
+// wrapper so the tests that load it from here up to app.setName see it.)
+const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:", "models:"];
 const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits", "release:status", "release:check", "update:status", "update:set", "settings:get-key"]);
 ipcMain.handle = handleProjectIpc;
 
@@ -4164,9 +4166,13 @@ async function applyModelRouting(route, { role = "routine", taskType = role, wei
     const scope = `${projectId}:${signature}:${crypto.createHash("sha256").update(credential?.key ?? `stand-in:${standIn?.kind}`).update(JSON.stringify(config)).digest("hex")}`;
     if (!local && (modelRoutingBackoff.get(scope) ?? 0) > Date.now()) return finish("default", `${standIn ? "The stand-in judge" : "Jev"} is temporarily unavailable; using the usual model.`);
     if (!standIn && !local) await flushJevCharges();
-    const [catalog, performance] = await Promise.all([
+    // The community feed and Studio's probe runs are weaker evidence that only
+    // nudge a candidate's prior (model-routing.mjs); either may be missing.
+    const [catalog, performance, communityFeed, probeStore] = await Promise.all([
       readFile(path.join(STUDIO_ROOT, "data", "models.json"), "utf8").then(JSON.parse),
       modelLearningSnapshot(),
+      typeof modelCommunityForRouting === "function" ? modelCommunityForRouting().catch(() => null) : null,
+      typeof readModelProbes === "function" ? readModelProbes().catch(() => null) : null,
     ]);
     // A dispatched job is always the "worker" role — that is what gates the
     // tool-call filter below. How heavy the work looks travels separately, in
@@ -4174,7 +4180,7 @@ async function applyModelRouting(route, { role = "routine", taskType = role, wei
     // tool-call requirement on the way to the judge.
     const routingRole = worker ? "worker" : role;
     const candidates = router.buildRoutingCandidates({ catalog, performance, provider: route.provider,
-      defaults: [route.model], taskType, role: routingRole });
+      defaults: [route.model], taskType, role: routingRole, community: communityFeed, probes: probeStore });
     offered = candidates.filter((candidate) => candidate?.provider === route.provider && typeof candidate.model === "string").map((candidate) => candidate.model);
     if (candidates.length < 2) return finish("default", "Too few compatible models to compare; using the usual model.");
     if (local) {
@@ -5664,7 +5670,9 @@ async function assistantFetch(system, user, maxTokens = 6000, { role = "routine"
 
 // The CLI half of assistantFetch, shared with the data-only callers
 // (planning, brain drafts, the analyzer read) that may ride Claude Code.
-async function cliAssistantCall(route, system, user, maxTokens, { role = "routine", taskType = role, source = "request" } = {}) {
+// `fallback: false` keeps a failed CLI call failed instead of retrying on
+// another model (a probe measures one model, never whichever answered).
+async function cliAssistantCall(route, system, user, maxTokens, { role = "routine", taskType = role, source = "request", fallback = true } = {}) {
   if (typeof agentTools !== "undefined" && !agentTools.active.getStore() && taskType !== "ai-probe") {
     const settings = await readAgentSettings();
     if (typeof agentAddons !== "undefined") system += scrubOutbound(await agentAddons.instructions(projectRoot(), settings, role));
@@ -5704,7 +5712,7 @@ async function cliAssistantCall(route, system, user, maxTokens, { role = "routin
     }
   }
   const settings = await (typeof readAgentSettings === "function" ? readAgentSettings() : readSettings());
-  if (!autoFallbackEnabled(settings)) return cli;
+  if (!fallback || !autoFallbackEnabled(settings)) return cli;
   const http = await resolveAiRoute(role, { allowCli: false });
   if (!http.ok) return cli;
   const retried = await httpAssistantCall(http, system, user, maxTokens, { taskType, source, role });
@@ -18959,6 +18967,239 @@ function stopServerStyler() {
   return { ok: true, stopped: true, message: "Stopping Server Styler." };
 }
 
+// ---- model community feed and probes (docs/model-community.md) ---------------
+// Two weaker kinds of model evidence, both kept in this PC's user data (never
+// the repo's data/): the Void Engine Bot's public community feed, fetched at
+// most every six hours or when the owner presses Refresh in Models, and
+// Studio's own probe runs, which start only from the Run probes button and
+// only on a model the owner has enabled here. Routing reads both beside the
+// catalog (applyModelRouting); neither is ever a task win or loss. No feed is
+// an ordinary state: everything runs without one. Plain declarations only,
+// because tests slice main.cjs into sandboxes around sections like this one.
+let modelCommunityLib = null;
+let modelCommunityState = null;
+let modelCommunityRefreshing = null;
+let modelProbeWrites = Promise.resolve();
+let modelProbeActive = null;
+// An on-demand Refresh still waits this long between two fetches.
+const MODEL_COMMUNITY_MIN_REFRESH_MS = 60000;
+
+function modelCommunityModule() {
+  if (!modelCommunityLib) modelCommunityLib = require("./scripts/model-community.cjs");
+  return modelCommunityLib;
+}
+function modelCommunityFile() { return path.join(app.getPath("userData"), "model-community.json"); }
+function modelProbesFile() { return path.join(app.getPath("userData"), "model-probes.json"); }
+
+// The last good copy, read once. It is Studio's own file but is validated
+// again anyway: feed text is never trusted twice.
+async function readModelCommunity() {
+  if (modelCommunityState) return modelCommunityState;
+  const lib = modelCommunityModule();
+  let saved = null;
+  try { saved = JSON.parse(await readFile(modelCommunityFile(), "utf8")); } catch { saved = null; }
+  const time = (value) => Number.isFinite(value) && value > 0 ? value : null;
+  const checked = saved?.feed ? lib.validateFeed(saved.feed) : null;
+  modelCommunityState = {
+    feed: checked?.ok ? checked.feed : null, fetchedAt: time(saved?.fetchedAt), checkedAt: time(saved?.checkedAt),
+    etag: typeof saved?.etag === "string" ? saved.etag.slice(0, 200) : null,
+    lastError: typeof saved?.lastError === "string" ? saved.lastError.slice(0, 200) : null,
+    missing: saved?.missing === true, droppedCount: Number.isSafeInteger(saved?.droppedCount) ? saved.droppedCount : 0,
+  };
+  return modelCommunityState;
+}
+
+// One fetch at a time, at most every six hours (a minute when forced). A
+// failed fetch keeps the old copy and records why.
+async function refreshModelCommunity({ force = false } = {}) {
+  const state = await readModelCommunity();
+  if (SMOKE || CAPTURE) return state;
+  const lib = modelCommunityModule();
+  if (state.checkedAt && Date.now() - state.checkedAt < (force ? MODEL_COMMUNITY_MIN_REFRESH_MS : lib.FEED_MAX_AGE_MS)) return state;
+  if (modelCommunityRefreshing) return modelCommunityRefreshing;
+  modelCommunityRefreshing = (async () => {
+    const result = await lib.fetchFeed({ fetchImpl: fetch, etag: state.feed ? state.etag : null });
+    const now = Date.now();
+    const next = { ...state, checkedAt: now };
+    if (result.ok && result.notModified) Object.assign(next, { fetchedAt: now, lastError: null, missing: false });
+    else if (result.ok) {
+      const checked = lib.validateFeed(result.json);
+      if (checked.ok) {
+        Object.assign(next, { feed: checked.feed, fetchedAt: now, etag: result.etag, lastError: null, missing: false, droppedCount: checked.droppedCount });
+        logLine(`[models] community feed: ${checked.feed.models.length} models${checked.droppedCount ? `, ${checked.droppedCount} entries dropped by validation` : ""}`);
+      } else Object.assign(next, { lastError: checked.error });
+    } else Object.assign(next, { lastError: result.missing ? null : result.error, missing: result.missing === true });
+    modelCommunityState = next;
+    try { await authStore.atomicWriteJson(modelCommunityFile(), { schema: 1, ...next }); }
+    catch (error) { logLine(`[models] could not save the community feed: ${error.message}`); }
+    return next;
+  })().finally(() => { modelCommunityRefreshing = null; });
+  return modelCommunityRefreshing;
+}
+
+// What routing reads: the saved feed at once, never a wait on the network. A
+// stale copy starts one background refresh for the next decision.
+async function modelCommunityForRouting() {
+  const state = await readModelCommunity();
+  const stale = !state.checkedAt || Date.now() - state.checkedAt >= modelCommunityModule().FEED_MAX_AGE_MS;
+  if (stale && !SMOKE && !CAPTURE && !CLI_MODE) refreshModelCommunity().catch(() => {});
+  return state.feed;
+}
+
+// Models' read: the feed's status and the row for one of Studio's models.
+async function modelCommunityView({ provider = null, model = null } = {}) {
+  const lib = modelCommunityModule();
+  let state = await readModelCommunity();
+  if (!state.checkedAt || Date.now() - state.checkedAt >= lib.FEED_MAX_AGE_MS) state = await refreshModelCommunity();
+  const match = state.feed && typeof provider === "string" && typeof model === "string" ? lib.matchModel(state.feed, { provider, model }) : null;
+  return {
+    url: lib.FEED_URL, hasFeed: Boolean(state.feed), generatedAt: state.feed?.generatedAt ?? null, source: state.feed?.source ?? null,
+    modelCount: state.feed?.models?.length ?? 0, fetchedAt: state.fetchedAt, checkedAt: state.checkedAt, lastError: state.lastError,
+    missing: state.missing, droppedCount: state.droppedCount, taskKinds: [...lib.TASK_KINDS],
+    match: match ? { matchedBy: match.matchedBy, row: match.row } : null,
+  };
+}
+
+async function readModelProbes() {
+  const lib = await loadModule("scripts/model-probes.mjs");
+  let saved = null;
+  try { saved = JSON.parse(await readFile(modelProbesFile(), "utf8")); } catch { saved = null; }
+  return lib.normalizeProbeStore(saved);
+}
+
+// Writes queue behind each other, so two results never tear the file.
+function saveModelProbeRun(entry) {
+  const write = modelProbeWrites.then(async () => {
+    const lib = await loadModule("scripts/model-probes.mjs");
+    await authStore.atomicWriteJson(modelProbesFile(), lib.recordProbeRun(await readModelProbes(), entry));
+  });
+  modelProbeWrites = write.catch((error) => logLine(`[models] could not save a probe result: ${error.message}`));
+  return modelProbeWrites;
+}
+
+// The models the owner has enabled on this PC, and the only ones a probe may
+// run on: a provider with a saved key (or a signed-in data-only CLI), and a
+// model that provider's defaults, Studio's routing roster, the owner's saved
+// model choices or a seat names.
+async function modelProbeTargets(settings = null) {
+  settings = settings ?? await readSettings();
+  const targets = [];
+  const add = (provider, model, cliModel = null) => {
+    const id = String(model ?? "").trim();
+    if (!/^[A-Za-z0-9._:/ ()-]{1,160}$/.test(id) || targets.some((item) => item.provider === provider && item.model === id)) return;
+    targets.push({ provider, model: id, label: `${AUTO_PROVIDER_NAMES[provider] ?? provider} · ${id}`, ...(cliModel === null ? {} : { cli: true, cliModel }) });
+  };
+  const chosen = (provider) => {
+    const scoped = settings.aiModelsByProvider && typeof settings.aiModelsByProvider === "object" ? settings.aiModelsByProvider[provider] : null;
+    const seats = Object.keys(SEAT_DEFAULTS).map((seat) => seatChoice(settings, seat)).filter((seat) => seat.provider === provider).map((seat) => seat.model);
+    return [scoped?.routine, scoped?.heavy, ...seats].filter((value) => typeof value === "string" && value.trim());
+  };
+  let catalog = null;
+  try { catalog = JSON.parse(await readFile(path.join(STUDIO_ROOT, "data", "models.json"), "utf8")); } catch { catalog = null; }
+  const router = catalog ? await loadModule("scripts/model-routing.mjs") : null;
+  const roster = (provider, defaults) => router ? router.buildRoutingCandidates({ catalog, provider, defaults, role: "routine" }).map((candidate) => candidate.model) : [];
+  if (decryptKey(settings, "zaiApiKeyEncrypted")) for (const id of [ZAI_MODEL_ROUTINE, ZAI_MODEL_HEAVY, ...chosen("zai"), ...roster("zai", [ZAI_MODEL_ROUTINE])]) add("zai", id);
+  if (decryptKey(settings, "apiKeyEncrypted")) for (const id of [ASSISTANT_MODEL, ...chosen("opencode"), ...roster("opencode", [ASSISTANT_MODEL])]) add("opencode", id);
+  if (decryptKey(settings, "zenApiKeyEncrypted")) for (const id of [ZEN_MODEL_ROUTINE, ZEN_MODEL_HEAVY, ...chosen("zen")]) add("zen", id);
+  if (decryptKey(settings, "openrouterApiKeyEncrypted")) for (const id of [OPENROUTER_MODEL, ...chosen("openrouter")]) add("openrouter", id);
+  for (const id of chosen("lmstudio")) add("lmstudio", id);
+  if (normalizeCompatEndpoint(settings.customEndpoint)) for (const id of chosen("custom")) add("custom", id);
+  // A CLI is offered only where it answers data-only: no tools, a read-only
+  // sandbox, never the builder's file-editing run.
+  const available = { claude: claudeCliAvailable, codex: codexCliAvailable, grok: grokCliAvailable, antigravity: antigravityCliAvailable };
+  for (const provider of ["claude", "codex", "grok", "antigravity"]) {
+    if (!DATA_ONLY_CLIS.has(provider) || !(await Promise.resolve().then(() => available[provider]()).catch(() => false))) continue;
+    const models = chosen(provider);
+    if (!models.length) add(provider, `${provider}-default`, "");
+    for (const id of models) add(provider, id, id);
+  }
+  return targets;
+}
+
+// The route one probe call takes: exactly this model, no fallbacks.
+function modelProbeRoute(target, settings) {
+  const key = (name) => decryptKey(settings, name);
+  const http = (endpoint, apiKey) => endpoint && apiKey !== null && apiKey !== undefined
+    ? { ok: true, provider: target.provider, endpoint, model: target.model, apiKey, fallback: null, fallbacks: [] }
+    : { ok: false, error: `${AUTO_PROVIDER_NAMES[target.provider] ?? target.provider} is not set up on this PC.` };
+  if (target.provider === "zai") return http(ZAI_ENDPOINT, key("zaiApiKeyEncrypted"));
+  if (target.provider === "opencode") return http(ASSISTANT_ENDPOINT, key("apiKeyEncrypted"));
+  if (target.provider === "zen") return http(zenEndpoint(target.model), key("zenApiKeyEncrypted"));
+  if (target.provider === "openrouter") return http(OPENROUTER_ENDPOINT, key("openrouterApiKeyEncrypted"));
+  if (target.provider === "lmstudio") return http(normalizeLmStudioEndpoint(settings.lmStudioEndpoint), "lm-studio");
+  if (target.provider === "custom") return http(normalizeCompatEndpoint(settings.customEndpoint), key("customApiKeyEncrypted") ?? "");
+  if (target.cli === true && DATA_ONLY_CLIS.has(target.provider)) return { ok: true, provider: target.provider, cli: true, model: target.cliModel ?? "", endpoint: null, apiKey: null, fallback: null, fallbacks: [] };
+  return { ok: false, error: "Studio probes a model only through a route that cannot change files." };
+}
+
+// One owner-started probe run: each probe in turn through the resolved route,
+// every call recorded in the model ledger (taskType probe-<kind>, source
+// probe) so its cost and latency count, each result kept in model-probes.json.
+// Only the models:probe-run handler calls this; nothing in Studio schedules it.
+async function runModelProbes({ provider, model, kinds = null } = {}) {
+  if (modelProbeActive) return { ok: false, error: `Probes are already running on ${modelProbeActive.model}. Cancel them first.` };
+  if (typeof provider !== "string" || typeof model !== "string") return { ok: false, error: "Choose a model to probe." };
+  const run = { id: crypto.randomUUID(), provider, model, cancelled: false };
+  // Claimed before the first await, so two clicks never start two runs.
+  modelProbeActive = run;
+  try {
+    const lib = await loadModule("scripts/model-probes.mjs");
+    const settings = await readSettings();
+    const target = (await modelProbeTargets(settings)).find((item) => item.provider === provider && item.model === model);
+    if (!target) return { ok: false, error: "Studio probes only models enabled on this PC: a saved key or signed-in CLI, and a model Studio routes to or you chose." };
+    const wanted = lib.PROBE_KINDS.filter((kind) => !Array.isArray(kinds) || !kinds.length || kinds.includes(kind));
+    if (!wanted.length) return { ok: false, error: "Choose at least one probe." };
+    const route = modelProbeRoute(target, settings);
+    if (!route.ok) return route;
+    const progress = (event) => send("models:probe-progress", { runId: run.id, provider, model, total: wanted.length, ...event });
+    const runNode = (options) => lib.runNode({ ...options, execPath: process.execPath, env: { ELECTRON_RUN_AS_NODE: "1" } });
+    const results = {};
+    logLine(`[models] probing ${provider}/${model}: ${wanted.join(", ")}`);
+    for (const [index, kind] of wanted.entries()) {
+      if (run.cancelled) break;
+      const probe = lib.probeFor(kind);
+      progress({ state: "running", kind, index });
+      const startedAt = Date.now();
+      const options = { taskType: `probe-${kind}`, source: "probe", role: "routine" };
+      // No tools, skills, routing or fallback: the fixed prompt reaches this
+      // one model as written (agentTools.active marks the call tool-less).
+      const call = await agentTools.active.run(true, () => route.cli
+        ? cliAssistantCall(route, probe.system, probe.user, probe.maxTokens, { ...options, fallback: false })
+        : httpAssistantCall(route, probe.system, probe.user, probe.maxTokens, { ...options, pinned: true }));
+      if (run.cancelled) break;
+      const scored = call?.ok ? await lib.scoreProbe(kind, call.text, { runNode }) : null;
+      const result = { at: startedAt, elapsedMs: Date.now() - startedAt, passed: scored?.passed === true, score: scored ? scored.score : null, checks: scored?.checks ?? [],
+        error: call?.ok ? null : String(call?.error ?? "The model did not answer.").slice(0, 200) };
+      results[kind] = result;
+      await saveModelProbeRun({ provider, model, kind, run: result });
+      progress({ state: "scored", kind, index, result });
+    }
+    progress({ state: run.cancelled ? "cancelled" : "done" });
+    logLine(`[models] probes on ${provider}/${model} ${run.cancelled ? "cancelled" : "finished"}`);
+    return { ok: true, runId: run.id, cancelled: run.cancelled, results };
+  } finally {
+    if (modelProbeActive === run) modelProbeActive = null;
+  }
+}
+
+// The call already in flight finishes (and is recorded); no further probe starts.
+function cancelModelProbes() {
+  if (!modelProbeActive) return { ok: true, cancelled: false };
+  modelProbeActive.cancelled = true;
+  return { ok: true, cancelled: true, message: "Stopping after the probe that is running now." };
+}
+
+async function modelProbesView({ provider = null, model = null } = {}) {
+  const lib = await loadModule("scripts/model-probes.mjs");
+  const [targets, store] = await Promise.all([modelProbeTargets(), readModelProbes()]);
+  return {
+    targets, kinds: lib.PROBES.map((probe) => ({ kind: probe.kind, title: probe.title })), maxTokens: lib.PROBE_MAX_TOKENS,
+    running: modelProbeActive ? { runId: modelProbeActive.id, provider: modelProbeActive.provider, model: modelProbeActive.model, cancelled: modelProbeActive.cancelled } : null,
+    runs: typeof provider === "string" && typeof model === "string" ? lib.probeRunsFor(store, { provider, model }) : {},
+  };
+}
+
+
 let speedMeasurementWrites = Promise.resolve();
 
 async function runSpeedProbe(modelId) {
@@ -20637,6 +20878,27 @@ function registerIpc() {
     try { return { ok: true, ...(await modelPerformanceStore().rate({ observationId: rating.observationId, authority: "human", score: rating.score, note: rating.note })) }; }
     catch (error) { return { ok: false, error: error.message }; }
   });
+  // The community feed and Studio's probes (docs/model-community.md). Reads
+  // never spend quota; a probe run starts only from the Run probes button.
+  ipcMain.handle("models:community", async (_event, payload = {}) => {
+    try { return { ok: true, ...(await modelCommunityView(payload)) }; }
+    catch (error) { return { ok: false, error: error.message }; }
+  });
+  ipcMain.handle("models:community-refresh", async (_event, payload = {}) => {
+    try {
+      await refreshModelCommunity({ force: true });
+      return { ok: true, ...(await modelCommunityView(payload)) };
+    } catch (error) { return { ok: false, error: error.message }; }
+  });
+  ipcMain.handle("models:probes", async (_event, payload = {}) => {
+    try { return { ok: true, ...(await modelProbesView(payload)) }; }
+    catch (error) { return { ok: false, error: error.message }; }
+  });
+  ipcMain.handle("models:probe-run", async (_event, payload = {}) => {
+    try { return await runModelProbes(payload); }
+    catch (error) { return { ok: false, error: error.message }; }
+  });
+  ipcMain.handle("models:probe-cancel", () => cancelModelProbes());
   ipcMain.handle("model-lab:context", async (_event, { taskId, budgetTokens } = {}) => {
     const eyes = await getEyes();
     const tasks = await eyes.readJson(TASKS_PATH, []);

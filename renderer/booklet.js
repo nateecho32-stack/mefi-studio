@@ -159,6 +159,8 @@
     cards: document.getElementById("cards"),
     count: document.getElementById("count"),
     footer: document.getElementById("footer-meta"),
+    alsoTracked: document.getElementById("also-tracked"),
+    alsoTrackedBody: document.getElementById("also-tracked-body"),
     banner2: null,
   };
 
@@ -293,6 +295,45 @@
       <span>per-model pool: 5h = 20%, week = 50%, month = 100%</span>`;
   }
 
+  // Also tracked: the models Studio routes to outside Go (providerModels,
+  // rebuilt from models.dev). Read-only, and built with textContent so no
+  // catalog string ever reaches innerHTML.
+  const ROUTE_LABELS = { claude: "Claude Code", zen: "OpenCode Zen", zai: "z.ai Coding Plan" };
+  let alsoTrackedDoc = null;
+  function renderAlsoTracked() {
+    const box = els.alsoTracked, body = els.alsoTrackedBody;
+    if (!box || !body || alsoTrackedDoc === state.doc) return;
+    alsoTrackedDoc = state.doc;
+    const routes = Object.entries(state.doc.providerModels ?? {}).filter(([, rows]) => Array.isArray(rows) && rows.length);
+    box.hidden = !routes.length;
+    const node = (tag, text, className) => {
+      const el = document.createElement(tag);
+      if (text != null) el.textContent = String(text);
+      if (className) el.className = className;
+      return el;
+    };
+    const price = (cost) => (cost && cost.input != null && cost.output != null ? `${fmt.money(cost.input)} in / ${fmt.money(cost.output)} out` : "—");
+    const parts = [];
+    for (const [route, rows] of routes) {
+      parts.push(node("h3", `${ROUTE_LABELS[route] ?? route} · ${rows.length}`));
+      const table = node("table", null, "lab-table");
+      const head = node("tr");
+      for (const label of ["Model", "Released", "Context", "List price / 1M"]) head.append(node("th", label));
+      table.append(head);
+      for (const row of rows) {
+        const name = node("td", row.name ?? row.id);
+        name.title = String(row.id ?? "");
+        const tr = node("tr");
+        tr.append(name, node("td", row.releaseDate ?? "—"), node("td", fmt.ctx(row.limits?.context)), node("td", price(row.cost)));
+        table.append(tr);
+      }
+      const wrap = node("div", null, "lab-table-wrap");
+      wrap.append(table);
+      parts.push(wrap);
+    }
+    body.replaceChildren(...parts);
+  }
+
   function renderStatus() {
     const doc = state.doc;
     const roster = doc.models.filter((m) => m.onRoster).length;
@@ -321,6 +362,7 @@
 
   function renderAll() {
     renderPlan();
+    renderAlsoTracked();
     renderStatus();
     renderChips();
     renderCards();

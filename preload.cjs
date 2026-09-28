@@ -95,6 +95,13 @@ const api = {
   modelPerformanceSnapshot: (payload) => ipcRenderer.invoke("model-performance:snapshot", payload ?? {}),
   modelPerformanceRate: (payload) => ipcRenderer.invoke("model-performance:rate", payload ?? {}),
   modelLabContext: (payload) => ipcRenderer.invoke("model-lab:context", payload ?? {}),
+  // The community model feed (read-only) and Studio's on-demand probes.
+  modelFeed: (payload) => ipcRenderer.invoke("models:community", payload ?? {}),
+  modelFeedRefresh: (payload) => ipcRenderer.invoke("models:community-refresh", payload ?? {}),
+  modelProbes: (payload) => ipcRenderer.invoke("models:probes", payload ?? {}),
+  modelProbeRun: (payload) => ipcRenderer.invoke("models:probe-run", payload ?? {}),
+  modelProbeCancel: () => ipcRenderer.invoke("models:probe-cancel"),
+  onModelProbeProgress: (callback) => ipcRenderer.on("models:probe-progress", (_event, data) => callback(data)),
   usageTracker: () => ipcRenderer.invoke("usage:tracker", {}),
   usageForTask: (taskId) => ipcRenderer.invoke("usage:task", { taskId }),
   opencodeCredits: () => ipcRenderer.invoke("opencode:credits", {}),

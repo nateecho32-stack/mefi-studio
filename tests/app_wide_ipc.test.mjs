@@ -24,7 +24,7 @@ function host() {
 
 test("owner and app readings answer during a project switch; project work and restarts wait", () => {
   const h = host();
-  for (const channel of ["release:status", "release:check", "update:status", "update:set", "settings:get-key", "catalog:read", "speed:probe", "shell:open", "styler:status", "community:status", "usage:accounts"]) {
+  for (const channel of ["release:status", "release:check", "update:status", "update:set", "settings:get-key", "catalog:read", "speed:probe", "shell:open", "styler:status", "community:status", "usage:accounts", "models:community", "models:community-refresh", "models:probes", "models:probe-run", "models:probe-cancel"]) {
     assert.deepEqual(h.call(channel), { ok: true, channel }, channel);
   }
   for (const channel of ["update:apply", "release:apply", "app:restart", "tasks:save", "eyes:state", "settings:set-key"]) {

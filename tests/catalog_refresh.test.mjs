@@ -34,7 +34,7 @@ const liveMetadata = {
   release_date: "2026-03-01", knowledge: "2026-02",
 };
 
-async function fixture(t, { models = [savedModel], curatedModels = {} } = {}) {
+async function fixture(t, { models = [savedModel], curatedModels = {}, curatedExtra = {}, savedExtra = {} } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), "catalog-refresh-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const dataDir = path.join(root, "data");
@@ -43,11 +43,11 @@ async function fixture(t, { models = [savedModel], curatedModels = {} } = {}) {
     schemaVersion: 1, plan: { name: "Fixture", sources: { seedDate: "2026-01-01" } },
     taskPresets: [], privacyScores: {}, models: curatedModels,
     endpoints: { compat: { label: "Fixture compatibility endpoint", path: "https://invalid.test/v1" } },
-    endpointMap: {},
+    endpointMap: {}, ...curatedExtra,
   };
   const catalogPath = path.join(dataDir, "models.json");
   await writeFile(path.join(dataDir, "curated.json"), JSON.stringify(curated));
-  await writeFile(catalogPath, JSON.stringify({ models, hash: "old-hash", rosterHash: "old-roster-hash" }));
+  await writeFile(catalogPath, JSON.stringify({ models, hash: "old-hash", rosterHash: "old-roster-hash", ...savedExtra }));
   return { root, dataDir, catalogPath, curated };
 }
 
@@ -255,4 +255,131 @@ test("roster checks never write, deduplicate ids and report actual membership ch
     fetchImpl: sources({ roster: ["new-model"] }),
   }), /roster changed/);
   assert.equal(await readFile(f.catalogPath, "utf8"), saved);
+});
+
+// ---- providerModels: the routes Studio uses outside Go ----
+
+// Trimmed models.dev entries recorded on 2026-09-28; no test touches the network.
+const recorded = JSON.parse(await readFile(new URL("./fixtures/models-dev-routes.json", import.meta.url), "utf8"));
+const NOW = Date.parse("2026-09-28T12:00:00Z");
+const providerRoutes = {
+  note: "fixture",
+  claude: { label: "Claude Code", provider: "anthropic", priceProvider: "anthropic", pinned: ["claude-opus-5-5"], ids: ["claude-opus-5-5", "claude-sonnet-4-5", "claude-gone-1"] },
+  zen: { label: "OpenCode Zen", provider: "openai", priceProvider: "opencode", servedBy: "opencode", pinned: ["gpt-6-luna"], ids: ["gpt-6-luna", "gpt-5.6"] },
+  zai: { label: "z.ai Coding Plan", provider: "zai-coding-plan", priceProvider: "zai", ids: ["glm-5.3", "glm-5.3-highspeed"] },
+};
+function routeSources(api = recorded) {
+  return async (url) => {
+    assert.ok([rosterUrl, metadataUrl].includes(url));
+    if (url === rosterUrl) return response({ data: [{ id: "known-model" }] });
+    return response({ ...api, "opencode-go": { models: { "known-model": liveMetadata } } });
+  };
+}
+const routeWarnings = (result) => result.warnings.filter((warning) => warning.startsWith("providerModels"));
+
+test("providerModels rebuilds each Studio route from models.dev with the curated id list", async (t) => {
+  const f = await fixture(t, { curatedExtra: { providerRoutes } });
+  const result = await refreshCatalog({ root: f.root, logger, now: NOW, fetchImpl: routeSources() });
+  assert.deepEqual(Object.keys(result.providerModels), ["claude", "zen", "zai"], "one list per route; the note is not a route");
+  assert.deepEqual(result.providerModels.claude[0], {
+    id: "claude-opus-5-5", name: "Claude Opus 5.5", family: "claude-opus", releaseDate: "2026-09-22", knowledge: "2026-06",
+    limits: { context: 1000000, output: 128000 },
+    cost: { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
+    capabilities: { reasoning: true, toolCall: true, attachment: true, modalities: { input: ["text", "image", "pdf"], output: ["text"] }, openWeights: false },
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+    studioRoute: "claude",
+  });
+  assert.deepEqual(result.providerModels.claude.map((row) => row.id), ["claude-opus-5-5", "claude-sonnet-4-5"], "newest first; an id models.dev lacks is dropped");
+  assert.equal(result.providerModels.claude[1].reasoningEfforts, null);
+  assert.deepEqual(result.providerModels.zen.find((row) => row.id === "gpt-6-luna").cost, { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 }, "Zen rows carry Zen's price");
+  assert.equal(result.providerModels.zen.find((row) => row.id === "gpt-5.6").cost, null, "no Zen price is never a guessed one");
+  assert.deepEqual(result.providerModels.zai.map((row) => [row.id, row.cost?.input ?? null]), [["glm-5.3", 1.4], ["glm-5.3-highspeed", null]], "plan rows show the pay-as-you-go list price, not the plan's zero");
+  assert.deepEqual(routeWarnings(result).sort(), [
+    "providerModels.claude: claude-gone-1 is not on models.dev anthropic",
+    "providerModels.zen: gpt-5.6 is not listed under models.dev opencode",
+    "providerModels.zen: models.dev openai lists gpt-6-sol (released 2026-09-22) that curated providerRoutes does not track",
+  ], "dated snapshots and models the route does not serve are not reported as untracked");
+  assert.deepEqual(result.sources.providerModels.routes.zen, { provider: "openai", priceProvider: "opencode", servedBy: "opencode", count: 2, source: "models.dev" });
+  assert.equal(result.sources.providerModels.ok, true);
+  assert.deepEqual(Object.keys(result.models[0]).sort(), [
+    "avoidFor", "capabilities", "endpoint", "id", "knowledge", "legacy", "limits", "listed", "name", "onRoster", "premium", "pricing",
+    "privacy", "quality", "releaseDate", "rosterAlias", "tags", "typical", "typicalCostUSD", "usage", "useFor", "variants", "vendor", "verdict", "experimental",
+  ].sort(), "Go rows keep their exact shape");
+
+  const repriced = structuredClone(recorded);
+  repriced.opencode.models["gpt-6-luna"].cost.input = 0.2;
+  const again = await refreshCatalog({ root: f.root, logger, now: NOW, fetchImpl: routeSources(repriced) });
+  assert.notEqual(again.hash, result.hash, "providerModels is part of the hashed payload, so the catalog page re-renders");
+  assert.equal(again.rosterHash, result.rosterHash);
+});
+
+test("providerModels warns about stale ids unless Studio pins them", async (t) => {
+  const f = await fixture(t, { curatedExtra: { providerRoutes: { claude: { ...providerRoutes.claude, ids: ["claude-opus-5-5", "claude-sonnet-4-5"] } } } });
+  const later = Date.parse("2026-10-05T00:00:00Z");
+  const result = await refreshCatalog({ root: f.root, logger, now: later, fetchImpl: routeSources() });
+  assert.deepEqual(routeWarnings(result), ["providerModels.claude: claude-sonnet-4-5 (released 2025-09-29) is over 12 months old; drop it from curated providerRoutes"]);
+  assert.equal(result.providerModels.claude.length, 2, "a stale id is reported, never silently removed");
+  const pinned = await fixture(t, { curatedExtra: { providerRoutes: { claude: { ...providerRoutes.claude, pinned: ["claude-sonnet-4-5"], ids: ["claude-sonnet-4-5"] } } } });
+  const kept = await refreshCatalog({ root: pinned.root, logger, now: later, fetchImpl: routeSources() });
+  assert.deepEqual(routeWarnings(kept).filter((warning) => warning.includes("12 months")), []);
+});
+
+test("offline and failed-metadata refreshes rebuild providerModels from the committed catalog", async (t) => {
+  const f = await fixture(t, { curatedExtra: { providerRoutes } });
+  const live = await refreshCatalog({ root: f.root, logger, now: NOW, fetchImpl: routeSources() });
+  const offline = await refreshCatalog({ root: f.root, logger, now: NOW, offline: true,
+    fetchImpl() { assert.fail("offline refresh must not make network requests"); },
+  });
+  assert.deepEqual(offline.providerModels, live.providerModels);
+  assert.equal(offline.hash, live.hash, "an offline rebuild keeps the payload and its hash");
+  assert.equal(offline.sources.providerModels.ok, false);
+  assert.equal(offline.sources.providerModels.routes.claude.source, "committed");
+  assert.deepEqual(routeWarnings(offline), ["providerModels.claude: claude-gone-1 is not in the committed catalog"]);
+
+  const failed = await refreshCatalog({ root: f.root, logger, now: NOW, fetchImpl: async (url) => {
+    if (url === metadataUrl) throw new Error("fixture offline");
+    return response({ data: [{ id: "known-model" }] });
+  } });
+  assert.deepEqual(failed.providerModels, live.providerModels, "a models.dev outage keeps the committed rows");
+
+  const curatedPath = path.join(f.dataDir, "curated.json");
+  const curated = JSON.parse(await readFile(curatedPath, "utf8"));
+  curated.providerRoutes.claude.ids = ["claude-opus-5-5", "claude-sonnet-4-5"];
+  curated.providerRoutes.zen.ids = ["gpt-6-luna", "gpt-6-sol"];
+  await writeFile(curatedPath, JSON.stringify(curated));
+  const narrowed = await refreshCatalog({ root: f.root, logger, now: NOW, offline: true });
+  assert.deepEqual(narrowed.providerModels.zen.map((row) => row.id), ["gpt-6-luna"], "offline follows the curated list and never invents rows");
+  assert.deepEqual(routeWarnings(narrowed), ["providerModels.zen: gpt-6-sol is not in the committed catalog"]);
+});
+
+test("offline refresh without committed providerModels says so and writes empty routes", async (t) => {
+  const f = await fixture(t, { curatedExtra: { providerRoutes } });
+  const result = await refreshCatalog({ root: f.root, logger, now: NOW, offline: true });
+  assert.deepEqual(result.providerModels, { claude: [], zen: [], zai: [] });
+  assert.deepEqual(routeWarnings(result), ["providerModels: the committed catalog has none yet; run a live refresh"]);
+});
+
+test("the committed seed covers the live roster honestly and names Studio's routed models", async () => {
+  const curated = JSON.parse(await readFile(new URL("../data/curated.json", import.meta.url), "utf8"));
+  const catalog = JSON.parse(await readFile(new URL("../data/models.json", import.meta.url), "utf8"));
+  const unseeded = catalog.models.filter((model) => model.onRoster && !curated.models[model.id]?.docsName).map((model) => model.id);
+  assert.deepEqual(unseeded, [], "every roster model has a curated entry");
+  for (const [id, seed] of Object.entries(curated.models)) {
+    const quality = seed.quality ?? { index: null, declared: "none" };
+    if (quality.index != null) assert.ok(["AA", "AA*"].includes(quality.declared), `${id}: an index needs its declared source`);
+    else assert.equal(quality.declared, "none", `${id}: no index means declared none`);
+  }
+  for (const id of ["gpt-6-luna", "grok-4.7", "mimo-v2.6-flash", "mimo-v2.6-pro", "longcat-2.5-preview-free", "space-bunny-free"]) {
+    assert.equal(curated.models[id]?.listed, true, `${id} is documented on Go`);
+    assert.deepEqual(curated.models[id].quality, { index: null, declared: "none", benchmarks: [] }, `${id}: no benchmark was published, so none is claimed`);
+    assert.match(curated.models[id].verdict, /No published benchmark|No benchmark|benchmarks and end date are unpublished/);
+  }
+  assert.equal(curated.models["deepseek-v4.1-flash"].promo, null, "the Sep 20 promo is over");
+  for (const [route, spec] of Object.entries(curated.providerRoutes).filter(([name]) => name !== "note")) {
+    assert.ok(spec.pinned.every((id) => spec.ids.includes(id)), `${route}: pinned ids are part of the list`);
+    assert.deepEqual(catalog.providerModels[route].map((row) => row.id).sort(), [...spec.ids].sort(), `${route}: the catalog carries exactly the seeded ids`);
+    assert.ok(catalog.providerModels[route].every((row) => row.studioRoute === route));
+  }
+  const tracked = new Set(Object.values(catalog.providerModels).flat().map((row) => row.id));
+  for (const id of ["claude-opus-5-5", "gpt-6-sol", "gpt-6-luna", "glm-5.3", "glm-5.3-flash"]) assert.ok(tracked.has(id), `${id} is named by Studio and tracked`);
 });

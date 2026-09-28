@@ -36,6 +36,7 @@ const INLINE_SCRIPTS = [
   "tree3d.js",
   "tree-dynamics.js",
   "idle.js",
+  "model-community.js",
   "camera-tour.js",
   "explorer.js",
   "analyzer.js",

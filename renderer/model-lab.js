@@ -15,6 +15,7 @@
     usage: "Tokens and cost from the model calls Studio recorded.",
     context: "What a task carries into its model calls, and what the latest attempt cost.",
     tracker: "What each provider account reports: plans, balances and limits.",
+    community: "What the community reports about a model, and Studio's own probe runs on it.",
   };
   const plain = (error, fallback) => window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : error?.message || fallback;
   const when = (value) => {
@@ -231,9 +232,9 @@
     finally { if (token === state.contextRead) $("context-refresh").disabled = false; }
   }
   function show(view) {
-    if (!["rankings", "usage", "context", "tracker", "compare"].includes(view)) view = "rankings";
+    if (!["rankings", "usage", "context", "tracker", "community", "compare"].includes(view)) view = "rankings";
     state.view = view;
-    for (const name of ["rankings", "usage", "context", "tracker", "compare"]) {
+    for (const name of ["rankings", "usage", "context", "tracker", "community", "compare"]) {
       $(name).hidden = name !== view;
       $(`tab-${name}`).setAttribute("aria-selected", String(name === view));
       $(`tab-${name}`).tabIndex = name === view ? 0 : -1;
@@ -248,12 +249,13 @@
     if ($("summary")) $("summary").hidden = view !== "rankings";
     window.dispatchEvent(new CustomEvent("mefi:model-view", { detail: { view } }));
     if (view === "tracker") window.MefiUsageTracker?.refresh?.();
+    if (view === "community") window.MefiModelCommunity?.open?.();
     if (view === "context") loadTasks().then((fresh) => { if (fresh) return previewContext(); }).catch((error) => { $("context-status").textContent = plain(error, "Tasks could not be read."); });
   }
   function init() {
     if (state.initialized || !document.getElementById("model-lab")) return;
     state.initialized = true;
-    const views = ["rankings", "usage", "context", "tracker", "compare"];
+    const views = ["rankings", "usage", "context", "tracker", "community", "compare"];
     for (const [index, name] of views.entries()) {
       const button = $(`tab-${name}`);
       button.addEventListener("click", () => show(name));

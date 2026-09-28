@@ -1173,10 +1173,30 @@ failed process stays an error and cannot produce briefing requests.
 
 ### Model Lab and routing
 
+- The **model catalog** (`data/models.json`, Models › Catalog) is built by
+  `npm run data` (`scripts/refresh-models.mjs`) from the live OpenCode Go
+  roster, models.dev and the curated seed `data/curated.json`, whose
+  verdicts cite only published prices, pools and benchmarks (no benchmark
+  means no index). Its `providerModels` lists the models Studio routes to
+  outside Go: Claude Code (models.dev `anthropic`), Zen's OpenAI models
+  (`openai`, priced and confirmed by `opencode`) and the z.ai Coding Plan
+  (`zai-coding-plan`, list price from `zai`). Each route keeps the explicit
+  id list in the seed's `providerRoutes`. The refresher reports stale or
+  untracked ids and never adds them itself. Offline it rebuilds these rows
+  from the committed catalog. Catalog › **Also tracked** shows them read-only.
 - **Model Lab** records per-project latency, delivered tokens/s, errors,
   reported usage and USD cost, with human and model ratings kept separate;
   opening it never runs paid measurements. **Context** previews the current
   task brief within a chosen token budget and reports what was shortened.
+- **Community** (Models › Performance) shows, for one enabled model, what the
+  Void Engine community's public feed says about it (server ratings,
+  release-note claims with their source, observed strengths and weaknesses
+  with reporter counts, opinions, tips, a Discuss on Discord link) and
+  Studio's own **probes**: seven small fixed tasks with deterministic
+  scorers, run only from **Run probes**. Both are kept in user data
+  (`model-community.json`, `model-probes.json`) and only nudge routing's
+  prior; see [model-community.md](model-community.md) and
+  [agent-loop.md §12](agent-loop.md#12-choosing-a-builders-model-the-win-probability-evaluator).
 - **Usage tracker** sums two ledgers per day, provider and model: the calls
   Studio made itself (assistant HTTP and CLI routes, Jev, speed probes) and
   every coding-session turn OpenCode's own store recorded for the project

@@ -423,6 +423,7 @@
     </div>
     <div id="cards" class="cards"></div>
     <p id="count" class="muted"></p>
+    <details id="also-tracked" class="lab-catalog" hidden><summary>Also tracked <span>Claude Code, Zen and z.ai models Studio routes to, from models.dev. Prices are API list prices; subscriptions and plans bill differently.</span></summary><div id="also-tracked-body"></div></details>
   </section>
   <section id="tab-graph" hidden>
     <section id="model-lab" class="model-lab" aria-label="Model measurements">
@@ -433,6 +434,7 @@
         <button id="model-lab-tab-usage" role="tab" aria-selected="false" aria-controls="model-lab-usage" tabindex="-1" data-lab-view="usage">Usage</button>
         <button id="model-lab-tab-tracker" role="tab" aria-selected="false" aria-controls="model-lab-tracker" tabindex="-1" data-lab-view="tracker">Tracker</button>
         <button id="model-lab-tab-context" role="tab" aria-selected="false" aria-controls="model-lab-context" tabindex="-1" data-lab-view="context">Context</button>
+        <button id="model-lab-tab-community" role="tab" aria-selected="false" aria-controls="model-lab-community" tabindex="-1" data-lab-view="community">Community</button>
         <button id="model-lab-tab-compare" role="tab" aria-selected="false" aria-controls="model-lab-compare" tabindex="-1" data-lab-view="compare" hidden>Compare <span class="lab-soon">Planned</span></button>
       </div>
       <div id="model-lab-usage-switch" class="lab-usage-switch" role="tablist" aria-label="Usage source" hidden><button id="model-lab-recorded" role="tab" aria-controls="model-lab-usage" aria-selected="true" type="button">Recorded calls</button><button id="model-lab-accounts" role="tab" aria-controls="model-lab-tracker" aria-selected="false" tabindex="-1" type="button">Provider accounts</button></div>
@@ -452,6 +454,13 @@
       <section id="model-lab-context" role="tabpanel" aria-labelledby="model-lab-tab-context" hidden>
         <div class="lab-toolbar"><div><h3>Context preview</h3><p class="muted">Inspect the saved material a task can carry. Token counts are estimates.</p></div><div class="lab-context-controls"><label>Task <select id="model-lab-context-task"><option value="">Choose a task…</option></select></label><label>Preview budget <select id="model-lab-context-budget"><option value="1000">1,000 tokens</option><option value="2000">2,000 tokens</option><option value="4000" selected>4,000 tokens</option><option value="8000">8,000 tokens</option></select></label><button id="model-lab-context-refresh" class="ghost">Preview context</button></div></div>
         <p id="model-lab-context-status" class="lab-status" role="status"></p><div id="model-lab-context-sections" class="lab-context-sections"></div>
+      </section>
+      <section id="model-lab-community" role="tabpanel" aria-labelledby="model-lab-tab-community" hidden>
+        <div class="lab-toolbar"><div><h3>Community and probes</h3><p class="muted">What the Void Engine community reports about a model, and Studio's own small tests of it. Both only nudge model picks; verified task results count for more.</p></div><label>Model <select id="model-lab-community-model"><option value="">Choose a model…</option></select></label></div>
+        <div class="mc-grid">
+          <section class="mc-card" aria-labelledby="model-lab-community-title"><header class="mc-head"><h4 id="model-lab-community-title">Community</h4><button id="model-lab-community-refresh" class="ghost mini" type="button">Refresh</button></header><p id="model-lab-community-status" class="lab-status" role="status" aria-live="polite"></p><div id="model-lab-community-body"></div></section>
+          <section class="mc-card" aria-labelledby="model-lab-probes-title"><header class="mc-head"><h4 id="model-lab-probes-title">Probes</h4><div class="mc-actions"><button id="model-lab-probes-cancel" class="ghost mini" type="button" hidden>Cancel</button><button id="model-lab-probes-run" class="mini" type="button">Run probes</button></div></header><p id="model-lab-probes-status" class="lab-status" role="status" aria-live="polite"></p><div id="model-lab-probes-body"></div></section>
+        </div>
       </section>
       <section id="model-lab-compare" role="tabpanel" aria-labelledby="model-lab-tab-compare" hidden><div class="lab-empty"><span class="eyebrow">Planned</span><h3>Compare models on one brief</h3><p>Compare model results with separate human and model ratings. Demo format is being selected; no comparison runs or paid calls start from this view yet.</p></div></section>
     </section>

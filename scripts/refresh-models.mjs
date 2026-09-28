@@ -7,6 +7,11 @@
 //
 // Curated data always wins over fetched data; fetched data fills gaps.
 // Offline mode (--offline) rebuilds from the committed catalog + curated seed.
+//
+// providerModels tracks the models Studio routes to outside Go (Claude Code,
+// Zen's OpenAI models, the z.ai plan). curated.providerRoutes names each
+// route's models.dev provider and its explicit id list; rows are rebuilt from
+// models.dev, or from the committed catalog offline or when models.dev fails.
 
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
@@ -126,7 +131,8 @@ function buildRecord(id, { curated, catalogEntry, previousRecord, onRoster, warn
       }
     : null);
 
-  if (!onRoster && !seed.listed) warnings.push(`${id}: documented/known but not on the live roster`);
+  // A seeded legacy model leaving the roster is expected, not news.
+  if (!onRoster && !seed.listed && !seed.legacy) warnings.push(`${id}: documented/known but not on the live roster`);
   if (onRoster && !seed.docsName) warnings.push(`${id}: on the live roster with no curated entry`);
 
   const record = {
@@ -198,7 +204,115 @@ async function loadCatalogFromModelsDev(options) {
     || Object.entries(models).some(([id, entry]) => !validId(id) || !entry || typeof entry !== "object" || Array.isArray(entry))) {
     throw new Error(`models.dev has no valid models for provider ${PROVIDER}`);
   }
-  return models;
+  return { models, api };
+}
+
+// ---- providerModels: Studio's routes outside Go ----
+
+const isRecord = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+function routesOf(curated) {
+  return Object.entries(isRecord(curated.providerRoutes) ? curated.providerRoutes : {})
+    .filter(([, spec]) => isRecord(spec) && validId(spec.provider) && Array.isArray(spec.ids));
+}
+
+function providerTable(api, provider) {
+  const models = validId(provider) ? api?.[provider]?.models : null;
+  return isRecord(models) ? models : null;
+}
+
+function reasoningEffortsOf(entry) {
+  const options = Array.isArray(entry?.reasoning_options) ? entry.reasoning_options : [];
+  const effort = options.find((option) => option?.type === "effort" && Array.isArray(option.values));
+  return effort ? effort.values.filter((value) => typeof value === "string") : null;
+}
+
+function providerRouteRow(id, entry, priceEntry, route) {
+  const cost = isRecord(priceEntry?.cost) ? priceEntry.cost : null;
+  return {
+    id,
+    name: entry.name ?? prettifyId(id),
+    family: entry.family ?? null,
+    releaseDate: entry.release_date ?? null,
+    knowledge: entry.knowledge ?? null,
+    limits: { context: entry.limit?.context ?? null, output: entry.limit?.output ?? null },
+    cost: cost ? { input: cost.input ?? null, output: cost.output ?? null, cacheRead: cost.cache_read ?? null, cacheWrite: cost.cache_write ?? null } : null,
+    capabilities: {
+      reasoning: entry.reasoning ?? null,
+      toolCall: entry.tool_call ?? null,
+      attachment: entry.attachment ?? null,
+      modalities: entry.modalities ?? null,
+      openWeights: entry.open_weights ?? null,
+    },
+    reasoningEfforts: reasoningEffortsOf(entry),
+    studioRoute: route,
+  };
+}
+
+const isoDay = (ms) => new Date(ms).toISOString().slice(0, 10);
+
+// `api` is the whole models.dev document, or null offline / when it failed;
+// `saved` is the committed catalog's providerModels (or null).
+function buildProviderModels({ curated, api, saved, now, warnings }) {
+  const providerModels = {};
+  const routes = {};
+  const yearAgo = new Date(now);
+  yearAgo.setUTCMonth(yearAgo.getUTCMonth() - 12);
+  const staleBefore = yearAgo.toISOString().slice(0, 10);
+  const newSince = isoDay(now - 90 * 86400000);
+  if (!api && routesOf(curated).length && !isRecord(saved)) {
+    warnings.push("providerModels: the committed catalog has none yet; run a live refresh");
+  }
+  for (const [route, spec] of routesOf(curated)) {
+    const ids = [...new Set(spec.ids.filter(validId))];
+    const pinned = new Set(Array.isArray(spec.pinned) ? spec.pinned : []);
+    const table = api ? providerTable(api, spec.provider) : null;
+    const prices = api ? providerTable(api, spec.priceProvider ?? spec.provider) : null;
+    const served = api && spec.servedBy ? providerTable(api, spec.servedBy) : null;
+    if (api && !table) warnings.push(`providerModels.${route}: models.dev has no provider ${spec.provider}; kept the committed rows`);
+    if (api && spec.servedBy && !served) warnings.push(`providerModels.${route}: models.dev has no provider ${spec.servedBy} to confirm what the route serves`);
+    const savedRows = new Map((Array.isArray(saved?.[route]) ? saved[route] : [])
+      .filter((row) => isRecord(row) && validId(row.id)).map((row) => [row.id, row]));
+    const rows = [];
+    for (const id of ids) {
+      const entry = table?.[id];
+      if (isRecord(entry)) {
+        if (served && !served[id]) warnings.push(`providerModels.${route}: ${id} is not listed under models.dev ${spec.servedBy}`);
+        rows.push(providerRouteRow(id, entry, prices?.[id] ?? null, route));
+        continue;
+      }
+      if (table) warnings.push(`providerModels.${route}: ${id} is not on models.dev ${spec.provider}`);
+      const previous = savedRows.get(id);
+      if (previous) rows.push({ ...previous, studioRoute: route });
+      else if (!table && isRecord(saved)) warnings.push(`providerModels.${route}: ${id} is not in the committed catalog`);
+    }
+    rows.sort((a, b) => String(b.releaseDate ?? "").localeCompare(String(a.releaseDate ?? "")) || a.id.localeCompare(b.id));
+    for (const row of rows) {
+      if (row.releaseDate && row.releaseDate < staleBefore && !pinned.has(row.id)) {
+        warnings.push(`providerModels.${route}: ${row.id} (released ${row.releaseDate}) is over 12 months old; drop it from curated providerRoutes`);
+      }
+    }
+    // Keep the explicit list honest: a recent model the provider lists (and
+    // the route serves) that the seed leaves out is reported, never added.
+    if (table && (!spec.servedBy || served)) {
+      for (const [id, entry] of Object.entries(table)) {
+        if (ids.includes(id) || !isRecord(entry) || entry.status === "deprecated" || /-\d{8}$/.test(id)) continue;
+        if (served && !served[id]) continue;
+        if (typeof entry.release_date === "string" && entry.release_date >= newSince) {
+          warnings.push(`providerModels.${route}: models.dev ${spec.provider} lists ${id} (released ${entry.release_date}) that curated providerRoutes does not track`);
+        }
+      }
+    }
+    providerModels[route] = rows;
+    routes[route] = {
+      provider: spec.provider,
+      priceProvider: spec.priceProvider ?? spec.provider,
+      servedBy: spec.servedBy ?? null,
+      count: rows.length,
+      source: table ? "models.dev" : "committed",
+    };
+  }
+  return { providerModels, routes };
 }
 
 function previousMetadata(model) {
@@ -251,6 +365,7 @@ export async function refreshCatalog({
   fetchImpl = globalThis.fetch,
   timeoutMs = FETCH_TIMEOUT_MS,
   logger = console,
+  now = Date.now(),
 } = {}) {
   const dataDir = path.join(root, "data");
   const catalogPath = path.join(dataDir, "models.json");
@@ -271,6 +386,7 @@ export async function refreshCatalog({
 
   let rosterIds = [];
   let catalog = {};
+  let modelsDev = null;
   let previousRecords = new Map();
   let rosterOk = false;
   let catalogOk = false;
@@ -297,7 +413,8 @@ export async function refreshCatalog({
       logger.error(`! live roster fetch failed: ${error.message}`);
     }
     if (catalogResult.status === "fulfilled") {
-      catalog = catalogResult.value;
+      catalog = catalogResult.value.models;
+      modelsDev = catalogResult.value.api;
       catalogOk = true;
     } else {
       const error = catalogResult.reason;
@@ -321,22 +438,37 @@ export async function refreshCatalog({
     curated, catalogEntry: catalog[id], previousRecord: previousRecords.get(id), onRoster: rosterSet.has(id), warnings,
   }));
 
+  // Committed rows stand in for any route models.dev could not supply.
+  let savedProviderModels = null;
+  if (routesOf(curated).length) {
+    try {
+      savedProviderModels = (await readCommitted()).providerModels ?? null;
+    } catch {
+      savedProviderModels = null;
+    }
+  }
+  const provider = buildProviderModels({ curated, api: modelsDev, saved: savedProviderModels, now, warnings });
+
+  // providerModels is in the hash: the catalog page re-renders only when the
+  // hash moves, and no consumer pins the hash to the Go rows alone.
   const payload = {
     schemaVersion: curated.schemaVersion ?? 1,
     plan: curated.plan,
     taskPresets: curated.taskPresets,
     privacyScores: curated.privacyScores,
     models,
+    providerModels: provider.providerModels,
   };
 
   const document = {
     ...payload,
-    generatedAt: new Date().toISOString(),
+    generatedAt: new Date(now).toISOString(),
     hash: hashOf(payload),
     rosterHash: hashOf([...rosterIds].sort()),
     sources: {
       roster: { url: ROSTER_URL, ok: rosterOk, count: rosterIds.length },
       catalog: { url: MODELS_DEV_URL, ok: catalogOk, provider: PROVIDER },
+      providerModels: { url: MODELS_DEV_URL, ok: Boolean(modelsDev), routes: provider.routes },
       curatedSeed: curated.plan?.sources?.seedDate ?? null,
       mode: offline ? "offline" : "live",
     },
@@ -357,6 +489,8 @@ export async function refreshCatalog({
 
   await replaceCatalog(catalogPath, document);
   logger.log(`catalog updated (${models.length} models, hash ${document.hash.slice(0, 12)})`);
+  const routeCounts = Object.entries(provider.routes).map(([route, info]) => `${route} ${info.count} (${info.source})`);
+  if (routeCounts.length) logger.log(`providerModels: ${routeCounts.join(", ")}`);
 
   const undocumented = models.filter((m) => m.onRoster && !m.listed).map((m) => m.id);
   if (undocumented.length) logger.log(`roster-only models: ${undocumented.join(", ")}`);

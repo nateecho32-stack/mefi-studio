@@ -3550,6 +3550,31 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 .lab-catalog > summary { font-size: 16px; }
 .lab-catalog > summary span { display: inline-block; margin-left: 12px; font-size: 12px; color: var(--muted); }
 .lab-catalog[open] > summary { margin-bottom: 22px; }
+/* Models > Community: the community feed and Studio's probes (renderer/model-community.js). */
+.mc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.mc-card { border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--panel-solid); padding: 16px; min-width: 0; }
+.mc-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.mc-head h4 { margin: 0; font-size: 14px; color: var(--gold-bright); }
+.mc-actions { display: flex; gap: 6px; }
+.mc-summary { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; overflow-wrap: anywhere; }
+.mc-section { margin-top: 14px; }
+.mc-section h5, .mc-opinions > summary { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.mc-opinions > summary { cursor: pointer; }
+.mc-meta { font-size: 11px; color: var(--muted); }
+.mc-list { list-style: none; margin: 0; padding: 0; }
+.mc-item { display: flex; flex-direction: column; gap: 3px; padding: 8px 0; border-top: 1px solid var(--hairline); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.mc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.mc-chip { font-size: 11px; padding: 3px 8px; border: 1px solid var(--hairline); border-radius: 999px; font-variant-numeric: tabular-nums; }
+.mc-link { align-self: flex-start; padding: 0; border: 0; background: none; color: var(--gold); font-size: 12px; text-decoration: underline; cursor: pointer; }
+.mc-foot { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--hairline); }
+.mc-probes { display: grid; gap: 8px; margin-bottom: 10px; }
+.mc-probe { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: var(--r-md); }
+.mc-probe-head { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.mc-checks > summary { cursor: pointer; font-size: 11px; color: var(--gold); margin-top: 4px; }
+.mc-verdict { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+.mc-pass .mc-verdict, .mc-meta.mc-pass { color: var(--good); }
+.mc-fail .mc-verdict, .mc-meta.mc-fail { color: var(--bad); }
+@media (max-width: 900px) { .mc-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 1000px) { .model-lab { padding: 20px; }.lab-usage-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }.lab-rating-row { grid-template-columns: minmax(150px,1fr) 132px auto; }.lab-rating-row input { grid-row: 2; grid-column: 1 / -1; } }
 @media (max-width: 680px) { .model-lab { padding: 16px; }.model-lab .lab-head { flex-direction: column; gap: 8px; }.lab-head h2 { font-size: 27px; }.lab-summary { gap: 8px; }.lab-stat { padding: 12px; flex-direction: column; align-items: flex-start; }.lab-stat > strong { font-size: 23px; }.lab-tabs > button { padding: 8px 10px; }.lab-soon { display: none; }.lab-context-controls { width: 100%; }.lab-context-controls label:first-child { max-width: 100%; width: 100%; }.lab-rating-row { grid-template-columns: minmax(0,1fr) 124px; }.lab-rating-row button { grid-column: 2; }.lab-catalog { padding: 15px; }.lab-catalog > summary span { display: block; margin: 8px 0 0; } }
 
@@ -9906,6 +9931,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     </div>
     <div id="cards" class="cards"></div>
     <p id="count" class="muted"></p>
+    <details id="also-tracked" class="lab-catalog" hidden><summary>Also tracked <span>Claude Code, Zen and z.ai models Studio routes to, from models.dev. Prices are API list prices; subscriptions and plans bill differently.</span></summary><div id="also-tracked-body"></div></details>
   </section>
   <section id="tab-graph" hidden>
     <section id="model-lab" class="model-lab" aria-label="Model measurements">
@@ -9916,6 +9942,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         <button id="model-lab-tab-usage" role="tab" aria-selected="false" aria-controls="model-lab-usage" tabindex="-1" data-lab-view="usage">Usage</button>
         <button id="model-lab-tab-tracker" role="tab" aria-selected="false" aria-controls="model-lab-tracker" tabindex="-1" data-lab-view="tracker">Tracker</button>
         <button id="model-lab-tab-context" role="tab" aria-selected="false" aria-controls="model-lab-context" tabindex="-1" data-lab-view="context">Context</button>
+        <button id="model-lab-tab-community" role="tab" aria-selected="false" aria-controls="model-lab-community" tabindex="-1" data-lab-view="community">Community</button>
         <button id="model-lab-tab-compare" role="tab" aria-selected="false" aria-controls="model-lab-compare" tabindex="-1" data-lab-view="compare" hidden>Compare <span class="lab-soon">Planned</span></button>
       </div>
       <div id="model-lab-usage-switch" class="lab-usage-switch" role="tablist" aria-label="Usage source" hidden><button id="model-lab-recorded" role="tab" aria-controls="model-lab-usage" aria-selected="true" type="button">Recorded calls</button><button id="model-lab-accounts" role="tab" aria-controls="model-lab-tracker" aria-selected="false" tabindex="-1" type="button">Provider accounts</button></div>
@@ -9935,6 +9962,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       <section id="model-lab-context" role="tabpanel" aria-labelledby="model-lab-tab-context" hidden>
         <div class="lab-toolbar"><div><h3>Context preview</h3><p class="muted">Inspect the saved material a task can carry. Token counts are estimates.</p></div><div class="lab-context-controls"><label>Task <select id="model-lab-context-task"><option value="">Choose a task…</option></select></label><label>Preview budget <select id="model-lab-context-budget"><option value="1000">1,000 tokens</option><option value="2000">2,000 tokens</option><option value="4000" selected>4,000 tokens</option><option value="8000">8,000 tokens</option></select></label><button id="model-lab-context-refresh" class="ghost">Preview context</button></div></div>
         <p id="model-lab-context-status" class="lab-status" role="status"></p><div id="model-lab-context-sections" class="lab-context-sections"></div>
+      </section>
+      <section id="model-lab-community" role="tabpanel" aria-labelledby="model-lab-tab-community" hidden>
+        <div class="lab-toolbar"><div><h3>Community and probes</h3><p class="muted">What the Void Engine community reports about a model, and Studio's own small tests of it. Both only nudge model picks; verified task results count for more.</p></div><label>Model <select id="model-lab-community-model"><option value="">Choose a model…</option></select></label></div>
+        <div class="mc-grid">
+          <section class="mc-card" aria-labelledby="model-lab-community-title"><header class="mc-head"><h4 id="model-lab-community-title">Community</h4><button id="model-lab-community-refresh" class="ghost mini" type="button">Refresh</button></header><p id="model-lab-community-status" class="lab-status" role="status" aria-live="polite"></p><div id="model-lab-community-body"></div></section>
+          <section class="mc-card" aria-labelledby="model-lab-probes-title"><header class="mc-head"><h4 id="model-lab-probes-title">Probes</h4><div class="mc-actions"><button id="model-lab-probes-cancel" class="ghost mini" type="button" hidden>Cancel</button><button id="model-lab-probes-run" class="mini" type="button">Run probes</button></div></header><p id="model-lab-probes-status" class="lab-status" role="status" aria-live="polite"></p><div id="model-lab-probes-body"></div></section>
+        </div>
       </section>
       <section id="model-lab-compare" role="tabpanel" aria-labelledby="model-lab-tab-compare" hidden><div class="lab-empty"><span class="eyebrow">Planned</span><h3>Compare models on one brief</h3><p>Compare model results with separate human and model ratings. Demo format is being selected; no comparison runs or paid calls start from this view yet.</p></div></section>
     </section>
@@ -11475,11 +11509,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       "site": "https://opencode.ai/go",
       "roster": "https://opencode.ai/zen/go/v1/models",
       "catalog": "https://models.dev/api.json",
-      "seedDate": "2026-09-16"
+      "seedDate": "2026-09-28"
     },
     "notes": [
-      "Usage limits are dollar-based: $12 per 5 hours, $30 per week, $60 per month across the plan.",
-      "Each model also has its own monthly pool; 5h = 20% of it and week = 50% of it.",
+      "Each model has its own monthly dollar limit; its 5-hour window is 20% of it and its week 50%.",
+      "The plan-wide $12 per 5 hours, $30 per week and $60 per month windows come from the 2026-09-16 seed; the 2026-09-28 docs publish only the per-model limits.",
+      "Go Plus ($40/month) raises every model's monthly limit at the same token prices; this catalog tracks the $10 Go limits.",
       "DeepSeek V4.x runs peak/off-peak pricing; peak is 01:00-04:00 and 06:00-10:00 UTC Mon-Fri.",
       "When a limit is reached you can keep using free models, or fall back to a Zen balance if enabled."
     ]
@@ -11707,7 +11742,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       "privacy": {
         "training": false,
         "retentionDays": 0,
-        "note": "ZDR renewed monthly; current term valid through 2026-09-30."
+        "note": "ZDR agreement renewed monthly; current term valid through 2026-10-31."
       },
       "quality": {
         "index": 40,
@@ -11924,7 +11959,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       "privacy": {
         "training": false,
         "retentionDays": 0,
-        "note": "ZDR renewed monthly; current term valid through 2026-09-30."
+        "note": "ZDR agreement renewed monthly; current term valid through 2026-10-31."
       },
       "quality": {
         "index": 44,
@@ -11963,8 +11998,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       "rosterAlias": null,
       "tags": [
         "new",
-        "promo-4x",
-        "peak-pricing"
+        "peak-pricing",
+        "high-volume"
       ],
       "pricing": {
         "default": {
@@ -12021,22 +12056,19 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       },
       "usage": {
         "monthlyCapUSD": 60,
-        "monthlyCapBaseUSD": 15,
-        "promo": "4x usage until 2026-09-20",
+        "monthlyCapBaseUSD": null,
+        "promo": null,
         "requests": {
           "h5": 26000,
           "week": 65000,
-          "month": 130000,
-          "baseH5": 6500,
-          "baseWeek": 16250,
-          "baseMonth": 32500
+          "month": 130000
         },
         "unlimited": false
       },
       "privacy": {
         "training": false,
         "retentionDays": 0,
-        "note": "ZDR agreement renewed monthly; current term valid through 2026-09-30."
+        "note": "ZDR agreement renewed monthly; current term valid through 2026-10-31."
       },
       "quality": {
         "index": 40,
@@ -12053,12 +12085,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         "path": "https://opencode.ai/zen/go/v1/chat/completions",
         "sdk": "@ai-sdk/openai-compatible"
       },
-      "verdict": "Brand-new V4.1 with a 4x pool ($60 effective, ends Sep 20) before it settles at $15.",
+      "verdict": "The 09-28 docs list a $60 monthly pool (~26k req/5h) with no promo note; the 4x promo that ran until Sep 20 no longer appears.",
       "useFor": [
-        "current daily driving while the promo lasts"
+        "everyday driving",
+        "long cached sessions"
       ],
       "avoidFor": [
-        "planning around the promo pool after Sep 20"
+        "peak-hour bulk work (double price)"
       ],
       "releaseDate": "2026-09-10",
       "knowledge": "2025-05"
@@ -12077,35 +12110,20 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         "legacy",
         "roster-only"
       ],
-      "pricing": {
-        "default": {
-          "input": 1,
-          "output": 3.2,
-          "cacheRead": 0.2,
-          "cacheWrite": null,
-          "condition": "models.dev list price"
-        }
-      },
+      "pricing": null,
       "variants": [],
       "typical": null,
       "typicalCostUSD": null,
       "limits": {
-        "context": 202752,
-        "output": 32768
+        "context": null,
+        "output": null
       },
       "capabilities": {
-        "reasoning": true,
-        "toolCall": true,
-        "attachment": false,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "openWeights": true,
+        "reasoning": null,
+        "toolCall": null,
+        "attachment": null,
+        "modalities": null,
+        "openWeights": null,
         "providerNpm": null
       },
       "usage": {
@@ -12134,21 +12152,22 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       "avoidFor": [
         "new work"
       ],
-      "releaseDate": "2026-02-11",
-      "knowledge": "2025-04"
+      "releaseDate": null,
+      "knowledge": null
     },
     {
       "id": "glm-5.1",
       "name": "GLM-5.1",
       "vendor": "Zhipu",
       "onRoster": true,
-      "listed": true,
-      "legacy": false,
+      "listed": false,
+      "legacy": true,
       "premium": false,
       "experimental": false,
       "rosterAlias": null,
       "tags": [
-        "legacy-tier"
+        "legacy",
+        "roster-only"
       ],
       "pricing": {
         "default": {
@@ -12167,22 +12186,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       },
       "typicalCostUSD": 0.01516,
       "limits": {
-        "context": 202752,
-        "output": 32768
+        "context": null,
+        "output": null
       },
       "capabilities": {
-        "reasoning": true,
-        "toolCall": true,
-        "attachment": false,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "openWeights": true,
+        "reasoning": null,
+        "toolCall": null,
+        "attachment": null,
+        "modalities": null,
+        "openWeights": null,
         "providerNpm": null
       },
       "usage": {
@@ -12215,15 +12227,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         "path": "https://opencode.ai/zen/go/v1/chat/completions",
         "sdk": "@ai-sdk/openai-compatible"
       },
-      "verdict": "Older GLM at the same price as 5.2 - pick 5.2 unless 5.1 behaves better for you.",
+      "verdict": "Dropped from the Go docs by Sep 28 but still on the roster; GLM-5.2 is the documented model at the same price.",
       "useFor": [
         "fallback when 5.2 misbehaves"
       ],
       "avoidFor": [
-        "value picks"
+        "new work"
       ],
-      "releaseDate": "2026-04-07",
-      "knowledge": "2025-04"
+      "releaseDate": null,
+      "knowledge": null
     },
     {
       "id": "glm-5.2",
@@ -12304,7 +12316,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         "path": "https://opencode.ai/zen/go/v1/chat/completions",
         "sdk": "@ai-sdk/openai-compatible"
       },
-      "verdict": "Highest-scoring GLM on Go with a full $60 pool; 51 AA index and strong SWE/terminal scores.",
+      "verdict": "GLM-5.3's price with a full $60 pool (~880 req/5h). Its AA index of 51 is below GLM-5.3 (60) and GLM-5.3-Flash (57).",
       "useFor": [
         "hard debugging",
         "big refactors",
@@ -12393,7 +12405,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         "path": "https://opencode.ai/zen/go/v1/chat/completions",
         "sdk": "@ai-sdk/openai-compatible"
       },
-      "verdict": "Newest GLM with a small $15 pool - save it for hard problems.",
+      "verdict": "Top GLM tier on Go with a small $15 pool (~220 req/5h); save it for hard problems.",
       "useFor": [
         "hard problems",
         "careful refactors"
@@ -12415,8 +12427,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       "experimental": false,
       "rosterAlias": null,
       "tags": [
-        "flash",
-        "promo-2x"
+        "flash"
       ],
       "pricing": {
         "default": {
@@ -12487,7 +12498,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         "path": "https://opencode.ai/zen/go/v1/chat/completions",
         "sdk": "@ai-sdk/openai-compatible"
       },
-      "verdict": "The volume workhorse: cheapest GLM, 2x usage promo, ~6.3k requests per 5h.",
+      "verdict": "Cheapest GLM on Go ($0.15/$0.50) with a $60 pool, ~6.3k requests per 5h. The 09-28 docs no longer mention a usage promo.",
       "useFor": [
         "routine edits",
         "long agent loops",
@@ -12598,15 +12609,124 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         "path": "https://opencode.ai/zen/go/v1/responses",
         "sdk": "@ai-sdk/openai"
       },
-      "verdict": "OpenAI's Go entry at flash-ish prices but a $15 pool (~10k req/month).",
+      "verdict": "Superseded by GPT 6 Luna (Sep 22), which halves the input price and gets about twice the requests from the same $15 pool.",
       "useFor": [
-        "tasks where the OpenAI house style wins"
+        "sessions already tuned to 5.6 Luna"
       ],
       "avoidFor": [
+        "new work (GPT 6 Luna is cheaper)",
         "bulk volume"
       ],
       "releaseDate": "2026-07-09",
       "knowledge": "2026-02-16"
+    },
+    {
+      "id": "gpt-6-luna",
+      "name": "GPT 6 Luna",
+      "vendor": "OpenAI",
+      "onRoster": true,
+      "listed": true,
+      "legacy": false,
+      "premium": true,
+      "experimental": false,
+      "rosterAlias": null,
+      "tags": [
+        "new",
+        "premium-cap",
+        "responses-api"
+      ],
+      "pricing": {
+        "default": {
+          "input": 0.1,
+          "output": 0.5,
+          "cacheRead": 0.01,
+          "cacheWrite": 0.125,
+          "condition": "<= 272K tokens"
+        },
+        "variants": [
+          {
+            "condition": "> 272K tokens",
+            "input": 0.2,
+            "output": 0.75,
+            "cacheRead": 0.02,
+            "cacheWrite": 0.25
+          }
+        ]
+      },
+      "variants": [
+        {
+          "condition": "> 272K tokens",
+          "input": 0.2,
+          "output": 0.75,
+          "cacheRead": 0.02,
+          "cacheWrite": 0.25
+        }
+      ],
+      "typical": {
+        "input": 1000,
+        "cached": 50000,
+        "output": 220
+      },
+      "typicalCostUSD": 0.00071,
+      "limits": {
+        "context": 1050000,
+        "output": 128000
+      },
+      "capabilities": {
+        "reasoning": true,
+        "toolCall": true,
+        "attachment": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "openWeights": false,
+        "providerNpm": "@ai-sdk/openai"
+      },
+      "usage": {
+        "monthlyCapUSD": 15,
+        "monthlyCapBaseUSD": null,
+        "promo": null,
+        "requests": {
+          "h5": 4230,
+          "week": 10560,
+          "month": 21130
+        },
+        "unlimited": false
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 30,
+        "note": "Abuse-monitoring logs retained up to 30 days."
+      },
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "endpoint": {
+        "kind": "openai",
+        "label": "OpenAI Responses API",
+        "path": "https://opencode.ai/zen/go/v1/responses",
+        "sdk": "@ai-sdk/openai"
+      },
+      "verdict": "Newest OpenAI model on Go (Sep 22): half GPT 5.6 Luna's input price and about twice its requests from the same $15 pool. No published benchmark yet.",
+      "useFor": [
+        "work you would have sent to GPT 5.6 Luna",
+        "image or PDF input"
+      ],
+      "avoidFor": [
+        "bulk volume (the $15 pool)",
+        "privacy-sensitive work (30-day logs)"
+      ],
+      "releaseDate": "2026-09-22",
+      "knowledge": "2026-05-18"
     },
     {
       "id": "grok-4.5",
@@ -12678,7 +12798,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         "path": "https://opencode.ai/zen/go/v1/responses",
         "sdk": "@ai-sdk/openai"
       },
-      "verdict": "Previous Grok flagship still served; strong scores but 4.6 is the current one.",
+      "verdict": "Older Grok still served; strong scores, but 4.7 is the current one.",
       "useFor": [
         "compatibility with old evals"
       ],
@@ -12787,16 +12907,124 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         "path": "https://opencode.ai/zen/go/v1/responses",
         "sdk": "@ai-sdk/openai"
       },
-      "verdict": "xAI flagship with a ~845 req/month pool and 30-day retention - a scalp tool.",
+      "verdict": "Superseded by Grok 4.7 (Sep 21) at the same price and ~845 req/month pool; 30-day retention.",
       "useFor": [
-        "hard problems now and then"
+        "compatibility with old evals"
       ],
       "avoidFor": [
-        "daily volume",
+        "new work (Grok 4.7 costs the same)",
         "privacy-sensitive work"
       ],
       "releaseDate": "2026-08-12",
       "knowledge": "2026-02-01"
+    },
+    {
+      "id": "grok-4.7",
+      "name": "Grok 4.7",
+      "vendor": "xAI",
+      "onRoster": true,
+      "listed": true,
+      "legacy": false,
+      "premium": true,
+      "experimental": false,
+      "rosterAlias": null,
+      "tags": [
+        "new",
+        "premium-cap",
+        "responses-api"
+      ],
+      "pricing": {
+        "default": {
+          "input": 2,
+          "output": 6,
+          "cacheRead": 0.5,
+          "cacheWrite": null,
+          "condition": "<= 200K tokens"
+        },
+        "variants": [
+          {
+            "condition": "> 200K tokens",
+            "input": 4,
+            "output": 12,
+            "cacheRead": 1,
+            "cacheWrite": null
+          }
+        ]
+      },
+      "variants": [
+        {
+          "condition": "> 200K tokens",
+          "input": 4,
+          "output": 12,
+          "cacheRead": 1,
+          "cacheWrite": null
+        }
+      ],
+      "typical": {
+        "input": 390,
+        "cached": 32500,
+        "output": 120
+      },
+      "typicalCostUSD": 0.01775,
+      "limits": {
+        "context": 500000,
+        "output": 500000
+      },
+      "capabilities": {
+        "reasoning": true,
+        "toolCall": true,
+        "attachment": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "openWeights": false,
+        "providerNpm": "@ai-sdk/openai"
+      },
+      "usage": {
+        "monthlyCapUSD": 15,
+        "monthlyCapBaseUSD": null,
+        "promo": null,
+        "requests": {
+          "h5": 169,
+          "week": 423,
+          "month": 845
+        },
+        "unlimited": false
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 30,
+        "note": "ZDR would disable stateful Responses features; Go uses 30-day retention."
+      },
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "endpoint": {
+        "kind": "openai",
+        "label": "OpenAI Responses API",
+        "path": "https://opencode.ai/zen/go/v1/responses",
+        "sdk": "@ai-sdk/openai"
+      },
+      "verdict": "Newest Grok on Go (Sep 21) at Grok 4.6's price and ~845 req/month pool, with PDF input added. No published benchmark yet.",
+      "useFor": [
+        "hard problems now and then",
+        "image or PDF input"
+      ],
+      "avoidFor": [
+        "daily volume",
+        "privacy-sensitive work (30-day retention)"
+      ],
+      "releaseDate": "2026-09-21",
+      "knowledge": "2026-05"
     },
     {
       "id": "hy3",
@@ -13044,37 +13272,20 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         "legacy",
         "roster-only"
       ],
-      "pricing": {
-        "default": {
-          "input": 0.6,
-          "output": 3,
-          "cacheRead": 0.1,
-          "cacheWrite": null,
-          "condition": "models.dev list price"
-        }
-      },
+      "pricing": null,
       "variants": [],
       "typical": null,
       "typicalCostUSD": null,
       "limits": {
-        "context": 262144,
-        "output": 65536
+        "context": null,
+        "output": null
       },
       "capabilities": {
-        "reasoning": true,
-        "toolCall": true,
-        "attachment": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "openWeights": true,
+        "reasoning": null,
+        "toolCall": null,
+        "attachment": null,
+        "modalities": null,
+        "openWeights": null,
         "providerNpm": null
       },
       "usage": {
@@ -13103,8 +13314,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       "avoidFor": [
         "new work"
       ],
-      "releaseDate": "2026-01-27",
-      "knowledge": "2024-10"
+      "releaseDate": null,
+      "knowledge": null
     },
     {
       "id": "kimi-k2.6",
@@ -13373,7 +13584,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         "path": "https://opencode.ai/zen/go/v1/chat/completions",
         "sdk": "@ai-sdk/openai-compatible"
       },
-      "verdict": "Frontier quality on Go - top-3 AA index, video input, 1M ctx - but only ~110 req/5h.",
+      "verdict": "Frontier-tier Kimi (AA 57 at the seed date) with video input and 1M context, but only ~110 req/5h.",
       "useFor": [
         "hardest problems",
         "long multi-file reasoning",
@@ -13476,6 +13687,91 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       "knowledge": null
     },
     {
+      "id": "longcat-2.5-preview-free",
+      "name": "LongCat 2.5 Preview Free",
+      "vendor": "Meituan",
+      "onRoster": true,
+      "listed": true,
+      "legacy": false,
+      "premium": false,
+      "experimental": true,
+      "rosterAlias": null,
+      "tags": [
+        "new",
+        "free",
+        "limited-time",
+        "preview"
+      ],
+      "pricing": {
+        "default": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": null,
+          "condition": "free, limited time"
+        }
+      },
+      "variants": [],
+      "typical": null,
+      "typicalCostUSD": null,
+      "limits": {
+        "context": 1000000,
+        "output": 131072
+      },
+      "capabilities": {
+        "reasoning": true,
+        "toolCall": true,
+        "attachment": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "openWeights": false,
+        "providerNpm": null
+      },
+      "usage": {
+        "monthlyCapUSD": "unlimited",
+        "monthlyCapBaseUSD": null,
+        "promo": null,
+        "requests": {
+          "h5": "unlimited",
+          "week": "unlimited",
+          "month": "unlimited"
+        },
+        "unlimited": true
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "endpoint": {
+        "kind": "compat",
+        "label": "OpenAI Chat Completions",
+        "path": "https://opencode.ai/zen/go/v1/chat/completions",
+        "sdk": "@ai-sdk/openai-compatible"
+      },
+      "verdict": "Free and unlimited for a limited time (since Sep 25): Meituan's LongCat 2.5 preview with image input. No benchmark and no end date published.",
+      "useFor": [
+        "free experimenting while it lasts"
+      ],
+      "avoidFor": [
+        "anything you need repeatability on",
+        "planning around it (limited time)"
+      ],
+      "releaseDate": "2026-09-25",
+      "knowledge": null
+    },
+    {
       "id": "mimo-v2-omni",
       "name": "MiMo V2 Omni",
       "vendor": "Xiaomi",
@@ -13489,38 +13785,20 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         "roster-only",
         "omni-input"
       ],
-      "pricing": {
-        "default": {
-          "input": 0.4,
-          "output": 2,
-          "cacheRead": 0.08,
-          "cacheWrite": null,
-          "condition": "models.dev list price"
-        }
-      },
+      "pricing": null,
       "variants": [],
       "typical": null,
       "typicalCostUSD": null,
       "limits": {
-        "context": 262144,
-        "output": 128000
+        "context": null,
+        "output": null
       },
       "capabilities": {
-        "reasoning": true,
-        "toolCall": true,
-        "attachment": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "audio",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "openWeights": true,
+        "reasoning": null,
+        "toolCall": null,
+        "attachment": null,
+        "modalities": null,
+        "openWeights": null,
         "providerNpm": null
       },
       "usage": {
@@ -13549,8 +13827,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       "avoidFor": [
         "planning"
       ],
-      "releaseDate": "2026-03-18",
-      "knowledge": "2024-12"
+      "releaseDate": null,
+      "knowledge": null
     },
     {
       "id": "mimo-v2-pro",
@@ -13565,35 +13843,20 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       "tags": [
         "roster-only"
       ],
-      "pricing": {
-        "default": {
-          "input": 1,
-          "output": 3,
-          "cacheRead": 0.2,
-          "cacheWrite": null,
-          "condition": "models.dev list price"
-        }
-      },
+      "pricing": null,
       "variants": [],
       "typical": null,
       "typicalCostUSD": null,
       "limits": {
-        "context": 1048576,
-        "output": 128000
+        "context": null,
+        "output": null
       },
       "capabilities": {
-        "reasoning": true,
-        "toolCall": true,
-        "attachment": true,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "openWeights": true,
+        "reasoning": null,
+        "toolCall": null,
+        "attachment": null,
+        "modalities": null,
+        "openWeights": null,
         "providerNpm": null
       },
       "usage": {
@@ -13622,8 +13885,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       "avoidFor": [
         "planning"
       ],
-      "releaseDate": "2026-03-18",
-      "knowledge": "2024-12"
+      "releaseDate": null,
+      "knowledge": null
     },
     {
       "id": "mimo-v2.5",
@@ -13705,11 +13968,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         "path": "https://opencode.ai/zen/go/v1/chat/completions",
         "sdk": "@ai-sdk/openai-compatible"
       },
-      "verdict": "Cheapest model in the catalog and the volume king: ~30k requests per 5h window.",
+      "verdict": "Same price and ~30k req/5h pool as its successor MiMo-V2.6-Flash (Sep 22); keep it for sessions already tuned to it.",
       "useFor": [
         "bulk edits",
         "throwaway questions",
-        "image/audio/video input on the cheap"
+        "sessions already tuned to V2.5"
       ],
       "avoidFor": [
         "hard reasoning"
@@ -13796,7 +14059,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         "path": "https://opencode.ai/zen/go/v1/chat/completions",
         "sdk": "@ai-sdk/openai-compatible"
       },
-      "verdict": "42 AA index at flash prices, but the $15 pool caps it at ~16k req/month.",
+      "verdict": "42 AA index at flash prices on a $15 pool (~16k req/month); MiMo-V2.6-Pro (Sep 22) costs the same.",
       "useFor": [
         "quality work in bursts",
         "large cached contexts cheaply"
@@ -13806,6 +14069,190 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       ],
       "releaseDate": "2026-04-22",
       "knowledge": "2024-12"
+    },
+    {
+      "id": "mimo-v2.6-flash",
+      "name": "MiMo-V2.6-Flash",
+      "vendor": "Xiaomi",
+      "onRoster": true,
+      "listed": true,
+      "legacy": false,
+      "premium": false,
+      "experimental": false,
+      "rosterAlias": null,
+      "tags": [
+        "new",
+        "cheapest",
+        "omni-input",
+        "high-volume"
+      ],
+      "pricing": {
+        "default": {
+          "input": 0.14,
+          "output": 0.28,
+          "cacheRead": 0.0028,
+          "cacheWrite": null,
+          "condition": "all requests"
+        }
+      },
+      "variants": [],
+      "typical": {
+        "input": 830,
+        "cached": 71500,
+        "output": 295
+      },
+      "typicalCostUSD": 0.000399,
+      "limits": {
+        "context": 1048576,
+        "output": 131072
+      },
+      "capabilities": {
+        "reasoning": true,
+        "toolCall": true,
+        "attachment": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "openWeights": true,
+        "providerNpm": null
+      },
+      "usage": {
+        "monthlyCapUSD": 60,
+        "monthlyCapBaseUSD": null,
+        "promo": null,
+        "requests": {
+          "h5": 30100,
+          "week": 75200,
+          "month": 150400
+        },
+        "unlimited": false
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "endpoint": {
+        "kind": "compat",
+        "label": "OpenAI Chat Completions",
+        "path": "https://opencode.ai/zen/go/v1/chat/completions",
+        "sdk": "@ai-sdk/openai-compatible"
+      },
+      "verdict": "Successor to MiMo-V2.5 (Sep 22) at the same price and ~30k req/5h pool, with text, image, audio and video input. No published benchmark yet.",
+      "useFor": [
+        "bulk edits",
+        "long agent loops",
+        "image/audio/video input on the cheap"
+      ],
+      "avoidFor": [
+        "work that needs a published quality index"
+      ],
+      "releaseDate": "2026-09-22",
+      "knowledge": null
+    },
+    {
+      "id": "mimo-v2.6-pro",
+      "name": "MiMo-V2.6-Pro",
+      "vendor": "Xiaomi",
+      "onRoster": true,
+      "listed": true,
+      "legacy": false,
+      "premium": true,
+      "experimental": false,
+      "rosterAlias": null,
+      "tags": [
+        "new",
+        "cheap-cache",
+        "omni-input",
+        "premium-cap"
+      ],
+      "pricing": {
+        "default": {
+          "input": 0.435,
+          "output": 0.87,
+          "cacheRead": 0.003625,
+          "cacheWrite": null,
+          "condition": "all requests"
+        }
+      },
+      "variants": [],
+      "typical": {
+        "input": 790,
+        "cached": 86000,
+        "output": 305
+      },
+      "typicalCostUSD": 0.000921,
+      "limits": {
+        "context": 1048576,
+        "output": 131072
+      },
+      "capabilities": {
+        "reasoning": true,
+        "toolCall": true,
+        "attachment": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "openWeights": true,
+        "providerNpm": null
+      },
+      "usage": {
+        "monthlyCapUSD": 15,
+        "monthlyCapBaseUSD": null,
+        "promo": null,
+        "requests": {
+          "h5": 3250,
+          "week": 8150,
+          "month": 16300
+        },
+        "unlimited": false
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "endpoint": {
+        "kind": "compat",
+        "label": "OpenAI Chat Completions",
+        "path": "https://opencode.ai/zen/go/v1/chat/completions",
+        "sdk": "@ai-sdk/openai-compatible"
+      },
+      "verdict": "Successor to MiMo-V2.5-Pro (Sep 22) at the same price and $15 pool (~16k req/month), with omni input. No published benchmark yet.",
+      "useFor": [
+        "bursts of harder work",
+        "large cached contexts cheaply"
+      ],
+      "avoidFor": [
+        "all-day driving (the $15 pool)",
+        "work that needs a published quality index"
+      ],
+      "releaseDate": "2026-09-22",
+      "knowledge": null
     },
     {
       "id": "minimax-m2.5",
@@ -13833,23 +14280,16 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       "typical": null,
       "typicalCostUSD": null,
       "limits": {
-        "context": 204800,
-        "output": 65536
+        "context": null,
+        "output": null
       },
       "capabilities": {
-        "reasoning": true,
-        "toolCall": true,
-        "attachment": false,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "openWeights": true,
-        "providerNpm": "@ai-sdk/anthropic"
+        "reasoning": null,
+        "toolCall": null,
+        "attachment": null,
+        "modalities": null,
+        "openWeights": null,
+        "providerNpm": null
       },
       "usage": {
         "monthlyCapUSD": 60,
@@ -13877,8 +14317,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       "avoidFor": [
         "new work"
       ],
-      "releaseDate": "2026-02-12",
-      "knowledge": "2025-01"
+      "releaseDate": null,
+      "knowledge": null
     },
     {
       "id": "minimax-m2.7",
@@ -14266,36 +14706,20 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       "tags": [
         "roster-only"
       ],
-      "pricing": {
-        "default": {
-          "input": 0.2,
-          "output": 0.66,
-          "cacheRead": 0.04,
-          "cacheWrite": null,
-          "condition": "models.dev list price"
-        }
-      },
+      "pricing": null,
       "variants": [],
       "typical": null,
       "typicalCostUSD": null,
       "limits": {
-        "context": 500000,
-        "output": 128000
+        "context": null,
+        "output": null
       },
       "capabilities": {
-        "reasoning": true,
-        "toolCall": true,
-        "attachment": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "openWeights": false,
+        "reasoning": null,
+        "toolCall": null,
+        "attachment": null,
+        "modalities": null,
+        "openWeights": null,
         "providerNpm": null
       },
       "usage": {
@@ -14319,7 +14743,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       "avoidFor": [
         "planning"
       ],
-      "releaseDate": "2026-09-04",
+      "releaseDate": null,
       "knowledge": null
     },
     {
@@ -14328,7 +14752,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       "vendor": "Unknown",
       "onRoster": false,
       "listed": false,
-      "legacy": false,
+      "legacy": true,
       "premium": false,
       "experimental": true,
       "rosterAlias": null,
@@ -14349,24 +14773,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       "typical": null,
       "typicalCostUSD": null,
       "limits": {
-        "context": 1000000,
-        "output": 131072
+        "context": null,
+        "output": null
       },
       "capabilities": {
-        "reasoning": true,
-        "toolCall": true,
-        "attachment": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "openWeights": false,
+        "reasoning": null,
+        "toolCall": null,
+        "attachment": null,
+        "modalities": null,
+        "openWeights": null,
         "providerNpm": null
       },
       "usage": {
@@ -14387,14 +14802,14 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         "benchmarks": []
       },
       "endpoint": null,
-      "verdict": "Older free/unlimited catalog entry; Union Alpha is the current stealth model on the roster.",
+      "verdict": "Older free/unlimited catalog entry, not on the roster; Space Bunny Free and LongCat 2.5 Preview Free are the current free models.",
       "useFor": [
         "free experiments"
       ],
       "avoidFor": [
         "repeatability"
       ],
-      "releaseDate": "2026-08-21",
+      "releaseDate": null,
       "knowledge": null
     },
     {
@@ -14411,37 +14826,20 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         "legacy",
         "roster-only"
       ],
-      "pricing": {
-        "default": {
-          "input": 0.2,
-          "output": 1.2,
-          "cacheRead": 0.02,
-          "cacheWrite": 0.25,
-          "condition": "models.dev list price"
-        }
-      },
+      "pricing": null,
       "variants": [],
       "typical": null,
       "typicalCostUSD": null,
       "limits": {
-        "context": 262144,
-        "output": 65536
+        "context": null,
+        "output": null
       },
       "capabilities": {
-        "reasoning": true,
-        "toolCall": true,
-        "attachment": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "openWeights": false,
+        "reasoning": null,
+        "toolCall": null,
+        "attachment": null,
+        "modalities": null,
+        "openWeights": null,
         "providerNpm": null
       },
       "usage": {
@@ -14465,21 +14863,22 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       "avoidFor": [
         "new work"
       ],
-      "releaseDate": "2026-02-16",
-      "knowledge": "2025-04"
+      "releaseDate": null,
+      "knowledge": null
     },
     {
       "id": "qwen3.6-plus",
       "name": "Qwen3.6 Plus",
       "vendor": "Alibaba",
       "onRoster": true,
-      "listed": true,
-      "legacy": false,
+      "listed": false,
+      "legacy": true,
       "premium": false,
       "experimental": false,
       "rosterAlias": null,
       "tags": [
-        "multimodal",
+        "legacy",
+        "roster-only",
         "anthropic-api"
       ],
       "pricing": {
@@ -14563,13 +14962,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         "path": "https://opencode.ai/zen/go/v1/messages",
         "sdk": "@ai-sdk/anthropic"
       },
-      "verdict": "One point under 3.7 Plus on AA index with output 3.00/1M - the budget Qwen Plus.",
+      "verdict": "Dropped from the Go docs by Sep 28 but still on the roster; prices here are from the 09-16 seed. Qwen3.7 Plus is the documented Plus.",
       "useFor": [
-        "bulk agent work",
-        "image/video input"
+        "compatibility with older sessions"
       ],
       "avoidFor": [
-        "premium-cap tasks"
+        "new work"
       ],
       "releaseDate": "2026-04-02",
       "knowledge": "2025-04"
@@ -14579,15 +14977,15 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       "name": "Qwen3.7 Max",
       "vendor": "Alibaba",
       "onRoster": true,
-      "listed": true,
-      "legacy": false,
+      "listed": false,
+      "legacy": true,
       "premium": true,
       "experimental": false,
       "rosterAlias": null,
       "tags": [
-        "premium-cap",
-        "anthropic-api",
-        "top-quality"
+        "legacy",
+        "roster-only",
+        "anthropic-api"
       ],
       "pricing": {
         "default": {
@@ -14654,13 +15052,12 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         "path": "https://opencode.ai/zen/go/v1/messages",
         "sdk": "@ai-sdk/anthropic"
       },
-      "verdict": "46 AA index with strong SWE scores, but ~840 requests/month means it is a scalp tool.",
+      "verdict": "Dropped from the Go docs by Sep 28 but still on the roster; prices here are from the 09-16 seed. Qwen3.8 Max is the documented Max.",
       "useFor": [
-        "hard problems",
-        "final reviews"
+        "compatibility with older sessions"
       ],
       "avoidFor": [
-        "loops"
+        "new work"
       ],
       "releaseDate": "2026-05-21",
       "knowledge": null
@@ -14958,20 +15355,105 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       "knowledge": null
     },
     {
-      "id": "union-alpha",
-      "name": "Union Alpha",
-      "vendor": "Union",
-      "onRoster": false,
+      "id": "space-bunny-free",
+      "name": "Space Bunny Free",
+      "vendor": "Unknown",
+      "onRoster": true,
       "listed": true,
       "legacy": false,
       "premium": false,
       "experimental": true,
       "rosterAlias": null,
       "tags": [
+        "new",
         "free",
         "limited-time",
-        "anthropic-api",
         "stealth"
+      ],
+      "pricing": {
+        "default": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": null,
+          "condition": "free, limited time"
+        }
+      },
+      "variants": [],
+      "typical": null,
+      "typicalCostUSD": null,
+      "limits": {
+        "context": 1048576,
+        "output": 524288
+      },
+      "capabilities": {
+        "reasoning": true,
+        "toolCall": true,
+        "attachment": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "openWeights": false,
+        "providerNpm": null
+      },
+      "usage": {
+        "monthlyCapUSD": "unlimited",
+        "monthlyCapBaseUSD": null,
+        "promo": null,
+        "requests": {
+          "h5": "unlimited",
+          "week": "unlimited",
+          "month": "unlimited"
+        },
+        "unlimited": true
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "endpoint": {
+        "kind": "compat",
+        "label": "OpenAI Chat Completions",
+        "path": "https://opencode.ai/zen/go/v1/chat/completions",
+        "sdk": "@ai-sdk/openai-compatible"
+      },
+      "verdict": "Anonymous model, free and unlimited for a limited time (since Sep 23), with image and video input. Vendor, benchmarks and end date are unpublished.",
+      "useFor": [
+        "free experimenting while it lasts"
+      ],
+      "avoidFor": [
+        "anything you need repeatability on",
+        "planning around it (limited time)"
+      ],
+      "releaseDate": "2026-09-23",
+      "knowledge": null
+    },
+    {
+      "id": "union-alpha",
+      "name": "Union Alpha",
+      "vendor": "Union",
+      "onRoster": false,
+      "listed": false,
+      "legacy": true,
+      "premium": false,
+      "experimental": true,
+      "rosterAlias": null,
+      "tags": [
+        "free",
+        "stealth",
+        "legacy"
       ],
       "pricing": {
         "default": {
@@ -15023,37 +15505,1439 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         "path": "https://opencode.ai/zen/go/v1/messages",
         "sdk": "@ai-sdk/anthropic"
       },
-      "verdict": "Limited-time free/unlimited stealth model for agentic coding (released 2026-09-16, 256K ctx, image input).",
+      "verdict": "Stealth model that was free for a limited time from Sep 16; gone from the roster and the docs by Sep 28.",
       "useFor": [
-        "free experimenting while it lasts"
+        "nothing (no longer served)"
       ],
       "avoidFor": [
-        "anything you need repeatability on"
+        "new work"
       ],
       "releaseDate": null,
       "knowledge": null
     }
   ],
-  "generatedAt": "2026-09-19T03:40:36.730Z",
-  "hash": "f98dd2322a01205dc75a6a3ef60a40f35e0d4f15413f56cbd4d0bf68d1fe0dc2",
-  "rosterHash": "d5346e27713c411fce038180ee3b1e306cc4c29700de69b49fc19b6f24a93930",
+  "providerModels": {
+    "claude": [
+      {
+        "id": "claude-opus-5-5",
+        "name": "Claude Opus 5.5",
+        "family": "claude-opus",
+        "releaseDate": "2026-09-22",
+        "knowledge": "2026-06",
+        "limits": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 4,
+          "output": 20,
+          "cacheRead": 0.2,
+          "cacheWrite": 5
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "claude"
+      },
+      {
+        "id": "claude-fable-5-1",
+        "name": "Claude Fable 5.1",
+        "family": "claude-fable",
+        "releaseDate": "2026-09-01",
+        "knowledge": "2026-06",
+        "limits": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 10,
+          "output": 50,
+          "cacheRead": 0.25,
+          "cacheWrite": 12.5
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "claude"
+      },
+      {
+        "id": "claude-opus-5",
+        "name": "Claude Opus 5",
+        "family": "claude-opus",
+        "releaseDate": "2026-07-24",
+        "knowledge": "2026-05",
+        "limits": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 5,
+          "output": 25,
+          "cacheRead": 0.5,
+          "cacheWrite": 6.25
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "claude"
+      },
+      {
+        "id": "claude-sonnet-5",
+        "name": "Claude Sonnet 5",
+        "family": "claude-sonnet",
+        "releaseDate": "2026-06-29",
+        "knowledge": "2026-01-31",
+        "limits": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 2,
+          "output": 10,
+          "cacheRead": 0.2,
+          "cacheWrite": 2.5
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "claude"
+      },
+      {
+        "id": "claude-fable-5",
+        "name": "Claude Fable 5",
+        "family": "claude-fable",
+        "releaseDate": "2026-06-07",
+        "knowledge": null,
+        "limits": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 10,
+          "output": 50,
+          "cacheRead": 1,
+          "cacheWrite": 12.5
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "claude"
+      },
+      {
+        "id": "claude-opus-4-8",
+        "name": "Claude Opus 4.8",
+        "family": "claude-opus",
+        "releaseDate": "2026-05-28",
+        "knowledge": "2026-01",
+        "limits": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 5,
+          "output": 25,
+          "cacheRead": 0.5,
+          "cacheWrite": 6.25
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "claude"
+      },
+      {
+        "id": "claude-opus-4-7",
+        "name": "Claude Opus 4.7",
+        "family": "claude-opus",
+        "releaseDate": "2026-04-14",
+        "knowledge": "2026-01-31",
+        "limits": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 5,
+          "output": 25,
+          "cacheRead": 0.5,
+          "cacheWrite": 6.25
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "claude"
+      },
+      {
+        "id": "claude-sonnet-4-6",
+        "name": "Claude Sonnet 4.6",
+        "family": "claude-sonnet",
+        "releaseDate": "2026-02-17",
+        "knowledge": "2025-08-31",
+        "limits": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 3,
+          "output": 15,
+          "cacheRead": 0.3,
+          "cacheWrite": 3.75
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "studioRoute": "claude"
+      },
+      {
+        "id": "claude-opus-4-6",
+        "name": "Claude Opus 4.6",
+        "family": "claude-opus",
+        "releaseDate": "2026-02-04",
+        "knowledge": "2025-05-31",
+        "limits": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 5,
+          "output": 25,
+          "cacheRead": 0.5,
+          "cacheWrite": 6.25
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "studioRoute": "claude"
+      },
+      {
+        "id": "claude-opus-4-5",
+        "name": "Claude Opus 4.5 (latest)",
+        "family": "claude-opus",
+        "releaseDate": "2025-11-24",
+        "knowledge": "2025-05",
+        "limits": {
+          "context": 200000,
+          "output": 64000
+        },
+        "cost": {
+          "input": 5,
+          "output": 25,
+          "cacheRead": 0.5,
+          "cacheWrite": 6.25
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "low",
+          "medium",
+          "high"
+        ],
+        "studioRoute": "claude"
+      },
+      {
+        "id": "claude-haiku-4-5",
+        "name": "Claude Haiku 4.5 (latest)",
+        "family": "claude-haiku",
+        "releaseDate": "2025-10-15",
+        "knowledge": "2025-02-28",
+        "limits": {
+          "context": 200000,
+          "output": 64000
+        },
+        "cost": {
+          "input": 1,
+          "output": 5,
+          "cacheRead": 0.1,
+          "cacheWrite": 1.25
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": null,
+        "studioRoute": "claude"
+      },
+      {
+        "id": "claude-sonnet-4-5",
+        "name": "Claude Sonnet 4.5 (latest)",
+        "family": "claude-sonnet",
+        "releaseDate": "2025-09-29",
+        "knowledge": "2025-07-31",
+        "limits": {
+          "context": 1000000,
+          "output": 64000
+        },
+        "cost": {
+          "input": 3,
+          "output": 15,
+          "cacheRead": 0.3,
+          "cacheWrite": 3.75
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": null,
+        "studioRoute": "claude"
+      }
+    ],
+    "zen": [
+      {
+        "id": "gpt-6-luna",
+        "name": "GPT-6 Luna",
+        "family": "gpt-luna",
+        "releaseDate": "2026-09-22",
+        "knowledge": "2026-05-18",
+        "limits": {
+          "context": 1050000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 0.1,
+          "output": 0.5,
+          "cacheRead": 0.01,
+          "cacheWrite": 0.125
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-6-sol",
+        "name": "GPT-6 Sol",
+        "family": "gpt-sol",
+        "releaseDate": "2026-09-22",
+        "knowledge": "2026-04-20",
+        "limits": {
+          "context": 1050000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 2,
+          "output": 10,
+          "cacheRead": 0.2,
+          "cacheWrite": 2.5
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-6-astra",
+        "name": "GPT-6 Astra",
+        "family": "gpt-astra",
+        "releaseDate": "2026-09-04",
+        "knowledge": "2026-04-30",
+        "limits": {
+          "context": 1050000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 10,
+          "output": 50,
+          "cacheRead": 1,
+          "cacheWrite": 12.5
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.6-luna",
+        "name": "GPT-5.6 Luna",
+        "family": "gpt-luna",
+        "releaseDate": "2026-07-09",
+        "knowledge": "2026-02-16",
+        "limits": {
+          "context": 1050000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 0.2,
+          "output": 1.2,
+          "cacheRead": 0.02,
+          "cacheWrite": 0.25
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.6-sol",
+        "name": "GPT-5.6 Sol",
+        "family": "gpt-sol",
+        "releaseDate": "2026-07-09",
+        "knowledge": "2026-02-16",
+        "limits": {
+          "context": 1050000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 4,
+          "output": 20,
+          "cacheRead": 0.4,
+          "cacheWrite": 5
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.6-terra",
+        "name": "GPT-5.6 Terra",
+        "family": "gpt-terra",
+        "releaseDate": "2026-07-09",
+        "knowledge": "2026-02-16",
+        "limits": {
+          "context": 1050000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 2.5,
+          "output": 15,
+          "cacheRead": 0.25,
+          "cacheWrite": 3.125
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.5",
+        "name": "GPT-5.5",
+        "family": "gpt",
+        "releaseDate": "2026-04-23",
+        "knowledge": "2025-12-01",
+        "limits": {
+          "context": 1050000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 5,
+          "output": 30,
+          "cacheRead": 0.5,
+          "cacheWrite": null
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.5-pro",
+        "name": "GPT-5.5 Pro",
+        "family": "gpt-pro",
+        "releaseDate": "2026-04-23",
+        "knowledge": "2025-12-01",
+        "limits": {
+          "context": 1050000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 30,
+          "output": 180,
+          "cacheRead": 30,
+          "cacheWrite": null
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.4-mini",
+        "name": "GPT-5.4 mini",
+        "family": "gpt-mini",
+        "releaseDate": "2026-03-17",
+        "knowledge": "2025-08-31",
+        "limits": {
+          "context": 400000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 0.75,
+          "output": 4.5,
+          "cacheRead": 0.075,
+          "cacheWrite": null
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.4-nano",
+        "name": "GPT-5.4 nano",
+        "family": "gpt-nano",
+        "releaseDate": "2026-03-17",
+        "knowledge": "2025-08-31",
+        "limits": {
+          "context": 400000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 0.2,
+          "output": 1.25,
+          "cacheRead": 0.02,
+          "cacheWrite": null
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.4",
+        "name": "GPT-5.4",
+        "family": "gpt",
+        "releaseDate": "2026-03-05",
+        "knowledge": "2025-08-31",
+        "limits": {
+          "context": 1050000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 2.5,
+          "output": 15,
+          "cacheRead": 0.25,
+          "cacheWrite": null
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.4-pro",
+        "name": "GPT-5.4 Pro",
+        "family": "gpt-pro",
+        "releaseDate": "2026-03-05",
+        "knowledge": "2025-08-31",
+        "limits": {
+          "context": 1050000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 30,
+          "output": 180,
+          "cacheRead": 30,
+          "cacheWrite": null
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.3-codex",
+        "name": "GPT-5.3 Codex",
+        "family": "gpt-codex",
+        "releaseDate": "2026-02-05",
+        "knowledge": "2025-08-31",
+        "limits": {
+          "context": 400000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 1.75,
+          "output": 14,
+          "cacheRead": 0.175,
+          "cacheWrite": null
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.3-codex-spark",
+        "name": "GPT-5.3 Codex Spark",
+        "family": "gpt-codex-spark",
+        "releaseDate": "2026-02-05",
+        "knowledge": "2025-08-31",
+        "limits": {
+          "context": 128000,
+          "output": 32000
+        },
+        "cost": {
+          "input": 1.75,
+          "output": 14,
+          "cacheRead": 0.175,
+          "cacheWrite": null
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.2",
+        "name": "GPT-5.2",
+        "family": "gpt",
+        "releaseDate": "2025-12-11",
+        "knowledge": "2025-08-31",
+        "limits": {
+          "context": 400000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 1.75,
+          "output": 14,
+          "cacheRead": 0.175,
+          "cacheWrite": null
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "studioRoute": "zen"
+      },
+      {
+        "id": "gpt-5.1",
+        "name": "GPT-5.1",
+        "family": "gpt",
+        "releaseDate": "2025-11-13",
+        "knowledge": "2024-09-30",
+        "limits": {
+          "context": 400000,
+          "output": 128000
+        },
+        "cost": {
+          "input": 1.07,
+          "output": 8.5,
+          "cacheRead": 0.107,
+          "cacheWrite": null
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": [
+          "none",
+          "low",
+          "medium",
+          "high"
+        ],
+        "studioRoute": "zen"
+      }
+    ],
+    "zai": [
+      {
+        "id": "glm-5.3-flash",
+        "name": "GLM-5.3-Flash",
+        "family": "glm-flash",
+        "releaseDate": "2026-08-26",
+        "knowledge": null,
+        "limits": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "cost": {
+          "input": 0.15,
+          "output": 0.5,
+          "cacheRead": 0.03,
+          "cacheWrite": 0
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "video",
+              "pdf"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": true
+        },
+        "reasoningEfforts": [
+          "low",
+          "high",
+          "max"
+        ],
+        "studioRoute": "zai"
+      },
+      {
+        "id": "glm-5.3",
+        "name": "GLM-5.3",
+        "family": "glm",
+        "releaseDate": "2026-08-14",
+        "knowledge": null,
+        "limits": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "cost": {
+          "input": 1.4,
+          "output": 4.4,
+          "cacheRead": 0.26,
+          "cacheWrite": 0
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": false,
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": true
+        },
+        "reasoningEfforts": [
+          "low",
+          "high",
+          "max"
+        ],
+        "studioRoute": "zai"
+      },
+      {
+        "id": "glm-5.3-highspeed",
+        "name": "GLM-5.3 Highspeed",
+        "family": "glm",
+        "releaseDate": "2026-08-14",
+        "knowledge": null,
+        "limits": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "cost": null,
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": false,
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": true
+        },
+        "reasoningEfforts": [
+          "low",
+          "high",
+          "max"
+        ],
+        "studioRoute": "zai"
+      },
+      {
+        "id": "glm-5.2",
+        "name": "GLM-5.2",
+        "family": "glm",
+        "releaseDate": "2026-06-13",
+        "knowledge": null,
+        "limits": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "cost": {
+          "input": 1.4,
+          "output": 4.4,
+          "cacheRead": 0.26,
+          "cacheWrite": 0
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": false,
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": true
+        },
+        "reasoningEfforts": [
+          "high",
+          "max"
+        ],
+        "studioRoute": "zai"
+      },
+      {
+        "id": "glm-5.2-highspeed",
+        "name": "GLM-5.2 Highspeed",
+        "family": "glm",
+        "releaseDate": "2026-06-13",
+        "knowledge": null,
+        "limits": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "cost": null,
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": false,
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": true
+        },
+        "reasoningEfforts": [
+          "high",
+          "max"
+        ],
+        "studioRoute": "zai"
+      },
+      {
+        "id": "glm-5-turbo",
+        "name": "GLM-5-Turbo",
+        "family": "glm",
+        "releaseDate": "2026-03-16",
+        "knowledge": null,
+        "limits": {
+          "context": 200000,
+          "output": 131072
+        },
+        "cost": {
+          "input": 1.2,
+          "output": 4,
+          "cacheRead": 0.24,
+          "cacheWrite": 0
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": false,
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": false
+        },
+        "reasoningEfforts": null,
+        "studioRoute": "zai"
+      },
+      {
+        "id": "glm-4.7",
+        "name": "GLM-4.7",
+        "family": "glm",
+        "releaseDate": "2025-12-22",
+        "knowledge": "2025-04",
+        "limits": {
+          "context": 204800,
+          "output": 131072
+        },
+        "cost": {
+          "input": 0.6,
+          "output": 2.2,
+          "cacheRead": 0.11,
+          "cacheWrite": 0
+        },
+        "capabilities": {
+          "reasoning": true,
+          "toolCall": true,
+          "attachment": false,
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "openWeights": true
+        },
+        "reasoningEfforts": null,
+        "studioRoute": "zai"
+      }
+    ]
+  },
+  "generatedAt": "2026-09-28T17:04:09.598Z",
+  "hash": "bfe811c509c83a62ece9f015aebda77f203e79f346a971def9d0a99e6f2ede7e",
+  "rosterHash": "cff273bf935e374b635cf88845a0befe0929f924ed283436e02029b04441df9c",
   "sources": {
     "roster": {
       "url": "https://opencode.ai/zen/go/v1/models",
       "ok": true,
-      "count": 37
+      "count": 43
     },
     "catalog": {
       "url": "https://models.dev/api.json",
       "ok": true,
       "provider": "opencode-go"
     },
-    "curatedSeed": "2026-09-16",
+    "providerModels": {
+      "url": "https://models.dev/api.json",
+      "ok": true,
+      "routes": {
+        "claude": {
+          "provider": "anthropic",
+          "priceProvider": "anthropic",
+          "servedBy": null,
+          "count": 12,
+          "source": "models.dev"
+        },
+        "zen": {
+          "provider": "openai",
+          "priceProvider": "opencode",
+          "servedBy": "opencode",
+          "count": 16,
+          "source": "models.dev"
+        },
+        "zai": {
+          "provider": "zai-coding-plan",
+          "priceProvider": "zai",
+          "servedBy": null,
+          "count": 7,
+          "source": "models.dev"
+        }
+      }
+    },
+    "curatedSeed": "2026-09-28",
     "mode": "live"
   },
-  "warnings": [
-    "ox-alpha-free: documented/known but not on the live roster"
-  ]
+  "warnings": []
 }</script>
 <script>// One vocabulary for every task badge in the renderer. The board, Your work,
 // Plans and Command all pass a scheduler stage (backlog.taskStates[].stage) or
@@ -20303,6 +22187,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     usage: "Tokens and cost from the model calls Studio recorded.",
     context: "What a task carries into its model calls, and what the latest attempt cost.",
     tracker: "What each provider account reports: plans, balances and limits.",
+    community: "What the community reports about a model, and Studio's own probe runs on it.",
   };
   const plain = (error, fallback) => window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : error?.message || fallback;
   const when = (value) => {
@@ -20519,9 +22404,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     finally { if (token === state.contextRead) $("context-refresh").disabled = false; }
   }
   function show(view) {
-    if (!["rankings", "usage", "context", "tracker", "compare"].includes(view)) view = "rankings";
+    if (!["rankings", "usage", "context", "tracker", "community", "compare"].includes(view)) view = "rankings";
     state.view = view;
-    for (const name of ["rankings", "usage", "context", "tracker", "compare"]) {
+    for (const name of ["rankings", "usage", "context", "tracker", "community", "compare"]) {
       $(name).hidden = name !== view;
       $(`tab-${name}`).setAttribute("aria-selected", String(name === view));
       $(`tab-${name}`).tabIndex = name === view ? 0 : -1;
@@ -20536,12 +22421,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if ($("summary")) $("summary").hidden = view !== "rankings";
     window.dispatchEvent(new CustomEvent("mefi:model-view", { detail: { view } }));
     if (view === "tracker") window.MefiUsageTracker?.refresh?.();
+    if (view === "community") window.MefiModelCommunity?.open?.();
     if (view === "context") loadTasks().then((fresh) => { if (fresh) return previewContext(); }).catch((error) => { $("context-status").textContent = plain(error, "Tasks could not be read."); });
   }
   function init() {
     if (state.initialized || !document.getElementById("model-lab")) return;
     state.initialized = true;
-    const views = ["rankings", "usage", "context", "tracker", "compare"];
+    const views = ["rankings", "usage", "context", "tracker", "community", "compare"];
     for (const [index, name] of views.entries()) {
       const button = $(`tab-${name}`);
       button.addEventListener("click", () => show(name));
@@ -42879,6 +44765,259 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
+})();
+
+// Models › Community: what the Void Engine community reports about a model
+// (the public feed, docs/model-community.md) and Studio's own probe runs on it.
+// Feed text is untrusted: everything here renders with textContent, links open
+// only through the host's http(s)-only shell:open, and nothing is fetched from
+// a feed URL. Probes run only when the owner presses Run probes.
+(function () {
+  "use strict";
+  const state = { initialized: false, targets: [], kinds: [], selected: "", read: 0, running: null, progress: null, maxTokens: 1500 };
+  const $ = (id) => document.getElementById(`model-lab-${id}`);
+  const api = () => window.mefiStudio;
+  const rows = (value) => Array.isArray(value) ? value : [];
+  const finite = (value) => typeof value === "number" && Number.isFinite(value);
+  const plain = (error, fallback) => window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : error?.message || fallback;
+  const when = (value) => {
+    const date = new Date(value ?? NaN);
+    return Number.isFinite(date.getTime()) ? date.toLocaleString() : "an unknown time";
+  };
+  const KIND_NAMES = { planning: "Planning", structuring: "Structuring", coding: "Coding", debugging: "Debugging", writing: "Writing", commits: "Commits", tests: "Tests", setup: "Setup", review: "Review" };
+  const kindName = (kind) => KIND_NAMES[kind] || kind;
+  function element(tag, className = "", text = "") {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+  function empty(target, title, detail) {
+    const box = element("div", "lab-empty");
+    box.append(element("h3", "", title), element("p", "", detail));
+    target.replaceChildren(box);
+  }
+  // A feed link opens outside Studio through the host, which refuses anything
+  // but http(s); the feed was already held to https on the way in.
+  function linkButton(label, url) {
+    const button = element("button", "mc-link", label);
+    button.type = "button";
+    button.title = url;
+    button.addEventListener("click", () => { api()?.openExternal?.(url); });
+    return button;
+  }
+  const selectedTarget = () => state.targets.find((target) => `${target.provider}::${target.model}` === state.selected) || null;
+
+  function section(title, note = "") {
+    const box = element("section", "mc-section");
+    box.append(element("h5", "", title));
+    if (note) box.append(element("p", "mc-meta", note));
+    return box;
+  }
+  function list(items, render) {
+    const ul = element("ul", "mc-list");
+    for (const item of items) { const li = element("li", "mc-item"); render(li, item); ul.append(li); }
+    return ul;
+  }
+
+  function renderCommunity(view) {
+    const body = $("community-body");
+    const status = view.hasFeed
+      ? `Community feed from ${when(view.fetchedAt)} · ${view.modelCount} ${view.modelCount === 1 ? "model" : "models"}${view.lastError ? ` · the last refresh failed: ${view.lastError}` : ""}`
+      : view.lastError ? `The community feed could not be read: ${view.lastError}` : view.missing ? "No community feed is published yet." : "No community feed has been read on this PC yet.";
+    $("community-status").textContent = status;
+    const match = view.match;
+    if (!view.hasFeed) { empty(body, "No community feed", "Studio works the same without one. Once the Void Engine Bot publishes reviews, they appear here after a refresh."); return; }
+    if (!match?.row) { empty(body, "No community reports for this model yet", "Members review models in the Void Engine forum; this model has no post there, or none has been published."); return; }
+    const row = match.row;
+    const parts = [];
+    const head = element("div", "mc-summary");
+    const overall = row.ratings?.overall;
+    head.append(element("strong", "", row.name || row.id), element("span", "mc-meta", overall ? `Server rating ${overall.mean} / 5 · ${overall.n} ratings` : "No server rating yet"));
+    if (match.matchedBy === "alias") head.append(element("span", "mc-meta", `Listed as ${row.key}`));
+    parts.push(head);
+    const byTask = Object.entries(row.ratings?.byTask || {});
+    if (byTask.length) {
+      const chips = element("div", "mc-chips");
+      for (const [kind, rating] of byTask) chips.append(element("span", "mc-chip", `${kindName(kind)} ${rating.mean} · n ${rating.n}${rating.withEvidence ? ` · ${rating.withEvidence} with evidence` : ""}`));
+      const box = section("Ratings by task");
+      box.append(chips);
+      parts.push(box);
+    }
+    if (rows(row.documented).length) {
+      const box = section("From the release notes", "The provider's own statements, not measurements.");
+      box.append(list(row.documented, (li, entry) => {
+        li.append(element("span", "", entry.claim), element("span", "mc-meta", `${kindName(entry.taskKind)}${entry.specific ? " · specific" : ""}`));
+        if (entry.source?.url) li.append(linkButton(entry.source.title || "Source", entry.source.url));
+      }));
+      parts.push(box);
+    }
+    const observed = rows(row.claims).filter((claim) => claim.tier === "observed");
+    for (const [polarity, title] of [["strength", "Observed strengths"], ["weakness", "Observed weaknesses"]]) {
+      const items = observed.filter((claim) => claim.polarity === polarity);
+      if (!items.length) continue;
+      const box = section(title, "Members describing what they ran and what happened.");
+      box.append(list(items, (li, claim) => li.append(element("span", "", claim.text), element("span", "mc-meta", `${kindName(claim.taskKind)} · ${claim.reporters} ${claim.reporters === 1 ? "reporter" : "reporters"}${claim.withEvidence ? ` · ${claim.withEvidence} with evidence` : ""}`))));
+      parts.push(box);
+    }
+    const opinions = rows(row.claims).filter((claim) => claim.tier === "opinion");
+    if (opinions.length) {
+      const fold = element("details", "mc-section mc-opinions");
+      fold.append(element("summary", "", `Opinions (${opinions.length}) · shown, never used to pick models`));
+      fold.append(list(opinions, (li, claim) => li.append(element("span", "", claim.text), element("span", "mc-meta", `${kindName(claim.taskKind)} · ${claim.polarity} · ${claim.reporters} ${claim.reporters === 1 ? "member" : "members"}`))));
+      parts.push(fold);
+    }
+    if (rows(row.tips).length) {
+      const box = section("Tips");
+      box.append(list(row.tips, (li, tip) => li.append(element("span", "", tip.text), element("span", "mc-meta", `${kindName(tip.taskKind)} · ${tip.votes} ${tip.votes === 1 ? "vote" : "votes"}`))));
+      parts.push(box);
+    }
+    const foot = element("div", "mc-foot");
+    if (row.forumThread) foot.append(linkButton("Discuss on Discord", row.forumThread));
+    foot.append(element("p", "mc-meta", "Model picks use only specific release-note claims, strengths or weaknesses two or more members reported, and task ratings with three or more evidence notes, and only as a small nudge."));
+    parts.push(foot);
+    body.replaceChildren(...parts);
+  }
+
+  function checkList(checks) {
+    return list(rows(checks), (li, check) => {
+      li.classList.add(check.ok ? "mc-pass" : "mc-fail");
+      li.append(element("span", "mc-verdict", check.ok ? "Pass" : "Fail"), element("span", "", check.name), element("span", "mc-meta", check.detail || ""));
+    });
+  }
+  function renderProbes(view) {
+    const body = $("probes-body");
+    const target = selectedTarget();
+    const running = state.running;
+    const mine = running && target && running.provider === target.provider && running.model === target.model;
+    $("probes-run").disabled = !target || Boolean(running);
+    $("probes-cancel").hidden = !running;
+    if (!target) { empty(body, "No model to probe", "Probes run on models enabled on this PC: save a provider key or sign in to a CLI under Settings."); return; }
+    const runs = view?.runs || {};
+    const table = element("div", "mc-probes");
+    for (const { kind, title } of state.kinds) {
+      const card = element("div", "mc-probe");
+      const latest = rows(runs[kind])[0];
+      const live = mine && state.progress?.kind === kind && state.progress.state === "running";
+      const headline = live ? "Running…" : !latest ? "Not run yet" : latest.error ? `No answer: ${latest.error}` : `${latest.passed ? "Passed" : "Did not pass"} · ${Math.round((latest.score ?? 0) * 100)}% of checks`;
+      const top = element("div", "mc-probe-head");
+      top.append(element("strong", "", `${kindName(kind)}`), element("span", `mc-meta${latest && !latest.error ? latest.passed ? " mc-pass" : " mc-fail" : ""}`, headline));
+      card.append(top, element("span", "mc-meta", title));
+      if (latest) {
+        const scored = rows(runs[kind]).filter((run) => finite(run.score));
+        const mean = scored.length ? Math.round((scored.reduce((sum, run) => sum + run.score, 0) / scored.length) * 100) : null;
+        card.append(element("span", "mc-meta", `Last run ${when(latest.at)}${finite(latest.elapsedMs) ? ` · ${Math.round(latest.elapsedMs / 100) / 10} s` : ""}${scored.length > 1 ? ` · ${scored.length} runs, ${mean}% on average` : ""}`));
+        if (rows(latest.checks).length) {
+          const fold = element("details", "mc-checks");
+          fold.append(element("summary", "", `Checks (${latest.checks.filter((check) => check.ok).length} of ${latest.checks.length})`), checkList(latest.checks));
+          card.append(fold);
+        }
+      }
+      table.append(card);
+    }
+    body.replaceChildren(table, element("p", "mc-meta", `Each probe is one small fixed task, up to ${state.maxTokens.toLocaleString("en-US")} output tokens, billed like any call on this model and listed under Usage. Results are Studio's own measurements, weaker than verified task results; the last 5 runs per probe are kept.`));
+  }
+
+  async function load({ refresh = false } = {}) {
+    const token = ++state.read;
+    const target = selectedTarget();
+    $("community-refresh").disabled = true;
+    $("community-status").textContent = refresh ? "Checking the community feed…" : "Reading the community feed…";
+    const who = target ? { provider: target.provider, model: target.model } : {};
+    try {
+      if (!api()?.modelFeed) throw new Error("The community feed is available in the Studio desktop app.");
+      const [community, probes] = await Promise.all([refresh ? api().modelFeedRefresh(who) : api().modelFeed(who), api().modelProbes?.(who)]);
+      if (token !== state.read) return;
+      if (!community || community.ok === false) throw new Error(community?.error || "The community feed could not be read.");
+      renderCommunity(community);
+      if (probes?.ok) { state.running = probes.running || null; renderProbes(probes); }
+    } catch (error) {
+      if (token !== state.read) return;
+      $("community-status").textContent = plain(error, "The community feed could not be read.");
+      $("community-body").replaceChildren();
+    } finally {
+      if (token === state.read) $("community-refresh").disabled = false;
+    }
+  }
+
+  async function loadTargets() {
+    const result = await api()?.modelProbes?.({});
+    if (!result?.ok) throw new Error(result?.error || "Models could not be listed.");
+    state.targets = rows(result.targets);
+    state.kinds = rows(result.kinds);
+    state.maxTokens = finite(result.maxTokens) ? result.maxTokens : state.maxTokens;
+    state.running = result.running || null;
+    const select = $("community-model");
+    const first = element("option", "", state.targets.length ? "Choose a model…" : "No models enabled on this PC");
+    first.value = "";
+    select.replaceChildren(first);
+    for (const target of state.targets) {
+      const option = element("option", "", target.label || `${target.provider} · ${target.model}`);
+      option.value = `${target.provider}::${target.model}`;
+      select.append(option);
+    }
+    if (!state.targets.some((target) => `${target.provider}::${target.model}` === state.selected)) state.selected = state.targets[0] ? `${state.targets[0].provider}::${state.targets[0].model}` : "";
+    select.value = state.selected;
+  }
+
+  async function run() {
+    const target = selectedTarget();
+    if (!target || state.running) return;
+    $("probes-run").disabled = true;
+    $("probes-status").textContent = `Starting probes on ${target.model}…`;
+    state.running = { provider: target.provider, model: target.model };
+    $("probes-cancel").hidden = false;
+    try {
+      const result = await api().modelProbeRun({ provider: target.provider, model: target.model });
+      if (!result?.ok) throw new Error(result?.error || "The probes could not run.");
+      $("probes-status").textContent = result.cancelled ? "Probes stopped. Finished results are kept." : `Probes finished on ${target.model}.`;
+    } catch (error) {
+      $("probes-status").textContent = plain(error, "The probes could not run.");
+    } finally {
+      state.running = null; state.progress = null;
+      $("probes-cancel").hidden = true;
+      await load();
+    }
+  }
+
+  async function cancel() {
+    $("probes-cancel").disabled = true;
+    try {
+      const result = await api()?.modelProbeCancel?.();
+      $("probes-status").textContent = result?.message || "Stopping after the current probe…";
+    } finally { $("probes-cancel").disabled = false; }
+  }
+
+  function onProgress(event) {
+    if (!event || typeof event !== "object") return;
+    state.progress = event;
+    const total = finite(event.total) ? event.total : state.kinds.length;
+    if (event.state === "running") $("probes-status").textContent = `Running ${kindName(event.kind)} (${(event.index ?? 0) + 1} of ${total}) on ${event.model}…`;
+    else if (event.state === "scored") $("probes-status").textContent = `${kindName(event.kind)} ${event.result?.error ? "got no answer" : event.result?.passed ? "passed" : "did not pass"} (${(event.index ?? 0) + 1} of ${total}).`;
+    if (event.state === "scored" || event.state === "running") api()?.modelProbes?.({ provider: event.provider, model: event.model }).then((view) => {
+      const target = selectedTarget();
+      if (view?.ok && target && target.provider === event.provider && target.model === event.model) renderProbes(view);
+    }).catch(() => {});
+  }
+
+  function init() {
+    if (state.initialized || !$("community")) return;
+    state.initialized = true;
+    $("community-model").addEventListener("change", () => { state.selected = $("community-model").value; load(); });
+    $("community-refresh").addEventListener("click", () => load({ refresh: true }));
+    $("probes-run").addEventListener("click", run);
+    $("probes-cancel").addEventListener("click", cancel);
+    api()?.onModelProbeProgress?.(onProgress);
+  }
+
+  async function open() {
+    init();
+    if (!state.initialized) return;
+    try { await loadTargets(); }
+    catch (error) { $("probes-status").textContent = plain(error, "Models could not be listed."); }
+    await load();
+  }
+  window.MefiModelCommunity = { open, refresh: () => load({ refresh: true }) };
 })();
 
 // Command's camera motion: Zen visits branches and regularly reveals the
@@ -72532,6 +74671,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     cards: document.getElementById("cards"),
     count: document.getElementById("count"),
     footer: document.getElementById("footer-meta"),
+    alsoTracked: document.getElementById("also-tracked"),
+    alsoTrackedBody: document.getElementById("also-tracked-body"),
     banner2: null,
   };
 
@@ -72666,6 +74807,45 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       <span>per-model pool: 5h = 20%, week = 50%, month = 100%</span>`;
   }
 
+  // Also tracked: the models Studio routes to outside Go (providerModels,
+  // rebuilt from models.dev). Read-only, and built with textContent so no
+  // catalog string ever reaches innerHTML.
+  const ROUTE_LABELS = { claude: "Claude Code", zen: "OpenCode Zen", zai: "z.ai Coding Plan" };
+  let alsoTrackedDoc = null;
+  function renderAlsoTracked() {
+    const box = els.alsoTracked, body = els.alsoTrackedBody;
+    if (!box || !body || alsoTrackedDoc === state.doc) return;
+    alsoTrackedDoc = state.doc;
+    const routes = Object.entries(state.doc.providerModels ?? {}).filter(([, rows]) => Array.isArray(rows) && rows.length);
+    box.hidden = !routes.length;
+    const node = (tag, text, className) => {
+      const el = document.createElement(tag);
+      if (text != null) el.textContent = String(text);
+      if (className) el.className = className;
+      return el;
+    };
+    const price = (cost) => (cost && cost.input != null && cost.output != null ? `${fmt.money(cost.input)} in / ${fmt.money(cost.output)} out` : "—");
+    const parts = [];
+    for (const [route, rows] of routes) {
+      parts.push(node("h3", `${ROUTE_LABELS[route] ?? route} · ${rows.length}`));
+      const table = node("table", null, "lab-table");
+      const head = node("tr");
+      for (const label of ["Model", "Released", "Context", "List price / 1M"]) head.append(node("th", label));
+      table.append(head);
+      for (const row of rows) {
+        const name = node("td", row.name ?? row.id);
+        name.title = String(row.id ?? "");
+        const tr = node("tr");
+        tr.append(name, node("td", row.releaseDate ?? "—"), node("td", fmt.ctx(row.limits?.context)), node("td", price(row.cost)));
+        table.append(tr);
+      }
+      const wrap = node("div", null, "lab-table-wrap");
+      wrap.append(table);
+      parts.push(wrap);
+    }
+    body.replaceChildren(...parts);
+  }
+
   function renderStatus() {
     const doc = state.doc;
     const roster = doc.models.filter((m) => m.onRoster).length;
@@ -72694,6 +74874,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 
   function renderAll() {
     renderPlan();
+    renderAlsoTracked();
     renderStatus();
     renderChips();
     renderCards();
