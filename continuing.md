@@ -1,6 +1,6 @@
 # Continuing: handoff (2026-09-28, afternoon)
 
-Ten things are open:
+Twelve things are open:
 1. **The 0.4.5 build.** It started today and paused at about 13:10, when the account hit its usage limit (it resets at 2:10 pm Central). The work is partial and uncommitted, in worktrees on this PC only.
 2. **Home PCs that keep working, and reaching them from Discord** (the co-work session). Start with Windows, the Your PCs agent lines and the Studio side of the Discord remote are on main. The bot side is parked as `wip/remote-dms`. The end-to-end test, the owner's setup and subscriptions-first routing are left (section 2).
 3. **Menu Batch 3.** This is the owner's decision, unchanged (section 3).
@@ -11,6 +11,8 @@ Ten things are open:
 8. **The media player redesign** (the "Media player UI and performance improvements" session). A mini player with a transport, quick tree switches and a YouTube feed, on the pushed branch `wip/media-player-redesign`. It works in the offscreen probe; its tests aren't updated and it isn't landed (section 8).
 9. **The Task board's cleanup and masonry cards, carried to other menus** (the "Menu cleanup" session). The Task board part is on main; Ideas, Settings › Providers, Plans, Vibe and the Project map are next, starting with a shared masonry helper. The owner asked for this (section 9).
 10. **Void Engine Bot: fun, memory, release pings and model drops** (the "Discord community perks and verification" session). Built and mostly wired, parked on the bot's pushed branch `wip/bot-fun-memory` with 8 seam tests failing. The end-to-end test, a review and landing are left, and three sessions wait on it (section 10).
+11. **The launch screen, a welcome-back hub and a clean reload** (the "App loading screen animation" session). The plan is approved and no code is written: a project constellation that morphs into the studio, a full-screen hub after 10 minutes away, and a quiet emblem on reload. It owns the boot fade and release (C3); the "Build 4.5 roadmap" session owns the gate steps (section 11).
+12. **Agent Brain: child sessions on the Command tree.** The finish beats are on main. The Command-tree work, sub-agents and their return path, is built and gated in `C:\wt\cmd-kids` but uncommitted, waiting for the owner's OK to land (section 12).
 
 ## 1. 0.4.5: agents send only what's new, logging, load times, Friends 2.0
 
@@ -812,3 +814,227 @@ Written 2026-09-28 by the session "Discord community perks and verification". It
 - **For rooms, listen together and the remote:** the hub's public address and the "Mefi Studio Link" app id are also needed (sections 1 and 2).
 
 Remove this section once the branch lands on the bot's `main` and the three sessions have rebased.
+
+## 11. Launch screen, welcome-back hub and clean reload (planned, not started)
+
+The owner asked for a better launch screen, a cleaner reload, and a hub
+screen "when you aren't in the app for longer than 10 mins". The hub should
+be dynamic and unique, and the animation should be tied to the project being
+loaded. This is for 0.4.5 and must land in CHANGELOG `[Unreleased]` before
+`v0.4.5` is tagged. The plan is approved. No code has been written and there
+is no branch or worktree yet.
+
+### Owner's answers (binding, 2026-09-28)
+
+- **When the hub shows:** on a cold launch when Studio was closed for 10
+  minutes or more, and when you come back to the window after it sat
+  minimized, unfocused or idle for 10 minutes or more. The first-ever launch
+  also gets the hub. Reloads and short breaks skip it.
+- **What the hub is:** a full-screen welcome-back hub.
+  - The project's living animation is in the centre.
+  - It shows what changed while you were away: finished, failed, needs you,
+    and running or held agents.
+  - Big actions: Continue, Switch project and Start agents.
+  - It replaces today's text project picker.
+- **The visual:** a project constellation. The project map's systems and
+  co-change links assemble as nodes and wires, painted with
+  `MefiNodeStyles` in a palette drawn from the project and the theme. It
+  then morphs into the studio.
+- **Reload:** a quiet emblem. There is no text and no step list. The folded
+  constellation breathes while loading, then dissolves into the view.
+
+### Agreed with the "Build 4.5 roadmap and web upgrades" session
+
+- **This work owns C3:** the `boot.js` fade and release, the `#boot-layer`
+  markup and CSS, and the `startup.js` and companion-hub boot hooks. The
+  target is a studio that is visible and usable within 150 ms of ready.
+  After that, the dissolve runs on without blocking.
+- **That session owns the gate steps (their wave 2):**
+  - The steps become `snapshot`, `view` and `fonts`, plus `tree` only when
+    Command is home. `catalog` leaves the gate.
+  - A new `studio:bootSnapshot` call with a `bootSnapshotParts` registry.
+    They will message the commit.
+  - So the constellation must read `MefiBoot.state().steps` dynamically,
+    never a pinned id list.
+  - `away` goes on `startup:state`. The art projection becomes
+    `bootSnapshotParts.set("art", …)` once wave 2 lands; until then use
+    `brain:map-peek`.
+
+### Design in one screen
+
+- **Host presence clock.**
+  - A new pure `scripts/presence.cjs`, and a new main.cjs section after
+    `showWindow()` that stays outside every vm slice.
+  - It keeps `userData/presence.json`. Being "engaged" means the window is
+    focused and visible, not locked, and the system has been idle for under
+    60 s (or a "watching" hint, or a Studio dialog, holds it).
+  - A return after 10 minutes or more pushes `presence:back` and keeps one
+    pending return, which survives reloads until it is acked.
+  - Seed the clock from older stamps so the 0.4.5 upgrade restart is not a
+    first launch.
+  - `startup:state` gains an optional `away`.
+  - The setting is `settings.ui.welcomeBack`, on by default. QA can set
+    `MEFI_STUDIO_AWAY_MS`.
+- **The hub is an overlay (`#welcome-layer`, `renderer/welcome-hub.js`), not
+  a gate phase.**
+  - At launch, `startup.js` picks the active project automatically, with
+    agents held. The gate loads with the constellation assembling as the
+    real steps settle.
+  - In `onReady`, the canvas moves into the hub, and booklet.js holds the
+    setup helper, walkthrough, what's-new and community sequence until the
+    hub closes.
+  - In session, `presence:back` opens the same overlay.
+  - It goes "soft" (ack, and show today's orb bubble instead) when another
+    modal is open or you are typing.
+  - While idle but focused, only a first pointer move opens it. Keys are
+    never swallowed: any other key closes the hub and lands where you were.
+- **Clean reload.**
+  - A head script `renderer/boot-sky.js` (injected as `__BOOKLET_BOOT__`,
+    in a `<script id="boot-sky">`) paints the cached emblem (a WebP data
+    URL) and the theme tokens before the 4.6 MB bundle runs.
+  - `saveResume()` returns a 140 ms veil, so the old page and the new page
+    show the same frame.
+  - Fix the fade-to-flat cut: at ready, set `data-starting="reveal"` and
+    change the one selector at styles.css ~2444.
+- **Constellation** (`renderer/constellation.js`):
+  - a pure, seeded radial layout (not `relationshipLayout`);
+  - project-hued palette from the theme;
+  - the owner's node style;
+  - still poses for Calm and Off;
+  - DPR capped at 1.25, 30 fps while loading within a 4 ms budget, disposed
+    on release;
+  - startup benchmark within +5 %.
+- **Host data:**
+  - a read-only `brain:map-peek` (the first `brain:map` always rebuilds,
+    which is too slow for boot);
+  - `projectMap.compact()`;
+  - a side-effect-free `companion:digest`;
+  - `companion:welcome` returns the pending hub id, so the orb bubble never
+    duplicates the hub.
+
+### What is left, in order
+
+1. **Worktree and baseline.** Run
+   `git worktree add C:\wt\welcome-hub -b welcome-hub origin/main` and add a
+   `node_modules` junction (rmdir it before removing the worktree). Record a
+   baseline: build-booklet, check, audit, test:fast, the startup and
+   companion render suites with captures, and
+   `python tools/benchmark_startup.py --runs 3`. Re-check every anchor
+   against current main: the afterPaint fix (6a94370) and Start with
+   Windows (39a153d) have landed since the plan was read.
+2. **M1, clean reload and reveal (renderer only):** boot-sky.js, the emblem
+   cache, the reveal fix at 150 ms or less, the veil, and the quiet emblem.
+3. **M2, host presence (no visible change):** presence.cjs, the main.cjs
+   section, `away`, the IPC, the digest, `mapPeek` and `compact`. Run every
+   main.cjs slice suite afterwards (startup_resume, startup_hold,
+   outside_work_host, executor_resume, loop_control, update_continuity,
+   app_wide_ipc, main_window_guards, host_push_batching,
+   cli_path_refresh_host).
+4. **M3, the welcome overlay:** in-session returns, the automatic choice at
+   launch, the onReady hold, `trackPresence` adopt, and the setting row.
+5. **M4, the constellation canvas:** the painters, step ignitions, the
+   canvas handoff into the hub, and the exit warp.
+6. **M5, polish:** a project-worlds restyle of the chooser that keeps its
+   ids, window background, and docs (code-map, architecture,
+   performance.md, CHANGELOG, TESTRUNS).
+
+If v0.4.5 comes early, M1 to M3 is the minimum. `welcomeBack` off leaves
+only the reload fix.
+
+**New tests:** presence, presence_host (a two-launch probe with a fake
+clock), constellation, boot_sky, welcome_hub, and a new Electron fixture
+`welcome_render` (hub at 1920x1080 and 600x560, light, reload emblem,
+reduced motion, Calm, Continue, in-session). Every existing boot pin must
+keep holding. The list is in the plan's Tests section.
+
+### Ask the owner (defaults in brackets)
+
+1. When idle but still focused, only a first pointer move opens the hub.
+   [yes]
+2. On a second monitor, hovering the unfocused window counts as present
+   while away for under 10 minutes. [on]
+3. An update relaunch with no recent work still shows the chooser. Should
+   it reopen the active project instead? [follow-up]
+4. On a slow reload, show one caption line after N seconds. [5 s]
+5. First launch order: hub, then setup helper, then walkthrough. [yes]
+
+### Where the details are
+
+On the owner's PC that planned this, in `C:\Users\echor\.claude\plans\`:
+- `glistening-gathering-bubble.md`: the approved plan, with files,
+  insertion points, tests, landing and verification.
+- `….motion.md`: hub wireframes at 1920x1080 and 600x560, timelines in
+  motion tokens, the data shapes and the palette.
+- `….risk.md`: trigger rules per scenario, races and fixes, main.cjs
+  anchors.
+- `….explore-{boot,away,visuals}.md`: how today's boot works, and every
+  test that pins it.
+
+The architecture and contracts pass did not run (session limit). Its
+ground is mostly covered by the risk doc and the boot notes.
+
+Remove this section once the hub, the clean reload and the constellation are on main.
+
+## 12. Agent Brain blueprint: Command-tree children, built and waiting for the owner's OK to land
+
+Everything in `docs/roadmap-0.4.0.md` is now built; M10 (ads, README
+images) stays the owner's call. The finish beats are already on main (below). The rest of the finished work is uncommitted in the
+worktree `C:\wt\cmd-kids` (branch `claude/command-children`, based on
+`origin/main` `79d892d`) on the owner's laptop only. Nothing has been
+pushed: the owner has not said to commit yet.
+
+What is in it:
+- **Finish beats:**
+  - On main, in "Every node style finishes in its own way": every look's
+    `done` and `absorb` hooks in `renderer/node-styles.js`, the Agent brain
+    drawing through them, and its list, shelf and feed fixes. That commit
+    was reviewed before landing: beats fade out instead of being cut, absorb
+    marks lift on a light theme, a failed check is amber throughout, and
+    `popFx` puts the marks on the hopping body.
+  - In the worktree: the Command frame in `renderer/idle.js` plays them over
+    every flight home (the flight blend sets `entry.flight.t` and `from`).
+- **Sub-agents on the Command tree:**
+  - `renderer/tree3d.js` hangs the newest three sub-agent sessions
+    (`parentId`, busy in the last six hours) under their shown parent, with
+    `child`, `parentSessionId` and a `childMore` count.
+  - `idle.js` gives them a `childSession` life cycle: they pop out of the
+    parent and fly home into it, draw "+n sub-agents", and stay out of the
+    `S` numbers and the session counts (`nav.js` too).
+- **Return path up the chain:**
+  - A delegated part keeps an `fx.delegated` entry. It is exempt from the
+    member delete in `takeTasks`, the read-only delete in `sweepFx` and the
+    task-to-session redirect in `absorbHost`.
+  - It pops out of its parent task and, once closed, flies straight home
+    into it with no done-hold.
+- **Tests and docs:** `tests/command_children.test.mjs` (new), a
+  child-session test in `tests/tree3d_project.test.mjs`, the CHANGELOG, the
+  roadmap Status rows (M0, M2, M5) and `docs/architecture.md`.
+
+Gate (all in the worktree):
+- `npm run check` and `npm run audit` are clean.
+- Full `npm test` passes: 4493 Node tests (4487 pass, 6 skipped), the
+  Python contracts and the path lock. The TESTRUNS row is already added
+  there.
+- A seeded offscreen preview of Command showed the sub-agents,
+  "+1 sub-agent", and the Prism and Sigil beats as a part and a sub-agent
+  flew home. The preview is in this session's scratchpad (`cmdpreview/`).
+
+To land:
+1. Wait for the owner's OK.
+2. In `C:\wt\cmd-kids`, commit, then rebase onto `origin/main` if it moved. Rebuild
+   `renderer/booklet.html` after any conflict in it.
+3. Push to `main` and run `npm run sync`.
+4. Remove the worktree: `rmdir` its `node_modules` junction first.
+5. Delete this section.
+
+The worktree's copies of the finish-beat files are the version from before
+the review fixes: `renderer/node-styles.js`, `renderer/agent-brain.js` and
+`.css`, `tests/node_styles.test.mjs`, the CHANGELOG entry, the roadmap rows,
+`docs/architecture.md` and the finish-beats TESTRUNS row. Main has the
+fixed ones, so on rebase take main's copy of each and keep only the
+Command-tree parts: `idle.js`, `tree3d.js`, `nav.js`,
+`tests/command_children.test.mjs`, `tests/tree3d_project.test.mjs`, and
+their own CHANGELOG and TESTRUNS entries. Then rebuild
+`renderer/booklet.html` and rerun the gate. The `idle.js` calls need no
+change: the hooks keep their signatures, and their tails now fade at the
+end of the window the frame gives them.
