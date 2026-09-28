@@ -6,7 +6,7 @@
 //   node scripts/build-booklet.mjs                                      CLI (npm run build-booklet)
 //   import { build } from "./build-booklet.mjs"; await build({ root })   scripts/updater.mjs
 
-import { open, readFile, rename, rm } from "node:fs/promises";
+import { open, readFile as readText, rename, rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -16,6 +16,14 @@ const require = createRequire(import.meta.url);
 const { buildBookletSourceManifest } = require("./booklet-source-location.cjs");
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+// Git on Windows (core.autocrlf) checks the sources out with CRLF, and the
+// join below uses "\n". Every input is read as LF, so the booklet is never
+// mixed and the source manifest's offsets hold; the output is then written
+// with the template's own line ending, so an unchanged rebuild is byte for
+// byte what Git checked out instead of a same-text file at a new size.
+const lf = (text) => text.replace(/\r\n?/g, "\n");
+const readFile = async (file, encoding) => lf(await readText(file, encoding));
 
 // Emit order of the concatenated inline <script>. Keep in step with the
 // Promise.all destructuring below and tests/booklet_build.test.mjs.
@@ -105,7 +113,9 @@ async function writeBuildFile(out, content) {
 
 export async function build({ root = ROOT } = {}) {
   const RENDERER = path.join(root, "renderer");
-  const template = await readFile(path.join(RENDERER, "booklet.template.html"), "utf8");
+  const rawTemplate = await readText(path.join(RENDERER, "booklet.template.html"), "utf8");
+  const eol = /\r\n/.test(rawTemplate) ? "\r\n" : "\n";
+  const template = lf(rawTemplate);
   const catalog = await readFile(path.join(root, "data", "models.json"), "utf8");
   const parsed = JSON.parse(catalog);
 
@@ -191,17 +201,19 @@ export async function build({ root = ROOT } = {}) {
     .replace("__BOOKLET_CODE__", () => code);
 
   const out = path.join(RENDERER, "booklet.html");
+  const written = eol === "\n" ? html : html.replace(/\n/g, eol);
   let previous = null;
   try {
-    previous = await readFile(out, "utf8");
+    previous = await readText(out, "utf8");
   } catch {}
-  const changed = previous !== html;
-  if (changed) await writeBuildFile(out, html);
+  const changed = previous !== written;
+  if (changed) await writeBuildFile(out, written);
 
   // A sidecar source map so runtime error locations captured against the
   // concatenated bundle resolve back to renderer/<file>:<line>. It is derived
   // from the exact html written above (styles/data expansion included), never
-  // guessed from filenames or source order.
+  // guessed from filenames or source order. Lines count the same in LF and
+  // CRLF, so the LF html gives the written file's line numbers.
   const manifest = buildBookletSourceManifest(
     html,
     code,
@@ -211,7 +223,7 @@ export async function build({ root = ROOT } = {}) {
   const serialized = `${JSON.stringify(manifest, null, 2)}\n`;
   let previousManifest = null;
   try {
-    previousManifest = await readFile(manifestOut, "utf8");
+    previousManifest = await readText(manifestOut, "utf8");
   } catch {}
   if (previousManifest !== serialized) await writeBuildFile(manifestOut, serialized);
   return { out, models: parsed.models.length, hash: parsed.hash, changed };

@@ -195,6 +195,56 @@ test("booklet build on fixtures: a rebuild over identical inputs is a no-op", as
   }
 });
 
+// Git on Windows checks the inputs out with CRLF (core.autocrlf) while the
+// committed blobs are LF, and one editor may save a file either way.
+async function setLineEndings(root, ending, { except = [] } = {}) {
+  for (const dir of ["renderer", "data"]) {
+    for (const name of await readdir(path.join(root, dir))) {
+      if (name === "booklet.html" || name === "booklet.sources.json") continue;
+      const file = path.join(root, dir, name);
+      const text = (await readFile(file, "utf8")).replace(/\r\n?/g, "\n");
+      await writeFile(file, except.includes(name) ? text : text.replace(/\n/g, ending));
+    }
+  }
+}
+
+test("booklet build on fixtures: CRLF inputs give an all-CRLF booklet that a rebuild leaves alone", async () => {
+  const root = await makeFixtureRoot();
+  try {
+    // One LF file among CRLF ones: the booklet still comes out in one ending.
+    await setLineEndings(root, "\r\n", { except: ["palette.js"] });
+    const out = path.join(root, "renderer", "booklet.html");
+    await build({ root });
+    const bytes = await readFile(out);
+    const text = bytes.toString("utf8");
+    assert.ok(text.includes("\r\n"));
+    assert.equal(text.replace(/\r\n/g, "").includes("\n"), false, "no bare LF: the booklet is not mixed");
+    assert.equal(text.replace(/\r\n/g, "").includes("\r"), false, "no bare CR");
+
+    const second = await build({ root });
+    assert.equal(second.changed, false, "a rebuild over the same CRLF checkout is a no-op, not a size-only change");
+    assert.deepEqual(await readFile(out), bytes);
+
+    // The manifest's lines point at the real first line of each source in the written file.
+    const manifest = JSON.parse(await readFile(path.join(root, "renderer", "booklet.sources.json"), "utf8"));
+    const lines = text.split("\r\n");
+    for (const name of ["task-groups.js", "palette.js", "booklet.js"]) {
+      const segment = manifest.segments.find((entry) => entry.source === `renderer/${name}`);
+      const first = (await readFile(path.join(root, "renderer", name), "utf8")).split(/\r?\n/)[0];
+      assert.equal(lines[segment.startLine - 1], first, `${name} starts on its manifest line`);
+    }
+
+    // The same inputs checked out with LF (CI, core.autocrlf=false) build the same text with LF.
+    await setLineEndings(root, "\n");
+    assert.equal((await build({ root })).changed, true);
+    const lfText = await readFile(out, "utf8");
+    assert.equal(lfText.includes("\r"), false);
+    assert.equal(lfText, text.replace(/\r\n/g, "\n"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("overlapping booklet builds keep complete output and clean up their own temporary files", async () => {
   const root = await makeFixtureRoot();
   try {
