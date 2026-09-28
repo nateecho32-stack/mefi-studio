@@ -412,8 +412,9 @@ The owner asked for this (2026-09-28):
    `npm run check`, then push.
 
 ### Also open for the owner (from the "Continuing fixes" session)
-- **Old logs:** prune `tools/logs` (about 966 MB inside OneDrive) and the root `*.log` files.
-  Deleting them can't be undone, so they were left alone.
+- **Old logs:** don't delete `tools/logs` (about 966 MB inside OneDrive). The logging rework in
+  section 1 (S18) archives it, and the owner decided nothing gets deleted. The five one-off root
+  `*.log` files can go with it.
 - **Release workflow:** run `gh auth refresh -s workflow` so `release.yml` can be fixed (hosted
   Windows runners fail four render fixtures), unless section 1's list already covers it.
 - **`docs/friends-setup.md`** already tells people to update to 0.4.5.
