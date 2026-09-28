@@ -1,0 +1,380 @@
+{
+ "releases": [
+  {
+   "version": "0.4.4",
+   "date": "2026-09-27",
+   "headline": "Set up with one sign-in, avoid building the same work twice, and use the Void collection for free",
+   "highlights": [
+    "Start here can install Codex, Claude Code, Grok or Antigravity, sign you in and check the connection. \"Use for the whole studio\" then sends chat, mapping, planning, agents and coding through that one subscription.",
+    "Build it in Vibe decides whether a request is one task or two to six steps, and a Plan in flight card follows the steps. New app makes a project folder, starts Git and sends your description as the first build.",
+    "When you reopen a project, Studio reports the commits, edits and coding sessions made while it was closed. It checks queued cards against that work so finished work is not rebuilt.",
+    "There are four permission modes: Always ask, Accept per task, Auto and Elevated only. Automatic decisions come with a Why and an Undo. Mefi learns from your answers, and the desk can settle routine agent questions.",
+    "Every theme and node style is free, including the Void collection. Trace shows Studio's logs in one viewer, and Friends › Your PCs with Sync this PC keeps your PCs in step with GitHub."
+   ]
+  },
+  {
+   "version": "0.4.3",
+   "date": "2026-09-26",
+   "headline": "A media queue, live tree controls and tools for each agent",
+   "highlights": [
+    "An Up next queue for copied links and YouTube results. It has Play, Queue next and a built-in YouTube explorer, and it moves on to the next item by itself.",
+    "The node tree can move with the music or a video, in ring, wave or spiral shapes, with controls for size, spacing and position.",
+    "Separate transparency and brightness sliders for the tree, the wires and the video, plus optional node outlines.",
+    "You can drop text and code files into Home, Vibe and Plans. Planning reads fresh project excerpts and any files you name.",
+    "Each agent role can have its own web search, project read permission and allowed MCP tools."
+   ]
+  },
+  {
+   "version": "0.4.2",
+   "date": "2026-09-25",
+   "headline": "Vibe mode and remastered node styles",
+   "highlights": [
+    "Vibe mode is one calm workspace for conversation, new tasks, live work and decisions, and the full Build workspace is one switch away.",
+    "You answer agents' decisions in a drawer inside Vibe. It shows the question, the task it blocks and the recommended option first.",
+    "Vibe shows what is stopping the agents and offers the fix in place: Start agents, Resume or Connect an AI.",
+    "All eight node styles were remastered with their own shapes, motion, wires and finish effects, including light-theme contrast and reduced motion.",
+    "Plans can be archived and restored. There is also a 40-second product showreel."
+   ]
+  },
+  {
+   "version": "0.4.0",
+   "date": "2026-09-25",
+   "headline": "The Agent Brain: watch your agents work and keep what worked",
+   "highlights": [
+    "The Agent brain view (key J) shows a task's pipeline from the top down. Sub-agents go out, report back up the tree, and a desk worker helps the ones that get stuck.",
+    "The Playbook files every verified pipeline as a recipe, so the next task of the same kind starts from what worked.",
+    "A project map is built from your git history and your agents' work. Home shows it beside the conversation, with Work on this region.",
+    "A companion lives in the menu. It greets you with what happened while you were away and keeps one Needs you list with the actions right there.",
+    "The Links player plays YouTube, Spotify, SoundCloud and Vimeo. Home became glass over the live node tree, and the tree can move to your music."
+   ]
+  },
+  {
+   "version": "0.3.3",
+   "date": "2026-09-23",
+   "headline": "The Discord community link, a regrouped menu and a safer app",
+   "highlights": [
+    "Settings › Community links your Discord account to the Void Engine server through Discord's own login, and nothing reaches Discord until you link. Members got the Void collection, which later became free for everyone in 0.4.4.",
+    "The menu was regrouped into Home, Work, Live, Models and Settings, with Search Studio on Ctrl K.",
+    "Owner controls for the loop guard. Duplicate cards and repeating work now reach you as one question instead of looping.",
+    "Each task shows its run history: who ran it, how it ended and what it changed.",
+    "A Usage popover for every provider. Child processes no longer see Studio's keys, and the web preview is local-only."
+   ]
+  },
+  {
+   "version": "0.3.0",
+   "date": "2026-09-22",
+   "headline": "One navigation rail, Brain maps as a real node editor, and ad-free radio",
+   "highlights": [
+    "One rail down the left edge replaces three separate menus.",
+    "Brain maps became a node editor you can pan and zoom, for editing how the agent pipeline decides things.",
+    "Ad-free radio from SomaFM and Radio Paradise. If a stream drops, a backup mirror crossfades in.",
+    "Planning and reading can each use their own AI provider, and OpenCode Zen became a route.",
+    "A loop guard stops cards that keep failing and explains how to release them."
+   ]
+  },
+  {
+   "version": "0.2.0",
+   "date": "2026-09-22",
+   "headline": "First public release: a portable Windows build with an in-app updater",
+   "highlights": [
+    "A portable Windows download. The in-app updater checks each release's SHA-256 before installing it.",
+    "Brain maps: the agent pipeline as an editable graph, and Build with AI can draft one from a sentence.",
+    "A seven-stop Start here walkthrough with a Walk with me coach.",
+    "Command view's live node tree. Finished work waits in a verification stage, with evidence, before it counts as done.",
+    "Routing across many providers (z.ai, OpenCode Go, the Claude Code, Codex, Grok and Antigravity CLIs, LM Studio, custom endpoints), plus a usage tracker."
+   ]
+  }
+ ],
+ "comingNext": [
+  {
+   "title": "Setup helper: every agent setting in one menu",
+   "what": "One guided menu covers everything that decides what your agents do: Connect an AI, Team & models, Routing, How work runs, Permissions, Tools & skills, Machine & app and Look. Quick setup takes three steps, and Search reaches every section. It opens first on a new install and once after updating. Settings that used to save but do nothing now work.",
+   "evidence": "CHANGELOG.md [Unreleased] \"Setup helper\" and \"Settings that saved but did nothing now work\"; commits 9cb13e2 \"Add the setup helper, free the Void collection, fix dead agent settings\" and 74dc3b1 \"Setup helper: per-agent habits in Tools & skills\""
+  },
+  {
+   "title": "A friendlier first run",
+   "what": "With no AI connected, Studio says so and offers Connect an AI instead of \"Waiting for you\". With no coding tool installed, it tells you to install OpenCode, Claude Code or Codex instead of failing five times. Setup finds the login you already have: a tool that is installed but not signed in no longer counts as connected. Only one welcome shows at a time. Claude Code, Codex, Grok and Antigravity builds are checked by Studio's own checks, and install and PATH problems are fixed.",
+   "evidence": "CHANGELOG.md [Unreleased] \"A first run with no AI connected says so\", \"Setup finds the login you have\", \"One welcome at a time\", \"Talk it over talks\", \"First-time setup and agent choice\"; commit 6a5c7be \"New-user onboarding: say when no AI is connected, find the real login, one welcome at a time\""
+  },
+  {
+   "title": "Use more than one Claude Code or Codex login",
+   "what": "You can add a second login, up to a sixth, for Claude Code or Codex. When one hits its usage limit, Studio moves work to the next login straight away. Metered providers are only used once every subscription login is topped out. Each login gets its own row in Usage.",
+   "evidence": "CHANGELOG.md [Unreleased] \"More than one Claude Code or Codex login\"; commit 07150aa \"Use more than one Claude Code or Codex login, swapping when one tops out\""
+  },
+  {
+   "title": "Agents say why they are not working",
+   "what": "Home, Vibe, Command, the Agents switches, the task page and the chat all read one answer about what is holding work back: a pause, a cooldown, a permission mode, the free model's one-at-a-time limit, and so on. Each answer comes with the one control that clears it. Approvals are no longer dropped when references arrive after you approve, and permission modes keep their meaning.",
+   "evidence": "CHANGELOG.md [Unreleased] \"Agents say why they are not working\", \"Approvals are no longer cancelled silently\", \"Approvals survive the references gathered after them\", \"Permission modes keep their meaning\"; commits 1d86a1a \"Agents say why they are not working; approvals survive late references\" and 7acf8d3 \"Keep approvals and named Starts when references land on a new card\""
+  },
+  {
+   "title": "You choose what happens when Studio opens",
+   "what": "A new startup setting offers Resume what I had (the default), Start agents or Keep agents off. Studio no longer switches to Command view by itself after five quiet minutes. That is now a switch, and it is off by default.",
+   "evidence": "CHANGELOG.md [Unreleased] \"When Studio opens\" and \"No more surprise jump to Command view\""
+  },
+  {
+   "title": "Watch Mefi think and your team work in Vibe",
+   "what": "Suggest a next step and Build it show live progress: the stage reached, the files read or steps planned, which model is thinking, and a clock against how long it usually takes on your PC. A split request draws its steps as a track to the final check. Adding one suggestion no longer locks the others.",
+   "evidence": "CHANGELOG.md [Unreleased] \"Watch Mefi think, and watch your team work\" and \"Suggestions stay usable\"; commit b92b482 \"Show Vibe's idea planner and agent team at work\""
+  },
+  {
+   "title": "Build on your app with MEFI, and a map of how it fits together",
+   "what": "Vibe offers Modify, Experiment, Fix and Improve, with briefs based on your project map. Suggestions can be added to a draft or saved as ideas without starting work. The map shows which systems change together, and a separate Ideas tree groups ideas and tasks by system and progress.",
+   "evidence": "CHANGELOG.md [Unreleased] \"Build on your app with MEFI\" and \"A map that shows relationships\"; commit 75de5a4 \"Add MEFI evolution briefs and a connected project ideas map\""
+  },
+  {
+   "title": "A cleaner Needs you list",
+   "what": "An ask you answered leaves the list straight away. Old asks, and asks about cards that left the board while Studio was closed, are cleared when the project loads instead of when you click them.",
+   "evidence": "CHANGELOG.md [Unreleased] \"Answered asks leave the Needs you list\" and \"No dead asks after a restart\"; commit e53a572 \"Needs you: answered asks leave the list, and no dead asks after a reload\""
+  },
+  {
+   "title": "Configuration and agent habits",
+   "what": "Ctrl Shift , opens every Studio setting in one searchable tree, and it includes a new Interface scale from 70% to 150%. Each agent gets Habits: short rules such as explain changes, test, small steps and keep a to-do list, each set to off, brief or full, with the prompt cost shown in tokens.",
+   "evidence": "CHANGELOG.md [Unreleased] \"Configuration\" and \"Habits\"; restored to main by commit dc85f68 \"Restore the work the 16:57 merge dropped from main\" (not in the 0.4.4 build)"
+  },
+  {
+   "title": "Friends › Rooms inside Studio",
+   "what": "Browse rooms, ask to join with a note, accept or decline invites, let people in, invite by name, lock or close your rooms, and chat with @names. Plain errors and two-step confirms guard Close, Leave and Delete. The Discord link app ID and the rooms hub address can be entered once per PC under Settings › Community › Connection details. Rooms need the rooms hub, which is not live yet.",
+   "evidence": "CHANGELOG.md [Unreleased] \"Friends › Rooms\", \"Rooms show the right room\", \"Discord linking and Rooms without environment variables\"; commits 4ee6891, 6ad7385, e0951dd, 6b633be \"Link Discord and reach the rooms hub without environment variables\""
+  },
+  {
+   "title": "Your companion as a pet and a friend",
+   "what": "The companion menu has six bubbles, each with one job: Talk, What I'm doing, Needs you, Suggest work, Friends and Personality. You can pet it, and it remembers your days together. Friends › Playground lets companions on different PCs meet for short playdates, and Practice with Pip works without the hub. Nothing about you is shared until you allow it, and What was sent lists everything that left your PC.",
+   "evidence": "CHANGELOG.md [Unreleased] \"The companion as a pet and a friend\" and \"Friends across PCs\"; commit 37fb792 \"Friends across PCs: setup guide, three-account end-to-end test, 0.4.5\"; docs/friends-setup.md"
+  },
+  {
+   "title": "Share between your PCs, and share with friends",
+   "what": "A private GitHub vault, sealed with a key only your paired PCs hold, carries what you choose between your own PCs: model results, learned decisions, team setups, brains, recipes, memory notes, preferences, and open tasks and ideas. Keys and setup can be sent too, but only after a typed confirmation. Share with friends saves one item as a .mefishare file that is scrubbed and previewed before you save it. A received file is reviewed before use, and a friend's file can never change your permissions.",
+   "evidence": "CHANGELOG.md [Unreleased] \"Share between my PCs\", \"Share with friends\", \"A share the review cannot read to the end is blocked\", \"A friend's preferences cannot change your permissions\"; commits d516312, 64dd009, 51c69b7, f71a356, 80aac6f, a23c902"
+  },
+  {
+   "title": "Set up a new PC and keep every PC current",
+   "what": "Set up this PC is a checklist for Git, the GitHub CLI, Node.js, a GitHub sign-in and the project's packages, with a button for each gap. Get a project from GitHub clones one of your repositories. Keep this PC up to date checks GitHub once a minute and brings in other PCs' work when nothing local is in the way. Sync checks the project before it pushes and no longer raises false alarms.",
+   "evidence": "CHANGELOG.md [Unreleased] \"Set up this PC\", \"Keep this PC up to date\", \"Multi-PC sync holds up better\", \"Your PCs is more exact about what is only on this PC\"; commits c4c64de, c5e3f47, 48080d9"
+  },
+  {
+   "title": "Agents on several PCs never edit the same file at once",
+   "what": "Link a cowork room to a project, and before a builder starts, Studio claims the files it will edit. Every PC hears about the claim within a second, and a task whose files another PC holds waits and picks other work. This needs the rooms hub. Without a room or hub, nothing waits.",
+   "evidence": "CHANGELOG.md [Unreleased] \"Agents on several PCs never edit the same file at once\"; commit c4c64de \"Agents on several PCs claim their files live; PCs follow GitHub within a minute\""
+  },
+  {
+   "title": "Menus that ask twice and speak plainly",
+   "what": "Every action that can't be undone uses the same two-step button: the first press asks, the second acts. Errors are written as sentences, and pages leave out values that were never recorded instead of printing \"undefined\" or \"Invalid Date\". Menus open and close smoothly and keep their rows in place. M+ opens Projects on the project you are in.",
+   "evidence": "CHANGELOG.md [Unreleased] \"Actions that can't be undone ask twice\", \"Menus say what they mean\", \"Calmer, steadier menus\", \"Menus move cleanly\", \"M+ opens Projects on the selected project\"; commits 049904c, a4ee1d7, d77ff4e, 9a1b9f9, 2153f52"
+  },
+  {
+   "title": "A media player you can always reach",
+   "what": "Floating players have a move handle and Settings, minimize and close buttons, and a minimized player leaves a visible restore bar. Websites get the full panel width, and the player takes keyboard focus only when you minimize it yourself.",
+   "evidence": "CHANGELOG.md [Unreleased] \"Media controls stay within reach\" and \"The media player takes focus only when you minimize it\"; commits 93ee12e \"Make the in-app media player controls reachable and stable\" and d122d17"
+  },
+  {
+   "title": "\"What changed while I was away?\" works without an AI",
+   "what": "The chat answers from Studio's report of work done outside it, even with no model connected. It is careful to say a card \"may already be done\" when it only matched on file names.",
+   "evidence": "CHANGELOG.md [Unreleased] \"Asking what changed while you were away works without a model\" and \"'What changed while I was away?' is more careful\"; commits d85ece8 and 16a4646"
+  },
+  {
+   "title": "Lighter while minimized or in the tray",
+   "what": "A hidden window keeps only the newest board and machine updates and catches up when it is shown again. Status bursts are merged, and hidden panels such as Explorer and Command's rail stop repainting.",
+   "evidence": "Commits f1a5f8c \"Hold board lists and machine status while the window is hidden\", 0791ba4 \"Coalesce assistant:status bursts like assistant pushes\", baa7834, 0d4687a, bc7af1f (git log v0.4.4..origin/main); no CHANGELOG line"
+  }
+ ],
+ "inProgress": [
+  {
+   "title": "Faster agent messaging",
+   "what": "Agents and Studio will send each other only what changed instead of whole packages. Agents will see a window of recent actions and can fetch older history on request (the whole project by default, and Settings can narrow it). Each agent will also keep a work journal. The owner wants this landed before 0.4.5 is tagged.",
+   "evidence": "~\\.claude\\plans\\enumerated-hugging-fern.md, Context and \"Owner decisions (2026-09-28)\", plus section E rules 2-3. No code on main yet."
+  },
+  {
+   "title": "Logs that are kept, not deleted",
+   "what": "A logging rework: structured log lines (level, channel, task and run), with old logs archived monthly into compressed files in a local folder that OneDrive does not sync. Every archive is kept and can be read on request. Faster load times across the app are part of the same push.",
+   "evidence": "~\\.claude\\plans\\enumerated-hugging-fern.md, \"Owner decisions (2026-09-28)\" (\"Old logs are archived, and all of them are kept\") and section E rule 5. No code on main yet."
+  },
+  {
+   "title": "One page frame for every page (waiting on a design decision)",
+   "what": "The last menu-polish batch would give Performance, Usage, Context, Model catalog, Settings and Activity the same header band and edges as the other pages, and settle whether the tree strip stays at the right edge. It waits for the owner's call because a test pins the current behaviour.",
+   "evidence": "continuing.md \"Left for the owner: Batch 3, one page frame\"; ~\\.claude\\plans\\foamy-foraging-dewdrop.md \"Batch 3\""
+  },
+  {
+   "title": "Typing goes into the open menu's box",
+   "what": "When a menu with a text box is open, what you type lands in that box instead of triggering single-letter shortcuts that open other menus.",
+   "evidence": "Uncommitted in the main checkout: renderer/nav.js (\"typing goes to the open menu's box\") and tests/type_into_menu.test.mjs. Not on GitHub yet."
+  },
+  {
+   "title": "Start with Windows, and see what each PC's agents are doing",
+   "what": "An option to start Studio when you sign in to Windows. It opens in the tray on your last project, with agents following your When Studio opens choice. Your PCs would also show each PC's agents: what they are building, what waits on you, and what finished today, sent as counts and short titles only.",
+   "evidence": "Uncommitted in worktree C:\\wt\\away: main.cjs (startupAtLogin, \"Start with Windows\"), scripts/pc-vault.cjs agentsLine, tests/start_with_windows.test.mjs. Not on GitHub yet."
+  },
+  {
+   "title": "Rolling out: Rooms, Listen together and playdates across PCs",
+   "what": "Studio's side of Rooms, Listen together, companion playdates and cowork file claims is built. They go live once the Void Engine rooms hub has a public address and the Mefi Studio Link Discord app ID is set. Until then each PC can enter both under Settings › Community › Connection details.",
+   "evidence": "scripts/community.cjs CLIENT_ID = \"\" and scripts/hub-client.cjs HUB_URL = \"\" on origin/main; docs/friends-setup.md; docs/public-site.md (\"Shared desktop playback needs the rooms hub and Discord connection\")"
+  },
+  {
+   "title": "Discord bot: welcomes, celebrations and daily fun",
+   "what": "The Void Engine bot is gaining welcome messages, celebrations, a daily trivia and prompt of the day, and /help. It will only @everyone for real version releases, and will post news when new AI models drop.",
+   "evidence": "Void Engine Bot repo: untracked src/fun/lines.mjs and src/fun/tables.mjs, uncommitted src/llm/budget.mjs and jobs.mjs; memory void-engine-discord-community.md \"Update 2026-09-28\""
+  }
+ ],
+ "planned": [
+  {
+   "title": "A Friends section in the menu",
+   "what": "Friends becomes its own section with key F and tabs for Lobby, Rooms, People, Your PCs and Playground. Today some of these are reachable only through the companion bubble.",
+   "evidence": "~\\.claude\\plans\\enumerated-hugging-fern.md section F, \"Slices for 0.4.5\" F2",
+   "horizon": "0.4.5 (owner target)"
+  },
+  {
+   "title": "Friends 2.0: live presence and a shared tree",
+   "what": "See friends who are online in real time and share your live node tree with them. A lobby with rooms, invites that need no codes, and rooms backed by Discord.",
+   "evidence": "~\\.claude\\plans\\enumerated-hugging-fern.md Context (owner's asks) and \"Owner decisions (2026-09-28)\": \"Agent I/O, logging and Friends 2.0 all land before 0.4.5 is tagged\". No code yet.",
+   "horizon": "0.4.5 (owner target)"
+  },
+  {
+   "title": "A fair shared-video queue, and connecting without Discord",
+   "what": "A room queue where everyone gets a fair turn at the shared player, and ways for friends to connect without a Discord account.",
+   "evidence": "~\\.claude\\plans\\enumerated-hugging-fern.md Context (owner's asks, 2026-09-28)",
+   "horizon": "With Friends 2.0"
+  },
+  {
+   "title": "Nothing gets lost in the menus",
+   "what": "Every setting and destination gets one home, and other places show a shortcut chip that opens it. A test checks that everything is reachable and old links redirect. Configuration also finds the setup helper's settings.",
+   "evidence": "~\\.claude\\plans\\enumerated-hugging-fern.md section F (F1, F3); docs/fleet-overhaul-plan.md Phase 0 \"Configuration becomes the one index\"",
+   "horizon": "0.4.5 slices"
+  },
+  {
+   "title": "Agents that know about new GitHub commits",
+   "what": "Studio will read new and old commits that relate to a task, and flag the cards a new commit touches, so agents do not redo work someone already pushed.",
+   "evidence": "~\\.claude\\plans\\enumerated-hugging-fern.md Context (\"review of new and old GitHub commits relevant to a task\") and section E (\"A4/A9 index new commits into the journal and flag the cards they touch\")",
+   "horizon": "With the agent messaging work"
+  },
+  {
+   "title": "One Settings page and a Live section",
+   "what": "The menu settles into Home, Work, Agents, Live, Friends and Settings. Settings becomes one searchable page, and older duplicate menus are retired in the same change so nothing is added on top.",
+   "evidence": "~\\.claude\\plans\\enumerated-hugging-fern.md section F, \"Target structure\" and last paragraph (menu overhaul Phase 2)",
+   "horizon": "After 0.4.5"
+  },
+  {
+   "title": "Live › Fleet: every agent at a glance",
+   "what": "A live map of your agents as seats grouped into Lead, Build, Check and Keep, wired by who hands work to whom. Views include Table, Recent, Graph, Tree and Health, and each seat has Open in Command. The node tree stays as it is.",
+   "evidence": "docs/fleet-overhaul-plan.md Phases 1-2 (approved by the owner 2026-09-27). The status table says Phase 1 is in progress on branch fleet/overhaul, but that branch is not on this PC or on GitHub.",
+   "horizon": "After 0.4.5"
+  },
+  {
+   "title": "A task board with a lane per agent",
+   "what": "Lanes you can pause, a budget governor, Inbox, Deferred, Archived and Completed buckets, and a task inspector with blockers, done-when and Message this agent.",
+   "evidence": "docs/fleet-overhaul-plan.md Phase 3 \"Work › Tasks › Lanes\"",
+   "horizon": "Fleet overhaul"
+  },
+  {
+   "title": "Missions and Refocus",
+   "what": "Plans become missions with progress measured from verified work. Any task can be traced back to its mission and the project's intent. Agents are reminded of that intent on long runs, and drift is flagged.",
+   "evidence": "docs/fleet-overhaul-plan.md Phase 4 \"Missions and Refocus\"",
+   "horizon": "Fleet overhaul"
+  },
+  {
+   "title": "Dockable panels and a status bar",
+   "what": "Dock panels beside any page, add them from a picker, and save layouts per section. A status bar shows project, PC, who is working and why something waits. A Command deck runs your project's saved commands with one click.",
+   "evidence": "docs/fleet-overhaul-plan.md Phase 5; ~\\.claude\\plans\\reactive-wondering-spring.md \"Milestone F (Build): dockable panels\" (unstarted per memory vibe-own-mode-roadmap.md)",
+   "horizon": "Fleet overhaul"
+  },
+  {
+   "title": "Seat editor, recaps and shareable team setups",
+   "what": "Edit each seat's model, habits, tools and skills. Each run hands a short recap to the next one. Team setups can be exported and imported without keys and shared through the vault.",
+   "evidence": "docs/fleet-overhaul-plan.md Phase 6",
+   "horizon": "Fleet overhaul"
+  },
+  {
+   "title": "Cost per task and team budgets",
+   "what": "Per-run and per-seat token and cost records, a team budget, and a signal when agents are busy without verified progress.",
+   "evidence": "docs/fleet-overhaul-plan.md Phase 7; docs/task-agent-metrics-handoff.md; memory open-work-after-session-review.md (\"per-task cost and token recording for CLI runs\")",
+   "horizon": "Fleet overhaul"
+  },
+  {
+   "title": "Friends in the fleet",
+   "what": "Your other PCs appear in the fleet. Friends' fleet cards arrive through Rooms at the sharing level you chose, never with paths or keys, and guest seats show as their own group.",
+   "evidence": "docs/fleet-overhaul-plan.md Phase 8",
+   "horizon": "Fleet overhaul"
+  },
+  {
+   "title": "Diagram editor",
+   "what": "Freeform diagrams with shapes, colours and wire styles, drawn on the brain-map canvas. They can be opened from the Project map or a Plan.",
+   "evidence": "~\\.claude\\plans\\reactive-wondering-spring.md \"Milestone G\" (diagram editor unstarted per memory vibe-own-mode-roadmap.md)",
+   "horizon": "Later"
+  },
+  {
+   "title": "Finish animations per node style, and sub-agents on the tree",
+   "what": "Each node style gets its own \"done\" and \"absorb\" animation. Sub-agents are drawn on the Command tree and fly home up the chain when they finish.",
+   "evidence": "docs/roadmap-0.4.0.md status table M2 and M5 (\"hooks waiting\"); renderer/node-styles.js on origin/main has no done/absorb hooks",
+   "horizon": "Later"
+  },
+  {
+   "title": "Task workspace: diffs and follow-ups",
+   "what": "A per-attempt diff panel, plus ways to discuss a selected task, queue a follow-up or propose a brief change from the composer. Also better evidence for runs from coding tools that keep no session.",
+   "evidence": "Memory task-workspace-stage1.md \"Remaining stages\" 1-3; memory open-work-after-session-review.md (\"live output per task, a worktree diff panel and composer intents\")",
+   "horizon": "Later"
+  },
+  {
+   "title": "Cowork rooms with GitHub access",
+   "what": "A room can give its members access to a project on GitHub. Guests work on their own branches and open pull requests, and nothing merges automatically.",
+   "evidence": "docs/community.md \"What comes later\", Phase 4; ~\\.claude\\plans\\this-out-first-cached-lobster.md \"Phase 4\"",
+   "horizon": "After rooms go live"
+  },
+  {
+   "title": "Shared agent capacity pools",
+   "what": "Members can offer coding-agent capacity to a room under a shared cap, using metered keys or local models only. Subscription logins are never shared.",
+   "evidence": "docs/community.md \"Phase 5, capacity pools\"; ~\\.claude\\plans\\this-out-first-cached-lobster.md \"Phase 5\"",
+   "horizon": "Later"
+  },
+  {
+   "title": "Share your ideas and projects",
+   "what": "A place to post ideas and projects for other people to try, look at and give feedback on. The Discord bot's /showcase and Project of the week (Spotlight) are the groundwork already built.",
+   "evidence": "Owner's brief for the website rebuild (2026-09-28); groundwork in Void Engine Bot src/commands/showcase.mjs and docs/roles.md (Spotlight). Nothing in the Studio repo yet.",
+   "horizon": "Community roadmap, not designed yet"
+  },
+  {
+   "title": "Credits for trying projects, and spending them to advertise yours",
+   "what": "Earn credits by playing or looking at other people's projects, then spend them to promote your own.",
+   "evidence": "Owner's brief for the website rebuild (2026-09-28). No credits system exists: git grep on origin/main finds \"credits\" only for provider balances.",
+   "horizon": "Community roadmap, not designed yet"
+  },
+  {
+   "title": "Cosmetics and creator styles",
+   "what": "Spend earned credits on cosmetics such as themes, node styles and companion looks, and offer your own styles to others.",
+   "evidence": "Owner's brief for the website rebuild (2026-09-28). The existing theme and node-style system is in Settings › Appearance (docs/community.md \"Nothing is locked behind the link\").",
+   "horizon": "Community roadmap, not designed yet"
+  },
+  {
+   "title": "Shared mixes and most-played charts",
+   "what": "Share music mixes, and see which ones get played most, when you turn on sharing your music taste in the Friends or profile tab. The opt-in Share what I'm playing feed to Discord's /nowplaying is the groundwork already built.",
+   "evidence": "Owner's brief for the website rebuild (2026-09-28); groundwork in renderer/together.js \"Share what I'm playing\" (off by default) and CHANGELOG.md [0.4.0] \"Share what I'm playing\"",
+   "horizon": "Community roadmap, not designed yet"
+  },
+  {
+   "title": "Linux",
+   "what": "A Linux build of Studio. Linux CI already checks, tests and boots the app on every push.",
+   "evidence": "~\\.claude\\plans\\enumerated-hugging-fern.md \"Owner decisions\" (\"Linux comes after, or just before, 0.4.5. It is assessed here, not built\"); .github/workflows/studio-linux.yml",
+   "horizon": "Around 0.4.5"
+  }
+ ],
+ "ideas": [
+  {
+   "title": "\"Hey Studio\" voice",
+   "what": "An optional wake phrase or push-to-talk shortcut that opens a listening popup. It transcribes with a speech service you choose, shows the text for you to edit before sending, and can reply aloud if you want. Voice is not built: today the microphone only drives the tree's audio reactions.",
+   "evidence": "docs/public-site.md \"Proposed voice flow\" (\"a design proposal, not an implementation\")"
+  },
+  {
+   "title": "Studio as a bridge to your creative tools",
+   "what": "Connect Studio to Blender, Godot, Unity and other tools through MCP, including setups that use no AI at all.",
+   "evidence": "~\\.claude\\plans\\enumerated-hugging-fern.md Context and \"Owner decisions\" (\"The tool bridge (Blender, Godot, Unity, MCP, no-AI setups) is a roadmap section only\")"
+  },
+  {
+   "title": "Share a brain map straight into Discord",
+   "what": "Post a brain map or recipe to Discord with a share code, and import one from a code. It would be checked and saved as inactive. The .mefishare file coming in 0.4.5 covers the file-based version.",
+   "evidence": "~\\.claude\\plans\\this-out-first-cached-lobster.md Phase 2 (\"/map share\", \"Copy share code\" / \"Import from code\"); not in origin/main or the bot's command list (Void Engine Bot README)"
+  },
+  {
+   "title": "A structured link to coding tools",
+   "what": "Let Studio talk to coding tools through the Agent Client Protocol, so it sees each tool call, file and cost directly instead of reading their text output.",
+   "evidence": "Memory bettercode-comparable-repo.md (\"opencode acp\" handshake and full turn probed 2026-09-22)"
+  }
+ ],
+ "notes": "Things to know before publishing:\n\n1. The main checkout is not clean, although the task said it was. `git status` shows 16 uncommitted renderer files plus `tests/type_into_menu.test.mjs`, from another session. `C:\\wt\\away` also holds uncommitted work: Start with Windows and agent status lines per PC. I listed both under In progress, but neither is on GitHub, and either could change or be dropped.\n\n2. Some features built before the v0.4.4 tag are not in the 0.4.4 download:\n   - Configuration, Habits, menu motion, Set up this PC, the companion as a pet, sync hardening and the second bug hunt.\n   - The 16:57 merge (`65703a6`/`7ba162c`) dropped them, and commit `dc85f68` restored them after the tag and moved their changelog entries under [Unreleased].\n   - The CHANGELOG as it stood at the v0.4.4 tag confirms none of them shipped.\n   - So the site must list them as coming in 0.4.5, not as released.\n\n3. Rooms, Listen together, playdates and cowork claims can't be used by the public yet:\n   - Both `CLIENT_ID` in `scripts/community.cjs` and `HUB_URL` in `scripts/hub-client.cjs` are empty on origin/main.\n   - `docs/friends-setup.md` tells people to update to 0.4.5, which is not released.\n   - The site's current roadmap card (`C:\\wt\\site\\index.html` ~line 104) lists \"Community rooms\" and \"Cowork spaces\" as future ideas. Both are now built on main (coming in 0.4.5, waiting on the hub), so that card needs updating.\n\n4. Three evidence gaps:\n   - `docs/fleet-overhaul-plan.md` says Phase 1 is in progress on `fleet/overhaul`, but that branch is not local and not on origin (`git ls-remote` shows only main and gh-pages). I treated the Fleet work as planned.\n   - The owner decided Friends 2.0 should land before 0.4.5 (`enumerated-hugging-fern.md`), but that plan only has sections E and F filled in, and there is no code yet.\n   - The agent messaging and logging work likewise has only the plan and the owner's decisions, no code.\n\n5. The community vision (credits, advertising, cosmetics, mixes) has no design doc or code. Two constraints for that copy:\n   - `docs/community.md` and the bot's `docs/roles.md` say nothing may reward inviting people, because Discord's Platform Manipulation policy forbids it. Credits must not be earned for invites.\n   - The groundwork that already exists: the bot's `/showcase` and Spotlight, Builder, Helper and Mentor roles; Share what I'm playing, which feeds `/nowplaying`; `.mefishare` sharing; and companion share levels (none, play, hello, status, work).\n\n6. Where to send feature requests:\n   - GitHub has `.github/ISSUE_TEMPLATE/feature_request.md` (label `enhancement`): https://github.com/nateecho32-stack/mefi-studio/issues/new?template=feature_request.md\n   - Discord invite: https://discord.gg/xgfKc5pVxG\n   - `config.yml` allows blank issues and links the getting-started guide and private security reports.\n\n7. Release facts:\n   - Tags are v0.2.0, v0.3.0, v0.3.3, v0.4.0, v0.4.2, v0.4.3 and v0.4.4. There was never a 0.4.1, 0.3.1 or 0.3.2.\n   - The dates above follow CHANGELOG.md (local time). GitHub shows 0.4.2 as 2026-09-26 in UTC.\n   - The GitHub release title for 0.4.4 is \"Mefi Studio 0.4.4 — Build, share and hang out\".\n   - `docs/releases/0.4.4.md` already has user-facing 0.4.4 copy.\n\n8. The Void Engine bot repo is private (`nateecho32-stack/void-engine-bot`). Describe its features without linking the source.\n\n9. The last comingNext item, lighter while minimized, comes only from commit messages. It has no changelog line."
+}

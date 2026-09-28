@@ -1,0 +1,115 @@
+/* Download page. Builds on the tokens and components in site.css. */
+
+/* The Download button in the header marks this page (no tab does). */
+.head-actions .btn[aria-current="page"] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
+
+/* ---- hero: copy on the left, the release card on the right ---- */
+.dl-hero { padding: 56px 0 72px; }
+.dl-hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.02fr); gap: 48px; align-items: center; }
+.dl-hero h1 { max-width: 14ch; }
+.dl-hero .lede { margin-bottom: 22px; }
+.dl-ticks { margin-bottom: 26px; }
+.dl-ticks li { margin-bottom: 0.65em; }
+
+.on-page { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.on-page .label { font-size: 0.78rem; font-weight: 650; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); margin-right: 4px; }
+.on-page a { padding: 5px 12px; border-radius: var(--r-pill); border: 1px solid var(--hairline); color: var(--muted); font-size: 0.88rem; background: rgba(16, 31, 41, 0.5); }
+.on-page a:hover { color: var(--ivory); border-color: var(--hairline-strong); text-decoration: none; }
+
+/* ---- the release card ---- */
+.dl-card {
+  position: relative; min-width: 0;
+  padding: 28px; border-radius: var(--r-lg);
+  background:
+    radial-gradient(520px 220px at 100% 0%, rgba(140, 123, 255, 0.13), transparent 70%),
+    radial-gradient(520px 260px at 0% 100%, rgba(113, 203, 183, 0.12), transparent 70%),
+    var(--panel-solid);
+  border: 1px solid var(--hairline-strong);
+  box-shadow: var(--glow);
+}
+.dl-card-top { display: flex; gap: 16px; align-items: center; margin-bottom: 22px; }
+.dl-card-top img { width: 60px; height: 60px; border-radius: 16px; flex: none; box-shadow: 0 0 0 1px rgba(216, 179, 106, 0.45), 0 10px 30px rgba(0, 0, 0, 0.5); }
+.dl-card-top > div { min-width: 0; }
+.dl-badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px; }
+.dl-card h2 { font-size: clamp(1.6rem, 3vw, 2.1rem); margin: 0; font-variant-numeric: lining-nums tabular-nums; }
+.dl-meta { margin: 4px 0 0; color: var(--muted); font-size: 0.94rem; }
+.dl-main { width: 100%; white-space: normal; text-align: center; line-height: 1.25; }
+.dl-main svg { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.dl-for { margin: 10px 0 0; text-align: center; font-size: 0.88rem; color: var(--dim); }
+.dl-facts { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 1px; margin: 22px 0 0; border-radius: var(--r); overflow: hidden; border: 1px solid var(--hairline); background: var(--hairline); }
+.dl-facts > div { min-width: 0; padding: 12px 14px; background: rgba(5, 13, 19, 0.72); }
+.dl-facts dt { font-size: 0.72rem; font-weight: 650; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); margin-bottom: 2px; }
+.dl-facts dd { margin: 0; font-size: 0.9rem; color: var(--text); overflow-wrap: anywhere; }
+.dl-facts code { background: none; border: 0; padding: 0; color: var(--text); font-size: 0.86rem; }
+.dl-status { margin: 14px 0 0; min-height: 1.4em; }
+.dl-status:empty { display: none; }
+.dl-newer { margin-top: 14px; }
+
+/* ---- install steps ---- */
+.dl-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.dl-steps .step { padding: 24px 22px 22px; }
+.dl-steps .step p + p { margin-top: 0.7em; }
+.path { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 12px; }
+.path .arrow { color: var(--dim); }
+.dl-after { margin-top: 22px; color: var(--muted); max-width: 72ch; }
+
+/* ---- what you need ---- */
+.needs { display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.needs > * { min-width: 0; }
+.needs .card h3 { margin: 10px 0 8px; font-size: 1.08rem; }
+.need-tag { display: inline-block; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; padding: 2px 9px; border-radius: var(--r-pill); border: 1px solid currentColor; }
+.need-tag.must { color: var(--accent-bright); }
+.need-tag.good { color: #c3b9ff; }
+.need-tag.opt { color: var(--info); }
+.need-tag.none { color: var(--muted); }
+
+/* ---- code blocks with a copy button ---- */
+.code { min-width: 0; border: 1px solid var(--hairline); border-radius: var(--r); background: #030a0f; overflow: hidden; }
+.code-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 10px 8px 16px; border-bottom: 1px solid var(--hairline); font-size: 0.8rem; color: var(--dim); letter-spacing: 0.04em; }
+.code pre { margin: 0; border: 0; border-radius: 0; background: none; }
+.code pre:focus-visible { outline-offset: -3px; }
+.code .cm { color: var(--dim); }
+.copy { font: inherit; font-size: 0.82rem; font-weight: 600; color: var(--accent-bright); background: var(--accent-dim); border: 1px solid var(--hairline); border-radius: var(--r-pill); padding: 4px 12px; cursor: pointer; }
+.copy:hover { border-color: var(--accent); }
+.copy:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
+
+/* ---- updating ---- */
+.dl-update ol { margin: 10px 0 0; padding-left: 1.3em; color: var(--muted); }
+.dl-update ol li { margin-bottom: 0.55em; }
+.dl-update ol li::marker { color: var(--warn); font-weight: 700; }
+.dl-update h3 { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 6px; }
+.dl-update .notice p { color: var(--muted); }
+.dl-update .notice strong { color: var(--ivory); }
+
+/* ---- coming in 0.4.5 ---- */
+.coming { padding: 30px; border-radius: var(--r-lg); border: 1px solid rgba(140, 123, 255, 0.34); background: radial-gradient(640px 260px at 100% 0%, rgba(140, 123, 255, 0.14), transparent 70%), var(--panel-solid); }
+.coming-head { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: baseline; justify-content: space-between; margin-bottom: 18px; }
+.coming-head h2 { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.coming-head p { margin: 0; color: var(--muted); }
+.coming .grid-2 { gap: 12px 28px; }
+.coming .grid-2 > div { border-left: 2px solid rgba(140, 123, 255, 0.5); padding-left: 14px; }
+.coming h3 { font-size: 1rem; margin: 0 0 4px; font-family: var(--font-ui); font-weight: 650; letter-spacing: 0; }
+.coming .grid-2 p { margin: 0; color: var(--muted); font-size: 0.94rem; }
+.coming .more { display: inline-block; margin-top: 18px; font-weight: 600; }
+
+/* ---- more ways ---- */
+.dl-more { display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 44px; }
+.dl-more > * { min-width: 0; }
+
+@media (max-width: 960px) {
+  .dl-hero-grid { grid-template-columns: 1fr; gap: 36px; }
+  .dl-hero h1 { max-width: 18ch; }
+  .needs, .dl-more { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 860px) {
+  .dl-steps { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  .dl-hero { padding: 36px 0 52px; }
+  .dl-card { padding: 20px; }
+  .dl-card-top img { width: 48px; height: 48px; border-radius: 13px; }
+  .dl-facts { grid-template-columns: 1fr; }
+  .needs, .dl-more { grid-template-columns: 1fr; }
+  .coming { padding: 22px; }
+  .on-page .label { width: 100%; }
+}

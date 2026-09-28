@@ -1,0 +1,118 @@
+<!--
+SHARED MARKUP for every page of the Mefi Studio site (gh-pages, C:\wt\site).
+Copy these blocks verbatim. For pages at the site root, links are as written.
+For the wiki (wiki/index.html) prefix every relative link and asset path with "../".
+Set aria-current="page" on the ONE tab (and the matching menu link) for the page being built:
+  data-tab values: home (index.html), features, roadmap, community, wiki; download.html marks none
+  of the tabs but gives the Download button aria-current="page".
+The tab bar and menu are the only site navigation. Do not add in-page anchor links to the tab bar;
+put "on this page" links inside the page instead.
+-->
+
+<!-- HEAD (inside <head>, after the page's own <title>, description, canonical and og tags) -->
+<meta name="theme-color" content="#050d13">
+<link rel="icon" href="assets/favicon.ico">
+<link rel="stylesheet" href="assets/site.css">
+<!-- then the page's own stylesheet, e.g. <link rel="stylesheet" href="assets/roadmap.css"> -->
+
+<!-- BODY START -->
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-head">
+  <div class="container head-inner">
+    <a class="brand" href="index.html"><img src="assets/icon-256.png" width="30" height="30" alt="">Mefi Studio</a>
+    <nav class="tabs" aria-label="Site">
+      <a href="index.html" data-tab="home">Home</a>
+      <a href="features.html" data-tab="features">Features</a>
+      <a href="roadmap.html" data-tab="roadmap">Roadmap</a>
+      <a href="community.html" data-tab="community">Community</a>
+      <a href="wiki/" data-tab="wiki">Wiki</a>
+    </nav>
+    <div class="head-actions">
+      <a class="icon-link" href="https://discord.gg/xgfKc5pVxG" rel="noopener" aria-label="Mefi Studio on Discord" title="Discord"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.2 18.2 0 0 0-5.6 0L8.6 3a19.6 19.6 0 0 0-4.9 1.5C.6 9.1-.3 13.7.1 18.2a19.8 19.8 0 0 0 6 3l1.3-2.1a12.8 12.8 0 0 1-2-1l.5-.4a14.1 14.1 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.7 19.7 0 0 0 6-3c.5-5.2-.8-9.8-3.6-13.8ZM8 15.5c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.7 8 10.7s2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Z"/></svg></a>
+      <a class="icon-link" href="https://github.com/nateecho32-stack/mefi-studio" rel="noopener" aria-label="Mefi Studio on GitHub" title="GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5A11.5 11.5 0 0 0 8.4 22.9c.6.1.8-.2.8-.6v-2.1c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0c2.2-1.5 3.2-1.2 3.2-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .4.2.7.8.6A11.5 11.5 0 0 0 12 .5Z"/></svg></a>
+      <a class="btn btn-primary btn-sm" href="download.html">Download</a>
+    </div>
+    <details class="menu">
+      <summary aria-label="Open the menu"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></summary>
+      <nav class="menu-panel" aria-label="Site">
+        <a href="index.html">Home</a>
+        <a href="features.html">Features</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="community.html">Community</a>
+        <a href="wiki/">Wiki</a>
+        <hr>
+        <a href="https://discord.gg/xgfKc5pVxG" rel="noopener">Discord <span aria-hidden="true">↗</span></a>
+        <a href="https://github.com/nateecho32-stack/mefi-studio" rel="noopener">GitHub <span aria-hidden="true">↗</span></a>
+        <a class="btn btn-primary" href="download.html">Download for Windows</a>
+      </nav>
+    </details>
+  </div>
+</header>
+
+<main id="main">
+  <!-- page content -->
+</main>
+
+<!-- FOOTER -->
+<footer class="site-foot">
+  <div class="container">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="index.html"><img src="assets/icon-256.png" width="30" height="30" alt="">Mefi Studio</a>
+        <p>A free, open-source studio for Windows. Build your ideas with coding agents, and make them with people.</p>
+      </div>
+      <div class="foot-col">
+        <h2>Studio</h2>
+        <ul>
+          <li><a href="features.html">Features</a></li>
+          <li><a href="roadmap.html">Roadmap</a></li>
+          <li><a href="download.html">Download</a></li>
+          <li><a href="https://github.com/nateecho32-stack/mefi-studio/blob/main/CHANGELOG.md" rel="noopener">Changelog</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <h2>Community</h2>
+        <ul>
+          <li><a href="https://discord.gg/xgfKc5pVxG" rel="noopener">Discord</a></li>
+          <li><a href="community.html">Share your work</a></li>
+          <li><a href="https://github.com/nateecho32-stack/mefi-studio/issues/new?template=feature_request.md" rel="noopener">Request a feature</a></li>
+          <li><a href="https://github.com/nateecho32-stack/mefi-studio/issues/new?template=bug_report.md" rel="noopener">Report a bug</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <h2>Learn</h2>
+        <ul>
+          <li><a href="wiki/">Guide</a></li>
+          <li><a href="wiki/#/getting-started">Your first project</a></li>
+          <li><a href="wiki/#/faq">FAQ</a></li>
+          <li><a href="wiki/#/privacy">Privacy</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot-base">
+      <span>MIT licensed · Made with the community · <span data-year>2026</span></span>
+      <span><a href="https://github.com/nateecho32-stack/mefi-studio" rel="noopener">Source on GitHub</a></span>
+    </div>
+  </div>
+</footer>
+<script src="assets/site.js"></script>
+<!-- then the page's own script, if any -->
+
+<!--
+COMPONENTS in assets/site.css (use these before writing page CSS):
+  layout: .container .narrow .grid .grid-2 .grid-3 .grid-4 .split(.flip) .band .section-tight .section-head(.center) .page-head .lede
+  cards: .card .card-link(+.more) .card-feature .card-glow .glyph(.void|.gold, holds an inline svg) .frame(img + figcaption)
+  status (one vocabulary): <span class="status released">In 0.4.4</span> · <span class="status next">Coming in 0.4.5</span>
+         · <span class="status progress">In progress</span> · <span class="status rolling">Rolling out</span>
+         · <span class="status planned">Planned</span> / "Planned for 0.4.5" · <span class="status idea">Idea</span>
+  chips/filters: .chips .chip(aria-pressed) .search(input + svg)
+  roadmap: .board > .lane > .lane-head(h2 + .count) .lane-note .lane-group .item(h3, p, ul, .meta .tag)   ·   .timeline > li(.upcoming) .when h3 ul
+  community: <p class="pulse" data-discord-pulse hidden><span class="dot"></span><span data-pulse-text></span></p>  (site.js fills and shows it, hides on failure)
+  request band: .cta-band (h2 + p | .cta-row of buttons)
+  tabs: <div class="tabset" data-tabs="Community"> <section data-tab-label="Hang out" id="hang-out">…</section> … </div>
+  misc: .steps > li.step(h3 p) · .strip · .ticks (tick list) · .faq > details > summary · .notice(.info|.warn|.void) · .btn .btn-primary .btn-void .btn-lg .btn-sm · .cta-row(.center) · .eyebrow · .grad (gradient text) · kbd.key
+  reveal: add data-reveal to blocks that should fade up on scroll (site.js; off with reduced motion)
+SITE helpers (site.js): SITE.urls.{repo,releases,latest,issues,bugReport,featureRequest,discord,enhancements,changelog,…},
+  SITE.fetchLatestRelease(), SITE.fetchRepo(), SITE.fetchDiscordCounts(), SITE.fetchFeatureRequests(limit), SITE.formatDate(), SITE.formatBytes(), SITE.escapeHtml(), SITE.plural().
+  [data-latest-hint] elements get "Latest release: v0.4.4 · date · size".
+-->

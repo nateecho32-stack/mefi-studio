@@ -1,0 +1,499 @@
+{
+ "pages": [
+  {
+   "slug": "command-center",
+   "verdict": "update",
+   "problems": [
+    "\"The assistant sits near the center.\" Not true since 0.4.0. Command no longer draws the assistant or music node. CHANGELOG [0.4.0] says \"Command hides its redundant assistant and music nodes; music controls remain in the toolbar\", and renderer/idle.js (~line 9010) leaves both out of every frame with `state.nodes.filter((node) => node.kind !== \"assistant\" && node.kind !== \"music\")`. Agents still fly to the work they are doing. The conversation lives in the side panel's Assistant tab.",
+    "\"**Agents** in the top toolbar opens queue settings, including Autopilot, Parallel builds and Build mode.\" This leaves things out. The dropdown (template #cmd-settings) also has Agent mode (Swarm / Cluster) and a Stop or restart group with **Stop all** and **Restart Studio**, plus links to Team & models, Providers and All run settings. Parallel builds offers Machine managed or Manual 1–3 workers. Restart relaunches Studio paused (CHANGELOG 0.4.4). In 0.4.5 Stop all and Restart need a second press to confirm (Unreleased: \"Actions that can't be undone ask twice\").",
+    "\"Choose a theme, node style, layout and backdrop\" in Settings › Appearance. The Appearance sidebar's sections are Theme, Nodes, Layout and Interface (template #appearance-sections). Backdrop is chosen in Command's **Ambience** popover (Look › Backdrop, #idle-ambience-pop).",
+    "The heading \"Style & sound\" is a retired name. The current controls are the toolbar's audio button (\"Connect audio · Music and video\"), the Ambience popover, and Settings › Audio (\"Open music & video\", Sound effects).",
+    "\"All themes and node styles are free in 0.4.4\" is correct, but it should read \"since 0.4.4\" so it stays true after 0.4.5 ships.",
+    "The side-panel table leaves out that the Assistant tab also holds the **New work** switch (tab title \"Assistant · the conversation and the New work switch\"), and that a **Node** tab appears when you select a node.",
+    "The page never says when Command opens by itself. In 0.4.4 Studio switched to Command after five quiet minutes (renderer/idle.js `IDLE_MS = 5 * 60 * 1000` in v0.4.4). In 0.4.5 this becomes a switch, off by default: Settings › General › Profile & startup › \"Show Command view after 5 quiet minutes\" (Unreleased: \"No more surprise jump to Command view\")."
+   ],
+   "neededContent": [
+    "Toolbar map in the order it appears: task box \"Add a task… (Enter)\", search \"Find a session, todo or task…\", Agents group (Agents dropdown + Swarm/Cluster), Camera group (Fit `F`, Overview / Follow, `C` cycles Overview/Follow/free, Spin with `Space`), View ▾ (Map 2D/3D `V`, Labels auto/updates/all/none `L`, Zoom `+`/`−`), Sound group (Music & video button, Ambience), Close (`Esc` / `D`). Released 0.4.x.",
+    "Ambience popover: Backdrop, Speech bubbles, Card style (Auto/Outline/Filled); Listen to (Auto · local or desktop / Local player / Desktop audio / Spotify / Microphone), Zen bells; Calm › Zen mode. Released.",
+    "Zen tour: park the mouse at the right edge for about 2 s, or turn on Zen mode (30 s without input). Move, click or type to return. Released 0.4.3.",
+    "Legend and Usage pills in the bottom-left corner. Usage has Refresh and Details, which opens Agents › Usage. Released.",
+    "Pointer and keys: wheel or pinch zooms toward the pointer, double-click on empty canvas fits, arrow keys and [ / ] step through tasks. Released 0.4.4.",
+    "A short section on Pipelines (Agents › Live › Pipelines / Agent brain `J`) as the per-task view, linking to the proposed agent-brain page.",
+    "Coming in 0.4.5: the Command header says why agents aren't working, with the one control that fixes it (scripts/loop-status.cjs). Answered asks leave the Ask list, and asks older than two days are closed when the project loads.",
+    "In Vibe mode, Command opens inside Vibe's own rail, and Back returns to Vibe (CHANGELOG 0.4.2).",
+    "Tree modes & movement, video background, and the brightness/outline sliders: one line each, linking to the proposed media-player and appearance pages. Released 0.4.3."
+   ],
+   "sources": [
+    "renderer/booklet.template.html lines ~995-1150 (#idle-* toolbar, #idle-view-pop, #idle-ambience-pop, #cmd-settings, #cmd-rail tabs) and 1270-1282 (#cmd-legend, Legend and Usage pills)",
+    "renderer/idle.js ~line 9010 (drawn-node filter excludes assistant/music); v0.4.4 renderer/idle.js line 15 IDLE_MS",
+    "renderer/nav.js registry: command key D, music (Appearance) key U",
+    "CHANGELOG.md [0.4.0] 'Command hides its redundant assistant and music nodes'; [0.4.3] 'Parking the mouse at the right edge'; [0.4.4] 'Update's Restart now ... relaunches Studio paused'; [Unreleased] 'No more surprise jump to Command view', 'Agents say why they are not working', 'Actions that can't be undone ask twice', 'Answered asks leave the Needs you list'",
+    "docs/architecture.md 'Command center and the node tree'"
+   ]
+  },
+  {
+   "slug": "brain-maps",
+   "verdict": "update",
+   "problems": [
+    "The decision options list uses names that are not in the UI: \"**Retry**\", \"**Narrow**\", \"**Split**\", \"**Re-plan**\", \"**Instruct**\", \"**Hold**\". The real button labels (scripts/agent-issues.cjs ISSUE_OPTIONS, the same in v0.4.4) are: \"Try again\", \"Try again with a heavier model\", \"Keep to the brief\", \"Split the extra work out\", \"Re-plan this task\", \"Answer it in one line\", \"Grant it for this task\", \"Keep it out of scope\", \"Go ahead\", \"I'll take care of it\" and \"Leave it for review\". Which ones a card offers depends on its kind.",
+    "\"Depending on your settings and the issue, Studio may resolve a routine problem or ask you.\" This is too vague. Since 0.4.4, in **Auto** and **Elevated only** the desk settles ordinary asks on the desk seat's model (main.cjs `deskResolvesOn` returns true for auto/elevated). It labels the answer \"Mefi decided\" with its reason, keeps your stop and the card's budgets, and never learns the answer as your preference. Permission, risk and \"only you can do this\" asks always wait for you. You can undo automatic answers under Decided for you.",
+    "\"Open **Ask** in Command view, or **Needs you** in Vibe.\" This leaves out the companion's bubble, which is \"Requests\" in 0.4.4 and \"Needs you\" in 0.4.5 (renderer/companion-hub.js items). It also leaves out the \"Decision needed\" toast's **Answer** button (renderer/nav.js noticeQuestions).",
+    "\"Applying a map can change build approval, proactive work, model selection, dispatch and the worker limit.\" This is true, but 0.4.5 changes how build approval moves. The Verify-first gate now moves the permission mode (Always ask / Accept per task up to Auto, or Auto / Elevated only down to Always ask) instead of overwriting it. Activating a map changes the permission mode and New work only when its confirm list shows them moving (Unreleased: \"Permission modes keep their meaning\"). The worker limit is at most 3 (docs/brain-maps.md Gates).",
+    "\"**Map › Duplicate this map**\", \"**Draft with AI**\", \"**Make this live**\" and \"**Reset to the shipped pipeline**\" are correct. The page leaves out the Map menu's other items: New empty map, Discard unsaved changes and Delete this map (template #brains-more-menu)."
+   ],
+   "neededContent": [
+    "The full decision-option list with each option's one-line effect, taken from agent-issues.cjs descriptions (e.g. \"Keep to the brief: the extra work stays out\").",
+    "Who answers what: a short table by permission mode (Always ask / Accept per task / Auto / Elevated only) and the owner-only kinds. Link to the proposed permissions page.",
+    "Editor extras from the in-app legend (the `?` button): Add part, Tidy, minimap, zoom `0`/`+`/`-`, `F8` next problem, Shift-click and Shift-drag to select, `Ctrl D` duplicate, `[` / `]` to hide the panels, arrow-key nudging.",
+    "The in-app legend's marks: badge \"Map rules\" (the map decides; takes effect on save), \"Note\" (drawing only), switch-moving parts, dashed feedback wires, red ring = unwired required end.",
+    "Empty-map state: **Build with AI**. Draft banner: \"Drafted. Nothing is saved yet.\" with **Save as a new map** / **Discard draft**.",
+    "A one-line pointer that brain maps (`B`) are not the Agent brain (`J`: pipelines, Playbook, project map), linking to the proposed agent-brain page.",
+    "Coming in 0.4.5: answered asks leave the list at once, and asks older than two days (or whose card left the board) are closed when the project loads."
+   ],
+   "sources": [
+    "scripts/agent-issues.cjs lines 157-219 (ISSUE_OPTIONS); v0.4.4 same labels",
+    "renderer/booklet.template.html lines 1449-1590 (brains toolbar, Map menu, empty state, draft banner, shortcuts and legend)",
+    "scripts/brains.cjs defaultMap name 'The studio pipeline'",
+    "renderer/brains.js 'Not read by the studio yet.'",
+    "docs/brain-maps.md 'Gates: what activating a map actually moves' and 'The decision lane'",
+    "main.cjs function deskResolvesOn (present in v0.4.4, commit c655647)",
+    "CHANGELOG.md [0.4.4] 'The desk can handle asks for you'; [Unreleased] 'Permission modes keep their meaning', 'Answered asks leave the Needs you list', 'No dead asks after a restart'"
+   ]
+  },
+  {
+   "slug": "model-lab",
+   "verdict": "update",
+   "problems": [
+    "The page is accurate for 0.4.4: Agents › Models › Catalog `1`, Performance `2`, Agents › Usage with Recorded calls / Provider accounts, Agents › Workflows › Context with Preview context, and Settings › System › Diagnostics › Speed probe › Measure tokens/s all match renderer/agents.js and the template. The problems are omissions.",
+    "\"**Unpriced** means no price was reported\". The table column is \"Unpriced calls\" (renderer/tracker.js). In 0.4.5 the empty Unknown/Unknown cells read \"Not reported\" (tracker.js UNREPORTED_TITLE \"Not reported by the provider\"; Unreleased \"Menus say what they mean\"). The wording should cover both.",
+    "The Models section has two views the page does not name: **Catalog insights** (\"Benchmarks, pricing and plan capacity\") and a **Planned** view (\"Compare models on one brief\") that states no comparison runs or paid calls start from it yet (template lines ~436-460). It should be described as planned, not as a feature."
+   ],
+   "neededContent": [
+    "The **Rate recent work** block on Performance (\"Your score stays separate from model judging and error counts\") and the Task type filter.",
+    "How Studio actually chooses a builder's model: measured wins and losses per kind of work, and learned routing scope (this project, all projects, a 30% blend by default, or off). Say where to change it: Agents › Setup › Routing & fallback. Released 0.4.4 ('Model outcomes now retain their project').",
+    "Command's Usage pill: Refresh and Details (opens Usage). Refreshing sends no prompts.",
+    "Coming in 0.4.5: with more than one Claude Code or Codex login, each login gets its own row in Usage › Provider accounts, and limit marks survive a restart.",
+    "Coming in 0.4.5: Performance, Usage and Context each get their own subtitle, and the catalog leaves out values the store did not record instead of printing '?' or 'undefined'."
+   ],
+   "sources": [
+    "renderer/agents.js sections/children (models: Catalog, Performance; usage: Recorded calls, Provider accounts; workflows: Context)",
+    "renderer/booklet.template.html lines ~421 (Print / PDF), 436-460 (Performance, Rate recent work, Recorded usage, Provider accounts, Context preview, Planned, Catalog insights), 938-942 (Speed probe)",
+    "renderer/model-lab.js, renderer/tracker.js (Unpriced calls, UNREPORTED_TITLE)",
+    "CHANGELOG.md [0.4.4] Added 'Model outcomes now retain their project'; [Unreleased] 'Menus say what they mean', 'More than one Claude Code or Codex login'",
+    "docs/architecture.md 'Learning'"
+   ]
+  },
+  {
+   "slug": "tools",
+   "verdict": "update",
+   "problems": [
+    "\"Open **Analyzer** (`A`)\" gives no menu path. Analyzer sits in the **Work** section with Tasks, Plans and Ideas (renderer/nav.js LOCAL_ROUTES work: tasks, plans, ideas, analyzer), not under Agents.",
+    "\"**Agents › Live › Trace** puts Studio's logs in one viewer. Select a channel...\" is too thin, and the page does not say Trace has no single-key shortcut. Released in 0.4.4, the channels are Studio log, Assistant, Runs (the run ledger), OpenCode and Window. The controls are search, a tail of 100–2000 lines, level chips, source chips, problems only, follow, newest first or last, copy and open file (main.cjs TRACE_CHANNELS; CHANGELOG 0.4.4 'Trace').",
+    "The \"Change the workspace\" table is missing places. Settings › General also holds the **Community** card (Discord link), **Studio mode** (Vibe/Build), Motion and Blur. In 0.4.5 it also gets \"When Studio opens\". The table also leaves out Agents › Overview (readiness and **Check connections**).",
+    "The Live and Workflows menus have views the page never mentions: Agents › Live › **Pipelines** and Agents › Workflows › **Playbook** / **Project map** (the Agent brain, `J`)."
+   ],
+   "neededContent": [
+    "A row for **Configuration** (`Ctrl Shift ,`, or \"All settings in one place\" under Settings' categories): every setting in one searchable tree (Inference & Agents, Knowledge, Files & Exec, Web & Community, Storage, UI & Surfaces, Dev & Meta), with **Interface scale** 70–150%. Coming in 0.4.5.",
+    "A row for the **Setup helper**, reached from Search or Help: every agent setting in one sheet. Coming in 0.4.5.",
+    "One line each for Pipelines, Playbook and Project map, linking to the proposed agent-brain page.",
+    "The Diagnostics card's other buttons: Open profiler, Run auditor ↗ and Machine ↗ (the last two open in Sessions).",
+    "Link the Trace section to the proposed logs-and-diagnostics page."
+   ],
+   "sources": [
+    "renderer/nav.js registry (analyzer key A section work; trace has no key; config key 'Ctrl Shift ,'; LOCAL_ROUTES)",
+    "renderer/agents.js children (live: Command, Pipelines, Sessions, Activity, Trace, Overhead; workflows: Brain maps, Playbook, Project map, Context); move('settings-log','connections')",
+    "renderer/booklet.template.html 558-559 (Reveal file, Copy path), 574-626 (Settings General), 938-953 (Diagnostics, Connection log), 1651 (profiler Export JSON), 1804-1821 (Session tools)",
+    "main.cjs TRACE_CHANNELS (~line 18527)",
+    "renderer/setup-helper.js (registered 'setup-helper' sheet, showIn palette/help/tools); renderer/config-dialog.js",
+    "CHANGELOG.md [0.4.4] 'Trace (Live, beside Activity)'; [Unreleased] 'Configuration (Ctrl Shift ,...)', 'Setup helper', 'When Studio opens'"
+   ]
+  },
+  {
+   "slug": "verification",
+   "verdict": "update",
+   "problems": [
+    "The page never gives the labels a person actually sees. A task waiting for checks shows **Verifying** (awaiting_verification maps to \"Verifying\"), and finished tasks show \"Done · Verified\" or \"Done · Confirmed by you\" (renderer/stage-labels.js, the same in v0.4.4). Those words should appear here.",
+    "\"Open **Review** on Home, or the task's details\" is written for Build mode only. Vibe is the default mode (renderer/vibe.js mode() returns 'vibe'). There, results show under **Freshly done** and in the Tasks panel, and a finished task has **Ask for a change** (renderer/vibe-panels.js).",
+    "\"Choose **Confirm done** after reviewing a result you want to accept.\" The button reads Confirm done only while the task needs review. Otherwise it reads Mark done (renderer/tasks.js ~line 1001).",
+    "\"Pushing a project to GitHub does not copy all of Studio's local records to another PC.\" Still true, but 0.4.5 adds **Share between my PCs** (Friends › Your PCs). It carries chosen items (open tasks and ideas, model results, decisions, team setups, brains, recipes, memory notes, preferences, and keys only after a typed confirmation) through a sealed private GitHub repository. The page should say so."
+   ],
+   "neededContent": [
+    "The task detail tabs: Details, Evidence, History, References. Evidence sections: \"Work done outside Studio\", \"Result & completion checks\", \"Follow-up work\". History holds the Brief history and Attempts folds.",
+    "Released 0.4.4: work done outside Studio. When Studio reopens a project, cards that look already done wait in Needs you with **Mark it done**, **Drop it** or **Build it anyway**. Without a model the check only says \"may already be done\".",
+    "Where settings live: %APPDATA%\\Mefi's Studio AI+ holds settings.json, auth.json, community-auth.json and session.json, shared by a source and a portable install on the same Windows account. Only one of the two runs at a time.",
+    "Crash recovery: if a crash or restart interrupted work in the last ten minutes, Studio reopens that folder and restarts the agents that were running (README First launch). Coming in 0.4.5: \"When Studio opens\" (Resume what I had / Start agents / Keep agents off)."
+   ],
+   "sources": [
+    "renderer/stage-labels.js (LABELS review/awaiting_verification → 'Verifying'; 'Done · Verified', 'Done · Confirmed by you')",
+    "renderer/tasks.js ~1001 (Confirm done / Mark done), detailFold ids, sections at ~1595-1647",
+    "renderer/booklet.template.html task-tab-details/evidence/history/references",
+    "renderer/vibe.js mode(); renderer/vibe-panels.js 'Ask for a change'",
+    "SECURITY.md 'Local state is never committed or packaged'; README 'Install and run' (portable/source share %APPDATA%) and 'First launch'",
+    "CHANGELOG.md [0.4.4] 'Work done outside Studio'; [Unreleased] 'Share between my PCs', 'When Studio opens'"
+   ]
+  },
+  {
+   "slug": "updates",
+   "verdict": "update",
+   "problems": [
+    "\"Studio also checks for published builds periodically.\" It checks every 20 minutes (scripts/release-updater.mjs CHECK_INTERVAL_MS; template text \"Published builds are checked on GitHub every 20 minutes\"). A toast \"Update available · vX · Settings › Updates\" offers the way there (renderer/nav.js releaseToast).",
+    "\"A restart uses **Restart now**, which saves agent progress before relaunching.\" This should also say that Restart now stops the coding agents and relaunches Studio **paused** (CHANGELOG 0.4.4: \"stops coding agents, saves their latest work for continuation, and relaunches Studio paused\"). The live-update button reads \"Apply update\" or, only when a restart is needed, \"Restart now\" (nav.js ~2369).",
+    "The page does not say what the current release is. v0.4.4 (2026-09-27) is the latest release. 0.4.5 is being built on main and is not released yet. Portable users see it only when it is published, and source users get it by pulling main."
+   ],
+   "neededContent": [
+    "The update button's states: Update to vX.Y.Z → Downloading… n% → Installing… (the app restarts) → toast \"Updated to vX\" (nav.js ~2551-2556).",
+    "The portable and source installs share %APPDATA% settings, and only one runs at a time; opening the other brings the running one forward (README; main.cjs requestSingleInstanceLock).",
+    "Coming in 0.4.5: the Setup helper's **Machine & app** section also holds updates and the GitHub token.",
+    "For maintainers: tags v* publish through .github/workflows/release.yml. Keep the existing text."
+   ],
+   "sources": [
+    "renderer/booklet.template.html lines 916-936 (Updates card: Apply updates automatically, Apply update, Check GitHub, Update, GitHub token row)",
+    "scripts/release-updater.mjs header and CHECK_INTERVAL_MS",
+    "renderer/nav.js ~2323 UPDATES_PLACE, ~2369 apply label, ~2551-2556 release button text, releaseToast",
+    "CHANGELOG.md [0.4.4] 'Update's Restart now ...', 'Updates: the Update button can't start a second download'",
+    "package.json on main says 0.4.5 but tag v0.4.4 is the latest release",
+    "README.md 'Install and run'"
+   ]
+  },
+  {
+   "slug": "privacy",
+   "verdict": "update",
+   "problems": [
+    "The network table is missing features coming in 0.4.5 that send data out. **Share between my PCs** uses one private GitHub repository `<you>/mefi-studio-vault`, with every file sealed with AES-256-GCM under a key only your paired PCs hold. Items are checked going out and coming in, and keys are sent only after a typed confirmation. **Share with friends** writes a scrubbed, previewed `.mefishare` file. **Keep this PC up to date** asks GitHub once a minute, and the Your PCs check runs 45 s after launch and then every 15 min. **Set up this PC** signs you in to GitHub in the browser, and Studio never sees the token. **Friends › Rooms** chat goes through the rooms hub, and every room says \"Void Engine moderators can read every room.\" **Cowork claims** send the paths of files a builder will edit to the linked room. **Playground** shares companion cards only at the level you allow and lists them under What was sent.",
+    "\"Discord provides your account identity and membership details for the community server.\" This is vague. Linking reads your Discord id, username and display name, plus your role ids and join date in the Void Engine server, using scopes identify and guilds.members.read. It reads them when you link, about weekly after that, and when you press Check now. The refresh token is encrypted in community-auth.json, and Unlink revokes it (SECURITY.md; template #community-privacy).",
+    "\"Discord linking and shared rooms are still rolling out.\" Still true: the build ships with no link app ID and no hub address (scripts/community.cjs `CLIENT_ID = \"\"`, scripts/hub-client.cjs `HUB_URL = \"\"`). The page should add that 0.4.5 lets you enter both under Settings › General › Community › Connection details (Unreleased: \"Discord linking and Rooms without environment variables\").",
+    "\"The room service receives your shared media link and Discord name.\" Add that Studio sends your Discord access token to the hub once per 15-minute session, the hub checks it with Discord and drops it, and listen-together and now-playing data live in memory only (SECURITY.md; bot docs/privacy.md).",
+    "\"Do not post `auth.json`, `community-auth.json`, `settings.json` or your `data/` folder.\" Add session.json, your vault pairing code, and any `.mefishare` you have not reviewed."
+   ],
+   "neededContent": [
+    "A row for provider account readings (Usage › Provider accounts): Studio calls each provider's account API with your saved key. Refreshing sends no prompts.",
+    "A line on outbound scrubbing: payloads pass a credential filter before they leave (scripts/redaction.cjs scrubOutbound), and 0.4.4 masks `Authorization: Bearer` tokens in tool transcripts.",
+    "Coming in 0.4.5: a friend's `.mefishare` can carry only how agents behave and learn. It can never change your permissions.",
+    "Keep-control section: name all four permission modes and the elevated categories that stay with you by default (Granting reach, Irreversible changes, Closing your work, Work agents propose, A pricier model, Real-world to-dos). Link to the proposed permissions page."
+   ],
+   "sources": [
+    "SECURITY.md 'What Studio does with your data' (Discord scopes, Links/Listen together/now playing, local state)",
+    "scripts/community.cjs CLIENT_ID = '' ; scripts/hub-client.cjs HUB_URL = '' (both on origin/main)",
+    "scripts/pc-vault.cjs, scripts/vault-crypto.cjs, scripts/share-review.cjs, scripts/cowork.cjs, scripts/pc-setup.cjs headers (docs/code-map.md)",
+    "renderer/rooms.js line ~420 'Void Engine moderators can read every room.'",
+    "renderer/booklet.template.html #community-privacy text",
+    "Void Engine Bot docs/privacy.md 'Rooms and moderators', 'Now playing and listen together'",
+    "scripts/autonomy.cjs ELEVATED",
+    "CHANGELOG.md [0.4.4] 'Privacy: tool transcripts and scout payloads are redacted'; [Unreleased] 'Share between my PCs', 'Share with friends', 'Keep this PC up to date', 'A friend's preferences cannot change your permissions', 'Discord linking and Rooms without environment variables', 'Agents on several PCs never edit the same file at once'"
+   ]
+  },
+  {
+   "slug": "troubleshooting",
+   "verdict": "update",
+   "problems": [
+    "The heading \"“Agents are waiting for you”\" quotes text the app shows only in the tray tooltip (\"agents waiting for you\", main.cjs tray tip). In 0.4.5, Home, Vibe and Command show a headline from scripts/loop-status.cjs, such as \"Agents are off\" with **Start agents**, \"Agents paused\" with **Resume agents**, or \"No AI connected\" with **Connect an AI**. The launch screen's default button also follows Settings › General › Profile & startup › When Studio opens (Resume what I had is the default). The buttons read **Open studio** / **Open and start agents**, or \"Open with agents off\" when the default starts them (renderer/startup.js).",
+    "\"Open **Start here** and use **Check connection** for the agent you selected.\" In 0.4.5 the **Setup helper** opens first. Its Connect an AI section has **Set up automatically** and **Start free with OpenCode**, and it marks a coding tool that is installed but not signed in. Agents › Overview has **Check connections**. Start here still has Check connection.",
+    "\"## A task is Awaiting verification\". The badge reads **Verifying** (renderer/stage-labels.js, the same in v0.4.4).",
+    "\"## A task stays Ready\". The checklist is fine, but in 0.4.5 the task, Home and Vibe name the reason. Examples: new work paused; \"Agents are cooling down\" after failed starts; \"The work scheduler is stuck\" (Restart clears it); \"N tasks need your OK\" in the current permission mode; the free coding model's one-at-a-time limit; waiting for a running worker with the same title; or another PC holds its files through a cowork room (Unreleased: \"Agents say why they are not working\", \"Agents on several PCs never edit the same file at once\"). Deferred tasks read \"Scheduled for later\".",
+    "\"## My saved connection does not work on another PC ... Copying `auth.json` or `settings.json` is not a way to transfer a login.\" Still true. The page should add that 0.4.5's Share between my PCs › Keys and setup can move keys into the other PC's protected storage after the typed confirmation.",
+    "\"## I cannot join a shared listening room ... Reinstalling does not enable a service that has not been configured for that release.\" In 0.4.5 you enter the rooms hub address and link app ID under Settings › General › Community › Connection details, and every \"not connected yet\" message says which value is missing. A hub must still be running (docs/friends-setup.md). Friends › Rooms has the same requirement.",
+    "\"`npm test` needs Python 3 available as `python`\". On main (0.4.5) the runner also finds `py -3` and `python3`. `npm ci` fetches the Electron binary itself and stops on a Node older than 24 (scripts/run-all-tests.mjs; Unreleased 'First-time setup and agent choice')."
+   ],
+   "neededContent": [
+    "\"x is not installed or not on PATH\" (0.4.5 wording from scripts/executor-core.cjs): install OpenCode, Claude Code or Codex. Since 0.4.4, a CLI installed while Studio is open is found without restarting.",
+    "A Claude Code or Codex usage limit: add a second login with Setup helper › Connect an AI › More than one login (0.4.5). Studio swaps to the next login when one tops out.",
+    "Your PCs sync problems. Sync this PC pushes only after the project's `npm run check` passes (0.4.5). When both sides moved, use **Put my commits on top of GitHub's**; on a conflict it changes nothing and names the files (0.4.5). A lapsed GitHub sign-in shows as a problem, not as offline. exFAT/FAT drives can't hold worktrees (Set up this PC).",
+    "\"A different install came forward\": the source and portable installs share settings and only one runs at a time (README; main.cjs requestSingleInstanceLock).",
+    "\"Studio switched to Command view by itself\": this happens after 5 quiet minutes in 0.4.4. In 0.4.5 it is a switch, off by default.",
+    "\"Asks that no longer apply\": since 0.4.5, asks older than two days or whose card left the board are closed when the project loads, and Clear list removes stuck items."
+   ],
+   "sources": [
+    "scripts/loop-status.cjs headlines (No project open, No AI connected, Agents are off, Agents paused, Agents are cooling down, The work scheduler is stuck, N tasks need your OK/review)",
+    "renderer/startup.js ~line 74 (Open studio / Open with agents off / Open and start agents / Open a folder…)",
+    "main.cjs tray tip 'agents waiting for you'; requestSingleInstanceLock",
+    "renderer/setup-helper.js lines ~413, 554-559 (More than one login, Set up automatically, Start free with OpenCode)",
+    "renderer/stage-labels.js",
+    "renderer/community.js line 40 and renderer/companion-friends.js line 128 (Connection details hints); docs/friends-setup.md troubleshooting table",
+    "scripts/run-all-tests.mjs lines 21-26; scripts/executor-core.cjs line 238",
+    "CHANGELOG.md [0.4.4] 'Coding CLIs installed while Studio is open'; [Unreleased] 'A first run with no AI connected says so', 'Agents say why...', 'More than one Claude Code or Codex login', 'Multi-PC sync holds up better', 'No more surprise jump to Command view', 'No dead asks after a restart'",
+    "README.md 'Working from several PCs', 'Install and run'"
+   ]
+  },
+  {
+   "slug": "faq",
+   "verdict": "update",
+   "problems": [
+    "\"Check **App updates** in Settings\". No control has that label. It is **Settings › System › Updates** (template #settings-updates \"Updates · Live update and published builds\"; nav.js UPDATES_PLACE \"Settings › Updates\").",
+    "\"**Friends → Your PCs** helps sync project Git commits through GitHub. Tasks, conversations and local settings do not sync that way\". This is right for 0.4.4, but 0.4.5 adds Share between my PCs. It carries chosen items between your own PCs: open tasks and ideas (arriving as ideas), preferences without keys, model results, decisions, team setups, brains, Playbook recipes, Claude Code memory notes, and keys only after a typed confirmation. It also adds Keep this PC up to date (once a minute). Conversations still stay on each PC. The page also uses '→' where other pages use '›'.",
+    "\"**Start here** guides you through setup\". In 0.4.5 the Setup helper opens first on a new install, with Quick setup in three steps, and Start here follows it.",
+    "\"With background mode enabled, closing the window hides Studio to the tray\". Background mode is on by default (scripts/assistant.mjs DEFAULT_PREFS `background: true`). 0.4.5 adds the switch \"Keep running in the tray when the window closes\" under Setup helper › Machine & app, and a real quit asks first when the open project has work that exists only on this PC."
+   ],
+   "neededContent": [
+    "Q: Is everything free? Are there paid cosmetics? Answer: every theme and node style has been free since 0.4.4, and Discord is optional. Community credits, advertising and cosmetics are ideas only and are not built.",
+    "Q: What is Vibe and what is Build? Answer: Vibe is the default calm front door; Build is the full studio. Switch at the top or in Settings › General › Studio mode.",
+    "Q: Can I share my setup with a friend? Answer: coming in 0.4.5, a `.mefishare` file holds one brain, recipe, team setup, set of model results, memory note or preferences, scrubbed and previewed. A friend's file is reviewed before use and can't change your permissions.",
+    "Q: Can I use two Claude/ChatGPT subscriptions? Answer: coming in 0.4.5, Setup helper › Connect an AI › More than one login (up to six).",
+    "Q: What's coming next / where do I request a feature? Answer: link the roadmap page, the GitHub feature_request template (.github/ISSUE_TEMPLATE/feature_request.md) and Discord.",
+    "Q: What is in 0.4.5 and when does it ship? Answer: it is on main and not released yet; the owner is holding it for more work."
+   ],
+   "sources": [
+    "renderer/booklet.template.html #settings-updates; renderer/nav.js UPDATES_PLACE",
+    "scripts/assistant.mjs DEFAULT_PREFS (background: true); renderer/setup-helper.js line ~961",
+    "README.md 'Working from several PCs' (Share between my PCs, Share with friends, Keep this PC up to date)",
+    "renderer/music.js THEMES/NODE_STYLES comment 'Every theme and node style is free'",
+    "renderer/vibe.js mode() default 'vibe'; template #settings-mode",
+    "CHANGELOG.md [0.4.4] 'The Void collection is free'; [Unreleased] 'Setup helper', 'Share between my PCs', 'Share with friends', 'More than one Claude Code or Codex login', 'Keep this PC up to date', 'Multi-PC sync holds up better' (closing asks first)",
+    ".github/ISSUE_TEMPLATE/feature_request.md"
+   ]
+  },
+  {
+   "slug": "ruins-runner",
+   "verdict": "ok",
+   "problems": [
+    "Every claim checks out: the sibling folders `2d-Trippy-Hell` / `2d Trippy Hell`, the `MEFI_STUDIO_GAME_ROOT` variable, the Integrations card under Settings › System, one LÖVE run at a time (CHANGELOG 0.4.4), and the separate game pipeline.",
+    "Minor style issue: \"**Settings → System → Integrations**\" uses '→'. The rest of the wiki uses '›'.",
+    "Minor: the page doesn't name the four buttons on the card: **Launch Love2D studio**, **Run smoke**, **Launch Ruins Runner**, **Stop game** (template #studio-actions). It also doesn't give the error shown without a checkout: \"Set MEFI_STUDIO_GAME_ROOT to a Ruins Runner checkout to use the game launcher.\" (main.cjs ~18667).",
+    "Minor: \"became a separate application in September 2026\" could give the exact date, September 19, 2026 (docs/migration.md)."
+   ],
+   "neededContent": [
+    "The four button names and the missing-checkout message.",
+    "Optionally one line noting that the card's hint reads \"Uses the separate game project's cached LÖVE runtime and documented smoke-test script when available.\""
+   ],
+   "sources": [
+    "renderer/booklet.template.html #settings-integrations / #studio-actions",
+    "renderer/booklet.js initStudio hint text",
+    "main.cjs ~18641, ~18667 (GAME_ROOT messages)",
+    "README.md 'Optional: Ruins Runner'",
+    "docs/migration.md",
+    "CHANGELOG.md [0.4.4] 'Only one LÖVE launcher run can be open at a time'"
+   ]
+  }
+ ],
+ "newPages": [
+  {
+   "slug": "vibe-mode",
+   "title": "Vibe mode",
+   "section": "Using Studio",
+   "summary": "The calm front door: talk or build from one box, see what's building, and answer what needs you",
+   "outline": [
+    "What Vibe is: the default mode; one box ('Describe what you want'); Enter talks (**Talk it over**), Ctrl+Enter builds (**Build it**); switch to Build at the top or in Settings › General › Studio mode. Released 0.4.2.",
+    "Cards that appear only when they have something: **Needs you**, **Building now** ('Watch it live'), **Plan in flight**, **Freshly done** (last half day), **Fresh ideas**; a quiet project shows one line. Released 0.4.4.",
+    "The dock: Watch (while agents work), Tasks, Plans (while a plan is in play), Ideas (while fresh ones wait), Team, More. Each opens a compact panel; **Full view** opens the Build page inside Vibe's rail; Back or Esc steps out. Released 0.4.4.",
+    "Build it and 'Mefi sizes it': a short change becomes one card; a bigger one becomes 2–6 steps under your card; **Make it one task** drops unstarted steps. Released 0.4.4.",
+    "**New app**: name it and describe it; Studio makes a folder under Mefi Apps in your home folder, runs git init, opens it and sends the description as the first build. Released 0.4.4.",
+    "The Needs you drawer: **Answer** shows the question, the blocked task, the agent's last lines and options (recommended first); the banner offers **Start agents** / **Resume** / **Connect an AI**; **Review** approves a brief. Released 0.4.2–0.4.4.",
+    "Tasks panel: List/Lanes, pause/resume, a worker limit (1, 2, 3 or Automatic in 0.4.5), and an Inspector for priority, estimate, acceptance checks and Defer until. Released 0.4.4 (worker-limit fix coming 0.4.5).",
+    "Coming in 0.4.5: MEFI's **Modify / Experiment / Fix / Improve** briefs and **Suggest a next step**; suggestions can be added to a draft or saved as ideas without starting work; live progress strips show stage, files read, steps planned, model and a clock against this PC's usual time; Team shows 'Thinking now'.",
+    "Decided for you · For you: what Mefi decided and why, with Undo. Link to the permissions page."
+   ],
+   "sources": [
+    "renderer/vibe.js header (default mode, rail), lines ~600-740 (Modify/Experiment/Fix/Improve, Suggest a next step)",
+    "renderer/vibe-panels.js (Tasks List/Lanes, Inspector, Ask for a change, worker limit)",
+    "renderer/vibe-flow.js header (live waits)",
+    "renderer/booklet.template.html lines ~230-320 (Vibe box, cards, dock)",
+    "scripts/new-app.cjs, scripts/request-sizing.cjs",
+    "CHANGELOG.md [0.4.2] 'Vibe mode', 'Vibe: answer decisions without leaving it', 'Vibe can run on its own'; [0.4.4] ''Mefi sizes it'', 'New app', 'Vibe has its own menus', 'Vibe's cards and dock', 'Vibe Tasks gains List/Lanes'; [Unreleased] 'Watch Mefi think, and watch your team work', 'Suggestions stay usable', 'Build on your app with MEFI', 'Talk it over talks', 'Vibe's worker limit offers only what the host honours'"
+   ]
+  },
+  {
+   "slug": "friends-and-rooms",
+   "title": "Friends, rooms and playdates",
+   "section": "Community",
+   "summary": "Meet people in rooms, listen together and let your companion play with friends' companions",
+   "outline": [
+    "Where Friends lives: the companion's **Friends** bubble. In 0.4.4 it holds Your PCs and the listening-room link; in 0.4.5 it holds Playground, Rooms and Your PCs, and badges invites and requests.",
+    "What you need first (rolling-out): a linked Discord account in the Void Engine server plus a running rooms hub. The release ships with no hub address or link app ID. Coming in 0.4.5: enter both once per PC in Settings › General › Community › Connection details; 'Save' says whether the hub answered.",
+    "Rooms (coming 0.4.5, rolling-out): browse your rooms and listed ones; **Ask to join** with a note; accept or decline invites; **Make a room** (hangout or cowork; 'Anyone can ask to join' or 'Invite only'; listed or not); owners let people in, invite by name, lock, close. Room chat is plain text with @names, and links are never clickable. Leave, Close and Delete ask twice. Every room says 'Void Engine moderators can read every room.'",
+    "Listen together and Share what I'm playing (in the code since 0.4.0, rolling-out): pick a room in Music & video › Links and play a link for it; others choose **Listen along**. The starter or the room owner controls playback. Share what I'm playing is off by default and feeds the bot's `/nowplaying`; local files show only as 'Local music'.",
+    "Playground (coming 0.4.5): friends' companions in the same room meet for short scripted playdates, and **Practice with Pip** works on this PC alone. Nothing about you is shared until you allow it (everyone / a room / a friend, this session or always), and What was sent lists every card that left.",
+    "Cowork rooms for agents (coming 0.4.5, rolling-out): open a room and choose **Use this room for this project's agents**. Builders on every PC claim the files they will edit, and other PCs wait on those files.",
+    "Privacy in one paragraph: what the hub and bot keep (in memory only for listening; no message text stored by the bot), `/forget-me`, and a link to the privacy page.",
+    "Ideas, not features: sharing mixes and showing the most-played ones for people who turn on music sharing; credits for playing or looking at projects; spending credits to promote a project; cosmetics for credits. Mark all as 'idea' and link to the roadmap and the feature-request paths."
+   ],
+   "sources": [
+    "renderer/companion-hub.js items and Friends section (v0.4.4 vs origin/main)",
+    "renderer/rooms.js (Ask to join, Make a room, 'Use this room for this project's agents', moderators line)",
+    "renderer/companion-friends.js header; scripts/companion-friends.cjs (five sharing levels)",
+    "renderer/together.js; renderer/community.js (Connection details)",
+    "scripts/hub-client.cjs HUB_URL = ''; scripts/community.cjs CLIENT_ID = ''",
+    "docs/friends-setup.md; docs/community.md",
+    "Void Engine Bot README.md (phases: rooms, listen together, /nowplaying, cowork claims) and docs/privacy.md",
+    "CHANGELOG.md [0.4.0] 'Listen together', 'Share what I'm playing'; [Unreleased] 'Friends › Rooms', 'The companion as a pet and a friend', 'Friends across PCs', 'Discord linking and Rooms without environment variables', 'Agents on several PCs never edit the same file at once', 'Rooms show the right room'"
+   ]
+  },
+  {
+   "slug": "your-pcs",
+   "title": "Your PCs: sync and sharing",
+   "section": "Using Studio",
+   "summary": "Keep a project in step across your PCs and move chosen settings safely between them or to a friend",
+   "outline": [
+    "Where: companion › Friends › Your PCs. Opening it only looks.",
+    "Sync this PC (released 0.4.4): compares this PC with the project's default branch on GitHub and lists uncommitted files, unpushed commits, stashes, worktrees and local-only branches; pulls and pushes without force. Coming in 0.4.5: it pushes only after the project's `npm run check` passes.",
+    "Coming in 0.4.5: **Put my commits on top of GitHub's** (rebase when both sides moved; a conflict changes nothing); the Friends badge for work only this PC holds (checked 45 s after launch, then every 15 min); closing asks first; **Keep this PC up to date** (on by default, once a minute, fast-forward only when safe).",
+    "Set up this PC (coming 0.4.5): a checklist for Git, GitHub CLI, Node.js, GitHub sign-in (in the browser; Studio never sees the token), the project's remote, packages, and a drive that can hold worktrees (not exFAT/FAT). Each gap has a button that opens a visible setup window. **Get a project from GitHub** clones one of your repositories.",
+    "Share between my PCs (coming 0.4.5): one private repo `<you>/mefi-studio-vault`, AES-256-GCM sealed, with a pairing code typed on each other PC. Shelves: model results, learned decisions, team setups, brains, Playbook recipes, Claude Code memory notes, preferences, open tasks and ideas. Items are checked both ways, received items never overwrite yours, and keys need the exact typed confirmation.",
+    "Share with friends (coming 0.4.5): save one item as a scrubbed, previewed `.mefishare`; opening a friend's file runs the same review; a friend's file can't change your permissions.",
+    "From a terminal: `npm run sync` (and `--rebase`) for people who run from source.",
+    "What never moves: conversations, and saved logins unless you choose Keys and setup."
+   ],
+   "sources": [
+    "README.md 'Working from several PCs'",
+    "scripts/sync.mjs, scripts/pc-setup.cjs, scripts/pc-vault.cjs, scripts/vault-crypto.cjs, scripts/vault-shelves.cjs, scripts/share-review.cjs (docs/code-map.md)",
+    "renderer/pc-sync.js, renderer/pc-vault.js",
+    "CHANGELOG.md [0.4.4] Added 'Multi-PC sync'; [Unreleased] 'Multi-PC sync holds up better', 'Set up this PC', 'Share between my PCs', 'Share with friends', 'Keep this PC up to date', 'Your PCs is more exact...', 'Share between my PCs no longer gets stuck', 'A friend's preferences cannot change your permissions'"
+   ]
+  },
+  {
+   "slug": "setup-helper",
+   "title": "Setup helper and Configuration",
+   "section": "Start here",
+   "summary": "Set every agent setting in one place, or find any setting in one searchable tree",
+   "outline": [
+    "Coming in 0.4.5. The helper opens by itself on a new install and once after updating to the version that adds it. Reopen it later from Search ('Setup helper › …'), Help, or the tools list. Closing it leaves Start here waiting, with a toast.",
+    "Welcome: **Quick setup** (three steps, about two minutes) or **Everything**; set up **Studio defaults** or **This project only**.",
+    "Connect an AI: **Set up automatically**, **Start free with OpenCode**, subscription logins (Claude Code, Codex, Grok, Antigravity), API keys (OpenCode Go, Zen, z.ai, OpenRouter), LM Studio and custom endpoints. Tools installed but not signed in are marked. **More than one login** adds a second Claude Code or Codex login (up to six), and Studio swaps logins when one hits its limit.",
+    "Team & models: every role and the coding worker with its tier, plus the five seats (Companion, Context scout, Overseer, Lead, Desk) and saved teams.",
+    "Routing, How work runs (new work, workers at once, coordination, reporting, backlog), Permissions, Tools & skills (per-agent tools, skills and Habits set to off / brief / full, with their token cost), Machine & app (keep this computer awake, keep running in the tray, resource limits, updates, GitHub token), Look, Finish.",
+    "Configuration (`Ctrl Shift ,`, or 'All settings in one place' in Settings): every setting in one searchable tree under seven categories. Picking one opens its real control. Includes **Interface scale** (70%–150%).",
+    "New General settings: 'When Studio opens' (Resume what I had / Start agents / Keep agents off) and 'Show Command view after 5 quiet minutes' (off by default).",
+    "Every control saves through the same host call as its old place, so values match everywhere."
+   ],
+   "sources": [
+    "renderer/setup-helper.js header, SECTIONS (welcome, providers, team, routing, run, permissions, tools, system, look, finish), register() lines ~1275-1290",
+    "renderer/config-dialog.js (docs/code-map.md row)",
+    "scripts/habits.cjs; scripts/cli-accounts.cjs; docs/cli-setup.md#more-than-one-login",
+    "renderer/booklet.template.html lines 580-615 (All settings in one place, When Studio opens, Show Command view after 5 quiet minutes)",
+    "CHANGELOG.md [Unreleased] 'Setup helper', 'Configuration', 'Habits', 'More than one Claude Code or Codex login', 'Setup finds the login you have', 'One welcome at a time', 'When Studio opens', 'No more surprise jump to Command view'"
+   ]
+  },
+  {
+   "slug": "permissions",
+   "title": "Permissions and decisions",
+   "section": "Using Studio",
+   "summary": "Choose what Mefi may decide for you, see why it decided, and undo it",
+   "outline": [
+    "The four modes (released 0.4.4): **Always ask**, **Accept per task**, **Auto** (default), **Elevated only**. For each, say what happens to a new task and to an ordinary question.",
+    "Elevated categories that stay with you unless switched off: Granting reach, Irreversible changes, Closing your work, Work agents propose (Elevated only), A pricier model, Real-world to-dos. Turning off the first two needs a warning acknowledged.",
+    "Where to change it: the composer's permission chip, Vibe Settings, the companion's settings, Agents › Overview, Search. Coming in 0.4.5: also Setup helper › Permissions.",
+    "The desk handles asks in Auto and Elevated only: answers are labelled 'Mefi decided' with a reason, keep your stop and budgets, and are never learned as your preference. Permission, risk and 'only you can do this' asks always wait for you.",
+    "Decided for you (Why / Undo) and the For you list of real-world to-dos (up to 50). Undo waits for a running worker and keeps later edits.",
+    "Learning: owner answers teach Mefi (recent choices count more, corrections count double); scope this project / all projects / blend; turn it off or Forget.",
+    "Coming in 0.4.5: each mode's description says what happens to a new task; the old Auto build switch no longer turns Elevated into Auto or Accept per task into Always ask; approvals survive references gathered later; a friend's `.mefishare` can't change permissions."
+   ],
+   "sources": [
+    "scripts/autonomy.cjs LEVELS, DEFAULT_LEVEL 'auto', ELEVATED labels",
+    "docs/architecture.md 'Permission modes', 'Learning', glossary 'Delegated decision', 'For you'",
+    "renderer/autonomy-ui.js",
+    "main.cjs deskResolvesOn; scripts/desk-resolve.cjs",
+    "CHANGELOG.md [0.4.4] Added 'Four saved permission modes', 'Automatic answers have a bounded decision history', 'Mefi learns from successful owner answers', 'The desk can handle asks for you'; Fixed 'An answer the desk gave for you counted as yours'; [Unreleased] 'Permission modes keep their meaning', 'Approvals are no longer cancelled silently', 'A friend's preferences cannot change your permissions'"
+   ]
+  },
+  {
+   "slug": "media-player",
+   "title": "Music, video and the player",
+   "section": "Community",
+   "summary": "Play local music, radio or links while you work, and let the tree move with it",
+   "outline": [
+    "Open it: the audio button in Command's toolbar or Home ('Connect audio · Music and video'), Settings › Audio › Open music & video, or Search 'Music & video'. Closing the menu keeps playback running. Hovering the button opens the current source's settings.",
+    "Sources: Local music (record artwork, listening-room layout), Radio (ad-free stations), Links: YouTube (privacy-enhanced), Spotify, SoundCloud, Vimeo embeds, and plain audio/video files including Discord attachments. Spotify Jam, Twitch and other pages open in their own app or the browser. **Copy link**. Released 0.4.0–0.4.4.",
+    "YouTube explorer, **Next video**, and the **Up next** queue (Play, Add to queue, Queue next). Offer copied media links, and **Show links** to hide URLs on stream. Released 0.4.3.",
+    "**Browse here**: websites inside the player, with an address bar, navigation, mute, minimize and close. Released 0.4.4.",
+    "Floating player: drag, resize, pin, move aside, minimize without stopping. Coming in 0.4.5: a move handle, Settings, minimize and close buttons, a visible restore bar, and the player takes focus only when you minimize it.",
+    "Background video behind Command and Home: brightness 25–150%, separate tree and video transparency, the tree placed in dark or bright areas, and dimming when paused. Released 0.4.3–0.4.4.",
+    "Audio reactions: Listen to (local, desktop audio, microphone); tree modes Steady / Music / Video / Music + video; ring, wave and spiral shapes; node and line brightness and outlines; Zen bells. Microphone input only drives visuals. Released 0.4.0–0.4.3.",
+    "Listening with others is rolling out: link to the friends-and-rooms page."
+   ],
+   "sources": [
+    "renderer/music.js (sources 'Local music', 'Radio', 'Links'; Up next, Next video, Browse here, Show links, Offer copied media links)",
+    "renderer/media-window.js, renderer/media-browser.js, scripts/media-browser.cjs, scripts/youtube-explorer.cjs, renderer/tree-dynamics.js (docs/code-map.md)",
+    "renderer/booklet.template.html #settings-audio, #idle-music-toggle, #idle-ambience-pop",
+    "SECURITY.md 'Links, Listen together and now playing'",
+    "CHANGELOG.md [0.4.0] 'Links replaces the Spotify tab', 'Tree motion', 'The audio status box opens an adaptive Music & video dropdown', 'Media links play in a borderless floating window'; [0.4.3] media bullets; [0.4.4] 'Music & video puts the player...', 'browses web links inside its existing player'; [Unreleased] 'Media controls stay within reach', 'The media player takes focus only when you minimize it'"
+   ]
+  },
+  {
+   "slug": "companion",
+   "title": "Your companion",
+   "section": "Using Studio",
+   "summary": "The wisp in the menu foot: talk, see what the team is doing, and answer what needs you",
+   "outline": [
+    "What it is: the glowing wisp in the menu foot (named in Settings › General › Companion name; 'Let your companion move'). It greets you with what happened while you were away and keeps one queue of what needs you, with the count in the tray. Released 0.4.0.",
+    "Open the bubble menu by clicking it (or Esc from the launch box). 0.4.4 bubbles: Talk to me, Friends, Requests, Notifications, Settings, Quick actions. Coming in 0.4.5: Talk (three one-tap starters), What I'm doing, Needs you, Suggest work (send an idea to the inbox, or take one of its picks with Work on it), Friends, Personality.",
+    "Needs you and **Clear list** (released 0.4.4). Coming in 0.4.5: answered asks leave the list at once.",
+    "The desk answering for you in Auto and Elevated only ('Mefi decided'). Link to the permissions page.",
+    "Coming in 0.4.5, the companion as a pet: Personality set to Straight work, Balanced, or Friendly & expressive (faces, idle play, roaming; chat tone only); stroke it to pet it; it remembers days together, pets and playdates.",
+    "Its model: the Companion seat (default GPT-6 Luna on OpenCode Zen when Zen is connected); change it in Agents › Setup or Setup helper › Team & models.",
+    "Friends and Playground: link to the friends-and-rooms page."
+   ],
+   "sources": [
+    "renderer/companion-hub.js items (v0.4.4 vs origin/main); renderer/companion-ui.js personalities; renderer/agent-brain.js MefiCompanion",
+    "scripts/companion.cjs, scripts/companion-pet.cjs",
+    "renderer/booklet.template.html Settings General (Companion name, Let your companion move)",
+    "renderer/setup-helper.js SEATS/seatDefaults",
+    "docs/architecture.md glossary 'Companion'",
+    "CHANGELOG.md [0.4.0] 'A glowing wisp now wakes in the launch box', 'Your companion lives in the menu foot'; [0.4.4] 'The desk can handle asks for you' (Clear list); [Unreleased] 'The companion as a pet and a friend', 'Answered asks leave the Needs you list'"
+   ]
+  },
+  {
+   "slug": "agent-brain",
+   "title": "Agent brain, Playbook and project map",
+   "section": "Using Studio",
+   "summary": "Watch a task's pipeline, reuse what worked, and explore your project's systems",
+   "outline": [
+    "Open with `J`, or Agents › Live › Pipelines, Agents › Workflows › Playbook / Project map. Tabs: Explore, Live work, Playbook (Seats moved to Agents › Setup). Released 0.4.0.",
+    "Live work: a task's pipeline drawn top down (your companion, the lead, the steps, sub-agents that go out, finish and report up). **Replay today** plays back the day's events.",
+    "Playbook: every verified or failed pipeline is filed as a recipe; the next task of the same kind starts from the one that verifies most. Pin, rename, Retire/Restore, delete.",
+    "Project map (Explore): systems built from git history and the files verified runs touched. Back/Forward, breadcrumbs, contents search, working/changed filters, minimap; click to inspect, double-click or Enter to explore. Home's map and **Work on this region**. Released 0.4.0.",
+    "Coming in 0.4.5: connected system cards show files that change together, and an Ideas tree groups ideas and tasks by system and progress.",
+    "How this differs from Brain maps (`B`), the editable pipeline rules. Link to brain-maps."
+   ],
+   "sources": [
+    "renderer/agent-brain.js header; renderer/project-map-view.js",
+    "renderer/booklet.template.html lines 1607-1618 (data-brain-tab map/live/playbook/seats, agent-brain-replay)",
+    "renderer/agents.js children (live: Pipelines; workflows: Playbook, Project map)",
+    "renderer/nav.js registry 'agent-brain' key J",
+    "scripts/pipelines.cjs, scripts/playbook.cjs, scripts/project-map.cjs (docs/code-map.md)",
+    "CHANGELOG.md [0.4.0] 'The Agent Brain', 'Project map exploration now has Back/Forward...'; [Unreleased] 'A map that shows relationships'",
+    "docs/roadmap-0.4.0.md Status table"
+   ]
+  },
+  {
+   "slug": "appearance",
+   "title": "Themes, node styles and looks",
+   "section": "Using Studio",
+   "summary": "Every theme and node style is free: pick colours, node shapes, layouts and motion",
+   "outline": [
+    "Open with `U` or Settings › Appearance. The sidebar sits beside the live tree with sections Theme, Nodes, Layout and Interface; the arrow moves it left or right; Esc or clicking outside closes it.",
+    "Themes: Aurora (default), Studio gold, Midnight, Forest, Violet, Ember, Rose, Custom colors, plus the Void collection (Void, Eclipse, Abyss, Neon Dusk, two-tone). All free since 0.4.4, with no Discord needed.",
+    "Node styles (8): Classic orbs, Soft glass, Minimal, Halo, Crystal, plus Void's Singularity, Prism and Sigil. Each has its own shape, motion, wires and completion effect (remastered in 0.4.2).",
+    "Layouts: Constellation, Branches, Rings, Helix, Terraces. Backdrops are in Command's Ambience popover.",
+    "Interface: Motion Full / Calm / Off, Blur behind panels, glass and Focus / Studio / Atmosphere presets, tree brightness and outlines (0.4.3). Coming in 0.4.5: Interface scale 70–150% in Configuration.",
+    "Ideas, not features: cosmetics or styles earned or traded with credits. Mark them as ideas."
+   ],
+   "sources": [
+    "renderer/music.js THEMES, NODE_STYLES, NODE_LAYOUTS (lines ~20-60)",
+    "renderer/booklet.template.html Settings General (workspace-accent options, Motion segmented, pref-blur) and Appearance sections",
+    "renderer/node-styles.js (docs/code-map.md)",
+    "CHANGELOG.md [0.4.0] 'Appearance now showcases the live tree beside a compact, movable sidebar'; [0.4.2] 'Remastered node styles'; [0.4.3] brightness sliders; [0.4.4] 'The Void collection is free'; [Unreleased] 'Configuration' (Interface scale)"
+   ]
+  },
+  {
+   "slug": "logs-and-diagnostics",
+   "title": "Logs, Trace and diagnostics",
+   "section": "Reference",
+   "summary": "Read Studio's logs, record a slowdown and measure a model before you report a bug",
+   "outline": [
+    "Trace (Agents › Live › Trace; released 0.4.4): channels Studio log, Assistant, Runs (the run ledger), OpenCode, Window; search; a tail of 100–2000 lines; level chips (errors, warnings, info); source chips with counts; problems only; follow; newest first or last; copy; open the file.",
+    "Performance profiler (Settings › System › Diagnostics › Open profiler): Start capture, Stop, Export JSON; a capture stays in memory until exported.",
+    "Speed probe (Measure tokens/s) and the Connection log (Agents › Setup › Providers): what each shows, and that a probe may cost quota.",
+    "Run auditor and Machine (open in Sessions' Diagnostics): local wiring and gap checks, test leases, LÖVE runs, auto-kill.",
+    "Coming in 0.4.5: the agents' status line says why nothing is starting and names the one control that fixes it; errors read as full sentences.",
+    "What to include in a bug report, and what to remove (keys, tokens, private paths). Links to troubleshooting and privacy."
+   ],
+   "sources": [
+    "main.cjs TRACE_CHANNELS (~line 18527); scripts/trace.cjs; renderer/trace.js",
+    "renderer/booklet.template.html lines 938-953 (Diagnostics, Connection log), 1646-1651 (profiler)",
+    "renderer/agents.js move('settings-log','connections')",
+    "scripts/auditor.mjs, scripts/machine.mjs, scripts/performance-profiler.cjs (docs/code-map.md)",
+    "scripts/loop-status.cjs",
+    "CHANGELOG.md [0.4.4] 'Trace (Live, beside Activity)', 'The Performance profiler shows —'; [Unreleased] 'Agents say why they are not working', 'Menus say what they mean', 'Pages leave out what was not recorded'"
+   ]
+  }
+ ],
+ "notes": "Method: every claim was checked against origin/main, which equals HEAD 6c1c940. The task said the working tree was clean, but it is not. It has uncommitted peer-session edits to renderer/nav.js, rooms.js, music.js, idle.js, companion-hub.js, companion-ui.js, agent-brain.js, studio-ui.js, tasks.js, styles.css and the booklet, plus an untracked tests/type_into_menu.test.mjs. None of that is on origin, so it was ignored. I made no writes.\n\nHow releases were split:\n- **Released:** `git show v0.4.4:` was the baseline.\n- **Coming in 0.4.5:** these modules are on main but absent from v0.4.4, so their features are coming-0.4.5: renderer/setup-helper.js, config-dialog.js, rooms.js, pc-vault.js, companion-friends.js, vibe-flow.js, motion.js, plus scripts/loop-status.cjs, habits.cjs and cli-accounts.cjs.\n- **Present in v0.4.4:** trace.js, together.js and pc-sync.js (Sync this PC only).\n- **Rolling out:** scripts/hub-client.cjs has `HUB_URL = \"\"` and scripts/community.cjs has `CLIENT_ID = \"\"` on main. So Rooms, Listen together, Share what I'm playing, Discord linking, Playground with friends and cowork claims all need 0.4.5's Settings › General › Community › Connection details plus a running hub (docs/friends-setup.md).\n\nLabels confirmed as correct (keep them):\n- Agents sections: Overview, Setup (Team & models / Providers / Routing & fallback / Run behavior), Live (Command, Pipelines, Sessions, Activity, Trace, Overhead), Workflows (Brain maps, Playbook, Project map, Context), Models (Catalog, Performance), Usage (Recorded calls, Provider accounts). Same in v0.4.4.\n- Visible Settings categories: General, Appearance, Audio, System. agents.js removes Connections, Models and Automation.\n- Keys: H, D, T, P, I, B, J, E, O, A, 1, 2, 3, 4, U, ?, /, R, G, Ctrl K, Ctrl ,. Coming in 0.4.5: Ctrl Shift , (Configuration). Trace has no key.\n\nIdeas the owner raised that have no code in the app or the Void Engine Bot repo (label them \"idea\" only):\n- credits for playing or looking at others' projects\n- spending credits to advertise your own\n- cosmetics or styles for credits\n- sharing mixes and showing the most-played ones under a \"share music taste\" setting\n\nThings to keep in mind for those ideas:\n- The closest real features are the opt-in Share what I'm playing / `/nowplaying` and Listen together (rolling out), Playground (0.4.5) and `.mefishare` (0.4.5).\n- The bot README commits to \"never tracks or rewards invites or referrals, and never rewards raw message counts\", and XP is capped with no leaderboard. A credits design should respect that.\n- Selling cosmetics would reverse the \"every theme and node style is free since 0.4.4\" message, so present it as an idea, not a promise.\n\nRoadmap material for the site (\"planned\" / \"being worked on\"):\n- docs/fleet-overhaul-plan.md:\n  - Phase 1, seats, is in progress on branch fleet/overhaul.\n  - Phase 2, Live › Fleet, is next.\n  - Phases 3–8 are planned: Tasks lanes per agent, Missions & Refocus, continuity and a seat editor, a progress monitor with budgets, and Friends in the fleet.\n- docs/roadmap-0.4.0.md: M0 node-style packs is 'Waiting'.\n- docs/public-site.md: a 'Hey Studio' voice popup is proposed, i.e. an idea.\n- The Compare-models-on-one-brief view is marked 'Planned' in the app itself.\n- Feature-request paths that exist: .github/ISSUE_TEMPLATE/feature_request.md and bug_report.md, plus the Discord invite https://discord.gg/xgfKc5pVxG.\n\nPages outside my set that need 0.4.5 touches:\n- **whats-new:** add a 'Coming in 0.4.5' companion page.\n- **community:** Friends › Rooms, Connection details, Playground.\n- **connections:** Setup helper and More than one login.\n- **shortcuts:** Ctrl Shift ,; M+ opens Projects; Space is now 'spin'.\n- **workflow:** its states table says 'Awaiting verification' and 'Awaiting build approval'. The UI says 'Verifying' and 'Awaiting approval' (renderer/stage-labels.js), and deferred tasks read 'Scheduled for later'.\n- **assistant:** 'Agents' dropdown also has Agent mode and Restart; 'When Studio opens'.\n\nStale app-repo docs to fix separately:\n- docs/brain-maps.md says brain maps open from 'Work › Brain maps' and 'Settings › Models'. They are under Agents › Workflows now.\n- README 'First launch' step 3 says 'Settings › Connections'. That is now Agents › Setup › Providers.\n- README and package-release text say 'App updates'. The UI card is 'Updates'.\n- SECURITY.md does not mention the vault, Rooms or cowork claims yet.\n\nStyle: every audited page uses '›' except ruins-runner and faq, which use '→'."
+}

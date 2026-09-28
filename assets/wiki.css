@@ -1,0 +1,106 @@
+/* Mefi Studio guide: wiki-only rules. The shared wiki layout (.wiki,
+   .wiki-side, .wiki-main, .wiki-toc, .prose) lives in site.css; this file adds
+   the page list, the phone drawer, status notes and the page-swap motion. */
+
+/* ---- page list ---- */
+.wiki-side { scrollbar-width: thin; scrollbar-color: rgba(113, 203, 183, 0.28) transparent; overscroll-behavior: contain; }
+.wiki-side:focus { outline: none; }
+.wiki-side:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: -2px; }
+.side-group {
+  font-family: var(--font-ui); font-size: 0.72rem; font-weight: 650; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--accent); margin: 22px 10px 6px;
+}
+.wiki-side li a { padding: 5px 10px; font-size: 0.93rem; line-height: 1.4; }
+.side-tag {
+  display: inline-block; margin-left: 4px; padding: 0 7px; border-radius: var(--r-pill); border: 1px solid;
+  font-size: 0.68rem; font-weight: 650; letter-spacing: 0.03em; line-height: 1.6; vertical-align: 0.08em; white-space: nowrap;
+}
+.side-tag.next { color: #c3b9ff; background: rgba(140, 123, 255, 0.12); border-color: rgba(140, 123, 255, 0.34); }
+.side-tag.rolling { color: var(--warn); background: rgba(255, 212, 121, 0.08); border-color: rgba(255, 212, 121, 0.32); }
+.wiki-side .side-extra { margin: 22px 0 8px; padding: 14px 0 0; border-top: 1px solid var(--hairline); }
+.wiki-side .side-extra a { font-size: 0.9rem; }
+
+/* ---- search ---- */
+.wiki-side .search input { padding-right: 40px; }
+.search-key { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 0.72rem; padding: 0 7px; color: var(--dim); pointer-events: none; }
+.search input:focus ~ .search-key, .search input:not(:placeholder-shown) ~ .search-key { display: none; }
+@media (hover: none) { .search-key { display: none; } }
+.search-results .hit-section { color: var(--accent); }
+.search-results .none a { color: var(--accent-bright); }
+
+/* ---- page bar: phone toggle and breadcrumbs ---- */
+.wiki-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; min-width: 0; }
+.wiki-crumbs { margin: 0; min-width: 0; }
+.crumb-sep { margin: 0 0.45em; color: var(--dim); }
+#crumb-current { color: var(--muted); }
+.wiki-toggle svg { width: 16px; height: 16px; }
+
+/* ---- article ---- */
+.prose[aria-busy="true"] { opacity: 0.55; transition: opacity 0.2s ease; }
+.prose h1, .prose h2, .prose h3, .prose h4 { scroll-margin-top: 12px; }
+.prose h1:focus-visible, .prose [data-anchor]:focus-visible { outline-offset: 6px; border-radius: 6px; }
+.prose a.anchor:focus-visible { opacity: 1; }
+.prose .status { margin-right: 0.35em; vertical-align: 0.08em; }
+.prose h2 .status, .prose h3 .status, .prose h4 .status { vertical-align: middle; font-family: var(--font-ui); }
+.prose kbd {
+  display: inline-block; padding: 1px 7px; border-radius: 6px; border: 1px solid var(--hairline-strong);
+  background: rgba(5, 13, 19, 0.7); color: var(--ivory); font-size: 0.82em; line-height: 1.5; box-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+}
+.prose .table-wrap { margin: 1em 0 1.5em; }
+.prose .table-wrap table { margin: 0; }
+.prose .table-wrap:focus-visible { outline-offset: 2px; }
+
+/* Status notes: "> **Coming in 0.4.5:** …" and friends (the words carry the
+   status; the colour only repeats it). */
+.prose blockquote.note { color: var(--text); }
+.prose blockquote.note-next { border-left-color: var(--void); background: rgba(140, 123, 255, 0.08); }
+.prose blockquote.note-rolling { border-left-color: var(--warn); background: rgba(255, 212, 121, 0.07); }
+.prose blockquote.note-planned { border-left-color: var(--info); background: rgba(157, 183, 255, 0.07); }
+.prose blockquote.note-progress { border-left-color: var(--live); background: rgba(87, 255, 154, 0.06); }
+.prose blockquote.note-idea { border-left-color: var(--muted); background: rgba(169, 193, 198, 0.06); }
+.prose blockquote.note-next > p:first-child > strong:first-child { color: #c3b9ff; }
+.prose blockquote.note-rolling > p:first-child > strong:first-child { color: var(--warn); }
+.prose blockquote.note-planned > p:first-child > strong:first-child { color: var(--info); }
+
+/* ---- on this page ---- */
+.toc-title {
+  font-family: var(--font-ui); font-size: 0.72rem; font-weight: 650; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--accent); margin: 0 0 8px;
+}
+.wiki-toc { max-height: calc(100vh - 110px); overflow: auto; scrollbar-width: thin; scrollbar-color: rgba(113, 203, 183, 0.28) transparent; }
+
+/* ---- previous / next and page foot ---- */
+.wiki-nav > span { flex: 1; }
+.wf-links { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; }
+.wiki-foot a { color: var(--muted); }
+.wiki-foot a:hover { color: var(--ivory); }
+.wiki-foot .status { margin: 0 0.15em; vertical-align: 0.06em; }
+
+/* ---- page swaps ----
+   When the article would move (scrolled deep, or the phone drawer closes),
+   wiki.js adds .wiki-flat for the new state so the old page fades where it
+   was and the new one fades in, instead of sliding across the screen. */
+html.wiki-flat .wiki-main { view-transition-name: none; }
+
+/* ---- phones: a sticky page bar and the page list as a drawer ---- */
+@media (max-width: 720px) {
+  html { scroll-padding-top: 124px; }
+  .wiki { padding-top: 0; }
+  .wiki-bar {
+    position: sticky; top: 64px; z-index: 30;
+    margin: 0 calc(-1 * var(--gutter)) 18px; padding: 10px var(--gutter);
+    background: rgba(5, 13, 19, 0.98);
+    border-bottom: 1px solid var(--hairline);
+  }
+  .wiki-toggle { margin: 0; flex: none; }
+  .wiki-crumbs { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.95rem; }
+  .wiki-crumbs .crumb-trail { display: none; }
+  #crumb-current { color: var(--ivory); font-weight: 600; }
+  .wiki-side.open {
+    position: fixed; top: var(--drawer-top, 120px); left: 0; right: 0; bottom: 0; z-index: 45;
+    display: block; max-height: none; margin: 0; padding: 14px var(--gutter) 40px;
+    background: var(--bg); border-top: 1px solid var(--hairline); box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
+    overflow-y: auto;
+  }
+  html.wiki-drawer-open { overflow: hidden; }
+}

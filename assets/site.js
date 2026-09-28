@@ -115,9 +115,138 @@
     return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   };
 
+  // The community's own places. Discord is the easiest way in, never a requirement.
+  SITE.discord = {
+    invite: "https://discord.gg/xgfKc5pVxG",
+    code: "xgfKc5pVxG",
+  };
+  SITE.urls.discord = SITE.discord.invite;
+  SITE.urls.enhancements = `https://github.com/${SITE.repo}/issues?q=is%3Aissue+is%3Aopen+label%3Aenhancement+sort%3Areactions-%2B1-desc`;
+
+  // Live member and online counts from the invite (counts only; the server
+  // widget, which would publish names, stays off). Rejects on any failure.
+  let pulsePromise = null;
+  SITE.fetchDiscordCounts = function () {
+    if (pulsePromise) return pulsePromise;
+    pulsePromise = fetch(`https://discord.com/api/v10/invites/${SITE.discord.code}?with_counts=true`)
+      .then((res) => { if (!res.ok) throw new Error(`Discord answered ${res.status}`); return res.json(); })
+      .then((data) => {
+        const members = Number(data.approximate_member_count), online = Number(data.approximate_presence_count);
+        if (!Number.isFinite(members) || members <= 0) throw new Error("no counts");
+        return { members, online: Number.isFinite(online) ? online : null };
+      });
+    pulsePromise.catch(() => { pulsePromise = null; });
+    return pulsePromise;
+  };
+
+  // Open feature requests, most 👍 first (the vote count is GitHub's own
+  // reactions). Unauthenticated GitHub API: 60 requests an hour per visitor.
+  SITE.fetchFeatureRequests = function (limit = 8) {
+    const q = encodeURIComponent(`repo:${SITE.repo} is:issue is:open label:enhancement`);
+    return fetch(`https://api.github.com/search/issues?q=${q}&sort=reactions-%2B1&order=desc&per_page=${limit}`, { headers: { Accept: "application/vnd.github+json" } })
+      .then((res) => { if (!res.ok) throw new Error(`GitHub API answered ${res.status}`); return res.json(); })
+      .then((data) => (Array.isArray(data.items) ? data.items : []).map((issue) => ({
+        title: issue.title, url: issue.html_url, number: issue.number,
+        votes: Number(issue.reactions?.["+1"]) || 0, comments: Number(issue.comments) || 0, created: issue.created_at,
+      })));
+  };
+
+  const plural = (n, one, many) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+  SITE.plural = plural;
+
   window.SITE = SITE;
 
+  // ---- behaviours every page shares ---------------------------------------
+  function initMenu() {
+    // The phone menu is a <details>: close it on Escape, on an outside click
+    // and when one of its links is followed.
+    document.querySelectorAll("details.menu").forEach((menu) => {
+      const close = () => { if (menu.open) menu.open = false; };
+      document.addEventListener("click", (e) => { if (!menu.contains(e.target)) close(); });
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape" && menu.open) { close(); menu.querySelector("summary")?.focus(); } });
+      menu.querySelectorAll("a").forEach((a) => a.addEventListener("click", close));
+    });
+  }
+
+  function initPulse() {
+    const pulses = document.querySelectorAll("[data-discord-pulse]");
+    if (!pulses.length) return;
+    SITE.fetchDiscordCounts().then(({ members, online }) => {
+      pulses.forEach((el) => {
+        const text = online != null ? `<b>${plural(members, "member", "members")}</b> · ${online.toLocaleString()} online now` : `<b>${plural(members, "member", "members")}</b> in the Discord`;
+        const slot = el.querySelector("[data-pulse-text]") || el;
+        slot.innerHTML = text;
+        el.hidden = false;
+      });
+    }).catch(() => { pulses.forEach((el) => { el.hidden = true; }); });
+  }
+
+  // Grouped sections become tabs: <div class="tabset" data-tabs="Label"> holding
+  // <section data-tab-label="Name" id="…">. Without script they simply stack.
+  function initTabsets() {
+    document.querySelectorAll("[data-tabs]").forEach((set, setIndex) => {
+      const panels = [...set.querySelectorAll(":scope > [data-tab-label]")];
+      if (panels.length < 2) return;
+      const list = document.createElement("div");
+      list.setAttribute("role", "tablist");
+      list.setAttribute("aria-label", set.dataset.tabs || "Sections");
+      list.className = "chips";
+      const tabs = panels.map((panel, i) => {
+        if (!panel.id) panel.id = `tabpanel-${setIndex}-${i}`;
+        const tab = document.createElement("button");
+        tab.type = "button"; tab.className = "chip"; tab.id = `${panel.id}-tab`;
+        tab.setAttribute("role", "tab"); tab.setAttribute("aria-controls", panel.id);
+        tab.textContent = panel.dataset.tabLabel;
+        panel.setAttribute("role", "tabpanel"); panel.setAttribute("aria-labelledby", tab.id); panel.tabIndex = 0;
+        list.append(tab);
+        return tab;
+      });
+      const select = (index, focus) => {
+        tabs.forEach((tab, i) => {
+          const on = i === index;
+          tab.setAttribute("aria-selected", String(on)); tab.setAttribute("aria-pressed", String(on)); tab.tabIndex = on ? 0 : -1;
+          panels[i].hidden = !on;
+        });
+        if (focus) tabs[index].focus();
+      };
+      list.addEventListener("keydown", (e) => {
+        const current = tabs.findIndex((tab) => tab.getAttribute("aria-selected") === "true");
+        const next = e.key === "ArrowRight" ? (current + 1) % tabs.length : e.key === "ArrowLeft" ? (current - 1 + tabs.length) % tabs.length : e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 : -1;
+        if (next >= 0) { e.preventDefault(); select(next, true); }
+      });
+      tabs.forEach((tab, i) => tab.addEventListener("click", () => {
+        select(i, false);
+        if (history.replaceState) history.replaceState(null, "", `#${panels[i].id}`);
+      }));
+      set.prepend(list);
+      set.classList.add("is-tabs");
+      // A link to a panel, or to anything inside one, opens that tab.
+      let fromHash = -1;
+      if (location.hash.length > 1) {
+        const target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+        fromHash = target ? panels.findIndex((panel) => panel === target || panel.contains(target)) : -1;
+      }
+      select(fromHash >= 0 ? fromHash : 0, false);
+    });
+  }
+
+  function initReveal() {
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const targets = document.querySelectorAll("[data-reveal]");
+    if (still || !targets.length || !("IntersectionObserver" in window)) return;
+    document.documentElement.classList.add("js-reveal");
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.06 });
+    targets.forEach((el, i) => { el.style.transitionDelay = `${(i % 3) * 70}ms`; io.observe(el); });
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
+    initMenu();
+    initPulse();
+    initTabsets();
+    initReveal();
+
     // Footer year.
     document.querySelectorAll("[data-year]").forEach((el) => { el.textContent = String(new Date().getFullYear()); });
 

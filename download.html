@@ -1,228 +1,447 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Download — Mefi Studio</title>
-  <meta name="description" content="Download the portable Windows build of Mefi Studio, verify its SHA-256, or run it from source with Node 24.">
-  <meta name="theme-color" content="#050d13">
-  <link rel="icon" href="assets/favicon.ico">
-  <link rel="stylesheet" href="assets/site.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Download — Mefi Studio</title>
+<meta name="description" content="Download Mefi Studio 0.4.4 for Windows 10 and 11: a free, portable zip with no installer and no account. Three steps to install, how to check the SHA-256, how updates work, and how to run it from source.">
+<link rel="canonical" href="https://nateecho32-stack.github.io/mefi-studio/download.html">
+<meta property="og:title" content="Download Mefi Studio for Windows">
+<meta property="og:description" content="Free and open source. One portable zip for Windows 10 and 11: unzip it, open it and pick a project folder.">
+<meta property="og:site_name" content="Mefi Studio">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://nateecho32-stack.github.io/mefi-studio/download.html">
+<meta property="og:image" content="https://nateecho32-stack.github.io/mefi-studio/assets/studio-community-card.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:alt" content="Mefi Studio: Bring an idea. Find your people. Make it together. Share ideas, build with agents and hang out.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Download Mefi Studio for Windows">
+<meta name="twitter:description" content="Free and open source. One portable zip for Windows 10 and 11: unzip it, open it and pick a project folder.">
+<meta name="twitter:image" content="https://nateecho32-stack.github.io/mefi-studio/assets/studio-community-card.jpg">
+<meta name="twitter:image:alt" content="Mefi Studio: Bring an idea. Find your people. Make it together.">
+<meta name="theme-color" content="#050d13">
+<link rel="icon" href="assets/favicon.ico">
+<link rel="stylesheet" href="assets/site.css">
+<link rel="stylesheet" href="assets/download.css">
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to content</a>
-
-  <header class="nav">
-    <div class="container nav-inner">
-      <a class="brand" href="index.html"><img src="assets/icon-256.png" alt="" width="30" height="30">Mefi Studio</a>
-      <nav class="nav-links" aria-label="Site">
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-head">
+  <div class="container head-inner">
+    <a class="brand" href="index.html"><img src="assets/icon-256.png" width="30" height="30" alt="">Mefi Studio</a>
+    <nav class="tabs" aria-label="Site">
+      <a href="index.html" data-tab="home">Home</a>
+      <a href="features.html" data-tab="features">Features</a>
+      <a href="roadmap.html" data-tab="roadmap">Roadmap</a>
+      <a href="community.html" data-tab="community">Community</a>
+      <a href="wiki/" data-tab="wiki">Wiki</a>
+    </nav>
+    <div class="head-actions">
+      <a class="icon-link" href="https://discord.gg/xgfKc5pVxG" rel="noopener" aria-label="Mefi Studio on Discord" title="Discord"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.2 18.2 0 0 0-5.6 0L8.6 3a19.6 19.6 0 0 0-4.9 1.5C.6 9.1-.3 13.7.1 18.2a19.8 19.8 0 0 0 6 3l1.3-2.1a12.8 12.8 0 0 1-2-1l.5-.4a14.1 14.1 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.7 19.7 0 0 0 6-3c.5-5.2-.8-9.8-3.6-13.8ZM8 15.5c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.7 8 10.7s2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Z"/></svg></a>
+      <a class="icon-link" href="https://github.com/nateecho32-stack/mefi-studio" rel="noopener" aria-label="Mefi Studio on GitHub" title="GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5A11.5 11.5 0 0 0 8.4 22.9c.6.1.8-.2.8-.6v-2.1c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0c2.2-1.5 3.2-1.2 3.2-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .4.2.7.8.6A11.5 11.5 0 0 0 12 .5Z"/></svg></a>
+      <a class="btn btn-primary btn-sm" href="download.html" aria-current="page">Download</a>
+    </div>
+    <details class="menu">
+      <summary aria-label="Open the menu"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></summary>
+      <nav class="menu-panel" aria-label="Site">
         <a href="index.html">Home</a>
-        <a href="download.html" aria-current="page">Download</a>
-        <a href="wiki/">Wiki</a>
+        <a href="features.html">Features</a>
+        <a href="roadmap.html">Roadmap</a>
         <a href="community.html">Community</a>
-        <a href="https://github.com/nateecho32-stack/mefi-studio" data-repo-link="repo" rel="noopener">GitHub ↗</a>
+        <a href="wiki/">Wiki</a>
+        <hr>
+        <a href="https://discord.gg/xgfKc5pVxG" rel="noopener">Discord <span aria-hidden="true">↗</span></a>
+        <a href="https://github.com/nateecho32-stack/mefi-studio" rel="noopener">GitHub <span aria-hidden="true">↗</span></a>
+        <a class="btn btn-primary" href="download.html" aria-current="page">Download for Windows</a>
       </nav>
+    </details>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- HERO: the download itself -->
+  <section class="dl-hero" aria-labelledby="page-title">
+    <div class="container dl-hero-grid">
+      <div class="dl-hero-copy">
+        <p class="eyebrow">Download</p>
+        <h1 id="page-title">Get Mefi Studio for Windows</h1>
+        <p class="lede">Free and open source. One zip, no installer and no Studio account: unzip it, open it and pick a project folder.</p>
+        <ul class="ticks dl-ticks">
+          <li><strong>Portable.</strong> The app and its work stay in the folder you unzip. Nothing else gets installed.</li>
+          <li><strong>Private by default.</strong> No telemetry. Your projects stay on your PC, and an AI service you connect only gets what you send through it.</li>
+          <li><strong>Checkable.</strong> Every release comes with a SHA-256 file, so you can confirm the zip is the one that was published.</li>
+        </ul>
+        <nav class="on-page" aria-label="On this page">
+          <span class="label">On this page</span>
+          <a href="#install">Install</a>
+          <a href="#needs">What you need</a>
+          <a href="#verify">Check the download</a>
+          <a href="#updates">Updating</a>
+          <a href="#source">From source</a>
+        </nav>
+      </div>
+
+      <article class="dl-card" id="release" aria-labelledby="release-title">
+        <div class="dl-card-top">
+          <img src="assets/icon-256.png" width="60" height="60" alt="">
+          <div>
+            <p class="dl-badges"><span class="status released" id="release-badge">Latest release</span></p>
+            <h2 id="release-title">Mefi Studio <span id="release-version">0.4.4</span></h2>
+            <p class="dl-meta" id="release-meta">Published September 27, 2026 · 157 MB zip</p>
+          </div>
+        </div>
+        <a class="btn btn-primary btn-lg dl-main" id="release-zip" href="https://github.com/nateecho32-stack/mefi-studio/releases/download/v0.4.4/Mefi-Studio-AI%2B-v0.4.4-win32-x64.zip" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg><span id="release-zip-label">Download 0.4.4 for Windows</span></a>
+        <p class="dl-for">Windows 10 and 11 · 64-bit (x64) · portable zip</p>
+        <dl class="dl-facts">
+          <div><dt>File</dt><dd><code data-asset-name>Mefi-Studio-AI+-v0.4.4-win32-x64.zip</code></dd></div>
+          <div><dt>Checksum</dt><dd id="release-sha-slot"><a id="release-sha" href="https://github.com/nateecho32-stack/mefi-studio/releases/download/v0.4.4/Mefi-Studio-AI%2B-v0.4.4-win32-x64.zip.sha256" rel="noopener">SHA-256 file</a></dd></div>
+          <div><dt>Notes</dt><dd><a id="release-notes" href="https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.4" rel="noopener">Release notes</a></dd></div>
+        </dl>
+        <p class="fine dl-status" id="release-status" role="status"></p>
+      </article>
     </div>
-  </header>
+  </section>
 
-  <main id="main">
-    <div class="container page-head">
-      <div class="eyebrow">Download</div>
-      <h1>Get Mefi Studio</h1>
-      <p>Download the portable Windows build, extract the complete folder, and open the app. No installer or Node.js required. Project records stay local; connected AI providers may receive prompts and project context.</p>
+  <!-- INSTALL -->
+  <section class="band" id="install" aria-labelledby="install-title">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <p class="eyebrow">Install</p>
+        <h2 id="install-title">Three steps, about two minutes</h2>
+        <p>There's no installer to run. You download a zip, unzip it and open the app inside.</p>
+      </div>
+      <ol class="steps dl-steps">
+        <li class="step" data-reveal>
+          <h3>Download the zip</h3>
+          <p>Use the button above to get <code data-asset-name>Mefi-Studio-AI+-v0.4.4-win32-x64.zip</code> (<span data-asset-size>157 MB</span>). Grab the SHA-256 file too if you want to <a href="#verify">check it</a>.</p>
+        </li>
+        <li class="step" data-reveal>
+          <h3>Unzip it somewhere you can write</h3>
+          <p>Right-click the zip and choose <strong>Extract All…</strong>. Pick a folder you own, like Documents or your Desktop, not Program Files: Studio saves its tasks, plans and chats inside its own folder.</p>
+          <p>Keep the <code>Mefi Studio AI+</code> folder together, and don't open the app from inside the zip.</p>
+        </li>
+        <li class="step" data-reveal>
+          <h3>Open it, and let Windows run it</h3>
+          <p>Double-click <code>Mefi Studio AI+.exe</code>. The build isn't code-signed yet, so Windows SmartScreen may say it protected your PC. Choose <strong>More info</strong>, then <strong>Run anyway</strong>. Windows usually asks only the first time.</p>
+          <p class="path" aria-label="SmartScreen: More info, then Run anyway"><kbd class="key">More info</kbd><span class="arrow" aria-hidden="true">→</span><kbd class="key">Run anyway</kbd></p>
+        </li>
+      </ol>
+      <p class="dl-after" data-reveal>Then choose a project folder on the launch screen and pick <strong>Open studio</strong> (agents stay off) or <strong>Open and start agents</strong>. <strong>Start here</strong> walks you through the rest in seven short stops. <a href="wiki/#/getting-started">Your first project in the wiki →</a></p>
     </div>
+  </section>
 
-    <section style="padding-top:0">
-      <div class="container release">
-        <div class="release-card" id="release" aria-live="polite">
-          <span class="badge live">Published release</span>
-          <div class="version" style="margin-top:10px">v0.4.4</div>
-          <p class="muted">One subscription runs the whole studio, Mefi sizes every request, permission modes that learn, and Your PCs sync.</p>
-          <dl>
-            <dt>Platform</dt><dd>Windows 10/11, x64, portable</dd>
-            <dt>File</dt><dd>Mefi-Studio-AI+-v0.4.4-win32-x64.zip</dd>
-            <dt>Checksum</dt><dd><a href="https://github.com/nateecho32-stack/mefi-studio/releases/download/v0.4.4/Mefi-Studio-AI%2B-v0.4.4-win32-x64.zip.sha256" rel="noopener">Download SHA-256</a></dd>
-          </dl>
-          <div class="release-actions">
-            <a class="btn btn-primary" href="https://github.com/nateecho32-stack/mefi-studio/releases/download/v0.4.4/Mefi-Studio-AI%2B-v0.4.4-win32-x64.zip" rel="noopener">Download v0.4.4 for Windows</a>
-            <a class="btn" href="https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.4" rel="noopener">Release notes</a>
-          </div>
+  <!-- WHAT YOU NEED -->
+  <section id="needs" aria-labelledby="needs-title">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <p class="eyebrow">What you need</p>
+        <h2 id="needs-title">A Windows PC. The rest is up to you.</h2>
+        <p>Studio itself is free. To build things it works with a coding tool or AI service you choose, on that service's own plan or key.</p>
+      </div>
+      <div class="needs">
+        <div class="card" data-reveal>
+          <span class="need-tag must">Needed</span>
+          <h3>Windows 10 or 11, 64-bit</h3>
+          <p>Studio is built for Windows, and it protects saved keys with the Windows keystore. There's no macOS build. A Linux build is on the <a href="roadmap.html">roadmap</a> <span class="status planned">Planned</span></p>
         </div>
-        <div class="release-side">
-          <div class="card">
-            <h3>Requirements</h3>
-            <ul class="checklist">
-              <li><strong>Windows 10 or 11.</strong> Saved keys are protected by the Windows keystore (DPAPI). Other platforms are untested.</li>
-              <li><strong>A coding agent to build.</strong> Claude Code, OpenCode, Codex, Grok or Antigravity. Setup can install one and sign you in. Without one, Studio still plans, chats and browses the catalog.</li>
-              <li><strong>An API key or a local model (optional)</strong> for the companion: z.ai, OpenCode Go, a CLI login, LM Studio or any OpenAI-compatible endpoint.</li>
-              <li><strong>Node 24 and npm</strong> only for a source install, <strong>Git</strong> only to clone, <strong>Python 3</strong> on PATH as <code>python</code> only for <code>npm test</code>.</li>
-            </ul>
-          </div>
-          <div class="notice info">
-            <p><strong>Source and portable installs keep separate project stores.</strong> Tasks, conversations and plans do not travel between them. Saved keys are bound to your Windows account and cannot be decrypted on another machine.</p>
-          </div>
+        <div class="card" data-reveal>
+          <span class="need-tag must">Needed</span>
+          <h3>Some disk space</h3>
+          <p>About <span data-asset-size>157 MB</span> to download and roughly 400 MB once unzipped, plus room for the work Studio keeps for your projects.</p>
+        </div>
+        <div class="card" data-reveal>
+          <span class="need-tag good">Recommended</span>
+          <h3>Git</h3>
+          <p>Studio reads your project through Git to check work that claims a commit, and <strong>Friends › Your PCs</strong> uses it to sync your PCs. Without it, those checks are skipped.</p>
+        </div>
+        <div class="card" data-reveal>
+          <span class="need-tag opt">Optional</span>
+          <h3>A coding tool, to build</h3>
+          <p>OpenCode, Claude Code, Codex, Grok or Antigravity. If one is already installed and signed in, Studio finds it on first launch, even one you add while Studio is open. Without one you can still plan and chat, but builds can't start.</p>
+        </div>
+        <div class="card" data-reveal>
+          <span class="need-tag opt">Optional</span>
+          <h3>An AI for chat and plans</h3>
+          <p>An API key (z.ai, OpenCode Go or Zen, OpenRouter) or a local model in LM Studio or any OpenAI-compatible server. Or let your coding tool's login run everything with <strong>Use for the whole studio</strong>.</p>
+        </div>
+        <div class="card" data-reveal>
+          <span class="need-tag none">Not needed</span>
+          <h3>Node.js, an account or Discord</h3>
+          <p>The zip brings everything it runs on. There's no Studio account to make. The <a href="https://discord.gg/xgfKc5pVxG" rel="noopener">Discord</a> is the easiest place to ask for help, and it's never required.</p>
         </div>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <section id="portable">
-      <div class="container">
-        <div class="section-head">
-          <div class="eyebrow">Portable install</div>
-          <h2>Five steps, nothing to install</h2>
+  <!-- VERIFY -->
+  <section class="band" id="verify" aria-labelledby="verify-title">
+    <div class="container two-col">
+      <div data-reveal>
+        <p class="eyebrow">Check the download</p>
+        <h2 id="verify-title">Make sure the zip is the real one</h2>
+        <p class="muted">Every release has a <code>.sha256</code> file next to the zip. Studio's own updater checks it before it installs anything, and you can check it yourself.</p>
+        <p class="muted">Open PowerShell, go to the folder with both files and run these lines. <strong>True</strong> means the zip matches what was published. <strong>False</strong> means download it again.</p>
+      </div>
+      <div class="code" data-reveal>
+        <div class="code-head"><span>PowerShell</span><button type="button" class="copy" data-copy="verify-code" hidden>Copy</button></div>
+<pre id="verify-code" tabindex="0" aria-label="PowerShell commands to check the download"><code>cd "$HOME\Downloads"
+$zip = "<span data-asset-name>Mefi-Studio-AI+-v0.4.4-win32-x64.zip</span>"
+$want = (Get-Content "$zip.sha256").Split(" ")[0]
+(Get-FileHash $zip -Algorithm SHA256).Hash -eq $want</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- UPDATES -->
+  <section id="updates" class="dl-update" aria-labelledby="updates-title">
+    <div class="container two-col">
+      <div data-reveal>
+        <p class="eyebrow">Updating</p>
+        <h2 id="updates-title">Studio tells you when there's a new release</h2>
+        <p class="muted">The app looks for new releases on GitHub every 20 minutes. When one is out, the menu shows an update badge and a notice says so. To look right away, open <strong>Settings › System › Updates</strong> and press <strong>Check GitHub</strong>.</p>
+        <p class="muted"><strong>Update</strong> downloads the new build, checks its SHA-256, and swaps the app files after Studio closes. Your data folder is never overwritten.</p>
+        <p class="muted">Running from source? Pull <code>main</code>. Live update applies the changes while Studio runs.</p>
+        <p><a href="wiki/#/updates">Update Studio in the wiki →</a></p>
+      </div>
+      <div class="notice warn" data-reveal>
+        <h3>Updating from 0.4.4? Do it by hand this once <span class="status next">Fixed in 0.4.5</span></h3>
+        <p>In 0.4.4 and earlier, <strong>Update</strong> can download a new release but its install step may not run after Studio closes. The fix is coming in 0.4.5. Until then:</p>
+        <ol>
+          <li>Quit Studio. Closing the window keeps it in the tray, so right-click the tray icon and choose <strong>Quit</strong>.</li>
+          <li>Unzip the new release into a new folder.</li>
+          <li>Copy everything in your old <code>resources\app\data</code> folder into the new one, except <code>curated.json</code> and <code>models.json</code>, which are the new build's model lists.</li>
+          <li>Open the new <code>Mefi Studio AI+.exe</code>. Settings, saved keys and your project list live in Windows' app data, so they come along by themselves. Keep the old folder until you're happy.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMING IN 0.4.5 -->
+  <section class="section-tight" aria-labelledby="coming-title">
+    <div class="container">
+      <div class="coming" data-until="0.4.5" data-reveal>
+        <div class="coming-head">
+          <h2 id="coming-title">Next up <span class="status next">Coming in 0.4.5</span></h2>
+          <p>Built already, and it ships with 0.4.5. There's no release date yet.</p>
         </div>
-        <div class="steps">
-          <div class="step"><h3>Download the zip</h3><p>Grab the <code>win32-x64</code> zip from the latest release above, and the <code>.sha256</code> file beside it if you want to verify.</p></div>
-          <div class="step"><h3>Extract the whole folder</h3><p>Right-click the zip and choose <strong>Extract All…</strong>. Keep the <code>Mefi Studio AI+</code> folder together; the app keeps its own data next to the executable.</p></div>
-          <div class="step"><h3>Open the app</h3><p>Double-click <code>Mefi Studio AI+.exe</code>. The build is not code-signed, so SmartScreen may ask once; after checking the digest, choose <strong>More info → Run anyway</strong>.</p></div>
-          <div class="step"><h3>Choose a project</h3><p>The launch screen asks for a folder first. Pick one, then <strong>Open studio</strong> (agents stay off) or <strong>Open and start agents</strong>.</p></div>
-          <div class="step"><h3>Follow Start here</h3><p>The first launch runs auto setup from what is already on the machine, then the walkthrough takes you through seven stops to your first verified task.</p></div>
+        <div class="grid-2">
+          <div>
+            <h3>A setup helper that opens first</h3>
+            <p>On a new install it walks you through connecting an AI, choosing permissions and finishing, with a way to set things up automatically or start free with OpenCode.</p>
+          </div>
+          <div>
+            <h3>More than one Claude Code or Codex login</h3>
+            <p>Add a second login. When one hits its usage limit, work moves to the next one.</p>
+          </div>
+          <div>
+            <h3>Updates that finish on their own</h3>
+            <p>The <strong>Update</strong> button's install step runs after Studio closes, and guided coding-tool setup opens its terminal window again.</p>
+          </div>
+          <div>
+            <h3>Set up this PC</h3>
+            <p>A checklist for Git, the GitHub CLI, Node.js and a GitHub sign-in, with a button for each missing piece.</p>
+          </div>
+        </div>
+        <a class="more" href="roadmap.html">See everything on the roadmap →</a>
+      </div>
+      <div class="coming" data-from="0.4.5" hidden>
+        <div class="coming-head">
+          <h2>A newer release is out</h2>
+          <p>The download above is the newest build. Its <a href="https://github.com/nateecho32-stack/mefi-studio/releases/latest" rel="noopener">release notes</a> list what changed, and the <a href="roadmap.html">roadmap</a> shows what comes next.</p>
         </div>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <section id="verify">
-      <div class="container two-col">
-        <div>
-          <div class="eyebrow">Verify the download</div>
-          <h2>Check the SHA-256 before you run it</h2>
-          <p class="muted">Every release ships a <code>.sha256</code> file next to the zip. Studio's own updater checks it before installing; you can do the same by hand in PowerShell from the folder you downloaded into. The two hashes must match exactly.</p>
-        </div>
-        <div>
-<pre><code>Get-FileHash ".\<span data-asset-name>Mefi-Studio-AI+-v0.4.4-win32-x64.zip</span>" -Algorithm SHA256
-Get-Content ".\<span data-asset-name>Mefi-Studio-AI+-v0.4.4-win32-x64.zip</span>.sha256"</code></pre>
-        </div>
+  <!-- FROM SOURCE -->
+  <section class="band" id="source" aria-labelledby="source-title">
+    <div class="container two-col">
+      <div data-reveal>
+        <p class="eyebrow">For developers</p>
+        <h2 id="source-title">Run it from source</h2>
+        <p class="muted">You need Node 24 with npm, and Git. <code>npm ci</code> downloads Electron once, about 110 MB. Source runs what's on <code>main</code>, so it already has the Coming in 0.4.5 work, and it changes often.</p>
+        <p class="muted">Run <code>npm start</code> from a normal shell. If <code>ELECTRON_RUN_AS_NODE</code> is set, Studio stops and tells you how to fix it. A source install and the portable app share settings and keys on the same Windows account, so only one of them runs at a time.</p>
+        <p><a href="wiki/#/installation">Install Studio in the wiki →</a> · <a href="https://github.com/nateecho32-stack/mefi-studio/blob/main/CONTRIBUTING.md" rel="noopener">Contributing guide</a></p>
       </div>
-    </section>
-
-    <section id="source">
-      <div class="container two-col">
-        <div>
-          <div class="eyebrow">Run from source</div>
-          <h2>Clone, install, build the booklet, start</h2>
-          <p class="muted"><code>npm ci</code> downloads Electron once, about 110 MB. <code>npm start</code> needs a normal shell: if <code>ELECTRON_RUN_AS_NODE</code> is set, as some agent harnesses do, Studio refuses to start and prints the fix.</p>
-          <p class="muted">Double-clicking <code>Run Mefi's Studio AI+.cmd</code> starts a portable build in <code>dist/</code> when one exists, otherwise the source install. The browser preview on port 4173 cannot launch workers; keep that port on localhost.</p>
-          <p><a href="wiki/#/installation">Full installation notes in the wiki →</a></p>
-        </div>
-        <div>
-<pre><code>git clone https://github.com/nateecho32-stack/mefi-studio.git
+      <div class="code" data-reveal>
+        <div class="code-head"><span>PowerShell or any shell</span><button type="button" class="copy" data-copy="source-code" hidden>Copy</button></div>
+<pre id="source-code" tabindex="0" aria-label="Commands to run Studio from source"><code>git clone https://github.com/nateecho32-stack/mefi-studio.git
 cd mefi-studio
-npm ci                   # once; downloads Electron
-npm run build-booklet    # bundles renderer/ into booklet.html
-npm start                # desktop app
-
-npm run start:web        # browser-only preview, no workers
-npm run package          # refresh a portable build in dist/</code></pre>
-        </div>
-      </div>
-    </section>
-
-    <section id="release-vs-source">
-      <div class="container">
-        <div class="section-head">
-          <div class="eyebrow">Release or source?</div>
-          <h2>0.4.4 is ready to download</h2>
-          <p>0.4.4 adds guided CLI setup, so one Codex, Claude Code, Grok or Antigravity subscription can run the whole studio. It also notices work done outside Studio, splits bigger requests into steps, adds four permission modes with Why and Undo, and keeps your PCs in sync through GitHub. The media player, Vibe mode, Agent Brain and project map from earlier releases are all included.</p>
-          <p><a href="wiki/#/whats-new">What's new in 0.4.4 →</a></p>
-        </div>
-      </div>
-    </section>
-
-    <section id="contents">
-      <div class="container two-col">
-        <div>
-          <h3>What a release zip contains</h3>
-          <ul class="checklist">
-            <li>The Electron runtime and the app under <code>resources/app</code></li>
-            <li>The two public model catalogs, <code>curated.json</code> and <code>models.json</code></li>
-            <li>A sibling <code>.sha256</code> digest published with every release</li>
-          </ul>
-        </div>
-        <div>
-          <h3>What it never contains</h3>
-          <ul class="checklist no">
-            <li>The maintainer's projects, tasks or conversations</li>
-            <li>Any credentials, settings or caches</li>
-            <li>Private project captures or saved provider sessions</li>
-          </ul>
-          <p class="muted">Studio has no usage telemetry or required Studio account. AI services may require their own key or login and receive requests you send through them.</p>
-        </div>
-      </div>
-    </section>
-
-    <section id="updates">
-      <div class="container">
-        <div class="section-head">
-          <div class="eyebrow">Staying current</div>
-          <h2>Updates install in place and never touch your data</h2>
-          <p>A packaged copy reads the repository's latest release every 20 minutes. When a newer build exists, <strong>App updates</strong> in <strong>Settings › Updates &amp; diagnostics</strong> offers <strong>Update to vX.Y.Z</strong>. It downloads the zip, verifies the published digest, stages the folder, and a helper waits for the app to exit, copies the payload into place and relaunches. <code>resources/app/data</code> is never overwritten.</p>
-          <p><a href="wiki/#/updates">How live update and release updates work →</a></p>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <footer>
-    <div class="container foot-inner">
-      <div>© <span data-year>2026</span> MefiMaxi · MIT License</div>
-      <div class="foot-links">
-        <a href="https://github.com/nateecho32-stack/mefi-studio" data-repo-link="repo" rel="noopener">Source</a>
-        <a href="https://github.com/nateecho32-stack/mefi-studio/releases" data-repo-link="releases" rel="noopener">All releases</a>
-        <a href="https://github.com/nateecho32-stack/mefi-studio/blob/main/CHANGELOG.md" data-repo-link="changelog" rel="noopener">Changelog</a>
-        <a href="https://github.com/nateecho32-stack/mefi-studio/issues" data-repo-link="issues" rel="noopener">Issues</a>
-        <a href="wiki/">Wiki</a>
-        <a href="community.html">Community</a>
+npm ci
+npm run build-booklet
+npm start</code></pre>
       </div>
     </div>
-  </footer>
+  </section>
 
-  <script src="assets/site.js"></script>
-  <script>
-    (function () {
-      const box = document.getElementById("release");
-      const S = window.SITE;
-      const esc = (s) => S.escapeHtml(s);
-      const publishedRelease = box.innerHTML;
+  <!-- MORE -->
+  <section aria-labelledby="more-title">
+    <div class="container">
+      <h2 id="more-title" class="visually-hidden">More downloads and help</h2>
+      <div class="dl-more">
+        <a class="card card-link" href="https://github.com/nateecho32-stack/mefi-studio/releases" rel="noopener" data-reveal>
+          <h3>Older releases</h3>
+          <p>Every version from 0.2.0 on is on GitHub, each with its zip, SHA-256 file and notes.</p>
+          <span class="more">All releases <span aria-hidden="true">↗</span></span>
+        </a>
+        <a class="card card-link" href="https://github.com/nateecho32-stack/mefi-studio/blob/main/CHANGELOG.md" rel="noopener" data-reveal>
+          <h3>Changelog</h3>
+          <p>Every change, release by release, including what's already built for 0.4.5.</p>
+          <span class="more">Read the changelog <span aria-hidden="true">↗</span></span>
+        </a>
+        <a class="card card-link" href="wiki/#/troubleshooting" data-reveal>
+          <h3>Troubleshooting</h3>
+          <p>Studio won't start, a connection fails, or a task sits still: fixes for the usual snags.</p>
+          <span class="more">Open the guide <span aria-hidden="true">→</span></span>
+        </a>
+      </div>
+      <div class="cta-band" data-reveal>
+        <div>
+          <h2>Stuck on the install?</h2>
+          <p>Ask in the Discord and someone who has done it will help. You can also report a problem on GitHub.</p>
+        </div>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="https://discord.gg/xgfKc5pVxG" rel="noopener">Ask in the Discord <span aria-hidden="true">↗</span></a>
+          <a class="btn" href="https://github.com/nateecho32-stack/mefi-studio/issues/new?template=bug_report.md" rel="noopener">Report a bug <span aria-hidden="true">↗</span></a>
+        </div>
+      </div>
+    </div>
+  </section>
+  <p class="visually-hidden" id="copy-status" role="status"></p>
+</main>
 
-      function fillAssetNames(name) {
-        document.querySelectorAll("[data-asset-name]").forEach((el) => { el.textContent = name; });
+<footer class="site-foot">
+  <div class="container">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="index.html"><img src="assets/icon-256.png" width="30" height="30" alt="">Mefi Studio</a>
+        <p>A free, open-source studio for Windows. Build your ideas with coding agents, and make them with people.</p>
+      </div>
+      <div class="foot-col">
+        <h2>Studio</h2>
+        <ul>
+          <li><a href="features.html">Features</a></li>
+          <li><a href="roadmap.html">Roadmap</a></li>
+          <li><a href="download.html">Download</a></li>
+          <li><a href="https://github.com/nateecho32-stack/mefi-studio/blob/main/CHANGELOG.md" rel="noopener">Changelog</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <h2>Community</h2>
+        <ul>
+          <li><a href="https://discord.gg/xgfKc5pVxG" rel="noopener">Discord</a></li>
+          <li><a href="community.html">Share your work</a></li>
+          <li><a href="https://github.com/nateecho32-stack/mefi-studio/issues/new?template=feature_request.md" rel="noopener">Request a feature</a></li>
+          <li><a href="https://github.com/nateecho32-stack/mefi-studio/issues/new?template=bug_report.md" rel="noopener">Report a bug</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <h2>Learn</h2>
+        <ul>
+          <li><a href="wiki/">Guide</a></li>
+          <li><a href="wiki/#/getting-started">Your first project</a></li>
+          <li><a href="wiki/#/faq">FAQ</a></li>
+          <li><a href="wiki/#/privacy">Privacy</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot-base">
+      <span>MIT licensed · Made with the community · <span data-year>2026</span></span>
+      <span><a href="https://github.com/nateecho32-stack/mefi-studio" rel="noopener">Source on GitHub</a></span>
+    </div>
+  </div>
+</footer>
+<script src="assets/site.js"></script>
+<script>
+  // The card above works without script (static 0.4.4 links). With script it
+  // asks GitHub for the latest release and fills in that one instead.
+  (function () {
+    "use strict";
+    var S = window.SITE;
+    var PAGE_VERSION = "0.4.4"; // the release this page's text was written for
+    var byId = function (id) { return document.getElementById(id); };
+    var status = byId("release-status");
+
+    function parts(v) {
+      return String(v || "").replace(/^v/i, "").split(/[.+-]/).slice(0, 3).map(function (n) { return parseInt(n, 10) || 0; });
+    }
+    function compare(a, b) {
+      var x = parts(a), y = parts(b);
+      for (var i = 0; i < 3; i += 1) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0); }
+      return 0;
+    }
+    function setText(selector, text) {
+      document.querySelectorAll(selector).forEach(function (el) { el.textContent = text; });
+    }
+
+    function render(rel) {
+      var version = String(rel.tag || rel.name || "").replace(/^v/i, "");
+      var asset = rel.asset;
+      if (!version) return;
+      byId("release-version").textContent = version;
+      byId("release-badge").textContent = rel.prerelease ? "Pre-release" : "Latest release";
+      var meta = [];
+      if (rel.publishedAt) meta.push("Published " + S.formatDate(rel.publishedAt));
+      if (asset) meta.push(S.formatBytes(asset.size) + " zip");
+      if (meta.length) byId("release-meta").textContent = meta.join(" · ");
+
+      var zip = byId("release-zip");
+      if (asset) {
+        zip.href = asset.browser_download_url;
+        byId("release-zip-label").textContent = "Download " + version + " for Windows";
+        setText("[data-asset-name]", asset.name);
+        setText("[data-asset-size]", S.formatBytes(asset.size));
+      } else {
+        zip.href = rel.htmlUrl;
+        byId("release-zip-label").textContent = "Open " + version + " on GitHub";
       }
-
-      function renderFallback() {
-        box.innerHTML = publishedRelease;
-        const note = document.createElement("p");
-        note.className = "dim";
-        note.textContent = "The latest-release lookup is unavailable. The published 0.4.4 download and release notes above remain available.";
-        box.append(note);
-        fillAssetNames("Mefi-Studio-AI+-v0.4.4-win32-x64.zip");
+      if (rel.checksum) {
+        byId("release-sha").href = rel.checksum.browser_download_url;
+      } else {
+        byId("release-sha-slot").textContent = "Not attached to this release";
       }
+      byId("release-notes").href = rel.htmlUrl;
 
-      function renderRelease(rel) {
-        const a = rel.asset;
-        const rows = [
-          rel.publishedAt ? `<dt>Published</dt><dd>${esc(S.formatDate(rel.publishedAt))}</dd>` : "",
-          a ? `<dt>File</dt><dd>${esc(a.name)}</dd><dt>Size</dt><dd>${esc(S.formatBytes(a.size))}</dd>` : "",
-          `<dt>Platform</dt><dd>Windows 10/11, x64, portable</dd>`,
-          rel.checksum ? `<dt>Checksum</dt><dd><a href="${esc(rel.checksum.browser_download_url)}" rel="noopener">${esc(rel.checksum.name)}</a></dd>` : `<dt>Checksum</dt><dd class="dim">not attached to this release</dd>`,
-        ].join("");
-        const primary = a
-          ? `<a class="btn btn-primary" href="${esc(a.browser_download_url)}" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>Download ${esc(rel.tag)} for Windows</a>`
-          : `<a class="btn btn-primary" href="${esc(rel.htmlUrl)}" rel="noopener">Open release ${esc(rel.tag)}</a>`;
-        box.innerHTML = `
-          <span class="badge live">Latest release</span>${rel.prerelease ? ' <span class="badge">pre-release</span>' : ""}
-          <div class="version" style="margin-top:10px">${esc(rel.tag)}</div>
-          ${a ? "" : '<p class="muted" style="margin-top:8px">This release has no Windows zip attached; open it on GitHub to see what was published.</p>'}
-          <dl>${rows}</dl>
-          <div class="release-actions">
-            ${primary}
-            <a class="btn" href="${esc(rel.htmlUrl)}" rel="noopener">Release notes</a>
-            <a class="btn" href="${S.urls.changelog}" rel="noopener">Changelog</a>
-          </div>`;
-        if (a) fillAssetNames(a.name);
-      }
+      document.querySelectorAll("[data-until]").forEach(function (el) { if (compare(version, el.dataset.until) >= 0) el.hidden = true; });
+      document.querySelectorAll("[data-from]").forEach(function (el) { if (compare(version, el.dataset.from) >= 0) el.hidden = false; });
 
-      S.fetchLatestRelease().then((rel) => { rel.none ? renderFallback() : renderRelease(rel); }).catch(renderFallback);
-    })();
-  </script>
+      if (!asset) status.textContent = "This release has no Windows zip attached yet. Open it on GitHub to see what was published.";
+      else if (compare(version, PAGE_VERSION) > 0) status.textContent = "Checked GitHub just now: " + version + " is out. Parts of this page were written for " + PAGE_VERSION + ", so read the release notes too.";
+      else status.textContent = "Checked GitHub just now: this is the newest release.";
+    }
+
+    if (S) {
+      S.fetchLatestRelease().then(function (rel) {
+        if (rel.none) status.textContent = "GitHub lists no release right now. Try the releases page, or run Studio from source.";
+        else render(rel);
+      }).catch(function () {
+        status.textContent = "Couldn't reach GitHub to look for a newer release. The " + PAGE_VERSION + " download above works as it is.";
+      });
+    }
+
+    // Copy buttons on the command blocks (shown only when the clipboard is available).
+    var copyStatus = byId("copy-status");
+    document.querySelectorAll("[data-copy]").forEach(function (button) {
+      if (!navigator.clipboard || !window.isSecureContext) return;
+      button.hidden = false;
+      var label = button.textContent;
+      var timer = 0;
+      button.addEventListener("click", function () {
+        var source = byId(button.dataset.copy);
+        navigator.clipboard.writeText(source.textContent.trim() + "\n").then(function () {
+          button.textContent = "Copied";
+          copyStatus.textContent = "Copied to the clipboard.";
+          clearTimeout(timer);
+          timer = setTimeout(function () { button.textContent = label; copyStatus.textContent = ""; }, 2000);
+        }).catch(function () {
+          copyStatus.textContent = "Couldn't copy. Select the text and copy it instead.";
+        });
+      });
+    });
+  })();
+</script>
 </body>
 </html>

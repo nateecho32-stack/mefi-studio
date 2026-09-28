@@ -3,73 +3,147 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Mefi Studio guide — Setup, projects and community</title>
-  <meta name="description" content="Get Mefi Studio running, connect your coding tools, try a first task and review the result. Plain guides for version 0.4.4, with help for media, Discord and troubleshooting.">
+  <title>Mefi Studio guide</title>
+  <meta name="description" content="How to install Mefi Studio, connect an AI, build with Vibe mode and agents, and take part in the community. Plain guides for the current release, with next release changes marked.">
   <link rel="canonical" href="https://nateecho32-stack.github.io/mefi-studio/wiki/">
+  <meta property="og:site_name" content="Mefi Studio">
   <meta property="og:title" content="Mefi Studio guide">
-  <meta property="og:description" content="Install Studio, connect your tools and build your first project. Clear steps for 0.4.4, plus media, community and troubleshooting.">
+  <meta property="og:description" content="Install Studio, connect an AI, build your first project and find your people. Clear steps for the current release.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://nateecho32-stack.github.io/mefi-studio/wiki/">
   <meta property="og:image" content="https://nateecho32-stack.github.io/mefi-studio/assets/studio-community-card.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="Mefi Studio: Bring an idea. Find your people. Make it together.">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="theme-color" content="#070a0e">
+  <meta name="twitter:title" content="Mefi Studio guide">
+  <meta name="twitter:description" content="Install Studio, connect an AI, build your first project and find your people. Clear steps for the current release.">
+  <meta name="twitter:image" content="https://nateecho32-stack.github.io/mefi-studio/assets/studio-community-card.jpg">
+  <meta name="twitter:image:alt" content="Mefi Studio: Bring an idea. Find your people. Make it together.">
+  <meta name="theme-color" content="#050d13">
   <link rel="icon" href="../assets/favicon.ico">
   <link rel="stylesheet" href="../assets/site.css">
+  <link rel="stylesheet" href="../assets/wiki.css">
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+  <noscript><style>.wiki-loading { display: none; }</style></noscript>
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to content</a>
-
-  <header class="nav">
-    <div class="container nav-inner">
-      <a class="brand" href="../index.html"><img src="../assets/icon-256.png" alt="" width="30" height="30">Mefi Studio</a>
-      <nav class="nav-links" aria-label="Site">
-        <a href="../index.html">Home</a>
-        <a href="../download.html">Download</a>
-        <a href="./" aria-current="page">Wiki</a>
-        <a href="../community.html">Community</a>
-        <a href="https://github.com/nateecho32-stack/mefi-studio" data-repo-link="repo" rel="noopener">GitHub ↗</a>
-      </nav>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-head">
+  <div class="container head-inner">
+    <a class="brand" href="../index.html"><img src="../assets/icon-256.png" width="30" height="30" alt="">Mefi Studio</a>
+    <nav class="tabs" aria-label="Site">
+      <a href="../index.html" data-tab="home">Home</a>
+      <a href="../features.html" data-tab="features">Features</a>
+      <a href="../roadmap.html" data-tab="roadmap">Roadmap</a>
+      <a href="../community.html" data-tab="community">Community</a>
+      <a href="../wiki/" data-tab="wiki" aria-current="page">Wiki</a>
+    </nav>
+    <div class="head-actions">
+      <a class="icon-link" href="https://discord.gg/xgfKc5pVxG" rel="noopener" aria-label="Mefi Studio on Discord" title="Discord"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.2 18.2 0 0 0-5.6 0L8.6 3a19.6 19.6 0 0 0-4.9 1.5C.6 9.1-.3 13.7.1 18.2a19.8 19.8 0 0 0 6 3l1.3-2.1a12.8 12.8 0 0 1-2-1l.5-.4a14.1 14.1 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.7 19.7 0 0 0 6-3c.5-5.2-.8-9.8-3.6-13.8ZM8 15.5c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.7 8 10.7s2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Z"/></svg></a>
+      <a class="icon-link" href="https://github.com/nateecho32-stack/mefi-studio" rel="noopener" aria-label="Mefi Studio on GitHub" title="GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5A11.5 11.5 0 0 0 8.4 22.9c.6.1.8-.2.8-.6v-2.1c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0c2.2-1.5 3.2-1.2 3.2-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .4.2.7.8.6A11.5 11.5 0 0 0 12 .5Z"/></svg></a>
+      <a class="btn btn-primary btn-sm" href="../download.html">Download</a>
     </div>
-  </header>
+    <details class="menu">
+      <summary aria-label="Open the menu"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></summary>
+      <nav class="menu-panel" aria-label="Site">
+        <a href="../index.html">Home</a>
+        <a href="../features.html">Features</a>
+        <a href="../roadmap.html">Roadmap</a>
+        <a href="../community.html">Community</a>
+        <a href="../wiki/" aria-current="page">Wiki</a>
+        <hr>
+        <a href="https://discord.gg/xgfKc5pVxG" rel="noopener">Discord <span aria-hidden="true">↗</span></a>
+        <a href="https://github.com/nateecho32-stack/mefi-studio" rel="noopener">GitHub <span aria-hidden="true">↗</span></a>
+        <a class="btn btn-primary" href="../download.html">Download for Windows</a>
+      </nav>
+    </details>
+  </div>
+</header>
 
-  <div class="container wiki" id="main">
-    <aside class="wiki-side" id="side">
-      <div class="search">
+<main id="main">
+  <div class="wiki">
+    <div class="wiki-side" id="side" tabindex="-1">
+      <div class="search" role="search">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input id="search" type="search" placeholder="Search the wiki…" aria-label="Search the wiki" autocomplete="off">
+        <input id="search" type="search" placeholder="Search the guide" aria-label="Search the guide" aria-describedby="search-status" autocomplete="off" spellcheck="false">
+        <kbd class="key search-key" aria-hidden="true">/</kbd>
       </div>
+      <p class="visually-hidden" id="search-status" aria-live="polite"></p>
       <div class="search-results" id="results" hidden></div>
-      <nav id="sidenav" aria-label="Wiki pages"></nav>
-    </aside>
+      <nav id="sidenav" aria-label="Guide pages"></nav>
+      <ul class="side-extra" aria-label="More ways to take part">
+        <li><a href="../roadmap.html">Roadmap</a></li>
+        <li><a href="https://github.com/nateecho32-stack/mefi-studio/issues/new?template=feature_request.md" rel="noopener">Request a feature <span aria-hidden="true">↗</span></a></li>
+        <li><a href="https://discord.gg/xgfKc5pVxG" rel="noopener">Ask on Discord <span aria-hidden="true">↗</span></a></li>
+      </ul>
+    </div>
 
     <div class="wiki-main">
-      <button class="btn btn-sm wiki-toggle" id="toggle" type="button" aria-expanded="false" aria-controls="side">☰ Pages</button>
-      <div class="wiki-crumbs" id="crumbs"><a href="../index.html">Home</a> › <a href="#/home">Guide</a> › <span id="crumb-current">…</span></div>
+      <div class="wiki-bar">
+        <button class="btn btn-sm wiki-toggle" id="toggle" type="button" aria-expanded="false" aria-controls="side"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Pages</button>
+        <nav class="wiki-crumbs" id="crumbs" aria-label="Breadcrumb">
+          <span class="crumb-trail"><a href="../index.html">Home</a><span class="crumb-sep" aria-hidden="true">›</span><a href="#/home">Guide</a><span class="crumb-sep" aria-hidden="true">›</span><span id="crumb-section" hidden></span><span class="crumb-sep" id="crumb-section-sep" aria-hidden="true" hidden>›</span></span><span id="crumb-current" aria-current="page">Loading…</span>
+        </nav>
+      </div>
       <div id="notice" hidden></div>
-      <article class="prose" id="article" aria-live="polite" tabindex="-1">
-        <p class="dim"><span class="spinner" aria-hidden="true"></span>Loading the wiki…</p>
+      <article class="prose" id="article" tabindex="-1" aria-busy="true">
+        <p class="dim wiki-loading"><span class="spinner" aria-hidden="true"></span>Loading the guide…</p>
+        <noscript>
+          <h1>Mefi Studio guide</h1>
+          <p>This guide needs JavaScript to show its pages. You can also read every page as a plain file <a href="https://github.com/nateecho32-stack/mefi-studio/tree/gh-pages/wiki/pages">on GitHub</a>.</p>
+        </noscript>
       </article>
       <nav class="wiki-nav" id="pagenav" aria-label="Previous and next page"></nav>
       <div class="wiki-foot" id="foot"></div>
     </div>
 
-    <aside class="wiki-toc" id="toc" aria-label="On this page"></aside>
+    <nav class="wiki-toc" id="toc" aria-label="On this page" hidden></nav>
   </div>
+</main>
 
-  <footer>
-    <div class="container foot-inner">
-      <div>© <span data-year>2026</span> MefiMaxi · MIT License</div>
-      <div class="foot-links">
-        <a href="https://github.com/nateecho32-stack/mefi-studio" data-repo-link="repo" rel="noopener">Source</a>
-        <a href="https://github.com/nateecho32-stack/mefi-studio/issues" data-repo-link="issues" rel="noopener">Issues</a>
-        <a href="../download.html">Download</a>
-        <a href="../community.html">Community</a>
+<footer class="site-foot">
+  <div class="container">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="../index.html"><img src="../assets/icon-256.png" width="30" height="30" alt="">Mefi Studio</a>
+        <p>A free, open-source studio for Windows. Build your ideas with coding agents, and make them with people.</p>
+      </div>
+      <div class="foot-col">
+        <h2>Studio</h2>
+        <ul>
+          <li><a href="../features.html">Features</a></li>
+          <li><a href="../roadmap.html">Roadmap</a></li>
+          <li><a href="../download.html">Download</a></li>
+          <li><a href="https://github.com/nateecho32-stack/mefi-studio/blob/main/CHANGELOG.md" rel="noopener">Changelog</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <h2>Community</h2>
+        <ul>
+          <li><a href="https://discord.gg/xgfKc5pVxG" rel="noopener">Discord</a></li>
+          <li><a href="../community.html">Share your work</a></li>
+          <li><a href="https://github.com/nateecho32-stack/mefi-studio/issues/new?template=feature_request.md" rel="noopener">Request a feature</a></li>
+          <li><a href="https://github.com/nateecho32-stack/mefi-studio/issues/new?template=bug_report.md" rel="noopener">Report a bug</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <h2>Learn</h2>
+        <ul>
+          <li><a href="../wiki/">Guide</a></li>
+          <li><a href="../wiki/#/getting-started">Your first project</a></li>
+          <li><a href="../wiki/#/faq">FAQ</a></li>
+          <li><a href="../wiki/#/privacy">Privacy</a></li>
+        </ul>
       </div>
     </div>
-  </footer>
-
-  <script src="../assets/site.js"></script>
-  <script src="../assets/wiki.js"></script>
+    <div class="foot-base">
+      <span>MIT licensed · Made with the community · <span data-year>2026</span></span>
+      <span><a href="https://github.com/nateecho32-stack/mefi-studio" rel="noopener">Source on GitHub</a></span>
+    </div>
+  </div>
+</footer>
+<script src="../assets/site.js"></script>
+<script src="../assets/wiki.js"></script>
 </body>
 </html>

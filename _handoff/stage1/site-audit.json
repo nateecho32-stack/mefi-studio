@@ -1,0 +1,268 @@
+{
+ "pages": [
+  {
+   "file": "C:\\wt\\site\\index.html (+ assets/home.css, assets/home.js)",
+   "purpose": "Landing page that pitches Studio as a community first ('Bring an idea. Find your people. Make it together.') and then walks through every desktop feature and the 0.4.4 release notes. It is the only page with the full visual treatment (a sans display face, gradient headline, animated node-sky canvas, screenshots you can click to enlarge).",
+   "sections": [
+    "Sticky nav (index.html:32-45). In-page anchors How it works / Media / Community(#friends) / What's new, plus Wiki, GitHub and a Download CTA",
+    "HERO (50-71). A pill '0.4.4 An open studio. A growing community.' that links to #new, the three-line H1 with gradient 'Make it together.', the lede, CTAs 'Find us on Discord' and 'Get Studio for Windows', a fine print line, a live 'Latest release' hint (data-latest-hint), the vibe.webp screenshot tilted in 3D, and three floating status chips (2 agents building / 1 decision needs you / Now playing)",
+    "#friends 'Made with people' (74-120). A 12-column grid of 4 fcards: Join us on Discord; Meet the Discord bot; 'Rolling out · shared rooms' with listen-panel.webp; 'Ideas we're exploring' (Community rooms, Cowork spaces, Hey Studio). Then CTAs 'Join the conversation' and 'Find your way around' (goes to community.html)",
+    "Works with (123-130). Pills for Claude Code, OpenCode, Codex, Grok, Antigravity, OpenRouter, LM Studio, z.ai, Any OpenAI-compatible API",
+    "#how 'From one sentence to checked work' (133-147). Four numbered steps: Say it / Mefi sizes it / Agents build it / It gets checked",
+    "Vibe mode split (150-166). Tick list and the vibe-void.webp screenshot",
+    "Command view split (169-184). Tick list and command.webp",
+    "#media 'Your project. Your soundtrack.' (187-207). watch-bg.webp with a caption, then 6 cards (YouTube and more, Up next, Behind the tree, Fade on finish, Browse inside the player, Music moves the tree)",
+    "'You stay in charge' split (210-225). Permission modes, Why/Undo, and needs-you.webp",
+    "'Under the hood' duo (228-240). Agent Brain brain.webp and Project map map.webp",
+    "'Make it yours' (243-260). 'Eleven themes. Eight node styles.' with 6 theme thumbnails",
+    "#new 'New in 0.4.4' (263-300). Three groups of three cards (Getting started / Smarter agents / Everyday Studio) and a changelog link",
+    "Privacy trust strip (303-312). Local-first / No Studio account / Keys stay locked / Your AI, your choice",
+    "FAQ (315-328). 8 details/summary items",
+    "Final CTA (331-341). 'There's room for your idea here.' with Come say hello and Download Studio 0.4.4",
+    "Lightbox <dialog> (345) and footer (347-352)"
+   ],
+   "keep": [
+    "The headline and share card copy 'Bring an idea. Find your people. Make it together.' It is strong, community-first, and matches assets/studio-community-card.jpg",
+    "The hero's live release hint. It renders 'Latest release: v0.4.4 · September 27, 2026 · 157 MB zip' from the GitHub API (site.js:131-145), with a static fallback",
+    "The 'How it works' 4-step strip (140-145). It explains the product in four short sentences",
+    "Honest status tags: tag-live, tag-soon ('Rolling out'), tag-next ('Ideas we're exploring') in home.css:132-136. The copy keeps saying what is and is not in 0.4.4 (e.g. index.html:100, 112). This is the seed of the roadmap status system",
+    "Screenshot set in assets/shots/ (2400x1500, synthetic 'Notes app' data per README.md). The tilt-then-settle hero frame, the lightbox and the theme thumbnails with label chips work well",
+    "The canvas node-sky (home.js:8-80). It is on-brand (echoes Command view), pauses off-screen and when the tab is hidden, and honours reduced motion",
+    "The privacy trust strip (306-309) and the FAQ answers 'Is it free?', 'What do I need?', 'Will agents change my files without asking?', 'Does my code leave my computer?' (319-326)",
+    "The house voice: plain sentences, e.g. 'Here, \"done\" means verified.' (144)"
+   ],
+   "problems": [
+    "Too long. The page is 12,496 px tall at 1440 and 16,921 px at 390 (report.json), about 19 phone screens, and it carries 14 sections. It is a full feature tour plus release notes plus FAQ. A features page and a roadmap page would absorb most of it",
+    "The community focus fades after the first fold. Friends is section 2 of 14, then 11 product sections follow. Nothing shows actual community activity: no member count, no showcased projects, no bot commands, no events",
+    "Out of date against main (0.4.5, unreleased). The 'Ideas we're exploring' card (104-113) lists 'Community rooms' and 'Cowork spaces' as future ideas, but main already has Friends › Rooms with chat, requests and invites (commit 4ee6891; README.md 'Community' section), cowork file claims between PCs (c4c64de) and Discord linking without environment variables (6b633be). These are coming-0.4.5 / rolling-out, not ideas. 'Hey Studio' is still only an idea (docs/public-site.md 'Proposed voice flow')",
+    "Nothing on the site mentions the 0.4.5 work: Share between my PCs vault (d516312), Share with friends .mefishare files, several Claude Code/Codex logins (07150aa), the Setup helper, MEFI Modify/Experiment/Fix (75de5a4), the companion as a pet (CHANGELOG [Unreleased] 'The companion as a pet and a friend'), new-user onboarding (6a5c7be), and Vibe's idea planner and team view (b92b482)",
+    "Repetition. The Discord invite appears 5 times on this page. 'Hey Studio is a future idea' is explained here twice (110, 321) and again in community.html, wiki home.md, community.md and faq.md. Permission modes appear three times (217, 285, 323). The media player appears three times (media section, 293, 325). Rolling-out rooms appear twice (97-100, 192)",
+    "The Discord bot card (88-94) says only 'Come meet Studio, try it out'. It never says what the bot does. Per Void Engine Bot/README.md 'Features by phase', it has /showcase (with co-credit and a weekly digest), /cowork start (temporary voice channel plus thread), /ask (answers from the wiki), /nowplaying, /me (streaks), and participation roles (Builder, Helper, Mentor, Spotlight, Cowork Host). The bot is also named 'Studio', the same as the app, which is confusing",
+    "Navigation: on screens ≤960 px, home.css:209 hides every nav link except Community and Download. Phones and tablets therefore lose Wiki, GitHub and What's new, and there is no menu button (index-w390-01.png). The nav is also a different model from the inner pages (in-page anchors here, page links there). 'Community' here jumps to #friends, not community.html",
+    "CSS bug: '.home .copy p' (home.css:95, specificity 0,2,1) overrides '.eyebrow' colour and size on the split sections. 'VIBE MODE', 'COMMAND VIEW' and 'YOU STAY IN CHARGE' render large and grey instead of small and teal like the other eyebrows (index-w1440-05.png vs index-w1440-04.png)",
+    "Layout gaps: the dashed roadmap fcard stretches to its row partner's height, leaving a large empty box (index-w1440-04.png top right). Friends padding (96 px) plus works-with padding (72 px) leaves roughly 170 px of dead space. The 96 px section padding throughout gives several near-empty screens at 1440 (index-w1440-12.png)",
+    "listen-panel.webp (1252x636) is cropped mid-sentence at the source ('the hub keeps it in memory only and drops it when Studio closes' is cut off)",
+    "The hero pill text 'An open studio. A growing community. →' links to #new (release notes), so the text does not match the destination",
+    "'0.4.4' is hard-coded 8 times, including the CTA 'Download Studio 0.4.4' (338) and 'New in 0.4.4', so every release needs hand edits",
+    "Mobile: 2400 px screenshots are sent to 390 px phones with no srcset (about 838 KB of images on this page). Theme thumbnails stack one per row into 6 tall images (index-w390-13.png). App screenshots are unreadable at phone width (index-w390-08.png)"
+   ]
+  },
+  {
+   "file": "C:\\wt\\site\\community.html",
+   "purpose": "Invitation to the Discord plus a contributor handbook: how to report bugs, suggest features, edit the wiki, contribute code, report security issues, and the house rules.",
+   "sections": [
+    "Nav (28-39). Home / Download / Wiki / Community(current) / GitHub. No Download CTA styling",
+    "Hero (42-62). 'Your ideas belong here.', the lede, 'Join us on Discord' and 'Try Studio 0.4.4', a welcome line, and a side card 'Meet Studio, our Discord bot'",
+    "#together 'A place for the whole process' (64-77). 3 cards: Share what you're making / Co-work with company / Stay for the hangout",
+    "#growing-together 'We're building toward a shared Studio' (79-100). Cards 'Rolling out: Watch and listen together' and 'An idea for the future: Hey Studio'",
+    "#contribute 'Small contributions count' (102-120). 9 link cards: Report a bug, Suggest a feature, Discussions (hidden unless enabled), Browse issues, Releases, Changelog, Architecture & glossary, Contributing guide, Website source",
+    "#discussions-note (122-128). Notice that GitHub Discussions are off. It shows now because has_discussions=false (verified via the GitHub API)",
+    "#security (130-145). Report privately, with a checklist",
+    "#bug-report 'What makes a bug report useful' (147-165). A 5-item checklist",
+    "#wiki-help 'Every page is a markdown file' (167-185)",
+    "#code 'Three gates, two test trees' (187-204). npm command block",
+    "#rules 'Help everyone feel at home' (206-219). 4 house rules",
+    "Footer and inline script (236-247) that toggles the Discussions card from SITE.fetchRepo()"
+   ],
+   "keep": [
+    "Hero line 'Your ideas belong here.' and the lede (46-47). 'You don't need a finished project to join.' (52)",
+    "The three 'whole process' cards (72-74). This is the right community framing: share, co-work, hang out",
+    "The house rules strip (212-217). Warm, short and specific ('Look after each other's privacy', 'Give credit and share the space')",
+    "The direct GitHub template links for bug_report.md and feature_request.md (110-111). Both templates exist in .github/ISSUE_TEMPLATE, and feature_request.md applies the 'enhancement' label. This is the base of the request-a-feature path",
+    "The Discussions auto-toggle pattern (237-246). It is good progressive enhancement",
+    "The security reporting guidance (130-145). It belongs on the site, but more compactly"
+   ],
+   "problems": [
+    "Weak community focus. After the first two sections, about 70% of the page is contributor and developer material (bug checklist, wiki markdown conventions, npm gates, security). A visitor who wants to share a project gets no showcase, no member count, no bot commands, no channels and no events",
+    "'Suggest a feature' is one card out of 9 in a link grid (111), with no Discord alternative and no list of existing requests. There is no roadmap to check first",
+    "Out of date against main: 'Watch and listen together … aren't available in every build yet' (91) and 'Hey Studio' (95-96) are the only 'what's next' items. Rooms with chat, cowork file claims, Share with friends and Friends across PCs (all on main, coming in 0.4.5) are missing",
+    "Layout bug: '<div class=\"container section-head\">' (103) combines .container's auto margins with .section-head's max-width 64ch, so the 'Build this with us' intro is centered while every other section is left-aligned (community-w1440-02.png, x=452 vs 148)",
+    "Developer content on a community page: the npm block (196-201) overflows into a horizontal scrollbar at 1440 (community-w1440-05.png). 'Route and builder … readiness line' (157) is jargon for newcomers",
+    "Its visual language differs from home. It uses Georgia serif headings (site.css:27) where home uses the Segoe UI Variable Display sans (home.css:5), plain .badge pills instead of home's dotted .tag, and a different nav. It looks like a different site",
+    "Mobile: the inner-page nav wraps to two rows (about 120 px of sticky header at 390, community-w390-01.png). The page is 8,272 px tall at 390",
+    "'0.4.4' is hard-coded twice ('Try Studio 0.4.4', 'not features in 0.4.4')"
+   ]
+  },
+  {
+   "file": "C:\\wt\\site\\download.html",
+   "purpose": "Direct download of the portable Windows zip and its SHA-256, requirements, install steps, verification, source install, and how updates work.",
+   "sections": [
+    "Nav (15-26)",
+    "Page head 'Get Mefi Studio' (29-33)",
+    "Release card #release (37-50). Static v0.4.4 links, replaced live by the latest GitHub release (inline script 180-226), plus a Requirements checklist and a notice that source and portable installs keep separate stores (51-64)",
+    "#portable 'Five steps, nothing to install' (68-82)",
+    "#verify SHA-256 in PowerShell (84-96)",
+    "#source 'Clone, install, build the booklet, start' (98-118)",
+    "#release-vs-source '0.4.4 is ready to download' (120-129)",
+    "#contents 'What a release zip contains / never contains' (131-151)",
+    "#updates 'Updates install in place' (153-162)",
+    "Footer"
+   ],
+   "keep": [
+    "Progressive enhancement: the static v0.4.4 links work without JS, then the script renders Published / File / Size / Platform / Checksum from releases/latest, with a fallback message (180-226). Verified live: v0.4.4, 157 MB, .sha256 attached",
+    "The asset-name mirror (site.js:48-52 releaseAssetName, kept in sync with scripts/release-updater.mjs), which picks the correct zip",
+    "The five portable steps (74-80), especially the honest SmartScreen 'More info → Run anyway' note",
+    "The 'What it never contains' list (142-148) and the updates explanation (158). These build trust"
+   ],
+   "problems": [
+    "Layout bug: '.page-head' (site.css:201) sets 'padding: 56px 0 24px', which overrides .container's side gutter. At 1440 the heading sits 16 px left of the content below (download-w1440-01.png), and at 390 the text touches the screen edge (download-w390-01.png)",
+    "The release card stretches to the height of the requirements column, leaving about 200 px of empty panel (download-w1440-01.png)",
+    "Georgia's old-style numerals make 'v0.4.4' read like 'vo.4.4' in the big version number (.release-card .version, site.css:207)",
+    "Too much developer depth for a download page: ELECTRON_RUN_AS_NODE, port 4173, npm run build-booklet, npm run package (103-115). This belongs in wiki/installation",
+    "The PowerShell block overflows with a horizontal scrollbar at 1440 (download-w1440-02.png)",
+    "No social metadata: no canonical, og:*, or twitter:* (head, lines 4-10). Shared download links get no preview card",
+    "'0.4.4' is hard-coded 12 times. The '0.4.4 is ready to download' prose (124-125) will be wrong the day 0.4.5 ships, even though the card updates itself",
+    "No hint of what is coming next (0.4.5) and no link to a roadmap"
+   ]
+  },
+  {
+   "file": "C:\\wt\\site\\wiki\\index.html (+ assets/wiki.js, wiki/pages.json, wiki/pages/*.md)",
+   "purpose": "Client-rendered guide: 22 markdown pages in 4 sections (Start here, Using Studio, Reference, Project), with search, a table of contents, previous/next links and edit-on-GitHub.",
+   "sections": [
+    "Nav (23-34)",
+    "Left sidebar #side: search input (/ shortcut), results, and a nav built from pages.json",
+    "Main: 'Pages' toggle for mobile, breadcrumbs, a notice area, #article (rendered markdown), previous/next, and a foot with 'Edit this page on GitHub' and 'Studio 0.4.4 · Technical reference'",
+    "Right TOC 'On this page' with scrollspy (hidden ≤960 px)",
+    "Footer"
+   ],
+   "keep": [
+    "The whole wiki engine (assets/wiki.js). It loads marked 18.0.13 from cdnjs with a jsdelivr fallback, has hash routing with heading anchors, rewrites .md links and images, wraps tables to scroll, and has a TOC scrollspy, previous/next links, full-text client search with highlighted snippets, an edit-on-GitHub link per page, an offline/file:// notice and a graceful raw-markdown fallback",
+    "Its information design: pages.json sections with short summaries, and the 'You want to… / Open' table on the home page",
+    "Contributor friendliness: every page is a plain .md file with an edit link (wiki.js:214-224)"
+   ],
+   "problems": [
+    "Content is 0.4.4-only (every page was last edited 2026-09-27 in 3fdf4b9). No pages cover the main-branch (0.4.5) features: Friends › Rooms, Share between my PCs, Share with friends, several logins, the Setup helper, or the companion. faq.md:51 says tasks, conversations and settings do not sync between PCs, which Share between my PCs changes in 0.4.5 (README.md 'Working from several PCs' › Shelves). community.md:38 and home.md:30 call cowork a future idea",
+    "The footer version is hard-coded ('Studio 0.4.4' in wiki.js:223), as is the <meta description> ('Plain guides for version 0.4.4')",
+    "SEO: pages are fetched and rendered client-side behind #/ hashes, so search engines index one near-empty URL and every shared wiki link previews the same generic card",
+    "The sticky sidebar gets its own scrollbar at 1440x900 (max-height calc(100vh - 92px), site.css:233; wiki-index-w1440-01.png)",
+    "'aria-live=\"polite\"' on the whole #article (wiki/index.html:47) makes screen readers read the entire page on every navigation",
+    "Naming drift: the breadcrumb says 'Start here' while the H1 says 'Mefi Studio guide'. The sidebar page 'Media and community' mixes two topics",
+    "Same Georgia/serif styling and wrapping nav as the other inner pages (wiki-index-w390-01.png shows the two-row sticky header)"
+   ]
+  },
+  {
+   "file": "C:\\wt\\site\\404.html",
+   "purpose": "Not-found page that probes for the site root and rewrites its links and stylesheet (inline script).",
+   "sections": [
+    "Centered 'That page went idle' with Home / Wiki / Download buttons"
+   ],
+   "keep": [
+    "The root-probing script, which makes the 404 work from any depth on a GitHub Pages project site",
+    "The copy hint that wiki links need wiki/#/"
+   ],
+   "problems": [
+    "No nav, footer, favicon or skip link. Its theme-color #070a0e and inline body colours differ from the site's #050d13 tokens",
+    "No Discord or Community link"
+   ]
+  },
+  {
+   "file": "C:\\wt\\site\\README.md",
+   "purpose": "Maintainer notes for the gh-pages branch.",
+   "sections": [
+    "Public URL, file roles, naming rule (keep SITE.portableName), the share-card process, screenshot provenance, status wording, and how to preview and publish"
+   ],
+   "keep": [
+    "The naming rule (keep executable, launcher and asset names), the share-card regeneration note (use a new filename to bust caches), and the rule that screenshots use synthetic data"
+   ],
+   "problems": [
+    "It will need updating for the new pages (features, roadmap), any roadmap data file, and the removal of unused media"
+   ]
+  }
+ ],
+ "designSystem": {
+  "tokens": "site.css:6-38 :root, dark-only (color-scheme: dark). SURFACES: --bg #050d13, --bg-2 #081820, --panel rgba(16,31,41,.82), --panel-solid #101f29, --hairline rgba(113,203,183,.16), --hairline-strong rgba(113,203,183,.38). ACCENT: --accent #71cbb7 (mint/teal), --accent-bright #a7f3da, --accent-dim rgba(113,203,183,.13), --brand-gold #d8b36a (icon ring only). TEXT: --ivory #e7f5ee (headings), --text #dcebe6, --muted #abc4c9, --dim #7c8f93, --ink #04110d (text on accent). STATUS: --live #57ff9a, --warn #ffd479, --bad #ff9c9c, --info #9db7ff. FONTS: --font-display Georgia serif, --font-ui system-ui/Segoe UI, --font-mono ui-monospace/Consolas/Cascadia Mono. RADII: --r 14px, --r-sm 10px, --r-pill 999px. Many radii are hard-coded outside the tokens: 16/20/12/18/8/6 px in home.css. LAYOUT: --max 1160px, --gutter 16px. EFFECTS: --shadow, --shadow-lg, --ring (3px accent focus ring). home.css:4-11 adds page-scoped tokens on body.home only: --display 'Segoe UI Variable Display' stack, --glow, --void #7c6cff, --void-2 #36d1ff, --pink #ff5fa2. TYPE SCALE (no tokens): body 16px/1.6; site h1 clamp(2rem,5vw,3.3rem), h2 clamp(1.5rem,3vw,2.1rem), h3 1.22rem; home h1 clamp(2.9rem,8.4vw,6.2rem) at line-height .98 and letter-spacing -.045em, home h2 clamp(1.9rem,4.2vw,3rem); eyebrow .72rem with .22em tracking, uppercase. SPACING (no tokens): sections 56px (site) and 96/72/56px (home by breakpoint); card padding 22-26px; grid gaps 14-24px. BREAKPOINTS: 1100, 960, 860, 720, 640. Contrast (computed): text 15.9:1, muted 10.7:1, dim 5.78:1 on --bg and 4.97:1 on --panel-solid, accent 10.2:1, ink on accent 10.0:1. All pass WCAG AA; keep the palette. assets/launch.css holds an abandoned light 'launch' palette (#f0f0e8 bg, #246c53 accent) that no page references.",
+  "fonts": "No web fonts load anywhere: no Google Fonts, no @font-face, no @import. Home headings use the system face 'Segoe UI Variable Display' → Segoe UI → system-ui → -apple-system → Helvetica Neue → Arial (home.css:5), bold 700 with tight negative tracking. Inner pages and the wiki use Georgia for h1-h4 and the brand (site.css:27, :58, :86), and system-ui for body text. The result is two brands: a modern sans on home and an editorial serif elsewhere (compare index-w1440-01.png with community-w1440-01.png). On macOS, iOS and Android the home display face falls back to SF or Roboto, so the tight -.045em tracking was tuned for a font most non-Windows visitors never see. The share card (assets/studio-community-card.html) also uses Segoe UI Variable Display, so the sans is the de facto brand face.",
+  "components": [
+   "Sticky blurred nav: .nav, .nav-inner, .brand (icon with gold ring), .nav-links with pill hover and aria-current state; .nav-cta (home only)",
+   "Buttons: .btn (pill, hairline border), .btn-primary (mint gradient, ink text, glow), .btn-sm, .btn-lg (home), .btn svg icon slot, focus-visible --ring",
+   "Hero pieces: .pill version chip (home), .float-chip with .dot.live/.warn/.info bobbing status chips, .grad gradient text, canvas.hero-sky",
+   "Screenshot .frame with figcaption (16:10 cover, top-left anchored), .frame-hero 3D tilt that settles on scroll, .frame-wide violet glow variant",
+   "Cards: .card (site: r14, panel .82) and .home .card (r16, panel .55, hover lift) are two versions of the same thing; .fcard (home friends, r20, gradient); .card-link and .links-grid a.card (↗ suffix)",
+   "Status chips, twice: .badge/.badge.live/.dim/.src (site.css:181-184, square uppercase) and .tag/.tag-live/.tag-soon/.tag-next (home.css:132-136, dotted). These map directly to released / rolling-out / planned",
+   "Lists: .ticks (radial dot bullets, home), .checklist (✓) and .checklist.no (–), .strip (left-rule columns, house rules), .trust (hairline-gap 4-up grid)",
+   "Steps: .steps (CSS counter, site) and .steps4 (numbered 01-04 with connectors, home), again two implementations",
+   "Section intros: .section-head (site) and .section-intro/.section-intro.wide (home), again duplicates. .eyebrow is shared",
+   "Grids: .grid (auto-fit 260px), .grid3, .duo, .split/.split.reverse, .feature/.feature.flip, .two-col, .gallery, .themes (thumbnail with label chip), .logo-row (provider pills)",
+   "FAQ accordion: details/summary with rotating + (home)",
+   "Notices: .notice, .notice.info, .notice.warn",
+   "Download: .release-card with dl metadata grid, .version, .release-actions, .spinner",
+   "Wiki: .wiki 3-column layout, .wiki-side, .search with icon and .search-results with mark, .wiki-toc scrollspy, .wiki-crumbs, .wiki-nav prev/next, .wiki-foot, .wiki-toggle, .prose typography (anchors, tables in .table-wrap, code, blockquote, kbd.key)",
+   "Lightbox: native <dialog class=lightbox> with a close button, opened from .frame/.fcard-media/.themes images (home.js:100-112)",
+   "Footer: .foot-inner, .foot-links",
+   "Reveal-on-scroll: .js .reveal/.in (home only)"
+  ],
+  "scripts": [
+   "assets/site.js (all pages). A SITE config block (repo nateecho32-stack/mefi-studio, siteRepo and gh-pages branch for edit links, portableName 'Mefi Studio AI+', win32/x64) and SITE.urls for repo, releases, issues, discussions, bug and feature templates, CONTRIBUTING, SECURITY, CHANGELOG, GETTING_STARTED, architecture, plus newIssue(title, body) to prefill issues. releaseAssetName() mirrors the app's scripts/release-updater.mjs. fetchLatestRelease() reads GitHub API releases/latest (memoised, 404 → {none:true}) and picks the zip and its .sha256. fetchRepo() reads the repo JSON (used for has_discussions). It also provides formatBytes, formatDate and escapeHtml. On DOMContentLoaded it fills [data-year], rewrites [data-repo-link] hrefs, and renders [data-latest-hint] ('Latest release: v0.4.4 · September 27, 2026 · 157 MB zip'). Minor: el.dataset.sourceHref is inserted without escaping (site.js:136)",
+   "assets/home.js (index only). Adds the .js class. The hero canvas draws 26-70 drifting nodes in teal/violet/cyan, linking nodes that are close (DPR ≤2), pauses when off-screen or the tab is hidden, and draws one static frame under reduced motion. The hero screenshot settles flat after 40 px of scroll. Reveal-on-scroll uses IntersectionObserver with staggered delays. The lightbox makes images role=button, tabindex=0 and Enter/Space-openable in a <dialog>",
+   "assets/wiki.js (wiki only). Markdown wiki SPA: pages.json manifest, marked 18.0.13 from cdnjs then jsdelivr, #/slug/anchor routing, heading ids and # anchors, .md and relative link and image rewriting, external links opened in new tabs, table wrapping, TOC with scrollspy, previous/next, 'Edit this page on GitHub' (siteRepo/edit/gh-pages/wiki/pages/<file>), full-text search that lazily fetches all pages (title hits weighted 100, snippets, <mark>), the '/' shortcut, the mobile sidebar toggle, and a file:// warning",
+   "Inline script in download.html (180-226). Renders the live release card (tag, published date, file, size, checksum link, download button with SVG icon, pre-release badge), fills [data-asset-name] in the PowerShell snippet, and falls back to the static 0.4.4 card with a note",
+   "Inline script in community.html (237-246). Shows the Discussions card or the 'not enabled yet' notice from fetchRepo().has_discussions (currently false)",
+   "Inline script in 404.html. HEAD-probes '/' and '/<first-segment>/' for assets/site.css, then rewrites the button links and stylesheet href"
+  ]
+ },
+ "recommendations": [
+  "Adopt a 6-page structure with one shared nav on every page: Home · Features · Roadmap · Community · Wiki, plus a Download CTA button and Discord/GitHub icon links. Below 960 px, use a real menu button (a <button aria-expanded> toggling the link list) instead of hiding links (home.css:209) or wrapping to two rows (inner pages). Stop mixing in-page anchors with page links in the nav",
+  "Home becomes short (about 5-6 desktop screens) and community-first: (1) the hero keeps 'Bring an idea. Find your people. Make it together.', with Discord as the primary CTA showing live counts ('101 members · 44 online' from the invite API, see liveData), Download as secondary, and the live release hint; (2) 'What happens in the community' with 4 tiles (share a project, get feedback, cowork, listen together), each with a status chip; (3) 'What Studio does' with 4 feature tiles (Vibe, Command view, You stay in charge, Media) linking to Features; (4) a roadmap teaser in three columns (Done / Being worked on / Planned, 3 items each) linking to Roadmap; (5) a request-a-feature band; (6) a short trust strip and a single final CTA. Move the 0.4.4 What's new grid, the media cards, Agent Brain/Map, the theme gallery and most of the FAQ to Features or the wiki",
+  "New features.html: 'Everything in Studio' grouped as Build with agents (Talk it over / Build it, Mefi sizing, builders, Review/verify, Agent Brain, project map, MEFI evolve), Watch it work (Command view, Zen tour, Vibe cards), You stay in charge (4 permission modes, Why/Undo, Needs you), Media and music (player, queue, YouTube explorer, background video, fade on finish, Browse here, radio, audio-reactive tree), Friends and community (Discord link, Rooms, Listen together, Share what I'm playing, Share with friends, companion), Your PCs (Sync this PC, Share between my PCs, Keep this PC up to date), Make it yours (11 themes: Studio gold, Midnight, Forest, Violet, Ember, Aurora, Rose, Void, Eclipse, Abyss, Neon Dusk from renderer/music.js; 8 node styles: crystal, glass, halo, minimal, orbs, prism, sigil, singularity from renderer/node-styles.js LOOKS), Setup and connections (guided CLI setup, several logins, Setup helper, API keys, local models), Privacy. Give every item a status chip (Released / Coming in 0.4.5 / Rolling out) and a group anchor. Add sticky filter chips at the top (All · Released · Coming 0.4.5). Reuse the existing screenshots, one per group",
+  "New roadmap.html driven by one data file (e.g. assets/roadmap.json with {title, blurb, status, area, evidence}), so updates do not need HTML edits. Use lanes Done (released, grouped by version: 0.4.4, 0.4.3 …), Being worked on (coming-0.4.5 plus rolling-out: Rooms and Listen together need the hub URL and link app ID), Planned (docs/community.md 'What comes later': Phase 4 cowork rooms with GitHub access, Phase 5 capacity pools; fleet overhaul from docs/fleet-overhaul-plan.md), and Ideas ('Hey Studio' from docs/public-site.md, plus the owner's creator-economy vision). Each card gets a status chip in the token colours (released = --live, coming = --accent, rolling-out = --warn, planned = --info, idea = dashed and --dim, reusing home's .tag styles), a one-line description and an evidence link (CHANGELOG anchor or commit). The page ends with the request-a-feature block",
+  "Request-a-feature path (on Roadmap as #request, linked from Home, Community, Wiki and the footer): two equal cards. 'On GitHub' opens .github/ISSUE_TEMPLATE/feature_request.md (it already applies the 'enhancement' label; use SITE.urls.newIssue to prefill a title). 'In Discord' opens the invite (name the ideas channel once the owner confirms it). Below them, a live list of open issues labelled enhancement from the GitHub API (currently 0 issues, so design the empty state: 'No requests yet — be the first'). Add 'Vote with 👍 on an existing request'. Consider asking the owner to enable GitHub Discussions with an Ideas category (has_discussions is false today)",
+  "Community page becomes the social heart. Hero with the live Discord count. 'What you can do there' using the real bot features (Void Engine Bot/README.md): /showcase to post a project, with co-credit and a weekly digest; /cowork start for a temporary voice room and thread; /ask for answers from the wiki; /nowplaying; roles earned by showing work and helping (Builder, Helper, Mentor, Spotlight, Cowork Host), never by invites or message counts. Then 'In Studio' (Friends › Rooms, Listen together, Share with friends; status chips, rolling-out) using the unused friends-panel.webp. Then a 'Where we're headed' creator-economy vision card. Keep the house rules. Collapse the contributor material (bug checklist, wiki conventions, npm gates, security) into one compact 'Contribute' row of 4 links to the wiki contributing page, CONTRIBUTING.md and SECURITY.md",
+  "Frame the owner's credits idea (earn credits by playing or reviewing others' projects, spend them to promote your own, cosmetics for credits, charts of the most-played shared mixes from people who opt in to 'share music taste') as Ideas with an invitation to discuss. Keep it consistent with the stated commitments: Void Engine Bot/README.md 'Commitments' (never rewards invites or raw message counts; capped XP, no leaderboard; /nowplaying data held in memory only) and docs/community.md ('Nothing rewards inviting people … Discord's Platform Manipulation policy'; 'Every theme and node style is free for everyone, in every build'). Cosmetics for credits must therefore be new extras, never re-locked existing themes. A most-played chart needs a new explicit opt-in with stored aggregates, beyond today's 'Share what I'm playing' toggle (renderer/together.js:385, off by default, memory-only)",
+  "Download page: keep the release card and live script. Fix the .page-head gutter (site.css:201 → 'padding-block' only). Stop the card stretching (align-items:start). Use lining numerals or the sans for .version. Move source install and ELECTRON_RUN_AS_NODE/port notes to wiki/installation. Add OG, Twitter and canonical tags. Replace the '0.4.4 is ready' prose with a line rendered from the release lookup, plus a 'Coming next' link to Roadmap",
+  "Unify the design system in site.css :root and delete per-page forks. Move --display, --void, --void-2, --pink and --glow out of body.home. Pick ONE heading face: either load a Google Font with a similar feel (e.g. 'Plus Jakarta Sans', 'Manrope' or 'Inter Tight', weights 600/700, font-display: swap, one request) or keep the system stack. Georgia goes either way. Add a type scale (--step--1 … --step-5) and a spacing scale (--space-1 … --space-8, with section padding 64/48/40 instead of 96). Merge .badge and .tag into one .chip with status modifiers, .card and .home .card into one card, .steps and .steps4, .section-head and .section-intro, .ticks and .checklist, .hero-actions and .cta-row. Tokenise radii (12/16/20). Fix the eyebrow specificity bug (home.css:95: scope to '.copy > p:not(.eyebrow)')",
+  "Stop hard-coding the version (8 + 2 + 12 occurrences plus wiki.js:223). Put the version in one place (a data-version attribute filled from SITE.fetchLatestRelease(), or a SITE.release constant) and have copy say 'the latest release' where possible",
+  "Wiki: bring it up to date for 0.4.4 released plus 0.4.5 flagged 'coming'. Add pages for Friends & Rooms, Your PCs & Share between my PCs, Share with friends, Setup helper & several logins, and The companion. Fix faq.md:51, community.md:38 and home.md:30 (cowork and rooms are built on main, rolling out). Add a 'Roadmap' link in pages.json. Read the footer version from pages.json instead of wiki.js:223. For SEO, optionally generate static wiki/<slug>/index.html from the same markdown with a small node script, keeping the SPA as the enhancement",
+  "Performance and assets: add srcset/sizes with 1200w and 800w WebP variants of the 2400 px shots (about 838 KB of images on home today). Recrop listen-panel.webp so its last sentence is not cut off. Delete about 15 MB of unused files (see assets.unused), especially media/*.mp4 (13.8 MB). Replace the old UI captures in assets/screens/ (0.3.x-era, e.g. workspace.webp) rather than reusing them",
+  "Evidence caution for whoever writes the roadmap: git log v0.4.4..origin/main includes commits whose content already shipped in 0.4.4 through the two-PC merge (e.g. 9cb13e2 'free the Void collection' is not an ancestor of the v0.4.4 tag, yet CHANGELOG [0.4.4] line 395 and tag commit 116d334 ship it). Use the CHANGELOG sections, not the commit range, to decide released vs coming-0.4.5"
+ ],
+ "accessibility": [
+  "Working today (keep): skip links on index, community, download and wiki (none on 404); aria-current on inner-page nav; decorative canvas and float chips are aria-hidden; reduced motion is honoured for the canvas, reveal, chips, tilt and transitions (home.css:223-228, site.css:312-316); native <dialog> lightbox with a labelled close button and keyboard-openable images; details/summary FAQ; a visible focus ring on .btn and summary; descriptive alt text on screenshots; lang=en",
+  "Contrast passes WCAG AA for every token pair (computed): dim #7c8f93 is 5.78:1 on --bg and 4.97:1 on --panel-solid, the weakest pair, so do not use --dim on lighter panels or below 14 px",
+  "Home nav at ≤960 px hides Wiki, GitHub, What's new and How it works with no menu control (home.css:209). Keyboard and phone users cannot reach the wiki from the home header",
+  "Inner-page nav wraps to two rows at 390 px, and the sticky header takes about 120 px (community-w390-01.png, download-w390-01.png, wiki-index-w390-01.png)",
+  "Wiki #article has aria-live=polite (wiki/index.html:47), so screen readers announce the whole page on every hash navigation. Instead, move focus to the new h1 and announce only the title",
+  "Link text arrows ('↗', '→') and the '☰ Pages' glyph are read aloud ('north east arrow'). Wrap them in aria-hidden spans and add visually hidden '(opens Discord)' or '(GitHub)' where links leave the site",
+  "The hero pill link text ('An open studio. A growing community.') does not describe its destination (#new, release notes)",
+  "The lightbox turns <img> into role=button via JS (home.js:104-106). Real <button> wrappers would be more robust and would get the focus ring",
+  "Horizontally scrolling <pre> blocks (community npm block, download PowerShell) cannot be scrolled from the keyboard without tabindex=0 and a label",
+  "Nav links and cards have hover states but no custom :focus-visible style (only the browser default). Apply --ring consistently to .nav-links a, .card-link, .links-grid a.card and .wiki-side a",
+  "404.html has no skip link, nav or footer, and uses off-token colours"
+ ],
+ "assets": {
+  "used": [
+   "assets/favicon.ico (all pages except 404)",
+   "assets/icon-256.png (brand mark in nav, bot card and final CTA; also used by studio-community-card.html)",
+   "assets/site.css (all pages)",
+   "assets/home.css (index)",
+   "assets/site.js (index, community, download, wiki)",
+   "assets/home.js (index)",
+   "assets/wiki.js (wiki)",
+   "assets/studio-community-card.jpg (1200x630 og:image and twitter:image for index, community and wiki)",
+   "assets/studio-community-card.html (editable source of the share card, per README.md; not linked, keep as source)",
+   "assets/shots/vibe.webp (hero)",
+   "assets/shots/vibe-void.webp (Vibe split)",
+   "assets/shots/command.webp (Command split; also wiki/pages/command-center.md:7)",
+   "assets/shots/watch-bg.webp (media section)",
+   "assets/shots/needs-you.webp (control split)",
+   "assets/shots/brain.webp and assets/shots/map.webp (under the hood)",
+   "assets/shots/listen-panel.webp (rolling-out rooms card; cropped mid-sentence)",
+   "assets/shots/thumb-command-abyss/dusk/eclipse/ember/midnight/gold.webp (theme gallery)",
+   "wiki/pages.json and wiki/pages/*.md (22 pages)",
+   "External: marked 18.0.13 via cdnjs.cloudflare.com, with cdn.jsdelivr.net fallback (wiki.js:7-10)"
+  ],
+  "unused": [
+   "assets/launch.css (3.9 KB; abandoned light 'launch' theme, referenced nowhere)",
+   "assets/screens/ (all 12 files, 722 KB, 1440x900, older 0.3.x-era UI): brains-inspector.webp, brains.webp, catalog.webp, command-ask.webp, command.webp, og-command.jpg, plans.webp, rail.webp, settings.webp, tasks.webp, walkthrough.webp, workspace.webp. The only 'command.webp' references point to assets/shots/",
+   "assets/shots/friends-panel.webp (1840x1240; Friends bubble plus Your PCs, current UI; a good candidate for the new Community page)",
+   "assets/shots/og.jpg (1200x630, an older share card superseded by studio-community-card.jpg)",
+   "media/mefi-studio-v0.4.2-discord.mp4 (9.99 MB; wiki/pages/whats-new.md:43 links to the GitHub release copy, not this file)",
+   "media/mefi-studio-v0.4.2-poster.jpg",
+   "media/mefi-work-in-motion.mp4 (3.77 MB)",
+   "media/mefi-work-in-motion.png",
+   "media/social-posts.md (0.4.3 Discord post copy)",
+   "Total unused is about 15 MB, mostly video"
+  ]
+ },
+ "liveData": "What exists now: (1) GitHub releases/latest via SITE.fetchLatestRelease() (site.js:57-86). It powers the home hero hint ('Latest release: v0.4.4 · September 27, 2026 · 157 MB zip', seen in index-w1440-01.png) and the download card (tag, date, zip name, size, .sha256 link, pre-release badge), with static v0.4.4 fallbacks. The request is unauthenticated; GitHub allows 60 requests per hour per IP, and the result is memoised per page. (2) GitHub repo JSON via SITE.fetchRepo() (site.js:90-96), used only to toggle the community Discussions card. has_discussions is currently false, so the 'not enabled yet' notice shows. The same call also returns stargazers_count 13 and forks_count 2, which are not displayed. (3) The wiki fetches pages.json and the .md files, plus marked from a CDN. There is no Discord data anywhere on the site. Verified options for the redesign: GET https://discord.com/api/v10/invites/xgfKc5pVxG?with_counts=true returns guild 'Void Engine' with approximate_member_count 101 and approximate_presence_count 44, and it sends access-control-allow-origin: https://nateecho32-stack.github.io, so the site can fetch it client-side. The guild widget (/api/guilds/1345380333302059129/widget.json) returns 403 because the widget is disabled. GitHub issues filtered by the existing 'enhancement' label (/repos/nateecho32-stack/mefi-studio/issues?labels=enhancement&state=open) can drive a live 'Requested features' list; there are 0 issues today and 2 closed PRs, one from an outside contributor (King4s). Cache all API results in sessionStorage inside try/catch, and always render a static fallback.",
+ "seo": "index.html has full metadata: title, description, canonical, og:title/description/site_name/type/url, og:image with width 1200, height 630, type and alt, twitter summary_large_image with title, description, image and alt, and theme-color #050d13. community.html has canonical and full OG/Twitter tags but no og:image width/height. download.html has only a title, description and theme-color: no canonical, OG or Twitter card, so shared download links get no preview. wiki/index.html has canonical wiki/, partial OG (title, description, url, image and alt) and twitter:card without twitter:title or twitter:image; its description is pinned to 'version 0.4.4'. Every wiki page lives behind a #/ hash and is rendered client-side from markdown, so crawlers see one page with a 'Loading the wiki…' spinner, per-page titles are set only by JS, and shared wiki links all preview the same card. 404.html is correctly noindex but uses a different theme-color (#070a0e, as the wiki does). Missing site-wide: robots.txt, sitemap.xml, SoftwareApplication JSON-LD (name Mefi Studio, operatingSystem Windows 10/11, offers price 0, downloadUrl, softwareVersion), apple-touch-icon and a web manifest (only favicon.ico; icon-256.png is available), and og:locale. Title patterns are inconsistent ('Mefi Studio — …', 'Download — Mefi Studio', '… · Wiki · Mefi Studio'); pick one, e.g. 'Page — Mefi Studio'. The share card (studio-community-card.jpg) is strong and on-message; per README.md, give any replacement a new filename to bust preview caches. The GitHub repo's homepage field already points at the site, and its description matches the community positioning. New pages (features.html, roadmap.html) need their own canonical, OG and Twitter tags; consider one share card per page, e.g. a roadmap card."
+}

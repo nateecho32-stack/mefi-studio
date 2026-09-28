@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Mefi Studio — Bring an idea. Find your people.</title>
-<meta name="description" content="A place for curious people to share ideas, build with coding agents and hang out. Join the Discord, show your work in progress, and help shape Mefi Studio.">
+<meta name="description" content="Mefi Studio is a free, open-source Windows app for building ideas with coding agents, with a community to share them in. Join the Discord, see what's done and planned on the roadmap, and help decide what comes next.">
 <meta property="og:title" content="Mefi Studio — Bring an idea. Find your people.">
-<meta property="og:description" content="Share ideas. Build with agents. Hang out. Bring your work in progress to our Discord and help shape a studio made with people. Free and open source for Windows.">
+<meta property="og:description" content="Build your ideas with coding agents and share them with people. Join the Discord, follow the roadmap and request what you'd like next. Free and open source for Windows.">
 <meta property="og:site_name" content="Mefi Studio">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://nateecho32-stack.github.io/mefi-studio/">
@@ -17,7 +17,7 @@
 <meta property="og:image:alt" content="Mefi Studio: Bring an idea. Find your people. Make it together. Share ideas, build with agents and hang out.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Mefi Studio — Bring an idea. Find your people.">
-<meta name="twitter:description" content="Share ideas. Build with agents. Hang out. Join our Discord and help shape a studio made with people. Free and open source for Windows.">
+<meta name="twitter:description" content="Build your ideas with coding agents and share them with people. Join the Discord, follow the roadmap and request what you'd like next. Free and open source for Windows.">
 <meta name="twitter:image" content="https://nateecho32-stack.github.io/mefi-studio/assets/studio-community-card.jpg">
 <meta name="twitter:image:alt" content="Mefi Studio: Bring an idea. Find your people. Make it together.">
 <link rel="canonical" href="https://nateecho32-stack.github.io/mefi-studio/">
@@ -28,326 +28,389 @@
 </head>
 <body class="home">
 <a class="skip-link" href="#main">Skip to content</a>
-
-<header class="nav">
-  <div class="container nav-inner">
+<header class="site-head">
+  <div class="container head-inner">
     <a class="brand" href="index.html"><img src="assets/icon-256.png" width="30" height="30" alt="">Mefi Studio</a>
-    <nav class="nav-links" aria-label="Site">
-      <a href="#how">How it works</a>
-      <a href="#media">Media</a>
-      <a href="#friends">Community</a>
-      <a href="#new">What's new</a>
-      <a href="wiki/">Wiki</a>
-      <a href="https://github.com/nateecho32-stack/mefi-studio" rel="noopener">GitHub ↗</a>
-      <a class="nav-cta" href="download.html">Download</a>
+    <nav class="tabs" aria-label="Site">
+      <a href="index.html" data-tab="home" aria-current="page">Home</a>
+      <a href="features.html" data-tab="features">Features</a>
+      <a href="roadmap.html" data-tab="roadmap">Roadmap</a>
+      <a href="community.html" data-tab="community">Community</a>
+      <a href="wiki/" data-tab="wiki">Wiki</a>
     </nav>
+    <div class="head-actions">
+      <a class="icon-link" href="https://discord.gg/xgfKc5pVxG" rel="noopener" aria-label="Mefi Studio on Discord" title="Discord"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.2 18.2 0 0 0-5.6 0L8.6 3a19.6 19.6 0 0 0-4.9 1.5C.6 9.1-.3 13.7.1 18.2a19.8 19.8 0 0 0 6 3l1.3-2.1a12.8 12.8 0 0 1-2-1l.5-.4a14.1 14.1 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.7 19.7 0 0 0 6-3c.5-5.2-.8-9.8-3.6-13.8ZM8 15.5c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.7 8 10.7s2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Z"/></svg></a>
+      <a class="icon-link" href="https://github.com/nateecho32-stack/mefi-studio" rel="noopener" aria-label="Mefi Studio on GitHub" title="GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5A11.5 11.5 0 0 0 8.4 22.9c.6.1.8-.2.8-.6v-2.1c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0c2.2-1.5 3.2-1.2 3.2-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .4.2.7.8.6A11.5 11.5 0 0 0 12 .5Z"/></svg></a>
+      <a class="btn btn-primary btn-sm" href="download.html">Download</a>
+    </div>
+    <details class="menu">
+      <summary aria-label="Open the menu"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></summary>
+      <nav class="menu-panel" aria-label="Site">
+        <a href="index.html" aria-current="page">Home</a>
+        <a href="features.html">Features</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="community.html">Community</a>
+        <a href="wiki/">Wiki</a>
+        <hr>
+        <a href="https://discord.gg/xgfKc5pVxG" rel="noopener">Discord <span aria-hidden="true">↗</span></a>
+        <a href="https://github.com/nateecho32-stack/mefi-studio" rel="noopener">GitHub <span aria-hidden="true">↗</span></a>
+        <a class="btn btn-primary" href="download.html">Download for Windows</a>
+      </nav>
+    </details>
   </div>
 </header>
-
 <main id="main">
 
 <!-- HERO -->
-<section class="hero">
+<section class="hero" aria-labelledby="hero-title">
   <canvas class="hero-sky" aria-hidden="true"></canvas>
   <div class="container hero-copy">
-    <a class="pill" href="#new"><b>0.4.4</b> An open studio. A growing community. →</a>
-    <h1>Bring an idea.<br>Find your people.<br><span class="grad">Make it together.</span></h1>
-    <p class="lede">A studio for people who like making things. Build your ideas with coding agents, bring your work in progress to our Discord, and find some company along the way. Help us shape what Studio becomes.</p>
+    <a class="pill" href="roadmap.html"><b>Roadmap</b> See what's done, what's being built and what's planned <span aria-hidden="true">→</span></a>
+    <h1 id="hero-title">Bring an idea.<br>Find your people.<br><span class="grad">Make it together.</span></h1>
+    <p class="lede">Mefi Studio is a free, open-source app for Windows. Build your ideas with coding agents, bring your work in progress to the Discord, and help decide what Studio becomes next.</p>
     <div class="cta-row">
-      <a class="btn btn-primary btn-lg" href="https://discord.gg/xgfKc5pVxG" rel="noopener">Find us on Discord ↗</a>
-      <a class="btn btn-lg" href="download.html">Get Studio for Windows</a>
+      <a class="btn btn-primary btn-lg" href="https://discord.gg/xgfKc5pVxG" rel="noopener">Join the Discord <span aria-hidden="true">↗</span></a>
+      <a class="btn btn-lg" href="download.html">Download for Windows</a>
     </div>
-    <p class="fine">Free &amp; open source · Windows · Come with a project, a question, or just yourself</p>
-    <p class="fine" data-latest-hint></p>
+    <div class="hero-meta">
+      <p class="pulse" data-discord-pulse hidden><span class="dot"></span><span data-pulse-text></span></p>
+      <p class="fine" data-latest-hint>Latest release: <a href="https://github.com/nateecho32-stack/mefi-studio/releases/latest">see GitHub</a></p>
+    </div>
+    <p class="fine">Free and open source · Windows 10 and 11 · No Studio account · Discord is optional</p>
   </div>
   <div class="container hero-shot">
     <figure class="frame frame-hero">
-      <img src="assets/shots/vibe.webp" width="2400" height="1500" alt="Vibe mode: a box that asks what's next for the Notes app, with Needs you, Building now, Freshly done and Fresh ideas cards below it" fetchpriority="high">
+      <a class="zoom" href="assets/shots/vibe.webp"><img src="assets/shots/vibe.webp" width="2400" height="1500" alt="Vibe mode: a box that asks What's next for Notes app?, with Needs you, Building now, Freshly done and Fresh ideas cards below it" fetchpriority="high" decoding="async"><span class="visually-hidden"> (open a larger view)</span></a>
     </figure>
     <div class="float-chip chip-a" aria-hidden="true"><i class="dot live"></i>2 agents building</div>
     <div class="float-chip chip-b" aria-hidden="true"><i class="dot warn"></i>1 decision needs you</div>
-    <div class="float-chip chip-c" aria-hidden="true"><i class="dot info"></i>Now playing · lo-fi mix</div>
+    <div class="float-chip chip-c" aria-hidden="true"><i class="dot info"></i>1 task checking its work</div>
   </div>
 </section>
 
-<!-- FRIENDS -->
-<section id="friends" class="section friends">
+<!-- PILLARS -->
+<section class="pillars" aria-labelledby="pillars-title">
   <div class="container">
-    <div class="section-intro wide">
-      <p class="eyebrow">Made with people</p>
-      <h2>Good ideas get better with company.</h2>
-      <p>Studio is growing into a place to create together. Our community starts in the Void Engine Discord: bring a half-finished project, trade feedback, show off a tiny win, or keep each other company while you build.</p>
+    <div class="section-head center" data-reveal>
+      <p class="eyebrow">What Studio is</p>
+      <h2 id="pillars-title">A studio for making things, with company.</h2>
+      <p>Describe what you want and agents build it in your project. You stay in charge, and people are close by when you want them.</p>
     </div>
-    <div class="friends-grid">
-      <article class="fcard">
-        <span class="tag tag-live">Join us on Discord</span>
-        <h3>Your work in progress is welcome.</h3>
-        <p>Games, apps, experiments, wild ideas. Share what you're making, ask how someone did something, or find a little encouragement to take the next step. You don't have to be an expert to belong here.</p>
-        <p class="small">Download Studio when you're ready to build with agents. You can join the conversation right now.</p>
-      </article>
-      <article class="fcard bot-card">
-        <span class="tag tag-live">Meet the Discord bot</span>
-        <div class="bot-mark" aria-hidden="true"><img src="assets/icon-256.png" width="52" height="52" alt=""><span>Hello, Studio.</span></div>
-        <h3>Studio is in the server, too.</h3>
-        <p>Our new Discord bot is part of the experiment. Come meet Studio, try it out in the server and tell us what would make it a useful part of your creative hangout.</p>
-        <p class="small">Your feedback helps shape how the bot and desktop studio grow together.</p>
-      </article>
-      <article class="fcard fcard-media">
-        <div class="fcard-copy">
-          <span class="tag tag-soon">Rolling out · shared rooms</span>
-          <h3>Same video. Same moment.</h3>
-          <p>We're bringing watch-and-listen sessions into Studio: one person puts on a link and friends join with <b>Listen along</b>. Build, take a break and enjoy something together.</p>
-          <p class="small">Synced rooms need a connected rooms hub and Discord account. Availability depends on that setup; the personal media player is ready in 0.4.4. Preview below uses sample data.</p>
-        </div>
-        <img src="assets/shots/listen-panel.webp" width="1252" height="636" loading="lazy" alt="Sample preview of Listen together: a shared room, currently playing media and a Listen along control">
-      </article>
-      <article class="fcard roadmap">
-        <span class="tag tag-next">Ideas we're exploring</span>
-        <h3>Help decide what Studio becomes.</h3>
+    <div class="grid-4">
+      <a class="card card-link pillar" href="features.html#build" data-reveal>
+        <span class="glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3l1.9 5.1L18 10l-5.1 1.9L11 17l-1.9-5.1L4 10l5.1-1.9Z"/><path d="M18.5 15v5M16 17.5h5"/></svg></span>
+        <h3>Build with agents</h3>
+        <p>Type an idea, a fix or a question. <b>Build it</b> puts coding agents to work in your project folder, and finished work waits in <b>Review</b> until its checks pass.</p>
+        <span class="more">How building works <span aria-hidden="true">→</span></span>
+      </a>
+      <a class="card card-link pillar" href="features.html#community" data-reveal>
+        <span class="glyph void"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h10a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H9l-4 3v-3H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/><path d="M19 9h1a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-1v3l-4-3h-3"/></svg></span>
+        <h3>Hang out and share</h3>
+        <p>Show what you're making in the Discord, trade feedback and keep each other company while you build. Rooms inside Studio are rolling out.</p>
+        <span class="more">The social side <span aria-hidden="true">→</span></span>
+      </a>
+      <a class="card card-link pillar" href="features.html#in-charge" data-reveal>
+        <span class="glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.4-2.9 8.2-7 10-4.1-1.8-7-5.6-7-10V6Z"/><path d="M9 12l2 2 4-4"/></svg></span>
+        <h3>Stay in charge</h3>
+        <p>Choose how much agents do alone, from <b>Always ask</b> to <b>Auto</b>. Questions wait in one <b>Needs you</b> list, and every automatic choice has a <b>Why</b> and an <b>Undo</b>.</p>
+        <span class="more">You decide <span aria-hidden="true">→</span></span>
+      </a>
+      <a class="card card-link pillar" href="features.html#make-it-yours" data-reveal>
+        <span class="glyph gold"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1 0 1.6-.7 1.6-1.5 0-1-.8-1.4-.8-2.3 0-.9.7-1.6 1.6-1.6H17a4 4 0 0 0 4-4C21 6.8 17 3 12 3Z"/><path d="M7.5 12h.01M9.5 7.5h.01M14.5 7.5h.01"/></svg></span>
+        <h3>Make it yours</h3>
+        <p>Eleven colour themes, eight animated node styles, your own colours, and music or a video behind your work. Every look is free.</p>
+        <span class="more">Themes and styles <span aria-hidden="true">→</span></span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- COMMUNITY -->
+<section class="band community" aria-labelledby="community-title">
+  <div class="container">
+    <div class="head-row" data-reveal>
+      <div class="section-head">
+        <p class="eyebrow">Community</p>
+        <h2 id="community-title">Good ideas get better with company.</h2>
+        <p>The community meets in the Void Engine Discord today. You don't need Studio to join, and you don't need Discord to use Studio.</p>
+      </div>
+      <a class="btn" href="community.html">Visit the Community page <span aria-hidden="true">→</span></a>
+    </div>
+    <div class="grid-3 community-grid">
+      <article class="card card-feature" data-reveal>
+        <span class="badge live">Open now</span>
+        <h3>In the Discord today</h3>
+        <p>Share what you're making, ask for feedback, swap model setups and keep each other company. Unfinished work and first-timers are welcome.</p>
         <ul class="ticks">
-          <li><b>Community rooms</b> for conversations and ideas inside Studio</li>
-          <li><b>Cowork spaces</b> where friends and their agents can take a project forward together</li>
-          <li><b>“Hey Studio”</b> to open an optional voice popup, transcribe with a service you choose, and reply aloud if you want</li>
+          <li><b>/showcase</b> posts your project to #showcase, with credit for anyone who helped</li>
+          <li><b>/cowork start</b> opens a temporary voice room and thread to work side by side</li>
+          <li>New Studio releases are posted in #updates</li>
         </ul>
-        <p class="small">These are future ideas, not features included in 0.4.4. Tell us what you'd use and what you'd change.</p>
+      </article>
+      <article class="card card-feature" data-reveal>
+        <span class="status rolling">Rolling out</span>
+        <h3>Friends in Studio</h3>
+        <p><b>Friends › Rooms</b> brings the community inside Studio: hangout rooms for up to 25 people and cowork rooms for up to 10, each with a plain-text chat. <b>Listen together</b> plays one link for everyone in a room, at the same point.</p>
+        <p class="note">Both are built: Listen together is in 0.4.4 and Rooms come with 0.4.5. They switch on once the community's rooms hub is online.</p>
+      </article>
+      <article class="card card-feature plan-card" data-reveal>
+        <span class="status planned">Planned</span>
+        <h3>Where we're headed</h3>
+        <p>A place to share your ideas and projects. Earn credits by playing or looking at other people's projects, and spend them to promote your own, on cosmetics, or on styles other creators offer. Share mixes too, with a most-played list from people who turn on sharing their music taste.</p>
+        <p class="note">Credits will only be earned: never bought, and never for inviting people or for Discord activity. Today's themes and node styles stay free. The details are still open, so come and help shape them.</p>
       </article>
     </div>
-    <div class="cta-row center">
-      <a class="btn btn-primary" href="https://discord.gg/xgfKc5pVxG" rel="noopener">Join the conversation ↗</a>
-      <a class="btn" href="community.html">Find your way around</a>
+  </div>
+</section>
+
+<!-- TOUR -->
+<section class="tour" aria-labelledby="tour-title">
+  <div class="container">
+    <div class="head-row" data-reveal>
+      <div class="section-head">
+        <p class="eyebrow">A quick look</p>
+        <h2 id="tour-title">See it before you download it.</h2>
+        <p>Three screens from Studio, using sample data from a made-up Notes app.</p>
+      </div>
+      <a class="btn" href="features.html">See every feature <span aria-hidden="true">→</span></a>
+    </div>
+    <div class="grid-3 tour-grid">
+      <figure class="frame" data-reveal>
+        <a class="zoom" href="assets/shots/needs-you.webp"><img src="assets/shots/needs-you.webp" width="2400" height="1500" loading="lazy" decoding="async" alt="Vibe mode with a decision drawer open: Should the empty state also appear when a search has no matches? The option Yes, one component for both is marked Recommended, with a box to answer in your own words"><span class="visually-hidden"> (open a larger view)</span></a>
+        <figcaption><strong>Answer in Vibe.</strong> A decision shows its question and options, recommended first, or takes your own words.</figcaption>
+      </figure>
+      <figure class="frame" data-reveal>
+        <a class="zoom" href="assets/shots/command.webp"><img src="assets/shots/command.webp" width="2400" height="1500" loading="lazy" decoding="async" alt="Command view: tasks and builders drawn as a connected tree, with a Live work panel counting 2 ready and 1 verifying, and 3 agents working"><span class="visually-hidden"> (open a larger view)</span></a>
+        <figcaption><strong>Command view.</strong> Tasks and builders as a live tree, with what's ready, verifying and waiting at the side.</figcaption>
+      </figure>
+      <figure class="frame" data-reveal>
+        <a class="zoom" href="assets/shots/watch-bg.webp"><img src="assets/shots/watch-bg.webp" width="2400" height="1500" loading="lazy" decoding="async" alt="Command view in a violet theme with a music video playing behind the tree and its playback controls at the bottom"><span class="visually-hidden"> (open a larger view)</span></a>
+        <figcaption><strong>A video behind the tree.</strong> Play something while you work, right behind your agents.</figcaption>
+      </figure>
     </div>
   </div>
 </section>
 
-<!-- WORKS WITH -->
-<section class="works-with" aria-labelledby="works-with-title">
+<!-- ROADMAP TEASER -->
+<section class="band roadmap-teaser" aria-labelledby="roadmap-title">
   <div class="container">
-    <p id="works-with-title" class="eyebrow center">Works with the coding agents and models you already use</p>
-    <ul class="logo-row">
-      <li>Claude Code</li><li>OpenCode</li><li>Codex</li><li>Grok</li><li>Antigravity</li><li>OpenRouter</li><li>LM Studio</li><li>z.ai</li><li>Any OpenAI-compatible API</li>
-    </ul>
+    <div class="head-row" data-reveal>
+      <div class="section-head">
+        <p class="eyebrow">Roadmap</p>
+        <h2 id="roadmap-title">Done, being worked on, and planned.</h2>
+        <p>A few items from each column. Every item carries a label that says where it stands.</p>
+      </div>
+      <a class="btn" href="roadmap.html">See the whole roadmap <span aria-hidden="true">→</span></a>
+    </div>
+    <div class="board">
+      <div class="lane" data-reveal>
+        <div class="lane-head"><h3>Done</h3></div>
+        <p class="lane-note">In the download today.</p>
+        <div class="item">
+          <h4>Set up with one sign-in</h4>
+          <p>Start here can install Codex, Claude Code, Grok or Antigravity, sign you in and check the connection.</p>
+          <div class="meta"><span class="status released">In 0.4.4</span></div>
+        </div>
+        <div class="item">
+          <h4>Big requests become steps</h4>
+          <p><b>Build it</b> decides whether a request is one task or two to six steps, each leaving your project working.</p>
+          <div class="meta"><span class="status released">In 0.4.4</span></div>
+        </div>
+        <div class="item">
+          <h4>Every look is free</h4>
+          <p>Every theme and node style, the Void collection included.</p>
+          <div class="meta"><span class="status released">In 0.4.4</span></div>
+        </div>
+      </div>
+      <div class="lane" data-reveal>
+        <div class="lane-head"><h3>Being worked on</h3></div>
+        <p class="lane-note">Built, and on its way to you.</p>
+        <div class="item">
+          <h4>The setup helper</h4>
+          <p>Every agent setting in one guided menu, with a three-step Quick setup.</p>
+          <div class="meta"><span class="status next">Coming in 0.4.5</span></div>
+        </div>
+        <div class="item">
+          <h4>More than one Claude Code or Codex login</h4>
+          <p>When one login hits its usage limit, work moves to the next one.</p>
+          <div class="meta"><span class="status next">Coming in 0.4.5</span></div>
+        </div>
+        <div class="item">
+          <h4>Rooms and Listen together</h4>
+          <p>Built, and switching on once the community's rooms hub is online.</p>
+          <div class="meta"><span class="status rolling">Rolling out</span></div>
+        </div>
+      </div>
+      <div class="lane" data-reveal>
+        <div class="lane-head"><h3>Planned</h3></div>
+        <p class="lane-note">Decided, not started yet.</p>
+        <div class="item">
+          <h4>Faster agents, and logs that are kept</h4>
+          <p>Agents get only what's new and pick up where they left off. Old logs are archived, never deleted.</p>
+          <div class="meta"><span class="status planned">Planned for 0.4.5</span></div>
+        </div>
+        <div class="item">
+          <h4>Friends 2.0</h4>
+          <p>A lobby with three rooms, who's online, and invite links that take one click.</p>
+          <div class="meta"><span class="status planned">Planned for 0.4.5</span></div>
+        </div>
+        <div class="item">
+          <h4>Linux support</h4>
+          <p>A Linux build of Studio, after 0.4.5.</p>
+          <div class="meta"><span class="status planned">Planned</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cta-band request" data-reveal>
+      <div>
+        <h2>Want something in Studio?</h2>
+        <p>Ask for it. Open a feature request on GitHub (it needs a free GitHub account), or say it in the Discord. If someone already asked, add a thumbs-up to their request.</p>
+      </div>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://github.com/nateecho32-stack/mefi-studio/issues/new?template=feature_request.md" rel="noopener">Request on GitHub <span aria-hidden="true">↗</span></a>
+        <a class="btn" href="https://discord.gg/xgfKc5pVxG" rel="noopener">Suggest it in Discord <span aria-hidden="true">↗</span></a>
+      </div>
+    </div>
   </div>
 </section>
 
-<!-- HOW IT WORKS -->
-<section id="how" class="section">
+<!-- INSTALL -->
+<section class="install" aria-labelledby="install-title">
   <div class="container">
-    <div class="section-intro">
-      <p class="eyebrow">How it works</p>
-      <h2>From one sentence to checked work.</h2>
-      <p>You describe what you want. Studio plans it, builds it and checks it, and shows you every step along the way.</p>
+    <div class="head-row" data-reveal>
+      <div class="section-head">
+        <p class="eyebrow">Get started</p>
+        <h2 id="install-title">Up and running in three steps.</h2>
+        <p>Studio is a portable app: there is no installer and nothing else to set up first.</p>
+      </div>
+      <a class="btn" href="download.html">Download page <span aria-hidden="true">→</span></a>
     </div>
-    <ol class="steps4">
-      <li><span class="n">01</span><h3>Say it</h3><p>Type an idea, a fix or a question. <b>Talk it over</b> to think it through with Mefi, or press <b>Build it</b> to put it on the board. Drop files in for context.</p></li>
-      <li><span class="n">02</span><h3>Mefi sizes it</h3><p>A small change goes straight to a builder. A bigger one is split into two to six steps. Each step leaves your project working, and your original request runs last to tie them together.</p></li>
-      <li><span class="n">03</span><h3>Agents build it</h3><p>Coding agents pick up the work in your project folder. Each one shows up in the tree, flies to its task and tells you what it's doing.</p></li>
-      <li><span class="n">04</span><h3>It gets checked</h3><p>Finished work waits in <b>Review</b> with its evidence until the checks pass or you confirm it. Here, "done" means verified.</p></li>
+    <ol class="steps">
+      <li class="step" data-reveal>
+        <h3>Download the zip</h3>
+        <p>Get the Windows zip from the <a href="download.html">latest release</a>.</p>
+      </li>
+      <li class="step" data-reveal>
+        <h3>Unzip and run</h3>
+        <p>Right-click the zip, choose <b>Extract All</b>, keep the folder together and open <b>Mefi Studio AI+.exe</b>.</p>
+      </li>
+      <li class="step" data-reveal>
+        <h3>Get past SmartScreen</h3>
+        <p>The build isn't code-signed yet, so Windows may warn you the first time. Choose <b>More info</b>, then <b>Run anyway</b>.</p>
+      </li>
     </ol>
-  </div>
-</section>
-
-<!-- VIBE -->
-<section class="section feat">
-  <div class="container split">
-    <div class="copy">
-      <p class="eyebrow">Vibe mode</p>
-      <h2>One calm screen for everything that matters.</h2>
-      <p>Vibe puts the conversation, new work, live progress and your decisions in one place. Cards appear only when they have something to tell you, so a quiet project stays quiet.</p>
-      <ul class="ticks">
-        <li><b>Needs you</b>: questions, approvals and stuck tasks, each answered in place</li>
-        <li><b>Building now</b>: what every agent is doing, with live progress</li>
-        <li><b>Freshly done</b> and <b>Fresh ideas</b>: what finished, and what's worth building next</li>
-        <li><b>New app</b>: name it, describe it, and Studio makes the folder, starts git and begins building</li>
-      </ul>
-      <p class="aside">Want every control? Switch to <b>Build</b> for the full workspace. Studio remembers which mode you like.</p>
-    </div>
-    <figure class="frame"><img src="assets/shots/vibe-void.webp" width="2400" height="1500" loading="lazy" alt="Vibe mode in the violet Void theme"></figure>
-  </div>
-</section>
-
-<!-- COMMAND -->
-<section class="section feat">
-  <div class="container split reverse">
-    <div class="copy">
-      <p class="eyebrow">Command view</p>
-      <h2>Watch your agents work, live.</h2>
-      <p>Every session, task and agent is a node in a living tree. Builders orbit your assistant, fly to the task they're working on and report back in speech bubbles. The side panel keeps score: what's ready, what's verifying, what's waiting on you.</p>
-      <ul class="ticks">
-        <li>Several builders at once, each on its own task</li>
-        <li>Progress from the agent's own step list, not guesswork</li>
-        <li>Click any node for its details, history and evidence</li>
-        <li>Park the mouse at the edge for a slow Zen tour of the tree</li>
-      </ul>
-    </div>
-    <figure class="frame"><img src="assets/shots/command.webp" width="2400" height="1500" loading="lazy" alt="Command view: tasks and builders drawn as a connected tree, with the Live work panel listing two running tasks and three working agents"></figure>
-  </div>
-</section>
-
-<!-- MEDIA -->
-<section id="media" class="section media">
-  <div class="container">
-    <div class="section-intro wide">
-      <p class="eyebrow">Make room for the good part</p>
-      <h2>Your project. Your soundtrack. Your kind of evening.</h2>
-      <p>Put on a video, queue some music and settle into a project. Studio's built-in player keeps you company while agents work, and lets you know when something needs you. Meet up in Discord to share the session; synced playback inside Studio is rolling out.</p>
-    </div>
-    <figure class="frame frame-wide">
-      <img src="assets/shots/watch-bg.webp" width="2400" height="1500" loading="lazy" alt="A video playing as the background of Command view, with the agent tree and Live work panel drawn on top of it">
-      <figcaption>Use a video as the backdrop. The tree stays readable on top, and the video fades when a task finishes.</figcaption>
-    </figure>
-    <div class="grid3">
-      <article class="card"><h3>YouTube and more</h3><p>Play YouTube, Vimeo, SoundCloud, Spotify, Discord attachments or plain video and audio links in a floating player that stays put as you move around.</p></article>
-      <article class="card"><h3>Up next</h3><p>Search YouTube in the built-in explorer and build a queue. <b>Next video</b> plays what you queued first, and videos advance on their own.</p></article>
-      <article class="card"><h3>Behind the tree</h3><p>Make any video your background. Set its brightness and the tree's transparency, and let the tree drift toward the darker parts of the frame.</p></article>
-      <article class="card"><h3>Fade on finish</h3><p>When a task finishes, the video fades and Studio tells you. One click brings it back.</p></article>
-      <article class="card"><h3>Browse inside the player</h3><p><b>Browse here</b> opens websites in the same player, with an address bar, back and forward. Copy a link anywhere and Studio offers to play or queue it.</p></article>
-      <article class="card"><h3>Music moves the tree</h3><p>Play your own music or ad-free radio. Turn on the audio link and the tree speeds up, sways and pulses with the beat.</p></article>
-    </div>
-  </div>
-</section>
-
-<!-- CONTROL -->
-<section class="section feat">
-  <div class="container split">
-    <div class="copy">
-      <p class="eyebrow">You stay in charge</p>
-      <h2>Agents ask. You decide in one click.</h2>
-      <p>When an agent hits a real choice, it asks you, explains why and suggests an answer. Pick an option, or type your own words, and the work carries on.</p>
-      <ul class="ticks">
-        <li>Four permission modes: <b>Always ask</b>, <b>Accept per task</b>, <b>Auto</b> and <b>Elevated only</b></li>
-        <li>Every automatic decision comes with a <b>Why</b> and an <b>Undo</b></li>
-        <li>Mefi learns from your answers, and you can make it forget</li>
-        <li>Risky or permission-level calls always wait for you</li>
-      </ul>
-    </div>
-    <figure class="frame"><img src="assets/shots/needs-you.webp" width="2400" height="1500" loading="lazy" alt="A decision drawer beside Vibe mode: Should the empty state also appear when a search has no matches? The recommended option is One component for both"></figure>
-  </div>
-</section>
-
-<!-- BRAIN / MAP -->
-<section class="section">
-  <div class="container">
-    <div class="section-intro wide">
-      <p class="eyebrow">Under the hood</p>
-      <h2>See the plan, not just the result.</h2>
-      <p>Studio shows how each task is broken down, which parts of your project it touches and how it went last time.</p>
-    </div>
-    <div class="duo">
-      <figure class="frame"><img src="assets/shots/brain.webp" width="2400" height="1500" loading="lazy" alt="Agent Brain: Mefi at the head, a lead agent, and steps Read the brief, Map the files, Build empty state and Add keyboard action, then Run the checks and Verify the result"><figcaption><b>Agent Brain</b>: each task's pipeline, with sub-agents working their steps and reports climbing back up.</figcaption></figure>
-      <figure class="frame"><img src="assets/shots/map.webp" width="2400" height="1500" loading="lazy" alt="Explore the project: the project's systems (Search, Editor, Checks, Design, Export, Library) as tiles, with working and changed filters"><figcaption><b>Project map</b>: your code as systems, parts and files, lit up where agents are working.</figcaption></figure>
-    </div>
-  </div>
-</section>
-
-<!-- MAKE IT YOURS -->
-<section class="section">
-  <div class="container">
-    <div class="section-intro wide">
-      <p class="eyebrow">Make it yours</p>
-      <h2>Eleven themes. Eight node styles.</h2>
-      <p>Pick colours, node looks, layouts and glass. Every theme restyles the whole app, from the menus to the tree.</p>
-    </div>
-    <ul class="themes">
-      <li><img src="assets/shots/thumb-command-abyss.webp" width="960" height="681" loading="lazy" alt=""><span>Abyss · Prism</span></li>
-      <li><img src="assets/shots/thumb-command-dusk.webp" width="960" height="681" loading="lazy" alt=""><span>Neon Dusk · Sigil</span></li>
-      <li><img src="assets/shots/thumb-command-eclipse.webp" width="960" height="681" loading="lazy" alt=""><span>Eclipse · Halo</span></li>
-      <li><img src="assets/shots/thumb-command-ember.webp" width="960" height="681" loading="lazy" alt=""><span>Ember · Soft glass</span></li>
-      <li><img src="assets/shots/thumb-command-midnight.webp" width="960" height="681" loading="lazy" alt=""><span>Midnight · Minimal</span></li>
-      <li><img src="assets/shots/thumb-command-gold.webp" width="960" height="681" loading="lazy" alt=""><span>Studio gold · Classic orbs</span></li>
-    </ul>
-    <p class="fine center">Every theme and node style is free in 0.4.4, including the Void collection. Make the space feel like yours, then show the community what you came up with.</p>
-  </div>
-</section>
-
-<!-- WHAT'S NEW -->
-<section id="new" class="section new">
-  <div class="container">
-    <div class="section-intro wide">
-      <p class="eyebrow">New in 0.4.4</p>
-      <h2>Easier to start, smarter while it works.</h2>
-      <p>0.4.4 makes setup a single sign-in, gives agents a memory of what already happened, and smooths the everyday screens. Here is what changed.</p>
-    </div>
-
-    <div class="new-group">
-      <h3 class="new-head"><span>01</span>Getting started</h3>
-      <div class="grid3">
-        <article class="card"><h4>Use a subscription you already have</h4><p>Setup can install Codex, Claude Code, Grok or Antigravity, sign you in and test the connection. That one account then runs chat, planning and coding.</p></article>
-        <article class="card"><h4>Start a new app in one step</h4><p>Give it a name and a description. Studio makes the folder, starts git and sends your description as the first request.</p></article>
-        <article class="card"><h4>Keep every PC in step</h4><p><b>Friends › Your PCs</b> shows whether this PC matches GitHub. <b>Sync this PC</b> pulls and pushes, and never force-pushes.</p></article>
-      </div>
-    </div>
-
-    <div class="new-group">
-      <h3 class="new-head"><span>02</span>Smarter agents</h3>
-      <div class="grid3">
-        <article class="card"><h4>Big requests become steps</h4><p><b>Build it</b> decides whether a request is one task or two to six steps, each leaving your project working. <b>Make it one task</b> undoes the split.</p></article>
-        <article class="card"><h4>Nothing gets built twice</h4><p>Reopen a project and Studio lists the commits, edits and agent sessions from while it was closed, then checks the queue against them.</p></article>
-        <article class="card"><h4>You choose how much they do alone</h4><p>Four permission modes, from <b>Always ask</b> to <b>Auto</b>. Mefi can settle small asks for you, and every automatic call has a Why and an Undo.</p></article>
-      </div>
-    </div>
-
-    <div class="new-group">
-      <h3 class="new-head"><span>03</span>Everyday Studio</h3>
-      <div class="grid3">
-        <article class="card"><h4>Vibe keeps you on one screen</h4><p>Tasks, Plans, Ideas, Team and Settings open as compact panels inside Vibe. Send finished work back with <b>Ask for a change</b>.</p></article>
-        <article class="card"><h4>A roomier media player</h4><p>Player and queue share one panel, websites open inside it with <b>Browse here</b>, and local music shows its record artwork.</p></article>
-        <article class="card"><h4>Lighter and steadier</h4><p>A calmer Command view, a whole-app bug hunt, a Trace viewer for Studio's logs, and updates that save your agents' work first.</p></article>
-      </div>
-    </div>
-
-    <p class="fine center"><a href="https://github.com/nateecho32-stack/mefi-studio/blob/main/CHANGELOG.md">Read the full changelog →</a></p>
-  </div>
-</section>
-
-<!-- PRIVACY -->
-<section class="section privacy">
-  <div class="container">
-    <div class="trust">
-      <div><h3>Local-first</h3><p>Tasks, conversations, plans and settings stay on your PC, inside the project you chose.</p></div>
-      <div><h3>No Studio account required</h3><p>The desktop app has no sign-up or usage telemetry. Discord and AI connections are your choice.</p></div>
-      <div><h3>Keys stay locked</h3><p>API keys are encrypted with the Windows keystore. The interface shows "saved" or "not saved".</p></div>
-      <div><h3>Your AI, your choice</h3><p>Use a CLI login, an API key or a local model. Only the providers you connect receive your prompts and project context.</p></div>
+    <div class="strip trust" data-reveal>
+      <div><strong>Stays on your PC</strong><span>Tasks, conversations, plans and settings stay on your computer.</span></div>
+      <div><strong>No Studio account</strong><span>No sign-up and no usage telemetry. Discord and AI connections are your choice.</span></div>
+      <div><strong>Keys stay locked</strong><span>API keys are encrypted with the Windows keystore, and Studio only shows "saved" or "not saved".</span></div>
+      <div><strong>Your AI, your choice</strong><span>Use a CLI login, an API key or a local model. Only the providers you connect get your prompts and project context.</span></div>
     </div>
   </div>
 </section>
 
 <!-- FAQ -->
-<section class="section faq">
-  <div class="container narrow">
-    <p class="eyebrow center">Questions</p>
-    <h2 class="center">Good to know</h2>
-    <details><summary>Is it free?</summary><p>Yes. Mefi Studio is open source under the MIT license, including every theme and node style. Connected AI services may have their own costs; you choose your provider, supported CLI login or local model.</p></details>
-    <details><summary>Can I join before I have something to show?</summary><p>Please do. Bring an unfinished idea, ask a question, give someone feedback or just hang out in the <a href="https://discord.gg/xgfKc5pVxG" rel="noopener">Void Engine Discord</a>. You don't need to download Studio to take part.</p></details>
-    <details><summary>Can I say “Hey Studio” to open the app?</summary><p>That's an idea we're exploring, not a feature in 0.4.4. The aim is an optional voice popup with a transcription service you choose, editable text before sending, and spoken replies only if you want them. Come help shape it in Discord.</p></details>
-    <details><summary>What do I need?</summary><p>Windows 10 or 11. Download the portable app, extract the folder and open <b>Mefi Studio AI+.exe</b>. No installer or Node.js needed. To build, you need a coding agent (Claude Code, OpenCode, Codex, Grok or Antigravity). Setup can install and sign in to one for you.</p></details>
-    <details><summary>Will agents change my files without asking?</summary><p>Agents run real commands in the project folder you pick. You choose how much they do alone: <b>Always ask</b> approves each step, and <b>Auto</b> lets routine work run. Nothing starts until you open a project and turn the agents on.</p></details>
-    <details><summary>Does my code leave my computer?</summary><p>Connected AI providers and coding tools may receive prompts and project context. Studio stores your work locally and has no usage telemetry. Optional Discord and room features use their connected services; joining the community doesn't publish your projects.</p></details>
-    <details><summary>Can I watch YouTube in it?</summary><p>Yes. The built-in player handles YouTube, Vimeo, SoundCloud, Spotify and plain media links. It floats over your work, can become the background, and fades when a task finishes.</p></details>
-    <details><summary>Mac or Linux?</summary><p>Studio is built and tested on Windows. It's open source, and other platforms are untested.</p></details>
+<section class="band questions" aria-labelledby="faq-title">
+  <div class="container faq-split">
+    <div class="section-head" data-reveal>
+      <p class="eyebrow">Questions</p>
+      <h2 id="faq-title">Good to know</h2>
+      <p>More answers in the <a href="wiki/#/faq">wiki's FAQ</a>, or ask in the Discord.</p>
+    </div>
+    <div class="faq">
+      <details>
+        <summary>Is Mefi Studio free?</summary>
+        <p>Yes. It's open source under the MIT license, and every theme and node style is free. The AI services you connect may charge for their own use, so you can also use a subscription you already have or a local model.</p>
+      </details>
+      <details>
+        <summary>Can I join before I have something to show?</summary>
+        <p>Please do. Bring an unfinished idea, ask a question, give someone feedback or just hang out. You don't need to download Studio to take part.</p>
+      </details>
+      <details>
+        <summary>Do I need Discord to use Studio?</summary>
+        <p>No. Discord is the easiest way to meet the community, but Studio works without it and has no account of its own. Linking your Discord inside Studio is optional. Today Rooms use that link to know who you are, and ways for friends to connect without Discord are planned.</p>
+      </details>
+      <details>
+        <summary>What do I need to run it?</summary>
+        <p>Windows 10 or 11. To build, connect a coding agent: Start here can install Codex, Claude Code, Grok or Antigravity and sign you in. A Linux build is planned.</p>
+      </details>
+      <details>
+        <summary>Will agents change my files without asking?</summary>
+        <p>Agents run real commands in the project folder you choose, so you decide how much they do alone. <b>Always ask</b> makes every new task wait for your OK, and <b>Auto</b>, the default, lets routine work run. Every automatic choice comes with a Why and an Undo.</p>
+      </details>
+      <details>
+        <summary>What do the labels mean?</summary>
+        <ul class="labels">
+          <li><span class="status released">In 0.4.4</span> in the download today.</li>
+          <li><span class="status next">Coming in 0.4.5</span> built, and ships with the next release.</li>
+          <li><span class="status rolling">Rolling out</span> built, and switches on once the community's rooms hub is online.</li>
+          <li><span class="status planned">Planned for 0.4.5</span> decided and wanted before 0.4.5 ships, not started yet.</li>
+          <li><span class="status planned">Planned</span> decided, with details still open. There are no dates.</li>
+        </ul>
+      </details>
+    </div>
   </div>
 </section>
 
-<!-- FINAL CTA -->
-<section class="section final">
-  <div class="container final-inner">
-    <img src="assets/icon-256.png" width="72" height="72" alt="">
-    <h2>There's room for your idea here.</h2>
-    <p>Start a project. Share a little progress. Help someone else get going.<br>Let's make Studio a place we build together.</p>
+<!-- CLOSING -->
+<section class="final" aria-labelledby="final-title">
+  <div class="container final-inner" data-reveal>
+    <img src="assets/icon-256.png" width="60" height="60" alt="" loading="lazy" decoding="async">
+    <h2 id="final-title">There's room for your idea here.</h2>
+    <p>Start a project. Share a little progress. Help someone else get going.</p>
     <div class="cta-row center">
-      <a class="btn btn-primary btn-lg" href="https://discord.gg/xgfKc5pVxG" rel="noopener">Come say hello ↗</a>
-      <a class="btn btn-lg" href="download.html">Download Studio 0.4.4</a>
+      <a class="btn btn-primary btn-lg" href="https://discord.gg/xgfKc5pVxG" rel="noopener">Join the Discord <span aria-hidden="true">↗</span></a>
+      <a class="btn btn-lg" href="download.html">Download for Windows</a>
     </div>
   </div>
 </section>
 
 </main>
 
-<dialog class="lightbox" aria-label="Screenshot"><img alt=""><button type="button" class="lightbox-close" aria-label="Close">×</button></dialog>
+<dialog class="lightbox" aria-label="Larger screenshot">
+  <button type="button" class="lightbox-close" aria-label="Close">×</button>
+  <img alt="">
+</dialog>
 
-<footer>
-  <div class="container foot-inner">
-    <p>© 2026 MefiMaxi · MIT License · Screenshots use sample data.</p>
-    <div class="foot-links"><a href="download.html">Download</a><a href="wiki/">Wiki</a><a href="community.html">Community</a><a href="https://discord.gg/xgfKc5pVxG" rel="noopener">Discord</a><a href="https://github.com/nateecho32-stack/mefi-studio/blob/main/CHANGELOG.md">Changelog</a><a href="https://github.com/nateecho32-stack/mefi-studio" rel="noopener">Source</a></div>
+<footer class="site-foot">
+  <div class="container">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="index.html"><img src="assets/icon-256.png" width="30" height="30" alt="">Mefi Studio</a>
+        <p>A free, open-source studio for Windows. Build your ideas with coding agents, and make them with people.</p>
+      </div>
+      <div class="foot-col">
+        <h2>Studio</h2>
+        <ul>
+          <li><a href="features.html">Features</a></li>
+          <li><a href="roadmap.html">Roadmap</a></li>
+          <li><a href="download.html">Download</a></li>
+          <li><a href="https://github.com/nateecho32-stack/mefi-studio/blob/main/CHANGELOG.md" rel="noopener">Changelog</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <h2>Community</h2>
+        <ul>
+          <li><a href="https://discord.gg/xgfKc5pVxG" rel="noopener">Discord</a></li>
+          <li><a href="community.html">Share your work</a></li>
+          <li><a href="https://github.com/nateecho32-stack/mefi-studio/issues/new?template=feature_request.md" rel="noopener">Request a feature</a></li>
+          <li><a href="https://github.com/nateecho32-stack/mefi-studio/issues/new?template=bug_report.md" rel="noopener">Report a bug</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <h2>Learn</h2>
+        <ul>
+          <li><a href="wiki/">Guide</a></li>
+          <li><a href="wiki/#/getting-started">Your first project</a></li>
+          <li><a href="wiki/#/faq">FAQ</a></li>
+          <li><a href="wiki/#/privacy">Privacy</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot-base">
+      <span>MIT licensed · Made with the community · <span data-year>2026</span></span>
+      <span><a href="https://github.com/nateecho32-stack/mefi-studio" rel="noopener">Source on GitHub</a></span>
+    </div>
   </div>
 </footer>
 <script src="assets/site.js"></script>

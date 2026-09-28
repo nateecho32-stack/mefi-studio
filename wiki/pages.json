@@ -1,5 +1,19 @@
 {
   "title": "Mefi Studio guide",
+  "release": "0.4.4",
+  "next": "0.4.5",
+  "aliases": {
+    "logs-and-diagnostics": "trace",
+    "logs": "trace",
+    "permission-modes": "permissions",
+    "coming-in-045": "coming-in-0-4-5",
+    "setup": "setup-helper",
+    "vibe": "vibe-mode",
+    "rooms": "friends-and-rooms",
+    "media": "media-player",
+    "themes": "appearance",
+    "command-view": "command-center"
+  },
   "sections": [
     {
       "title": "Start here",
@@ -7,27 +21,38 @@
         {
           "slug": "home",
           "title": "Start here",
-          "summary": "Install Studio, connect a tool and try your first task"
+          "summary": "What Studio is, how this guide marks releases, and where to begin"
         },
         {
           "slug": "installation",
           "title": "Install Studio",
-          "summary": "Download the Windows app or run it from source"
+          "summary": "Download the portable Windows build, or run Studio from source"
         },
         {
           "slug": "getting-started",
           "title": "Your first project",
-          "summary": "Choose a folder, describe a small task and review it"
+          "summary": "Open a folder, ask for a small change and review what the agents did"
         },
         {
           "slug": "connections",
-          "title": "Connect your tools",
-          "summary": "Set up a coding CLI, API key or local model"
+          "title": "Connect an AI",
+          "summary": "Sign in with a coding CLI, save an API key or use a local model"
+        },
+        {
+          "slug": "setup-helper",
+          "title": "The setup helper",
+          "summary": "Coming in 0.4.5: one guided sheet for connecting an AI, permissions and every agent setting",
+          "status": "next"
         },
         {
           "slug": "whats-new",
           "title": "What's new in 0.4.4",
-          "summary": "Setup, task planning, PC sync and free themes"
+          "summary": "What the current download added: easier setup, clearer work, more control and free themes"
+        },
+        {
+          "slug": "coming-in-0-4-5",
+          "title": "Coming in 0.4.5",
+          "summary": "Finished on main but not in a download yet: the setup helper, rooms, PC sharing and more"
         }
       ]
     },
@@ -35,29 +60,29 @@
       "title": "Using Studio",
       "pages": [
         {
-          "slug": "shortcuts",
-          "title": "Navigation and shortcuts",
-          "summary": "Find screens, search and keyboard controls"
+          "slug": "vibe-mode",
+          "title": "Vibe mode",
+          "summary": "The calm front door: talk it over, build it, and answer what needs you"
         },
         {
           "slug": "workflow",
           "title": "Tasks",
-          "summary": "Create work, answer questions and follow task states"
+          "summary": "Create work, follow task states and answer the agents' questions"
         },
         {
           "slug": "planning",
-          "title": "Plans",
-          "summary": "Turn an idea into a plan before building"
+          "title": "Plans and ideas",
+          "summary": "Keep ideas, and turn one into a reviewed plan before anything is built"
         },
         {
           "slug": "assistant",
           "title": "Assistant and agents",
-          "summary": "Understand who does what and pause the work"
+          "summary": "Who is on the team, what each agent does, and how to pause the work"
         },
         {
-          "slug": "community",
-          "title": "Media and community",
-          "summary": "Use the player, join Discord and check shared-room availability"
+          "slug": "permissions",
+          "title": "Permissions and decisions",
+          "summary": "Choose what Mefi may start and decide for you, see why, and undo it"
         },
         {
           "slug": "command-center",
@@ -65,24 +90,70 @@
           "summary": "Follow agents and tasks in the live tree"
         },
         {
+          "slug": "agent-brain",
+          "title": "Agent brain, Playbook and project map",
+          "summary": "Watch a task's pipeline, reuse what worked and explore your project's systems"
+        },
+        {
           "slug": "brain-maps",
           "title": "Brain maps",
           "summary": "Inspect and change the steps agents follow"
         },
         {
-          "slug": "model-lab",
-          "title": "Models and usage",
-          "summary": "Compare models, measure response time and check usage"
+          "slug": "shortcuts",
+          "title": "Navigation and shortcuts",
+          "summary": "Find your way around the menu, search and keyboard shortcuts"
+        }
+      ]
+    },
+    {
+      "title": "Friends and media",
+      "pages": [
+        {
+          "slug": "community",
+          "title": "Community and Discord",
+          "summary": "How to take part: share your work, get help and request features"
         },
         {
-          "slug": "tools",
-          "title": "Project tools",
-          "summary": "Find activity, files, logs and performance tools"
+          "slug": "friends-and-rooms",
+          "title": "Friends, rooms and playdates",
+          "summary": "Rolling out: join rooms, chat, listen together and let agents cowork across PCs",
+          "status": "rolling"
         },
         {
-          "slug": "updates",
-          "title": "Update Studio",
-          "summary": "Update a portable install or a source checkout"
+          "slug": "your-pcs",
+          "title": "Your PCs: sync and share",
+          "summary": "Keep projects in step across your own PCs and share setups safely"
+        },
+        {
+          "slug": "companion",
+          "title": "Your companion",
+          "summary": "Talk with your companion, see what needs you, and give it a name and a look"
+        },
+        {
+          "slug": "media-player",
+          "title": "Music, video and the player",
+          "summary": "Play links, radio or your own music while you work, and let the tree move with it"
+        },
+        {
+          "slug": "discord",
+          "title": "The Void Engine Discord",
+          "summary": "Share projects, get help and meet other builders; joining is optional"
+        }
+      ]
+    },
+    {
+      "title": "Make it yours",
+      "pages": [
+        {
+          "slug": "appearance",
+          "title": "Themes, node styles and looks",
+          "summary": "Pick a theme, node style, layout and motion; every look is free"
+        },
+        {
+          "slug": "settings",
+          "title": "Settings and Configuration",
+          "summary": "What lives in General, Appearance, Audio and System, and how to find any setting"
         }
       ]
     },
@@ -90,14 +161,34 @@
       "title": "Reference",
       "pages": [
         {
+          "slug": "model-lab",
+          "title": "Model Lab and usage",
+          "summary": "Compare models, measure their speed and see what your calls used"
+        },
+        {
+          "slug": "tools",
+          "title": "Agent tools and skills",
+          "summary": "What agents can use while they work: web search, project reads, MCP tools and skills"
+        },
+        {
+          "slug": "trace",
+          "title": "Trace, logs and diagnostics",
+          "summary": "Read Studio's logs, run diagnostics and gather details for a bug report"
+        },
+        {
           "slug": "verification",
-          "title": "Reviewing work",
-          "summary": "Read checks and evidence before accepting a result"
+          "title": "Verification",
+          "summary": "How Studio checks finished work, and how to review it before you accept it"
+        },
+        {
+          "slug": "updates",
+          "title": "Updates",
+          "summary": "Update the portable build or a source checkout"
         },
         {
           "slug": "privacy",
           "title": "Privacy",
-          "summary": "Where data is stored and what connected services receive"
+          "summary": "What stays on your PC and what connected services receive"
         },
         {
           "slug": "troubleshooting",
@@ -106,7 +197,7 @@
         },
         {
           "slug": "faq",
-          "title": "Common questions",
+          "title": "FAQ",
           "summary": "Cost, requirements, community and supported tools"
         }
       ]
@@ -116,8 +207,8 @@
       "pages": [
         {
           "slug": "contributing",
-          "title": "Contribute",
-          "summary": "Report a bug, improve the docs or submit a change"
+          "title": "Contributing and feature requests",
+          "summary": "Request a feature, report a bug, improve the guide or send a change"
         },
         {
           "slug": "ruins-runner",
@@ -126,8 +217,8 @@
         },
         {
           "slug": "about-this-wiki",
-          "title": "Edit this guide",
-          "summary": "Fix a page or add one"
+          "title": "About this guide",
+          "summary": "How this guide is written, what its status labels mean, and how to edit a page"
         }
       ]
     }

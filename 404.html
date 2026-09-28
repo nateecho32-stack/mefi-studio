@@ -1,50 +1,223 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Not found — Mefi Studio</title>
-  <meta name="robots" content="noindex">
-  <meta name="theme-color" content="#070a0e">
-  <link rel="stylesheet" href="assets/site.css" id="css">
-  <style>
-    body { background: #070a0e; color: #e4e9ec; font-family: system-ui, "Segoe UI", sans-serif; margin: 0; }
-    .lost { min-height: 80vh; display: grid; place-items: center; text-align: center; padding: 48px 16px; }
-    .lost h1 { font-size: clamp(2.4rem, 8vw, 5rem); margin-bottom: 0.2em; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page not found — Mefi Studio</title>
+<meta name="description" content="This address doesn't match a page on the Mefi Studio site.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#050d13">
+<link rel="icon" href="/mefi-studio/assets/favicon.ico">
+<link rel="stylesheet" href="/mefi-studio/assets/site.css">
+<style>
+  /* 404 only. GitHub Pages serves this file for a missing path at any depth,
+     so every link and asset on it is absolute under /mefi-studio/. */
+  .lost { padding: 72px 0 88px; }
+  .lost-head { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 40px; align-items: center; margin-bottom: 44px; }
+  .lost-head > * { min-width: 0; }
+  .lost h1 { max-width: 16ch; }
+  .lost .lede { margin-bottom: 14px; }
+  .lost-path { overflow-wrap: anywhere; }
+  .lost-guess { margin: 18px 0 0; max-width: 62ch; }
+  .lost-art { width: 100%; height: auto; color: var(--accent); }
+  .lost-art .link { stroke: var(--hairline-strong); stroke-width: 1.5; }
+  .lost-art .loose { stroke: rgba(140, 123, 255, 0.55); stroke-width: 1.5; stroke-dasharray: 4 6; }
+  .lost-art .node { fill: var(--panel-raised); stroke: var(--accent); stroke-width: 2; }
+  .lost-art .core { fill: var(--accent); }
+  .lost-art .drift { fill: rgba(140, 123, 255, 0.2); stroke: var(--void); stroke-width: 2; animation: drift 5.5s ease-in-out infinite; transform-origin: 214px 58px; }
+  @keyframes drift { 50% { transform: translate(6px, -8px); } }
+  .lost-links .card h3 { font-size: 1.12rem; margin: 4px 0 6px; font-family: var(--font-display); }
+  .lost-more { margin-top: 28px; }
+  @media (max-width: 860px) {
+    .lost-head { grid-template-columns: 1fr; }
+    .lost-art { max-width: 220px; order: -1; }
+  }
+  @media (max-width: 720px) { .lost { padding: 44px 0 64px; } }
+</style>
 </head>
 <body>
-  <main class="lost">
-    <div>
-      <div class="eyebrow">404</div>
-      <h1>That page went idle</h1>
-      <p class="muted" style="max-width:48ch;margin:0 auto 24px">The address does not match anything on this site. Wiki pages live behind the <code>#/</code> hash, so a copied link may just need <code>wiki/</code> in front of it.</p>
-      <div class="hero-actions" style="justify-content:center;margin:0">
-        <a class="btn btn-primary" data-root-link="index.html" href="index.html">Home</a>
-        <a class="btn" data-root-link="wiki/" href="wiki/">Wiki</a>
-        <a class="btn" data-root-link="download.html" href="download.html">Download</a>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-head">
+  <div class="container head-inner">
+    <a class="brand" href="/mefi-studio/"><img src="/mefi-studio/assets/icon-256.png" width="30" height="30" alt="">Mefi Studio</a>
+    <nav class="tabs" aria-label="Site">
+      <a href="/mefi-studio/" data-tab="home">Home</a>
+      <a href="/mefi-studio/features.html" data-tab="features">Features</a>
+      <a href="/mefi-studio/roadmap.html" data-tab="roadmap">Roadmap</a>
+      <a href="/mefi-studio/community.html" data-tab="community">Community</a>
+      <a href="/mefi-studio/wiki/" data-tab="wiki">Wiki</a>
+    </nav>
+    <div class="head-actions">
+      <a class="icon-link" href="https://discord.gg/xgfKc5pVxG" rel="noopener" aria-label="Mefi Studio on Discord" title="Discord"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.2 18.2 0 0 0-5.6 0L8.6 3a19.6 19.6 0 0 0-4.9 1.5C.6 9.1-.3 13.7.1 18.2a19.8 19.8 0 0 0 6 3l1.3-2.1a12.8 12.8 0 0 1-2-1l.5-.4a14.1 14.1 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.7 19.7 0 0 0 6-3c.5-5.2-.8-9.8-3.6-13.8ZM8 15.5c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.7 8 10.7s2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Z"/></svg></a>
+      <a class="icon-link" href="https://github.com/nateecho32-stack/mefi-studio" rel="noopener" aria-label="Mefi Studio on GitHub" title="GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5A11.5 11.5 0 0 0 8.4 22.9c.6.1.8-.2.8-.6v-2.1c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0c2.2-1.5 3.2-1.2 3.2-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .4.2.7.8.6A11.5 11.5 0 0 0 12 .5Z"/></svg></a>
+      <a class="btn btn-primary btn-sm" href="/mefi-studio/download.html">Download</a>
+    </div>
+    <details class="menu">
+      <summary aria-label="Open the menu"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></summary>
+      <nav class="menu-panel" aria-label="Site">
+        <a href="/mefi-studio/">Home</a>
+        <a href="/mefi-studio/features.html">Features</a>
+        <a href="/mefi-studio/roadmap.html">Roadmap</a>
+        <a href="/mefi-studio/community.html">Community</a>
+        <a href="/mefi-studio/wiki/">Wiki</a>
+        <hr>
+        <a href="https://discord.gg/xgfKc5pVxG" rel="noopener">Discord <span aria-hidden="true">↗</span></a>
+        <a href="https://github.com/nateecho32-stack/mefi-studio" rel="noopener">GitHub <span aria-hidden="true">↗</span></a>
+        <a class="btn btn-primary" href="/mefi-studio/download.html">Download for Windows</a>
+      </nav>
+    </details>
+  </div>
+</header>
+
+<main id="main">
+  <section class="lost" aria-labelledby="lost-title">
+    <div class="container">
+      <div class="lost-head">
+        <div>
+          <p class="eyebrow">404 · Page not found</p>
+          <h1 id="lost-title">That page went idle</h1>
+          <p class="lede">Nothing lives at <code class="lost-path" id="lost-path">this address</code>. It may have moved when the site was rebuilt, or a letter slipped in the link.</p>
+          <p class="muted">Looking for a guide page? Wiki pages live after <code>wiki/#/</code>, like <a href="/mefi-studio/wiki/#/installation">wiki/#/installation</a>.</p>
+          <p class="notice info lost-guess" id="lost-guess" hidden></p>
+        </div>
+        <svg class="lost-art" viewBox="0 0 260 180" aria-hidden="true" focusable="false">
+          <path class="link" d="M60 120 L118 82 M118 82 L170 118 M118 82 L112 30 M60 120 L40 64"/>
+          <path class="loose" d="M170 118 C 200 100, 208 84, 214 58"/>
+          <circle class="node" cx="60" cy="120" r="12"/>
+          <circle class="node" cx="118" cy="82" r="16"/><circle class="core" cx="118" cy="82" r="6"/>
+          <circle class="node" cx="170" cy="118" r="11"/>
+          <circle class="node" cx="112" cy="30" r="9"/>
+          <circle class="node" cx="40" cy="64" r="8"/>
+          <circle class="drift" cx="214" cy="58" r="13"/>
+        </svg>
+      </div>
+
+      <h2 class="visually-hidden">Places to go instead</h2>
+      <div class="grid-4 lost-links">
+        <a class="card card-link" href="/mefi-studio/">
+          <h3>Home</h3>
+          <p>What Studio is, and the community around it.</p>
+          <span class="more">Go home <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="card card-link" href="/mefi-studio/features.html">
+          <h3>Features</h3>
+          <p>Everything Studio does today, and what's coming next.</p>
+          <span class="more">See features <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="card card-link" href="/mefi-studio/roadmap.html">
+          <h3>Roadmap</h3>
+          <p>What's done, what's being built and what's planned.</p>
+          <span class="more">Open the roadmap <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="card card-link" href="/mefi-studio/wiki/">
+          <h3>Wiki</h3>
+          <p>Install Studio, start your first project and find answers.</p>
+          <span class="more">Read the guide <span aria-hidden="true">→</span></span>
+        </a>
+      </div>
+      <p class="fine lost-more">Followed a broken link on this site? Tell us with a <a href="https://github.com/nateecho32-stack/mefi-studio/issues/new?template=bug_report.md" rel="noopener">bug report</a> or in the <a href="https://discord.gg/xgfKc5pVxG" rel="noopener">Discord</a>.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="site-foot">
+  <div class="container">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="/mefi-studio/"><img src="/mefi-studio/assets/icon-256.png" width="30" height="30" alt="">Mefi Studio</a>
+        <p>A free, open-source studio for Windows. Build your ideas with coding agents, and make them with people.</p>
+      </div>
+      <div class="foot-col">
+        <h2>Studio</h2>
+        <ul>
+          <li><a href="/mefi-studio/features.html">Features</a></li>
+          <li><a href="/mefi-studio/roadmap.html">Roadmap</a></li>
+          <li><a href="/mefi-studio/download.html">Download</a></li>
+          <li><a href="https://github.com/nateecho32-stack/mefi-studio/blob/main/CHANGELOG.md" rel="noopener">Changelog</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <h2>Community</h2>
+        <ul>
+          <li><a href="https://discord.gg/xgfKc5pVxG" rel="noopener">Discord</a></li>
+          <li><a href="/mefi-studio/community.html">Share your work</a></li>
+          <li><a href="https://github.com/nateecho32-stack/mefi-studio/issues/new?template=feature_request.md" rel="noopener">Request a feature</a></li>
+          <li><a href="https://github.com/nateecho32-stack/mefi-studio/issues/new?template=bug_report.md" rel="noopener">Report a bug</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <h2>Learn</h2>
+        <ul>
+          <li><a href="/mefi-studio/wiki/">Guide</a></li>
+          <li><a href="/mefi-studio/wiki/#/getting-started">Your first project</a></li>
+          <li><a href="/mefi-studio/wiki/#/faq">FAQ</a></li>
+          <li><a href="/mefi-studio/wiki/#/privacy">Privacy</a></li>
+        </ul>
       </div>
     </div>
-  </main>
-  <script>
-    // GitHub Pages serves this file for any missing path, so relative links can
-    // resolve from a deep folder. Probe for the site root (a user site lives at
-    // "/", a project site at "/<repo>/") and rewrite the links and stylesheet.
-    (async function () {
-      const segs = location.pathname.split("/").filter(Boolean);
-      const candidates = ["/"];
-      if (segs.length) candidates.push("/" + segs[0] + "/");
-      for (const root of candidates) {
-        try {
-          const r = await fetch(root + "assets/site.css", { method: "HEAD", cache: "no-store" });
-          if (!r.ok) continue;
-          document.querySelectorAll("[data-root-link]").forEach((a) => { a.href = root + a.dataset.rootLink; });
-          const css = document.getElementById("css");
-          if (css.getAttribute("href") !== root + "assets/site.css") css.href = root + "assets/site.css";
-          break;
-        } catch (_) { /* try the next candidate */ }
+    <div class="foot-base">
+      <span>MIT licensed · Made with the community · <span data-year>2026</span></span>
+      <span><a href="https://github.com/nateecho32-stack/mefi-studio" rel="noopener">Source on GitHub</a></span>
+    </div>
+  </div>
+</footer>
+<script src="/mefi-studio/assets/site.js"></script>
+<script>
+  (function () {
+    "use strict";
+    var HOME = "/mefi-studio/";
+    var here = location.pathname;
+    var shown = document.getElementById("lost-path");
+    try { shown.textContent = decodeURIComponent(here); } catch (_) { shown.textContent = here; }
+
+    // Suggest the page the address probably meant: a top-level page without
+    // ".html", or a wiki page typed as a path instead of after "#/".
+    function guess(root) {
+      var box = document.getElementById("lost-guess");
+      var rest = here.indexOf(root) === 0 ? here.slice(root.length) : here;
+      var word = rest.split("/").filter(Boolean).pop() || "";
+      word = word.replace(/\.(html?|md)$/i, "").toLowerCase();
+      if (!word || word === "404") return;
+      function offer(href, label) {
+        var a = document.createElement("a");
+        a.href = href; a.textContent = label;
+        box.textContent = "Did you mean ";
+        box.append(a, "?");
+        box.hidden = false;
       }
-    })();
-  </script>
+      var pages = { index: "Home", home: "Home", features: "Features", roadmap: "Roadmap", community: "Community", download: "Download" };
+      if (pages[word]) { offer(root + (word === "index" || word === "home" ? "" : word + ".html"), pages[word]); return; }
+      fetch(root + "wiki/pages.json").then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+        if (!data || !Array.isArray(data.sections)) return;
+        var all = [];
+        data.sections.forEach(function (s) { (s.pages || []).forEach(function (p) { if (p && p.slug) all.push(p); }); });
+        var hit = all.find(function (p) { return p.slug === word; }) ||
+          (word.length >= 4 ? all.find(function (p) { return p.slug.indexOf(word) === 0 || word.indexOf(p.slug) === 0; }) : null);
+        if (hit) offer(root + "wiki/#/" + hit.slug, "the wiki page " + (hit.title || hit.slug));
+      }).catch(function () { /* no suggestion */ });
+    }
+
+    if (here.indexOf(HOME) === 0) { guess(HOME); return; }
+
+    // Served from somewhere other than /mefi-studio/ (a fork or a local
+    // preview): find the site root and point the links and assets at it.
+    var first = here.split("/").filter(Boolean)[0];
+    var roots = ["/"];
+    if (first) roots.push("/" + first + "/");
+    (function probe(i) {
+      if (i >= roots.length) return;
+      var root = roots[i];
+      fetch(root + "assets/site.css", { method: "HEAD", cache: "no-store" }).then(function (r) {
+        if (!r.ok) { probe(i + 1); return; }
+        document.querySelectorAll('[href^="/mefi-studio/"], [src^="/mefi-studio/"]').forEach(function (el) {
+          var attr = el.hasAttribute("src") ? "src" : "href";
+          el.setAttribute(attr, root + el.getAttribute(attr).slice(HOME.length));
+        });
+        if (!window.SITE) { var s = document.createElement("script"); s.src = root + "assets/site.js"; document.body.append(s); }
+        guess(root);
+      }).catch(function () { probe(i + 1); });
+    })(0);
+  })();
+</script>
 </body>
 </html>
