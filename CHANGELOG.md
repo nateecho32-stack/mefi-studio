@@ -7,6 +7,29 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Menus say what they mean.** Vibe › Tasks counts the same Needs you list
+  it shows. Trace's chips no longer read "All undefined" and keep keyboard
+  focus while Follow updates them. Performance, Usage and Context each have
+  their own subtitle, and "Not reported" replaces the Unknown/Unknown cells.
+  Sessions, Activity, Tasks, Ideas, Plans and the Catalog leave out a value
+  the store did not record instead of printing "?", "undefined" or "Invalid
+  Date". Errors read as sentences instead of "Cannot read properties of
+  undefined". After deleting a preset, Agents says "Preset deleted.".
+- **Actions that can't be undone ask twice.** Closing, leaving or deleting in
+  Rooms, removing keys or a library item in Your PCs, stopping Listen together
+  for everyone, removing a key or deleting a team in Setup, stopping a worker
+  or dropping a task in Vibe, Stop all, Restart and killing a run in Sessions,
+  Forget all in Why/Undo, and deleting a preset, a draft or a recipe share
+  one two-step button: the first press asks, the second acts.
+- **Calmer, steadier menus.** The companion hub and panel open and close with
+  the shared motion tokens and an SVG close. Lists that rebuild (Vibe's
+  panels, the music queue, Rooms, Your PCs) keep their rows in place. The
+  Why/Undo panel keeps focus and an open menu when it repaints, and
+  Configuration keeps Tab inside its dialog. Several dark leftovers (sheet
+  links, Activity text, Model Lab, Vibe shadows, Brain map scrims) now follow
+  light palettes.
+- **M+ opens Projects on the selected project.** Keyboard focus lands on the
+  project you are in, or Add project when none is available.
 - **A first run with no AI connected says so.** Home, Vibe and the agents'
   status read "No AI connected" with **Connect an AI** instead of "Waiting for
   you", and the held switch reads "Agents off". With no coding tool installed,

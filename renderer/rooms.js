@@ -49,7 +49,16 @@
     timeout: "The room service did not answer in time. Try again.",
     "not-yours": "Only the person who posted it can change it.",
     "room-busy": "That room is busy. Try again in a moment.",
+    auth: "Your Discord link needs signing in again. Link Discord again in Settings › General › Community.",
+    version: "The room service needs a newer Studio. Update Studio, then connect again.",
+    unsupported: "This copy of Studio cannot reach the room service.",
   };
+  // Two-step confirm (studio-ui.js MefiUi.arm): the first press asks, the
+  // second acts. Without the shared helper (a bare page), the browser asks.
+  const confirmed = (label, armed, ask, run) => (window.MefiUi?.arm
+    ? window.MefiUi.arm(button(label, () => {}), { run, armed })
+    : button(label, () => { if (window.confirm?.(ask) !== false) run(); }));
+  const plain = (error, fallback) => (window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : fallback);
   const why = (answer, fallback) => REASONS[answer?.reason] || REASONS[answer?.error] || fallback;
   const time = (ms) => (Number.isFinite(ms) ? new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "");
   // A room frame is the same for every member, so it may not say what you are
@@ -135,7 +144,7 @@
       busy = true;
       root.setAttribute("aria-busy", "true");
       if (label) status.textContent = label;
-      try { await work(); } catch (error) { status.textContent = `Rooms could not do that: ${error?.message || error}`; }
+      try { await work(); } catch (error) { status.textContent = plain(error, "Rooms could not do that. Try again."); }
       busy = false;
       root.removeAttribute("aria-busy");
     };
@@ -304,7 +313,7 @@
       item.append(head, text);
       if (message.attachments?.length) item.append(node("p", "muted", `Attachments in Discord: ${message.attachments.map((file) => file.name).join(", ")}`));
       const actions = node("div", "rooms-row-actions");
-      if (message.author.id === me?.id && message.author.viaStudio) actions.append(button("Delete", () => guard("Deleting…", async () => {
+      if (message.author.id === me?.id && message.author.viaStudio) actions.append(confirmed("Delete", "Delete it?", "Delete this message?", () => guard("Deleting…", async () => {
         const answer = await call("deleteMessage", roomId, message.id);
         status.textContent = answer?.ok ? "Deleted." : why(answer, "The message could not be deleted.");
       })));
@@ -466,8 +475,7 @@
           if (answer?.ok && openRoom?.id === room.id) openRoom = merged(openRoom, answer.room);
           status.textContent = answer?.ok ? (answer.room.status === "locked" ? "Locked: no new posts or requests." : "Unlocked.") : why(answer, "That did not go through.");
           paint();
-        })), button("Close room", () => {
-          if (!window.confirm?.(`Close ${room.name}? Its history stays in Discord, but nobody can post or join.`)) return;
+        })), confirmed("Close room", "Close it for everyone?", `Close ${room.name}? Its history stays in Discord, but nobody can post or join.`, () => {
           void guard("Closing…", async () => {
             const answer = await call("close", room.id);
             status.textContent = answer?.ok ? `${room.name} is closed.` : why(answer, "The room could not be closed.");
@@ -476,8 +484,7 @@
         }));
         return [head, privacy, ...(together ? [together] : []), earlier, log, box, send, controls, found];
       }
-      controls.append(button("Leave room", () => {
-        if (!window.confirm?.(`Leave ${room.name}?`)) return;
+      controls.append(confirmed("Leave room", "Leave it?", `Leave ${room.name}?`, () => {
         void guard("Leaving…", async () => {
           const answer = await call("leave", room.id);
           status.textContent = answer?.ok ? `You left ${room.name}.` : why(answer, "You could not leave.");
@@ -507,7 +514,7 @@
 
     function explain(hub) {
       if (!hub?.configured) {
-        status.textContent = "Rooms need the Void Engine room service, which this PC is not connected to yet: add its address in Settings › Community › Connection details.";
+        status.textContent = "Rooms need the Void Engine room service, which this PC is not connected to yet: add its address in Settings › General › Community › Connection details.";
         root.dataset.state = "not-configured";
         body.replaceChildren();
         return false;
@@ -520,7 +527,7 @@
       }
       if (hub.state !== "ready") {
         root.dataset.state = hub.state || "off";
-        status.textContent = hub.state === "connecting" ? "Connecting to the room service…" : hub.error ? `Not connected: ${why({ error: hub.error }, hub.error)}` : "Rooms are off. Connect to see your rooms.";
+        status.textContent = hub.state === "connecting" ? "Connecting to the room service…" : hub.error ? (REASONS[hub.error] ? `Not connected. ${REASONS[hub.error]}` : "Not connected to the room service. Try Connect again.") : "Rooms are off. Connect to see your rooms.";
         body.replaceChildren(button("Connect", () => guard("Connecting…", async () => {
           const answer = await api.hubConnect();
           if (answer?.status?.state === "ready" || answer?.ok) await load(); else explain(answer?.status);

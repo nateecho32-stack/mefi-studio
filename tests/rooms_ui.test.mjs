@@ -58,7 +58,7 @@ function environment({ status = { configured: true, linked: true, state: "ready"
   const window = { mefiStudio: api, confirm: () => true };
   const context = vm.createContext({ window, document: { createElement: (tag) => new Element(tag) }, Date, Number, Array, Set, Map, Promise, JSON, Object, String });
   vm.runInContext(source, context);
-  return { rooms: window.MefiRooms, calls, push: (event) => hubEvent(event), setStatus: (next) => { status = next; }, hearing: () => hearing, setLists: (next) => { requests = next.requests ?? requests; invites = next.invites ?? invites; } };
+  return { rooms: window.MefiRooms, window, calls, push: (event) => hubEvent(event), setStatus: (next) => { status = next; }, hearing: () => hearing, setLists: (next) => { requests = next.requests ?? requests; invites = next.invites ?? invites; } };
 }
 
 test("the panel explains itself until the hub is configured, linked and connected", async () => {
@@ -67,7 +67,7 @@ test("the panel explains itself until the hub is configured, linked and connecte
   const unset = environment({ status: { configured: false } }).rooms.panel();
   await flush();
   assert.equal(unset.dataset.state, "not-configured");
-  assert.match(unset.find("rooms-status").textContent, /not connected to yet: add its address in Settings › Community › Connection details/);
+  assert.match(unset.find("rooms-status").textContent, /not connected to yet: add its address in Settings › General › Community › Connection details/);
   const unlinked = environment({ status: { configured: true, linked: false } }).rooms.panel();
   await flush();
   assert.equal(unlinked.find("rooms-status").textContent, "Link your Discord account to use rooms.");
@@ -278,6 +278,33 @@ test("with Friends closed, invites and requests still reach the badge", async ()
   env.push({ type: "joinRequest", request: {} });
   await flush();
   assert.equal(env.rooms.pending(), 0, "after Friends closes the badge keeps following");
+});
+
+test("the hub's own codes read as sentences, and closing, leaving and deleting ask twice", async () => {
+  for (const [code, words] of [["auth", /^Not connected\. Your Discord link needs signing in again/], ["version", /^Not connected\. The room service needs a newer Studio/], ["socket-closed", /^Not connected to the room service\. Try Connect again\.$/]]) {
+    const panel = environment({ status: { configured: true, linked: true, state: "error", error: code } }).rooms.panel();
+    await flush();
+    assert.match(panel.find("rooms-status").textContent, words, code);
+  }
+  const env = environment({ rooms: [room({ you: "member", ownerId: FRIEND.id })], replies: { messages: { ok: true, messages: [message({ author: { id: ME.id, name: "Mefi", viaStudio: true } })], hasMore: false } } });
+  // The shared two-step control (studio-ui.js): the first press only asks.
+  env.window.MefiUi = { arm: (button, { run, armed }) => { let asked = false; button.addEventListener("click", (event) => { if (!asked) { asked = true; button.textContent = armed; return; } run(event); }); return button; } };
+  const panel = env.rooms.panel();
+  await flush();
+  panel.buttons("Open")[0].click();
+  await flush();
+  panel.buttons("Delete")[0].click();
+  await flush();
+  assert.equal(env.calls.some((call) => call[0] === "deleteMessage"), false, "the first press asks");
+  panel.buttons("Delete it?")[0].click();
+  await flush();
+  assert.ok(env.calls.some((call) => call[0] === "deleteMessage"));
+  panel.buttons("Leave room")[0].click();
+  await flush();
+  assert.equal(env.calls.some((call) => call[0] === "leave"), false);
+  panel.buttons("Leave it?")[0].click();
+  await flush();
+  assert.ok(env.calls.some((call) => call[0] === "leave"));
 });
 
 test("main passes only the listed room methods, with no more arguments than each takes", async () => {

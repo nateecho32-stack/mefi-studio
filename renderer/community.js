@@ -37,7 +37,7 @@
     network: "Couldn't reach Discord. Check your connection and try again.",
     "not-member": "Your Discord account isn't in the Void Engine server yet. Join, then choose Check now.",
     "rate-limit": "Discord asked Studio to slow down. Try again in a few minutes.",
-    "not-configured": "Discord linking isn't set up on this PC yet. Add the link app ID in Settings › Community › Connection details.",
+    "not-configured": "Discord linking isn't set up on this PC yet. Add the link app ID in Settings › General › Community › Connection details.",
     throttled: "Checked a moment ago. Try again in a minute.",
     unavailable: "Linking the Void Engine Discord needs the desktop app.",
   };
