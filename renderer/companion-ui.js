@@ -205,6 +205,11 @@
     const starters = node("div", "companion-starters");
     starters.append(chip("What are you doing?", "What are you doing right now?"), chip("What's next?", "What should we work on next?"), chip("Recap today", "Recap what happened today."));
     panes.ask.append(thread, starters, input, actions, chatStatus);
+    // Typing while you are in the panel (or resting the pointer on it) goes to
+    // Talk's box, from whichever tab it opened on, not to Studio's shortcuts.
+    const talkBox = () => { if (panel.hidden) return null; if (tab !== "ask") selectTab("ask"); return input; };
+    window.MefiNav?.typeScope?.(panel, talkBox);
+    window.MefiNav?.typeScope?.(orb, talkBox);
     const places = node("div", "companion-places");
     for (const [label, route, options] of [["Tasks", "tasks"], ["Agents", "agents"], ["Live", "command"], ["Project map", "agent-brain", { tab: "map" }], ["Settings", "studio"]]) places.append(button(label, () => { host.toggle(false); window.MefiNav?.go(route, options); }));
     const location = node("p", "ab-quiet"); location.dataset.companionLocation = "true";

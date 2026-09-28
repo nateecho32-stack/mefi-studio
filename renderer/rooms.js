@@ -360,6 +360,10 @@
       rows.clear();
       reporting.clear();
       paint();
+      // You opened the room to talk: the caret waits in its message box, and
+      // paint() keeps it there when the messages arrive.
+      const compose = fields.get(`compose:${room.id}`);
+      if (compose && !compose.disabled) compose.focus?.({ preventScroll: true });
       api.hubSubscribe?.(room.id, true, "rooms");
       status.textContent = "Loading messages…";
       const page = await call("messages", room.id);

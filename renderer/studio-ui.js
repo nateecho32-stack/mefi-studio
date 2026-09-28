@@ -241,9 +241,14 @@
     if (!popup || option.disabled || option.parentElement?.disabled) return;
     const select = popup.select;
     if (select.multiple) option.selected = !option.selected; else select.value = option.value;
+    const before = document.activeElement;
     select.dispatchEvent(new Event("input", { bubbles: true }));
     select.dispatchEvent(new Event("change", { bubbles: true }));
-    closeSelect(true); schedule();
+    // A choice that opened a box of its own ("Enter a model ID…") keeps the
+    // caret there; otherwise focus goes back to the select's button.
+    const now = document.activeElement;
+    const moved = now !== before && now && now !== document.body && !popup?.root.contains(now);
+    closeSelect(!moved); schedule();
   }
   function drawOptions(query = "") {
     if (!popup) return;

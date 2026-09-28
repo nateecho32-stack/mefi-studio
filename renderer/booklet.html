@@ -9625,7 +9625,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         <div id="workspace-thread" class="ws-thread" role="log" aria-label="Project conversation" aria-live="polite" aria-relevant="additions"></div>
         <details class="ws-activity"><summary>Recent activity <span id="workspace-activity-count"></span></summary><ol id="workspace-activity-list"></ol></details>
     <div class="ws-secondary">
-      <details id="workspace-queue-details" class="ws-home-disclosure"><summary>Project queue <span id="workspace-queue-count"></span></summary>
+      <details id="workspace-queue-details" data-type-scope class="ws-home-disclosure"><summary>Project queue <span id="workspace-queue-count"></span></summary>
         <aside class="ws-work" aria-label="Project work and results">
         <div class="ws-work-heading"><div><p class="ws-kicker">FROM IDEA TO DONE</p><h2>Your work</h2></div><button class="ghost mini" data-nav="tasks" title="Open full task board">View board ↗</button></div>
         <section class="ws-backlog" aria-label="Backlog controls">
@@ -9801,7 +9801,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     <p class="vibe-chat-note">Reply in the box in the middle. Enter talks, Ctrl + Enter builds.</p>
   </aside>
   <!-- A decision from Needs you, answered without leaving Vibe (vibe.js). -->
-  <aside id="vibe-ask" class="vibe-chat vibe-ask" aria-labelledby="vibe-ask-title" hidden>
+  <aside id="vibe-ask" data-type-scope class="vibe-chat vibe-ask" aria-labelledby="vibe-ask-title" hidden>
     <header class="vibe-chat-head"><div><small id="vibe-ask-kicker">Needs you</small><h2 id="vibe-ask-title">A decision</h2></div><button id="vibe-ask-close" class="vibe-icon" type="button" aria-label="Close the decision" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
     <div id="vibe-ask-body" class="vibe-ask-body"></div>
     <footer class="vibe-ask-foot"><span id="vibe-ask-note" class="vibe-ask-note" role="status" aria-live="polite"></span><button id="vibe-ask-watch" class="vibe-ask-link" type="button">Open in Watch</button></footer>
@@ -10636,7 +10636,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
        picked, so the reading surface is full height with one scroller; the
        floating #idle-info card is only the narrow-layout fallback. -->
   <aside id="cmd-node" class="cmd-node cmd-card" role="tabpanel" aria-labelledby="cmd-rail-tab-node" hidden></aside>
-  <aside id="cmd-chat" class="cmd-chat" role="tabpanel" aria-label="Assistant chat log" hidden>
+  <aside id="cmd-chat" data-type-scope class="cmd-chat" role="tabpanel" aria-label="Assistant chat log" hidden>
     <header class="rail-view-head chat-log-head">
       <i id="cmd-chat-dot" class="feed-dot" aria-hidden="true"></i>
       <button id="cmd-chat-jump" class="rail-view-title chat-log-title" type="button" title="Select the assistant on the tree (M)">Assistant</button>
@@ -10697,7 +10697,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       <p id="idle-feed-meta" class="feed-meta"></p>
     </div>
     </div>
-    <div id="idle-feed-chat" class="feed-chat" hidden>
+    <div id="idle-feed-chat" data-type-scope class="feed-chat" hidden>
       <p id="idle-chat-status" class="eyes-status assistant-service" role="status">assistant</p>
       <div id="idle-chat-thread" class="assistant-thread feed-chat-thread" aria-live="polite" aria-label="Assistant thread"></div>
       <ul id="idle-chat-work" class="pin-list assistant-activity feed-chat-work"></ul>
@@ -11310,7 +11310,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         <p class="eyes-status assistant-service" id="assistant-service" role="status">service starting…</p>
         <div id="assistant-thread" class="assistant-thread" aria-live="polite" aria-label="Assistant thread"></div>
         <div class="assistant-composer">
-          <textarea id="assistant-input" class="grow" rows="1" placeholder="Message the assistant… (Enter)" aria-label="Message the assistant" autocomplete="off" spellcheck="false"></textarea>
+          <textarea id="assistant-input" data-type-here class="grow" rows="1" placeholder="Message the assistant… (Enter)" aria-label="Message the assistant" autocomplete="off" spellcheck="false"></textarea>
           <button id="assistant-send" class="primary">Send</button>
         </div>
         <div id="assistant-chips" class="chat-chips" aria-label="Quick asks">
@@ -16002,9 +16002,14 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     if (!popup || option.disabled || option.parentElement?.disabled) return;
     const select = popup.select;
     if (select.multiple) option.selected = !option.selected; else select.value = option.value;
+    const before = document.activeElement;
     select.dispatchEvent(new Event("input", { bubbles: true }));
     select.dispatchEvent(new Event("change", { bubbles: true }));
-    closeSelect(true); schedule();
+    // A choice that opened a box of its own ("Enter a model ID…") keeps the
+    // caret there; otherwise focus goes back to the select's button.
+    const now = document.activeElement;
+    const moved = now !== before && now && now !== document.body && !popup?.root.contains(now);
+    closeSelect(!moved); schedule();
   }
   function drawOptions(query = "") {
     if (!popup) return;
@@ -16599,6 +16604,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 // project-scoped recent tasks, the local view row, Search, Help and shortcuts.
 // Classic tabs, dock and sheet links resolve through this same registry.
 // New task opens Home's composer; task identity persists across destinations.
+// A letter typed while a menu is open goes into that menu's box (typeInto),
+// not to the shortcuts.
 (function () {
   "use strict";
 
@@ -18652,6 +18659,79 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     else go(dest.id);
   }
 
+  // ---- typing goes to the open menu's box -----------------------------------
+  // A menu with a text box takes what you type. A printable key pressed
+  // outside any field goes into the box of the menu you are in (focus inside
+  // it, or the pointer resting on it), else into the open sheet's box, instead
+  // of firing the single-letter keys that open other menus. Click out of a
+  // menu and its box lets go. A menu opts in by carrying data-type-scope (its
+  // box: [data-type-here], else its first search or text box) or through
+  // typeScope(root, field); a sheet's box is [data-type-here], else its
+  // registry focus when that is a text box, else its first search box.
+  // Password, number and key fields never take stray typing.
+  const TEXT_TYPES = new Set(["", "text", "search", "url", "email"]);
+  const typeScopes = new Set();
+  function typeScope(root, field) {
+    const entry = { root, field };
+    typeScopes.add(entry);
+    return () => typeScopes.delete(entry);
+  }
+  function typeBox(node) {
+    const tag = String(node?.tagName ?? "").toLowerCase();
+    const text = tag === "textarea" || (tag === "input" && TEXT_TYPES.has(String(node.getAttribute?.("type") ?? "").toLowerCase()));
+    return text && !node.disabled && !node.readOnly && visibleNavTarget(node) ? node : null;
+  }
+  function firstBox(root, selector) {
+    for (const node of root?.querySelectorAll?.(selector) ?? []) if (typeBox(node)) return node;
+    return null;
+  }
+  function scopeBox(entry) {
+    const root = typeof entry.root === "function" ? entry.root() : entry.root;
+    if (!root || !visibleNavTarget(root)) return null;
+    if (entry.field) return typeBox(typeof entry.field === "function" ? entry.field() : entry.field);
+    return firstBox(root, "[data-type-here]") ?? firstBox(root, "input, textarea");
+  }
+  function layerBox(id) {
+    const dest = get(id);
+    const root = layerRoot(dest);
+    if (!root || !visibleNavTarget(root)) return null;
+    const requested = dest.focus ? Array.from(document.querySelectorAll?.(dest.focus) ?? []).find(typeBox) : null;
+    return firstBox(root, "[data-type-here]") ?? requested ?? firstBox(root, 'input[type="search"]');
+  }
+  // The box a printable key should land in, or null when it stays a shortcut.
+  function typingBox(event) {
+    const key = event?.key;
+    if (typeof key !== "string" || key.length !== 1 || key === " " || key === "?") return null;
+    if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.altKey || event.metaKey) return null;
+    if (event.target?.closest?.("input, textarea, select, [contenteditable]")) return null;
+    const active = document.activeElement;
+    const scopes = [...typeScopes, ...Array.from(document.querySelectorAll?.("[data-type-scope]") ?? [], (root) => ({ root }))];
+    const rootOf = (entry) => (typeof entry.root === "function" ? entry.root() : entry.root);
+    // Focus first, then the pointer: the menu you clicked into beats the one
+    // you happen to be hovering on the way past.
+    for (const held of [(root) => root.contains?.(active), (root) => root.matches?.(":hover")]) {
+      const matches = scopes.filter((entry) => { const root = rootOf(entry); return root && held(root); });
+      // The innermost menu wins over one that contains it.
+      matches.sort((a, b) => (rootOf(a).contains(rootOf(b)) ? 1 : rootOf(b).contains(rootOf(a)) ? -1 : 0));
+      for (const entry of matches) {
+        const box = scopeBox(entry);
+        if (box) return box;
+      }
+    }
+    const layer = state.transient ?? state.sheet;
+    return layer ? layerBox(layer) : null;
+  }
+  // Moves the caret into the box during keydown, so the key's own character
+  // lands there; the event is left alone for the browser to insert it.
+  function typeInto(event) {
+    const box = typingBox(event);
+    if (!box) return false;
+    box.focus?.({ preventScroll: true });
+    const end = box.value?.length ?? 0;
+    try { box.setSelectionRange?.(end, end); } catch {}
+    return true;
+  }
+
   function handleKey(event) {
     if (event.defaultPrevented || window.MefiCompanionHub?.isOpen()) return;
     if (event.key === "Escape" && closeHelpMenu(true)) { event.preventDefault(); return; }
@@ -18705,6 +18785,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       return;
     }
     if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if (typeInto(event)) return;
     if (event.key === "Escape") {
       if (!state.transient && window.MefiCompanionHub?.open()) { event.preventDefault(); return; }
       closeTop();
@@ -19570,6 +19651,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     renderFooter,
     hintLine,
     handleKey,
+    typeScope,
+    typeInto,
     noMotion,
     syncMotion,
     state,
@@ -31963,6 +32046,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
         if (text) void answerQuestion(question.id, input.dataset.option || null, text, send);
       });
       card.append(custom);
+      // Typing on an open question writes your own answer to it.
+      card.dataset.typeScope = "";
       // Whether a decision reaches you at all is a node in the live brain
       // map, so the card links to the part that decided to ask.
       if (question.source === "issue") {
@@ -42171,7 +42256,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       chip.addEventListener("click", () => sendAssistant(chip.dataset.cmdchatMsg, "log"));
     });
     // The rail's tabs: one visible view, roving focus, remembered between runs.
-    for (const button of el.railTabs ?? []) button.addEventListener("click", () => setRailTab(button.dataset.railView));
+    // Choosing the Assistant tab is choosing to talk: the caret goes to its box.
+    for (const button of el.railTabs ?? []) button.addEventListener("click", () => { setRailTab(button.dataset.railView); if (button.dataset.railView === "assistant" && el.chatLogInput && !el.chatLogInput.disabled && !el.chatLogInput.closest("[hidden]")) el.chatLogInput.focus({ preventScroll: true }); });
     el.rail?.querySelector(".rail-tabs")?.addEventListener("keydown", (event) => {
       // The Node tab is only there while something is selected: walk the tabs
       // that are actually on screen, so an arrow never lands on nothing.
@@ -42243,7 +42329,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     });
     pillOf("sessions")?.addEventListener("click", () => setCamMode("orbit"));
     pillOf("progress")?.addEventListener("click", () => focusNextInProgress());
-    pillOf("assistant")?.addEventListener("click", () => selectAssistant());
+    pillOf("assistant")?.addEventListener("click", () => selectAssistant({ focus: true }));
     el.emptyAssistant?.addEventListener("click", () => window.MefiCompanion?.open?.());
 
     // The broadcast carries the list that was just written. Using it skips a
@@ -56215,7 +56301,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
 (() => {
   "use strict";
   function create({ host, onMove, onMoveKey, onMinimize, onClose, onChange }) {
-    const root = document.createElement("section"); root.className = "music-browser"; root.hidden = true;
+    // Typing on the browser's bar goes to its address box.
+    const root = document.createElement("section"); root.className = "music-browser"; root.hidden = true; root.dataset.typeScope = "";
     root.setAttribute("aria-label", "Built-in media browser");
     root.innerHTML = `<header class="music-browser-header">
       <button type="button" id="browser-move" title="Move media player; arrow keys move it too">⠿ Media browser</button>
@@ -56340,6 +56427,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       if (!result?.ok) return result;
       deactivate(); active = true; root.hidden = false;
       if (result.state) paint(result.state);
+      // Opened without an address, it waits for one, like a new tab.
+      if (!String(raw).trim()) { address.focus({ preventScroll: true }); address.select(); }
       observe(); schedule(); return result;
     }
     function close() {
@@ -57788,6 +57877,9 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const dropdown = element("section", "music-dropdown", null, document.body);
     els.dropdown = dropdown; dropdown.id = "music-dropdown"; dropdown.hidden = true; dropdown.tabIndex = -1;
     dropdown.setAttribute("role", "dialog"); dropdown.setAttribute("aria-modal", "false"); dropdown.setAttribute("aria-labelledby", "music-dropdown-heading");
+    // Typing in the menu (or with the pointer on it) goes to the box on show:
+    // the link address, the YouTube search while it is open, the AI mood.
+    dropdown.dataset.typeScope = "";
     const dropdownHeader = element("header", "music-dropdown-header", null, dropdown);
     els.dropdownHeader = dropdownHeader;
     const dropdownTitle = element("h2", null, "Music & video", dropdownHeader); dropdownTitle.id = "music-dropdown-heading";
@@ -57971,6 +58063,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     const searchForm = element("form", "music-link-form", null, els.youtubeExplorer);
     els.youtubeQuery = element("input", null, null, searchForm); els.youtubeQuery.id = "music-youtube-query";
     els.youtubeQuery.type = "search"; els.youtubeQuery.maxLength = 160; els.youtubeQuery.placeholder = "Search YouTube videos"; els.youtubeQuery.setAttribute("aria-label", "Search YouTube");
+    els.youtubeExplorer.dataset.typeScope = "";
+    els.youtubeExplorer.addEventListener("toggle", () => { if (els.youtubeExplorer.open) els.youtubeQuery.focus({ preventScroll: true }); });
     els.youtubeSearch = button("Search", "ghost", searchForm, searchYouTube, "music-youtube-search");
     searchForm.addEventListener("submit", event => { event.preventDefault(); searchYouTube(); });
     els.youtubeNotice = element("p", "music-fineprint", "Find a video, then Play. Next video follows your results or YouTube playlist.", els.youtubeExplorer); els.youtubeNotice.setAttribute("role", "status");
@@ -60422,6 +60516,10 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       rows.clear();
       reporting.clear();
       paint();
+      // You opened the room to talk: the caret waits in its message box, and
+      // paint() keeps it there when the messages arrive.
+      const compose = fields.get(`compose:${room.id}`);
+      if (compose && !compose.disabled) compose.focus?.({ preventScroll: true });
       api.hubSubscribe?.(room.id, true, "rooms");
       status.textContent = "Loading messages…";
       const page = await call("messages", room.id);
@@ -64258,6 +64356,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const starters = node("div", "companion-starters");
     starters.append(chip("What are you doing?", "What are you doing right now?"), chip("What's next?", "What should we work on next?"), chip("Recap today", "Recap what happened today."));
     panes.ask.append(thread, starters, input, actions, chatStatus);
+    // Typing while you are in the panel (or resting the pointer on it) goes to
+    // Talk's box, from whichever tab it opened on, not to Studio's shortcuts.
+    const talkBox = () => { if (panel.hidden) return null; if (tab !== "ask") selectTab("ask"); return input; };
+    window.MefiNav?.typeScope?.(panel, talkBox);
+    window.MefiNav?.typeScope?.(orb, talkBox);
     const places = node("div", "companion-places");
     for (const [label, route, options] of [["Tasks", "tasks"], ["Agents", "agents"], ["Live", "command"], ["Project map", "agent-brain", { tab: "map" }], ["Settings", "studio"]]) places.append(button(label, () => { host.toggle(false); window.MefiNav?.go(route, options); }));
     const location = node("p", "ab-quiet"); location.dataset.companionLocation = "true";
@@ -64720,12 +64823,17 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     syncBadge();
     layer.addEventListener("click", (event) => { if (event.target === layer) close(); });
     layer.addEventListener("keydown", trap);
+    // The open section's box takes stray typing: Talk, Suggest work, and an
+    // open room's message box under Friends. Other sections have none.
+    window.MefiNav?.typeScope?.(layer, () => hub.section === "ask" ? host.panel.querySelector("#companion-pane-ask textarea") : hub.section === "ideas" ? extra.querySelector("#agent-hub-suggest-text") : hub.section === "friends" ? extra.querySelector(".rooms-compose") : null);
     // Capture while this modal owns the keyboard; nested selects/confirmations
     // get first refusal and retain their own focus restoration.
     window.addEventListener("keydown", (event) => {
       if (!hub.open || document.querySelector(".studio-choice-popup") || otherDialog() || event.target?.closest?.("#toast-host")) return;
       if (event.key === "Escape") { event.preventDefault(); event.stopImmediatePropagation(); if (hub.section) select(null); else close(); }
-      else if (!(event.key === "Tab" || event.key === "Enter" || event.key === " " || event.key.startsWith("Arrow") || event.target?.closest?.("input, textarea, select"))) event.stopPropagation();
+      // A letter lands in the open section's box (Talk, Suggest work) rather
+      // than being dropped; either way Studio's shortcuts never see it.
+      else if (!(event.key === "Tab" || event.key === "Enter" || event.key === " " || event.key.startsWith("Arrow") || event.target?.closest?.("input, textarea, select"))) { window.MefiNav?.typeInto?.(event); event.stopPropagation(); }
     }, true);
     window.addEventListener("mefi:nav", () => { if (hub.open) close({ immediate: true, restore: false }); });
     window.addEventListener("resize", resize);
@@ -64828,7 +64936,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     // The section arrives from the bubbles' side, or across from the last one,
     // which fades where it was (renderer/motion.js); without layout it just paints.
     if (window.MefiMotion?.swap) window.MefiMotion.swap(el.extra, paint, { dir: previous ? 0 : 1 }); else paint();
-    title.focus({ preventScroll: true }); resize();
+    // Talk and Suggest work open with the caret in their box: you came to type.
+    const box = section === "ask" ? host.panel.querySelector("#companion-pane-ask textarea") : section === "ideas" ? el.extra.querySelector("#agent-hub-suggest-text") : null;
+    (box && !box.disabled ? box : title).focus({ preventScroll: true }); resize();
   }
   // A companion face for a look: the wisp is this file's own light, the
   // others the menu foot's drawings (MefiCompanion.face).
@@ -65041,7 +65151,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const forward = button("ghost mini pm-history", "→", "Forward in map (Alt+Right)", () => travel(1));
     const up = button("ghost mini pm-history", "↑", "Go up one level (Backspace)", () => parent());
     const trail = element("nav", "ab-map-breadcrumb"); trail.setAttribute("aria-label", "Project map location");
-    const browse = button("ghost mini pm-browse", "Browse", "Show or hide map contents", () => setNavigator(!navigatorOpen, true));
+    const browse = button("ghost mini pm-browse", "Browse", "Show or hide map contents", () => { setNavigator(!navigatorOpen, true); if (navigatorOpen) search.focus({ preventScroll: true }); });
     const modes = element("div", "pm-modes"); modes.setAttribute("aria-label", "Map view");
     for (const [id, title] of [["systems", "Systems"], ["ideas", "Ideas tree"]]) {
       const pick = button("pm-mode", title, `Show ${title.toLowerCase()}`, () => setMode(id)); pick.dataset.mode = id; modes.append(pick);
@@ -65049,7 +65159,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     navigation.append(modes, back, forward, up, trail, browse);
     tools?.prepend(navigation);
 
-    const navigator = element("aside", "pm-navigator"); navigator.setAttribute("aria-label", "Map contents");
+    // Browse opens with the caret in its search, and typing over the contents
+    // or the ideas tree finds things there instead of firing shortcuts.
+    const navigator = element("aside", "pm-navigator"); navigator.setAttribute("aria-label", "Map contents"); navigator.dataset.typeScope = "";
     const searchBox = element("div", "pm-search-box");
     const search = element("input", "pm-search"); search.type = "search"; search.placeholder = "Find a system or file…";
     search.setAttribute("aria-label", "Search all project systems, parts and files"); search.autocomplete = "off"; search.spellcheck = false;
@@ -65068,7 +65180,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const legend = element("div", "pm-legend"); legend.setAttribute("aria-label", "Map relationship legend");
     legend.append(element("span", "pm-legend-link", "Changed together"), element("span", "pm-legend-branch", "Contains"), element("span", "pm-legend-observed", "Agent explored")); stage.append(legend);
     const relationships = element("div", "pm-relationships"); relationships.setAttribute("aria-live", "polite"); navigator.append(relationships);
-    const ideaPanel = element("section", "pm-ideas"); ideaPanel.hidden = true; ideaPanel.setAttribute("aria-label", "Ideas and work tree");
+    const ideaPanel = element("section", "pm-ideas"); ideaPanel.hidden = true; ideaPanel.dataset.typeScope = ""; ideaPanel.setAttribute("aria-label", "Ideas and work tree");
     const ideaIntro = element("div", "pm-ideas-intro");
     const ideaHeading = element("div", ""); ideaHeading.append(element("p", "pm-region-kicker", "Growing with your project"), element("h3", "", "Ideas become branches of work"), element("p", "ab-quiet", "Grouped by system, then by progress. Branches move as agents discover files and work moves forward."));
     const ideaSearch = element("input", "pm-search pm-idea-search"); ideaSearch.type = "search"; ideaSearch.placeholder = "Find an idea or task…"; ideaSearch.setAttribute("aria-label", "Search the ideas tree");
@@ -69950,9 +70062,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     render();
     if (kind === "team") { void loadTeam(); void window.MefiAutonomy?.refresh?.({ learning: true }); }
     vibe()?.paintDock?.();
-    requestAnimationFrame(() => (aside.querySelector(".vibe-panel-body button, .vibe-panel-body input") || $("close"))?.focus?.({ preventScroll: true }));
+    requestAnimationFrame(() => (typeHere() || aside.querySelector(".vibe-panel-body button, .vibe-panel-body input") || $("close"))?.focus?.({ preventScroll: true }));
     return true;
   }
+  // The panel's own box (a task's note, a new app's name): it takes the caret
+  // when the panel opens, and what you type anywhere in the panel.
+  function typeHere() { return Array.from(aside.querySelectorAll(".vibe-panel-body [data-type-here]")).find((box) => !box.disabled) ?? null; }
+  window.MefiNav?.typeScope?.(aside, typeHere);
   function close({ quiet = false } = {}) {
     if (aside.hidden) return;
     const was = state.kind;
@@ -70276,7 +70392,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     input.rows = 2;
     input.placeholder = running ? "Notes can be added once this run finishes." : "Tell it something for its next attempt…";
     input.disabled = running || state.busy;
-    input.setAttribute("aria-label", "A note for this task");
+    input.setAttribute("aria-label", "A note for this task"); input.dataset.typeHere = "";
     const draftKey = `${state.data.projectId}:${task.id}`;
     input.value = state.noteDrafts[draftKey] || "";
     input.addEventListener("input", () => { state.noteDrafts[draftKey] = input.value; });
@@ -70552,13 +70668,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const form = el("form", "vibe-set vibe-newapp");
     const name = el("input");
     name.type = "text"; name.maxLength = 60; name.placeholder = "Pixel Garden"; name.autocomplete = "off"; name.value = state.draftApp.name;
-    name.setAttribute("aria-label", "The app's name");
+    name.setAttribute("aria-label", "The app's name"); name.dataset.typeHere = "";
     name.disabled = state.busy || Boolean(state.draftApp.made);
     const about = el("textarea");
     about.rows = 4; about.maxLength = 600; about.value = state.draftApp.about;
     about.disabled = state.busy;
     about.placeholder = "A cosy 2D game where you grow pixel plants and trade them at a market.";
-    about.setAttribute("aria-label", "What the app should be");
+    about.setAttribute("aria-label", "What the app should be"); about.dataset.typeHere = "";
     const where = el("span", "vibe-set-hint", "");
     const paintWhere = () => { const slug = slugOf(name.value); where.textContent = slug ? `Folder: Mefi Apps/${slug}` : "The folder is named after the app."; };
     paintWhere();

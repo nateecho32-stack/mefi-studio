@@ -77,7 +77,7 @@
     const forward = button("ghost mini pm-history", "→", "Forward in map (Alt+Right)", () => travel(1));
     const up = button("ghost mini pm-history", "↑", "Go up one level (Backspace)", () => parent());
     const trail = element("nav", "ab-map-breadcrumb"); trail.setAttribute("aria-label", "Project map location");
-    const browse = button("ghost mini pm-browse", "Browse", "Show or hide map contents", () => setNavigator(!navigatorOpen, true));
+    const browse = button("ghost mini pm-browse", "Browse", "Show or hide map contents", () => { setNavigator(!navigatorOpen, true); if (navigatorOpen) search.focus({ preventScroll: true }); });
     const modes = element("div", "pm-modes"); modes.setAttribute("aria-label", "Map view");
     for (const [id, title] of [["systems", "Systems"], ["ideas", "Ideas tree"]]) {
       const pick = button("pm-mode", title, `Show ${title.toLowerCase()}`, () => setMode(id)); pick.dataset.mode = id; modes.append(pick);
@@ -85,7 +85,9 @@
     navigation.append(modes, back, forward, up, trail, browse);
     tools?.prepend(navigation);
 
-    const navigator = element("aside", "pm-navigator"); navigator.setAttribute("aria-label", "Map contents");
+    // Browse opens with the caret in its search, and typing over the contents
+    // or the ideas tree finds things there instead of firing shortcuts.
+    const navigator = element("aside", "pm-navigator"); navigator.setAttribute("aria-label", "Map contents"); navigator.dataset.typeScope = "";
     const searchBox = element("div", "pm-search-box");
     const search = element("input", "pm-search"); search.type = "search"; search.placeholder = "Find a system or file…";
     search.setAttribute("aria-label", "Search all project systems, parts and files"); search.autocomplete = "off"; search.spellcheck = false;
@@ -104,7 +106,7 @@
     const legend = element("div", "pm-legend"); legend.setAttribute("aria-label", "Map relationship legend");
     legend.append(element("span", "pm-legend-link", "Changed together"), element("span", "pm-legend-branch", "Contains"), element("span", "pm-legend-observed", "Agent explored")); stage.append(legend);
     const relationships = element("div", "pm-relationships"); relationships.setAttribute("aria-live", "polite"); navigator.append(relationships);
-    const ideaPanel = element("section", "pm-ideas"); ideaPanel.hidden = true; ideaPanel.setAttribute("aria-label", "Ideas and work tree");
+    const ideaPanel = element("section", "pm-ideas"); ideaPanel.hidden = true; ideaPanel.dataset.typeScope = ""; ideaPanel.setAttribute("aria-label", "Ideas and work tree");
     const ideaIntro = element("div", "pm-ideas-intro");
     const ideaHeading = element("div", ""); ideaHeading.append(element("p", "pm-region-kicker", "Growing with your project"), element("h3", "", "Ideas become branches of work"), element("p", "ab-quiet", "Grouped by system, then by progress. Branches move as agents discover files and work moves forward."));
     const ideaSearch = element("input", "pm-search pm-idea-search"); ideaSearch.type = "search"; ideaSearch.placeholder = "Find an idea or task…"; ideaSearch.setAttribute("aria-label", "Search the ideas tree");

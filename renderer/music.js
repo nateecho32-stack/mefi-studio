@@ -1425,6 +1425,9 @@
     const dropdown = element("section", "music-dropdown", null, document.body);
     els.dropdown = dropdown; dropdown.id = "music-dropdown"; dropdown.hidden = true; dropdown.tabIndex = -1;
     dropdown.setAttribute("role", "dialog"); dropdown.setAttribute("aria-modal", "false"); dropdown.setAttribute("aria-labelledby", "music-dropdown-heading");
+    // Typing in the menu (or with the pointer on it) goes to the box on show:
+    // the link address, the YouTube search while it is open, the AI mood.
+    dropdown.dataset.typeScope = "";
     const dropdownHeader = element("header", "music-dropdown-header", null, dropdown);
     els.dropdownHeader = dropdownHeader;
     const dropdownTitle = element("h2", null, "Music & video", dropdownHeader); dropdownTitle.id = "music-dropdown-heading";
@@ -1608,6 +1611,8 @@
     const searchForm = element("form", "music-link-form", null, els.youtubeExplorer);
     els.youtubeQuery = element("input", null, null, searchForm); els.youtubeQuery.id = "music-youtube-query";
     els.youtubeQuery.type = "search"; els.youtubeQuery.maxLength = 160; els.youtubeQuery.placeholder = "Search YouTube videos"; els.youtubeQuery.setAttribute("aria-label", "Search YouTube");
+    els.youtubeExplorer.dataset.typeScope = "";
+    els.youtubeExplorer.addEventListener("toggle", () => { if (els.youtubeExplorer.open) els.youtubeQuery.focus({ preventScroll: true }); });
     els.youtubeSearch = button("Search", "ghost", searchForm, searchYouTube, "music-youtube-search");
     searchForm.addEventListener("submit", event => { event.preventDefault(); searchYouTube(); });
     els.youtubeNotice = element("p", "music-fineprint", "Find a video, then Play. Next video follows your results or YouTube playlist.", els.youtubeExplorer); els.youtubeNotice.setAttribute("role", "status");

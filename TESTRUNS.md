@@ -35,6 +35,36 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-28 - Typing goes to the open menu's box
+
+A printable key pressed outside any field while a menu is open (focus in it,
+or the pointer resting on it), or while a sheet is open, now lands in that
+menu's text box instead of firing the single-letter shortcuts that opened
+other menus (`typeInto` in `renderer/nav.js`; menus opt in with
+`data-type-scope`, `data-type-here` or `typeScope()`). Clicking out of a menu
+gives the keys back. Wired: the companion panel (from any tab to Talk) and
+hub (Talk and Suggest work open with the caret in their box; an open room's
+message box), Music & video (link box, YouTube search), Command's chat
+panels, Assistant pill and tab, Ask cards, Vibe's side panel and ask drawer,
+the project map's Browse, Home's queue search, Explorer's session tools and
+the media browser's address bar. MefiSelect no longer takes the caret back
+from a box its choice opened (Agents' "Enter a model ID…").
+
+- Browser pane, fake-bridge booklet, real key presses: the Task board took
+  "plan the demo" into its box with P not opening Plans; T still opened the
+  Task board with no menu up; the Music dropdown, the companion panel (from
+  Needs you) and the hub's Suggest work all took typing.
+- `npm run build-booklet` in C:\wt\type-into; `npm run check`, `npm run audit`
+  (0 errors, 0 warnings): PASS.
+- New suite type_into_menu (9); the new tests fail on the old code.
+- `npm test` in C:\wt\type-into on 6c1c940: Node parallel stage 0 failures;
+  Electron lane 37 of 41 passed, 1 skipped, 3 failed under load
+  (media_window_render "No media report", task_overview_render "No fixture
+  report", unified_studio_render on a MefiSelect focus rule since narrowed).
+  All three pass solo after the fix. Python contracts: only
+  test_electron_smoke_boots_when_installed timed out (120 s); the launcher
+  file passes solo (11 tests, 1 skipped).
+
 ## 2026-09-28 - Needs you: answered asks leave the list, no dead asks after a reload
 
 The owner reported that answered asks in the companion's Needs you list hung
@@ -535,37 +565,6 @@ Markdown, section-anchor and image references pass after fixing an obsolete
 social-post link. JavaScript syntax and git diff --check pass. No application
 suite was run for these static website and documentation changes.
 
-## 2026-09-27 evening - Work done outside Studio: last look, report and relevance check
-
-New scripts/outside-work.cjs (pure) and main.cjs's "work done outside Studio"
-block. Studio keeps a per-project last look (git HEAD, branch, uncommitted
-paths, time) while it watches a folder: every five minutes with the window
-shown, 15 s after each run settles, on leaving a folder and at quit. Opening
-the folder again reports commits, uncommitted edits and Claude Code/OpenCode
-sessions since that look to the thread, the chat payload (`outside`) and the
-welcome-back digest, and holds every queued card (`relevance` stamp,
-backlog.workState `deferred`/`relevance-check`, bounded to 6 h) until one
-model call (or local file/subject matching) judges it needed, partial, done
-or obsolete. Done/obsolete cards wait on an owner-only Ask card
-(autonomy.canDelegate refuses source `relevance`). Also fixed the
-verification_drain flake: kickVerificationSettlement read the clock twice, so
-under load the settle timer was armed 999 ms instead of 1000 ms.
-
-Baseline before the change on the same tree: npm run check passed; test:fast
-had one failure, verification_drain "no supported verification command"
-(passed solo, the double clock read). tools/monitor_loop.mjs --scenario all
-matched before and after (steady/no-evidence/flaky 12/12 done, wedged 6 done
-with 12 start kills, handoffs converging to 180/180 done at 225 min in a
-300-minute run).
-
-Validation: npm run check passed; npm run audit 0 findings; lint 0 errors and
-no warnings in changed code; test:fast 3953 passed, 0 failed, 4 skipped. New
-suites: outside_work (16), outside_work_host (6, a real temporary git repo and
-a fake home) and a tasks_ui case; module_purity covers the new module.
-Full npm test on the change: Node 3993 passed, 0 failed, 6 skipped (Electron
-fixtures included), Python contracts 248 OK (1 skipped), normalized-path lock
-passed. A final npm run check and test:fast (3954 passed, 0 failed) followed
-the last edits (a refresh race fix and Vibe's stage words).
 ## Read Before Any Tests
 
 This is the test guide for the standalone Mefi's Studio AI+ repository. Run all commands from this repository root.

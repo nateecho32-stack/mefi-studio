@@ -49,9 +49,13 @@
     render();
     if (kind === "team") { void loadTeam(); void window.MefiAutonomy?.refresh?.({ learning: true }); }
     vibe()?.paintDock?.();
-    requestAnimationFrame(() => (aside.querySelector(".vibe-panel-body button, .vibe-panel-body input") || $("close"))?.focus?.({ preventScroll: true }));
+    requestAnimationFrame(() => (typeHere() || aside.querySelector(".vibe-panel-body button, .vibe-panel-body input") || $("close"))?.focus?.({ preventScroll: true }));
     return true;
   }
+  // The panel's own box (a task's note, a new app's name): it takes the caret
+  // when the panel opens, and what you type anywhere in the panel.
+  function typeHere() { return Array.from(aside.querySelectorAll(".vibe-panel-body [data-type-here]")).find((box) => !box.disabled) ?? null; }
+  window.MefiNav?.typeScope?.(aside, typeHere);
   function close({ quiet = false } = {}) {
     if (aside.hidden) return;
     const was = state.kind;
@@ -375,7 +379,7 @@
     input.rows = 2;
     input.placeholder = running ? "Notes can be added once this run finishes." : "Tell it something for its next attempt…";
     input.disabled = running || state.busy;
-    input.setAttribute("aria-label", "A note for this task");
+    input.setAttribute("aria-label", "A note for this task"); input.dataset.typeHere = "";
     const draftKey = `${state.data.projectId}:${task.id}`;
     input.value = state.noteDrafts[draftKey] || "";
     input.addEventListener("input", () => { state.noteDrafts[draftKey] = input.value; });
@@ -651,13 +655,13 @@
     const form = el("form", "vibe-set vibe-newapp");
     const name = el("input");
     name.type = "text"; name.maxLength = 60; name.placeholder = "Pixel Garden"; name.autocomplete = "off"; name.value = state.draftApp.name;
-    name.setAttribute("aria-label", "The app's name");
+    name.setAttribute("aria-label", "The app's name"); name.dataset.typeHere = "";
     name.disabled = state.busy || Boolean(state.draftApp.made);
     const about = el("textarea");
     about.rows = 4; about.maxLength = 600; about.value = state.draftApp.about;
     about.disabled = state.busy;
     about.placeholder = "A cosy 2D game where you grow pixel plants and trade them at a market.";
-    about.setAttribute("aria-label", "What the app should be");
+    about.setAttribute("aria-label", "What the app should be"); about.dataset.typeHere = "";
     const where = el("span", "vibe-set-hint", "");
     const paintWhere = () => { const slug = slugOf(name.value); where.textContent = slug ? `Folder: Mefi Apps/${slug}` : "The folder is named after the app."; };
     paintWhere();

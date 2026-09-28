@@ -2549,6 +2549,8 @@
         if (text) void answerQuestion(question.id, input.dataset.option || null, text, send);
       });
       card.append(custom);
+      // Typing on an open question writes your own answer to it.
+      card.dataset.typeScope = "";
       // Whether a decision reaches you at all is a node in the live brain
       // map, so the card links to the part that decided to ask.
       if (question.source === "issue") {
@@ -12757,7 +12759,8 @@
       chip.addEventListener("click", () => sendAssistant(chip.dataset.cmdchatMsg, "log"));
     });
     // The rail's tabs: one visible view, roving focus, remembered between runs.
-    for (const button of el.railTabs ?? []) button.addEventListener("click", () => setRailTab(button.dataset.railView));
+    // Choosing the Assistant tab is choosing to talk: the caret goes to its box.
+    for (const button of el.railTabs ?? []) button.addEventListener("click", () => { setRailTab(button.dataset.railView); if (button.dataset.railView === "assistant" && el.chatLogInput && !el.chatLogInput.disabled && !el.chatLogInput.closest("[hidden]")) el.chatLogInput.focus({ preventScroll: true }); });
     el.rail?.querySelector(".rail-tabs")?.addEventListener("keydown", (event) => {
       // The Node tab is only there while something is selected: walk the tabs
       // that are actually on screen, so an arrow never lands on nothing.
@@ -12829,7 +12832,7 @@
     });
     pillOf("sessions")?.addEventListener("click", () => setCamMode("orbit"));
     pillOf("progress")?.addEventListener("click", () => focusNextInProgress());
-    pillOf("assistant")?.addEventListener("click", () => selectAssistant());
+    pillOf("assistant")?.addEventListener("click", () => selectAssistant({ focus: true }));
     el.emptyAssistant?.addEventListener("click", () => window.MefiCompanion?.open?.());
 
     // The broadcast carries the list that was just written. Using it skips a

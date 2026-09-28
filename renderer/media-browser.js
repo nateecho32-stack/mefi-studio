@@ -3,7 +3,8 @@
 (() => {
   "use strict";
   function create({ host, onMove, onMoveKey, onMinimize, onClose, onChange }) {
-    const root = document.createElement("section"); root.className = "music-browser"; root.hidden = true;
+    // Typing on the browser's bar goes to its address box.
+    const root = document.createElement("section"); root.className = "music-browser"; root.hidden = true; root.dataset.typeScope = "";
     root.setAttribute("aria-label", "Built-in media browser");
     root.innerHTML = `<header class="music-browser-header">
       <button type="button" id="browser-move" title="Move media player; arrow keys move it too">⠿ Media browser</button>
@@ -128,6 +129,8 @@
       if (!result?.ok) return result;
       deactivate(); active = true; root.hidden = false;
       if (result.state) paint(result.state);
+      // Opened without an address, it waits for one, like a new tab.
+      if (!String(raw).trim()) { address.focus({ preventScroll: true }); address.select(); }
       observe(); schedule(); return result;
     }
     function close() {

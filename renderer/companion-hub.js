@@ -257,12 +257,17 @@
     syncBadge();
     layer.addEventListener("click", (event) => { if (event.target === layer) close(); });
     layer.addEventListener("keydown", trap);
+    // The open section's box takes stray typing: Talk, Suggest work, and an
+    // open room's message box under Friends. Other sections have none.
+    window.MefiNav?.typeScope?.(layer, () => hub.section === "ask" ? host.panel.querySelector("#companion-pane-ask textarea") : hub.section === "ideas" ? extra.querySelector("#agent-hub-suggest-text") : hub.section === "friends" ? extra.querySelector(".rooms-compose") : null);
     // Capture while this modal owns the keyboard; nested selects/confirmations
     // get first refusal and retain their own focus restoration.
     window.addEventListener("keydown", (event) => {
       if (!hub.open || document.querySelector(".studio-choice-popup") || otherDialog() || event.target?.closest?.("#toast-host")) return;
       if (event.key === "Escape") { event.preventDefault(); event.stopImmediatePropagation(); if (hub.section) select(null); else close(); }
-      else if (!(event.key === "Tab" || event.key === "Enter" || event.key === " " || event.key.startsWith("Arrow") || event.target?.closest?.("input, textarea, select"))) event.stopPropagation();
+      // A letter lands in the open section's box (Talk, Suggest work) rather
+      // than being dropped; either way Studio's shortcuts never see it.
+      else if (!(event.key === "Tab" || event.key === "Enter" || event.key === " " || event.key.startsWith("Arrow") || event.target?.closest?.("input, textarea, select"))) { window.MefiNav?.typeInto?.(event); event.stopPropagation(); }
     }, true);
     window.addEventListener("mefi:nav", () => { if (hub.open) close({ immediate: true, restore: false }); });
     window.addEventListener("resize", resize);
@@ -365,7 +370,9 @@
     // The section arrives from the bubbles' side, or across from the last one,
     // which fades where it was (renderer/motion.js); without layout it just paints.
     if (window.MefiMotion?.swap) window.MefiMotion.swap(el.extra, paint, { dir: previous ? 0 : 1 }); else paint();
-    title.focus({ preventScroll: true }); resize();
+    // Talk and Suggest work open with the caret in their box: you came to type.
+    const box = section === "ask" ? host.panel.querySelector("#companion-pane-ask textarea") : section === "ideas" ? el.extra.querySelector("#agent-hub-suggest-text") : null;
+    (box && !box.disabled ? box : title).focus({ preventScroll: true }); resize();
   }
   // A companion face for a look: the wisp is this file's own light, the
   // others the menu foot's drawings (MefiCompanion.face).

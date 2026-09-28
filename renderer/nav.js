@@ -2,6 +2,8 @@
 // project-scoped recent tasks, the local view row, Search, Help and shortcuts.
 // Classic tabs, dock and sheet links resolve through this same registry.
 // New task opens Home's composer; task identity persists across destinations.
+// A letter typed while a menu is open goes into that menu's box (typeInto),
+// not to the shortcuts.
 (function () {
   "use strict";
 
@@ -2055,6 +2057,79 @@
     else go(dest.id);
   }
 
+  // ---- typing goes to the open menu's box -----------------------------------
+  // A menu with a text box takes what you type. A printable key pressed
+  // outside any field goes into the box of the menu you are in (focus inside
+  // it, or the pointer resting on it), else into the open sheet's box, instead
+  // of firing the single-letter keys that open other menus. Click out of a
+  // menu and its box lets go. A menu opts in by carrying data-type-scope (its
+  // box: [data-type-here], else its first search or text box) or through
+  // typeScope(root, field); a sheet's box is [data-type-here], else its
+  // registry focus when that is a text box, else its first search box.
+  // Password, number and key fields never take stray typing.
+  const TEXT_TYPES = new Set(["", "text", "search", "url", "email"]);
+  const typeScopes = new Set();
+  function typeScope(root, field) {
+    const entry = { root, field };
+    typeScopes.add(entry);
+    return () => typeScopes.delete(entry);
+  }
+  function typeBox(node) {
+    const tag = String(node?.tagName ?? "").toLowerCase();
+    const text = tag === "textarea" || (tag === "input" && TEXT_TYPES.has(String(node.getAttribute?.("type") ?? "").toLowerCase()));
+    return text && !node.disabled && !node.readOnly && visibleNavTarget(node) ? node : null;
+  }
+  function firstBox(root, selector) {
+    for (const node of root?.querySelectorAll?.(selector) ?? []) if (typeBox(node)) return node;
+    return null;
+  }
+  function scopeBox(entry) {
+    const root = typeof entry.root === "function" ? entry.root() : entry.root;
+    if (!root || !visibleNavTarget(root)) return null;
+    if (entry.field) return typeBox(typeof entry.field === "function" ? entry.field() : entry.field);
+    return firstBox(root, "[data-type-here]") ?? firstBox(root, "input, textarea");
+  }
+  function layerBox(id) {
+    const dest = get(id);
+    const root = layerRoot(dest);
+    if (!root || !visibleNavTarget(root)) return null;
+    const requested = dest.focus ? Array.from(document.querySelectorAll?.(dest.focus) ?? []).find(typeBox) : null;
+    return firstBox(root, "[data-type-here]") ?? requested ?? firstBox(root, 'input[type="search"]');
+  }
+  // The box a printable key should land in, or null when it stays a shortcut.
+  function typingBox(event) {
+    const key = event?.key;
+    if (typeof key !== "string" || key.length !== 1 || key === " " || key === "?") return null;
+    if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.altKey || event.metaKey) return null;
+    if (event.target?.closest?.("input, textarea, select, [contenteditable]")) return null;
+    const active = document.activeElement;
+    const scopes = [...typeScopes, ...Array.from(document.querySelectorAll?.("[data-type-scope]") ?? [], (root) => ({ root }))];
+    const rootOf = (entry) => (typeof entry.root === "function" ? entry.root() : entry.root);
+    // Focus first, then the pointer: the menu you clicked into beats the one
+    // you happen to be hovering on the way past.
+    for (const held of [(root) => root.contains?.(active), (root) => root.matches?.(":hover")]) {
+      const matches = scopes.filter((entry) => { const root = rootOf(entry); return root && held(root); });
+      // The innermost menu wins over one that contains it.
+      matches.sort((a, b) => (rootOf(a).contains(rootOf(b)) ? 1 : rootOf(b).contains(rootOf(a)) ? -1 : 0));
+      for (const entry of matches) {
+        const box = scopeBox(entry);
+        if (box) return box;
+      }
+    }
+    const layer = state.transient ?? state.sheet;
+    return layer ? layerBox(layer) : null;
+  }
+  // Moves the caret into the box during keydown, so the key's own character
+  // lands there; the event is left alone for the browser to insert it.
+  function typeInto(event) {
+    const box = typingBox(event);
+    if (!box) return false;
+    box.focus?.({ preventScroll: true });
+    const end = box.value?.length ?? 0;
+    try { box.setSelectionRange?.(end, end); } catch {}
+    return true;
+  }
+
   function handleKey(event) {
     if (event.defaultPrevented || window.MefiCompanionHub?.isOpen()) return;
     if (event.key === "Escape" && closeHelpMenu(true)) { event.preventDefault(); return; }
@@ -2108,6 +2183,7 @@
       return;
     }
     if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if (typeInto(event)) return;
     if (event.key === "Escape") {
       if (!state.transient && window.MefiCompanionHub?.open()) { event.preventDefault(); return; }
       closeTop();
@@ -2973,6 +3049,8 @@
     renderFooter,
     hintLine,
     handleKey,
+    typeScope,
+    typeInto,
     noMotion,
     syncMotion,
     state,
