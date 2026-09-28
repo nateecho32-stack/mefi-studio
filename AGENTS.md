@@ -11,6 +11,9 @@ Longer-form docs live under `docs/`; superseded ones under `docs/archive/`.
 - Run `npm run check`, `npm test`, and `npm run audit` for application changes.
   Run `npm run build-booklet` after editing renderer sources; the generated
   `renderer/booklet.html` is committed.
+- Before every commit, work through `.claude/skills/commit-check/SKILL.md`:
+  look at recent commits first, send only what is new, keep older work
+  reachable on request, stay fast and stable, log properly and lose nothing.
 - Ruins Runner is an optional external project. Never move its game files into
   this repository. Use `MEFI_STUDIO_GAME_ROOT` for game integration and
   `MEFI_STUDIO_REPO` to select another working repository.
