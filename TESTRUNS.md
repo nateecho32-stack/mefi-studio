@@ -34,6 +34,34 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-28 - Sync counts only real local work; vault calls take turns
+
+Follow-ups from the Plan session's review. sync.mjs recounts a non-empty
+status from the diffs and untracked files (a line-ending-only difference
+is not uncommitted work), skips local branches whose commits are all on
+some GitHub branch, and runs Git with GIT_OPTIONAL_LOCKS=0. The vault runs
+one call at a time, resets only when a rebase stopped on unmerged paths and
+names the changes a clash dropped, keeps insights, learned and settings per
+PC (older shared files still read), and removes its folder after a failed
+pair or create (create carries on with an empty private repository). The
+renderer saves the previewed share and keeps Send, Use and the lists on
+the shelf they were read from.
+
+- `npm run build-booklet` (renderer/booklet.html rebuilt), `npm run check`
+  (187 targets, 385 specs) and `npm run audit` (zero findings): PASS.
+- New suites: sync_changes (5), pc_vault_turns (9; 8 fail on the old
+  pc-vault.cjs) and pc_vault_ui_turns (3; all fail on the old renderer).
+  sync.test.mjs's stranded-work fixture builds `published` from main so
+  `local-only` keeps a commit of its own.
+- `npm test` in a private worktree, exit 0: Node parallel stage 4290 tests,
+  4285 passed, 5 skipped, 0 failures; Electron stage 42 tests, 41 passed, 1
+  skipped; `eyes_toggle_electron` 1/1; `occlusion_probe` 1 passed, 1
+  capability skip; Python contracts OK (248); normalized-path lock passed.
+- Rebased onto the multi-login commits (07150aa, 732026f): CHANGELOG kept
+  both entries, booklet rebuilt; `npm run check` (188 targets, 387 specs),
+  `npm run audit` and the sync, vault, booklet, setup-helper and
+  cli_accounts suites (107 tests) pass on the combined tree.
+
 ## 2026-09-28 - More than one Claude Code or Codex login, swapped when one tops out
 
 Extra subscription logins (settings.cliAccounts, each a folder under user
@@ -469,33 +497,6 @@ the only failure was the known-red updater contract fixed by db15d74. New
 regression tests are porcelain_paths plus additions to salvage_json,
 outbound_privacy, verification_command_quoting, scope_heal_walk and
 check_syntax.
-## 2026-09-27 afternoon - Node tree follow-up: resize re-seed, rest sleep, touch, band spill
-
-Second node-tree pass over the items the first one left open, all in
-renderer/idle.js plus tree-dynamics.js, the template's exit label and tests.
-A resize now waits 150 ms of animation time for the frame to hold still and
-re-seeds under the view the layout was first seeded in (angle, pitch, zoom,
-camera): a 2 px resize after a 90° spin or at zoom 2.4 moves anchors about
-0.5 world units instead of re-laying the tree out (measured on a 3-session,
-15-task tree in both views). A resting Command books its next frame on a
-timer and wakeFrames() cuts it short. The fit keeps its measured reach while
-a layout holds. drawFrame projects saved anchors once (free: 1 projection per
-node per frame, down from 2; Overview 2, down from 3). Music frames reuse
-per-frame band views and blended tints, keep per-node memos in WeakMaps, and
-the nebula, bokeh and firefly skies use unit-space gradients per canvas and
-tint (Chromium pixel parity: max 1 level, washes exact). A leaving node's
-live-shape offset blends into its host's over the flight. Touch and pen
-reuse the mouse handlers, with a two-finger pinch. The music spectrum
-measures a band more than 40 dB under the loudest one against that floor: in
-the real AnalyserNode fixture the snare-only section's kick cue fell from
-0.645 to 0.005, hat from 0.877 to 0.001 and bass from 0.295 to 0.026 (mid
-0.805), and the existing quiet-hat case at 36 dB still reads in full.
-
-Results: `npm run check` ok; `npm run audit` 0 errors, 0 warnings; `npm test`
-Node 3,976 tests, 3,970 pass, 5 skipped, 1 fail (occlusion_probe:
-"MessageChannel round trip too slow: 283ms" under the parallel load; passes
-solo, 2/2); Python 248 OK, 1 skipped; normalized-path lock 6/6.
-
 ## Read Before Any Tests
 
 This is the test guide for the standalone Mefi's Studio AI+ repository. Run all commands from this repository root.

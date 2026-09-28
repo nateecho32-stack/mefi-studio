@@ -58965,7 +58965,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       box.dataset.state = "unavailable";
       return box;
     }
-    let busy = false, loaded = false, offered = [];
+    let busy = false, loaded = false, offered = [], offerShelf = "";
     let keysPhrase = "", syncKeysButton = () => {};
     const intro = node("p", "muted", "Your PCs share through one private GitHub repository. Everything in it is sealed with a key only your paired PCs hold, so GitHub cannot read it. Nothing goes until you choose it, and Studio checks each item for keys, passwords and instructions aimed at an agent on the way out and again on the way in.");
 
@@ -59038,6 +59038,13 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       footer,
     );
     offerRow.append(shelf, button("Choose what to share", "pc-vault-offer-open", () => showOffer()));
+    // The lists belong to the shelf they were read from.
+    shelf.addEventListener("change", () => {
+      offered = [];
+      offer.replaceChildren();
+      send.hidden = true;
+      received.replaceChildren();
+    });
     footer.append(
       button("Show pairing code", "pc-vault-show-code", () => run("Getting the pairing code…", async () => {
         const got = await api.vaultCode();
@@ -59079,7 +59086,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
           : result.account ? `Signed in to GitHub as ${result.account}. Make the vault here, or pair with a code.` : "Sign in to GitHub first (Set up this PC above), then make the vault or pair.";
         return;
       }
-      status.textContent = `Paired with ${result.repo}${result.offline ? " (offline: showing the last copy)" : ""}.${result.keyMatches === false ? " This PC's key does not match the vault; pair again." : ""}`;
+      const dropped = result.dropped?.changes?.length ? ` ${when(result.dropped.at) || "Earlier"}, another PC changed the same thing at the same moment, so its version was kept and this PC's was dropped: ${result.dropped.changes.join("; ")}. Send it again if you still want it.` : "";
+      status.textContent = `Paired with ${result.repo}${result.offline ? " (offline: showing the last copy)" : ""}.${result.keyMatches === false ? " This PC's key does not match the vault; pair again." : ""}${dropped}`;
       pcs.replaceChildren(...(result.pcs ?? []).map((pc) => {
         const waiting = (pc.projects ?? []).filter((item) => item.risk || item.behind).map((item) => `${item.repo}: ${[item.risk ? `${item.risk} not on GitHub` : "", item.behind ? `${item.behind} to pull` : ""].filter(Boolean).join(", ")}`);
         return node("li", "", `${pc.self ? "This PC" : pc.name} · ${when(pc.at) || "not seen yet"}${waiting.length ? ` · ${waiting.join("; ")}` : " · in step"}`);
@@ -59094,9 +59102,11 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     // Share from this PC: every item with what Studio found; stopped ones cannot be ticked.
     async function showOffer() {
       await run("Looking at what this PC has…", async () => {
-        const result = await api.vaultOffer(shelf.value);
+        const from = shelf.value;
+        const result = await api.vaultOffer(from);
         if (!result?.ok) { status.textContent = result?.error || "That shelf could not be read."; return; }
         offered = result.items;
+        offerShelf = from;
         offer.replaceChildren(...offered.map((item) => {
           const row = node("li", "pc-vault-item");
           const label = node("label", "pc-vault-pick");
@@ -59118,7 +59128,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       const ids = [...offer.querySelectorAll("input[type=checkbox]")].filter((tick) => tick.checked && !tick.disabled).map((tick) => tick.value);
       if (!ids.length) { status.textContent = "Tick at least one item to send."; return; }
       await run(`Sending ${ids.length} item(s) to your vault…`, async () => {
-        const result = await api.vaultPublish(shelf.value, ids);
+        const result = await api.vaultPublish(offerShelf, ids);
         const stopped = result?.stopped?.length ? ` Studio stopped ${result.stopped.length}: ${result.stopped.map((item) => item.reasons.join(" ")).join(" ")}` : "";
         status.textContent = result?.ok ? `Sent ${result.sent.length} item(s).${stopped}` : `${result?.error || "Nothing was sent."}${stopped}`;
       });
@@ -59126,7 +59136,8 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
     // From my other PCs: what can be used here, and what was quarantined.
     async function read() {
       await run("Reading your vault…", async () => {
-        const result = await api.vaultRead(shelf.value);
+        const from = shelf.value;
+        const result = await api.vaultRead(from);
         if (!result?.ok) { status.textContent = result?.error || "The vault could not be read."; return; }
         received.replaceChildren(
           ...result.items.map((item) => {
@@ -59134,7 +59145,7 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
             row.dataset.id = item.id;
             row.append(node("span", "", `${item.title} · from ${item.from} · ${when(item.at)}`));
             if (item.usable) row.append(button("Use on this PC", null, () => run(`Using ${item.title}…`, async () => {
-              const used = await api.vaultUse(shelf.value, item.id, item.from);
+              const used = await api.vaultUse(from, item.id, item.from);
               status.textContent = used?.ok ? `${item.title} is here now${used.step === "learn" ? " and counts in Studio's learning" : ""}.` : used?.error || "It could not be used.";
               if (used?.ok) await paintLibrary();
             }), "ghost mini"));
@@ -59297,16 +59308,21 @@ html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:
       status.textContent = items.length ? "Pick one, then preview exactly what your friend gets." : result?.error || "Nothing of that kind on this PC yet.";
     })), item, button("Preview", "pc-share-preview", () => run("Preparing the preview…", async () => {
       if (!item.value) return;
-      const result = await api.sharePreview(shelf.value, item.value);
+      // Save writes exactly what was previewed, whatever is picked by then.
+      const shown = { shelf: shelf.value, id: item.value };
+      const result = await api.sharePreview(shown.shelf, shown.id);
       if (!result?.ok && !result?.reasons) { status.textContent = result?.error || "It could not be prepared."; return; }
       const save = button("Save share file", "pc-share-save", () => run("Saving…", async () => {
-        const saved = await api.shareExport(shelf.value, item.value);
+        const saved = await api.shareExport(shown.shelf, shown.id);
         status.textContent = saved?.canceled ? "Not saved." : saved?.ok ? `Saved ${saved.file}. Send it to your friend however you like.` : saved?.error || "It could not be saved.";
       }));
       save.hidden = !result.ok;
       out.replaceChildren(node("p", "", `Your friend gets: ${result.title}`), reasonList(result.reasons), node("pre", "pc-share-text", result.preview), save);
       status.textContent = result.ok ? "Paths, user and PC names, emails, addresses and keys are removed. This is everything in the file." : "Studio stopped this one. Remove what it found first.";
     })));
+    // A preview stands only for the item it showed.
+    shelf.addEventListener("change", () => { item.replaceChildren(); item.hidden = true; out.replaceChildren(); });
+    item.addEventListener("change", () => out.replaceChildren());
     const openRow = node("div", "pc-sync-actions");
     openRow.append(button("Open a share file", "pc-share-open", () => run("Checking the file…", async () => {
       const result = await api.shareOpen();

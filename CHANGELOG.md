@@ -7,6 +7,22 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Your PCs is more exact about what is only on this PC.** A file whose only
+  difference is line endings Git would undo no longer counts as uncommitted
+  work, and a branch whose commits are all on GitHub already (on another
+  branch or gh-pages) is no longer listed as this PC's alone. The look never
+  takes Git's optional lock inside a worktree an agent is using.
+- **Share between my PCs keeps every PC's evidence.** Model results, what
+  Mefi learned and preferences are kept per PC, so the owner's PCs no longer
+  overwrite each other's and a third PC sees them all; the older shared
+  files are still read. Vault calls take turns, so a status line landing
+  during a share no longer rolls the share back while saying it was sent. A
+  change is only dropped when another PC changed the same thing at the same
+  moment, and the vault then says which. A failed pairing or a vault that
+  could not be made the first time no longer blocks the next try.
+- **Share with friends saves what was previewed.** Picking another item or
+  kind clears the preview, and Save writes exactly the item shown. Changing
+  the shelf in Share between my PCs clears the lists read from the old one.
 - **More than one Claude Code or Codex login.** Setup › Connect an AI › **More
   than one login** adds a second (up to a sixth) subscription login for
   Claude Code or Codex: Studio makes the login its own folder, opens the

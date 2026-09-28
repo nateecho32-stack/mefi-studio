@@ -379,6 +379,10 @@ settings and per-model work-kind summaries for the shared controls.
   profile. Keys cross only with the typed confirmation and a native prompt,
   and their values stay in main. A `.mefishare` friend file is always
   scrubbed, names no repository or PC, and is reviewed before it is kept.
+  Vault calls take turns; a rebase is undone without loss unless two PCs
+  changed the same file, and then GitHub's version is kept and status
+  names this PC's dropped changes. Each PC's model results, decisions and
+  preferences go in their own files (shelves/<shelf>/<pcId>--<id>.json).
 - **Agents on several PCs** (main.cjs "Cowork claims", scripts/cowork.cjs,
   the hub client's claims calls). A cowork room linked to the project's
   GitHub repository (settings.cowork.rooms) carries live file claims. The

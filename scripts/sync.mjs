@@ -42,7 +42,9 @@ const LOCAL_ONLY = new Set(["uncommitted", "unpushed", "stash", "worktree", "loc
 
 export function runGit(cwd, args, { timeout = 30000 } = {}) {
   return new Promise((resolve) => {
-    execFile("git", args, { cwd, timeout, windowsHide: true, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } }, (error, stdout, stderr) => {
+    // GIT_OPTIONAL_LOCKS=0: a look's `git status` runs inside agents' worktrees
+    // too, and must never take index.lock just as an agent adds or commits.
+    execFile("git", args, { cwd, timeout, windowsHide: true, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0" } }, (error, stdout, stderr) => {
       resolve({ ok: !error, timedOut: Boolean(error?.killed), stdout: String(stdout ?? "").trim(), stderr: scrub(String(stderr ?? "").trim() || error?.message || "") });
     });
   });
@@ -97,6 +99,22 @@ export async function projectCheck(cwd, { run = null, timeout = CHECK_TIMEOUT_MS
   };
 }
 
+// Files with changes of their own. `git status --porcelain` also lists a file
+// whose only difference is one Git would undo, such as line endings under
+// core.autocrlf (it looks at size and time); a diff compares content. So a
+// non-empty status is recounted from the diffs and untracked files.
+export async function changedFiles(cwd, { run = runGit } = {}) {
+  const status = lines((await run(cwd, ["status", "--porcelain"])).stdout);
+  if (!status.length) return 0;
+  const names = new Set();
+  for (const args of [["diff", "--name-only", "-z"], ["diff", "--cached", "--name-only", "-z"], ["ls-files", "--others", "--exclude-standard", "--directory", "-z"]]) {
+    const result = await run(cwd, args);
+    if (!result.ok) return status.length;
+    for (const name of result.stdout.split("\0")) if (name) names.add(name);
+  }
+  return names.size;
+}
+
 // The checkout as it stands, with no network and no writes.
 export async function inspect(cwd, { run = runGit } = {}) {
   const git = (args, options) => run(cwd, args, options);
@@ -110,7 +128,7 @@ export async function inspect(cwd, { run = runGit } = {}) {
   const hasMain = (await git(["rev-parse", "--verify", "--quiet", `refs/heads/${main}`])).ok;
   const [ahead, behind] = hasUpstream && hasMain ? (await git(["rev-list", "--left-right", "--count", `${main}...${upstream}`])).stdout.split(/\s+/).map(Number) : [0, 0];
   const branch = (await git(["rev-parse", "--abbrev-ref", "HEAD"])).stdout || "HEAD";
-  const dirty = lines((await git(["status", "--porcelain"])).stdout).length;
+  const dirty = await changedFiles(cwd, { run });
   const stashes = lines((await git(["stash", "list"])).stdout).length;
   const trees = [];
   for (const line of lines((await git(["worktree", "list", "--porcelain"])).stdout)) {
@@ -120,7 +138,7 @@ export async function inspect(cwd, { run = runGit } = {}) {
   const worktrees = [];
   for (const tree of trees) {
     if (tree.path === root) continue;
-    const changed = lines((await run(tree.path, ["status", "--porcelain"])).stdout).length;
+    const changed = await changedFiles(tree.path, { run });
     if (changed) worktrees.push({ ...tree, dirty: changed });
   }
   const missing = async (ref) => (hasUpstream ? Number((await git(["rev-list", "--count", `${upstream}..${ref}`])).stdout) || 0 : 0);
@@ -137,6 +155,8 @@ export async function inspect(cwd, { run = runGit } = {}) {
     if (ref === main) continue;
     const commits = await missing(ref);
     if (!commits) continue;
+    // Every commit already on some GitHub branch (gh-pages included): not this PC's alone.
+    if (!Number((await git(["rev-list", "--count", ref, "--not", `--remotes=${REMOTE}`])).stdout)) continue;
     // A branch already on GitHub at the same commit is listed once, as GitHub's.
     const published = remoteBranches.find((item) => item.name === ref);
     if (published && !Number((await git(["rev-list", "--count", `${REMOTE}/${ref}..${ref}`])).stdout)) continue;
