@@ -333,20 +333,28 @@ test("the thread, the chat and the welcome-back digest each get their own words"
   const facts = outside.chatFacts(REP, stamped, NOW + HOUR);
   assert.equal(facts.headline, REP.headline);
   assert.equal(facts.commits[0].commit, "ccccccc");
-  assert.deepEqual(facts.cards, [{ taskId: "t1", title: "Dark theme toggle", check: "done", waitsForOwner: true, reason: "done by ccccccc" }]);
+  assert.deepEqual(facts.cards, [{ taskId: "t1", title: "Dark theme toggle", check: "done", by: "model", waitsForOwner: true, reason: "done by ccccccc" }]);
   assert.ok(outside.chatFacts(REP, stamped, NOW + 3 * 24 * HOUR), "an answer still owed keeps an old report in view");
   assert.equal(outside.chatFacts(REP, [], NOW + 3 * 24 * HOUR), null, "a stale report with nothing owed is gone");
 
-  for (const question of ["what did I do while Studio was closed?", "What changed while I was away", "anything happen outside studio?", "what have we worked on since I left", "what's changed"]) {
+  for (const question of ["what did I do while Studio was closed?", "What changed while I was away", "anything happen outside studio?", "what have we worked on since I left", "what's changed",
+    "anything new while I'm out?", "what happened when the app was off", "did the agents do anything while we were offline", "what happened while I stepped away", "news from when you were closed?"]) {
     assert.equal(outside.asksAboutAway(question), true, question);
   }
-  for (const other of ["start the export task", "why is the login card parked?", "what's next"]) assert.equal(outside.asksAboutAway(other), false, other);
+  for (const other of ["start the export task", "why is the login card parked?", "what's next",
+    "When the user logs out, clear the cache", "when I log out, clear the session", "show a banner while the server is offline", "fade the menu out when it is closed by a click elsewhere"]) {
+    assert.equal(outside.asksAboutAway(other), false, other);
+  }
   const answer = outside.awayAnswer("what changed while I was away?", facts);
   assert.ok(answer.startsWith(REP.headline));
   assert.match(answer, /Commits: ccccccc "Add the dark theme toggle to settings", fffffff "Refactor the router"\./);
   assert.match(answer, /Uncommitted: new src\/new\.js\./);
   assert.match(answer, /Other agents: Claude Code "Remove the legacy exporter entirely"\./);
   assert.match(answer, /Waiting for you: "Dark theme toggle" \(looks already done\)\./);
+  const guessed = [card("t1", "Dark theme toggle", { relevance: outside.verdictStamp({ verdict: "done", by: "local", reason: "commit ccccccc says so", rep: REP, now: NOW }) })];
+  const guessedFacts = outside.chatFacts(REP, guessed, NOW + HOUR);
+  assert.equal(guessedFacts.cards[0].by, "local", "the chat model is told which verdicts are only file and commit matches");
+  assert.match(outside.awayAnswer("what changed while I was away?", guessedFacts), /Waiting for you: "Dark theme toggle" \(may already be done\)\./, "a local match is only a maybe, as on its card");
   assert.equal(outside.awayAnswer("start the export task", facts), "", "not the question: no answer");
   assert.equal(outside.awayAnswer("what changed while I was away?", null), "", "no report: no answer");
 

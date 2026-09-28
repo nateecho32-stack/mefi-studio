@@ -685,6 +685,8 @@ function chatFacts(rep, tasks = [], now) {
       taskId: task.id,
       title: clip(task.title, 90),
       check: task.relevance.state === "checking" ? "checking" : task.relevance.verdict ?? "needed",
+      // "local" is a guess from file and commit matches, so it is said as a maybe.
+      by: task.relevance.state === "checking" ? undefined : task.relevance.by || undefined,
       waitsForOwner: task.relevance.state === "ask" && queued(task) ? true : undefined,
       reason: task.relevance.reason || undefined,
     })),
@@ -692,8 +694,10 @@ function chatFacts(rep, tasks = [], now) {
 }
 
 // "What changed while I was away?", "what did we do while Studio was closed",
-// "anything happen outside Studio": a question about the report.
-const AWAY_QUESTION = /\b(?:while|when)\b.{0,40}\b(?:away|closed|gone|out|offline|off)\b|\bsince (?:i|we)\b.{0,20}\b(?:left|closed|was|were|last)\b|\boutside (?:of )?studio\b|\bwhat (?:did|have) (?:i|we) (?:do|done|change|changed|work(?:ed)? on)\b|\bwhat(?:'s| has)? changed\b/i;
+// "anything happen outside Studio": a question about the report. The absence
+// is the owner's or Studio's ("while I was out"), not anyone's: "When the user
+// logs out, clear the cache" is a task, not this question.
+const AWAY_QUESTION = /\b(?:while|when)\s+(?:i|we|you|it|mefi|(?:the\s+)?(?:app|studio))\s*(?:was|were|am|'m|’m|are|'re|’re|have been|had been|stepped|went)\b.{0,30}?\b(?:away|closed|gone|out|offline|off|afk)\b|\bsince (?:i|we)\b.{0,20}\b(?:left|closed|was|were|last)\b|\boutside (?:of )?studio\b|\bwhat (?:did|have) (?:i|we) (?:do|done|change|changed|work(?:ed)? on)\b|\bwhat(?:'s| has)? changed\b/i;
 function asksAboutAway(text) {
   return AWAY_QUESTION.test(String(text ?? ""));
 }
@@ -716,7 +720,7 @@ function awayAnswer(text, facts) {
   const cards = asArray(facts.cards);
   const waiting = cards.filter((row) => row.waitsForOwner);
   const checking = cards.filter((row) => row.check === "checking");
-  if (waiting.length) lines.push(`Waiting for you: ${waiting.slice(0, 3).map((row) => `"${clip(row.title, 50)}" (${row.check === "obsolete" ? "may no longer be needed" : "looks already done"})`).join(", ")}.`);
+  if (waiting.length) lines.push(`Waiting for you: ${waiting.slice(0, 3).map((row) => `"${clip(row.title, 50)}" (${row.check === "obsolete" ? "may no longer be needed" : row.by === "local" ? "may already be done" : "looks already done"})`).join(", ")}.`);
   else if (checking.length) lines.push(`${plural(checking.length, "queued card")} ${checking.length === 1 ? "is" : "are"} being checked against it.`);
   else if (cards.length) lines.push(`All ${plural(cards.length, "queued card")} checked against it still stand${cards.length === 1 ? "s" : ""}.`);
   return clip(lines.join(" "), 700);
