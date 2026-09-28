@@ -1,9 +1,10 @@
 # Continuing: handoff (2026-09-28, afternoon)
 
-Three things are open:
+Four things are open:
 1. **The 0.4.5 build.** It started today and paused at about 13:10, when the account hit its usage limit (it resets at 2:10 pm Central). The work is partial and uncommitted, in worktrees on this PC only.
 2. **Home PCs that keep working, and reaching them from Discord** (the co-work session). Start with Windows, the Your PCs agent lines and the Studio side of the Discord remote are on main. The bot side is parked as `wip/remote-dms`. The end-to-end test, the owner's setup and subscriptions-first routing are left (section 2).
 3. **Menu Batch 3.** This is the owner's decision, unchanged (section 3).
+4. **The website rebuild** (the "Continuing fixes" session). It is parked on the pushed branch `wip/site-rebuild` and is not published: the build agents hit the same usage limit (section 4).
 
 ## 1. 0.4.5: agents send only what's new, logging, load times, Friends 2.0
 
@@ -321,4 +322,98 @@ It wasn't done, because the first step contradicts a pinned contract: `tests/fix
 - Either way, capture before and after (the seeded fake-bridge preview at 1920x1080).
 - Leave `styles.css` ~4833 (the `data-nav-section` padding) and the `studio-ui.css` `@media (max-height: 600px)` rail block alone.
 
-Remove this section once that is decided, and delete the file when all three sections are done.
+Remove this section once that is decided, and delete the file when all four sections are done.
+
+
+## 4. The website rebuild (not published)
+
+The owner asked for this (2026-09-28):
+- Repolish and upgrade the public site (restyle freely), community first, simple, with a solid
+  design built from normal web page elements.
+- A page listing everything in Studio.
+- A roadmap showing Done, Being worked on and Planned, with ways to request features on GitHub or
+  in the Discord.
+- The owner's community plan, shown as Planned:
+  - share ideas and projects;
+  - earn credits for playing or looking at others' projects, and spend them to advertise your own;
+  - cosmetics and creator styles for credits;
+  - shared mixes, with most-played lists for people who turn on "share music taste".
+- The wiki brought up to date.
+- Live now, without waiting for 0.4.5. The download stays on 0.4.4.
+
+### Where it is
+- **Branch `wip/site-rebuild`** (pushed; based on `gh-pages` 3fdf4b9). On this PC it is checked out
+  in the worktree `C:\wt\site`. On another PC:
+  `git worktree add C:\wt\site origin/wip/site-rebuild`, then `git switch -c wip/site-rebuild`.
+- GitHub Pages publishes only `gh-pages`, so the old site is still live. Nothing on the branch has
+  been checked yet.
+- **`_handoff/` on that branch** holds everything the next session needs:
+  - `owner-and-roadmap-input.md`: the request, the labelling and honesty rules, the roadmap in plain
+    words, the website ideas and the verified facts. **Read it first.**
+  - `partials.html`: the shared header, phone menu and footer markup, plus the component catalogue.
+  - `stage1/*.json`: the research.
+    - About 420 features, each with a status and evidence (`features_completeness.json` adds 21
+      and fixes 13 statuses).
+    - The roadmap, the site audit, page-by-page wiki audits and the community facts.
+  - `capture-site.cjs`: an offscreen screenshot tool. It serves the folder on 127.0.0.1 and writes
+    full-page and segment PNGs plus `report.json` (console errors, 404s, overflow). Run:
+    `"<app>\node_modules\electron\dist\electron.exe" capture-site.cjs --root C:\wt\site --out <dir> --pages index.html,roadmap.html,wiki/index.html#/vibe-mode --widths 1440,390`
+
+| File | State |
+| --- | --- |
+| `assets/site.css`, `assets/site.js` | Done: the new design system (tab bar with gliding active tab, phone menu, view transitions, footer, status badges, roadmap board and timeline, live Discord pulse, tabsets, FAQ, request band, most-wanted requests by 👍) |
+| `index.html` + `home.css`/`home.js`, `features.html` + css/js, `community.html` + css/js + `showcase.json`, `download.html` + css, `404.html` | Partial: written by agents that stopped before their visual and fact checks |
+| `assets/roadmap.json` | Written; needs updating (step 1) |
+| `roadmap.html`, `roadmap.css`, `roadmap.js` | **Missing** |
+| `wiki/index.html`, `wiki.js`, `wiki.css`, `wiki/pages.json` | Partial: the new structure lists 13 pages that don't exist yet |
+| 13 new wiki pages | **Missing**: setup-helper, coming-in-0-4-5, vibe-mode, permissions, agent-brain, trace, settings, friends-and-rooms, your-pcs, companion, media-player, discord, appearance |
+| 21 existing wiki pages | **Not updated**. The audits in `stage1/wiki_*.json` list every fix |
+
+### Finish in this order
+1. **Roadmap page.** Build `roadmap.html`, `roadmap.css` and `roadmap.js`, rendering `assets/roadmap.json`:
+   - three lanes: Done (with a release timeline), Being worked on, Planned;
+   - area filters and a details disclosure on each item;
+   - a `<noscript>` fallback;
+   - "Ask for something": the GitHub feature template and the Discord, plus Most wanted from
+     `SITE.fetchFeatureRequests(6)`.
+
+   Update the JSON first: main moved after the research (`git log --oneline v0.4.4..origin/main`).
+   - Built since, so "Coming in 0.4.5": 704ef0d, 39a153d, 6a94370, 16544dd, 5732ceb and anything
+     newer.
+   - Section 1's 0.4.5 work has started (faster sends, logging, load times, Friends 2.0), so show
+     those items as In progress, with the paused state that section 1 records.
+2. **Wiki.** Write the 13 new pages and update the 21 existing ones. The guide documents 0.4.4;
+   mark newer behaviour with `<span class="status next">Coming in 0.4.5</span>`, and link to
+   `../roadmap.html` for planned things.
+3. **Check each page** at 1440 and 390 wide. **Fact-check every claim** against main and
+   `stage1`. These facts are easy to get wrong (all in `owner-and-roadmap-input.md`):
+   - **Updates in 0.4.4 don't install.** An in-app update never finishes installing, so the
+     download page must give the manual steps: extract to a new folder and copy the old
+     `resources\app\data`. Settings and keys carry over from `%APPDATA%`.
+   - **CLI sign-in in 0.4.4.** The guided CLI setup windows may close at once, so sign in from a
+     terminal.
+   - **Rolling out, not Coming in 0.4.5:** playdates with friends, "Share back?" and Rooms. They
+     need the owner-run hub.
+   - **Credits.** They are earned only, never bought, never for inviting people, and never tied to
+     Discord activity. Never mention invite rewards.
+4. **Link and accessibility sweep.** `report.json` must show zero console errors, zero 404s and no
+   overflow, and every internal link and wiki slug must resolve.
+5. **Clean up.**
+   - Delete `_handoff/` and the unused `assets/launch.css`.
+   - Decide on `media/mefi-work-in-motion.mp4` and `assets/shots/friends-panel.webp`, which no page
+     uses.
+   - Update the branch `README.md` (the new pages, and how to edit `roadmap.json` and
+     `showcase.json`) and `docs/public-site.md` on main.
+6. **Publish.** Check that `origin/gh-pages` is still 3fdf4b9, fast-forward it
+   (`git push origin HEAD:gh-pages`), then load the live site.
+7. **Then land `wip/issue-links` on main** (pushed, one commit). It adds the roadmap and the Discord
+   to GitHub's "New issue" chooser, and a check-the-roadmap / 👍 note to the feature template. It
+   links to `roadmap.html`, so land it only once that page is live. Rebase onto main, run
+   `npm run check`, then push.
+
+### Also open for the owner (from the "Continuing fixes" session)
+- **Old logs:** prune `tools/logs` (about 966 MB inside OneDrive) and the root `*.log` files.
+  Deleting them can't be undone, so they were left alone.
+- **Release workflow:** run `gh auth refresh -s workflow` so `release.yml` can be fixed (hosted
+  Windows runners fail four render fixtures), unless section 1's list already covers it.
+- **`docs/friends-setup.md`** already tells people to update to 0.4.5.
