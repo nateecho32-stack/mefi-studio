@@ -1,6 +1,6 @@
 # Continuing: handoff (2026-09-28, afternoon)
 
-Nine things are open:
+Ten things are open:
 1. **The 0.4.5 build.** It started today and paused at about 13:10, when the account hit its usage limit (it resets at 2:10 pm Central). The work is partial and uncommitted, in worktrees on this PC only.
 2. **Home PCs that keep working, and reaching them from Discord** (the co-work session). Start with Windows, the Your PCs agent lines and the Studio side of the Discord remote are on main. The bot side is parked as `wip/remote-dms`. The end-to-end test, the owner's setup and subscriptions-first routing are left (section 2).
 3. **Menu Batch 3.** This is the owner's decision, unchanged (section 3).
@@ -10,6 +10,7 @@ Nine things are open:
 7. **In-app performance: tree brightness** (the "In-app performance" session). The owner's 200% tree brightness keeps the GPU at 98–100% (Vibe 4.6 fps, Command 8.8, Home 4.1). A fix that brings them to 42, 36 and 43 fps is parked on the pushed branch `wip/tree-brightness-gpu`. It waits on the outline step and an owner look check (section 7).
 8. **The media player redesign** (the "Media player UI and performance improvements" session). A mini player with a transport, quick tree switches and a YouTube feed, on the pushed branch `wip/media-player-redesign`. It works in the offscreen probe; its tests aren't updated and it isn't landed (section 8).
 9. **The Task board's cleanup and masonry cards, carried to other menus** (the "Menu cleanup" session). The Task board part is on main; Ideas, Settings › Providers, Plans, Vibe and the Project map are next, starting with a shared masonry helper. The owner asked for this (section 9).
+10. **Void Engine Bot: fun, memory, release pings and model drops** (the "Discord community perks and verification" session). Built and mostly wired, parked on the bot's pushed branch `wip/bot-fun-memory` with 8 seam tests failing. The end-to-end test, a review and landing are left, and three sessions wait on it (section 10).
 
 ## 1. 0.4.5: agents send only what's new, logging, load times, Friends 2.0
 
@@ -709,3 +710,105 @@ Pins to know:
 - For captures, use `tests/task_overview_render.test.mjs` with `MEFI_TASK_OVERVIEW_CAPTURE_DIR=<abs dir>`. For 1920x1080, copy the fixture, change the window size, and switch tasks with `MefiTasks.selectTask(id)` between captures.
 
 Remove this section once items 1–5 are done or the owner drops them.
+
+## 10. Void Engine Bot: fun, memory, release pings and model drops (parked on `wip/bot-fun-memory`)
+
+Written 2026-09-28 by the session "Discord community perks and verification". It covers the bot repo only
+(private `nateecho32-stack/void-engine-bot`); nothing in Studio changes.
+
+### What the owner asked for
+
+- **An @everyone post only when a new version is built**, not for every commit.
+- **Updates in the server about new model drops.**
+- **A fun bot that remembers things.**
+
+### Where it is
+
+- **Branch:** `wip/bot-fun-memory` on the bot's origin (`61e8e8d`, one commit on `61b1deb`). The bot's main checkout, `C:\Users\echor\OneDrive\Desktop\Coding Projects\Void Engine Bot`, is on that branch. The bot's `main` is still `61b1deb`.
+- **Tests:** `npm test` gives 618 tests: 610 pass and 8 fail. All 8 are at integration seams; the commit message names them.
+
+### What is built
+
+- **Release pings** (`src/releases.mjs`):
+  - It announces only a published release whose tag matches `RELEASES_TAG_PATTERN` (`^v\d+\.\d+\.\d+$`) and that has a built `.zip` (`RELEASES_REQUIRE_ASSET`). A release still waiting for its zip is picked up on a later hourly poll. Commits, and tags with no release, are never announced.
+  - `RELEASES_PING=everyone` is the default (also `here`, `role:<id>` or `none`). Pre-releases post quietly (`RELEASES_PRERELEASES=quiet|skip`).
+  - The post has a heading, a persona line, up to 5 cleaned highlights, the zip link and size, and the release link.
+  - Without Mention Everyone in the channel, it posts without the ping and logs a warning. A test guards that only `releases.mjs` asks for `parse: ['everyone']`.
+- **Model drops** (`src/models-watch.mjs`):
+  - It reads models.dev every 6 h for anthropic, openai, google, zai, deepseek, xai, moonshotai, alibaba, mistral and opencode-go (`MODEL_DROPS_PROVIDERS`).
+  - A drop is an unseen id released in the last 30 days, deduped by `canonical_model_id`. The first run is a silent baseline.
+  - It posts one digest per poll in `MODEL_DROPS_CHANNEL_ID` (5 models, then "+N more"), marked "✓ in Studio", plus "✨ New in Studio" from mefi-studio `data/models.json`. It reads both `models[]` and `providerModels`; the first sighting of `providerModels` is a silent baseline.
+  - `MODEL_DROPS_ROLE_ID` adds an opt-in role ping, which `/notify models` toggles. `/models latest [provider]` shows recent drops.
+- **Chat, persona and memory:**
+  - @mention the bot, or reply to it, to chat with "Void". The voice is in `config/persona.md`; the name is `BOT_NAME`.
+  - Each member gets 20 chats a day (`CHAT_USER_DAILY_LIMIT`), and chat uses at most 80% of the LLM daily and monthly caps. Every model reply ends with `-# 🤖 AI reply`.
+  - It never answers inside room threads and stores no transcripts: an 8-turn ring in memory, kept 30 minutes.
+  - Memory needs consent. `/remember`, or "Void, remember …" plus a confirm button. `/memory auto on` (off by default) saves one note per chat, with an Undo button. `/memories` lists and deletes notes; moderators curate `/lore`.
+  - Automatic notes expire after 90 days unused and explicit ones after 365. A member who leaves loses their notes, and `/forget-me` wipes everything.
+  - `CHAT_DMS` gates DM chat. No DMs arrive until `wip/remote-dms` adds the intent.
+- **Fun:**
+  - `/help`, built from the command list.
+  - Welcomes when a member completes onboarding (`WELCOME_CHANNEL_ID`): once per member, at most 10 a minute.
+  - Celebrations for earned roles, streak milestones and join anniversaries (`CELEBRATE_CHANNEL_ID`); `/celebrate off` opts out.
+  - `/trivia` about AI models: +2 points, capped at 10 a day.
+  - A prompt of the day from `config/prompts.json` (`LOUNGE_CHANNEL_ID`, `FUN_HOUR_UTC`).
+- **Integration already done:**
+  - `index.mjs` wiring for all of the above, plus the DM seam `hub.onDirectMessage` and `hub.dmRouters` for remote-dms.
+  - The config keys and `.env.example`.
+  - A v3 store migration (the memory, fun and model tables).
+  - Commands and buttons (`mem`, `memsave`, `trv`).
+  - Adapter `addReaction`, `replyTo` and `listMembers`, and Add Reactions in `BOT_PERMISSIONS`.
+
+### What is left, in order
+
+1. **Fix the 8 failing tests.** They are seam tests, not feature bugs:
+   - the `/help` command list;
+   - the v1→v2 upgrade test, which now meets v3;
+   - the scheduled job names and counts;
+   - the `ensureMemoryTables`-versus-migration check;
+   - `main()`'s boot wiring;
+   - the new command definitions;
+   - the fun jobs with a member list.
+2. **Finish the integration.**
+   - Extend `test/e2e-hub.test.mjs` through `createHub` with the fakes:
+     - an @mention reply with the AI label and no ping;
+     - remember → confirm → `/memories` → `/forget-me`;
+     - a leaving member's notes are deleted;
+     - a v-tag release with a zip → one post with `{ parse: ['everyone'] }`, and no ping without the permission;
+     - no zip → no post, then a post once the zip appears;
+     - a commit or a non-version tag → nothing;
+     - a model-drop digest from a fake models.dev;
+     - a welcome, `/trivia` and the prompt job;
+     - `/help` listing every command;
+     - a DM with no routers reaches the persona, and a router answering `handled: true` means zero LLM calls.
+   - Update the job counts in `test/hub-wiring.test.mjs`.
+   - Run `npm run register -- --dry-run`.
+   - Add the feature list to the README.
+3. **Gates:** `node --check` on every file, and `npm test` all green.
+4. **Security and policy review** of the new surface:
+   - only releases may ping @everyone;
+   - prompt injection through memories and lore;
+   - memory screening;
+   - the DM seam;
+   - deletion when a member leaves;
+   - nothing from a room thread reaches the LLM.
+5. **Land.** Rebase onto the bot's `origin/main`, push the branch to `main` fast-forward only, then delete `wip/bot-fun-memory`.
+6. **Tell the three sessions waiting on this push**, with the hash. They land in this order:
+   1. **"Co-work and PC linking setup":** rebase `wip/remote-dms` onto it and drop its stand-in `onDirectMessage` and `dmRouters`. Register `createRemoteDmRouter` with `hub.dmRouters.unshift(...)`.
+   2. **"Discord bot model feedback integration":** rebase `wip/model-reviews` (section 5). It builds on `createModelsWatch`, whose rows are camelCase: `{ provider, providerName, id, name, family, releaseDate, releasedAt, lastUpdated, cost: { input, output }, limit: { context, output }, reasoning, toolCall, vision, openWeights, canonical, description, firstSeenAt, announced, inStudio }`. It also feeds ratings into chat's `facts`.
+   3. **"Build 4.5 roadmap and web upgrades":** FH0/FH1 on the hub. FH10 (bot chat in Studio) reuses `createChatService`, and Studio chat must stay a direct conversation with the bot: keyed by the hub session's Discord id, and never fed room messages.
+
+### The owner's setup to go live
+
+- **The bot application.** Paste its token into the bot's `.env` yourself. Turn on the Server Members intent; Message Content is needed only for rooms and model reviews.
+- **Add Reactions.** Grant the bot's role this new permission, or re-invite with `npm run invite`.
+- **Channels, with their ids in `.env`:**
+  - #releases, with a channel override granting the bot **Mention @everyone**. Without it, releases post but don't ping.
+  - #model-drops, #welcome, #celebrations and #lounge.
+  - The existing #mod-queue, #showcase forum and #rooms.
+- **An optional "Model drops" role**, placed below the bot's role, for `/notify`.
+- **A pay-as-you-go z.ai key** for the LLM, not the Coding Plan key. The free fallback model stays off until z.ai's terms are checked.
+- **Start it.** Run `npm run register`, then set it to start at login with Task Scheduler (`docs/runbook.md`).
+- **For rooms, listen together and the remote:** the hub's public address and the "Mefi Studio Link" app id are also needed (sections 1 and 2).
+
+Remove this section once the branch lands on the bot's `main` and the three sessions have rebased.
